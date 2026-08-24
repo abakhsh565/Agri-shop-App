@@ -1,0 +1,1 @@
+var f=require("fs");var p=require("path");console.log("builder ready");

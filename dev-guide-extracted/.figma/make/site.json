@@ -1,0 +1,10 @@
+{
+  "description": "Transform your Figma designs into fully functional web applications with ease, streamlining the development process for designers and developers alike.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}

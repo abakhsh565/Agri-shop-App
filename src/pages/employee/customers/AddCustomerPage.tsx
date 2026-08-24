@@ -1,0 +1,177 @@
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import StatusBar from "@/components/ui/StatusBar";
+import NavHeader from "@/components/ui/NavHeader";
+import ImageUpload from "@/components/ui/ImageUpload";
+import { useCustomersStore } from "@/stores/customersStore";
+import { useUIStore } from "@/stores/uiStore";
+import { useAuthStore } from "@/stores/authStore";
+import { useT } from "@/lib/i18n";
+import { useThemeStore } from "@/stores/themeStore";
+import { useShellBase } from "@/lib/useShellBase";
+
+export default function AddCustomerPage() {
+  const navigate = useNavigate();
+  const base = useShellBase();
+  const t = useT();
+  const { language } = useThemeStore();
+  const isUrdu = language === "ur";
+  const { addToast } = useUIStore();
+  const { user } = useAuthStore();
+  const customers = useCustomersStore((s) => s.customers);
+  const createCustomer = useCustomersStore((s) => s.createCustomer);
+
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [address, setAddress] = useState("");
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [loading, setLoading] = useState(false);
+  const [existingCustomerId, setExistingCustomerId] = useState<string | null>(null);
+
+  async function handleSave() {
+    const errs: Record<string, string> = {};
+    if (!name.trim()) errs.name = isUrdu ? "نام درج کریں" : "Name is required";
+    if (!phone.trim()) errs.phone = isUrdu ? "فون نمبر درج کریں" : "Phone number is required";
+    else if (!/^0\d{9,10}$/.test(phone.replace(/\s/g, "")))
+      errs.phone = isUrdu ? "درست فون نمبر درج کریں" : "Enter a valid phone number";
+    else {
+      const existing = customers.find((c) => c.phone === phone.replace(/\s/g, "") && !c.isArchived);
+      if (existing) {
+        errs.phone = isUrdu ? `"${existing.name}" کے ساتھ پہلے سے رجسٹرڈ ہے` : `Already registered with "${existing.name}"`;
+        setExistingCustomerId(existing.id);
+      }
+    }
+
+    if (Object.keys(errs).length) { setErrors(errs); return; }
+
+    setLoading(true);
+    try {
+      const newCustomer = await createCustomer({
+        name: name.trim(),
+        phone: phone.replace(/\s/g, ""),
+        address: address.trim() || undefined,
+        creditLimit: 0,
+        createdBy: user?.id,
+      });
+      // Persist image if uploaded
+      if (imageUrl && newCustomer.id) {
+        const { updateCustomerImage } = useCustomersStore.getState();
+        await updateCustomerImage(newCustomer.id, imageUrl);
+      }
+      addToast(`${name} ${isUrdu ? "شامل کر دیا گیا" : "added successfully"}`, "success");
+      navigate(`${base}/customers`, { replace: true });
+    } catch (e) {
+      setErrors({ phone: e instanceof Error ? e.message : String(e) });
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div
+      className="flex flex-col w-full min-h-full justify-between"
+      style={{ background: "var(--background)", direction: isUrdu ? "rtl" : "ltr" }}
+    >
+      <div>
+        <StatusBar />
+        <NavHeader title={t("addCustomer.title")} />
+
+        <div className="flex flex-col gap-5 p-4 mt-2">
+          {/* Profile Image */}
+          <div className="flex justify-center">
+            <ImageUpload
+              bucket="customer-images"
+              value={imageUrl}
+              onChange={setImageUrl}
+              shape="circle"
+              label="Add photo"
+            />
+          </div>
+
+          {/* Name */}
+          <div>
+            <p className="text-[11px] font-bold uppercase mb-2 tracking-wider" style={{ color: "var(--text-secondary)" }}>
+              {t("addCustomer.name")}
+            </p>
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder={isUrdu ? "گاہک کا پورا نام" : "Enter customer name"}
+              className="w-full h-12 rounded-[24px] px-4 text-sm outline-none"
+              style={{
+                background: "var(--surface-2)",
+                border: `1px solid ${errors.name ? "var(--error)" : "var(--divider)"}`,
+                color: "var(--text-primary)",
+              }}
+            />
+            {errors.name && <p className="text-xs mt-1" style={{ color: "var(--error)" }}>{errors.name}</p>}
+          </div>
+
+          {/* Phone */}
+          <div>
+            <p className="text-[11px] font-bold uppercase mb-2 tracking-wider" style={{ color: "var(--text-secondary)" }}>
+              {t("addCustomer.phone")}
+            </p>
+            <input
+              type="tel"
+              inputMode="tel"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="03001234567"
+              className="w-full h-12 rounded-[24px] px-4 text-sm outline-none"
+              style={{
+                background: "var(--surface-2)",
+                border: `1px solid ${errors.phone ? "var(--error)" : "var(--divider)"}`,
+                color: "var(--text-primary)",
+              }}
+            />
+            {errors.phone && (
+              <div className="flex items-center gap-1 mt-1">
+                <p className="text-xs" style={{ color: "var(--error)" }}>{errors.phone}</p>
+                {existingCustomerId && (
+                  <button
+                    onClick={() => navigate(`${base}/customers/${existingCustomerId}`)}
+                    className="text-xs font-bold underline"
+                    style={{ color: "var(--brand-dark)" }}
+                  >
+                    {isUrdu ? "گاہک دیکھیں" : "View customer →"}
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Address */}
+          <div>
+            <p className="text-[11px] font-bold uppercase mb-2 tracking-wider" style={{ color: "var(--text-secondary)" }}>
+              {t("addCustomer.address")}
+            </p>
+            <input
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
+              placeholder={isUrdu ? "گاؤں / شہر / قصبہ" : "Village / town / city"}
+              className="w-full h-12 rounded-[24px] px-4 text-sm outline-none"
+              style={{
+                background: "var(--surface-2)",
+                border: "1px solid var(--divider)",
+                color: "var(--text-primary)",
+              }}
+            />
+          </div>
+        </div>
+      </div>
+
+      <div className="p-4 pb-6">
+        <button
+          onClick={handleSave}
+          disabled={loading}
+          className="w-full h-12 rounded-full font-bold text-sm transition-all active:scale-[0.98] disabled:opacity-50"
+          style={{ background: "var(--brand)", color: "#0a0a0a" }}
+        >
+          {loading ? t("common.loading") : t("addCustomer.submit")}
+        </button>
+      </div>
+    </div>
+  );
+}
