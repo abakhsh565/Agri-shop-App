@@ -11,11 +11,16 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Install Node and Java Directly
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y openjdk-17-jdk
-          node -v
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
 
       - name: Install Dependencies & Build Web
         run: |
@@ -24,10 +29,10 @@ jobs:
 
       - name: Build Capacitor Android App
         run: |
-          npm install @capacitor/cli @capacitor/core @capacitor/android
-          npx cap init AgrishopApp com.agrishop.app --web-dir dist
-          npx cap add android
-          npx cap sync
+          npm install --save-dev @capacitor/cli
+          npm install @capacitor/core @capacitor/android
+          npx cap add android || true
+          npx cap sync android
           cd android
           chmod +x gradlew
           ./gradlew assembleDebug
