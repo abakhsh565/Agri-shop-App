@@ -24,8 +24,10 @@ Default port from `vite.config.ts` is 8443 with `strictPort: true`. Using `--por
 
 For background (detached) mode on Windows:
 ```powershell
-Start-Process -FilePath 'npx' -ArgumentList 'vite','--host','0.0.0.0','--port','5173' -WorkingDirectory '<project-root>' -WindowStyle Hidden
+Start-Process -FilePath 'node.exe' -ArgumentList 'node_modules/vite/bin/vite.js','--host','0.0.0.0','--port','5175' -WorkingDirectory '<project-root>' -RedirectStandardOutput '<log>' -RedirectStandardError '<log>.err' -WindowStyle Hidden -PassThru | Select-Object -ExpandProperty Id
 ```
+
+Note: ports 5173 and 5174 may already be in use on this machine. 5175 works reliably.
 
 ## Reproduce artifacts
 
