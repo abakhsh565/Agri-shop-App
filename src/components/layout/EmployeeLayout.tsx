@@ -1,5 +1,5 @@
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
-import { Home, Receipt, ScanLine, Package, User, Wifi, WifiOff } from "lucide-react";
+import { Home, Receipt, ScanLine, Package, Users, Wifi, WifiOff } from "lucide-react";
 import { useAuthStore } from "@/stores/authStore";
 import { useOfflineStore } from "@/stores/offlineStore";
 import PINInput from "@/components/ui/PINInput";
@@ -17,7 +17,7 @@ const TAB_DEFS = [
   { key: "nav.sales" as const,   icon: Receipt,       path: "/employee/sales"     },
   { key: "scan" as const,        icon: ScanLine,      path: "__scan__"            },
   { key: "nav.products" as const,icon: Package,       path: "/employee/products"  },
-  { key: "settings.title" as const, icon: User,       path: "/employee/settings"  },
+  { key: "nav.customers" as const, icon: Users,       path: "/employee/customers"  },
 ];
 
 const LOCK_TIMEOUT_MS = 15 * 60 * 1000;
@@ -87,7 +87,7 @@ export default function EmployeeLayout() {
     const path = location.pathname;
     if (path.startsWith("/employee/sale"))      return "/employee/sales";
     if (path.startsWith("/employee/sales"))     return "/employee/sales";
-    if (path.startsWith("/employee/customers") || path.startsWith("/employee/settings")) return "/employee/settings";
+    if (path.startsWith("/employee/customers")) return "/employee/customers";
     if (path.startsWith("/employee/products"))  return "/employee/products";
     return "/employee/dashboard";
   }
