@@ -50,6 +50,11 @@ export default function RegisterStatusPage() {
     if (pendingPhone) {
       loadMyRequest(normalizePhone(pendingPhone));
     }
+    // Auto-refresh every 10 seconds to detect approval/rejection
+    const interval = setInterval(() => {
+      if (pendingPhone) loadMyRequest(normalizePhone(pendingPhone));
+    }, 10000);
+    return () => clearInterval(interval);
   }, [pendingPhone]);
 
   const status = myRequest?.status ?? "pending";
