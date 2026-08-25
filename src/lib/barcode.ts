@@ -138,14 +138,16 @@ export async function scanFromCamera(): Promise<ScanResult | null> {
       }
 
       // Start scanning
+      const { BarcodeFormat } = await import("@capacitor-mlkit/barcode-scanning");
       const result = await BarcodeScanner.scan({
-        formats: ["CODE_128", "CODE_39", "EAN_13", "EAN_8", "UPC_A", "UPC_E"],
+        formats: [BarcodeFormat.Code128, BarcodeFormat.Code39, BarcodeFormat.Ean13, BarcodeFormat.Ean8, BarcodeFormat.UpcA, BarcodeFormat.UpcE],
       });
 
       if (result.barcodes.length > 0) {
+        const barcode = result.barcodes[0];
         return {
-          barcode: result.barcodes[0].rawValue,
-          format: result.barcodes[0].format,
+          barcode: barcode.rawValue ?? '',
+          format: barcode.format ?? 'UNKNOWN',
         };
       }
       return null;
