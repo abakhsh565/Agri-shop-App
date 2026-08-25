@@ -7,11 +7,11 @@ interface AuthState {
   user: User | null;
   isLocked: boolean;
   pendingPhone: string;
-  pendingFlow: "login" | "forgot_pin" | null;
+  pendingFlow: "login" | "register" | "forgot_pin" | null;
   isNewDevice: boolean;
   setUser: (user: User | null) => void;
   setPendingPhone: (phone: string) => void;
-  setPendingFlow: (flow: "login" | "forgot_pin" | null) => void;
+  setPendingFlow: (flow: "login" | "register" | "forgot_pin" | null) => void;
   setIsNewDevice: (v: boolean) => void;
   lock: () => void;
   unlock: () => void;

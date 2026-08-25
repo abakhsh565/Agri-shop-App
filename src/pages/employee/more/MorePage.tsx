@@ -3,7 +3,7 @@ import StatusBar from "@/components/ui/StatusBar";
 import { useAuthStore } from "@/stores/authStore";
 import { useT } from "@/lib/i18n";
 import { useThemeStore } from "@/stores/themeStore";
-import { Settings, Users, Activity, ChevronRight } from "lucide-react";
+import { Settings, Users, ChevronRight } from "lucide-react";
 
 function initBgColor(name: string) {
   const colors = ["#84cc16","#3b82f6","#8b5cf6","#f59e0b","#06b6d4","#ec4899"];
@@ -24,7 +24,6 @@ export default function MorePage() {
 
   const MENU_ITEMS = [
     { key: "nav.customers" as const, icon: Users, path: "/employee/customers" },
-    { key: "activity.title" as const, icon: Activity, path: "/employee/sales" },
     { key: "settings.title" as const, icon: Settings, path: "/employee/settings" },
   ];
 

@@ -78,6 +78,12 @@ export default function LoginPage() {
           >
             Send Code
           </Button>
+          <p className="text-xs text-center text-[#888]">
+            New shop owner?{' '}
+            <button onClick={() => navigate("/register")} className="text-black font-medium underline">
+              Register your shop
+            </button>
+          </p>
         </div>
       </div>
     </AuthLayout>

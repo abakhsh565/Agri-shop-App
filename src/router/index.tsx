@@ -9,6 +9,15 @@ import PINSetPage from "@/pages/auth/PINSetPage";
 import NotRegisteredPage from "@/pages/auth/NotRegisteredPage";
 import DeactivatedPage from "@/pages/auth/DeactivatedPage";
 
+// Registration
+import RegisterPhonePage from "@/pages/register/RegisterPhonePage";
+import RegisterOTPPage from "@/pages/register/RegisterOTPPage";
+import RegisterShopDetailsPage from "@/pages/register/RegisterShopDetailsPage";
+import RegisterStatusPage from "@/pages/register/RegisterStatusPage";
+
+// Super Admin
+import SuperAdminDashboard from "@/pages/super-admin/SuperAdminDashboard";
+
 // Layout
 import EmployeeLayout from "@/components/layout/EmployeeLayout";
 import AdminLayout from "@/components/layout/AdminLayout";
@@ -72,6 +81,15 @@ export const router = createBrowserRouter([
   { path: "/login/pin-set", element: <PINSetPage /> },
   { path: "/login/not-registered", element: <NotRegisteredPage /> },
   { path: "/login/deactivated", element: <DeactivatedPage /> },
+
+  // Registration flow
+  { path: "/register", element: <RegisterPhonePage /> },
+  { path: "/register/otp", element: <RegisterOTPPage /> },
+  { path: "/register/shop-details", element: <RegisterShopDetailsPage /> },
+  { path: "/register/status", element: <RegisterStatusPage /> },
+
+  // Super Admin
+  { path: "/super-admin", element: <SuperAdminDashboard /> },
 
   {
     element: <ProtectedRoute allowedRoles={["admin", "co_admin"]} />,
