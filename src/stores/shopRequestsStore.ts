@@ -186,23 +186,23 @@ export const useShopRequestsStore = create<ShopRequestsState>((set, get) => ({
   approveRequest: async (requestId) => {
     set({ loading: true, error: null });
     try {
-      const { data, error } = await supabase.rpc("approve_shop_request", {
-        request_id: requestId,
-        admin_id: "00000000-0000-0000-0000-000000000001", // placeholder - will use actual admin ID
-      });
+      const { error } = await supabase
+        .from("shop_requests")
+        .update({
+          status: "approved",
+          reviewed_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", requestId);
 
       if (error) {
         set({ loading: false, error: error.message });
         return { success: false, error: error.message };
       }
 
-      const result = data as { success: boolean; error?: string };
-      if (result.success) {
-        // Refresh the list
-        await get().loadAllRequests();
-      }
+      await get().loadAllRequests();
       set({ loading: false });
-      return result;
+      return { success: true };
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Failed to approve request";
       set({ loading: false, error: msg });
@@ -213,23 +213,24 @@ export const useShopRequestsStore = create<ShopRequestsState>((set, get) => ({
   rejectRequest: async (requestId, reason) => {
     set({ loading: true, error: null });
     try {
-      const { data, error } = await supabase.rpc("reject_shop_request", {
-        request_id: requestId,
-        admin_id: "00000000-0000-0000-0000-000000000001", // placeholder
-        reason: reason ?? null,
-      });
+      const { error } = await supabase
+        .from("shop_requests")
+        .update({
+          status: "rejected",
+          rejection_reason: reason ?? null,
+          reviewed_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", requestId);
 
       if (error) {
         set({ loading: false, error: error.message });
         return { success: false, error: error.message };
       }
 
-      const result = data as { success: boolean; error?: string };
-      if (result.success) {
-        await get().loadAllRequests();
-      }
+      await get().loadAllRequests();
       set({ loading: false });
-      return result;
+      return { success: true };
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Failed to reject request";
       set({ loading: false, error: msg });
