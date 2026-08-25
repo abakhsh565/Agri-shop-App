@@ -94,12 +94,33 @@ export async function verifyOTPAndResolveUser(
   if (token !== DEV_OTP) return { status: "wrong_otp" };
 
   // Find the matching app profile row.
-  const { data: existing, error: lookupErr } = await supabase
+  // Try both formats: with and without + prefix
+  let existing = null;
+  let lookupErr = null;
+  
+  // First try exact match (no + prefix)
+  const result1 = await supabase
     .from("users")
     .select("*")
     .eq("phone", e164)
     .maybeSingle();
-  if (lookupErr) return { status: "error", message: lookupErr.message };
+  
+  if (result1.data) {
+    existing = result1.data;
+  } else {
+    // Try with + prefix
+    const result2 = await supabase
+      .from("users")
+      .select("*")
+      .eq("phone", "+" + e164)
+      .maybeSingle();
+    if (result2.data) {
+      existing = result2.data;
+    } else {
+      lookupErr = result1.error || result2.error;
+    }
+  }
+  if (lookupErr) return { status: "error", message: lookupErr!.message };
 
   if (existing) {
     const row = existing as UserRow;
