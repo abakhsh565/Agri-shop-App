@@ -13,21 +13,21 @@ import {
 const STATUS_TABS: { key: ShopRequestStatus | "all"; label: string; color: string }[] = [
   { key: "all", label: "All", color: "var(--text-primary)" },
   { key: "pending", label: "Pending", color: "#f59e0b" },
-  { key: "under_review", label: "Reviewing", color: "#3b82f6" },
+  { key: "hold", label: "On Hold", color: "#8b5cf6" },
   { key: "approved", label: "Approved", color: "#22c55e" },
   { key: "rejected", label: "Rejected", color: "#ef4444" },
 ];
 
 const STATUS_ICONS: Record<ShopRequestStatus, typeof Clock> = {
   pending: Clock,
-  under_review: Eye,
+  hold: Eye,
   approved: CheckCircle,
   rejected: XCircle,
 };
 
 const STATUS_COLORS: Record<ShopRequestStatus, { bg: string; fg: string }> = {
   pending: { bg: "rgba(245,158,11,0.1)", fg: "#f59e0b" },
-  under_review: { bg: "rgba(59,130,246,0.1)", fg: "#3b82f6" },
+  hold: { bg: "rgba(139,92,246,0.1)", fg: "#8b5cf6" },
   approved: { bg: "rgba(34,197,94,0.1)", fg: "#22c55e" },
   rejected: { bg: "rgba(239,68,68,0.1)", fg: "#ef4444" },
 };
@@ -55,7 +55,7 @@ export default function SuperAdminDashboard() {
   const counts = {
     all: requests.length,
     pending: requests.filter((r) => r.status === "pending").length,
-    under_review: requests.filter((r) => r.status === "under_review").length,
+    hold: requests.filter((r) => r.status === "hold").length,
     approved: requests.filter((r) => r.status === "approved").length,
     rejected: requests.filter((r) => r.status === "rejected").length,
   };
@@ -253,7 +253,7 @@ export default function SuperAdminDashboard() {
             )}
 
             {/* Action Buttons */}
-            {(selectedRequest.status === "pending" || selectedRequest.status === "under_review") && (
+            {(selectedRequest.status === "pending" || selectedRequest.status === "hold") && (
               <div className="flex gap-3 mt-2">
                 <button
                   onClick={() => setShowRejectModal(true)}

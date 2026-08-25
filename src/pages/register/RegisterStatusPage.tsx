@@ -15,13 +15,13 @@ const STATUS_CONFIG = {
     subtitle: "Your request is in the queue",
     description: "We've received your shop registration. Our team will review it shortly. You'll be notified once a decision is made.",
   },
-  under_review: {
+  hold: {
     icon: RefreshCw,
-    color: "#3b82f6",
-    bgColor: "rgba(59,130,246,0.1)",
-    title: "Under Review",
-    subtitle: "Our team is reviewing your request",
-    description: "Your registration is being reviewed by our admin team. This usually takes 1-2 business days.",
+    color: "#8b5cf6",
+    bgColor: "rgba(139,92,246,0.1)",
+    title: "On Hold",
+    subtitle: "Your request needs more information",
+    description: "Your registration has been put on hold. Please check with your shop admin for more details.",
   },
   approved: {
     icon: CheckCircle,
@@ -152,7 +152,7 @@ export default function RegisterStatusPage() {
             </button>
           )}
 
-          {(status === "pending" || status === "under_review") && (
+          {(status === "pending" || status === "hold") && (
             <button
               onClick={() => loadMyRequest(normalizePhone(pendingPhone))}
               className="w-full h-12 rounded-full font-bold text-sm flex items-center justify-center gap-2"

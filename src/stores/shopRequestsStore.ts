@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { supabase } from "@/lib/supabase";
 
-export type ShopRequestStatus = "pending" | "under_review" | "approved" | "rejected";
+export type ShopRequestStatus = "pending" | "approved" | "hold" | "rejected";
 
 export interface ShopRequest {
   id: string;
