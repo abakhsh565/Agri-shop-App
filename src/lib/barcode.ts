@@ -119,15 +119,43 @@ export interface ScanResult {
 }
 
 /**
- * Open camera and scan for barcodes using the BarcodeDetector API.
+ * Open camera and scan for barcodes.
+ * Uses Capacitor MLKit on native devices, BarcodeDetector on web.
  * Returns the first detected barcode, or null if the user cancels.
- *
- * Falls back gracefully if BarcodeDetector is not available.
  */
 export async function scanFromCamera(): Promise<ScanResult | null> {
-  // Check if BarcodeDetector is available
+  // Try Capacitor MLKit first (works on Android/iOS native)
+  try {
+    const { BarcodeScanner } = await import("@capacitor-mlkit/barcode-scanning");
+    
+    // Check if available on this device
+    const supported = await BarcodeScanner.isSupported();
+    if (supported) {
+      // Request camera permission
+      const permission = await BarcodeScanner.requestPermissions();
+      if (permission.camera !== "granted") {
+        return null;
+      }
+
+      // Start scanning
+      const result = await BarcodeScanner.scan({
+        formats: ["CODE_128", "CODE_39", "EAN_13", "EAN_8", "UPC_A", "UPC_E"],
+      });
+
+      if (result.barcodes.length > 0) {
+        return {
+          barcode: result.barcodes[0].rawValue,
+          format: result.barcodes[0].format,
+        };
+      }
+      return null;
+    }
+  } catch {
+    // Capacitor MLKit not available, fall through to web method
+  }
+
+  // Fallback: Browser BarcodeDetector API (web)
   if (!BarcodeDetectorClass) {
-    // Fallback: prompt user to enter barcode manually
     return null;
   }
 
@@ -141,7 +169,6 @@ export async function scanFromCamera(): Promise<ScanResult | null> {
     video.autoplay = true;
     video.playsInline = true;
 
-    // Wait for video to start playing
     await new Promise<void>((resolve) => {
       video.onloadedmetadata = () => {
         video.play();
@@ -153,7 +180,6 @@ export async function scanFromCamera(): Promise<ScanResult | null> {
       formats: ["code_128", "code_39", "ean_13", "ean_8", "upc_a", "upc_e"],
     });
 
-    // Scan in a loop until we get a result or the user cancels
     const result = await new Promise<ScanResult | null>((resolve) => {
       let scanning = true;
       const stop = () => {
@@ -162,7 +188,6 @@ export async function scanFromCamera(): Promise<ScanResult | null> {
         resolve(null);
       };
 
-      // Auto-timeout after 30 seconds
       const timeout = setTimeout(stop, 30_000);
 
       const scanLoop = async () => {
@@ -179,9 +204,7 @@ export async function scanFromCamera(): Promise<ScanResult | null> {
             });
             return;
           }
-        } catch {
-          // ignore detection errors
-        }
+        } catch {}
         if (scanning) requestAnimationFrame(scanLoop);
       };
 
