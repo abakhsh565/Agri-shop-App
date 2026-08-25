@@ -8,6 +8,7 @@ import OTPVerifyPage from "@/pages/auth/OTPVerifyPage";
 import PINSetPage from "@/pages/auth/PINSetPage";
 import NotRegisteredPage from "@/pages/auth/NotRegisteredPage";
 import DeactivatedPage from "@/pages/auth/DeactivatedPage";
+import SetupDemoPage from "@/pages/auth/SetupDemoPage";
 
 // Registration
 import RegisterPhonePage from "@/pages/register/RegisterPhonePage";
@@ -81,6 +82,7 @@ export const router = createBrowserRouter([
   { path: "/login/pin-set", element: <PINSetPage /> },
   { path: "/login/not-registered", element: <NotRegisteredPage /> },
   { path: "/login/deactivated", element: <DeactivatedPage /> },
+  { path: "/setup-demo", element: <SetupDemoPage /> },
 
   // Registration flow
   { path: "/register", element: <RegisterPhonePage /> },

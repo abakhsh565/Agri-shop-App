@@ -47,7 +47,7 @@ export default function EmployeesListPage() {
         }
       />
 
-      <div className="flex flex-col px-4 gap-3 pb-4">
+      <div className="flex flex-col px-4 gap-3 pb-24">
         {ready && employees.length === 0 && (
           <div className="flex flex-col items-center py-20 gap-2">
             <p className="text-3xl">👥</p>
@@ -98,6 +98,22 @@ export default function EmployeesListPage() {
             </button>
           );
         })}
+      </div>
+
+      {/* Floating Add Employee */}
+      <div
+        className="fixed left-0 right-0 max-w-[480px] mx-auto pointer-events-none z-40"
+        style={{ bottom: "calc(var(--tabbar-height) + 16px)" }}
+      >
+        <div className="flex px-4 justify-end">
+          <button
+            onClick={() => navigate("/admin/employees/new")}
+            className="pointer-events-auto h-13 pl-4 pr-5 rounded-full flex items-center gap-2 text-sm font-bold shadow-lg active:scale-95 transition-transform"
+            style={{ background: "var(--brand)", color: "#0a0a0a", height: "52px", boxShadow: "0 6px 20px rgba(0,0,0,0.25)" }}
+          >
+            <Plus size={20} strokeWidth={2.5} /> Employee
+          </button>
+        </div>
       </div>
     </div>
   );

@@ -46,6 +46,8 @@ export default function AdminLayout() {
   const findByBarcode = useProductsStore((s) => s.findByBarcode);
   const { addToast } = useUIStore();
   const [scanning, setScanning] = useState(false);
+  const [showManualScan, setShowManualScan] = useState(false);
+  const [manualBarcode, setManualBarcode] = useState("");
 
   async function handleNavScan() {
     setScanning(true);
@@ -60,11 +62,27 @@ export default function AdminLayout() {
           navigate(`/admin/inventory/new`);
           addToast(`Barcode "${result.barcode}" — no product found. Create new?`, "info");
         }
+      } else {
+        setShowManualScan(true);
       }
     } catch {
-      addToast("Camera unavailable", "error");
+      setShowManualScan(true);
     } finally {
       setScanning(false);
+    }
+  }
+
+  function handleManualScanSubmit() {
+    if (manualBarcode.trim().length >= 3) {
+      const product = findByBarcode(manualBarcode.trim());
+      if (product) {
+        navigate(`/admin/inventory/${product.id}/edit`);
+      } else {
+        navigate(`/admin/inventory/new`);
+        addToast(`Barcode "${manualBarcode}" — no product found. Create new?`, "info");
+      }
+      setManualBarcode("");
+      setShowManualScan(false);
     }
   }
 
@@ -74,6 +92,46 @@ export default function AdminLayout() {
       style={{ background: "var(--background)" }}
     >
       <ToastContainer />
+
+      {/* ── Manual Scan Modal ── */}
+      {showManualScan && (
+        <div
+          className="fixed inset-0 z-50 flex items-end"
+          style={{ background: "rgba(0,0,0,0.5)" }}
+          onClick={() => setShowManualScan(false)}
+        >
+          <div
+            className="w-full max-w-[480px] mx-auto rounded-t-[24px] p-6 flex flex-col gap-4"
+            style={{ background: "var(--surface)" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <p className="text-base font-bold" style={{ color: "var(--text-primary)" }}>Scan Barcode</p>
+              <button onClick={() => setShowManualScan(false)} className="text-sm" style={{ color: "var(--text-secondary)" }}>✕</button>
+            </div>
+            <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
+              Camera not available. Enter barcode manually.
+            </p>
+            <input
+              autoFocus
+              value={manualBarcode}
+              onChange={(e) => setManualBarcode(e.target.value.toUpperCase())}
+              onKeyDown={(e) => e.key === "Enter" && handleManualScanSubmit()}
+              placeholder="e.g. AGS-HMSK-01"
+              className="w-full h-12 rounded-full px-4 text-sm outline-none font-mono"
+              style={{ background: "var(--surface-2)", border: "1px solid var(--divider)", color: "var(--text-primary)" }}
+            />
+            <button
+              onClick={handleManualScanSubmit}
+              disabled={manualBarcode.trim().length < 3}
+              className="w-full h-12 rounded-full font-bold text-sm disabled:opacity-50"
+              style={{ background: "var(--brand)", color: "#0a0a0a" }}
+            >
+              Look up product
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ── Main content ── */}
       <div
