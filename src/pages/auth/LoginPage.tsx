@@ -15,7 +15,9 @@ export default function LoginPage() {
   const [phoneError, setPhoneError] = useState("");
 
   function validatePhone(p: string) {
-    return /^0\d{9,10}$/.test(p.replace(/\s/g, ""));
+    const clean = p.replace(/\s/g, "");
+    // Accept local format (03001234567) or international (923001234567)
+    return /^0\d{9,10}$/.test(clean) || /^92\d{10,11}$/.test(clean);
   }
 
   async function handleSignIn() {
@@ -23,7 +25,7 @@ export default function LoginPage() {
     const cleanPhone = phone.replace(/\s/g, "");
 
     if (!validatePhone(cleanPhone)) {
-      setPhoneError("Enter a valid phone number (e.g. 03001234567)");
+      setPhoneError("Enter a valid phone number (e.g. 03001234567 or 923001234567)");
       return;
     }
 
