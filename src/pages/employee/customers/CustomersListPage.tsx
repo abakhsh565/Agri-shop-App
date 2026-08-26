@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
 import { useCustomersStore } from "@/stores/customersStore";
@@ -6,13 +6,34 @@ import { formatCurrency } from "@/lib/formatters";
 import { useT } from "@/lib/i18n";
 import { useThemeStore } from "@/stores/themeStore";
 import { useShellBase } from "@/lib/useShellBase";
-import { Plus, Search, ChevronRight } from "lucide-react";
+import { Plus, Search, ChevronRight, SlidersHorizontal, Check } from "lucide-react";
+import type { Customer } from "@/types";
+
+type SortKey = "outstanding" | "name" | "recent";
+
+const SORT_OPTIONS: { key: SortKey; label: string }[] = [
+  { key: "outstanding", label: "Highest Outstanding" },
+  { key: "name", label: "Name (A–Z)" },
+  { key: "recent", label: "Recently Added" },
+];
 
 function initBgColor(name: string) {
-  const colors = ["#84cc16","#3b82f6","#8b5cf6","#f59e0b","#06b6d4","#ec4899"];
+  const colors = ["#84cc16","#3b82f6","#8b5cf6","#f59e0b","#06b6d4","#ec4899","#ef4444","#10b981"];
   let hash = 0;
   for (const c of name) hash = (hash * 31 + c.charCodeAt(0)) & 0xffff;
   return colors[hash % colors.length];
+}
+
+function sortCustomers(list: Customer[], sort: SortKey): Customer[] {
+  const sorted = [...list];
+  if (sort === "outstanding") {
+    sorted.sort((a, b) => b.outstandingBalance - a.outstandingBalance);
+  } else if (sort === "name") {
+    sorted.sort((a, b) => a.name.localeCompare(b.name));
+  } else {
+    sorted.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }
+  return sorted;
 }
 
 export default function CustomersListPage() {
@@ -25,13 +46,29 @@ export default function CustomersListPage() {
   const ready = useCustomersStore((s) => s.ready);
 
   const [search, setSearch] = useState("");
+  const [sort, setSort] = useState<SortKey>("outstanding");
+  const [showSortMenu, setShowSortMenu] = useState(false);
+  const sortMenuRef = useRef<HTMLDivElement>(null);
+
+  // Close sort menu on outside click
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (sortMenuRef.current && !sortMenuRef.current.contains(e.target as Node)) {
+        setShowSortMenu(false);
+      }
+    }
+    if (showSortMenu) document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [showSortMenu]);
 
   const filtered = customers.filter((c) =>
-    c.name.toLowerCase().includes(search.toLowerCase()) || c.phone.includes(search)
+    (c.name.toLowerCase().includes(search.toLowerCase()) || c.phone.includes(search)) &&
+    !c.isArchived
   );
 
+  const sorted = sortCustomers(filtered, sort);
   const totalOutstanding = customers.reduce((s, c) => s + c.outstandingBalance, 0);
-  const withBalance = customers.filter((c) => c.outstandingBalance > 0).length;
+  const onCredit = customers.filter((c) => c.outstandingBalance > 0).length;
 
   return (
     <div
@@ -47,35 +84,35 @@ export default function CustomersListPage() {
         </p>
       </div>
 
-      {/* Summary */}
+      {/* Summary strip */}
       <div className="px-4 pb-3">
         <div
           className="rounded-[12px] px-4 py-3 flex items-center justify-between"
           style={{ background: "var(--surface-2)" }}
         >
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
+            <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "var(--text-secondary)" }}>
               Total Outstanding
             </p>
-            <p className="text-[18px] font-bold mt-0.5" style={{ color: totalOutstanding > 0 ? "#d97706" : "var(--brand-dark)" }}>
+            <p className="text-[20px] font-bold mt-0.5" style={{ color: "#d97706" }}>
               {formatCurrency(totalOutstanding)}
             </p>
           </div>
           <div className="text-right">
-            <p className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
+            <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "var(--text-secondary)" }}>
               On Credit
             </p>
-            <p className="text-[18px] font-bold mt-0.5" style={{ color: "var(--text-primary)" }}>
-              {withBalance} / {customers.length}
+            <p className="text-[20px] font-bold mt-0.5" style={{ color: "var(--text-primary)" }}>
+              {onCredit} / {customers.length}
             </p>
           </div>
         </div>
       </div>
 
-      {/* Search */}
-      <div className="px-4 pb-3">
+      {/* Search + Sort */}
+      <div className="px-4 pb-3 flex gap-2 items-center">
         <div
-          className="flex items-center gap-2 h-10 rounded-full px-3"
+          className="flex-1 flex items-center gap-2 h-10 rounded-full px-3"
           style={{ background: "var(--surface-2)", border: "1px solid var(--divider)" }}
         >
           <Search size={14} style={{ color: "var(--text-secondary)" }} />
@@ -90,6 +127,42 @@ export default function CustomersListPage() {
             <button onClick={() => setSearch("")} style={{ color: "var(--text-secondary)" }}>×</button>
           )}
         </div>
+
+        {/* Sort button */}
+        <div className="relative" ref={sortMenuRef}>
+          <button
+            onClick={() => setShowSortMenu(!showSortMenu)}
+            className="w-10 h-10 rounded-full flex items-center justify-center shrink-0"
+            style={{ background: "var(--surface-2)", border: "1px solid var(--divider)" }}
+          >
+            <SlidersHorizontal size={15} style={{ color: "var(--text-primary)" }} />
+          </button>
+
+          {/* Sort dropdown */}
+          {showSortMenu && (
+            <div
+              className="absolute right-0 top-12 w-52 rounded-[14px] shadow-xl overflow-hidden z-50 animate-scale-in"
+              style={{ background: "var(--surface)", border: "1px solid var(--divider)" }}
+            >
+              {SORT_OPTIONS.map((opt) => (
+                <button
+                  key={opt.key}
+                  onClick={() => { setSort(opt.key); setShowSortMenu(false); }}
+                  className="flex items-center justify-between w-full px-4 py-3.5 text-left transition-colors active:bg-black/5"
+                  style={{ borderBottom: "1px solid var(--divider)" }}
+                >
+                  <span
+                    className="text-[13px] font-medium"
+                    style={{ color: sort === opt.key ? "var(--brand-dark)" : "var(--text-primary)" }}
+                  >
+                    {opt.label}
+                  </span>
+                  {sort === opt.key && <Check size={16} style={{ color: "var(--brand)" }} />}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Customer list */}
@@ -97,7 +170,7 @@ export default function CustomersListPage() {
         <div className="flex flex-col items-center py-16 gap-3">
           <p className="text-[13px]" style={{ color: "var(--text-secondary)" }}>Loading...</p>
         </div>
-      ) : filtered.length === 0 ? (
+      ) : sorted.length === 0 ? (
         <div className="flex flex-col items-center py-16 gap-3">
           <p className="text-4xl">👤</p>
           <p className="text-[15px] font-semibold" style={{ color: "var(--text-primary)" }}>
@@ -110,17 +183,20 @@ export default function CustomersListPage() {
           )}
         </div>
       ) : (
-        <div className="flex flex-col px-4 gap-3 pb-24">
-          {filtered.map((c, i) => {
+        <div className="flex flex-col px-4 gap-2 pb-24">
+          {sorted.map((c) => {
             const bg = initBgColor(c.name);
             const hasDebt = c.outstandingBalance > 0;
+            const creditUsed = c.creditLimit > 0
+              ? Math.min(100, Math.round((c.outstandingBalance / c.creditLimit) * 100))
+              : 0;
 
             return (
               <button
                 key={c.id}
                 onClick={() => navigate(`${base}/customers/${c.id}`)}
                 className="flex items-center gap-3 p-3 rounded-[14px] text-left transition-all active:scale-[0.98]"
-                style={{ background: "var(--surface-2)" }}
+                style={{ background: "var(--surface)", border: "1px solid var(--border-light)" }}
               >
                 {/* Avatar */}
                 {c.imageUrl ? (
@@ -144,21 +220,43 @@ export default function CustomersListPage() {
                     {c.name}
                   </p>
                   <p className="text-[12px]" style={{ color: "var(--text-secondary)" }}>{c.phone}</p>
+                  {/* Credit usage bar */}
+                  {c.creditLimit > 0 && (
+                    <div className="mt-1.5">
+                      <div className="w-full h-1.5 rounded-full" style={{ background: "var(--divider)" }}>
+                        <div
+                          className="h-full rounded-full transition-all"
+                          style={{
+                            width: `${creditUsed}%`,
+                            background: creditUsed >= 90 ? "#ef4444" : creditUsed >= 70 ? "#f59e0b" : "#22c55e",
+                          }}
+                        />
+                      </div>
+                      <p className="text-[10px] mt-0.5" style={{ color: "var(--text-secondary)" }}>
+                        {creditUsed}% used
+                      </p>
+                    </div>
+                  )}
                 </div>
 
-                {/* Right — outstanding + chevron */}
+                {/* Right side */}
                 <div className="flex flex-col items-end gap-1 shrink-0">
                   {hasDebt ? (
                     <>
-                      <span className="text-[13px] font-bold" style={{ color: "#d97706" }}>
+                      <span className="text-[13px] font-bold" style={{ color: "var(--text-primary)" }}>
                         {formatCurrency(c.outstandingBalance)}
                       </span>
-                      <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full" style={{ background: "rgba(245,158,11,0.12)", color: "#d97706" }}>
-                        Credit
+                      <span
+                        className="text-[10px] font-semibold"
+                        style={{ color: "#22c55e" }}
+                      >
+                        outstanding
                       </span>
                     </>
                   ) : (
-                    <span className="text-[11px]" style={{ color: "var(--brand-dark)" }}>No balance</span>
+                    <span className="text-[11px] font-medium" style={{ color: "var(--text-secondary)" }}>
+                      No balance
+                    </span>
                   )}
                   <ChevronRight size={14} style={{ color: "var(--text-secondary)" }} />
                 </div>
