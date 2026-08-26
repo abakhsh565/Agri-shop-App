@@ -178,14 +178,14 @@ export default function AddProductPage() {
           {/* Barcode */}
           <div>
             <p className={labelCls} style={{ color: "var(--text-secondary)" }}>Barcode</p>
-            <input
-              value={barcode}
-              onChange={(e) => setBarcode(e.target.value.toUpperCase())}
-              placeholder="Auto-generated if empty"
-              className="w-full h-12 rounded-[24px] px-4 text-sm outline-none font-mono"
-              style={fieldStyle}
-            />
-            <div className="flex gap-2 mt-2">
+            <div className="flex gap-2">
+              <input
+                value={barcode}
+                onChange={(e) => setBarcode(e.target.value.toUpperCase())}
+                placeholder="Auto-generated if empty"
+                className="flex-1 h-12 rounded-[24px] px-4 text-sm outline-none font-mono"
+                style={fieldStyle}
+              />
               <button
                 type="button"
                 onClick={async () => {
@@ -200,25 +200,12 @@ export default function AddProductPage() {
                     addToast("Camera unavailable", "error");
                   }
                 }}
-                className="h-12 px-4 rounded-[24px] flex items-center gap-1.5 text-xs font-bold shrink-0"
-                style={{ background: "var(--brand)", color: "#0a0a0a" }}
+                className="h-12 w-12 rounded-full flex items-center justify-center shrink-0"
+                style={{ background: "var(--surface-2)", border: "1px solid var(--divider)" }}
               >
-                📷 Scan
-              </button>
-              <button
-                type="button"
-                onClick={() => setBarcode(generateProductBarcode(name || "PRODUCT"))}
-                className="h-12 px-4 rounded-[24px] flex items-center gap-1.5 text-xs font-bold shrink-0"
-                style={{ background: "var(--surface-2)", color: "var(--brand-dark)", border: "1px solid var(--divider)" }}
-              >
-                Generate Code
+                <Scan size={16} style={{ color: "var(--brand-dark)" }} />
               </button>
             </div>
-            {barcode && (
-              <p className="text-[10px] mt-1.5 font-mono" style={{ color: "var(--text-secondary)" }}>
-                {barcode}
-              </p>
-            )}
           </div>
 
           {/* Company */}

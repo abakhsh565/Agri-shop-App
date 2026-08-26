@@ -129,15 +129,6 @@ export default function ProductDetailPage() {
             <p className="text-sm" style={{ color: "var(--text-secondary)" }}>{product.company}</p>
             <div className="flex items-center gap-2 mt-1 flex-wrap">
               <CategoryChip label={CATEGORY_LABEL[product.category]} />
-              {!isAdmin && (
-                <button
-                  onClick={() => setShowImageEdit(true)}
-                  className="flex items-center gap-1 h-6 px-2 rounded-full text-[10px] font-bold"
-                  style={{ background: "var(--surface-2)", color: "var(--text-secondary)", border: "1px solid var(--divider)" }}
-                >
-                  <Camera size={10} /> Photo
-                </button>
-              )}
             </div>
           </div>
         </div>

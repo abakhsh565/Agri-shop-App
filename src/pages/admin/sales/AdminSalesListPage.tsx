@@ -19,7 +19,7 @@ function initBgColor(name: string) {
 }
 
 type Tab = "all" | "credit" | "paid";
-type DateFilter = "today" | "yesterday" | "this_week" | "this_month";
+type DateFilter = "today" | "yesterday" | "this_week" | "this_month" | "custom";
 
 export default function AdminSalesListPage() {
   const navigate = useNavigate();
@@ -29,6 +29,7 @@ export default function AdminSalesListPage() {
   const isUrdu = language === "ur";
   const [tab, setTab] = useState<Tab>((state?.tab as Tab) ?? "all");
   const [dateFilter, setDateFilter] = useState<DateFilter>("today");
+  const [customDate, setCustomDate] = useState("");
   const [query, setQuery] = useState("");
 
   // Live sales from Supabase (real-time) — loaded + subscribed globally by the layout.
@@ -53,6 +54,9 @@ export default function AdminSalesListPage() {
       const now = new Date();
       return new Date(d).getMonth() === now.getMonth() && new Date(d).getFullYear() === now.getFullYear();
     }
+    if (dateFilter === "custom" && customDate) {
+      return d === customDate;
+    }
     const weekStart = new Date(); weekStart.setDate(weekStart.getDate() - weekStart.getDay());
     return new Date(d) >= weekStart;
   }
@@ -73,8 +77,7 @@ export default function AdminSalesListPage() {
     );
   }
 
-  const inDateAll = allSales.filter((s) => !s.isVoided && inDate(s));
-  const filtered  = (inDateAll.length > 0 ? inDateAll : allSales.filter((s) => !s.isVoided)).filter(inTab).filter(inQuery);
+  const filtered = allSales.filter((s) => !s.isVoided && inDate(s)).filter(inTab).filter(inQuery);
   const total     = filtered.reduce((s, x) => s + x.totalAmount, 0);
   const profit    = Math.round(total * 0.2);
 
@@ -83,6 +86,7 @@ export default function AdminSalesListPage() {
     { key: "yesterday",   label: t("sales.yesterday") },
     { key: "this_week",   label: t("sales.thisWeek") },
     { key: "this_month",  label: "This Month" },
+    { key: "custom",      label: "Custom Date" },
   ];
 
   const TABS: { key: Tab; label: string }[] = [
@@ -171,6 +175,15 @@ export default function AdminSalesListPage() {
 
       {/* Date filters */}
       <div className="flex gap-2 px-4 py-3 overflow-x-auto no-scrollbar" style={{ scrollBehavior: "smooth" }}>
+        {dateFilter === "custom" && (
+          <input
+            type="date"
+            value={customDate}
+            onChange={(e) => setCustomDate(e.target.value)}
+            className="h-8 px-3 rounded-full text-xs font-medium outline-none"
+            style={{ background: "var(--surface-2)", color: "var(--text-primary)", border: "1px solid var(--divider)" }}
+          />
+        )}
         {DATE_FILTERS.map(({ key, label }) => (
           <button
             key={key}

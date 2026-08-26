@@ -71,7 +71,6 @@ export default function EmployeesListPage() {
                 </div>
                 <p className="text-xs" style={{ color: "var(--text-secondary)" }}>{emp.phone}</p>
                 <div className="flex items-center gap-2 mt-1">
-                  <span className="text-xs" style={{ color: "var(--text-secondary)" }}>Rs. 35,000/mo</span>
                   <span
                     className="text-[10px] font-bold px-2 py-0.5 rounded-full"
                     style={{ background: bg, color }}
