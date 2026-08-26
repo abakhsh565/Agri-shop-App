@@ -29,15 +29,27 @@ jobs:
       - name: Build Web App
         run: npm run build
 
-      - name: Add Android Platform & Sync
-        run: |
-          npx cap add android || true
-          npx cap sync android
+      - name: Add Android Platform
+        run: npx cap add android || true
 
-      - name: Add Camera Permission to AndroidManifest
+      - name: Sync Capacitor
+        run: npx cap sync android
+
+      - name: Inject Camera Permission
         run: |
-          sed -i '/<manifest /a\
-\n    <uses-permission android:name="android.permission.CAMERA" />\n    <uses-feature android:name="android.hardware.camera" android:required="false" />\n    <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />' android/app/src/main/AndroidManifest.xml
+          node -e "
+          const fs = require('fs');
+          const path = 'android/app/src/main/AndroidManifest.xml';
+          let xml = fs.readFileSync(path, 'utf8');
+          const perm = '    <uses-permission android:name=\"android.permission.CAMERA\" />\n    <uses-feature android:name=\"android.hardware.camera\" android:required=\"false\" />\n    <uses-feature android:name=\"android.hardware.camera.autofocus\" android:required=\"false\" />';
+          if (!xml.includes('android.permission.CAMERA')) {
+            xml = xml.replace('<manifest ', '<manifest \n' + perm + '\n');
+            fs.writeFileSync(path, xml);
+            console.log('Camera permission injected');
+          } else {
+            console.log('Camera permission already present');
+          }
+          "
 
       - name: Build APK
         run: |
