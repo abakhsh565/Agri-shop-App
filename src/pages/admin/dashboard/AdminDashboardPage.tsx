@@ -11,7 +11,7 @@ import { useCompaniesStore } from "@/stores/companiesStore";
 import { useCustomersStore } from "@/stores/customersStore";
 import { formatCurrency, formatSmartDateTime } from "@/lib/formatters";
 import { useT } from "@/lib/i18n";
-import { AlertTriangle, TrendingUp, ChevronRight, TrendingDown, ShoppingCart, Search, Bell, Wallet } from "lucide-react";
+import { AlertTriangle, TrendingUp, ChevronRight, TrendingDown, ShoppingCart, Search, Bell, Wallet, CheckCircle2 } from "lucide-react";
 import StatusBar from "@/components/ui/StatusBar";
 
 function initBgColor(name: string) {
@@ -327,7 +327,7 @@ export default function AdminDashboardPage() {
         </div>
 
         <button
-          onClick={() => navigate("/admin/customers")}
+          onClick={() => navigate("/admin/customers", { state: { filter: "credit" } })}
           className="w-full rounded-[12px] p-4 flex items-center justify-between transition-opacity active:opacity-70"
           style={{ background: "var(--surface)", border: "1px solid var(--border-light)" }}
         >
@@ -345,9 +345,6 @@ export default function AdminDashboardPage() {
 
       {/* ── Quick Actions ── */}
       <div className="px-4 pt-5">
-        <p className="text-[11px] font-bold uppercase tracking-widest mb-3" style={{ color: "var(--text-secondary)" }}>
-          {t("dashboard.quickActions")}
-        </p>
         <div className="grid grid-cols-3 gap-2">
           <button
             onClick={() => navigate("/admin/sale")}
@@ -417,6 +414,20 @@ export default function AdminDashboardPage() {
               </div>
               <ChevronRight size={16} style={{ color: "var(--text-secondary)" }} />
             </button>
+          )}
+          {lowStockCount === 0 && totalPayable === 0 && (
+            <div
+              className="rounded-[14px] p-4 flex items-center gap-3"
+              style={{ background: "var(--surface)", border: "1px solid var(--border-light)" }}
+            >
+              <div className="size-9 rounded-full flex items-center justify-center" style={{ background: "rgba(132,204,22,0.1)" }}>
+                <CheckCircle2 size={16} color="#65a30d" />
+              </div>
+              <div>
+                <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>All Clear</p>
+                <p className="text-xs" style={{ color: "var(--text-secondary)" }}>No low stock or supplier payable alerts right now</p>
+              </div>
+            </div>
           )}
         </div>
       </div>

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
 import { useCustomersStore } from "@/stores/customersStore";
 import { formatCurrency } from "@/lib/formatters";
@@ -38,6 +38,7 @@ function sortCustomers(list: Customer[], sort: SortKey): Customer[] {
 
 export default function CustomersListPage() {
   const navigate = useNavigate();
+  const { state } = useLocation();
   const base = useShellBase();
   const t = useT();
   const { language } = useThemeStore();
@@ -45,6 +46,8 @@ export default function CustomersListPage() {
   const customers = useCustomersStore((s) => s.customers);
   const ready = useCustomersStore((s) => s.ready);
 
+  const initialFilter = state?.filter === "credit" ? "credit" : "all";
+  const [creditFilter, setCreditFilter] = useState<"all" | "credit">(initialFilter);
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<SortKey>("outstanding");
   const [showSortMenu, setShowSortMenu] = useState(false);
@@ -63,7 +66,8 @@ export default function CustomersListPage() {
 
   const filtered = customers.filter((c) =>
     (c.name.toLowerCase().includes(search.toLowerCase()) || c.phone.includes(search)) &&
-    !c.isArchived
+    !c.isArchived &&
+    (creditFilter === "all" || c.outstandingBalance > 0)
   );
 
   const sorted = sortCustomers(filtered, sort);
@@ -163,6 +167,23 @@ export default function CustomersListPage() {
             </div>
           )}
         </div>
+      </div>
+
+      {/* Filter chips */}
+      <div className="flex gap-2 px-4 pb-3">
+        {[{ key: "all", label: "All Customers" }, { key: "credit", label: "On Credit" }].map((f) => (
+          <button
+            key={f.key}
+            onClick={() => setCreditFilter(f.key as "all" | "credit")}
+            className="h-8 px-4 rounded-full text-xs font-semibold transition-colors"
+            style={{
+              background: creditFilter === f.key ? "var(--brand)" : "var(--surface-2)",
+              color: creditFilter === f.key ? "#0a0a0a" : "var(--text-secondary)",
+            }}
+          >
+            {f.label}
+          </button>
+        ))}
       </div>
 
       {/* Customer list */}
