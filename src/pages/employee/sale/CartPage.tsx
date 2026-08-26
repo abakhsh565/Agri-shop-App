@@ -10,7 +10,6 @@ import { useAuthStore } from "@/stores/authStore";
 import { formatCurrency, getCreditHealth, getCreditHealthColor } from "@/lib/formatters";
 import { Plus } from "lucide-react";
 import { useUIStore } from "@/stores/uiStore";
-import EmptyState from "@/components/ui/EmptyState";
 import { useShellBase } from "@/lib/useShellBase";
 import { useProductsStore } from "@/stores/productsStore";
 import ScanButton from "@/components/ui/ScanButton";
@@ -40,6 +39,12 @@ export default function CartPage() {
     </div>
   );
 
+  // PRD §38.3: When last item is removed, redirect to product selection
+  if (items.length === 0) {
+    navigate(`${base}/sale/products`, { replace: true });
+    return null;
+  }
+
   const total = subtotal();
   const parsedAmount = amountReceived === "" ? null : Number(amountReceived);
   const amountPaid = paymentType === "full" ? total : Math.min(parsedAmount ?? 0, total);
@@ -60,7 +65,7 @@ export default function CartPage() {
         customerPhone: customer!.phone,
         customerAddress: customer!.address,
         employeeId: user?.id ?? "",
-        employeeName: user?.name?.split(" ")[0] ?? "Staff",
+        employeeName: user?.name ?? "Staff",
         items: items.map((it) => ({
           productId: it.productId,
           productName: it.productName,
@@ -124,10 +129,7 @@ export default function CartPage() {
 
       {/* Cart items */}
       <div className="px-4 pt-4">
-        {items.length === 0 ? (
-          <EmptyState icon="🛒" title="Cart is empty" subtitle="Add products to start a sale" />
-        ) : (
-          <div className="flex flex-col">
+        <div className="flex flex-col">
             {items.map((item, i) => (
               <div key={item.variantId} className={`py-4 ${i < items.length - 1 ? "border-b border-[#e5e5e5]" : ""}`}>
                 <div className="flex items-start justify-between">
@@ -153,7 +155,6 @@ export default function CartPage() {
               </div>
             ))}
           </div>
-        )}
 
         <div className="flex gap-2 mt-3">
           <button

@@ -88,6 +88,9 @@ export default function DashboardPage() {
   const totalAmount  = salesToUse.reduce((s, x) => s + x.totalAmount, 0);
   const paidAmount   = salesToUse.filter((s) => s.paymentType === "full").reduce((s, x) => s + x.amountPaid, 0);
   const creditAmount = salesToUse.filter((s) => s.paymentType !== "full").reduce((s, x) => s + x.outstandingBalance, 0);
+  const txCount      = salesToUse.length;
+  const productsSold = salesToUse.reduce((s, x) => s + x.items.length, 0);
+  const qtySold      = salesToUse.reduce((s, x) => s + x.items.reduce((q, it) => q + it.qty, 0), 0);
   const recentSales  = mockSales.filter((s) => !s.isVoided).slice(0, 3);
   const badgeCount   = unread();
 
@@ -247,8 +250,18 @@ export default function DashboardPage() {
         </div>
       </div>
 
+      {/* ── Summary strip ── */}
+      <div className="flex gap-2 px-4 pt-3">
+        {[{ label: "Transactions", value: String(txCount) }, { label: "Products Sold", value: String(productsSold) }, { label: "Qty Sold", value: String(qtySold) }].map((m) => (
+          <div key={m.label} className="flex-1 rounded-[10px] p-2.5 text-center" style={{ background: "var(--surface-2)" }}>
+            <p className="text-[9px] font-bold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>{m.label}</p>
+            <p className="text-[14px] font-bold mt-0.5" style={{ color: "var(--text-primary)" }}>{m.value}</p>
+          </div>
+        ))}
+      </div>
+
       {/* ── Quick Actions ── */}
-      <div className="px-4 pt-5 animate-fade-in-up delay-75">
+      <div className="px-4 pt-4 animate-fade-in-up delay-75">
         <p className="text-[11px] font-bold uppercase tracking-widest mb-3" style={{ color: "var(--text-secondary)" }}>
           {t("dashboard.quickActions")}
         </p>

@@ -13,7 +13,7 @@ import type { Sale } from "@/types";
 import { Search } from "lucide-react";
 
 type Tab = "all" | "credit" | "paid";
-type DateFilter = "today" | "yesterday" | "this_week";
+type DateFilter = "today" | "yesterday" | "this_week" | "this_month";
 
 function initBgColor(name: string) {
   const colors = ["#84cc16","#3b82f6","#8b5cf6","#f59e0b","#06b6d4","#ec4899"];
@@ -62,8 +62,15 @@ export default function SalesListPage() {
     const d = sale.createdAt.split("T")[0];
     if (dateFilter === "today")     return d === todayStr;
     if (dateFilter === "yesterday") return d === yesterdayStr;
-    const weekStart = new Date(); weekStart.setDate(weekStart.getDate() - weekStart.getDay());
-    return new Date(d) >= weekStart;
+    if (dateFilter === "this_week") {
+      const weekStart = new Date(); weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+      return new Date(d) >= weekStart;
+    }
+    if (dateFilter === "this_month") {
+      const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+      return new Date(d) >= monthStart;
+    }
+    return true;
   }
 
   function inTab(sale: Sale) {
@@ -78,9 +85,10 @@ export default function SalesListPage() {
   const total     = filtered.reduce((s, x) => s + x.totalAmount, 0);
 
   const DATE_FILTERS: { key: DateFilter; label: string }[] = [
-    { key: "today",     label: t("sales.today") },
-    { key: "yesterday", label: t("sales.yesterday") },
-    { key: "this_week", label: t("sales.thisWeek") },
+    { key: "today",      label: t("sales.today") },
+    { key: "yesterday",  label: t("sales.yesterday") },
+    { key: "this_week",  label: t("sales.thisWeek") },
+    { key: "this_month", label: t("sales.thisMonth") },
   ];
 
   const TABS: { key: Tab; label: string }[] = [
