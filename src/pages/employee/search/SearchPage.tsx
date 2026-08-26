@@ -10,7 +10,7 @@ import { useAuthStore } from "@/stores/authStore";
 import { useThemeStore } from "@/stores/themeStore";
 import { useShellBase } from "@/lib/useShellBase";
 import { formatCurrency } from "@/lib/formatters";
-import { Search, X, Package, Users, ShoppingCart, Building2, UserCog } from "lucide-react";
+import { Search, X, Package, Users, ShoppingCart, Building2, UserCog, ChevronLeft } from "lucide-react";
 
 type FilterType = "all" | "product" | "customer" | "sale" | "employee" | "company";
 
@@ -210,10 +210,10 @@ export default function SearchPage() {
       <div className="flex items-center gap-3 px-4 pt-3 pb-3">
         <button
           onClick={() => navigate(-1)}
-          className="text-sm font-medium shrink-0"
-          style={{ color: "var(--text-primary)" }}
+          className="size-9 rounded-full flex items-center justify-center shrink-0 active:opacity-70"
+          style={{ background: "var(--surface-2)" }}
         >
-          ←
+          <ChevronLeft size={18} style={{ color: "var(--text-primary)" }} />
         </button>
         <div
           className="flex-1 flex items-center gap-2 h-11 rounded-full px-4"

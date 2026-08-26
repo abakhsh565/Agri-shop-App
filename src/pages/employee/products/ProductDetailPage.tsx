@@ -3,12 +3,14 @@ import { useNavigate, useParams } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
 import ImageUpload from "@/components/ui/ImageUpload";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { CategoryChip, StockBadge } from "@/components/ui/Badge";
 import { useProductsStore } from "@/stores/productsStore";
 import { useUIStore } from "@/stores/uiStore";
-import { formatCurrency, getStockStatus } from "@/lib/formatters";
+import { formatCurrency, getStockStatus, getStockStatusColor } from "@/lib/formatters";
 import { useShellBase } from "@/lib/useShellBase";
-import { Pencil, Camera } from "lucide-react";
+import { rpcDeleteProduct } from "@/lib/db";
+import { Pencil, Camera, TrendingUp, Barcode, Trash2 } from "lucide-react";
 import { barcodeToSvg } from "@/lib/barcode";
 
 const CATEGORY_LABEL: Record<string, string> = {
@@ -22,6 +24,13 @@ function initBgColor(name: string) {
   return colors[hash % colors.length];
 }
 
+function stockStatusLabel(status: string) {
+  if (status === "in_stock")    return "In Stock";
+  if (status === "low_stock")   return "Low Stock";
+  if (status === "out_of_stock") return "Out of Stock";
+  return "Expired";
+}
+
 export default function ProductDetailPage() {
   const { productId } = useParams();
   const navigate = useNavigate();
@@ -32,6 +41,8 @@ export default function ProductDetailPage() {
   const { addToast } = useUIStore();
 
   const [showImageEdit, setShowImageEdit] = useState(false);
+  const [toDelete, setToDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   async function handleImageChange(url: string | null) {
     if (!productId) return;
@@ -50,6 +61,27 @@ export default function ProductDetailPage() {
     }
   }
 
+  async function confirmDelete() {
+    if (!product) return;
+    setDeleting(true);
+    try {
+      const res = await rpcDeleteProduct({ id: product.id });
+      await useProductsStore.getState().load();
+      addToast(
+        res.deactivated
+          ? `${product.name} has sales history — archived`
+          : `${product.name} deleted`,
+        "success"
+      );
+      navigate(-1);
+    } catch (err) {
+      addToast(err instanceof Error ? err.message : "Could not delete.", "error");
+    } finally {
+      setDeleting(false);
+      setToDelete(false);
+    }
+  }
+
   if (!product) return null;
   const bg = initBgColor(product.name);
 
@@ -58,7 +90,6 @@ export default function ProductDetailPage() {
       <StatusBar />
       <NavHeader
         title="Product Details"
-       
         right={
           isAdmin ? (
             <button
@@ -73,7 +104,7 @@ export default function ProductDetailPage() {
       />
 
       <div className="px-4 pt-4">
-        {/* Product image + name — compact layout */}
+        {/* Product image + name */}
         <div className="flex items-center gap-4 mb-4">
           {isAdmin ? (
             <ImageUpload
@@ -149,11 +180,30 @@ export default function ProductDetailPage() {
           </div>
         )}
 
-        {/* Pack sizes */}
-        <p className="text-xs font-bold uppercase mb-3 tracking-wider" style={{ color: "var(--text-secondary)" }}>Pack Sizes and Pricing</p>
-        <div className="rounded-[14px] overflow-hidden" style={{ border: "1px solid var(--divider)" }}>
+        {/* Total Stock Summary */}
+        <div
+          className="rounded-[14px] p-4 mb-4 flex items-center justify-between"
+          style={{ background: "var(--surface-2)", border: "1px solid var(--divider)" }}
+        >
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>Total Stock</p>
+            <p className="text-lg font-bold" style={{ color: "var(--text-primary)" }}>
+              {product.stockQty} {product.baseUnit}
+            </p>
+          </div>
+          <div className="text-right">
+            <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>Variants</p>
+            <p className="text-lg font-bold" style={{ color: "var(--text-primary)" }}>{product.variants.length}</p>
+          </div>
+        </div>
+
+        {/* Pack Sizes and Stock */}
+        <p className="text-xs font-bold uppercase mb-3 tracking-wider" style={{ color: "var(--text-secondary)" }}>Pack Sizes & Stock</p>
+        <div className="rounded-[14px] overflow-hidden mb-4" style={{ border: "1px solid var(--divider)" }}>
           {product.variants.map((v, i) => {
-            const status = getStockStatus(product.stockQty, v.lowStockThreshold);
+            const available = Math.floor(product.stockQty / v.unitSize);
+            const status = available === 0 ? "out_of_stock" : available <= v.lowStockThreshold ? "low_stock" : "in_stock";
+            const statusColor = getStockStatusColor(status);
             return (
               <div
                 key={v.id}
@@ -162,16 +212,78 @@ export default function ProductDetailPage() {
               >
                 <div>
                   <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>{v.name}</p>
-                  <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
-                    {formatCurrency(v.sellingPrice)} — {product.stockQty} units available
+                  <p className="text-[11px]" style={{ color: "var(--text-secondary)" }}>
+                    Unit: {v.unitSize} {product.baseUnit} · Price: {formatCurrency(v.sellingPrice)}
                   </p>
                 </div>
-                <StockBadge status={status} outline />
+                <div className="flex items-center gap-3">
+                  <p className="text-xs font-bold" style={{ color: "var(--text-primary)" }}>
+                    {available} units
+                  </p>
+                  <span
+                    className="text-[10px] font-bold px-2 py-0.5 rounded-full"
+                    style={{ color: statusColor, background: statusColor + "22" }}
+                  >
+                    {stockStatusLabel(status)}
+                  </span>
+                </div>
               </div>
             );
           })}
         </div>
+
+        {/* Admin Actions */}
+        {isAdmin && (
+          <>
+            <p className="text-xs font-bold uppercase mb-3 tracking-wider" style={{ color: "var(--text-secondary)" }}>Actions</p>
+            <div className="rounded-[14px] overflow-hidden mb-6" style={{ border: "1px solid var(--divider)" }}>
+              <button
+                onClick={() => navigate(`/admin/inventory/${product.id}/adjust`)}
+                className="flex items-center gap-3 w-full px-4 py-3.5 text-left text-[13px] font-medium active:opacity-70"
+                style={{ color: "var(--text-primary)" }}
+              >
+                <TrendingUp size={16} style={{ color: "var(--brand)" }} />
+                Adjust Stock
+              </button>
+              <button
+                onClick={() => navigate(`/admin/inventory/${product.id}/edit`)}
+                className="flex items-center gap-3 w-full px-4 py-3.5 text-left text-[13px] font-medium active:opacity-70"
+                style={{ color: "var(--text-primary)", borderTop: "1px solid var(--divider)" }}
+              >
+                <Pencil size={16} style={{ color: "var(--brand)" }} />
+                Edit Product
+              </button>
+              <button
+                onClick={() => navigate(`/admin/inventory/barcodes?product=${product.id}`)}
+                className="flex items-center gap-3 w-full px-4 py-3.5 text-left text-[13px] font-medium active:opacity-70"
+                style={{ color: "var(--text-primary)", borderTop: "1px solid var(--divider)" }}
+              >
+                <Barcode size={16} style={{ color: "var(--brand)" }} />
+                Generate Barcode
+              </button>
+              <button
+                onClick={() => setToDelete(true)}
+                className="flex items-center gap-3 w-full px-4 py-3.5 text-left text-[13px] font-medium active:opacity-70"
+                style={{ color: "var(--error)", borderTop: "1px solid var(--divider)" }}
+              >
+                <Trash2 size={16} />
+                Delete Product
+              </button>
+            </div>
+          </>
+        )}
       </div>
+
+      <ConfirmDialog
+        open={toDelete}
+        title="Delete product?"
+        message={`"${product.name}" will be removed. If it has past sales, it's archived instead of deleted.`}
+        confirmLabel="Delete"
+        destructive
+        loading={deleting}
+        onConfirm={confirmDelete}
+        onCancel={() => setToDelete(false)}
+      />
     </div>
   );
 }
