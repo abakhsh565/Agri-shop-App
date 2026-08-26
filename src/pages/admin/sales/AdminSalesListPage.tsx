@@ -170,7 +170,7 @@ export default function AdminSalesListPage() {
       </div>
 
       {/* Date filters */}
-      <div className="flex gap-2 px-4 py-3">
+      <div className="flex gap-2 px-4 py-3 overflow-x-auto no-scrollbar" style={{ scrollBehavior: "smooth" }}>
         {DATE_FILTERS.map(({ key, label }) => (
           <button
             key={key}
@@ -214,7 +214,10 @@ export default function AdminSalesListPage() {
                 )}
                 <div>
                   <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>{sale.customerName}</p>
-                  <p className="text-xs mt-0.5" style={{ color: "var(--text-secondary)" }}>{formatSmartDateTime(sale.createdAt, now)}</p>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <span className="text-[10px] font-mono" style={{ color: "var(--text-secondary)" }}>{sale.saleNumber}</span>
+                    <span className="text-xs" style={{ color: "var(--text-secondary)" }}>• {formatSmartDateTime(sale.createdAt, now)}</span>
+                  </div>
                   <p className="text-xs" style={{ color: "var(--brand-dark)" }}>
                     Est. profit: {formatCurrency(Math.round(sale.totalAmount * 0.2))}
                   </p>

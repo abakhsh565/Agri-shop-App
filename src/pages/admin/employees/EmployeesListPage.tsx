@@ -32,20 +32,7 @@ export default function EmployeesListPage() {
       style={{ background: "var(--background)", direction: isUrdu ? "rtl" : "ltr" }}
     >
       <StatusBar />
-      <NavHeader
-        title={t("admin.employees")}
-       
-        right={
-          <button
-            onClick={() => navigate("/admin/employees/new")}
-            className="flex items-center gap-1 h-8 px-3 rounded-full text-xs font-bold transition-colors active:opacity-70"
-            style={{ border: "1.5px solid var(--brand)", color: "var(--brand-dark)" }}
-          >
-            <Plus size={13} />
-            {t("admin.addEmployee")}
-          </button>
-        }
-      />
+      <NavHeader title={t("admin.employees")} />
 
       <div className="flex flex-col px-4 gap-3 pb-24">
         {ready && employees.length === 0 && (

@@ -158,7 +158,10 @@ export default function SaleSuccessPage() {
           {/* Receipt card */}
           <div className="w-full rounded-[20px] overflow-hidden animate-fade-in-up delay-225" style={{ border: "1px solid var(--border-light)", background: "var(--surface)" }}>
             <div className="px-5 py-5 text-white" style={{ background: "linear-gradient(135deg, #a855f7 0%, #ec4899 50%, #f59e0b 100%)" }}>
-              <p className="text-[20px] font-bold">{s.saleNumber}</p>
+              <div className="flex items-center justify-between">
+                <p className="text-[20px] font-bold">Sale Receipt</p>
+                <p className="text-[12px] font-mono opacity-85">{s.saleNumber}</p>
+              </div>
               <p className="text-[12px] opacity-85 mt-0.5">{formatDateLong(s.createdAt)} • {formatTime12(s.createdAt)}</p>
             </div>
             <div className="px-5 py-4 flex flex-col gap-[14px]">
@@ -201,6 +204,9 @@ export default function SaleSuccessPage() {
         </button>
         <button onClick={handleDownload} className="flex h-[48px] items-center justify-center gap-2 rounded-[24px] w-full font-bold text-[14px] transition-transform active:scale-[0.97]" style={{ border: "1px solid var(--border-light)", color: "var(--text-primary)" }}>
           <Download size={16} strokeWidth={2} /> Download Receipt
+        </button>
+        <button onClick={() => navigate(`${base}/dashboard`, { replace: true })} className="h-[44px] rounded-full text-[13px] font-semibold transition-transform active:scale-[0.97] mt-1" style={{ color: "var(--text-secondary)" }}>
+          Back to Home
         </button>
       </div>
     </div>

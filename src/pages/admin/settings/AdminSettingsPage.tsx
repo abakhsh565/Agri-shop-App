@@ -282,32 +282,7 @@ export default function AdminSettingsPage() {
           </div>
         </div>
 
-        {/* Business Config — PRD §A-054 */}
-        <div className="px-4 pt-5 animate-fade-in-up delay-125">
-          <p className="text-xs font-bold uppercase mb-3 tracking-wider" style={{ color: "var(--text-secondary)" }}>
-            Business Rules
-          </p>
-          <div className="rounded-xl overflow-hidden" style={{ border: "1px solid var(--border-light)" }}>
-            {[
-              { label: "Low Stock Alert Threshold", right: "5 units", desc: "Default alert level for all products" },
-              { label: "Expiry Warning Window", right: "30 days", desc: "Alert before products expire" },
-              { label: "Sale Void Window", right: "Same day", desc: "Admin can void sales within this window" },
-              { label: "Seed Step Size", right: "0.5 kg", desc: "Default increment for seed sales" },
-            ].map((item, i, arr) => (
-              <div
-                key={item.label}
-                className={`px-4 py-4 ${i < arr.length - 1 ? "border-b" : ""}`}
-                style={{ borderColor: "var(--border-light)" }}
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>{item.label}</span>
-                  <span className="text-xs font-bold px-3 py-1 rounded-full" style={{ background: "var(--brand)", color: "#0a0a0a" }}>{item.right}</span>
-                </div>
-                <p className="text-[10px] mt-1" style={{ color: "var(--text-secondary)" }}>{item.desc}</p>
-              </div>
-            ))}
-          </div>
-        </div>
+
 
         {/* Account */}
         <div className="px-4 pt-5 animate-fade-in-up delay-150">

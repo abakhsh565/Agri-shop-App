@@ -178,22 +178,14 @@ export default function AddProductPage() {
           {/* Barcode */}
           <div>
             <p className={labelCls} style={{ color: "var(--text-secondary)" }}>Barcode</p>
-            <div className="flex gap-2">
-              <input
-                value={barcode}
-                onChange={(e) => setBarcode(e.target.value.toUpperCase())}
-                placeholder="Auto-generated if empty"
-                className="flex-1 h-12 rounded-[24px] px-4 text-sm outline-none font-mono"
-                style={fieldStyle}
-              />
-              <button
-                type="button"
-                onClick={() => setBarcode(generateProductBarcode(name || "PRODUCT"))}
-                className="h-12 px-4 rounded-[24px] flex items-center gap-1.5 text-xs font-bold shrink-0"
-                style={{ background: "var(--surface-2)", color: "var(--brand-dark)", border: "1px solid var(--divider)" }}
-              >
-                <Scan size={13} /> Generate
-              </button>
+            <input
+              value={barcode}
+              onChange={(e) => setBarcode(e.target.value.toUpperCase())}
+              placeholder="Auto-generated if empty"
+              className="w-full h-12 rounded-[24px] px-4 text-sm outline-none font-mono"
+              style={fieldStyle}
+            />
+            <div className="flex gap-2 mt-2">
               <button
                 type="button"
                 onClick={async () => {
@@ -212,6 +204,14 @@ export default function AddProductPage() {
                 style={{ background: "var(--brand)", color: "#0a0a0a" }}
               >
                 📷 Scan
+              </button>
+              <button
+                type="button"
+                onClick={() => setBarcode(generateProductBarcode(name || "PRODUCT"))}
+                className="h-12 px-4 rounded-[24px] flex items-center gap-1.5 text-xs font-bold shrink-0"
+                style={{ background: "var(--surface-2)", color: "var(--brand-dark)", border: "1px solid var(--divider)" }}
+              >
+                Generate Code
               </button>
             </div>
             {barcode && (
