@@ -36,20 +36,7 @@ jobs:
         run: npx cap sync android
 
       - name: Inject Camera Permission
-        run: |
-          node -e "
-          const fs = require('fs');
-          const path = 'android/app/src/main/AndroidManifest.xml';
-          let xml = fs.readFileSync(path, 'utf8');
-          const perm = '    <uses-permission android:name=\"android.permission.CAMERA\" />\n    <uses-feature android:name=\"android.hardware.camera\" android:required=\"false\" />\n    <uses-feature android:name=\"android.hardware.camera.autofocus\" android:required=\"false\" />';
-          if (!xml.includes('android.permission.CAMERA')) {
-            xml = xml.replace('<manifest ', '<manifest \n' + perm + '\n');
-            fs.writeFileSync(path, xml);
-            console.log('Camera permission injected');
-          } else {
-            console.log('Camera permission already present');
-          }
-          "
+        run: node .github/inject-permissions.cjs
 
       - name: Build APK
         run: |
