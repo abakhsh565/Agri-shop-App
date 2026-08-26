@@ -174,7 +174,7 @@ export default function CartPage() {
             className="flex-1 h-12 rounded-xl border border-black flex items-center justify-center gap-2 text-sm font-medium text-black"
           >
             <Plus size={16} />
-            Browse
+            Add More
           </button>
           <ScanButton
             onScan={(code) => {

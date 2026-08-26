@@ -10,7 +10,7 @@ import { useUIStore } from "@/stores/uiStore";
 import { formatCurrency, getStockStatus, getStockStatusColor } from "@/lib/formatters";
 import { useShellBase } from "@/lib/useShellBase";
 import { rpcDeleteProduct } from "@/lib/db";
-import { Pencil, Camera, TrendingUp, Barcode, Trash2 } from "lucide-react";
+import { Pencil, Camera, TrendingUp, Barcode, Trash2, Copy } from "lucide-react";
 import { barcodeToSvg } from "@/lib/barcode";
 
 const CATEGORY_LABEL: Record<string, string> = {
@@ -145,7 +145,14 @@ export default function ProductDetailPage() {
         {/* Barcode */}
         {product.barcode && (
           <div className="mb-4 rounded-[14px] p-3 flex items-center gap-3" style={{ background: "var(--surface)", border: "1px solid var(--divider)" }}>
-            <div dangerouslySetInnerHTML={{ __html: barcodeToSvg(product.barcode, { height: 40, showText: true, width: 160 }) }} />
+            <div dangerouslySetInnerHTML={{ __html: barcodeToSvg(product.barcode, { height: 40, showText: true, width: 160 }) }} className="flex-1" />
+            <button
+              onClick={() => { navigator.clipboard.writeText(product.barcode!).then(() => addToast("Barcode copied", "success")).catch(() => {}); }}
+              className="size-8 rounded-full flex items-center justify-center shrink-0 active:opacity-70"
+              style={{ background: "var(--surface-2)" }}
+            >
+              <Copy size={14} style={{ color: "var(--text-secondary)" }} />
+            </button>
           </div>
         )}
 
@@ -245,14 +252,7 @@ export default function ProductDetailPage() {
                 <TrendingUp size={16} style={{ color: "var(--brand)" }} />
                 Adjust Stock
               </button>
-              <button
-                onClick={() => navigate(`/admin/inventory/${product.id}/edit`)}
-                className="flex items-center gap-3 w-full px-4 py-3.5 text-left text-[13px] font-medium active:opacity-70"
-                style={{ color: "var(--text-primary)", borderTop: "1px solid var(--divider)" }}
-              >
-                <Pencil size={16} style={{ color: "var(--brand)" }} />
-                Edit Product
-              </button>
+
               <button
                 onClick={() => navigate(`/admin/inventory/barcodes?product=${product.id}`)}
                 className="flex items-center gap-3 w-full px-4 py-3.5 text-left text-[13px] font-medium active:opacity-70"

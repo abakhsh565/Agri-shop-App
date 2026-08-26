@@ -19,7 +19,7 @@ function initBgColor(name: string) {
 }
 
 type Tab = "all" | "credit" | "paid";
-type DateFilter = "today" | "yesterday" | "this_week";
+type DateFilter = "today" | "yesterday" | "this_week" | "this_month";
 
 export default function AdminSalesListPage() {
   const navigate = useNavigate();
@@ -49,6 +49,10 @@ export default function AdminSalesListPage() {
     const d = sale.createdAt.split("T")[0];
     if (dateFilter === "today")     return d === todayStr;
     if (dateFilter === "yesterday") return d === yesterdayStr;
+    if (dateFilter === "this_month") {
+      const now = new Date();
+      return new Date(d).getMonth() === now.getMonth() && new Date(d).getFullYear() === now.getFullYear();
+    }
     const weekStart = new Date(); weekStart.setDate(weekStart.getDate() - weekStart.getDay());
     return new Date(d) >= weekStart;
   }
@@ -75,9 +79,10 @@ export default function AdminSalesListPage() {
   const profit    = Math.round(total * 0.2);
 
   const DATE_FILTERS: { key: DateFilter; label: string }[] = [
-    { key: "today",     label: t("sales.today") },
-    { key: "yesterday", label: t("sales.yesterday") },
-    { key: "this_week", label: t("sales.thisWeek") },
+    { key: "today",       label: t("sales.today") },
+    { key: "yesterday",   label: t("sales.yesterday") },
+    { key: "this_week",   label: t("sales.thisWeek") },
+    { key: "this_month",  label: "This Month" },
   ];
 
   const TABS: { key: Tab; label: string }[] = [
@@ -114,7 +119,7 @@ export default function AdminSalesListPage() {
           <p className="text-[10px] uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
             {summaryLabel}
           </p>
-          <p className="text-[11px]" style={{ color: "var(--brand-dark)" }}>
+          <p className="text-[13px] font-bold" style={{ color: "var(--brand-dark)" }}>
             {t("admin.grossProfit")}: {formatCurrency(profit)}
           </p>
         </div>

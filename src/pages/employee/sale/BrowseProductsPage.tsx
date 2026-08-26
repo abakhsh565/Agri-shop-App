@@ -180,9 +180,7 @@ export default function BrowseProductsPage() {
                     </span>
                     <StockBadge status={getStockStatus(p.stockQty, 5)} outline />
                   </div>
-                  <p className="text-[11px]" style={{ color: "var(--text-secondary)" }}>
-                    {p.stockQty > 0 ? `${p.stockQty} ${p.baseUnit} available` : "No stock"}
-                  </p>
+
                 </div>
 
                 <ChevronRight size={18} style={{ color: "var(--text-secondary)" }} className="shrink-0" />

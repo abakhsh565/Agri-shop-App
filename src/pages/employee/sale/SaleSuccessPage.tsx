@@ -1,5 +1,5 @@
 import { useNavigate, useLocation, Navigate } from "react-router-dom";
-import { ShoppingCart, Share2, Download, Receipt } from "lucide-react";
+import { ShoppingCart, Share2, Download } from "lucide-react";
 import { formatCurrency, formatDateTime } from "@/lib/formatters";
 import type { Sale } from "@/types";
 import { useShellBase } from "@/lib/useShellBase";
@@ -25,170 +25,8 @@ function formatTime12(dateStr: string): string {
   return d.toLocaleTimeString("en-PK", { hour: "2-digit", minute: "2-digit", hour12: true });
 }
 
-// ─── Canvas helpers ────────────────────────────────────────────────────────
-function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
-  ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.lineTo(x + w - r, y);
-  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
-  ctx.lineTo(x + w, y + h - r);
-  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
-  ctx.lineTo(x + r, y + h);
-  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
-  ctx.lineTo(x, y + r);
-  ctx.quadraticCurveTo(x, y, x + r, y);
-  ctx.closePath();
-}
 
-function roundRectTop(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
-  ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.lineTo(x + w - r, y);
-  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
-  ctx.lineTo(x + w, y + h);
-  ctx.lineTo(x, y + h);
-  ctx.lineTo(x, y + r);
-  ctx.quadraticCurveTo(x, y, x + r, y);
-  ctx.closePath();
-}
-
-/** Render the receipt onto a canvas and return it as a PNG Blob */
-function renderReceiptBlob(s: {
-  saleNumber: string; customerName: string; customerPhone: string;
-  employeeName: string; paymentMethod: string; paymentType: string;
-  createdAt: string; totalAmount: number; amountPaid: number;
-  outstandingBalance: number; subtotal: number;
-  items: { productName: string; variantName: string; qty: number; unitPrice: number }[];
-}): Promise<Blob | null> {
-  return new Promise((resolve) => {
-    try {
-      const canvas = document.createElement("canvas");
-      const ctx = canvas.getContext("2d")!;
-      const W = 400;
-      canvas.width = W;
-
-      const lineHeight = 28;
-      const headerHeight = 120;
-      const sectionStart = headerHeight + 20;
-
-      const detailLines = [
-        { label: "Sale #", value: s.saleNumber },
-        { label: "Date", value: formatDateLong(s.createdAt) },
-        { label: "Time", value: formatTime12(s.createdAt) },
-        { label: "Customer", value: s.customerName },
-        { label: "Phone", value: s.customerPhone || "N/A" },
-        { label: "Sold by", value: s.employeeName },
-        { label: "Method", value: s.paymentMethod === "cash" ? "Cash" : "Bank Transfer" },
-        { label: "Payment", value: s.paymentType === "full" ? "Full Payment" : "Partial / Credit" },
-      ];
-
-      const itemsHeight = s.items.length * 26 + 40;
-      const summaryHeight = 140;
-      const totalHeight = sectionStart + detailLines.length * lineHeight + itemsHeight + summaryHeight + 80;
-      canvas.height = totalHeight;
-
-      ctx.fillStyle = "#f0f0f0";
-      ctx.fillRect(0, 0, W, totalHeight);
-
-      const cardMargin = 16;
-      const cardW = W - cardMargin * 2;
-      ctx.fillStyle = "#ffffff";
-      roundRect(ctx, cardMargin, 10, cardW, totalHeight - 30, 16);
-      ctx.fill();
-
-      const grad = ctx.createLinearGradient(cardMargin, 10, cardMargin + cardW, 10);
-      grad.addColorStop(0, "#a855f7");
-      grad.addColorStop(0.5, "#ec4899");
-      grad.addColorStop(1, "#f59e0b");
-      ctx.fillStyle = grad;
-      roundRectTop(ctx, cardMargin, 10, cardW, headerHeight, 16);
-      ctx.fill();
-
-      ctx.fillStyle = "#ffffff";
-      ctx.font = "bold 22px sans-serif";
-      ctx.textAlign = "center";
-      ctx.fillText("Sale Receipt", W / 2, 55);
-      ctx.font = "13px sans-serif";
-      ctx.fillStyle = "rgba(255,255,255,0.85)";
-      ctx.fillText(`${formatDateLong(s.createdAt)}  •  ${formatTime12(s.createdAt)}`, W / 2, 78);
-      ctx.font = "bold 11px monospace";
-      ctx.fillStyle = "rgba(255,255,255,0.9)";
-      ctx.fillText(s.saleNumber, W / 2, 100);
-
-      let y = sectionStart + 10;
-      ctx.textAlign = "left";
-      for (const line of detailLines) {
-        ctx.font = "12px sans-serif";
-        ctx.fillStyle = "#888888";
-        ctx.fillText(line.label, cardMargin + 24, y);
-        ctx.font = "bold 13px sans-serif";
-        ctx.fillStyle = "#1a1a1a";
-        ctx.textAlign = "right";
-        ctx.fillText(line.value, W - cardMargin - 24, y);
-        ctx.textAlign = "left";
-        y += lineHeight;
-      }
-
-      y += 8;
-      ctx.strokeStyle = "#e5e5e5"; ctx.lineWidth = 1;
-      ctx.beginPath(); ctx.moveTo(cardMargin + 24, y); ctx.lineTo(W - cardMargin - 24, y); ctx.stroke();
-      y += 12;
-
-      ctx.font = "bold 12px sans-serif"; ctx.fillStyle = "#888888";
-      ctx.fillText("ITEMS", cardMargin + 24, y);
-      y += 18;
-
-      for (const item of s.items) {
-        ctx.font = "12px sans-serif"; ctx.fillStyle = "#1a1a1a";
-        ctx.fillText(`${item.productName} (${item.variantName})`, cardMargin + 24, y);
-        ctx.textAlign = "right";
-        ctx.fillText(`${item.qty} × ${formatCurrency(item.unitPrice)}`, W - cardMargin - 24, y);
-        ctx.textAlign = "left";
-        y += 26;
-      }
-
-      y += 8;
-      ctx.strokeStyle = "#e5e5e5";
-      ctx.beginPath(); ctx.moveTo(cardMargin + 24, y); ctx.lineTo(W - cardMargin - 24, y); ctx.stroke();
-      y += 20;
-
-      const summaryItems = [
-        { label: "Subtotal", value: formatCurrency(s.subtotal) },
-        { label: "Paid", value: formatCurrency(s.amountPaid), color: "#22c55e" },
-        ...(s.outstandingBalance > 0
-          ? [{ label: "Outstanding", value: formatCurrency(s.outstandingBalance), color: "#ef4444" }]
-          : []),
-      ];
-      for (const si of summaryItems) {
-        ctx.font = "13px sans-serif"; ctx.fillStyle = "#888888";
-        ctx.fillText(si.label, cardMargin + 24, y);
-        ctx.font = "bold 14px sans-serif"; ctx.fillStyle = (si as any).color || "#1a1a1a";
-        ctx.textAlign = "right";
-        ctx.fillText(si.value, W - cardMargin - 24, y);
-        ctx.textAlign = "left";
-        y += 30;
-      }
-
-      ctx.strokeStyle = "#e5e5e5";
-      ctx.beginPath(); ctx.moveTo(cardMargin + 24, y); ctx.lineTo(W - cardMargin - 24, y); ctx.stroke();
-      y += 24;
-      ctx.font = "bold 14px sans-serif"; ctx.fillStyle = "#1a1a1a";
-      ctx.fillText("TOTAL", cardMargin + 24, y);
-      ctx.font = "bold 20px sans-serif";
-      ctx.textAlign = "right";
-      ctx.fillText(formatCurrency(s.totalAmount), W - cardMargin - 24, y);
-      ctx.textAlign = "left";
-      y += 40;
-
-      ctx.font = "11px sans-serif"; ctx.fillStyle = "#aaa"; ctx.textAlign = "center";
-      ctx.fillText("Powered by AgriShop • agrishop.app", W / 2, y);
-
-      canvas.toBlob((blob) => resolve(blob), "image/png");
-    } catch {
-      resolve(null);
-    }
-  });
-}
+import { renderReceiptBlob } from "@/lib/receiptRenderer";
 
 // ─── Page ──────────────────────────────────────────────────────────────────
 
@@ -316,34 +154,11 @@ export default function SaleSuccessPage() {
     >
       <div className="flex flex-col items-start shrink-0 w-full">
         <StatusBar />
-        <div className="flex flex-col gap-[24px] items-center pb-[24px] pt-[32px] px-[24px] w-full">
-          {/* Success icon */}
-          <div
-            className="animate-pop-in"
-            style={{
-              width: 72, height: 72, borderRadius: 36,
-              background: "var(--brand)",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              boxShadow: "0 0 0 12px rgba(132, 204, 22, 0.15)",
-            }}
-          >
-            <svg fill="none" height="32" viewBox="0 0 32 32" width="32">
-              <path d="M8 16.5L13 21.5L24 10.5" stroke="white" strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" style={{ animation: "checkDraw 0.4s 0.3s ease both" }} />
-            </svg>
-          </div>
-
-          {/* Title */}
-          <div className="flex flex-col gap-[6px] items-center text-center w-full animate-fade-in-up delay-150">
-            <p className="font-bold text-[26px]" style={{ color: "var(--text-primary)" }}>Sale Completed!</p>
-            <p className="font-normal text-[13px]" style={{ color: "var(--text-secondary)" }}>
-              {s.saleNumber} • Receipt generated
-            </p>
-          </div>
-
+        <div className="flex flex-col gap-[16px] items-center pb-[16px] pt-[12px] px-[24px] w-full">
           {/* Receipt card */}
           <div className="w-full rounded-[20px] overflow-hidden animate-fade-in-up delay-225" style={{ border: "1px solid var(--border-light)", background: "var(--surface)" }}>
             <div className="px-5 py-5 text-white" style={{ background: "linear-gradient(135deg, #a855f7 0%, #ec4899 50%, #f59e0b 100%)" }}>
-              <p className="text-[20px] font-bold">Sale Receipt</p>
+              <p className="text-[20px] font-bold">{s.saleNumber}</p>
               <p className="text-[12px] opacity-85 mt-0.5">{formatDateLong(s.createdAt)} • {formatTime12(s.createdAt)}</p>
             </div>
             <div className="px-5 py-4 flex flex-col gap-[14px]">
@@ -372,18 +187,7 @@ export default function SaleSuccessPage() {
             </div>
           </div>
 
-          {/* Items summary */}
-          {s.items.length > 0 && (
-            <div className="w-full rounded-[16px] p-4 animate-fade-in-up delay-300" style={{ background: "var(--surface-2)" }}>
-              <p className="text-[11px] font-bold uppercase tracking-wider mb-2" style={{ color: "var(--text-secondary)" }}>Items in this sale</p>
-              {s.items.map((item, i) => (
-                <div key={i} className="flex items-center justify-between py-1.5" style={{ borderBottom: i < s.items.length - 1 ? "1px solid var(--divider)" : "none" }}>
-                  <span className="text-[12px]" style={{ color: "var(--text-primary)" }}>{item.productName} ({item.variantName})</span>
-                  <span className="text-[12px] font-medium" style={{ color: "var(--text-primary)" }}>{item.qty} × {formatCurrency(item.unitPrice)}</span>
-                </div>
-              ))}
-            </div>
-          )}
+
         </div>
       </div>
 
@@ -396,10 +200,7 @@ export default function SaleSuccessPage() {
           <Share2 size={16} strokeWidth={2} /> Share Receipt
         </button>
         <button onClick={handleDownload} className="flex h-[48px] items-center justify-center gap-2 rounded-[24px] w-full font-bold text-[14px] transition-transform active:scale-[0.97]" style={{ border: "1px solid var(--border-light)", color: "var(--text-primary)" }}>
-          <Download size={16} strokeWidth={2} /> Download Receipt (PNG)
-        </button>
-        <button onClick={() => navigate(`${base}/sales/${s.id}`)} className="flex h-[48px] items-center justify-center gap-2 rounded-[24px] w-full font-bold text-[14px] transition-transform active:scale-[0.97]" style={{ border: "1px solid var(--border-light)", color: "var(--text-primary)" }}>
-          <Receipt size={16} strokeWidth={2} /> View Receipt
+          <Download size={16} strokeWidth={2} /> Download Receipt
         </button>
       </div>
     </div>

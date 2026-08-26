@@ -63,37 +63,63 @@ export default function AdminSaleDetailPage() {
     }
   }
 
-  function handleShare() {
-    const text = `AgriShop Receipt\n#${sale!.saleNumber}\nCustomer: ${sale!.customerName}\nTotal: ${formatCurrency(sale!.totalAmount)}\nPaid: ${formatCurrency(sale!.amountPaid)}\nDate: ${formatDateTime(sale!.createdAt)}\nSold by: ${sale!.employeeName}`;
-    if (navigator.share) {
-      navigator.share({ title: "Sale Receipt", text }).catch(() => {});
-    } else {
-      navigator.clipboard.writeText(text).then(() => addToast("Receipt copied to clipboard", "success")).catch(() => {});
-    }
+  function buildReceiptText() {
+    return `AgriShop Receipt\n#${sale!.saleNumber}\nCustomer: ${sale!.customerName}\nTotal: ${formatCurrency(sale!.totalAmount)}\nPaid: ${formatCurrency(sale!.amountPaid)}\nDate: ${formatDateTime(sale!.createdAt)}\nSold by: ${sale!.employeeName}`;
   }
 
-  function handleDownload() {
+  async function handleShare() {
+    const text = buildReceiptText();
+    if (navigator.share) {
+      try { await navigator.share({ title: "Sale Receipt", text }); return; } catch {}
+    }
+    navigator.clipboard.writeText(text).then(() => addToast("Receipt copied to clipboard", "success")).catch(() => {});
+  }
+
+  async function handleDownload() {
+    // Generate receipt as image via canvas (reuse SaleSuccessPage logic)
+    try {
+      const { renderReceiptBlob } = await import("@/lib/receiptRenderer");
+      const blob = await renderReceiptBlob({
+        saleNumber: sale!.saleNumber,
+        customerName: sale!.customerName,
+        customerPhone: sale!.customerPhone ?? "",
+        employeeName: sale!.employeeName,
+        paymentMethod: sale!.paymentMethod ?? "cash",
+        paymentType: sale!.paymentType ?? "full",
+        createdAt: sale!.createdAt,
+        totalAmount: sale!.totalAmount,
+        amountPaid: sale!.amountPaid,
+        outstandingBalance: sale!.outstandingBalance,
+        subtotal: sale!.subtotal,
+        items: sale!.items.map((it) => ({ productName: it.productName, variantName: it.variantName, qty: it.qty, unitPrice: it.unitPrice })),
+      });
+      if (blob) {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `receipt-${sale!.saleNumber}.png`;
+        a.click();
+        URL.revokeObjectURL(url);
+        addToast("Receipt downloaded", "success");
+        return;
+      }
+    } catch {}
+    // Fallback: CSV
     const rows = [
       ["Sale #", sale!.saleNumber],
       ["Customer", sale!.customerName],
       ["Date", formatDateTime(sale!.createdAt)],
       ["Sold by", sale!.employeeName],
-      ["Payment", sale!.paymentMethod === "cash" ? "Cash" : "Bank Transfer"],
-      ["---", "---"],
-      ...sale!.items.map((it) => [it.productName + " " + it.variantName, `${it.qty} × ${formatCurrency(it.unitPrice)}`, formatCurrency(it.lineTotal)]),
-      ["---", "---"],
-      ["Subtotal", formatCurrency(sale!.subtotal)],
+      ...sale!.items.map((it) => [it.productName + " " + it.variantName, `${it.qty} × ${formatCurrency(it.unitPrice)}`]),
       ["Total", formatCurrency(sale!.totalAmount)],
       ["Paid", formatCurrency(sale!.amountPaid)],
     ];
     const csv = rows.map((r) => r.join(",")).join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `sale-${sale!.saleNumber}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    const blob2 = new Blob([csv], { type: "text/csv" });
+    const url2 = URL.createObjectURL(blob2);
+    const a2 = document.createElement("a");
+    a2.href = url2; a2.download = `sale-${sale!.saleNumber}.csv`; a2.click();
+    URL.revokeObjectURL(url2);
     addToast("Sale exported as CSV", "success");
   }
 
