@@ -72,6 +72,7 @@ import ReturnSuccessPage from "@/pages/employee/returns/ReturnSuccessPage";
 import SearchPage from "@/pages/employee/search/SearchPage";
 import SettingsPage from "@/pages/employee/settings/SettingsPage";
 import ActivityLogPage from "@/pages/employee/activity/ActivityLogPage";
+import EmployeeNotificationsPage from "@/pages/employee/notifications/EmployeeNotificationsPage";
 import EmployeeMorePage from "@/pages/employee/more/MorePage";
 import BarcodeGeneratePage from "@/pages/admin/inventory/BarcodeGeneratePage";
 
@@ -176,6 +177,7 @@ export const router = createBrowserRouter([
       { path: "search", element: <SearchPage /> },
       { path: "settings", element: <SettingsPage /> },
       { path: "activity", element: <ActivityLogPage /> },
+      { path: "notifications", element: <EmployeeNotificationsPage /> },
       { path: "more", element: <EmployeeMorePage /> },
     ],
   }],

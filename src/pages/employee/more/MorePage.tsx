@@ -3,7 +3,7 @@ import StatusBar from "@/components/ui/StatusBar";
 import { useAuthStore } from "@/stores/authStore";
 import { useT } from "@/lib/i18n";
 import { useThemeStore } from "@/stores/themeStore";
-import { Settings, Users, ChevronRight } from "lucide-react";
+import { Settings, Users, Bell, ChevronRight } from "lucide-react";
 
 function initBgColor(name: string) {
   const colors = ["#84cc16","#3b82f6","#8b5cf6","#f59e0b","#06b6d4","#ec4899"];
@@ -23,8 +23,9 @@ export default function MorePage() {
   const initials = user?.name?.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase() ?? "U";
 
   const MENU_ITEMS = [
-    { key: "nav.customers" as const, icon: Users, path: "/employee/customers" },
-    { key: "settings.title" as const, icon: Settings, path: "/employee/settings" },
+    { key: "nav.customers", icon: Users, path: "/employee/customers" },
+    { key: "Notifications", icon: Bell, path: "/employee/notifications" },
+    { key: "settings.title", icon: Settings, path: "/employee/settings" },
   ];
 
   return (
@@ -67,7 +68,7 @@ export default function MorePage() {
               <Icon size={16} style={{ color: "var(--text-primary)" }} />
             </div>
             <p className="flex-1 text-left text-[14px] font-semibold" style={{ color: "var(--text-primary)" }}>
-              {t(key)}
+              {key.startsWith("nav.") || key.startsWith("settings.") ? t(key as any) : key}
             </p>
             <ChevronRight size={16} style={{ color: "var(--text-secondary)" }} />
           </button>

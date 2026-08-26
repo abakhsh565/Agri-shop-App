@@ -13,6 +13,7 @@ import { useUIStore } from "@/stores/uiStore";
 import { useShellBase } from "@/lib/useShellBase";
 import { useProductsStore } from "@/stores/productsStore";
 import ScanButton from "@/components/ui/ScanButton";
+import { checkAndNotifyLowStock } from "@/lib/notifications";
 
 export default function CartPage() {
   const navigate = useNavigate();
@@ -85,6 +86,17 @@ export default function CartPage() {
         paymentMethod,
         paymentType,
       });
+      // Check for low stock after sale
+      const products = useProductsStore.getState().products;
+      for (const it of items) {
+        const product = products.find((p) => p.id === it.productId);
+        if (product) {
+          const variant = product.variants.find((v) => v.id === it.variantId);
+          if (variant) {
+            checkAndNotifyLowStock(product.id, product.name, product.stockQty, variant.lowStockThreshold);
+          }
+        }
+      }
       // Navigate first, then clear cart — clearing first causes the <Navigate>
       // guard in this component to fire and redirect away from the success page.
       navigate(`${base}/sale/success`, { state: { sale }, replace: true });

@@ -9,6 +9,7 @@ import { useUIStore } from "@/stores/uiStore";
 import { useT } from "@/lib/i18n";
 import { useThemeStore } from "@/stores/themeStore";
 import { useShellBase } from "@/lib/useShellBase";
+import { notifyPaymentReceived } from "@/lib/notifications";
 
 export default function RecordCustomerPaymentPage() {
   const { customerId } = useParams();
@@ -45,6 +46,7 @@ export default function RecordCustomerPaymentPage() {
         notes,
       });
       addToast(`${formatCurrency(paid)} recorded`, "success");
+      notifyPaymentReceived(customer!.name, paid, customer!.id);
       navigate(`${base}/customers/${customerId}`, { replace: true });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));

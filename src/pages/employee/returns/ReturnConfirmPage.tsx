@@ -9,6 +9,7 @@ import { useUIStore } from "@/stores/uiStore";
 import { useAuthStore } from "@/stores/authStore";
 import { rpcProcessReturn } from "@/lib/db";
 import { AlertTriangle } from "lucide-react";
+import { notifyReturnProcessed } from "@/lib/notifications";
 
 export default function ReturnConfirmPage() {
   const { saleId } = useParams();
@@ -61,6 +62,7 @@ export default function ReturnConfirmPage() {
         processedAt: new Date().toISOString(),
         processedBy: currentUser?.name ?? "—",
       };
+      notifyReturnProcessed(sale?.customerName ?? "Customer", rpcResult.totalRefund, saleId ?? "");
       navigate(`/employee/sales/${saleId}/return/success`, { state: { result }, replace: true });
     } catch (e) {
       addToast(e instanceof Error ? e.message : "Could not process return.", "error");
