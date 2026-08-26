@@ -10,6 +10,15 @@ import { useT } from "@/lib/i18n";
 import { useThemeStore } from "@/stores/themeStore";
 import { useShellBase } from "@/lib/useShellBase";
 
+function normalizePhone(p: string): string {
+  return p.replace(/[\s\-()]/g, "").replace(/^\+?92/, "0");
+}
+
+function isValidPakistaniPhone(raw: string): boolean {
+  // Accepts: 03001234567, 923001234567, +923001234567
+  return /^(0\d{10}|92\d{10}|\+92\d{10})$/.test(raw);
+}
+
 export default function AddCustomerPage() {
   const navigate = useNavigate();
   const base = useShellBase();
@@ -31,25 +40,45 @@ export default function AddCustomerPage() {
 
   async function handleSave() {
     const errs: Record<string, string> = {};
-    if (!name.trim()) errs.name = isUrdu ? "نام درج کریں" : "Name is required";
-    if (!phone.trim()) errs.phone = isUrdu ? "فون نمبر درج کریں" : "Phone number is required";
-    else if (!/^0\d{9,10}$/.test(phone.replace(/\s/g, "")))
-      errs.phone = isUrdu ? "درست فون نمبر درج کریں" : "Enter a valid phone number";
-    else {
-      const existing = customers.find((c) => c.phone === phone.replace(/\s/g, "") && !c.isArchived);
-      if (existing) {
-        errs.phone = isUrdu ? `"${existing.name}" کے ساتھ پہلے سے رجسٹرڈ ہے` : `Already registered with "${existing.name}"`;
-        setExistingCustomerId(existing.id);
+    setExistingCustomerId(null);
+
+    if (!name.trim()) {
+      errs.name = isUrdu ? "نام درج کریں" : "Name is required";
+    }
+
+    if (!phone.trim()) {
+      errs.phone = isUrdu ? "فون نمبر درج کریں" : "Phone number is required";
+    } else {
+      const raw = normalizePhone(phone);
+      if (!isValidPakistaniPhone(raw)) {
+        errs.phone = isUrdu
+          ? "درست فون نمبر درج کریں"
+          : "Enter a valid phone number (e.g. 03001234567 or 923001234567)";
+      } else {
+        const existing = customers.find((c) => {
+          const cp = normalizePhone(c.phone);
+          return cp === raw && !c.isArchived;
+        });
+        if (existing) {
+          errs.phone = isUrdu
+            ? `"${existing.name}" کے ساتھ پہلے سے رجسٹرڈ ہے`
+            : `Already registered with "${existing.name}"`;
+          setExistingCustomerId(existing.id);
+        }
       }
     }
 
-    if (Object.keys(errs).length) { setErrors(errs); return; }
+    if (Object.keys(errs).length) {
+      setErrors(errs);
+      return;
+    }
 
     setLoading(true);
     try {
+      const normalizedPhone = normalizePhone(phone);
       const newCustomer = await createCustomer({
         name: name.trim(),
-        phone: phone.replace(/\s/g, ""),
+        phone: normalizedPhone,
         address: address.trim() || undefined,
         creditLimit: 0,
         createdBy: user?.id,

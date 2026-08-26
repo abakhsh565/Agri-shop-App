@@ -222,28 +222,46 @@ export default function SaleSuccessPage() {
     const blob = await renderReceiptBlob(s);
     if (!blob) { addToast("Failed to generate receipt image", "error"); return; }
 
-    // Convert blob to base64 data URL for Capacitor Share plugin
-    const dataUrl = await new Promise<string>((resolve) => {
+    // Convert blob to base64
+    const base64 = await new Promise<string>((resolve) => {
       const reader = new FileReader();
-      reader.onloadend = () => resolve(reader.result as string);
+      reader.onloadend = () => {
+        const result = reader.result as string;
+        resolve(result.split(",")[1]); // strip data:image/png;base64, prefix
+      };
       reader.readAsDataURL(blob);
     });
 
-    // Try Capacitor native share first (opens Android share sheet with image)
+    const fileName = `receipt-${s.saleNumber}.png`;
+
+    // Try Capacitor native share — write blob to cache, share the file path
     try {
+      const { Filesystem, Directory } = await import("@capacitor/filesystem");
+      await Filesystem.writeFile({
+        path: fileName,
+        data: base64,
+        directory: Directory.Cache,
+        recursive: true,
+      });
+      const fileUri = await Filesystem.getUri({
+        path: fileName,
+        directory: Directory.Cache,
+      });
+
       const { Share } = await import("@capacitor/share");
       await Share.share({
         title: "AgriShop Receipt",
         dialogTitle: "Share Receipt",
-        url: dataUrl,
+        url: fileUri.uri,
+        files: [fileUri.uri],
       });
       return;
     } catch {
-      // Capacitor Share not available — fall through
+      // Capacitor not available — fall through to web
     }
 
     // Try Web Share API with file (works on Android Chrome)
-    const file = new File([blob], `receipt-${s.saleNumber}.png`, { type: "image/png" });
+    const file = new File([blob], fileName, { type: "image/png" });
     if (navigator.share && navigator.canShare?.({ files: [file] })) {
       try {
         await navigator.share({ title: "AgriShop Receipt", files: [file] });
@@ -257,7 +275,7 @@ export default function SaleSuccessPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `receipt-${s.saleNumber}.png`;
+    a.download = fileName;
     a.click();
     URL.revokeObjectURL(url);
     addToast("Receipt image saved — share it manually", "success");
