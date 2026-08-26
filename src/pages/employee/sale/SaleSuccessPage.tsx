@@ -222,19 +222,38 @@ export default function SaleSuccessPage() {
     const blob = await renderReceiptBlob(s);
     if (!blob) { addToast("Failed to generate receipt image", "error"); return; }
 
-    const file = new File([blob], `receipt-${s.saleNumber}.png`, { type: "image/png" });
+    // Convert blob to base64 data URL for Capacitor Share plugin
+    const dataUrl = await new Promise<string>((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.readAsDataURL(blob);
+    });
 
-    // Try native share with the image file (opens WhatsApp, Facebook, etc.)
+    // Try Capacitor native share first (opens Android share sheet with image)
+    try {
+      const { Share } = await import("@capacitor/share");
+      await Share.share({
+        title: "AgriShop Receipt",
+        dialogTitle: "Share Receipt",
+        url: dataUrl,
+      });
+      return;
+    } catch {
+      // Capacitor Share not available — fall through
+    }
+
+    // Try Web Share API with file (works on Android Chrome)
+    const file = new File([blob], `receipt-${s.saleNumber}.png`, { type: "image/png" });
     if (navigator.share && navigator.canShare?.({ files: [file] })) {
       try {
         await navigator.share({ title: "AgriShop Receipt", files: [file] });
         return;
       } catch {
-        // User cancelled — fall through to download
+        // User cancelled
       }
     }
 
-    // Fallback: download the image directly
+    // Fallback: download the image
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
