@@ -35,6 +35,7 @@ export default function CustomerProfilePage() {
   const [editName, setEditName] = useState("");
   const [editPhone, setEditPhone] = useState("");
   const [editAddress, setEditAddress] = useState("");
+  const [editImageUrl, setEditImageUrl] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   function startEdit() {
@@ -42,6 +43,7 @@ export default function CustomerProfilePage() {
     setEditName(customer.name);
     setEditPhone(customer.phone);
     setEditAddress(customer.address ?? "");
+    setEditImageUrl(customer.imageUrl ?? null);
     setEditing(true);
   }
 
@@ -64,6 +66,10 @@ export default function CustomerProfilePage() {
         .update({ name: editName.trim(), phone: editPhone.trim(), address: editAddress.trim() || null })
         .eq("id", customerId);
       if (error) throw new Error(error.message);
+      // Save image if changed
+      if (editImageUrl !== (customer.imageUrl ?? null)) {
+        await updateCustomerImage(customerId, editImageUrl);
+      }
       await useCustomersStore.getState().load();
       setEditing(false);
       addToast("Customer updated", "success");
@@ -129,15 +135,7 @@ export default function CustomerProfilePage() {
       {/* Profile hero — image left, data right, compact */}
       <div className="px-4 pt-4 pb-3 animate-fade-in-up">
         <div className="flex items-center gap-4">
-          {isAdmin ? (
-            <ImageUpload
-              bucket="employee-photos"
-              shape="circle"
-              value={customer.imageUrl ?? null}
-              onChange={handleImageChange}
-              label="Photo"
-            />
-          ) : customer.imageUrl ? (
+          {customer.imageUrl ? (
             <img src={customer.imageUrl} alt={customer.name} className="size-14 rounded-full object-cover shrink-0" />
           ) : (
             <div
@@ -202,6 +200,18 @@ export default function CustomerProfilePage() {
             onClick={(e) => e.stopPropagation()}
           >
             <p className="text-base font-bold text-center" style={{ color: "var(--text-primary)" }}>Edit Customer</p>
+            {/* Image in popup */}
+            {isAdmin && (
+              <div className="flex justify-center">
+                <ImageUpload
+                  bucket="customer-images"
+                  shape="circle"
+                  value={editImageUrl}
+                  onChange={setEditImageUrl}
+                  label="Photo"
+                />
+              </div>
+            )}
             <div>
               <p className="text-[11px] font-bold uppercase mb-1.5 tracking-wider" style={{ color: "var(--text-secondary)" }}>Name</p>
               <input value={editName} onChange={(e) => setEditName(e.target.value)}

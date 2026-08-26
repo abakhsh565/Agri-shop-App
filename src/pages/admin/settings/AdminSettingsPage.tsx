@@ -8,9 +8,11 @@ import { clearDeviceSession } from "@/lib/deviceSession";
 import { useT } from "@/lib/i18n";
 import {
   Lock, Bell, Globe, Info, ChevronRight, Moon, Sun,
-  ClipboardList, Smartphone, Camera, Users, Package,
-  Building2, ShieldCheck,
+  ClipboardList, Smartphone, Users, Package,
+  Building2, ShieldCheck, Pencil, Loader2, Save,
 } from "lucide-react";
+import { uploadImage } from "@/lib/storage";
+import { supabase } from "@/lib/supabase";
 
 const LANG_LABELS: Record<string, string> = { en: "English", ur: "اردو" };
 
@@ -19,7 +21,12 @@ export default function AdminSettingsPage() {
   const t = useT();
   const { user, logout } = useAuthStore();
   const { theme, toggleTheme, language, setLanguage } = useThemeStore();
-  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(user?.photoUrl ?? null);
+  const [editing, setEditing] = useState(false);
+  const [editName, setEditName] = useState("");
+  const [editImageUrl, setEditImageUrl] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [saving, setSaving] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isUrdu = language === "ur";
 
@@ -35,12 +42,40 @@ export default function AdminSettingsPage() {
     setLanguage(language === "en" ? "ur" : "en");
   }
 
-  function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
+  function startEdit() {
+    setEditName(user?.name ?? "");
+    setEditImageUrl(user?.photoUrl ?? null);
+    setEditing(true);
+  }
+
+  async function saveEdit() {
+    if (!editName.trim()) return;
+    setSaving(true);
+    try {
+      const { error } = await supabase.from("users").update({ name: editName.trim(), photo_url: editImageUrl }).eq("id", user!.id);
+      if (error) throw error;
+      useAuthStore.getState().setUser({ ...user!, name: editName.trim(), photoUrl: editImageUrl ?? undefined });
+      setAvatarUrl(editImageUrl);
+      setEditing(false);
+    } catch (err) {
+      // silent
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleAvatarUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => setAvatarUrl(ev.target?.result as string);
-    reader.readAsDataURL(file);
+    setUploading(true);
+    try {
+      const url = await uploadImage("employee-photos", file);
+      setEditImageUrl(url);
+    } catch {
+      // silent
+    } finally {
+      setUploading(false);
+    }
   }
 
   const initials = user?.name?.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase() ?? "OW";
@@ -60,30 +95,15 @@ export default function AdminSettingsPage() {
           style={{ border: "1px solid var(--border-light)", background: "var(--surface-2)" }}
         >
           <div className="relative shrink-0">
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={handleAvatarChange}
-            />
             <div
-              className="w-14 h-14 rounded-full overflow-hidden flex items-center justify-center text-lg font-bold cursor-pointer"
+              className="w-14 h-14 rounded-full overflow-hidden flex items-center justify-center text-lg font-bold"
               style={{ background: "var(--brand)", color: "#0a0a0a" }}
-              onClick={() => fileInputRef.current?.click()}
             >
               {avatarUrl
                 ? <img src={avatarUrl} alt="avatar" className="w-full h-full object-cover" />
                 : initials
               }
             </div>
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center shadow"
-              style={{ background: "var(--brand)", color: "#0a0a0a" }}
-            >
-              <Camera size={10} strokeWidth={2.5} />
-            </button>
           </div>
 
           <div className="flex-1 min-w-0">
@@ -103,7 +123,74 @@ export default function AdminSettingsPage() {
             </p>
             <p className="text-xs" style={{ color: "var(--text-secondary)" }}>{user?.phone}</p>
           </div>
+
+          <button
+            onClick={startEdit}
+            className="flex items-center gap-1 h-6 px-2 rounded-full text-[10px] font-bold shrink-0"
+            style={{ background: "var(--surface)", color: "var(--text-secondary)", border: "1px solid var(--divider)" }}
+          >
+            <Pencil size={10} /> Edit
+          </button>
         </div>
+
+        {/* Edit Profile Popup */}
+        {editing && (
+          <div
+            className="fixed inset-0 z-50 flex items-end"
+            style={{ background: "rgba(0,0,0,0.5)" }}
+            onClick={() => setEditing(false)}
+          >
+            <div
+              className="w-full max-w-[390px] mx-auto rounded-t-[24px] p-6 flex flex-col gap-4"
+              style={{ background: "var(--surface)" }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <p className="text-base font-bold text-center" style={{ color: "var(--text-primary)" }}>Edit Profile</p>
+              {/* Image upload in popup */}
+              <div className="flex justify-center">
+                <div className="relative">
+                  <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarUpload} />
+                  <div
+                    className="w-16 h-16 rounded-full overflow-hidden flex items-center justify-center text-xl font-bold cursor-pointer"
+                    style={{ background: "var(--brand)", color: "#0a0a0a" }}
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    {uploading ? (
+                      <Loader2 size={20} className="animate-spin" />
+                    ) : editImageUrl ? (
+                      <img src={editImageUrl} alt="avatar" className="w-full h-full object-cover" />
+                    ) : (
+                      initials
+                    )}
+                  </div>
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full flex items-center justify-center shadow"
+                    style={{ background: "var(--brand)", color: "#0a0a0a" }}
+                  >
+                    <Pencil size={10} strokeWidth={2.5} />
+                  </button>
+                </div>
+              </div>
+              <div>
+                <p className="text-[11px] font-bold uppercase mb-1.5 tracking-wider" style={{ color: "var(--text-secondary)" }}>Name</p>
+                <input
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  className="w-full h-11 rounded-full px-4 text-sm outline-none"
+                  style={{ background: "var(--surface-2)", border: "1px solid var(--divider)", color: "var(--text-primary)" }}
+                />
+              </div>
+              <div className="flex gap-3">
+                <button onClick={() => setEditing(false)} className="flex-1 h-12 rounded-full text-sm font-bold"
+                  style={{ border: "1px solid var(--divider)", color: "var(--text-primary)" }}>Cancel</button>
+                <button onClick={saveEdit} disabled={saving}
+                  className="flex-1 h-12 rounded-full text-sm font-bold disabled:opacity-50"
+                  style={{ background: "var(--brand)", color: "#0a0a0a" }}>{saving ? "Saving..." : "Save"}</button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Appearance */}
         <div className="px-4 pt-5 animate-fade-in-up delay-75">

@@ -250,7 +250,7 @@ export default function AdminDashboardPage() {
       )}
 
       {/* ── Time-period filter — controls all figures below ── */}
-      <div className="flex gap-2 px-4 pt-1 pb-2 overflow-x-auto no-scrollbar">
+      <div className="flex gap-2 px-4 pt-1 pb-2 overflow-x-auto no-scrollbar" style={{ scrollBehavior: "smooth", WebkitOverflowScrolling: "touch" }}>
         {DATE_PILLS.map(({ key, label }) => (
           <button
             key={key}

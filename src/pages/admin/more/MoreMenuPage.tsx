@@ -5,7 +5,6 @@ import { Package, Building2, Users, ShoppingCart, BarChart2, Layers, CreditCard,
 import StatusBar from "@/components/ui/StatusBar";
 
 const TILES = [
-  { labelKey: "admin.products"  as const, icon: Package,      path: "/admin/products",   color: "#3b82f6" },
   { labelKey: "admin.companies" as const, icon: Building2,    path: "/admin/companies",  color: "#84cc16" },
   { labelKey: "admin.employees" as const, icon: Users,        path: "/admin/employees",  color: "#8b5cf6" },
   { labelKey: "admin.purchases" as const, icon: ShoppingCart, path: "/admin/purchases",  color: "#f59e0b" },

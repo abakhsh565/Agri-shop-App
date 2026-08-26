@@ -8,7 +8,7 @@ import StatusBar from "@/components/ui/StatusBar";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { rpcDeleteProduct } from "@/lib/db";
 import { useUIStore } from "@/stores/uiStore";
-import { Search, Plus, Pencil, Trash2 } from "lucide-react";
+import { Search, Plus, Pencil, Trash2, MoreVertical, TrendingUp } from "lucide-react";
 import type { ProductCategory, Product } from "@/types";
 import { barcodeToSvg } from "@/lib/barcode";
 
@@ -49,6 +49,7 @@ export default function AdminInventoryPage() {
   const [cat, setCat] = useState<"all" | ProductCategory>("all");
   const [toDelete, setToDelete] = useState<Product | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [openMenu, setOpenMenu] = useState<string | null>(null);
 
   async function confirmDelete() {
     if (!toDelete) return;
@@ -171,30 +172,42 @@ export default function AdminInventoryPage() {
                     </div>
                   )}
                 </div>
-                <div className="flex items-center gap-1.5 shrink-0">
+                <div className="relative shrink-0">
                   <button
-                    onClick={() => navigate(`/admin/inventory/${p.id}/adjust`)}
-                    className="h-7 px-3 rounded-full text-[11px] font-bold transition-colors active:opacity-70"
-                    style={{ background: "var(--brand)", color: "#0a0a0a" }}
-                  >
-                    {t("admin.adjustStock")}
-                  </button>
-                  <button
-                    aria-label="Edit product"
-                    onClick={() => navigate(`/admin/inventory/${p.id}/edit`)}
+                    onClick={() => setOpenMenu(openMenu === p.id ? null : p.id)}
                     className="size-7 rounded-full flex items-center justify-center active:opacity-70"
                     style={{ background: "var(--surface-2)", color: "var(--text-secondary)" }}
                   >
-                    <Pencil size={13} />
+                    <MoreVertical size={14} />
                   </button>
-                  <button
-                    aria-label="Delete product"
-                    onClick={() => setToDelete(p)}
-                    className="size-7 rounded-full flex items-center justify-center active:opacity-70"
-                    style={{ background: "var(--surface-2)", color: "var(--error)" }}
-                  >
-                    <Trash2 size={13} />
-                  </button>
+                  {openMenu === p.id && (
+                    <div
+                      className="absolute right-0 top-9 w-44 rounded-[12px] shadow-xl z-50 overflow-hidden"
+                      style={{ background: "var(--surface)", border: "1px solid var(--divider)" }}
+                    >
+                      <button
+                        onClick={() => { setOpenMenu(null); navigate(`/admin/inventory/${p.id}/adjust`); }}
+                        className="flex items-center gap-2 w-full px-3 py-3 text-left text-[12px] font-medium"
+                        style={{ color: "var(--text-primary)" }}
+                      >
+                        <TrendingUp size={13} /> {t("admin.adjustStock")}
+                      </button>
+                      <button
+                        onClick={() => { setOpenMenu(null); navigate(`/admin/inventory/${p.id}/edit`); }}
+                        className="flex items-center gap-2 w-full px-3 py-3 text-left text-[12px] font-medium border-t"
+                        style={{ color: "var(--text-primary)", borderColor: "var(--divider)" }}
+                      >
+                        <Pencil size={13} /> Edit Product
+                      </button>
+                      <button
+                        onClick={() => { setOpenMenu(null); setToDelete(p); }}
+                        className="flex items-center gap-2 w-full px-3 py-3 text-left text-[12px] font-medium border-t"
+                        style={{ color: "var(--error)", borderColor: "var(--divider)" }}
+                      >
+                        <Trash2 size={13} /> Delete
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
 

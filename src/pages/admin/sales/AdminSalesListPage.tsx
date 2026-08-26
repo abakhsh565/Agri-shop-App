@@ -100,12 +100,7 @@ export default function AdminSalesListPage() {
 
       {/* Header */}
       <div className="flex items-center justify-between px-4 h-11">
-        <div
-          className="px-2 py-0.5 rounded-full text-[10px] font-bold"
-          style={{ background: "var(--brand)", color: "#0a0a0a" }}
-        >
-          Admin
-        </div>
+        <div className="w-8" />
         <p className="text-base font-bold" style={{ color: "var(--text-primary)" }}>{t("admin.sales")}</p>
         <div className="w-8" />
       </div>
