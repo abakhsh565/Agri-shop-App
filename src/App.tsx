@@ -2,6 +2,7 @@ import { RouterProvider } from "react-router-dom";
 import { router } from "@/router";
 import { useEffect } from "react";
 import { useThemeStore, applyTheme } from "@/stores/themeStore";
+import { Agentation } from "agentation";
 
 export default function App() {
   const { theme } = useThemeStore();
@@ -21,6 +22,7 @@ export default function App() {
       >
         <RouterProvider router={router} />
       </div>
+      <Agentation />
     </div>
   );
 }
