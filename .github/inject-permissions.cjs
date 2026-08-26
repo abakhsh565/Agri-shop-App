@@ -19,6 +19,7 @@ const perm = [
   '    <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />',
 ].join('\n');
 
-xml = xml.replace('<manifest ', '<manifest \n' + perm + '\n');
+// Insert permissions after the manifest opening tag (after the >)
+xml = xml.replace(/(<manifest[^>]*>)/, '$1\n' + perm + '\n');
 fs.writeFileSync(path, xml);
 console.log('Camera permission injected successfully');
