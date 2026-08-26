@@ -233,7 +233,7 @@ export default function AdminSettingsPage() {
               className="flex items-center justify-between w-full px-4 py-4"
             >
               <div className="flex items-center gap-3">
-                <Globe size={18} style={{ color: "var(--text-primary)" }} />
+                <Globe size={18} style={{ color: "var(--brand)" }} />
                 <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>{t("settings.language")}</span>
               </div>
               <div className="flex items-center gap-2">
@@ -248,14 +248,7 @@ export default function AdminSettingsPage() {
             </button>
           </div>
 
-          {language === "ur" && (
-            <div
-              className="mt-2 px-4 py-3 rounded-xl text-right text-sm animate-fade-in-up"
-              style={{ background: "rgba(132,204,22,0.1)", color: "var(--brand-dark)", direction: "rtl" }}
-            >
-              اردو زبان فعال ہے۔ یہ ایپ دو زبانوں میں کام کرتی ہے۔
-            </div>
-          )}
+
         </div>
 
         {/* Admin Quick Links */}
@@ -339,7 +332,7 @@ export default function AdminSettingsPage() {
                   style={{ borderColor: "var(--border-light)" }}
                 >
                   <div className="flex items-center gap-3">
-                    <Icon size={18} style={{ color: "var(--text-primary)" }} />
+                    <Icon size={18} style={{ color: "var(--brand)" }} />
                     <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>{s.label}</span>
                   </div>
                   <div className="flex items-center gap-1">
