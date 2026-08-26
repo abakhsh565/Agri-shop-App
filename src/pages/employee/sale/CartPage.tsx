@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate, Navigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
 import Button from "@/components/ui/Button";
@@ -26,81 +26,64 @@ export default function CartPage() {
   const [paymentType, setPaymentType] = useState<"full" | "partial">("full");
   const [paymentMethod, setPaymentMethod] = useState<"cash" | "bank_transfer">("cash");
   const [amountReceived, setAmountReceived] = useState("");
+  const [amountTouched, setAmountTouched] = useState(false);
   const [completing, setCompleting] = useState(false);
 
-  if (!customer) return <Navigate to={`${base}/sale`} replace />;
+  if (!customer) return (
+    <div className="flex flex-col bg-white w-full min-h-full">
+      <StatusBar />
+      <NavHeader title="Review & Payment" />
+      <div className="flex-1 flex flex-col items-center justify-center py-16 gap-3">
+        <p className="text-sm" style={{ color: "var(--text-secondary)" }}>No customer selected</p>
+        <button onClick={() => navigate(`${base}/sale`)} className="text-sm font-bold" style={{ color: "var(--brand)" }}>Go back</button>
+      </div>
+    </div>
+  );
 
   const total = subtotal();
-  const amountPaid = paymentType === "full" ? total : Math.min(Number(amountReceived || 0), total);
+  const parsedAmount = amountReceived === "" ? null : Number(amountReceived);
+  const amountPaid = paymentType === "full" ? total : Math.min(parsedAmount ?? 0, total);
   const creditAfterSale = customer.outstandingBalance + (paymentType === "full" ? 0 : total - amountPaid);
   const creditHealth = getCreditHealth(creditAfterSale, customer.creditLimit);
   const creditOverLimit = customer.creditLimit > 0 && creditAfterSale > customer.creditLimit;
 
   async function handleCompleteSale() {
     if (!items.length) { addToast("Add at least one product", "warning"); return; }
-    if (paymentType === "partial" && amountPaid <= 0) { addToast("Enter the amount received", "warning"); return; }
+    if (paymentType === "partial" && amountTouched && parsedAmount !== null && parsedAmount < 0) { addToast("Amount cannot be negative", "warning"); return; }
 
     setCompleting(true);
     try {
       const outstandingBalance = total - amountPaid;
-      let sale;
-      try {
-        // Try the real RPC first (works after migrations are applied)
-        sale = await createSale({
-          customerId: customer!.id,
-          customerName: customer!.name,
-          customerPhone: customer!.phone,
-          customerAddress: customer!.address,
-          employeeId: user?.id ?? "",
-          employeeName: user?.name?.split(" ")[0] ?? "Staff",
-          items: items.map((it) => ({
-            productId: it.productId,
-            productName: it.productName,
-            variantId: it.variantId,
-            variantName: it.variantName,
-            qty: it.qty,
-            unitPrice: it.unitPrice,
-            unitSize: it.unitSize,
-            baseUnit: it.baseUnit,
-            lineTotal: it.lineTotal,
-          })),
-          subtotal: total,
-          taxAmount: 0,
-          totalAmount: total,
-          amountPaid,
-          outstandingBalance,
-          paymentMethod,
-          paymentType,
-        });
-      } catch {
-        // Fallback: create a local mock sale for preview/development
-        sale = {
-          id: "local-" + Date.now(),
-          saleNumber: "SALE-" + String(Math.floor(Math.random() * 9999)).padStart(4, "0"),
-          customerId: customer!.id,
-          customerName: customer!.name,
-          customerPhone: customer!.phone,
-          customerAddress: customer!.address,
-          employeeId: user?.id ?? "",
-          employeeName: user?.name?.split(" ")[0] ?? "Staff",
-          items: items.map((it, i) => ({
-            ...it,
-            id: "item-" + i,
-            saleId: "local-" + Date.now(),
-          })),
-          subtotal: total,
-          taxAmount: 0,
-          totalAmount: total,
-          amountPaid,
-          outstandingBalance,
-          paymentMethod,
-          paymentType,
-          isVoided: false,
-          createdAt: new Date().toISOString(),
-        };
-      }
-      clearCart();
+      const sale = await createSale({
+        customerId: customer!.id,
+        customerName: customer!.name,
+        customerPhone: customer!.phone,
+        customerAddress: customer!.address,
+        employeeId: user?.id ?? "",
+        employeeName: user?.name?.split(" ")[0] ?? "Staff",
+        items: items.map((it) => ({
+          productId: it.productId,
+          productName: it.productName,
+          variantId: it.variantId,
+          variantName: it.variantName,
+          qty: it.qty,
+          unitPrice: it.unitPrice,
+          unitSize: it.unitSize,
+          baseUnit: it.baseUnit,
+          lineTotal: it.lineTotal,
+        })),
+        subtotal: total,
+        taxAmount: 0,
+        totalAmount: total,
+        amountPaid,
+        outstandingBalance,
+        paymentMethod,
+        paymentType,
+      });
+      // Navigate first, then clear cart — clearing first causes the <Navigate>
+      // guard in this component to fire and redirect away from the success page.
       navigate(`${base}/sale/success`, { state: { sale }, replace: true });
+      clearCart();
     } catch (e) {
       addToast(e instanceof Error ? e.message : "Failed to complete sale", "error");
     } finally {
@@ -268,8 +251,9 @@ export default function CartPage() {
             inputMode="numeric"
             value={amountReceived}
             onChange={(e) => setAmountReceived(e.target.value)}
-            placeholder="Enter amount"
+            placeholder="Enter amount (0 for credit)"
             className="w-full h-12 rounded-[24px] border border-[#e5e5e5] px-4 text-sm text-black placeholder:text-[#888] outline-none"
+            onFocus={() => setAmountTouched(true)}
           />
         </div>
       )}

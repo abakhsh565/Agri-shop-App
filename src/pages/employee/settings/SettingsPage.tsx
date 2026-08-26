@@ -8,7 +8,7 @@ import { useT } from "@/lib/i18n";
 import { uploadImage } from "@/lib/storage";
 import { supabase } from "@/lib/supabase";
 import { useUIStore } from "@/stores/uiStore";
-import { Lock, Bell, Globe, Info, ChevronRight, Moon, Sun, ClipboardList, Smartphone, Camera, Loader2 } from "lucide-react";
+import { Lock, Bell, Globe, Info, ChevronRight, Moon, Sun, ClipboardList, Smartphone, Camera, Loader2, User, Save } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 const LANG_LABELS: Record<string, string> = { en: "English", ur: "اردو" };
@@ -20,8 +20,28 @@ export default function SettingsPage() {
   const { theme, toggleTheme, language, setLanguage } = useThemeStore();
   const [avatarUrl, setAvatarUrl] = useState<string | null>(user?.photoUrl ?? null);
   const [uploading, setUploading] = useState(false);
+  const [editingName, setEditingName] = useState(false);
+  const [nameValue, setNameValue] = useState(user?.name ?? "");
+  const [savingName, setSavingName] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { addToast } = useUIStore();
+
+  async function handleSaveName() {
+    if (!nameValue.trim() || !user) return;
+    setSavingName(true);
+    try {
+      const { error } = await supabase.from("users").update({ name: nameValue.trim() }).eq("id", user.id);
+      if (error) throw error;
+      useAuthStore.getState().setUser({ ...user, name: nameValue.trim() });
+      setEditingName(false);
+      addToast("Name updated", "success");
+    } catch (err) {
+      addToast(err instanceof Error ? err.message : "Failed to update name", "error");
+      setNameValue(user.name);
+    } finally {
+      setSavingName(false);
+    }
+  }
 
   // Apply stored theme on mount
   useEffect(() => { applyTheme(theme); }, []);
@@ -111,9 +131,39 @@ export default function SettingsPage() {
           </div>
 
           <div className="flex-1 min-w-0">
-            <p className="text-base font-bold truncate" style={{ color: "var(--text-primary)" }}>
-              {user?.name}
-            </p>
+            {editingName ? (
+              <div className="flex items-center gap-2">
+                <input
+                  autoFocus
+                  value={nameValue}
+                  onChange={(e) => setNameValue(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") handleSaveName(); if (e.key === "Escape") { setEditingName(false); setNameValue(user?.name ?? ""); } }}
+                  className="flex-1 h-9 rounded-full px-3 text-sm font-bold outline-none"
+                  style={{ background: "var(--surface)", border: "1px solid var(--brand)", color: "var(--text-primary)" }}
+                />
+                <button
+                  onClick={handleSaveName}
+                  disabled={savingName || !nameValue.trim()}
+                  className="w-8 h-8 rounded-full flex items-center justify-center"
+                  style={{ background: "var(--brand)", color: "#0a0a0a" }}
+                >
+                  {savingName ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <p className="text-base font-bold truncate" style={{ color: "var(--text-primary)" }}>
+                  {user?.name}
+                </p>
+                <button
+                  onClick={() => setEditingName(true)}
+                  className="shrink-0 w-6 h-6 rounded-full flex items-center justify-center"
+                  style={{ background: "var(--surface)", color: "var(--text-secondary)" }}
+                >
+                  <User size={12} />
+                </button>
+              </div>
+            )}
             <p className="text-xs mt-0.5" style={{ color: "var(--text-secondary)" }}>
               {user?.jobTitle ?? "Store Associate"}
               {user?.employeeNumber ? ` · Emp #${user.employeeNumber}` : ""}

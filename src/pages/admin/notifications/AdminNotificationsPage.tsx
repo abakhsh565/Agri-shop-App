@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
@@ -13,7 +13,6 @@ import {
 
 /** Map notification kind + entity_id → the correct admin route */
 function notificationRoute(n: AppNotification): string | null {
-  // When entity_id exists → always go to the specific record detail
   if (n.entity_id) {
     switch (n.kind) {
       case "sale": return "/admin/sales/" + n.entity_id;
@@ -26,7 +25,6 @@ function notificationRoute(n: AppNotification): string | null {
       default: return null;
     }
   }
-  // No entity_id → list page
   switch (n.kind) {
     case "sale": return "/admin/sales";
     case "return": return "/admin/sales";
@@ -49,12 +47,47 @@ const KIND_ICON: Record<string, any> = {
   system: Info,
 };
 
+/** Group notifications by time period */
+type TimeGroup = { label: string; items: AppNotification[] };
+
+function groupByTime(items: AppNotification[], now: Date): TimeGroup[] {
+  const today = now.toISOString().split("T")[0];
+  const yesterdayDate = new Date(now);
+  yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+  const yesterday = yesterdayDate.toISOString().split("T")[0];
+  const weekAgo = new Date(now);
+  weekAgo.setDate(weekAgo.getDate() - 7);
+  const monthAgo = new Date(now);
+  monthAgo.setMonth(monthAgo.getMonth() - 1);
+
+  const groups: Record<string, AppNotification[]> = {
+    "Today": [],
+    "Yesterday": [],
+    "This Week": [],
+    "This Month": [],
+    "Earlier": [],
+  };
+
+  for (const n of items) {
+    const d = n.created_at.split("T")[0];
+    const dt = new Date(n.created_at);
+    if (d === today) groups["Today"].push(n);
+    else if (d === yesterday) groups["Yesterday"].push(n);
+    else if (dt >= weekAgo) groups["This Week"].push(n);
+    else if (dt >= monthAgo) groups["This Month"].push(n);
+    else groups["Earlier"].push(n);
+  }
+
+  return Object.entries(groups)
+    .filter(([, items]) => items.length > 0)
+    .map(([label, items]) => ({ label, items }));
+}
+
 export default function AdminNotificationsPage() {
   const navigate = useNavigate();
   const { items, loading, ready, load, subscribe, markAllRead } = useNotificationStore();
   const { language } = useThemeStore();
   const isUrdu = language === "ur";
-
   const now = useCurrentTime();
 
   useEffect(() => {
@@ -62,6 +95,8 @@ export default function AdminNotificationsPage() {
     const unsub = subscribe();
     return unsub;
   }, []);
+
+  const groups = useMemo(() => groupByTime(items, now), [items, now]);
 
   return (
     <div
@@ -71,7 +106,6 @@ export default function AdminNotificationsPage() {
       <StatusBar />
       <NavHeader
         title="Notifications"
-       
         right={
           items.some((n) => !n.read) ? (
             <button
@@ -105,47 +139,65 @@ export default function AdminNotificationsPage() {
           </p>
         </div>
       ) : (
-        <div className="flex flex-col mx-4 mt-2">
-          {items.map((n, i) => {
-            const Icon = KIND_ICON[n.kind] ?? Info;
-            return (
-              <button
-                key={n.id}
-                onClick={() => {
-                  const route = notificationRoute(n);
-                  if (route) navigate(route);
-                  markAllRead();
-                }}
-                className="flex items-start gap-3 py-4 w-full text-left active:scale-[0.98] transition-transform"
-                style={{
-                  borderBottom: i < items.length - 1 ? "1px solid var(--divider)" : "none",
-                  opacity: n.read ? 0.6 : 1,
-                }}
-              >
-                <div
-                  className="w-9 h-9 rounded-full flex items-center justify-center shrink-0"
-                  style={{ background: "var(--surface-2)" }}
+        <div className="flex flex-col pb-8">
+          {groups.map((group) => (
+            <div key={group.label}>
+              {/* Group header */}
+              <div className="px-4 pt-5 pb-2">
+                <p
+                  className="text-[11px] font-bold uppercase tracking-widest"
+                  style={{ color: "var(--text-secondary)" }}
                 >
-                  <Icon size={16} style={{ color: "var(--brand)" }} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <p className="text-sm font-bold truncate" style={{ color: "var(--text-primary)" }}>
-                      {n.title}
-                    </p>
-                    {!n.read && (
-                      <span className="w-2 h-2 rounded-full shrink-0" style={{ background: "var(--brand)" }} />
-                    )}
-                  </div>
-                  {n.body && (
-                    <p className="text-xs mt-0.5" style={{ color: "var(--text-secondary)" }}>{n.body}</p>
-                  )}
-                  <p className="text-[11px] mt-1" style={{ color: "var(--text-secondary)" }}>
-                    {n.actor_name ? `${n.actor_name} · ` : ""}{timeAgo(n.created_at, now)}
-                  </p>
-                </div>                </button>
-              );
-          })}
+                  {group.label}
+                </p>
+              </div>
+
+              {/* Items */}
+              <div className="flex flex-col mx-4">
+                {group.items.map((n, i) => {
+                  const Icon = KIND_ICON[n.kind] ?? Info;
+                  return (
+                    <button
+                      key={n.id}
+                      onClick={() => {
+                        const route = notificationRoute(n);
+                        if (route) navigate(route);
+                        markAllRead();
+                      }}
+                      className="flex items-start gap-3 py-4 w-full text-left active:scale-[0.98] transition-transform"
+                      style={{
+                        borderBottom: i < group.items.length - 1 ? "1px solid var(--divider)" : "none",
+                        opacity: n.read ? 0.6 : 1,
+                      }}
+                    >
+                      <div
+                        className="w-9 h-9 rounded-full flex items-center justify-center shrink-0"
+                        style={{ background: "var(--surface-2)" }}
+                      >
+                        <Icon size={16} style={{ color: "var(--brand)" }} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-bold truncate" style={{ color: "var(--text-primary)" }}>
+                            {n.title}
+                          </p>
+                          {!n.read && (
+                            <span className="w-2 h-2 rounded-full shrink-0" style={{ background: "var(--brand)" }} />
+                          )}
+                        </div>
+                        {n.body && (
+                          <p className="text-xs mt-0.5" style={{ color: "var(--text-secondary)" }}>{n.body}</p>
+                        )}
+                        <p className="text-[11px] mt-1" style={{ color: "var(--text-secondary)" }}>
+                          {n.actor_name ? `${n.actor_name} · ` : ""}{timeAgo(n.created_at, now)}
+                        </p>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
         </div>
       )}
     </div>

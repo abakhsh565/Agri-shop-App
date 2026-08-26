@@ -203,6 +203,9 @@ export const useSalesStore = create<SalesState>((set, get) => ({
       })),
     });
 
+    // Compute totals from input items (RPC may not return all fields)
+    const computedTotal = input.items.reduce((s, it) => s + it.unitPrice * it.qty, 0);
+    const computedPaid = input.amountPaid ?? 0;
     const sale: Sale = {
       id: result.id,
       saleNumber: result.saleNumber,
@@ -217,11 +220,11 @@ export const useSalesStore = create<SalesState>((set, get) => ({
         id: "local-" + i,
         saleId: result.id,
       })),
-      subtotal: result.totalAmount,
+      subtotal: result.totalAmount ?? computedTotal,
       taxAmount: 0,
-      totalAmount: result.totalAmount,
-      amountPaid: result.amountPaid,
-      outstandingBalance: result.outstandingBalance,
+      totalAmount: result.totalAmount ?? computedTotal,
+      amountPaid: result.amountPaid ?? computedPaid,
+      outstandingBalance: result.outstandingBalance ?? (computedTotal - computedPaid),
       paymentType: input.paymentType,
       paymentMethod: input.paymentMethod,
       isVoided: false,

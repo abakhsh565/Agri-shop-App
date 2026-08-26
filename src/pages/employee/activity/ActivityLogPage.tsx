@@ -67,32 +67,6 @@ function buildFeed(
     });
   });
 
-  // Simulate a return entry
-  feed.push({
-    id: "ret-001",
-    kind: "return",
-    title: "Return from Rashid Ali",
-    subtitle: "1 item returned · Cash refund",
-    amount: 2200,
-    actor: "Ahmed",
-    at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-    status: "warning",
-  });
-
-  // Simulate customer added
-  mockCustomers.slice(0, 2).forEach((c, i) => {
-    feed.push({
-      id: "cust-" + c.id,
-      kind: "customer_added",
-      title: `New customer added`,
-      subtitle: c.name + " · " + c.phone,
-      actor: "Ahmed",
-      at: new Date(Date.now() - (i + 3) * 60 * 60 * 1000).toISOString(),
-      linkPath: `${base}/customers/${c.id}`,
-      status: "info",
-    });
-  });
-
   // Sort newest first
   return feed.sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
 }
