@@ -28,11 +28,12 @@ export default function ScanButton({ onScan, label = "Scan", size = "md" }: Scan
       if (result) {
         onScan(result.barcode);
       } else {
-        // Camera not available — show manual entry
+        // Camera not available or permission denied — show manual entry
+        addToast("Camera not available. Enter barcode manually.", "warning");
         setShowManual(true);
       }
-    } catch {
-      addToast("Camera access denied. Use manual entry.", "error");
+    } catch (err) {
+      addToast("Camera error: " + (err instanceof Error ? err.message : "Use manual entry"), "error");
       setShowManual(true);
     } finally {
       setScanning(false);

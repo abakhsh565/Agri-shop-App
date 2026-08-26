@@ -126,38 +126,50 @@ export interface ScanResult {
 export async function scanFromCamera(): Promise<ScanResult | null> {
   // Try Capacitor MLKit first (works on Android/iOS native)
   try {
-    const { BarcodeScanner } = await import("@capacitor-mlkit/barcode-scanning");
+    const { BarcodeScanner, BarcodeFormat } = await import("@capacitor-mlkit/barcode-scanning");
     
-    // Check if available on this device
+    // Check if MLKit is supported on this device
     const supported = await BarcodeScanner.isSupported();
-    if (supported) {
-      // Request camera permission
-      const permission = await BarcodeScanner.requestPermissions();
-      if (permission.camera !== "granted") {
-        return null;
-      }
+    if (!supported) throw new Error("MLKit not supported");
 
-      // Start scanning
-      const { BarcodeFormat } = await import("@capacitor-mlkit/barcode-scanning");
-      const result = await BarcodeScanner.scan({
-        formats: [BarcodeFormat.Code128, BarcodeFormat.Code39, BarcodeFormat.Ean13, BarcodeFormat.Ean8, BarcodeFormat.UpcA, BarcodeFormat.UpcE],
-      });
-
-      if (result.barcodes.length > 0) {
-        const barcode = result.barcodes[0];
-        return {
-          barcode: barcode.rawValue ?? '',
-          format: barcode.format ?? 'UNKNOWN',
-        };
-      }
-      return null;
+    // Request camera permission — important for Android 12+
+    const permission = await BarcodeScanner.requestPermissions();
+    if (permission.camera !== "granted") {
+      throw new Error("Camera permission denied");
     }
-  } catch {
-    // Capacitor MLKit not available, fall through to web method
+
+    // Start the native barcode scanner overlay
+    const result = await BarcodeScanner.scan({
+      formats: [
+        BarcodeFormat.QrCode,
+        BarcodeFormat.Code128,
+        BarcodeFormat.Code39,
+        BarcodeFormat.Ean13,
+        BarcodeFormat.Ean8,
+        BarcodeFormat.UpcA,
+        BarcodeFormat.UpcE,
+        BarcodeFormat.DataMatrix,
+        BarcodeFormat.Pdf417,
+      ],
+    });
+
+    if (result.barcodes.length > 0) {
+      const barcode = result.barcodes[0];
+      return {
+        barcode: barcode.rawValue ?? "",
+        format: barcode.format ?? "UNKNOWN",
+      };
+    }
+    return null;
+  } catch (err) {
+    // Log the actual error for debugging
+    console.warn("MLKit barcode scan failed:", err);
+    // Fall through to web method
   }
 
-  // Fallback: Browser BarcodeDetector API (web)
+  // Fallback: Browser BarcodeDetector API (web Chrome on desktop)
   if (!BarcodeDetectorClass) {
+    console.warn("No barcode detection API available");
     return null;
   }
 
@@ -179,7 +191,7 @@ export async function scanFromCamera(): Promise<ScanResult | null> {
     });
 
     const detector = new BarcodeDetectorClass({
-      formats: ["code_128", "code_39", "ean_13", "ean_8", "upc_a", "upc_e"],
+      formats: ["qr_code", "code_128", "code_39", "ean_13", "ean_8", "upc_a", "upc_e"],
     });
 
     const result = await new Promise<ScanResult | null>((resolve) => {
