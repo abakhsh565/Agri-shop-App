@@ -7,6 +7,7 @@ import { useT } from "@/lib/i18n";
 import { useThemeStore } from "@/stores/themeStore";
 import { useSalesStore } from "@/stores/salesStore";
 import { useCustomersStore } from "@/stores/customersStore";
+import { useEmployeesStore } from "@/stores/employeesStore";
 import { useCurrentTime } from "@/lib/useCurrentTime";
 import type { Sale } from "@/types";
 import { Search, Calendar } from "lucide-react";
@@ -28,7 +29,8 @@ export default function AdminSalesListPage() {
   const { language } = useThemeStore();
   const isUrdu = language === "ur";
   const [tab, setTab] = useState<Tab>((state?.tab as Tab) ?? "all");
-  const [dateFilter, setDateFilter] = useState<DateFilter>("today");
+  const [employeeFilter, setEmployeeFilter] = useState<string | null>(state?.employeeId ?? null);
+  const [dateFilter, setDateFilter] = useState<DateFilter>(state?.dateFilter ?? "today");
   const [showDateModal, setShowDateModal] = useState(false);
   const [customFrom, setCustomFrom] = useState("");
   const [customTo, setCustomTo] = useState("");
@@ -37,6 +39,7 @@ export default function AdminSalesListPage() {
   // Live sales from Supabase (real-time) — loaded + subscribed globally by the layout.
   const allSales: Sale[] = useSalesStore((s) => s.sales);
   const customers = useCustomersStore((s) => s.customers);
+  const mockEmployees = useEmployeesStore((s) => s.employees);
 
   function getCustomerImg(customerId: string) {
     return customers.find((c) => c.id === customerId)?.imageUrl;
@@ -84,7 +87,11 @@ export default function AdminSalesListPage() {
     );
   }
 
-  const filtered = allSales.filter((s) => !s.isVoided && inDate(s)).filter(inTab).filter(inQuery);
+  const filtered = allSales
+    .filter((s) => !s.isVoided && inDate(s))
+    .filter(inTab)
+    .filter(inQuery)
+    .filter((s) => !employeeFilter || s.employeeId === employeeFilter);
   const total     = filtered.reduce((s, x) => s + x.totalAmount, 0);
   const profit    = Math.round(total * 0.2);
 
@@ -184,8 +191,19 @@ export default function AdminSalesListPage() {
           >
             {label}
           </button>
-        ))}
-      </div>
+        ))}      </div>
+
+      {/* Employee filter badge */}
+      {employeeFilter && (
+        <div className="px-4 pt-2 flex items-center gap-2">
+          <span className="text-xs font-semibold px-3 py-1.5 rounded-full" style={{ background: "var(--brand)", color: "#0a0a0a" }}>
+            {mockEmployees.find((e) => e.id === employeeFilter)?.name ?? "Employee"} ✕
+          </span>
+          <button onClick={() => setEmployeeFilter(null)} className="text-xs" style={{ color: "var(--text-secondary)" }}>
+            Clear filter
+          </button>
+        </div>
+      )}
 
       {/* Date filters — horizontally scrollable with fade indicator */}
       <div className="relative">

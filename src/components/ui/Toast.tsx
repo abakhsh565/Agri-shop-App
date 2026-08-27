@@ -7,7 +7,7 @@ export default function ToastContainer() {
   if (!toasts.length) return null;
 
   return (
-    <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 flex flex-col gap-2 w-[calc(100%-32px)] max-w-sm">
+    <div className="fixed left-1/2 -translate-x-1/2 z-50 flex flex-col gap-2 w-[calc(100%-32px)] max-w-sm" style={{ bottom: "calc(var(--tabbar-height, 72px) + 16px)" }}>
       {toasts.map((t) => {
         const styles = {
           success: "bg-black text-white",

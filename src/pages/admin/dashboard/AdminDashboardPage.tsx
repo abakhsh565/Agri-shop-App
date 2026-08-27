@@ -141,12 +141,17 @@ export default function AdminDashboardPage() {
   }, 0);
   const totalPayable = mockCompanies.reduce((s, c) => s + c.outstandingPayable, 0);
 
-  // Employee performance
-  const empStats = mockEmployees.map((emp) => ({
-    emp,
-    total: allActive.filter((s) => s.employeeId === emp.id).reduce((s, x) => s + x.totalAmount, 0),
-    count: allActive.filter((s) => s.employeeId === emp.id).length,
-  })).filter((e) => e.count > 0).sort((a, b) => b.total - a.total);
+  // Employee performance — filtered by selected date filter
+  const empStats = mockEmployees.map((emp) => {
+    const empSales = filtered.filter((s) => s.employeeId === emp.id);
+    const items = empSales.reduce((s, x) => s + x.items.reduce((q, it) => q + it.qty, 0), 0);
+    return {
+      emp,
+      total: empSales.reduce((s, x) => s + x.totalAmount, 0),
+      count: empSales.length,
+      items,
+    };
+  }).filter((e) => e.count > 0).sort((a, b) => b.total - a.total);
 
   const DATE_PILLS: { key: DateFilter; label: string }[] = [
     { key: "all",        label: t("sales.all") ?? "All" },
@@ -441,10 +446,10 @@ export default function AdminDashboardPage() {
             {t("admin.employeePerformance")}
           </p>
           <div className="rounded-[14px] overflow-hidden" style={{ border: "1px solid var(--border-light)" }}>
-            {empStats.map(({ emp, total, count }, i) => (
+            {empStats.map(({ emp, total, count, items }, i) => (
               <button
                 key={emp.id}
-                onClick={() => navigate(`/admin/employees/${emp.id}`)}
+                onClick={() => navigate("/admin/sales", { state: { employeeId: emp.id, dateFilter } })}
                 className="flex items-center justify-between px-4 py-3 w-full text-left transition-opacity active:opacity-70"
                 style={{ borderBottom: i < empStats.length - 1 ? "1px solid var(--divider)" : "none" }}
               >
@@ -457,7 +462,7 @@ export default function AdminDashboardPage() {
                   </div>
                   <div>
                     <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>{emp.name}</p>
-                    <p className="text-xs" style={{ color: "var(--text-secondary)" }}>{count} {count === 1 ? "sale" : "sales"}</p>
+                    <p className="text-xs" style={{ color: "var(--text-secondary)" }}>{count} {count === 1 ? "sale" : "sales"} · {items} items</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
