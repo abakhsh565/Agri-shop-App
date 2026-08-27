@@ -34,6 +34,8 @@ export async function rpcCreateSale(payload: {
   customerName: string;
   customerPhone?: string;
   customerAddress?: string;
+  employeeId?: string;
+  employeeName?: string;
   paymentType: PaymentType;
   paymentMethod: PaymentMethod;
   amountPaid: number;

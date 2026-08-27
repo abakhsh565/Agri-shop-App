@@ -188,6 +188,8 @@ export const useSalesStore = create<SalesState>((set, get) => ({
       customerName: input.customerName,
       customerPhone: input.customerPhone,
       customerAddress: input.customerAddress,
+      employeeId: input.employeeId,
+      employeeName: input.employeeName,
       paymentType: input.paymentType,
       paymentMethod: input.paymentMethod,
       amountPaid: input.amountPaid,
