@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useThemeStore } from "@/stores/themeStore";
 import { useT } from "@/lib/i18n";
@@ -14,7 +13,7 @@ import { useCurrentTime } from "@/lib/useCurrentTime";
 import {
   Phone, Briefcase, Hash, ShieldCheck, UserX, UserCheck,
   TrendingUp, ShoppingCart, Users, Calendar, ChevronRight,
-  Eye, ArrowUpRight, Package
+  Eye, Package
 } from "lucide-react";
 import type { Sale } from "@/types";
 
@@ -38,7 +37,6 @@ export default function EmployeeDetailPage() {
   const sales = useSalesStore((s) => s.sales);
   const customers = useCustomersStore((s) => s.customers);
   const now = useCurrentTime();
-  const [showAllSales, setShowAllSales] = useState(false);
 
   const emp = employees.find((e) => e.id === employeeId);
   if (!emp) return (
@@ -84,12 +82,13 @@ export default function EmployeeDetailPage() {
   const roleLabel = emp.role === "co_admin" ? "Co-Admin" : emp.role === "admin" ? "Admin" : "Employee";
   const isActive = emp.isActive;
 
+  const pl = (n: number, s: string) => `${n} ${n === 1 ? s : s + "s"}`;
   const stats = [
     { icon: TrendingUp, label: "Total Revenue", value: formatCurrency(totalRevenue), color: "var(--brand)" },
-    { icon: ShoppingCart, label: "Total Sales", value: `${totalTransactions} sales`, color: "#3b82f6" },
-    { icon: Package, label: "Items Sold", value: `${totalItems} items`, color: "#8b5cf6" },
-    { icon: Users, label: "Customers Served", value: `${uniqueCustomers.length} customers`, color: "#06b6d4" },
-    { icon: Calendar, label: "Today", value: `${todayTransactions} sales · ${formatCurrency(todayRevenue)}`, color: "#f59e0b" },
+    { icon: ShoppingCart, label: "Total Sales", value: pl(totalTransactions, "sale"), color: "#3b82f6" },
+    { icon: Package, label: "Items Sold", value: pl(totalItems, "item"), color: "#8b5cf6" },
+    { icon: Users, label: "Customers Served", value: pl(uniqueCustomers.length, "customer"), color: "#06b6d4" },
+    { icon: Calendar, label: "Today", value: `${pl(todayTransactions, "sale")} · ${formatCurrency(todayRevenue)}`, color: "#f59e0b" },
     { icon: ShieldCheck, label: "Avg. Sale", value: formatCurrency(avgSaleValue), color: "#ec4899" },
   ];
 
