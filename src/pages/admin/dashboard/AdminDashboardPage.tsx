@@ -515,6 +515,7 @@ export default function AdminDashboardPage() {
                   <div>
                     <p className="text-[13px] font-bold" style={{ color: "var(--text-primary)" }}>{sale.customerName}</p>
                     <p className="text-[11px] mt-0.5" style={{ color: "var(--text-secondary)" }}>{formatSmartDateTime(sale.createdAt, now)}</p>
+                    <p className="text-[10px] mt-0.5" style={{ color: "var(--text-secondary)", opacity: 0.7 }}>Sold by: {sale.employeeName}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
