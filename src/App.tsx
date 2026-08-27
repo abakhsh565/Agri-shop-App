@@ -3,6 +3,9 @@ import { router } from "@/router";
 import { useEffect } from "react";
 import { useThemeStore, applyTheme } from "@/stores/themeStore";
 import { Agentation } from "agentation";
+import { Capacitor } from "@capacitor/core";
+
+const isNative = Capacitor.isNativePlatform();
 
 export default function App() {
   const { theme } = useThemeStore();
@@ -22,7 +25,7 @@ export default function App() {
       >
         <RouterProvider router={router} />
       </div>
-      <Agentation />
+      {!isNative && <Agentation />}
     </div>
   );
 }

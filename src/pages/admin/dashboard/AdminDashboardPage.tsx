@@ -512,14 +512,16 @@ export default function AdminDashboardPage() {
                       {sale.customerName.charAt(0).toUpperCase()}
                     </div>
                   )}
-                  <div>
-                    <p className="text-[13px] font-bold" style={{ color: "var(--text-primary)" }}>{sale.customerName}</p>
-                    <p className="text-[11px] mt-0.5" style={{ color: "var(--text-secondary)" }}>{formatSmartDateTime(sale.createdAt, now)}</p>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="text-[13px] font-bold truncate" style={{ color: "var(--text-primary)" }}>{sale.customerName}</p>
+                      <p className="text-[10px] shrink-0" style={{ color: "var(--text-secondary)" }}>{formatSmartDateTime(sale.createdAt, now)}</p>
+                    </div>
                     <p className="text-[10px] mt-0.5" style={{ color: "var(--text-secondary)", opacity: 0.7 }}>Sold by: {sale.employeeName}</p>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-[13px] font-bold" style={{ color: "var(--text-primary)" }}>
+                <div className="flex flex-col items-end gap-1">
+                  <span className="text-[14px] font-bold" style={{ color: "var(--text-primary)" }}>
                     {formatRs(sale.totalAmount)}
                   </span>
                   {sale.paymentType !== "full" ? (

@@ -338,19 +338,16 @@ export default function AdminSalesListPage() {
                     {sale.customerName.charAt(0).toUpperCase()}
                   </div>
                 )}
-                <div>
-                  <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>{sale.customerName}</p>
-                  <div className="flex items-center gap-2 mt-0.5">
-                    <span className="text-[10px] font-mono" style={{ color: "var(--text-secondary)" }}>{sale.saleNumber}</span>
-                    <span className="text-xs" style={{ color: "var(--text-secondary)" }}>• {formatSmartDateTime(sale.createdAt, now)}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <p className="text-[14px] font-bold truncate" style={{ color: "var(--text-primary)" }}>{sale.customerName}</p>
+                    <span className="text-[10px] shrink-0" style={{ color: "var(--text-secondary)" }}>{formatSmartDateTime(sale.createdAt, now)}</span>
                   </div>
-                  <p className="text-xs" style={{ color: "var(--brand-dark)" }}>
-                    Est. profit: {formatCurrency(Math.round(sale.totalAmount * 0.2))}
-                  </p>
+                  <p className="text-[10px] mt-0.5" style={{ color: "var(--text-secondary)", opacity: 0.7 }}>Sold by: {sale.employeeName}</p>
                 </div>
               </div>
-              <div className="flex flex-col items-end gap-1.5">
-                <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+              <div className="flex flex-col items-end gap-1">
+                <span className="text-[15px] font-bold" style={{ color: "var(--text-primary)" }}>
                   {formatCurrency(sale.totalAmount)}
                 </span>
                 <PaymentBadge type={sale.paymentType} outstandingBalance={sale.outstandingBalance} />
