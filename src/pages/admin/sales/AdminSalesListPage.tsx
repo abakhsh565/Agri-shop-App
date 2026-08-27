@@ -9,7 +9,7 @@ import { useSalesStore } from "@/stores/salesStore";
 import { useCustomersStore } from "@/stores/customersStore";
 import { useCurrentTime } from "@/lib/useCurrentTime";
 import type { Sale } from "@/types";
-import { Search } from "lucide-react";
+import { Search, Calendar } from "lucide-react";
 
 function initBgColor(name: string) {
   const colors = ["#84cc16","#3b82f6","#8b5cf6","#f59e0b","#06b6d4","#ec4899"];
@@ -29,7 +29,9 @@ export default function AdminSalesListPage() {
   const isUrdu = language === "ur";
   const [tab, setTab] = useState<Tab>((state?.tab as Tab) ?? "all");
   const [dateFilter, setDateFilter] = useState<DateFilter>("today");
-  const [customDate, setCustomDate] = useState("");
+  const [showDateModal, setShowDateModal] = useState(false);
+  const [customFrom, setCustomFrom] = useState("");
+  const [customTo, setCustomTo] = useState("");
   const [query, setQuery] = useState("");
 
   // Live sales from Supabase (real-time) — loaded + subscribed globally by the layout.
@@ -51,14 +53,19 @@ export default function AdminSalesListPage() {
     if (dateFilter === "today")     return d === todayStr;
     if (dateFilter === "yesterday") return d === yesterdayStr;
     if (dateFilter === "this_month") {
-      const now = new Date();
       return new Date(d).getMonth() === now.getMonth() && new Date(d).getFullYear() === now.getFullYear();
     }
-    if (dateFilter === "custom" && customDate) {
-      return d === customDate;
+    if (dateFilter === "this_week") {
+      const weekStart = new Date(); weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+      return new Date(d) >= weekStart;
     }
-    const weekStart = new Date(); weekStart.setDate(weekStart.getDate() - weekStart.getDay());
-    return new Date(d) >= weekStart;
+    if (dateFilter === "custom") {
+      if (customFrom && customTo) return d >= customFrom && d <= customTo;
+      if (customFrom) return d >= customFrom;
+      if (customTo) return d <= customTo;
+      return true;
+    }
+    return true;
   }
 
   function inTab(sale: Sale) {
@@ -85,9 +92,16 @@ export default function AdminSalesListPage() {
     { key: "today",       label: t("sales.today") },
     { key: "yesterday",   label: t("sales.yesterday") },
     { key: "this_week",   label: t("sales.thisWeek") },
-    { key: "this_month",  label: "This Month" },
-    { key: "custom",      label: "Custom Date" },
+    { key: "this_month",  label: t("sales.thisMonth") ?? "This Month" },
+    { key: "custom",      label: "Custom" },
   ];
+
+  const todayISO = now.toISOString().split("T")[0];
+
+  function applyCustomDates() {
+    setShowDateModal(false);
+    setDateFilter("custom");
+  }
 
   const TABS: { key: Tab; label: string }[] = [
     { key: "all",    label: t("sales.all") },
@@ -174,30 +188,89 @@ export default function AdminSalesListPage() {
       </div>
 
       {/* Date filters */}
-      <div className="flex gap-2 px-4 py-3 overflow-x-auto no-scrollbar" style={{ scrollBehavior: "smooth" }}>
-        {dateFilter === "custom" && (
-          <input
-            type="date"
-            value={customDate}
-            onChange={(e) => setCustomDate(e.target.value)}
-            className="h-8 px-3 rounded-full text-xs font-medium outline-none"
-            style={{ background: "var(--surface-2)", color: "var(--text-primary)", border: "1px solid var(--divider)" }}
-          />
-        )}
+      <div className="flex gap-2 px-4 py-3 overflow-x-auto no-scrollbar" style={{ scrollBehavior: "smooth", WebkitOverflowScrolling: "touch" }}>
         {DATE_FILTERS.map(({ key, label }) => (
           <button
             key={key}
-            onClick={() => setDateFilter(key)}
-            className="h-8 px-4 rounded-full text-xs font-medium transition-colors"
+            onClick={() => {
+              if (key === "custom") {
+                setShowDateModal(true);
+              } else {
+                setDateFilter(key);
+              }
+            }}
+            className="h-8 px-4 rounded-full text-xs font-semibold whitespace-nowrap shrink-0 transition-colors flex items-center gap-1.5"
             style={{
               background: dateFilter === key ? "var(--brand)" : "var(--surface-2)",
               color: dateFilter === key ? "#0a0a0a" : "var(--text-secondary)",
             }}
           >
+            {key === "custom" && <Calendar size={12} />}
             {label}
+            {key === "custom" && customFrom && (
+              <span className="text-[9px] opacity-70">({customFrom} → {customTo || "..."})</span>
+            )}
           </button>
         ))}
       </div>
+
+      {/* Custom Date Range Modal */}
+      {showDateModal && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center" onClick={() => setShowDateModal(false)}>
+          <div className="absolute inset-0 bg-black/40" />
+          <div
+            className="relative w-full max-w-md rounded-t-2xl p-5 pb-8 animate-slide-up"
+            style={{ background: "var(--surface)" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <p className="text-[15px] font-bold" style={{ color: "var(--text-primary)" }}>Select Date Range</p>
+              <button onClick={() => setShowDateModal(false)} className="text-xl" style={{ color: "var(--text-secondary)" }}>×</button>
+            </div>
+            <div className="flex gap-3">
+              <div className="flex-1">
+                <label className="text-[11px] font-semibold uppercase tracking-wider mb-1 block" style={{ color: "var(--text-secondary)" }}>From</label>
+                <input
+                  type="date"
+                  value={customFrom}
+                  onChange={(e) => setCustomFrom(e.target.value)}
+                  max={todayISO}
+                  className="w-full h-10 px-3 rounded-xl text-[13px] outline-none"
+                  style={{ background: "var(--surface-2)", color: "var(--text-primary)", border: "1px solid var(--divider)" }}
+                />
+              </div>
+              <div className="flex-1">
+                <label className="text-[11px] font-semibold uppercase tracking-wider mb-1 block" style={{ color: "var(--text-secondary)" }}>To</label>
+                <input
+                  type="date"
+                  value={customTo}
+                  onChange={(e) => setCustomTo(e.target.value)}
+                  max={todayISO}
+                  min={customFrom || undefined}
+                  className="w-full h-10 px-3 rounded-xl text-[13px] outline-none"
+                  style={{ background: "var(--surface-2)", color: "var(--text-primary)", border: "1px solid var(--divider)" }}
+                />
+              </div>
+            </div>
+            <div className="flex gap-2 mt-4">
+              <button
+                onClick={() => { setCustomFrom(""); setCustomTo(""); setDateFilter("custom"); setShowDateModal(false); }}
+                className="flex-1 h-10 rounded-xl text-[13px] font-semibold"
+                style={{ background: "var(--surface-2)", color: "var(--text-secondary)" }}
+              >
+                Clear
+              </button>
+              <button
+                onClick={applyCustomDates}
+                className="flex-1 h-10 rounded-xl text-[13px] font-bold"
+                style={{ background: "var(--brand)", color: "#0a0a0a" }}
+              >
+                Apply
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Sales list */}
       {filtered.length === 0 ? (
