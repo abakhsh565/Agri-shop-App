@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { supabase } from "@/lib/supabase";
 import { rpcCreateSale } from "@/lib/db";
+import { createNotification } from "@/lib/notifications";
 import type { Sale, SaleItem } from "@/types";
 
 // ─── Row <-> domain mapping ─────────────────────────────────────────────────
@@ -233,6 +234,16 @@ export const useSalesStore = create<SalesState>((set, get) => ({
     };
     // Optimistically prepend so the creator sees it instantly.
     set({ sales: [sale, ...get().sales] });
+
+    // Create notification so admin sees the new sale in real-time
+    const paymentLabel = input.paymentType === "full" ? "Paid" : "Credit";
+    createNotification({
+      kind: "sale",
+      title: `New sale: Rs. ${sale.totalAmount.toLocaleString("en-PK")} (${paymentLabel})`,
+      body: `${input.customerName} — sold by ${input.employeeName}`,
+      entityId: sale.id,
+    });
+
     return sale;
   },
 

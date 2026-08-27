@@ -68,11 +68,33 @@ export default function AdminSaleDetailPage() {
   }
 
   async function handleShare() {
-    const text = buildReceiptText();
-    if (navigator.share) {
-      try { await navigator.share({ title: "Sale Receipt", text }); return; } catch {}
+    const { renderReceiptBlob } = await import("@/lib/receiptRenderer");
+    const blob = await renderReceiptBlob({
+      saleNumber: sale!.saleNumber, customerName: sale!.customerName,
+      customerPhone: sale!.customerPhone ?? "", employeeName: sale!.employeeName,
+      paymentMethod: sale!.paymentMethod ?? "cash", paymentType: sale!.paymentType ?? "full",
+      createdAt: sale!.createdAt, totalAmount: sale!.totalAmount, amountPaid: sale!.amountPaid,
+      outstandingBalance: sale!.outstandingBalance, subtotal: sale!.subtotal,
+      items: sale!.items.map((it) => ({ productName: it.productName, variantName: it.variantName, qty: it.qty, unitPrice: it.unitPrice })),
+    });
+    if (!blob) { addToast("Failed to generate receipt", "error"); return; }
+    const fileName = `receipt-${sale!.saleNumber}.png`;
+    try {
+      const { Filesystem, Directory } = await import("@capacitor/filesystem");
+      const base64 = await new Promise<string>((resolve) => { const r = new FileReader(); r.onloadend = () => resolve((r.result as string).split(",")[1]); r.readAsDataURL(blob); });
+      await Filesystem.writeFile({ path: fileName, data: base64, directory: Directory.Cache, recursive: true });
+      const fileUri = await Filesystem.getUri({ path: fileName, directory: Directory.Cache });
+      const { Share } = await import("@capacitor/share");
+      await Share.share({ title: "AgriShop Receipt", dialogTitle: "Share Receipt", url: fileUri.uri, files: [fileUri.uri] });
+      return;
+    } catch {}
+    const file = new File([blob], fileName, { type: "image/png" });
+    if (navigator.share && navigator.canShare?.({ files: [file] })) {
+      try { await navigator.share({ title: "AgriShop Receipt", files: [file] }); return; } catch {}
     }
-    navigator.clipboard.writeText(text).then(() => addToast("Receipt copied to clipboard", "success")).catch(() => {});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href = url; a.download = fileName; a.click();
+    URL.revokeObjectURL(url); addToast("Receipt image saved", "success");
   }
 
   async function handleDownload() {

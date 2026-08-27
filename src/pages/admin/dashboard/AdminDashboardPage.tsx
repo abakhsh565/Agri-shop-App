@@ -8,6 +8,7 @@ import { useSalesStore } from "@/stores/salesStore";
 import { useProductsStore } from "@/stores/productsStore";
 import { useEmployeesStore } from "@/stores/employeesStore";
 import { useCompaniesStore } from "@/stores/companiesStore";
+import PullToRefresh from "@/components/ui/PullToRefresh";
 import { useCustomersStore } from "@/stores/customersStore";
 import { formatCurrency, formatSmartDateTime } from "@/lib/formatters";
 import { useT } from "@/lib/i18n";
@@ -106,13 +107,8 @@ export default function AdminDashboardPage() {
     return new Date(d) >= ms;
   }
 
-  // Filter sales — fall back to all when date filter returns nothing (dev/demo)
   const allActive = mockSales.filter((s) => !s.isVoided);
-  const filtered = (() => {
-    if (dateFilter === "all") return allActive;
-    const f = allActive.filter(inFilter);
-    return f.length > 0 ? f : allActive;
-  })();
+  const filtered = dateFilter === "all" ? allActive : allActive.filter(inFilter);
 
   // Cost lookup for real gross profit (admin-only figure — cost vs selling price).
   const variantCost = new Map<string, number>();
@@ -160,7 +156,16 @@ export default function AdminDashboardPage() {
     { key: "this_month", label: t("sales.thisMonth") },
   ];
 
+  async function handleRefresh() {
+    await Promise.all([
+      useSalesStore.getState().load(),
+      useProductsStore.getState().load(),
+      load(),
+    ]);
+  }
+
   return (
+    <PullToRefresh onRefresh={handleRefresh}>
     <div
       className="flex flex-col w-full min-h-full relative"
       style={{ background: "var(--background)", direction: isUrdu ? "rtl" : "ltr" }}
@@ -528,5 +533,6 @@ export default function AdminDashboardPage() {
         </div>
       )}
     </div>
+    </PullToRefresh>
   );
 }

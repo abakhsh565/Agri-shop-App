@@ -7,44 +7,64 @@ import { useSalesStore } from "@/stores/salesStore";
 import { useProductsStore } from "@/stores/productsStore";
 import { useCustomersStore } from "@/stores/customersStore";
 import { useCompaniesStore } from "@/stores/companiesStore";
-import { TrendingUp, Receipt, Wallet, AlertTriangle } from "lucide-react";
+import { TrendingUp, Receipt, Wallet, AlertTriangle, Calendar } from "lucide-react";
 
-type Period = "today" | "week" | "month" | "all";
+type Period = "today" | "week" | "month" | "all" | "custom";
 
 const PERIODS: { key: Period; label: string }[] = [
   { key: "today", label: "Today" },
   { key: "week", label: "This Week" },
   { key: "month", label: "This Month" },
   { key: "all", label: "All Time" },
+  { key: "custom", label: "Custom" },
 ];
 
-function startOf(period: Period): number {
+function startOf(period: Period, customFrom?: string, customTo?: string): { from: number; to: number } {
   const now = new Date();
-  if (period === "today") { const d = new Date(now); d.setHours(0, 0, 0, 0); return +d; }
-  if (period === "week") { const d = new Date(now); d.setDate(d.getDate() - 7); return +d; }
-  if (period === "month") { const d = new Date(now); d.setMonth(d.getMonth() - 1); return +d; }
-  return 0;
+  if (period === "today") {
+    const d = new Date(now); d.setHours(0, 0, 0, 0);
+    return { from: +d, to: +now };
+  }
+  if (period === "week") {
+    const d = new Date(now); d.setDate(d.getDate() - 7);
+    return { from: +d, to: +now };
+  }
+  if (period === "month") {
+    const d = new Date(now); d.setMonth(d.getMonth() - 1);
+    return { from: +d, to: +now };
+  }
+  if (period === "custom") {
+    const from = customFrom ? new Date(customFrom + "T00:00:00").getTime() : 0;
+    const to = customTo ? new Date(customTo + "T23:59:59").getTime() : +now;
+    return { from, to };
+  }
+  return { from: 0, to: +now };
 }
 
 export default function AdminReportsPage() {
   const { language } = useThemeStore();
   const isUrdu = language === "ur";
   const [period, setPeriod] = useState<Period>("month");
+  const [showDateModal, setShowDateModal] = useState(false);
+  const [customFrom, setCustomFrom] = useState("");
+  const [customTo, setCustomTo] = useState("");
   const mockSales = useSalesStore((s) => s.sales);
   const mockProducts = useProductsStore((s) => s.products);
   const mockCustomers = useCustomersStore((s) => s.customers);
   const mockCompanies = useCompaniesStore((s) => s.companies);
 
-  // Cost lookup: variantId -> current base cost (PRD §14 COGS input; admin-only).
   const variantCost = useMemo(() => {
     const map: Record<string, number> = {};
     for (const p of mockProducts) for (const v of p.variants) map[v.id] = v.costPrice;
     return map;
   }, [mockProducts]);
 
+  const now = new Date();
+  const todayISO = now.toISOString().split("T")[0];
+
   const report = useMemo(() => {
-    const from = startOf(period);
-    const sales = mockSales.filter((s) => !s.isVoided && +new Date(s.createdAt) >= from);
+    const { from, to } = startOf(period, customFrom, customTo);
+    const sales = mockSales.filter((s) => !s.isVoided && +new Date(s.createdAt) >= from && +new Date(s.createdAt) <= to);
 
     let revenue = 0, cogs = 0, collected = 0, credit = 0;
     const byEmployee: Record<string, { name: string; total: number }> = {};
@@ -81,7 +101,7 @@ export default function AdminReportsPage() {
       count: sales.length, topEmployees, topProducts,
       outstandingCredit, supplierPayable, lowStock,
     };
-  }, [period, mockSales, mockProducts, mockCustomers, mockCompanies, variantCost]);
+  }, [period, customFrom, customTo, mockSales, mockProducts, mockCustomers, mockCompanies, variantCost]);
 
   return (
     <div
@@ -91,25 +111,41 @@ export default function AdminReportsPage() {
       <StatusBar />
       <NavHeader title="Reports" />
 
-      {/* Period filter */}
-      <div className="flex gap-2 px-4 pt-3 overflow-x-auto">
+      {/* Period filter — horizontal scroll */}
+      <div
+        className="flex gap-2 px-4 pt-3 pb-1 overflow-x-auto"
+        style={{ scrollBehavior: "smooth", WebkitOverflowScrolling: "touch" }}
+      >
         {PERIODS.map((p) => (
           <button
             key={p.key}
-            onClick={() => setPeriod(p.key)}
-            className="shrink-0 h-8 px-4 rounded-full text-xs font-bold transition-colors"
+            onClick={() => {
+              setPeriod(p.key);
+              if (p.key === "custom") setShowDateModal(true);
+            }}
+            className="shrink-0 h-8 px-4 rounded-full text-xs font-bold whitespace-nowrap transition-colors"
             style={{
               background: period === p.key ? "var(--brand)" : "var(--surface-2)",
               color: period === p.key ? "#0a0a0a" : "var(--text-secondary)",
             }}
           >
+            {p.key === "custom" && <Calendar size={12} className="inline mr-1 -mt-0.5" />}
             {p.label}
           </button>
         ))}
       </div>
 
-      {/* Gross profit hero (admin-only, PRD §14) */}
-      <div className="px-4 pt-4">
+      {/* Custom date range summary */}
+      {period === "custom" && (customFrom || customTo) && (
+        <div className="px-4 pt-1 pb-1">
+          <p className="text-xs font-semibold" style={{ color: "var(--brand-dark)" }}>
+            {customFrom || "Start"} → {customTo || todayISO}
+          </p>
+        </div>
+      )}
+
+      {/* Gross profit hero */}
+      <div className="px-4 pt-3">
         <div className="rounded-[16px] p-5" style={{ background: "var(--brand)" }}>
           <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "rgba(0,0,0,0.55)" }}>
             Gross Profit
@@ -192,6 +228,34 @@ export default function AdminReportsPage() {
         <div className="flex flex-col items-center py-16 gap-2">
           <p className="text-3xl">📊</p>
           <p className="text-sm" style={{ color: "var(--text-secondary)" }}>No sales in this period</p>
+        </div>
+      )}
+
+      {/* Custom date modal */}
+      {showDateModal && (
+        <div className="fixed inset-0 z-50 flex items-end" style={{ background: "rgba(0,0,0,0.5)" }} onClick={() => setShowDateModal(false)}>
+          <div className="w-full max-w-[390px] mx-auto rounded-t-[24px] p-6 flex flex-col gap-4"
+            style={{ background: "var(--surface)" }} onClick={(e) => e.stopPropagation()}>
+            <p className="text-base font-bold text-center" style={{ color: "var(--text-primary)" }}>Select Date Range</p>
+            <div className="flex gap-3">
+              <div className="flex-1">
+                <p className="text-xs font-bold uppercase mb-1" style={{ color: "var(--text-secondary)" }}>From</p>
+                <input type="date" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)}
+                  className="w-full h-11 rounded-full px-4 text-sm outline-none" style={{ background: "var(--surface-2)", border: "1px solid var(--divider)", color: "var(--text-primary)" }} />
+              </div>
+              <div className="flex-1">
+                <p className="text-xs font-bold uppercase mb-1" style={{ color: "var(--text-secondary)" }}>To</p>
+                <input type="date" value={customTo} max={todayISO} onChange={(e) => setCustomTo(e.target.value)}
+                  className="w-full h-11 rounded-full px-4 text-sm outline-none" style={{ background: "var(--surface-2)", border: "1px solid var(--divider)", color: "var(--text-primary)" }} />
+              </div>
+            </div>
+            <div className="flex gap-3">
+              <button onClick={() => { setCustomFrom(""); setCustomTo(""); }}
+                className="flex-1 h-12 rounded-full text-sm font-bold" style={{ border: "1px solid var(--divider)", color: "var(--text-primary)" }}>Clear</button>
+              <button onClick={() => setShowDateModal(false)}
+                className="flex-1 h-12 rounded-full text-sm font-bold" style={{ background: "var(--brand)", color: "#0a0a0a" }}>Apply</button>
+            </div>
+          </div>
         </div>
       )}
     </div>

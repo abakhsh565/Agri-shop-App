@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "@/stores/authStore";
 import { useNotificationStore, type AppNotification } from "@/stores/notificationStore";
 import { useSalesStore } from "@/stores/salesStore";
+import PullToRefresh from "@/components/ui/PullToRefresh";
 import { useCustomersStore } from "@/stores/customersStore";
 import { formatSmartDateTime } from "@/lib/formatters";
 import { useT } from "@/lib/i18n";
@@ -94,12 +95,18 @@ export default function DashboardPage() {
   const recentSales  = mockSales.filter((s) => !s.isVoided).slice(0, 3);
   const badgeCount   = unread();
 
+  async function handleRefresh() {
+    await useSalesStore.getState().load();
+    await load();
+  }
+
   function handleBell() {
     setShowNotifs((v) => !v);
     markAllRead();
   }
 
   return (
+    <PullToRefresh onRefresh={handleRefresh}>
     <div
       className="flex flex-col w-full min-h-full relative"
       style={{ background: "var(--background)", direction: isUrdu ? "rtl" : "ltr" }}
@@ -330,5 +337,6 @@ export default function DashboardPage() {
         </div>
       </div>
     </div>
+    </PullToRefresh>
   );
 }

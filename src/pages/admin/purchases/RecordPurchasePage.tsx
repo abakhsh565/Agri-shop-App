@@ -255,7 +255,7 @@ export default function RecordPurchasePage() {
         open={sheet === "company"}
         title="Select supplier"
         searchable
-        options={companies.map((c) => ({ value: c.id, label: c.name }))}
+        options={companies.map((c) => ({ value: c.id, label: c.name, sub: c.outstandingPayable > 0 ? `Payable: ${formatCurrency(c.outstandingPayable)}` : undefined }))}
         selected={companyId}
         emptyLabel="No companies yet. Add a company first."
         onSelect={(id) => { setCompanyId(id); setProductId(""); setVariantId(""); }}
@@ -265,7 +265,7 @@ export default function RecordPurchasePage() {
         open={sheet === "product"}
         title="Select product"
         searchable
-        options={companyProducts.map((p) => ({ value: p.id, label: p.name }))}
+        options={companyProducts.map((p) => ({ value: p.id, label: p.name, sub: `${p.variants.length} variant${p.variants.length !== 1 ? "s" : ""} · ${p.stockQty} ${p.baseUnit} in stock`, imageUrl: p.imageUrl }))}
         selected={productId}
         emptyLabel={company ? `No products linked to ${company.name} yet.` : "Select a supplier first."}
         onSelect={(id) => { setProductId(id); setVariantId(""); }}

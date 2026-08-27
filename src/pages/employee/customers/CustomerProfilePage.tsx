@@ -10,7 +10,7 @@ import { formatCurrency, getCreditHealth } from "@/lib/formatters";
 import { useT } from "@/lib/i18n";
 import { useThemeStore } from "@/stores/themeStore";
 import { useShellBase } from "@/lib/useShellBase";
-import { MapPin, ChevronRight, CreditCard, Pencil } from "lucide-react";
+import { MapPin, ChevronRight, CreditCard, Pencil, Trash2 } from "lucide-react";
 
 function initBgColor(name: string) {
   const colors = ["#84cc16","#3b82f6","#8b5cf6","#f59e0b","#06b6d4","#ec4899"];
@@ -37,6 +37,7 @@ export default function CustomerProfilePage() {
   const [editAddress, setEditAddress] = useState("");
   const [editImageUrl, setEditImageUrl] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [showDelete, setShowDelete] = useState(false);
 
   function startEdit() {
     if (!customer) return;
@@ -299,7 +300,44 @@ export default function CustomerProfilePage() {
             </button>
           ))}
         </div>
+
+        {/* Admin-only: Delete customer */}
+        {isAdmin && (
+          <button
+            onClick={() => setShowDelete(true)}
+            className="flex items-center justify-center gap-2 w-full h-12 rounded-full font-semibold text-sm mt-4 transition-all active:scale-[0.98]"
+            style={{ border: "1.5px solid #ef4444", color: "#ef4444", background: "transparent" }}
+          >
+            <Trash2 size={15} />
+            Delete Customer
+          </button>
+        )}
       </div>
+
+      {/* Delete confirmation modal */}
+      {showDelete && (
+        <div className="fixed inset-0 z-50 flex items-end" style={{ background: "rgba(0,0,0,0.5)" }} onClick={() => setShowDelete(false)}>
+          <div className="w-full max-w-[390px] mx-auto rounded-t-[24px] p-6 flex flex-col gap-4"
+            style={{ background: "var(--surface)" }} onClick={(e) => e.stopPropagation()}>
+            <p className="text-base font-bold text-center" style={{ color: "var(--text-primary)" }}>Delete Customer</p>
+            <p className="text-sm text-center" style={{ color: "var(--text-secondary)" }}>
+              This will archive "{customer?.name}". Their transaction history will be preserved in the database.
+            </p>
+            <div className="flex gap-3">
+              <button onClick={() => setShowDelete(false)} className="flex-1 h-12 rounded-full text-sm font-bold"
+                style={{ border: "1px solid var(--divider)", color: "var(--text-primary)" }}>Cancel</button>
+              <button onClick={async () => {
+                const { archiveCustomer } = useCustomersStore.getState();
+                await archiveCustomer(customerId!);
+                addToast("Customer deleted", "success");
+                setShowDelete(false);
+                navigate(-1);
+              }} className="flex-1 h-12 rounded-full text-sm font-bold"
+                style={{ background: "#ef4444", color: "#fff" }}>Delete</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

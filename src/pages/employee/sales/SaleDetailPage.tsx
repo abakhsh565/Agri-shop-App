@@ -36,38 +36,53 @@ export default function SaleDetailPage() {
 
   const { addToast } = useUIStore.getState();
 
-  function handleShare() {
-    const text = `AgriShop Receipt\n#${sale!.saleNumber}\nCustomer: ${sale!.customerName}\nTotal: ${formatCurrency(sale!.totalAmount)}\nPaid: ${formatCurrency(sale!.amountPaid)}\nDate: ${formatDateTime(sale!.createdAt)}\nSold by: ${sale!.employeeName}`;
-    if (navigator.share) {
-      navigator.share({ title: "Sale Receipt", text }).catch(() => {});
-    } else {
-      navigator.clipboard.writeText(text).then(() => addToast("Receipt copied to clipboard", "success")).catch(() => {});
+  async function handleShare() {
+    const { renderReceiptBlob } = await import("@/lib/receiptRenderer");
+    const blob = await renderReceiptBlob({
+      saleNumber: sale!.saleNumber, customerName: sale!.customerName,
+      customerPhone: sale!.customerPhone ?? "", employeeName: sale!.employeeName,
+      paymentMethod: sale!.paymentMethod ?? "cash", paymentType: sale!.paymentType ?? "full",
+      createdAt: sale!.createdAt, totalAmount: sale!.totalAmount, amountPaid: sale!.amountPaid,
+      outstandingBalance: sale!.outstandingBalance, subtotal: sale!.subtotal,
+      items: sale!.items.map((it) => ({ productName: it.productName, variantName: it.variantName, qty: it.qty, unitPrice: it.unitPrice })),
+    });
+    if (!blob) { addToast("Failed to generate receipt", "error"); return; }
+    const fileName = `receipt-${sale!.saleNumber}.png`;
+    // Try Capacitor native share
+    try {
+      const { Filesystem, Directory } = await import("@capacitor/filesystem");
+      const base64 = await new Promise<string>((resolve) => { const r = new FileReader(); r.onloadend = () => resolve((r.result as string).split(",")[1]); r.readAsDataURL(blob); });
+      await Filesystem.writeFile({ path: fileName, data: base64, directory: Directory.Cache, recursive: true });
+      const fileUri = await Filesystem.getUri({ path: fileName, directory: Directory.Cache });
+      const { Share } = await import("@capacitor/share");
+      await Share.share({ title: "AgriShop Receipt", dialogTitle: "Share Receipt", url: fileUri.uri, files: [fileUri.uri] });
+      return;
+    } catch {}
+    // Try Web Share API
+    const file = new File([blob], fileName, { type: "image/png" });
+    if (navigator.share && navigator.canShare?.({ files: [file] })) {
+      try { await navigator.share({ title: "AgriShop Receipt", files: [file] }); return; } catch {}
     }
+    // Fallback: download
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href = url; a.download = fileName; a.click();
+    URL.revokeObjectURL(url); addToast("Receipt image saved", "success");
   }
 
-  function handleDownload() {
-    const rows = [
-      ["Sale #", sale!.saleNumber],
-      ["Customer", sale!.customerName],
-      ["Date", formatDateTime(sale!.createdAt)],
-      ["Sold by", sale!.employeeName],
-      ["Payment", sale!.paymentMethod === "cash" ? "Cash" : "Bank Transfer"],
-      ["---", "---"],
-      ...sale!.items.map((it) => [it.productName + " " + it.variantName, `${it.qty} × ${formatCurrency(it.unitPrice)}`, formatCurrency(it.lineTotal)]),
-      ["---", "---"],
-      ["Subtotal", formatCurrency(sale!.subtotal)],
-      ["Total", formatCurrency(sale!.totalAmount)],
-      ["Paid", formatCurrency(sale!.amountPaid)],
-    ];
-    const csv = rows.map((r) => r.join(",")).join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
+  async function handleDownload() {
+    const { renderReceiptBlob } = await import("@/lib/receiptRenderer");
+    const blob = await renderReceiptBlob({
+      saleNumber: sale!.saleNumber, customerName: sale!.customerName,
+      customerPhone: sale!.customerPhone ?? "", employeeName: sale!.employeeName,
+      paymentMethod: sale!.paymentMethod ?? "cash", paymentType: sale!.paymentType ?? "full",
+      createdAt: sale!.createdAt, totalAmount: sale!.totalAmount, amountPaid: sale!.amountPaid,
+      outstandingBalance: sale!.outstandingBalance, subtotal: sale!.subtotal,
+      items: sale!.items.map((it) => ({ productName: it.productName, variantName: it.variantName, qty: it.qty, unitPrice: it.unitPrice })),
+    });
+    if (!blob) { addToast("Failed to generate receipt", "error"); return; }
     const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `sale-${sale!.saleNumber}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-    addToast("Sale exported as CSV", "success");
+    const a = document.createElement("a"); a.href = url; a.download = `receipt-${sale!.saleNumber}.png`; a.click();
+    URL.revokeObjectURL(url); addToast("Receipt downloaded", "success");
   }
 
   const summaryRows = [

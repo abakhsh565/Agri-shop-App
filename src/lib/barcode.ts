@@ -127,7 +127,7 @@ export async function scanFromCamera(): Promise<ScanResult | null> {
   // Try Capacitor MLKit first (works on Android/iOS native)
   try {
     const { BarcodeScanner, BarcodeFormat } = await import("@capacitor-mlkit/barcode-scanning");
-    
+
     // Check if MLKit is supported on this device
     const supported = await BarcodeScanner.isSupported();
     if (!supported) throw new Error("MLKit not supported");
@@ -138,8 +138,11 @@ export async function scanFromCamera(): Promise<ScanResult | null> {
       throw new Error("Camera permission denied");
     }
 
-    // Start the native barcode scanner overlay
-    const result = await BarcodeScanner.scan({
+    // Start the native barcode scanner overlay with a safety timeout.
+    // On some Android devices, the native scanner can hang if the camera
+    // hardware is slow to initialize. We race the scan against a 20s timeout
+    // so the user is never stuck in a black screen.
+    const scanPromise = BarcodeScanner.scan({
       formats: [
         BarcodeFormat.QrCode,
         BarcodeFormat.Code128,
@@ -153,6 +156,12 @@ export async function scanFromCamera(): Promise<ScanResult | null> {
       ],
     });
 
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      setTimeout(() => reject(new Error("Scan timed out")), 20_000);
+    });
+
+    const result = await Promise.race([scanPromise, timeoutPromise]);
+
     if (result.barcodes.length > 0) {
       const barcode = result.barcodes[0];
       return {
@@ -162,9 +171,7 @@ export async function scanFromCamera(): Promise<ScanResult | null> {
     }
     return null;
   } catch (err) {
-    // Log the actual error for debugging
     console.warn("MLKit barcode scan failed:", err);
-    // Fall through to web method
   }
 
   // Fallback: Browser BarcodeDetector API (web Chrome on desktop)

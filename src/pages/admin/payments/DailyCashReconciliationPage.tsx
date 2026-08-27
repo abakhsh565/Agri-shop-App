@@ -78,6 +78,7 @@ export default function DailyCashReconciliationPage() {
           <input
             type="date"
             value={selectedDate}
+            max={new Date().toISOString().slice(0, 10)}
             onChange={(e) => { setSelectedDate(e.target.value); setSaved(false); setCountedCash(""); }}
             className="w-full h-12 rounded-[24px] px-4 text-sm outline-none"
             style={{ background: "var(--surface-2)", border: "1px solid var(--divider)", color: "var(--text-primary)" }}

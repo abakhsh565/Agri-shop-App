@@ -5,6 +5,7 @@ export interface SelectOption {
   value: string;
   label: string;
   sub?: string;
+  imageUrl?: string;
 }
 
 interface SelectSheetProps {
@@ -92,10 +93,15 @@ export default function SelectSheet({
                   className="flex items-center justify-between w-full px-3 py-3.5 rounded-[12px] text-left active:opacity-70"
                   style={{ background: isSel ? "rgba(132,204,22,0.1)" : "transparent" }}
                 >
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold truncate"
-                      style={{ color: isSel ? "var(--brand-dark)" : "var(--text-primary)" }}>{o.label}</p>
-                    {o.sub && <p className="text-xs truncate" style={{ color: "var(--text-secondary)" }}>{o.sub}</p>}
+                  <div className="flex items-center gap-3 min-w-0">
+                    {o.imageUrl ? (
+                      <img src={o.imageUrl} alt="" className="size-9 rounded-full object-cover shrink-0" />
+                    ) : null}
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold truncate"
+                        style={{ color: isSel ? "var(--brand-dark)" : "var(--text-primary)" }}>{o.label}</p>
+                      {o.sub && <p className="text-xs truncate" style={{ color: "var(--text-secondary)" }}>{o.sub}</p>}
+                    </div>
                   </div>
                   {isSel && <Check size={16} style={{ color: "var(--brand-dark)" }} className="shrink-0" />}
                 </button>
