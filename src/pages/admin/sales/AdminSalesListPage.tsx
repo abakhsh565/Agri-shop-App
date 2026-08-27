@@ -187,31 +187,53 @@ export default function AdminSalesListPage() {
         ))}
       </div>
 
-      {/* Date filters */}
-      <div className="flex gap-2 px-4 py-3 overflow-x-auto no-scrollbar" style={{ scrollBehavior: "smooth", WebkitOverflowScrolling: "touch" }}>
-        {DATE_FILTERS.map(({ key, label }) => (
-          <button
-            key={key}
-            onClick={() => {
-              if (key === "custom") {
-                setShowDateModal(true);
-              } else {
-                setDateFilter(key);
-              }
-            }}
-            className="h-8 px-4 rounded-full text-xs font-semibold whitespace-nowrap shrink-0 transition-colors flex items-center gap-1.5"
-            style={{
-              background: dateFilter === key ? "var(--brand)" : "var(--surface-2)",
-              color: dateFilter === key ? "#0a0a0a" : "var(--text-secondary)",
-            }}
-          >
-            {key === "custom" && <Calendar size={12} />}
-            {label}
-            {key === "custom" && customFrom && (
-              <span className="text-[9px] opacity-70">({customFrom} → {customTo || "..."})</span>
-            )}
-          </button>
-        ))}
+      {/* Date filters — horizontally scrollable with fade indicator */}
+      <div className="relative">
+        <div
+          ref={(el) => {
+            if (!el) return;
+            const update = () => {
+              const atEnd = el.scrollLeft + el.clientWidth >= el.scrollWidth - 4;
+              el.parentElement!.style.setProperty("--show-fade", atEnd ? "0" : "1");
+            };
+            el.addEventListener("scroll", update, { passive: true });
+            update();
+          }}
+          className="flex gap-2 px-4 py-3 overflow-x-auto"
+          style={{ scrollBehavior: "smooth", WebkitOverflowScrolling: "touch" }}
+        >
+          {DATE_FILTERS.map(({ key, label }) => (
+            <button
+              key={key}
+              onClick={() => {
+                if (key === "custom") {
+                  setShowDateModal(true);
+                } else {
+                  setDateFilter(key);
+                }
+              }}
+              className="h-8 px-4 rounded-full text-xs font-semibold whitespace-nowrap shrink-0 transition-colors flex items-center gap-1.5"
+              style={{
+                background: dateFilter === key ? "var(--brand)" : "var(--surface-2)",
+                color: dateFilter === key ? "#0a0a0a" : "var(--text-secondary)",
+              }}
+            >
+              {key === "custom" && <Calendar size={12} />}
+              {label}
+              {key === "custom" && customFrom && (
+                <span className="text-[9px] opacity-70">({customFrom} → {customTo || "..."})</span>
+              )}
+            </button>
+          ))}
+        </div>
+        {/* Fade indicator on right edge */}
+        <div
+          className="absolute right-0 top-0 bottom-0 w-8 pointer-events-none transition-opacity"
+          style={{
+            background: `linear-gradient(to right, transparent, var(--background))`,
+            opacity: "var(--show-fade, 1)",
+          }}
+        />
       </div>
 
       {/* Custom Date Range Modal */}
