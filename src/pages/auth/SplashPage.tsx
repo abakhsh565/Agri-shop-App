@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "@/stores/authStore";
+import { hasPin } from "@/lib/pinLock";
 import StatusBar from "@/components/ui/StatusBar";
 
 export default function SplashPage() {
@@ -10,8 +11,19 @@ export default function SplashPage() {
   useEffect(() => {
     const t = setTimeout(() => {
       if (user && user.isActive) {
-        navigate("/employee/dashboard", { replace: true });
+        // User is logged in — check if they have a PIN set on this device
+        if (hasPin(user.id)) {
+          // Existing user with PIN → go to PIN login screen
+          navigate("/login/pin", { replace: true });
+        } else {
+          // Existing user without PIN (fresh install or data cleared) → go to dashboard directly
+          const dest = (user.role === "admin" || user.role === "co_admin")
+            ? "/admin/dashboard"
+            : "/employee/dashboard";
+          navigate(dest, { replace: true });
+        }
       } else {
+        // No saved user → go to login
         navigate("/login", { replace: true });
       }
     }, 1500);

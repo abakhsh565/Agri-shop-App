@@ -79,6 +79,8 @@ export type ResolveResult =
   | { status: "ok"; user: User }
   | { status: "not_registered" }
   | { status: "deactivated" }
+  | { status: "pending" }
+  | { status: "rejected" }
   | { status: "wrong_otp" }
   | { status: "error"; message: string };
 
@@ -129,7 +131,23 @@ export async function verifyOTPAndResolveUser(
     return { status: "ok", user: userFromRow(row) };
   }
 
-  // No profile found.
+  // No user profile found — check if there's a pending shop registration
+  const { data: shopReq } = await supabase
+    .from("shop_requests")
+    .select("status")
+    .eq("owner_phone", e164)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (shopReq) {
+    if (shopReq.status === "pending" || shopReq.status === "hold") return { status: "pending" };
+    if (shopReq.status === "rejected") return { status: "rejected" };
+    // approved but user not created yet — shouldn't happen, treat as pending
+    return { status: "pending" };
+  }
+
+  // No profile and no shop request.
   return { status: "not_registered" };
 }
 

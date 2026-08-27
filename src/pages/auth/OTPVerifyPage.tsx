@@ -81,6 +81,8 @@ export default function OTPVerifyPage() {
 
       if (result.status === "not_registered") { navigate("/login/not-registered"); return; }
       if (result.status === "deactivated") { navigate("/login/deactivated"); return; }
+      if (result.status === "pending") { navigate("/login/under-review"); return; }
+      if (result.status === "rejected") { navigate("/login/rejected"); return; }
       if (result.status === "error") { setError(result.message); setOtp(""); return; }
 
       // status === "ok"

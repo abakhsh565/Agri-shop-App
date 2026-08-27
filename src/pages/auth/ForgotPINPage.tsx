@@ -49,6 +49,8 @@ export default function ForgotPINPage() {
       if (result.status === "wrong_otp") { setError("Incorrect code. Try again."); setOtp(""); return; }
       if (result.status === "not_registered") { setError("Number not registered"); return; }
       if (result.status === "deactivated") { setError("Account deactivated"); return; }
+      if (result.status === "pending") { setError("Registration under review"); return; }
+      if (result.status === "rejected") { setError("Registration rejected"); return; }
       if (result.status === "error") { setError(result.message); return; }
       // OTP correct — now set new PIN
       setUser(result.user);
