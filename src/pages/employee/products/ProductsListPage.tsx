@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
+import PullToRefresh from "@/components/ui/PullToRefresh";
 import { useProductsStore } from "@/stores/productsStore";
 import { getStockStatus, getStockStatusLabel, getStockStatusColor } from "@/lib/formatters";
 import type { Product } from "@/types";
@@ -51,7 +52,12 @@ export default function ProductsListPage() {
     return "in_stock" as const;
   }
 
+  async function handleRefresh() {
+    await useProductsStore.getState().load();
+  }
+
   return (
+    <PullToRefresh onRefresh={handleRefresh}>
     <div
       className="flex flex-col w-full min-h-full"
       style={{ background: "var(--background)", direction: isUrdu ? "rtl" : "ltr" }}
@@ -160,5 +166,6 @@ export default function ProductsListPage() {
         </div>
       )}
     </div>
+    </PullToRefresh>
   );
 }

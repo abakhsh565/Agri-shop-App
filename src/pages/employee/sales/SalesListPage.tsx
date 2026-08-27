@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
+import PullToRefresh from "@/components/ui/PullToRefresh";
 import { PaymentBadge } from "@/components/ui/Badge";
 import { formatCurrency, formatSmartDateTime } from "@/lib/formatters";
 import { useT } from "@/lib/i18n";
@@ -115,7 +116,15 @@ export default function SalesListPage() {
     tab === "credit" ? t("sales.summaryCreditSales") :
                        t("sales.summaryPaidSales");
 
+  async function handleRefresh() {
+    await Promise.all([
+      useSalesStore.getState().load(),
+      useCustomersStore.getState().load(),
+    ]);
+  }
+
   return (
+    <PullToRefresh onRefresh={handleRefresh}>
     <div
       className="flex flex-col w-full min-h-full"
       style={{ background: "var(--background)", direction: isUrdu ? "rtl" : "ltr" }}
@@ -333,5 +342,6 @@ export default function SalesListPage() {
         </div>
       )}
     </div>
+    </PullToRefresh>
   );
 }

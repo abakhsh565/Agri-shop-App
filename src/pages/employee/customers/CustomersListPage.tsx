@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
+import PullToRefresh from "@/components/ui/PullToRefresh";
 import { useCustomersStore } from "@/stores/customersStore";
 import { formatCurrency } from "@/lib/formatters";
 import { useT } from "@/lib/i18n";
@@ -74,7 +75,12 @@ export default function CustomersListPage() {
   const totalOutstanding = customers.reduce((s, c) => s + c.outstandingBalance, 0);
   const onCredit = customers.filter((c) => c.outstandingBalance > 0).length;
 
+  async function handleRefresh() {
+    await useCustomersStore.getState().load();
+  }
+
   return (
+    <PullToRefresh onRefresh={handleRefresh}>
     <div
       className="flex flex-col w-full min-h-full"
       style={{ background: "var(--background)", direction: isUrdu ? "rtl" : "ltr" }}
@@ -303,5 +309,6 @@ export default function CustomersListPage() {
         </div>
       </div>
     </div>
+    </PullToRefresh>
   );
 }
