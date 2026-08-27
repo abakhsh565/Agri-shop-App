@@ -99,7 +99,7 @@ export default function SettingsPage() {
           className="mx-4 mt-3 rounded-xl p-4 flex items-center gap-4 animate-fade-in-up"
           style={{ border: "1px solid var(--border-light)", background: "var(--surface-2)" }}
         >
-          {/* Avatar with camera overlay */}
+          {/* Avatar */}
           <div className="relative shrink-0">
             <input
               ref={fileInputRef}
@@ -109,9 +109,8 @@ export default function SettingsPage() {
               onChange={handleAvatarChange}
             />
             <div
-              className="w-14 h-14 rounded-full overflow-hidden flex items-center justify-center text-lg font-bold cursor-pointer"
+              className="w-14 h-14 rounded-full overflow-hidden flex items-center justify-center text-lg font-bold"
               style={{ background: "var(--brand)", color: "#0a0a0a" }}
-              onClick={() => !uploading && fileInputRef.current?.click()}
             >
               {uploading ? (
                 <Loader2 size={20} className="animate-spin" />
@@ -121,49 +120,21 @@ export default function SettingsPage() {
                 initials
               )}
             </div>
-            <button
-              onClick={() => !uploading && fileInputRef.current?.click()}
-              className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center shadow"
-              style={{ background: "var(--brand)", color: "#0a0a0a" }}
-            >
-              {uploading ? <Loader2 size={10} className="animate-spin" /> : <Camera size={10} strokeWidth={2.5} />}
-            </button>
           </div>
 
           <div className="flex-1 min-w-0">
-            {editingName ? (
-              <div className="flex items-center gap-2">
-                <input
-                  autoFocus
-                  value={nameValue}
-                  onChange={(e) => setNameValue(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === "Enter") handleSaveName(); if (e.key === "Escape") { setEditingName(false); setNameValue(user?.name ?? ""); } }}
-                  className="flex-1 h-9 rounded-full px-3 text-sm font-bold outline-none"
-                  style={{ background: "var(--surface)", border: "1px solid var(--brand)", color: "var(--text-primary)" }}
-                />
-                <button
-                  onClick={handleSaveName}
-                  disabled={savingName || !nameValue.trim()}
-                  className="w-8 h-8 rounded-full flex items-center justify-center"
-                  style={{ background: "var(--brand)", color: "#0a0a0a" }}
-                >
-                  {savingName ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-                </button>
-              </div>
-            ) : (
-              <div className="flex items-center gap-2">
-                <p className="text-base font-bold truncate" style={{ color: "var(--text-primary)" }}>
-                  {user?.name}
-                </p>
-                <button
-                  onClick={() => setEditingName(true)}
-                  className="shrink-0 w-6 h-6 rounded-full flex items-center justify-center"
-                  style={{ background: "var(--surface)", color: "var(--text-secondary)" }}
-                >
-                  <User size={12} />
-                </button>
-              </div>
-            )}
+            <div className="flex items-center gap-2">
+              <p className="text-base font-bold truncate" style={{ color: "var(--text-primary)" }}>
+                {user?.name}
+              </p>
+              <button
+                onClick={() => setEditingName(true)}
+                className="shrink-0 w-6 h-6 rounded-full flex items-center justify-center"
+                style={{ background: "var(--surface)", color: "var(--text-secondary)" }}
+              >
+                <User size={12} />
+              </button>
+            </div>
             <p className="text-xs mt-0.5" style={{ color: "var(--text-secondary)" }}>
               {user?.jobTitle ?? "Store Associate"}
               {user?.employeeNumber ? ` · Emp #${user.employeeNumber}` : ""}
@@ -217,7 +188,7 @@ export default function SettingsPage() {
               className="flex items-center justify-between w-full px-4 py-4"
             >
               <div className="flex items-center gap-3">
-                <Globe size={18} style={{ color: "var(--text-primary)" }} />
+                <Globe size={18} style={{ color: "var(--brand)" }} />
                 <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>{t("settings.language")}</span>
               </div>
               <div className="flex items-center gap-2">
@@ -303,6 +274,58 @@ export default function SettingsPage() {
       </div>
 
       <div className="p-4 pb-6 animate-fade-in-up delay-225">
+      {/* Edit Profile Popup */}
+      {editingName && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center" onClick={() => { setEditingName(false); setNameValue(user?.name ?? ""); }}>
+          <div className="absolute inset-0 bg-black/40" />
+          <div
+            className="relative w-full max-w-md rounded-t-2xl p-5 pb-8 animate-slide-up"
+            style={{ background: "var(--surface)" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <p className="text-[15px] font-bold" style={{ color: "var(--text-primary)" }}>Edit Profile</p>
+              <button onClick={() => { setEditingName(false); setNameValue(user?.name ?? ""); }} className="text-xl" style={{ color: "var(--text-secondary)" }}>×</button>
+            </div>
+            {/* Photo in popup */}
+            <div className="flex flex-col items-center mb-4">
+              <div className="relative">
+                <div className="w-20 h-20 rounded-full overflow-hidden flex items-center justify-center text-2xl font-bold" style={{ background: "var(--brand)", color: "#0a0a0a" }}>
+                  {avatarUrl ? <img src={avatarUrl} alt="" className="w-full h-full object-cover" /> : initials}
+                </div>
+                <button
+                  onClick={() => { setEditingName(false); fileInputRef.current?.click(); }}
+                  className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full flex items-center justify-center shadow"
+                  style={{ background: "var(--brand)", color: "#0a0a0a" }}
+                >
+                  <Camera size={13} strokeWidth={2.5} />
+                </button>
+              </div>
+            </div>
+            {/* Name input */}
+            <div className="mb-4">
+              <label className="text-[11px] font-semibold uppercase tracking-wider mb-1 block" style={{ color: "var(--text-secondary)" }}>Name</label>
+              <input
+                autoFocus
+                value={nameValue}
+                onChange={(e) => setNameValue(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") handleSaveName(); }}
+                className="w-full h-11 px-4 rounded-xl text-sm font-bold outline-none"
+                style={{ background: "var(--surface-2)", border: "1px solid var(--divider)", color: "var(--text-primary)" }}
+              />
+            </div>
+            <button
+              onClick={handleSaveName}
+              disabled={savingName || !nameValue.trim()}
+              className="w-full h-11 rounded-xl text-[13px] font-bold disabled:opacity-50"
+              style={{ background: "var(--brand)", color: "#0a0a0a" }}
+            >
+              {savingName ? "Saving..." : "Save Changes"}
+            </button>
+          </div>
+        </div>
+      )}
+
         <button
           onClick={handleLogout}
           className="w-full h-[48px] rounded-full font-bold text-sm transition-colors border"

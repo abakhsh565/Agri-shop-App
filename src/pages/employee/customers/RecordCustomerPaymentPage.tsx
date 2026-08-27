@@ -10,6 +10,7 @@ import { useT } from "@/lib/i18n";
 import { useThemeStore } from "@/stores/themeStore";
 import { useShellBase } from "@/lib/useShellBase";
 import { notifyPaymentReceived } from "@/lib/notifications";
+import { Plus, Minus } from "lucide-react";
 
 export default function RecordCustomerPaymentPage() {
   const { customerId } = useParams();
@@ -87,19 +88,35 @@ export default function RecordCustomerPaymentPage() {
             <p className="text-[11px] font-bold uppercase mb-2 tracking-wider" style={{ color: "var(--text-secondary)" }}>
               {t("recordPayment.amountLabel")}
             </p>
-            <input
-              type="number"
-              inputMode="numeric"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              placeholder={t("recordPayment.amountHint")}
-              className="w-full h-12 rounded-[24px] px-4 text-sm outline-none"
-              style={{
-                background: "var(--surface-2)",
-                border: `1px solid ${error ? "var(--error)" : "var(--divider)"}`,
-                color: "var(--text-primary)",
-              }}
-            />
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setAmount(String(Math.max(0, (Number(amount) || 0) - 100)))}
+                className="w-11 h-12 rounded-full flex items-center justify-center shrink-0 active:opacity-70"
+                style={{ background: "var(--surface-2)", border: "1px solid var(--divider)" }}
+              >
+                <Minus size={16} style={{ color: "var(--text-primary)" }} />
+              </button>
+              <input
+                type="number"
+                inputMode="numeric"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                placeholder={t("recordPayment.amountHint")}
+                className="flex-1 h-12 rounded-[24px] px-4 text-sm font-bold text-center outline-none"
+                style={{
+                  background: "var(--surface-2)",
+                  border: `1px solid ${error ? "var(--error)" : "var(--divider)"}`,
+                  color: "var(--text-primary)",
+                }}
+              />
+              <button
+                onClick={() => setAmount(String(Math.min(customer!.outstandingBalance, (Number(amount) || 0) + 100)))}
+                className="w-11 h-12 rounded-full flex items-center justify-center shrink-0 active:opacity-70"
+                style={{ background: "var(--brand)", color: "#0a0a0a" }}
+              >
+                <Plus size={16} strokeWidth={2.5} />
+              </button>
+            </div>
             {error && <p className="text-xs mt-1" style={{ color: "var(--error)" }}>{error}</p>}
           </div>
 

@@ -10,7 +10,7 @@ import { useT } from "@/lib/i18n";
 import { useThemeStore } from "@/stores/themeStore";
 import { useShellBase } from "@/lib/useShellBase";
 
-type Filter = "all" | "month" | "3months";
+type Filter = "all" | "month" | "3months" | "custom";
 
 export default function CustomerPurchaseHistoryPage() {
   const { customerId } = useParams();
@@ -22,6 +22,9 @@ export default function CustomerPurchaseHistoryPage() {
   const customer = useCustomersStore((s) => s.customers.find((c) => c.id === customerId));
   const allSales = useSalesStore((s) => s.sales);
   const [filter, setFilter] = useState<Filter>("all");
+  const [showDateModal, setShowDateModal] = useState(false);
+  const [customFrom, setCustomFrom] = useState("");
+  const [customTo, setCustomTo] = useState("");
 
   if (!customer) return null;
 
@@ -29,21 +32,32 @@ export default function CustomerPurchaseHistoryPage() {
   const health = getCreditHealth(customer.outstandingBalance, customer.creditLimit);
 
   const FILTERS: { key: Filter; label: string }[] = [
-    { key: "all",     label: isUrdu ? "تمام خریداری"     : "All Purchases" },
+    { key: "all",     label: isUrdu ? "تمام خریداری"     : "All" },
     { key: "month",   label: isUrdu ? "اس مہینے"         : "This Month" },
-    { key: "3months", label: isUrdu ? "پچھلے 3 مہینے"   : "Last 3 Months" },
+    { key: "3months", label: isUrdu ? "پچھلے 3 مہینے"   : "3 Months" },
+    { key: "custom",  label: "Custom" },
   ];
+
+  const todayISO = new Date().toISOString().split("T")[0];
 
   function inFilter(sale: (typeof sales)[0]) {
     if (filter === "all") return true;
     const d = new Date(sale.createdAt);
     const now = new Date();
     if (filter === "month") return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
-    const cutoff = new Date(); cutoff.setMonth(cutoff.getMonth() - 3);
-    return d >= cutoff;
+    if (filter === "3months") { const cutoff = new Date(); cutoff.setMonth(cutoff.getMonth() - 3); return d >= cutoff; }
+    if (filter === "custom") {
+      const ds = sale.createdAt.split("T")[0];
+      if (customFrom && customTo) return ds >= customFrom && ds <= customTo;
+      if (customFrom) return ds >= customFrom;
+      if (customTo) return ds <= customTo;
+      return true;
+    }
+    return true;
   }
 
   const filtered = sales.filter(inFilter);
+  const totalSalesAmount = filtered.reduce((s, x) => s + x.totalAmount, 0);
 
   return (
     <div
@@ -63,7 +77,7 @@ export default function CustomerPurchaseHistoryPage() {
           <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>{customer.name}</p>
           <CreditHealthBadge health={health} />
         </div>
-        <div className="flex gap-8">
+        <div className="flex gap-6">
           <div>
             <p className="text-[10px] uppercase" style={{ color: "var(--text-secondary)" }}>
               {t("customers.outstanding")}
@@ -80,6 +94,14 @@ export default function CustomerPurchaseHistoryPage() {
               {formatCurrency(customer.creditLimit)}
             </p>
           </div>
+          <div>
+            <p className="text-[10px] uppercase" style={{ color: "var(--text-secondary)" }}>
+              Total Sales
+            </p>
+            <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>
+              {formatCurrency(totalSalesAmount)}
+            </p>
+          </div>
         </div>
       </div>
 
@@ -88,17 +110,47 @@ export default function CustomerPurchaseHistoryPage() {
         {FILTERS.map(({ key, label }) => (
           <button
             key={key}
-            onClick={() => setFilter(key)}
-            className="shrink-0 h-8 px-4 rounded-full text-xs font-medium transition-colors"
+            onClick={() => { if (key === "custom") { setShowDateModal(true); } else { setFilter(key); } }}
+            className="shrink-0 h-8 px-4 rounded-full text-xs font-semibold whitespace-nowrap transition-colors"
             style={{
               background: filter === key ? "var(--brand)" : "var(--surface-2)",
               color: filter === key ? "#0a0a0a" : "var(--text-secondary)",
             }}
           >
             {label}
+            {key === "custom" && customFrom && (
+              <span className="text-[9px] opacity-70"> ({customFrom}→{customTo || "..."})</span>
+            )}
           </button>
         ))}
       </div>
+
+      {/* Custom Date Range Modal */}
+      {showDateModal && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center" onClick={() => setShowDateModal(false)}>
+          <div className="absolute inset-0 bg-black/40" />
+          <div className="relative w-full max-w-md rounded-t-2xl p-5 pb-8 animate-slide-up" style={{ background: "var(--surface)" }} onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <p className="text-[15px] font-bold" style={{ color: "var(--text-primary)" }}>Select Date Range</p>
+              <button onClick={() => setShowDateModal(false)} className="text-xl" style={{ color: "var(--text-secondary)" }}>×</button>
+            </div>
+            <div className="flex gap-3">
+              <div className="flex-1">
+                <label className="text-[11px] font-semibold uppercase tracking-wider mb-1 block" style={{ color: "var(--text-secondary)" }}>From</label>
+                <input type="date" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} max={todayISO} className="w-full h-10 px-3 rounded-xl text-[13px] outline-none" style={{ background: "var(--surface-2)", color: "var(--text-primary)", border: "1px solid var(--divider)" }} />
+              </div>
+              <div className="flex-1">
+                <label className="text-[11px] font-semibold uppercase tracking-wider mb-1 block" style={{ color: "var(--text-secondary)" }}>To</label>
+                <input type="date" value={customTo} onChange={(e) => setCustomTo(e.target.value)} max={todayISO} min={customFrom || undefined} className="w-full h-10 px-3 rounded-xl text-[13px] outline-none" style={{ background: "var(--surface-2)", color: "var(--text-primary)", border: "1px solid var(--divider)" }} />
+              </div>
+            </div>
+            <div className="flex gap-2 mt-4">
+              <button onClick={() => { setCustomFrom(""); setCustomTo(""); setFilter("custom"); setShowDateModal(false); }} className="flex-1 h-10 rounded-xl text-[13px] font-semibold" style={{ background: "var(--surface-2)", color: "var(--text-secondary)" }}>Clear</button>
+              <button onClick={() => { setShowDateModal(false); setFilter("custom"); }} className="flex-1 h-10 rounded-xl text-[13px] font-bold" style={{ background: "var(--brand)", color: "#0a0a0a" }}>Apply</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {filtered.length === 0 ? (
         <div className="flex flex-col items-center py-12 gap-2">
@@ -117,19 +169,19 @@ export default function CustomerPurchaseHistoryPage() {
               style={{ borderBottom: i < filtered.length - 1 ? "1px solid var(--divider)" : "none" }}
             >
               <div className="flex justify-between items-start">
-                <div>
-                  <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-bold" style={{ color: "var(--text-secondary)" }}>
                     {formatDate(sale.createdAt)}
                   </p>
-                  <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
+                  <p className="text-sm font-bold mt-0.5" style={{ color: "var(--text-primary)" }}>
                     {sale.items.map((it) => it.productName).join(", ")}
                   </p>
-                  <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
+                  <p className="text-[11px]" style={{ color: "var(--text-secondary)" }}>
                     {t("sales.soldBy")} {sale.employeeName}
                   </p>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+                <div className="flex flex-col items-end gap-1 ml-3">
+                  <span className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>
                     {formatCurrency(sale.totalAmount)}
                   </span>
                   <PaymentBadge type={sale.paymentType} outstandingBalance={sale.outstandingBalance} />

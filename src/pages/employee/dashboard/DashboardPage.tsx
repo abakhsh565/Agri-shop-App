@@ -150,7 +150,11 @@ export default function DashboardPage() {
           className="flex items-center justify-center rounded-full shrink-0 size-[44px] font-bold text-[15px] transition-transform active:scale-95"
           style={{ background: "var(--brand)", color: "#0a0a0a" }}
         >
-          {firstName.charAt(0).toUpperCase()}
+          {user?.photoUrl ? (
+            <img src={user.photoUrl} alt="" className="w-full h-full object-cover" />
+          ) : (
+            firstName.charAt(0).toUpperCase()
+          )}
         </button>
 
         <div className="flex flex-col flex-1 min-w-0">
@@ -250,15 +254,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* ── Summary strip ── */}
-      <div className="flex gap-2 px-4 pt-3">
-        {[{ label: "Transactions", value: String(txCount) }, { label: "Products Sold", value: String(productsSold) }, { label: "Qty Sold", value: String(qtySold) }].map((m) => (
-          <div key={m.label} className="flex-1 rounded-[10px] p-2.5 text-center" style={{ background: "var(--surface-2)" }}>
-            <p className="text-[9px] font-bold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>{m.label}</p>
-            <p className="text-[14px] font-bold mt-0.5" style={{ color: "var(--text-primary)" }}>{m.value}</p>
-          </div>
-        ))}
-      </div>
+
 
       {/* ── Quick Actions ── */}
       <div className="px-4 pt-4 animate-fade-in-up delay-75">
@@ -291,7 +287,12 @@ export default function DashboardPage() {
           {t("dashboard.recentSales")}
         </p>
         <div className="rounded-[14px] overflow-hidden" style={{ border: "1px solid var(--divider)" }}>
-          {recentSales.map((sale, i) => {
+          {recentSales.length === 0 ? (
+            <div className="px-4 py-8 text-center">
+              <p className="text-2xl mb-1">📋</p>
+              <p className="text-[13px]" style={{ color: "var(--text-secondary)" }}>No sales yet today</p>
+            </div>
+          ) : recentSales.map((sale, i) => {
             const cImg = getCustomerImg(sale.customerId);
             const cBg = initBgColor(sale.customerName);
             return (

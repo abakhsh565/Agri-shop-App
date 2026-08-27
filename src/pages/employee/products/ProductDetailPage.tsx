@@ -106,24 +106,35 @@ export default function ProductDetailPage() {
       <div className="px-4 pt-4">
         {/* Product image + name */}
         <div className="flex items-center gap-4 mb-4">
-          {isAdmin ? (
-            <ImageUpload
-              bucket="product-images"
-              shape="square"
-              value={product.imageUrl ?? null}
-              onChange={handleImageChange}
-              label="Photo"
-            />
-          ) : product.imageUrl ? (
-            <img src={product.imageUrl} alt={product.name} className="size-16 rounded-2xl object-cover shrink-0" />
-          ) : (
-            <div
-              className="size-16 rounded-2xl flex items-center justify-center text-xl font-bold shrink-0"
-              style={{ background: bg + "22", color: bg }}
-            >
-              {product.name.charAt(0)}
-            </div>
-          )}
+          <div className="relative shrink-0">
+            {isAdmin ? (
+              <ImageUpload
+                bucket="product-images"
+                shape="square"
+                value={product.imageUrl ?? null}
+                onChange={handleImageChange}
+                label="Photo"
+              />
+            ) : product.imageUrl ? (
+              <img src={product.imageUrl} alt={product.name} className="size-16 rounded-2xl object-cover" />
+            ) : (
+              <div
+                className="size-16 rounded-2xl flex items-center justify-center text-xl font-bold"
+                style={{ background: bg + "22", color: bg }}
+              >
+                {product.name.charAt(0)}
+              </div>
+            )}
+            {!isAdmin && (
+              <button
+                onClick={() => setShowImageEdit(true)}
+                className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full flex items-center justify-center shadow"
+                style={{ background: "var(--brand)", color: "#0a0a0a" }}
+              >
+                <Camera size={12} strokeWidth={2.5} />
+              </button>
+            )}
+          </div>
           <div className="flex-1 min-w-0">
             <p className="text-lg font-bold truncate" style={{ color: "var(--text-primary)" }}>{product.name}</p>
             <p className="text-sm" style={{ color: "var(--text-secondary)" }}>{product.company}</p>
