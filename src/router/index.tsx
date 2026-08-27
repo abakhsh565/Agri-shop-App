@@ -6,6 +6,8 @@ import SplashPage from "@/pages/auth/SplashPage";
 import LoginPage from "@/pages/auth/LoginPage";
 import OTPVerifyPage from "@/pages/auth/OTPVerifyPage";
 import PINSetPage from "@/pages/auth/PINSetPage";
+import PINLoginPage from "@/pages/auth/PINLoginPage";
+import ForgotPINPage from "@/pages/auth/ForgotPINPage";
 import NotRegisteredPage from "@/pages/auth/NotRegisteredPage";
 import DeactivatedPage from "@/pages/auth/DeactivatedPage";
 import SetupDemoPage from "@/pages/auth/SetupDemoPage";
@@ -81,6 +83,8 @@ export const router = createBrowserRouter([
   { path: "/login", element: <LoginPage /> },
   { path: "/login/otp", element: <OTPVerifyPage /> },
   { path: "/login/pin-set", element: <PINSetPage /> },
+  { path: "/login/pin", element: <PINLoginPage /> },
+  { path: "/login/forgot-pin", element: <ForgotPINPage /> },
   { path: "/login/not-registered", element: <NotRegisteredPage /> },
   { path: "/login/deactivated", element: <DeactivatedPage /> },
   { path: "/setup-demo", element: <SetupDemoPage /> },

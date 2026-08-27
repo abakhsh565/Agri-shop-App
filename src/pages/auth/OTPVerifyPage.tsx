@@ -5,6 +5,7 @@ import NavHeader from "@/components/ui/NavHeader";
 import OTPInput from "@/components/ui/OTPInput";
 import Button from "@/components/ui/Button";
 import { verifyOTPAndResolveUser, sendOTP } from "@/lib/auth";
+import { hasPin } from "@/lib/pinLock";
 import { useAuthStore } from "@/stores/authStore";
 
 const OTP_VALIDITY = 5 * 60;
@@ -84,11 +85,17 @@ export default function OTPVerifyPage() {
 
       // status === "ok"
       setUser(result.user);
-      const dest =
-        result.user.role === "admin" || result.user.role === "co_admin"
-          ? "/admin/dashboard"
-          : "/employee/dashboard";
-      navigate(dest, { replace: true });
+      // Check if user has a PIN set on this device
+      if (!hasPin(result.user.id)) {
+        // First time on this device — prompt to create PIN
+        navigate("/login/pin-set", { replace: true });
+      } else {
+        const dest =
+          result.user.role === "admin" || result.user.role === "co_admin"
+            ? "/admin/dashboard"
+            : "/employee/dashboard";
+        navigate(dest, { replace: true });
+      }
     } finally {
       setLoading(false);
     }
