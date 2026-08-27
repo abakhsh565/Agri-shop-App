@@ -29,17 +29,27 @@ jobs:
       - name: Build Web App
         run: npm run build
 
-      - name: Add Android Platform & Sync
-        run: |
-          npx cap add android || true
-          npx cap sync android
+      - name: Verify dist exists
+        run: ls -la dist/index.html
+
+      - name: Add Android Platform
+        run: npx cap add android
+
+      - name: Verify Android Platform Created
+        run: ls -la android/gradlew
+
+      - name: Sync Capacitor
+        run: npx cap sync android
+
+      - name: Verify gradlew still exists after sync
+        run: ls -la android/gradlew
 
       - name: Inject Camera Permission
         run: node .github/inject-permissions.cjs
 
       - name: Build APK
+        working-directory: android
         run: |
-          cd android
           chmod +x gradlew
           ./gradlew assembleDebug
 
