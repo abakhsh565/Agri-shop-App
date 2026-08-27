@@ -2,8 +2,11 @@ name: Build Android APK
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   build:
@@ -29,11 +32,10 @@ jobs:
       - name: Build Web App
         run: npm run build
 
-      - name: Add Android Platform
-        run: npx cap add android || true
-
-      - name: Sync Capacitor
-        run: npx cap sync android
+      - name: Add Android Platform & Sync
+        run: |
+          npx cap add android || true
+          npx cap sync android
 
       - name: Inject Camera Permission
         run: node .github/inject-permissions.cjs
