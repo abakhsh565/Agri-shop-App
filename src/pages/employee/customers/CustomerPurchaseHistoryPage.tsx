@@ -10,6 +10,13 @@ import { useT } from "@/lib/i18n";
 import { useThemeStore } from "@/stores/themeStore";
 import { useShellBase } from "@/lib/useShellBase";
 
+function initBgColor(name: string) {
+  const colors = ["#84cc16","#3b82f6","#8b5cf6","#f59e0b","#06b6d4","#ec4899"];
+  let hash = 0;
+  for (const c of name) hash = (hash * 31 + c.charCodeAt(0)) & 0xffff;
+  return colors[hash % colors.length];
+}
+
 type Filter = "all" | "month" | "3months" | "custom";
 
 export default function CustomerPurchaseHistoryPage() {
@@ -71,11 +78,23 @@ export default function CustomerPurchaseHistoryPage() {
        
       />
 
-      {/* Customer strip */}
-      <div className="mx-4 mt-3 rounded-[14px] p-4" style={{ background: "var(--surface-2)" }}>
-        <div className="flex items-center justify-between mb-2">
-          <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>{customer.name}</p>
-          <CreditHealthBadge health={health} />
+      {/* Hero Card — customer image + name */}
+      <div className="mx-4 mt-3 rounded-[14px] p-4" style={{ border: "1px solid var(--divider)", background: "var(--surface-2)" }}>
+        <div className="flex items-center gap-3 mb-3">
+          {customer.imageUrl ? (
+            <img src={customer.imageUrl} alt={customer.name} className="w-12 h-12 rounded-full object-cover shrink-0" />
+          ) : (
+            <div className="w-12 h-12 rounded-full shrink-0 flex items-center justify-center text-sm font-bold" style={{ background: initBgColor(customer.name), color: "#fff" }}>
+              {customer.name.charAt(0).toUpperCase()}
+            </div>
+          )}
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center justify-between">
+              <p className="text-base font-bold truncate" style={{ color: "var(--text-primary)" }}>{customer.name}</p>
+              <CreditHealthBadge health={health} />
+            </div>
+            {customer.phone && <p className="text-xs" style={{ color: "var(--text-secondary)" }}>{customer.phone}</p>}
+          </div>
         </div>
         <div className="flex gap-6">
           <div>

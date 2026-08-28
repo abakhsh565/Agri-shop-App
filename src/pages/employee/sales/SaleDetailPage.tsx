@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
@@ -34,7 +35,26 @@ export default function SaleDetailPage() {
     </div>
   );
 
+  const updateNote = useSalesStore((s) => s.updateNote);
+  const [note, setNote] = useState("");
+  const [savingNote, setSavingNote] = useState(false);
   const { addToast } = useUIStore.getState();
+
+  // Sync note from DB when sale loads
+  useEffect(() => { if (sale) setNote(sale.note ?? ""); }, [sale?.id]);
+
+  async function handleSaveNote() {
+    if (note === (sale?.note ?? "")) return;
+    setSavingNote(true);
+    try {
+      await updateNote(sale!.id, note);
+      addToast("Note saved", "success");
+    } catch {
+      addToast("Could not save note", "error");
+    } finally {
+      setSavingNote(false);
+    }
+  }
 
   async function handleShare() {
     const { renderReceiptBlob } = await import("@/lib/receiptRenderer");
@@ -182,6 +202,36 @@ export default function SaleDetailPage() {
               <p className="text-xs" style={{ color: "var(--text-secondary)" }}>{t("sales.status")}</p>
             </div>
             <PaymentBadge type={sale.paymentType} outstandingBalance={sale.outstandingBalance} />
+          </div>
+          {/* Note — inside payment card */}
+          <div className="pt-2 mt-1" style={{ borderTop: "1px solid var(--divider)" }}>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs font-bold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
+                Note
+              </p>
+              {note !== (sale.note ?? "") && (
+                <button
+                  onClick={handleSaveNote}
+                  disabled={savingNote}
+                  className="text-xs font-bold px-3 py-1 rounded-full"
+                  style={{ background: "var(--brand)", color: "#0a0a0a" }}
+                >
+                  {savingNote ? "Saving..." : "Save"}
+                </button>
+              )}
+            </div>
+            <textarea
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder="Add a note..."
+              rows={3}
+              className="w-full rounded-[12px] px-4 py-3 text-sm resize-none outline-none"
+              style={{
+                background: "var(--surface)",
+                border: "1px solid var(--divider)",
+                color: "var(--text-primary)",
+              }}
+            />
           </div>
         </div>
 

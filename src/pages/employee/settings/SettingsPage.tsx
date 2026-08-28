@@ -228,7 +228,7 @@ export default function SettingsPage() {
               {
                 icon: Lock,
                 label: user && hasPin(user.id) ? "Change PIN" : "Setup PIN",
-                right: null, action: () => navigate("/login/pin-set"),
+                right: null, action: () => navigate("/login/pin-set", { state: { returnTo: "/employee/settings" } }),
               },
               {
                 icon: Bell, label: t("settings.notifications"),

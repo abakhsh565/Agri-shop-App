@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import AuthLayout from "@/components/layout/AuthLayout";
 import NavHeader from "@/components/ui/NavHeader";
 import PINInput from "@/components/ui/PINInput";
@@ -8,6 +8,8 @@ import { useAuthStore } from "@/stores/authStore";
 
 export default function PINSetPage() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const returnTo = (location.state as { returnTo?: string } | null)?.returnTo;
   const { user, setUser } = useAuthStore();
   const [step, setStep] = useState<"set" | "confirm">("set");
   const [firstPin, setFirstPin] = useState("");
@@ -35,8 +37,13 @@ export default function PINSetPage() {
         await savePin(user.id, pin);
         setUser({ ...user, pin });
       }
-      const dest = (user?.role === "admin" || user?.role === "co_admin") ? "/admin/dashboard" : "/employee/dashboard";
-      navigate(dest, { replace: true });
+      // Navigate back to where the user came from, or to dashboard
+      if (returnTo) {
+        navigate(returnTo, { replace: true });
+      } else {
+        const dest = (user?.role === "admin" || user?.role === "co_admin") ? "/admin/dashboard" : "/employee/dashboard";
+        navigate(dest, { replace: true });
+      }
     }
   }
 
