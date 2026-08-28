@@ -3,14 +3,13 @@ import { useNavigate, useParams } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
 import ImageUpload from "@/components/ui/ImageUpload";
-import { CreditHealthBadge } from "@/components/ui/Badge";
 import { useCustomersStore } from "@/stores/customersStore";
 import { useUIStore } from "@/stores/uiStore";
 import { formatCurrency, getCreditHealth } from "@/lib/formatters";
 import { useT } from "@/lib/i18n";
 import { useThemeStore } from "@/stores/themeStore";
 import { useShellBase } from "@/lib/useShellBase";
-import { MapPin, ChevronRight, CreditCard, Pencil, Trash2 } from "lucide-react";
+import { MapPin, CreditCard, Pencil, Trash2, History, Wallet, Receipt } from "lucide-react";
 
 function initBgColor(name: string) {
   const colors = ["#84cc16","#3b82f6","#8b5cf6","#f59e0b","#06b6d4","#ec4899"];
@@ -26,7 +25,6 @@ export default function CustomerProfilePage() {
   const t = useT();
   const { language } = useThemeStore();
   const isUrdu = language === "ur";
-  const isAdmin = base === "/admin";
   const customer = useCustomersStore((s) => s.customers.find((c) => c.id === customerId));
   const updateCustomerImage = useCustomersStore((s) => s.updateCustomerImage);
   const { addToast } = useUIStore();
@@ -52,7 +50,6 @@ export default function CustomerProfilePage() {
     if (!customerId || !customer) return;
     if (!editName.trim()) { addToast("Name is required", "error"); return; }
     if (!editPhone.trim()) { addToast("Phone is required", "error"); return; }
-    // Check for duplicate phone number (excluding current customer)
     const allCustomers = useCustomersStore.getState().customers;
     const duplicate = allCustomers.find((c) => c.phone === editPhone.trim() && c.id !== customerId && !c.isArchived);
     if (duplicate) {
@@ -67,7 +64,6 @@ export default function CustomerProfilePage() {
         .update({ name: editName.trim(), phone: editPhone.trim(), address: editAddress.trim() || null })
         .eq("id", customerId);
       if (error) throw new Error(error.message);
-      // Save image if changed
       if (editImageUrl !== (customer.imageUrl ?? null)) {
         await updateCustomerImage(customerId, editImageUrl);
       }
@@ -81,49 +77,16 @@ export default function CustomerProfilePage() {
     }
   }
 
-  async function handleImageChange(url: string | null) {
-    if (!customerId) return;
-    try {
-      await updateCustomerImage(customerId, url);
-      addToast(url ? "Photo updated" : "Photo removed", "success");
-    } catch (err) {
-      addToast(err instanceof Error ? err.message : "Could not save photo.", "error");
-    }
-  }
-
   if (!customer) return null;
 
-  const health   = getCreditHealth(customer.outstandingBalance, customer.creditLimit);
-  const initBg   = initBgColor(customer.name);
+  const health = getCreditHealth(customer.outstandingBalance, customer.creditLimit);
+  const initBg = initBgColor(customer.name);
   const usagePct = customer.creditLimit > 0
     ? Math.min(100, Math.round((customer.outstandingBalance / customer.creditLimit) * 100))
     : 0;
 
-  const METRICS = [
-    { key: t("customers.totalPurchases"), value: formatCurrency(customer.totalPurchases), highlight: false },
-    { key: t("customers.totalPaid"),      value: formatCurrency(customer.totalPaid),      highlight: false },
-    { key: t("customers.outstanding"),    value: formatCurrency(customer.outstandingBalance), highlight: customer.outstandingBalance > 0 },
-    { key: t("customers.creditLimit"),    value: formatCurrency(customer.creditLimit),    highlight: false },
-  ];
-
-  const ACTIONS = [
-    {
-      label: t("customerProfile.purchaseHistory"),
-      sub:   t("customerProfile.purchaseSub"),
-      path:  `${base}/customers/${customerId}/purchases`,
-    },
-    {
-      label: t("customerProfile.paymentHistory"),
-      sub:   t("customerProfile.paymentSub"),
-      path:  `${base}/customers/${customerId}/payments`,
-    },
-    {
-      label: t("customerProfile.recordPayment"),
-      sub:   t("customerProfile.recordSub"),
-      path:  `${base}/customers/${customerId}/record-payment`,
-      brand: true,
-    },
-  ];
+  const healthColor = health === "over_limit" ? "#ef4444" : health === "warning" ? "#f59e0b" : "#22c55e";
+  const healthLabel = health === "over_limit" ? "Over Limit" : health === "warning" ? "Warning" : "Good";
 
   return (
     <div
@@ -131,59 +94,161 @@ export default function CustomerProfilePage() {
       style={{ background: "var(--background)", direction: isUrdu ? "rtl" : "ltr" }}
     >
       <StatusBar />
-      <NavHeader title={customer.name} />
+      <NavHeader title="Customer Details" />
 
-      {/* Profile hero — image left, data right, compact */}
-      <div className="px-4 pt-4 pb-3 animate-fade-in-up">
-        <div className="flex items-center gap-4">
-          {customer.imageUrl ? (
-            <img src={customer.imageUrl} alt={customer.name} className="size-14 rounded-full object-cover shrink-0" />
-          ) : (
-            <div
-              className="size-14 rounded-full flex items-center justify-center text-lg font-bold shrink-0"
-              style={{ background: initBg, color: "#fff" }}
-            >
-              {customer.name.charAt(0).toUpperCase()}
-            </div>
-          )}
+      <div className="flex flex-col gap-4 px-4 pt-4 pb-8">
+        {/* ── HERO CARD: Image + Name + Phone + Address + Health Badge ── */}
+        <div
+          className="rounded-[16px] p-4 flex gap-3 items-center"
+          style={{ background: "var(--surface-2)", border: "1px solid var(--divider)" }}
+        >
+          <div className="shrink-0">
+            {customer.imageUrl ? (
+              <img src={customer.imageUrl} alt={customer.name} className="size-14 rounded-full object-cover" />
+            ) : (
+              <div
+                className="size-14 rounded-full flex items-center justify-center text-xl font-bold"
+                style={{ background: initBg, color: "#fff" }}
+              >
+                {customer.name.charAt(0).toUpperCase()}
+              </div>
+            )}
+          </div>
           <div className="flex-1 min-w-0">
-            <p className="text-[17px] font-bold truncate" style={{ color: "var(--text-primary)" }}>{customer.name}</p>
-            <p className="text-[13px]" style={{ color: "var(--text-secondary)" }}>{customer.phone}</p>
+            <p className="text-base font-bold truncate" style={{ color: "var(--text-primary)" }}>{customer.name}</p>
+            <p className="text-xs" style={{ color: "var(--text-secondary)" }}>{customer.phone}</p>
             {customer.address && (
-              <p className="flex items-center gap-1 text-[12px] truncate" style={{ color: "var(--text-secondary)" }}>
-                <MapPin size={12} className="shrink-0" /> {customer.address}
+              <p className="flex items-center gap-1 text-[11px] truncate mt-0.5" style={{ color: "var(--text-secondary)" }}>
+                <MapPin size={11} className="shrink-0" /> {customer.address}
               </p>
             )}
-            <div className="flex items-center gap-2 mt-1">
-              <CreditHealthBadge health={health} />
-              <button
-                onClick={startEdit}
-                className="flex items-center gap-1 h-6 px-2 rounded-full text-[10px] font-bold"
-                style={{ background: "var(--surface-2)", color: "var(--text-secondary)", border: "1px solid var(--divider)" }}
+            <div className="flex items-center gap-2 mt-1.5">
+              <span
+                className="text-[10px] font-bold px-2 py-0.5 rounded-full"
+                style={{ color: healthColor, background: healthColor + "22" }}
               >
-                <Pencil size={10} /> Edit
-              </button>
+                {healthLabel}
+              </span>
             </div>
           </div>
         </div>
 
-        {/* Credit usage bar */}
-        {customer.creditLimit > 0 && (
-          <div className="mt-3">
-            <div className="h-1.5 rounded-full w-full" style={{ background: "var(--divider)" }}>
-              <div
-                className="h-full rounded-full"
-                style={{
-                  width: `${usagePct}%`,
-                  background: health === "over_limit" ? "#ef4444" : health === "warning" ? "#f59e0b" : "#84cc16",
-                }}
-              />
-            </div>
-            <p className="text-[10px] mt-0.5" style={{ color: "var(--text-secondary)" }}>
-              {usagePct}% {isUrdu ? "ادھار استعمال" : "credit used"}
+        {/* ── QUICK INFO: Total Purchases | Total Paid | Outstanding ── */}
+        <div
+          className="rounded-[14px] p-4 grid grid-cols-3 gap-3"
+          style={{ border: "1px solid var(--divider)" }}
+        >
+          <div className="text-center">
+            <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>Purchases</p>
+            <p className="text-sm font-bold mt-0.5" style={{ color: "var(--text-primary)" }}>
+              {formatCurrency(customer.totalPurchases)}
             </p>
           </div>
+          <div className="text-center" style={{ borderLeft: "1px solid var(--divider)", borderRight: "1px solid var(--divider)" }}>
+            <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>Paid</p>
+            <p className="text-sm font-bold mt-0.5" style={{ color: "var(--text-primary)" }}>
+              {formatCurrency(customer.totalPaid)}
+            </p>
+          </div>
+          <div className="text-center">
+            <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>Outstanding</p>
+            <p className="text-sm font-bold mt-0.5" style={{ color: customer.outstandingBalance > 0 ? "#d97706" : "var(--text-primary)" }}>
+              {formatCurrency(customer.outstandingBalance)}
+            </p>
+          </div>
+        </div>
+
+        {/* ── CREDIT CARD: Limit + Progress Bar + Status ── */}
+        {customer.creditLimit > 0 && (
+          <div
+            className="rounded-[14px] overflow-hidden"
+            style={{ border: "1px solid var(--divider)" }}
+          >
+            <div className="px-4 py-3 flex items-center justify-between" style={{ background: "var(--surface-2)" }}>
+              <div className="flex items-center gap-2">
+                <CreditCard size={14} style={{ color: "var(--brand)" }} />
+                <p className="text-xs font-bold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
+                  Credit
+                </p>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="text-right">
+                  <p className="text-[10px] uppercase" style={{ color: "var(--text-secondary)" }}>Limit</p>
+                  <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>{formatCurrency(customer.creditLimit)}</p>
+                </div>
+                <span
+                  className="text-[10px] font-bold px-2 py-0.5 rounded-full"
+                  style={{ color: healthColor, background: healthColor + "22" }}
+                >
+                  {healthLabel}
+                </span>
+              </div>
+            </div>
+            <div className="px-4 py-3">
+              <div className="h-2 rounded-full w-full" style={{ background: "var(--divider)" }}>
+                <div
+                  className="h-full rounded-full transition-all"
+                  style={{ width: `${usagePct}%`, background: healthColor }}
+                />
+              </div>
+              <div className="flex items-center justify-between mt-1.5">
+                <p className="text-[11px]" style={{ color: "var(--text-secondary)" }}>
+                  {formatCurrency(customer.outstandingBalance)} of {formatCurrency(customer.creditLimit)} used
+                </p>
+                <p className="text-[11px] font-bold" style={{ color: healthColor }}>
+                  {usagePct}%
+                </p>
+              </div>
+            </div>
+          </div>
         )}
+
+        {/* ── ALL ACTIONS: Purchase History + Payment History + Record Payment + Edit + Delete ── */}
+        <div
+          className="rounded-[14px] overflow-hidden"
+          style={{ border: "1px solid var(--divider)" }}
+        >
+          <button
+            onClick={() => navigate(`${base}/customers/${customerId}/purchases`)}
+            className="flex items-center gap-3 w-full px-4 py-3.5 text-left text-[13px] font-medium active:opacity-70"
+            style={{ color: "var(--text-primary)" }}
+          >
+            <History size={16} style={{ color: "var(--brand)" }} />
+            Purchase History
+          </button>
+          <button
+            onClick={() => navigate(`${base}/customers/${customerId}/payments`)}
+            className="flex items-center gap-3 w-full px-4 py-3.5 text-left text-[13px] font-medium active:opacity-70"
+            style={{ color: "var(--text-primary)", borderTop: "1px solid var(--divider)" }}
+          >
+            <Wallet size={16} style={{ color: "var(--brand)" }} />
+            Payment History
+          </button>
+          <button
+            onClick={() => navigate(`${base}/customers/${customerId}/record-payment`)}
+            className="flex items-center gap-3 w-full px-4 py-3.5 text-left text-[13px] font-medium active:opacity-70"
+            style={{ color: "var(--brand-dark)", borderTop: "1px solid var(--divider)", background: "rgba(132,204,22,0.06)" }}
+          >
+            <Receipt size={16} style={{ color: "var(--brand-dark)" }} />
+            Record Payment
+          </button>
+          <button
+            onClick={startEdit}
+            className="flex items-center gap-3 w-full px-4 py-3.5 text-left text-[13px] font-medium active:opacity-70"
+            style={{ color: "var(--text-primary)", borderTop: "1px solid var(--divider)" }}
+          >
+            <Pencil size={16} style={{ color: "var(--brand)" }} />
+            Edit Customer
+          </button>
+          <button
+            onClick={() => setShowDelete(true)}
+            className="flex items-center gap-3 w-full px-4 py-3.5 text-left text-[13px] font-medium active:opacity-70"
+            style={{ color: "var(--error)", borderTop: "1px solid var(--divider)" }}
+          >
+            <Trash2 size={16} />
+            Delete Customer
+          </button>
+        </div>
       </div>
 
       {/* Edit modal */}
@@ -199,7 +264,6 @@ export default function CustomerProfilePage() {
             onClick={(e) => e.stopPropagation()}
           >
             <p className="text-base font-bold text-center" style={{ color: "var(--text-primary)" }}>Edit Customer</p>
-            {/* Image in popup */}
             <div className="flex justify-center">
               <ImageUpload
                 bucket="customer-images"
@@ -238,76 +302,6 @@ export default function CustomerProfilePage() {
         </div>
       )}
 
-      {/* Financial summary */}
-      <div className="px-4 pt-4 animate-fade-in-up delay-150">
-        <p className="text-[11px] font-bold text-[#888] uppercase mb-3 tracking-wider" style={{ color: "var(--text-secondary)" }}>
-          {t("customerProfile.financial")}
-        </p>
-        <div className="grid grid-cols-2 gap-3">
-          {METRICS.map((m) => (
-            <div
-              key={m.key}
-              className="rounded-[12px] p-4"
-              style={{ border: "1px solid var(--divider)", background: "var(--surface-2)" }}
-            >
-              <p className="text-[10px] uppercase mb-1 tracking-wider" style={{ color: "var(--text-secondary)" }}>
-                {m.key}
-              </p>
-              <p
-                className="text-lg font-bold"
-                style={{ color: m.highlight ? "#d97706" : "var(--text-primary)" }}
-              >
-                {m.value}
-              </p>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Quick actions */}
-      <div className="px-4 pt-4 pb-6 animate-fade-in-up delay-225">
-        <p className="text-[11px] font-bold uppercase mb-3 tracking-wider" style={{ color: "var(--text-secondary)" }}>
-          {t("customerProfile.quickActions")}
-        </p>
-        <div className="rounded-[14px] overflow-hidden" style={{ border: "1px solid var(--divider)" }}>
-          {ACTIONS.map((a, i) => (
-            <button
-              key={a.label}
-              onClick={() => navigate(a.path)}
-              className="flex items-center justify-between px-4 py-4 text-left w-full transition-opacity active:opacity-70"
-              style={{
-                borderBottom: i < ACTIONS.length - 1 ? "1px solid var(--divider)" : "none",
-                background: a.brand ? "rgba(132,204,22,0.06)" : "transparent",
-              }}
-            >
-              <div className="flex items-center gap-3">
-                {a.brand && <CreditCard size={16} style={{ color: "var(--brand-dark)" }} />}
-                <div>
-                  <p
-                    className="text-sm font-bold"
-                    style={{ color: a.brand ? "var(--brand-dark)" : "var(--text-primary)" }}
-                  >
-                    {a.label}
-                  </p>
-                  <p className="text-xs" style={{ color: "var(--text-secondary)" }}>{a.sub}</p>
-                </div>
-              </div>
-              <ChevronRight size={18} style={{ color: "var(--text-secondary)" }} className="shrink-0" />
-            </button>
-          ))}
-        </div>
-
-        {/* Delete customer — available to all */}
-        <button
-          onClick={() => setShowDelete(true)}
-          className="flex items-center justify-center gap-2 w-full h-12 rounded-full font-semibold text-sm mt-4 transition-all active:scale-[0.98]"
-          style={{ border: "1.5px solid #ef4444", color: "#ef4444", background: "transparent" }}
-        >
-          <Trash2 size={15} />
-          Delete Customer
-        </button>
-      </div>
-
       {/* Delete confirmation modal */}
       {showDelete && (
         <div className="fixed inset-0 z-50 flex items-end" style={{ background: "rgba(0,0,0,0.5)" }} onClick={() => setShowDelete(false)}>
@@ -315,7 +309,7 @@ export default function CustomerProfilePage() {
             style={{ background: "var(--surface)" }} onClick={(e) => e.stopPropagation()}>
             <p className="text-base font-bold text-center" style={{ color: "var(--text-primary)" }}>Delete Customer</p>
             <p className="text-sm text-center" style={{ color: "var(--text-secondary)" }}>
-              This will archive "{customer?.name}". Their transaction history will be preserved in the database.
+              This will archive "{customer?.name}". Their transaction history will be preserved.
             </p>
             <div className="flex gap-3">
               <button onClick={() => setShowDelete(false)} className="flex-1 h-12 rounded-full text-sm font-bold"
