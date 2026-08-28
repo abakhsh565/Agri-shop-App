@@ -1,0 +1,31 @@
+{
+  "projectId": "fab36f50-a822-44fe-9350-fc67fa625a6c",
+  "type": "frontend",
+  "name": "Admin Customers — list, search, credit filter, profile",
+  "planSteps": [
+    { "type": "action", "description": "Navigate to the login page" },
+    { "type": "action", "description": "Enter phone number 923001234567 and click Send Code" },
+    { "type": "action", "description": "Enter OTP 123456 and verify" },
+    { "type": "action", "description": "Enter PIN 1234 and submit" },
+    { "type": "action", "description": "Navigate to the Customers page via More menu or tab" },
+    {
+      "type": "assertion",
+      "description": "The Customers page loads showing total outstanding amount, on credit count, search bar, filter tabs (All Customers, On Credit), and customer list with name, phone, credit usage percentage, credit health status, and outstanding balance"
+    },
+    { "type": "action", "description": "Click the 'On Credit' filter tab" },
+    {
+      "type": "assertion",
+      "description": "Only customers with outstanding credit balances are shown"
+    },
+    { "type": "action", "description": "Type a customer name in the search bar" },
+    {
+      "type": "assertion",
+      "description": "The customer list filters to show only matching customers"
+    },
+    { "type": "action", "description": "Click on a customer card" },
+    {
+      "type": "assertion",
+      "description": "The customer profile page opens showing customer photo, name, phone, address, credit health badge, purchases total, paid total, outstanding amount, and action buttons (Purchase History, Payment History, Record Payment, Edit Customer, Delete Customer)"
+    }
+  ]
+}

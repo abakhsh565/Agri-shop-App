@@ -1,0 +1,31 @@
+{
+  "projectId": "fab36f50-a822-44fe-9350-fc67fa625a6c",
+  "type": "frontend",
+  "name": "Admin Products — list, search, detail, barcode",
+  "planSteps": [
+    { "type": "action", "description": "Navigate to the login page" },
+    { "type": "action", "description": "Enter phone number 923001234567 and click Send Code" },
+    { "type": "action", "description": "Enter OTP 123456 and verify" },
+    { "type": "action", "description": "Enter PIN 1234 and submit" },
+    { "type": "action", "description": "Click the Inventory tab in the bottom navigation" },
+    {
+      "type": "assertion",
+      "description": "The Products page loads showing search bar, category filters (All, Spray, Seed, Fertilizer), product list with product name, company, category badge, variant count, stock status, and barcode number"
+    },
+    { "type": "action", "description": "Click the 'Seed' category filter" },
+    {
+      "type": "assertion",
+      "description": "Only seed products are shown in the filtered list"
+    },
+    { "type": "action", "description": "Click on a product card" },
+    {
+      "type": "assertion",
+      "description": "The product detail page opens showing product image, name, company, category, stock status, price range, stock quantity, variant count, barcode with copy and download buttons, pack sizes with prices and stock, and action buttons (Edit Product, Adjust Stock, Generate Barcode, Delete Product)"
+    },
+    { "type": "action", "description": "Click the 'Add Product' floating button" },
+    {
+      "type": "assertion",
+      "description": "The Add Product form opens with fields for photo, product name, barcode with scan button, supplier/company dropdown, category, base unit, stock, and variants"
+    }
+  ]
+}

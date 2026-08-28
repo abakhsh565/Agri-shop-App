@@ -1,0 +1,32 @@
+{
+  "projectId": "fab36f50-a822-44fe-9350-fc67fa625a6c",
+  "type": "frontend",
+  "name": "Admin Sales List — filters, search, date sections",
+  "planSteps": [
+    { "type": "action", "description": "Navigate to the login page" },
+    { "type": "action", "description": "Enter phone number 923001234567 and click Send Code" },
+    { "type": "action", "description": "Enter OTP 123456 and verify" },
+    { "type": "action", "description": "Enter PIN 1234 and submit" },
+    { "type": "action", "description": "Click the Sales tab in the bottom navigation" },
+    {
+      "type": "assertion",
+      "description": "The Sales page loads showing a summary strip with total sales and gross profit, search bar, tab filters (All, Credit, Paid), and date filter chips (Today, Yesterday, This Week, This Month, Custom)"
+    },
+    { "type": "action", "description": "Click the 'Credit' tab filter" },
+    {
+      "type": "assertion",
+      "description": "Only credit sales are shown in the list, each displaying customer name, date, Sold by employee name, Credit tag, and amount"
+    },
+    { "type": "action", "description": "Click the 'All' tab filter" },
+    { "type": "action", "description": "Type a customer name in the search bar" },
+    {
+      "type": "assertion",
+      "description": "The sales list filters to show only matching sales"
+    },
+    { "type": "action", "description": "Clear the search and click on a sale card" },
+    {
+      "type": "assertion",
+      "description": "The sale detail page opens with customer info, items sold, payment summary, and note field"
+    }
+  ]
+}

@@ -1,0 +1,26 @@
+{
+  "projectId": "fab36f50-a822-44fe-9350-fc67fa625a6c",
+  "type": "frontend",
+  "name": "Admin Settings — profile, appearance, account, management",
+  "planSteps": [
+    { "type": "action", "description": "Navigate to the login page" },
+    { "type": "action", "description": "Enter phone number 923001234567 and click Send Code" },
+    { "type": "action", "description": "Enter OTP 123456 and verify" },
+    { "type": "action", "description": "Enter PIN 1234 and submit" },
+    { "type": "action", "description": "Navigate to the Settings page" },
+    {
+      "type": "assertion",
+      "description": "The Settings page loads showing profile section with avatar, name, role, phone, Edit button, Appearance section (Light Mode, Language), Account section (Change PIN, Notifications, Activity Log, Device info, App Version), Management section (Employees, Companies, Inventory, Reports), and Sign Out button"
+    },
+    { "type": "action", "description": "Click the 'Change PIN' button" },
+    {
+      "type": "assertion",
+      "description": "The PIN change page opens with a numeric keypad for entering a new PIN"
+    },
+    { "type": "action", "description": "Go back and click the 'Notifications' button" },
+    {
+      "type": "assertion",
+      "description": "The Notifications page opens showing a list of business notifications"
+    }
+  ]
+}

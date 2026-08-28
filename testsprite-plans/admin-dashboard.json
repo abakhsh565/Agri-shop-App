@@ -1,0 +1,30 @@
+{
+  "projectId": "fab36f50-a822-44fe-9350-fc67fa625a6c",
+  "type": "frontend",
+  "name": "Admin Dashboard — stats, filters, recent sales",
+  "planSteps": [
+    { "type": "action", "description": "Navigate to the login page" },
+    { "type": "action", "description": "Enter phone number 923001234567 and click Send Code" },
+    { "type": "action", "description": "Enter OTP 123456 and verify" },
+    { "type": "action", "description": "Enter PIN 1234 and submit" },
+    {
+      "type": "assertion",
+      "description": "The admin dashboard loads showing greeting, date filter pills (All, Today, Yesterday, This Week, This Month), total sales card with amount, transactions count, and gross profit"
+    },
+    { "type": "action", "description": "Click the 'Today' date filter pill" },
+    {
+      "type": "assertion",
+      "description": "The total sales amount updates to reflect today's sales only"
+    },
+    { "type": "action", "description": "Scroll down to the Recent Sales section" },
+    {
+      "type": "assertion",
+      "description": "Recent Sales section shows customer name, date/time, Credit or Paid tag, and sale amount for each sale"
+    },
+    { "type": "action", "description": "Click on a recent sale card" },
+    {
+      "type": "assertion",
+      "description": "The sale detail page opens showing customer info, items sold, payment summary, and actions (Share, Download, Void Sale)"
+    }
+  ]
+}

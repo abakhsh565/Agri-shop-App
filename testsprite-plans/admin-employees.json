@@ -1,0 +1,26 @@
+{
+  "projectId": "fab36f50-a822-44fe-9350-fc67fa625a6c",
+  "type": "frontend",
+  "name": "Admin Employees — list, add, detail",
+  "planSteps": [
+    { "type": "action", "description": "Navigate to the login page" },
+    { "type": "action", "description": "Enter phone number 923001234567 and click Send Code" },
+    { "type": "action", "description": "Enter OTP 123456 and verify" },
+    { "type": "action", "description": "Enter PIN 1234 and submit" },
+    { "type": "action", "description": "Navigate to the Employees page via More menu" },
+    {
+      "type": "assertion",
+      "description": "The Employees page loads showing a list of employees with name, role badge, phone number, and Active status"
+    },
+    { "type": "action", "description": "Click the 'Add Employee' floating button" },
+    {
+      "type": "assertion",
+      "description": "The Add Employee form opens with fields for photo, full name, phone number, job title, and access level selection (Employee or Co-Admin)"
+    },
+    { "type": "action", "description": "Go back and click on an employee card" },
+    {
+      "type": "assertion",
+      "description": "The employee detail page opens showing employee info, performance stats, recent sales, and customers served"
+    }
+  ]
+}

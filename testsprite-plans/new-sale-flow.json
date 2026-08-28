@@ -1,0 +1,31 @@
+{
+  "projectId": "fab36f50-a822-44fe-9350-fc67fa625a6c",
+  "type": "frontend",
+  "name": "New Sale Flow — select customer, browse products, add to cart, checkout",
+  "planSteps": [
+    { "type": "action", "description": "Navigate to the login page" },
+    { "type": "action", "description": "Enter phone number 923001234567 and click Send Code" },
+    { "type": "action", "description": "Enter OTP 123456 and verify" },
+    { "type": "action", "description": "Enter PIN 1234 and submit" },
+    { "type": "action", "description": "Click 'New Sale' quick action on the dashboard" },
+    {
+      "type": "assertion",
+      "description": "The Select Customer page loads showing search bar, recent customers list with name, phone, and outstanding balance, and an 'Add New Customer' button"
+    },
+    { "type": "action", "description": "Click on a customer from the list" },
+    {
+      "type": "assertion",
+      "description": "The Browse Products page loads showing customer name strip, search bar, category filters, product list with name, company, category, stock status, and a floating Scan button"
+    },
+    { "type": "action", "description": "Click on a product card" },
+    {
+      "type": "assertion",
+      "description": "The Variant Selector page loads showing product image, name, company, stock summary, variant options with prices and availability, quantity counter, and 'Add to Cart' button"
+    },
+    { "type": "action", "description": "Click 'Add to Cart'" },
+    {
+      "type": "assertion",
+      "description": "The Cart page loads showing customer credit info, cart items with quantity controls, payment type selection (Full Payment / Partial Credit), payment method (Cash / Bank Transfer), summary with subtotal/paid/total, and 'Complete Sale' button"
+    }
+  ]
+}

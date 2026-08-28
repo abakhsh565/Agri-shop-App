@@ -1,0 +1,25 @@
+{
+  "projectId": "fab36f50-a822-44fe-9350-fc67fa625a6c",
+  "type": "frontend",
+  "name": "Employee Dashboard — personal stats, quick actions, recent sales",
+  "planSteps": [
+    { "type": "action", "description": "Navigate to the login page" },
+    { "type": "action", "description": "Enter phone number 923001122334 and click Send Code" },
+    { "type": "action", "description": "Enter OTP 123456 and verify" },
+    { "type": "action", "description": "Enter PIN 1234 and submit" },
+    {
+      "type": "assertion",
+      "description": "The employee dashboard loads showing greeting with employee name, today's sales summary card with total sales, paid count, and credit amount, quick actions (New Sale, Record Payment), and recent sales list"
+    },
+    { "type": "action", "description": "Click the 'New Sale' quick action" },
+    {
+      "type": "assertion",
+      "description": "The Select Customer page loads for the employee to start a new sale"
+    },
+    { "type": "action", "description": "Go back and click the Sales tab in the bottom navigation" },
+    {
+      "type": "assertion",
+      "description": "The employee sales list shows only their own sales with customer name, date, Credit/Paid tag, and amount"
+    }
+  ]
+}
