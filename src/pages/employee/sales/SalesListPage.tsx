@@ -378,21 +378,22 @@ export default function SalesListPage() {
                           {sale.customerName.charAt(0).toUpperCase()}
                         </div>
                       )}
-                      <div>
-                        <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>{sale.customerName}</p>
-                        <p className="text-xs mt-0.5" style={{ color: "var(--text-secondary)" }}>{formatSmartDateTime(sale.createdAt, now)}</p>
+                      <div className="flex-1 min-w-0 rounded-xl px-3 py-2" style={{ background: "var(--surface-2)" }}>
+                        <p className="text-[14px] font-bold truncate" style={{ color: "var(--text-primary)" }}>{sale.customerName}</p>
+                        <p className="text-[10px] mt-0.5" style={{ color: "var(--text-secondary)" }}>{formatSmartDateTime(sale.createdAt, now)}</p>
+                        <p className="text-[11px] font-medium mt-0.5" style={{ color: "var(--text-secondary)" }}>Sold by: {sale.employeeName}</p>
                       </div>
                     </div>
-                    <div className="flex flex-col items-end gap-1 shrink-0">
+                    <div className="flex flex-col items-end gap-2 shrink-0 ml-3">
                       <span className="text-[14px] font-bold" style={{ color: "var(--text-primary)" }}>
                         {formatCurrency(sale.totalAmount)}
                       </span>
                       {sale.paymentType !== "full" ? (
-                        <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full" style={{ background: "rgba(239,68,68,0.1)", color: "#ef4444" }}>
+                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ background: "rgba(239,68,68,0.1)", color: "#ef4444" }}>
                           Credit
                         </span>
                       ) : (
-                        <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full" style={{ background: "rgba(132,204,22,0.15)", color: "var(--brand-dark)" }}>
+                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ background: "rgba(132,204,22,0.15)", color: "var(--brand-dark)" }}>
                           Paid
                         </span>
                       )}
