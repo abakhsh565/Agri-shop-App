@@ -6,7 +6,7 @@ import { useProductsStore } from "@/stores/productsStore";
 import { useUIStore } from "@/stores/uiStore";
 import { barcodeToSvg, generateProductBarcode } from "@/lib/barcode";
 import { formatCurrency } from "@/lib/formatters";
-import { Download, Share2, Check, Minus, Plus, Package, Copy } from "lucide-react";
+import { Download, Share2, Check, Package, Copy } from "lucide-react";
 
 const CATEGORY_COLOR: Record<string, { bg: string; fg: string }> = {
   spray: { bg: "rgba(59,130,246,0.1)", fg: "#3b82f6" },
@@ -22,7 +22,6 @@ export default function BarcodeGeneratePage() {
   const printRef = useRef<HTMLDivElement>(null);
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [qty, setQty] = useState<Record<string, number>>({});
   const [step, setStep] = useState<"select" | "preview">("select");
 
   // Products without barcodes are eligible for generation
@@ -43,12 +42,8 @@ export default function BarcodeGeneratePage() {
     setSelected(new Set(eligibleProducts.map((p) => p.id)));
   }
 
-  function getQty(id: string) {
-    return qty[id] ?? 1;
-  }
-
-  function setQtyFor(id: string, v: number) {
-    setQty((prev) => ({ ...prev, [id]: Math.max(1, Math.min(20, v)) }));
+  function getQty(_id: string) {
+    return 1;
   }
 
   function generate() {
@@ -129,7 +124,7 @@ export default function BarcodeGeneratePage() {
         {/* Info banner */}
         <div className="mx-4 mt-2 rounded-xl p-3" style={{ background: "rgba(59,130,246,0.08)", border: "1px solid rgba(59,130,246,0.2)" }}>
           <p className="text-xs font-semibold" style={{ color: "#3b82f6" }}>
-            {eligibleProducts.length} product{eligibleProducts.length !== 1 ? "s" : ""} without barcodes — select to generate
+            {eligibleProducts.length} product{eligibleProducts.length !== 1 ? "s" : ""} without barcodes — select to generate 1 barcode each
           </p>
           {maxEligible === 0 && (
             <p className="text-xs mt-1" style={{ color: "var(--text-secondary)" }}>
@@ -170,19 +165,7 @@ export default function BarcodeGeneratePage() {
                     → {autoBarcode}
                   </p>
                 </div>
-                {isSelected && (
-                  <div className="flex items-center gap-2 shrink-0">
-                    <button onClick={() => setQtyFor(p.id, getQty(p.id) - 1)}
-                      className="w-7 h-7 rounded-full flex items-center justify-center" style={{ background: "var(--divider)" }}>
-                      <Minus size={12} />
-                    </button>
-                    <span className="text-sm font-bold w-6 text-center" style={{ color: "var(--text-primary)" }}>{getQty(p.id)}</span>
-                    <button onClick={() => setQtyFor(p.id, getQty(p.id) + 1)}
-                      className="w-7 h-7 rounded-full flex items-center justify-center" style={{ background: "var(--brand)", color: "#0a0a0a" }}>
-                      <Plus size={12} />
-                    </button>
-                  </div>
-                )}
+
               </div>
             );
           })}
@@ -202,7 +185,7 @@ export default function BarcodeGeneratePage() {
             <button onClick={generate}
               className="w-full h-12 rounded-full font-bold text-sm transition-all active:scale-[0.97]"
               style={{ background: "var(--brand)", color: "#0a0a0a" }}>
-              Generate {selected.size} Barcode{selected.size !== 1 ? "s" : ""}
+              Generate {selected.size} Barcode{selected.size !== 1 ? "s" : ""} (1 per product)
             </button>
           </div>
         )}
@@ -227,7 +210,7 @@ export default function BarcodeGeneratePage() {
                 <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: catColor.bg, color: catColor.fg }}>
                   {product.category}
                 </span>
-                <span className="text-[10px]" style={{ color: "var(--text-secondary)" }}>×{copies}</span>
+
               </div>
               <div className="flex justify-center bg-white rounded-lg p-3 mb-3">
                 <div dangerouslySetInnerHTML={{ __html: svg }} />
