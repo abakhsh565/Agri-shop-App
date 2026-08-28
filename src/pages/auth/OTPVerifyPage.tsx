@@ -56,7 +56,7 @@ export default function OTPVerifyPage() {
 
     detectOTP();
     return () => abortController.abort();
-  }, [pendingPhone, locked, expired]);
+  }, [pendingPhone, locked, countdown]);
 
   useEffect(() => {
     const t = setInterval(() => setCountdown((c) => Math.max(0, c - 1)), 1000);
