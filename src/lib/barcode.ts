@@ -120,120 +120,116 @@ export interface ScanResult {
 
 /**
  * Open camera and scan for barcodes.
- * Uses Capacitor MLKit on native devices, BarcodeDetector on web.
+ * Uses html5-qrcode (getUserMedia + camera feed) for reliable cross-platform
+ * barcode scanning. Works on Android WebView, Chrome, Safari, and PWA.
  * Returns the first detected barcode, or null if the user cancels.
  */
 export async function scanFromCamera(): Promise<ScanResult | null> {
-  // Try Capacitor MLKit first (works on Android/iOS native)
+  // Try Capacitor MLKit first (only works on native Android/iOS with plugin registered)
   try {
     const { BarcodeScanner, BarcodeFormat } = await import("@capacitor-mlkit/barcode-scanning");
-
-    // Check if MLKit is supported on this device
     const supported = await BarcodeScanner.isSupported();
-    if (!supported) throw new Error("MLKit not supported");
-
-    // Request camera permission — important for Android 12+
-    const permission = await BarcodeScanner.requestPermissions();
-    if (permission.camera !== "granted") {
-      throw new Error("Camera permission denied");
+    if (supported) {
+      const permission = await BarcodeScanner.requestPermissions();
+      if (permission.camera === "granted") {
+        // Race scan against 10s timeout — if MLKit hangs, fall through to web scanner
+        const scanPromise = BarcodeScanner.scan({
+          formats: [
+            BarcodeFormat.QrCode, BarcodeFormat.Code128, BarcodeFormat.Code39,
+            BarcodeFormat.Ean13, BarcodeFormat.Ean8, BarcodeFormat.UpcA,
+            BarcodeFormat.UpcE, BarcodeFormat.DataMatrix, BarcodeFormat.Pdf417,
+          ],
+        });
+        const timeoutPromise = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("MLKit timeout")), 10_000)
+        );
+        const result = await Promise.race([scanPromise, timeoutPromise]);
+        if (result.barcodes.length > 0) {
+          return { barcode: result.barcodes[0].rawValue ?? "", format: result.barcodes[0].format ?? "UNKNOWN" };
+        }
+        return null;
+      }
     }
-
-    // Start the native barcode scanner overlay with a safety timeout.
-    // On some Android devices, the native scanner can hang if the camera
-    // hardware is slow to initialize. We race the scan against a 20s timeout
-    // so the user is never stuck in a black screen.
-    const scanPromise = BarcodeScanner.scan({
-      formats: [
-        BarcodeFormat.QrCode,
-        BarcodeFormat.Code128,
-        BarcodeFormat.Code39,
-        BarcodeFormat.Ean13,
-        BarcodeFormat.Ean8,
-        BarcodeFormat.UpcA,
-        BarcodeFormat.UpcE,
-        BarcodeFormat.DataMatrix,
-        BarcodeFormat.Pdf417,
-      ],
-    });
-
-    const timeoutPromise = new Promise<never>((_, reject) => {
-      setTimeout(() => reject(new Error("Scan timed out")), 20_000);
-    });
-
-    const result = await Promise.race([scanPromise, timeoutPromise]);
-
-    if (result.barcodes.length > 0) {
-      const barcode = result.barcodes[0];
-      return {
-        barcode: barcode.rawValue ?? "",
-        format: barcode.format ?? "UNKNOWN",
-      };
-    }
-    return null;
-  } catch (err) {
-    console.warn("MLKit barcode scan failed:", err);
-  }
-
-  // Fallback: Browser BarcodeDetector API (web Chrome on desktop)
-  if (!BarcodeDetectorClass) {
-    console.warn("No barcode detection API available");
-    return null;
-  }
-
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: "environment" },
-    });
-
-    const video = document.createElement("video");
-    video.srcObject = stream;
-    video.autoplay = true;
-    video.playsInline = true;
-
-    await new Promise<void>((resolve) => {
-      video.onloadedmetadata = () => {
-        video.play();
-        resolve();
-      };
-    });
-
-    const detector = new BarcodeDetectorClass({
-      formats: ["qr_code", "code_128", "code_39", "ean_13", "ean_8", "upc_a", "upc_e"],
-    });
-
-    const result = await new Promise<ScanResult | null>((resolve) => {
-      let scanning = true;
-      const stop = () => {
-        scanning = false;
-        stream.getTracks().forEach((t) => t.stop());
-        resolve(null);
-      };
-
-      const timeout = setTimeout(stop, 30_000);
-
-      const scanLoop = async () => {
-        if (!scanning) return;
-        try {
-          const barcodes = await detector.detect(video);
-          if (barcodes.length > 0) {
-            clearTimeout(timeout);
-            scanning = false;
-            stream.getTracks().forEach((t) => t.stop());
-            resolve({
-              barcode: barcodes[0].rawValue,
-              format: barcodes[0].format,
-            });
-            return;
-          }
-        } catch {}
-        if (scanning) requestAnimationFrame(scanLoop);
-      };
-
-      scanLoop();
-    });
-
-    return result;
   } catch {
+    // MLKit not available or timed out — fall through to web scanner
+  }
+
+  // ── Web fallback: html5-qrcode (works on all Android WebViews + Chrome) ──
+  try {
+    const { Html5Qrcode } = await import("html5-qrcode");
+
+    // Create full-screen scanner overlay
+    const overlay = document.createElement("div");
+    overlay.id = "barcode-scanner-overlay";
+    overlay.style.cssText = "position:fixed;inset:0;z-index:99999;background:#000;display:flex;flex-direction:column;";
+    overlay.innerHTML = `
+      <div style="flex:1;position:relative;overflow:hidden;">
+        <div id="barcode-reader" style="width:100%;height:100%;"></div>
+        <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;">
+          <div style="width:280px;height:160px;border:2px solid rgba(132,204,22,0.8);border-radius:16px;position:relative;">
+            <div style="position:absolute;top:50%;left:0;right:0;height:2px;background:rgba(132,204,22,0.6);animation:scanLine 2s ease-in-out infinite;"></div>
+          </div>
+        </div>
+      </div>
+      <div style="padding:20px;text-align:center;background:#000;">
+        <p style="color:#fff;font-size:14px;margin:0 0 12px;">Point camera at a barcode</p>
+        <button id="barcode-cancel-btn" style="background:#333;color:#fff;border:none;padding:12px 32px;border-radius:24px;font-size:14px;font-weight:600;">Cancel</button>
+      </div>
+      <style>@keyframes scanLine{0%,100%{transform:translateY(-60px)}50%{transform:translateY(60px)}}</style>
+    `;
+    document.body.appendChild(overlay);
+
+    return new Promise<ScanResult | null>((resolve) => {
+      let resolved = false;
+      const cleanup = () => {
+        if (resolved) return;
+        resolved = true;
+        try { html5Qrcode.stop().catch(() => {}); } catch {}
+        overlay.remove();
+      };
+
+      // Cancel button
+      document.getElementById("barcode-cancel-btn")?.addEventListener("click", () => {
+        cleanup();
+        resolve(null);
+      });
+
+      // Also allow tapping the overlay background to cancel
+      overlay.addEventListener("click", (e) => {
+        if (e.target === overlay || e.target === overlay.firstElementChild) {
+          cleanup();
+          resolve(null);
+        }
+      });
+
+      const html5Qrcode = new Html5Qrcode("barcode-reader");
+
+      html5Qrcode.start(
+        { facingMode: "environment" },
+        {
+          fps: 10,
+          qrbox: { width: 250, height: 140 },
+          aspectRatio: 1.0,
+          disableFlip: false,
+        },
+        (decodedText, decodedResult) => {
+          if (!resolved) {
+            cleanup();
+            resolve({ barcode: decodedText, format: decodedResult?.result?.format?.formatName ?? "UNKNOWN" });
+          }
+        },
+        () => { /* scan error — keep scanning */ },
+      ).catch((err) => {
+        console.warn("html5-qrcode start failed:", err);
+        cleanup();
+        resolve(null);
+      });
+
+      // Safety timeout — auto-cancel after 60s
+      setTimeout(() => { if (!resolved) { cleanup(); resolve(null); } }, 60_000);
+    });
+  } catch (err) {
+    console.warn("Web barcode scanner failed:", err);
     return null;
   }
 }
