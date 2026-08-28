@@ -154,7 +154,7 @@ export default function DashboardPage() {
       <div className="flex items-center justify-between px-4 py-3 gap-3">
         <button
           onClick={() => navigate("/employee/settings")}
-          className="flex items-center justify-center rounded-full shrink-0 size-[44px] font-bold text-[15px] transition-transform active:scale-95"
+          className="flex items-center justify-center rounded-full shrink-0 size-[44px] font-bold text-[15px] transition-transform active:scale-95 overflow-hidden"
           style={{ background: "var(--brand)", color: "#0a0a0a" }}
         >
           {user?.photoUrl ? (

@@ -33,6 +33,7 @@ export default function CustomerProfilePage() {
   const [editName, setEditName] = useState("");
   const [editPhone, setEditPhone] = useState("");
   const [editAddress, setEditAddress] = useState("");
+  const [editCreditLimit, setEditCreditLimit] = useState("");
   const [editImageUrl, setEditImageUrl] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
@@ -42,6 +43,7 @@ export default function CustomerProfilePage() {
     setEditName(customer.name);
     setEditPhone(customer.phone);
     setEditAddress(customer.address ?? "");
+    setEditCreditLimit(customer.creditLimit > 0 ? String(customer.creditLimit) : "");
     setEditImageUrl(customer.imageUrl ?? null);
     setEditing(true);
   }
@@ -59,9 +61,15 @@ export default function CustomerProfilePage() {
     setSaving(true);
     try {
       const { supabase } = await import("@/lib/supabase");
+      const creditLim = editCreditLimit.trim() ? parseFloat(editCreditLimit.trim()) : 0;
       const { error } = await supabase
         .from("customers")
-        .update({ name: editName.trim(), phone: editPhone.trim(), address: editAddress.trim() || null })
+        .update({
+          name: editName.trim(),
+          phone: editPhone.trim(),
+          address: editAddress.trim() || null,
+          credit_limit: isNaN(creditLim) ? 0 : creditLim,
+        })
         .eq("id", customerId);
       if (error) throw new Error(error.message);
       if (editImageUrl !== (customer.imageUrl ?? null)) {
@@ -290,6 +298,18 @@ export default function CustomerProfilePage() {
               <input value={editAddress} onChange={(e) => setEditAddress(e.target.value)}
                 className="w-full h-11 rounded-full px-4 text-sm outline-none"
                 style={{ background: "var(--surface-2)", border: "1px solid var(--divider)", color: "var(--text-primary)" }} />
+            </div>
+            <div>
+              <p className="text-[11px] font-bold uppercase mb-1.5 tracking-wider" style={{ color: "var(--text-secondary)" }}>Credit Limit (Rs.)</p>
+              <input
+                value={editCreditLimit}
+                onChange={(e) => setEditCreditLimit(e.target.value)}
+                type="number"
+                inputMode="decimal"
+                placeholder="0 for no limit"
+                className="w-full h-11 rounded-full px-4 text-sm outline-none"
+                style={{ background: "var(--surface-2)", border: "1px solid var(--divider)", color: "var(--text-primary)" }}
+              />
             </div>
             <div className="flex gap-3">
               <button onClick={() => setEditing(false)} className="flex-1 h-12 rounded-full text-sm font-bold"
