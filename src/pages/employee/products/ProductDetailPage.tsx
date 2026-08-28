@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
@@ -9,8 +9,10 @@ import { useUIStore } from "@/stores/uiStore";
 import { formatCurrency, getStockStatusColor } from "@/lib/formatters";
 import { useShellBase } from "@/lib/useShellBase";
 import { rpcDeleteProduct } from "@/lib/db";
-import { Pencil, TrendingUp, Barcode, Trash2, Copy, Download, Package } from "lucide-react";
+import { Pencil, TrendingUp, Barcode, Trash2, Copy, Download, Package, Camera, Loader2 } from "lucide-react";
 import { barcodeToSvg } from "@/lib/barcode";
+import { uploadImage } from "@/lib/storage";
+import { supabase } from "@/lib/supabase";
 
 const CATEGORY_LABEL: Record<string, string> = {
   spray: "Sprays", seed: "Seeds", fertilizer: "Fertilizer", other: "Other",
@@ -41,6 +43,52 @@ export default function ProductDetailPage() {
 
   const [toDelete, setToDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [editName, setEditName] = useState("");
+  const [editImageUrl, setEditImageUrl] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  function startEdit() {
+    setEditName(product?.name ?? "");
+    setEditImageUrl(product?.imageUrl ?? null);
+    setEditing(true);
+  }
+
+  async function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const url = await uploadImage("product-photos", file);
+      setEditImageUrl(url);
+    } catch {
+      addToast("Image upload failed", "error");
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }
+
+  async function saveEdit() {
+    if (!editName.trim() || !product) return;
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from("products")
+        .update({ name: editName.trim(), image_url: editImageUrl })
+        .eq("id", product.id);
+      if (error) throw error;
+      await useProductsStore.getState().load();
+      setEditing(false);
+      addToast("Product updated", "success");
+    } catch (err) {
+      addToast(err instanceof Error ? err.message : "Failed to update", "error");
+    } finally {
+      setSaving(false);
+    }
+  }
 
   async function confirmDelete() {
     if (!product) return;
@@ -92,6 +140,7 @@ export default function ProductDetailPage() {
           className="rounded-[16px] p-4 flex gap-3 items-center"
           style={{ background: "var(--surface-2)", border: "1px solid var(--divider)" }}
         >
+          <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
           <div className="shrink-0">
             {product.imageUrl ? (
               <img src={product.imageUrl} alt={product.name} className="size-14 rounded-xl object-cover" />
@@ -105,7 +154,16 @@ export default function ProductDetailPage() {
             )}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-base font-bold truncate" style={{ color: "var(--text-primary)" }}>{product.name}</p>
+            <div className="flex items-center gap-2">
+              <p className="text-base font-bold truncate" style={{ color: "var(--text-primary)" }}>{product.name}</p>
+              <button
+                onClick={startEdit}
+                className="flex items-center gap-1 h-6 px-2 rounded-full text-[10px] font-bold shrink-0"
+                style={{ background: "var(--surface)", color: "var(--text-secondary)", border: "1px solid var(--divider)" }}
+              >
+                <Pencil size={10} /> Edit
+              </button>
+            </div>
             <p className="text-xs truncate" style={{ color: "var(--text-secondary)" }}>{product.company}</p>
             <div className="flex items-center gap-2 mt-1 flex-wrap">
               <CategoryChip label={CATEGORY_LABEL[product.category]} />
@@ -273,6 +331,70 @@ export default function ProductDetailPage() {
           )}
         </div>
       </div>
+
+      {/* Edit Product Bottom Sheet */}
+      {editing && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center" onClick={() => setEditing(false)}>
+          <div className="absolute inset-0 bg-black/40" />
+          <div
+            className="relative w-full max-w-md rounded-t-[24px] p-6 pb-8 animate-slide-up"
+            style={{ background: "var(--surface-2)", border: "1px solid var(--divider)", borderBottom: "none" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Handle bar */}
+            <div className="flex justify-center mb-4">
+              <div className="w-10 h-1 rounded-full" style={{ background: "var(--divider)" }} />
+            </div>
+            <p className="text-base font-bold text-center mb-5" style={{ color: "var(--text-primary)" }}>Edit Product</p>
+            {/* Image in popup */}
+            <div className="flex flex-col items-center mb-5">
+              <div className="relative">
+                <div className="w-20 h-20 rounded-xl overflow-hidden flex items-center justify-center text-2xl font-bold" style={{ background: initBgColor(editName), color: "#fff" }}>
+                  {uploading ? (
+                    <Loader2 size={20} className="animate-spin" />
+                  ) : editImageUrl ? (
+                    <img src={editImageUrl} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    editName.charAt(0)
+                  )}
+                </div>
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full flex items-center justify-center shadow"
+                  style={{ background: "var(--brand)", color: "#0a0a0a" }}
+                >
+                  <Camera size={13} strokeWidth={2.5} />
+                </button>
+              </div>
+            </div>
+            {/* Name input */}
+            <div className="mb-5">
+              <label className="text-[11px] font-semibold uppercase tracking-wider mb-1.5 block" style={{ color: "var(--text-secondary)" }}>Product Name</label>
+              <input
+                autoFocus
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") saveEdit(); }}
+                className="w-full h-12 px-4 rounded-full text-sm font-bold outline-none"
+                style={{ background: "var(--surface)", border: "1px solid var(--divider)", color: "var(--text-primary)" }}
+              />
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setEditing(false)}
+                className="flex-1 h-12 rounded-full text-sm font-bold"
+                style={{ border: "1px solid var(--divider)", color: "var(--text-primary)" }}
+              >Cancel</button>
+              <button
+                onClick={saveEdit}
+                disabled={saving || !editName.trim()}
+                className="flex-1 h-12 rounded-full text-sm font-bold disabled:opacity-50"
+                style={{ background: "var(--brand)", color: "#0a0a0a" }}
+              >{saving ? "Saving..." : "Save"}</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <ConfirmDialog
         open={toDelete}
