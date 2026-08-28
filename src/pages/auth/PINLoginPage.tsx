@@ -23,6 +23,7 @@ export default function PINLoginPage() {
   // User passed from SplashPage
   const routeUser = (location.state as { user?: User } | null)?.user;
 
+  const [pinValue, setPinValue] = useState("");
   const [error, setError] = useState("");
   const [shake, setShake] = useState(false);
   const [verifying, setVerifying] = useState(false);
@@ -58,6 +59,7 @@ export default function PINLoginPage() {
 
   function handleChange(val: string) {
     setError("");
+    setPinValue(val);
     if (val.length === 4) handlePinComplete(val);
   }
 
@@ -91,7 +93,7 @@ export default function PINLoginPage() {
           )}
         </div>
 
-        <PINInput value="" onChange={handleChange} error={!!error} shake={shake} />
+        <PINInput value={pinValue} onChange={handleChange} error={!!error} shake={shake} />
 
         {verifying && (
           <div className="flex items-center gap-2">
