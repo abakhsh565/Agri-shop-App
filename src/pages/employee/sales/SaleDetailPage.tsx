@@ -8,7 +8,7 @@ import { useThemeStore } from "@/stores/themeStore";
 import { useSalesStore } from "@/stores/salesStore";
 import { useCustomersStore } from "@/stores/customersStore";
 import { useUIStore } from "@/stores/uiStore";
-import { ChevronRight, RotateCcw, Share2, Download, FileSpreadsheet } from "lucide-react";
+import { ChevronRight, RotateCcw, Share2, Download } from "lucide-react";
 
 function initBgColor(name: string) {
   const colors = ["#84cc16","#3b82f6","#8b5cf6","#f59e0b","#06b6d4","#ec4899"];
@@ -86,10 +86,10 @@ export default function SaleDetailPage() {
   }
 
   const summaryRows = [
-    { label: t("sale.subtotal"),             value: formatCurrency(sale.subtotal) },
-    { label: t("sales.amountPaid"),          value: formatCurrency(sale.amountPaid) },
+    { label: t("sale.subtotal"),             value: formatCurrency(sale.subtotal),             bold: false },
+    { label: t("sales.amountPaid"),          value: formatCurrency(sale.amountPaid),          bold: false },
     ...(sale.outstandingBalance > 0
-      ? [{ label: t("sales.outstandingBalance"), value: formatCurrency(sale.outstandingBalance) }]
+      ? [{ label: t("sales.outstandingBalance"), value: formatCurrency(sale.outstandingBalance), bold: false, color: "#d97706" }]
       : []),
   ];
 
@@ -202,14 +202,6 @@ export default function SaleDetailPage() {
           >
             <Download size={14} />
             Download
-          </button>
-          <button
-            onClick={handleDownload}
-            className="flex-1 flex items-center justify-center gap-2 h-11 rounded-full text-sm font-medium transition-colors"
-            style={{ border: "1px solid var(--divider)", color: "var(--text-primary)" }}
-          >
-            <FileSpreadsheet size={14} />
-            Export
           </button>
         </div>
 

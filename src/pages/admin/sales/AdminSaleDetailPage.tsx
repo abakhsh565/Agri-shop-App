@@ -9,7 +9,7 @@ import { useThemeStore } from "@/stores/themeStore";
 import { useSalesStore } from "@/stores/salesStore";
 import { useCustomersStore } from "@/stores/customersStore";
 import { useUIStore } from "@/stores/uiStore";
-import { ChevronRight, Trash2, Share2, Download, FileSpreadsheet } from "lucide-react";
+import { ChevronRight, Trash2, Share2, Download } from "lucide-react";
 
 function initBgColor(name: string) {
   const colors = ["#84cc16","#3b82f6","#8b5cf6","#f59e0b","#06b6d4","#ec4899"];
@@ -242,45 +242,20 @@ export default function AdminSaleDetailPage() {
           </div>
         </div>
 
-        {/* Payment summary + profit */}
+        {/* Payment summary + note grouped */}
         <div
           className="rounded-[14px] p-4 flex flex-col gap-2"
           style={{ border: "1px solid var(--divider)" }}
         >
-          <div className="flex justify-between">
-            <span className="text-sm" style={{ color: "var(--text-secondary)" }}>{t("admin.baseCost")}</span>
-            <span className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>
-              {formatCurrency(Math.round(baseCost))}
-            </span>
-          </div>
+          {/* Subtotal + Payment method first */}
           <div className="flex justify-between">
             <span className="text-sm" style={{ color: "var(--text-secondary)" }}>{t("sale.subtotal")}</span>
             <span className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>
               {formatCurrency(sale.subtotal)}
             </span>
           </div>
-          {sale.outstandingBalance > 0 && (
-            <div className="flex justify-between">
-              <span className="text-sm" style={{ color: "var(--text-secondary)" }}>{t("sales.outstandingBalance")}</span>
-              <span className="text-sm font-bold" style={{ color: "#d97706" }}>
-                {formatCurrency(sale.outstandingBalance)}
-              </span>
-            </div>
-          )}
           <div
-            className="flex justify-between items-center pt-2 mt-1"
-            style={{ borderTop: "1px solid var(--divider)" }}
-          >
-            <span className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>
-              {t("admin.netProfit")}
-            </span>
-            <span className="text-base font-bold" style={{ color: "#16a34a" }}>
-              {formatCurrency(Math.round(netProfit))}
-            </span>
-          </div>
-          <div
-            className="flex justify-between items-center pt-2 mt-1"
-            style={{ borderTop: "1px solid var(--divider)" }}
+            className="flex justify-between items-center"
           >
             <div>
               <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>
@@ -290,40 +265,62 @@ export default function AdminSaleDetailPage() {
             </div>
             <PaymentBadge type={sale.paymentType} outstandingBalance={sale.outstandingBalance} />
           </div>
-        </div>
-
-        {/* Note field */}
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-xs font-bold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
-              Note
-            </p>
-            {note !== (sale.note ?? "") && (
-              <button
-                onClick={handleSaveNote}
-                disabled={savingNote}
-                className="text-xs font-bold px-3 py-1 rounded-full"
-                style={{ background: "var(--brand)", color: "#0a0a0a" }}
-              >
-                {savingNote ? "Saving..." : "Save"}
-              </button>
-            )}
+          {sale.outstandingBalance > 0 && (
+            <div className="flex justify-between">
+              <span className="text-sm" style={{ color: "var(--text-secondary)" }}>{t("sales.outstandingBalance")}</span>
+              <span className="text-sm font-bold" style={{ color: "#d97706" }}>
+                {formatCurrency(sale.outstandingBalance)}
+              </span>
+            </div>
+          )}
+          {/* Base cost + Net profit at bottom */}
+          <div className="flex justify-between pt-2 mt-1" style={{ borderTop: "1px solid var(--divider)" }}>
+            <span className="text-xs" style={{ color: "var(--text-secondary)" }}>{t("admin.baseCost")}</span>
+            <span className="text-xs font-bold" style={{ color: "var(--text-secondary)" }}>
+              {formatCurrency(Math.round(baseCost))}
+            </span>
           </div>
-          <textarea
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            placeholder="Add a note..."
-            rows={3}
-            className="w-full rounded-[12px] px-4 py-3 text-sm resize-none outline-none"
-            style={{
-              background: "var(--surface)",
-              border: "1px solid var(--divider)",
-              color: "var(--text-primary)",
-            }}
-          />
+          <div className="flex justify-between items-center">
+            <span className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>
+              {t("admin.netProfit")}
+            </span>
+            <span className="text-base font-bold" style={{ color: "#16a34a" }}>
+              {formatCurrency(Math.round(netProfit))}
+            </span>
+          </div>
+          {/* Note — inside payment card */}
+          <div className="pt-2 mt-1" style={{ borderTop: "1px solid var(--divider)" }}>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs font-bold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
+                Note
+              </p>
+              {note !== (sale.note ?? "") && (
+                <button
+                  onClick={handleSaveNote}
+                  disabled={savingNote}
+                  className="text-xs font-bold px-3 py-1 rounded-full"
+                  style={{ background: "var(--brand)", color: "#0a0a0a" }}
+                >
+                  {savingNote ? "Saving..." : "Save"}
+                </button>
+              )}
+            </div>
+            <textarea
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder="Add a note..."
+              rows={3}
+              className="w-full rounded-[12px] px-4 py-3 text-sm resize-none outline-none"
+              style={{
+                background: "var(--surface)",
+                border: "1px solid var(--divider)",
+                color: "var(--text-primary)",
+              }}
+            />
+          </div>
         </div>
 
-        {/* Actions */}
+        {/* Actions — Share + Download only (Export removed, was duplicate) */}
         <div className="flex gap-2">
           <button
             onClick={handleShare}
@@ -340,14 +337,6 @@ export default function AdminSaleDetailPage() {
           >
             <Download size={14} />
             Download
-          </button>
-          <button
-            onClick={handleDownload}
-            className="flex-1 flex items-center justify-center gap-2 h-11 rounded-full text-sm font-medium transition-colors"
-            style={{ border: "1px solid var(--divider)", color: "var(--text-primary)" }}
-          >
-            <FileSpreadsheet size={14} />
-            Export
           </button>
         </div>
 
