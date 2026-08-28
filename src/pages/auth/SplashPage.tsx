@@ -13,8 +13,8 @@ export default function SplashPage() {
       if (user && user.isActive) {
         // User is logged in — check if they have a PIN set on this device
         if (hasPin(user.id)) {
-          // Existing user with PIN → go to PIN login screen
-          navigate("/login/pin", { replace: true });
+          // Existing user with PIN → go to PIN login screen (pass user so no phone lookup needed)
+          navigate("/login/pin", { replace: true, state: { user } });
         } else {
           // Existing user without PIN (fresh install or data cleared) → go to dashboard directly
           const dest = (user.role === "admin" || user.role === "co_admin")

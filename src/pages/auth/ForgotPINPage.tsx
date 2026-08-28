@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import AuthLayout from "@/components/layout/AuthLayout";
 import NavHeader from "@/components/ui/NavHeader";
 import Button from "@/components/ui/Button";
@@ -9,21 +9,42 @@ import PINInput from "@/components/ui/PINInput";
 import { sendOTP, verifyOTPAndResolveUser } from "@/lib/auth";
 import { savePin } from "@/lib/pinLock";
 import { useAuthStore } from "@/stores/authStore";
+import type { User } from "@/types";
 
 type Step = "phone" | "otp" | "pin" | "confirm";
 
+/**
+ * Forgot PIN flow — 2-step when user comes from PINLoginPage:
+ * 1. Verify OTP (phone pre-filled)
+ * 2. Set + Confirm new PIN → Dashboard
+ *
+ * 3-step when accessed directly:
+ * 1. Enter phone
+ * 2. Verify OTP
+ * 3. Set + Confirm new PIN → Dashboard
+ */
 export default function ForgotPINPage() {
   const navigate = useNavigate();
-  const { user, setUser, pendingPhone, setPendingPhone, setPendingFlow } = useAuthStore();
+  const location = useLocation();
+  const { setUser, setPendingPhone, setPendingFlow, pendingPhone } = useAuthStore();
 
-  const [step, setStep] = useState<Step>("phone");
-  const [phone, setPhone] = useState(pendingPhone || "");
+  // User passed from PINLoginPage (skip phone entry)
+  const routeUser = (location.state as { user?: User } | null)?.user;
+
+  const [step, setStep] = useState<Step>(routeUser ? "otp" : "phone");
+  const [phone, setPhone] = useState(routeUser?.phone || pendingPhone || "");
   const [otp, setOtp] = useState("");
   const [firstPin, setFirstPin] = useState("");
   const [confirmPin, setConfirmPin] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [shake, setShake] = useState(false);
+
+  useEffect(() => {
+    if (!routeUser && !pendingPhone) {
+      // No context — stay on phone step
+    }
+  }, []);
 
   async function handleSendOTP() {
     if (!phone.trim()) { setError("Enter your phone number"); return; }
@@ -52,7 +73,7 @@ export default function ForgotPINPage() {
       if (result.status === "pending") { setError("Registration under review"); return; }
       if (result.status === "rejected") { setError("Registration rejected"); return; }
       if (result.status === "error") { setError(result.message); return; }
-      // OTP correct — now set new PIN
+      // OTP correct — set user and go to PIN creation
       setUser(result.user);
       setStep("pin");
     } finally {
@@ -71,16 +92,17 @@ export default function ForgotPINPage() {
       if (val !== firstPin) {
         setError("PINs don't match. Try again.");
         setShake(true);
-        setTimeout(() => { setShake(false); setError(""); setStep("pin"); setFirstPin(""); }, 600);
+        setTimeout(() => { setShake(false); setError(""); setStep("pin"); setFirstPin(""); setConfirmPin(""); }, 600);
         return;
       }
       // Save new PIN
-      if (user) {
-        await savePin(user.id, val);
-        setUser({ ...user, pin: val });
+      const activeUser = routeUser || useAuthStore.getState().user;
+      if (activeUser) {
+        await savePin(activeUser.id, val);
+        setUser({ ...activeUser, pin: val });
       }
       setPendingFlow(null);
-      const dest = user?.role === "admin" || user?.role === "co_admin"
+      const dest = activeUser?.role === "admin" || activeUser?.role === "co_admin"
         ? "/admin/dashboard" : "/employee/dashboard";
       navigate(dest, { replace: true });
     }
@@ -99,7 +121,7 @@ export default function ForgotPINPage() {
       <NavHeader title="Reset PIN" backTo="/login" />
       <div className="flex flex-col flex-1 items-center gap-8 p-6 pt-8">
 
-        {/* Step 1: Enter phone */}
+        {/* Step 1: Enter phone (only if no user in state) */}
         {step === "phone" && (
           <>
             <div className="flex flex-col items-center gap-2 text-center">
