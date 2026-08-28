@@ -2,12 +2,14 @@ import { Outlet, useNavigate, useLocation } from "react-router-dom";
 import { LayoutDashboard, ShoppingBag, Package, ScanLine, MoreHorizontal } from "lucide-react";
 import { useT } from "@/lib/i18n";
 import ToastContainer from "@/components/ui/Toast";
+import NavTracker from "@/components/ui/NavTracker";
 import { useBootstrapData } from "@/stores/useBootstrapData";
 import { isTopLevel } from "@/lib/navDepth";
 import { useState } from "react";
 import ScanButton from "@/components/ui/ScanButton";
 import { useProductsStore } from "@/stores/productsStore";
 import { useUIStore } from "@/stores/uiStore";
+import { clearNav } from "@/lib/navContext";
 
 const TAB_DEFS = [
   { key: "admin.dashboard" as const, icon: LayoutDashboard, path: "/admin/dashboard" },
@@ -91,6 +93,7 @@ export default function AdminLayout() {
       className="flex flex-col min-h-full w-full relative"
       style={{ background: "var(--background)" }}
     >
+      <NavTracker />
       <ToastContainer />
 
       {/* ── Manual Scan Modal ── */}
@@ -179,7 +182,7 @@ export default function AdminLayout() {
           return (
             <button
               key={path}
-              onClick={() => navigate(path)}
+              onClick={() => { clearNav(); navigate(path); }}
               className="flex flex-col items-center justify-center flex-1 gap-1 cursor-pointer transition-all"
             >
               <Icon

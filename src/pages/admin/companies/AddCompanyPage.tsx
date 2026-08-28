@@ -6,6 +6,7 @@ import ImageUpload from "@/components/ui/ImageUpload";
 import { useCompaniesStore } from "@/stores/companiesStore";
 import { useUIStore } from "@/stores/uiStore";
 import { useThemeStore } from "@/stores/themeStore";
+import { clearNav } from "@/lib/navContext";
 
 export default function AddCompanyPage() {
   const navigate = useNavigate();
@@ -43,6 +44,7 @@ export default function AddCompanyPage() {
       });
 
       addToast(`${name.trim()} added`, "success");
+      clearNav();
       navigate("/admin/companies", { replace: true });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not add company. Please try again.");
@@ -65,7 +67,7 @@ export default function AddCompanyPage() {
     >
       <div>
         <StatusBar />
-        <NavHeader title="Add Company / Supplier" backTo="/admin/companies" />
+        <NavHeader title="Add Company / Supplier" />
 
         <div className="flex flex-col gap-5 p-4">
           <div className="flex justify-center pt-1">

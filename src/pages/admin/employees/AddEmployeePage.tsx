@@ -8,6 +8,7 @@ import { useUIStore } from "@/stores/uiStore";
 import { useAuthStore } from "@/stores/authStore";
 import { useThemeStore } from "@/stores/themeStore";
 import { normalizePhone } from "@/lib/auth";
+import { clearNav } from "@/lib/navContext";
 import type { UserRole } from "@/types";
 
 const ROLES: { key: Exclude<UserRole, "admin">; label: string; hint: string }[] = [
@@ -55,6 +56,7 @@ export default function AddEmployeePage() {
         createdBy: user?.id,
       });
       addToast(`${name.trim()} added. They can now sign in with their phone.`, "success");
+      clearNav();
       navigate("/admin/employees", { replace: true });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not add employee.");
@@ -76,7 +78,7 @@ export default function AddEmployeePage() {
     >
       <div>
         <StatusBar />
-        <NavHeader title="Add Employee" backTo="/admin/employees" />
+        <NavHeader title="Add Employee" />
 
         <div className="flex flex-col gap-5 p-4">
           <div className="flex justify-center pt-1">

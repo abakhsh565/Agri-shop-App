@@ -8,9 +8,11 @@ import { verifyPin } from "@/lib/pinLock";
 import { useUIStore } from "@/stores/uiStore";
 import { useProductsStore } from "@/stores/productsStore";
 import ToastContainer from "@/components/ui/Toast";
+import NavTracker from "@/components/ui/NavTracker";
 import { useT } from "@/lib/i18n";
 import { useBootstrapData } from "@/stores/useBootstrapData";
 import { isTopLevel } from "@/lib/navDepth";
+import { clearNav } from "@/lib/navContext";
 
 const TAB_DEFS = [
   { key: "nav.home" as const,    icon: Home,          path: "/employee/dashboard" },
@@ -142,6 +144,7 @@ export default function EmployeeLayout() {
       className="flex flex-col min-h-full w-full relative"
       style={{ background: "var(--background)" }}
     >
+      <NavTracker />
       <ToastContainer />
 
       {/* ── Offline banner ── */}
@@ -287,7 +290,7 @@ export default function EmployeeLayout() {
           return (
             <button
               key={path}
-              onClick={() => navigate(path)}
+              onClick={() => { clearNav(); navigate(path); }}
               className="flex flex-col items-center justify-center flex-1 gap-1 cursor-pointer transition-all"
             >
               <Icon

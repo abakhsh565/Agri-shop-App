@@ -32,7 +32,7 @@ export default function SelectCustomerPage() {
   return (
     <div className="flex flex-col bg-white w-full">
       <StatusBar />
-      <NavHeader title="New Sale" backTo={`${base}/dashboard`} />
+      <NavHeader title="New Sale" />
       <div className="px-4 pt-2 pb-3">
         <SearchBar
           placeholder="Search customer by name or phone"

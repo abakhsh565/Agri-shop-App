@@ -63,7 +63,7 @@ export default function VariantSelectorPage() {
   return (
     <div className="flex flex-col w-full min-h-full" style={{ background: "var(--background)" }}>
       <StatusBar />
-      <NavHeader title="Product Details" backTo={`${base}/sale/products`} />
+      <NavHeader title="Product Details" />
 
       {/* Product header card */}
       <div className="mx-4 mt-3 rounded-xl p-4 flex items-center gap-3 justify-between" style={{ background: "var(--surface-2)" }}>

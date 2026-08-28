@@ -9,6 +9,7 @@ import { useAuthStore } from "@/stores/authStore";
 import { useT } from "@/lib/i18n";
 import { useThemeStore } from "@/stores/themeStore";
 import { useShellBase } from "@/lib/useShellBase";
+import { clearNav } from "@/lib/navContext";
 
 function normalizePhone(p: string): string {
   return p.replace(/[\s\-()]/g, "").replace(/^\+?92/, "0");
@@ -90,6 +91,7 @@ export default function AddCustomerPage() {
         await updateCustomerImage(newCustomer.id, imageUrl);
       }
       addToast(`${name} ${isUrdu ? "شامل کر دیا گیا" : "added successfully"}`, "success");
+      clearNav();
       navigate(`${base}/customers`, { replace: true });
     } catch (e) {
       setErrors({ phone: e instanceof Error ? e.message : String(e) });
@@ -105,7 +107,7 @@ export default function AddCustomerPage() {
     >
       <div>
         <StatusBar />
-        <NavHeader title={t("addCustomer.title")} backTo={`${base}/customers`} />
+        <NavHeader title={t("addCustomer.title")} />
 
         <div className="flex flex-col gap-5 p-4 mt-2">
           {/* Profile Image */}

@@ -100,7 +100,7 @@ export default function BrowseProductsPage() {
   return (
     <div className="flex flex-col w-full min-h-full" style={{ background: "var(--background)" }}>
       <StatusBar />
-      <NavHeader title="Select Products" backTo={`${base}/sale`} />
+      <NavHeader title="Select Products" />
 
       {/* Customer strip */}
       {customer && (

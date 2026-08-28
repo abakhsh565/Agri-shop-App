@@ -1,6 +1,8 @@
 import { ArrowLeft } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { type ReactNode } from "react";
+import { popNav, setSkipNext } from "@/lib/navContext";
+import { useLocation } from "react-router-dom";
 
 interface NavHeaderProps {
   title: string;
@@ -12,11 +14,20 @@ interface NavHeaderProps {
 
 export default function NavHeader({ title, backTo, onBack, right, noBack }: NavHeaderProps) {
   const navigate = useNavigate();
+  const location = useLocation();
 
   function handleBack() {
     if (onBack) { onBack(); return; }
     if (backTo) { navigate(backTo); return; }
-    navigate(-1);
+    // Pop from our journey stack instead of browser history
+    const from = popNav(location.pathname);
+    if (from) {
+      setSkipNext();
+      navigate(from, { replace: true });
+    } else {
+      setSkipNext();
+      navigate(-1 as any);
+    }
   }
 
   return (

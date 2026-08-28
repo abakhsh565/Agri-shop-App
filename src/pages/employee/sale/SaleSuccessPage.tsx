@@ -27,6 +27,7 @@ function formatTime12(dateStr: string): string {
 
 
 import { renderReceiptBlob } from "@/lib/receiptRenderer";
+import { clearNav } from "@/lib/navContext";
 
 // ─── Page ──────────────────────────────────────────────────────────────────
 
@@ -196,7 +197,7 @@ export default function SaleSuccessPage() {
 
       {/* Actions */}
       <div className="flex flex-col gap-[10px] items-center px-[24px] pb-[32px] pt-[8px] w-full animate-fade-in-up delay-300">
-        <button onClick={() => navigate(`${base}/sale`, { replace: true })} className="flex h-[48px] items-center justify-center gap-2 rounded-[24px] w-full font-bold text-[14px] transition-transform active:scale-[0.97]" style={{ background: "var(--brand)", color: "#0a0a0a" }}>
+        <button onClick={() => { clearNav(); navigate(`${base}/sale`, { replace: true }); }} className="flex h-[48px] items-center justify-center gap-2 rounded-[24px] w-full font-bold text-[14px] transition-transform active:scale-[0.97]" style={{ background: "var(--brand)", color: "#0a0a0a" }}>
           <ShoppingCart size={16} strokeWidth={2.5} /> New Sale
         </button>
         <button onClick={handleShare} className="flex h-[48px] items-center justify-center gap-2 rounded-[24px] w-full font-bold text-[14px] transition-transform active:scale-[0.97]" style={{ border: "1px solid var(--border-light)", color: "var(--text-primary)" }}>
@@ -205,7 +206,7 @@ export default function SaleSuccessPage() {
         <button onClick={handleDownload} className="flex h-[48px] items-center justify-center gap-2 rounded-[24px] w-full font-bold text-[14px] transition-transform active:scale-[0.97]" style={{ border: "1px solid var(--border-light)", color: "var(--text-primary)" }}>
           <Download size={16} strokeWidth={2} /> Download Receipt
         </button>
-        <button onClick={() => navigate(`${base}/dashboard`, { replace: true })} className="h-[44px] rounded-full text-[13px] font-semibold transition-transform active:scale-[0.97] mt-1" style={{ color: "var(--text-secondary)" }}>
+        <button onClick={() => { clearNav(); navigate(`${base}/dashboard`, { replace: true }); }} className="h-[44px] rounded-full text-[13px] font-semibold transition-transform active:scale-[0.97] mt-1" style={{ color: "var(--text-secondary)" }}>
           Back to Home
         </button>
       </div>

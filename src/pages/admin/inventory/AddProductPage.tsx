@@ -8,6 +8,7 @@ import { useProductsStore } from "@/stores/productsStore";
 import { rpcCreateProduct, rpcUpdateProduct } from "@/lib/db";
 import { useUIStore } from "@/stores/uiStore";
 import { useThemeStore } from "@/stores/themeStore";
+import { clearNav } from "@/lib/navContext";
 import type { ProductCategory, BaseUnit } from "@/types";
 import { ChevronDown, Plus, Trash2, Scan } from "lucide-react";
 import { generateProductBarcode } from "@/lib/barcode";
@@ -138,6 +139,7 @@ export default function AddProductPage() {
         });
         addToast(`${name.trim()} added to inventory`, "success");
       }
+      clearNav();
       navigate("/admin/inventory", { replace: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save product.");
@@ -160,7 +162,7 @@ export default function AddProductPage() {
     >
       <div>
         <StatusBar />
-        <NavHeader title={isEdit ? "Edit Product" : "Add Product"} backTo="/admin/inventory" />
+        <NavHeader title={isEdit ? "Edit Product" : "Add Product"} />
 
         <div className="flex flex-col gap-5 p-4">
           {/* Photo */}
