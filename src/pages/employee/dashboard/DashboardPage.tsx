@@ -9,7 +9,6 @@ import { formatSmartDateTime } from "@/lib/formatters";
 import { useT } from "@/lib/i18n";
 import { useThemeStore } from "@/stores/themeStore";
 import { useCurrentTime } from "@/lib/useCurrentTime";
-import { PaymentBadge } from "@/components/ui/Badge";
 import { ShoppingCart, CreditCard, ChevronRight, Bell, Search, ArrowRight } from "lucide-react";
 import StatusBar from "@/components/ui/StatusBar";
 
@@ -325,11 +324,19 @@ export default function DashboardPage() {
                   <p className="text-[11px] mt-0.5" style={{ color: "var(--text-secondary)" }}>{formatSmartDateTime(sale.createdAt, now)}</p>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-col items-end gap-1">
                 <span className="text-[13px] font-bold" style={{ color: "var(--text-primary)" }}>
                   {formatRs(sale.totalAmount)}
                 </span>
-                <PaymentBadge type={sale.paymentType} outstandingBalance={sale.outstandingBalance} />
+                {sale.paymentType !== "full" ? (
+                  <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full" style={{ background: "rgba(239,68,68,0.1)", color: "#ef4444" }}>
+                    Credit
+                  </span>
+                ) : (
+                  <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full" style={{ background: "rgba(132,204,22,0.15)", color: "var(--brand-dark)" }}>
+                    Paid
+                  </span>
+                )}
               </div>
             </button>
             );

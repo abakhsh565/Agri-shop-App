@@ -327,9 +327,9 @@ export default function AdminSalesListPage() {
                 <p className="text-[11px] font-bold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
                   {section.label}
                 </p>
-                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ background: "var(--surface-2)", color: "var(--text-secondary)" }}>
-                  {section.sales.length} sale{section.sales.length !== 1 ? "s" : ""}
-                </span>
+                <button className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ background: "var(--surface-2)", color: "var(--text-secondary)" }}>
+                  Sort ↓
+                </button>
               </div>
               <div className="mx-4 rounded-[14px] overflow-hidden" style={{ border: "1px solid var(--divider)" }}>
                 {section.sales.map((sale, i) => {
@@ -351,11 +351,9 @@ export default function AdminSalesListPage() {
                         </div>
                       )}
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <p className="text-[14px] font-bold truncate" style={{ color: "var(--text-primary)" }}>{sale.customerName}</p>
-                          <span className="text-[10px] shrink-0" style={{ color: "var(--text-secondary)" }}>{formatSmartDateTime(sale.createdAt, now)}</span>
-                        </div>
+                        <p className="text-[14px] font-bold truncate" style={{ color: "var(--text-primary)" }}>{sale.customerName}</p>
                         <p className="text-[11px] font-medium mt-0.5" style={{ color: "var(--text-secondary)" }}>Sold by: {sale.employeeName}</p>
+                        <p className="text-[10px] mt-0.5" style={{ color: "var(--text-secondary)" }}>{formatSmartDateTime(sale.createdAt, now)}</p>
                       </div>
                     </div>
                     <div className="flex flex-col items-end gap-1 shrink-0">

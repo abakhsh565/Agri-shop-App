@@ -314,9 +314,9 @@ export default function SalesListPage() {
                 <p className="text-[11px] font-bold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
                   {section.label}
                 </p>
-                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ background: "var(--surface-2)", color: "var(--text-secondary)" }}>
-                  {section.sales.length} sale{section.sales.length !== 1 ? "s" : ""}
-                </span>
+                <button className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ background: "var(--surface-2)", color: "var(--text-secondary)" }}>
+                  Sort ↓
+                </button>
               </div>
               <div className="mx-4 rounded-[14px] overflow-hidden" style={{ border: "1px solid var(--divider)" }}>
                 {section.sales.map((sale, i) => {
