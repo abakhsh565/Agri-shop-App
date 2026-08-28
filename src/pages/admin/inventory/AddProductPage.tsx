@@ -221,8 +221,8 @@ export default function AddProductPage() {
                 setBarcode(generated);
                 addToast(`Barcode generated: ${generated}`, "success");
               }}
-              className="w-full h-10 rounded-full text-xs font-semibold transition-all active:scale-[0.98]"
-              style={{ background: "var(--surface-2)", color: "var(--brand-dark)", border: "1px solid var(--divider)" }}
+              className="text-xs font-semibold mt-1.5 underline underline-offset-2"
+              style={{ color: "var(--brand-dark)" }}
             >
               Generate Barcode
             </button>
