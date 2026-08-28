@@ -10,6 +10,7 @@ import { useT } from "@/lib/i18n";
 import { useThemeStore } from "@/stores/themeStore";
 import { useShellBase } from "@/lib/useShellBase";
 import { MapPin, CreditCard, Pencil, Trash2, History, Wallet, Receipt } from "lucide-react";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
 
 function initBgColor(name: string) {
   const colors = ["#84cc16","#3b82f6","#8b5cf6","#f59e0b","#06b6d4","#ec4899"];
@@ -37,6 +38,7 @@ export default function CustomerProfilePage() {
   const [editImageUrl, setEditImageUrl] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   function startEdit() {
     if (!customer) return;
@@ -322,30 +324,29 @@ export default function CustomerProfilePage() {
         </div>
       )}
 
-      {/* Delete confirmation modal */}
-      {showDelete && (
-        <div className="fixed inset-0 z-50 flex items-end" style={{ background: "rgba(0,0,0,0.5)" }} onClick={() => setShowDelete(false)}>
-          <div className="w-full max-w-[390px] mx-auto rounded-t-[24px] p-6 flex flex-col gap-4"
-            style={{ background: "var(--surface)" }} onClick={(e) => e.stopPropagation()}>
-            <p className="text-base font-bold text-center" style={{ color: "var(--text-primary)" }}>Delete Customer</p>
-            <p className="text-sm text-center" style={{ color: "var(--text-secondary)" }}>
-              This will archive "{customer?.name}". Their transaction history will be preserved.
-            </p>
-            <div className="flex gap-3">
-              <button onClick={() => setShowDelete(false)} className="flex-1 h-12 rounded-full text-sm font-bold"
-                style={{ border: "1px solid var(--divider)", color: "var(--text-primary)" }}>Cancel</button>
-              <button onClick={async () => {
-                const { archiveCustomer } = useCustomersStore.getState();
-                await archiveCustomer(customerId!);
-                addToast("Customer deleted", "success");
-                setShowDelete(false);
-                navigate(`${base}/customers`);
-              }} className="flex-1 h-12 rounded-full text-sm font-bold"
-                style={{ background: "#ef4444", color: "#fff" }}>Delete</button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmDialog
+        open={showDelete}
+        title="Delete Customer?"
+        message={`"${customer.name}" will be archived. Their transaction history will be preserved.`}
+        confirmLabel="Delete"
+        destructive
+        loading={deleting}
+        onConfirm={async () => {
+          setDeleting(true);
+          try {
+            const { archiveCustomer } = useCustomersStore.getState();
+            await archiveCustomer(customerId!);
+            addToast("Customer deleted", "success");
+            setShowDelete(false);
+            navigate(`${base}/customers`);
+          } catch (err) {
+            addToast(err instanceof Error ? err.message : "Failed to delete", "error");
+          } finally {
+            setDeleting(false);
+          }
+        }}
+        onCancel={() => setShowDelete(false)}
+      />
     </div>
   );
 }

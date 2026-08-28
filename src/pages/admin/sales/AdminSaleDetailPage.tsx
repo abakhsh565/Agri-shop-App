@@ -10,6 +10,7 @@ import { useSalesStore } from "@/stores/salesStore";
 import { useCustomersStore } from "@/stores/customersStore";
 import { useUIStore } from "@/stores/uiStore";
 import { ChevronRight, Trash2, Share2, Download } from "lucide-react";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
 
 function initBgColor(name: string) {
   const colors = ["#84cc16","#3b82f6","#8b5cf6","#f59e0b","#06b6d4","#ec4899"];
@@ -367,7 +368,7 @@ export default function AdminSaleDetailPage() {
         )}
       </div>
 
-      {/* Void dialog */}
+      {/* Void dialog — bottom sheet for reason input + confirm */}
       {showVoidDialog && (
         <div
           className="fixed inset-0 z-50 flex items-end"
@@ -379,6 +380,10 @@ export default function AdminSaleDetailPage() {
             style={{ background: "var(--surface)" }}
             onClick={(e) => e.stopPropagation()}
           >
+            {/* Handle bar */}
+            <div className="flex justify-center">
+              <div className="w-10 h-1 rounded-full" style={{ background: "var(--divider)" }} />
+            </div>
             <p className="text-base font-bold text-center" style={{ color: "var(--text-primary)" }}>
               {t("admin.voidSale")}
             </p>
@@ -413,7 +418,7 @@ export default function AdminSaleDetailPage() {
                 onClick={handleVoid}
                 disabled={!voidReason.trim()}
                 className="flex-1 h-12 rounded-full text-sm font-bold disabled:opacity-50"
-                style={{ background: "#ef4444", color: "#fff" }}
+                style={{ background: "var(--error)", color: "#fff" }}
               >
                 {t("admin.voidSale")}
               </button>
