@@ -86,11 +86,7 @@ export default function LoginPage() {
               Register your shop
             </button>
           </p>
-          <p className="text-xs text-center text-[#888]">
-            <button onClick={() => navigate("/login/pin")} className="text-black font-medium underline">
-              Use PIN to sign in
-            </button>
-          </p>
+
         </div>
       </div>
     </AuthLayout>
