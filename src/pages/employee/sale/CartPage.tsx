@@ -32,7 +32,7 @@ export default function CartPage() {
   if (!customer) return (
     <div className="flex flex-col bg-white w-full min-h-full">
       <StatusBar />
-      <NavHeader title="Review & Payment" />
+      <NavHeader title="Review & Payment" backTo={`${base}/sale/products`} />
       <div className="flex-1 flex flex-col items-center justify-center py-16 gap-3">
         <p className="text-sm" style={{ color: "var(--text-secondary)" }}>No customer selected</p>
         <button onClick={() => navigate(`${base}/sale/products`)} className="text-sm font-bold" style={{ color: "var(--brand)" }}>Go back</button>
@@ -111,7 +111,7 @@ export default function CartPage() {
   return (
     <div className="flex flex-col bg-white w-full min-h-full">
       <StatusBar />
-      <NavHeader title="Review & Payment" />
+      <NavHeader title="Review & Payment" backTo={`${base}/sale/products`} />
 
       {/* Customer strip */}
       <div className="mx-4 mt-3 bg-[#f5f5f5] rounded-xl p-4">

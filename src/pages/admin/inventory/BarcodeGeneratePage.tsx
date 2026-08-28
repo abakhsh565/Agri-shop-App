@@ -119,7 +119,7 @@ export default function BarcodeGeneratePage() {
     return (
       <div className="flex flex-col w-full min-h-full" style={{ background: "var(--background)" }}>
         <StatusBar />
-        <NavHeader title="Generate Barcodes" />
+        <NavHeader title="Generate Barcodes" backTo="/admin/inventory" />
 
         {/* Info banner */}
         <div className="mx-4 mt-2 rounded-xl p-3" style={{ background: "rgba(59,130,246,0.08)", border: "1px solid rgba(59,130,246,0.2)" }}>

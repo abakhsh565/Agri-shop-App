@@ -69,7 +69,7 @@ export default function RegisterShopDetailsPage() {
   return (
     <div className="flex flex-col w-full min-h-full" style={{ background: "var(--background)" }}>
       <StatusBar />
-      <NavHeader title="Shop Details" />
+      <NavHeader title="Shop Details" backTo="/register" />
 
       <div className="flex flex-col gap-5 p-4 flex-1">
         {/* Logo */}

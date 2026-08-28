@@ -90,6 +90,7 @@ export default function EmployeeNotificationsPage() {
       <StatusBar />
       <NavHeader
         title="Notifications"
+        backTo="/employee/dashboard"
         right={
           items.some((n) => !n.read) ? (
             <button

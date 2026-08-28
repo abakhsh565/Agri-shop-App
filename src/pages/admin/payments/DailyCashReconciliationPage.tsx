@@ -69,7 +69,7 @@ export default function DailyCashReconciliationPage() {
       style={{ background: "var(--background)", direction: isUrdu ? "rtl" : "ltr" }}
     >
       <StatusBar />
-      <NavHeader title="Daily Cash Reconciliation" />
+      <NavHeader title="Daily Cash Reconciliation" backTo="/admin/payments" />
 
       <div className="flex flex-col gap-4 p-4">
         {/* Date selector */}

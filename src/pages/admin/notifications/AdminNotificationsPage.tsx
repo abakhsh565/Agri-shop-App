@@ -106,6 +106,7 @@ export default function AdminNotificationsPage() {
       <StatusBar />
       <NavHeader
         title="Notifications"
+        backTo="/admin/dashboard"
         right={
           items.some((n) => !n.read) ? (
             <button
