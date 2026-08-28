@@ -141,11 +141,14 @@ export default function AdminSettingsPage() {
             style={{ background: "rgba(0,0,0,0.5)" }}
             onClick={() => setEditing(false)}
           >
-            <div
-              className="w-full max-w-[390px] mx-auto rounded-t-[24px] p-6 flex flex-col gap-4"
-              style={{ background: "var(--surface)" }}
-              onClick={(e) => e.stopPropagation()}
-            >
+            <div            className="w-full max-w-[390px] mx-auto rounded-t-[24px] p-6 flex flex-col gap-4"
+            style={{ background: "var(--surface-2)", border: "1px solid var(--divider)", borderBottom: "none" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+              {/* Handle bar */}
+              <div className="flex justify-center mb-2">
+                <div className="w-10 h-1 rounded-full" style={{ background: "var(--divider)" }} />
+              </div>
               <p className="text-base font-bold text-center" style={{ color: "var(--text-primary)" }}>Edit Profile</p>
               {/* Image upload in popup */}
               <div className="flex justify-center">

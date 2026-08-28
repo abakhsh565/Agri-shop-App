@@ -77,6 +77,9 @@ export default function EmployeeDetailPage() {
   const paidSales = empSales.filter(s => s.paymentType === "full");
   const creditSales = empSales.filter(s => s.paymentType !== "full");
   const creditOutstanding = creditSales.reduce((sum, s) => sum + (s.outstandingBalance || 0), 0);
+  const creditExtended = creditSales.reduce((sum, s) => sum + s.totalAmount, 0);
+  const creditPaidBack = creditExtended - creditOutstanding;
+  const creditPct = creditExtended > 0 ? Math.min(100, Math.round((creditPaidBack / creditExtended) * 100)) : 0;
 
   const initials = emp.name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase();
   const roleLabel = emp.role === "co_admin" ? "Co-Admin" : emp.role === "admin" ? "Admin" : "Employee";
@@ -233,6 +236,51 @@ export default function EmployeeDetailPage() {
           ))}
         </div>
       </div>
+
+      {/* Credit Extension Summary */}
+      {creditExtended > 0 && (
+        <div className="px-4 pt-5 animate-fade-in-up delay-[135ms]">
+          <p className="text-[11px] font-bold uppercase tracking-widest mb-3" style={{ color: "var(--text-secondary)" }}>
+            Credit Extended
+          </p>
+          <div
+            className="rounded-xl overflow-hidden"
+            style={{ border: "1px solid var(--border-light)" }}
+          >
+            <div className="px-4 py-3 flex items-center justify-between" style={{ background: "var(--surface-2)" }}>
+              <span className="text-xs font-bold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>Collection Progress</span>
+              <span
+                className="text-[10px] font-bold px-2 py-0.5 rounded-full"
+                style={{ color: creditPct >= 80 ? "#22c55e" : creditPct >= 50 ? "#f59e0b" : "#ef4444", background: (creditPct >= 80 ? "#22c55e" : creditPct >= 50 ? "#f59e0b" : "#ef4444") + "22" }}
+              >
+                {creditPct}% collected
+              </span>
+            </div>
+            <div className="px-4 py-3">
+              <div className="h-2 rounded-full w-full" style={{ background: "var(--divider)" }}>
+                <div
+                  className="h-full rounded-full transition-all"
+                  style={{ width: `${creditPct}%`, background: creditPct >= 80 ? "#22c55e" : creditPct >= 50 ? "#f59e0b" : "#ef4444" }}
+                />
+              </div>
+              <div className="flex items-center justify-between mt-2">
+                <div>
+                  <p className="text-[10px] uppercase" style={{ color: "var(--text-secondary)" }}>Extended</p>
+                  <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>{formatCurrency(creditExtended)}</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-[10px] uppercase" style={{ color: "var(--text-secondary)" }}>Collected</p>
+                  <p className="text-sm font-bold" style={{ color: "#22c55e" }}>{formatCurrency(creditPaidBack)}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-[10px] uppercase" style={{ color: "var(--text-secondary)" }}>Outstanding</p>
+                  <p className="text-sm font-bold" style={{ color: creditOutstanding > 0 ? "#ef4444" : "var(--text-primary)" }}>{formatCurrency(creditOutstanding)}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Customers Served */}
       {uniqueCustomers.length > 0 && (

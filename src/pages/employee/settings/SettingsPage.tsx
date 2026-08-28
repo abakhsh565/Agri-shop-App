@@ -130,10 +130,10 @@ export default function SettingsPage() {
               </p>
               <button
                 onClick={() => setEditingName(true)}
-                className="shrink-0 w-6 h-6 rounded-full flex items-center justify-center"
-                style={{ background: "var(--surface)", color: "var(--text-secondary)" }}
+                className="flex items-center gap-1 h-6 px-2 rounded-full text-[10px] font-bold shrink-0"
+                style={{ background: "var(--surface)", color: "var(--text-secondary)", border: "1px solid var(--divider)" }}
               >
-                <User size={12} />
+                <User size={10} /> Edit
               </button>
             </div>
             <p className="text-xs mt-0.5" style={{ color: "var(--text-secondary)" }}>
@@ -276,21 +276,22 @@ export default function SettingsPage() {
       </div>
 
       <div className="p-4 pb-6 animate-fade-in-up delay-225">
-      {/* Edit Profile Popup */}
+      {/* Edit Profile Bottom Sheet */}
       {editingName && (
         <div className="fixed inset-0 z-50 flex items-end justify-center" onClick={() => { setEditingName(false); setNameValue(user?.name ?? ""); }}>
           <div className="absolute inset-0 bg-black/40" />
           <div
-            className="relative w-full max-w-md rounded-t-2xl p-5 pb-8 animate-slide-up"
-            style={{ background: "var(--surface)" }}
+            className="relative w-full max-w-md rounded-t-[24px] p-6 pb-8 animate-slide-up"
+            style={{ background: "var(--surface-2)", border: "1px solid var(--divider)", borderBottom: "none" }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between mb-4">
-              <p className="text-[15px] font-bold" style={{ color: "var(--text-primary)" }}>Edit Profile</p>
-              <button onClick={() => { setEditingName(false); setNameValue(user?.name ?? ""); }} className="text-xl" style={{ color: "var(--text-secondary)" }}>×</button>
+            {/* Handle bar */}
+            <div className="flex justify-center mb-4">
+              <div className="w-10 h-1 rounded-full" style={{ background: "var(--divider)" }} />
             </div>
+            <p className="text-base font-bold text-center mb-5" style={{ color: "var(--text-primary)" }}>Edit Profile</p>
             {/* Photo in popup */}
-            <div className="flex flex-col items-center mb-4">
+            <div className="flex flex-col items-center mb-5">
               <div className="relative">
                 <div className="w-20 h-20 rounded-full overflow-hidden flex items-center justify-center text-2xl font-bold" style={{ background: "var(--brand)", color: "#0a0a0a" }}>
                   {avatarUrl ? <img src={avatarUrl} alt="" className="w-full h-full object-cover" /> : initials}
@@ -305,25 +306,30 @@ export default function SettingsPage() {
               </div>
             </div>
             {/* Name input */}
-            <div className="mb-4">
-              <label className="text-[11px] font-semibold uppercase tracking-wider mb-1 block" style={{ color: "var(--text-secondary)" }}>Name</label>
+            <div className="mb-5">
+              <label className="text-[11px] font-semibold uppercase tracking-wider mb-1.5 block" style={{ color: "var(--text-secondary)" }}>Name</label>
               <input
                 autoFocus
                 value={nameValue}
                 onChange={(e) => setNameValue(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter") handleSaveName(); }}
-                className="w-full h-11 px-4 rounded-xl text-sm font-bold outline-none"
-                style={{ background: "var(--surface-2)", border: "1px solid var(--divider)", color: "var(--text-primary)" }}
+                className="w-full h-12 px-4 rounded-full text-sm font-bold outline-none"
+                style={{ background: "var(--surface)", border: "1px solid var(--divider)", color: "var(--text-primary)" }}
               />
             </div>
-            <button
-              onClick={handleSaveName}
-              disabled={savingName || !nameValue.trim()}
-              className="w-full h-11 rounded-xl text-[13px] font-bold disabled:opacity-50"
-              style={{ background: "var(--brand)", color: "#0a0a0a" }}
-            >
-              {savingName ? "Saving..." : "Save Changes"}
-            </button>
+            <div className="flex gap-3">
+              <button
+                onClick={() => { setEditingName(false); setNameValue(user?.name ?? ""); }}
+                className="flex-1 h-12 rounded-full text-sm font-bold"
+                style={{ border: "1px solid var(--divider)", color: "var(--text-primary)" }}
+              >Cancel</button>
+              <button
+                onClick={handleSaveName}
+                disabled={savingName || !nameValue.trim()}
+                className="flex-1 h-12 rounded-full text-sm font-bold disabled:opacity-50"
+                style={{ background: "var(--brand)", color: "#0a0a0a" }}
+              >{savingName ? "Saving..." : "Save"}</button>
+            </div>
           </div>
         </div>
       )}
