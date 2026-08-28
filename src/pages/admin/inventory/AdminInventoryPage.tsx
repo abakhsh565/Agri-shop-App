@@ -3,14 +3,10 @@ import { useNavigate } from "react-router-dom";
 import { useThemeStore } from "@/stores/themeStore";
 import { useT } from "@/lib/i18n";
 import { useProductsStore } from "@/stores/productsStore";
-import { getStockStatusColor } from "@/lib/formatters";
+import { getStockStatus, getStockStatusLabel, getStockStatusColor } from "@/lib/formatters";
 import StatusBar from "@/components/ui/StatusBar";
-import ConfirmDialog from "@/components/ui/ConfirmDialog";
-import { rpcDeleteProduct } from "@/lib/db";
-import { useUIStore } from "@/stores/uiStore";
 import { Search, Plus, ChevronRight } from "lucide-react";
 import type { ProductCategory, Product } from "@/types";
-import { barcodeToSvg } from "@/lib/barcode";
 
 const CATEGORY_KEYS: Record<string, "products.all" | "products.spray" | "products.seed" | "products.fertilizer"> = {
   all: "products.all",
@@ -40,10 +36,18 @@ export default function AdminInventoryPage() {
   const filtered = products.filter((p) => {
     const matchSearch =
       p.name.toLowerCase().includes(search.toLowerCase()) ||
-      p.company.toLowerCase().includes(search.toLowerCase());
+      p.company.toLowerCase().includes(search.toLowerCase()) ||
+      (p.barcode && p.barcode.toLowerCase().includes(search.toLowerCase()));
     const matchCat = cat === "all" || p.category === cat;
     return matchSearch && matchCat;
   });
+
+  function productStatus(p: Product) {
+    const statuses = p.variants.map((v) => getStockStatus(p.stockQty, v.lowStockThreshold));
+    if (statuses.every((s) => s === "out_of_stock")) return "out_of_stock" as const;
+    if (statuses.some((s) => s === "low_stock")) return "low_stock" as const;
+    return "in_stock" as const;
+  }
 
   return (
     <div
@@ -53,7 +57,7 @@ export default function AdminInventoryPage() {
       <StatusBar />
 
       {/* Header */}
-      <div className="relative flex items-center justify-center h-11">
+      <div className="flex items-center justify-center h-11">
         <p className="text-base font-bold" style={{ color: "var(--text-primary)" }}>{t("admin.inventory")}</p>
       </div>
 
@@ -97,66 +101,56 @@ export default function AdminInventoryPage() {
       {/* Empty state */}
       {ready && filtered.length === 0 && (
         <div className="flex flex-col items-center py-16 gap-2">
-          <p className="text-sm" style={{ color: "var(--text-secondary)" }}>No products yet</p>
+          <p className="text-3xl">📦</p>
+          <p className="text-sm" style={{ color: "var(--text-secondary)" }}>No products found</p>
         </div>
       )}
 
-      {/* Product list — clean cards */}
-      <div className="flex flex-col mx-4 gap-3 pb-24">
-        {filtered.map((p) => {
-          const dotColor = CATEGORY_DOT[p.category] ?? "#888";
-          // Compute total stock status
-          const totalStock = p.stockQty;
-          const hasVariants = p.variants.length > 0;
-          const minThreshold = hasVariants
-            ? Math.min(...p.variants.map((v) => v.lowStockThreshold))
-            : 5;
-          const status =
-            totalStock === 0
-              ? "out_of_stock"
-              : totalStock <= minThreshold
-              ? "low_stock"
-              : "in_stock";
+      {/* Product list — flat list matching employee side */}
+      <div className="flex flex-col">
+        {filtered.map((p, i) => {
+          const status = productStatus(p);
           const statusColor = getStockStatusColor(status);
-
+          const dotColor = CATEGORY_DOT[p.category] ?? "#888";
           return (
             <button
               key={p.id}
               onClick={() => navigate(`/admin/products/${p.id}`)}
-              className="rounded-[14px] overflow-hidden text-left active:scale-[0.98] transition-transform"
-              style={{ border: "1px solid var(--divider)", background: "var(--surface)" }}
+              className="flex items-center justify-between px-4 py-4 text-left transition-opacity active:opacity-70"
+              style={{ borderBottom: i < filtered.length - 1 ? "1px solid var(--divider)" : "none" }}
             >
-              <div className="flex items-center gap-3 px-4 py-3">
+              <div className="flex items-center gap-3">
                 {p.imageUrl ? (
-                  <img src={p.imageUrl} alt={p.name} className="size-11 rounded-[10px] object-cover shrink-0" />
+                  <img src={p.imageUrl} alt={p.name} className="size-10 rounded-[10px] object-cover shrink-0" />
                 ) : (
                   <div
-                    className="size-11 rounded-[10px] flex items-center justify-center text-[12px] font-bold shrink-0"
+                    className="size-10 rounded-[10px] shrink-0 flex items-center justify-center text-[11px] font-bold"
                     style={{ background: dotColor + "22", color: dotColor }}
                   >
                     {p.name.charAt(0)}
                   </div>
                 )}
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-bold truncate" style={{ color: "var(--text-primary)" }}>{p.name}</p>
-                  <p className="text-[11px] truncate" style={{ color: "var(--text-secondary)" }}>{p.company}</p>
-                  {p.barcode && (
-                    <div className="mt-1 flex items-center gap-1.5">
-                      <span className="text-[9px] font-mono" style={{ color: "var(--text-secondary)" }}>{p.barcode}</span>
-                      <div dangerouslySetInnerHTML={{ __html: barcodeToSvg(p.barcode, { height: 16, showText: false, width: 50 }) }} className="shrink-0" />
-                    </div>
-                  )}
-                </div>
-                <div className="flex flex-col items-end gap-1 shrink-0">
-                  <span
-                    className="text-[10px] font-bold px-2 py-0.5 rounded-full"
-                    style={{ color: statusColor, background: statusColor + "22" }}
-                  >
-                    {totalStock} {p.baseUnit}
-                  </span>
-                  <ChevronRight size={16} style={{ color: "var(--text-secondary)" }} />
+                <div className="flex flex-col gap-0.5">
+                  <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>{p.name}</p>
+                  <p className="text-xs" style={{ color: "var(--text-secondary)" }}>{p.company}</p>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    {/* Status badge */}
+                    <span
+                      className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full"
+                      style={{ background: statusColor + "20", color: statusColor }}
+                    >
+                      {getStockStatusLabel(status)}
+                    </span>
+                    {/* Barcode number only — no SVG */}
+                    {p.barcode && (
+                      <span className="text-[10px] font-mono" style={{ color: "var(--text-secondary)" }}>
+                        {p.barcode}
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
+              <ChevronRight size={18} style={{ color: "var(--text-secondary)" }} className="shrink-0" />
             </button>
           );
         })}
