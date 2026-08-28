@@ -61,7 +61,7 @@ export default function ReorderSuggestionsPage() {
       style={{ background: "var(--background)", direction: isUrdu ? "rtl" : "ltr" }}
     >
       <StatusBar />
-      <NavHeader title="Reorder Suggestions" backTo="/admin/inventory" />
+      <NavHeader title="Reorder Suggestions" />
 
       <div className="px-4 pt-3 pb-2">
         <div className="flex items-center gap-2 rounded-[14px] p-3" style={{ background: "rgba(217,119,6,0.08)", border: "1px solid rgba(217,119,6,0.2)" }}>

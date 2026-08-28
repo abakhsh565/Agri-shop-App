@@ -56,7 +56,7 @@ export default function ReturnSelectItemsPage() {
     >
       <div>
         <StatusBar />
-        <NavHeader title={t("returns.title")} backTo={`/employee/sales/${saleId}`} />
+        <NavHeader title={t("returns.title")} />
 
         {/* Sale info */}
         <div className="mx-4 mt-3 rounded-[14px] p-4" style={{ background: "var(--surface-2)" }}>

@@ -82,7 +82,7 @@ export default function StockMovementHistoryPage() {
       style={{ background: "var(--background)", direction: isUrdu ? "rtl" : "ltr" }}
     >
       <StatusBar />
-      <NavHeader title="Stock Movements" backTo="/admin/inventory" />
+      <NavHeader title="Stock Movements" />
 
       {loading ? (
         <div className="flex-1 flex items-center justify-center py-16">

@@ -60,7 +60,7 @@ export default function PurchaseDetailPage() {
     return (
       <div className="flex flex-col w-full min-h-full" style={{ background: "var(--background)" }}>
         <StatusBar />
-        <NavHeader title="Purchase Detail" backTo="/admin/purchases" />
+        <NavHeader title="Purchase Detail" />
         <div className="flex-1 flex items-center justify-center">
           <p className="text-sm" style={{ color: "var(--text-secondary)" }}>Loading…</p>
         </div>
@@ -72,7 +72,7 @@ export default function PurchaseDetailPage() {
     return (
       <div className="flex flex-col w-full min-h-full" style={{ background: "var(--background)" }}>
         <StatusBar />
-        <NavHeader title="Purchase Detail" backTo="/admin/purchases" />
+        <NavHeader title="Purchase Detail" />
         <div className="flex-1 flex items-center justify-center">
           <p className="text-sm" style={{ color: "var(--text-secondary)" }}>Purchase not found</p>
         </div>
@@ -86,7 +86,7 @@ export default function PurchaseDetailPage() {
       style={{ background: "var(--background)", direction: isUrdu ? "rtl" : "ltr" }}
     >
       <StatusBar />
-      <NavHeader title="Purchase Detail" backTo="/admin/purchases" />
+      <NavHeader title="Purchase Detail" />
 
       <div className="flex flex-col gap-4 p-4">
         {/* Header card */}

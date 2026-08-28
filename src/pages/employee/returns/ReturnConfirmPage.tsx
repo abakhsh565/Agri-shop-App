@@ -75,7 +75,7 @@ export default function ReturnConfirmPage() {
     <div className="flex flex-col bg-white w-full min-h-full justify-between">
       <div>
         <StatusBar />
-        <NavHeader title="Confirm Return" backTo={`/employee/sales/${saleId}/return`} />
+        <NavHeader title="Confirm Return" />
 
         {/* Estimated refund */}
         <div className="mx-4 mt-3 border border-[#e5e5e5] rounded-xl p-4 text-center">

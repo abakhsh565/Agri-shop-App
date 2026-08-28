@@ -104,7 +104,7 @@ export default function CustomerProfilePage() {
       style={{ background: "var(--background)", direction: isUrdu ? "rtl" : "ltr" }}
     >
       <StatusBar />
-      <NavHeader title="Customer Details" backTo={`${base}/customers`} />
+      <NavHeader title="Customer Details" />
 
       <div className="flex flex-col gap-4 px-4 pt-4 pb-8">
         {/* ── HERO CARD: Image + Name + Phone + Address + Health Badge ── */}

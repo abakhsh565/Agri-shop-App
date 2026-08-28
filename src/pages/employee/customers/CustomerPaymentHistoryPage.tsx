@@ -43,7 +43,7 @@ export default function CustomerPaymentHistoryPage() {
       <StatusBar />
       <NavHeader
         title={t("customerProfile.paymentHistory")}
-        backTo={`${base}/customers/${customerId}`}
+        
       />
 
       {/* Customer strip */}

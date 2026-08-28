@@ -36,7 +36,7 @@ export default function CompanyDetailPage() {
   if (!company) return (
     <div style={{ background: "var(--background)", color: "var(--text-primary)" }} className="flex flex-col min-h-full">
       <StatusBar />
-      <NavHeader title="Company" backTo="/admin/companies" />
+      <NavHeader title="Company" />
       <div className="flex flex-col items-center py-20 gap-2">
         <p className="text-3xl">🔍</p>
         <p className="text-sm" style={{ color: "var(--text-secondary)" }}>Company not found</p>
@@ -53,7 +53,7 @@ export default function CompanyDetailPage() {
       style={{ background: "var(--background)", direction: isUrdu ? "rtl" : "ltr" }}
     >
       <StatusBar />
-      <NavHeader title={company.name} backTo="/admin/companies" />
+      <NavHeader title={company.name} />
 
       {company.logoUrl && (
         <div className="flex justify-center pt-3">

@@ -132,7 +132,7 @@ export default function ProductDetailPage() {
   return (
     <div className="flex flex-col w-full min-h-full" style={{ background: "var(--background)" }}>
       <StatusBar />
-      <NavHeader title="Product Details" backTo={`${base}/products`} />
+      <NavHeader title="Product Details" />
 
       <div className="flex flex-col gap-4 px-4 pt-4 pb-8">
         {/* ── HERO CARD: Image + Name + Category + Stock Badge ── */}
