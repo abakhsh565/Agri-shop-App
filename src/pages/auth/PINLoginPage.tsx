@@ -34,23 +34,25 @@ export default function PINLoginPage() {
     return null;
   }
 
+  const user: User = routeUser;
+
   async function handlePinComplete(val: string) {
     if (val.length < 4 || verifying) return;
     setVerifying(true);
     try {
-      const ok = await verifyPin(routeUser.id, val);
+      const ok = await verifyPin(user.id, val);
       if (ok) {
         // PIN correct → set user in authStore and go to dashboard
-        setUser(routeUser);
-        const dest = routeUser.role === "admin" || routeUser.role === "co_admin"
+        setUser(user);
+        const dest = user.role === "admin" || user.role === "co_admin"
           ? "/admin/dashboard" : "/employee/dashboard";
         navigate(dest, { replace: true });
       } else {
         // PIN wrong or not set on this device → auto-fallback to OTP
-        clearPin(routeUser.id);
-        setPendingPhone(routeUser.phone);
+        clearPin(user.id);
+        setPendingPhone(user.phone);
         setPendingFlow("login");
-        navigate("/login/otp", { replace: true, state: { user: routeUser } });
+        navigate("/login/otp", { replace: true, state: { user } });
       }
     } finally {
       setVerifying(false);
@@ -64,9 +66,9 @@ export default function PINLoginPage() {
   }
 
   function handleForgotPIN() {
-    setPendingPhone(routeUser.phone);
+    setPendingPhone(user.phone);
     setPendingFlow("forgot_pin");
-    navigate("/login/forgot-pin", { replace: true, state: { user: routeUser } });
+    navigate("/login/forgot-pin", { replace: true, state: { user } });
   }
 
   return (

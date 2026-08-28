@@ -29,16 +29,7 @@ export default function CartPage() {
   const [amountTouched, setAmountTouched] = useState(false);
   const [completing, setCompleting] = useState(false);
 
-  if (!customer) return (
-    <div className="flex flex-col bg-white w-full min-h-full">
-      <StatusBar />
-      <NavHeader title="Review & Payment" />
-      <div className="flex-1 flex flex-col items-center justify-center py-16 gap-3">
-        <p className="text-sm" style={{ color: "var(--text-secondary)" }}>No customer selected</p>
-        <button onClick={() => navigate(`${base}/sale/products`)} className="text-sm font-bold" style={{ color: "var(--brand)" }}>Go back</button>
-      </div>
-    </div>
-  );
+  // Show cart even without customer — user can scan products first, select customer later
 
   // PRD §38.3: When last item is removed, redirect to product selection
   if (items.length === 0) {
@@ -49,12 +40,13 @@ export default function CartPage() {
   const total = subtotal();
   const parsedAmount = amountReceived === "" ? null : Number(amountReceived);
   const amountPaid = paymentType === "full" ? total : Math.min(parsedAmount ?? 0, total);
-  const creditAfterSale = customer.outstandingBalance + (paymentType === "full" ? 0 : total - amountPaid);
-  const creditHealth = getCreditHealth(creditAfterSale, customer.creditLimit);
-  const creditOverLimit = customer.creditLimit > 0 && creditAfterSale > customer.creditLimit;
+  const creditAfterSale = (customer?.outstandingBalance ?? 0) + (paymentType === "full" ? 0 : total - amountPaid);
+  const creditHealth = customer ? getCreditHealth(creditAfterSale, customer.creditLimit) : "good" as const;
+  const creditOverLimit = customer ? customer.creditLimit > 0 && creditAfterSale > customer.creditLimit : false;
 
   async function handleCompleteSale() {
     if (!items.length) { addToast("Add at least one product", "warning"); return; }
+    if (!customer) { addToast("Please select a customer first", "warning"); navigate(`${base}/sale`, { state: { fromCart: true } }); return; }
     if (paymentType === "partial" && amountTouched && parsedAmount !== null && parsedAmount < 0) { addToast("Amount cannot be negative", "warning"); return; }
 
     setCompleting(true);
@@ -113,30 +105,50 @@ export default function CartPage() {
       <StatusBar />
       <NavHeader title="Review & Payment" />
 
-      {/* Customer strip */}
-      <div className="mx-4 mt-3 bg-[#f5f5f5] rounded-xl p-4">
-        <div className="flex items-center justify-between mb-3">
-          <p className="text-sm font-bold text-black">{customer.name}</p>
-          <span className="text-xs" style={{ color: getCreditHealthColor(creditHealth) }}>
-            Credit Health: {creditHealth === "good" ? "Good" : creditHealth === "warning" ? "Warning" : "Over Limit"}
-          </span>
-        </div>
-        <div className="flex gap-8">
-          <div>
-            <p className="text-[10px] text-[#888] uppercase">Outstanding Credit</p>
-            <p className="text-sm font-bold text-black">{formatCurrency(customer.outstandingBalance)}</p>
+      {/* Customer strip — two states */}
+      {!customer ? (
+        <button
+          onClick={() => navigate(`${base}/sale`, { state: { fromCart: true } })}
+          className="mx-4 mt-3 rounded-xl p-4 flex items-center justify-between transition-opacity active:opacity-70"
+          style={{ background: "var(--surface-2)", border: "1.5px dashed var(--divider)" }}
+        >
+          <div className="flex items-center gap-3">
+            <div className="size-10 rounded-full flex items-center justify-center" style={{ background: "var(--muted)" }}>
+              <Plus size={18} style={{ color: "var(--text-secondary)" }} />
+            </div>
+            <div className="text-left">
+              <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>Select Customer</p>
+              <p className="text-xs" style={{ color: "var(--text-secondary)" }}>Required before completing sale</p>
+            </div>
           </div>
-          <div>
-            <p className="text-[10px] text-[#888] uppercase">Credit Limit</p>
-            <p className="text-sm font-bold text-black">{formatCurrency(customer.creditLimit)}</p>
+          <span className="text-xs font-semibold" style={{ color: "var(--brand-dark)" }}>Choose →</span>
+        </button>
+      ) : (
+        <>
+          <div className="mx-4 mt-3 bg-[#f5f5f5] rounded-xl p-4">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-sm font-bold text-black">{customer.name}</p>
+              <span className="text-xs" style={{ color: getCreditHealthColor(creditHealth) }}>
+                Credit Health: {creditHealth === "good" ? "Good" : creditHealth === "warning" ? "Warning" : "Over Limit"}
+              </span>
+            </div>
+            <div className="flex gap-8">
+              <div>
+                <p className="text-[10px] text-[#888] uppercase">Outstanding Credit</p>
+                <p className="text-sm font-bold text-black">{formatCurrency(customer.outstandingBalance)}</p>
+              </div>
+              <div>
+                <p className="text-[10px] text-[#888] uppercase">Credit Limit</p>
+                <p className="text-sm font-bold text-black">{formatCurrency(customer.creditLimit)}</p>
+              </div>
+            </div>
           </div>
-        </div>
-      </div>
-
-      {creditOverLimit && (
-        <div className="mx-4 mt-2 bg-[#fef2f2] border border-[#ef4444] rounded-xl p-3">
-          <p className="text-xs text-[#ef4444] font-medium">⚠ This sale will exceed {customer.name}'s credit limit.</p>
-        </div>
+          {creditOverLimit && (
+            <div className="mx-4 mt-2 bg-[#fef2f2] border border-[#ef4444] rounded-xl p-3">
+              <p className="text-xs text-[#ef4444] font-medium">⚠ This sale will exceed {customer.name}'s credit limit.</p>
+            </div>
+          )}
+        </>
       )}
 
       {/* Cart items */}
@@ -298,13 +310,22 @@ export default function CartPage() {
 
       {/* Complete Sale — instead of Proceed to Review */}
       <div className="p-4 pb-6">
-        <Button
-          onClick={handleCompleteSale}
-          disabled={completing || items.length === 0}
-          className="w-full"
-        >
-          {completing ? "Processing…" : `Complete Sale · ${formatCurrency(total)}`}
-        </Button>
+        {!customer ? (
+          <Button
+            onClick={() => navigate(`${base}/sale`, { state: { fromCart: true } })}
+            className="w-full"
+          >
+            Select Customer to Continue
+          </Button>
+        ) : (
+          <Button
+            onClick={handleCompleteSale}
+            disabled={completing || items.length === 0}
+            className="w-full"
+          >
+            {completing ? "Processing…" : `Complete Sale · ${formatCurrency(total)}`}
+          </Button>
+        )}
       </div>
     </div>
   );

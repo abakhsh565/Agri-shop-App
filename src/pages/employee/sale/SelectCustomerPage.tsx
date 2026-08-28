@@ -26,7 +26,13 @@ export default function SelectCustomerPage() {
 
   function select(c: Customer) {
     setCustomer(c);
-    navigate(`${base}/sale/products`);
+    // If coming from cart, go back to cart; otherwise go to products
+    const state = window.history.state?.usr;
+    if (state?.fromCart) {
+      navigate(`${base}/sale/cart`, { replace: true });
+    } else {
+      navigate(`${base}/sale/products`);
+    }
   }
 
   return (
