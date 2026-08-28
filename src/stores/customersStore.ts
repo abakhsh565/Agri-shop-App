@@ -136,10 +136,19 @@ export const useCustomersStore = create<CustomersState>((set, get) => ({
   },
 
   archiveCustomer: async (id) => {
-    const { error } = await supabase.rpc("archive_customer", {
+    // Try RPC first (works if migration 0027 is deployed)
+    const { error: rpcErr } = await supabase.rpc("archive_customer", {
       p_customer_id: id,
     });
-    if (error) throw new Error(error.message);
+    if (rpcErr) {
+      // Fallback: direct update (bypasses RLS via SECURITY DEFINER not available)
+      const { error } = await supabase
+        .from("customers")
+        .update({ is_archived: true, archived_at: new Date().toISOString() })
+        .eq("id", id)
+        .select();
+      if (error) throw new Error(error.message);
+    }
     set({
       customers: get().customers.map((c) =>
         c.id === id ? { ...c, isArchived: true, archivedAt: new Date().toISOString() } : c
@@ -148,10 +157,19 @@ export const useCustomersStore = create<CustomersState>((set, get) => ({
   },
 
   restoreCustomer: async (id) => {
-    const { error } = await supabase.rpc("restore_customer", {
+    // Try RPC first (works if migration 0027 is deployed)
+    const { error: rpcErr } = await supabase.rpc("restore_customer", {
       p_customer_id: id,
     });
-    if (error) throw new Error(error.message);
+    if (rpcErr) {
+      // Fallback: direct update
+      const { error } = await supabase
+        .from("customers")
+        .update({ is_archived: false, archived_at: null, archived_by: null })
+        .eq("id", id)
+        .select();
+      if (error) throw new Error(error.message);
+    }
     set({
       customers: get().customers.map((c) =>
         c.id === id ? { ...c, isArchived: false, archivedAt: null, archivedBy: null } : c
