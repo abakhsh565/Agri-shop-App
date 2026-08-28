@@ -11,10 +11,7 @@ export default function StatusBar() {
   return (
     <div
       className="shrink-0 w-full"
-      style={{
-        height: "max(var(--safe-top), 8px)",
-        background: "var(--background)",
-      }}
+      style={{ height: "max(var(--safe-top), 8px)" }}
     />
   );
 }
