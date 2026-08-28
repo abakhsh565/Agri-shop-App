@@ -32,27 +32,31 @@ export default function PINInput({ value, onChange, error, shake }: PINInputProp
         ))}
       </div>
 
-      {/* Number pad — modern Android-style with generous touch targets */}
-      <div className="grid grid-cols-3 gap-4 w-full max-w-[300px]">
+      {/* Number pad — 100×100 circular buttons, comfortable spacing */}
+      <div className="grid grid-cols-3 gap-3 w-full max-w-[340px]">
         {PAD.map((key, i) => (
-          <button
-            key={i}
-            type="button"
-            onClick={() => tap(key)}
-            disabled={!key}
-            className="
-              h-[72px] rounded-full text-[22px] font-medium transition-all duration-150
-              active:scale-95 active:bg-[#ddd]
-              disabled:opacity-0 disabled:pointer-events-none
-            "
-            style={{
-              color: key === "⌫" ? "var(--text-secondary, #888)" : "var(--text-primary, #111)",
-              background: key ? "var(--surface-2, #f5f5f5)" : "transparent",
-              fontSize: key === "⌫" ? "18px" : undefined,
-            }}
-          >
-            {key}
-          </button>
+          key ? (
+            <button
+              key={i}
+              type="button"
+              onClick={() => tap(key)}
+              className="
+                w-[100px] h-[100px] rounded-full text-[24px] font-medium
+                flex items-center justify-center
+                transition-all duration-100
+                active:scale-90 active:brightness-90
+              "
+              style={{
+                color: key === "⌫" ? "var(--text-secondary, #888)" : "var(--text-primary, #111)",
+                background: "var(--surface-2, #f5f5f5)",
+                fontSize: key === "⌫" ? "20px" : undefined,
+              }}
+            >
+              {key}
+            </button>
+          ) : (
+            <div key={i} className="w-[100px] h-[100px]" />
+          )
         ))}
       </div>
     </div>
