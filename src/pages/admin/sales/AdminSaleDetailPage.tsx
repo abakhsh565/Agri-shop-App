@@ -238,6 +238,21 @@ export default function AdminSaleDetailPage() {
                 </div>
               );
             })}
+            {/* Sold by — admin only */}
+            <div
+              className="flex items-center gap-2 px-4 py-3"
+              style={{ borderTop: "1px solid var(--divider)", background: "var(--surface-2)" }}
+            >
+              <div
+                className="size-6 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0"
+                style={{ background: initBgColor(sale.employeeName), color: "#fff" }}
+              >
+                {sale.employeeName.charAt(0).toUpperCase()}
+              </div>
+              <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
+                Sold by <span className="font-semibold" style={{ color: "var(--text-primary)" }}>{sale.employeeName}</span>
+              </p>
+            </div>
           </div>
         </div>
 
