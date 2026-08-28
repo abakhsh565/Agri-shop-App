@@ -34,6 +34,7 @@ export default function AddCustomerPage() {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [address, setAddress] = useState("");
+  const [creditLimit, setCreditLimit] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const [existingCustomerId, setExistingCustomerId] = useState<string | null>(null);
@@ -80,7 +81,7 @@ export default function AddCustomerPage() {
         name: name.trim(),
         phone: normalizedPhone,
         address: address.trim() || undefined,
-        creditLimit: 0,
+        creditLimit: creditLimit ? parseFloat(creditLimit) : 0,
         createdBy: user?.id,
       });
       // Persist image if uploaded
@@ -187,6 +188,30 @@ export default function AddCustomerPage() {
                 color: "var(--text-primary)",
               }}
             />
+          </div>
+
+          {/* Credit Limit */}
+          <div>
+            <p className="text-[11px] font-bold uppercase mb-2 tracking-wider" style={{ color: "var(--text-secondary)" }}>
+              Credit Limit (Optional)
+            </p>
+            <input
+              type="number"
+              inputMode="decimal"
+              value={creditLimit}
+              onChange={(e) => setCreditLimit(e.target.value)}
+              placeholder="0"
+              min="0"
+              className="w-full h-12 rounded-[24px] px-4 text-sm outline-none"
+              style={{
+                background: "var(--surface-2)",
+                border: "1px solid var(--divider)",
+                color: "var(--text-primary)",
+              }}
+            />
+            <p className="text-[11px] mt-1" style={{ color: "var(--text-secondary)" }}>
+              {isUrdu ? "اس گاہک کو کتنا ادھار دے سکتے ہیں" : "Maximum credit amount for this customer"}
+            </p>
           </div>
         </div>
       </div>

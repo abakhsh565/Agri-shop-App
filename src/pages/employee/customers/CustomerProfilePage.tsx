@@ -156,15 +156,13 @@ export default function CustomerProfilePage() {
             )}
             <div className="flex items-center gap-2 mt-1">
               <CreditHealthBadge health={health} />
-              {isAdmin && (
-                <button
-                  onClick={startEdit}
-                  className="flex items-center gap-1 h-6 px-2 rounded-full text-[10px] font-bold"
-                  style={{ background: "var(--surface-2)", color: "var(--text-secondary)", border: "1px solid var(--divider)" }}
-                >
-                  <Pencil size={10} /> Edit
-                </button>
-              )}
+              <button
+                onClick={startEdit}
+                className="flex items-center gap-1 h-6 px-2 rounded-full text-[10px] font-bold"
+                style={{ background: "var(--surface-2)", color: "var(--text-secondary)", border: "1px solid var(--divider)" }}
+              >
+                <Pencil size={10} /> Edit
+              </button>
             </div>
           </div>
         </div>
@@ -202,17 +200,15 @@ export default function CustomerProfilePage() {
           >
             <p className="text-base font-bold text-center" style={{ color: "var(--text-primary)" }}>Edit Customer</p>
             {/* Image in popup */}
-            {isAdmin && (
-              <div className="flex justify-center">
-                <ImageUpload
-                  bucket="customer-images"
-                  shape="circle"
-                  value={editImageUrl}
-                  onChange={setEditImageUrl}
-                  label="Photo"
-                />
-              </div>
-            )}
+            <div className="flex justify-center">
+              <ImageUpload
+                bucket="customer-images"
+                shape="circle"
+                value={editImageUrl}
+                onChange={setEditImageUrl}
+                label="Photo"
+              />
+            </div>
             <div>
               <p className="text-[11px] font-bold uppercase mb-1.5 tracking-wider" style={{ color: "var(--text-secondary)" }}>Name</p>
               <input value={editName} onChange={(e) => setEditName(e.target.value)}
@@ -301,17 +297,15 @@ export default function CustomerProfilePage() {
           ))}
         </div>
 
-        {/* Admin-only: Delete customer */}
-        {isAdmin && (
-          <button
-            onClick={() => setShowDelete(true)}
-            className="flex items-center justify-center gap-2 w-full h-12 rounded-full font-semibold text-sm mt-4 transition-all active:scale-[0.98]"
-            style={{ border: "1.5px solid #ef4444", color: "#ef4444", background: "transparent" }}
-          >
-            <Trash2 size={15} />
-            Delete Customer
-          </button>
-        )}
+        {/* Delete customer — available to all */}
+        <button
+          onClick={() => setShowDelete(true)}
+          className="flex items-center justify-center gap-2 w-full h-12 rounded-full font-semibold text-sm mt-4 transition-all active:scale-[0.98]"
+          style={{ border: "1.5px solid #ef4444", color: "#ef4444", background: "transparent" }}
+        >
+          <Trash2 size={15} />
+          Delete Customer
+        </button>
       </div>
 
       {/* Delete confirmation modal */}

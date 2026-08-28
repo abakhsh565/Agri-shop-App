@@ -8,6 +8,7 @@ import { useT } from "@/lib/i18n";
 import { useThemeStore } from "@/stores/themeStore";
 import { useShellBase } from "@/lib/useShellBase";
 import { Plus, Search, ChevronRight, SlidersHorizontal, Check } from "lucide-react";
+import { getCreditHealth } from "@/lib/formatters";
 import type { Customer } from "@/types";
 
 type SortKey = "outstanding" | "name" | "recent";
@@ -247,8 +248,8 @@ export default function CustomersListPage() {
                     {c.name}
                   </p>
                   <p className="text-[12px]" style={{ color: "var(--text-secondary)" }}>{c.phone}</p>
-                  {/* Credit usage bar */}
-                  {c.creditLimit > 0 && (
+                  {/* Credit usage bar + status */}
+                  {c.creditLimit > 0 ? (
                     <div className="mt-1.5">
                       <div className="w-full h-1.5 rounded-full" style={{ background: "var(--divider)" }}>
                         <div
@@ -259,10 +260,31 @@ export default function CustomersListPage() {
                           }}
                         />
                       </div>
-                      <p className="text-[10px] mt-0.5" style={{ color: "var(--text-secondary)" }}>
-                        {creditUsed}% used
-                      </p>
+                      <div className="flex items-center justify-between mt-0.5">
+                        <p className="text-[10px]" style={{ color: "var(--text-secondary)" }}>
+                          {creditUsed}% used
+                        </p>
+                        <span
+                          className="text-[9px] font-bold px-1.5 py-0.5 rounded-full"
+                          style={{
+                            color: getCreditHealth(c.outstandingBalance, c.creditLimit) === "over_limit" ? "#ef4444"
+                              : getCreditHealth(c.outstandingBalance, c.creditLimit) === "warning" ? "#f59e0b"
+                              : "#22c55e",
+                            background: getCreditHealth(c.outstandingBalance, c.creditLimit) === "over_limit" ? "#ef444422"
+                              : getCreditHealth(c.outstandingBalance, c.creditLimit) === "warning" ? "#f59e0b22"
+                              : "#22c55e22",
+                          }}
+                        >
+                          {getCreditHealth(c.outstandingBalance, c.creditLimit) === "over_limit" ? "Over Limit"
+                            : getCreditHealth(c.outstandingBalance, c.creditLimit) === "warning" ? "Warning"
+                            : "Good"}
+                        </span>
+                      </div>
                     </div>
+                  ) : (
+                    <p className="text-[10px] mt-1" style={{ color: "var(--text-secondary)" }}>
+                      No credit limit set
+                    </p>
                   )}
                 </div>
 
