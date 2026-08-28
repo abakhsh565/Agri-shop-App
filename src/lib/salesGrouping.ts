@@ -50,8 +50,7 @@ export function groupSalesByDateSections(sales: Sale[], now: Date): SalesSection
   const sections: SalesSection[] = [];
   for (const [label, sectionSales] of Object.entries(groups)) {
     if (sectionSales.length > 0) {
-      // Sort newest-first within each section
-      sectionSales.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+      // Preserve parent sort order — do not re-sort within sections
       sections.push({ label, sales: sectionSales });
     }
   }
