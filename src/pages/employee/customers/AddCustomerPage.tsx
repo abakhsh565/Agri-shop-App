@@ -105,7 +105,7 @@ export default function AddCustomerPage() {
     >
       <div>
         <StatusBar />
-        <NavHeader title={t("addCustomer.title")} />
+        <NavHeader title={t("addCustomer.title")} backTo={`${base}/customers`} />
 
         <div className="flex flex-col gap-5 p-4 mt-2">
           {/* Profile Image */}

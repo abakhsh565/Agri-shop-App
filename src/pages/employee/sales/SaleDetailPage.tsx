@@ -119,7 +119,7 @@ export default function SaleDetailPage() {
       style={{ background: "var(--background)", direction: isUrdu ? "rtl" : "ltr" }}
     >
       <StatusBar />
-      <NavHeader title={t("sales.saleDetails")} />
+      <NavHeader title={t("sales.saleDetails")} backTo={`${base}/sales`} />
 
       <div className="flex flex-col gap-4 p-4">
         {/* Customer card with image */}

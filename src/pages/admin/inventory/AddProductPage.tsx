@@ -160,7 +160,7 @@ export default function AddProductPage() {
     >
       <div>
         <StatusBar />
-        <NavHeader title={isEdit ? "Edit Product" : "Add Product"} />
+        <NavHeader title={isEdit ? "Edit Product" : "Add Product"} backTo="/admin/inventory" />
 
         <div className="flex flex-col gap-5 p-4">
           {/* Photo */}

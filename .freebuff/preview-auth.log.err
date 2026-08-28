@@ -1,0 +1,11 @@
+[33m(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vite.config.ts:29:27). Use `import.meta.dirname` instead
+  - JSON import "./.figma/make/site.json" without import attributes (vite.config.ts:6:31). Add `with { type: 'json' }`
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.[39m
+[31merror when starting dev server:
+Error: Port 54553 is already in use
+    at httpServerStart (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:11681:10)
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async startServer (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:26694:30)
+    at async Object.listen (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:26511:4)
+    at async CAC.<anonymous> (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/cli.js:721:3)[39m

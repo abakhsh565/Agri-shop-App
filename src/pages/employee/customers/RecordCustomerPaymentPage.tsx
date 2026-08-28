@@ -65,8 +65,7 @@ export default function RecordCustomerPaymentPage() {
         <StatusBar />
         <NavHeader
           title={t("recordPayment.title")}
-         
-         
+          backTo={`${base}/customers/${customerId}`}
         />
 
         {/* Outstanding card — brand lime accent */}

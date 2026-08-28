@@ -42,7 +42,7 @@ export default function InventoryAdjustPage() {
   if (!product) return (
     <div style={{ background: "var(--background)", color: "var(--text-primary)" }} className="flex flex-col min-h-full">
       <StatusBar />
-      <NavHeader title="Adjust Stock" />
+      <NavHeader title="Adjust Stock" backTo="/admin/inventory" />
       <div className="flex flex-col items-center py-20 gap-2">
         <p className="text-3xl">🔍</p>
         <p className="text-sm" style={{ color: "var(--text-secondary)" }}>Product not found</p>
@@ -110,7 +110,7 @@ export default function InventoryAdjustPage() {
     >
       <div>
         <StatusBar />
-        <NavHeader title="Adjust Stock" />
+        <NavHeader title="Adjust Stock" backTo="/admin/inventory" />
 
         <div className="flex flex-col gap-5 p-4">
           <div>

@@ -42,7 +42,7 @@ export default function EmployeeDetailPage() {
   if (!emp) return (
     <div style={{ background: "var(--background)", color: "var(--text-primary)" }} className="flex flex-col min-h-full">
       <StatusBar />
-      <NavHeader title="Employee" />
+      <NavHeader title="Employee" backTo="/admin/employees" />
       <div className="flex flex-col items-center py-20 gap-2">
         <p className="text-3xl">🔍</p>
         <p className="text-sm" style={{ color: "var(--text-secondary)" }}>Employee not found</p>
@@ -113,7 +113,7 @@ export default function EmployeeDetailPage() {
       style={{ background: "var(--background)", direction: isUrdu ? "rtl" : "ltr" }}
     >
       <StatusBar />
-      <NavHeader title={emp.name} />
+      <NavHeader title={emp.name} backTo="/admin/employees" />
 
       {/* Avatar + name card */}
       <div className="px-4 pt-3 animate-fade-in-up">

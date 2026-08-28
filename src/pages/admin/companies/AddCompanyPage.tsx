@@ -65,7 +65,7 @@ export default function AddCompanyPage() {
     >
       <div>
         <StatusBar />
-        <NavHeader title="Add Company / Supplier" />
+        <NavHeader title="Add Company / Supplier" backTo="/admin/companies" />
 
         <div className="flex flex-col gap-5 p-4">
           <div className="flex justify-center pt-1">

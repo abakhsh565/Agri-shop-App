@@ -76,7 +76,7 @@ export default function AddEmployeePage() {
     >
       <div>
         <StatusBar />
-        <NavHeader title="Add Employee" />
+        <NavHeader title="Add Employee" backTo="/admin/employees" />
 
         <div className="flex flex-col gap-5 p-4">
           <div className="flex justify-center pt-1">

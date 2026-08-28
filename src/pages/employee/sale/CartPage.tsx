@@ -35,7 +35,7 @@ export default function CartPage() {
       <NavHeader title="Review & Payment" />
       <div className="flex-1 flex flex-col items-center justify-center py-16 gap-3">
         <p className="text-sm" style={{ color: "var(--text-secondary)" }}>No customer selected</p>
-        <button onClick={() => navigate(`${base}/sale`)} className="text-sm font-bold" style={{ color: "var(--brand)" }}>Go back</button>
+        <button onClick={() => navigate(`${base}/sale/products`)} className="text-sm font-bold" style={{ color: "var(--brand)" }}>Go back</button>
       </div>
     </div>
   );

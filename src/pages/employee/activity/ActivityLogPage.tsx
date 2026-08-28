@@ -128,7 +128,7 @@ export default function ActivityLogPage() {
       style={{ background: "var(--background)" }}
     >
       <StatusBar />
-      <NavHeader title="Activity Log" />
+      <NavHeader title="Activity Log" backTo={`${base}/dashboard`} />
 
       {/* Summary strip */}
       <div className="px-4 pt-2 animate-fade-in-up">

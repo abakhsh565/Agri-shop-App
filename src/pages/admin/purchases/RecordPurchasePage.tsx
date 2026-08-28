@@ -106,7 +106,7 @@ export default function RecordPurchasePage() {
     >
       <div>
         <StatusBar />
-        <NavHeader title="Record Stock Purchase" />
+        <NavHeader title="Record Stock Purchase" backTo="/admin/purchases" />
 
         <div className="flex flex-col gap-5 p-4">
           {/* Supplier */}

@@ -66,7 +66,7 @@ export default function RecordSupplierPaymentPage() {
     >
       <div>
         <StatusBar />
-        <NavHeader title="Pay Supplier" />
+        <NavHeader title="Pay Supplier" backTo="/admin/payments" />
 
         <div className="mx-4 mt-3 rounded-[14px] p-5 text-center" style={{ background: "var(--brand)" }}>
           <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "rgba(0,0,0,0.55)" }}>

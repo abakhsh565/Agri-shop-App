@@ -102,7 +102,7 @@ export default function CustomerProfilePage() {
       style={{ background: "var(--background)", direction: isUrdu ? "rtl" : "ltr" }}
     >
       <StatusBar />
-      <NavHeader title="Customer Details" />
+      <NavHeader title="Customer Details" backTo={`${base}/customers`} />
 
       <div className="flex flex-col gap-4 px-4 pt-4 pb-8">
         {/* ── HERO CARD: Image + Name + Phone + Address + Health Badge ── */}
@@ -339,7 +339,7 @@ export default function CustomerProfilePage() {
                 await archiveCustomer(customerId!);
                 addToast("Customer deleted", "success");
                 setShowDelete(false);
-                navigate(-1);
+                navigate(`${base}/customers`);
               }} className="flex-1 h-12 rounded-full text-sm font-bold"
                 style={{ background: "#ef4444", color: "#fff" }}>Delete</button>
             </div>

@@ -166,8 +166,7 @@ export default function AdminSaleDetailPage() {
       <StatusBar />
       <NavHeader
         title={t("sales.saleDetails")}
-       
-       
+        backTo="/admin/sales"
       />
 
       {/* Void banner */}
