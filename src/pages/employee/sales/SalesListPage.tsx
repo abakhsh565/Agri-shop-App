@@ -378,8 +378,8 @@ export default function SalesListPage() {
                           {sale.customerName.charAt(0).toUpperCase()}
                         </div>
                       )}
-                      <div className="flex-1 min-w-0 rounded-xl px-3 py-2" style={{ background: "var(--surface-2)" }}>
-                        <p className="text-[14px] font-bold truncate" style={{ color: "var(--text-primary)" }}>{sale.customerName}</p>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[13px] font-bold truncate" style={{ color: "var(--text-primary)" }}>{sale.customerName}</p>
                         <p className="text-[10px] mt-0.5" style={{ color: "var(--text-secondary)" }}>{formatSmartDateTime(sale.createdAt, now)}</p>
                         <p className="text-[11px] font-medium mt-0.5" style={{ color: "var(--text-secondary)" }}>Sold by: {sale.employeeName}</p>
                       </div>
