@@ -305,7 +305,7 @@ export default function DashboardPage() {
             <button
               key={sale.id}
               onClick={() => navigate(`/employee/sales/${sale.id}`)}
-              className="flex items-center gap-4 px-4 py-3.5 w-full text-left transition-colors active:opacity-70"
+              className="flex items-center justify-between gap-4 px-4 py-3.5 w-full text-left transition-colors active:opacity-70"
               style={{
                 borderBottom: i < recentSales.length - 1 ? "1px solid var(--divider)" : "none",
                 background: "var(--background)",

@@ -373,7 +373,7 @@ export default function SalesListPage() {
                   <button
                     key={sale.id}
                     onClick={() => navigate(`/employee/sales/${sale.id}`)}
-                    className="flex items-center gap-4 px-4 py-3.5 text-left transition-opacity active:opacity-70"
+                    className="flex items-center justify-between gap-4 px-4 py-3.5 text-left transition-opacity active:opacity-70"
                     style={{ borderBottom: i < section.sales.length - 1 ? "1px solid var(--divider)" : "none" }}
                   >
                     <div className="flex items-center gap-3">
