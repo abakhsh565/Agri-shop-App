@@ -57,10 +57,10 @@ export default function AdminLayout() {
       if (result) {
         const product = findByBarcode(result.barcode);
         if (product) {
-          navigate(`/admin/inventory/${product.id}/edit`);
+          // Go to Variant Selection → Cart → Checkout (same as employee)
+          navigate(`/admin/sale/products/${product.id}`);
         } else {
-          navigate(`/admin/inventory/new`);
-          addToast(`Barcode "${result.barcode}" — no product found. Create new?`, "info");
+          addToast(`No product found for "${result.barcode}"`, "error");
         }
       } else {
         setShowManualScan(true);
@@ -76,10 +76,10 @@ export default function AdminLayout() {
     if (manualBarcode.trim().length >= 3) {
       const product = findByBarcode(manualBarcode.trim());
       if (product) {
-        navigate(`/admin/inventory/${product.id}/edit`);
+        // Go to Variant Selection → Cart → Checkout (same as employee)
+        navigate(`/admin/sale/products/${product.id}`);
       } else {
-        navigate(`/admin/inventory/new`);
-        addToast(`Barcode "${manualBarcode}" — no product found. Create new?`, "info");
+        addToast(`No product found for "${manualBarcode}"`, "error");
       }
       setManualBarcode("");
       setShowManualScan(false);
