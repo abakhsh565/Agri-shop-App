@@ -10,6 +10,7 @@ import { useSalesStore } from "@/stores/salesStore";
 import { useCustomersStore } from "@/stores/customersStore";
 import { useUIStore } from "@/stores/uiStore";
 import { ChevronRight, RotateCcw, Share2, Download } from "lucide-react";
+import { useShellBase } from "@/lib/useShellBase";
 
 function initBgColor(name: string) {
   const colors = ["#84cc16","#3b82f6","#8b5cf6","#f59e0b","#06b6d4","#ec4899"];
@@ -21,6 +22,7 @@ function initBgColor(name: string) {
 export default function SaleDetailPage() {
   const { saleId } = useParams();
   const navigate = useNavigate();
+  const base = useShellBase();
   const t = useT();
   const { language } = useThemeStore();
   const isUrdu = language === "ur";
