@@ -30,43 +30,7 @@ export default function CartPage() {
   const [completing, setCompleting] = useState(false);
   const completingRef = useRef(false);
 
-  // Shared barcode scan handler — used by both Select Product and Scan buttons
-  function handleBarcodeScan(code: string) {
-    const product = useProductsStore.getState().findByBarcode(code);
-    if (!product) {
-      addToast(`No product found for "${code}"`, "error");
-      return;
-    }
-    if (product.stockQty <= 0) {
-      addToast(`${product.name} is out of stock`, "warning");
-      return;
-    }
-    const inStock = product.variants.filter((v) => Math.floor(product.stockQty / v.unitSize) > 0);
-    if (inStock.length === 0) {
-      addToast(`${product.name} is out of stock`, "warning");
-      return;
-    }
-    if (inStock.length === 1) {
-      const v = inStock[0];
-      const maxU = Math.floor(product.stockQty / v.unitSize);
-      useCartStore.getState().addItem({
-        productId: product.id,
-        productName: product.name,
-        variantId: v.id,
-        variantName: v.name,
-        qty: v.qtyStep,
-        unitPrice: v.sellingPrice,
-        lineTotal: v.sellingPrice * v.qtyStep,
-        maxQty: maxU,
-        qtyStep: v.qtyStep,
-        unitSize: v.unitSize,
-        baseUnit: product.baseUnit,
-      });
-      addToast(`${product.name} (${v.name}) added`, "success");
-    } else {
-      navigate(`${base}/sale/products/${product.id}`);
-    }
-  }
+  // Show cart even without customer — user can scan products first, select customer later
 
   // PRD §38.3: When last item is removed, redirect to product selection
   // Skip redirect while completing sale to avoid overriding success navigation
@@ -128,7 +92,8 @@ export default function CartPage() {
           }
         }
       }
-      // Navigate first, then clear cart
+      // Navigate first, then clear cart — clearing first causes the <Navigate>
+      // guard in this component to fire and redirect away from the success page.
       navigate(`${base}/sale/success`, { state: { sale }, replace: true });
       clearCart();
     } catch (e) {
@@ -220,13 +185,50 @@ export default function CartPage() {
           </div>
 
         <div className="flex gap-2 mt-3">
+          <button
+            onClick={() => navigate(`${base}/sale/products`)}
+            className="flex-1 h-12 rounded-xl border border-black flex items-center justify-center gap-2 text-sm font-medium text-black"
+          >
+            <Plus size={16} />
+            Add More
+          </button>
           <ScanButton
-            onScan={handleBarcodeScan}
-            label="Select Product"
-            size="lg"
-          />
-          <ScanButton
-            onScan={handleBarcodeScan}
+            onScan={(code) => {
+              const product = useProductsStore.getState().findByBarcode(code);
+              if (!product) {
+                addToast(`No product found for "${code}"`, "error");
+                return;
+              }
+              if (product.stockQty <= 0) {
+                addToast(`${product.name} is out of stock`, "warning");
+                return;
+              }
+              const inStock = product.variants.filter((v) => Math.floor(product.stockQty / v.unitSize) > 0);
+              if (inStock.length === 0) {
+                addToast(`${product.name} is out of stock`, "warning");
+                return;
+              }
+              if (inStock.length === 1) {
+                const v = inStock[0];
+                const maxU = Math.floor(product.stockQty / v.unitSize);
+                useCartStore.getState().addItem({
+                  productId: product.id,
+                  productName: product.name,
+                  variantId: v.id,
+                  variantName: v.name,
+                  qty: v.qtyStep,
+                  unitPrice: v.sellingPrice,
+                  lineTotal: v.sellingPrice * v.qtyStep,
+                  maxQty: maxU,
+                  qtyStep: v.qtyStep,
+                  unitSize: v.unitSize,
+                  baseUnit: product.baseUnit,
+                });
+                addToast(`${product.name} (${v.name}) added`, "success");
+              } else {
+                navigate(`${base}/sale/products/${product.id}`);
+              }
+            }}
             label="Scan"
             size="lg"
           />
@@ -251,7 +253,7 @@ export default function CartPage() {
         </div>
       </div>
 
-      {/* Payment method */}
+      {/* Payment method — moved from SaleReviewPage */}
       <div className="px-4 pt-4">
         <p className="text-xs font-bold text-black uppercase mb-3">Payment Method</p>
         <div className="flex gap-2">
@@ -310,7 +312,7 @@ export default function CartPage() {
         </div>
       )}
 
-      {/* Complete Sale */}
+      {/* Complete Sale — instead of Proceed to Review */}
       <div className="p-4 pb-6">
         {!customer ? (
           <Button
