@@ -10,11 +10,19 @@ import { useAuthStore } from "@/stores/authStore";
 import { useCustomersStore } from "@/stores/customersStore";
 import { useCurrentTime } from "@/lib/useCurrentTime";
 import type { Sale } from "@/types";
-import { Search, Calendar } from "lucide-react";
+import { Search, Calendar, SlidersHorizontal, Check } from "lucide-react";
 import { groupSalesByDateSections } from "@/lib/salesGrouping";
 
 type Tab = "all" | "credit" | "paid";
 type DateFilter = "today" | "yesterday" | "this_week" | "this_month" | "custom";
+type SortKey = "newest" | "oldest" | "highest" | "lowest";
+
+const SORT_OPTIONS: { key: SortKey; label: string }[] = [
+  { key: "newest", label: "Newest First" },
+  { key: "oldest", label: "Oldest First" },
+  { key: "highest", label: "Highest Amount" },
+  { key: "lowest", label: "Lowest Amount" },
+];
 
 function initBgColor(name: string) {
   const colors = ["#84cc16","#3b82f6","#8b5cf6","#f59e0b","#06b6d4","#ec4899"];
@@ -35,6 +43,8 @@ export default function SalesListPage() {
   const [customFrom, setCustomFrom] = useState("");
   const [customTo, setCustomTo] = useState("");
   const [query, setQuery] = useState("");
+  const [sort, setSort] = useState<SortKey>("newest");
+  const [showSortMenu, setShowSortMenu] = useState(false);
 
   const { user } = useAuthStore();
   const customers = useCustomersStore((s) => s.customers);
@@ -87,7 +97,13 @@ export default function SalesListPage() {
     return true;
   }
 
-  const filtered = allSales.filter((s) => !s.isVoided && inDate(s)).filter(inTab).filter(inQuery);
+  const filtered = allSales.filter((s) => !s.isVoided && inDate(s)).filter(inTab).filter(inQuery)
+    .sort((a, b) => {
+      if (sort === "newest") return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      if (sort === "oldest") return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+      if (sort === "highest") return b.totalAmount - a.totalAmount;
+      return a.totalAmount - b.totalAmount;
+    });
   const total     = filtered.reduce((s, x) => s + x.totalAmount, 0);
 
   const DATE_FILTERS: { key: DateFilter; label: string }[] = [
@@ -151,10 +167,10 @@ export default function SalesListPage() {
         </p>
       </div>
 
-      {/* Search bar */}
-      <div className="px-4 pt-3">
+      {/* Search + Sort */}
+      <div className="px-4 pt-3 flex gap-2 items-center">
         <div
-          className="flex items-center gap-2 h-10 rounded-full px-3"
+          className="flex-1 flex items-center gap-2 h-10 rounded-full px-3"
           style={{ background: "var(--surface-2)", border: "1px solid var(--divider)" }}
         >
           <Search size={14} style={{ color: "var(--text-secondary)" }} />
@@ -167,6 +183,35 @@ export default function SalesListPage() {
           />
           {query && (
             <button onClick={() => setQuery("")} style={{ color: "var(--text-secondary)" }}>×</button>
+          )}
+        </div>
+        <div className="relative">
+          <button
+            onClick={() => setShowSortMenu(!showSortMenu)}
+            className="w-10 h-10 rounded-full flex items-center justify-center shrink-0"
+            style={{ background: "var(--surface-2)", border: "1px solid var(--divider)" }}
+          >
+            <SlidersHorizontal size={15} style={{ color: "var(--text-primary)" }} />
+          </button>
+          {showSortMenu && (
+            <div
+              className="absolute right-0 top-12 w-52 rounded-[14px] shadow-xl overflow-hidden z-50"
+              style={{ background: "var(--surface)", border: "1px solid var(--divider)" }}
+            >
+              {SORT_OPTIONS.map((opt) => (
+                <button
+                  key={opt.key}
+                  onClick={() => { setSort(opt.key); setShowSortMenu(false); }}
+                  className="flex items-center justify-between w-full px-4 py-3.5 text-left transition-colors active:bg-black/5"
+                  style={{ borderBottom: "1px solid var(--divider)" }}
+                >
+                  <span className="text-[13px] font-medium" style={{ color: sort === opt.key ? "var(--brand-dark)" : "var(--text-primary)" }}>
+                    {opt.label}
+                  </span>
+                  {sort === opt.key && <Check size={16} style={{ color: "var(--brand)" }} />}
+                </button>
+              ))}
+            </div>
           )}
         </div>
       </div>
@@ -309,14 +354,10 @@ export default function SalesListPage() {
         <div className="flex flex-col pb-8">
           {groupSalesByDateSections(filtered, now).map((section) => (
             <div key={section.label} className="mt-4">
-              {/* Section heading */}
-              <div className="flex items-center justify-between px-4 mb-2">
+              <div className="px-4 mb-2">
                 <p className="text-[11px] font-bold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
                   {section.label}
                 </p>
-                <button className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ background: "var(--surface-2)", color: "var(--text-secondary)" }}>
-                  Sort ↓
-                </button>
               </div>
               <div className="mx-4 rounded-[14px] overflow-hidden" style={{ border: "1px solid var(--divider)" }}>
                 {section.sales.map((sale, i) => {
