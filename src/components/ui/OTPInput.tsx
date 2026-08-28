@@ -46,13 +46,23 @@ export default function OTPInput({ value, onChange, length = 6, disabled, error 
 
   return (
     <div className="flex gap-3 justify-center">
+      {/* Hidden input for OTP auto-detection (Web OTP API / SMS autofill) */}
+      <input
+        type="text"
+        inputMode="numeric"
+        autoComplete="one-time-code"
+        className="absolute opacity-0 w-0 h-0 pointer-events-none"
+        tabIndex={-1}
+      />
       {Array.from({ length }).map((_, i) => (
         <input
           key={i}
           ref={(el) => { refs.current[i] = el; }}
           type="text"
           inputMode="numeric"
+          autoComplete={i === 0 ? "one-time-code" : "off"}
           maxLength={1}
+          autoFocus={i === 0}
           value={digits[i] || ""}
           disabled={disabled}
           onChange={(e) => handleChange(i, e.target.value)}

@@ -32,6 +32,32 @@ export default function OTPVerifyPage() {
     if (!pendingPhone) navigate("/login", { replace: true });
   }, []);
 
+  // SMS OTP auto-detection (Web OTP API — like WhatsApp)
+  useEffect(() => {
+    if (!pendingPhone || locked || expired) return;
+    // Only available in secure contexts (HTTPS or localhost)
+    if (!window.navigator?.credentials?.get) return;
+
+    const abortController = new AbortController();
+
+    async function detectOTP() {
+      try {
+        const credential = await navigator.credentials.get({
+          otp: { transport: ["sms"] },
+          signal: abortController.signal,
+        } as any);
+        if (credential && (credential as any).code) {
+          setOtp((credential as any).code);
+        }
+      } catch {
+        // User denied or API not available — silent fallback
+      }
+    }
+
+    detectOTP();
+    return () => abortController.abort();
+  }, [pendingPhone, locked, expired]);
+
   useEffect(() => {
     const t = setInterval(() => setCountdown((c) => Math.max(0, c - 1)), 1000);
     return () => clearInterval(t);
