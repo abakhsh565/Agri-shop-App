@@ -191,7 +191,7 @@ export default function BrowseProductsPage() {
 
       {/* Floating Scan button */}
       <div className="fixed left-0 right-0 max-w-[480px] mx-auto pointer-events-none z-40" style={{ bottom: "calc(var(--tabbar-height) + 16px)" }}>
-        <div className="flex px-4 justify-end">
+        <div className="flex px-4 justify-end pointer-events-auto">
           <ScanButton onScan={handleBarcodeScan} label="Scan" size="lg" />
         </div>
       </div>
