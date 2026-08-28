@@ -358,7 +358,10 @@ export default function AdminSalesListPage() {
                         <p className="text-[11px] font-medium mt-0.5" style={{ color: "var(--text-secondary)" }}>Sold by: {sale.employeeName}</p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2 shrink-0">
+                    <div className="flex flex-col items-end gap-1 shrink-0">
+                      <span className="text-[14px] font-bold" style={{ color: "var(--text-primary)" }}>
+                        {formatCurrency(sale.totalAmount)}
+                      </span>
                       {sale.paymentType !== "full" ? (
                         <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full" style={{ background: "rgba(239,68,68,0.1)", color: "#ef4444" }}>
                           Credit
@@ -368,9 +371,6 @@ export default function AdminSalesListPage() {
                           Paid
                         </span>
                       )}
-                      <span className="text-[14px] font-bold" style={{ color: "var(--text-primary)" }}>
-                        {formatCurrency(sale.totalAmount)}
-                      </span>
                     </div>
                   </button>
                   );
