@@ -386,10 +386,10 @@ export default function AdminSalesListPage() {
                   <button
                     key={sale.id}
                     onClick={() => navigate(`/admin/sales/${sale.id}`)}
-                    className="flex items-center justify-between px-4 py-3.5 text-left transition-opacity active:opacity-70"
+                    className="flex items-center gap-4 px-4 py-3.5 text-left transition-opacity active:opacity-70"
                     style={{ borderBottom: i < section.sales.length - 1 ? "1px solid var(--divider)" : "none" }}
                   >
-                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                    <div className="flex items-center gap-3">
                       {cImg ? (
                         <img src={cImg} alt={sale.customerName} className="size-10 rounded-full object-cover shrink-0" />
                       ) : (
@@ -397,13 +397,13 @@ export default function AdminSalesListPage() {
                           {sale.customerName.charAt(0).toUpperCase()}
                         </div>
                       )}
-                      <div className="flex-1 min-w-0">
+                      <div className="min-w-0">
                         <p className="text-[13px] font-bold truncate" style={{ color: "var(--text-primary)" }}>{sale.customerName}</p>
                         <p className="text-[10px] mt-0.5" style={{ color: "var(--text-secondary)" }}>{formatSmartDateTime(sale.createdAt, now)}</p>
                         <p className="text-[11px] font-medium mt-0.5" style={{ color: "var(--text-secondary)" }}>Sold by: {sale.employeeName}</p>
                       </div>
                     </div>
-                    <div className="flex flex-col items-end gap-1 shrink-0 ml-auto">
+                    <div className="flex flex-col items-end gap-1 shrink-0">
                       <span className="text-[14px] font-bold" style={{ color: "var(--text-primary)" }}>
                         {formatCurrency(sale.totalAmount)}
                       </span>
