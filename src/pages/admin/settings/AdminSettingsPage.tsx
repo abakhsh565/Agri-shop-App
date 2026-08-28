@@ -251,41 +251,8 @@ export default function AdminSettingsPage() {
 
         </div>
 
-        {/* Admin Quick Links */}
+        {/* Account + Management — unified section */}
         <div className="px-4 pt-5 animate-fade-in-up delay-100">
-          <p className="text-xs font-bold uppercase mb-3 tracking-wider" style={{ color: "var(--text-secondary)" }}>
-            Management
-          </p>
-          <div className="rounded-xl overflow-hidden" style={{ border: "1px solid var(--border-light)" }}>
-            {[
-              { icon: Users,     label: t("admin.employees") ?? "Employees",    action: () => navigate("/admin/employees") },
-              { icon: Building2, label: t("admin.companies")  ?? "Companies",   action: () => navigate("/admin/companies") },
-              { icon: Package,   label: t("admin.inventory")  ?? "Inventory",   action: () => navigate("/admin/inventory") },
-              { icon: ShieldCheck, label: t("admin.reports")  ?? "Reports",     action: () => navigate("/admin/reports") },
-            ].map((row, i, arr) => {
-              const Icon = row.icon;
-              return (
-                <button
-                  key={row.label}
-                  onClick={row.action}
-                  className={`flex items-center justify-between w-full px-4 py-4 text-left active:opacity-70 ${i < arr.length - 1 ? "border-b" : ""}`}
-                  style={{ borderColor: "var(--border-light)" }}
-                >
-                  <div className="flex items-center gap-3">
-                    <Icon size={18} style={{ color: "var(--brand)" }} />
-                    <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>{row.label}</span>
-                  </div>
-                  <ChevronRight size={14} style={{ color: "var(--text-secondary)" }} />
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-
-
-        {/* Account */}
-        <div className="px-4 pt-5 animate-fade-in-up delay-150">
           <p className="text-xs font-bold uppercase mb-3 tracking-wider" style={{ color: "var(--text-secondary)" }}>
             {t("settings.account")}
           </p>
@@ -316,6 +283,37 @@ export default function AdminSettingsPage() {
                     )}
                     {s.action && <ChevronRight size={14} style={{ color: "var(--text-secondary)" }} />}
                   </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Management shortcuts */}
+        <div className="px-4 pt-5 animate-fade-in-up delay-150">
+          <p className="text-xs font-bold uppercase mb-3 tracking-wider" style={{ color: "var(--text-secondary)" }}>
+            Management
+          </p>
+          <div className="rounded-xl overflow-hidden" style={{ border: "1px solid var(--border-light)" }}>
+            {[
+              { icon: Users,       label: t("admin.employees") ?? "Employees",  action: () => navigate("/admin/employees") },
+              { icon: Building2,   label: t("admin.companies")  ?? "Companies", action: () => navigate("/admin/companies") },
+              { icon: Package,     label: t("admin.inventory")  ?? "Inventory", action: () => navigate("/admin/inventory") },
+              { icon: ShieldCheck, label: t("admin.reports")    ?? "Reports",   action: () => navigate("/admin/reports") },
+            ].map((row, i, arr) => {
+              const Icon = row.icon;
+              return (
+                <button
+                  key={row.label}
+                  onClick={row.action}
+                  className={`flex items-center justify-between w-full px-4 py-4 text-left active:opacity-70 ${i < arr.length - 1 ? "border-b" : ""}`}
+                  style={{ borderColor: "var(--border-light)" }}
+                >
+                  <div className="flex items-center gap-3">
+                    <Icon size={18} style={{ color: "var(--brand)" }} />
+                    <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>{row.label}</span>
+                  </div>
+                  <ChevronRight size={14} style={{ color: "var(--text-secondary)" }} />
                 </button>
               );
             })}

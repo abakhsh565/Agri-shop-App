@@ -257,7 +257,7 @@ export default function SettingsPage() {
                   style={{ borderColor: "var(--border-light)" }}
                 >
                   <div className="flex items-center gap-3">
-                    <Icon size={18} style={{ color: "var(--text-primary)" }} />
+                    <Icon size={18} style={{ color: "var(--brand)" }} />
                     <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>{s.label}</span>
                   </div>
                   <div className="flex items-center gap-1">
