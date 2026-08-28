@@ -31,7 +31,7 @@ import AdminLayout from "@/components/layout/AdminLayout";
 import AdminDashboardPage from "@/pages/admin/dashboard/AdminDashboardPage";
 import AdminSalesListPage from "@/pages/admin/sales/AdminSalesListPage";
 import AdminSaleDetailPage from "@/pages/admin/sales/AdminSaleDetailPage";
-import AdminInventoryPage from "@/pages/admin/inventory/AdminInventoryPage";
+
 import MoreMenuPage from "@/pages/admin/more/MoreMenuPage";
 import EmployeesListPage from "@/pages/admin/employees/EmployeesListPage";
 import EmployeeDetailPage from "@/pages/admin/employees/EmployeeDetailPage";
@@ -118,7 +118,6 @@ export const router = createBrowserRouter([
       { path: "sale/success", element: <SaleSuccessPage /> },
       { path: "sales",      element: <AdminSalesListPage /> },
       { path: "sales/:saleId", element: <AdminSaleDetailPage /> },
-      { path: "inventory",  element: <AdminInventoryPage /> },
       { path: "inventory/new", element: <AddProductPage /> },
       { path: "inventory/:productId/edit", element: <AddProductPage /> },
       { path: "inventory/:productId/adjust", element: <InventoryAdjustPage /> },

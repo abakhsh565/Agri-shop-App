@@ -8,7 +8,7 @@ import type { Product } from "@/types";
 import { useT } from "@/lib/i18n";
 import { useThemeStore } from "@/stores/themeStore";
 import { useShellBase } from "@/lib/useShellBase";
-import { ChevronRight, Search } from "lucide-react";
+import { ChevronRight, Search, Plus } from "lucide-react";
 import type { ProductCategory } from "@/types";
 
 const CATEGORY_KEYS: Record<string, "products.all" | "products.spray" | "products.seed" | "products.fertilizer"> = {
@@ -156,6 +156,11 @@ export default function ProductsListPage() {
                       >
                         {getStockStatusLabel(status)}
                       </span>
+                      {p.barcode && (
+                        <span className="text-[10px] font-mono" style={{ color: "var(--text-secondary)" }}>
+                          {p.barcode}
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -166,6 +171,23 @@ export default function ProductsListPage() {
         </div>
       )}
     </div>
+      {/* Floating Add Product (admin only) */}
+      {base === "/admin" && (
+        <div
+          className="fixed left-0 right-0 max-w-[480px] mx-auto pointer-events-none z-40"
+          style={{ bottom: "calc(var(--tabbar-height) + 16px)" }}
+        >
+          <div className={`flex px-4 ${isUrdu ? "justify-start" : "justify-end"}`}>
+            <button
+              onClick={() => navigate("/admin/inventory/new")}
+              className="pointer-events-auto h-13 pl-4 pr-5 rounded-full flex items-center gap-2 text-sm font-bold shadow-lg active:scale-95 transition-transform"
+              style={{ background: "var(--brand)", color: "#0a0a0a", height: "52px", boxShadow: "0 6px 20px rgba(0,0,0,0.25)" }}
+            >
+              <Plus size={20} strokeWidth={2.5} /> Product
+            </button>
+          </div>
+        </div>
+      )}
     </PullToRefresh>
   );
 }

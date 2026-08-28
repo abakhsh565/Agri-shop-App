@@ -88,7 +88,7 @@ export default function InventoryAdjustPage() {
           actor_id: user?.id ?? null,
         });
       } catch { /* notification is best-effort */ }
-      navigate("/admin/inventory", { replace: true });
+      navigate("/admin/products", { replace: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not adjust stock.");
     } finally {

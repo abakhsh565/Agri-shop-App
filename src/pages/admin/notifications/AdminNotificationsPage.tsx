@@ -20,7 +20,7 @@ function notificationRoute(n: AppNotification): string | null {
       case "purchase": return "/admin/purchases/" + n.entity_id;
       case "employee": return "/admin/employees/" + n.entity_id;
       case "low_stock": return "/admin/products/" + n.entity_id;
-      case "stock_adjust": return "/admin/inventory";
+      case "stock_adjust": return "/admin/products";
       case "payment": return "/admin/payments";
       default: return null;
     }
@@ -30,7 +30,7 @@ function notificationRoute(n: AppNotification): string | null {
     case "return": return "/admin/sales";
     case "payment": return "/admin/payments";
     case "purchase": return "/admin/purchases";
-    case "low_stock": case "stock_adjust": return "/admin/inventory";
+    case "low_stock": case "stock_adjust": return "/admin/products";
     case "employee": return "/admin/employees";
     default: return null;
   }

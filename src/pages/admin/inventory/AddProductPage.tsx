@@ -140,7 +140,7 @@ export default function AddProductPage() {
         addToast(`${name.trim()} added to inventory`, "success");
       }
       clearNav();
-      navigate("/admin/inventory", { replace: true });
+      navigate("/admin/products", { replace: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save product.");
     } finally {

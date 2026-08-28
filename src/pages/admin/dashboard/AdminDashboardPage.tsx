@@ -32,7 +32,7 @@ function adminNotifRoute(n: AppNotification): string | null {
       case "purchase": return "/admin/purchases/" + n.entity_id;
       case "employee": return "/admin/employees/" + n.entity_id;
       case "low_stock": return "/admin/products/" + n.entity_id; // low-stock product detail
-      case "stock_adjust": return "/admin/inventory"; // no individual adjustment detail
+      case "stock_adjust": return "/admin/products";
       case "payment": return "/admin/payments"; // no individual payment detail
       default: return null;
     }
@@ -43,7 +43,7 @@ function adminNotifRoute(n: AppNotification): string | null {
     case "return": return "/admin/sales";
     case "payment": return "/admin/payments";
     case "purchase": return "/admin/purchases";
-    case "low_stock": case "stock_adjust": return "/admin/inventory";
+    case "low_stock": case "stock_adjust": return "/admin/products";
     case "employee": return "/admin/employees";
     default: return null;
   }
@@ -388,7 +388,7 @@ export default function AdminDashboardPage() {
         <div className="flex flex-col gap-2">
           {lowStockCount > 0 && (
             <button
-              onClick={() => navigate("/admin/inventory")}
+              onClick={() => navigate("/admin/products")}
               className="flex items-center justify-between rounded-[14px] p-4 transition-opacity active:opacity-70"
               style={{ background: "var(--surface)", border: "1px solid var(--border-light)" }}
             >

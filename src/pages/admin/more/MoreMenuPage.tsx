@@ -9,7 +9,7 @@ const TILES = [
   { labelKey: "admin.employees" as const, icon: Users,        path: "/admin/employees",  color: "#8b5cf6" },
   { labelKey: "admin.purchases" as const, icon: ShoppingCart, path: "/admin/purchases",  color: "#f59e0b" },
   { labelKey: "admin.reports"   as const, icon: BarChart2,    path: "/admin/reports",    color: "#06b6d4" },
-  { labelKey: "admin.inventory" as const, icon: Layers,       path: "/admin/inventory",  color: "#84cc16" },
+  { labelKey: "admin.inventory" as const, icon: Layers,       path: "/admin/products",   color: "#84cc16" },
   { labelKey: "admin.payments"  as const, icon: CreditCard,   path: "/admin/payments",   color: "#10b981" },
   { labelKey: "admin.settings"  as const, icon: Settings,     path: "/admin/settings",   color: "#6b7280" },
   { label: "Stock Movements",  icon: History,       path: "/admin/inventory/movements", color: "#6366f1" },

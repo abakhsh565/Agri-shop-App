@@ -15,7 +15,7 @@ const TAB_DEFS = [
   { key: "admin.dashboard" as const, icon: LayoutDashboard, path: "/admin/dashboard" },
   { key: "admin.sales"     as const, icon: ShoppingBag,     path: "/admin/sales"     },
   { key: "scan"            as const, icon: ScanLine,        path: "__scan__"         },
-  { key: "admin.inventory" as const, icon: Package,         path: "/admin/inventory" },
+  { key: "admin.inventory" as const, icon: Package,         path: "/admin/products"    },
   { key: "admin.more"      as const, icon: MoreHorizontal,  path: "/admin/more"      },
 ];
 
@@ -28,7 +28,8 @@ export default function AdminLayout() {
   function activeTab() {
     const path = location.pathname;
     if (path.startsWith("/admin/sales"))     return "/admin/sales";
-    if (path.startsWith("/admin/inventory") || path.startsWith("/admin/inventory/movements") || path.startsWith("/admin/inventory/reorder")) return "/admin/inventory";
+    if (path.startsWith("/admin/products"))  return "/admin/products";
+    if (path.startsWith("/admin/inventory") || path.startsWith("/admin/inventory/movements") || path.startsWith("/admin/inventory/reorder")) return "/admin/products";
     if (path.startsWith("/admin/customers")) return "/admin/customers";
     if (path.startsWith("/admin/more") ||
         path.startsWith("/admin/employees") ||
@@ -36,8 +37,7 @@ export default function AdminLayout() {
         path.startsWith("/admin/purchases") ||
         path.startsWith("/admin/reports") ||
         path.startsWith("/admin/settings") ||
-        path.startsWith("/admin/payments") ||
-        path.startsWith("/admin/products"))  return "/admin/more";
+        path.startsWith("/admin/payments"))  return "/admin/more";
     return "/admin/dashboard";
   }
 

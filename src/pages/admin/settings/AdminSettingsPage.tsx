@@ -302,7 +302,7 @@ export default function AdminSettingsPage() {
             {[
               { icon: Users,       label: t("admin.employees") ?? "Employees",  action: () => navigate("/admin/employees") },
               { icon: Building2,   label: t("admin.companies")  ?? "Companies", action: () => navigate("/admin/companies") },
-              { icon: Package,     label: t("admin.inventory")  ?? "Inventory", action: () => navigate("/admin/inventory") },
+              { icon: Package,     label: t("admin.inventory")  ?? "Inventory", action: () => navigate("/admin/products") },
               { icon: ShieldCheck, label: t("admin.reports")    ?? "Reports",   action: () => navigate("/admin/reports") },
             ].map((row, i, arr) => {
               const Icon = row.icon;
