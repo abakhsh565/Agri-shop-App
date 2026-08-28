@@ -356,13 +356,10 @@ export default function AdminSalesListPage() {
                           <p className="text-[14px] font-bold truncate" style={{ color: "var(--text-primary)" }}>{sale.customerName}</p>
                           <span className="text-[10px] shrink-0" style={{ color: "var(--text-secondary)" }}>{formatSmartDateTime(sale.createdAt, now)}</span>
                         </div>
-                        <p className="text-[10px] mt-0.5" style={{ color: "var(--text-secondary)", opacity: 0.7 }}>Sold by: {sale.employeeName}</p>
+                        <p className="text-[11px] font-medium mt-0.5" style={{ color: "var(--text-secondary)" }}>Sold by: {sale.employeeName}</p>
                       </div>
                     </div>
-                    <div className="flex flex-col items-end gap-1">
-                      <span className="text-[15px] font-bold" style={{ color: "var(--text-primary)" }}>
-                        {formatCurrency(sale.totalAmount)}
-                      </span>
+                    <div className="shrink-0">
                       <PaymentBadge type={sale.paymentType} outstandingBalance={sale.outstandingBalance} />
                     </div>
                   </button>
