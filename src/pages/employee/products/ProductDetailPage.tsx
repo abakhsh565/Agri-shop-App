@@ -119,7 +119,7 @@ export default function ProductDetailPage() {
       />
 
       <div className="flex flex-col gap-4 px-4 pt-4 pb-8">
-        {/* ── HERO CARD: Image + Name + Category + Stock Badge + Price ── */}
+        {/* ── HERO CARD: Image + Name + Category + Stock Badge ── */}
         <div
           className="rounded-[16px] p-4 flex gap-4"
           style={{ background: "var(--surface-2)", border: "1px solid var(--divider)" }}
@@ -153,36 +153,45 @@ export default function ProductDetailPage() {
               </button>
             )}
           </div>
-          <div className="flex-1 min-w-0 flex flex-col justify-between">
-            <div>
-              <p className="text-lg font-bold truncate" style={{ color: "var(--text-primary)" }}>{product.name}</p>
-              <p className="text-sm truncate" style={{ color: "var(--text-secondary)" }}>{product.company}</p>
-              <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                <CategoryChip label={CATEGORY_LABEL[product.category]} />
-                <span
-                  className="text-[10px] font-bold px-2 py-0.5 rounded-full"
-                  style={{ color: stockColor, background: stockColor + "22" }}
-                >
-                  {stockStatusLabel(stockStatus)}
-                </span>
-              </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-lg font-bold truncate" style={{ color: "var(--text-primary)" }}>{product.name}</p>
+            <p className="text-sm truncate" style={{ color: "var(--text-secondary)" }}>{product.company}</p>
+            <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+              <CategoryChip label={CATEGORY_LABEL[product.category]} />
+              <span
+                className="text-[10px] font-bold px-2 py-0.5 rounded-full"
+                style={{ color: stockColor, background: stockColor + "22" }}
+              >
+                {stockStatusLabel(stockStatus)}
+              </span>
             </div>
-            <div className="flex items-end justify-between mt-2">
-              <div>
-                <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>Price</p>
-                <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>
-                  {prices.length > 1
-                    ? `${formatCurrency(minPrice)} – ${formatCurrency(maxPrice)}`
-                    : formatCurrency(minPrice)}
-                </p>
-              </div>
-              <div className="text-right">
-                <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>Stock</p>
-                <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>
-                  {totalStock} {product.baseUnit}
-                </p>
-              </div>
-            </div>
+          </div>
+        </div>
+
+        {/* ── QUICK INFO: Price + Stock + Variants in a clean row ── */}
+        <div
+          className="rounded-[14px] p-4 grid grid-cols-3 gap-3"
+          style={{ border: "1px solid var(--divider)" }}
+        >
+          <div className="text-center">
+            <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>Price</p>
+            <p className="text-sm font-bold mt-0.5" style={{ color: "var(--text-primary)" }}>
+              {prices.length > 1
+                ? `${formatCurrency(minPrice)} – ${formatCurrency(maxPrice)}`
+                : formatCurrency(minPrice)}
+            </p>
+          </div>
+          <div className="text-center" style={{ borderLeft: "1px solid var(--divider)", borderRight: "1px solid var(--divider)" }}>
+            <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>Stock</p>
+            <p className="text-sm font-bold mt-0.5" style={{ color: "var(--text-primary)" }}>
+              {totalStock} {product.baseUnit}
+            </p>
+          </div>
+          <div className="text-center">
+            <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>Variants</p>
+            <p className="text-sm font-bold mt-0.5" style={{ color: "var(--text-primary)" }}>
+              {product.variants.length}
+            </p>
           </div>
         </div>
 
@@ -203,30 +212,13 @@ export default function ProductDetailPage() {
           </div>
         )}
 
-        {/* ── INVENTORY CARD: Stock Summary + Variants grouped together ── */}
-        <div
-          className="rounded-[14px] overflow-hidden"
-          style={{ border: "1px solid var(--divider)" }}
-        >
-          {/* Card header */}
-          <div className="px-4 py-3 flex items-center justify-between" style={{ background: "var(--surface-2)" }}>
-            <div className="flex items-center gap-2">
-              <Package size={14} style={{ color: "var(--brand)" }} />
-              <p className="text-xs font-bold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
-                Inventory
-              </p>
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="text-right">
-                <p className="text-[10px] uppercase" style={{ color: "var(--text-secondary)" }}>Total</p>
-                <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>{totalStock} {product.baseUnit}</p>
-              </div>
-              <div className="text-right">
-                <p className="text-[10px] uppercase" style={{ color: "var(--text-secondary)" }}>Variants</p>
-                <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>{product.variants.length}</p>
-              </div>
-            </div>
-          </div>
+        {/* ── PACK SIZES: Variant details ── */}
+        <div>
+          <p className="text-xs font-bold uppercase mb-2 tracking-wider" style={{ color: "var(--text-secondary)" }}>Pack Sizes</p>
+          <div
+            className="rounded-[14px] overflow-hidden"
+            style={{ border: "1px solid var(--divider)" }}
+          >
 
           {/* Variants list */}
           {product.variants.map((v, i) => {
@@ -259,6 +251,7 @@ export default function ProductDetailPage() {
               </div>
             );
           })}
+          </div>
         </div>
 
         {/* ── ADMIN ACTIONS: Management (separated from destructive) ── */}
