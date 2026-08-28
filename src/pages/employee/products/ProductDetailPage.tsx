@@ -9,7 +9,7 @@ import { useUIStore } from "@/stores/uiStore";
 import { formatCurrency, getStockStatusColor } from "@/lib/formatters";
 import { useShellBase } from "@/lib/useShellBase";
 import { rpcDeleteProduct } from "@/lib/db";
-import { Pencil, TrendingUp, Barcode, Trash2, Copy, Package } from "lucide-react";
+import { Pencil, TrendingUp, Barcode, Trash2, Copy, Download, Package } from "lucide-react";
 import { barcodeToSvg } from "@/lib/barcode";
 
 const CATEGORY_LABEL: Record<string, string> = {
@@ -153,13 +153,34 @@ export default function ProductDetailPage() {
             style={{ background: "var(--surface)", border: "1px solid var(--divider)" }}
           >
             <div dangerouslySetInnerHTML={{ __html: barcodeToSvg(product.barcode, { height: 40, showText: true, width: 160 }) }} className="flex-1" />
-            <button
-              onClick={() => { navigator.clipboard.writeText(product.barcode!).then(() => addToast("Barcode copied", "success")).catch(() => {}); }}
-              className="size-8 rounded-full flex items-center justify-center shrink-0 active:opacity-70"
-              style={{ background: "var(--surface-2)" }}
-            >
-              <Copy size={14} style={{ color: "var(--text-secondary)" }} />
-            </button>
+            <div className="flex gap-1.5 shrink-0">
+              <button
+                onClick={() => { navigator.clipboard.writeText(product.barcode!).then(() => addToast("Barcode copied", "success")).catch(() => {}); }}
+                className="size-8 rounded-full flex items-center justify-center active:opacity-70"
+                style={{ background: "var(--surface-2)" }}
+                title="Copy barcode"
+              >
+                <Copy size={14} style={{ color: "var(--text-secondary)" }} />
+              </button>
+              <button
+                onClick={() => {
+                  const svg = barcodeToSvg(product.barcode!, { height: 60, showText: true });
+                  const blob = new Blob([svg], { type: "image/svg+xml" });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  a.href = url;
+                  a.download = `barcode-${product.name.replace(/\s+/g, "-")}-${product.barcode}.svg`;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                  addToast("Barcode downloaded", "success");
+                }}
+                className="size-8 rounded-full flex items-center justify-center active:opacity-70"
+                style={{ background: "var(--surface-2)" }}
+                title="Download barcode"
+              >
+                <Download size={14} style={{ color: "var(--text-secondary)" }} />
+              </button>
+            </div>
           </div>
         )}
 

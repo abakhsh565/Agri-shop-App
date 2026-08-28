@@ -275,7 +275,6 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      <div className="p-4 pb-6 animate-fade-in-up delay-225">
       {/* Edit Profile Bottom Sheet */}
       {editingName && (
         <div className="fixed inset-0 z-50 flex items-end justify-center" onClick={() => { setEditingName(false); setNameValue(user?.name ?? ""); }}>
@@ -334,6 +333,7 @@ export default function SettingsPage() {
         </div>
       )}
 
+      <div className="p-4 pb-6 animate-fade-in-up delay-225">
         <button
           onClick={handleLogout}
           className="w-full h-[48px] rounded-full font-bold text-sm transition-colors border"
