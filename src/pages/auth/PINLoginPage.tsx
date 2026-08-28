@@ -88,13 +88,10 @@ export default function PINLoginPage() {
           ? "/admin/dashboard" : "/employee/dashboard";
         navigate(dest, { replace: true });
       } else {
-        // PIN not set on this device or wrong — fall back to OTP
+        // PIN not set on this device or wrong — auto-fallback to OTP
         clearPin(foundUser.id);
-        setError("PIN not found on this device. Use OTP instead.");
-        setTimeout(() => {
-          setPendingPhone(phone.trim());
-          navigate("/login/otp", { replace: true });
-        }, 1500);
+        setPendingPhone(phone.trim());
+        navigate("/login/otp", { replace: true });
       }
     } finally {
       setVerifying(false);
@@ -114,21 +111,16 @@ export default function PINLoginPage() {
     navigate("/login/forgot-pin");
   }
 
-  function handleUseOTP() {
-    if (phone.trim()) setPendingPhone(phone.trim());
-    navigate("/login", { replace: true });
-  }
-
   return (
     <AuthLayout>
-      <NavHeader title="PIN Login" backTo="/login" />
+      <NavHeader title="Sign In" backTo="/login" />
       <div className="flex flex-col flex-1 items-center gap-8 p-6 pt-8">
 
         {/* Step 1: Enter phone number */}
         {step === "phone" && (
           <>
             <div className="flex flex-col items-center gap-2 text-center">
-              <p className="text-xl font-bold text-black">Sign in with PIN</p>
+              <p className="text-xl font-bold text-black">Welcome back</p>
               <p className="text-sm text-[#888]">Enter your phone number to continue</p>
             </div>
             <div className="w-full flex flex-col gap-4">
@@ -145,9 +137,12 @@ export default function PINLoginPage() {
                 Continue
               </Button>
             </div>
-            <button onClick={handleUseOTP} className="text-xs text-[#888] underline">
-              Sign in with OTP instead
-            </button>
+            <p className="text-xs text-center text-[#888]">
+              New shop owner?{' '}
+              <button onClick={() => navigate("/register")} className="text-black font-medium underline">
+                Register your shop
+              </button>
+            </p>
           </>
         )}
 
@@ -185,10 +180,6 @@ export default function PINLoginPage() {
 
             <button onClick={handleForgotPIN} className="text-sm font-medium text-[#888] underline underline-offset-2">
               Forgot PIN?
-            </button>
-
-            <button onClick={handleUseOTP} className="text-xs text-[#aaa]">
-              Sign in with OTP instead
             </button>
           </>
         )}

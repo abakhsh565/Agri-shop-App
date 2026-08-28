@@ -4,6 +4,7 @@ import NavHeader from "@/components/ui/NavHeader";
 import { useAuthStore } from "@/stores/authStore";
 import { useThemeStore, applyTheme } from "@/stores/themeStore";
 import { clearDeviceSession } from "@/lib/deviceSession";
+import { hasPin } from "@/lib/pinLock";
 import { useT } from "@/lib/i18n";
 import { uploadImage } from "@/lib/storage";
 import { supabase } from "@/lib/supabase";
@@ -225,7 +226,8 @@ export default function SettingsPage() {
           >
             {[
               {
-                icon: Lock, label: t("settings.changePin"),
+                icon: Lock,
+                label: user && hasPin(user.id) ? "Change PIN" : "Setup PIN",
                 right: null, action: () => navigate("/login/pin-set"),
               },
               {

@@ -5,6 +5,7 @@ import NavHeader from "@/components/ui/NavHeader";
 import { useAuthStore } from "@/stores/authStore";
 import { useThemeStore, applyTheme } from "@/stores/themeStore";
 import { clearDeviceSession } from "@/lib/deviceSession";
+import { hasPin } from "@/lib/pinLock";
 import { useT } from "@/lib/i18n";
 import {
   Lock, Bell, Globe, Info, ChevronRight, Moon, Sun,
@@ -258,7 +259,7 @@ export default function AdminSettingsPage() {
           </p>
           <div className="rounded-xl overflow-hidden" style={{ border: "1px solid var(--border-light)" }}>
             {[
-              { icon: Lock,         label: t("settings.changePin"),   action: () => navigate("/login/pin-set") },
+              { icon: Lock,         label: user && hasPin(user.id) ? "Change PIN" : "Setup PIN",   action: () => navigate("/login/pin-set") },
               { icon: Bell,         label: t("settings.notifications"), action: () => navigate("/admin/notifications") },
               { icon: ClipboardList, label: t("settings.activityLog"), action: () => navigate("/admin/activity") },
               { icon: Smartphone,   label: t("settings.device"),       action: null,       right: "This Phone" },
