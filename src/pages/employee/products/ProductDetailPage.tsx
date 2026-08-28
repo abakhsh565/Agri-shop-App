@@ -2,7 +2,6 @@ import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
-import ImageUpload from "@/components/ui/ImageUpload";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { CategoryChip } from "@/components/ui/Badge";
 import { useProductsStore } from "@/stores/productsStore";
@@ -10,7 +9,7 @@ import { useUIStore } from "@/stores/uiStore";
 import { formatCurrency, getStockStatusColor } from "@/lib/formatters";
 import { useShellBase } from "@/lib/useShellBase";
 import { rpcDeleteProduct } from "@/lib/db";
-import { Pencil, Camera, TrendingUp, Barcode, Trash2, Copy, Package, AlertTriangle } from "lucide-react";
+import { Pencil, TrendingUp, Barcode, Trash2, Copy, Package } from "lucide-react";
 import { barcodeToSvg } from "@/lib/barcode";
 
 const CATEGORY_LABEL: Record<string, string> = {
@@ -40,26 +39,8 @@ export default function ProductDetailPage() {
   const product = products.find((p) => p.id === productId);
   const { addToast } = useUIStore();
 
-  const [showImageEdit, setShowImageEdit] = useState(false);
   const [toDelete, setToDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
-
-  async function handleImageChange(url: string | null) {
-    if (!productId) return;
-    try {
-      const { supabase } = await import("@/lib/supabase");
-      const { error } = await supabase
-        .from("products")
-        .update({ image_url: url })
-        .eq("id", productId);
-      if (error) throw new Error(error.message);
-      await useProductsStore.getState().load();
-      setShowImageEdit(false);
-      addToast(url ? "Image updated" : "Image removed", "success");
-    } catch (err) {
-      addToast(err instanceof Error ? err.message : "Could not save image", "error");
-    }
-  }
 
   async function confirmDelete() {
     if (!product) return;
@@ -103,60 +84,30 @@ export default function ProductDetailPage() {
   return (
     <div className="flex flex-col w-full min-h-full" style={{ background: "var(--background)" }}>
       <StatusBar />
-      <NavHeader
-        title="Product Details"
-        right={
-          isAdmin ? (
-            <button
-              onClick={() => navigate(`/admin/inventory/${product.id}/edit`)}
-              className="flex items-center gap-1 h-8 px-3 rounded-full text-xs font-bold active:opacity-70"
-              style={{ background: "var(--brand)", color: "#0a0a0a" }}
-            >
-              <Pencil size={13} /> Edit
-            </button>
-          ) : undefined
-        }
-      />
+      <NavHeader title="Product Details" />
 
       <div className="flex flex-col gap-4 px-4 pt-4 pb-8">
         {/* ── HERO CARD: Image + Name + Category + Stock Badge ── */}
         <div
-          className="rounded-[16px] p-4 flex gap-4"
+          className="rounded-[16px] p-4 flex gap-3 items-center"
           style={{ background: "var(--surface-2)", border: "1px solid var(--divider)" }}
         >
-          <div className="relative shrink-0">
-            {isAdmin ? (
-              <ImageUpload
-                bucket="product-images"
-                shape="square"
-                value={product.imageUrl ?? null}
-                onChange={handleImageChange}
-                label="Photo"
-              />
-            ) : product.imageUrl ? (
-              <img src={product.imageUrl} alt={product.name} className="size-20 rounded-2xl object-cover" />
+          <div className="shrink-0">
+            {product.imageUrl ? (
+              <img src={product.imageUrl} alt={product.name} className="size-14 rounded-xl object-cover" />
             ) : (
               <div
-                className="size-20 rounded-2xl flex items-center justify-center text-2xl font-bold"
+                className="size-14 rounded-xl flex items-center justify-center text-xl font-bold"
                 style={{ background: bg + "22", color: bg }}
               >
                 {product.name.charAt(0)}
               </div>
             )}
-            {!isAdmin && (
-              <button
-                onClick={() => setShowImageEdit(true)}
-                className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full flex items-center justify-center shadow"
-                style={{ background: "var(--brand)", color: "#0a0a0a" }}
-              >
-                <Camera size={12} strokeWidth={2.5} />
-              </button>
-            )}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-lg font-bold truncate" style={{ color: "var(--text-primary)" }}>{product.name}</p>
-            <p className="text-sm truncate" style={{ color: "var(--text-secondary)" }}>{product.company}</p>
-            <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+            <p className="text-base font-bold truncate" style={{ color: "var(--text-primary)" }}>{product.name}</p>
+            <p className="text-xs truncate" style={{ color: "var(--text-secondary)" }}>{product.company}</p>
+            <div className="flex items-center gap-2 mt-1 flex-wrap">
               <CategoryChip label={CATEGORY_LABEL[product.category]} />
               <span
                 className="text-[10px] font-bold px-2 py-0.5 rounded-full"
@@ -254,74 +205,53 @@ export default function ProductDetailPage() {
           </div>
         </div>
 
-        {/* ── ADMIN ACTIONS: Management (separated from destructive) ── */}
-        {isAdmin && (
-          <>
-            <div
-              className="rounded-[14px] overflow-hidden"
-              style={{ border: "1px solid var(--divider)" }}
+        {/* ── ALL ACTIONS: Edit + Adjust + Barcode + Delete (unified) ── */}
+        <div
+          className="rounded-[14px] overflow-hidden"
+          style={{ border: "1px solid var(--divider)" }}
+        >
+          {isAdmin && (
+            <button
+              onClick={() => navigate(`/admin/inventory/${product.id}/edit`)}
+              className="flex items-center gap-3 w-full px-4 py-3.5 text-left text-[13px] font-medium active:opacity-70"
+              style={{ color: "var(--text-primary)" }}
             >
-              <button
-                onClick={() => navigate(`/admin/inventory/${product.id}/adjust`)}
-                className="flex items-center gap-3 w-full px-4 py-3.5 text-left text-[13px] font-medium active:opacity-70"
-                style={{ color: "var(--text-primary)" }}
-              >
-                <TrendingUp size={16} style={{ color: "var(--brand)" }} />
-                Adjust Stock
-              </button>
-              <button
-                onClick={() => navigate(`/admin/inventory/barcodes?product=${product.id}`)}
-                className="flex items-center gap-3 w-full px-4 py-3.5 text-left text-[13px] font-medium active:opacity-70"
-                style={{ color: "var(--text-primary)", borderTop: "1px solid var(--divider)" }}
-              >
-                <Barcode size={16} style={{ color: "var(--brand)" }} />
-                Generate Barcode
-              </button>
-            </div>
-
-            {/* Destructive action — visually separated */}
+              <Pencil size={16} style={{ color: "var(--brand)" }} />
+              Edit Product
+            </button>
+          )}
+          {isAdmin && (
+            <button
+              onClick={() => navigate(`/admin/inventory/${product.id}/adjust`)}
+              className="flex items-center gap-3 w-full px-4 py-3.5 text-left text-[13px] font-medium active:opacity-70"
+              style={{ color: "var(--text-primary)", borderTop: "1px solid var(--divider)" }}
+            >
+              <TrendingUp size={16} style={{ color: "var(--brand)" }} />
+              Adjust Stock
+            </button>
+          )}
+          {isAdmin && (
+            <button
+              onClick={() => navigate(`/admin/inventory/barcodes?product=${product.id}`)}
+              className="flex items-center gap-3 w-full px-4 py-3.5 text-left text-[13px] font-medium active:opacity-70"
+              style={{ color: "var(--text-primary)", borderTop: "1px solid var(--divider)" }}
+            >
+              <Barcode size={16} style={{ color: "var(--brand)" }} />
+              Generate Barcode
+            </button>
+          )}
+          {isAdmin && (
             <button
               onClick={() => setToDelete(true)}
-              className="flex items-center justify-center gap-2 w-full h-11 rounded-full font-semibold text-sm transition-all active:scale-[0.98]"
-              style={{ border: "1.5px solid #ef4444", color: "#ef4444", background: "transparent" }}
+              className="flex items-center gap-3 w-full px-4 py-3.5 text-left text-[13px] font-medium active:opacity-70"
+              style={{ color: "var(--error)", borderTop: "1px solid var(--divider)" }}
             >
-              <Trash2 size={14} />
+              <Trash2 size={16} />
               Delete Product
             </button>
-          </>
-        )}
-      </div>
-
-      {/* Employee image edit modal */}
-      {showImageEdit && (
-        <div
-          className="fixed inset-0 z-50 flex items-end"
-          style={{ background: "rgba(0,0,0,0.5)" }}
-          onClick={() => setShowImageEdit(false)}
-        >
-          <div
-            className="w-full max-w-[390px] mx-auto rounded-t-[24px] p-6 flex flex-col gap-4 items-center"
-            style={{ background: "var(--surface)" }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <p className="text-base font-bold" style={{ color: "var(--text-primary)" }}>Update Photo</p>
-            <ImageUpload
-              bucket="product-images"
-              shape="square"
-              value={product.imageUrl ?? null}
-              onChange={handleImageChange}
-              label="Upload new photo"
-            />
-            <button
-              onClick={() => setShowImageEdit(false)}
-              className="w-full h-12 rounded-full text-sm font-bold"
-              style={{ border: "1px solid var(--divider)", color: "var(--text-primary)" }}
-            >
-              Done
-            </button>
-          </div>
+          )}
         </div>
-      )}
+      </div>
 
       <ConfirmDialog
         open={toDelete}
