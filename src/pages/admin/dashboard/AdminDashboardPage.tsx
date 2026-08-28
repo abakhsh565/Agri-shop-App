@@ -504,7 +504,7 @@ export default function AdminDashboardPage() {
                   background: "var(--background)",
                 }}
               >
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 flex-1 min-w-0">
                   {cImg ? (
                     <img src={cImg} alt={sale.customerName} className="size-9 rounded-full object-cover shrink-0" />
                   ) : (
@@ -518,7 +518,7 @@ export default function AdminDashboardPage() {
                     <p className="text-[11px] font-medium mt-0.5" style={{ color: "var(--text-secondary)" }}>Sold by: {sale.employeeName}</p>
                   </div>
                 </div>
-                <div className="flex flex-col items-end gap-1 shrink-0">
+                <div className="flex flex-col items-end gap-1 shrink-0 ml-auto">
                   <span className="text-[14px] font-bold" style={{ color: "var(--text-primary)" }}>
                     {formatRs(sale.totalAmount)}
                   </span>

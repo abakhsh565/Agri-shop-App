@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
 import PullToRefresh from "@/components/ui/PullToRefresh";
@@ -195,6 +195,12 @@ export default function SalesListPage() {
           </button>
           {showSortMenu && (
             <div
+              ref={(el) => {
+                if (el && showSortMenu) {
+                  const handler = (e: MouseEvent) => { if (!el.parentElement?.contains(e.target as Node)) setShowSortMenu(false); };
+                  setTimeout(() => document.addEventListener("click", handler, { once: true }), 0);
+                }
+              }}
               className="absolute right-0 top-12 w-52 rounded-[14px] shadow-xl overflow-hidden z-50"
               style={{ background: "var(--surface)", border: "1px solid var(--divider)" }}
             >
@@ -370,7 +376,7 @@ export default function SalesListPage() {
                     className="flex items-center justify-between px-4 py-3.5 text-left transition-opacity active:opacity-70"
                     style={{ borderBottom: i < section.sales.length - 1 ? "1px solid var(--divider)" : "none" }}
                   >
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-3 flex-1 min-w-0">
                       {cImg ? (
                         <img src={cImg} alt={sale.customerName} className="size-10 rounded-full object-cover shrink-0" />
                       ) : (
@@ -384,7 +390,7 @@ export default function SalesListPage() {
                         <p className="text-[11px] font-medium mt-0.5" style={{ color: "var(--text-secondary)" }}>Sold by: {sale.employeeName}</p>
                       </div>
                     </div>
-                    <div className="flex flex-col items-end gap-2 shrink-0 ml-3">
+                    <div className="flex flex-col items-end gap-2 shrink-0 ml-auto">
                       <span className="text-[14px] font-bold" style={{ color: "var(--text-primary)" }}>
                         {formatCurrency(sale.totalAmount)}
                       </span>
