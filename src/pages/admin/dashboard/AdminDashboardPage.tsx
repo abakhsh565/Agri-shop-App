@@ -63,7 +63,7 @@ export default function AdminDashboardPage() {
   const navigate = useNavigate();
   const t = useT();
   const isUrdu = language === "ur";
-  const [dateFilter, setDateFilter] = useState<DateFilter>("today");
+  const [dateFilter, setDateFilter] = useState<DateFilter>("all");
   const [showNotifs, setShowNotifs] = useState(false);
   const { items: notifications, unread, load, subscribe, markAllRead } = useNotificationStore();
   const mockSales = useSalesStore((s) => s.sales);
