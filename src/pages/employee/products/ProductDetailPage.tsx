@@ -61,7 +61,7 @@ export default function ProductDetailPage() {
     if (!file) return;
     setUploading(true);
     try {
-      const url = await uploadImage("product-photos", file);
+      const url = await uploadImage("product-images", file);
       setEditImageUrl(url);
     } catch {
       addToast("Image upload failed", "error");
