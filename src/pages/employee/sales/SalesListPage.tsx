@@ -12,6 +12,7 @@ import { useCustomersStore } from "@/stores/customersStore";
 import { useCurrentTime } from "@/lib/useCurrentTime";
 import type { Sale } from "@/types";
 import { Search, Calendar } from "lucide-react";
+import { groupSalesByDateSections } from "@/lib/salesGrouping";
 
 type Tab = "all" | "credit" | "paid";
 type DateFilter = "today" | "yesterday" | "this_week" | "this_month" | "custom";
@@ -299,46 +300,61 @@ export default function SalesListPage() {
         </div>
       )}
 
-      {/* Sales list */}
+      {/* Sales list with date sections */}
       {filtered.length === 0 ? (
         <div className="flex flex-col items-center py-16 gap-2">
           <p className="text-3xl">📋</p>
           <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>{t("sales.noSales")}</p>
         </div>
       ) : (
-        <div className="flex flex-col mx-4">
-          {filtered.map((sale, i) => {
-            const cImg = getCustomerImg(sale.customerId);
-            const cBg = initBgColor(sale.customerName);
-            return (
-            <button
-              key={sale.id}
-              onClick={() => navigate(`/employee/sales/${sale.id}`)}
-              className="flex items-center justify-between py-4 text-left transition-opacity active:opacity-70"
-              style={{ borderBottom: i < filtered.length - 1 ? "1px solid var(--divider)" : "none" }}
-            >
-              <div className="flex items-center gap-3">
-                {cImg ? (
-                  <img src={cImg} alt={sale.customerName} className="size-10 rounded-full object-cover shrink-0" />
-                ) : (
-                  <div className="size-10 rounded-full shrink-0 flex items-center justify-center text-sm font-bold" style={{ background: cBg, color: "#fff" }}>
-                    {sale.customerName.charAt(0).toUpperCase()}
-                  </div>
-                )}
-                <div>
-                  <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>{sale.customerName}</p>
-                  <p className="text-xs mt-0.5" style={{ color: "var(--text-secondary)" }}>{formatSmartDateTime(sale.createdAt, now)}</p>
-                </div>
-              </div>
-              <div className="flex flex-col items-end gap-1.5">
-                <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
-                  {formatCurrency(sale.totalAmount)}
+        <div className="flex flex-col pb-8">
+          {groupSalesByDateSections(filtered, now).map((section) => (
+            <div key={section.label} className="mt-4">
+              {/* Section heading */}
+              <div className="flex items-center justify-between px-4 mb-2">
+                <p className="text-[11px] font-bold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
+                  {section.label}
+                </p>
+                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ background: "var(--surface-2)", color: "var(--text-secondary)" }}>
+                  {section.sales.length} sale{section.sales.length !== 1 ? "s" : ""}
                 </span>
-                <PaymentBadge type={sale.paymentType} outstandingBalance={sale.outstandingBalance} />
               </div>
-            </button>
-            );
-          })}
+              <div className="mx-4 rounded-[14px] overflow-hidden" style={{ border: "1px solid var(--divider)" }}>
+                {section.sales.map((sale, i) => {
+                  const cImg = getCustomerImg(sale.customerId);
+                  const cBg = initBgColor(sale.customerName);
+                  return (
+                  <button
+                    key={sale.id}
+                    onClick={() => navigate(`/employee/sales/${sale.id}`)}
+                    className="flex items-center justify-between px-4 py-3.5 text-left transition-opacity active:opacity-70"
+                    style={{ borderBottom: i < section.sales.length - 1 ? "1px solid var(--divider)" : "none" }}
+                  >
+                    <div className="flex items-center gap-3">
+                      {cImg ? (
+                        <img src={cImg} alt={sale.customerName} className="size-10 rounded-full object-cover shrink-0" />
+                      ) : (
+                        <div className="size-10 rounded-full shrink-0 flex items-center justify-center text-sm font-bold" style={{ background: cBg, color: "#fff" }}>
+                          {sale.customerName.charAt(0).toUpperCase()}
+                        </div>
+                      )}
+                      <div>
+                        <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>{sale.customerName}</p>
+                        <p className="text-xs mt-0.5" style={{ color: "var(--text-secondary)" }}>{formatSmartDateTime(sale.createdAt, now)}</p>
+                      </div>
+                    </div>
+                    <div className="flex flex-col items-end gap-1.5">
+                      <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+                        {formatCurrency(sale.totalAmount)}
+                      </span>
+                      <PaymentBadge type={sale.paymentType} outstandingBalance={sale.outstandingBalance} />
+                    </div>
+                  </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
         </div>
       )}
     </div>
