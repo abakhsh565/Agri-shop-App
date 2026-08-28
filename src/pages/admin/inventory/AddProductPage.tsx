@@ -206,6 +206,26 @@ export default function AddProductPage() {
                 <Scan size={16} style={{ color: "var(--brand-dark)" }} />
               </button>
             </div>
+            <button
+              type="button"
+              onClick={() => {
+                if (!name.trim()) {
+                  addToast("Enter product name first", "error");
+                  return;
+                }
+                if (barcode.trim()) {
+                  addToast("Barcode already exists", "error");
+                  return;
+                }
+                const generated = generateProductBarcode(name.trim());
+                setBarcode(generated);
+                addToast(`Barcode generated: ${generated}`, "success");
+              }}
+              className="w-full h-10 rounded-full text-xs font-semibold transition-all active:scale-[0.98]"
+              style={{ background: "var(--surface-2)", color: "var(--brand-dark)", border: "1px solid var(--divider)" }}
+            >
+              Generate Barcode
+            </button>
           </div>
 
           {/* Company */}
