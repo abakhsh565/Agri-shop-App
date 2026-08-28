@@ -141,9 +141,6 @@ export default function SaleDetailPage() {
             <div>
               <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>{sale.customerName}</p>
               <p className="text-xs" style={{ color: "var(--text-secondary)" }}>{formatDateTime(sale.createdAt)}</p>
-              <p className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>
-                Sold by: {sale.employeeName}
-              </p>
             </div>
           </div>
           <ChevronRight size={18} style={{ color: "var(--text-secondary)" }} className="shrink-0" />
