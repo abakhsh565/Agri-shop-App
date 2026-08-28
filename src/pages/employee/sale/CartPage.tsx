@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
@@ -28,11 +28,13 @@ export default function CartPage() {
   const [amountReceived, setAmountReceived] = useState("");
   const [amountTouched, setAmountTouched] = useState(false);
   const [completing, setCompleting] = useState(false);
+  const completingRef = useRef(false);
 
   // Show cart even without customer — user can scan products first, select customer later
 
   // PRD §38.3: When last item is removed, redirect to product selection
-  if (items.length === 0) {
+  // Skip redirect while completing sale to avoid overriding success navigation
+  if (items.length === 0 && !completingRef.current) {
     navigate(`${base}/sale/products`, { replace: true });
     return null;
   }
@@ -50,6 +52,7 @@ export default function CartPage() {
     if (paymentType === "partial" && amountTouched && parsedAmount !== null && parsedAmount < 0) { addToast("Amount cannot be negative", "warning"); return; }
 
     setCompleting(true);
+    completingRef.current = true;
     try {
       const outstandingBalance = total - amountPaid;
       const sale = await createSale({
@@ -94,6 +97,7 @@ export default function CartPage() {
       navigate(`${base}/sale/success`, { state: { sale }, replace: true });
       clearCart();
     } catch (e) {
+      completingRef.current = false;
       addToast(e instanceof Error ? e.message : "Failed to complete sale", "error");
     } finally {
       setCompleting(false);
