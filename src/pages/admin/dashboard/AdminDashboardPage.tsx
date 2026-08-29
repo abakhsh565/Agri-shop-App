@@ -388,7 +388,7 @@ export default function AdminDashboardPage() {
         <div className="flex flex-col gap-2">
           {lowStockCount > 0 && (
             <button
-              onClick={() => navigate("/admin/products")}
+              onClick={() => navigate("/admin/inventory/reorder")}
               className="flex items-center justify-between rounded-[14px] p-4 transition-opacity active:opacity-70"
               style={{ background: "var(--surface)", border: "1px solid var(--border-light)" }}
             >

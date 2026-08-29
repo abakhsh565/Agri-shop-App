@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
 import SelectSheet from "@/components/ui/SelectSheet";
@@ -10,7 +10,7 @@ import { formatCurrency } from "@/lib/formatters";
 import { useUIStore } from "@/stores/uiStore";
 import { useThemeStore } from "@/stores/themeStore";
 import type { PaymentMethod } from "@/types";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, AlertTriangle } from "lucide-react";
 
 export default function RecordPurchasePage() {
   const navigate = useNavigate();
@@ -21,6 +21,8 @@ export default function RecordPurchasePage() {
   const companies = useCompaniesStore((s) => s.companies);
   const products = useProductsStore((s) => s.products);
 
+  const [searchParams] = useSearchParams();
+  const presetCompanyId = searchParams.get("companyId") || "";
   const [companyId, setCompanyId] = useState("");
   const [productId, setProductId] = useState("");
   const [variantId, setVariantId] = useState("");
@@ -32,6 +34,13 @@ export default function RecordPurchasePage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [sheet, setSheet] = useState<null | "company" | "product">(null);
+
+  // Pre-select company when coming from Company Detail (Order Stock)
+  useEffect(() => {
+    if (presetCompanyId && companies.length > 0) {
+      setCompanyId(presetCompanyId);
+    }
+  }, [presetCompanyId, companies]);
 
   const company = companies.find((c) => c.id === companyId);
   // Products supplied by the chosen company (Product.company is the company name).
@@ -47,6 +56,15 @@ export default function RecordPurchasePage() {
   const total = qtyNum * costNum;
   const paidNum = amountPaid === "" ? total : Math.min(Number(amountPaid) || 0, total);
   const payable = Math.max(0, total - paidNum);
+
+  const productSheetOptions = useMemo(() => companyProducts.map((p) => {
+    const th = p.variants[0]?.lowStockThreshold ?? 5;
+    const isLow = p.stockQty <= th;
+    const vCount = p.variants.length;
+    const vLabel = vCount + (vCount !== 1 ? " variants" : " variant");
+    const stockLabel = vLabel + " \u00b7 " + p.stockQty + " " + p.baseUnit + " in stock" + (isLow ? " \u00b7 Low stock" : "");
+    return { value: p.id, label: p.name + (isLow ? " \u26a0\ufe0f" : ""), sub: stockLabel, imageUrl: p.imageUrl };
+  }), [companyProducts]);
 
   function pickVariant(id: string) {
     setVariantId(id);
@@ -106,24 +124,40 @@ export default function RecordPurchasePage() {
     >
       <div>
         <StatusBar />
-        <NavHeader title="Record Stock Purchase" />
+        <NavHeader title={presetCompanyId ? "Order Stock" : "Record Stock Purchase"} />
 
         <div className="flex flex-col gap-5 p-4">
           {/* Supplier */}
           <div>
             <p className={labelCls} style={{ color: "var(--text-secondary)" }}>Supplier / Company</p>
-            <button
-              type="button"
-              onClick={() => setSheet("company")}
-              className="w-full h-12 rounded-[24px] px-4 text-sm outline-none flex items-center justify-between"
-              style={fieldStyle}
-            >
-              <span style={{ color: company ? "var(--text-primary)" : "var(--text-secondary)" }}>
-                {company ? company.name : "Select supplier…"}
-              </span>
-              <ChevronDown size={16} style={{ color: "var(--text-secondary)" }} />
-            </button>
+            {presetCompanyId ? (
+              <div className="w-full h-12 rounded-[24px] px-4 text-sm flex items-center" style={{ ...fieldStyle, opacity: 0.8 }}>
+                <span style={{ color: "var(--text-primary)" }}>{company?.name || "Loading…"}</span>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setSheet("company")}
+                className="w-full h-12 rounded-[24px] px-4 text-sm outline-none flex items-center justify-between"
+                style={fieldStyle}
+              >
+                <span style={{ color: company ? "var(--text-primary)" : "var(--text-secondary)" }}>
+                  {company ? company.name : "Select supplier…"}
+                </span>
+                <ChevronDown size={16} style={{ color: "var(--text-secondary)" }} />
+              </button>
+            )}
           </div>
+
+          {/* Low-stock alert for this supplier */}
+          {company && companyProducts.some(p => p.stockQty <= (p.variants[0]?.lowStockThreshold ?? 5)) && (
+            <div className="flex items-center gap-2 rounded-[14px] p-3" style={{ background: "rgba(217,119,6,0.08)", border: "1px solid rgba(217,119,6,0.2)" }}>
+              <AlertTriangle size={16} style={{ color: "#d97706" }} />
+              <p className="text-xs" style={{ color: "#92400e" }}>
+                {companyProducts.filter(p => p.stockQty <= (p.variants[0]?.lowStockThreshold ?? 5)).length} product(s) from this supplier need restocking
+              </p>
+            </div>
+          )}
 
           {/* Product */}
           {company && (
@@ -265,7 +299,7 @@ export default function RecordPurchasePage() {
         open={sheet === "product"}
         title="Select product"
         searchable
-        options={companyProducts.map((p) => ({ value: p.id, label: p.name, sub: `${p.variants.length} variant${p.variants.length !== 1 ? "s" : ""} · ${p.stockQty} ${p.baseUnit} in stock`, imageUrl: p.imageUrl }))}
+        options={productSheetOptions}
         selected={productId}
         emptyLabel={company ? `No products linked to ${company.name} yet.` : "Select a supplier first."}
         onSelect={(id) => { setProductId(id); setVariantId(""); }}

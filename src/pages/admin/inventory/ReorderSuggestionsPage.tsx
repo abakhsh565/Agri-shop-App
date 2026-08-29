@@ -4,14 +4,16 @@ import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
 import { useThemeStore } from "@/stores/themeStore";
 import { useProductsStore } from "@/stores/productsStore";
+import { useCompaniesStore } from "@/stores/companiesStore";
 import { getStockStatus, getStockStatusColor, formatCurrency } from "@/lib/formatters";
-import { Package, AlertTriangle, ArrowRight } from "lucide-react";
+import { Package, AlertTriangle, ArrowRight, ShoppingCart } from "lucide-react";
 
 export default function ReorderSuggestionsPage() {
   const { language } = useThemeStore();
   const isUrdu = language === "ur";
   const navigate = useNavigate();
   const products = useProductsStore((s) => s.products);
+  const companies = useCompaniesStore((s) => s.companies);
 
   const suggestions = useMemo(() => {
     const rows: {
@@ -114,14 +116,17 @@ export default function ReorderSuggestionsPage() {
                   </div>
                 </div>
 
-                {/* Action */}
+                {/* Action — order from this supplier */}
                 <div className="px-4 pb-3">
                   <button
-                    onClick={() => navigate(`/admin/purchases/new`)}
+                    onClick={() => {
+                      const supplier = companies.find(c => c.name === s.company);
+                      navigate(supplier ? `/admin/purchases/new?companyId=${supplier.id}` : `/admin/purchases/new`);
+                    }}
                     className="flex items-center justify-center gap-2 w-full h-10 rounded-full text-xs font-bold transition-colors active:opacity-70"
                     style={{ background: "var(--brand)", color: "#0a0a0a" }}
                   >
-                    Record Purchase <ArrowRight size={14} />
+                    <ShoppingCart size={13} /> Order from {s.company} <ArrowRight size={14} />
                   </button>
                 </div>
               </div>

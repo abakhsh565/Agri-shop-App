@@ -8,7 +8,7 @@ import { fetchPurchases } from "@/lib/db";
 import type { Purchase } from "@/types";
 import { formatCurrency, formatDate } from "@/lib/formatters";
 import { useThemeStore } from "@/stores/themeStore";
-import { Phone, User, MapPin, PackagePlus, Wallet } from "lucide-react";
+import { Phone, User, MapPin, PackagePlus, Wallet, ShoppingCart } from "lucide-react";
 
 export default function CompanyDetailPage() {
   const { companyId } = useParams();
@@ -74,12 +74,19 @@ export default function CompanyDetailPage() {
         </div>
       </div>
 
-      {/* Record Payment — always available from Company Detail (supplier-payment flow) */}
-      <div className="px-4 pt-3">
+      {/* Quick Actions — Order Stock + Record Payment */}
+      <div className="px-4 pt-3 flex gap-2">
+        <button
+          onClick={() => navigate(`/admin/purchases/new?companyId=${company.id}`)}
+          className="flex-1 h-12 rounded-full text-sm font-bold flex items-center justify-center gap-2 active:scale-[0.98] transition-transform"
+          style={{ background: "var(--brand)", color: "#0a0a0a" }}
+        >
+          <ShoppingCart size={16} /> Order Stock
+        </button>
         <button
           onClick={() => navigate(`/admin/payments/supplier/${company.id}`)}
-          className="w-full h-12 rounded-full text-sm font-bold flex items-center justify-center gap-2 active:scale-[0.98] transition-transform"
-          style={{ background: "var(--brand)", color: "#0a0a0a" }}
+          className="flex-1 h-12 rounded-full text-sm font-bold flex items-center justify-center gap-2 active:scale-[0.98] transition-transform"
+          style={{ background: "var(--surface-2)", color: "var(--text-primary)", border: "1px solid var(--divider)" }}
         >
           <Wallet size={16} /> Record Payment
         </button>
