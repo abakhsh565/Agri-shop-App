@@ -311,7 +311,7 @@ export default function DashboardPage() {
                 background: "var(--background)",
               }}
             >
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 flex-1 min-w-0">
                 {cImg ? (
                   <img src={cImg} alt={sale.customerName} className="size-9 rounded-full object-cover shrink-0" />
                 ) : (

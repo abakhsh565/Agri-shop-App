@@ -376,7 +376,7 @@ export default function SalesListPage() {
                     className="flex items-center justify-between gap-4 px-4 py-3.5 text-left transition-opacity active:opacity-70"
                     style={{ borderBottom: i < section.sales.length - 1 ? "1px solid var(--divider)" : "none" }}
                   >
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-3 flex-1 min-w-0">
                       {cImg ? (
                         <img src={cImg} alt={sale.customerName} className="size-10 rounded-full object-cover shrink-0" />
                       ) : (
