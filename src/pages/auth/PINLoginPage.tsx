@@ -21,21 +21,23 @@ export default function PINLoginPage() {
   const location = useLocation();
   const { setUser, setPendingPhone, setPendingFlow } = useAuthStore();
 
-  // User passed from SplashPage
+  // User passed from SplashPage via navigation state, or fallback to authStore
   const routeUser = (location.state as { user?: User } | null)?.user;
+  const authUser = useAuthStore((s) => s.user);
+  const routeUserOrAuth = routeUser ?? authUser;
 
   const [pinValue, setPinValue] = useState("");
   const [error, setError] = useState("");
   const [shake, setShake] = useState(false);
   const [verifying, setVerifying] = useState(false);
 
-  if (!routeUser) {
-    // Fallback: no user in state → go to login
+  if (!routeUserOrAuth) {
+    // No user at all → go to login
     navigate("/login", { replace: true });
     return null;
   }
 
-  const user: User = routeUser;
+  const user: User = routeUserOrAuth;
 
   async function handlePinComplete(val: string) {
     if (val.length < 4 || verifying) return;
@@ -79,18 +81,18 @@ export default function PINLoginPage() {
       <NavHeader title="Sign In" backTo="/login" />
       <div className="flex flex-col flex-1 items-center gap-8 p-6 pt-8">
         <div className="flex flex-col items-center gap-2 text-center">
-          {routeUser.photoUrl ? (
-            <img src={routeUser.photoUrl} alt="" className="w-16 h-16 rounded-full object-cover mb-2" />
+          {user.photoUrl ? (
+            <img src={user.photoUrl} alt="" className="w-16 h-16 rounded-full object-cover mb-2" />
           ) : (
             <div
               className="w-16 h-16 rounded-full flex items-center justify-center text-xl font-bold mb-2"
               style={{ background: "var(--brand)", color: "#0a0a0a" }}
             >
-              {routeUser.name.charAt(0).toUpperCase()}
+              {user.name.charAt(0).toUpperCase()}
             </div>
           )}
           <p className="text-xl font-bold text-black">
-            Welcome, {routeUser.name.split(" ")[0]}
+            Welcome, {user.name.split(" ")[0]}
           </p>
           <p className="text-sm text-[#888]">Enter your 4-digit PIN to continue</p>
           {error && (
