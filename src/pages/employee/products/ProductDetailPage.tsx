@@ -154,7 +154,16 @@ export default function ProductDetailPage() {
             )}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-base font-bold truncate" style={{ color: "var(--text-primary)" }}>{product.name}</p>
+            <div className="flex items-center gap-2">
+              <p className="text-base font-bold truncate" style={{ color: "var(--text-primary)" }}>{product.name}</p>
+              <button
+                onClick={startEdit}
+                className="flex items-center gap-1 h-6 px-2 rounded-full text-[10px] font-bold shrink-0"
+                style={{ background: "var(--surface)", color: "var(--text-secondary)", border: "1px solid var(--divider)" }}
+              >
+                <Pencil size={10} /> Edit
+              </button>
+            </div>
             <p className="text-xs truncate" style={{ color: "var(--text-secondary)" }}>{product.company}</p>
             <div className="flex items-center gap-2 mt-1 flex-wrap">
               <CategoryChip label={CATEGORY_LABEL[product.category]} />

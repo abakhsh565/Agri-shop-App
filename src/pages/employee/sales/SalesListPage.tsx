@@ -68,11 +68,13 @@ export default function SalesListPage() {
 
   const today = now;
   const todayStr = today.toISOString().split("T")[0];
-
+  const yesterday = new Date(today); yesterday.setDate(today.getDate() - 1);
+  const yesterdayStr = yesterday.toISOString().split("T")[0];
 
   function inDate(sale: Sale) {
     const d = sale.createdAt.split("T")[0];
     if (dateFilter === "today")     return d === todayStr;
+    if (dateFilter === "yesterday") return d === yesterdayStr;
     if (dateFilter === "this_week") {
       const weekStart = new Date(); weekStart.setDate(weekStart.getDate() - weekStart.getDay());
       return new Date(d) >= weekStart;
@@ -106,6 +108,7 @@ export default function SalesListPage() {
 
   const DATE_FILTERS: { key: DateFilter; label: string }[] = [
     { key: "today",      label: t("sales.today") },
+    { key: "yesterday",  label: t("sales.yesterday") },
     { key: "this_week",  label: t("sales.thisWeek") },
     { key: "this_month", label: t("sales.thisMonth") ?? "This Month" },
     { key: "custom",     label: "Custom" },
