@@ -4,6 +4,7 @@ import { formatCurrency, formatDateTime } from "@/lib/formatters";
 import type { Sale } from "@/types";
 import { useShellBase } from "@/lib/useShellBase";
 import { useUIStore } from "@/stores/uiStore";
+import { useAuthStore } from "@/stores/authStore";
 
 function StatusBar() {
   const now = new Date();
@@ -37,6 +38,7 @@ export default function SaleSuccessPage() {
   const { state } = useLocation();
   const sale: Sale | undefined = state?.sale;
   const { addToast } = useUIStore();
+  const { user } = useAuthStore();
 
   if (!sale) return <Navigate to={`${base}/dashboard`} replace />;
 
@@ -145,7 +147,7 @@ export default function SaleSuccessPage() {
     { label: "Payment Method", value: s.paymentMethod === "cash" ? "Cash" : "Bank Transfer", bold: true },
     { label: "Items", value: `${s.items.length} product(s)`, bold: false },
     { label: "Date & Time", value: formatDateTime(s.createdAt), bold: false },
-    { label: "Sold by", value: s.employeeName, bold: true },
+    { label: "Sold by", value: s.employeeName === user?.name ? "You" : s.employeeName, bold: true },
   ];
 
   return (

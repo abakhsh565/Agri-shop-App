@@ -2,7 +2,11 @@ import { create } from "zustand";
 import { supabase } from "@/lib/supabase";
 import { rpcCreateSale } from "@/lib/db";
 import { createNotification } from "@/lib/notifications";
+import { enqueueOperation } from "@/lib/offlineQueue";
+import { getCachedData as getLocalCache, setCachedData as setLocalCache, isCacheStale as isLocalStale } from "@/lib/localCache";
 import type { Sale, SaleItem } from "@/types";
+
+const CACHE_KEY = "sales";
 
 // ─── Row <-> domain mapping ─────────────────────────────────────────────────
 // DB columns are snake_case; the app's types are camelCase. Keep the mapping in
@@ -141,20 +145,40 @@ export const useSalesStore = create<SalesState>((set, get) => ({
 
   load: async () => {
     set({ loading: true, error: null });
-    const { data, error } = await supabase
-      .from("sales")
-      .select("*, sale_items(*)")
-      .order("created_at", { ascending: false })
-      .limit(200);
-    if (error) {
-      set({ loading: false, ready: true, error: error.message });
+
+    // Stale-while-revalidate
+    const cached = getLocalCache<Sale[]>(CACHE_KEY);
+    const stale = isLocalStale(CACHE_KEY);
+
+    if (cached && !stale) {
+      set({ sales: cached, loading: false, ready: true });
       return;
     }
-    set({
-      sales: (data as SaleRow[]).map(saleFromRow),
-      loading: false,
-      ready: true,
-    });
+
+    if (cached && stale) {
+      set({ sales: cached, loading: false, ready: true });
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from("sales")
+        .select("*, sale_items(*)")
+        .order("created_at", { ascending: false })
+        .limit(200);
+      if (error) {
+        if (!cached) {
+          set({ loading: false, ready: true, error: error.message });
+        }
+        return;
+      }
+      const sales = (data as SaleRow[]).map(saleFromRow);
+      setLocalCache(CACHE_KEY, sales);
+      set({ sales, loading: false, ready: true });
+    } catch {
+      if (!cached) {
+        set({ loading: false, ready: true, error: "Offline" });
+      }
+    }
   },
 
   subscribe: () => {
@@ -179,11 +203,11 @@ export const useSalesStore = create<SalesState>((set, get) => ({
   },
 
   createSale: async (input) => {
-    // One atomic server call: validates + decrements stock (never negative),
-    // writes the sale + items, updates the customer balance, and notifies.
-    // Selling price is re-read from the DB inside the function, so the client
-    // can't dictate price or oversell.
-    const result = await rpcCreateSale({
+    const computedTotal = input.items.reduce((s, it) => s + it.unitPrice * it.qty, 0);
+    const computedPaid = input.amountPaid ?? 0;
+    const paymentLabel = input.paymentType === "full" ? "Paid" : "Credit";
+
+    const rpcPayload = {
       customerId: asUuidOrNull(input.customerId) ?? undefined,
       customerName: input.customerName,
       customerPhone: input.customerPhone,
@@ -204,61 +228,138 @@ export const useSalesStore = create<SalesState>((set, get) => ({
         unitSize: it.unitSize,
         baseUnit: it.baseUnit,
       })),
-    });
-
-    // Compute totals from input items (RPC may not return all fields)
-    const computedTotal = input.items.reduce((s, it) => s + it.unitPrice * it.qty, 0);
-    const computedPaid = input.amountPaid ?? 0;
-    const sale: Sale = {
-      id: result.id,
-      saleNumber: result.saleNumber,
-      customerId: input.customerId,
-      customerName: input.customerName,
-      customerPhone: input.customerPhone,
-      customerAddress: input.customerAddress,
-      employeeId: input.employeeId,
-      employeeName: input.employeeName,
-      items: input.items.map((it, i) => ({
-        ...it,
-        id: "local-" + i,
-        saleId: result.id,
-      })),
-      subtotal: result.totalAmount ?? computedTotal,
-      taxAmount: 0,
-      totalAmount: result.totalAmount ?? computedTotal,
-      amountPaid: result.amountPaid ?? computedPaid,
-      outstandingBalance: result.outstandingBalance ?? (computedTotal - computedPaid),
-      paymentType: input.paymentType,
-      paymentMethod: input.paymentMethod,
-      isVoided: false,
-      note: input.note,
-      createdAt: new Date().toISOString(),
     };
-    // Optimistically prepend so the creator sees it instantly.
-    set({ sales: [sale, ...get().sales] });
 
-    // Create notification so admin sees the new sale in real-time
-    const paymentLabel = input.paymentType === "full" ? "Paid" : "Credit";
-    createNotification({
+    // Use "You" in notification body when the employee is the current user
+    const currentUserId = (await import("@/stores/authStore")).useAuthStore.getState().user?.id;
+    const isSelf = currentUserId === input.employeeId;
+    const soldByLabel = isSelf ? "You" : input.employeeName;
+
+    const notifPayload = {
       kind: "sale",
-      title: `New sale: Rs. ${sale.totalAmount.toLocaleString("en-PK")} (${paymentLabel})`,
-      body: `${input.customerName} — sold by ${input.employeeName}`,
-      entityId: sale.id,
-    });
+      title: `New sale: Rs. ${computedTotal.toLocaleString("en-PK")} (${paymentLabel})`,
+      body: `${input.customerName} — sold by ${soldByLabel}`,
+      entityId: null as string | null,
+      actor_id: input.employeeId || null,
+      actor_name: input.employeeName || null,
+    };
 
-    return sale;
+    // ── Try online first ──
+    try {
+      const result = await rpcCreateSale(rpcPayload);
+      notifPayload.entityId = result.id;
+
+      const sale: Sale = {
+        id: result.id,
+        saleNumber: result.saleNumber,
+        customerId: input.customerId,
+        customerName: input.customerName,
+        customerPhone: input.customerPhone,
+        customerAddress: input.customerAddress,
+        employeeId: input.employeeId,
+        employeeName: input.employeeName,
+        items: input.items.map((it, i) => ({
+          ...it,
+          id: "local-" + i,
+          saleId: result.id,
+        })),
+        subtotal: result.totalAmount ?? computedTotal,
+        taxAmount: 0,
+        totalAmount: result.totalAmount ?? computedTotal,
+        amountPaid: result.amountPaid ?? computedPaid,
+        outstandingBalance: result.outstandingBalance ?? (computedTotal - computedPaid),
+        paymentType: input.paymentType,
+        paymentMethod: input.paymentMethod,
+        isVoided: false,
+        note: input.note,
+        createdAt: new Date().toISOString(),
+      };
+
+      set({ sales: [sale, ...get().sales] });
+      setLocalCache(CACHE_KEY, [sale, ...get().sales]);
+
+      // Fire-and-forget notification
+      createNotification({
+        kind: "sale",
+        title: notifPayload.title,
+        body: notifPayload.body ?? undefined,
+        entityId: sale.id,
+      });
+
+      return sale;
+    } catch (err) {
+      // ── Offline fallback: queue everything for later sync ──
+      if (!navigator.onLine || (err instanceof Error && /fetch|network|Failed to fetch/i.test(err.message))) {
+        const tempId = `offline-sale-${Date.now()}`;
+        const saleNumber = `OFF-${Date.now().toString(36).toUpperCase()}`;
+
+        const sale: Sale = {
+          id: tempId,
+          saleNumber,
+          customerId: input.customerId,
+          customerName: input.customerName,
+          customerPhone: input.customerPhone,
+          customerAddress: input.customerAddress,
+          employeeId: input.employeeId,
+          employeeName: input.employeeName,
+          items: input.items.map((it, i) => ({
+            ...it,
+            id: `local-${i}`,
+            saleId: tempId,
+          })),
+          subtotal: computedTotal,
+          taxAmount: 0,
+          totalAmount: computedTotal,
+          amountPaid: computedPaid,
+          outstandingBalance: computedTotal - computedPaid,
+          paymentType: input.paymentType,
+          paymentMethod: input.paymentMethod,
+          isVoided: false,
+          note: input.note,
+          createdAt: new Date().toISOString(),
+        };
+
+        // Add to local sales list
+        set({ sales: [sale, ...get().sales] });
+        setLocalCache(CACHE_KEY, [sale, ...get().sales]);
+
+        // Queue for sync (notification needs snake_case for DB insert)
+        enqueueOperation({ type: "create_sale", payload: rpcPayload });
+        enqueueOperation({ type: "create_notification", payload: {
+          kind: notifPayload.kind,
+          title: notifPayload.title,
+          body: notifPayload.body,
+          entity_id: notifPayload.entityId,
+          actor_id: notifPayload.actor_id,
+          actor_name: notifPayload.actor_name,
+        }});
+
+        return sale;
+      }
+
+      throw err;
+    }
   },
 
   updateNote: async (saleId, note) => {
-    const { error } = await supabase
-      .from("sales")
-      .update({ note })
-      .eq("id", saleId);
-    if (error) throw new Error(error.message);
+    // Optimistic local update
     set({
       sales: get().sales.map((s) =>
         s.id === saleId ? { ...s, note } : s
       ),
     });
+
+    try {
+      const { error } = await supabase
+        .from("sales")
+        .update({ note })
+        .eq("id", saleId);
+      if (error) throw error;
+    } catch {
+      // Queue for later sync if offline
+      if (!navigator.onLine) {
+        enqueueOperation({ type: "update_note", payload: { saleId, note } });
+      }
+    }
   },
 }));

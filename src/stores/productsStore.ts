@@ -1,7 +1,10 @@
 import { create } from "zustand";
 import { supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/stores/authStore";
+import { getCachedData, setCachedData, isCacheStale } from "@/lib/localCache";
 import type { Product, ProductVariant, ProductCategory, BaseUnit } from "@/types";
+
+const CACHE_KEY = "products";
 
 // Products: `products` table holds catalogue + stockQty (one source of truth).
 // `product_variants` holds sellable unit definitions (pricing, unitSize, qtyStep).
@@ -72,43 +75,71 @@ export const useProductsStore = create<ProductsState>((set, get) => ({
 
   load: async () => {
     set({ loading: true, error: null });
+
+    // Stale-while-revalidate: show cached data immediately if available
+    const cached = getCachedData<Product[]>(CACHE_KEY);
+    const stale = isCacheStale(CACHE_KEY);
+
+    if (cached && !stale) {
+      // Cache is fresh — use it, skip network
+      set({ products: cached, loading: false, ready: true });
+      return;
+    }
+
+    if (cached && stale) {
+      // Cache is stale — show it while we refetch in background
+      set({ products: cached, loading: false, ready: true });
+    }
+
     const isAdmin = ["admin", "co_admin"].includes(
       useAuthStore.getState().user?.role ?? ""
     );
 
-    const [{ data: prods, error: pErr }, { data: vars, error: vErr }] =
-      await Promise.all([
-        supabase.from("products").select("*").eq("is_active", true).order("name"),
-        isAdmin
-          ? supabase.from("product_variants").select("*").eq("is_active", true)
-          : supabase.from("product_variants_public").select("*"),
-      ]);
+    try {
+      const [{ data: prods, error: pErr }, { data: vars, error: vErr }] =
+        await Promise.all([
+          supabase.from("products").select("*").eq("is_active", true).order("name"),
+          isAdmin
+            ? supabase.from("product_variants").select("*").eq("is_active", true)
+            : supabase.from("product_variants_public").select("*"),
+        ]);
 
-    if (pErr || vErr) {
-      set({ loading: false, ready: true, error: (pErr ?? vErr)!.message });
-      return;
+      if (pErr || vErr) {
+        // Network error — keep cached data if available, just report error
+        if (!cached) {
+          set({ loading: false, ready: true, error: (pErr ?? vErr)!.message });
+        }
+        return;
+      }
+
+      const byProduct = new Map<string, ProductVariant[]>();
+      for (const v of (vars as VariantRow[]) ?? []) {
+        const list = byProduct.get(v.product_id) ?? [];
+        list.push(variantFromRow(v));
+        byProduct.set(v.product_id, list);
+      }
+
+      const products: Product[] = ((prods as ProductRow[]) ?? []).map((p) => ({
+        id: p.id,
+        name: p.name,
+        company: p.company,
+        category: p.category,
+        imageUrl: p.image_url ?? undefined,
+        barcode: p.barcode ?? undefined,
+        baseUnit: (p.base_unit as BaseUnit) ?? "piece",
+        stockQty: Number(p.stock_qty ?? 0),
+        variants: byProduct.get(p.id) ?? [],
+      }));
+
+      // Save to cache
+      setCachedData(CACHE_KEY, products);
+      set({ products, loading: false, ready: true });
+    } catch {
+      // Complete network failure — show cached data if available
+      if (!cached) {
+        set({ loading: false, ready: true, error: "Offline — showing cached data" });
+      }
     }
-
-    const byProduct = new Map<string, ProductVariant[]>();
-    for (const v of (vars as VariantRow[]) ?? []) {
-      const list = byProduct.get(v.product_id) ?? [];
-      list.push(variantFromRow(v));
-      byProduct.set(v.product_id, list);
-    }
-
-    const products: Product[] = ((prods as ProductRow[]) ?? []).map((p) => ({
-      id: p.id,
-      name: p.name,
-      company: p.company,
-      category: p.category,
-      imageUrl: p.image_url ?? undefined,
-      barcode: p.barcode ?? undefined,
-      baseUnit: (p.base_unit as BaseUnit) ?? "piece",
-      stockQty: Number(p.stock_qty ?? 0),
-      variants: byProduct.get(p.id) ?? [],
-    }));
-
-    set({ products, loading: false, ready: true });
   },
 
   subscribe: () => {

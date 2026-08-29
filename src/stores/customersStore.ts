@@ -1,6 +1,10 @@
 import { create } from "zustand";
 import { supabase } from "@/lib/supabase";
+import { getCachedData, setCachedData, isCacheStale } from "@/lib/localCache";
+import { enqueueOperation } from "@/lib/offlineQueue";
 import type { Customer } from "@/types";
+
+const CACHE_KEY = "customers";
 
 interface CustomerRow {
   id: string;
@@ -74,19 +78,39 @@ export const useCustomersStore = create<CustomersState>((set, get) => ({
 
   load: async () => {
     set({ loading: true, error: null });
-    const { data, error } = await supabase
-      .from("customers")
-      .select("*")
-      .order("name");
-    if (error) {
-      set({ loading: false, ready: true, error: error.message });
+
+    // Stale-while-revalidate: show cached data immediately
+    const cached = getCachedData<Customer[]>(CACHE_KEY);
+    const stale = isCacheStale(CACHE_KEY);
+
+    if (cached && !stale) {
+      set({ customers: cached, loading: false, ready: true });
       return;
     }
-    set({
-      customers: (data as CustomerRow[]).map(customerFromRow),
-      loading: false,
-      ready: true,
-    });
+
+    if (cached && stale) {
+      set({ customers: cached, loading: false, ready: true });
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from("customers")
+        .select("*")
+        .order("name");
+      if (error) {
+        if (!cached) {
+          set({ loading: false, ready: true, error: error.message });
+        }
+        return;
+      }
+      const customers = (data as CustomerRow[]).map(customerFromRow);
+      setCachedData(CACHE_KEY, customers);
+      set({ customers, loading: false, ready: true });
+    } catch {
+      if (!cached) {
+        set({ loading: false, ready: true, error: "Offline — showing cached data" });
+      }
+    }
   },
 
   subscribe: () => {
@@ -105,21 +129,49 @@ export const useCustomersStore = create<CustomersState>((set, get) => ({
   },
 
   createCustomer: async (input) => {
-    const { data, error } = await supabase
-      .from("customers")
-      .insert({
-        name: input.name,
-        phone: input.phone,
-        address: input.address ?? null,
-        credit_limit: input.creditLimit ?? 0,
-        created_by: asUuidOrNull(input.createdBy),
-      })
-      .select()
-      .single();
-    if (error) throw new Error(error.message);
-    const customer = customerFromRow(data as CustomerRow);
-    set({ customers: [customer, ...get().customers] });
-    return customer;
+    const rowPayload = {
+      name: input.name,
+      phone: input.phone,
+      address: input.address ?? null,
+      credit_limit: input.creditLimit ?? 0,
+      created_by: asUuidOrNull(input.createdBy),
+    };
+
+    // Try online first
+    try {
+      const { data, error } = await supabase
+        .from("customers")
+        .insert(rowPayload)
+        .select()
+        .single();
+      if (error) throw error;
+      const customer = customerFromRow(data as CustomerRow);
+      set({ customers: [customer, ...get().customers] });
+      setCachedData(CACHE_KEY, [customer, ...get().customers]);
+      return customer;
+    } catch (err) {
+      // If network error, queue for later
+      if (!navigator.onLine || (err instanceof Error && err.message.includes("fetch"))) {
+        const tempId = `offline-cust-${Date.now()}`;
+        const tempCustomer: Customer = {
+          id: tempId,
+          name: input.name,
+          phone: input.phone,
+          address: input.address,
+          creditLimit: input.creditLimit ?? 0,
+          outstandingBalance: 0,
+          totalPurchases: 0,
+          totalPaid: 0,
+          createdAt: new Date().toISOString(),
+          createdBy: input.createdBy ?? "",
+        };
+        set({ customers: [tempCustomer, ...get().customers] });
+        setCachedData(CACHE_KEY, [tempCustomer, ...get().customers]);
+        enqueueOperation({ type: "create_customer", payload: rowPayload });
+        return tempCustomer;
+      }
+      throw err;
+    }
   },
 
   updateCustomerImage: async (id, imageUrl) => {

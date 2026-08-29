@@ -5,11 +5,19 @@ import ToastContainer from "@/components/ui/Toast";
 import NavTracker from "@/components/ui/NavTracker";
 import { useBootstrapData } from "@/stores/useBootstrapData";
 import { isTopLevel } from "@/lib/navDepth";
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import ScanButton from "@/components/ui/ScanButton";
 import { useProductsStore } from "@/stores/productsStore";
 import { useUIStore } from "@/stores/uiStore";
 import { clearNav } from "@/lib/navContext";
+import BackButtonHandler from "@/components/ui/BackButtonHandler";
+import { useOfflineStore } from "@/stores/offlineStore";
+import { getPendingCount } from "@/lib/offlineQueue";
+import { useAuthStore } from "@/stores/authStore";
+import PINInput from "@/components/ui/PINInput";
+import { verifyPin } from "@/lib/pinLock";
+
+const LOCK_TIMEOUT_MS = 15 * 60 * 1000;
 
 const TAB_DEFS = [
   { key: "admin.dashboard" as const, icon: LayoutDashboard, path: "/admin/dashboard" },
@@ -24,6 +32,72 @@ export default function AdminLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   useBootstrapData();
+  const { user, isLocked, lock, unlock, logout } = useAuthStore();
+  const { setOnline, syncQueue } = useOfflineStore();
+  const [pin, setPin] = useState("");
+  const [pinError, setPinError] = useState(false);
+  const [pinShake, setPinShake] = useState(false);
+  const lockTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Online/offline detection + auto-sync
+  useEffect(() => {
+    const handleOnline = () => {
+      setOnline(true);
+      addToast("Back online — syncing data", "success");
+      syncQueue();
+    };
+    const handleOffline = () => {
+      setOnline(false);
+      addToast("You are offline. Changes will sync when reconnected.", "warning");
+    };
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+    // Check initial pending ops count
+    const pending = getPendingCount();
+    if (pending > 0) {
+      setOnline(navigator.onLine);
+    }
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, []);
+
+  // Session lock timer (same as employee side)
+  function resetLockTimer() {
+    if (lockTimer.current) clearTimeout(lockTimer.current);
+    lockTimer.current = setTimeout(() => lock(), LOCK_TIMEOUT_MS);
+  }
+
+  useEffect(() => {
+    resetLockTimer();
+    const events = ["touchstart", "click", "keydown"];
+    events.forEach((e) => window.addEventListener(e, resetLockTimer));
+    return () => {
+      if (lockTimer.current) clearTimeout(lockTimer.current);
+      events.forEach((e) => window.removeEventListener(e, resetLockTimer));
+    };
+  }, []);
+
+  useEffect(() => {
+    if (pin.length === 4) handlePINSubmit(pin);
+  }, [pin]);
+
+  async function handlePINSubmit(p: string) {
+    if (!user) return;
+    const ok = await verifyPin(user.id, p);
+    if (ok) {
+      unlock();
+      setPin("");
+      setPinError(false);
+    } else {
+      setPinError(true);
+      setPinShake(true);
+      setTimeout(() => setPinShake(false), 500);
+      setPin("");
+      addToast("Incorrect PIN. Try again.", "error");
+    }
+  }
 
   function activeTab() {
     const path = location.pathname;
@@ -94,7 +168,38 @@ export default function AdminLayout() {
       style={{ background: "var(--background)" }}
     >
       <NavTracker />
+      <BackButtonHandler />
       <ToastContainer />
+
+      {/* ── Session lock overlay ── */}
+      {isLocked && (
+        <div
+          className="absolute inset-0 z-50 flex flex-col"
+          style={{ background: "var(--background)" }}
+        >
+          <div className="safe-top" />
+          <div className="flex flex-col flex-1 items-center justify-center px-6 gap-8">
+            <div className="flex flex-col items-center gap-2 text-center animate-fade-in-up">
+              <div
+                className="w-14 h-14 rounded-full flex items-center justify-center mb-2 text-xl font-bold"
+                style={{ background: "var(--muted)", color: "var(--text-primary)" }}
+              >
+                {user?.name?.charAt(0).toUpperCase()}
+              </div>
+              <p className="text-xl font-bold" style={{ color: "var(--text-primary)" }}>{user?.name}</p>
+              <p className="text-sm" style={{ color: "var(--text-secondary)" }}>Enter your PIN to continue</p>
+            </div>
+            <PINInput value={pin} onChange={setPin} error={pinError} shake={pinShake} />
+            <button
+              onClick={() => { logout(); navigate("/login"); }}
+              className="text-sm underline underline-offset-2"
+              style={{ color: "var(--text-secondary)" }}
+            >
+              Not you? Sign out
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ── Manual Scan Modal ── */}
       {showManualScan && (

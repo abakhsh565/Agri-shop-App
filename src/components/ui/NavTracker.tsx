@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useLocation } from "react-router-dom";
-import { pushNav, shouldSkipNext } from "@/lib/navContext";
+import { pushNav, shouldSkipNext, isDashboardPath, clearNav } from "@/lib/navContext";
 
 /**
  * Auto-tracks every route transition into the journey stack.
@@ -20,7 +20,10 @@ export default function NavTracker() {
     const prev = prevPath.current;
     const curr = location.pathname;
     if (prev !== curr) {
-      if (!shouldSkipNext()) {
+      // When reaching dashboard, clear old navigation history
+      if (isDashboardPath(curr)) {
+        clearNav();
+      } else if (!shouldSkipNext()) {
         pushNav(curr, prev);
       }
       prevPath.current = curr;

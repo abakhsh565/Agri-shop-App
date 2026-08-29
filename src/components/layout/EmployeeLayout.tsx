@@ -2,6 +2,7 @@ import { Outlet, useNavigate, useLocation } from "react-router-dom";
 import { Home, Receipt, ScanLine, Package, Users, Wifi, WifiOff } from "lucide-react";
 import { useAuthStore } from "@/stores/authStore";
 import { useOfflineStore } from "@/stores/offlineStore";
+import { getPendingCount } from "@/lib/offlineQueue";
 import PINInput from "@/components/ui/PINInput";
 import { useState, useEffect, useRef } from "react";
 import { verifyPin } from "@/lib/pinLock";
@@ -13,6 +14,7 @@ import { useT } from "@/lib/i18n";
 import { useBootstrapData } from "@/stores/useBootstrapData";
 import { isTopLevel } from "@/lib/navDepth";
 import { clearNav } from "@/lib/navContext";
+import BackButtonHandler from "@/components/ui/BackButtonHandler";
 
 const TAB_DEFS = [
   { key: "nav.home" as const,    icon: Home,          path: "/employee/dashboard" },
@@ -28,23 +30,32 @@ export default function EmployeeLayout() {
   const t = useT();
   const { user, isLocked, lock, unlock, logout } = useAuthStore();
   const { addToast } = useUIStore();
-  const { isOnline, pendingQueue, setOnline, syncQueue, isSyncing } = useOfflineStore();
+  const { isOnline, setOnline, syncQueue, isSyncing, pendingOpsCount } = useOfflineStore();
   const navigate = useNavigate();
   const location = useLocation();
   useBootstrapData();
   const [pin, setPin] = useState("");
   const [pinError, setPinError] = useState(false);
   const [pinShake, setPinShake] = useState(false);
-  const lockTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // Offline detection
+  const lockTimer = useRef<ReturnType<typeof setTimeout> | null>(null);  // Online/offline detection + auto-sync
   useEffect(() => {
-    function handleOnline()  { setOnline(true);  addToast("Back online — syncing pending sales", "success"); }
-    function handleOffline() { setOnline(false); addToast("You are offline. Sales will queue locally.", "warning"); }
-    window.addEventListener("online",  handleOnline);
+    const handleOnline = () => {
+      setOnline(true);
+      addToast("Back online — syncing data", "success");
+      syncQueue();
+    };
+    const handleOffline = () => {
+      setOnline(false);
+      addToast("You are offline. Sales will queue locally.", "warning");
+    };
+    window.addEventListener("online", handleOnline);
     window.addEventListener("offline", handleOffline);
+    const pending = getPendingCount();
+    if (pending > 0) {
+      setOnline(navigator.onLine);
+    }
     return () => {
-      window.removeEventListener("online",  handleOnline);
+      window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);
     };
   }, []);
@@ -145,6 +156,7 @@ export default function EmployeeLayout() {
       style={{ background: "var(--background)" }}
     >
       <NavTracker />
+      <BackButtonHandler />
       <ToastContainer />
 
       {/* ── Offline banner ── */}
@@ -156,7 +168,7 @@ export default function EmployeeLayout() {
           <div className="flex items-center gap-2">
             <WifiOff size={14} />
             <span className="text-[12px] font-semibold">
-              Offline mode — {pendingQueue.length > 0 ? `${pendingQueue.length} sale(s) queued` : "working locally"}
+              Offline mode — {pendingOpsCount > 0 ? `${pendingOpsCount} change(s) queued` : "working locally"}
             </span>
           </div>
           <span className="text-[10px] opacity-60 uppercase tracking-wide">Auto-syncs on reconnect</span>
@@ -170,7 +182,7 @@ export default function EmployeeLayout() {
           style={{ background: "rgba(132,204,22,0.12)", color: "var(--brand-dark)" }}
         >
           <Wifi size={14} className="animate-pulse" />
-          <span className="text-[12px] font-semibold">Syncing {pendingQueue.length} queued sale(s)…</span>
+          <span className="text-[12px] font-semibold">Syncing {pendingOpsCount} queued change(s)…</span>
         </div>
       )}
 

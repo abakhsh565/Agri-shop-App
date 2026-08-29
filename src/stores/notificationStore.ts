@@ -6,6 +6,8 @@ import { useAuthStore } from "@/stores/authStore";
 // One shared Realtime channel across all subscribers (see `subscribe` below).
 let sharedChannel: RealtimeChannel | null = null;
 let subscriberCount = 0;
+let pollingInterval: ReturnType<typeof setInterval> | null = null;
+const POLL_INTERVAL_MS = 30_000; // 30 seconds
 
 // Kinds an employee is allowed to see. Kept in sync with the persona-aware
 // `notifications_read` RLS policy (migration 0006) as defense-in-depth: the DB
@@ -125,11 +127,25 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
         .subscribe();
     }
 
+    // Polling fallback: Realtime may not be enabled on all Supabase projects.
+    // Poll every 30s to catch any missed INSERT events.
+    if (!pollingInterval) {
+      pollingInterval = setInterval(() => {
+        get().load();
+      }, POLL_INTERVAL_MS);
+    }
+
     return () => {
       subscriberCount -= 1;
-      if (subscriberCount <= 0 && sharedChannel) {
-        supabase.removeChannel(sharedChannel);
-        sharedChannel = null;
+      if (subscriberCount <= 0) {
+        if (sharedChannel) {
+          supabase.removeChannel(sharedChannel);
+          sharedChannel = null;
+        }
+        if (pollingInterval) {
+          clearInterval(pollingInterval);
+          pollingInterval = null;
+        }
         subscriberCount = 0;
       }
     };

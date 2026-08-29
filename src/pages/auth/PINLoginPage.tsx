@@ -6,6 +6,7 @@ import PINInput from "@/components/ui/PINInput";
 import Button from "@/components/ui/Button";
 import { verifyPin, clearPin } from "@/lib/pinLock";
 import { useAuthStore } from "@/stores/authStore";
+import { getUserFromSession } from "@/lib/auth";
 import type { User } from "@/types";
 
 /**
@@ -42,8 +43,10 @@ export default function PINLoginPage() {
     try {
       const ok = await verifyPin(user.id, val);
       if (ok) {
-        // PIN correct → set user in authStore and go to dashboard
-        setUser(user);
+        // PIN correct → re-fetch latest user data from DB to ensure
+        // profile changes made by admin (or elsewhere) are reflected
+        const freshUser = await getUserFromSession();
+        setUser(freshUser ?? user);
         const dest = user.role === "admin" || user.role === "co_admin"
           ? "/admin/dashboard" : "/employee/dashboard";
         navigate(dest, { replace: true });

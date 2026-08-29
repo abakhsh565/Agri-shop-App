@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { persist } from "zustand/middleware";
 import type { CartItem, Customer } from "@/types";
 
 interface CartState {
@@ -12,9 +13,11 @@ interface CartState {
   subtotal: () => number;
 }
 
-export const useCartStore = create<CartState>()((set, get) => ({
-  customer: null,
-  items: [],
+export const useCartStore = create<CartState>()(
+  persist(
+    (set, get) => ({
+      customer: null,
+      items: [],
   setCustomer: (customer) => set({ customer }),
   addItem: (item) => {
     const existing = get().items.find((i) => i.variantId === item.variantId);
@@ -46,4 +49,10 @@ export const useCartStore = create<CartState>()((set, get) => ({
   removeItem: (variantId) => set({ items: get().items.filter((i) => i.variantId !== variantId) }),
   clearCart: () => set({ customer: null, items: [] }),
   subtotal: () => get().items.reduce((s, i) => s + i.lineTotal, 0),
-}));
+    }),
+    {
+      name: "agrishop-cart",
+      partialize: (s) => ({ customer: s.customer, items: s.items }),
+    }
+  )
+);

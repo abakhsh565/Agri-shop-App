@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "@/stores/authStore";
 import { hasPin } from "@/lib/pinLock";
+import { getUserFromSession } from "@/lib/auth";
 import StatusBar from "@/components/ui/StatusBar";
 
 export default function SplashPage() {
@@ -9,21 +10,26 @@ export default function SplashPage() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    const t = setTimeout(() => {
+    const t = setTimeout(async () => {
       if (user && user.isActive) {
-        // User is logged in — check if they have a PIN set on this device
-        if (hasPin(user.id)) {
-          // Existing user with PIN → go to PIN login screen (pass user so no phone lookup needed)
-          navigate("/login/pin", { replace: true, state: { user } });
+        // Re-fetch latest user data from DB so admin-made changes (name, photo, etc.) are reflected
+        const freshUser = await getUserFromSession();
+        const latestUser = freshUser ?? user;
+        // Update local store with fresh data
+        if (freshUser && (freshUser.name !== user.name || freshUser.photoUrl !== user.photoUrl)) {
+          useAuthStore.getState().setUser(freshUser);
+        }
+        if (hasPin(latestUser.id)) {
+          // PIN exists → PIN login screen
+          navigate("/login/pin", { replace: true, state: { user: latestUser } });
         } else {
-          // Existing user without PIN (fresh install or data cleared) → go to dashboard directly
-          const dest = (user.role === "admin" || user.role === "co_admin")
+          // No PIN set → prompt to create one (mandatory for all users)
+          const dest = (latestUser.role === "admin" || latestUser.role === "co_admin")
             ? "/admin/dashboard"
             : "/employee/dashboard";
-          navigate(dest, { replace: true });
+          navigate("/login/pin-set", { replace: true, state: { returnTo: dest } });
         }
       } else {
-        // No saved user → go to login
         navigate("/login", { replace: true });
       }
     }, 1500);

@@ -73,6 +73,11 @@ export function peekBack(currentPath: string): string | null {
   return null;
 }
 
+/** Check if a path is a dashboard/home screen */
+export function isDashboardPath(path: string): boolean {
+  return path === "/admin/dashboard" || path === "/employee/dashboard";
+}
+
 /** Clear the entire stack (e.g. on logout) */
 export function clearNav() {
   stack = [];

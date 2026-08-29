@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
@@ -34,10 +34,15 @@ export default function CartPage() {
 
   // PRD §38.3: When last item is removed, redirect to product selection
   // Skip redirect while completing sale to avoid overriding success navigation
-  if (items.length === 0 && !completingRef.current) {
-    navigate(`${base}/sale/products`, { replace: true });
-    return null;
-  }
+  // Use useEffect to avoid race condition with Zustand store sync
+  useEffect(() => {
+    if (items.length === 0 && !completingRef.current) {
+      navigate(`${base}/sale/products`, { replace: true });
+    }
+  }, [items.length, base, navigate]);
+
+  // While redirecting, render nothing
+  if (items.length === 0 && !completingRef.current) return null;
 
   const total = subtotal();
   const parsedAmount = amountReceived === "" ? null : Number(amountReceived);

@@ -112,10 +112,10 @@ export default function DashboardPage() {
     >
       {/* ── Notification overlay ── */}
       {showNotifs && (
-        <div className="absolute inset-0 z-40" onClick={() => setShowNotifs(false)}>
+        <div className="fixed inset-0" style={{ zIndex: 60 }} onClick={() => setShowNotifs(false)}>
           <div
-            className="absolute top-[88px] right-4 w-[280px] rounded-[16px] shadow-2xl overflow-hidden z-50 animate-scale-in"
-            style={{ background: "var(--surface)", border: "1px solid var(--divider)" }}
+            className="fixed top-[88px] right-4 w-[280px] rounded-[16px] shadow-2xl overflow-hidden animate-scale-in"
+            style={{ zIndex: 61, background: "var(--surface)", border: "1px solid var(--divider)" }}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="px-4 py-3" style={{ borderBottom: "1px solid var(--divider)" }}>
@@ -322,7 +322,6 @@ export default function DashboardPage() {
                 <div className="min-w-0">
                   <p className="text-[13px] font-bold" style={{ color: "var(--text-primary)" }}>{sale.customerName}</p>
                   <p className="text-[10px] mt-0.5" style={{ color: "var(--text-secondary)" }}>{formatSmartDateTime(sale.createdAt, now)}</p>
-                  <p className="text-[11px] font-medium mt-0.5" style={{ color: "var(--text-secondary)" }}>Sold by: {sale.employeeName}</p>
                 </div>
               </div>
               <div className="flex flex-col items-end gap-1 shrink-0">

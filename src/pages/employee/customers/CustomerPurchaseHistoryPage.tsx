@@ -8,6 +8,7 @@ import { useSalesStore } from "@/stores/salesStore";
 import { formatCurrency, formatDate, getCreditHealth } from "@/lib/formatters";
 import { useT } from "@/lib/i18n";
 import { useThemeStore } from "@/stores/themeStore";
+import { useAuthStore } from "@/stores/authStore";
 import { useShellBase } from "@/lib/useShellBase";
 
 function initBgColor(name: string) {
@@ -23,6 +24,7 @@ export default function CustomerPurchaseHistoryPage() {
   const { customerId } = useParams();
   const navigate = useNavigate();
   const base = useShellBase();
+  const { user } = useAuthStore();
   const t = useT();
   const { language } = useThemeStore();
   const isUrdu = language === "ur";
@@ -193,9 +195,6 @@ export default function CustomerPurchaseHistoryPage() {
                   </p>
                   <p className="text-sm font-bold mt-0.5" style={{ color: "var(--text-primary)" }}>
                     {sale.items.map((it) => it.productName).join(", ")}
-                  </p>
-                  <p className="text-[11px]" style={{ color: "var(--text-secondary)" }}>
-                    {t("sales.soldBy")} {sale.employeeName}
                   </p>
                 </div>
                 <div className="flex flex-col items-end gap-1 ml-3">
