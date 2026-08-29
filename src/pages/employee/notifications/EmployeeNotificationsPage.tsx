@@ -4,7 +4,7 @@ import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
 import { useNotificationStore, type AppNotification } from "@/stores/notificationStore";
 import { useCurrentTime } from "@/lib/useCurrentTime";
-import { timeAgo } from "@/lib/formatters";
+import { formatSmartDateTime } from "@/lib/formatters";
 import {
   Bell, ShoppingCart, CreditCard, RotateCcw, Package,
   AlertTriangle, Info,
@@ -172,7 +172,7 @@ export default function EmployeeNotificationsPage() {
                           <p className="text-xs mt-0.5" style={{ color: "var(--text-secondary)" }}>{n.body}</p>
                         )}
                         <p className="text-[11px] mt-1" style={{ color: "var(--text-secondary)" }}>
-                          {n.actor_name ? `${n.actor_name} · ` : ""}{timeAgo(n.created_at, now)}
+                          {formatSmartDateTime(n.created_at, now)}
                         </p>
                       </div>
                     </button>
