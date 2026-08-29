@@ -194,6 +194,7 @@ export interface Return {
   items: ReturnItem[];
   totalRefund: number;
   resolution: ReturnResolution;
+  reason?: string;
   processedBy: string;
   note?: string;
   createdAt: string;

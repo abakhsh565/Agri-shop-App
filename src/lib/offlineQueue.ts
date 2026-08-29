@@ -24,7 +24,8 @@ export type QueueOperation =
   | { type: "record_payment"; payload: Record<string, unknown> }
   | { type: "record_supplier_payment"; payload: Record<string, unknown> }
   | { type: "update_note"; payload: { saleId: string; note: string } }
-  | { type: "void_sale"; payload: { saleId: string; reason: string } };
+  | { type: "void_sale"; payload: { saleId: string; reason: string } }
+  | { type: "process_return"; payload: Record<string, unknown> };
 
 export interface QueueItem {
   id: string;
@@ -198,6 +199,12 @@ async function executeOperation(
       });
       if (error) throw new Error(error.message);
       return null;
+    }
+
+    case "process_return": {
+      const { data, error } = await client.rpc("process_return", { payload });
+      if (error) throw new Error(error.message);
+      return { id: (data as any)?.id };
     }
 
     default:

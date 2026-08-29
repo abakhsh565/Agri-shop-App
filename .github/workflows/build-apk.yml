@@ -10,15 +10,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v4
 
       - name: Setup Node.js
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@v4
         with:
           node-version: 22
 
       - name: Setup Java
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
           java-version: '21'
@@ -29,8 +29,12 @@ jobs:
       - name: Build Web App
         run: npm run build
 
-      - name: Add Android Platform
-        run: npx cap add android
+      - name: Setup Android Platform
+        run: |
+          # Remove stale platform if it exists, then re-add cleanly
+          npx cap remove android 2>/dev/null || true
+          rm -rf android/
+          npx cap add android
 
       - name: Sync Capacitor
         run: npx cap sync android

@@ -79,6 +79,9 @@ import ActivityLogPage from "@/pages/employee/activity/ActivityLogPage";
 import EmployeeNotificationsPage from "@/pages/employee/notifications/EmployeeNotificationsPage";
 import EmployeeMorePage from "@/pages/employee/more/MorePage";
 import BarcodeGeneratePage from "@/pages/admin/inventory/BarcodeGeneratePage";
+import AdminReturnSelectItemsPage from "@/pages/admin/returns/AdminReturnSelectItemsPage";
+import AdminReturnConfirmPage from "@/pages/admin/returns/AdminReturnConfirmPage";
+import AdminReturnSuccessPage from "@/pages/admin/returns/AdminReturnSuccessPage";
 
 export const router = createBrowserRouter([
   { path: "/", element: <SplashPage /> },
@@ -150,6 +153,9 @@ export const router = createBrowserRouter([
       { path: "inventory/movements", element: <StockMovementHistoryPage /> },
       { path: "inventory/reorder", element: <ReorderSuggestionsPage /> },
       { path: "inventory/barcodes", element: <BarcodeGeneratePage /> },
+      { path: "sales/:saleId/return", element: <AdminReturnSelectItemsPage /> },
+      { path: "sales/:saleId/return/confirm", element: <AdminReturnConfirmPage /> },
+      { path: "sales/:saleId/return/success", element: <AdminReturnSuccessPage /> },
     ],
   }],
   },

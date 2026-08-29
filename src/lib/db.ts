@@ -139,10 +139,25 @@ export async function rpcProcessReturn(payload: {
   customerId?: string | null;
   customerName: string;
   resolution: string;
+  reason?: string;
   note?: string;
+  idempotencyKey?: string;
   items: { saleItemId?: string; productId?: string; productName: string; variantId?: string; variantName: string; qty: number; unitPrice: number; restock: boolean }[];
 }): Promise<{ id: string; returnNumber: string; totalRefund: number }> {
-  const { data, error } = await supabase.rpc("process_return", { payload });
+  // Build payload — only include optional fields that have values
+  // so the old RPC (without reason/idempotency_key columns) still works
+  const rpcPayload: Record<string, unknown> = {
+    saleId: payload.saleId,
+    customerId: payload.customerId,
+    customerName: payload.customerName,
+    resolution: payload.resolution,
+    items: payload.items,
+  };
+  if (payload.reason) rpcPayload.reason = payload.reason;
+  if (payload.idempotencyKey) rpcPayload.idempotency_key = payload.idempotencyKey;
+  if (payload.note) rpcPayload.note = payload.note;
+
+  const { data, error } = await supabase.rpc("process_return", { payload: rpcPayload });
   if (error) throw new Error(friendly(error.message));
   return data as any;
 }
@@ -154,6 +169,14 @@ function friendly(msg: string): string {
   if (msg.includes("VARIANT_NOT_FOUND")) return "One of the selected items no longer exists.";
   if (msg.includes("NOT_AUTHORIZED")) return "You don't have permission to do that.";
   if (msg.includes("PRODUCT_NOT_FOUND")) return "That product no longer exists.";
+  if (msg.includes("REASON_REQUIRED")) return "A return reason is required.";
+  if (msg.includes("RETURN_WINDOW_EXPIRED")) return "Return window has expired (30 days).";
+  if (msg.includes("EXCESS_RETURN")) return "Cannot return more than the remaining quantity.";
+  if (msg.includes("ITEM_NOT_OWNED")) return "This item does not belong to the selected sale.";
+  if (msg.includes("SALE_ITEM_NOT_FOUND")) return "One of the return items no longer exists.";
+  if (msg.includes("SALE_NOT_FOUND")) return "The original sale was not found.";
+  if (msg.includes("INVALID_QTY")) return "Return quantity must be at least 1.";
+  if (msg.includes("null value")) return "A required field is missing. Please run the SQL migration (0014_return_enhancements.sql) in Supabase.";
   return msg;
 }
 
@@ -266,8 +289,8 @@ export async function fetchStockAdjustments(): Promise<StockAdjustment[]> {
 
 interface ReturnRow {
   id: string; return_number: string; sale_id: string | null; customer_id: string | null;
-  customer_name: string; total_refund: number; resolution: string; note: string | null;
-  processed_by: string | null; processed_by_name: string | null; created_at: string;
+  customer_name: string; total_refund: number; resolution: string; reason: string | null;
+  note: string | null; processed_by: string | null; processed_by_name: string | null; created_at: string;
 }
 
 export async function fetchReturns(): Promise<Return[]> {
@@ -286,6 +309,7 @@ export async function fetchReturns(): Promise<Return[]> {
     items: [],
     totalRefund: Number(r.total_refund),
     resolution: (r.resolution as Return["resolution"]) ?? "refund_cash",
+    reason: r.reason ?? undefined,
     processedBy: r.processed_by_name ?? r.processed_by ?? "",
     note: r.note ?? undefined,
     createdAt: r.created_at,

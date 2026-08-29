@@ -79,24 +79,24 @@ export default function PINLoginPage() {
   return (
     <AuthLayout>
       <NavHeader title="Sign In" backTo="/login" />
-      <div className="flex flex-col flex-1 items-center gap-8 p-6 pt-8">
-        <div className="flex flex-col items-center gap-2 text-center">
+      <div className="flex flex-col flex-1 items-center gap-5 sm:gap-8 px-4 py-4 sm:p-6 sm:pt-8">
+        <div className="flex flex-col items-center gap-1.5 sm:gap-2 text-center">
           {user.photoUrl ? (
-            <img src={user.photoUrl} alt="" className="w-16 h-16 rounded-full object-cover mb-2" />
+            <img src={user.photoUrl} alt="" className="w-12 h-12 sm:w-16 sm:h-16 rounded-full object-cover mb-1 sm:mb-2" />
           ) : (
             <div
-              className="w-16 h-16 rounded-full flex items-center justify-center text-xl font-bold mb-2"
+              className="w-12 h-12 sm:w-16 sm:h-16 rounded-full flex items-center justify-center text-lg sm:text-xl font-bold mb-1 sm:mb-2"
               style={{ background: "var(--brand)", color: "#0a0a0a" }}
             >
               {user.name.charAt(0).toUpperCase()}
             </div>
           )}
-          <p className="text-xl font-bold text-black">
+          <p className="text-lg sm:text-xl font-bold text-black">
             Welcome, {user.name.split(" ")[0]}
           </p>
-          <p className="text-sm text-[#888]">Enter your 4-digit PIN to continue</p>
+          <p className="text-xs sm:text-sm text-[#888]">Enter your 4-digit PIN to continue</p>
           {error && (
-            <p className="text-sm text-[#ef4444]">{error}</p>
+            <p className="text-xs sm:text-sm text-[#ef4444]">{error}</p>
           )}
         </div>
 
@@ -105,11 +105,11 @@ export default function PINLoginPage() {
         {verifying && (
           <div className="flex items-center gap-2">
             <div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin" />
-            <p className="text-sm text-[#888]">Verifying...</p>
+            <p className="text-xs sm:text-sm text-[#888]">Verifying...</p>
           </div>
         )}
 
-        <button onClick={handleForgotPIN} className="text-sm font-medium text-[#888] underline underline-offset-2">
+        <button onClick={handleForgotPIN} className="text-xs sm:text-sm font-medium text-[#888] underline underline-offset-2">
           Forgot PIN?
         </button>
       </div>

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "@/stores/authStore";
 import { useNotificationStore, type AppNotification } from "@/stores/notificationStore";
@@ -10,6 +10,7 @@ import { useEmployeesStore } from "@/stores/employeesStore";
 import { useCompaniesStore } from "@/stores/companiesStore";
 import PullToRefresh from "@/components/ui/PullToRefresh";
 import { useCustomersStore } from "@/stores/customersStore";
+import { supabase } from "@/lib/supabase";
 import { formatCurrency, formatSmartDateTime } from "@/lib/formatters";
 import { useT } from "@/lib/i18n";
 import { AlertTriangle, TrendingUp, ChevronRight, TrendingDown, ShoppingCart, Search, Bell, Wallet, CheckCircle2 } from "lucide-react";
@@ -71,6 +72,21 @@ export default function AdminDashboardPage() {
   const mockCompanies = useCompaniesStore((s) => s.companies);
   const mockEmployees = useEmployeesStore((s) => s.employees);
   const customers = useCustomersStore((s) => s.customers);
+  const [totalReturns, setTotalReturns] = useState(0);
+
+  // Fetch returns for net sales calculation
+  useEffect(() => {
+    async function fetchReturns() {
+      try {
+        const { data } = await supabase.from("returns").select("total_refund, created_at");
+        if (data) {
+          const total = data.reduce((s: number, r: any) => s + Number(r.total_refund || 0), 0);
+          setTotalReturns(total);
+        }
+      } catch {}
+    }
+    fetchReturns();
+  }, []);
 
   function getCustomerImg(customerId: string) {
     return customers.find((c) => c.id === customerId)?.imageUrl;
@@ -286,9 +302,19 @@ export default function AdminDashboardPage() {
           <p className="text-[11px] font-bold uppercase tracking-widest mb-1" style={{ color: "rgba(0,0,0,0.55)" }}>
             {t("admin.totalSales")}
           </p>
-          <p className="text-[34px] font-bold leading-none mb-4" style={{ color: "#0a0a0a" }}>
-            {formatRs(totalSales)}
+          <p className="text-[34px] font-bold leading-none" style={{ color: "#0a0a0a" }}>
+            {formatRs(totalSales - totalReturns)}
           </p>
+          <div className="flex items-center gap-2 mt-1 mb-4">
+            <span className="text-[10px] font-medium" style={{ color: "rgba(0,0,0,0.5)" }}>
+              Gross: {formatRs(totalSales)}
+            </span>
+            {totalReturns > 0 && (
+              <span className="text-[10px] font-medium" style={{ color: "rgba(239,68,68,0.8)" }}>
+                Returns: -{formatRs(totalReturns)}
+              </span>
+            )}
+          </div>
           <div className="flex gap-6">
             <div>
               <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "rgba(0,0,0,0.5)" }}>
