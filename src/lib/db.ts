@@ -142,10 +142,11 @@ export async function rpcProcessReturn(payload: {
   reason?: string;
   note?: string;
   idempotencyKey?: string;
+  processedBy?: string;
+  processedByName?: string;
   items: { saleItemId?: string; productId?: string; productName: string; variantId?: string; variantName: string; qty: number; unitPrice: number; restock: boolean }[];
 }): Promise<{ id: string; returnNumber: string; totalRefund: number }> {
   // Build payload — only include optional fields that have values
-  // so the old RPC (without reason/idempotency_key columns) still works
   const rpcPayload: Record<string, unknown> = {
     saleId: payload.saleId,
     customerId: payload.customerId,
@@ -156,6 +157,8 @@ export async function rpcProcessReturn(payload: {
   if (payload.reason) rpcPayload.reason = payload.reason;
   if (payload.idempotencyKey) rpcPayload.idempotency_key = payload.idempotencyKey;
   if (payload.note) rpcPayload.note = payload.note;
+  if (payload.processedBy) rpcPayload.processedBy = payload.processedBy;
+  if (payload.processedByName) rpcPayload.processedByName = payload.processedByName;
 
   const { data, error } = await supabase.rpc("process_return", { payload: rpcPayload });
   if (error) throw new Error(friendly(error.message));

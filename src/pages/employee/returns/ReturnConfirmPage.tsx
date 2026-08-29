@@ -84,6 +84,8 @@ export default function ReturnConfirmPage() {
         resolution,
         reason: reason.trim(),
         idempotencyKey,
+        processedBy: currentUser?.id,
+        processedByName: currentUser?.name,
         items: rpcItems,
       });
 
