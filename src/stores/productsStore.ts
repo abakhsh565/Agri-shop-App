@@ -78,9 +78,9 @@ export const useProductsStore = create<ProductsState>((set, get) => ({
 
     const [{ data: prods, error: pErr }, { data: vars, error: vErr }] =
       await Promise.all([
-        supabase.from("products").select("*").order("name"),
+        supabase.from("products").select("*").eq("is_active", true).order("name"),
         isAdmin
-          ? supabase.from("product_variants").select("*")
+          ? supabase.from("product_variants").select("*").eq("is_active", true)
           : supabase.from("product_variants_public").select("*"),
       ]);
 
