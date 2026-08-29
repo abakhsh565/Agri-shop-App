@@ -373,7 +373,7 @@ export default function SalesListPage() {
                   <button
                     key={sale.id}
                     onClick={() => navigate(`/employee/sales/${sale.id}`)}
-                    className="flex items-center justify-between gap-4 px-4 py-3.5 text-left transition-opacity active:opacity-70"
+                    className="flex items-center px-4 py-3.5 text-left transition-opacity active:opacity-70"
                     style={{ borderBottom: i < section.sales.length - 1 ? "1px solid var(--divider)" : "none" }}
                   >
                     <div className="flex items-center gap-3 flex-1 min-w-0">
@@ -390,7 +390,7 @@ export default function SalesListPage() {
                         <p className="text-[11px] font-medium mt-0.5" style={{ color: "var(--text-secondary)" }}>Sold by: {sale.employeeName}</p>
                       </div>
                     </div>
-                    <div className="flex flex-col items-end gap-2 shrink-0">
+                    <div className="flex flex-col items-end gap-2 ml-auto shrink-0">
                       <span className="text-[14px] font-bold" style={{ color: "var(--text-primary)" }}>
                         {formatCurrency(sale.totalAmount)}
                       </span>

@@ -498,7 +498,7 @@ export default function AdminDashboardPage() {
               <button
                 key={sale.id}
                 onClick={() => navigate(`/admin/sales/${sale.id}`)}
-                className="flex items-center justify-between gap-4 px-4 py-3.5 w-full text-left transition-colors active:opacity-70"
+                className="flex items-center px-4 py-3.5 w-full text-left transition-colors active:opacity-70"
                 style={{
                   borderBottom: i < recentSales.length - 1 ? "1px solid var(--divider)" : "none",
                   background: "var(--background)",
@@ -518,7 +518,7 @@ export default function AdminDashboardPage() {
                     <p className="text-[11px] font-medium mt-0.5" style={{ color: "var(--text-secondary)" }}>Sold by: {sale.employeeName}</p>
                   </div>
                 </div>
-                <div className="flex flex-col items-end gap-1 shrink-0">
+                <div className="flex flex-col items-end gap-1 ml-auto shrink-0">
                   <span className="text-[14px] font-bold" style={{ color: "var(--text-primary)" }}>
                     {formatRs(sale.totalAmount)}
                   </span>
