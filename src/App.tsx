@@ -3,6 +3,7 @@ import { router } from "@/router";
 import { useEffect } from "react";
 import { useThemeStore, applyTheme, applyDirection } from "@/stores/themeStore";
 import { Agentation } from "agentation";
+import ErrorBoundary from "@/components/ui/ErrorBoundary";
 import { Capacitor } from "@capacitor/core";
 
 const isNative = Capacitor.isNativePlatform();
@@ -24,7 +25,7 @@ export default function App() {
         className="app-frame w-full max-w-[480px] relative overflow-hidden shadow-2xl"
         style={{ background: "var(--background)", minHeight: "100dvh" }}
       >
-        <RouterProvider router={router} />
+        <ErrorBoundary><RouterProvider router={router} /></ErrorBoundary>
       </div>
       {!isNative && <Agentation />}
     </div>

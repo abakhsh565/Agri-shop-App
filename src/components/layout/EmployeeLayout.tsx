@@ -4,7 +4,7 @@ import { useAuthStore } from "@/stores/authStore";
 import { useOfflineStore } from "@/stores/offlineStore";
 import { getPendingCount } from "@/lib/offlineQueue";
 import PINInput from "@/components/ui/PINInput";
-import { useState, useEffect, useRef } from "react";
+import { Suspense, useState, useEffect, useRef } from "react";
 import { verifyPin } from "@/lib/pinLock";
 import { useUIStore } from "@/stores/uiStore";
 import { useProductsStore } from "@/stores/productsStore";
@@ -261,7 +261,7 @@ export default function EmployeeLayout() {
         className="flex flex-col flex-1 overflow-y-auto"
         style={{ paddingBottom: showTabBar ? "var(--tabbar-height)" : "0px" }}
       >
-        <Outlet />
+        <Suspense fallback={<div className="flex items-center justify-center flex-1" style={{ color: "var(--text-secondary)" }}><div className="w-6 h-6 border-2 border-current border-t-transparent rounded-full animate-spin" /></div>}><Outlet /></Suspense>
       </div>
 
       {/* ── Bottom tab bar (4 tabs) — only on top-level navigation screens ── */}

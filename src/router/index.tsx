@@ -1,4 +1,5 @@
 import { createBrowserRouter, Navigate } from "react-router-dom";
+import React, { Suspense } from "react";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 
 // Auth
@@ -28,48 +29,48 @@ import EmployeeLayout from "@/components/layout/EmployeeLayout";
 import AdminLayout from "@/components/layout/AdminLayout";
 
 // Admin pages
-import AdminDashboardPage from "@/pages/admin/dashboard/AdminDashboardPage";
-import AdminSalesListPage from "@/pages/admin/sales/AdminSalesListPage";
-import AdminSaleDetailPage from "@/pages/admin/sales/AdminSaleDetailPage";
+const AdminDashboardPage = React.lazy(() => import("@/pages/admin/dashboard/AdminDashboardPage"));
+const AdminSalesListPage = React.lazy(() => import("@/pages/admin/sales/AdminSalesListPage"));
+const AdminSaleDetailPage = React.lazy(() => import("@/pages/admin/sales/AdminSaleDetailPage"));
 
 import MoreMenuPage from "@/pages/admin/more/MoreMenuPage";
-import EmployeesListPage from "@/pages/admin/employees/EmployeesListPage";
-import EmployeeDetailPage from "@/pages/admin/employees/EmployeeDetailPage";
+const EmployeesListPage = React.lazy(() => import("@/pages/admin/employees/EmployeesListPage"));
+const EmployeeDetailPage = React.lazy(() => import("@/pages/admin/employees/EmployeeDetailPage"));
 import CompaniesListPage from "@/pages/admin/companies/CompaniesListPage";
 import AddCompanyPage from "@/pages/admin/companies/AddCompanyPage";
 import CompanyDetailPage from "@/pages/admin/companies/CompanyDetailPage";
 import AdminSettingsPage from "@/pages/admin/settings/AdminSettingsPage";
 import AdminNotificationsPage from "@/pages/admin/notifications/AdminNotificationsPage";
 import AddEmployeePage from "@/pages/admin/employees/AddEmployeePage";
-import AdminPurchasesPage from "@/pages/admin/purchases/AdminPurchasesPage";
-import RecordPurchasePage from "@/pages/admin/purchases/RecordPurchasePage";
+const AdminPurchasesPage = React.lazy(() => import("@/pages/admin/purchases/AdminPurchasesPage"));
+const RecordPurchasePage = React.lazy(() => import("@/pages/admin/purchases/RecordPurchasePage"));
 import AdminPaymentsPage from "@/pages/admin/payments/AdminPaymentsPage";
 import RecordSupplierPaymentPage from "@/pages/admin/payments/RecordSupplierPaymentPage";
-import AdminReportsPage from "@/pages/admin/reports/AdminReportsPage";
-import InventoryAdjustPage from "@/pages/admin/inventory/InventoryAdjustPage";
-import AddProductPage from "@/pages/admin/inventory/AddProductPage";
+const AdminReportsPage = React.lazy(() => import("@/pages/admin/reports/AdminReportsPage"));
+const InventoryAdjustPage = React.lazy(() => import("@/pages/admin/inventory/InventoryAdjustPage"));
+const AddProductPage = React.lazy(() => import("@/pages/admin/inventory/AddProductPage"));
 import PurchaseDetailPage from "@/pages/admin/purchases/PurchaseDetailPage";
 import StockMovementHistoryPage from "@/pages/admin/inventory/StockMovementHistoryPage";
 import ReorderSuggestionsPage from "@/pages/admin/inventory/ReorderSuggestionsPage";
 import DailyCashReconciliationPage from "@/pages/admin/payments/DailyCashReconciliationPage";
 
 // Employee pages
-import DashboardPage from "@/pages/employee/dashboard/DashboardPage";
+const DashboardPage = React.lazy(() => import("@/pages/employee/dashboard/DashboardPage"));
 import SelectCustomerPage from "@/pages/employee/sale/SelectCustomerPage";
 import BrowseProductsPage from "@/pages/employee/sale/BrowseProductsPage";
 import VariantSelectorPage from "@/pages/employee/sale/VariantSelectorPage";
 import CartPage from "@/pages/employee/sale/CartPage";
 import SaleSuccessPage from "@/pages/employee/sale/SaleSuccessPage";
-import SalesListPage from "@/pages/employee/sales/SalesListPage";
-import SaleDetailPage from "@/pages/employee/sales/SaleDetailPage";
-import CustomersListPage from "@/pages/employee/customers/CustomersListPage";
-import CustomerProfilePage from "@/pages/employee/customers/CustomerProfilePage";
+const SalesListPage = React.lazy(() => import("@/pages/employee/sales/SalesListPage"));
+const SaleDetailPage = React.lazy(() => import("@/pages/employee/sales/SaleDetailPage"));
+const CustomersListPage = React.lazy(() => import("@/pages/employee/customers/CustomersListPage"));
+const CustomerProfilePage = React.lazy(() => import("@/pages/employee/customers/CustomerProfilePage"));
 import CustomerPurchaseHistoryPage from "@/pages/employee/customers/CustomerPurchaseHistoryPage";
 import CustomerPaymentHistoryPage from "@/pages/employee/customers/CustomerPaymentHistoryPage";
 import RecordCustomerPaymentPage from "@/pages/employee/customers/RecordCustomerPaymentPage";
 import AddCustomerPage from "@/pages/employee/customers/AddCustomerPage";
-import ProductsListPage from "@/pages/employee/products/ProductsListPage";
-import ProductDetailPage from "@/pages/employee/products/ProductDetailPage";
+const ProductsListPage = React.lazy(() => import("@/pages/employee/products/ProductsListPage"));
+const ProductDetailPage = React.lazy(() => import("@/pages/employee/products/ProductDetailPage"));
 import ReturnSelectItemsPage from "@/pages/employee/returns/ReturnSelectItemsPage";
 import ReturnConfirmPage from "@/pages/employee/returns/ReturnConfirmPage";
 import ReturnSuccessPage from "@/pages/employee/returns/ReturnSuccessPage";
@@ -78,7 +79,7 @@ import SettingsPage from "@/pages/employee/settings/SettingsPage";
 import ActivityLogPage from "@/pages/employee/activity/ActivityLogPage";
 import EmployeeNotificationsPage from "@/pages/employee/notifications/EmployeeNotificationsPage";
 import EmployeeMorePage from "@/pages/employee/more/MorePage";
-import BarcodeGeneratePage from "@/pages/admin/inventory/BarcodeGeneratePage";
+const BarcodeGeneratePage = React.lazy(() => import("@/pages/admin/inventory/BarcodeGeneratePage"));
 import AdminReturnSelectItemsPage from "@/pages/admin/returns/AdminReturnSelectItemsPage";
 import AdminReturnConfirmPage from "@/pages/admin/returns/AdminReturnConfirmPage";
 import AdminReturnSuccessPage from "@/pages/admin/returns/AdminReturnSuccessPage";
