@@ -475,9 +475,23 @@ export default function CustomerProfilePage() {
                   style={{ background: "var(--surface-2)", border: "1px solid var(--divider)", color: "var(--text-primary)" }}
                 />
                 {customer.creditLimit > 0 && (
-                  <p className="text-[11px] mt-1" style={{ color: "var(--text-secondary)" }}>
-                    {creditHealth.status === "green" ? "Good" : creditHealth.status === "yellow" ? "Caution" : "Risk"} — Repaid {Math.round(((effectivePaid) / (customer.totalPurchases || 1)) * 100)}% of total purchases
-                  </p>
+                  <div className="mt-2 p-2.5 rounded-xl" style={{ background: creditHealth.status === "green" ? "rgba(34,197,94,0.08)" : creditHealth.status === "yellow" ? "rgba(234,179,8,0.08)" : "rgba(239,68,68,0.08)" }}>
+                    <div className="flex items-center gap-1.5">
+                      <div className="size-1.5 rounded-full" style={{ background: getCreditHealthStatusColor(creditHealth.status) }} />
+                      <span className="text-[11px] font-bold" style={{ color: getCreditHealthStatusColor(creditHealth.status) }}>
+                        {creditHealth.headline}
+                      </span>
+                    </div>
+                    <p className="text-[10px] mt-1" style={{ color: "var(--text-secondary)" }}>
+                      {creditHealth.explanation}
+                    </p>
+                    {creditHealth.signals.map((sig, i) => (
+                      <p key={i} className="text-[10px] mt-0.5" style={{ color: "var(--text-secondary)" }}>• {sig}</p>
+                    ))}
+                    <p className="text-[10px] mt-1 italic" style={{ color: "var(--text-secondary)" }}>
+                      {creditHealth.recommendation}
+                    </p>
+                  </div>
                 )}
               </div>
               <ImageUpload bucket="customer-images" value={editImageUrl} onChange={setEditImageUrl} shape="circle" label="Profile Photo" />

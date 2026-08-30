@@ -506,7 +506,7 @@ export default function AdminDashboardPage() {
               }
             }
             return harvestAlerts.map((text, i) => (
-              <div key={i} className="flex items-center gap-3 rounded-[14px] p-4" style={{ background: "#F1EFE8" }}>
+              <button key={i} onClick={() => navigate("/admin/customers")} className="flex items-center gap-3 rounded-[14px] p-4 active:opacity-70 w-full text-left" style={{ background: "#F1EFE8" }}>
                 <div className="size-5 shrink-0 flex items-center justify-center">
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#5F5E5A" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <rect width="18" height="18" x="3" y="4" rx="2" ry="2" />
@@ -518,7 +518,7 @@ export default function AdminDashboardPage() {
                 <div className="flex-1 min-w-0">
                   <p className="text-[13px]" style={{ color: "#444441", lineHeight: 1.5 }}>{text}</p>
                 </div>
-              </div>
+              </button>
             ));
           })()}
 
