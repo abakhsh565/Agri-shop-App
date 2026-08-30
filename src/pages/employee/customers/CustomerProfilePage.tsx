@@ -266,40 +266,37 @@ export default function CustomerProfilePage() {
         >
           <div className="flex-1 text-center py-3.5" style={{ borderRight: "0.5px solid #E5E4DE" }}>
             <p className="text-[10px] tracking-[0.5px] font-medium" style={{ color: "#8A8A85" }}>PURCHASES</p>
-            <p className="text-[15px] font-medium mt-1" style={{ color: "#1A1A1A" }}>
+            <p className="text-[15px] font-bold mt-1" style={{ color: "#1A1A1A" }}>
               {formatCurrency(customer.totalPurchases || customerSales.reduce((a, s) => a + s.totalAmount, 0))}
             </p>
           </div>
           <div className="flex-1 text-center py-3.5" style={{ borderRight: "0.5px solid #E5E4DE" }}>
             <p className="text-[10px] tracking-[0.5px] font-medium" style={{ color: "#8A8A85" }}>PAID</p>
-            <p className="text-[15px] font-medium mt-1" style={{ color: "#1A1A1A" }}>
+            <p className="text-[15px] font-bold mt-1" style={{ color: "#1A1A1A" }}>
               {formatCurrency(effectivePaid)}
             </p>
           </div>
           <div className="flex-1 text-center py-3.5">
             <p className="text-[10px] tracking-[0.5px] font-medium" style={{ color: "#8A8A85" }}>OUTSTANDING</p>
-            <p className="text-[15px] font-medium mt-1" style={{ color: "#D97706" }}>
+            <p className="text-[15px] font-bold mt-1" style={{ color: "#D97706" }}>
               {formatCurrency(customer.outstandingBalance)}
             </p>
           </div>
         </div>
 
         {/* ═══════════════════════════════════════════
-            3. CREDIT CARD — Limit, bar, utilization, Reminder schedule
+            3. CREDIT CARD — Limit, bar, utilization
            ═══════════════════════════════════════════ */}
         <div
           className="rounded-[16px] p-4"
           style={{ background: "#F6F5F1" }}
         >
-          {/* Header row */}
-          <div className="flex justify-between items-center">
-            <span className="text-[12px] font-medium tracking-[0.5px]" style={{ color: "#5A5A55" }}>CREDIT</span>
-            <div className="text-right">
-              <p className="text-[10px]" style={{ color: "#8A8A85" }}>LIMIT</p>
-              <p className="text-[15px] font-medium" style={{ color: "#1A1A1A" }}>
-                {customer.creditLimit > 0 ? formatCurrency(customer.creditLimit) : "\u2014"}
-              </p>
-            </div>
+          {/* Credit Limit — horizontal alignment */}
+          <div className="flex items-center justify-between">
+            <span className="text-[12px] font-medium tracking-[0.5px]" style={{ color: "#5A5A55" }}>CREDIT LIMIT</span>
+            <span className="text-[15px] font-bold" style={{ color: "#1A1A1A" }}>
+              {customer.creditLimit > 0 ? formatCurrency(customer.creditLimit) : "\u2014"}
+            </span>
           </div>
 
           {/* Progress bar */}
@@ -315,7 +312,7 @@ export default function CustomerProfilePage() {
                 <span className="text-[11px]" style={{ color: "#8A8A85" }}>
                   {formatCurrency(customer.outstandingBalance)} of {formatCurrency(customer.creditLimit)} used
                 </span>
-                <span className="text-[11px] font-medium" style={{ color: "#3B6D11" }}>{usagePct}%</span>
+                <span className="text-[11px] font-bold" style={{ color: "#3B6D11" }}>{usagePct}%</span>
               </div>
             </>
           )}
@@ -440,71 +437,58 @@ export default function CustomerProfilePage() {
           >
             <p className="text-base font-bold" style={{ color: "var(--text-primary)" }}>Edit Customer</p>
 
+            {/* Image on top */}
+            <div className="flex justify-center">
+              <ImageUpload bucket="customer-images" value={editImageUrl} onChange={setEditImageUrl} shape="circle" label="Profile Photo" />
+            </div>
+
             <div className="flex flex-col gap-3">
               <div>
-                <label className="text-[12px] font-medium block mb-1" style={{ color: "var(--text-secondary)" }}>Name</label>
+                <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1.5" style={{ color: "var(--text-secondary)" }}>Name</label>
                 <input
                   value={editName}
                   onChange={(e) => setEditName(e.target.value)}
-                  className="w-full h-10 rounded-lg px-3 text-sm outline-none"
-                  style={{ background: "var(--surface-2)", border: "1px solid var(--divider)", color: "var(--text-primary)" }}
+                  className="w-full h-12 rounded-[24px] px-4 text-sm outline-none"
+                  style={{ background: "var(--surface-2)", border: "1px solid var(--divider)", color: "var(--text-primary)", borderRadius: "24px" }}
                 />
               </div>
               <div>
-                <label className="text-[12px] font-medium block mb-1" style={{ color: "var(--text-secondary)" }}>Phone</label>
+                <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1.5" style={{ color: "var(--text-secondary)" }}>Phone</label>
                 <input
                   value={editPhone}
                   onChange={(e) => setEditPhone(e.target.value)}
-                  className="w-full h-10 rounded-lg px-3 text-sm outline-none"
-                  style={{ background: "var(--surface-2)", border: "1px solid var(--divider)", color: "var(--text-primary)" }}
+                  className="w-full h-12 rounded-[24px] px-4 text-sm outline-none"
+                  style={{ background: "var(--surface-2)", border: "1px solid var(--divider)", color: "var(--text-primary)", borderRadius: "24px" }}
                 />
               </div>
               <div>
-                <label className="text-[12px] font-medium block mb-1" style={{ color: "var(--text-secondary)" }}>Address</label>
+                <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1.5" style={{ color: "var(--text-secondary)" }}>Address</label>
                 <input
                   value={editAddress}
                   onChange={(e) => setEditAddress(e.target.value)}
-                  className="w-full h-10 rounded-lg px-3 text-sm outline-none"
-                  style={{ background: "var(--surface-2)", border: "1px solid var(--divider)", color: "var(--text-primary)" }}
+                  className="w-full h-12 rounded-[24px] px-4 text-sm outline-none"
+                  style={{ background: "var(--surface-2)", border: "1px solid var(--divider)", color: "var(--text-primary)", borderRadius: "24px" }}
                 />
               </div>
               <div>
-                <label className="text-[12px] font-medium block mb-1" style={{ color: "var(--text-secondary)" }}>Crops</label>
+                <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1.5" style={{ color: "var(--text-secondary)" }}>Crops</label>
                 <div className="flex flex-wrap gap-2">
                   {businessSettings.crops.map(crop => (
-                    <button key={crop.name} type="button" onClick={() => setEditCrops(prev => prev.includes(crop.name) ? prev.filter(c => c !== crop.name) : [...prev, crop.name])} className="h-8 px-3 rounded-full text-[12px] font-medium transition-colors" style={{ background: editCrops.includes(crop.name) ? "var(--brand)" : "var(--surface-2)", color: editCrops.includes(crop.name) ? "#0a0a0a" : "var(--text-secondary)", border: editCrops.includes(crop.name) ? "none" : "1px solid var(--divider)" }}>{crop.name}</button>
+                    <button key={crop.name} type="button" onClick={() => setEditCrops(prev => prev.includes(crop.name) ? prev.filter(c => c !== crop.name) : [...prev, crop.name])} className="h-9 px-4 rounded-full text-[12px] font-medium transition-colors" style={{ background: editCrops.includes(crop.name) ? "var(--brand)" : "var(--surface-2)", color: editCrops.includes(crop.name) ? "#0a0a0a" : "var(--text-secondary)", border: editCrops.includes(crop.name) ? "none" : "1px solid var(--divider)" }}>{crop.name}</button>
                   ))}
                   {businessSettings.crops.length === 0 && <p className="text-[11px]" style={{ color: "var(--text-secondary)" }}>Configure crops in Business Settings first</p>}
                 </div>
-                <label className="text-[12px] font-medium block mb-1 mt-3" style={{ color: "var(--text-secondary)" }}>Credit Limit (Rs.)</label>
+              </div>
+              <div>
+                <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1.5" style={{ color: "var(--text-secondary)" }}>Credit Limit (Rs.)</label>
                 <input
                   type="number"
                   value={editCreditLimit}
                   onChange={(e) => setEditCreditLimit(e.target.value)}
-                  className="w-full h-10 rounded-lg px-3 text-sm outline-none"
-                  style={{ background: "var(--surface-2)", border: "1px solid var(--divider)", color: "var(--text-primary)" }}
+                  className="w-full h-12 rounded-[24px] px-4 text-sm outline-none"
+                  style={{ background: "var(--surface-2)", border: "1px solid var(--divider)", color: "var(--text-primary)", borderRadius: "24px" }}
                 />
-                {customer.creditLimit > 0 && (
-                  <div className="mt-2 p-2.5 rounded-xl" style={{ background: creditHealth.status === "green" ? "rgba(34,197,94,0.08)" : creditHealth.status === "yellow" ? "rgba(234,179,8,0.08)" : "rgba(239,68,68,0.08)" }}>
-                    <div className="flex items-center gap-1.5">
-                      <div className="size-1.5 rounded-full" style={{ background: getCreditHealthStatusColor(creditHealth.status) }} />
-                      <span className="text-[11px] font-bold" style={{ color: getCreditHealthStatusColor(creditHealth.status) }}>
-                        {creditHealth.headline}
-                      </span>
-                    </div>
-                    <p className="text-[10px] mt-1" style={{ color: "var(--text-secondary)" }}>
-                      {creditHealth.explanation}
-                    </p>
-                    {creditHealth.signals.map((sig, i) => (
-                      <p key={i} className="text-[10px] mt-0.5" style={{ color: "var(--text-secondary)" }}>• {sig}</p>
-                    ))}
-                    <p className="text-[10px] mt-1 italic" style={{ color: "var(--text-secondary)" }}>
-                      {creditHealth.recommendation}
-                    </p>
-                  </div>
-                )}
               </div>
-              <ImageUpload bucket="customer-images" value={editImageUrl} onChange={setEditImageUrl} shape="circle" label="Profile Photo" />
             </div>
 
             <div className="flex gap-3 mt-1">

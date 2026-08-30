@@ -247,8 +247,8 @@ export default function AdminDashboardPage() {
       {showNotifs && (
         <div className="fixed inset-0" style={{ zIndex: 60 }} onClick={() => setShowNotifs(false)}>
           <div
-            className="fixed top-[88px] right-4 w-[300px] rounded-[16px] shadow-2xl overflow-hidden animate-scale-in flex flex-col"
-            style={{ zIndex: 61, background: "var(--surface)", border: "1px solid var(--divider)", maxHeight: "calc(100dvh - 120px)" }}
+            className="fixed top-[88px] right-4 w-[280px] rounded-[16px] shadow-2xl overflow-hidden animate-scale-in flex flex-col"
+            style={{ zIndex: 61, background: "var(--surface)", border: "1px solid var(--divider)", maxHeight: "360px" }}
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
@@ -264,7 +264,7 @@ export default function AdminDashboardPage() {
             </div>
 
             {/* Scrollable list */}
-            <div className="overflow-y-auto flex-1" style={{ maxHeight: "calc(100dvh - 180px)" }}>
+            <div className="overflow-y-auto flex-1" style={{ maxHeight: "310px" }}>
               {notifications.length === 0 ? (
                 <div className="px-4 py-8 text-center">
                   <p className="text-[13px]" style={{ color: "var(--text-secondary)" }}>{t("dashboard.noNotifications") || "No notifications yet"}</p>
@@ -293,8 +293,18 @@ export default function AdminDashboardPage() {
                   }
 
                   const nonEmpty = groups.filter(g => g.items.length > 0);
+                  // Limit to 5 most recent notifications total
+                  let totalCount = 0;
+                  const limited: typeof nonEmpty = [];
+                  for (const g of nonEmpty) {
+                    const remaining = 5 - totalCount;
+                    if (remaining <= 0) break;
+                    const items = g.items.slice(0, remaining);
+                    limited.push({ ...g, items });
+                    totalCount += items.length;
+                  }
 
-                  return nonEmpty.map((group) => (
+                  return limited.map((group) => (
                     <div key={group.heading}>
                       <p className="px-4 pt-3 pb-1 text-[10px] font-bold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
                         {group.heading}

@@ -162,7 +162,7 @@ export default function ReminderConfigSheet({ config, onSave, onClose }: Props) 
 
           {/* Interval fields */}
           {local.repeat === "interval" && (
-            <div className="pl-4" style={{ borderLeft: "2px solid var(--brand)" }}>
+            <div className="pl-4" style={{ borderLeft: "2px solid var(--divider)" }}>
               <div className="flex items-center gap-2">
                 <span className="text-[13px]" style={{ color: "var(--text-secondary)" }}>Every</span>
                 <input
@@ -191,7 +191,7 @@ export default function ReminderConfigSheet({ config, onSave, onClose }: Props) 
 
           {/* Escalation fields */}
           {local.repeat === "escalate" && (
-            <div className="pl-4 flex flex-col gap-3" style={{ borderLeft: "2px solid var(--brand)" }}>
+            <div className="pl-4 flex flex-col gap-3" style={{ borderLeft: "2px solid var(--divider)" }}>
               {local.escalation.map((step, i) => (
                 <div key={i} className="flex items-center gap-3">
                   <span className="text-[13px] w-[88px] shrink-0 font-medium" style={{ color: "var(--text-secondary)" }}>{step.label}</span>
@@ -258,7 +258,7 @@ export default function ReminderConfigSheet({ config, onSave, onClose }: Props) 
           {/* Summary */}
           <div
             className="rounded-[14px] p-4 text-[13px] leading-relaxed"
-            style={{ background: "var(--surface-2)", color: "var(--text-secondary)" }}
+            style={{ background: "var(--brand-light, #d9f99d)", color: "var(--brand-dark, #65a30d)", border: "1px solid var(--brand, #84cc16)" }}
           >
             {buildSummary(local)}
           </div>
