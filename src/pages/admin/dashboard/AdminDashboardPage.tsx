@@ -310,7 +310,7 @@ export default function AdminDashboardPage() {
           <p className="text-[34px] font-bold leading-none" style={{ color: "#0a0a0a" }}>
             {formatRs(totalSales - totalReturns)}
           </p>
-          <div className="flex items-center gap-2 mt-1 mb-4">
+          <div className="flex flex-col gap-0 mt-1 mb-4">
             <span className="text-[10px] font-medium" style={{ color: "rgba(0,0,0,0.5)" }}>
               Gross: {formatRs(totalSales)}
             </span>
@@ -417,86 +417,116 @@ export default function AdminDashboardPage() {
           {t("admin.quickAlerts")}
         </p>
         <div className="flex flex-col gap-2.5">
-          {/* Red alert — supplier payable due */}
-          {totalPayable > 0 && (
-            <button
-              onClick={() => navigate("/admin/companies")}
-              className="flex items-start gap-3 rounded-[14px] p-4 transition-opacity active:opacity-70 text-left"
-              style={{ background: "#FCEBEB" }}
-            >
-              <AlertTriangle size={20} color="#A32D2D" className="mt-0.5 shrink-0" />
-              <div className="flex-1 min-w-0">
-                <p className="text-[14px] font-medium" style={{ color: "#791F1F" }}>Supplier payable due</p>
-                <p className="text-[13px] mt-1" style={{ color: "#791F1F", lineHeight: 1.5 }}>{formatCurrency(totalPayable)} total due to suppliers</p>
-                <div className="flex items-center justify-between mt-2">
-                  <span className="text-[11px]" style={{ color: "#A32D2D" }}>action needed</span>
-                  <span className="text-[13px] font-medium" style={{ color: "#791F1F" }}>Review</span>
+          {/* TIER 1 — Red: Critical overrides (always shown) */}
+          {(() => {
+            const totalRed = creditLimitReached + (totalPayable > 0 ? 1 : 0);
+            if (totalRed > 0) {
+              return (
+                <>
+                  {/* Supplier payable due */}
+                  {totalPayable > 0 && (
+                    <button
+                      onClick={() => navigate("/admin/companies")}
+                      className="flex items-start gap-3 rounded-[14px] p-4 transition-opacity active:opacity-70 text-left w-full"
+                      style={{ background: "#FCEBEB" }}
+                    >
+                      <AlertTriangle size={20} color="#A32D2D" className="mt-0.5 shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[14px] font-medium" style={{ color: "#791F1F" }}>Supplier payable due</p>
+                        <p className="text-[13px] mt-1" style={{ color: "#791F1F", lineHeight: 1.5 }}>{formatCurrency(totalPayable)} total due to suppliers</p>
+                        <div className="flex items-center justify-between mt-2">
+                          <span className="text-[11px]" style={{ color: "#A32D2D" }}>action needed</span>
+                          <span className="text-[13px] font-medium" style={{ color: "#791F1F" }}>Review</span>
+                        </div>
+                      </div>
+                    </button>
+                  )}
+                  {/* Credit limit reached */}
+                  {creditLimitReached > 0 && (
+                    <button
+                      onClick={() => navigate("/admin/alerts/credit-overrides")}
+                      className="flex items-start gap-3 rounded-[14px] p-4 transition-opacity active:opacity-70 text-left w-full"
+                      style={{ background: "#FCEBEB" }}
+                    >
+                      <AlertTriangle size={20} color="#A32D2D" className="mt-0.5 shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[14px] font-medium" style={{ color: "#791F1F" }}>{creditLimitReached} customer{creditLimitReached !== 1 ? "s" : ""} need attention</p>
+                        <p className="text-[13px] mt-1" style={{ color: "#791F1F", lineHeight: 1.5 }}>Credit limit reached or critical repayment situation</p>
+                        <div className="flex items-center justify-between mt-2">
+                          <span className="text-[11px]" style={{ color: "#A32D2D" }}>action needed</span>
+                          <span className="text-[13px] font-medium" style={{ color: "#791F1F" }}>Review</span>
+                        </div>
+                      </div>
+                    </button>
+                  )}
+                </>
+              );
+            }
+            /* All clear — red tier */
+            return (
+              <div className="flex items-center gap-3 rounded-[14px] p-4" style={{ background: "var(--surface-2)" }}>
+                <CheckCircle2 size={20} style={{ color: "var(--brand-dark, #65a30d)" }} className="shrink-0" />
+                <div className="flex-1">
+                  <p className="text-[13px] font-medium" style={{ color: "var(--text-primary)" }}>All clear — no critical alerts</p>
                 </div>
               </div>
-            </button>
-          )}
-          {/* Red alert - credit limit reached */}
-          {creditLimitReached > 0 && (
-            <button
-              onClick={() => navigate("/admin/alerts/credit-overrides")}
-              className="flex items-start gap-3 rounded-[14px] p-4 transition-opacity active:opacity-70 text-left w-full"
-              style={{ background: "#FCEBEB" }}
-            >
-              <AlertTriangle size={20} color="#A32D2D" className="mt-0.5 shrink-0" />
-              <div className="flex-1 min-w-0">
-                <p className="text-[14px] font-medium" style={{ color: "#791F1F" }}>{creditLimitReached} customer{creditLimitReached !== 1 ? "s" : ""} need attention</p>
-                <p className="text-[13px] mt-1" style={{ color: "#791F1F", lineHeight: 1.5 }}>Credit limit reached or critical repayment situation</p>
-                <div className="flex items-center justify-between mt-2">
-                  <span className="text-[11px]" style={{ color: "#A32D2D" }}>action needed</span>
-                  <span className="text-[13px] font-medium" style={{ color: "#791F1F" }}>Review</span>
+            );
+          })()}
+
+          {/* TIER 2 — Amber: Daily rollup (always shown) */}
+          {(() => {
+            const totalAmber = dueReminderCount + lowStockCount;
+            if (totalAmber > 0) {
+              return (
+                <>
+                  {/* Reminders batch */}
+                  {dueReminderCount > 0 && (
+                    <button
+                      onClick={() => navigate("/admin/alerts/reminders")}
+                      className="flex items-center gap-3 rounded-[14px] p-4 transition-opacity active:opacity-70 text-left w-full"
+                      style={{ background: "#FAEEDA" }}
+                    >
+                      <Bell size={20} color="#854F0B" className="shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[13px]" style={{ color: "#633806", lineHeight: 1.5 }}>{dueReminderCount} reminder{dueReminderCount !== 1 ? "s" : ""} ready to send</p>
+                      </div>
+                      <span className="text-[13px] font-medium shrink-0" style={{ color: "#854F0B" }}>View</span>
+                    </button>
+                  )}
+                  {/* Low stock */}
+                  {lowStockCount > 0 && (
+                    <button
+                      onClick={() => navigate("/admin/alerts/inventory")}
+                      className="flex items-center gap-3 rounded-[14px] p-4 transition-opacity active:opacity-70 text-left w-full"
+                      style={{ background: "#FAEEDA" }}
+                    >
+                      <AlertTriangle size={20} color="#854F0B" className="shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[13px]" style={{ color: "#633806", lineHeight: 1.5 }}>{lowStockCount} product{lowStockCount !== 1 ? "s" : ""} low on stock — need reorder</p>
+                      </div>
+                      <span className="text-[13px] font-medium shrink-0" style={{ color: "#854F0B" }}>View</span>
+                    </button>
+                  )}
+                </>
+              );
+            }
+            /* All clear — amber tier */
+            return (
+              <div className="flex items-center gap-3 rounded-[14px] p-4" style={{ background: "var(--surface-2)" }}>
+                <CheckCircle2 size={20} style={{ color: "var(--brand-dark, #65a30d)" }} className="shrink-0" />
+                <div className="flex-1">
+                  <p className="text-[13px]" style={{ color: "var(--text-primary)", lineHeight: 1.5 }}>No pending reminders or low stock alerts</p>
                 </div>
               </div>
-            </button>
-          )}
-          {/* Amber alert - reminders ready */}
-          {dueReminderCount > 0 && (
-            <button
-              onClick={() => navigate("/admin/alerts/reminders")}
-              className="flex items-center gap-3 rounded-[14px] p-4 transition-opacity active:opacity-70 text-left w-full"
-              style={{ background: "#FAEEDA" }}
-            >
-              <div className="size-5 shrink-0 flex items-center justify-center">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#854F0B" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
-                  <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
-                </svg>
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-[13px]" style={{ color: "#633806", lineHeight: 1.5 }}>{dueReminderCount} reminder{dueReminderCount !== 1 ? "s" : ""} ready to send</p>
-              </div>
-              <span className="text-[13px] font-medium shrink-0" style={{ color: "#854F0B" }}>View</span>
-            </button>
-          )}
-          {/* Amber alert — low stock products */}
-          {lowStockCount > 0 && (
-            <button
-              onClick={() => navigate("/admin/alerts/inventory")}
-              className="flex items-center gap-3 rounded-[14px] p-4 transition-opacity active:opacity-70 text-left w-full"
-              style={{ background: "#FAEEDA" }}
-            >
-              <div className="size-5 shrink-0 flex items-center justify-center">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#854F0B" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
-                  <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
-                </svg>
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-[13px]" style={{ color: "#633806", lineHeight: 1.5 }}>{lowStockCount} products low on stock — need reorder</p>
-              </div>
-              <span className="text-[13px] font-medium shrink-0" style={{ color: "#854F0B" }}>View</span>
-            </button>
-          )}
-          {/* Harvest season alert */}
+            );
+          })()}
+
+          {/* TIER 3 — Gray: Harvest / informational (always shown) */}
           {(() => {
             const bizRaw = localStorage.getItem("business_settings");
             const biz = bizRaw ? JSON.parse(bizRaw) : { crops: [] };
             const now = new Date();
-            let harvestAlerts: string[] = [];
+            const harvestAlerts: string[] = [];
             for (const crop of biz.crops) {
               const harvest = new Date(now.getFullYear(), crop.harvestMonth - 1, crop.harvestDay || 1);
               if (harvest < now) harvest.setFullYear(now.getFullYear() + 1);
@@ -506,23 +536,31 @@ export default function AdminDashboardPage() {
                 harvestAlerts.push(crop.name + " season starts in " + daysUntil + " days — " + affectedCustomers + " farmer" + (affectedCustomers !== 1 ? "s" : "") + " due for harvest reminders");
               }
             }
-            return harvestAlerts.map((text, i) => (
-              <button key={i} onClick={() => navigate("/admin/customers")} className="flex items-center gap-3 rounded-[14px] p-4 active:opacity-70 w-full text-left" style={{ background: "#F1EFE8" }}>
-                <div className="size-5 shrink-0 flex items-center justify-center">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#5F5E5A" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            if (harvestAlerts.length > 0) {
+              return harvestAlerts.map((text, i) => (
+                <button key={i} onClick={() => navigate("/admin/customers")} className="flex items-center gap-3 rounded-[14px] p-4 active:opacity-70 w-full text-left" style={{ background: "#F1EFE8" }}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#5F5E5A" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
                     <rect width="18" height="18" x="3" y="4" rx="2" ry="2" />
                     <line x1="16" x2="16" y1="2" y2="6" />
                     <line x1="8" x2="8" y1="2" y2="6" />
                     <line x1="3" x2="21" y1="10" y2="10" />
                   </svg>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[13px]" style={{ color: "#444441", lineHeight: 1.5 }}>{text}</p>
+                  </div>
+                </button>
+              ));
+            }
+            /* All clear — gray tier */
+            return (
+              <div className="flex items-center gap-3 rounded-[14px] p-4" style={{ background: "var(--surface-2)" }}>
+                <CheckCircle2 size={20} style={{ color: "var(--brand-dark, #65a30d)" }} className="shrink-0" />
+                <div className="flex-1">
+                  <p className="text-[13px]" style={{ color: "var(--text-primary)", lineHeight: 1.5 }}>No upcoming harvest season alerts</p>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-[13px]" style={{ color: "#444441", lineHeight: 1.5 }}>{text}</p>
-                </div>
-              </button>
-            ));
+              </div>
+            );
           })()}
-
         </div>
       </div>
 
