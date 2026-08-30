@@ -7,6 +7,7 @@ import PullToRefresh from "@/components/ui/PullToRefresh";
 import { useCustomersStore } from "@/stores/customersStore";
 import { formatSmartDateTime } from "@/lib/formatters";
 import { useT } from "@/lib/i18n";
+import { generateReminders } from "@/lib/reminderEngine";
 import { useThemeStore } from "@/stores/themeStore";
 import { useCurrentTime } from "@/lib/useCurrentTime";
 import { ShoppingCart, CreditCard, ChevronRight, Bell, Search, ArrowRight } from "lucide-react";

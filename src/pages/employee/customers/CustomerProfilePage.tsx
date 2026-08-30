@@ -14,7 +14,7 @@ import { useShellBase } from "@/lib/useShellBase";
 import { History, Wallet, Bell, Pencil, Trash2, Receipt } from "lucide-react";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import ReminderConfigSheet from "@/components/ui/ReminderConfigSheet";
-import type { ReminderConfig } from "@/types";
+import type { ReminderConfig, BusinessSettings, CropConfig } from "@/types";
 
 function initBgColor(name: string) {
   const colors = ["#ec1e79","#84cc16","#3b82f6","#8b5cf6","#f59e0b","#06b6d4"];
@@ -39,6 +39,7 @@ export default function CustomerProfilePage() {
   const [editAddress, setEditAddress] = useState("");
   const [editCreditLimit, setEditCreditLimit] = useState("");
   const [editImageUrl, setEditImageUrl] = useState<string | null>(null);
+  const [editCrops, setEditCrops] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
   const [payments, setPayments] = useState<CustomerPayment[]>([]);
@@ -46,10 +47,16 @@ export default function CustomerProfilePage() {
   const [deleting, setDeleting] = useState(false);
   const [showReminderConfig, setShowReminderConfig] = useState(false);
   const [reminderConfig, setReminderConfig] = useState<ReminderConfig | null>(null);
+  const [customerCrops, setCustomerCrops] = useState<string[]>([]);
+  const [businessSettings, setBusinessSettings] = useState<BusinessSettings>({ crops: [] });
 
   useEffect(() => {
     if (!customerId) return;
     try {
+      const cropsRaw = localStorage.getItem('customer_crops_' + customerId);
+      if (cropsRaw) setCustomerCrops(JSON.parse(cropsRaw));
+      const bizRaw = localStorage.getItem('business_settings');
+      if (bizRaw) setBusinessSettings(JSON.parse(bizRaw));
       const saved = localStorage.getItem("reminder_config_" + customerId);
       if (saved) setReminderConfig(JSON.parse(saved));
     } catch {}
@@ -69,6 +76,8 @@ export default function CustomerProfilePage() {
     setEditAddress(customer.address ?? "");
     setEditCreditLimit(customer.creditLimit > 0 ? String(customer.creditLimit) : "");
     setEditImageUrl(customer.imageUrl ?? null);
+    const cropsRaw = localStorage.getItem("customer_crops_" + customerId);
+    setEditCrops(cropsRaw ? JSON.parse(cropsRaw) : []);
     setEditing(true);
   }
 
@@ -228,6 +237,14 @@ export default function CustomerProfilePage() {
                 {riskLabel}
               </span>
             </div>
+
+            {customerCrops.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                {customerCrops.map((crop: string) => (
+                  <span key={crop} className="text-[10px] font-medium px-2 py-0.5 rounded-full" style={{ background: "rgba(99,153,34,0.12)", color: "#3B6D11" }}>{crop}</span>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
@@ -442,7 +459,14 @@ export default function CustomerProfilePage() {
                 />
               </div>
               <div>
-                <label className="text-[12px] font-medium block mb-1" style={{ color: "var(--text-secondary)" }}>Credit Limit (Rs.)</label>
+                <label className="text-[12px] font-medium block mb-1" style={{ color: "var(--text-secondary)" }}>Crops</label>
+                <div className="flex flex-wrap gap-2">
+                  {businessSettings.crops.map(crop => (
+                    <button key={crop.name} type="button" onClick={() => setEditCrops(prev => prev.includes(crop.name) ? prev.filter(c => c !== crop.name) : [...prev, crop.name])} className="h-8 px-3 rounded-full text-[12px] font-medium transition-colors" style={{ background: editCrops.includes(crop.name) ? "var(--brand)" : "var(--surface-2)", color: editCrops.includes(crop.name) ? "#0a0a0a" : "var(--text-secondary)", border: editCrops.includes(crop.name) ? "none" : "1px solid var(--divider)" }}>{crop.name}</button>
+                  ))}
+                  {businessSettings.crops.length === 0 && <p className="text-[11px]" style={{ color: "var(--text-secondary)" }}>Configure crops in Business Settings first</p>}
+                </div>
+                <label className="text-[12px] font-medium block mb-1 mt-3" style={{ color: "var(--text-secondary)" }}>Credit Limit (Rs.)</label>
                 <input
                   type="number"
                   value={editCreditLimit}

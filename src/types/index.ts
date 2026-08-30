@@ -47,6 +47,52 @@ export interface ReminderConfig {
   endsDate: string | null;
   endsCount: number;
 }
+// ─── Business / Crop Settings ──────────────────────────────────────────────────
+
+export interface CropConfig {
+
+  name: string;
+
+  harvestMonth: number; // 1-12
+
+  harvestDay: number;   // 1-31, 0 = entire month
+
+}
+
+
+
+export interface BusinessSettings {
+
+  crops: CropConfig[];
+
+}
+
+
+
+export interface GeneratedReminder {
+
+  customerId: string;
+
+  customerName: string;
+
+  customerPhone: string;
+
+  outstanding: number;
+
+  tone: 'gentle' | 'firmer' | 'final';
+
+  trigger: 'credit' | 'harvest' | 'due_date';
+
+  triggerDetail: string;
+
+  cropName?: string;
+
+  config: ReminderConfig;
+
+}
+
+
+
 export type ReturnResolution = "refund_cash" | "credit_note";
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────

@@ -12,6 +12,7 @@ import PullToRefresh from "@/components/ui/PullToRefresh";
 import { useCustomersStore } from "@/stores/customersStore";
 import { supabase } from "@/lib/supabase";
 import { formatCurrency, formatSmartDateTime } from "@/lib/formatters";
+import { generateReminders } from "@/lib/reminderEngine";
 import { useT } from "@/lib/i18n";
 import { AlertTriangle, TrendingUp, ChevronRight, TrendingDown, ShoppingCart, Search, Bell, Wallet, CheckCircle2 } from "lucide-react";
 import StatusBar from "@/components/ui/StatusBar";
@@ -156,6 +157,9 @@ export default function AdminDashboardPage() {
     return c + (bad ? 1 : 0);
   }, 0);
   const totalPayable = mockCompanies.reduce((s, c) => s + c.outstandingPayable, 0);
+  const dueReminders = generateReminders({ customers, sales: mockSales, payments: [] });
+  const dueReminderCount = dueReminders.length;
+  const creditLimitReached = customers.filter(c => c.outstandingBalance > 0 && c.creditLimit > 0 && c.outstandingBalance >= c.creditLimit).length;
 
   // Employee performance — filtered by selected date filter
   const empStats = mockEmployees.map((emp) => {
@@ -430,39 +434,43 @@ export default function AdminDashboardPage() {
               </div>
             </button>
           )}
-          {/* Red alert — credit override flag */}
-          <button
-            onClick={() => navigate("/admin/alerts/credit-overrides")}
-            className="flex items-start gap-3 rounded-[14px] p-4 transition-opacity active:opacity-70 text-left w-full"
-            style={{ background: "#FCEBEB" }}
-          >
-            <AlertTriangle size={20} color="#A32D2D" className="mt-0.5 shrink-0" />
-            <div className="flex-1 min-w-0">
-              <p className="text-[14px] font-medium" style={{ color: "#791F1F" }}>Red flag override</p>
-              <p className="text-[13px] mt-1" style={{ color: "#791F1F", lineHeight: 1.5 }}>Yaqoob approved Rs. 2,000 credit for Ahsan Iqbal, marked red</p>
-              <div className="flex items-center justify-between mt-2">
-                <span className="text-[11px]" style={{ color: "#A32D2D" }}>12 min ago</span>
-                <span className="text-[13px] font-medium" style={{ color: "#791F1F" }}>Review</span>
+          {/* Red alert - credit limit reached */}
+          {creditLimitReached > 0 && (
+            <button
+              onClick={() => navigate("/admin/alerts/credit-overrides")}
+              className="flex items-start gap-3 rounded-[14px] p-4 transition-opacity active:opacity-70 text-left w-full"
+              style={{ background: "#FCEBEB" }}
+            >
+              <AlertTriangle size={20} color="#A32D2D" className="mt-0.5 shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-[14px] font-medium" style={{ color: "#791F1F" }}>{creditLimitReached} customer{creditLimitReached !== 1 ? "s" : ""} need attention</p>
+                <p className="text-[13px] mt-1" style={{ color: "#791F1F", lineHeight: 1.5 }}>Credit limit reached or critical repayment situation</p>
+                <div className="flex items-center justify-between mt-2">
+                  <span className="text-[11px]" style={{ color: "#A32D2D" }}>action needed</span>
+                  <span className="text-[13px] font-medium" style={{ color: "#791F1F" }}>Review</span>
+                </div>
               </div>
-            </div>
-          </button>
-          {/* Amber alert — reminders sent today */}
-          <button
-            onClick={() => navigate("/admin/alerts/reminders")}
-            className="flex items-center gap-3 rounded-[14px] p-4 transition-opacity active:opacity-70 text-left w-full"
-            style={{ background: "#FAEEDA" }}
-          >
-            <div className="size-5 shrink-0 flex items-center justify-center">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#854F0B" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
-                <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
-              </svg>
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-[13px]" style={{ color: "#633806", lineHeight: 1.5 }}>6 reminders sent automatically today</p>
-            </div>
-            <span className="text-[13px] font-medium shrink-0" style={{ color: "#854F0B" }}>View</span>
-          </button>
+            </button>
+          )}
+          {/* Amber alert - reminders ready */}
+          {dueReminderCount > 0 && (
+            <button
+              onClick={() => navigate("/admin/alerts/reminders")}
+              className="flex items-center gap-3 rounded-[14px] p-4 transition-opacity active:opacity-70 text-left w-full"
+              style={{ background: "#FAEEDA" }}
+            >
+              <div className="size-5 shrink-0 flex items-center justify-center">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#854F0B" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
+                  <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
+                </svg>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[13px]" style={{ color: "#633806", lineHeight: 1.5 }}>{dueReminderCount} reminder{dueReminderCount !== 1 ? "s" : ""} ready to send</p>
+              </div>
+              <span className="text-[13px] font-medium shrink-0" style={{ color: "#854F0B" }}>View</span>
+            </button>
+          )}
           {/* Amber alert — low stock products */}
           {lowStockCount > 0 && (
             <button
@@ -482,23 +490,37 @@ export default function AdminDashboardPage() {
               <span className="text-[13px] font-medium shrink-0" style={{ color: "#854F0B" }}>View</span>
             </button>
           )}
-          {/* Neutral — harvest season notice */}
-          <div
-            className="flex items-center gap-3 rounded-[14px] p-4"
-            style={{ background: "#F1EFE8" }}
-          >
-            <div className="size-5 shrink-0 flex items-center justify-center">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#5F5E5A" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <rect width="18" height="18" x="3" y="4" rx="2" ry="2" />
-                <line x1="16" x2="16" y1="2" y2="6" />
-                <line x1="8" x2="8" y1="2" y2="6" />
-                <line x1="3" x2="21" y1="10" y2="10" />
-              </svg>
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-[13px]" style={{ color: "#444441", lineHeight: 1.5 }}>Cotton season starts in 5 days — 14 farmers due for harvest reminders</p>
-            </div>
-          </div>
+          {/* Harvest season alert */}
+          {(() => {
+            const bizRaw = localStorage.getItem("business_settings");
+            const biz = bizRaw ? JSON.parse(bizRaw) : { crops: [] };
+            const now = new Date();
+            let harvestAlerts: string[] = [];
+            for (const crop of biz.crops) {
+              const harvest = new Date(now.getFullYear(), crop.harvestMonth - 1, crop.harvestDay || 1);
+              if (harvest < now) harvest.setFullYear(now.getFullYear() + 1);
+              const daysUntil = Math.ceil((harvest.getTime() - now.getTime()) / 86400000);
+              if (daysUntil <= 30 && daysUntil > 0) {
+                const affectedCustomers = customers.filter(c => c.outstandingBalance > 0).length;
+                harvestAlerts.push(crop.name + " season starts in " + daysUntil + " days — " + affectedCustomers + " farmer" + (affectedCustomers !== 1 ? "s" : "") + " due for harvest reminders");
+              }
+            }
+            return harvestAlerts.map((text, i) => (
+              <div key={i} className="flex items-center gap-3 rounded-[14px] p-4" style={{ background: "#F1EFE8" }}>
+                <div className="size-5 shrink-0 flex items-center justify-center">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#5F5E5A" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect width="18" height="18" x="3" y="4" rx="2" ry="2" />
+                    <line x1="16" x2="16" y1="2" y2="6" />
+                    <line x1="8" x2="8" y1="2" y2="6" />
+                    <line x1="3" x2="21" y1="10" y2="10" />
+                  </svg>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[13px]" style={{ color: "#444441", lineHeight: 1.5 }}>{text}</p>
+                </div>
+              </div>
+            ));
+          })()}
 
         </div>
       </div>

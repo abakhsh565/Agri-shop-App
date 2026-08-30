@@ -1,3 +1,4 @@
+import BusinessSettingsSheet from '@/components/ui/BusinessSettingsSheet';
 import { useNavigate } from "react-router-dom";
 import { useEffect, useRef, useState } from "react";
 import StatusBar from "@/components/ui/StatusBar";
@@ -28,6 +29,7 @@ export default function AdminSettingsPage() {
   const [editImageUrl, setEditImageUrl] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [showBusinessSettings, setShowBusinessSettings] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isUrdu = language === "ur";
 
@@ -293,7 +295,26 @@ export default function AdminSettingsPage() {
           </div>
         </div>
 
-        {/* Management shortcuts */}
+        {showBusinessSettings && <BusinessSettingsSheet onClose={() => setShowBusinessSettings(false)} onSave={() => {}} />}
+
+        {/* Business Settings */}
+        <div className="px-4 pt-5 animate-fade-in-up delay-125">
+          <p className="text-xs font-bold uppercase mb-3 tracking-wider" style={{ color: "var(--text-secondary)" }}>Business Settings</p>
+          <div className="rounded-xl overflow-hidden" style={{ border: "1px solid var(--border-light)" }}>
+            <button onClick={() => setShowBusinessSettings(true)} className="flex items-center justify-between w-full px-4 py-4 active:opacity-70">
+              <div className="flex items-center gap-3">
+                <span style={{ fontSize: 18 }}>{"🌾"}</span>
+                <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>Crops & Seasons</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="text-sm" style={{ color: "var(--text-secondary)" }}>Configure</span>
+                <ChevronRight size={14} style={{ color: "var(--text-secondary)" }} />
+              </div>
+            </button>
+          </div>
+        </div>
+
+      {/* Management shortcuts */}
         <div className="px-4 pt-5 animate-fade-in-up delay-150">
           <p className="text-xs font-bold uppercase mb-3 tracking-wider" style={{ color: "var(--text-secondary)" }}>
             {t("settings.management") || "Management"}
