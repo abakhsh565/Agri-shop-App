@@ -30,7 +30,7 @@ export function hasPin(userId: string): boolean {
 export async function verifyPin(userId: string, pin: string): Promise<boolean> {
   const stored = await secureGet(KEY(userId));
   // If no PIN was ever set on this device, don't trap the user out.
-  if (!stored) return true;
+  if (!stored) return false;
   return stored === (await digest(userId, pin));
 }
 

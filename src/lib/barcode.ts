@@ -220,7 +220,7 @@ export async function scanFromCamera(): Promise<ScanResult | null> {
         },
         () => { /* scan error — keep scanning */ },
       ).catch((err) => {
-        console.warn("html5-qrcode start failed:", err);
+        if (import.meta.env.DEV) console.warn("html5-qrcode start failed:", err);
         cleanup();
         resolve(null);
       });
@@ -229,7 +229,7 @@ export async function scanFromCamera(): Promise<ScanResult | null> {
       setTimeout(() => { if (!resolved) { cleanup(); resolve(null); } }, 60_000);
     });
   } catch (err) {
-    console.warn("Web barcode scanner failed:", err);
+    if (import.meta.env.DEV) console.warn("Web barcode scanner failed:", err);
     return null;
   }
 }

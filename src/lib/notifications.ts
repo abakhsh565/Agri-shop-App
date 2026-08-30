@@ -25,14 +25,14 @@ export async function createNotification(input: {
   try {
     const { error } = await supabase.from("notifications").insert(payload);
     if (error) {
-      console.error("[Notification] Insert failed:", error.message, error.code);
+      if (import.meta.env.DEV) console.error("[Notification] Insert failed:", error.message, error.code);
       // If offline, queue for later
       if (!navigator.onLine) {
         enqueueOperation({ type: "create_notification", payload });
       }
     }
   } catch (err) {
-    console.error("[Notification] Insert exception:", err);
+    if (import.meta.env.DEV) console.error("[Notification] Insert exception:", err);
     if (!navigator.onLine) {
       enqueueOperation({ type: "create_notification", payload });
     }
