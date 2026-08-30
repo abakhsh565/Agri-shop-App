@@ -8,8 +8,9 @@ import { useT } from "@/lib/i18n";
 import { useThemeStore } from "@/stores/themeStore";
 import { useShellBase } from "@/lib/useShellBase";
 import { Plus, Search, ChevronRight, SlidersHorizontal, Check } from "lucide-react";
-import { getCreditHealth } from "@/lib/formatters";
+import { getCreditHealth, calculateCreditHealth, getCreditHealthStatusColor } from "@/lib/formatters";
 import type { Customer } from "@/types";
+import { useSalesStore } from "@/stores/salesStore";
 
 type SortKey = "outstanding" | "name" | "recent";
 
@@ -264,21 +265,7 @@ export default function CustomersListPage() {
                         <p className="text-[10px]" style={{ color: "var(--text-secondary)" }}>
                           {creditUsed}% used
                         </p>
-                        <span
-                          className="text-[9px] font-bold px-1.5 py-0.5 rounded-full"
-                          style={{
-                            color: getCreditHealth(c.outstandingBalance, c.creditLimit) === "over_limit" ? "#ef4444"
-                              : getCreditHealth(c.outstandingBalance, c.creditLimit) === "warning" ? "#f59e0b"
-                              : "#22c55e",
-                            background: getCreditHealth(c.outstandingBalance, c.creditLimit) === "over_limit" ? "#ef444422"
-                              : getCreditHealth(c.outstandingBalance, c.creditLimit) === "warning" ? "#f59e0b22"
-                              : "#22c55e22",
-                          }}
-                        >
-                          {getCreditHealth(c.outstandingBalance, c.creditLimit) === "over_limit" ? "Over Limit"
-                            : getCreditHealth(c.outstandingBalance, c.creditLimit) === "warning" ? "Warning"
-                            : "Good"}
-                        </span>
+                        {(() => { const sc = useSalesStore.getState().sales.filter((s) => s.customerId === c.id); const scCount = sc.length; const fullTotal = sc.filter((s) => s.paymentType === "full").reduce((a, s) => a + s.totalAmount, 0); const ep = c.totalPaid + fullTotal; const hasCredit = sc.some((s) => s.paymentType !== "full"); const ch = calculateCreditHealth(c, scCount, null, ep, hasCredit); const chColor = getCreditHealthStatusColor(ch.status); return (<span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full" style={{ color: chColor, background: chColor + "22" }}>{ch.headline}</span>); })()}
                       </div>
                     </div>
                   ) : (

@@ -1,19 +1,23 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
 import ImageUpload from "@/components/ui/ImageUpload";
 import { useCustomersStore } from "@/stores/customersStore";
 import { useUIStore } from "@/stores/uiStore";
-import { formatCurrency, getCreditHealth } from "@/lib/formatters";
-import { useT } from "@/lib/i18n";
+import { useSalesStore } from "@/stores/salesStore";
+import { fetchCustomerPayments } from "@/lib/db";
+import type { CustomerPayment } from "@/types";
+import { formatCurrency, calculateCreditHealth, getCreditHealthStatusColor } from "@/lib/formatters";
 import { useThemeStore } from "@/stores/themeStore";
 import { useShellBase } from "@/lib/useShellBase";
-import { MapPin, CreditCard, Pencil, Trash2, History, Wallet, Receipt } from "lucide-react";
+import { History, Wallet, Bell, Pencil, Trash2, Receipt } from "lucide-react";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
+import ReminderConfigSheet from "@/components/ui/ReminderConfigSheet";
+import type { ReminderConfig } from "@/types";
 
 function initBgColor(name: string) {
-  const colors = ["#84cc16","#3b82f6","#8b5cf6","#f59e0b","#06b6d4","#ec4899"];
+  const colors = ["#ec1e79","#84cc16","#3b82f6","#8b5cf6","#f59e0b","#06b6d4"];
   let hash = 0;
   for (const c of name) hash = (hash * 31 + c.charCodeAt(0)) & 0xffff;
   return colors[hash % colors.length];
@@ -23,7 +27,6 @@ export default function CustomerProfilePage() {
   const { customerId } = useParams();
   const navigate = useNavigate();
   const base = useShellBase();
-  const t = useT();
   const { language } = useThemeStore();
   const isUrdu = language === "ur";
   const customer = useCustomersStore((s) => s.customers.find((c) => c.id === customerId));
@@ -38,7 +41,26 @@ export default function CustomerProfilePage() {
   const [editImageUrl, setEditImageUrl] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
+  const [payments, setPayments] = useState<CustomerPayment[]>([]);
+  const sales = useSalesStore((s) => s.sales);
   const [deleting, setDeleting] = useState(false);
+  const [showReminderConfig, setShowReminderConfig] = useState(false);
+  const [reminderConfig, setReminderConfig] = useState<ReminderConfig | null>(null);
+
+  useEffect(() => {
+    if (!customerId) return;
+    try {
+      const saved = localStorage.getItem("reminder_config_" + customerId);
+      if (saved) setReminderConfig(JSON.parse(saved));
+    } catch {}
+  }, [customerId]);
+
+  function saveReminderConfig(cfg: ReminderConfig) {
+    localStorage.setItem("reminder_config_" + customerId, JSON.stringify(cfg));
+    setReminderConfig(cfg);
+    setShowReminderConfig(false);
+    addToast("Reminder schedule saved", "success");
+  }
 
   function startEdit() {
     if (!customer) return;
@@ -57,7 +79,7 @@ export default function CustomerProfilePage() {
     const allCustomers = useCustomersStore.getState().customers;
     const duplicate = allCustomers.find((c) => c.phone === editPhone.trim() && c.id !== customerId && !c.isArchived);
     if (duplicate) {
-      addToast(`Phone number already registered with "${duplicate.name}"`, "error");
+      addToast("Phone number already registered with \"" + duplicate.name + "\"", "error");
       return;
     }
     setSaving(true);
@@ -87,16 +109,81 @@ export default function CustomerProfilePage() {
     }
   }
 
+  async function handleDelete() {
+    if (!customerId) return;
+    setDeleting(true);
+    try {
+      const { supabase } = await import("@/lib/supabase");
+      const { error } = await supabase.from("customers").delete().eq("id", customerId);
+      if (error) throw new Error(error.message);
+      await useCustomersStore.getState().load();
+      addToast("Customer deleted", "success");
+      navigate(base + "/customers", { replace: true });
+    } catch (err) {
+      addToast(err instanceof Error ? err.message : "Could not delete", "error");
+    } finally {
+      setDeleting(false);
+      setShowDelete(false);
+    }
+  }
+
+  useEffect(() => {
+    if (!customerId) return;
+    let active = true;
+    fetchCustomerPayments(customerId).then((rows) => { if (active) setPayments(rows); }).catch(() => {});
+    return () => { active = false; };
+  }, [customerId]);
+
   if (!customer) return null;
 
-  const health = getCreditHealth(customer.outstandingBalance, customer.creditLimit);
   const initBg = initBgColor(customer.name);
   const usagePct = customer.creditLimit > 0
     ? Math.min(100, Math.round((customer.outstandingBalance / customer.creditLimit) * 100))
     : 0;
 
-  const healthColor = health === "over_limit" ? "#ef4444" : health === "warning" ? "#f59e0b" : "#22c55e";
-  const healthLabel = health === "over_limit" ? "Over Limit" : health === "warning" ? "Warning" : "Good";
+  const lastPaymentAt = payments.length > 0 ? payments[0].createdAt : null;
+  const customerSales = sales.filter((s) => s.customerId === customerId);
+  const salesCount = customerSales.length;
+  const fullPaymentSalesTotal = customerSales.filter((s) => s.paymentType === "full").reduce((a, s) => a + s.totalAmount, 0);
+  const effectivePaid = customer.totalPaid + fullPaymentSalesTotal;
+  const hasCreditActivity = customerSales.some((s) => s.paymentType !== "full");
+  const creditHealth = calculateCreditHealth(customer, salesCount, lastPaymentAt, effectivePaid, hasCreditActivity);
+
+  // Risk pill
+  const riskDot = creditHealth.status === "green" ? "#639922" : creditHealth.status === "yellow" ? "#D97706" : "#DC2626";
+  const riskBg = creditHealth.status === "green" ? "#E3F3D9" : creditHealth.status === "yellow" ? "#FEF3C7" : "#FEE2E2";
+  const riskTextColor = creditHealth.status === "green" ? "#3B6D11" : creditHealth.status === "yellow" ? "#92400e" : "#A32D2D";
+  const riskLabel = hasCreditActivity ? creditHealth.headline : "Cash";
+
+  // Credit bar color
+  const utilColor = usagePct >= 80 ? "#ef4444" : usagePct >= 50 ? "#f59e0b" : "#639922";
+
+  // Reminder schedule subtitle
+  let reminderSubtitle = "Not configured";
+  if (reminderConfig) {
+    if (reminderConfig.repeat === "once") reminderSubtitle = "One-time reminder";
+    else if (reminderConfig.repeat === "interval") reminderSubtitle = "Every " + reminderConfig.intervalN + " " + reminderConfig.intervalUnit;
+    else {
+      const nextStep = reminderConfig.escalation.find((s) => s.day > 0) ?? reminderConfig.escalation[0];
+      reminderSubtitle = "Escalating \u00b7 next: " + nextStep.label.toLowerCase() + " in " + nextStep.day + " days";
+    }
+  }
+
+  // Reminder history count from localStorage
+  let reminderCount = 0;
+  let lastReminderDaysAgo: number | null = null;
+  try {
+    const historyRaw = localStorage.getItem("reminder_logs_" + customerId);
+    if (historyRaw) {
+      const history = JSON.parse(historyRaw) as Array<{ sentAt: string }>;
+      reminderCount = history.length;
+      if (history.length > 0) {
+        const last = new Date(history[0].sentAt);
+        const diff = Math.floor((Date.now() - last.getTime()) / (1000 * 60 * 60 * 24));
+        lastReminderDaysAgo = diff;
+      }
+    }
+  } catch {}
 
   return (
     <div
@@ -104,20 +191,23 @@ export default function CustomerProfilePage() {
       style={{ background: "var(--background)", direction: isUrdu ? "rtl" : "ltr" }}
     >
       <StatusBar />
-      <NavHeader title="Customer Details" />
+      <NavHeader title="Customer details" />
 
-      <div className="flex flex-col gap-4 px-4 pt-4 pb-8">
-        {/* ── HERO CARD: Image + Name + Phone + Address + Health Badge ── */}
+      <div className="flex flex-col gap-3.5 px-4 pt-3 pb-8">
+
+        {/* ═══════════════════════════════════════════
+            1. HERO CARD — Avatar, Name, Phone, Risk pill
+           ═══════════════════════════════════════════ */}
         <div
-          className="rounded-[16px] p-4 flex gap-3 items-center"
-          style={{ background: "var(--surface-2)", border: "1px solid var(--divider)" }}
+          className="rounded-[16px] p-4 flex gap-3 items-start"
+          style={{ background: "#F6F5F1" }}
         >
           <div className="shrink-0">
             {customer.imageUrl ? (
-              <img src={customer.imageUrl} alt={customer.name} className="size-14 rounded-full object-cover" />
+              <img src={customer.imageUrl} alt={customer.name} className="size-[52px] rounded-full object-cover" />
             ) : (
               <div
-                className="size-14 rounded-full flex items-center justify-center text-xl font-bold"
+                className="size-[52px] rounded-full flex items-center justify-center text-[20px] font-medium"
                 style={{ background: initBg, color: "#fff" }}
               >
                 {customer.name.charAt(0).toUpperCase()}
@@ -125,227 +215,281 @@ export default function CustomerProfilePage() {
             )}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-base font-bold truncate" style={{ color: "var(--text-primary)" }}>{customer.name}</p>
-            <p className="text-xs" style={{ color: "var(--text-secondary)" }}>{customer.phone}</p>
-            {customer.address && (
-              <p className="flex items-center gap-1 text-[11px] truncate mt-0.5" style={{ color: "var(--text-secondary)" }}>
-                <MapPin size={11} className="shrink-0" /> {customer.address}
-              </p>
-            )}
-            <div className="flex items-center gap-2 mt-1.5">
-              <span
-                className="text-[10px] font-bold px-2 py-0.5 rounded-full"
-                style={{ color: healthColor, background: healthColor + "22" }}
-              >
-                {healthLabel}
+            <p className="text-[17px] font-medium truncate" style={{ color: "#1A1A1A" }}>{customer.name}</p>
+            <p className="text-[13px] mt-0.5" style={{ color: "#8A8A85" }}>
+              {customer.phone}{customer.address ? " \u00a0\u00b7\u00a0 " + customer.address : ""}
+            </p>
+            <div
+              className="inline-flex items-center gap-1.5 mt-2 px-2.5 py-1 rounded-full"
+              style={{ background: riskBg }}
+            >
+              <div className="size-1.5 rounded-full" style={{ background: riskDot }} />
+              <span className="text-[12px] font-medium" style={{ color: riskTextColor }}>
+                {riskLabel}
               </span>
             </div>
           </div>
         </div>
 
-        {/* ── QUICK INFO: Total Purchases | Total Paid | Outstanding ── */}
+        {/* ═══════════════════════════════════════════
+            2. QUICK STATS — Purchases | Paid | Outstanding
+           ═══════════════════════════════════════════ */}
         <div
-          className="rounded-[14px] p-4 grid grid-cols-3 gap-3"
-          style={{ border: "1px solid var(--divider)" }}
+          className="flex rounded-[16px] overflow-hidden"
+          style={{ border: "0.5px solid #E5E4DE", background: "#fff" }}
         >
-          <div className="text-center">
-            <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>Purchases</p>
-            <p className="text-sm font-bold mt-0.5" style={{ color: "var(--text-primary)" }}>
-              {formatCurrency(customer.totalPurchases)}
+          <div className="flex-1 text-center py-3.5" style={{ borderRight: "0.5px solid #E5E4DE" }}>
+            <p className="text-[10px] tracking-[0.5px] font-medium" style={{ color: "#8A8A85" }}>PURCHASES</p>
+            <p className="text-[15px] font-medium mt-1" style={{ color: "#1A1A1A" }}>
+              {formatCurrency(customer.totalPurchases || customerSales.reduce((a, s) => a + s.totalAmount, 0))}
             </p>
           </div>
-          <div className="text-center" style={{ borderLeft: "1px solid var(--divider)", borderRight: "1px solid var(--divider)" }}>
-            <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>Paid</p>
-            <p className="text-sm font-bold mt-0.5" style={{ color: "var(--text-primary)" }}>
-              {formatCurrency(customer.totalPaid)}
+          <div className="flex-1 text-center py-3.5" style={{ borderRight: "0.5px solid #E5E4DE" }}>
+            <p className="text-[10px] tracking-[0.5px] font-medium" style={{ color: "#8A8A85" }}>PAID</p>
+            <p className="text-[15px] font-medium mt-1" style={{ color: "#1A1A1A" }}>
+              {formatCurrency(effectivePaid)}
             </p>
           </div>
-          <div className="text-center">
-            <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>Outstanding</p>
-            <p className="text-sm font-bold mt-0.5" style={{ color: customer.outstandingBalance > 0 ? "#d97706" : "var(--text-primary)" }}>
+          <div className="flex-1 text-center py-3.5">
+            <p className="text-[10px] tracking-[0.5px] font-medium" style={{ color: "#8A8A85" }}>OUTSTANDING</p>
+            <p className="text-[15px] font-medium mt-1" style={{ color: "#D97706" }}>
               {formatCurrency(customer.outstandingBalance)}
             </p>
           </div>
         </div>
 
-        {/* ── CREDIT CARD: Limit + Progress Bar + Status ── */}
-        {customer.creditLimit > 0 && (
-          <div
-            className="rounded-[14px] overflow-hidden"
-            style={{ border: "1px solid var(--divider)" }}
-          >
-            <div className="px-4 py-3 flex items-center justify-between" style={{ background: "var(--surface-2)" }}>
-              <div className="flex items-center gap-2">
-                <CreditCard size={14} style={{ color: "var(--brand)" }} />
-                <p className="text-xs font-bold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
-                  Credit
-                </p>
-              </div>
-              <div className="flex items-center gap-3">
-                <div className="text-right">
-                  <p className="text-[10px] uppercase" style={{ color: "var(--text-secondary)" }}>Limit</p>
-                  <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>{formatCurrency(customer.creditLimit)}</p>
-                </div>
-                <span
-                  className="text-[10px] font-bold px-2 py-0.5 rounded-full"
-                  style={{ color: healthColor, background: healthColor + "22" }}
-                >
-                  {healthLabel}
-                </span>
-              </div>
-            </div>
-            <div className="px-4 py-3">
-              <div className="h-2 rounded-full w-full" style={{ background: "var(--divider)" }}>
-                <div
-                  className="h-full rounded-full transition-all"
-                  style={{ width: `${usagePct}%`, background: healthColor }}
-                />
-              </div>
-              <div className="flex items-center justify-between mt-1.5">
-                <p className="text-[11px]" style={{ color: "var(--text-secondary)" }}>
-                  {formatCurrency(customer.outstandingBalance)} of {formatCurrency(customer.creditLimit)} used
-                </p>
-                <p className="text-[11px] font-bold" style={{ color: healthColor }}>
-                  {usagePct}%
-                </p>
-              </div>
+        {/* ═══════════════════════════════════════════
+            3. CREDIT CARD — Limit, bar, utilization, Reminder schedule
+           ═══════════════════════════════════════════ */}
+        <div
+          className="rounded-[16px] p-4"
+          style={{ background: "#F6F5F1" }}
+        >
+          {/* Header row */}
+          <div className="flex justify-between items-center">
+            <span className="text-[12px] font-medium tracking-[0.5px]" style={{ color: "#5A5A55" }}>CREDIT</span>
+            <div className="text-right">
+              <p className="text-[10px]" style={{ color: "#8A8A85" }}>LIMIT</p>
+              <p className="text-[15px] font-medium" style={{ color: "#1A1A1A" }}>
+                {customer.creditLimit > 0 ? formatCurrency(customer.creditLimit) : "\u2014"}
+              </p>
             </div>
           </div>
-        )}
 
-        {/* ── ALL ACTIONS: Purchase History + Payment History + Record Payment + Edit + Delete ── */}
+          {/* Progress bar */}
+          {customer.creditLimit > 0 && (
+            <>
+              <div className="h-[6px] rounded-full mt-3 overflow-hidden" style={{ background: "#E5E4DE" }}>
+                <div
+                  className="h-full rounded-full"
+                  style={{ width: usagePct + "%", background: utilColor }}
+                />
+              </div>
+              <div className="flex justify-between mt-1.5">
+                <span className="text-[11px]" style={{ color: "#8A8A85" }}>
+                  {formatCurrency(customer.outstandingBalance)} of {formatCurrency(customer.creditLimit)} used
+                </span>
+                <span className="text-[11px] font-medium" style={{ color: "#3B6D11" }}>{usagePct}%</span>
+              </div>
+            </>
+          )}
+
+          {/* Divider + Reminder schedule */}
+          <div
+            className="mt-4 pt-3 flex justify-between items-center"
+            style={{ borderTop: "0.5px solid #E5E4DE" }}
+          >
+            <div className="flex-1 min-w-0">
+              <p className="text-[13px] font-medium" style={{ color: "#1A1A1A" }}>Reminder schedule</p>
+              <p className="text-[11px] mt-0.5 truncate" style={{ color: "#8A8A85" }}>{reminderSubtitle}</p>
+            </div>
+            <button
+              onClick={() => setShowReminderConfig(true)}
+              className="shrink-0 ml-2 p-1"
+            >
+              <Pencil size={16} color="#8A8A85" />
+            </button>
+          </div>
+        </div>
+
+        {/* ═══════════════════════════════════════════
+            4. ACTIONS LIST — bordered card with rows
+           ═══════════════════════════════════════════ */}
         <div
-          className="rounded-[14px] overflow-hidden"
-          style={{ border: "1px solid var(--divider)" }}
+          className="rounded-[16px] overflow-hidden"
+          style={{ border: "0.5px solid #E5E4DE", background: "#fff" }}
         >
+          {/* Purchase History */}
           <button
-            onClick={() => navigate(`${base}/customers/${customerId}/purchases`)}
-            className="flex items-center gap-3 w-full px-4 py-3.5 text-left text-[13px] font-medium active:opacity-70"
-            style={{ color: "var(--text-primary)" }}
+            onClick={() => navigate(base + "/customers/" + customerId + "/purchases")}
+            className="w-full flex items-center gap-3 px-4 py-3.5"
+            style={{ borderBottom: "0.5px solid #E5E4DE" }}
           >
-            <History size={16} style={{ color: "var(--brand)" }} />
-            Purchase History
+            <History size={18} color="#639922" />
+            <span className="flex-1 text-left text-[14px]" style={{ color: "#1A1A1A" }}>Purchase History</span>
           </button>
+
+          {/* Payment History */}
           <button
-            onClick={() => navigate(`${base}/customers/${customerId}/payments`)}
-            className="flex items-center gap-3 w-full px-4 py-3.5 text-left text-[13px] font-medium active:opacity-70"
-            style={{ color: "var(--text-primary)", borderTop: "1px solid var(--divider)" }}
+            onClick={() => navigate(base + "/customers/" + customerId + "/payments")}
+            className="w-full flex items-center gap-3 px-4 py-3.5"
+            style={{ borderBottom: "0.5px solid #E5E4DE" }}
           >
-            <Wallet size={16} style={{ color: "var(--brand)" }} />
-            Payment History
+            <Wallet size={18} color="#639922" />
+            <span className="flex-1 text-left text-[14px]" style={{ color: "#1A1A1A" }}>Payment History</span>
           </button>
+
+          {/* Reminder History */}
           <button
-            onClick={() => navigate(`${base}/customers/${customerId}/record-payment`)}
-            className="flex items-center gap-3 w-full px-4 py-3.5 text-left text-[13px] font-medium active:opacity-70"
-            style={{ color: "var(--brand-dark)", borderTop: "1px solid var(--divider)", background: "rgba(132,204,22,0.06)" }}
+            onClick={() => navigate(base + "/customers/" + customerId + "/reminders")}
+            className="w-full flex items-center gap-3 px-4 py-3.5"
+            style={{ borderBottom: "0.5px solid #E5E4DE" }}
           >
-            <Receipt size={16} style={{ color: "var(--brand-dark)" }} />
-            Record Payment
+            <Bell size={18} color="#639922" />
+            <span className="flex-1 text-left text-[14px]" style={{ color: "#1A1A1A" }}>Reminder History</span>
+            {reminderCount > 0 && (
+              <span className="text-[11px] shrink-0" style={{ color: "#8A8A85" }}>
+                {reminderCount} sent{lastReminderDaysAgo !== null ? " \u00b7 last " + lastReminderDaysAgo + "d ago" : ""}
+              </span>
+            )}
           </button>
+
+          {/* Record Payment — green highlight */}
+          <button
+            onClick={() => navigate(base + "/customers/" + customerId + "/record-payment")}
+            className="w-full flex items-center gap-3 px-4 py-3.5"
+            style={{ borderBottom: "0.5px solid #E5E4DE", background: "#F2F8EC" }}
+          >
+            <Receipt size={18} color="#3B6D11" />
+            <span className="flex-1 text-left text-[14px] font-medium" style={{ color: "#3B6D11" }}>Record Payment</span>
+          </button>
+
+          {/* Edit Customer */}
           <button
             onClick={startEdit}
-            className="flex items-center gap-3 w-full px-4 py-3.5 text-left text-[13px] font-medium active:opacity-70"
-            style={{ color: "var(--text-primary)", borderTop: "1px solid var(--divider)" }}
+            className="w-full flex items-center gap-3 px-4 py-3.5"
+            style={{ borderBottom: "0.5px solid #E5E4DE" }}
           >
-            <Pencil size={16} style={{ color: "var(--brand)" }} />
-            Edit Customer
+            <Pencil size={18} color="#639922" />
+            <span className="flex-1 text-left text-[14px]" style={{ color: "#1A1A1A" }}>Edit Customer</span>
           </button>
+
+          {/* Delete Customer */}
           <button
             onClick={() => setShowDelete(true)}
-            className="flex items-center gap-3 w-full px-4 py-3.5 text-left text-[13px] font-medium active:opacity-70"
-            style={{ color: "var(--error)", borderTop: "1px solid var(--divider)" }}
+            className="w-full flex items-center gap-3 px-4 py-3.5"
           >
-            <Trash2 size={16} />
-            Delete Customer
+            <Trash2 size={18} color="#D64545" />
+            <span className="flex-1 text-left text-[14px]" style={{ color: "#D64545" }}>Delete Customer</span>
           </button>
         </div>
+
       </div>
 
-      {/* Edit modal */}
+      {/* ═══════════════════════════════════════════
+          MODALS / SHEETS
+         ═══════════════════════════════════════════ */}
+
+      {/* Reminder Config Sheet */}
+      {showReminderConfig && (
+        <ReminderConfigSheet
+          config={reminderConfig}
+          onSave={saveReminderConfig}
+          onClose={() => setShowReminderConfig(false)}
+        />
+      )}
+
+      {/* Edit Customer Modal */}
       {editing && (
         <div
-          className="fixed inset-0 z-50 flex items-end"
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
           style={{ background: "rgba(0,0,0,0.5)" }}
           onClick={() => setEditing(false)}
         >
           <div
-            className="w-full max-w-[390px] mx-auto rounded-t-[24px] p-6 flex flex-col gap-4"
-            style={{ background: "var(--surface)" }}
+            className="w-full max-w-[400px] rounded-t-2xl sm:rounded-2xl p-5 flex flex-col gap-4"
+            style={{ background: "var(--surface)", maxHeight: "90vh" }}
             onClick={(e) => e.stopPropagation()}
           >
-            <p className="text-base font-bold text-center" style={{ color: "var(--text-primary)" }}>Edit Customer</p>
-            <div className="flex justify-center">
-              <ImageUpload
-                bucket="customer-images"
-                shape="circle"
-                value={editImageUrl}
-                onChange={setEditImageUrl}
-                label="Photo"
-              />
+            <p className="text-base font-bold" style={{ color: "var(--text-primary)" }}>Edit Customer</p>
+
+            <div className="flex flex-col gap-3">
+              <div>
+                <label className="text-[12px] font-medium block mb-1" style={{ color: "var(--text-secondary)" }}>Name</label>
+                <input
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  className="w-full h-10 rounded-lg px-3 text-sm outline-none"
+                  style={{ background: "var(--surface-2)", border: "1px solid var(--divider)", color: "var(--text-primary)" }}
+                />
+              </div>
+              <div>
+                <label className="text-[12px] font-medium block mb-1" style={{ color: "var(--text-secondary)" }}>Phone</label>
+                <input
+                  value={editPhone}
+                  onChange={(e) => setEditPhone(e.target.value)}
+                  className="w-full h-10 rounded-lg px-3 text-sm outline-none"
+                  style={{ background: "var(--surface-2)", border: "1px solid var(--divider)", color: "var(--text-primary)" }}
+                />
+              </div>
+              <div>
+                <label className="text-[12px] font-medium block mb-1" style={{ color: "var(--text-secondary)" }}>Address</label>
+                <input
+                  value={editAddress}
+                  onChange={(e) => setEditAddress(e.target.value)}
+                  className="w-full h-10 rounded-lg px-3 text-sm outline-none"
+                  style={{ background: "var(--surface-2)", border: "1px solid var(--divider)", color: "var(--text-primary)" }}
+                />
+              </div>
+              <div>
+                <label className="text-[12px] font-medium block mb-1" style={{ color: "var(--text-secondary)" }}>Credit Limit (Rs.)</label>
+                <input
+                  type="number"
+                  value={editCreditLimit}
+                  onChange={(e) => setEditCreditLimit(e.target.value)}
+                  className="w-full h-10 rounded-lg px-3 text-sm outline-none"
+                  style={{ background: "var(--surface-2)", border: "1px solid var(--divider)", color: "var(--text-primary)" }}
+                />
+                {customer.creditLimit > 0 && (
+                  <p className="text-[11px] mt-1" style={{ color: "var(--text-secondary)" }}>
+                    {creditHealth.status === "green" ? "Good" : creditHealth.status === "yellow" ? "Caution" : "Risk"} — Repaid {Math.round(((effectivePaid) / (customer.totalPurchases || 1)) * 100)}% of total purchases
+                  </p>
+                )}
+              </div>
+              <ImageUpload bucket="customer-images" value={editImageUrl} onChange={setEditImageUrl} shape="circle" label="Profile Photo" />
             </div>
-            <div>
-              <p className="text-[11px] font-bold uppercase mb-1.5 tracking-wider" style={{ color: "var(--text-secondary)" }}>Name</p>
-              <input value={editName} onChange={(e) => setEditName(e.target.value)}
-                className="w-full h-11 rounded-full px-4 text-sm outline-none"
-                style={{ background: "var(--surface-2)", border: "1px solid var(--divider)", color: "var(--text-primary)" }} />
-            </div>
-            <div>
-              <p className="text-[11px] font-bold uppercase mb-1.5 tracking-wider" style={{ color: "var(--text-secondary)" }}>Phone</p>
-              <input value={editPhone} onChange={(e) => setEditPhone(e.target.value)} type="tel" inputMode="tel"
-                className="w-full h-11 rounded-full px-4 text-sm outline-none"
-                style={{ background: "var(--surface-2)", border: "1px solid var(--divider)", color: "var(--text-primary)" }} />
-            </div>
-            <div>
-              <p className="text-[11px] font-bold uppercase mb-1.5 tracking-wider" style={{ color: "var(--text-secondary)" }}>Address</p>
-              <input value={editAddress} onChange={(e) => setEditAddress(e.target.value)}
-                className="w-full h-11 rounded-full px-4 text-sm outline-none"
-                style={{ background: "var(--surface-2)", border: "1px solid var(--divider)", color: "var(--text-primary)" }} />
-            </div>
-            <div>
-              <p className="text-[11px] font-bold uppercase mb-1.5 tracking-wider" style={{ color: "var(--text-secondary)" }}>Credit Limit (Rs.)</p>
-              <input
-                value={editCreditLimit}
-                onChange={(e) => setEditCreditLimit(e.target.value)}
-                type="number"
-                inputMode="decimal"
-                placeholder="0 for no limit"
-                className="w-full h-11 rounded-full px-4 text-sm outline-none"
-                style={{ background: "var(--surface-2)", border: "1px solid var(--divider)", color: "var(--text-primary)" }}
-              />
-            </div>
-            <div className="flex gap-3">
-              <button onClick={() => setEditing(false)} className="flex-1 h-12 rounded-full text-sm font-bold"
-                style={{ border: "1px solid var(--divider)", color: "var(--text-primary)" }}>Cancel</button>
-              <button onClick={saveEdit} disabled={saving}
-                className="flex-1 h-12 rounded-full text-sm font-bold disabled:opacity-50"
-                style={{ background: "var(--brand)", color: "#0a0a0a" }}>{saving ? "Saving..." : "Save"}</button>
+
+            <div className="flex gap-3 mt-1">
+              <button
+                onClick={() => setEditing(false)}
+                className="flex-1 h-11 rounded-full text-sm font-medium"
+                style={{ background: "var(--surface-2)", color: "var(--text-secondary)" }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={saveEdit}
+                disabled={saving}
+                className="flex-1 h-11 rounded-full text-sm font-bold"
+                style={{ background: "var(--brand)", color: "#0a0a0a", opacity: saving ? 0.6 : 1 }}
+              >
+                {saving ? "Saving..." : "Save"}
+              </button>
             </div>
           </div>
         </div>
       )}
 
+      {/* Delete Confirmation */}
       <ConfirmDialog
         open={showDelete}
-        title="Delete Customer?"
-        message={`"${customer.name}" will be archived. Their transaction history will be preserved.`}
-        confirmLabel="Delete"
+        title="Delete Customer"
+        message={"Are you sure you want to delete \"" + customer.name + "\"? This cannot be undone."}
+        confirmLabel={deleting ? "Deleting..." : "Delete"}
+        onConfirm={handleDelete}
+        onCancel={() => setShowDelete(false)}
         destructive
         loading={deleting}
-        onConfirm={async () => {
-          setDeleting(true);
-          try {
-            const { archiveCustomer } = useCustomersStore.getState();
-            await archiveCustomer(customerId!);
-            addToast("Customer deleted", "success");
-            setShowDelete(false);
-            navigate(`${base}/customers`);
-          } catch (err) {
-            addToast(err instanceof Error ? err.message : "Failed to delete", "error");
-          } finally {
-            setDeleting(false);
-          }
-        }}
-        onCancel={() => setShowDelete(false)}
       />
     </div>
   );

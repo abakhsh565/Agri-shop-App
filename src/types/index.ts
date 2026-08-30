@@ -6,6 +6,47 @@ export type StockStatus = "in_stock" | "low_stock" | "out_of_stock";
 export type PaymentType = "full" | "partial" | "credit";
 export type PaymentMethod = "cash" | "bank_transfer";
 export type CreditHealth = "good" | "warning" | "over_limit";
+
+
+export interface CreditHealthStatus {
+  status: "green" | "yellow" | "red" | "not_enough_history" | "cash_customer";
+  headline: string;
+  explanation: string;
+  signals: string[];
+  recommendation: string;
+}
+
+export interface ReminderStatus {
+  hasOutstanding: boolean;
+  lastPaymentDaysAgo: number | null;
+  reminderState: "none" | "due" | "overdue" | "urgent";
+  reminderMessage: string;
+  nextReminderDate: string | null;
+}
+
+
+export type ReminderRepeat = "once" | "interval" | "escalate";
+export type ReminderEnds = "paid" | "date" | "count";
+export type ReminderAnchor = "after_credit" | "after_due" | "before_harvest";
+
+export interface EscalationStep {
+  label: string;
+  tone: string;
+  day: number;
+}
+
+export interface ReminderConfig {
+  enabled: boolean;
+  startDays: number;
+  anchor: ReminderAnchor;
+  repeat: ReminderRepeat;
+  intervalN: number;
+  intervalUnit: "days" | "weeks";
+  escalation: EscalationStep[];
+  ends: ReminderEnds;
+  endsDate: string | null;
+  endsCount: number;
+}
 export type ReturnResolution = "refund_cash" | "credit_note";
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────

@@ -67,6 +67,7 @@ const CustomersListPage = React.lazy(() => import("@/pages/employee/customers/Cu
 const CustomerProfilePage = React.lazy(() => import("@/pages/employee/customers/CustomerProfilePage"));
 import CustomerPurchaseHistoryPage from "@/pages/employee/customers/CustomerPurchaseHistoryPage";
 import CustomerPaymentHistoryPage from "@/pages/employee/customers/CustomerPaymentHistoryPage";
+import ReminderHistoryPage from "@/pages/employee/customers/ReminderHistoryPage";
 import RecordCustomerPaymentPage from "@/pages/employee/customers/RecordCustomerPaymentPage";
 import AddCustomerPage from "@/pages/employee/customers/AddCustomerPage";
 const ProductsListPage = React.lazy(() => import("@/pages/employee/products/ProductsListPage"));
@@ -131,6 +132,7 @@ export const router = createBrowserRouter([
       { path: "customers/:customerId/purchases", element: <CustomerPurchaseHistoryPage /> },
       { path: "customers/:customerId/payments",  element: <CustomerPaymentHistoryPage /> },
       { path: "customers/:customerId/record-payment", element: <RecordCustomerPaymentPage /> },
+      { path: "customers/:customerId/reminders", element: <ReminderHistoryPage /> },
       { path: "more",       element: <MoreMenuPage /> },
       { path: "employees",  element: <EmployeesListPage /> },
       { path: "employees/new", element: <AddEmployeePage /> },
@@ -186,6 +188,7 @@ export const router = createBrowserRouter([
       { path: "customers/:customerId/purchases", element: <CustomerPurchaseHistoryPage /> },
       { path: "customers/:customerId/payments", element: <CustomerPaymentHistoryPage /> },
       { path: "customers/:customerId/record-payment", element: <RecordCustomerPaymentPage /> },
+      { path: "customers/:customerId/reminders", element: <ReminderHistoryPage /> },
       { path: "products", element: <ProductsListPage /> },
       { path: "products/:productId", element: <ProductDetailPage /> },
       { path: "search", element: <SearchPage /> },

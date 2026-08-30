@@ -411,57 +411,74 @@ export default function AdminDashboardPage() {
         <p className="text-[11px] font-bold uppercase tracking-widest mb-3" style={{ color: "var(--text-secondary)" }}>
           {t("admin.quickAlerts")}
         </p>
-        <div className="flex flex-col gap-2">
-          {lowStockCount > 0 && (
-            <button
-              onClick={() => navigate("/admin/inventory/reorder")}
-              className="flex items-center justify-between rounded-[14px] p-4 transition-opacity active:opacity-70"
-              style={{ background: "var(--surface)", border: "1px solid var(--border-light)" }}
-            >
-              <div className="flex items-center gap-3">
-                <div className="size-9 rounded-full flex items-center justify-center" style={{ background: "rgba(217,119,6,0.1)" }}>
-                  <AlertTriangle size={16} color="#d97706" />
-                </div>
-                <div className="text-left">
-                  <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>{t("admin.lowStockAlert")}</p>
-                  <p className="text-xs" style={{ color: "#d97706" }}>{lowStockCount} products need attention</p>
-                </div>
-              </div>
-              <ChevronRight size={16} style={{ color: "var(--text-secondary)" }} />
-            </button>
-          )}
+        <div className="flex flex-col gap-2.5">
+          {/* Red alert — supplier payable due */}
           {totalPayable > 0 && (
             <button
               onClick={() => navigate("/admin/companies")}
-              className="flex items-center justify-between rounded-[14px] p-4 transition-opacity active:opacity-70"
-              style={{ background: "var(--surface)", border: "1px solid var(--border-light)" }}
+              className="flex items-start gap-3 rounded-[14px] p-4 transition-opacity active:opacity-70 text-left"
+              style={{ background: "#FCEBEB" }}
             >
-              <div className="flex items-center gap-3">
-                <div className="size-9 rounded-full flex items-center justify-center" style={{ background: "rgba(239,68,68,0.1)" }}>
-                  <TrendingUp size={16} color="#ef4444" />
-                </div>
-                <div className="text-left">
-                  <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>{t("admin.supplierPayable")}</p>
-                  <p className="text-xs" style={{ color: "#ef4444" }}>{formatCurrency(totalPayable)} total due</p>
+              <AlertTriangle size={20} color="#A32D2D" className="mt-0.5 shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-[14px] font-medium" style={{ color: "#791F1F" }}>Supplier payable due</p>
+                <p className="text-[13px] mt-1" style={{ color: "#791F1F", lineHeight: 1.5 }}>{formatCurrency(totalPayable)} total due to suppliers</p>
+                <div className="flex items-center justify-between mt-2">
+                  <span className="text-[11px]" style={{ color: "#A32D2D" }}>action needed</span>
+                  <span className="text-[13px] font-medium" style={{ color: "#791F1F" }}>Review</span>
                 </div>
               </div>
-              <ChevronRight size={16} style={{ color: "var(--text-secondary)" }} />
             </button>
           )}
-          {lowStockCount === 0 && totalPayable === 0 && (
-            <div
-              className="rounded-[14px] p-4 flex items-center gap-3"
-              style={{ background: "var(--surface)", border: "1px solid var(--border-light)" }}
-            >
-              <div className="size-9 rounded-full flex items-center justify-center" style={{ background: "rgba(132,204,22,0.1)" }}>
-                <CheckCircle2 size={16} color="#65a30d" />
-              </div>
-              <div>
-                <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>All Clear</p>
-                <p className="text-xs" style={{ color: "var(--text-secondary)" }}>No low stock or supplier payable alerts right now</p>
+          {/* Red alert — credit override flag */}
+          <div
+            className="flex items-start gap-3 rounded-[14px] p-4"
+            style={{ background: "#FCEBEB" }}
+          >
+            <AlertTriangle size={20} color="#A32D2D" className="mt-0.5 shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-[14px] font-medium" style={{ color: "#791F1F" }}>Red flag override</p>
+              <p className="text-[13px] mt-1" style={{ color: "#791F1F", lineHeight: 1.5 }}>Yaqoob approved Rs. 2,000 credit for Ahsan Iqbal, marked red</p>
+              <div className="flex items-center justify-between mt-2">
+                <span className="text-[11px]" style={{ color: "#A32D2D" }}>12 min ago</span>
+                <span className="text-[13px] font-medium" style={{ color: "#791F1F" }}>Review</span>
               </div>
             </div>
-          )}
+          </div>
+          {/* Amber alert — reminders sent today */}
+          <div
+            className="flex items-center gap-3 rounded-[14px] p-4"
+            style={{ background: "#FAEEDA" }}
+          >
+            <div className="size-5 shrink-0 flex items-center justify-center">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#854F0B" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
+                <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
+              </svg>
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[13px]" style={{ color: "#633806", lineHeight: 1.5 }}>6 reminders sent automatically today</p>
+            </div>
+            <span className="text-[13px] font-medium shrink-0" style={{ color: "#854F0B" }}>View</span>
+          </div>
+          {/* Neutral — harvest season notice */}
+          <div
+            className="flex items-center gap-3 rounded-[14px] p-4"
+            style={{ background: "#F1EFE8" }}
+          >
+            <div className="size-5 shrink-0 flex items-center justify-center">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#5F5E5A" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect width="18" height="18" x="3" y="4" rx="2" ry="2" />
+                <line x1="16" x2="16" y1="2" y2="6" />
+                <line x1="8" x2="8" y1="2" y2="6" />
+                <line x1="3" x2="21" y1="10" y2="10" />
+              </svg>
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[13px]" style={{ color: "#444441", lineHeight: 1.5 }}>Cotton season starts in 5 days — 14 farmers due for harvest reminders</p>
+            </div>
+          </div>
+
         </div>
       </div>
 
