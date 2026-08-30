@@ -359,16 +359,7 @@ export default function AdminDashboardPage() {
           <p className="text-[34px] font-bold leading-none" style={{ color: "#0a0a0a" }}>
             {formatRs(totalSales - totalReturns)}
           </p>
-          <div className="flex flex-col gap-0 mt-1 mb-4">
-            <span className="text-[10px] font-medium" style={{ color: "rgba(0,0,0,0.5)" }}>
-              Gross: {formatRs(totalSales)}
-            </span>
-            {totalReturns > 0 && (
-              <span className="text-[10px] font-medium" style={{ color: "rgba(239,68,68,0.8)" }}>
-                Returns: -{formatRs(totalReturns)}
-              </span>
-            )}
-          </div>
+
           <div className="flex gap-6">
             <div>
               <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "rgba(0,0,0,0.5)" }}>
