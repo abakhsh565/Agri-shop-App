@@ -1,3 +1,5 @@
+import { secureSet, secureGet, secureRemove, secureHas } from "@/lib/secureStorage";
+
 // Device-level quick-unlock PIN.
 //
 // The authoritative sign-in is Supabase phone OTP (see lib/auth.ts). The PIN is
@@ -18,20 +20,20 @@ async function digest(userId: string, pin: string): Promise<string> {
 }
 
 export async function savePin(userId: string, pin: string): Promise<void> {
-  localStorage.setItem(KEY(userId), await digest(userId, pin));
+  await secureSet(KEY(userId), await digest(userId, pin));
 }
 
 export function hasPin(userId: string): boolean {
-  return localStorage.getItem(KEY(userId)) !== null;
+  return secureHas(KEY(userId));
 }
 
 export async function verifyPin(userId: string, pin: string): Promise<boolean> {
-  const stored = localStorage.getItem(KEY(userId));
+  const stored = await secureGet(KEY(userId));
   // If no PIN was ever set on this device, don't trap the user out.
   if (!stored) return true;
   return stored === (await digest(userId, pin));
 }
 
 export function clearPin(userId: string): void {
-  localStorage.removeItem(KEY(userId));
+  secureRemove(KEY(userId));
 }
