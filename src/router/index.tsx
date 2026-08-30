@@ -84,6 +84,9 @@ const BarcodeGeneratePage = React.lazy(() => import("@/pages/admin/inventory/Bar
 import AdminReturnSelectItemsPage from "@/pages/admin/returns/AdminReturnSelectItemsPage";
 import AdminReturnConfirmPage from "@/pages/admin/returns/AdminReturnConfirmPage";
 import AdminReturnSuccessPage from "@/pages/admin/returns/AdminReturnSuccessPage";
+import CreditOverridesPage from "@/pages/admin/alerts/CreditOverridesPage";
+import RemindersOverviewPage from "@/pages/admin/alerts/RemindersOverviewPage";
+import InventoryAlertsPage from "@/pages/admin/alerts/InventoryAlertsPage";
 
 export const router = createBrowserRouter([
   { path: "/", element: <SplashPage /> },
@@ -133,6 +136,9 @@ export const router = createBrowserRouter([
       { path: "customers/:customerId/payments",  element: <CustomerPaymentHistoryPage /> },
       { path: "customers/:customerId/record-payment", element: <RecordCustomerPaymentPage /> },
       { path: "customers/:customerId/reminders", element: <ReminderHistoryPage /> },
+      { path: "alerts/credit-overrides", element: <CreditOverridesPage /> },
+      { path: "alerts/reminders", element: <RemindersOverviewPage /> },
+      { path: "alerts/inventory", element: <InventoryAlertsPage /> },
       { path: "more",       element: <MoreMenuPage /> },
       { path: "employees",  element: <EmployeesListPage /> },
       { path: "employees/new", element: <AddEmployeePage /> },

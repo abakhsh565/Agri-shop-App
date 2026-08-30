@@ -431,8 +431,9 @@ export default function AdminDashboardPage() {
             </button>
           )}
           {/* Red alert — credit override flag */}
-          <div
-            className="flex items-start gap-3 rounded-[14px] p-4"
+          <button
+            onClick={() => navigate("/admin/alerts/credit-overrides")}
+            className="flex items-start gap-3 rounded-[14px] p-4 transition-opacity active:opacity-70 text-left w-full"
             style={{ background: "#FCEBEB" }}
           >
             <AlertTriangle size={20} color="#A32D2D" className="mt-0.5 shrink-0" />
@@ -444,10 +445,11 @@ export default function AdminDashboardPage() {
                 <span className="text-[13px] font-medium" style={{ color: "#791F1F" }}>Review</span>
               </div>
             </div>
-          </div>
+          </button>
           {/* Amber alert — reminders sent today */}
-          <div
-            className="flex items-center gap-3 rounded-[14px] p-4"
+          <button
+            onClick={() => navigate("/admin/alerts/reminders")}
+            className="flex items-center gap-3 rounded-[14px] p-4 transition-opacity active:opacity-70 text-left w-full"
             style={{ background: "#FAEEDA" }}
           >
             <div className="size-5 shrink-0 flex items-center justify-center">
@@ -460,7 +462,26 @@ export default function AdminDashboardPage() {
               <p className="text-[13px]" style={{ color: "#633806", lineHeight: 1.5 }}>6 reminders sent automatically today</p>
             </div>
             <span className="text-[13px] font-medium shrink-0" style={{ color: "#854F0B" }}>View</span>
-          </div>
+          </button>
+          {/* Amber alert — low stock products */}
+          {lowStockCount > 0 && (
+            <button
+              onClick={() => navigate("/admin/alerts/inventory")}
+              className="flex items-center gap-3 rounded-[14px] p-4 transition-opacity active:opacity-70 text-left w-full"
+              style={{ background: "#FAEEDA" }}
+            >
+              <div className="size-5 shrink-0 flex items-center justify-center">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#854F0B" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
+                  <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
+                </svg>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[13px]" style={{ color: "#633806", lineHeight: 1.5 }}>{lowStockCount} products low on stock — need reorder</p>
+              </div>
+              <span className="text-[13px] font-medium shrink-0" style={{ color: "#854F0B" }}>View</span>
+            </button>
+          )}
           {/* Neutral — harvest season notice */}
           <div
             className="flex items-center gap-3 rounded-[14px] p-4"

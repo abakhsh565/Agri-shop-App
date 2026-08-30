@@ -268,8 +268,9 @@ export default function DashboardPage() {
         </p>
         <div className="flex flex-col gap-2.5">
           {/* Amber alert — reminders sent today */}
-          <div
-            className="flex items-center gap-3 rounded-[14px] p-4"
+          <button
+            onClick={() => navigate("/employee/customers")}
+            className="flex items-center gap-3 rounded-[14px] p-4 transition-opacity active:opacity-70 text-left w-full"
             style={{ background: "#FAEEDA" }}
           >
             <div className="size-5 shrink-0 flex items-center justify-center">
@@ -282,7 +283,7 @@ export default function DashboardPage() {
               <p className="text-[13px]" style={{ color: "#633806", lineHeight: 1.5 }}>3 pending reminders to send today</p>
             </div>
             <span className="text-[13px] font-medium shrink-0" style={{ color: "#854F0B" }}>View</span>
-          </div>
+          </button>
           {/* Neutral ─ harvest season notice */}
           <div
             className="flex items-center gap-3 rounded-[14px] p-4"
