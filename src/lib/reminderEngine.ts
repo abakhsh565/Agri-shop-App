@@ -131,11 +131,14 @@ export function seedMockReminderData(customers: { id: string; outstandingBalance
       ]
     }));
   }
-  // 2. Customer crops for first customer with outstanding
-  const testCustomer = customers.find(c => c.outstandingBalance > 0);
-  if (testCustomer && !localStorage.getItem("customer_crops_" + testCustomer.id)) {
-    localStorage.setItem("customer_crops_" + testCustomer.id, JSON.stringify(["Cotton", "Wheat"]));
-  }
+  // 2. Customer crops for customers with outstanding
+  const cropSets = [["Cotton", "Wheat"], ["Cotton"], ["Wheat", "Rice"]];
+  const outstandingCustomers = customers.filter(c => c.outstandingBalance > 0);
+  outstandingCustomers.forEach((c, i) => {
+    if (!localStorage.getItem("customer_crops_" + c.id)) {
+      localStorage.setItem("customer_crops_" + c.id, JSON.stringify(cropSets[i % cropSets.length]));
+    }
+  });
   // 3. Reminder configs for all customers with outstanding
   for (const tc of customers.filter(c => c.outstandingBalance > 0)) {
     if (!localStorage.getItem("reminder_config_" + tc.id)) {

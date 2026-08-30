@@ -82,7 +82,7 @@ export default function CreditOverridesPage() {
             {overrides.map((o) => (
               <button
                 key={o.customer.id}
-                onClick={() => navigate("/admin/customers/" + o.customer.id)}
+                onClick={() => navigate("/admin/alerts/credit-overrides/" + o.customer.id)}
                 className="flex items-center gap-3 rounded-[14px] p-4 transition-opacity active:opacity-70 text-left w-full"
                 style={{ background: "var(--surface)", border: "1px solid var(--divider)" }}
               >

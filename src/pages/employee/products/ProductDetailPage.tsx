@@ -9,7 +9,10 @@ import { useUIStore } from "@/stores/uiStore";
 import { formatCurrency, getStockStatusColor } from "@/lib/formatters";
 import { useShellBase } from "@/lib/useShellBase";
 import { rpcDeleteProduct } from "@/lib/db";
-import { Pencil, TrendingUp, Barcode, Trash2, Copy, Download, Package, Camera, Loader2 } from "lucide-react";
+import { Pencil, TrendingUp, Barcode, Trash2, Copy, Download, Package, Camera, Loader2, Bell } from "lucide-react";
+import { getRecommendationsForProduct } from "@/lib/recommendationEngine";
+import { useCustomersStore } from "@/stores/customersStore";
+import { useSalesStore } from "@/stores/salesStore";
 import { barcodeToSvg } from "@/lib/barcode";
 import { uploadImage } from "@/lib/storage";
 import { supabase } from "@/lib/supabase";
@@ -284,6 +287,9 @@ export default function ProductDetailPage() {
           </div>
         </div>
 
+        {/* ── CUSTOMERS LIKELY TO WANT THIS ── */}
+        <ProductCustomerRecommendations productId={product.id} />
+
         {/* ── ALL ACTIONS: Edit + Adjust + Barcode + Delete (unified) ── */}
         <div
           className="rounded-[14px] overflow-hidden"
@@ -406,6 +412,75 @@ export default function ProductDetailPage() {
         onConfirm={confirmDelete}
         onCancel={() => setToDelete(false)}
       />
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════
+   ProductCustomerRecommendations — shows customers who
+   likely want this product based on crop + basket gaps
+   ═══════════════════════════════════════════════════════ */
+function ProductCustomerRecommendations({ productId }: { productId: string }) {
+  const customers = useCustomersStore((s) => s.customers);
+  const products = useProductsStore((s) => s.products);
+  const customersReady = useCustomersStore((s) => s.ready);
+  const sales = useSalesStore((s) => s.sales);
+
+  const product = products.find((p) => p.id === productId);
+  if (!product || !customersReady || customers.length === 0) return null;
+
+  const recs = getRecommendationsForProduct(product, { customers, sales, products });
+  if (recs.length === 0) return null;
+
+  function getInitials(name: string): string {
+    return name.split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2);
+  }
+
+  function getAvatarColor(name: string): string {
+    const colors = ["#65a30d", "#2563eb", "#7c3aed", "#db2777", "#ea580c"];
+    let hash = 0;
+    for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+    return colors[Math.abs(hash) % colors.length];
+  }
+
+  return (
+    <div className="rounded-[16px] p-4" style={{ background: "var(--surface-2)" }}>
+      <p className="text-[10px] font-bold uppercase tracking-wider mb-3" style={{ color: "var(--text-secondary)" }}>
+        CUSTOMERS LIKELY TO WANT THIS
+      </p>
+      <div className="flex flex-col">
+        {recs.map((rec, i) => (
+          <div
+            key={rec.customer.id}
+            className="flex items-center gap-3 py-3"
+            style={{ borderBottom: i < recs.length - 1 ? "1px solid var(--divider)" : "none" }}
+          >
+            <div
+              className="w-10 h-10 rounded-full flex items-center justify-center text-[12px] font-bold shrink-0"
+              style={{ background: getAvatarColor(rec.customer.name), color: "#fff" }}
+            >
+              {getInitials(rec.customer.name)}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[14px] font-medium" style={{ color: "var(--text-primary)" }}>
+                {rec.customer.name}
+              </p>
+              <p className="text-[12px] mt-0.5" style={{ color: "var(--text-secondary)" }}>
+                {rec.reason}
+              </p>
+            </div>
+            <button
+              className="size-8 rounded-full flex items-center justify-center shrink-0"
+              style={{ background: "var(--surface)", border: "1px solid var(--divider)" }}
+              onClick={() => {
+                // TODO: Send nudge notification to this customer
+              }}
+            >
+              <Bell size={14} style={{ color: "var(--text-secondary)" }} />
+            </button>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

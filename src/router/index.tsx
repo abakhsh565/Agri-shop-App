@@ -85,6 +85,7 @@ import AdminReturnSelectItemsPage from "@/pages/admin/returns/AdminReturnSelectI
 import AdminReturnConfirmPage from "@/pages/admin/returns/AdminReturnConfirmPage";
 import AdminReturnSuccessPage from "@/pages/admin/returns/AdminReturnSuccessPage";
 import CreditOverridesPage from "@/pages/admin/alerts/CreditOverridesPage";
+import CreditOverrideDetailPage from "@/pages/admin/alerts/CreditOverrideDetailPage";
 import RemindersOverviewPage from "@/pages/admin/alerts/RemindersOverviewPage";
 import InventoryAlertsPage from "@/pages/admin/alerts/InventoryAlertsPage";
 
@@ -137,6 +138,7 @@ export const router = createBrowserRouter([
       { path: "customers/:customerId/record-payment", element: <RecordCustomerPaymentPage /> },
       { path: "customers/:customerId/reminders", element: <ReminderHistoryPage /> },
       { path: "alerts/credit-overrides", element: <CreditOverridesPage /> },
+      { path: "alerts/credit-overrides/:customerId", element: <CreditOverrideDetailPage /> },
       { path: "alerts/reminders", element: <RemindersOverviewPage /> },
       { path: "alerts/inventory", element: <InventoryAlertsPage /> },
       { path: "more",       element: <MoreMenuPage /> },

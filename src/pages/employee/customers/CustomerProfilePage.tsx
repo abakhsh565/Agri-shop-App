@@ -11,7 +11,10 @@ import type { CustomerPayment } from "@/types";
 import { formatCurrency, calculateCreditHealth, getCreditHealthStatusColor } from "@/lib/formatters";
 import { useThemeStore } from "@/stores/themeStore";
 import { useShellBase } from "@/lib/useShellBase";
-import { History, Wallet, Bell, Pencil, Trash2, Receipt } from "lucide-react";
+import { History, Wallet, Bell, Pencil, Trash2, Receipt, Plus } from "lucide-react";
+import { getRecommendationsForCustomer } from "@/lib/recommendationEngine";
+import { seedMockReminderData } from "@/lib/reminderEngine";
+import { useProductsStore } from "@/stores/productsStore";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import ReminderConfigSheet from "@/components/ui/ReminderConfigSheet";
 import type { ReminderConfig, BusinessSettings, CropConfig } from "@/types";
@@ -30,7 +33,13 @@ export default function CustomerProfilePage() {
   const { language } = useThemeStore();
   const isUrdu = language === "ur";
   const customer = useCustomersStore((s) => s.customers.find((c) => c.id === customerId));
+  const allCustomers = useCustomersStore((s) => s.customers);
   const updateCustomerImage = useCustomersStore((s) => s.updateCustomerImage);
+
+  // Seed mock crop/reminder data on first load
+  useEffect(() => {
+    if (allCustomers.length > 0) seedMockReminderData(allCustomers);
+  }, [allCustomers]);
   const { addToast } = useUIStore();
 
   const [editing, setEditing] = useState(false);
@@ -330,8 +339,9 @@ export default function CustomerProfilePage() {
         </div>
 
         {/* ═══════════════════════════════════════════
-            4. ACTIONS LIST — bordered card with rows
+            4. RECOMMENDED PRODUCTS
            ═══════════════════════════════════════════ */}
+        <RecommendedSection customerId={customerId} />
         <div
           className="rounded-[16px] overflow-hidden"
           style={{ border: "0.5px solid #E5E4DE", background: "#fff" }}
@@ -529,6 +539,72 @@ export default function CustomerProfilePage() {
         destructive
         loading={deleting}
       />
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════
+   RecommendedSection — suggests products for this customer
+   based on crop + basket gaps + season timing
+   ═══════════════════════════════════════════════════════ */
+function RecommendedSection({ customerId }: { customerId: string | undefined }) {
+  if (!customerId) return null;
+  const customers = useCustomersStore((s) => s.customers);
+  const products = useProductsStore((s) => s.products);
+  const productsReady = useProductsStore((s) => s.ready);
+  const sales = useSalesStore((s) => s.sales);
+
+  const customer = customers.find((c) => c.id === customerId);
+  if (!customer || !productsReady || products.length === 0) return null;
+
+  const recs = getRecommendationsForCustomer(customer, { customers, sales, products });
+  if (recs.length === 0) return null;
+
+  const PRODUCT_ICONS: Record<string, string> = {
+    spray: "\uD83D\uDD2C",
+    seed: "\uD83C\uDF31",
+    fertilizer: "\uD83C\uDF3F",
+    other: "\uD83D\uDCE6",
+  };
+
+  return (
+    <div className="rounded-[16px] p-4" style={{ background: "#F6F5F1" }}>
+      <p className="text-[10px] font-bold uppercase tracking-wider mb-3" style={{ color: "#5A5A55" }}>
+        RECOMMENDED FOR {customer.name.split(" ")[0].toUpperCase()}
+      </p>
+      <div className="flex flex-col">
+        {recs.map((rec, i) => (
+          <div
+            key={rec.product.id}
+            className="flex items-center gap-3 py-3"
+            style={{ borderBottom: i < recs.length - 1 ? "0.5px solid #E5E4DE" : "none" }}
+          >
+            <div
+              className="size-10 rounded-full flex items-center justify-center shrink-0"
+              style={{ background: "#E8F5E0" }}
+            >
+              <span className="text-[16px]">{PRODUCT_ICONS[rec.product.category] || "\uD83D\uDCE6"}</span>
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[14px] font-medium" style={{ color: "#1A1A1A" }}>
+                {rec.product.name}
+              </p>
+              <p className="text-[12px] mt-0.5" style={{ color: "#8A8A85" }}>
+                {rec.reason}
+              </p>
+            </div>
+            <button
+              className="size-8 rounded-full flex items-center justify-center shrink-0"
+              style={{ background: "#E8F5E0" }}
+              onClick={() => {
+                // TODO: Add to new sale — navigate to new sale with product pre-selected
+              }}
+            >
+              <Plus size={16} color="#3B6D11" />
+            </button>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
