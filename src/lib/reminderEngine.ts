@@ -52,7 +52,7 @@ function determineTone(config: ReminderConfig, daysElapsed: number): "gentle" | 
 
 function getTriggerDate(config: ReminderConfig, sale: Sale | undefined, crop: CropConfig | undefined, now: Date): Date | null {
   if (config.anchor === "after_credit" || config.anchor === "after_due") {
-    const baseDate = sale?.createdAt ?? now.toISOString();
+    const baseDate = sale?.createdAt ?? new Date(now.getTime() - 30 * 86400000).toISOString();
     const trigger = new Date(baseDate);
     trigger.setDate(trigger.getDate() + config.startDays);
     return trigger;
@@ -117,4 +117,44 @@ export function generateReminderMessage(reminder: GeneratedReminder): string {
   if (reminder.tone === "gentle") return "Hello " + name + ", this is a friendly reminder that " + amount + " is currently outstanding on your account. Please arrange payment when convenient.";
   if (reminder.tone === "firmer") return "Hello " + name + ", " + amount + " remains outstanding on your account. Please arrange payment at your earliest convenience.";
   return "Hello " + name + ", " + amount + " remains outstanding on your account. Please contact us regarding settlement. Do not ignore this message.";
+}
+
+/** Seed mock data for testing the reminder system */
+export function seedMockReminderData(customers: { id: string; outstandingBalance: number }[]) {
+  // 1. Business Settings
+  if (!localStorage.getItem("business_settings")) {
+    localStorage.setItem("business_settings", JSON.stringify({
+      crops: [
+        { name: "Cotton", harvestMonth: 9, harvestDay: 3 },
+        { name: "Wheat", harvestMonth: 3, harvestDay: 1 },
+        { name: "Rice", harvestMonth: 10, harvestDay: 10 },
+      ]
+    }));
+  }
+  // 2. Customer crops for first customer with outstanding
+  const testCustomer = customers.find(c => c.outstandingBalance > 0);
+  if (testCustomer && !localStorage.getItem("customer_crops_" + testCustomer.id)) {
+    localStorage.setItem("customer_crops_" + testCustomer.id, JSON.stringify(["Cotton", "Wheat"]));
+  }
+  // 3. Reminder configs for all customers with outstanding
+  for (const tc of customers.filter(c => c.outstandingBalance > 0)) {
+    if (!localStorage.getItem("reminder_config_" + tc.id)) {
+      localStorage.setItem("reminder_config_" + tc.id, JSON.stringify({
+        enabled: true,
+        startDays: 1,
+        anchor: "after_credit",
+        repeat: "escalate",
+        intervalN: 7,
+        intervalUnit: "days",
+        escalation: [
+          { label: "Gentle", tone: "gentle nudge", day: 1 },
+          { label: "Firmer", tone: "firmer follow-up", day: 3 },
+          { label: "Final notice", tone: "final notice", day: 7 },
+        ],
+        ends: "paid",
+        endsDate: null,
+        endsCount: 5,
+      }));
+    }
+  }
 }

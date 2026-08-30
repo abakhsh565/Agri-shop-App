@@ -20,11 +20,14 @@ export default function BusinessSettingsSheet({ onClose, onSave }: Props) {
       const exists = prev.crops.find(c => c.name === name);
       if (exists) return { ...prev, crops: prev.crops.filter(c => c.name !== name) };
       const dm = name === "Cotton" ? 8 : name === "Wheat" ? 4 : name === "Rice" ? 10 : name === "Sugarcane" ? 3 : 7;
-      return { ...prev, crops: [...prev.crops, { name, harvestMonth: dm, harvestDay: 0 }] };
+      return { ...prev, crops: [...prev.crops, { name, harvestMonth: dm, harvestDay: 1 }] };
     });
   }
   function updateHarvestMonth(name: string, month: number) {
     setSettings(prev => ({ ...prev, crops: prev.crops.map(c => c.name === name ? { ...c, harvestMonth: month } : c) }));
+  }
+  function updateHarvestDay(name: string, day: number) {
+    setSettings(prev => ({ ...prev, crops: prev.crops.map(c => c.name === name ? { ...c, harvestDay: day } : c) }));
   }
   function addCustomCrop() {
     const n = customCrop.trim();
@@ -69,6 +72,9 @@ export default function BusinessSettingsSheet({ onClose, onSave }: Props) {
                           <select value={crop.harvestMonth} onChange={e => updateHarvestMonth(crop.name, parseInt(e.target.value))} className="w-full h-9 rounded-[12px] px-3 text-[12px] outline-none appearance-none font-medium" style={{ ...ss, borderRadius: "var(--radius)" }}>
                             {MONTHS.map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
                           </select>
+                        <select value={crop.harvestDay} onChange={e => updateHarvestDay(crop.name, parseInt(e.target.value))} className="w-[60px] h-9 rounded-[12px] px-2 text-[12px] outline-none appearance-none font-medium" style={{ ...ss, borderRadius: "var(--radius)" }}>
+                          {Array.from({length: 31}, (_, i) => i + 1).map(d => <option key={d} value={d}>{d}</option>)}
+                        </select>
                         </div>
                       </div>
                     </div>

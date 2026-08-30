@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
@@ -6,7 +6,7 @@ import { useCustomersStore } from "@/stores/customersStore";
 import { useSalesStore } from "@/stores/salesStore";
 import { useThemeStore } from "@/stores/themeStore";
 import { formatCurrency } from "@/lib/formatters";
-import { generateReminders, generateReminderMessage } from "@/lib/reminderEngine";
+import { generateReminders, generateReminderMessage, seedMockReminderData } from "@/lib/reminderEngine";
 import type { GeneratedReminder } from "@/types";
 import { Bell, MessageCircle, Smartphone, X } from "lucide-react";
 
@@ -46,6 +46,8 @@ export default function RemindersOverviewPage() {
   const isUrdu = language === "ur";
   const customers = useCustomersStore((s) => s.customers);
   const sales = useSalesStore((s) => s.sales);
+
+  useEffect(() => { if (customers.length > 0) seedMockReminderData(customers); }, [customers]);
 
   const dueReminders = useMemo(
     () => generateReminders({ customers, sales, payments: [] }),
