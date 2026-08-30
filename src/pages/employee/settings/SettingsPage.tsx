@@ -227,7 +227,7 @@ export default function SettingsPage() {
             {[
               {
                 icon: Lock,
-                label: user && hasPin(user.id) ? "Change PIN" : "Setup PIN",
+                label: user && hasPin(user.id) ? (t("settings.changePin") || "Change PIN") : (t("settings.setupPin") || "Setup PIN"),
                 right: null, action: () => navigate("/login/pin-set", { state: { returnTo: "/employee/settings" } }),
               },
               {
@@ -240,7 +240,7 @@ export default function SettingsPage() {
               },
               {
                 icon: Smartphone, label: t("settings.device"),
-                right: "This Phone", action: null,
+                right: t("settings.thisPhone") || "This Phone", action: null,
               },
               {
                 icon: Info, label: t("settings.appVersion"),

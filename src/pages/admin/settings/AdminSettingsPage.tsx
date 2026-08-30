@@ -116,11 +116,11 @@ export default function AdminSettingsPage() {
                 className="text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0"
                 style={{ background: "var(--brand)", color: "#0a0a0a" }}
               >
-                Owner
+                {t("settings.owner") || "Owner"}
               </span>
             </div>
             <p className="text-xs mt-0.5" style={{ color: "var(--text-secondary)" }}>
-              {user?.jobTitle ?? "Store Owner"}
+              {user?.jobTitle ?? (t("settings.storeOwner") || "Store Owner")}
             </p>
             <p className="text-xs" style={{ color: "var(--text-secondary)" }}>{user?.phone}</p>
           </div>
@@ -262,10 +262,10 @@ export default function AdminSettingsPage() {
           </p>
           <div className="rounded-xl overflow-hidden" style={{ border: "1px solid var(--border-light)" }}>
             {[
-              { icon: Lock,         label: user && hasPin(user.id) ? (t("settings.changePin") || "Change PIN") : "Setup PIN",   action: () => navigate("/login/pin-set", { state: { returnTo: "/admin/settings" } }) },
+              { icon: Lock,         label: user && hasPin(user.id) ? (t("settings.changePin") || "Change PIN") : (t("settings.setupPin") || "Setup PIN"),   action: () => navigate("/login/pin-set", { state: { returnTo: "/admin/settings" } }) },
               { icon: Bell,         label: t("settings.notifications"), action: () => navigate("/admin/notifications") },
               { icon: ClipboardList, label: t("settings.activityLog"), action: () => navigate("/admin/activity") },
-              { icon: Smartphone,   label: t("settings.device"),       action: null,       right: "This Phone" },
+              { icon: Smartphone,   label: t("settings.device"),       action: null,       right: t("settings.thisPhone") || "This Phone" },
               { icon: Info,         label: t("settings.appVersion"),    action: null,       right: "1.0.0" },
             ].map((s, i, arr) => {
               const Icon = s.icon;
@@ -296,7 +296,7 @@ export default function AdminSettingsPage() {
         {/* Management shortcuts */}
         <div className="px-4 pt-5 animate-fade-in-up delay-150">
           <p className="text-xs font-bold uppercase mb-3 tracking-wider" style={{ color: "var(--text-secondary)" }}>
-            Management
+            {t("settings.management") || "Management"}
           </p>
           <div className="rounded-xl overflow-hidden" style={{ border: "1px solid var(--border-light)" }}>
             {[

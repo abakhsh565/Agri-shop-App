@@ -231,6 +231,12 @@ export const translations = {
     "employees.active":      "Active",
     "employees.onLeave":     "On Leave",
     "employees.deactivated": "Deactivated",
+    // Settings extras
+    "settings.management":  "Management",
+    "settings.owner":       "Owner",
+    "settings.storeOwner":  "Store Owner",
+    "settings.thisPhone":   "This Phone",
+    "settings.setupPin":    "Setup PIN",
   },
 
   ur: {
@@ -463,6 +469,12 @@ export const translations = {
     "employees.active":      "فعال",
     "employees.onLeave":     "چھٹی پر",
     "employees.deactivated": "غیر فعال",
+    // Settings extras
+    "settings.management":  "ینٹرملینگ",
+    "settings.owner":       "مالک",
+    "settings.storeOwner":  "دکان مالک",
+    "settings.thisPhone":   "یہ فون",
+    "settings.setupPin":    "PIN سیٹ اپ",
   },
 } as const;
 
