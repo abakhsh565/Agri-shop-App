@@ -247,35 +247,84 @@ export default function AdminDashboardPage() {
       {showNotifs && (
         <div className="fixed inset-0" style={{ zIndex: 60 }} onClick={() => setShowNotifs(false)}>
           <div
-            className="fixed top-[88px] right-4 w-[280px] rounded-[16px] shadow-2xl overflow-hidden animate-scale-in"
-            style={{ zIndex: 61, background: "var(--surface)", border: "1px solid var(--divider)" }}
+            className="fixed top-[88px] right-4 w-[300px] rounded-[16px] shadow-2xl overflow-hidden animate-scale-in flex flex-col"
+            style={{ zIndex: 61, background: "var(--surface)", border: "1px solid var(--divider)", maxHeight: "calc(100dvh - 120px)" }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="px-4 py-3" style={{ borderBottom: "1px solid var(--divider)" }}>
+            {/* Header */}
+            <div className="px-4 py-3 flex items-center justify-between shrink-0" style={{ borderBottom: "1px solid var(--divider)" }}>
               <p className="text-[12px] font-bold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
                 {t("dashboard.notifications")}
               </p>
+              {notifications.length > 0 && (
+                <button onClick={() => { markAllRead(); }} className="text-[11px] font-semibold" style={{ color: "var(--brand-dark, #65a30d)" }}>
+                  Mark all read
+                </button>
+              )}
             </div>
-            {notifications.length === 0 ? (
-              <div className="px-4 py-6 text-center">
-                <p className="text-[13px]" style={{ color: "var(--text-secondary)" }}>{t("dashboard.noNotifications")}</p>
-              </div>
-            ) : (
-              notifications.map((n) => {
-                const route = adminNotifRoute(n);
-                return (
-                  <button
-                    key={n.id}
-                    onClick={() => { if (route) { navigate(route); setShowNotifs(false); } }}
-                    className="w-full text-left px-4 py-3 active:bg-black/5 transition-colors"
-                    style={{ borderBottom: "1px solid var(--divider)" }}
-                  >
-                    <p className="text-[13px] font-semibold" style={{ color: "var(--text-primary)" }}>{n.title}</p>
-                    <p className="text-[12px] mt-0.5" style={{ color: "var(--text-secondary)" }}>{n.body}</p>
-                  </button>
-                );
-              })
-            )}
+
+            {/* Scrollable list */}
+            <div className="overflow-y-auto flex-1" style={{ maxHeight: "calc(100dvh - 180px)" }}>
+              {notifications.length === 0 ? (
+                <div className="px-4 py-8 text-center">
+                  <p className="text-[13px]" style={{ color: "var(--text-secondary)" }}>{t("dashboard.noNotifications") || "No notifications yet"}</p>
+                </div>
+              ) : (
+                (() => {
+                  /* Group notifications by time period */
+                  const now = new Date();
+                  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                  const yesterdayStart = new Date(todayStart); yesterdayStart.setDate(yesterdayStart.getDate() - 1);
+                  const weekStart = new Date(todayStart); weekStart.setDate(weekStart.getDate() - 7);
+
+                  const groups: { heading: string; items: typeof notifications }[] = [
+                    { heading: "Today", items: [] },
+                    { heading: "Yesterday", items: [] },
+                    { heading: "Last week", items: [] },
+                    { heading: "Earlier", items: [] },
+                  ];
+
+                  for (const n of notifications) {
+                    const d = new Date(n.created_at);
+                    if (d >= todayStart) groups[0].items.push(n);
+                    else if (d >= yesterdayStart) groups[1].items.push(n);
+                    else if (d >= weekStart) groups[2].items.push(n);
+                    else groups[3].items.push(n);
+                  }
+
+                  const nonEmpty = groups.filter(g => g.items.length > 0);
+
+                  return nonEmpty.map((group) => (
+                    <div key={group.heading}>
+                      <p className="px-4 pt-3 pb-1 text-[10px] font-bold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
+                        {group.heading}
+                      </p>
+                      {group.items.map((n) => {
+                        const route = adminNotifRoute(n);
+                        return (
+                          <button
+                            key={n.id}
+                            onClick={() => { if (route) { navigate(route); setShowNotifs(false); } }}
+                            className="w-full text-left px-4 py-3 active:bg-black/5 transition-colors"
+                            style={{ borderBottom: "1px solid var(--divider)" }}
+                          >
+                            <div className="flex items-start gap-2">
+                              {!n.read && (
+                                <div className="w-2 h-2 rounded-full mt-1.5 shrink-0" style={{ background: "var(--brand)" }} />
+                              )}
+                              <div className="flex-1 min-w-0">
+                                <p className="text-[13px] font-semibold" style={{ color: "var(--text-primary)" }}>{n.title}</p>
+                                {n.body && <p className="text-[12px] mt-0.5" style={{ color: "var(--text-secondary)" }}>{n.body}</p>}
+                              </div>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ));
+                })()
+              )}
+            </div>
           </div>
         </div>
       )}

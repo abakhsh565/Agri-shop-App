@@ -46,7 +46,7 @@ export default function BusinessSettingsSheet({ onClose, onSave }: Props) {
         </div>
         <div className="px-5 pb-6 flex flex-col gap-5 overflow-y-auto" style={{ flex: 1 }}>
           <div>
-            <label className="text-[12px] font-semibold uppercase tracking-wide block mb-2" style={{ color: "var(--text-secondary)" }}>Crops you deal with</label>
+            <p className="text-[11px] font-semibold uppercase tracking-wider block mb-2" style={{ color: "var(--text-secondary)" }}>Crops you deal with</p>
             <div className="flex flex-wrap gap-2">
               {PRESET_CROPS.map(crop => {
                 const active = selectedNames.includes(crop);
@@ -54,13 +54,13 @@ export default function BusinessSettingsSheet({ onClose, onSave }: Props) {
               })}
             </div>
             <div className="flex items-center gap-2 mt-3">
-              <input value={customCrop} onChange={e => setCustomCrop(e.target.value)} onKeyDown={e => { if (e.key === "Enter") addCustomCrop(); }} placeholder="Add custom crop..." className="flex-1 h-10 rounded-[14px] px-4 text-[13px] outline-none" style={{ ...ss, borderRadius: "var(--radius)" }} />
-              <button onClick={addCustomCrop} className="size-10 rounded-[14px] flex items-center justify-center shrink-0" style={{ background: "var(--brand)" }}><Plus size={16} color="#0a0a0a" /></button>
+              <input value={customCrop} onChange={e => setCustomCrop(e.target.value)} onKeyDown={e => { if (e.key === "Enter") addCustomCrop(); }} placeholder="Add custom crop..." className="flex-1 h-12 rounded-[24px] px-4 text-[13px] outline-none" style={{ ...ss, borderRadius: "24px" }} />
+              <button onClick={addCustomCrop} className="size-12 rounded-full flex items-center justify-center shrink-0" style={{ background: "var(--brand)" }}><Plus size={16} color="#0a0a0a" /></button>
             </div>
           </div>
           {settings.crops.length > 0 && (
             <div>
-              <label className="text-[12px] font-semibold uppercase tracking-wide block mb-2" style={{ color: "var(--text-secondary)" }}>Harvest periods</label>
+              <p className="text-[11px] font-semibold uppercase tracking-wider block mb-2" style={{ color: "var(--text-secondary)" }}>Harvest periods</p>
               <div className="flex flex-col gap-3">
                 {settings.crops.map(crop => (
                   <div key={crop.name} className="flex items-center gap-3 p-3 rounded-[14px]" style={{ background: "var(--surface-2)" }}>
@@ -69,10 +69,10 @@ export default function BusinessSettingsSheet({ onClose, onSave }: Props) {
                       <div className="flex items-center gap-2 mt-1.5">
                         <span className="text-[12px]" style={{ color: "var(--text-secondary)" }}>Harvest:</span>
                         <div className="relative flex-1">
-                          <select value={crop.harvestMonth} onChange={e => updateHarvestMonth(crop.name, parseInt(e.target.value))} className="w-full h-9 rounded-[12px] px-3 text-[12px] outline-none appearance-none font-medium" style={{ ...ss, borderRadius: "var(--radius)" }}>
+                          <select value={crop.harvestMonth} onChange={e => updateHarvestMonth(crop.name, parseInt(e.target.value))} className="w-full h-12 rounded-[24px] px-3 text-[12px] outline-none appearance-none font-medium" style={{ ...ss, borderRadius: "24px" }}>
                             {MONTHS.map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
                           </select>
-                        <select value={crop.harvestDay} onChange={e => updateHarvestDay(crop.name, parseInt(e.target.value))} className="w-[60px] h-9 rounded-[12px] px-2 text-[12px] outline-none appearance-none font-medium" style={{ ...ss, borderRadius: "var(--radius)" }}>
+                        <select value={crop.harvestDay} onChange={e => updateHarvestDay(crop.name, parseInt(e.target.value))} className="w-[60px] h-12 rounded-[24px] px-2 text-[12px] outline-none appearance-none font-medium" style={{ ...ss, borderRadius: "24px" }}>
                           {Array.from({length: 31}, (_, i) => i + 1).map(d => <option key={d} value={d}>{d}</option>)}
                         </select>
                         </div>

@@ -183,8 +183,8 @@ export default function AdminSettingsPage() {
                 <input
                   value={editName}
                   onChange={(e) => setEditName(e.target.value)}
-                  className="w-full h-11 rounded-full px-4 text-sm outline-none"
-                  style={{ background: "var(--surface-2)", border: "1px solid var(--divider)", color: "var(--text-primary)" }}
+                  className="w-full h-12 rounded-[24px] px-4 text-sm outline-none"
+                  style={{ background: "var(--surface-2)", border: "1px solid var(--divider)", color: "var(--text-primary)", borderRadius: "24px" }}
                 />
               </div>
               <div className="flex gap-3">
