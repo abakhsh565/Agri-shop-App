@@ -51,6 +51,12 @@ interface Props {
 export default function ReminderConfigSheet({ config, onSave, onClose }: Props) {
   const [local, setLocal] = useState<ReminderConfig>(config ?? { ...DEFAULT_CONFIG });
 
+  // Lock background scroll
+  useEffect(() => {
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = ""; };
+  }, []);
+
   useEffect(() => {
     setLocal(config ?? { ...DEFAULT_CONFIG });
   }, [config]);
@@ -67,11 +73,14 @@ export default function ReminderConfigSheet({ config, onSave, onClose }: Props) 
     });
   }
 
-  const selectStyle = {
+  const fieldStyle = {
     background: "var(--surface-2)",
     color: "var(--text-primary)",
     border: "1px solid var(--divider)",
+    borderRadius: "24px",
   };
+
+  const labelCls = "text-[11px] font-semibold uppercase tracking-wider mb-2 block";
 
   return (
     <div
@@ -106,25 +115,23 @@ export default function ReminderConfigSheet({ config, onSave, onClose }: Props) 
 
           {/* Start reminders */}
           <div>
-            <label className="text-[12px] font-semibold uppercase tracking-wide block mb-2" style={{ color: "var(--text-secondary)" }}>
-              Start reminders
-            </label>
+            <p className={labelCls} style={{ color: "var(--text-secondary)" }}>Start reminders</p>
             <div className="flex items-center gap-2">
               <input
                 type="number"
                 value={local.startDays}
                 min={0}
                 onChange={(e) => update("startDays", parseInt(e.target.value) || 0)}
-                className="h-11 rounded-[14px] px-4 text-sm w-[72px] outline-none font-medium"
-                style={{ ...selectStyle, borderRadius: "var(--radius)" }}
+                className="h-12 px-4 text-sm w-[72px] outline-none font-medium"
+                style={fieldStyle}
               />
               <span className="text-[13px]" style={{ color: "var(--text-secondary)" }}>days</span>
               <div className="flex-1 relative">
                 <select
                   value={local.anchor}
                   onChange={(e) => update("anchor", e.target.value as ReminderAnchor)}
-                  className="w-full h-11 rounded-[14px] px-4 text-[13px] outline-none appearance-none font-medium"
-                  style={{ ...selectStyle, borderRadius: "var(--radius)" }}
+                  className="w-full h-12 px-4 pr-10 text-[13px] outline-none appearance-none font-medium"
+                  style={fieldStyle}
                 >
                   <option value="after_credit">after credit given</option>
                   <option value="after_due">after due date</option>
@@ -137,15 +144,13 @@ export default function ReminderConfigSheet({ config, onSave, onClose }: Props) 
 
           {/* Repeat */}
           <div>
-            <label className="text-[12px] font-semibold uppercase tracking-wide block mb-2" style={{ color: "var(--text-secondary)" }}>
-              Repeat
-            </label>
+            <p className={labelCls} style={{ color: "var(--text-secondary)" }}>Repeat</p>
             <div className="relative">
               <select
                 value={local.repeat}
                 onChange={(e) => update("repeat", e.target.value as ReminderRepeat)}
-                className="w-full h-11 rounded-[14px] px-4 text-[13px] outline-none appearance-none font-medium"
-                style={{ ...selectStyle, borderRadius: "var(--radius)" }}
+                className="w-full h-12 px-4 pr-10 text-[13px] outline-none appearance-none font-medium"
+                style={fieldStyle}
               >
                 <option value="once">One-time reminder</option>
                 <option value="interval">Every fixed interval</option>
@@ -165,15 +170,15 @@ export default function ReminderConfigSheet({ config, onSave, onClose }: Props) 
                   value={local.intervalN}
                   min={1}
                   onChange={(e) => update("intervalN", parseInt(e.target.value) || 1)}
-                  className="h-10 rounded-[14px] px-3 text-sm w-[60px] outline-none font-medium"
-                  style={{ ...selectStyle, borderRadius: "var(--radius)" }}
+                  className="h-12 px-3 text-sm w-[60px] outline-none font-medium"
+                  style={fieldStyle}
                 />
                 <div className="relative">
                   <select
                     value={local.intervalUnit}
                     onChange={(e) => update("intervalUnit", e.target.value as "days" | "weeks")}
-                    className="h-10 rounded-[14px] px-3 text-[13px] outline-none appearance-none font-medium"
-                    style={{ ...selectStyle, borderRadius: "var(--radius)" }}
+                    className="h-12 px-3 pr-8 text-[13px] outline-none appearance-none font-medium"
+                    style={fieldStyle}
                   >
                     <option value="days">days</option>
                     <option value="weeks">weeks</option>
@@ -190,14 +195,14 @@ export default function ReminderConfigSheet({ config, onSave, onClose }: Props) 
               {local.escalation.map((step, i) => (
                 <div key={i} className="flex items-center gap-3">
                   <span className="text-[13px] w-[88px] shrink-0 font-medium" style={{ color: "var(--text-secondary)" }}>{step.label}</span>
-                  <span className="text-[12px]" style={{ color: "var(--text-muted)" }}>day</span>
+                  <span className="text-[12px]" style={{ color: "var(--text-secondary)" }}>day</span>
                   <input
                     type="number"
                     value={step.day}
                     min={0}
                     onChange={(e) => updateEscDay(i, parseInt(e.target.value) || 0)}
-                    className="h-10 rounded-[14px] px-3 text-sm w-[60px] outline-none font-medium"
-                    style={{ ...selectStyle, borderRadius: "var(--radius)" }}
+                    className="h-12 px-3 text-sm w-[60px] outline-none font-medium"
+                    style={fieldStyle}
                   />
                 </div>
               ))}
@@ -206,15 +211,13 @@ export default function ReminderConfigSheet({ config, onSave, onClose }: Props) 
 
           {/* Ends */}
           <div>
-            <label className="text-[12px] font-semibold uppercase tracking-wide block mb-2" style={{ color: "var(--text-secondary)" }}>
-              Ends
-            </label>
+            <p className={labelCls} style={{ color: "var(--text-secondary)" }}>Ends</p>
             <div className="relative">
               <select
                 value={local.ends}
                 onChange={(e) => update("ends", e.target.value as ReminderEnds)}
-                className="w-full h-11 rounded-[14px] px-4 text-[13px] outline-none appearance-none font-medium"
-                style={{ ...selectStyle, borderRadius: "var(--radius)" }}
+                className="w-full h-12 px-4 pr-10 text-[13px] outline-none appearance-none font-medium"
+                style={fieldStyle}
               >
                 <option value="paid">Until paid in full</option>
                 <option value="date">On a specific date</option>
@@ -231,8 +234,8 @@ export default function ReminderConfigSheet({ config, onSave, onClose }: Props) 
                 type="date"
                 value={local.endsDate ?? ""}
                 onChange={(e) => update("endsDate", e.target.value || null)}
-                className="w-full h-11 rounded-[14px] px-4 text-sm outline-none font-medium"
-                style={{ ...selectStyle, borderRadius: "var(--radius)" }}
+                className="w-full h-12 px-4 text-sm outline-none font-medium"
+                style={fieldStyle}
               />
             </div>
           )}
@@ -245,8 +248,8 @@ export default function ReminderConfigSheet({ config, onSave, onClose }: Props) 
                 value={local.endsCount}
                 min={1}
                 onChange={(e) => update("endsCount", parseInt(e.target.value) || 1)}
-                className="h-11 rounded-[14px] px-4 text-sm w-[80px] outline-none font-medium"
-                style={{ ...selectStyle, borderRadius: "var(--radius)" }}
+                className="h-12 px-4 text-sm w-[80px] outline-none font-medium"
+                style={fieldStyle}
               />
               <span className="text-[13px]" style={{ color: "var(--text-secondary)" }}>reminders</span>
             </div>
@@ -255,7 +258,7 @@ export default function ReminderConfigSheet({ config, onSave, onClose }: Props) 
           {/* Summary */}
           <div
             className="rounded-[14px] p-4 text-[13px] leading-relaxed"
-            style={{ background: "var(--surface-2)", color: "var(--text-secondary)", borderRadius: "var(--radius)" }}
+            style={{ background: "var(--surface-2)", color: "var(--text-secondary)" }}
           >
             {buildSummary(local)}
           </div>

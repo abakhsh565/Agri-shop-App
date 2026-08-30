@@ -364,3 +364,10 @@ textarea,
 
 /* Input clear buttons: currently absolute right-3 → flip */
 
+/* ── Scroll Lock: prevent background scroll when any bottom sheet / modal is open ── */
+body:has(.fixed.inset-0.z-50) {
+  overflow: hidden !important;
+  position: fixed;
+  width: 100%;
+}
+
