@@ -275,3 +275,92 @@ textarea,
 .dark svg.text-black   { color: var(--foreground)       !important; }
 .dark svg.text-\[\#888\] { color: var(--muted-foreground) !important; }
 
+/* ── RTL Support ──
+   When dir="rtl" is set on <html>, these rules flip directional
+   elements so the layout reads naturally in Urdu / Arabic. */
+[dir="rtl"] .rtl-flip {
+  transform: scaleX(-1);
+}
+[dir="rtl"] .rtl-flip-x {
+  transform: scaleX(-1);
+}
+
+/* Logical spacing: replace mx-4 with inline equivalent */
+[dir="rtl"] .rtl-pe-4 {
+  padding-inline-end: 1rem;
+}
+[dir="rtl"] .rtl-ps-4 {
+  padding-inline-start: 1rem;
+}
+
+/* Bottom sheets slide from correct side */
+@keyframes slideUpRtl {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+
+/* ── Scrollbar direction fix for RTL ── */
+[dir="rtl"] {
+  direction: rtl;
+  text-align: right;
+}
+
+/* Fix left-positioned absolute elements in RTL */
+[dir="rtl"] .fix-rtl-left {
+  left: auto;
+  right: 0;
+}
+[dir="rtl"] .fix-rtl-right {
+  right: auto;
+  left: 0;
+}
+
+/* ChevronRight / ArrowLeft / ArrowRight icon flips — apply to all lucide icons that point right/left */
+[dir="rtl"] svg.lucide-chevron-right,
+[dir="rtl"] svg.lucide-arrow-right,
+[dir="rtl"] svg.lucide-arrow-up-right,
+[dir="rtl"] svg.lucide-arrow-down-right,
+[dir="rtl"] svg.lucide-chevron-left,
+[dir="rtl"] svg.lucide-arrow-left,
+[dir="rtl"] svg.lucide-arrow-up-left,
+[dir="rtl"] svg.lucide-arrow-down-left,
+[dir="rtl"] svg.lucide-move-right,
+[dir="rtl"] svg.lucide-move-left {
+  transform: scaleX(-1);
+}
+
+/* Auto-flip any [style*="rotate"] direction indicators */
+[dir="rtl"] svg.rotate-0 {
+  transform: scaleX(-1);
+}
+
+/* Tab bar icons: flip scan icon */
+[dir="rtl"] .icon-scan {
+  transform: scaleX(-1);
+}
+
+/* ArrowLeft in NavHeader handled by component itself */
+
+/* Auto-flip absolute positioning for RTL */
+[dir="rtl"] [class*="absolute right-"] {
+  right: auto !important;
+}
+[dir="rtl"] [class*="absolute left-"] {
+  left: auto !important;
+}
+
+/* Flip text alignment */
+[dir="rtl"] .text-left { text-align: right !important; }
+[dir="rtl"] .text-right { text-align: left !important; }
+
+/* Flip flex-row gaps that imply direction (e.g. customer cards with avatar left, info right) */
+/* These work fine with flex — no override needed */
+
+/* Modal backdrop — no change needed */
+
+/* Bottom sheets — slide from bottom (same in both directions) */
+
+/* Sort dropdown: absolute positioned — handled by component */
+
+/* Input clear buttons: currently absolute right-3 → flip */
+

@@ -1,4 +1,5 @@
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, ArrowRight } from "lucide-react";
+import { useThemeStore } from "@/stores/themeStore";
 import { useNavigate } from "react-router-dom";
 import { type ReactNode } from "react";
 import { popNav, setSkipNext, isDashboardPath } from "@/lib/navContext";
@@ -16,6 +17,8 @@ interface NavHeaderProps {
 export default function NavHeader({ title, backTo, onBack, right, noBack }: NavHeaderProps) {
   const navigate = useNavigate();
   const location = useLocation();
+  const { language } = useThemeStore();
+  const isRtl = language === "ur";
 
   function handleBack() {
     if (onBack) { onBack(); return; }
@@ -53,10 +56,10 @@ export default function NavHeader({ title, backTo, onBack, right, noBack }: NavH
       {!noBack && (
         <button
           onClick={handleBack}
-          className="flex items-center text-sm font-medium absolute left-4 transition-opacity active:opacity-60"
-          style={{ color: "var(--text-primary)" }}
+          className="flex items-center text-sm font-medium absolute transition-opacity active:opacity-60"
+          style={{ color: "var(--text-primary)", [isRtl ? "right" : "left"]: 16 }}
         >
-          <ArrowLeft size={18} />
+          {isRtl ? <ArrowRight size={18} /> : <ArrowLeft size={18} />}
         </button>
       )}
       <p
@@ -65,7 +68,7 @@ export default function NavHeader({ title, backTo, onBack, right, noBack }: NavH
       >
         {title}
       </p>
-      {right && <div className="absolute right-4">{right}</div>}
+      {right && <div className="absolute" style={{ [isRtl ? "left" : "right"]: 16 }}>{right}</div>}
     </div>
   );
 }

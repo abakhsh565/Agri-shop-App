@@ -27,11 +27,21 @@ export const useThemeStore = create<ThemeState>()(
         set({ theme: next });
         applyTheme(next);
       },
-      setLanguage: (language) => set({ language }),
+      setLanguage: (language) => {
+        set({ language });
+        applyDirection(language);
+      },
     }),
     { name: "agrishop-theme" }
   )
 );
+
+export function applyDirection(lang: Language) {
+  if (typeof document !== "undefined") {
+    document.documentElement.dir = lang === "ur" ? "rtl" : "ltr";
+    document.documentElement.lang = lang;
+  }
+}
 
 export function applyTheme(theme: Theme) {
   const root = document.documentElement;
