@@ -11,6 +11,7 @@ import { useShellBase } from "@/lib/useShellBase";
 import { rpcDeleteProduct } from "@/lib/db";
 import { Pencil, TrendingUp, Barcode, Trash2, Copy, Download, Package, Camera, Loader2, Bell } from "lucide-react";
 import { getRecommendationsForProduct } from "@/lib/recommendationEngine";
+import { loadCustomerCrops } from "@/lib/reminderEngine";
 import { useCustomersStore } from "@/stores/customersStore";
 import { useSalesStore } from "@/stores/salesStore";
 import { barcodeToSvg } from "@/lib/barcode";
@@ -416,16 +417,23 @@ function ProductCustomerRecommendations({ productId }: { productId: string }) {
   const products = useProductsStore((s) => s.products);
   const customersReady = useCustomersStore((s) => s.ready);
   const sales = useSalesStore((s) => s.sales);
+  const [cropsMap, setCropsMap] = useState<Record<string, string[]>>({});
 
-  // Ensure stores are loaded
+  // Load crops from Supabase for all customers
   useEffect(() => {
     if (!customersReady) useCustomersStore.getState().load();
-  }, [customersReady]);
+    // Load crops for all active customers
+    customers.filter(c => !c.isArchived).forEach(c => {
+      loadCustomerCrops(c.id).then(crops => {
+        setCropsMap(prev => ({ ...prev, [c.id]: crops }));
+      });
+    });
+  }, [customersReady, customers.length]);
 
   const product = products.find((p) => p.id === productId);
   if (!product || !customersReady || customers.length === 0) return null;
 
-  const recs = getRecommendationsForProduct(product, { customers, sales, products });
+  const recs = getRecommendationsForProduct(product, { customers, sales, products, customerCropsMap: cropsMap });
   if (recs.length === 0) return null;
 
   function getInitials(name: string): string {
@@ -469,10 +477,21 @@ function ProductCustomerRecommendations({ productId }: { productId: string }) {
               className="size-8 rounded-full flex items-center justify-center shrink-0"
               style={{ background: "var(--surface)", border: "1px solid var(--divider)" }}
               onClick={() => {
-                // TODO: Send nudge notification to this customer
+                const phone = (rec.customer.phone || '').replace(/[^0-9+]/g, '');
+                const waPhone = phone.startsWith('+') ? phone.slice(1) : phone.startsWith('0') ? '92' + phone.slice(1) : phone;
+                const firstName = rec.customer.name.split(' ')[0];
+                let msg = '';
+                if (rec.reasonTag === 'missing_from_basket') {
+                  msg = `Hi ${firstName}, the ${product.name} is needed for your ${rec.cropName} season but we haven't seen an order yet. Would you like me to set one aside for you?`;
+                } else if (rec.reasonTag === 'due_again') {
+                  msg = `Hi ${firstName}, it's been a while since your last ${product.name} order for ${rec.cropName}. Time to restock?`;
+                } else {
+                  msg = `Hi ${firstName}, ${product.name} is in season for your ${rec.cropName} — thought you might need it.`;
+                }
+                window.open('https://wa.me/' + waPhone + '?text=' + encodeURIComponent(msg), '_blank');
               }}
             >
-              <Bell size={14} style={{ color: "var(--text-secondary)" }} />
+              <Bell size={14} style={{ color: 'var(--text-secondary)' }} />
             </button>
           </div>
         ))}

@@ -587,18 +587,20 @@ function RecommendedSection({ customerId }: { customerId: string | undefined }) 
   const products = useProductsStore((s) => s.products);
   const productsReady = useProductsStore((s) => s.ready);
   const sales = useSalesStore((s) => s.sales);
+  const [cropsMap, setCropsMap] = useState<Record<string, string[]>>({});
 
-  // Ensure products are loaded when this component mounts
+  // Load crops from Supabase for all customers
   useEffect(() => {
-    if (!productsReady) {
-      useProductsStore.getState().load();
-    }
-  }, [productsReady]);
+    if (!productsReady) useProductsStore.getState().load();
+    loadCustomerCrops(customerId).then(crops => {
+      setCropsMap(prev => ({ ...prev, [customerId]: crops }));
+    });
+  }, [productsReady, customerId]);
 
   const customer = customers.find((c) => c.id === customerId);
   if (!customer || !productsReady || products.length === 0) return null;
 
-  const recs = getRecommendationsForCustomer(customer, { customers, sales, products });
+  const recs = getRecommendationsForCustomer(customer, { customers, sales, products, customerCropsMap: cropsMap });
   if (recs.length === 0) return null;
 
   const PRODUCT_ICONS: Record<string, string> = {
@@ -638,7 +640,18 @@ function RecommendedSection({ customerId }: { customerId: string | undefined }) 
               className="size-8 rounded-full flex items-center justify-center shrink-0"
               style={{ background: "#E8F5E0" }}
               onClick={() => {
-                // TODO: Add to new sale — navigate to new sale with product pre-selected
+                const phone = (customer.phone || '').replace(/[^0-9+]/g, '');
+                const waPhone = phone.startsWith('+') ? phone.slice(1) : phone.startsWith('0') ? '92' + phone.slice(1) : phone;
+                const firstName = customer.name.split(' ')[0];
+                let msg = '';
+                if (rec.reasonTag === 'missing_from_basket') {
+                  msg = `Hi ${firstName}, the ${rec.product.name} is needed for your ${rec.cropName} season but we haven't seen an order yet. Would you like me to set one aside for you?`;
+                } else if (rec.reasonTag === 'due_again') {
+                  msg = `Hi ${firstName}, it's been a while since your last ${rec.product.name} order for ${rec.cropName}. Time to restock?`;
+                } else {
+                  msg = `Hi ${firstName}, ${rec.product.name} is in season for your ${rec.cropName} — thought you might need it.`;
+                }
+                window.open('https://wa.me/' + waPhone + '?text=' + encodeURIComponent(msg), '_blank');
               }}
             >
               <Plus size={16} color="#3B6D11" />

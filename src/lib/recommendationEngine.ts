@@ -29,19 +29,8 @@ interface CustomerRecommendation {
   cropName: string;
 }
 
-function loadCustomerCrops(customerId: string): string[] {
-  try {
-    const raw = localStorage.getItem("customer_crops_" + customerId);
-    return raw ? JSON.parse(raw) : [];
-  } catch { return []; }
-}
-
-function loadBusinessSettings(): BusinessSettings {
-  try {
-    const raw = localStorage.getItem("business_settings");
-    return raw ? JSON.parse(raw) : { crops: [] };
-  } catch { return { crops: [] }; }
-}
+// Crops are loaded from Supabase by the calling component and passed in.
+// This keeps the engine synchronous and free of async/Supabase dependencies.
 
 /** Map crop → months when each product category is relevant */
 const CROP_SEASON_WINDOWS: Record<string, Record<string, [number, number]>> = {
@@ -106,12 +95,12 @@ function formatDaysAgo(days: number): string {
  */
 export function getRecommendationsForCustomer(
   customer: Customer,
-  input: RecommendationInput,
+  input: RecommendationInput & { customerCropsMap?: Record<string, string[]> },
   now?: Date,
 ): ProductRecommendation[] {
-  const { sales, products } = input;
+  const { sales, products, customerCropsMap } = input;
   const currentTime = now ?? new Date();
-  const customerCrops = loadCustomerCrops(customer.id);
+  const customerCrops = customerCropsMap?.[customer.id] ?? [];
   if (customerCrops.length === 0) return [];
 
   // Get all products this customer has purchased
@@ -135,7 +124,6 @@ export function getRecommendationsForCustomer(
     if (product.stockQty <= 0) continue;
 
     for (const cropName of customerCrops) {
-      const crop = loadBusinessSettings().crops.find(c => c.name === cropName);
       const category = product.category;
 
       // Signal 1: Is this product's category relevant to this crop?
@@ -194,10 +182,10 @@ export function getRecommendationsForCustomer(
  */
 export function getRecommendationsForProduct(
   product: Product,
-  input: RecommendationInput,
+  input: RecommendationInput & { customerCropsMap?: Record<string, string[]> },
   now?: Date,
 ): CustomerRecommendation[] {
-  const { customers, sales } = input;
+  const { customers, sales, customerCropsMap } = input;
   const currentTime = now ?? new Date();
   const category = product.category;
 
@@ -205,7 +193,7 @@ export function getRecommendationsForProduct(
 
   for (const customer of customers) {
     if (customer.isArchived) continue;
-    const customerCrops = loadCustomerCrops(customer.id);
+    const customerCrops = customerCropsMap?.[customer.id] ?? [];
     if (customerCrops.length === 0) continue;
 
     // Get purchase history for this customer + this product
