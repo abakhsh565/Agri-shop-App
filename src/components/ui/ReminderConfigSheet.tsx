@@ -267,7 +267,7 @@ export default function ReminderConfigSheet({ config, onSave, onClose }: Props) 
 
           {/* Save button */}
           <button
-            onClick={() => onSave({ ...local, enabled: true })}
+            onClick={() => onSave({ ...local, id: local.id || "new-" + Date.now(), enabled: true })}
             className="w-full h-12 rounded-full text-[14px] font-bold transition-opacity active:opacity-80"
             style={{ background: "var(--brand)", color: "#0a0a0a" }}
           >
