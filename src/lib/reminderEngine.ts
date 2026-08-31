@@ -281,7 +281,7 @@ export async function generateReminders(input: ReminderEngineInput): Promise<Gen
             dueDate: customer.dueDate, paymentStatus: calculatePaymentStatus(customer, now),
             configId: config.id, tone: determineTone(config, daysElapsed),
             trigger: "harvest", triggerDetail: config.startDays + " days before " + cropName + " harvest",
-            cropName, config,
+            cropName, config, triggerDate: triggerDate.toISOString(),
           });
         }
       } else {
@@ -298,7 +298,7 @@ export async function generateReminders(input: ReminderEngineInput): Promise<Gen
           dueDate: customer.dueDate, paymentStatus: calculatePaymentStatus(customer, now),
           configId: config.id, tone: determineTone(config, daysElapsed),
           trigger: config.anchor === "after_credit" ? "credit" : "due_date",
-          triggerDetail: label, config,
+          triggerDetail: label, config, triggerDate: triggerDate.toISOString(),
         });
       }
     }

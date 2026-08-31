@@ -176,7 +176,7 @@ export default function AdminDashboardPage() {
     return (customerCropsMap[customerId] || []).includes(cropName);
   }
   useEffect(() => { generateReminders({ customers, sales: mockSales }).then(setDueReminders); }, [customers, mockSales]);
-  const dueReminderCount = dueReminders.length;
+  const dueReminderCount = dueReminders.filter(r => new Date(r.triggerDate) <= new Date()).length;
   const creditLimitReached = customers.filter(c => c.outstandingBalance > 0 && c.creditLimit > 0 && c.outstandingBalance >= c.creditLimit).length;
   const delayedCount = customers.filter(c => c.outstandingBalance > 0 && calculatePaymentStatus(c, new Date()) === "delayed").length;
   const highRiskCount = customers.filter(c => c.outstandingBalance > 0 && calculatePaymentStatus(c, new Date()) === "high_risk").length;

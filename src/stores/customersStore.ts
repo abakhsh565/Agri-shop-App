@@ -234,6 +234,8 @@ export const useCustomersStore = create<CustomersState>((set, get) => ({
   },
 
   updateDueDate: async (id, dueDate) => {
+    // Invalidate cache so next load() fetches fresh data
+    localStorage.removeItem("agrishop_cache_customers");
     const { error } = await supabase
       .from("customers")
       .update({ due_date: dueDate })

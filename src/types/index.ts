@@ -88,6 +88,8 @@ export interface GeneratedReminder {
 
   configId: string;
 
+  triggerDate: string;
+
   tone: 'gentle' | 'firmer' | 'final';
 
   trigger: 'credit' | 'harvest' | 'due_date';
