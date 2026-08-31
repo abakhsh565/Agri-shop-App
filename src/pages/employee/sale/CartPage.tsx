@@ -27,6 +27,7 @@ export default function CartPage() {
   const [paymentMethod, setPaymentMethod] = useState<"cash" | "bank_transfer">("cash");
   const [amountReceived, setAmountReceived] = useState("");
   const [amountTouched, setAmountTouched] = useState(false);
+  const [dueDate, setDueDate] = useState(customer?.dueDate ?? "");
   const [completing, setCompleting] = useState(false);
   const completingRef = useRef(false);
 
@@ -96,6 +97,13 @@ export default function CartPage() {
             checkAndNotifyLowStock(product.id, product.name, product.stockQty, variant.lowStockThreshold);
           }
         }
+      }
+      // Save due date to customer if partial/credit and date was set
+      if (paymentType === "partial" && dueDate) {
+        try {
+          const { updateDueDate } = await import("@/stores/customersStore").then(m => m.useCustomersStore.getState());
+          await updateDueDate(customer!.id, dueDate);
+        } catch {}
       }
       // Navigate first, then clear cart — clearing first causes the <Navigate>
       // guard in this component to fire and redirect away from the success page.
@@ -288,6 +296,14 @@ export default function CartPage() {
             placeholder="Enter amount (0 for credit)"
             className="w-full h-12 rounded-[24px] border border-[#e5e5e5] px-4 text-sm text-black placeholder:text-[#888] outline-none"
             onFocus={() => setAmountTouched(true)}
+          />
+          <p className="text-xs font-bold text-black uppercase mb-2 mt-4">Payment Due Date</p>
+          <p className="text-[12px] text-[#888] mb-2">Optional. When should the customer pay the outstanding amount?</p>
+          <input
+            type="date"
+            value={dueDate}
+            onChange={(e) => setDueDate(e.target.value)}
+            className="w-full h-12 rounded-[24px] border border-[#e5e5e5] px-4 text-sm text-black outline-none"
           />
         </div>
       )}

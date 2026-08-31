@@ -6,7 +6,7 @@ import { useCustomersStore } from "@/stores/customersStore";
 import { useSalesStore } from "@/stores/salesStore";
 import { useThemeStore } from "@/stores/themeStore";
 import { formatCurrency } from "@/lib/formatters";
-import { generateReminders, generateReminderMessage, loadReminderLogs, logReminder as logReminderToDb } from "@/lib/reminderEngine";
+import { generateReminders, generateReminderMessage } from "@/lib/reminderEngine";
 import type { GeneratedReminder } from "@/types";
 import { MessageCircle, Smartphone, X, ChevronDown, ChevronUp, Bell, CheckCircle2, Clock } from "lucide-react";
 
@@ -21,23 +21,30 @@ interface ReminderLogEntry {
   sentAt: string;
 }
 
-function getReminderLogs(customerId: string): ReminderLogEntry[] {
+async function loadAllReminderLogs(): Promise<ReminderLogEntry[]> {
   try {
-    const raw = localStorage.getItem("reminder_logs_" + customerId);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
+    const { supabase } = await import("@/lib/supabase");
+    const { data } = await supabase.from("reminder_logs").select("*").order("sent_at", { ascending: false }).limit(50);
+    if (!data) return [];
+    return data.map((r: any) => ({
+      id: r.id,
+      customerId: r.customer_id,
+      customerName: r.customer_name,
+      type: r.tone,
+      message: r.message,
+      channel: r.channel,
+      sentAt: r.sent_at,
+    }));
+  } catch { return getAllReminderLogsFromStorage(); }
 }
 
-function getAllReminderLogs(): ReminderLogEntry[] {
+function getAllReminderLogsFromStorage(): ReminderLogEntry[] {
   const all: ReminderLogEntry[] = [];
   for (let i = 0; i < localStorage.length; i++) {
     const key = localStorage.key(i);
     if (key?.startsWith("reminder_logs_")) {
       try {
         const logs = JSON.parse(localStorage.getItem(key) || "[]");
-        // Filter entries that have at minimum an id and sentAt
         const valid = Array.isArray(logs) ? logs.filter((l: ReminderLogEntry) => l && l.id && l.sentAt) : [];
         all.push(...valid);
       } catch { /* skip */ }
@@ -46,10 +53,23 @@ function getAllReminderLogs(): ReminderLogEntry[] {
   return all.sort((a, b) => new Date(b.sentAt).getTime() - new Date(a.sentAt).getTime());
 }
 
-function logReminder(customerId: string, customerName: string, entry: ReminderLogEntry) {
-  const logs = getReminderLogs(customerId);
-  logs.unshift(entry);
-  localStorage.setItem("reminder_logs_" + customerId, JSON.stringify(logs));
+async function logReminderToDb(customerId: string, customerName: string, entry: ReminderLogEntry) {
+  try {
+    const { supabase } = await import("@/lib/supabase");
+    await supabase.from("reminder_logs").insert({
+      customer_id: customerId,
+      customer_name: customerName,
+      tone: entry.type,
+      message: entry.message,
+      channel: entry.channel,
+      sent_at: entry.sentAt,
+    });
+  } catch { /* fallback to localStorage */
+    const raw = localStorage.getItem("reminder_logs_" + customerId);
+    const logs = raw ? JSON.parse(raw) : [];
+    logs.unshift(entry);
+    localStorage.setItem("reminder_logs_" + customerId, JSON.stringify(logs));
+  }
 }
 
 /* ── Tone config using brand palette ── */
@@ -269,11 +289,12 @@ export default function RemindersOverviewPage() {
   const [editingReminder, setEditingReminder] = useState<GeneratedReminder | null>(null);
   const [editMessage, setEditMessage] = useState("");
   const [sentKeys, setSentKeys] = useState<Set<string>>(new Set());
-  const [allLogs, setAllLogs] = useState<ReminderLogEntry[]>(getAllReminderLogs);
+  const [allLogs, setAllLogs] = useState<ReminderLogEntry[]>([]);
+  useEffect(() => { loadAllReminderLogs().then(setAllLogs); }, []);
 
   // Refresh logs periodically
   useEffect(() => {
-    const timer = setInterval(() => setAllLogs(getAllReminderLogs()), 5000);
+    const timer = setInterval(() => loadAllReminderLogs().then(setAllLogs), 10000);
     return () => clearInterval(timer);
   }, []);
 
@@ -288,34 +309,21 @@ export default function RemindersOverviewPage() {
   }, [editingReminder]);
 
   // Filter reminders into tabs
+  const now = new Date();
   const readyReminders = useMemo(() => {
-    return allReminders.filter(r => !sentKeys.has(r.customerId + "-sent"));
+    return allReminders.filter(r => !sentKeys.has(r.customerId + "-sent") && new Date(r.triggerDate) <= now);
   }, [allReminders, sentKeys]);
 
   const futureReminders = useMemo(() => {
-    // Show reminders that have a future trigger (not yet due)
-    return allReminders.filter(r => {
-      const config = localStorage.getItem("reminder_config_" + r.customerId);
-      if (!config) return false;
-      try {
-        const c = JSON.parse(config);
-        if (c.repeat === "escalate") {
-          return c.escalation.some((e: { day: number }) => e.day > 0);
-        }
-        return true;
-      } catch { return false; }
-    }).slice(0, 5);
-  }, [allReminders]);
+    return allReminders.filter(r => !sentKeys.has(r.customerId + "-sent") && new Date(r.triggerDate) > now);
+  }, [allReminders, sentKeys]);
 
   const sentLogs = useMemo(() => allLogs, [allLogs]);
 
-  const configuredCount = useMemo(
-    () => customers.filter((c) => {
-      try { const r = localStorage.getItem("reminder_config_" + c.id); return r && JSON.parse(r).enabled; }
-      catch { return false; }
-    }).length,
-    [customers]
-  );
+  const configuredCount = useMemo(() => {
+    const unique = new Set(allReminders.map(r => r.customerId));
+    return unique.size;
+  }, [allReminders]);
 
   function openSendSheet(reminder: GeneratedReminder) {
     setEditingReminder(reminder);
@@ -335,7 +343,7 @@ export default function RemindersOverviewPage() {
       window.open("sms:" + phone + "?body=" + encodedMsg, "_blank");
     }
 
-    logReminder(editingReminder.customerId, editingReminder.customerName, {
+    logReminderToDb(editingReminder.customerId, editingReminder.customerName, {
       id: "rem-" + Date.now(),
       customerId: editingReminder.customerId,
       customerName: editingReminder.customerName,
@@ -346,7 +354,7 @@ export default function RemindersOverviewPage() {
     });
 
     setSentKeys(prev => new Set([...prev, key]));
-    setAllLogs(getAllReminderLogs());
+    loadAllReminderLogs().then(setAllLogs);
     setEditingReminder(null);
   }, [editingReminder, editMessage]);
 

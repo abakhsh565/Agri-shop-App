@@ -12,7 +12,7 @@ import PullToRefresh from "@/components/ui/PullToRefresh";
 import { useCustomersStore } from "@/stores/customersStore";
 import { supabase } from "@/lib/supabase";
 import { formatCurrency, formatSmartDateTime } from "@/lib/formatters";
-import { generateReminders } from "@/lib/reminderEngine";
+import { generateReminders, calculatePaymentStatus, loadBusinessSettings } from "@/lib/reminderEngine";
 import { useT } from "@/lib/i18n";
 import { AlertTriangle, TrendingUp, ChevronRight, TrendingDown, ShoppingCart, Search, Bell, Wallet, CheckCircle2 } from "lucide-react";
 import StatusBar from "@/components/ui/StatusBar";
@@ -159,9 +159,27 @@ export default function AdminDashboardPage() {
   const totalPayable = mockCompanies.reduce((s, c) => s + c.outstandingPayable, 0);
   
   const [dueReminders, setDueReminders] = useState<any[]>([]);
+  const [bizSettings, setBizSettings] = useState<{crops: any[]}>({crops: []});
+  const [customerCropsMap, setCustomerCropsMap] = useState<Record<string, string[]>>({});
+  useEffect(() => {
+    loadBusinessSettings().then(setBizSettings).catch(() => {});
+    // Load all customer crops for harvest alert filtering
+    import("@/lib/reminderEngine").then(async (m) => {
+      const map: Record<string, string[]> = {};
+      for (const c of customers) {
+        try { map[c.id] = await m.loadCustomerCrops(c.id); } catch { map[c.id] = []; }
+      }
+      setCustomerCropsMap(map);
+    }).catch(() => {});
+  }, [customers.length]);
+  function customerCropsHas(customerId: string, cropName: string) {
+    return (customerCropsMap[customerId] || []).includes(cropName);
+  }
   useEffect(() => { generateReminders({ customers, sales: mockSales }).then(setDueReminders); }, [customers, mockSales]);
   const dueReminderCount = dueReminders.length;
   const creditLimitReached = customers.filter(c => c.outstandingBalance > 0 && c.creditLimit > 0 && c.outstandingBalance >= c.creditLimit).length;
+  const delayedCount = customers.filter(c => c.outstandingBalance > 0 && calculatePaymentStatus(c, new Date()) === "delayed").length;
+  const highRiskCount = customers.filter(c => c.outstandingBalance > 0 && calculatePaymentStatus(c, new Date()) === "high_risk").length;
 
   // Employee performance — filtered by selected date filter
   const empStats = mockEmployees.map((emp) => {
@@ -470,7 +488,7 @@ export default function AdminDashboardPage() {
         <div className="flex flex-col gap-2.5">
           {/* TIER 1 — Red: Critical overrides (always shown) */}
           {(() => {
-            const totalRed = creditLimitReached + (totalPayable > 0 ? 1 : 0);
+            const totalRed = creditLimitReached + (totalPayable > 0 ? 1 : 0) + delayedCount + highRiskCount;
             if (totalRed > 0) {
               return (
                 <>
@@ -485,6 +503,42 @@ export default function AdminDashboardPage() {
                       <div className="flex-1 min-w-0">
                         <p className="text-[14px] font-medium" style={{ color: "#791F1F" }}>Supplier payable due</p>
                         <p className="text-[13px] mt-1" style={{ color: "#791F1F", lineHeight: 1.5 }}>{formatCurrency(totalPayable)} total due to suppliers</p>
+                        <div className="flex items-center justify-between mt-2">
+                          <span className="text-[11px]" style={{ color: "#A32D2D" }}>action needed</span>
+                          <span className="text-[13px] font-medium" style={{ color: "#791F1F" }}>Review</span>
+                        </div>
+                      </div>
+                    </button>
+                  )}
+                  {/* Delayed customers */}
+                  {delayedCount > 0 && (
+                    <button
+                      onClick={() => navigate("/admin/customers", { state: { paymentStatus: "delayed" } })}
+                      className="flex items-start gap-3 rounded-[14px] p-4 transition-opacity active:opacity-70 text-left w-full"
+                      style={{ background: "#FCEBEB" }}
+                    >
+                      <AlertTriangle size={20} color="#A32D2D" className="mt-0.5 shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[14px] font-medium" style={{ color: "#791F1F" }}>{delayedCount} customer{delayedCount !== 1 ? "s" : ""} delayed</p>
+                        <p className="text-[13px] mt-1" style={{ color: "#791F1F", lineHeight: 1.5 }}>Payment past due date but within 30 days</p>
+                        <div className="flex items-center justify-between mt-2">
+                          <span className="text-[11px]" style={{ color: "#A32D2D" }}>follow up needed</span>
+                          <span className="text-[13px] font-medium" style={{ color: "#791F1F" }}>View</span>
+                        </div>
+                      </div>
+                    </button>
+                  )}
+                  {/* High risk customers */}
+                  {highRiskCount > 0 && (
+                    <button
+                      onClick={() => navigate("/admin/customers", { state: { paymentStatus: "high_risk" } })}
+                      className="flex items-start gap-3 rounded-[14px] p-4 transition-opacity active:opacity-70 text-left w-full"
+                      style={{ background: "#FCEBEB" }}
+                    >
+                      <AlertTriangle size={20} color="#A32D2D" className="mt-0.5 shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[14px] font-medium" style={{ color: "#791F1F" }}>{highRiskCount} high-risk customer{highRiskCount !== 1 ? "s" : ""}</p>
+                        <p className="text-[13px] mt-1" style={{ color: "#791F1F", lineHeight: 1.5 }}>More than 30 days overdue — immediate action required</p>
                         <div className="flex items-center justify-between mt-2">
                           <span className="text-[11px]" style={{ color: "#A32D2D" }}>action needed</span>
                           <span className="text-[13px] font-medium" style={{ color: "#791F1F" }}>Review</span>
@@ -574,8 +628,7 @@ export default function AdminDashboardPage() {
 
           {/* TIER 3 — Gray: Harvest / informational (always shown) */}
           {(() => {
-            const bizRaw = localStorage.getItem("business_settings");
-            const biz = bizRaw ? JSON.parse(bizRaw) : { crops: [] };
+            const biz = bizSettings;
             const now = new Date();
             const harvestAlerts: { text: string; cropName: string }[] = [];
             for (const crop of biz.crops) {
@@ -583,7 +636,7 @@ export default function AdminDashboardPage() {
               if (harvest < now) harvest.setFullYear(now.getFullYear() + 1);
               const daysUntil = Math.ceil((harvest.getTime() - now.getTime()) / 86400000);
               if (daysUntil <= 30 && daysUntil > 0) {
-                const affectedCustomers = customers.filter(c => c.outstandingBalance > 0).length;
+                const affectedCustomers = customers.filter(c => c.outstandingBalance > 0 && customerCropsHas(c.id, crop.name)).length;
                 harvestAlerts.push({
                   text: crop.name + " season starts in " + daysUntil + " days — " + affectedCustomers + " farmer" + (affectedCustomers !== 1 ? "s" : "") + " due for harvest reminders",
                   cropName: crop.name,

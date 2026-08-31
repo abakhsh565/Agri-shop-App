@@ -13,7 +13,7 @@ import { useThemeStore } from "@/stores/themeStore";
 import { useShellBase } from "@/lib/useShellBase";
 import { History, Wallet, Bell, Pencil, Trash2, Receipt, Plus } from "lucide-react";
 import { getRecommendationsForCustomer } from "@/lib/recommendationEngine";
-import { loadReminderConfigs, saveReminderConfig as saveReminderConfigToDb, loadCustomerCrops, saveCustomerCrops as saveCustomerCropsToDb, calculatePaymentStatus, getPaymentStatusLabel, getPaymentStatusColor } from "@/lib/reminderEngine";
+import { loadReminderConfigs, saveReminderConfig as saveReminderConfigToDb, loadCustomerCrops, saveCustomerCrops as saveCustomerCropsToDb, loadBusinessSettings, calculatePaymentStatus, getPaymentStatusLabel, getPaymentStatusColor } from "@/lib/reminderEngine";
 import { useProductsStore } from "@/stores/productsStore";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import ReminderConfigSheet from "@/components/ui/ReminderConfigSheet";
@@ -36,9 +36,15 @@ export default function CustomerProfilePage() {
   const allCustomers = useCustomersStore((s) => s.customers);
   const updateCustomerImage = useCustomersStore((s) => s.updateCustomerImage);
 
-  // Seed mock crop/reminder data on first load
   useEffect(() => {
-      }, [allCustomers]);
+    async function loadBiz() {
+      try {
+        const s = await loadBusinessSettings();
+        setBusinessSettings(s);
+      } catch {}
+    }
+    loadBiz();
+  }, []);
   const { addToast } = useUIStore();
 
   const [editing, setEditing] = useState(false);
@@ -54,27 +60,53 @@ export default function CustomerProfilePage() {
   const sales = useSalesStore((s) => s.sales);
   const [deleting, setDeleting] = useState(false);
   const [showReminderConfig, setShowReminderConfig] = useState(false);
-  const [reminderConfig, setReminderConfig] = useState<ReminderConfig | null>(null);
+  const [editingConfig, setEditingConfig] = useState<ReminderConfig | null>(null);
+  const [reminderConfigs, setReminderConfigs] = useState<ReminderConfig[]>([]);
+  const [showEditDueDate, setShowEditDueDate] = useState(false);
+  const [editDueDate, setEditDueDate] = useState("");
   const [customerCrops, setCustomerCrops] = useState<string[]>([]);
   const [businessSettings, setBusinessSettings] = useState<BusinessSettings>({ crops: [] });
 
   useEffect(() => {
     if (!customerId) return;
-    try {
-      const cropsRaw = localStorage.getItem('customer_crops_' + customerId);
-      if (cropsRaw) setCustomerCrops(JSON.parse(cropsRaw));
-      const bizRaw = localStorage.getItem('business_settings');
-      if (bizRaw) setBusinessSettings(JSON.parse(bizRaw));
-      const saved = localStorage.getItem("reminder_config_" + customerId);
-      if (saved) setReminderConfig(JSON.parse(saved));
-    } catch {}
+    async function loadData() {
+      try {
+        const crops = await loadCustomerCrops(customerId!);
+        setCustomerCrops(crops);
+        const configs = await loadReminderConfigs(customerId!);
+        setReminderConfigs(configs);
+      } catch {}
+    }
+    loadData();
   }, [customerId]);
 
-  function saveReminderConfig(cfg: ReminderConfig) {
-    localStorage.setItem("reminder_config_" + customerId, JSON.stringify(cfg));
-    setReminderConfig(cfg);
-    setShowReminderConfig(false);
-    addToast("Reminder schedule saved", "success");
+  async function saveReminderConfig(cfg: ReminderConfig) {
+    try {
+      await saveReminderConfigToDb(customerId!, cfg);
+      const configs = await loadReminderConfigs(customerId!);
+      setReminderConfigs(configs);
+      setShowReminderConfig(false);
+      addToast("Reminder saved", "success");
+    } catch { addToast("Failed to save reminder", "error"); }
+  }
+
+  async function handleDeleteReminder(configId: string) {
+    try {
+      const { deleteReminderConfig } = await import("@/lib/reminderEngine");
+      await deleteReminderConfig(configId);
+      const configs = await loadReminderConfigs(customerId!);
+      setReminderConfigs(configs);
+      addToast("Reminder deleted", "success");
+    } catch { addToast("Failed to delete reminder", "error"); }
+  }
+
+  async function handleSaveDueDate() {
+    try {
+      const { updateDueDate } = useCustomersStore.getState();
+      await updateDueDate(customerId!, editDueDate || null);
+      setShowEditDueDate(false);
+      addToast(editDueDate ? "Due date updated" : "Due date removed", "success");
+    } catch { addToast("Failed to update due date", "error"); }
   }
 
   function startEdit() {
@@ -84,8 +116,7 @@ export default function CustomerProfilePage() {
     setEditAddress(customer.address ?? "");
     setEditCreditLimit(customer.creditLimit > 0 ? String(customer.creditLimit) : "");
     setEditImageUrl(customer.imageUrl ?? null);
-    const cropsRaw = localStorage.getItem("customer_crops_" + customerId);
-    setEditCrops(cropsRaw ? JSON.parse(cropsRaw) : []);
+    setEditCrops([...customerCrops]);
     setEditing(true);
   }
 
@@ -116,6 +147,8 @@ export default function CustomerProfilePage() {
       if (editImageUrl !== (customer.imageUrl ?? null)) {
         await updateCustomerImage(customerId, editImageUrl);
       }
+      await saveCustomerCropsToDb(customerId, editCrops);
+      setCustomerCrops([...editCrops]);
       await useCustomersStore.getState().load();
       setEditing(false);
       addToast("Customer updated", "success");
@@ -176,32 +209,7 @@ export default function CustomerProfilePage() {
   // Credit bar color
   const utilColor = usagePct >= 80 ? "#ef4444" : usagePct >= 50 ? "#f59e0b" : "#639922";
 
-  // Reminder schedule subtitle
-  let reminderSubtitle = "Not configured";
-  if (reminderConfig) {
-    if (reminderConfig.repeat === "once") reminderSubtitle = "One-time reminder";
-    else if (reminderConfig.repeat === "interval") reminderSubtitle = "Every " + reminderConfig.intervalN + " " + reminderConfig.intervalUnit;
-    else {
-      const nextStep = reminderConfig.escalation.find((s) => s.day > 0) ?? reminderConfig.escalation[0];
-      reminderSubtitle = "Escalating \u00b7 next: " + nextStep.label.toLowerCase() + " in " + nextStep.day + " days";
-    }
-  }
 
-  // Reminder history count from localStorage
-  let reminderCount = 0;
-  let lastReminderDaysAgo: number | null = null;
-  try {
-    const historyRaw = localStorage.getItem("reminder_logs_" + customerId);
-    if (historyRaw) {
-      const history = JSON.parse(historyRaw) as Array<{ sentAt: string }>;
-      reminderCount = history.length;
-      if (history.length > 0) {
-        const last = new Date(history[0].sentAt);
-        const diff = Math.floor((Date.now() - last.getTime()) / (1000 * 60 * 60 * 24));
-        lastReminderDaysAgo = diff;
-      }
-    }
-  } catch {}
 
   return (
     <div
@@ -317,21 +325,48 @@ export default function CustomerProfilePage() {
             </>
           )}
 
-          {/* Divider + Reminder schedule */}
-          <div
-            className="mt-4 pt-3 flex justify-between items-center"
-            style={{ borderTop: "0.5px solid #E5E4DE" }}
-          >
-            <div className="flex-1 min-w-0">
-              <p className="text-[13px] font-medium" style={{ color: "#1A1A1A" }}>Reminder schedule</p>
-              <p className="text-[11px] mt-0.5 truncate" style={{ color: "#8A8A85" }}>{reminderSubtitle}</p>
+          {/* Due Date */}
+          <div className="mt-3 pt-3" style={{ borderTop: "0.5px solid #E5E4DE" }}>
+            <div className="flex justify-between items-center">
+              <div>
+                <p className="text-[11px] font-medium tracking-wider" style={{ color: "#8A8A85" }}>DUE DATE</p>
+                <p className="text-[14px] font-bold mt-0.5" style={{ color: customer.dueDate ? "#1A1A1A" : "#8A8A85" }}>
+                  {customer.dueDate ? new Date(customer.dueDate).toLocaleDateString("en-PK", { day: "numeric", month: "short", year: "numeric" }) : "Not set"}
+                </p>
+              </div>
+              <button onClick={() => { setEditDueDate(customer.dueDate || ""); setShowEditDueDate(true); }} className="text-[12px] font-semibold px-3 py-1.5 rounded-full" style={{ background: "#F1EFE8", color: "#5A5A55" }}>
+                {customer.dueDate ? "Edit" : "Set"}
+              </button>
             </div>
-            <button
-              onClick={() => setShowReminderConfig(true)}
-              className="shrink-0 ml-2 p-1"
-            >
-              <Pencil size={16} color="#8A8A85" />
-            </button>
+          </div>
+          {/* Reminder schedules */}
+          <div className="mt-3 pt-3" style={{ borderTop: "0.5px solid #E5E4DE" }}>
+            <div className="flex justify-between items-center mb-2">
+              <p className="text-[11px] font-medium tracking-wider" style={{ color: "#8A8A85" }}>REMINDERS</p>
+              <button onClick={() => { setEditingConfig(null); setShowReminderConfig(true); }} className="text-[12px] font-semibold px-3 py-1.5 rounded-full" style={{ background: "#F1EFE8", color: "#5A5A55" }}>+ Add</button>
+            </div>
+            {reminderConfigs.length === 0 ? (
+              <p className="text-[12px] py-1" style={{ color: "#8A8A85" }}>No reminders configured</p>
+            ) : (
+              <div className="flex flex-col gap-1.5">
+                {reminderConfigs.map((cfg: ReminderConfig) => (
+                  <div key={cfg.id} className="flex items-center justify-between py-2 px-2 rounded-lg" style={{ background: "rgba(99,153,34,0.05)" }}>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[12px] font-medium" style={{ color: "#1A1A1A" }}>
+                        {cfg.startDays}d {cfg.anchor === "after_credit" ? "after credit" : cfg.anchor === "after_due" ? "after due date" : cfg.anchor === "before_due" ? "before due date" : "before harvest"}
+                      </p>
+                      <p className="text-[11px]" style={{ color: "#8A8A85" }}>
+                        {cfg.repeat === "once" ? "One-time" : cfg.repeat === "interval" ? "Every " + cfg.intervalN + " " + cfg.intervalUnit : "Escalating"}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <button onClick={() => { setEditingConfig(cfg); setShowReminderConfig(true); }} className="p-1"><Pencil size={14} color="#8A8A85" /></button>
+                      <button onClick={() => handleDeleteReminder(cfg.id)} className="p-1"><Trash2 size={14} color="#D64545" /></button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
@@ -371,11 +406,6 @@ export default function CustomerProfilePage() {
           >
             <Bell size={18} color="#639922" />
             <span className="flex-1 text-left text-[14px]" style={{ color: "#1A1A1A" }}>Reminder History</span>
-            {reminderCount > 0 && (
-              <span className="text-[11px] shrink-0" style={{ color: "#8A8A85" }}>
-                {reminderCount} sent{lastReminderDaysAgo !== null ? " \u00b7 last " + lastReminderDaysAgo + "d ago" : ""}
-              </span>
-            )}
           </button>
 
           {/* Record Payment — green highlight */}
@@ -417,7 +447,7 @@ export default function CustomerProfilePage() {
       {/* Reminder Config Sheet */}
       {showReminderConfig && (
         <ReminderConfigSheet
-          config={reminderConfig}
+          config={editingConfig}
           onSave={saveReminderConfig}
           onClose={() => setShowReminderConfig(false)}
         />
@@ -507,6 +537,26 @@ export default function CustomerProfilePage() {
               >
                 {saving ? "Saving..." : "Save"}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+
+      {/* Due Date Edit Bottom Sheet */}
+      {showEditDueDate && (
+        <div className="fixed inset-0 z-50 flex items-end" style={{ background: 'rgba(0,0,0,0.5)' }} onClick={() => setShowEditDueDate(false)}>
+          <div className="w-full max-w-[400px] mx-auto rounded-t-2xl p-5 flex flex-col gap-4" style={{ background: 'var(--surface)' }} onClick={e => e.stopPropagation()}>
+            <div className="flex justify-center pt-1 pb-0"><div className="w-10 h-1 rounded-full" style={{ background: 'var(--divider)' }} /></div>
+            <p className="text-[16px] font-semibold" style={{ color: 'var(--text-primary)' }}>Payment Due Date</p>
+            <p className="text-[13px]" style={{ color: 'var(--text-secondary)' }}>Set the date by which the customer should pay their outstanding balance.</p>
+            <div>
+              <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1.5" style={{ color: 'var(--text-secondary)' }}>Due Date</label>
+              <input type="date" value={editDueDate} onChange={e => setEditDueDate(e.target.value)} className="w-full h-12 rounded-[24px] px-4 text-sm outline-none" style={{ background: 'var(--surface-2)', border: '1px solid var(--divider)', color: 'var(--text-primary)', borderRadius: '24px' }} />
+            </div>
+            <div className="flex gap-3 mt-1">
+              <button onClick={() => setShowEditDueDate(false)} className="flex-1 h-11 rounded-full text-sm font-medium" style={{ background: 'var(--surface-2)', color: 'var(--text-secondary)' }}>Cancel</button>
+              <button onClick={handleSaveDueDate} className="flex-1 h-11 rounded-full text-sm font-bold" style={{ background: 'var(--brand)', color: '#0a0a0a' }}>Save</button>
             </div>
           </div>
         </div>
