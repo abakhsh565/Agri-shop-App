@@ -82,7 +82,7 @@ export async function saveCustomerCrops(customerId: string, crops: string[]): Pr
 export async function loadBusinessSettings(): Promise<BusinessSettings> {
   try {
     const { data } = await supabase.from("business_settings").select("crops").limit(1).single();
-    if (data?.crops) return { crops: data.crops };
+    if (data?.crops) return { crops: typeof data.crops === "string" ? JSON.parse(data.crops) : data.crops };
   } catch {}
   return { crops: [] };
 }
