@@ -16,6 +16,7 @@ interface CustomerRow {
   outstanding_balance: number;
   total_purchases: number;
   total_paid: number;
+  due_date: string | null;
   created_at: string;
   created_by: string | null;
   is_archived: boolean;
@@ -34,6 +35,7 @@ function customerFromRow(r: CustomerRow): Customer {
     outstandingBalance: Number(r.outstanding_balance),
     totalPurchases: Number(r.total_purchases),
     totalPaid: Number(r.total_paid),
+    dueDate: r.due_date ?? null,
     createdAt: r.created_at,
     createdBy: r.created_by ?? "",
     isArchived: r.is_archived ?? false,
@@ -58,6 +60,7 @@ interface CustomersState {
   }) => Promise<Customer>;
   updateCustomerImage: (id: string, imageUrl: string | null) => Promise<void>;
   archiveCustomer: (id: string) => Promise<void>;
+  updateDueDate: (id: string, dueDate: string | null) => Promise<void>;
   restoreCustomer: (id: string) => Promise<void>;
   /** Get customer snapshot for historical sale display */
   getSnapshot: (customerId: string) => { name: string; phone: string; address?: string } | null;
@@ -162,6 +165,7 @@ export const useCustomersStore = create<CustomersState>((set, get) => ({
           outstandingBalance: 0,
           totalPurchases: 0,
           totalPaid: 0,
+          dueDate: null,
           createdAt: new Date().toISOString(),
           createdBy: input.createdBy ?? "",
         };
@@ -225,6 +229,19 @@ export const useCustomersStore = create<CustomersState>((set, get) => ({
     set({
       customers: get().customers.map((c) =>
         c.id === id ? { ...c, isArchived: false, archivedAt: null, archivedBy: null } : c
+      ),
+    });
+  },
+
+  updateDueDate: async (id, dueDate) => {
+    const { error } = await supabase
+      .from("customers")
+      .update({ due_date: dueDate })
+      .eq("id", id);
+    if (error) throw new Error(error.message);
+    set({
+      customers: get().customers.map((c) =>
+        c.id === id ? { ...c, dueDate } : c
       ),
     });
   },

@@ -12,7 +12,7 @@ import PullToRefresh from "@/components/ui/PullToRefresh";
 import { useCustomersStore } from "@/stores/customersStore";
 import { supabase } from "@/lib/supabase";
 import { formatCurrency, formatSmartDateTime } from "@/lib/formatters";
-import { generateReminders, seedMockReminderData } from "@/lib/reminderEngine";
+import { generateReminders } from "@/lib/reminderEngine";
 import { useT } from "@/lib/i18n";
 import { AlertTriangle, TrendingUp, ChevronRight, TrendingDown, ShoppingCart, Search, Bell, Wallet, CheckCircle2 } from "lucide-react";
 import StatusBar from "@/components/ui/StatusBar";
@@ -157,8 +157,9 @@ export default function AdminDashboardPage() {
     return c + (bad ? 1 : 0);
   }, 0);
   const totalPayable = mockCompanies.reduce((s, c) => s + c.outstandingPayable, 0);
-  useEffect(() => { if (customers.length > 0) seedMockReminderData(customers); }, [customers]);
-  const dueReminders = generateReminders({ customers, sales: mockSales, payments: [] });
+  
+  const [dueReminders, setDueReminders] = useState<any[]>([]);
+  useEffect(() => { generateReminders({ customers, sales: mockSales }).then(setDueReminders); }, [customers, mockSales]);
   const dueReminderCount = dueReminders.length;
   const creditLimitReached = customers.filter(c => c.outstandingBalance > 0 && c.creditLimit > 0 && c.outstandingBalance >= c.creditLimit).length;
 

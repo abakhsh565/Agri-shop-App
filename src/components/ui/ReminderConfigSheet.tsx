@@ -3,6 +3,7 @@ import { X, ChevronDown } from "lucide-react";
 import type { ReminderConfig, ReminderRepeat, ReminderEnds, ReminderAnchor } from "@/types";
 
 const DEFAULT_CONFIG: ReminderConfig = {
+  id: "new-" + Date.now(),
   enabled: true,
   startDays: 15,
   anchor: "after_credit",
@@ -22,6 +23,7 @@ const DEFAULT_CONFIG: ReminderConfig = {
 const ANCHOR_LABELS: Record<ReminderAnchor, string> = {
   after_credit: "after credit given",
   after_due: "after due date",
+  before_due: "before due date",
   before_harvest: "before harvest season",
 };
 
@@ -49,7 +51,7 @@ interface Props {
 }
 
 export default function ReminderConfigSheet({ config, onSave, onClose }: Props) {
-  const [local, setLocal] = useState<ReminderConfig>(config ?? { ...DEFAULT_CONFIG });
+  const [local, setLocal] = useState<ReminderConfig>(config ?? { ...DEFAULT_CONFIG, id: "new-" + Date.now() });
 
   // Lock background scroll
   useEffect(() => {

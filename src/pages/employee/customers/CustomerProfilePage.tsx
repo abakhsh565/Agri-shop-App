@@ -13,7 +13,7 @@ import { useThemeStore } from "@/stores/themeStore";
 import { useShellBase } from "@/lib/useShellBase";
 import { History, Wallet, Bell, Pencil, Trash2, Receipt, Plus } from "lucide-react";
 import { getRecommendationsForCustomer } from "@/lib/recommendationEngine";
-import { seedMockReminderData } from "@/lib/reminderEngine";
+import { loadReminderConfigs, saveReminderConfig as saveReminderConfigToDb, loadCustomerCrops, saveCustomerCrops as saveCustomerCropsToDb, calculatePaymentStatus, getPaymentStatusLabel, getPaymentStatusColor } from "@/lib/reminderEngine";
 import { useProductsStore } from "@/stores/productsStore";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import ReminderConfigSheet from "@/components/ui/ReminderConfigSheet";
@@ -38,8 +38,7 @@ export default function CustomerProfilePage() {
 
   // Seed mock crop/reminder data on first load
   useEffect(() => {
-    if (allCustomers.length > 0) seedMockReminderData(allCustomers);
-  }, [allCustomers]);
+      }, [allCustomers]);
   const { addToast } = useUIStore();
 
   const [editing, setEditing] = useState(false);
@@ -168,10 +167,11 @@ export default function CustomerProfilePage() {
   const creditHealth = calculateCreditHealth(customer, salesCount, lastPaymentAt, effectivePaid, hasCreditActivity);
 
   // Risk pill
-  const riskDot = creditHealth.status === "green" ? "#639922" : creditHealth.status === "yellow" ? "#D97706" : "#DC2626";
-  const riskBg = creditHealth.status === "green" ? "#E3F3D9" : creditHealth.status === "yellow" ? "#FEF3C7" : "#FEE2E2";
-  const riskTextColor = creditHealth.status === "green" ? "#3B6D11" : creditHealth.status === "yellow" ? "#92400e" : "#A32D2D";
-  const riskLabel = hasCreditActivity ? creditHealth.headline : "Cash";
+  const paymentStatus = calculatePaymentStatus(customer, new Date());
+  const riskDot = getPaymentStatusColor(paymentStatus).color;
+  const riskBg = getPaymentStatusColor(paymentStatus).bg;
+  const riskTextColor = getPaymentStatusColor(paymentStatus).color;
+  const riskLabel = getPaymentStatusLabel(paymentStatus);
 
   // Credit bar color
   const utilColor = usagePct >= 80 ? "#ef4444" : usagePct >= 50 ? "#f59e0b" : "#639922";

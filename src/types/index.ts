@@ -7,6 +7,8 @@ export type PaymentType = "full" | "partial" | "credit";
 export type PaymentMethod = "cash" | "bank_transfer";
 export type CreditHealth = "good" | "warning" | "over_limit";
 
+export type PaymentStatus = "on_time" | "delayed" | "high_risk" | "no_due_date" | "paid";
+
 
 export interface CreditHealthStatus {
   status: "green" | "yellow" | "red" | "not_enough_history" | "cash_customer";
@@ -27,7 +29,7 @@ export interface ReminderStatus {
 
 export type ReminderRepeat = "once" | "interval" | "escalate";
 export type ReminderEnds = "paid" | "date" | "count";
-export type ReminderAnchor = "after_credit" | "after_due" | "before_harvest";
+export type ReminderAnchor = "after_credit" | "after_due" | "before_due" | "before_harvest";
 
 export interface EscalationStep {
   label: string;
@@ -36,6 +38,7 @@ export interface EscalationStep {
 }
 
 export interface ReminderConfig {
+  id: string;
   enabled: boolean;
   startDays: number;
   anchor: ReminderAnchor;
@@ -78,6 +81,12 @@ export interface GeneratedReminder {
   customerPhone: string;
 
   outstanding: number;
+
+  dueDate: string | null;
+
+  paymentStatus: PaymentStatus;
+
+  configId: string;
 
   tone: 'gentle' | 'firmer' | 'final';
 
@@ -175,6 +184,7 @@ export interface Customer {
   outstandingBalance: number;
   totalPurchases: number;
   totalPaid: number;
+  dueDate: string | null;
   createdAt: string;
   createdBy: string;
   isArchived?: boolean;

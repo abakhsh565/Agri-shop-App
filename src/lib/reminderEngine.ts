@@ -1,60 +1,189 @@
-import type { Customer, Sale, ReminderConfig, BusinessSettings, CropConfig, GeneratedReminder } from "@/types";
+import type { Customer, Sale, ReminderConfig, BusinessSettings, CropConfig, GeneratedReminder, PaymentStatus } from "@/types";
+import { supabase } from "@/lib/supabase";
 
-/**
- * Reminder Engine - evaluates all customers and generates due reminders.
- */
+// ─── Supabase Data Access ─────────────────────────────────────────────────────
 
-interface ReminderEngineInput {
-  customers: Customer[];
-  sales: Sale[];
-  payments: { customerId: string; createdAt: string }[];
-  now?: Date;
+export async function loadReminderConfigs(customerId: string): Promise<ReminderConfig[]> {
+  try {
+    const { data } = await supabase
+      .from("reminder_configs")
+      .select("*")
+      .eq("customer_id", customerId)
+      .order("created_at");
+    if (!data) return [];
+    return data.map(row => ({
+      id: row.id,
+      enabled: row.enabled ?? true,
+      startDays: row.start_days ?? 1,
+      anchor: row.anchor as ReminderConfig["anchor"],
+      repeat: row.repeat_type as ReminderConfig["repeat"],
+      intervalN: row.interval_n ?? 7,
+      intervalUnit: row.interval_unit as ReminderConfig["intervalUnit"],
+      escalation: row.escalation ?? [],
+      ends: row.ends as ReminderConfig["ends"],
+      endsDate: row.ends_date ?? null,
+      endsCount: row.ends_count ?? 5,
+    }));
+  } catch {
+    return [];
+  }
 }
 
-function loadReminderConfig(customerId: string): ReminderConfig | null {
-  try { const raw = localStorage.getItem("reminder_config_" + customerId); if (raw) return JSON.parse(raw); } catch {}
-  return null;
+export async function saveReminderConfig(customerId: string, config: ReminderConfig): Promise<void> {
+  const payload = {
+    customer_id: customerId,
+    enabled: config.enabled,
+    start_days: config.startDays,
+    anchor: config.anchor,
+    repeat_type: config.repeat,
+    interval_n: config.intervalN,
+    interval_unit: config.intervalUnit,
+    escalation: config.escalation,
+    ends: config.ends,
+    ends_date: config.endsDate || null,
+    ends_count: config.endsCount,
+    updated_at: new Date().toISOString(),
+  };
+
+  if (config.id && config.id.length > 0 && !config.id.startsWith("new-")) {
+    await supabase.from("reminder_configs").update(payload).eq("id", config.id);
+  } else {
+    const { id: _id, ...insertPayload } = { ...payload, id: undefined };
+    await supabase.from("reminder_configs").insert(insertPayload);
+  }
 }
 
-function loadCustomerCrops(customerId: string): string[] {
-  try { const raw = localStorage.getItem("customer_crops_" + customerId); if (raw) return JSON.parse(raw); } catch {}
-  return [];
+export async function deleteReminderConfig(configId: string): Promise<void> {
+  await supabase.from("reminder_configs").delete().eq("id", configId);
 }
 
-function loadBusinessSettings(): BusinessSettings {
-  try { const raw = localStorage.getItem("business_settings"); if (raw) return JSON.parse(raw); } catch {}
+export async function loadCustomerCrops(customerId: string): Promise<string[]> {
+  try {
+    const { data } = await supabase
+      .from("customer_crops")
+      .select("crop_name")
+      .eq("customer_id", customerId);
+    if (!data) return [];
+    return data.map(r => r.crop_name);
+  } catch {
+    return [];
+  }
+}
+
+export async function saveCustomerCrops(customerId: string, crops: string[]): Promise<void> {
+  await supabase.from("customer_crops").delete().eq("customer_id", customerId);
+  if (crops.length > 0) {
+    await supabase.from("customer_crops").insert(
+      crops.map(name => ({ customer_id: customerId, crop_name: name }))
+    );
+  }
+}
+
+export async function loadBusinessSettings(): Promise<BusinessSettings> {
+  try {
+    const { data } = await supabase.from("business_settings").select("crops").limit(1).single();
+    if (data?.crops) return { crops: data.crops };
+  } catch {}
   return { crops: [] };
 }
+
+export async function saveBusinessSettings(settings: BusinessSettings): Promise<void> {
+  const { data: existing } = await supabase.from("business_settings").select("id").limit(1).single();
+  if (existing) {
+    await supabase.from("business_settings").update({ crops: settings.crops, updated_at: new Date().toISOString() }).eq("id", existing.id);
+  } else {
+    await supabase.from("business_settings").insert({ crops: settings.crops });
+  }
+}
+
+export async function loadReminderLogs(customerId?: string): Promise<Array<{ id: string; customerId: string; customerName?: string; configId?: string; tone: string; message: string; channel: string; sentAt: string }>> {
+  try {
+    let query = supabase.from("reminder_logs").select("*").order("sent_at", { ascending: false });
+    if (customerId) query = query.eq("customer_id", customerId);
+    const { data } = await query.limit(200);
+    if (!data) return [];
+    return data.map(r => ({
+      id: r.id,
+      customerId: r.customer_id,
+      customerName: r.customer_name,
+      configId: r.config_id,
+      tone: r.tone,
+      message: r.message,
+      channel: r.channel,
+      sentAt: r.sent_at,
+    }));
+  } catch {
+    return [];
+  }
+}
+
+export async function logReminder(customerId: string, customerName: string, configId: string, tone: string, message: string, channel: string): Promise<void> {
+  await supabase.from("reminder_logs").insert({
+    customer_id: customerId,
+    customer_name: customerName,
+    config_id: configId,
+    tone,
+    message,
+    channel,
+    sent_at: new Date().toISOString(),
+  });
+}
+
+// ─── Core Engine ──────────────────────────────────────────────────────────────
 
 function getDaysSince(dateStr: string, now: Date): number {
   return Math.floor((now.getTime() - new Date(dateStr).getTime()) / 86400000);
 }
 
+function getDaysBetween(date1: Date, date2: Date): number {
+  return Math.floor((date2.getTime() - date1.getTime()) / 86400000);
+}
+
 function getNextHarvestDate(crop: CropConfig, now: Date): Date {
   const year = now.getFullYear();
   const harvest = new Date(year, crop.harvestMonth - 1, crop.harvestDay || 1);
-  if (harvest < now) harvest.setFullYear(year + 1);
+  if (harvest <= now) harvest.setFullYear(year + 1);
   return harvest;
+}
+
+function getLatestCreditSale(sales: Sale[], customerId: string): Sale | undefined {
+  const customerSales = sales
+    .filter(s => s.customerId === customerId && s.paymentType !== "full" && !s.isVoided)
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  return customerSales[0];
 }
 
 function determineTone(config: ReminderConfig, daysElapsed: number): "gentle" | "firmer" | "final" {
   if (config.repeat !== "escalate") return "gentle";
-  const sorted = [...config.escalation].sort((a, b) => b.day - a.day);
+  const sorted = [...config.escalation].sort((a, b) => a.day - b.day);
+  let currentTone: "gentle" | "firmer" | "final" = "gentle";
   for (const step of sorted) {
     if (daysElapsed >= step.day) {
-      if (step.tone.includes("final")) return "final";
-      if (step.tone.includes("firmer")) return "firmer";
-      return "gentle";
+      if (step.tone.includes("final")) currentTone = "final";
+      else if (step.tone.includes("firmer")) currentTone = "firmer";
+      else currentTone = "gentle";
     }
   }
-  return "gentle";
+  return currentTone;
 }
 
-function getTriggerDate(config: ReminderConfig, sale: Sale | undefined, crop: CropConfig | undefined, now: Date): Date | null {
-  if (config.anchor === "after_credit" || config.anchor === "after_due") {
-    const baseDate = sale?.createdAt ?? new Date(now.getTime() - 30 * 86400000).toISOString();
-    const trigger = new Date(baseDate);
+function getTriggerDate(config: ReminderConfig, customer: Customer, sale: Sale | undefined, crop: CropConfig | undefined, now: Date): Date | null {
+  if (config.anchor === "after_credit") {
+    if (!sale) return null;
+    const trigger = new Date(sale.createdAt);
     trigger.setDate(trigger.getDate() + config.startDays);
+    return trigger;
+  }
+  if (config.anchor === "after_due") {
+    if (!customer.dueDate) return null;
+    const trigger = new Date(customer.dueDate);
+    trigger.setDate(trigger.getDate() + config.startDays);
+    return trigger;
+  }
+  if (config.anchor === "before_due") {
+    if (!customer.dueDate) return null;
+    const trigger = new Date(customer.dueDate);
+    trigger.setDate(trigger.getDate() - config.startDays);
     return trigger;
   }
   if (config.anchor === "before_harvest" && crop) {
@@ -72,40 +201,106 @@ function isReminderStopped(config: ReminderConfig, outstanding: number, sentCoun
   return false;
 }
 
-export function generateReminders(input: ReminderEngineInput): GeneratedReminder[] {
+// ─── Payment Status ───────────────────────────────────────────────────────────
+
+export function calculatePaymentStatus(customer: Customer, now: Date): PaymentStatus {
+  if (customer.outstandingBalance <= 0) return "paid";
+  if (!customer.dueDate) return "no_due_date";
+  const dueDate = new Date(customer.dueDate);
+  const daysOverdue = getDaysBetween(dueDate, now);
+  if (daysOverdue <= 7) return "on_time";
+  if (daysOverdue <= 30) return "delayed";
+  return "high_risk";
+}
+
+export function getPaymentStatusLabel(status: PaymentStatus): string {
+  switch (status) {
+    case "on_time": return "On Time";
+    case "delayed": return "Delayed";
+    case "high_risk": return "High Risk";
+    case "no_due_date": return "No Due Date";
+    case "paid": return "Paid";
+  }
+}
+
+export function getPaymentStatusColor(status: PaymentStatus): { color: string; bg: string } {
+  switch (status) {
+    case "on_time": return { color: "#3B6D11", bg: "#E3F3D9" };
+    case "delayed": return { color: "#92400e", bg: "#FEF3C7" };
+    case "high_risk": return { color: "#A32D2D", bg: "#FCEBEB" };
+    case "no_due_date": return { color: "#5A5A55", bg: "#F1EFE8" };
+    case "paid": return { color: "#3B6D11", bg: "#E3F3D9" };
+  }
+}
+
+// ─── Generate Reminders ───────────────────────────────────────────────────────
+
+interface ReminderEngineInput {
+  customers: Customer[];
+  sales: Sale[];
+  now?: Date;
+}
+
+export async function generateReminders(input: ReminderEngineInput): Promise<GeneratedReminder[]> {
   const { customers, sales, now: nowRef } = input;
   const now = nowRef ?? new Date();
-  const bizSettings = loadBusinessSettings();
   const reminders: GeneratedReminder[] = [];
+  const bizSettings = await loadBusinessSettings();
 
   for (const customer of customers) {
     if (customer.outstandingBalance <= 0) continue;
-    const config = loadReminderConfig(customer.id);
-    if (!config || !config.enabled) continue;
-    const customerCropNames = loadCustomerCrops(customer.id);
-    const customerSales = sales.filter(s => s.customerId === customer.id);
-    const latestSale = customerSales[0];
-    let sentCount = 0;
-    try { sentCount = JSON.parse(localStorage.getItem("reminder_logs_" + customer.id) || "[]").length; } catch {}
-    if (isReminderStopped(config, customer.outstandingBalance, sentCount)) continue;
+    const configs = await loadReminderConfigs(customer.id);
+    if (configs.length === 0) continue;
+    const customerCropNames = await loadCustomerCrops(customer.id);
+    const latestSale = getLatestCreditSale(sales, customer.id);
 
-    if (config.anchor === "before_harvest" && customerCropNames.length > 0) {
-      for (const cropName of customerCropNames) {
-        const crop = bizSettings.crops.find(c => c.name === cropName);
-        if (!crop) continue;
-        const triggerDate = getTriggerDate(config, latestSale, crop, now);
-        if (!triggerDate || triggerDate > now) continue;
-        const daysElapsed = getDaysSince(triggerDate.toISOString(), now);
-        const tone = determineTone(config, daysElapsed);
-        reminders.push({ customerId: customer.id, customerName: customer.name, customerPhone: customer.phone, outstanding: customer.outstandingBalance, tone, trigger: "harvest", triggerDetail: config.startDays + " days before " + cropName + " harvest", cropName, config });
+    for (const config of configs) {
+      if (!config.enabled) continue;
+      let sentCount = 0;
+      try {
+        const { count } = await supabase
+          .from("reminder_logs")
+          .select("id", { count: "exact", head: true })
+          .eq("customer_id", customer.id)
+          .eq("config_id", config.id);
+        sentCount = count ?? 0;
+      } catch {}
+      if (isReminderStopped(config, customer.outstandingBalance, sentCount)) continue;
+
+      if (config.anchor === "before_harvest" && customerCropNames.length > 0) {
+        for (const cropName of customerCropNames) {
+          const crop = bizSettings.crops.find(c => c.name === cropName);
+          if (!crop) continue;
+          const triggerDate = getTriggerDate(config, customer, latestSale, crop, now);
+          if (!triggerDate) continue;
+          const isFuture = triggerDate > now;
+          const daysElapsed = isFuture ? 0 : getDaysSince(triggerDate.toISOString(), now);
+          reminders.push({
+            customerId: customer.id, customerName: customer.name,
+            customerPhone: customer.phone, outstanding: customer.outstandingBalance,
+            dueDate: customer.dueDate, paymentStatus: calculatePaymentStatus(customer, now),
+            configId: config.id, tone: determineTone(config, daysElapsed),
+            trigger: "harvest", triggerDetail: config.startDays + " days before " + cropName + " harvest",
+            cropName, config,
+          });
+        }
+      } else {
+        const triggerDate = getTriggerDate(config, customer, latestSale, undefined, now);
+        if (!triggerDate) continue;
+        const isFuture = triggerDate > now;
+        const daysElapsed = isFuture ? 0 : getDaysSince(triggerDate.toISOString(), now);
+        const label = config.anchor === "after_credit" ? config.startDays + " days after credit given"
+          : config.anchor === "after_due" ? config.startDays + " days after due date"
+          : config.startDays + " days before due date";
+        reminders.push({
+          customerId: customer.id, customerName: customer.name,
+          customerPhone: customer.phone, outstanding: customer.outstandingBalance,
+          dueDate: customer.dueDate, paymentStatus: calculatePaymentStatus(customer, now),
+          configId: config.id, tone: determineTone(config, daysElapsed),
+          trigger: config.anchor === "after_credit" ? "credit" : "due_date",
+          triggerDetail: label, config,
+        });
       }
-    } else {
-      const triggerDate = getTriggerDate(config, latestSale, undefined, now);
-      if (!triggerDate || triggerDate > now) continue;
-      const daysElapsed = getDaysSince(triggerDate.toISOString(), now);
-      const tone = determineTone(config, daysElapsed);
-      const triggerLabel = config.anchor === "after_credit" ? config.startDays + " days after credit given" : config.startDays + " days after due date";
-      reminders.push({ customerId: customer.id, customerName: customer.name, customerPhone: customer.phone, outstanding: customer.outstandingBalance, tone, trigger: config.anchor === "after_credit" ? "credit" : "due_date", triggerDetail: triggerLabel, config });
     }
   }
   return reminders;
@@ -119,45 +314,28 @@ export function generateReminderMessage(reminder: GeneratedReminder): string {
   return "Hello " + name + ", " + amount + " remains outstanding on your account. Please contact us regarding settlement. Do not ignore this message.";
 }
 
-/** Seed mock data for testing the reminder system */
-export function seedMockReminderData(customers: { id: string; outstandingBalance: number }[]) {
-  // 1. Business Settings
-  if (!localStorage.getItem("business_settings")) {
-    localStorage.setItem("business_settings", JSON.stringify({
-      crops: [
-        { name: "Cotton", harvestMonth: 9, harvestDay: 3 },
-        { name: "Wheat", harvestMonth: 3, harvestDay: 1 },
-        { name: "Rice", harvestMonth: 10, harvestDay: 10 },
-      ]
-    }));
+// ─── Helper: split reminders into tabs ────────────────────────────────────────
+
+export function categorizeReminders(
+  reminders: GeneratedReminder[], sentConfigIds: Set<string>, now: Date,
+): { ready: GeneratedReminder[]; future: GeneratedReminder[] } {
+  const ready: GeneratedReminder[] = [];
+  const future: GeneratedReminder[] = [];
+  for (const r of reminders) {
+    if (sentConfigIds.has(r.customerId + "-" + r.configId)) continue;
+    const triggerDate = calcTriggerForCategory(r.config, r);
+    if (triggerDate && triggerDate > now) future.push(r);
+    else ready.push(r);
   }
-  // 2. Customer crops for customers with outstanding
-  const cropSets = [["Cotton", "Wheat"], ["Cotton"], ["Wheat", "Rice"]];
-  const outstandingCustomers = customers.filter(c => c.outstandingBalance > 0);
-  outstandingCustomers.forEach((c, i) => {
-    if (!localStorage.getItem("customer_crops_" + c.id)) {
-      localStorage.setItem("customer_crops_" + c.id, JSON.stringify(cropSets[i % cropSets.length]));
-    }
-  });
-  // 3. Reminder configs for all customers with outstanding
-  for (const tc of customers.filter(c => c.outstandingBalance > 0)) {
-    if (!localStorage.getItem("reminder_config_" + tc.id)) {
-      localStorage.setItem("reminder_config_" + tc.id, JSON.stringify({
-        enabled: true,
-        startDays: 1,
-        anchor: "after_credit",
-        repeat: "escalate",
-        intervalN: 7,
-        intervalUnit: "days",
-        escalation: [
-          { label: "Gentle", tone: "gentle nudge", day: 1 },
-          { label: "Firmer", tone: "firmer follow-up", day: 3 },
-          { label: "Final notice", tone: "final notice", day: 7 },
-        ],
-        ends: "paid",
-        endsDate: null,
-        endsCount: 5,
-      }));
-    }
+  return { ready, future };
+}
+
+function calcTriggerForCategory(config: ReminderConfig, reminder: GeneratedReminder): Date | null {
+  if (config.anchor === "after_due" && reminder.dueDate) {
+    const d = new Date(reminder.dueDate); d.setDate(d.getDate() + config.startDays); return d;
   }
+  if (config.anchor === "before_due" && reminder.dueDate) {
+    const d = new Date(reminder.dueDate); d.setDate(d.getDate() - config.startDays); return d;
+  }
+  return null;
 }

@@ -6,7 +6,7 @@ import { useCustomersStore } from "@/stores/customersStore";
 import { useSalesStore } from "@/stores/salesStore";
 import { useThemeStore } from "@/stores/themeStore";
 import { formatCurrency } from "@/lib/formatters";
-import { generateReminders, generateReminderMessage, seedMockReminderData } from "@/lib/reminderEngine";
+import { generateReminders, generateReminderMessage, loadReminderLogs, logReminder as logReminderToDb } from "@/lib/reminderEngine";
 import type { GeneratedReminder } from "@/types";
 import { MessageCircle, Smartphone, X, ChevronDown, ChevronUp, Bell, CheckCircle2, Clock } from "lucide-react";
 
@@ -259,12 +259,11 @@ export default function RemindersOverviewPage() {
   const customers = useCustomersStore((s) => s.customers);
   const sales = useSalesStore((s) => s.sales);
 
-  useEffect(() => { if (customers.length > 0) seedMockReminderData(customers); }, [customers]);
-
-  const allReminders = useMemo(
-    () => generateReminders({ customers, sales, payments: [] }),
-    [customers, sales]
-  );
+  
+  const [allReminders, setAllReminders] = useState<any[]>([]);
+  useEffect(() => {
+    generateReminders({ customers, sales }).then(setAllReminders);
+  }, [customers, sales]);
 
   const [activeTab, setActiveTab] = useState<TabKey>("ready");
   const [editingReminder, setEditingReminder] = useState<GeneratedReminder | null>(null);
