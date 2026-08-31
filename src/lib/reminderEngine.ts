@@ -19,7 +19,14 @@ export async function loadReminderConfigs(customerId: string): Promise<ReminderC
       repeat: row.repeat_type as ReminderConfig["repeat"],
       intervalN: row.interval_n ?? 7,
       intervalUnit: row.interval_unit as ReminderConfig["intervalUnit"],
-      escalation: row.escalation ?? [],
+      escalation: (() => {
+        const raw = typeof row.escalation === 'string' ? JSON.parse(row.escalation) : (row.escalation ?? []);
+        return Array.isArray(raw) ? raw.map((s: any) => ({
+          label: s.label || s.tone || 'Stage',
+          tone: s.tone || 'nudge',
+          day: s.day ?? 1,
+        })) : [];
+      })(),
       ends: row.ends as ReminderConfig["ends"],
       endsDate: row.ends_date ?? null,
       endsCount: row.ends_count ?? 5,

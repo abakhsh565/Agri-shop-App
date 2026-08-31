@@ -135,9 +135,10 @@ export default function ReminderConfigSheet({ config, onSave, onClose }: Props) 
                   className="w-full h-12 px-4 pr-10 text-[13px] outline-none appearance-none font-medium"
                   style={fieldStyle}
                 >
-                  <option value="after_credit">after credit given</option>
-                  <option value="after_due">after due date</option>
-                  <option value="before_harvest">before harvest season</option>
+              <option value="after_credit">after credit given</option>
+              <option value="before_due">before due date</option>
+              <option value="after_due">after due date</option>
+              <option value="before_harvest">before harvest season</option>
                 </select>
                 <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: "var(--text-secondary)" }} />
               </div>
@@ -164,7 +165,7 @@ export default function ReminderConfigSheet({ config, onSave, onClose }: Props) 
 
           {/* Interval fields */}
           {local.repeat === "interval" && (
-            <div className="pl-4" style={{ borderLeft: "2px solid var(--divider)" }}>
+            <div className="pl-4">
               <div className="flex items-center gap-2">
                 <span className="text-[13px]" style={{ color: "var(--text-secondary)" }}>Every</span>
                 <input
@@ -193,17 +194,17 @@ export default function ReminderConfigSheet({ config, onSave, onClose }: Props) 
 
           {/* Escalation fields */}
           {local.repeat === "escalate" && (
-            <div className="pl-4 flex flex-col gap-3" style={{ borderLeft: "2px solid var(--divider)" }}>
+            <div className="pl-4 flex flex-col gap-3">
               {local.escalation.map((step, i) => (
                 <div key={i} className="flex items-center gap-3">
-                  <span className="text-[13px] w-[88px] shrink-0 font-medium" style={{ color: "var(--text-secondary)" }}>{step.label}</span>
-                  <span className="text-[12px]" style={{ color: "var(--text-secondary)" }}>day</span>
+                  <span className="text-[13px] w-[96px] shrink-0 font-medium" style={{ color: "var(--text-secondary)" }}>{step.label}</span>
+                  <span className="text-[12px]" style={{ color: "var(--text-muted, var(--text-secondary))" }}>day</span>
                   <input
                     type="number"
                     value={step.day}
                     min={0}
                     onChange={(e) => updateEscDay(i, parseInt(e.target.value) || 0)}
-                    className="h-12 px-3 text-sm w-[60px] outline-none font-medium"
+                    className="h-10 px-3 text-[13px] w-[64px] outline-none font-medium"
                     style={fieldStyle}
                   />
                 </div>
@@ -260,7 +261,7 @@ export default function ReminderConfigSheet({ config, onSave, onClose }: Props) 
           {/* Summary */}
           <div
             className="rounded-[14px] p-4 text-[13px] leading-relaxed"
-            style={{ background: "var(--brand-light, #d9f99d)", color: "var(--brand-dark, #65a30d)", border: "1px solid var(--brand, #84cc16)" }}
+            style={{ background: "var(--surface-2)", color: "var(--text-primary)", border: "1px solid var(--brand, #639922)", borderLeft: "3px solid var(--brand, #639922)" }}
           >
             {buildSummary(local)}
           </div>

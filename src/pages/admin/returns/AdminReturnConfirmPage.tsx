@@ -7,7 +7,7 @@ import { formatCurrency } from "@/lib/formatters";
 import type { ReturnItem, Sale } from "@/types";
 import { useUIStore } from "@/stores/uiStore";
 import { useAuthStore } from "@/stores/authStore";
-import { rpcProcessReturn } from "@/lib/db";
+import { supabase } from "@/lib/supabase";
 import { AlertTriangle } from "lucide-react";
 import { notifyReturnProcessed } from "@/lib/notifications";
 
@@ -51,37 +51,68 @@ export default function AdminReturnConfirmPage() {
     }
     setLoading(true);
     try {
-      const rpcItems = items.map((it) => {
-        const src = sale?.items.find((si) => si.id === it.saleItemId);
-        return {
-          saleItemId: it.saleItemId,
-          productId: src?.productId,
-          productName: it.productName,
-          variantId: src?.variantId,
-          variantName: it.variantName,
-          qty: Number(it.qtyToReturn),
-          unitPrice: Number(it.editedUnitPrice),
-          restock: true,
-        };
-      });
+      const returnNumber = 'RET-' + Math.random().toString(36).substring(2, 8).toUpperCase();
+      const totalRefund = liveTotal;
 
-      const idempotencyKey = `ret-${saleId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      // 1. Create the return record
+      const { data: returnRecord, error: retErr } = await supabase
+        .from('returns')
+        .insert({
+          return_number: returnNumber,
+          sale_id: saleId,
+          customer_id: sale?.customerId ?? null,
+          customer_name: sale?.customerName ?? 'Customer',
+          total_refund: totalRefund,
+          resolution,
+          reason: reason.trim(),
+          idempotency_key: `ret-${saleId}-${Date.now()}`,
+          processed_by: currentUser?.id ?? null,
+          processed_by_name: currentUser?.name ?? 'Staff',
+        })
+        .select('id')
+        .single();
 
-      const rpcResult = await rpcProcessReturn({
-        saleId,
-        customerId: sale?.customerId ?? undefined,
-        customerName: sale?.customerName ?? "Customer",
-        resolution,
-        reason: reason.trim(),
-        idempotencyKey,
-        processedBy: currentUser?.id,
-        processedByName: currentUser?.name,
-        items: rpcItems,
-      });
+      if (retErr || !returnRecord) throw new Error(retErr?.message ?? 'Failed to create return record');
+
+      // 2. Insert each return item
+      for (const item of items) {
+        const src = sale?.items.find((si) => si.id === item.saleItemId);
+        const { error: riErr } = await supabase
+          .from('return_items')
+          .insert({
+            return_id: returnRecord.id,
+            sale_item_id: item.saleItemId,
+            product_id: src?.productId ?? null,
+            product_name: item.productName,
+            variant_id: src?.variantId ?? null,
+            variant_name: item.variantName,
+            qty: Number(item.qtyToReturn),
+            unit_price: Number(item.editedUnitPrice),
+            line_total: Number(item.qtyToReturn) * Number(item.editedUnitPrice),
+            restock: true,
+          });
+        if (riErr) throw new Error(riErr.message);
+
+        // 3. Restock the product variant
+        if (src?.variantId) {
+          const { data: variant } = await supabase.from('product_variants').select('stock_qty').eq('id', src.variantId).single();
+          if (variant) {
+            await supabase.from('product_variants').update({ stock_qty: variant.stock_qty + Number(item.qtyToReturn) }).eq('id', src.variantId);
+          }
+        }
+      }
+
+      // 4. If credit note resolution, add to outstanding
+      if (resolution === 'credit_note' && sale?.customerId) {
+        const { data: cust } = await supabase.from('customers').select('outstanding_balance').eq('id', sale.customerId).single();
+        if (cust) {
+          await supabase.from('customers').update({ outstanding_balance: cust.outstanding_balance + totalRefund }).eq('id', sale.customerId);
+        }
+      }
 
       const result = {
-        refundAmount: rpcResult.totalRefund,
-        returnNumber: rpcResult.returnNumber,
+        refundAmount: totalRefund,
+        returnNumber,
         resolution,
         reason: reason.trim(),
         customerName: sale?.customerName ?? "Customer",
@@ -91,7 +122,7 @@ export default function AdminReturnConfirmPage() {
         processedAt: new Date().toISOString(),
         processedBy: currentUser?.name ?? "—",
       };
-      notifyReturnProcessed(sale?.customerName ?? "Customer", rpcResult.totalRefund, saleId ?? "");
+      notifyReturnProcessed(sale?.customerName ?? "Customer", totalRefund, saleId ?? "");
       navigate(`/admin/sales/${saleId}/return/success`, { state: { result }, replace: true });
     } catch (e) {
       addToast(e instanceof Error ? e.message : "Could not process return.", "error");
