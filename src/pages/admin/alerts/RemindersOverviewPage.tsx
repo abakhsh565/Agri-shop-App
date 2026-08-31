@@ -351,10 +351,7 @@ export default function RemindersOverviewPage() {
       message: editMessage,
       channel,
       sentAt: new Date().toISOString(),
-    });
-
-    setSentKeys(prev => new Set([...prev, key]));
-    loadAllReminderLogs().then(setAllLogs);
+    }).then(() => { setSentKeys(prev => new Set([...prev, key])); loadAllReminderLogs().then(setAllLogs); });
     setEditingReminder(null);
   }, [editingReminder, editMessage]);
 
