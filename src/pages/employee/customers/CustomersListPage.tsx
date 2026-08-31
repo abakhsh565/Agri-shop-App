@@ -50,6 +50,7 @@ export default function CustomersListPage() {
   const ready = useCustomersStore((s) => s.ready);
 
   const initialFilter = state?.filter === "credit" ? "credit" : "all";
+  const cropFilter = state?.cropFilter as string | undefined;
   const [creditFilter, setCreditFilter] = useState<"all" | "credit">(initialFilter);
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<SortKey>("outstanding");
@@ -67,10 +68,19 @@ export default function CustomersListPage() {
     return () => document.removeEventListener("mousedown", handleClick);
   }, [showSortMenu]);
 
+  // Load customer crops for filtering
+  const getCustomerCrops = (customerId: string): string[] => {
+    try {
+      const raw = localStorage.getItem("customer_crops_" + customerId);
+      return raw ? JSON.parse(raw) : [];
+    } catch { return []; }
+  };
+
   const filtered = customers.filter((c) =>
     (c.name.toLowerCase().includes(search.toLowerCase()) || c.phone.includes(search)) &&
     !c.isArchived &&
-    (creditFilter === "all" || c.outstandingBalance > 0)
+    (creditFilter === "all" || c.outstandingBalance > 0) &&
+    (!cropFilter || getCustomerCrops(c.id).includes(cropFilter))
   );
 
   const sorted = sortCustomers(filtered, sort);
@@ -178,7 +188,18 @@ export default function CustomersListPage() {
       </div>
 
       {/* Filter chips */}
-      <div className="flex gap-2 px-4 pb-3">
+      <div className="flex gap-2 px-4 pb-3 flex-wrap">
+        {cropFilter && (
+          <div
+            className="h-8 px-3 rounded-full text-xs font-semibold flex items-center gap-1.5"
+            style={{ background: "var(--brand-light, #d9f99d)", color: "var(--brand-dark, #65a30d)" }}
+          >
+            {cropFilter}
+            <button onClick={() => navigate(".", { state: { ...state, cropFilter: undefined } })} className="ml-0.5">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
+        )}
         {[{ key: "all", label: "All Customers" }, { key: "credit", label: "On Credit" }].map((f) => (
           <button
             key={f.key}

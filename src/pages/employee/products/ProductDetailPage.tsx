@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
@@ -416,6 +416,11 @@ function ProductCustomerRecommendations({ productId }: { productId: string }) {
   const products = useProductsStore((s) => s.products);
   const customersReady = useCustomersStore((s) => s.ready);
   const sales = useSalesStore((s) => s.sales);
+
+  // Ensure stores are loaded
+  useEffect(() => {
+    if (!customersReady) useCustomersStore.getState().load();
+  }, [customersReady]);
 
   const product = products.find((p) => p.id === productId);
   if (!product || !customersReady || customers.length === 0) return null;

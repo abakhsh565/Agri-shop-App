@@ -262,49 +262,6 @@ export default function DashboardPage() {
       </div>
 
 
-      {/* ── Quick Alerts ── */}
-      <div className="px-4 pt-4 animate-fade-in-up delay-75">
-        <p className="text-[11px] font-bold uppercase tracking-widest mb-3" style={{ color: "var(--text-secondary)" }}>
-          QUICK ALERTS
-        </p>
-        <div className="flex flex-col gap-2.5">
-          {/* Amber alert — reminders sent today */}
-          <button
-            onClick={() => navigate("/employee/customers")}
-            className="flex items-center gap-3 rounded-[14px] p-4 transition-opacity active:opacity-70 text-left w-full"
-            style={{ background: "#FAEEDA" }}
-          >
-            <div className="size-5 shrink-0 flex items-center justify-center">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#854F0B" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
-                <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
-              </svg>
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-[13px]" style={{ color: "#633806", lineHeight: 1.5 }}>3 pending reminders to send today</p>
-            </div>
-            <span className="text-[13px] font-medium shrink-0" style={{ color: "#854F0B" }}>View</span>
-          </button>
-          {/* Neutral ─ harvest season notice */}
-          <div
-            className="flex items-center gap-3 rounded-[14px] p-4"
-            style={{ background: "#F1EFE8" }}
-          >
-            <div className="size-5 shrink-0 flex items-center justify-center">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#5F5E5A" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <rect width="18" height="18" x="3" y="4" rx="2" ry="2" />
-                <line x1="16" x2="16" y1="2" y2="6" />
-                <line x1="8" x2="8" y1="2" y2="6" />
-                <line x1="3" x2="21" y1="10" y2="10" />
-              </svg>
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-[13px]" style={{ color: "#444441", lineHeight: 1.5 }}>Cotton season starts in 5 days — 14 farmers due for harvest reminders</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
       {/* ── Quick Actions ── */}
       <div className="px-4 pt-4 animate-fade-in-up delay-75">
         <p className="text-[11px] font-bold uppercase tracking-widest mb-3" style={{ color: "var(--text-secondary)" }}>

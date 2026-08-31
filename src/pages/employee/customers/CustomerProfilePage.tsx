@@ -538,6 +538,13 @@ function RecommendedSection({ customerId }: { customerId: string | undefined }) 
   const productsReady = useProductsStore((s) => s.ready);
   const sales = useSalesStore((s) => s.sales);
 
+  // Ensure products are loaded when this component mounts
+  useEffect(() => {
+    if (!productsReady) {
+      useProductsStore.getState().load();
+    }
+  }, [productsReady]);
+
   const customer = customers.find((c) => c.id === customerId);
   if (!customer || !productsReady || products.length === 0) return null;
 

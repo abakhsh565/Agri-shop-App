@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
 import ImageUpload from "@/components/ui/ImageUpload";
+import ReminderConfigSheet from "@/components/ui/ReminderConfigSheet";
 import { useCustomersStore } from "@/stores/customersStore";
 import { useUIStore } from "@/stores/uiStore";
 import { useAuthStore } from "@/stores/authStore";
@@ -10,6 +11,8 @@ import { useT } from "@/lib/i18n";
 import { useThemeStore } from "@/stores/themeStore";
 import { useShellBase } from "@/lib/useShellBase";
 import { clearNav } from "@/lib/navContext";
+import type { ReminderConfig } from "@/types";
+import { Bell } from "lucide-react";
 
 function normalizePhone(p: string): string {
   return p.replace(/[\s\-()]/g, "").replace(/^\+?92/, "0");
@@ -39,6 +42,8 @@ export default function AddCustomerPage() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const [existingCustomerId, setExistingCustomerId] = useState<string | null>(null);
+  const [showReminderConfig, setShowReminderConfig] = useState(false);
+  const [reminderConfig, setReminderConfig] = useState<ReminderConfig | null>(null);
 
   async function handleSave() {
     const errs: Record<string, string> = {};
@@ -192,11 +197,21 @@ export default function AddCustomerPage() {
             />
           </div>
 
-          {/* Credit Limit */}
+          {/* Credit Limit + Reminder Config */}
           <div>
-            <p className="text-[11px] font-bold uppercase mb-2 tracking-wider" style={{ color: "var(--text-secondary)" }}>
-              Credit Limit (Optional)
-            </p>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-[11px] font-bold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
+                Credit Limit (Optional)
+              </p>
+              <button
+                type="button"
+                onClick={() => setShowReminderConfig(true)}
+                className="flex items-center gap-1.5 h-7 px-2.5 rounded-full text-[10px] font-semibold"
+                style={{ background: reminderConfig ? "var(--brand-light, #d9f99d)" : "var(--surface-2)", color: reminderConfig ? "var(--brand-dark, #65a30d)" : "var(--text-secondary)", border: "1px solid var(--divider)" }}
+              >
+                <Bell size={12} /> Reminder
+              </button>
+            </div>
             <input
               type="number"
               inputMode="decimal"
@@ -228,6 +243,18 @@ export default function AddCustomerPage() {
           {loading ? t("common.loading") : t("addCustomer.submit")}
         </button>
       </div>
+
+      {/* Reminder Config Bottom Sheet */}
+      {showReminderConfig && (
+        <ReminderConfigSheet
+          config={reminderConfig}
+          onSave={(config) => {
+            setReminderConfig(config);
+            setShowReminderConfig(false);
+          }}
+          onClose={() => setShowReminderConfig(false)}
+        />
+      )}
     </div>
   );
 }

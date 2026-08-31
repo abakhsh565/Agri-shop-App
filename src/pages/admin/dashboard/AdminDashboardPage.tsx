@@ -576,19 +576,22 @@ export default function AdminDashboardPage() {
             const bizRaw = localStorage.getItem("business_settings");
             const biz = bizRaw ? JSON.parse(bizRaw) : { crops: [] };
             const now = new Date();
-            const harvestAlerts: string[] = [];
+            const harvestAlerts: { text: string; cropName: string }[] = [];
             for (const crop of biz.crops) {
               const harvest = new Date(now.getFullYear(), crop.harvestMonth - 1, crop.harvestDay || 1);
               if (harvest < now) harvest.setFullYear(now.getFullYear() + 1);
               const daysUntil = Math.ceil((harvest.getTime() - now.getTime()) / 86400000);
               if (daysUntil <= 30 && daysUntil > 0) {
                 const affectedCustomers = customers.filter(c => c.outstandingBalance > 0).length;
-                harvestAlerts.push(crop.name + " season starts in " + daysUntil + " days — " + affectedCustomers + " farmer" + (affectedCustomers !== 1 ? "s" : "") + " due for harvest reminders");
+                harvestAlerts.push({
+                  text: crop.name + " season starts in " + daysUntil + " days — " + affectedCustomers + " farmer" + (affectedCustomers !== 1 ? "s" : "") + " due for harvest reminders",
+                  cropName: crop.name,
+                });
               }
             }
             if (harvestAlerts.length > 0) {
-              return harvestAlerts.map((text, i) => (
-                <button key={i} onClick={() => navigate("/admin/customers")} className="flex items-center gap-3 rounded-[14px] p-4 active:opacity-70 w-full text-left" style={{ background: "#F1EFE8" }}>
+              return harvestAlerts.map((alert, i) => (
+                <button key={i} onClick={() => navigate("/admin/customers", { state: { cropFilter: alert.cropName } })} className="flex items-center gap-3 rounded-[14px] p-4 active:opacity-70 w-full text-left" style={{ background: "#F1EFE8" }}>
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#5F5E5A" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
                     <rect width="18" height="18" x="3" y="4" rx="2" ry="2" />
                     <line x1="16" x2="16" y1="2" y2="6" />
@@ -596,7 +599,7 @@ export default function AdminDashboardPage() {
                     <line x1="3" x2="21" y1="10" y2="10" />
                   </svg>
                   <div className="flex-1 min-w-0">
-                    <p className="text-[13px]" style={{ color: "#444441", lineHeight: 1.5 }}>{text}</p>
+                    <p className="text-[13px]" style={{ color: "#444441", lineHeight: 1.5 }}>{alert.text}</p>
                   </div>
                 </button>
               ));
