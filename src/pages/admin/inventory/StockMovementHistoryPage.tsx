@@ -111,7 +111,7 @@ export default function StockMovementHistoryPage() {
                   {mov.variantName} · {movementLabel(mov.type)} {mov.reference ? `· ${mov.reference}` : ""}
                 </p>
               </div>
-              <div className="text-right shrink-0">
+              <div className="text-end shrink-0">
                 <p className="text-sm font-bold" style={{ color: mov.qtyChange > 0 ? "#22c55e" : "var(--error)" }}>
                   {mov.qtyChange > 0 ? "+" : ""}{mov.qtyChange}
                 </p>

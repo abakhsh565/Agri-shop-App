@@ -83,7 +83,7 @@ export default function CompaniesListPage() {
             <button
               key={company.id}
               onClick={() => navigate(`/admin/companies/${company.id}`)}
-              className="flex items-center gap-3 rounded-[14px] p-4 text-left transition-opacity active:opacity-70"
+              className="flex items-center gap-3 rounded-[14px] p-4 text-start transition-opacity active:opacity-70"
               style={{ background: "var(--surface)", border: "1px solid var(--divider)" }}
             >
               {/* Logo circle */}
@@ -135,7 +135,7 @@ export default function CompaniesListPage() {
         <div className={`flex px-4 ${isUrdu ? "justify-start" : "justify-end"}`}>
           <button
             onClick={() => navigate("/admin/companies/new")}
-            className="pointer-events-auto pl-4 pr-5 rounded-full flex items-center gap-2 text-sm font-bold active:scale-95 transition-transform"
+            className="pointer-events-auto ps-4 pe-5 rounded-full flex items-center gap-2 text-sm font-bold active:scale-95 transition-transform"
             style={{ background: "var(--brand)", color: "#0a0a0a", height: "52px", boxShadow: "0 6px 20px rgba(0,0,0,0.25)" }}
           >
             <Plus size={20} strokeWidth={2.5} /> {t("admin.addCompany")}

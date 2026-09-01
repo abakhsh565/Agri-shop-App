@@ -108,7 +108,7 @@ export default function CustomerPaymentHistoryPage() {
                     {isUrdu ? "درج کیا:" : "Rec:"} {p.recordedByName}
                   </p>
                 </div>
-                <div className="text-right">
+                <div className="text-end">
                   <p className="text-sm font-bold" style={{ color: "var(--brand-dark)" }}>
                     -{formatCurrency(p.amount)}
                   </p>

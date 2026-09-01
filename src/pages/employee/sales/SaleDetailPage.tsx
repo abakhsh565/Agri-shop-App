@@ -226,7 +226,7 @@ export default function SaleDetailPage() {
         {/* Customer card */}
         <button
           onClick={() => navigate(`${base}/customers/${sale.customerId}`)}
-          className="flex items-center justify-between rounded-[14px] p-4 text-left w-full transition-opacity active:opacity-70"
+          className="flex items-center justify-between rounded-[14px] p-4 text-start w-full transition-opacity active:opacity-70"
           style={{ border: "1px solid var(--divider)", background: "var(--surface-2)" }}
         >
           <div className="flex items-center gap-3">

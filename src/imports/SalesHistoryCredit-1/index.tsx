@@ -224,7 +224,7 @@ function StatusCredit() {
 function SaleMeta() {
   return (
     <div className="content-stretch flex gap-[12px] items-center relative shrink-0" data-name="sale-meta">
-      <p className="[word-break:break-word] font-['Geist:Bold',sans-serif] font-bold leading-[normal] relative shrink-0 text-[14px] text-black text-right whitespace-nowrap">Rs. 14,000</p>
+      <p className="[word-break:break-word] font-['Geist:Bold',sans-serif] font-bold leading-[normal] relative shrink-0 text-[14px] text-black text-end whitespace-nowrap">Rs. 14,000</p>
       <StatusCredit />
     </div>
   );
@@ -261,7 +261,7 @@ function StatusCredit1() {
 function SaleMeta1() {
   return (
     <div className="content-stretch flex gap-[12px] items-center relative shrink-0" data-name="sale-meta">
-      <p className="[word-break:break-word] font-['Geist:Bold',sans-serif] font-bold leading-[normal] relative shrink-0 text-[14px] text-black text-right whitespace-nowrap">Rs. 22,500</p>
+      <p className="[word-break:break-word] font-['Geist:Bold',sans-serif] font-bold leading-[normal] relative shrink-0 text-[14px] text-black text-end whitespace-nowrap">Rs. 22,500</p>
       <StatusCredit1 />
     </div>
   );

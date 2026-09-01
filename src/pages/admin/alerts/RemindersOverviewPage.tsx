@@ -6,6 +6,7 @@ import { useCustomersStore } from "@/stores/customersStore";
 import { useSalesStore } from "@/stores/salesStore";
 import { useThemeStore } from "@/stores/themeStore";
 import { formatCurrency } from "@/lib/formatters";
+import { useT } from "@/lib/i18n";
 import { generateReminders, generateReminderMessage } from "@/lib/reminderEngine";
 import type { GeneratedReminder } from "@/types";
 import { MessageCircle, Smartphone, X, ChevronDown, ChevronUp, Bell, CheckCircle2, Clock } from "lucide-react";
@@ -80,9 +81,9 @@ const TONE_CONFIG: Record<string, { color: string; bg: string; label: string }> 
 };
 
 const TAB_CONFIG = [
-  { key: "ready", label: "Ready to Send", icon: MessageCircle },
-  { key: "future", label: "Future Ready", icon: Clock },
-  { key: "sent", label: "Recently Sent", icon: CheckCircle2 },
+  { key: "ready", labelKey: "common.readyToSend" as const, icon: MessageCircle },
+  { key: "future", labelKey: "common.futureReady" as const, icon: Clock },
+  { key: "sent", labelKey: "common.recentlySent" as const, icon: CheckCircle2 },
 ] as const;
 
 type TabKey = typeof TAB_CONFIG[number]["key"];
@@ -142,7 +143,7 @@ function ReminderCard({
     >
       {/* Card header — always visible */}
       <button
-        className="w-full flex items-center gap-3 p-4 text-left"
+        className="w-full flex items-center gap-3 p-4 text-start"
         onClick={() => setExpanded(!expanded)}
       >
         {/* Avatar */}
@@ -164,7 +165,7 @@ function ReminderCard({
         </div>
 
         {/* Chevron */}
-        <div className="shrink-0 ml-1">
+        <div className="shrink-0 ms-1">
           {expanded ? (
             <ChevronUp size={18} style={{ color: "var(--text-secondary)" }} />
           ) : (
@@ -274,6 +275,7 @@ function ActivityItem({ log }: { log: ReminderLogEntry }) {
 /* ── Main page ── */
 export default function RemindersOverviewPage() {
   const navigate = useNavigate();
+  const t = useT();
   const { language } = useThemeStore();
   const isUrdu = language === "ur";
   const customers = useCustomersStore((s) => s.customers);
@@ -467,7 +469,7 @@ export default function RemindersOverviewPage() {
                 }}
               >
                 <Icon size={14} />
-                {tab.label}
+                {t(tab.labelKey)}
               </button>
             );
           })}

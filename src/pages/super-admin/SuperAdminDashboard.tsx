@@ -132,7 +132,7 @@ export default function SuperAdminDashboard() {
             {tab.label}
             {counts[tab.key] > 0 && (
               <span
-                className="ml-1 w-5 h-5 rounded-full text-[10px] flex items-center justify-center font-bold"
+                className="ms-1 w-5 h-5 rounded-full text-[10px] flex items-center justify-center font-bold"
                 style={{
                   background: activeTab === tab.key ? "rgba(0,0,0,0.15)" : "var(--divider)",
                 }}
@@ -165,7 +165,7 @@ export default function SuperAdminDashboard() {
               <button
                 key={req.id}
                 onClick={() => setSelectedRequest(req)}
-                className="flex items-center gap-3 p-3 rounded-[14px] text-left transition-all active:scale-[0.98]"
+                className="flex items-center gap-3 p-3 rounded-[14px] text-start transition-all active:scale-[0.98]"
                 style={{ background: "var(--surface)" }}
               >
                 {/* Shop Logo/Initials */}

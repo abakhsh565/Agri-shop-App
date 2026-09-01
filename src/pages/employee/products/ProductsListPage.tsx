@@ -122,7 +122,7 @@ export default function ProductsListPage() {
               <button
                 key={p.id}
                 onClick={() => navigate(`${base}/products/${p.id}`)}
-                className="flex items-center justify-between px-4 py-4 text-left transition-opacity active:opacity-70"
+                className="flex items-center justify-between px-4 py-4 text-start transition-opacity active:opacity-70"
                 style={{ borderBottom: i < filtered.length - 1 ? "1px solid var(--divider)" : "none" }}
               >
                 <div className="flex items-center gap-3">
@@ -180,7 +180,7 @@ export default function ProductsListPage() {
           <div className={`flex px-4 ${isUrdu ? "justify-start" : "justify-end"}`}>
             <button
               onClick={() => navigate("/admin/inventory/new")}
-              className="pointer-events-auto h-13 pl-4 pr-5 rounded-full flex items-center gap-2 text-sm font-bold shadow-lg active:scale-95 transition-transform"
+              className="pointer-events-auto h-13 ps-4 pe-5 rounded-full flex items-center gap-2 text-sm font-bold shadow-lg active:scale-95 transition-transform"
               style={{ background: "var(--brand)", color: "#0a0a0a", height: "52px", boxShadow: "0 6px 20px rgba(0,0,0,0.25)" }}
             >
               <Plus size={20} strokeWidth={2.5} /> Product

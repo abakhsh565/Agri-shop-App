@@ -56,7 +56,7 @@ export default function SelectCustomerPage() {
           <button
             key={c.id}
             onClick={() => select(c)}
-            className={`flex items-center gap-3 px-4 py-4 text-left ${
+            className={`flex items-center gap-3 px-4 py-4 text-start ${
               i < filtered.length - 1 ? "border-b border-[#e5e5e5]" : ""
             }`}
           >
@@ -72,7 +72,7 @@ export default function SelectCustomerPage() {
               <p className="text-sm font-bold text-black truncate">{c.name}</p>
               <p className="text-xs text-[#888]">{c.phone}</p>
             </div>
-            <div className="text-right">
+            <div className="text-end">
               {c.outstandingBalance > 0 ? (
                 <p className="text-xs font-medium text-black">{formatCurrency(c.outstandingBalance)} due</p>
               ) : (

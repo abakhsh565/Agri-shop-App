@@ -90,7 +90,7 @@ export default function SelectSheet({
                 <button
                   key={o.value}
                   onClick={() => { onSelect(o.value); onClose(); }}
-                  className="flex items-center justify-between w-full px-3 py-3.5 rounded-[12px] text-left active:opacity-70"
+                  className="flex items-center justify-between w-full px-3 py-3.5 rounded-[12px] text-start active:opacity-70"
                   style={{ background: isSel ? "rgba(132,204,22,0.1)" : "transparent" }}
                 >
                   <div className="flex items-center gap-3 min-w-0">

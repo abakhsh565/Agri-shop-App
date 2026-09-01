@@ -121,7 +121,7 @@ export default function RegisterShopDetailsPage() {
               <button
                 key={t.key}
                 onClick={() => setShopType(t.key)}
-                className="flex items-start gap-3 p-4 rounded-[14px] text-left transition-colors"
+                className="flex items-start gap-3 p-4 rounded-[14px] text-start transition-colors"
                 style={{
                   background: "var(--surface)",
                   border: `1.5px solid ${shopType === t.key ? "var(--brand)" : "var(--divider)"}`,

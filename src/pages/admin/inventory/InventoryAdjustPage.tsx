@@ -128,7 +128,7 @@ export default function InventoryAdjustPage() {
                   <button
                     key={v.id}
                     onClick={() => { setVariantId(v.id); force((n) => n + 1); }}
-                    className="flex items-center justify-between p-3.5 rounded-[14px] text-left transition-colors"
+                    className="flex items-center justify-between p-3.5 rounded-[14px] text-start transition-colors"
                     style={{ background: "var(--surface)", border: `1.5px solid ${selected ? "var(--brand)" : "var(--divider)"}` }}
                   >
                     <div>

@@ -334,7 +334,7 @@ export default function AdminDashboardPage() {
                           <button
                             key={n.id}
                             onClick={() => { if (route) { navigate(route); setShowNotifs(false); } }}
-                            className="w-full text-left px-4 py-3 active:bg-black/5 transition-colors"
+                            className="w-full text-start px-4 py-3 active:bg-black/5 transition-colors"
                             style={{ borderBottom: "1px solid var(--divider)" }}
                           >
                             <div className="flex items-start gap-2">
@@ -378,7 +378,7 @@ export default function AdminDashboardPage() {
       {/* ── Total Sales card (lime hero): Total Sales · Transactions · Gross Profit ── */}
       <div className="px-4 animate-fade-in-up">
         <button
-          className="w-full rounded-[16px] p-5 text-left transition-transform active:scale-[0.98]"
+          className="w-full rounded-[16px] p-5 text-start transition-transform active:scale-[0.98]"
           style={{ background: "var(--brand)" }}
           onClick={() => navigate("/admin/sales")}
         >
@@ -496,7 +496,7 @@ export default function AdminDashboardPage() {
                   {totalPayable > 0 && (
                     <button
                       onClick={() => navigate("/admin/companies")}
-                      className="flex items-start gap-3 rounded-[14px] p-4 transition-opacity active:opacity-70 text-left w-full"
+                      className="flex items-start gap-3 rounded-[14px] p-4 transition-opacity active:opacity-70 text-start w-full"
                       style={{ background: "#FCEBEB" }}
                     >
                       <AlertTriangle size={20} color="#A32D2D" className="mt-0.5 shrink-0" />
@@ -514,7 +514,7 @@ export default function AdminDashboardPage() {
                   {delayedCount > 0 && (
                     <button
                       onClick={() => navigate("/admin/customers", { state: { paymentStatus: "delayed" } })}
-                      className="flex items-start gap-3 rounded-[14px] p-4 transition-opacity active:opacity-70 text-left w-full"
+                      className="flex items-start gap-3 rounded-[14px] p-4 transition-opacity active:opacity-70 text-start w-full"
                       style={{ background: "#FCEBEB" }}
                     >
                       <AlertTriangle size={20} color="#A32D2D" className="mt-0.5 shrink-0" />
@@ -532,7 +532,7 @@ export default function AdminDashboardPage() {
                   {highRiskCount > 0 && (
                     <button
                       onClick={() => navigate("/admin/customers", { state: { paymentStatus: "high_risk" } })}
-                      className="flex items-start gap-3 rounded-[14px] p-4 transition-opacity active:opacity-70 text-left w-full"
+                      className="flex items-start gap-3 rounded-[14px] p-4 transition-opacity active:opacity-70 text-start w-full"
                       style={{ background: "#FCEBEB" }}
                     >
                       <AlertTriangle size={20} color="#A32D2D" className="mt-0.5 shrink-0" />
@@ -550,7 +550,7 @@ export default function AdminDashboardPage() {
                   {creditLimitReached > 0 && (
                     <button
                       onClick={() => navigate("/admin/alerts/credit-overrides")}
-                      className="flex items-start gap-3 rounded-[14px] p-4 transition-opacity active:opacity-70 text-left w-full"
+                      className="flex items-start gap-3 rounded-[14px] p-4 transition-opacity active:opacity-70 text-start w-full"
                       style={{ background: "#FCEBEB" }}
                     >
                       <AlertTriangle size={20} color="#A32D2D" className="mt-0.5 shrink-0" />
@@ -588,7 +588,7 @@ export default function AdminDashboardPage() {
                   {dueReminderCount > 0 && (
                     <button
                       onClick={() => navigate("/admin/alerts/reminders")}
-                      className="flex items-center gap-3 rounded-[14px] p-4 transition-opacity active:opacity-70 text-left w-full"
+                      className="flex items-center gap-3 rounded-[14px] p-4 transition-opacity active:opacity-70 text-start w-full"
                       style={{ background: "#FAEEDA" }}
                     >
                       <Bell size={20} color="#854F0B" className="shrink-0" />
@@ -602,7 +602,7 @@ export default function AdminDashboardPage() {
                   {lowStockCount > 0 && (
                     <button
                       onClick={() => navigate("/admin/alerts/inventory")}
-                      className="flex items-center gap-3 rounded-[14px] p-4 transition-opacity active:opacity-70 text-left w-full"
+                      className="flex items-center gap-3 rounded-[14px] p-4 transition-opacity active:opacity-70 text-start w-full"
                       style={{ background: "#FAEEDA" }}
                     >
                       <AlertTriangle size={20} color="#854F0B" className="shrink-0" />
@@ -645,7 +645,7 @@ export default function AdminDashboardPage() {
             }
             if (harvestAlerts.length > 0) {
               return harvestAlerts.map((alert, i) => (
-                <button key={i} onClick={() => navigate("/admin/customers", { state: { cropFilter: alert.cropName } })} className="flex items-center gap-3 rounded-[14px] p-4 active:opacity-70 w-full text-left" style={{ background: "#F1EFE8" }}>
+                <button key={i} onClick={() => navigate("/admin/customers", { state: { cropFilter: alert.cropName } })} className="flex items-center gap-3 rounded-[14px] p-4 active:opacity-70 w-full text-start" style={{ background: "#F1EFE8" }}>
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#5F5E5A" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
                     <rect width="18" height="18" x="3" y="4" rx="2" ry="2" />
                     <line x1="16" x2="16" y1="2" y2="6" />
@@ -682,7 +682,7 @@ export default function AdminDashboardPage() {
               <button
                 key={emp.id}
                 onClick={() => navigate("/admin/sales", { state: { employeeId: emp.id, dateFilter } })}
-                className="flex items-center justify-between px-4 py-3 w-full text-left transition-opacity active:opacity-70"
+                className="flex items-center justify-between px-4 py-3 w-full text-start transition-opacity active:opacity-70"
                 style={{ borderBottom: i < empStats.length - 1 ? "1px solid var(--divider)" : "none" }}
               >
                 <div className="flex items-center gap-3">
@@ -730,7 +730,7 @@ export default function AdminDashboardPage() {
               <button
                 key={sale.id}
                 onClick={() => navigate(`/admin/sales/${sale.id}`)}
-                className="flex items-center justify-between px-4 py-3.5 w-full text-left transition-colors active:opacity-70"
+                className="flex items-center justify-between px-4 py-3.5 w-full text-start transition-colors active:opacity-70"
                 style={{
                   borderBottom: i < recentSales.length - 1 ? "1px solid var(--divider)" : "none",
                   background: "var(--background)",

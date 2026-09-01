@@ -185,7 +185,7 @@ export default function CustomerPurchaseHistoryPage() {
             <button
               key={sale.id}
               onClick={() => navigate(`${base}/sales/${sale.id}`)}
-              className="py-4 text-left transition-opacity active:opacity-70"
+              className="py-4 text-start transition-opacity active:opacity-70"
               style={{ borderBottom: i < filtered.length - 1 ? "1px solid var(--divider)" : "none" }}
             >
               <div className="flex justify-between items-start">
@@ -197,7 +197,7 @@ export default function CustomerPurchaseHistoryPage() {
                     {sale.items.map((it) => it.productName).join(", ")}
                   </p>
                 </div>
-                <div className="flex flex-col items-end gap-1 ml-3">
+                <div className="flex flex-col items-end gap-1 ms-3">
                   <span className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>
                     {formatCurrency(sale.totalAmount)}
                   </span>

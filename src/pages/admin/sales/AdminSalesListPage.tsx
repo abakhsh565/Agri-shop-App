@@ -210,7 +210,7 @@ export default function AdminSalesListPage() {
                 <button
                   key={opt.key}
                   onClick={() => { setSort(opt.key); setShowSortMenu(false); }}
-                  className="flex items-center justify-between w-full px-4 py-3.5 text-left transition-colors active:bg-black/5"
+                  className="flex items-center justify-between w-full px-4 py-3.5 text-start transition-colors active:bg-black/5"
                   style={{ borderBottom: "1px solid var(--divider)" }}
                 >
                   <span className="text-[13px] font-medium" style={{ color: sort === opt.key ? "var(--brand-dark)" : "var(--text-primary)" }}>
@@ -386,7 +386,7 @@ export default function AdminSalesListPage() {
                   <button
                     key={sale.id}
                     onClick={() => navigate(`/admin/sales/${sale.id}`)}
-                    className="flex items-center justify-between px-4 py-3.5 w-full text-left transition-opacity active:opacity-70"
+                    className="flex items-center justify-between px-4 py-3.5 w-full text-start transition-opacity active:opacity-70"
                     style={{ borderBottom: i < section.sales.length - 1 ? "1px solid var(--divider)" : "none" }}
                   >
                     <div className="flex items-center gap-3 flex-1 min-w-0">

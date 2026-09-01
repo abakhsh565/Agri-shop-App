@@ -155,7 +155,7 @@ export default function CompanyDetailPage() {
                     <p className="text-[11px]" style={{ color: "var(--text-secondary)" }}>{formatDate(p.createdAt)}</p>
                   </div>
                 </div>
-                <div className="text-right">
+                <div className="text-end">
                   <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>{formatCurrency(p.totalAmount)}</p>
                   {p.outstandingPayable > 0 && (
                     <p className="text-[11px]" style={{ color: "var(--error)" }}>{formatCurrency(p.outstandingPayable)} payable</p>

@@ -223,7 +223,7 @@ function StatusPaid() {
 function SaleMeta() {
   return (
     <div className="content-stretch flex gap-[12px] items-center relative shrink-0" data-name="sale-meta">
-      <p className="[word-break:break-word] font-['Geist:Bold',sans-serif] font-bold leading-[normal] relative shrink-0 text-[14px] text-black text-right whitespace-nowrap">Rs. 9,200</p>
+      <p className="[word-break:break-word] font-['Geist:Bold',sans-serif] font-bold leading-[normal] relative shrink-0 text-[14px] text-black text-end whitespace-nowrap">Rs. 9,200</p>
       <StatusPaid />
     </div>
   );
@@ -260,7 +260,7 @@ function StatusCredit() {
 function SaleMeta1() {
   return (
     <div className="content-stretch flex gap-[12px] items-center relative shrink-0" data-name="sale-meta">
-      <p className="[word-break:break-word] font-['Geist:Bold',sans-serif] font-bold leading-[normal] relative shrink-0 text-[14px] text-black text-right whitespace-nowrap">Rs. 14,000</p>
+      <p className="[word-break:break-word] font-['Geist:Bold',sans-serif] font-bold leading-[normal] relative shrink-0 text-[14px] text-black text-end whitespace-nowrap">Rs. 14,000</p>
       <StatusCredit />
     </div>
   );
@@ -296,7 +296,7 @@ function StatusPaid1() {
 function SaleMeta2() {
   return (
     <div className="content-stretch flex gap-[12px] items-center relative shrink-0" data-name="sale-meta">
-      <p className="[word-break:break-word] font-['Geist:Bold',sans-serif] font-bold leading-[normal] relative shrink-0 text-[14px] text-black text-right whitespace-nowrap">Rs. 4,500</p>
+      <p className="[word-break:break-word] font-['Geist:Bold',sans-serif] font-bold leading-[normal] relative shrink-0 text-[14px] text-black text-end whitespace-nowrap">Rs. 4,500</p>
       <StatusPaid1 />
     </div>
   );
@@ -333,7 +333,7 @@ function StatusCredit1() {
 function SaleMeta3() {
   return (
     <div className="content-stretch flex gap-[12px] items-center relative shrink-0" data-name="sale-meta">
-      <p className="[word-break:break-word] font-['Geist:Bold',sans-serif] font-bold leading-[normal] relative shrink-0 text-[14px] text-black text-right whitespace-nowrap">Rs. 22,500</p>
+      <p className="[word-break:break-word] font-['Geist:Bold',sans-serif] font-bold leading-[normal] relative shrink-0 text-[14px] text-black text-end whitespace-nowrap">Rs. 22,500</p>
       <StatusCredit1 />
     </div>
   );
@@ -369,7 +369,7 @@ function StatusPaid2() {
 function SaleMeta4() {
   return (
     <div className="content-stretch flex gap-[12px] items-center relative shrink-0" data-name="sale-meta">
-      <p className="[word-break:break-word] font-['Geist:Bold',sans-serif] font-bold leading-[normal] relative shrink-0 text-[14px] text-black text-right whitespace-nowrap">Rs. 6,800</p>
+      <p className="[word-break:break-word] font-['Geist:Bold',sans-serif] font-bold leading-[normal] relative shrink-0 text-[14px] text-black text-end whitespace-nowrap">Rs. 6,800</p>
       <StatusPaid2 />
     </div>
   );
@@ -405,7 +405,7 @@ function StatusPaid3() {
 function SaleMeta5() {
   return (
     <div className="content-stretch flex gap-[12px] items-center relative shrink-0" data-name="sale-meta">
-      <p className="[word-break:break-word] font-['Geist:Bold',sans-serif] font-bold leading-[normal] relative shrink-0 text-[14px] text-black text-right whitespace-nowrap">Rs. 11,200</p>
+      <p className="[word-break:break-word] font-['Geist:Bold',sans-serif] font-bold leading-[normal] relative shrink-0 text-[14px] text-black text-end whitespace-nowrap">Rs. 11,200</p>
       <StatusPaid3 />
     </div>
   );

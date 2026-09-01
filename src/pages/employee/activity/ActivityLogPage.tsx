@@ -144,7 +144,7 @@ export default function ActivityLogPage() {
               {allActivities.length} events
             </p>
           </div>
-          <div className="text-right">
+          <div className="text-end">
             <p className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
               Sales Volume
             </p>
@@ -187,7 +187,7 @@ export default function ActivityLogPage() {
             <button
               key={activity.id}
               onClick={() => activity.linkPath && navigate(activity.linkPath)}
-              className="flex items-start gap-3 p-3 rounded-xl text-left transition-all active:scale-[0.98] animate-fade-in-up"
+              className="flex items-start gap-3 p-3 rounded-xl text-start transition-all active:scale-[0.98] animate-fade-in-up"
               style={{
                 background: "var(--surface-2)",
                 animationDelay: `${i * 40}ms`,
@@ -223,7 +223,7 @@ export default function ActivityLogPage() {
 
               {/* Amount */}
               {activity.amount != null && (
-                <div className="text-right shrink-0">
+                <div className="text-end shrink-0">
                   <p className="text-[13px] font-bold" style={{ color: "var(--text-primary)" }}>
                     {formatCurrency(activity.amount)}
                   </p>

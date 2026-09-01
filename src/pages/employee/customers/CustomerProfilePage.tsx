@@ -10,6 +10,7 @@ import { fetchCustomerPayments } from "@/lib/db";
 import type { CustomerPayment } from "@/types";
 import { formatCurrency, calculateCreditHealth, getCreditHealthStatusColor } from "@/lib/formatters";
 import { useThemeStore } from "@/stores/themeStore";
+import { useT } from "@/lib/i18n";
 import { useShellBase } from "@/lib/useShellBase";
 import { History, Wallet, Bell, Pencil, Trash2, Receipt, Plus } from "lucide-react";
 import { getRecommendationsForCustomer, KNOWN_CROPS } from "@/lib/recommendationEngine";
@@ -30,6 +31,7 @@ export default function CustomerProfilePage() {
   const { customerId } = useParams();
   const navigate = useNavigate();
   const base = useShellBase();
+  const t = useT();
   const { language } = useThemeStore();
   const isUrdu = language === "ur";
   const customer = useCustomersStore((s) => s.customers.find((c) => c.id === customerId));
@@ -204,7 +206,7 @@ export default function CustomerProfilePage() {
   const riskDot = getPaymentStatusColor(paymentStatus).color;
   const riskBg = getPaymentStatusColor(paymentStatus).bg;
   const riskTextColor = getPaymentStatusColor(paymentStatus).color;
-  const riskLabel = getPaymentStatusLabel(paymentStatus);
+  const riskLabel = getPaymentStatusLabel(paymentStatus, isUrdu);
 
   // Credit bar color
   const utilColor = usagePct >= 80 ? "#ef4444" : usagePct >= 50 ? "#f59e0b" : "#639922";
@@ -217,7 +219,7 @@ export default function CustomerProfilePage() {
       style={{ background: "var(--background)", direction: isUrdu ? "rtl" : "ltr" }}
     >
       <StatusBar />
-      <NavHeader title="Customer details" />
+      <NavHeader title={t("customerProfile.title")} />
 
       <div className="flex flex-col gap-3.5 px-4 pt-3 pb-8">
 
@@ -273,19 +275,19 @@ export default function CustomerProfilePage() {
           style={{ border: "0.5px solid #E5E4DE", background: "#fff" }}
         >
           <div className="flex-1 text-center py-3.5" style={{ borderRight: "0.5px solid #E5E4DE" }}>
-            <p className="text-[10px] tracking-[0.5px] font-medium" style={{ color: "#8A8A85" }}>PURCHASES</p>
+            <p className="text-[10px] tracking-[0.5px] font-medium" style={{ color: "#8A8A85" }}>{t("customerProfile.purchases")}</p>
             <p className="text-[15px] font-bold mt-1" style={{ color: "#1A1A1A" }}>
               {formatCurrency(customer.totalPurchases || customerSales.reduce((a, s) => a + s.totalAmount, 0))}
             </p>
           </div>
           <div className="flex-1 text-center py-3.5" style={{ borderRight: "0.5px solid #E5E4DE" }}>
-            <p className="text-[10px] tracking-[0.5px] font-medium" style={{ color: "#8A8A85" }}>PAID</p>
+            <p className="text-[10px] tracking-[0.5px] font-medium" style={{ color: "#8A8A85" }}>{t("customerProfile.paid")}</p>
             <p className="text-[15px] font-bold mt-1" style={{ color: "#1A1A1A" }}>
               {formatCurrency(effectivePaid)}
             </p>
           </div>
           <div className="flex-1 text-center py-3.5">
-            <p className="text-[10px] tracking-[0.5px] font-medium" style={{ color: "#8A8A85" }}>OUTSTANDING</p>
+            <p className="text-[10px] tracking-[0.5px] font-medium" style={{ color: "#8A8A85" }}>{t("customerProfile.outstanding")}</p>
             <p className="text-[15px] font-bold mt-1" style={{ color: "#D97706" }}>
               {formatCurrency(customer.outstandingBalance)}
             </p>
@@ -301,7 +303,7 @@ export default function CustomerProfilePage() {
         >
           {/* Credit Limit — horizontal alignment */}
           <div className="flex items-center justify-between">
-            <span className="text-[12px] font-medium tracking-[0.5px]" style={{ color: "#5A5A55" }}>CREDIT LIMIT</span>
+            <span className="text-[12px] font-medium tracking-[0.5px]" style={{ color: "#5A5A55" }}>{t("customerProfile.creditLimit")}</span>
             <span className="text-[15px] font-bold" style={{ color: "#1A1A1A" }}>
               {customer.creditLimit > 0 ? formatCurrency(customer.creditLimit) : "\u2014"}
             </span>
@@ -318,7 +320,7 @@ export default function CustomerProfilePage() {
               </div>
               <div className="flex justify-between mt-1.5">
                 <span className="text-[11px]" style={{ color: "#8A8A85" }}>
-                  {formatCurrency(customer.outstandingBalance)} of {formatCurrency(customer.creditLimit)} used
+                  {formatCurrency(customer.outstandingBalance)} {t("customerProfile.of")} {formatCurrency(customer.creditLimit)} {t("customerProfile.used")}
                 </span>
                 <span className="text-[11px] font-bold" style={{ color: "#3B6D11" }}>{usagePct}%</span>
               </div>
@@ -329,24 +331,24 @@ export default function CustomerProfilePage() {
           <div className="mt-3 pt-3" style={{ borderTop: "0.5px solid #E5E4DE" }}>
             <div className="flex justify-between items-center">
               <div>
-                <p className="text-[11px] font-medium tracking-wider" style={{ color: "#8A8A85" }}>DUE DATE</p>
+                <p className="text-[11px] font-medium tracking-wider" style={{ color: "#8A8A85" }}>{t("customerProfile.dueDate")}</p>
                 <p className="text-[14px] font-bold mt-0.5" style={{ color: customer.dueDate ? "#1A1A1A" : "#8A8A85" }}>
                   {customer.dueDate ? new Date(customer.dueDate).toLocaleDateString("en-PK", { day: "numeric", month: "short", year: "numeric" }) : "Not set"}
                 </p>
               </div>
               <button onClick={() => { setEditDueDate(customer.dueDate || ""); setShowEditDueDate(true); }} className="text-[12px] font-semibold px-3 py-1.5 rounded-full" style={{ background: "#F1EFE8", color: "#5A5A55" }}>
-                {customer.dueDate ? "Edit" : "Set"}
+                {customer.dueDate ? t("customerProfile.edit") : t("common.save")}
               </button>
             </div>
           </div>
           {/* Reminder schedules */}
           <div className="mt-3 pt-3" style={{ borderTop: "0.5px solid #E5E4DE" }}>
             <div className="flex justify-between items-center mb-2">
-              <p className="text-[11px] font-medium tracking-wider" style={{ color: "#8A8A85" }}>REMINDERS</p>
-              <button onClick={() => { setEditingConfig(null); setShowReminderConfig(true); }} className="text-[12px] font-semibold px-3 py-1.5 rounded-full" style={{ background: "#F1EFE8", color: "#5A5A55" }}>+ Add</button>
+              <p className="text-[11px] font-medium tracking-wider" style={{ color: "#8A8A85" }}>{t("customerProfile.reminders")}</p>
+              <button onClick={() => { setEditingConfig(null); setShowReminderConfig(true); }} className="text-[12px] font-semibold px-3 py-1.5 rounded-full" style={{ background: "#F1EFE8", color: "#5A5A55" }}>{t("customerProfile.add")}</button>
             </div>
             {reminderConfigs.length === 0 ? (
-              <p className="text-[12px] py-1" style={{ color: "#8A8A85" }}>No reminders configured</p>
+              <p className="text-[12px] py-1" style={{ color: "#8A8A85" }}>{t("common.noRemindersConfigured")}</p>
             ) : (
               <div className="flex flex-col gap-1.5">
                 {reminderConfigs.map((cfg: ReminderConfig) => (
@@ -385,7 +387,7 @@ export default function CustomerProfilePage() {
             style={{ borderBottom: "0.5px solid #E5E4DE" }}
           >
             <History size={18} color="#639922" />
-            <span className="flex-1 text-left text-[14px]" style={{ color: "#1A1A1A" }}>Purchase History</span>
+            <span className="flex-1 text-start text-[14px]" style={{ color: "#1A1A1A" }}>{t("customerProfile.purchaseHistory")}</span>
           </button>
 
           {/* Payment History */}
@@ -395,7 +397,7 @@ export default function CustomerProfilePage() {
             style={{ borderBottom: "0.5px solid #E5E4DE" }}
           >
             <Wallet size={18} color="#639922" />
-            <span className="flex-1 text-left text-[14px]" style={{ color: "#1A1A1A" }}>Payment History</span>
+            <span className="flex-1 text-start text-[14px]" style={{ color: "#1A1A1A" }}>{t("customerProfile.paymentHistory")}</span>
           </button>
 
           {/* Reminder History */}
@@ -405,7 +407,7 @@ export default function CustomerProfilePage() {
             style={{ borderBottom: "0.5px solid #E5E4DE" }}
           >
             <Bell size={18} color="#639922" />
-            <span className="flex-1 text-left text-[14px]" style={{ color: "#1A1A1A" }}>Reminder History</span>
+            <span className="flex-1 text-start text-[14px]" style={{ color: "#1A1A1A" }}>{t("customerProfile.reminderHistory")}</span>
           </button>
 
           {/* Record Payment — green highlight */}
@@ -415,7 +417,7 @@ export default function CustomerProfilePage() {
             style={{ borderBottom: "0.5px solid #E5E4DE", background: "#F2F8EC" }}
           >
             <Receipt size={18} color="#3B6D11" />
-            <span className="flex-1 text-left text-[14px] font-medium" style={{ color: "#3B6D11" }}>Record Payment</span>
+            <span className="flex-1 text-start text-[14px] font-medium" style={{ color: "#3B6D11" }}>{t("customerProfile.recordPayment")}</span>
           </button>
 
           {/* Edit Customer */}
@@ -425,7 +427,7 @@ export default function CustomerProfilePage() {
             style={{ borderBottom: "0.5px solid #E5E4DE" }}
           >
             <Pencil size={18} color="#639922" />
-            <span className="flex-1 text-left text-[14px]" style={{ color: "#1A1A1A" }}>Edit Customer</span>
+            <span className="flex-1 text-start text-[14px]" style={{ color: "#1A1A1A" }}>{t("customerProfile.editCustomer")}</span>
           </button>
 
           {/* Delete Customer */}
@@ -434,7 +436,7 @@ export default function CustomerProfilePage() {
             className="w-full flex items-center gap-3 px-4 py-3.5"
           >
             <Trash2 size={18} color="#D64545" />
-            <span className="flex-1 text-left text-[14px]" style={{ color: "#D64545" }}>Delete Customer</span>
+            <span className="flex-1 text-start text-[14px]" style={{ color: "#D64545" }}>{t("customerProfile.deleteCustomer")}</span>
           </button>
         </div>
 
@@ -465,16 +467,16 @@ export default function CustomerProfilePage() {
             style={{ background: "var(--surface)", maxHeight: "90vh" }}
             onClick={(e) => e.stopPropagation()}
           >
-            <p className="text-base font-bold" style={{ color: "var(--text-primary)" }}>Edit Customer</p>
+            <p className="text-base font-bold" style={{ color: "var(--text-primary)" }}>{t("common.editCustomer")}</p>
 
             {/* Image on top */}
             <div className="flex justify-center">
-              <ImageUpload bucket="customer-images" value={editImageUrl} onChange={setEditImageUrl} shape="circle" label="Profile Photo" />
+              <ImageUpload bucket="customer-images" value={editImageUrl} onChange={setEditImageUrl} shape="circle" label={t("common.profilePhoto")} />
             </div>
 
             <div className="flex flex-col gap-3">
               <div>
-                <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1.5" style={{ color: "var(--text-secondary)" }}>Name</label>
+                <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1.5" style={{ color: "var(--text-secondary)" }}>{t("addCustomer.name")}</label>
                 <input
                   value={editName}
                   onChange={(e) => setEditName(e.target.value)}
@@ -483,7 +485,7 @@ export default function CustomerProfilePage() {
                 />
               </div>
               <div>
-                <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1.5" style={{ color: "var(--text-secondary)" }}>Phone</label>
+                <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1.5" style={{ color: "var(--text-secondary)" }}>{t("addCustomer.phone")}</label>
                 <input
                   value={editPhone}
                   onChange={(e) => setEditPhone(e.target.value)}
@@ -492,7 +494,7 @@ export default function CustomerProfilePage() {
                 />
               </div>
               <div>
-                <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1.5" style={{ color: "var(--text-secondary)" }}>Address</label>
+                <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1.5" style={{ color: "var(--text-secondary)" }}>{t("addCustomer.address")}</label>
                 <input
                   value={editAddress}
                   onChange={(e) => setEditAddress(e.target.value)}
@@ -501,7 +503,7 @@ export default function CustomerProfilePage() {
                 />
               </div>
               <div>
-                <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1.5" style={{ color: "var(--text-secondary)" }}>Crops</label>
+                <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1.5" style={{ color: "var(--text-secondary)" }}>{t("common.crops")}</label>
                 <div className="flex flex-wrap gap-2">
                   {(businessSettings.crops.length > 0 ? businessSettings.crops.map(c => c.name) : KNOWN_CROPS).map(cropName => (
                     <button key={cropName} type="button" onClick={() => setEditCrops(prev => prev.includes(cropName) ? prev.filter(c => c !== cropName) : [...prev, cropName])} className="h-9 px-4 rounded-full text-[12px] font-medium transition-colors" style={{ background: editCrops.includes(cropName) ? "var(--brand)" : "var(--surface-2)", color: editCrops.includes(cropName) ? "#0a0a0a" : "var(--text-secondary)", border: editCrops.includes(cropName) ? "none" : "1px solid var(--divider)" }}>{cropName}</button>
@@ -509,7 +511,7 @@ export default function CustomerProfilePage() {
                 </div>
               </div>
               <div>
-                <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1.5" style={{ color: "var(--text-secondary)" }}>Credit Limit (Rs.)</label>
+                <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1.5" style={{ color: "var(--text-secondary)" }}>{t("common.creditLimitOptional")}</label>
                 <input
                   type="number"
                   value={editCreditLimit}
@@ -533,8 +535,7 @@ export default function CustomerProfilePage() {
                 disabled={saving}
                 className="flex-1 h-11 rounded-full text-sm font-bold"
                 style={{ background: "var(--brand)", color: "#0a0a0a", opacity: saving ? 0.6 : 1 }}
-              >
-                {saving ? "Saving..." : "Save"}
+              >                  {saving ? t("common.saving") : t("common.save")}
               </button>
             </div>
           </div>
@@ -564,9 +565,9 @@ export default function CustomerProfilePage() {
       {/* Delete Confirmation */}
       <ConfirmDialog
         open={showDelete}
-        title="Delete Customer"
-        message={"Are you sure you want to delete \"" + customer.name + "\"? This cannot be undone."}
-        confirmLabel={deleting ? "Deleting..." : "Delete"}
+        title={t("common.delete")}
+        message={t("common.deleteCustomerConfirm")}
+        confirmLabel={deleting ? t("common.saving") : t("common.delete")}
         onConfirm={handleDelete}
         onCancel={() => setShowDelete(false)}
         destructive

@@ -100,7 +100,7 @@ export default function ReorderSuggestionsPage() {
                     <p className="text-sm font-bold truncate" style={{ color: "var(--text-primary)" }}>{s.productName}</p>
                     <p className="text-xs" style={{ color: "var(--text-secondary)" }}>{s.company} · {s.variantName}</p>
                   </div>
-                  <div className="text-right shrink-0">
+                  <div className="text-end shrink-0">
                     <p className="text-sm font-bold" style={{ color }}>{s.stockQty} left</p>
                     <p className="text-[10px]" style={{ color: "var(--text-secondary)" }}>Threshold: {s.threshold}</p>
                   </div>

@@ -290,7 +290,7 @@ export default function ProductDetailPage() {
           {isAdmin && (
             <button
               onClick={() => navigate(`/admin/inventory/${product.id}/edit`)}
-              className="flex items-center gap-3 w-full px-4 py-3.5 text-left text-[13px] font-medium active:opacity-70"
+              className="flex items-center gap-3 w-full px-4 py-3.5 text-start text-[13px] font-medium active:opacity-70"
               style={{ color: "var(--text-primary)" }}
             >
               <Pencil size={16} style={{ color: "var(--brand)" }} />
@@ -300,7 +300,7 @@ export default function ProductDetailPage() {
           {isAdmin && (
             <button
               onClick={() => navigate(`/admin/inventory/${product.id}/adjust`)}
-              className="flex items-center gap-3 w-full px-4 py-3.5 text-left text-[13px] font-medium active:opacity-70"
+              className="flex items-center gap-3 w-full px-4 py-3.5 text-start text-[13px] font-medium active:opacity-70"
               style={{ color: "var(--text-primary)", borderTop: "1px solid var(--divider)" }}
             >
               <TrendingUp size={16} style={{ color: "var(--brand)" }} />
@@ -310,7 +310,7 @@ export default function ProductDetailPage() {
           {isAdmin && (
             <button
               onClick={() => navigate(`/admin/inventory/barcodes?product=${product.id}`)}
-              className="flex items-center gap-3 w-full px-4 py-3.5 text-left text-[13px] font-medium active:opacity-70"
+              className="flex items-center gap-3 w-full px-4 py-3.5 text-start text-[13px] font-medium active:opacity-70"
               style={{ color: "var(--text-primary)", borderTop: "1px solid var(--divider)" }}
             >
               <Barcode size={16} style={{ color: "var(--brand)" }} />
@@ -320,7 +320,7 @@ export default function ProductDetailPage() {
           {isAdmin && (
             <button
               onClick={() => setToDelete(true)}
-              className="flex items-center gap-3 w-full px-4 py-3.5 text-left text-[13px] font-medium active:opacity-70"
+              className="flex items-center gap-3 w-full px-4 py-3.5 text-start text-[13px] font-medium active:opacity-70"
               style={{ color: "var(--error)", borderTop: "1px solid var(--divider)" }}
             >
               <Trash2 size={16} />

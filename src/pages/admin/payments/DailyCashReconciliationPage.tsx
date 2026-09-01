@@ -125,7 +125,7 @@ export default function DailyCashReconciliationPage() {
               value={countedCash}
               onChange={(e) => { setCountedCash(e.target.value); setSaved(false); }}
               placeholder="Enter physically counted cash"
-              className="w-full h-12 rounded-[24px] pl-10 pr-4 text-sm outline-none"
+              className="w-full h-12 rounded-[24px] ps-10 pe-4 text-sm outline-none"
               style={{ background: "var(--surface-2)", border: "1px solid var(--divider)", color: "var(--text-primary)" }}
             />
           </div>

@@ -67,7 +67,7 @@ export default function MorePage() {
             <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0" style={{ background: "var(--divider)" }}>
               <Icon size={16} style={{ color: "var(--text-primary)" }} />
             </div>
-            <p className="flex-1 text-left text-[14px] font-semibold" style={{ color: "var(--text-primary)" }}>
+            <p className="flex-1 text-start text-[14px] font-semibold" style={{ color: "var(--text-primary)" }}>
               {key.startsWith("nav.") || key.startsWith("settings.") ? t(key as any) : key}
             </p>
             <ChevronRight size={16} style={{ color: "var(--text-secondary)" }} />

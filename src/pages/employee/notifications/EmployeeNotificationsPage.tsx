@@ -147,7 +147,7 @@ export default function EmployeeNotificationsPage() {
                         if (route) navigate(route);
                         markAllRead();
                       }}
-                      className="flex items-start gap-3 py-4 w-full text-left active:scale-[0.98] transition-transform"
+                      className="flex items-start gap-3 py-4 w-full text-start active:scale-[0.98] transition-transform"
                       style={{
                         borderBottom: i < group.items.length - 1 ? "1px solid var(--divider)" : "none",
                         opacity: n.read ? 0.6 : 1,

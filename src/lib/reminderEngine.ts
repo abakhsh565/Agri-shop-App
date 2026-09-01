@@ -220,14 +220,18 @@ export function calculatePaymentStatus(customer: Customer, now: Date): PaymentSt
   return "high_risk";
 }
 
-export function getPaymentStatusLabel(status: PaymentStatus): string {
-  switch (status) {
-    case "on_time": return "On Time";
-    case "delayed": return "Delayed";
-    case "high_risk": return "High Risk";
-    case "no_due_date": return "No Due Date";
-    case "paid": return "Paid";
-  }
+const PAYMENT_STATUS_LABELS: Record<string, { en: string; ur: string }> = {
+  on_time:      { en: "On Time",      ur: "ٹائم پر" },
+  delayed:       { en: "Delayed",       ur: "تاخیر" },
+  high_risk:     { en: "High Risk",     ur: "زیادہ خطرہ" },
+  no_due_date:   { en: "No Due Date",   ur: "کوئی مقررہ تاریخ نہیں" },
+  paid:          { en: "Paid",          ur: "ادا شدہ" },
+};
+
+export function getPaymentStatusLabel(status: PaymentStatus, isUrdu?: boolean): string {
+  const labels = PAYMENT_STATUS_LABELS[status];
+  if (!labels) return status;
+  return isUrdu ? labels.ur : labels.en;
 }
 
 export function getPaymentStatusColor(status: PaymentStatus): { color: string; bg: string } {

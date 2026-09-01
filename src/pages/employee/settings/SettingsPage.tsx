@@ -207,7 +207,7 @@ export default function SettingsPage() {
           {/* Urdu notice */}
           {language === "ur" && (
             <div
-              className="mt-2 px-4 py-3 rounded-xl text-right text-sm animate-fade-in-up"
+              className="mt-2 px-4 py-3 rounded-xl text-end text-sm animate-fade-in-up"
               style={{ background: "rgba(132,204,22,0.1)", color: "var(--brand-dark)", direction: "rtl" }}
             >
               اردو زبان فعال ہے۔ یہ ایپ دو زبانوں میں کام کرتی ہے۔
@@ -253,7 +253,7 @@ export default function SettingsPage() {
                   key={s.label}
                   onClick={s.action ?? undefined}
                   disabled={!s.action}
-                  className={`flex items-center justify-between w-full px-4 py-4 text-left transition-colors ${
+                  className={`flex items-center justify-between w-full px-4 py-4 text-start transition-colors ${
                     i < arr.length - 1 ? "border-b" : ""
                   } ${s.action ? "active:opacity-70" : "opacity-70"}`}
                   style={{ borderColor: "var(--border-light)" }}
@@ -288,7 +288,7 @@ export default function SettingsPage() {
             <div className="flex justify-center mb-4">
               <div className="w-10 h-1 rounded-full" style={{ background: "var(--divider)" }} />
             </div>
-            <p className="text-base font-bold text-center mb-5" style={{ color: "var(--text-primary)" }}>Edit Profile</p>
+            <p className="text-base font-bold text-center mb-5" style={{ color: "var(--text-primary)" }}>{t("common.edit")}</p>
             {/* Photo in popup */}
             <div className="flex flex-col items-center mb-5">
               <div className="relative">
@@ -306,7 +306,7 @@ export default function SettingsPage() {
             </div>
             {/* Name input */}
             <div className="mb-5">
-              <label className="text-[11px] font-semibold uppercase tracking-wider mb-1.5 block" style={{ color: "var(--text-secondary)" }}>Name</label>
+              <label className="text-[11px] font-semibold uppercase tracking-wider mb-1.5 block" style={{ color: "var(--text-secondary)" }}>{t("addCustomer.name")}</label>
               <input
                 autoFocus
                 value={nameValue}
@@ -321,13 +321,13 @@ export default function SettingsPage() {
                 onClick={() => { setEditingName(false); setNameValue(user?.name ?? ""); }}
                 className="flex-1 h-12 rounded-full text-sm font-bold"
                 style={{ border: "1px solid var(--divider)", color: "var(--text-primary)" }}
-              >Cancel</button>
+              >{t("common.cancel")}</button>
               <button
                 onClick={handleSaveName}
                 disabled={savingName || !nameValue.trim()}
                 className="flex-1 h-12 rounded-full text-sm font-bold disabled:opacity-50"
                 style={{ background: "var(--brand)", color: "#0a0a0a" }}
-              >{savingName ? "Saving..." : "Save"}</button>
+              >{savingName ? t("common.saving") : t("common.save")}</button>
             </div>
           </div>
         </div>

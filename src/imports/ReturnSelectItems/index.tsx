@@ -127,7 +127,7 @@ function OriginalSaleBanner() {
 
 function TextLeft() {
   return (
-    <div className="content-stretch flex flex-[1_0_0] flex-col gap-[4px] items-start min-w-px relative" data-name="text-left">
+    <div className="content-stretch flex flex-[1_0_0] flex-col gap-[4px] items-start min-w-px relative" data-name="text-start">
       <p className="font-['Geist:Bold',sans-serif] font-bold relative shrink-0 text-[14px] text-black">Janja Spray 500ml</p>
       <p className="font-['Geist:Regular',sans-serif] font-normal relative shrink-0 text-[#888] text-[12px]">3 purchased · Rs. 1,400 each</p>
     </div>
@@ -201,7 +201,7 @@ function ReturnRow() {
 
 function TextLeft1() {
   return (
-    <div className="content-stretch flex flex-[1_0_0] flex-col gap-[4px] items-start min-w-px relative" data-name="text-left">
+    <div className="content-stretch flex flex-[1_0_0] flex-col gap-[4px] items-start min-w-px relative" data-name="text-start">
       <p className="font-['Geist:Bold',sans-serif] font-bold relative shrink-0 text-[14px] text-black">Wheat Seeds 5kg</p>
       <p className="font-['Geist:Regular',sans-serif] font-normal relative shrink-0 text-[#888] text-[12px]">1 bag purchased · Rs. 5,000 each</p>
     </div>

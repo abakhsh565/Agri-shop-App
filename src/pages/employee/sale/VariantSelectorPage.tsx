@@ -115,7 +115,7 @@ export default function VariantSelectorPage() {
                   cursor: oos ? "not-allowed" : "pointer",
                 }}
               >
-                <div className="text-left">
+                <div className="text-start">
                   <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>{v.name}</p>
                   <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
                     {formatCurrency(v.sellingPrice)} per unit · {units > 0 ? `${units} available` : "Out of stock"}

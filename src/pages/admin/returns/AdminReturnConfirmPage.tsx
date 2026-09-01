@@ -156,7 +156,7 @@ export default function AdminReturnConfirmPage() {
               style={{ background: "var(--surface-2)", border: "1px solid var(--divider)", color: "var(--text-primary)" }}
             />
             {!reason.trim() && (
-              <p className="text-[11px] mt-1 ml-4" style={{ color: "var(--text-secondary)" }}>
+              <p className="text-[11px] mt-1 ms-4" style={{ color: "var(--text-secondary)" }}>
                 Reason is required to process return
               </p>
             )}

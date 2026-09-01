@@ -113,7 +113,7 @@ export default function PurchaseDetailPage() {
                   <p className="text-sm font-medium truncate" style={{ color: "var(--text-primary)" }}>{item.productName}</p>
                   <p className="text-xs" style={{ color: "var(--text-secondary)" }}>{item.variantName} × {item.qty}</p>
                 </div>
-                <div className="text-right shrink-0 ml-3">
+                <div className="text-end shrink-0 ms-3">
                   <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>{formatCurrency(item.lineTotal)}</p>
                   <p className="text-[10px]" style={{ color: "var(--text-secondary)" }}>{formatCurrency(item.costPrice)}/unit</p>
                 </div>

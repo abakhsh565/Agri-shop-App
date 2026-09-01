@@ -132,7 +132,7 @@ export default function AdminSettingsPage() {
             className="flex items-center gap-1 h-6 px-2 rounded-full text-[10px] font-bold shrink-0"
             style={{ background: "var(--surface)", color: "var(--text-secondary)", border: "1px solid var(--divider)" }}
           >
-            <Pencil size={10} /> Edit
+            <Pencil size={10} /> {t("common.edit")}
           </button>
         </div>
 
@@ -151,7 +151,7 @@ export default function AdminSettingsPage() {
               <div className="flex justify-center mb-2">
                 <div className="w-10 h-1 rounded-full" style={{ background: "var(--divider)" }} />
               </div>
-              <p className="text-base font-bold text-center" style={{ color: "var(--text-primary)" }}>Edit Profile</p>
+              <p className="text-base font-bold text-center" style={{ color: "var(--text-primary)" }}>{t("common.edit")} {t("settings.profilePhoto")}</p>
               {/* Image upload in popup */}
               <div className="flex justify-center">
                 <div className="relative">
@@ -189,10 +189,10 @@ export default function AdminSettingsPage() {
               </div>
               <div className="flex gap-3">
                 <button onClick={() => setEditing(false)} className="flex-1 h-12 rounded-full text-sm font-bold"
-                  style={{ border: "1px solid var(--divider)", color: "var(--text-primary)" }}>Cancel</button>
+                  style={{ border: "1px solid var(--divider)", color: "var(--text-primary)" }}>{t("common.cancel")}</button>
                 <button onClick={saveEdit} disabled={saving}
                   className="flex-1 h-12 rounded-full text-sm font-bold disabled:opacity-50"
-                  style={{ background: "var(--brand)", color: "#0a0a0a" }}>{saving ? "Saving..." : "Save"}</button>
+                  style={{ background: "var(--brand)", color: "#0a0a0a" }}>{saving ? t("common.saving") : t("common.save")}</button>
               </div>
             </div>
           </div>
@@ -276,7 +276,7 @@ export default function AdminSettingsPage() {
                   key={s.label}
                   onClick={s.action ?? undefined}
                   disabled={!s.action}
-                  className={`flex items-center justify-between w-full px-4 py-4 text-left transition-colors ${i < arr.length - 1 ? "border-b" : ""} ${s.action ? "active:opacity-70" : "opacity-70"}`}
+                  className={`flex items-center justify-between w-full px-4 py-4 text-start transition-colors ${i < arr.length - 1 ? "border-b" : ""} ${s.action ? "active:opacity-70" : "opacity-70"}`}
                   style={{ borderColor: "var(--border-light)" }}
                 >
                   <div className="flex items-center gap-3">
@@ -299,15 +299,15 @@ export default function AdminSettingsPage() {
 
         {/* Business Settings */}
         <div className="px-4 pt-5 animate-fade-in-up delay-125">
-          <p className="text-xs font-bold uppercase mb-3 tracking-wider" style={{ color: "var(--text-secondary)" }}>Business Settings</p>
+          <p className="text-xs font-bold uppercase mb-3 tracking-wider" style={{ color: "var(--text-secondary)" }}>{t("common.businessSettings")}</p>
           <div className="rounded-xl overflow-hidden" style={{ border: "1px solid var(--border-light)" }}>
             <button onClick={() => setShowBusinessSettings(true)} className="flex items-center justify-between w-full px-4 py-4 active:opacity-70">
               <div className="flex items-center gap-3">
                 <span style={{ fontSize: 18 }}>{"🌾"}</span>
-                <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>Crops & Seasons</span>
+                <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>{t("common.cropConfiguration")}</span>
               </div>
               <div className="flex items-center gap-1">
-                <span className="text-sm" style={{ color: "var(--text-secondary)" }}>Configure</span>
+                <span className="text-sm" style={{ color: "var(--text-secondary)" }}>{t("common.configureReminder")}</span>
                 <ChevronRight size={14} style={{ color: "var(--text-secondary)" }} />
               </div>
             </button>
@@ -331,7 +331,7 @@ export default function AdminSettingsPage() {
                 <button
                   key={row.label}
                   onClick={row.action}
-                  className={`flex items-center justify-between w-full px-4 py-4 text-left active:opacity-70 ${i < arr.length - 1 ? "border-b" : ""}`}
+                  className={`flex items-center justify-between w-full px-4 py-4 text-start active:opacity-70 ${i < arr.length - 1 ? "border-b" : ""}`}
                   style={{ borderColor: "var(--border-light)" }}
                 >
                   <div className="flex items-center gap-3">

@@ -152,7 +152,7 @@ export default function BrowseProductsPage() {
               <button
                 key={p.id}
                 onClick={() => navigate(`${base}/sale/products/${p.id}`)}
-                className="flex items-center gap-3 px-4 py-4 text-left"
+                className="flex items-center gap-3 px-4 py-4 text-start"
                 style={{ borderBottom: i < filtered.length - 1 ? "1px solid var(--divider)" : "none" }}
               >
                 {/* Product image or initial */}

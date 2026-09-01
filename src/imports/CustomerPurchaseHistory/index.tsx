@@ -154,7 +154,7 @@ function MetricOutstanding() {
 
 function MetricCart() {
   return (
-    <div className="[word-break:break-word] content-stretch flex flex-[1_0_0] flex-col gap-[2px] items-start leading-[normal] min-w-px pl-[16px] relative whitespace-nowrap" data-name="metric-cart">
+    <div className="[word-break:break-word] content-stretch flex flex-[1_0_0] flex-col gap-[2px] items-start leading-[normal] min-w-px ps-[16px] relative whitespace-nowrap" data-name="metric-cart">
       <p className="font-['Rubik:Regular',sans-serif] font-normal relative shrink-0 text-[#888] text-[12px] tracking-[0.5px] uppercase">Credit Limit</p>
       <p className="font-['Geist:SemiBold',sans-serif] font-semibold relative shrink-0 text-[16px] text-black">Rs. 50,000</p>
     </div>

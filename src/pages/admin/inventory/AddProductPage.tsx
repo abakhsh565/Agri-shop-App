@@ -235,7 +235,7 @@ export default function AddProductPage() {
             <p className={labelCls} style={{ color: "var(--text-secondary)" }}>Supplier / Company</p>
             <div className="relative">
               <select value={company} onChange={(e) => setCompany(e.target.value)}
-                className="w-full h-12 rounded-[24px] px-4 pr-10 text-sm outline-none appearance-none" style={fieldStyle}>
+                className="w-full h-12 rounded-[24px] px-4 pe-10 text-sm outline-none appearance-none" style={fieldStyle}>
                 <option value="">Select supplier…</option>
                 {companies.map((c) => <option key={c.id} value={c.name}>{c.name}</option>)}
               </select>

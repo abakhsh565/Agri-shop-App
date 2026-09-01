@@ -194,7 +194,7 @@ export default function RecordPurchasePage() {
                     <button
                       key={v.id}
                       onClick={() => pickVariant(v.id)}
-                      className="flex items-center justify-between p-3.5 rounded-[14px] text-left transition-colors"
+                      className="flex items-center justify-between p-3.5 rounded-[14px] text-start transition-colors"
                       style={{ background: "var(--surface)", border: `1.5px solid ${selected ? "var(--brand)" : "var(--divider)"}` }}
                     >
                       <div>

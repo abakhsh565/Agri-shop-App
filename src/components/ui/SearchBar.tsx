@@ -13,7 +13,7 @@ export default function SearchBar({ containerClass = "", ...props }: SearchBarPr
         type="text"
         {...props}
         className={`
-          w-full h-11 pl-10 pr-4 rounded-[100px] bg-[#f5f5f5] text-sm text-black
+          w-full h-11 ps-10 pe-4 rounded-[100px] bg-[#f5f5f5] text-sm text-black
           placeholder:text-[#888] outline-none border-none
           ${props.className ?? ""}
         `}

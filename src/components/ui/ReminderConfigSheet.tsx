@@ -132,7 +132,7 @@ export default function ReminderConfigSheet({ config, onSave, onClose }: Props) 
                 <select
                   value={local.anchor}
                   onChange={(e) => update("anchor", e.target.value as ReminderAnchor)}
-                  className="w-full h-12 px-4 pr-10 text-[13px] outline-none appearance-none font-medium"
+                  className="w-full h-12 px-4 pe-10 text-[13px] outline-none appearance-none font-medium"
                   style={fieldStyle}
                 >
               <option value="after_credit">after credit given</option>
@@ -152,7 +152,7 @@ export default function ReminderConfigSheet({ config, onSave, onClose }: Props) 
               <select
                 value={local.repeat}
                 onChange={(e) => update("repeat", e.target.value as ReminderRepeat)}
-                className="w-full h-12 px-4 pr-10 text-[13px] outline-none appearance-none font-medium"
+                className="w-full h-12 px-4 pe-10 text-[13px] outline-none appearance-none font-medium"
                 style={fieldStyle}
               >
                 <option value="once">One-time reminder</option>
@@ -165,7 +165,7 @@ export default function ReminderConfigSheet({ config, onSave, onClose }: Props) 
 
           {/* Interval fields */}
           {local.repeat === "interval" && (
-            <div className="pl-4">
+            <div className="ps-4">
               <div className="flex items-center gap-2">
                 <span className="text-[13px]" style={{ color: "var(--text-secondary)" }}>Every</span>
                 <input
@@ -180,7 +180,7 @@ export default function ReminderConfigSheet({ config, onSave, onClose }: Props) 
                   <select
                     value={local.intervalUnit}
                     onChange={(e) => update("intervalUnit", e.target.value as "days" | "weeks")}
-                    className="h-12 px-3 pr-8 text-[13px] outline-none appearance-none font-medium"
+                    className="h-12 px-3 pe-8 text-[13px] outline-none appearance-none font-medium"
                     style={fieldStyle}
                   >
                     <option value="days">days</option>
@@ -194,7 +194,7 @@ export default function ReminderConfigSheet({ config, onSave, onClose }: Props) 
 
           {/* Escalation fields */}
           {local.repeat === "escalate" && (
-            <div className="pl-4 flex flex-col gap-3">
+            <div className="ps-4 flex flex-col gap-3">
               {local.escalation.map((step, i) => (
                 <div key={i} className="flex items-center gap-3">
                   <span className="text-[13px] w-[96px] shrink-0 font-medium" style={{ color: "var(--text-secondary)" }}>{step.label}</span>
@@ -219,7 +219,7 @@ export default function ReminderConfigSheet({ config, onSave, onClose }: Props) 
               <select
                 value={local.ends}
                 onChange={(e) => update("ends", e.target.value as ReminderEnds)}
-                className="w-full h-12 px-4 pr-10 text-[13px] outline-none appearance-none font-medium"
+                className="w-full h-12 px-4 pe-10 text-[13px] outline-none appearance-none font-medium"
                 style={fieldStyle}
               >
                 <option value="paid">Until paid in full</option>

@@ -135,7 +135,7 @@ export default function DashboardPage() {
                   <button
                     key={n.id}
                     onClick={() => { if (route) { navigate(route); setShowNotifs(false); } }}
-                    className="w-full text-left px-4 py-3 active:bg-black/5 transition-colors"
+                    className="w-full text-start px-4 py-3 active:bg-black/5 transition-colors"
                     style={{ borderBottom: "1px solid var(--divider)" }}
                   >
                     <p className="text-[13px] font-semibold" style={{ color: "var(--text-primary)" }}>{n.title}</p>
@@ -305,7 +305,7 @@ export default function DashboardPage() {
             <button
               key={sale.id}
               onClick={() => navigate(`/employee/sales/${sale.id}`)}
-              className="flex items-center justify-between px-4 py-3.5 w-full text-left transition-colors active:opacity-70"
+              className="flex items-center justify-between px-4 py-3.5 w-full text-start transition-colors active:opacity-70"
               style={{
                 borderBottom: i < recentSales.length - 1 ? "1px solid var(--divider)" : "none",
                 background: "var(--background)",

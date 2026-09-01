@@ -120,7 +120,7 @@ export default function CustomersListPage() {
               {formatCurrency(totalOutstanding)}
             </p>
           </div>
-          <div className="text-right">
+          <div className="text-end">
             <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "var(--text-secondary)" }}>
               On Credit
             </p>
@@ -170,7 +170,7 @@ export default function CustomersListPage() {
                 <button
                   key={opt.key}
                   onClick={() => { setSort(opt.key); setShowSortMenu(false); }}
-                  className="flex items-center justify-between w-full px-4 py-3.5 text-left transition-colors active:bg-black/5"
+                  className="flex items-center justify-between w-full px-4 py-3.5 text-start transition-colors active:bg-black/5"
                   style={{ borderBottom: "1px solid var(--divider)" }}
                 >
                   <span
@@ -195,7 +195,7 @@ export default function CustomersListPage() {
             style={{ background: "var(--brand-light, #d9f99d)", color: "var(--brand-dark, #65a30d)" }}
           >
             {cropFilter}
-            <button onClick={() => navigate(".", { state: { ...state, cropFilter: undefined } })} className="ml-0.5">
+            <button onClick={() => navigate(".", { state: { ...state, cropFilter: undefined } })} className="ms-0.5">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
             </button>
           </div>
@@ -245,7 +245,7 @@ export default function CustomersListPage() {
               <button
                 key={c.id}
                 onClick={() => navigate(`${base}/customers/${c.id}`)}
-                className="flex items-center gap-3 p-3 rounded-[14px] text-left transition-all active:scale-[0.98]"
+                className="flex items-center gap-3 p-3 rounded-[14px] text-start transition-all active:scale-[0.98]"
                 style={{ background: "var(--surface)", border: "1px solid var(--border-light)" }}
               >
                 {/* Avatar */}
@@ -331,7 +331,7 @@ export default function CustomersListPage() {
         <div className={`flex px-4 ${isUrdu ? "justify-start" : "justify-end"}`}>
           <button
             onClick={() => navigate(`${base}/customers/new`)}
-            className="pointer-events-auto pl-4 pr-5 rounded-full flex items-center gap-2 text-sm font-bold active:scale-95 transition-transform"
+            className="pointer-events-auto ps-4 pe-5 rounded-full flex items-center gap-2 text-sm font-bold active:scale-95 transition-transform"
             style={{ background: "var(--brand)", color: "#0a0a0a", height: "52px", boxShadow: "0 6px 20px rgba(0,0,0,0.25)" }}
           >
             <Plus size={20} strokeWidth={2.5} /> Customer

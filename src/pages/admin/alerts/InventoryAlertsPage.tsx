@@ -67,7 +67,7 @@ export default function InventoryAlertsPage() {
         {totalPayable > 0 && (
           <button
             onClick={() => navigate("/admin/companies")}
-            className="flex items-center gap-3 rounded-[14px] p-4 transition-opacity active:opacity-70 text-left w-full"
+            className="flex items-center gap-3 rounded-[14px] p-4 transition-opacity active:opacity-70 text-start w-full"
             style={{ background: "#FCEBEB" }}
           >
             <Truck size={18} color="#A32D2D" className="shrink-0" />
@@ -90,7 +90,7 @@ export default function InventoryAlertsPage() {
                 <button
                   key={p.id}
                   onClick={() => navigate("/admin/inventory/" + p.id)}
-                  className="flex items-center gap-3 rounded-[14px] p-3.5 transition-opacity active:opacity-70 text-left w-full"
+                  className="flex items-center gap-3 rounded-[14px] p-3.5 transition-opacity active:opacity-70 text-start w-full"
                   style={{ background: "#FEF2F2", border: "1px solid #FECACA" }}
                 >
                   <div
@@ -123,7 +123,7 @@ export default function InventoryAlertsPage() {
                   <button
                     key={p.id}
                     onClick={() => navigate("/admin/inventory/" + p.id)}
-                    className="flex items-center gap-3 rounded-[14px] p-3.5 transition-opacity active:opacity-70 text-left w-full"
+                    className="flex items-center gap-3 rounded-[14px] p-3.5 transition-opacity active:opacity-70 text-start w-full"
                     style={{ background: "#FFFBEB", border: "1px solid #FDE68A" }}
                   >
                     <div

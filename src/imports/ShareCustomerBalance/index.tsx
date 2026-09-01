@@ -191,7 +191,7 @@ function ChatBubble() {
   return (
     <div className="bg-[#e2f4dd] content-stretch flex flex-col font-['Geist:Regular',sans-serif] font-normal gap-[6px] items-start p-[14px] relative rounded-[12px] shrink-0 w-full" data-name="chat-bubble">
       <p className="leading-[1.5] relative shrink-0 text-[13px] text-black w-full">Dear Rashid Ali, your outstanding balance at AgriShop is Rs. 13,200. Last payment: Rs. 10,000 on Jul 28. Please visit us for settlement. Thank you!</p>
-      <p className="leading-[normal] relative shrink-0 text-[#888] text-[10px] text-right w-full">Pre-formatted reminder</p>
+      <p className="leading-[normal] relative shrink-0 text-[#888] text-[10px] text-end w-full">Pre-formatted reminder</p>
     </div>
   );
 }

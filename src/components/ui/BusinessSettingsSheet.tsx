@@ -171,7 +171,7 @@ export default function BusinessSettingsSheet({ onClose, onSave }: Props) {
                         <select
                           value={crop.harvestMonth}
                           onChange={(e) => updateHarvestMonth(crop.name, parseInt(e.target.value))}
-                          className="w-full h-12 px-4 pr-10 text-[13px] outline-none appearance-none font-medium"
+                          className="w-full h-12 px-4 pe-10 text-[13px] outline-none appearance-none font-medium"
                           style={{ ...fieldStyle, borderRadius: "24px" }}
                         >
                           {MONTHS.map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
@@ -187,7 +187,7 @@ export default function BusinessSettingsSheet({ onClose, onSave }: Props) {
                         <select
                           value={crop.harvestDay}
                           onChange={(e) => updateHarvestDay(crop.name, parseInt(e.target.value))}
-                          className="w-full h-12 px-4 pr-10 text-[13px] outline-none appearance-none font-medium"
+                          className="w-full h-12 px-4 pe-10 text-[13px] outline-none appearance-none font-medium"
                           style={{ ...fieldStyle, borderRadius: "24px" }}
                         >
                           {Array.from({length: 31}, (_, i) => i + 1).map(d => <option key={d} value={d}>{d}</option>)}

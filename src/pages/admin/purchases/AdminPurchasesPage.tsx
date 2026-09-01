@@ -107,7 +107,7 @@ export default function AdminPurchasesPage() {
                   <span className="text-xs" style={{ color: "var(--text-secondary)" }}>
                     {p.items.length} line{p.items.length > 1 ? "s" : ""} · {units} units
                   </span>
-                  <div className="text-right">
+                  <div className="text-end">
                     <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>{formatCurrency(p.totalAmount)}</p>
                     {unpaid && (
                       <p className="text-[11px]" style={{ color: "var(--error)" }}>
@@ -130,7 +130,7 @@ export default function AdminPurchasesPage() {
         <div className={`flex px-4 ${isUrdu ? "justify-start" : "justify-end"}`}>
           <button
             onClick={() => navigate("/admin/purchases/new")}
-            className="pointer-events-auto pl-4 pr-5 rounded-full flex items-center gap-2 text-sm font-bold active:scale-95 transition-transform"
+            className="pointer-events-auto ps-4 pe-5 rounded-full flex items-center gap-2 text-sm font-bold active:scale-95 transition-transform"
             style={{ background: "var(--brand)", color: "#0a0a0a", height: "52px", boxShadow: "0 6px 20px rgba(0,0,0,0.25)" }}
           >
             <PackagePlus size={20} strokeWidth={2.5} /> Record Purchase

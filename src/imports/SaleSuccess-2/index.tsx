@@ -133,7 +133,7 @@ function ReceiptRow5() {
   return (
     <div className="[word-break:break-word] content-stretch flex items-start justify-between leading-[normal] relative shrink-0 text-[14px] w-full whitespace-nowrap" data-name="receipt-row">
       <p className="font-['Geist:Regular',sans-serif] font-normal relative shrink-0 text-[#888]">{`Date & Time`}</p>
-      <p className="font-['Geist:Medium',sans-serif] font-medium relative shrink-0 text-black text-right">Aug 8, 2026 — 2:34 PM</p>
+      <p className="font-['Geist:Medium',sans-serif] font-medium relative shrink-0 text-black text-end">Aug 8, 2026 — 2:34 PM</p>
     </div>
   );
 }

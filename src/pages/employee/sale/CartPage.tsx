@@ -133,7 +133,7 @@ export default function CartPage() {
             <div className="size-10 rounded-full flex items-center justify-center" style={{ background: "var(--muted)" }}>
               <Plus size={18} style={{ color: "var(--text-secondary)" }} />
             </div>
-            <div className="text-left">
+            <div className="text-start">
               <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>Select Customer</p>
               <p className="text-xs" style={{ color: "var(--text-secondary)" }}>Required before completing sale</p>
             </div>

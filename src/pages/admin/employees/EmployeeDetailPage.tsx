@@ -272,7 +272,7 @@ export default function EmployeeDetailPage() {
                   <p className="text-[10px] uppercase" style={{ color: "var(--text-secondary)" }}>Collected</p>
                   <p className="text-sm font-bold" style={{ color: "#22c55e" }}>{formatCurrency(creditPaidBack)}</p>
                 </div>
-                <div className="text-right">
+                <div className="text-end">
                   <p className="text-[10px] uppercase" style={{ color: "var(--text-secondary)" }}>Outstanding</p>
                   <p className="text-sm font-bold" style={{ color: creditOutstanding > 0 ? "#ef4444" : "var(--text-primary)" }}>{formatCurrency(creditOutstanding)}</p>
                 </div>
@@ -358,7 +358,7 @@ export default function EmployeeDetailPage() {
               <button
                 key={sale.id}
                 onClick={() => navigate(`/admin/sales/${sale.id}`)}
-                className="flex items-center justify-between px-4 py-3 w-full text-left transition-opacity active:opacity-70"
+                className="flex items-center justify-between px-4 py-3 w-full text-start transition-opacity active:opacity-70"
                 style={{ borderBottom: i < recentSales.length - 1 ? "1px solid var(--divider)" : "none" }}
               >
                 <div className="flex-1 min-w-0">
@@ -372,7 +372,7 @@ export default function EmployeeDetailPage() {
                     {sale.items.length} item{sale.items.length !== 1 ? "s" : ""} · {sale.paymentType === "full" ? "Paid" : "Credit"}
                   </p>
                 </div>
-                <span className="text-[13px] font-bold shrink-0 ml-2" style={{ color: "var(--text-primary)" }}>
+                <span className="text-[13px] font-bold shrink-0 ms-2" style={{ color: "var(--text-primary)" }}>
                   {formatCurrency(sale.totalAmount)}
                 </span>
               </button>

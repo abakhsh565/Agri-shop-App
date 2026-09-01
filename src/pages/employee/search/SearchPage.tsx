@@ -296,7 +296,7 @@ export default function SearchPage() {
                   <button
                     key={r.id + r.type}
                     onClick={() => navigate(r.path)}
-                    className="flex items-center justify-between px-4 py-3.5 w-full text-left transition-opacity active:opacity-70"
+                    className="flex items-center justify-between px-4 py-3.5 w-full text-start transition-opacity active:opacity-70"
                     style={{
                       borderBottom: i < items.length - 1 ? "1px solid var(--divider)" : "none",
                       background: "var(--background)",
@@ -346,7 +346,7 @@ export default function SearchPage() {
                     </div>
                     {r.badge && (
                       <span
-                        className="text-[11px] font-semibold px-2 py-0.5 rounded-full shrink-0 ml-2"
+                        className="text-[11px] font-semibold px-2 py-0.5 rounded-full shrink-0 ms-2"
                         style={{ background: "var(--surface-2)", color: "var(--text-secondary)" }}
                       >
                         {r.badge}

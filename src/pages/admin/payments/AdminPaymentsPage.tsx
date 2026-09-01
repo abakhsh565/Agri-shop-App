@@ -42,7 +42,7 @@ export default function AdminPaymentsPage() {
       <div className="grid grid-cols-2 gap-3 px-4 pt-3">
         <button
           onClick={() => setTab("customers")}
-          className="rounded-[14px] p-4 text-left"
+          className="rounded-[14px] p-4 text-start"
           style={{ background: "var(--surface-2)", border: `1.5px solid ${tab === "customers" ? "var(--brand)" : "var(--divider)"}` }}
         >
           <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "var(--text-secondary)" }}>Customers owe us</p>
@@ -50,7 +50,7 @@ export default function AdminPaymentsPage() {
         </button>
         <button
           onClick={() => setTab("suppliers")}
-          className="rounded-[14px] p-4 text-left"
+          className="rounded-[14px] p-4 text-start"
           style={{ background: "var(--surface-2)", border: `1.5px solid ${tab === "suppliers" ? "var(--brand)" : "var(--divider)"}` }}
         >
           <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "var(--text-secondary)" }}>We owe suppliers</p>
@@ -85,7 +85,7 @@ export default function AdminPaymentsPage() {
               <button
                 key={c.id}
                 onClick={() => navigate(`/admin/customers/${c.id}/record-payment`)}
-                className="flex items-center justify-between rounded-[14px] p-4 text-left transition-opacity active:opacity-70"
+                className="flex items-center justify-between rounded-[14px] p-4 text-start transition-opacity active:opacity-70"
                 style={{ background: "var(--surface)", border: "1px solid var(--divider)" }}
               >
                 <div className="min-w-0">
@@ -93,7 +93,7 @@ export default function AdminPaymentsPage() {
                   <p className="text-xs" style={{ color: "var(--text-secondary)" }}>{c.phone}</p>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                  <div className="text-right">
+                  <div className="text-end">
                     <p className="text-sm font-bold" style={{ color: "var(--error)" }}>{formatCurrency(c.outstandingBalance)}</p>
                     <p className="text-[10px]" style={{ color: "var(--text-secondary)" }}>Record payment</p>
                   </div>
@@ -111,7 +111,7 @@ export default function AdminPaymentsPage() {
             <button
               key={c.id}
               onClick={() => navigate(`/admin/payments/supplier/${c.id}`)}
-              className="flex items-center justify-between rounded-[14px] p-4 text-left transition-opacity active:opacity-70"
+              className="flex items-center justify-between rounded-[14px] p-4 text-start transition-opacity active:opacity-70"
               style={{ background: "var(--surface)", border: "1px solid var(--divider)" }}
             >
               <div className="min-w-0">
@@ -119,7 +119,7 @@ export default function AdminPaymentsPage() {
                 <p className="text-xs" style={{ color: "var(--text-secondary)" }}>{c.contactPerson ?? c.phone ?? "Supplier"}</p>
               </div>
               <div className="flex items-center gap-2 shrink-0">
-                <div className="text-right">
+                <div className="text-end">
                   <p className="text-sm font-bold" style={{ color: "var(--error)" }}>{formatCurrency(c.outstandingPayable)}</p>
                   <p className="text-[10px]" style={{ color: "var(--text-secondary)" }}>Record payment</p>
                 </div>

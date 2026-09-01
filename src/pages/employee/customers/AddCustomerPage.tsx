@@ -129,7 +129,7 @@ export default function AddCustomerPage() {
               value={imageUrl}
               onChange={setImageUrl}
               shape="circle"
-              label="Add photo"
+              label={t("common.addPhoto")}
             />
           </div>
 
@@ -207,7 +207,7 @@ export default function AddCustomerPage() {
           {/* Crops */}
           <div>
             <p className="text-[11px] font-bold uppercase mb-2 tracking-wider" style={{ color: "var(--text-secondary)" }}>
-              Crops
+              {t("common.crops")}
             </p>
             <div className="flex flex-wrap gap-2">
               {KNOWN_CROPS.map(cropName => (
@@ -227,7 +227,7 @@ export default function AddCustomerPage() {
               ))}
             </div>
             <p className="text-[11px] mt-1" style={{ color: "var(--text-secondary)" }}>
-              {isUrdu ? "گاہک کون سی فصلیں اگاتا ہے" : "What crops does this customer grow?"}
+              {t("common.whatCrops")}
             </p>
           </div>
 

@@ -129,7 +129,7 @@ export default function AdminReportsPage() {
               color: period === p.key ? "#0a0a0a" : "var(--text-secondary)",
             }}
           >
-            {p.key === "custom" && <Calendar size={12} className="inline mr-1 -mt-0.5" />}
+            {p.key === "custom" && <Calendar size={12} className="inline me-1 -mt-0.5" />}
             {p.label}
           </button>
         ))}
