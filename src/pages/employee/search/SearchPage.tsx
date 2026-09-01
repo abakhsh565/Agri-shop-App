@@ -9,6 +9,7 @@ import { useCompaniesStore } from "@/stores/companiesStore";
 import { useAuthStore } from "@/stores/authStore";
 import { useThemeStore } from "@/stores/themeStore";
 import { useShellBase } from "@/lib/useShellBase";
+import { useT } from "@/lib/i18n";
 import { formatCurrency } from "@/lib/formatters";
 import { Search, X, Package, Users, ShoppingCart, Building2, UserCog, ChevronLeft } from "lucide-react";
 
@@ -30,16 +31,16 @@ function initBgColor(name: string) {
   return colors[hash % colors.length];
 }
 
-const FILTER_CHIPS: { key: FilterType; label: string; icon: any }[] = [
-  { key: "all",      label: "All",       icon: Search },
-  { key: "product",  label: "Products",  icon: Package },
-  { key: "customer", label: "Customers", icon: Users },
-  { key: "sale",     label: "Sales",     icon: ShoppingCart },
+const FILTER_CHIPS_BASE: { key: FilterType; labelKey: string; icon: any }[] = [
+  { key: "all",      labelKey: "search.all",       icon: Search },
+  { key: "product",  labelKey: "search.products",  icon: Package },
+  { key: "customer", labelKey: "search.customers", icon: Users },
+  { key: "sale",     labelKey: "search.sales",     icon: ShoppingCart },
 ];
 
-const ADMIN_EXTRA_FILTERS = [
-  { key: "employee" as FilterType, label: "Employees", icon: UserCog },
-  { key: "company"  as FilterType, label: "Companies", icon: Building2 },
+const ADMIN_EXTRA_FILTERS_BASE = [
+  { key: "employee" as FilterType, labelKey: "search.employees", icon: UserCog },
+  { key: "company"  as FilterType, labelKey: "search.companies", icon: Building2 },
 ];
 
 export default function SearchPage() {
@@ -48,6 +49,10 @@ export default function SearchPage() {
   const isAdmin = base === "/admin";
   const { language } = useThemeStore();
   const isUrdu = language === "ur";
+  const t = useT();
+
+  const FILTER_CHIPS = FILTER_CHIPS_BASE.map((f) => ({ ...f, label: t(f.labelKey as any) }));
+  const ADMIN_EXTRA_FILTERS = ADMIN_EXTRA_FILTERS_BASE.map((f) => ({ ...f, label: t(f.labelKey as any) }));
 
   const [query, setQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState<FilterType>("all");
@@ -135,8 +140,8 @@ export default function SearchPage() {
             id: e.id,
             type: "employee",
             title: e.name,
-            subtitle: e.jobTitle || "Employee",
-            badge: e.isActive ? undefined : "Inactive",
+            subtitle: e.jobTitle || t("search.employee"),
+            badge: e.isActive ? undefined : t("search.inactive"),
             path: `/admin/employees/${e.id}`,
           });
         });
@@ -151,7 +156,7 @@ export default function SearchPage() {
             id: c.id,
             type: "company",
             title: c.name,
-            subtitle: c.contactPerson || "Supplier",
+            subtitle: c.contactPerson || t("search.supplier"),
             badge: c.outstandingPayable > 0 ? formatCurrency(c.outstandingPayable) : undefined,
             path: `/admin/companies/${c.id}`,
           });
@@ -174,16 +179,16 @@ export default function SearchPage() {
 
   const QUICK_ACCESS = isAdmin
     ? [
-        { label: "Products",  path: "/admin/products",  icon: Package },
-        { label: "Customers", path: "/admin/customers", icon: Users },
-        { label: "Sales",     path: "/admin/sales",     icon: ShoppingCart },
-        { label: "Employees", path: "/admin/employees", icon: UserCog },
-        { label: "Companies", path: "/admin/companies", icon: Building2 },
+        { label: t("search.products"),  path: "/admin/products",  icon: Package },
+        { label: t("search.customers"), path: "/admin/customers", icon: Users },
+        { label: t("search.sales"),     path: "/admin/sales",     icon: ShoppingCart },
+        { label: t("search.employees"), path: "/admin/employees", icon: UserCog },
+        { label: t("search.companies"), path: "/admin/companies", icon: Building2 },
       ]
     : [
-        { label: "Products",  path: `${base}/products`,  icon: Package },
-        { label: "Customers", path: `${base}/customers`, icon: Users },
-        { label: "Sales",     path: `${base}/sales`,     icon: ShoppingCart },
+        { label: t("search.products"),  path: `${base}/products`,  icon: Package },
+        { label: t("search.customers"), path: `${base}/customers`, icon: Users },
+        { label: t("search.sales"),     path: `${base}/sales`,     icon: ShoppingCart },
       ];
 
   const ALL_FILTERS = isAdmin
@@ -191,12 +196,12 @@ export default function SearchPage() {
     : FILTER_CHIPS;
 
   const SECTION_LABELS: Record<FilterType, string> = {
-    all: "Results",
-    product: "Products",
-    customer: "Customers",
-    sale: "Sales",
-    employee: "Employees",
-    company: "Companies",
+    all: t("search.results"),
+    product: t("search.products"),
+    customer: t("search.customers"),
+    sale: t("search.sales"),
+    employee: t("search.employees"),
+    company: t("search.companies"),
   };
 
   return (
@@ -224,7 +229,7 @@ export default function SearchPage() {
             autoFocus
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder={isAdmin ? "Search products, customers, sales, employees..." : "Search products, customers, sales..."}
+            placeholder={isAdmin ? t("search.placeholderAdmin") : t("search.placeholderEmployee")}
             className="flex-1 bg-transparent text-sm outline-none"
             style={{ color: "var(--text-primary)" }}
           />
@@ -259,7 +264,7 @@ export default function SearchPage() {
       {!q && (
         <div className="px-4 pt-2">
           <p className="text-xs font-bold uppercase mb-3 tracking-wider" style={{ color: "var(--text-secondary)" }}>
-            Quick Access
+            {t("search.quickAccess")}
           </p>
           <div className="flex flex-wrap gap-2">
             {QUICK_ACCESS.map(({ label, path, icon: Icon }) => (
@@ -281,7 +286,7 @@ export default function SearchPage() {
       {q && results.length > 0 && (
         <div className="px-4 pt-2 pb-24">
           <p className="text-xs font-bold uppercase mb-3 tracking-wider" style={{ color: "var(--text-secondary)" }}>
-            {results.length} result{results.length !== 1 ? "s" : ""} for "{query}"
+            {t("search.resultsFor", "{count} results for \"{query}\"").replace("{count}", String(results.length)).replace("{query}", query)}
           </p>
           {Array.from(grouped.entries()).map(([type, items]) => (
             <div key={type} className="mb-4">
@@ -366,9 +371,9 @@ export default function SearchPage() {
           <div className="size-14 rounded-full flex items-center justify-center" style={{ background: "var(--surface-2)" }}>
             <Search size={22} style={{ color: "var(--text-secondary)" }} />
           </div>
-          <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>No results for "{query}"</p>
+          <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>{t("search.noResults", `No results for "${query}"`).replace("{query}", query)}</p>
           <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
-            Try a different keyword or switch the filter
+            {t("search.tryDifferent")}
           </p>
         </div>
       )}

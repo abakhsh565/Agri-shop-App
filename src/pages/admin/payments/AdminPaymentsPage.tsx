@@ -7,6 +7,7 @@ import { useCustomersStore } from "@/stores/customersStore";
 import { useCompaniesStore } from "@/stores/companiesStore";
 import { formatCurrency } from "@/lib/formatters";
 import { useThemeStore } from "@/stores/themeStore";
+import { useT } from "@/lib/i18n";
 import { ChevronRight } from "lucide-react";
 
 type Tab = "customers" | "suppliers";
@@ -15,6 +16,7 @@ export default function AdminPaymentsPage() {
   const navigate = useNavigate();
   const { language } = useThemeStore();
   const isUrdu = language === "ur";
+  const t = useT();
   const [tab, setTab] = useState<Tab>("customers");
 
   const customers = useCustomersStore((s) => s.customers);
@@ -53,14 +55,14 @@ export default function AdminPaymentsPage() {
           className="rounded-[14px] p-4 text-start"
           style={{ background: "var(--surface-2)", border: `1.5px solid ${tab === "suppliers" ? "var(--brand)" : "var(--divider)"}` }}
         >
-          <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "var(--text-secondary)" }}>We owe suppliers</p>
+          <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "var(--text-secondary)" }}>{t("payments.weOweSuppliers")}</p>
           <p className="text-lg font-bold mt-1" style={{ color: totalPayable > 0 ? "var(--error)" : "var(--brand-dark)" }}>{formatCurrency(totalPayable)}</p>
         </button>
       </div>
 
       {/* Tabs */}
       <div className="flex gap-2 px-4 pt-4">
-        {([{ key: "customers", label: "Customer Credit" }, { key: "suppliers", label: "Supplier Payables" }] as const).map((tb) => (
+        {([{ key: "customers", label: t("payments.customerCredit") }, { key: "suppliers", label: t("payments.supplierPayables") }] as const).map((tb) => (
           <button
             key={tb.key}
             onClick={() => setTab(tb.key)}
@@ -104,7 +106,7 @@ export default function AdminPaymentsPage() {
           </div>
         )
       ) : owedToSuppliers.length === 0 ? (
-        <EmptyState icon="✅" title="No supplier payables" subtitle="All suppliers are settled." />
+        <EmptyState icon="✅" title={t("payments.noSupplierPayables")} subtitle={t("payments.allSuppliersSettled")} />
       ) : (
         <div className="flex flex-col px-4 gap-3 pt-4 pb-6">
           {owedToSuppliers.map((c) => (

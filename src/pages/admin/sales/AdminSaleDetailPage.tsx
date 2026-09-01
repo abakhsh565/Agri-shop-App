@@ -133,7 +133,7 @@ export default function AdminSaleDetailPage() {
 
   if (!sale) return (
     <div className="flex flex-col w-full min-h-full items-center justify-center" style={{ background: "var(--background)" }}>
-      <p style={{ color: "var(--text-secondary)" }}>Sale not found</p>
+      <p style={{ color: "var(--text-secondary)" }}>{t("saleDetail.saleNotFound")}</p>
     </div>
   );
 
@@ -146,9 +146,9 @@ export default function AdminSaleDetailPage() {
     setSavingNote(true);
     try {
       await updateNote(sale!.id, note);
-      addToast("Note saved", "success");
+      addToast(t("saleDetail.noteSaved"), "success");
     } catch {
-      addToast("Could not save note", "error");
+      addToast(t("saleDetail.couldNotSaveNote"), "error");
     } finally {
       setSavingNote(false);
     }
@@ -164,7 +164,7 @@ export default function AdminSaleDetailPage() {
       outstandingBalance: sale!.outstandingBalance, subtotal: sale!.subtotal,
       items: sale!.items.map((it) => ({ productName: it.productName, variantName: it.variantName, qty: it.qty, unitPrice: it.unitPrice })),
     });
-    if (!blob) { addToast("Failed to generate receipt", "error"); return; }
+    if (!blob) { addToast(t("saleDetail.failedReceipt"), "error"); return; }
     const fileName = `receipt-${sale!.saleNumber}.png`;
     try {
       const { Filesystem, Directory } = await import("@capacitor/filesystem");
@@ -172,16 +172,16 @@ export default function AdminSaleDetailPage() {
       await Filesystem.writeFile({ path: fileName, data: base64, directory: Directory.Cache, recursive: true });
       const fileUri = await Filesystem.getUri({ path: fileName, directory: Directory.Cache });
       const { Share } = await import("@capacitor/share");
-      await Share.share({ title: "AgriShop Receipt", dialogTitle: "Share Receipt", url: fileUri.uri, files: [fileUri.uri] });
+      await Share.share({ title: t("saleSuccess.saleReceipt"), dialogTitle: t("saleSuccess.shareReceipt"), url: fileUri.uri, files: [fileUri.uri] });
       return;
     } catch {}
     const file = new File([blob], fileName, { type: "image/png" });
     if (navigator.share && navigator.canShare?.({ files: [file] })) {
-      try { await navigator.share({ title: "AgriShop Receipt", files: [file] }); return; } catch {}
+      try { await navigator.share({ title: t("saleSuccess.saleReceipt"), files: [file] }); return; } catch {}
     }
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a"); a.href = url; a.download = fileName; a.click();
-    URL.revokeObjectURL(url); addToast("Receipt image saved", "success");
+    URL.revokeObjectURL(url); addToast(t("saleDetail.receiptImageSaved"), "success");
   }
 
   async function handleDownload() {
@@ -197,7 +197,7 @@ export default function AdminSaleDetailPage() {
     if (blob) {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a"); a.href = url; a.download = `receipt-${sale!.saleNumber}.png`; a.click();
-      URL.revokeObjectURL(url); addToast("Receipt downloaded", "success");
+      URL.revokeObjectURL(url); addToast(t("saleDetail.receiptDownloaded"), "success");
     }
   }
 
@@ -305,7 +305,7 @@ export default function AdminSaleDetailPage() {
                 {sale.employeeName.charAt(0).toUpperCase()}
               </div>
               <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
-                Sold by <span className="font-semibold" style={{ color: "var(--text-primary)" }}>{sale.employeeName}</span>
+                {t("saleDetail.soldBy")} <span className="font-semibold" style={{ color: "var(--text-primary)" }}>{sale.employeeName}</span>
               </p>
             </div>
           </div>
@@ -329,15 +329,15 @@ export default function AdminSaleDetailPage() {
                       background: ret.resolution === "refund_cash" ? "rgba(132,204,22,0.12)" : "rgba(59,130,246,0.12)",
                       color: ret.resolution === "refund_cash" ? "var(--brand-dark)" : "#2563eb",
                     }}>
-                      {ret.resolution === "refund_cash" ? "Cash Refund" : "Credit Note"}
+                      {ret.resolution === "refund_cash" ? t("saleDetail.cashRefund") : t("saleDetail.creditNote")}
                     </span>
                   </div>
                   <p className="text-xs mb-1" style={{ color: "var(--text-secondary)" }}>
-                    Returned by: <span className="font-semibold" style={{ color: "var(--text-primary)" }}>{ret.processedByName}</span>
+                    {t("saleDetail.processedBy")} <span className="font-semibold" style={{ color: "var(--text-primary)" }}>{ret.processedByName}</span>
                   </p>
                   {ret.reason && (
                     <p className="text-xs mb-1" style={{ color: "var(--text-secondary)" }}>
-                      Reason: <span style={{ color: "var(--text-primary)" }}>{ret.reason}</span>
+                      {t("saleDetail.reason")} <span style={{ color: "var(--text-primary)" }}>{ret.reason}</span>
                     </p>
                   )}
                   <div className="mt-2">
@@ -348,7 +348,7 @@ export default function AdminSaleDetailPage() {
                     ))}
                   </div>
                   <div className="flex justify-between mt-2 pt-2" style={{ borderTop: "1px solid var(--divider)" }}>
-                    <span className="text-xs font-bold" style={{ color: "var(--text-secondary)" }}>Refund</span>
+                    <span className="text-xs font-bold" style={{ color: "var(--text-secondary)" }}>{t("saleDetail.refund")}</span>
                     <span className="text-sm font-bold" style={{ color: "#ef4444" }}>{formatCurrency(ret.totalRefund)}</span>
                   </div>
                 </div>
@@ -365,7 +365,7 @@ export default function AdminSaleDetailPage() {
           </div>
           {totalReturned > 0 && (
             <div className="flex justify-between">
-              <span className="text-sm" style={{ color: "var(--text-secondary)" }}>Returns</span>
+              <span className="text-sm" style={{ color: "var(--text-secondary)" }}>{t("saleDetail.returns")}</span>
               <span className="text-sm font-bold" style={{ color: "#ef4444" }}>-{formatCurrency(totalReturned)}</span>
             </div>
           )}
@@ -395,14 +395,14 @@ export default function AdminSaleDetailPage() {
           {/* Note */}
           <div className="pt-2 mt-1" style={{ borderTop: "1px solid var(--divider)" }}>
             <div className="flex items-center justify-between mb-2">
-              <p className="text-xs font-bold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>Note</p>
+              <p className="text-xs font-bold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>{t("saleDetail.note")}</p>
               {note !== (sale.note ?? "") && (
                 <button onClick={handleSaveNote} disabled={savingNote} className="text-xs font-bold px-3 py-1 rounded-full" style={{ background: "var(--brand)", color: "#0a0a0a" }}>
-                  {savingNote ? "Saving..." : "Save"}
+                  {savingNote ? t("saleDetail.saving") : t("saleDetail.save")}
                 </button>
               )}
             </div>
-            <textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="Add a note..." rows={3}
+            <textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder={t("saleDetail.addNote")} rows={3}
               className="w-full rounded-[12px] px-4 py-3 text-sm resize-none outline-none"
               style={{ background: "var(--surface)", border: "1px solid var(--divider)", color: "var(--text-primary)" }}
             />
@@ -413,11 +413,11 @@ export default function AdminSaleDetailPage() {
         <div className="flex gap-2">
           <button onClick={handleShare} className="flex-1 flex items-center justify-center gap-2 h-11 rounded-full text-sm font-medium transition-colors"
             style={{ border: "1px solid var(--divider)", color: "var(--text-primary)" }}>
-            <Share2 size={14} /> Share
+            <Share2 size={14} /> {t("saleDetail.share")}
           </button>
           <button onClick={handleDownload} className="flex-1 flex items-center justify-center gap-2 h-11 rounded-full text-sm font-medium transition-colors"
             style={{ border: "1px solid var(--divider)", color: "var(--text-primary)" }}>
-            <Download size={14} /> Download
+            <Download size={14} /> {t("saleDetail.download")}
           </button>
         </div>
 
@@ -434,7 +434,7 @@ export default function AdminSaleDetailPage() {
         ) : (
           <div className="flex items-center justify-center gap-2 w-full h-12 rounded-full text-sm"
             style={{ border: "1.5px solid var(--divider)", color: "var(--text-secondary)", background: "var(--surface-2)" }}>
-            <Clock size={15} /> Return window expired (30 days)
+            <Clock size={15} /> {t("saleDetail.returnWindowExpired")}
           </div>
         )}
 

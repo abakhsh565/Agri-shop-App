@@ -5,6 +5,7 @@ import NavHeader from "@/components/ui/NavHeader";
 import { useNotificationStore, type AppNotification } from "@/stores/notificationStore";
 import { useThemeStore } from "@/stores/themeStore";
 import { useCurrentTime } from "@/lib/useCurrentTime";
+import { useT } from "@/lib/i18n";
 import { formatSmartDateTime } from "@/lib/formatters";
 import {
   Bell, ShoppingCart, CreditCard, RotateCcw, Package,
@@ -88,6 +89,7 @@ export default function AdminNotificationsPage() {
   const { items, loading, ready, load, subscribe, markAllRead } = useNotificationStore();
   const { language } = useThemeStore();
   const isUrdu = language === "ur";
+  const t = useT();
   const now = useCurrentTime();
 
   useEffect(() => {
@@ -133,10 +135,10 @@ export default function AdminNotificationsPage() {
             <Bell size={22} style={{ color: "var(--text-secondary)" }} />
           </div>
           <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
-            No notifications yet
+            {t("dashboard.noNotifications")}
           </p>
           <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
-            New sales, payments, and stock changes will appear here in real time.
+            {t("notifications.realTimeNotice")}
           </p>
         </div>
       ) : (

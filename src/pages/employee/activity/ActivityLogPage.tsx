@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
 import { useShellBase } from "@/lib/useShellBase";
+import { useT } from "@/lib/i18n";
 import { useSalesStore } from "@/stores/salesStore";
 import { useCustomersStore } from "@/stores/customersStore";
 import { useAuthStore } from "@/stores/authStore";
@@ -35,6 +36,7 @@ function buildFeed(
   mockSales: Sale[],
   mockCustomerPayments: CustomerPayment[],
   mockCustomers: Customer[],
+  t: (...args: any[]) => string,
 ): Activity[] {
   const feed: Activity[] = [];
 
@@ -58,7 +60,7 @@ function buildFeed(
       id: "pay-" + p.id,
       kind: "payment",
       title: `Payment from ${cust?.name ?? "Customer"}`,
-      subtitle: `Via ${p.method === "cash" ? "Cash" : "Bank Transfer"}`,
+      subtitle: `Via ${p.method === "cash" ? t("activity.cash") : t("activity.bankTransfer")}`,
       amount: p.amount,
       actor: p.recordedByName ?? '',
       at: p.createdAt,
@@ -85,17 +87,18 @@ const KIND_COLOR: Record<string, { bg: string; icon: string }> = {
   customer_added: { bg: "rgba(139,92,246,0.12)", icon: "#7c3aed" },
 };
 
-const FILTER_LABELS: { key: ActivityKind; label: string }[] = [
-  { key: "all",            label: "All" },
-  { key: "sale",           label: "Sales" },
-  { key: "payment",        label: "Payments" },
-  { key: "return",         label: "Returns" },
-  { key: "customer_added", label: "Customers" },
+const FILTER_LABELS: { key: ActivityKind; labelKey: string }[] = [
+  { key: "all",            labelKey: "activity.allFilter" },
+  { key: "sale",           labelKey: "activity.salesFilter" },
+  { key: "payment",        labelKey: "activity.paymentsFilter" },
+  { key: "return",         labelKey: "activity.returns" },
+  { key: "customer_added", labelKey: "activity.customersFilter" },
 ];
 
 export default function ActivityLogPage() {
   const navigate = useNavigate();
   const base = useShellBase();
+  const t = useT();
   const [filter, setFilter] = useState<ActivityKind>("all");
   const { user } = useAuthStore();
   const isAdmin = user?.role === "admin" || user?.role === "co_admin";
@@ -115,7 +118,7 @@ export default function ActivityLogPage() {
     }).catch(() => setPayments([]));
   }, []);
 
-  const allActivities = buildFeed(base, sales, payments, customers);
+  const allActivities = buildFeed(base, sales, payments, customers, t);
   const shown = filter === "all" ? allActivities : allActivities.filter((a) => a.kind === filter);
 
   const totalSalesAmount = allActivities
@@ -128,7 +131,7 @@ export default function ActivityLogPage() {
       style={{ background: "var(--background)" }}
     >
       <StatusBar />
-      <NavHeader title="Activity Log" />
+      <NavHeader title={t("activity.activityLog")} />
 
       {/* Summary strip */}
       <div className="px-4 pt-2 animate-fade-in-up">
@@ -138,7 +141,7 @@ export default function ActivityLogPage() {
         >
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
-              Total Recorded Activity
+              {t("activity.totalActivity")}
             </p>
             <p className="text-xl font-bold mt-1" style={{ color: "var(--text-primary)" }}>
               {allActivities.length} events
@@ -146,7 +149,7 @@ export default function ActivityLogPage() {
           </div>
           <div className="text-end">
             <p className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
-              Sales Volume
+              {t("activity.salesVolume")}
             </p>
             <p className="text-base font-bold mt-1" style={{ color: "var(--brand-dark)" }}>
               {formatCurrency(totalSalesAmount)}
@@ -167,7 +170,7 @@ export default function ActivityLogPage() {
               color: filter === f.key ? "#0a0a0a" : "var(--text-secondary)",
             }}
           >
-            {f.label}
+            {t(f.labelKey as any)}
           </button>
         ))}
       </div>

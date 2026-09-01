@@ -87,10 +87,10 @@ export default function EmployeeDetailPage() {
 
   const pl = (n: number, s: string) => `${n} ${n === 1 ? s : s + "s"}`;
   const stats = [
-    { icon: TrendingUp, label: "Total Revenue", value: formatCurrency(totalRevenue), color: "var(--brand)" },
-    { icon: ShoppingCart, label: "Total Sales", value: pl(totalTransactions, "sale"), color: "#3b82f6" },
-    { icon: Package, label: "Items Sold", value: pl(totalItems, "item"), color: "#8b5cf6" },
-    { icon: Users, label: "Customers Served", value: pl(uniqueCustomers.length, "customer"), color: "#06b6d4" },
+    { icon: TrendingUp, label: t("admin.totalRevenue"), value: formatCurrency(totalRevenue), color: "var(--brand)" },
+    { icon: ShoppingCart, label: t("admin.totalSales"), value: pl(totalTransactions, "sale"), color: "#3b82f6" },
+    { icon: Package, label: t("employee.itemsSold"), value: pl(totalItems, "item"), color: "#8b5cf6" },
+    { icon: Users, label: t("admin.customersServed"), value: pl(uniqueCustomers.length, "customer"), color: "#06b6d4" },
     { icon: Calendar, label: "Today", value: `${pl(todayTransactions, "sale")} · ${formatCurrency(todayRevenue)}`, color: "#f59e0b" },
     { icon: ShieldCheck, label: "Avg. Sale", value: formatCurrency(avgSaleValue), color: "#ec4899" },
   ];

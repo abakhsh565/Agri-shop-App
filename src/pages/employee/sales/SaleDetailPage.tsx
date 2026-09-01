@@ -140,7 +140,7 @@ export default function SaleDetailPage() {
 
   if (!sale) return (
     <div className="flex flex-col w-full min-h-full items-center justify-center" style={{ background: "var(--background)" }}>
-      <p style={{ color: "var(--text-secondary)" }}>Sale not found</p>
+      <p style={{ color: "var(--text-secondary)" }}>{t("saleDetail.saleNotFound")}</p>
     </div>
   );
 
@@ -149,9 +149,9 @@ export default function SaleDetailPage() {
     setSavingNote(true);
     try {
       await updateNote(sale!.id, note);
-      addToast("Note saved", "success");
+      addToast(t("saleDetail.noteSaved"), "success");
     } catch {
-      addToast("Could not save note", "error");
+      addToast(t("saleDetail.couldNotSaveNote"), "error");
     } finally {
       setSavingNote(false);
     }
@@ -167,7 +167,7 @@ export default function SaleDetailPage() {
       outstandingBalance: sale!.outstandingBalance, subtotal: sale!.subtotal,
       items: sale!.items.map((it) => ({ productName: it.productName, variantName: it.variantName, qty: it.qty, unitPrice: it.unitPrice })),
     });
-    if (!blob) { addToast("Failed to generate receipt", "error"); return; }
+    if (!blob) { addToast(t("saleDetail.failedReceipt"), "error"); return; }
     const fileName = `receipt-${sale!.saleNumber}.png`;
     try {
       const { Filesystem, Directory } = await import("@capacitor/filesystem");
@@ -175,7 +175,7 @@ export default function SaleDetailPage() {
       await Filesystem.writeFile({ path: fileName, data: base64, directory: Directory.Cache, recursive: true });
       const fileUri = await Filesystem.getUri({ path: fileName, directory: Directory.Cache });
       const { Share } = await import("@capacitor/share");
-      await Share.share({ title: "AgriShop Receipt", dialogTitle: "Share Receipt", url: fileUri.uri, files: [fileUri.uri] });
+      await Share.share({ title: t("saleSuccess.saleReceipt"), dialogTitle: t("saleSuccess.shareReceipt"), url: fileUri.uri, files: [fileUri.uri] });
       return;
     } catch {}
     const file = new File([blob], fileName, { type: "image/png" });
@@ -184,7 +184,7 @@ export default function SaleDetailPage() {
     }
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a"); a.href = url; a.download = fileName; a.click();
-    URL.revokeObjectURL(url); addToast("Receipt image saved", "success");
+    URL.revokeObjectURL(url); addToast(t("saleDetail.receiptImageSaved"), "success");
   }
 
   async function handleDownload() {
@@ -197,17 +197,17 @@ export default function SaleDetailPage() {
       outstandingBalance: sale!.outstandingBalance, subtotal: sale!.subtotal,
       items: sale!.items.map((it) => ({ productName: it.productName, variantName: it.variantName, qty: it.qty, unitPrice: it.unitPrice })),
     });
-    if (!blob) { addToast("Failed to generate receipt", "error"); return; }
+    if (!blob) { addToast(t("saleDetail.failedReceipt"), "error"); return; }
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a"); a.href = url; a.download = `receipt-${sale!.saleNumber}.png`; a.click();
-    URL.revokeObjectURL(url); addToast("Receipt downloaded", "success");
+    URL.revokeObjectURL(url); addToast(t("saleDetail.receiptDownloaded"), "success");
   }
 
   const summaryRows = [
     { label: t("sale.subtotal"),             value: formatCurrency(sale.subtotal),             bold: false },
     { label: t("sales.amountPaid"),          value: formatCurrency(sale.amountPaid),          bold: false },
     ...(totalReturned > 0
-      ? [{ label: "Returns", value: `-${formatCurrency(totalReturned)}`, bold: false, color: "#ef4444" }]
+      ? [{ label: t("saleDetail.returns"), value: `-${formatCurrency(totalReturned)}`, bold: false, color: "#ef4444" }]
       : []),
     ...(sale.outstandingBalance > 0
       ? [{ label: t("sales.outstandingBalance"), value: formatCurrency(sale.outstandingBalance), bold: false, color: "#d97706" }]
@@ -272,7 +272,7 @@ export default function SaleDetailPage() {
                     </p>
                     {isFullyReturned && (
                       <span className="inline-block text-[10px] font-semibold px-2 py-0.5 rounded-full mt-1" style={{ background: "rgba(239,68,68,0.1)", color: "#ef4444" }}>
-                        Returned
+                        {t("saleDetail.returned")}
                       </span>
                     )}
                     {isPartialReturned && (
@@ -299,7 +299,7 @@ export default function SaleDetailPage() {
                 {sale.employeeName.charAt(0).toUpperCase()}
               </div>
               <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
-                Sold by <span className="font-semibold" style={{ color: "var(--text-primary)" }}>{sale.employeeName}</span>
+                {t("saleDetail.soldBy")} <span className="font-semibold" style={{ color: "var(--text-primary)" }}>{sale.employeeName}</span>
               </p>
             </div>
           </div>
@@ -309,7 +309,7 @@ export default function SaleDetailPage() {
         {returns.length > 0 && (
           <div>
             <p className="text-xs font-bold uppercase mb-2 tracking-wider" style={{ color: "var(--text-secondary)" }}>
-              Return History
+              {t("saleDetail.returnHistory")}
             </p>
             <div className="flex flex-col gap-3">
               {returns.map((ret) => (
@@ -334,15 +334,15 @@ export default function SaleDetailPage() {
                         color: ret.resolution === "refund_cash" ? "var(--brand-dark)" : "#2563eb",
                       }}
                     >
-                      {ret.resolution === "refund_cash" ? "Cash Refund" : "Credit Note"}
+                      {ret.resolution === "refund_cash" ? t("saleDetail.cashRefund") : t("saleDetail.creditNote")}
                     </span>
                   </div>
                   <p className="text-xs mb-1" style={{ color: "var(--text-secondary)" }}>
-                    Returned by: <span className="font-semibold" style={{ color: "var(--text-primary)" }}>{ret.processedByName}</span>
+                    {t("saleDetail.processedBy")} <span className="font-semibold" style={{ color: "var(--text-primary)" }}>{ret.processedByName}</span>
                   </p>
                   {ret.reason && (
                     <p className="text-xs mb-1" style={{ color: "var(--text-secondary)" }}>
-                      Reason: <span style={{ color: "var(--text-primary)" }}>{ret.reason}</span>
+                      {t("saleDetail.reason")} <span style={{ color: "var(--text-primary)" }}>{ret.reason}</span>
                     </p>
                   )}
                   <div className="mt-2">
@@ -353,7 +353,7 @@ export default function SaleDetailPage() {
                     ))}
                   </div>
                   <div className="flex justify-between mt-2 pt-2" style={{ borderTop: "1px solid var(--divider)" }}>
-                    <span className="text-xs font-bold" style={{ color: "var(--text-secondary)" }}>Refund</span>
+                    <span className="text-xs font-bold" style={{ color: "var(--text-secondary)" }}>{t("saleDetail.refund")}</span>
                     <span className="text-sm font-bold" style={{ color: "#ef4444" }}>{formatCurrency(ret.totalRefund)}</span>
                   </div>
                 </div>
@@ -394,7 +394,7 @@ export default function SaleDetailPage() {
           <div className="pt-2 mt-1" style={{ borderTop: "1px solid var(--divider)" }}>
             <div className="flex items-center justify-between mb-2">
               <p className="text-xs font-bold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
-                Note
+                {t("saleDetail.note")}
               </p>
               {note !== (sale.note ?? "") && (
                 <button
@@ -403,14 +403,14 @@ export default function SaleDetailPage() {
                   className="text-xs font-bold px-3 py-1 rounded-full"
                   style={{ background: "var(--brand)", color: "#0a0a0a" }}
                 >
-                  {savingNote ? "Saving..." : "Save"}
+                  {savingNote ? t("saleDetail.saving") : t("saleDetail.save")}
                 </button>
               )}
             </div>
             <textarea
               value={note}
               onChange={(e) => setNote(e.target.value)}
-              placeholder="Add a note..."
+              placeholder={t("saleDetail.addNote")}
               rows={3}
               className="w-full rounded-[12px] px-4 py-3 text-sm resize-none outline-none"
               style={{
@@ -430,7 +430,7 @@ export default function SaleDetailPage() {
             style={{ border: "1px solid var(--divider)", color: "var(--text-primary)" }}
           >
             <Share2 size={14} />
-            Share
+            {t("saleDetail.share")}
           </button>
           <button
             onClick={handleDownload}
@@ -438,7 +438,7 @@ export default function SaleDetailPage() {
             style={{ border: "1px solid var(--divider)", color: "var(--text-primary)" }}
           >
             <Download size={14} />
-            Download
+            {t("saleDetail.download")}
           </button>
         </div>
 
@@ -457,8 +457,7 @@ export default function SaleDetailPage() {
             className="flex items-center justify-center gap-2 w-full h-12 rounded-full text-sm"
             style={{ border: "1.5px solid var(--divider)", color: "var(--text-secondary)", background: "var(--surface-2)" }}
           >
-            <Clock size={15} />
-            <span>Return window expired (30 days)</span>
+            <Clock size={15} />              <span>{t("saleDetail.returnWindowExpired")}</span>
           </div>
         ) : null}
       </div>

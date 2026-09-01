@@ -1,6 +1,7 @@
 import { useNavigate, useLocation, Navigate } from "react-router-dom";
 import { Home, RotateCcw, Receipt } from "lucide-react";
 import { formatCurrency, formatDateTime } from "@/lib/formatters";
+import { useT } from "@/lib/i18n";
 
 interface ReturnResult {
   refundAmount: number;
@@ -16,6 +17,7 @@ interface ReturnResult {
 
 export default function AdminReturnSuccessPage() {
   const navigate = useNavigate();
+  const t = useT();
   const { state } = useLocation();
   const result: ReturnResult | undefined = state?.result;
 
@@ -24,16 +26,16 @@ export default function AdminReturnSuccessPage() {
   const isCash = result.resolution === "refund_cash";
 
   const ROWS = [
-    { label: "Customer", value: result.customerName },
-    { label: "Sale #", value: result.saleNumber },
-    ...(result.reason ? [{ label: "Reason", value: result.reason }] : []),
+    { label: t("saleSuccess.customer"), value: result.customerName },
+    { label: t("sales.saleNumber"), value: result.saleNumber },
+    ...(result.reason ? [{ label: t("saleDetail.reason"), value: result.reason }] : []),
     { divider: true as const },
-    { label: "Items Returned", value: `${result.itemsReturned} item${result.itemsReturned !== 1 ? "s" : ""}` },
-    { label: "Refund Amount", value: formatCurrency(result.refundAmount), highlight: true },
-    { label: "Resolution", value: isCash ? "Cash Refund" : "Credit Note Applied" },
+    { label: t("return.itemsReturned"), value: `${result.itemsReturned} ${t("common.items")}` },
+    { label: t("return.refundAmount"), value: formatCurrency(result.refundAmount), highlight: true },
+    { label: t("return.resolution"), value: isCash ? t("return.cashRefundApplied") : t("return.creditNoteApplied") },
     { divider: true as const },
-    { label: "Processed by", value: result.processedBy },
-    { label: "Date & Time", value: formatDateTime(result.processedAt) },
+    { label: t("return.processedBy"), value: result.processedBy },
+    { label: t("saleSuccess.dateTime"), value: formatDateTime(result.processedAt) },
   ];
 
   return (
@@ -45,15 +47,15 @@ export default function AdminReturnSuccessPage() {
             <RotateCcw size={32} color="white" strokeWidth={2.5} />
           </div>
           <div className="flex flex-col gap-[8px] items-center text-center w-full animate-fade-in-up delay-150">
-            <p className="font-bold text-[28px]" style={{ color: "var(--text-primary)" }}>Return Processed!</p>
+            <p className="font-bold text-[28px]" style={{ color: "var(--text-primary)" }}>{t("returns.success")}</p>
             <p className="font-normal text-[14px]" style={{ color: "var(--text-secondary)" }}>
-              {isCash ? `${formatCurrency(result.refundAmount)} refunded in cash` : `${formatCurrency(result.refundAmount)} credited to account`}
+              {isCash ? `${formatCurrency(result.refundAmount)} ${t("return.refundedCash")}` : `${formatCurrency(result.refundAmount)} ${t("return.creditedToAccount")}`}
             </p>
           </div>
           <div className="flex items-center gap-2 px-4 py-2 rounded-full animate-scale-in delay-225"
             style={{ background: isCash ? "rgba(132,204,22,0.12)" : "rgba(59,130,246,0.12)", border: `1px solid ${isCash ? "rgba(132,204,22,0.4)" : "rgba(59,130,246,0.4)"}` }}>
             <span className="font-semibold text-[13px]" style={{ color: isCash ? "var(--brand-dark)" : "#2563eb" }}>
-              {isCash ? "✓ Cash Refund Issued" : "✓ Credit Note Applied to Account"}
+              {isCash ? t("return.cashRefundIssued") : t("return.creditNoteIssued")}
             </span>
           </div>
           <div className="flex flex-col gap-[16px] items-start p-[20px] rounded-[16px] w-full animate-fade-in-up delay-300" style={{ border: "1px solid var(--border-light)" }}>

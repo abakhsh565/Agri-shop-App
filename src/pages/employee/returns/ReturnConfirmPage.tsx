@@ -7,6 +7,7 @@ import { formatCurrency } from "@/lib/formatters";
 import type { ReturnItem, Sale } from "@/types";
 import { useUIStore } from "@/stores/uiStore";
 import { useAuthStore } from "@/stores/authStore";
+import { useT } from "@/lib/i18n";
 import { rpcProcessReturn } from "@/lib/db";
 import { AlertTriangle } from "lucide-react";
 import { notifyReturnProcessed } from "@/lib/notifications";
@@ -20,6 +21,7 @@ export default function ReturnConfirmPage() {
   const navigate = useNavigate();
   const { state } = useLocation();
   const { addToast } = useUIStore();
+  const t = useT();
   const currentUser = useAuthStore((s) => s.user);
 
   const rawReturnItems: ReturnItem[] = state?.returnItems ?? [];
@@ -232,8 +234,8 @@ export default function ReturnConfirmPage() {
             <div className="flex gap-2">
               {(
                 [
-                  { key: "refund_cash", label: "Refund Cash" },
-                  { key: "credit_note", label: "Credit Note" },
+                  { key: "refund_cash", label: t("return.refundCash") },
+                  { key: "credit_note", label: t("return.creditNote") },
                 ] as const
               ).map((opt) => (
                 <button
@@ -281,8 +283,8 @@ export default function ReturnConfirmPage() {
               <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
                 {formatCurrency(liveTotal)} will be{" "}
                 {resolution === "refund_cash"
-                  ? "returned directly to customer"
-                  : "added as credit note"}{" "}
+                  ? t("return.returnedDirectly")
+                  : t("return.addedAsCreditNote")}{" "}
                 {sale
                   ? `${sale.customerName}. Original invoice ${sale.saleNumber} remains preserved.`
                   : "to the customer."}

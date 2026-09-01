@@ -4,6 +4,7 @@ import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
 import { useNotificationStore, type AppNotification } from "@/stores/notificationStore";
 import { useCurrentTime } from "@/lib/useCurrentTime";
+import { useT } from "@/lib/i18n";
 import { formatSmartDateTime } from "@/lib/formatters";
 import {
   Bell, ShoppingCart, CreditCard, RotateCcw, Package,
@@ -74,6 +75,7 @@ function groupByTime(items: AppNotification[], now: Date): TimeGroup[] {
 
 export default function EmployeeNotificationsPage() {
   const navigate = useNavigate();
+  const t = useT();
   const { items, loading, ready, load, subscribe, markAllRead } = useNotificationStore();
   const now = useCurrentTime();
 
@@ -117,10 +119,10 @@ export default function EmployeeNotificationsPage() {
             <Bell size={22} style={{ color: "var(--text-secondary)" }} />
           </div>
           <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
-            No notifications yet
+            {t("dashboard.noNotifications")}
           </p>
           <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
-            New sales, payments, and stock changes will appear here in real time.
+            {t("notifications.realTimeNotice")}
           </p>
         </div>
       ) : (

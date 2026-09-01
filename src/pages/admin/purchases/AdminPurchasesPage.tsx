@@ -7,12 +7,14 @@ import { fetchPurchases } from "@/lib/db";
 import type { Purchase } from "@/types";
 import { formatCurrency, formatDate } from "@/lib/formatters";
 import { useThemeStore } from "@/stores/themeStore";
+import { useT } from "@/lib/i18n";
 import { PackagePlus } from "lucide-react";
 
 export default function AdminPurchasesPage() {
   const navigate = useNavigate();
   const { language } = useThemeStore();
   const isUrdu = language === "ur";
+  const t = useT();
 
   const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [loading, setLoading] = useState(true);
@@ -45,7 +47,7 @@ export default function AdminPurchasesPage() {
         >
           <div>
             <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "var(--text-secondary)" }}>
-              Outstanding Supplier Payable
+              {t("purchases.outstandingSupplier")}
             </p>
             <p className="text-xl font-bold mt-0.5" style={{ color: totalPayable > 0 ? "var(--error)" : "var(--brand-dark)" }}>
               {formatCurrency(totalPayable)}
@@ -56,7 +58,7 @@ export default function AdminPurchasesPage() {
             className="text-xs font-bold px-3 py-1.5 rounded-full"
             style={{ background: "var(--surface)", border: "1px solid var(--divider)", color: "var(--text-primary)" }}
           >
-            Pay suppliers
+            {t("purchases.paySuppliers")}
           </button>
         </div>
       </div>
@@ -66,7 +68,7 @@ export default function AdminPurchasesPage() {
           <p className="text-sm" style={{ color: "var(--text-secondary)" }}>Loading…</p>
         </div>
       ) : purchases.length === 0 ? (
-        <EmptyState icon="📦" title="No stock-ins yet" subtitle="Record a purchase to add inventory and track supplier payables." />
+        <EmptyState icon="📦" title={t("purchases.noStockIns")} subtitle={t("purchases.noStockInsDesc")} />
       ) : (
         <div className="flex flex-col px-4 gap-3 pt-4 pb-24">
           {purchases.map((p) => {

@@ -14,10 +14,10 @@ import { useSalesStore } from "@/stores/salesStore";
 
 type SortKey = "outstanding" | "name" | "recent";
 
-const SORT_OPTIONS: { key: SortKey; label: string }[] = [
-  { key: "outstanding", label: "Highest Outstanding" },
-  { key: "name", label: "Name (A–Z)" },
-  { key: "recent", label: "Recently Added" },
+const SORT_OPTIONS: { key: SortKey; labelKey: string }[] = [
+  { key: "outstanding", labelKey: "sale.highestAmount" },
+  { key: "name", labelKey: "sale.recentlyAdded" },
+  { key: "recent", labelKey: "sale.recentlyAdded" },
 ];
 
 function initBgColor(name: string) {
@@ -114,7 +114,7 @@ export default function CustomersListPage() {
         >
           <div>
             <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "var(--text-secondary)" }}>
-              Total Outstanding
+              {t("common.outstanding")}
             </p>
             <p className="text-[20px] font-bold mt-0.5" style={{ color: "#d97706" }}>
               {formatCurrency(totalOutstanding)}
@@ -122,7 +122,7 @@ export default function CustomersListPage() {
           </div>
           <div className="text-end">
             <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "var(--text-secondary)" }}>
-              On Credit
+              {t("sale.onCredit")}
             </p>
             <p className="text-[20px] font-bold mt-0.5" style={{ color: "var(--text-primary)" }}>
               {onCredit} / {customers.length}
@@ -141,7 +141,7 @@ export default function CustomersListPage() {
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search name or phone..."
+            placeholder={t("customers.search")}
             className="flex-1 bg-transparent text-[13px] outline-none"
             style={{ color: "var(--text-primary)" }}
           />
@@ -177,7 +177,7 @@ export default function CustomersListPage() {
                     className="text-[13px] font-medium"
                     style={{ color: sort === opt.key ? "var(--brand-dark)" : "var(--text-primary)" }}
                   >
-                    {opt.label}
+                    {t(opt.labelKey as any)}
                   </span>
                   {sort === opt.key && <Check size={16} style={{ color: "var(--brand)" }} />}
                 </button>
@@ -200,7 +200,7 @@ export default function CustomersListPage() {
             </button>
           </div>
         )}
-        {[{ key: "all", label: "All Customers" }, { key: "credit", label: "On Credit" }].map((f) => (
+        {[{ key: "all", labelKey: "sale.allCustomers" }, { key: "credit", labelKey: "sale.onCredit" }].map((f) => (
           <button
             key={f.key}
             onClick={() => setCreditFilter(f.key as "all" | "credit")}
@@ -210,7 +210,7 @@ export default function CustomersListPage() {
               color: creditFilter === f.key ? "#0a0a0a" : "var(--text-secondary)",
             }}
           >
-            {f.label}
+            {t(f.labelKey as any)}
           </button>
         ))}
       </div>
@@ -224,11 +224,11 @@ export default function CustomersListPage() {
         <div className="flex flex-col items-center py-16 gap-3">
           <p className="text-4xl">👤</p>
           <p className="text-[15px] font-semibold" style={{ color: "var(--text-primary)" }}>
-            {search ? "No customers match your search" : "No customers yet"}
+            {search ? t("sale.noCustomersMatch") : t("sale.noCustomersYet")}
           </p>
           {!search && (
             <p className="text-[13px]" style={{ color: "var(--text-secondary)" }}>
-              Add your first customer to get started
+              {t("customers.addNew")}
             </p>
           )}
         </div>
@@ -291,7 +291,7 @@ export default function CustomersListPage() {
                     </div>
                   ) : (
                     <p className="text-[10px] mt-1" style={{ color: "var(--text-secondary)" }}>
-                      No credit limit set
+                      {t("customers.creditLimit")} — {"—"}
                     </p>
                   )}
                 </div>
@@ -307,12 +307,12 @@ export default function CustomersListPage() {
                         className="text-[10px] font-semibold"
                         style={{ color: "#22c55e" }}
                       >
-                        outstanding
+                        {t("customers.outstanding")}
                       </span>
                     </>
                   ) : (
                     <span className="text-[11px] font-medium" style={{ color: "var(--text-secondary)" }}>
-                      No balance
+                      {t("customers.noOutstanding")}
                     </span>
                   )}
                   <ChevronRight size={14} style={{ color: "var(--text-secondary)" }} />
@@ -334,7 +334,7 @@ export default function CustomersListPage() {
             className="pointer-events-auto ps-4 pe-5 rounded-full flex items-center gap-2 text-sm font-bold active:scale-95 transition-transform"
             style={{ background: "var(--brand)", color: "#0a0a0a", height: "52px", boxShadow: "0 6px 20px rgba(0,0,0,0.25)" }}
           >
-            <Plus size={20} strokeWidth={2.5} /> Customer
+            <Plus size={20} strokeWidth={2.5} /> {t("customers.title")}
           </button>
         </div>
       </div>

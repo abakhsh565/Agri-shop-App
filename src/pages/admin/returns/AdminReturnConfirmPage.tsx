@@ -7,6 +7,7 @@ import { formatCurrency } from "@/lib/formatters";
 import type { ReturnItem, Sale } from "@/types";
 import { useUIStore } from "@/stores/uiStore";
 import { useAuthStore } from "@/stores/authStore";
+import { useT } from "@/lib/i18n";
 import { supabase } from "@/lib/supabase";
 import { AlertTriangle } from "lucide-react";
 import { notifyReturnProcessed } from "@/lib/notifications";
@@ -20,6 +21,7 @@ export default function AdminReturnConfirmPage() {
   const navigate = useNavigate();
   const { state } = useLocation();
   const { addToast } = useUIStore();
+  const t = useT();
   const currentUser = useAuthStore((s) => s.user);
 
   const rawReturnItems: ReturnItem[] = state?.returnItems ?? [];
@@ -193,7 +195,7 @@ export default function AdminReturnConfirmPage() {
           <div>
             <p className="text-xs font-bold uppercase mb-2" style={{ color: "var(--text-secondary)" }}>Resolution Method</p>
             <div className="flex gap-2">
-              {([ { key: "refund_cash" as const, label: "Refund Cash" }, { key: "credit_note" as const, label: "Credit Note" } ]).map((opt) => (
+              {([ { key: "refund_cash" as const, label: t("return.refundCash") }, { key: "credit_note" as const, label: t("return.creditNote") } ]).map((opt) => (
                 <button key={opt.key} onClick={() => setResolution(opt.key)}
                   className="flex-1 h-12 rounded-full text-sm font-medium transition-colors"
                   style={{
@@ -214,7 +216,7 @@ export default function AdminReturnConfirmPage() {
               <p className="text-xs font-bold uppercase mb-1" style={{ color: "var(--text-primary)" }}>Refund Processing</p>
               <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
                 {formatCurrency(liveTotal)} will be{" "}
-                {resolution === "refund_cash" ? "returned directly to customer" : "added as credit note"}{" "}
+                {resolution === "refund_cash" ? t("return.returnedDirectly") : t("return.addedAsCreditNote")}{" "}
                 {sale ? `${sale.customerName}. Original invoice ${sale.saleNumber} remains preserved.` : "to the customer."}
               </p>
             </div>

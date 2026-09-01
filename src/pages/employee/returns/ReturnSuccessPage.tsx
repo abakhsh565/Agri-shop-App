@@ -1,6 +1,8 @@
 import { useNavigate, useLocation, Navigate } from "react-router-dom";
 import { Home, RotateCcw, Receipt } from "lucide-react";
 import { formatCurrency, formatDateTime } from "@/lib/formatters";
+import { useT } from "@/lib/i18n";
+import { useShellBase } from "@/lib/useShellBase";
 
 interface ReturnResult {
   refundAmount: number;
@@ -15,23 +17,25 @@ interface ReturnResult {
 
 export default function ReturnSuccessPage() {
   const navigate = useNavigate();
+  const base = useShellBase();
+  const t = useT();
   const { state } = useLocation();
   const result: ReturnResult | undefined = state?.result;
 
-  if (!result) return <Navigate to="/employee/sales" replace />;
+  if (!result) return <Navigate to={`${base}/sales`} replace />;
 
   const isCash = result.resolution === "refund_cash";
 
   const ROWS = [
-    { label: "Customer", value: result.customerName },
-    { label: "Sale #", value: result.saleNumber },
+    { label: t("saleSuccess.customer"), value: result.customerName },
+    { label: t("sales.saleNumber"), value: result.saleNumber },
     { divider: true },
-    { label: "Items Returned", value: `${result.itemsReturned} item${result.itemsReturned !== 1 ? "s" : ""}` },
-    { label: "Refund Amount", value: formatCurrency(result.refundAmount), highlight: true },
-    { label: "Resolution", value: isCash ? "Cash Refund" : "Credit Note Applied" },
+    { label: t("return.itemsReturned"), value: `${result.itemsReturned} ${t("common.items")}` },
+    { label: t("return.refundAmount"), value: formatCurrency(result.refundAmount), highlight: true },
+    { label: t("return.resolution"), value: isCash ? t("return.cashRefundApplied") : t("return.creditNoteApplied") },
     { divider: true },
-    { label: "Processed by", value: result.processedBy },
-    { label: "Date & Time", value: formatDateTime(result.processedAt) },
+    { label: t("return.processedBy"), value: result.processedBy },
+    { label: t("saleSuccess.dateTime"), value: formatDateTime(result.processedAt) },
   ];
 
   return (
@@ -65,12 +69,12 @@ export default function ReturnSuccessPage() {
           {/* Headers */}
           <div className="flex flex-col gap-[8px] items-center text-center w-full animate-fade-in-up delay-150">
             <p className="font-bold text-[28px]" style={{ color: "var(--text-primary)" }}>
-              Return Processed!
+              {t("returns.success")}
             </p>
             <p className="font-normal text-[14px]" style={{ color: "var(--text-secondary)" }}>
               {isCash
-                ? `${formatCurrency(result.refundAmount)} refunded in cash`
-                : `${formatCurrency(result.refundAmount)} credited to account`}
+                ? `${formatCurrency(result.refundAmount)} ${t("return.refundedCash")}`
+                : `${formatCurrency(result.refundAmount)} ${t("return.creditedToAccount")}`}
             </p>
           </div>
 
@@ -86,7 +90,7 @@ export default function ReturnSuccessPage() {
               className="font-semibold text-[13px]"
               style={{ color: isCash ? "var(--brand-dark)" : "#2563eb" }}
             >
-              {isCash ? "✓ Cash Refund Issued" : "✓ Credit Note Applied to Account"}
+              {isCash ? t("return.cashRefundIssued") : t("return.creditNoteIssued")}
             </span>
           </div>
 
@@ -122,21 +126,21 @@ export default function ReturnSuccessPage() {
       {/* Actions */}
       <div className="flex flex-col gap-[12px] items-center px-[24px] pb-[32px] pt-[8px] w-full animate-fade-in-up delay-375">
         <button
-          onClick={() => navigate("/employee/dashboard", { replace: true })}
+          onClick={() => navigate(`${base}/dashboard`, { replace: true })}
           className="flex h-[48px] items-center justify-center gap-2 rounded-[24px] w-full font-bold text-[14px] transition-transform active:scale-[0.97]"
           style={{ background: "var(--brand)", color: "#0a0a0a" }}
         >
           <Home size={16} strokeWidth={2.5} />
-          Back to Dashboard
+          {t("returns.backDashboard")}
         </button>
 
         <button
-          onClick={() => navigate(`/employee/sales/${result.saleId}`)}
+          onClick={() => navigate(`${base}/sales/${result.saleId}`)}
           className="flex h-[48px] items-center justify-center gap-2 rounded-[24px] w-full font-bold text-[14px] transition-transform active:scale-[0.97]"
           style={{ border: "1px solid var(--border-light)", color: "var(--text-primary)" }}
         >
           <Receipt size={16} strokeWidth={2} />
-          View Original Sale
+          {t("returns.viewSale")}
         </button>
       </div>
     </div>

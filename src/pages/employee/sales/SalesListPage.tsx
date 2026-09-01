@@ -17,11 +17,11 @@ type Tab = "all" | "credit" | "paid";
 type DateFilter = "today" | "yesterday" | "this_week" | "this_month" | "custom";
 type SortKey = "newest" | "oldest" | "highest" | "lowest";
 
-const SORT_OPTIONS: { key: SortKey; label: string }[] = [
-  { key: "newest", label: "Newest First" },
-  { key: "oldest", label: "Oldest First" },
-  { key: "highest", label: "Highest Amount" },
-  { key: "lowest", label: "Lowest Amount" },
+const SORT_OPTIONS: { key: SortKey; labelKey: string }[] = [
+  { key: "newest", labelKey: "admin.sortNewestFirst" },
+  { key: "oldest", labelKey: "admin.sortOldestFirst" },
+  { key: "highest", labelKey: "admin.sortHighestAmount" },
+  { key: "lowest", labelKey: "admin.sortLowestAmount" },
 ];
 
 function initBgColor(name: string) {
@@ -111,7 +111,7 @@ export default function SalesListPage() {
     { key: "yesterday",  label: t("sales.yesterday") },
     { key: "this_week",  label: t("sales.thisWeek") },
     { key: "this_month", label: t("sales.thisMonth") ?? "This Month" },
-    { key: "custom",     label: "Custom" },
+    { key: "custom",     label: t("sale.custom") },
   ];
 
   const todayISO = now.toISOString().split("T")[0];
@@ -177,7 +177,7 @@ export default function SalesListPage() {
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search customer, sale #, or amount"
+            placeholder={t("sale.searchPlaceholder")}
             className="flex-1 bg-transparent text-[13px] outline-none"
             style={{ color: "var(--text-primary)" }}
           />
@@ -212,7 +212,7 @@ export default function SalesListPage() {
                   style={{ borderBottom: "1px solid var(--divider)" }}
                 >
                   <span className="text-[13px] font-medium" style={{ color: sort === opt.key ? "var(--brand-dark)" : "var(--text-primary)" }}>
-                    {opt.label}
+                    {t(opt.labelKey as any)}
                   </span>
                   {sort === opt.key && <Check size={16} style={{ color: "var(--brand)" }} />}
                 </button>
@@ -302,12 +302,12 @@ export default function SalesListPage() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-4">
-              <p className="text-[15px] font-bold" style={{ color: "var(--text-primary)" }}>Select Date Range</p>
+              <p className="text-[15px] font-bold" style={{ color: "var(--text-primary)" }}>{t("admin.selectDateRange")}</p>
               <button onClick={() => setShowDateModal(false)} className="text-xl" style={{ color: "var(--text-secondary)" }}>×</button>
             </div>
             <div className="flex gap-3">
               <div className="flex-1">
-                <label className="text-[11px] font-semibold uppercase tracking-wider mb-1 block" style={{ color: "var(--text-secondary)" }}>From</label>
+                <label className="text-[11px] font-semibold uppercase tracking-wider mb-1 block" style={{ color: "var(--text-secondary)" }}>{t("admin.from")}</label>
                 <input
                   type="date"
                   value={customFrom}
@@ -318,7 +318,7 @@ export default function SalesListPage() {
                 />
               </div>
               <div className="flex-1">
-                <label className="text-[11px] font-semibold uppercase tracking-wider mb-1 block" style={{ color: "var(--text-secondary)" }}>To</label>
+                <label className="text-[11px] font-semibold uppercase tracking-wider mb-1 block" style={{ color: "var(--text-secondary)" }}>{t("admin.to")}</label>
                 <input
                   type="date"
                   value={customTo}
@@ -336,14 +336,14 @@ export default function SalesListPage() {
                 className="flex-1 h-10 rounded-xl text-[13px] font-semibold"
                 style={{ background: "var(--surface-2)", color: "var(--text-secondary)" }}
               >
-                Clear
+                {t("common.cancel")}
               </button>
               <button
                 onClick={applyCustomDates}
                 className="flex-1 h-10 rounded-xl text-[13px] font-bold"
                 style={{ background: "var(--brand)", color: "#0a0a0a" }}
               >
-                Apply
+                {t("common.confirm")}
               </button>
             </div>
           </div>
@@ -395,11 +395,11 @@ export default function SalesListPage() {
                       </span>
                       {sale.paymentType !== "full" ? (
                         <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ background: "rgba(239,68,68,0.1)", color: "#ef4444" }}>
-                          Credit
+                          {t("common.creditTag")}
                         </span>
                       ) : (
                         <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ background: "rgba(132,204,22,0.15)", color: "var(--brand-dark)" }}>
-                          Paid
+                          {t("common.paidTag")}
                         </span>
                       )}
                     </div>
