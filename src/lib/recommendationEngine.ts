@@ -223,7 +223,7 @@ export function getRecommendationsForProduct(
       if (!hasBought && inSeason) {
         recommendations.push({
           customer,
-          reason: cropName + " \u00B7 growing season window is open",
+          reason: cropName + " \u00B7 missing from this season\u2019s basket",
           reasonTag: "missing_from_basket",
           cropName,
         });
