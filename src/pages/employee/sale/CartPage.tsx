@@ -11,6 +11,7 @@ import { formatCurrency, getCreditHealth, getCreditHealthColor } from "@/lib/for
 import { Plus } from "lucide-react";
 import { useUIStore } from "@/stores/uiStore";
 import { useShellBase } from "@/lib/useShellBase";
+import { useT } from "@/lib/i18n";
 import { useProductsStore } from "@/stores/productsStore";
 import ScanButton from "@/components/ui/ScanButton";
 import { checkAndNotifyLowStock } from "@/lib/notifications";
@@ -18,6 +19,7 @@ import { checkAndNotifyLowStock } from "@/lib/notifications";
 export default function CartPage() {
   const navigate = useNavigate();
   const base = useShellBase();
+  const t = useT();
   const { customer, items, updateQty, removeItem, subtotal, clearCart } = useCartStore();
   const { addToast } = useUIStore();
   const createSale = useSalesStore((s) => s.createSale);
@@ -53,9 +55,9 @@ export default function CartPage() {
   const creditOverLimit = customer ? customer.creditLimit > 0 && creditAfterSale > customer.creditLimit : false;
 
   async function handleCompleteSale() {
-    if (!items.length) { addToast("Add at least one product", "warning"); return; }
-    if (!customer) { addToast("Please select a customer first", "warning"); navigate(`${base}/sale`, { state: { fromCart: true } }); return; }
-    if (paymentType === "partial" && amountTouched && parsedAmount !== null && parsedAmount < 0) { addToast("Amount cannot be negative", "warning"); return; }
+    if (!items.length) { addToast(t("sale.addAtLeastOne"), "warning"); return; }
+    if (!customer) { addToast(t("sale.selectCustomerFirst"), "warning"); navigate(`${base}/sale`, { state: { fromCart: true } }); return; }
+    if (paymentType === "partial" && amountTouched && parsedAmount !== null && parsedAmount < 0) { addToast(t("sale.amountCannotBeNegative"), "warning"); return; }
 
     setCompleting(true);
     completingRef.current = true;
@@ -67,7 +69,7 @@ export default function CartPage() {
         customerPhone: customer!.phone,
         customerAddress: customer!.address,
         employeeId: user?.id ?? "",
-        employeeName: user?.name ?? "Staff",
+        employeeName: user?.name ?? t("employees.active"),
         items: items.map((it) => ({
           productId: it.productId,
           productName: it.productName,
@@ -111,7 +113,7 @@ export default function CartPage() {
       clearCart();
     } catch (e) {
       completingRef.current = false;
-      addToast(e instanceof Error ? e.message : "Failed to complete sale", "error");
+      addToast(e instanceof Error ? e.message : t("sale.failedToComplete"), "error");
     } finally {
       setCompleting(false);
     }
@@ -120,7 +122,7 @@ export default function CartPage() {
   return (
     <div className="flex flex-col bg-white w-full min-h-full">
       <StatusBar />
-      <NavHeader title="Review & Payment" />
+      <NavHeader title={t("sale.reviewPayment")} />
 
       {/* Customer strip — two states */}
       {!customer ? (
@@ -134,11 +136,11 @@ export default function CartPage() {
               <Plus size={18} style={{ color: "var(--text-secondary)" }} />
             </div>
             <div className="text-start">
-              <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>Select Customer</p>
-              <p className="text-xs" style={{ color: "var(--text-secondary)" }}>Required before completing sale</p>
+              <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>{t("sale.selectCustomerPrompt")}</p>
+              <p className="text-xs" style={{ color: "var(--text-secondary)" }}>{t("sale.requiredBeforeSale")}</p>
             </div>
           </div>
-          <span className="text-xs font-semibold" style={{ color: "var(--brand-dark)" }}>Choose →</span>
+          <span className="text-xs font-semibold" style={{ color: "var(--brand-dark)" }}>{t("sale.choose")}</span>
         </button>
       ) : (
         <>
@@ -146,23 +148,23 @@ export default function CartPage() {
             <div className="flex items-center justify-between mb-3">
               <p className="text-sm font-bold text-black">{customer.name}</p>
               <span className="text-xs" style={{ color: getCreditHealthColor(creditHealth) }}>
-                Credit Health: {creditHealth === "good" ? "Good" : creditHealth === "warning" ? "Warning" : "Over Limit"}
+                {t("sale.creditHealth")}: {creditHealth === "good" ? t("sale.good") : creditHealth === "warning" ? t("sale.warning") : t("sale.overLimit")}
               </span>
             </div>
             <div className="flex gap-8">
               <div>
-                <p className="text-[10px] text-[#888] uppercase">Outstanding Credit</p>
+                <p className="text-[10px] text-[#888] uppercase">{t("sale.outstandingCredit")}</p>
                 <p className="text-sm font-bold text-black">{formatCurrency(customer.outstandingBalance)}</p>
               </div>
               <div>
-                <p className="text-[10px] text-[#888] uppercase">Credit Limit</p>
+                <p className="text-[10px] text-[#888] uppercase">{t("customers.creditLimit")}</p>
                 <p className="text-sm font-bold text-black">{formatCurrency(customer.creditLimit)}</p>
               </div>
             </div>
           </div>
           {creditOverLimit && (
             <div className="mx-4 mt-2 bg-[#fef2f2] border border-[#ef4444] rounded-xl p-3">
-              <p className="text-xs text-[#ef4444] font-medium">⚠ This sale will exceed {customer.name}'s credit limit.</p>
+              <p className="text-xs text-[#ef4444] font-medium">⚠ {t("sale.willExceedLimit").replace("{name}", customer.name)}</p>
             </div>
           )}
         </>
@@ -203,7 +205,7 @@ export default function CartPage() {
             className="flex-1 h-12 rounded-xl border border-black flex items-center justify-center gap-2 text-sm font-medium text-black"
           >
             <Plus size={16} />
-            Add More
+            {t("sale.addMore")}
           </button>
           <ScanButton
             onScan={(code) => {
@@ -242,7 +244,7 @@ export default function CartPage() {
                 navigate(`${base}/sale/products/${product.id}`);
               }
             }}
-            label="Scan"
+            label={t("scan")}
             size="lg"
           />
         </div>
@@ -250,9 +252,9 @@ export default function CartPage() {
 
       {/* Payment type */}
       <div className="px-4 pt-5">
-        <p className="text-xs font-bold text-black uppercase mb-3">Payment Type</p>
+        <p className="text-xs font-bold text-black uppercase mb-3">{t("sale.paymentType")}</p>
         <div className="flex gap-2">
-          {[{ key: "full", label: "Full Payment" }, { key: "partial", label: "Partial / Credit" }].map((opt) => (
+          {[{ key: "full", labelKey: "sale.fullPayment" }, { key: "partial", labelKey: "sale.partialCredit" }].map((opt) => (
             <button
               key={opt.key}
               onClick={() => setPaymentType(opt.key as "full" | "partial")}
@@ -260,7 +262,7 @@ export default function CartPage() {
                 paymentType === opt.key ? "bg-[#22c55e] text-white" : "border border-[#e5e5e5] text-[#888]"
               }`}
             >
-              {opt.label}
+              {t(opt.labelKey as any)}
             </button>
           ))}
         </div>
@@ -268,9 +270,9 @@ export default function CartPage() {
 
       {/* Payment method — moved from SaleReviewPage */}
       <div className="px-4 pt-4">
-        <p className="text-xs font-bold text-black uppercase mb-3">Payment Method</p>
+        <p className="text-xs font-bold text-black uppercase mb-3">{t("sale.paymentMethod")}</p>
         <div className="flex gap-2">
-          {[{ key: "cash", label: "Cash" }, { key: "bank_transfer", label: "Bank Transfer" }].map((opt) => (
+          {[{ key: "cash", labelKey: "sale.cash" }, { key: "bank_transfer", labelKey: "sale.bankTransfer" }].map((opt) => (
             <button
               key={opt.key}
               onClick={() => setPaymentMethod(opt.key as "cash" | "bank_transfer")}
@@ -278,7 +280,7 @@ export default function CartPage() {
                 paymentMethod === opt.key ? "bg-black text-white" : "border border-[#e5e5e5] text-[#888]"
               }`}
             >
-              {opt.label}
+              {t(opt.labelKey as any)}
             </button>
           ))}
         </div>
@@ -287,18 +289,18 @@ export default function CartPage() {
       {/* Amount received for partial */}
       {paymentType === "partial" && (
         <div className="px-4 pt-4">
-          <p className="text-xs font-bold text-black uppercase mb-2">Amount Received</p>
+          <p className="text-xs font-bold text-black uppercase mb-2">{t("sale.amountReceived")}</p>
           <input
             type="number"
             inputMode="numeric"
             value={amountReceived}
             onChange={(e) => setAmountReceived(e.target.value)}
-            placeholder="Enter amount (0 for credit)"
+            placeholder={t("sale.enterAmount")}
             className="w-full h-12 rounded-[24px] border border-[#e5e5e5] px-4 text-sm text-black placeholder:text-[#888] outline-none"
             onFocus={() => setAmountTouched(true)}
           />
-          <p className="text-xs font-bold text-black uppercase mb-2 mt-4">Payment Due Date</p>
-          <p className="text-[12px] text-[#888] mb-2">Optional. When should the customer pay the outstanding amount?</p>
+          <p className="text-xs font-bold text-black uppercase mb-2 mt-4">{t("sale.paymentDueDate")}</p>
+          <p className="text-[12px] text-[#888] mb-2">{t("sale.dueDateOptional")}</p>
           <input
             type="date"
             value={dueDate}
@@ -312,22 +314,22 @@ export default function CartPage() {
       {items.length > 0 && (
         <div className="mx-4 mt-5 border border-[#e5e5e5] rounded-xl p-4 bg-[#f9f9f9]">
           <div className="flex justify-between py-1">
-            <span className="text-sm text-[#888]">Subtotal</span>
+            <span className="text-sm text-[#888]">{t("sale.subtotal")}</span>
             <span className="text-sm font-medium text-black">{formatCurrency(total)}</span>
           </div>
           <div className="flex justify-between py-1">
-            <span className="text-sm text-[#888]">Paid</span>
+            <span className="text-sm text-[#888]">{t("sale.paidLabel")}</span>
             <span className="text-sm font-medium text-black">{formatCurrency(amountPaid)}</span>
           </div>
           {paymentType === "partial" && amountPaid < total && (
             <div className="flex justify-between py-1">
-              <span className="text-sm text-[#888]">Outstanding</span>
+              <span className="text-sm text-[#888]">{t("sale.outstanding")}</span>
               <span className="text-sm font-medium text-[#ef4444]">{formatCurrency(total - amountPaid)}</span>
             </div>
           )}
           <div className="border-t border-[#e5e5e5] my-2" />
           <div className="flex justify-between py-1">
-            <span className="text-sm font-bold text-black">Total</span>
+            <span className="text-sm font-bold text-black">{t("sale.totalLabel")}</span>
             <span className="text-sm font-bold text-black">{formatCurrency(total)}</span>
           </div>
         </div>
@@ -340,7 +342,7 @@ export default function CartPage() {
             onClick={() => navigate(`${base}/sale`, { state: { fromCart: true } })}
             className="w-full"
           >
-            Select Customer to Continue
+            {t("sale.selectCustomerContinue")}
           </Button>
         ) : (
           <Button
@@ -348,7 +350,7 @@ export default function CartPage() {
             disabled={completing || items.length === 0}
             className="w-full"
           >
-            {completing ? "Processing…" : `Complete Sale · ${formatCurrency(total)}`}
+            {completing ? t("sale.processing") : t("sale.completeSaleWith").replace("{amount}", formatCurrency(total))}
           </Button>
         )}
       </div>

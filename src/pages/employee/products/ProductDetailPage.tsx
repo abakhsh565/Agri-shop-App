@@ -17,9 +17,10 @@ import { useSalesStore } from "@/stores/salesStore";
 import { barcodeToSvg } from "@/lib/barcode";
 import { uploadImage } from "@/lib/storage";
 import { supabase } from "@/lib/supabase";
+import { useT } from "@/lib/i18n";
 
-const CATEGORY_LABEL: Record<string, string> = {
-  spray: "Sprays", seed: "Seeds", fertilizer: "Fertilizer", other: "Other",
+const CATEGORY_LABEL_KEY: Record<string, string> = {
+  spray: "category.spray", seed: "category.seed", fertilizer: "category.fertilizer", other: "category.other",
 };
 
 function initBgColor(name: string) {
@@ -29,10 +30,10 @@ function initBgColor(name: string) {
   return colors[hash % colors.length];
 }
 
-function stockStatusLabel(status: string) {
-  if (status === "in_stock")    return "In Stock";
-  if (status === "low_stock")   return "Low Stock";
-  if (status === "out_of_stock") return "Out of Stock";
+function stockStatusLabel(status: string, t: any) {
+  if (status === "in_stock")    return t("products.inStock");
+  if (status === "low_stock")   return t("products.lowStock");
+  if (status === "out_of_stock") return t("products.outOfStock");
   return "Expired";
 }
 
@@ -40,6 +41,7 @@ export default function ProductDetailPage() {
   const { productId } = useParams();
   const navigate = useNavigate();
   const base = useShellBase();
+  const t = useT();
   const isAdmin = base === "/admin";
   const products = useProductsStore((s) => s.products);
   const product = products.find((p) => p.id === productId);
@@ -86,9 +88,9 @@ export default function ProductDetailPage() {
       if (error) throw error;
       await useProductsStore.getState().load();
       setEditing(false);
-      addToast("Product updated", "success");
+      addToast(t("sale.productUpdated"), "success");
     } catch (err) {
-      addToast(err instanceof Error ? err.message : "Failed to update", "error");
+      addToast(err instanceof Error ? err.message : t("sale.failedToComplete"), "error");
     } finally {
       setSaving(false);
     }
@@ -136,7 +138,7 @@ export default function ProductDetailPage() {
   return (
     <div className="flex flex-col w-full min-h-full" style={{ background: "var(--background)" }}>
       <StatusBar />
-      <NavHeader title="Product Details" />
+      <NavHeader title={t("sale.productDetails")} />
 
       <div className="flex flex-col gap-4 px-4 pt-4 pb-8">
         {/* ── HERO CARD: Image + Name + Category + Stock Badge ── */}
@@ -161,12 +163,12 @@ export default function ProductDetailPage() {
             <p className="text-base font-bold truncate" style={{ color: "var(--text-primary)" }}>{product.name}</p>
             <p className="text-xs truncate" style={{ color: "var(--text-secondary)" }}>{product.company}</p>
             <div className="flex items-center gap-2 mt-1 flex-wrap">
-              <CategoryChip label={CATEGORY_LABEL[product.category]} />
+              <CategoryChip label={t(CATEGORY_LABEL_KEY[product.category] as any)} />
               <span
                 className="text-[10px] font-bold px-2 py-0.5 rounded-full"
                 style={{ color: stockColor, background: stockColor + "22" }}
               >
-                {stockStatusLabel(stockStatus)}
+                {stockStatusLabel(stockStatus, t)}
               </span>
             </div>
           </div>
@@ -178,7 +180,7 @@ export default function ProductDetailPage() {
           style={{ border: "1px solid var(--divider)" }}
         >
           <div className="text-center">
-            <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>Price</p>
+            <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>{t("products.price")}</p>
             <p className="text-sm font-bold mt-0.5" style={{ color: "var(--text-primary)" }}>
               {prices.length > 1
                 ? `${formatCurrency(minPrice)} – ${formatCurrency(maxPrice)}`
@@ -186,13 +188,13 @@ export default function ProductDetailPage() {
             </p>
           </div>
           <div className="text-center" style={{ borderLeft: "1px solid var(--divider)", borderRight: "1px solid var(--divider)" }}>
-            <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>Stock</p>
+            <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>{t("products.stock")}</p>
             <p className="text-sm font-bold mt-0.5" style={{ color: "var(--text-primary)" }}>
               {totalStock} {product.baseUnit}
             </p>
           </div>
           <div className="text-center">
-            <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>Variants</p>
+            <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>{t("products.variantsLabel")}</p>
             <p className="text-sm font-bold mt-0.5" style={{ color: "var(--text-primary)" }}>
               {product.variants.length}
             </p>
@@ -208,10 +210,10 @@ export default function ProductDetailPage() {
             <div dangerouslySetInnerHTML={{ __html: barcodeToSvg(product.barcode, { height: 40, showText: true, width: 160 }) }} className="flex-1" />
             <div className="flex gap-1.5 shrink-0">
               <button
-                onClick={() => { navigator.clipboard.writeText(product.barcode!).then(() => addToast("Barcode copied", "success")).catch(() => {}); }}
+                onClick={() => { navigator.clipboard.writeText(product.barcode!).then(() => addToast(t("sale.copyBarcode"), "success")).catch(() => {}); }}
                 className="size-8 rounded-full flex items-center justify-center active:opacity-70"
                 style={{ background: "var(--surface-2)" }}
-                title="Copy barcode"
+                title={t("sale.copyBarcode")}
               >
                 <Copy size={14} style={{ color: "var(--text-secondary)" }} />
               </button>
@@ -225,11 +227,11 @@ export default function ProductDetailPage() {
                   a.download = `barcode-${product.name.replace(/\s+/g, "-")}-${product.barcode}.svg`;
                   a.click();
                   URL.revokeObjectURL(url);
-                  addToast("Barcode downloaded", "success");
+                  addToast(t("sale.downloadBarcode"), "success");
                 }}
                 className="size-8 rounded-full flex items-center justify-center active:opacity-70"
                 style={{ background: "var(--surface-2)" }}
-                title="Download barcode"
+                title={t("sale.downloadBarcode")}
               >
                 <Download size={14} style={{ color: "var(--text-secondary)" }} />
               </button>
@@ -239,7 +241,7 @@ export default function ProductDetailPage() {
 
         {/* ── PACK SIZES: Variant details ── */}
         <div>
-          <p className="text-xs font-bold uppercase mb-2 tracking-wider" style={{ color: "var(--text-secondary)" }}>Pack Sizes</p>
+          <p className="text-xs font-bold uppercase mb-2 tracking-wider" style={{ color: "var(--text-secondary)" }}>{t("products.packSizesTitle")}</p>
           <div
             className="rounded-[14px] overflow-hidden"
             style={{ border: "1px solid var(--divider)" }}
@@ -270,7 +272,7 @@ export default function ProductDetailPage() {
                     className="text-[10px] font-bold px-2 py-0.5 rounded-full"
                     style={{ color: vColor, background: vColor + "22" }}
                   >
-                    {stockStatusLabel(vStatus)}
+                    {stockStatusLabel(vStatus, t)}
                   </span>
                 </div>
               </div>
@@ -294,7 +296,7 @@ export default function ProductDetailPage() {
               style={{ color: "var(--text-primary)" }}
             >
               <Pencil size={16} style={{ color: "var(--brand)" }} />
-              Edit Product
+              {t("products.editProduct")}
             </button>
           )}
           {isAdmin && (
@@ -304,7 +306,7 @@ export default function ProductDetailPage() {
               style={{ color: "var(--text-primary)", borderTop: "1px solid var(--divider)" }}
             >
               <TrendingUp size={16} style={{ color: "var(--brand)" }} />
-              Adjust Stock
+              {t("products.adjustStock")}
             </button>
           )}
           {isAdmin && (
@@ -314,7 +316,7 @@ export default function ProductDetailPage() {
               style={{ color: "var(--text-primary)", borderTop: "1px solid var(--divider)" }}
             >
               <Barcode size={16} style={{ color: "var(--brand)" }} />
-              Generate Barcode
+              {t("products.generateBarcode")}
             </button>
           )}
           {isAdmin && (
@@ -324,7 +326,7 @@ export default function ProductDetailPage() {
               style={{ color: "var(--error)", borderTop: "1px solid var(--divider)" }}
             >
               <Trash2 size={16} />
-              Delete Product
+              {t("products.deleteProduct")}
             </button>
           )}
         </div>
@@ -343,7 +345,7 @@ export default function ProductDetailPage() {
             <div className="flex justify-center mb-4">
               <div className="w-10 h-1 rounded-full" style={{ background: "var(--divider)" }} />
             </div>
-            <p className="text-base font-bold text-center mb-5" style={{ color: "var(--text-primary)" }}>Edit Product</p>
+            <p className="text-base font-bold text-center mb-5" style={{ color: "var(--text-primary)" }}>{t("products.editProduct")}</p>
             {/* Image in popup */}
             <div className="flex flex-col items-center mb-5">
               <div className="relative">
@@ -396,9 +398,9 @@ export default function ProductDetailPage() {
 
       <ConfirmDialog
         open={toDelete}
-        title="Delete product?"
-        message={`"${product.name}" will be removed. If it has past sales, it's archived instead of deleted.`}
-        confirmLabel="Delete"
+        title={t("products.confirmDelete")}
+        message={`${product.name} will be removed. If it has past sales, it's archived instead of deleted.`}
+        confirmLabel={t("common.delete")}
         destructive
         loading={deleting}
         onConfirm={confirmDelete}
@@ -413,6 +415,7 @@ export default function ProductDetailPage() {
    likely want this product based on crop + basket gaps
    ═══════════════════════════════════════════════════════ */
 function ProductCustomerRecommendations({ productId }: { productId: string }) {
+  const t = useT();
   const customers = useCustomersStore((s) => s.customers);
   const products = useProductsStore((s) => s.products);
   const customersReady = useCustomersStore((s) => s.ready);
@@ -450,7 +453,7 @@ function ProductCustomerRecommendations({ productId }: { productId: string }) {
   return (
     <div className="rounded-[16px] p-4" style={{ background: "var(--surface-2)" }}>
       <p className="text-[10px] font-bold uppercase tracking-wider mb-3" style={{ color: "var(--text-secondary)" }}>
-        CUSTOMERS LIKELY TO WANT THIS
+        {t("products.customersLikely")}
       </p>
       <div className="flex flex-col">
         {recs.map((rec, i) => (

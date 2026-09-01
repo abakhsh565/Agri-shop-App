@@ -8,23 +8,24 @@ import { useCartStore } from "@/stores/cartStore";
 import { useProductsStore } from "@/stores/productsStore";
 import { useUIStore } from "@/stores/uiStore";
 import { useShellBase } from "@/lib/useShellBase";
+import { useT } from "@/lib/i18n";
 import { getStockStatus } from "@/lib/formatters";
 import { ChevronRight } from "lucide-react";
 import ScanButton from "@/components/ui/ScanButton";
 import type { ProductCategory } from "@/types";
 
-const FILTERS: { key: "all" | ProductCategory; label: string }[] = [
-  { key: "all", label: "All" },
-  { key: "spray", label: "Sprays" },
-  { key: "seed", label: "Seeds" },
-  { key: "fertilizer", label: "Fertilizer" },
+const FILTERS: { key: "all" | ProductCategory; labelKey: string }[] = [
+  { key: "all", labelKey: "products.all" },
+  { key: "spray", labelKey: "category.spray" },
+  { key: "seed", labelKey: "category.seed" },
+  { key: "fertilizer", labelKey: "category.fertilizer" },
 ];
 
-const CATEGORY_LABEL: Record<string, string> = {
-  spray: "Sprays",
-  seed: "Seeds",
-  fertilizer: "Fertilizer",
-  other: "Other",
+const CATEGORY_LABEL_KEY: Record<string, string> = {
+  spray: "category.spray",
+  seed: "category.seed",
+  fertilizer: "category.fertilizer",
+  other: "category.other",
 };
 
 const CATEGORY_COLOR: Record<string, { bg: string; fg: string }> = {
@@ -37,6 +38,7 @@ const CATEGORY_COLOR: Record<string, { bg: string; fg: string }> = {
 export default function BrowseProductsPage() {
   const navigate = useNavigate();
   const base = useShellBase();
+  const t = useT();
   const { customer } = useCartStore();
   const { addToast } = useUIStore();
   const [search, setSearch] = useState("");
@@ -100,13 +102,13 @@ export default function BrowseProductsPage() {
   return (
     <div className="flex flex-col w-full min-h-full" style={{ background: "var(--background)" }}>
       <StatusBar />
-      <NavHeader title="Select Products" />
+      <NavHeader title={t("sale.selectProducts")} />
 
       {/* Customer strip */}
       {customer && (
         <div className="px-4 py-2.5" style={{ background: "var(--surface-2)", borderBottom: "1px solid var(--divider)" }}>
           <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
-            Customer: <span className="font-medium" style={{ color: "var(--text-primary)" }}>{customer.name}</span>
+            {t("sale.customer")}: <span className="font-medium" style={{ color: "var(--text-primary)" }}>{customer.name}</span>
           </p>
         </div>
       )}
@@ -114,7 +116,7 @@ export default function BrowseProductsPage() {
       {/* Search — full width */}
       <div className="px-4 pt-3 pb-2">
         <SearchBar
-          placeholder="Search products"
+          placeholder={t("sale.searchProducts")}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
@@ -132,7 +134,7 @@ export default function BrowseProductsPage() {
               color: category === f.key ? "#0a0a0a" : "var(--text-secondary)",
             }}
           >
-            {f.label}
+            {t(f.labelKey as any)}
           </button>
         ))}
       </div>
@@ -141,7 +143,7 @@ export default function BrowseProductsPage() {
       {filtered.length === 0 ? (
         <div className="flex-1 flex flex-col items-center justify-center py-16 gap-2">
           <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
-            {search ? "No products match your search" : "No products yet"}
+            {search ? t("sale.noProductsMatch") : t("sale.noProductsYet")}
           </p>
         </div>
       ) : (
@@ -176,7 +178,7 @@ export default function BrowseProductsPage() {
                       className="self-start inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase"
                       style={{ background: catColor.bg, color: catColor.fg }}
                     >
-                      {CATEGORY_LABEL[p.category] || p.category}
+                      {t(CATEGORY_LABEL_KEY[p.category] as any) || p.category}
                     </span>
                     <StockBadge status={getStockStatus(p.stockQty, 5)} outline />
                   </div>
@@ -192,7 +194,7 @@ export default function BrowseProductsPage() {
       {/* Floating Scan button */}
       <div className="fixed left-0 right-0 max-w-[480px] mx-auto pointer-events-none z-40" style={{ bottom: "calc(var(--tabbar-height) + 16px)" }}>
         <div className="flex px-4 justify-end pointer-events-auto">
-          <ScanButton onScan={handleBarcodeScan} label="Scan" size="lg" />
+          <ScanButton onScan={handleBarcodeScan} label={t("scan")} size="lg" />
         </div>
       </div>
 

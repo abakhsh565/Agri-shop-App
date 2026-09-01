@@ -7,12 +7,14 @@ import { useCartStore } from "@/stores/cartStore";
 import { useCustomersStore } from "@/stores/customersStore";
 import { formatCurrency } from "@/lib/formatters";
 import { useShellBase } from "@/lib/useShellBase";
+import { useT } from "@/lib/i18n";
 import type { Customer } from "@/types";
-import { Plus } from "lucide-react";
+import { Plus } from "lucide-react"
 
 export default function SelectCustomerPage() {
   const navigate = useNavigate();
   const base = useShellBase();
+  const t = useT();
   const { setCustomer } = useCartStore();
   const customers = useCustomersStore((s) => s.customers);
   const [search, setSearch] = useState("");
@@ -38,17 +40,17 @@ export default function SelectCustomerPage() {
   return (
     <div className="flex flex-col bg-white w-full">
       <StatusBar />
-      <NavHeader title="New Sale" />
+      <NavHeader title={t("sale.newSale")} />
       <div className="px-4 pt-2 pb-3">
         <SearchBar
-          placeholder="Search customer by name or phone"
+          placeholder={t("sale.searchCustomer")}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
       </div>
 
       <div className="px-4">
-        <p className="text-xs font-bold text-black uppercase mb-2">Recent Customers</p>
+        <p className="text-xs font-bold text-black uppercase mb-2">{t("sale.recentCustomers")}</p>
       </div>
 
       <div className="flex flex-col">
@@ -74,9 +76,9 @@ export default function SelectCustomerPage() {
             </div>
             <div className="text-end">
               {c.outstandingBalance > 0 ? (
-                <p className="text-xs font-medium text-black">{formatCurrency(c.outstandingBalance)} due</p>
+                <p className="text-xs font-medium text-black">{formatCurrency(c.outstandingBalance)} {t("sale.due")}</p>
               ) : (
-                <p className="text-xs text-[#888]">No outstanding balance</p>
+                <p className="text-xs text-[#888]">{t("sale.noOutstandingBalance")}</p>
               )}
             </div>
           </button>
@@ -87,7 +89,7 @@ export default function SelectCustomerPage() {
           className="flex items-center gap-2 px-4 py-4 mx-4 mt-2 bg-[#f5f5f5] rounded-xl"
         >
           <Plus size={16} className="text-black" />
-          <span className="text-sm font-medium text-black">Add New Customer</span>
+          <span className="text-sm font-medium text-black">{t("sale.addNewCustomer")}</span>
         </button>
       </div>
     </div>
