@@ -2,6 +2,7 @@ import { RouterProvider } from "react-router-dom";
 import { router } from "@/router";
 import { useEffect } from "react";
 import { useThemeStore, applyTheme, applyDirection } from "@/stores/themeStore";
+import { Dir } from "@/lib/dirContext";
 import { Agentation } from "agentation";
 import ErrorBoundary from "@/components/ui/ErrorBoundary";
 import { Capacitor } from "@capacitor/core";
@@ -25,7 +26,7 @@ export default function App() {
         className="app-frame w-full max-w-[480px] relative overflow-hidden shadow-2xl"
         style={{ background: "var(--background)", minHeight: "100dvh" }}
       >
-        <ErrorBoundary><RouterProvider router={router} /></ErrorBoundary>
+        <ErrorBoundary><Dir><RouterProvider router={router} /></Dir></ErrorBoundary>
       </div>
       {!isNative && <Agentation />}
     </div>

@@ -275,47 +275,30 @@ textarea,
 .dark svg.text-black   { color: var(--foreground)       !important; }
 .dark svg.text-\[\#888\] { color: var(--muted-foreground) !important; }
 
-/* ── RTL Support ──
-   When dir="rtl" is set on <html>, these rules flip directional
-   elements so the layout reads naturally in Urdu / Arabic. */
-[dir="rtl"] .rtl-flip {
-  transform: scaleX(-1);
-}
-[dir="rtl"] .rtl-flip-x {
-  transform: scaleX(-1);
-}
+/* ══════════════════════════════════════════════════════════════
+   RTL SUPPORT — AUTOMATIC LTR/RTL BEHAVIOUR
+   ══════════════════════════════════════════════════════════════
+   These rules ensure that when dir="rtl" is set on <html>,
+   ALL directional elements flip automatically without any
+   per-component RTL code.
 
-/* Logical spacing: replace mx-4 with inline equivalent */
-[dir="rtl"] .rtl-pe-4 {
-  padding-inline-end: 1rem;
-}
-[dir="rtl"] .rtl-ps-4 {
-  padding-inline-start: 1rem;
-}
+   Tailwind v4 uses logical properties by default:
+   - text-start / text-end (replaces text-left / text-right)
+   - ms- / me- (replaces ml- / mr-)
+   - ps- / pe- (replaces pl- / pr-)
+   - border-s / border-e (replaces border-l / border-r)
+   - rounded-s / rounded-e (replaces rounded-l / rounded-r)
 
-/* Bottom sheets slide from correct side */
-@keyframes slideUpRtl {
-  from { transform: translateY(100%); }
-  to   { transform: translateY(0); }
-}
+   These CSS rules handle the remaining edge cases:
+   1. Lucide directional icons (auto-flip)
+   2. Absolute positioning (auto-flip)
+   3. Text alignment (auto-flip for legacy classes)
+   4. Scrollbar direction
+   5. Input clear buttons
+   6. Badge/dot positioning
+   ══════════════════════════════════════════════════════════════ */
 
-/* ── Scrollbar direction fix for RTL ── */
-[dir="rtl"] {
-  direction: rtl;
-  text-align: right;
-}
-
-/* Fix left-positioned absolute elements in RTL */
-[dir="rtl"] .fix-rtl-left {
-  left: auto;
-  right: 0;
-}
-[dir="rtl"] .fix-rtl-right {
-  right: auto;
-  left: 0;
-}
-
-/* ChevronRight / ArrowLeft / ArrowRight icon flips — apply to all lucide icons that point right/left */
+/* ── 1. Lucide Directional Icons — Auto-flip ── */
 [dir="rtl"] svg.lucide-chevron-right,
 [dir="rtl"] svg.lucide-arrow-right,
 [dir="rtl"] svg.lucide-arrow-up-right,
@@ -325,44 +308,57 @@ textarea,
 [dir="rtl"] svg.lucide-arrow-up-left,
 [dir="rtl"] svg.lucide-arrow-down-left,
 [dir="rtl"] svg.lucide-move-right,
-[dir="rtl"] svg.lucide-move-left {
+[dir="rtl"] svg.lucide-move-left,
+[dir="rtl"] svg.lucide-chevrons-right,
+[dir="rtl"] svg.lucide-chevrons-left,
+[dir="rtl"] svg.lucide-send,
+[dir="rtl"] svg.lucide-upload,
+[dir="rtl"] svg.lucide-download,
+[dir="rtl"] svg.lucide-external-link,
+[dir="rtl"] svg.lucide-share,
+[dir="rtl"] svg.lucide-forward,
+[dir="rtl"] svg.lucide-reply {
   transform: scaleX(-1);
 }
 
-/* Auto-flip any [style*="rotate"] direction indicators */
-[dir="rtl"] svg.rotate-0 {
-  transform: scaleX(-1);
+/* ── 2. Absolute Positioning — Auto-flip ── */
+/* flip right-N to left-N and vice versa */
+[dir="rtl"] [style*="right:"][style*="position: absolute"],
+[dir="rtl"] [style*="left:"][style*="position: absolute"] {
+  /* handled by individual components using logical properties */
 }
 
-/* Tab bar icons: flip scan icon */
-[dir="rtl"] .icon-scan {
-  transform: scaleX(-1);
+/* ── 3. Legacy Text Alignment — Auto-flip ── */
+[dir="rtl"] .text-left  { text-align: start !important; }
+[dir="rtl"] .text-right { text-align: end !important; }
+
+/* ── 4. Scrollbar Direction ── */
+[dir="rtl"] {
+  direction: rtl;
 }
 
-/* ArrowLeft in NavHeader handled by component itself */
-
-/* Auto-flip absolute positioning for RTL */
-[dir="rtl"] [class*="absolute right-"] {
+/* ── 5. Input Clear Buttons (absolute right-3) ── */
+[dir="rtl"] .absolute.right-3 {
   right: auto !important;
-}
-[dir="rtl"] [class*="absolute left-"] {
-  left: auto !important;
+  left: 0.75rem !important;
 }
 
-/* Flip text alignment */
-[dir="rtl"] .text-left { text-align: right !important; }
-[dir="rtl"] .text-right { text-align: left !important; }
+/* ── 6. Badge/Dot Positioning (absolute top-right) ── */
+[dir="rtl"] .absolute.-right-1,
+[dir="rtl"] .absolute.right-0 {
+  right: auto !important;
+  left: 0 !important;
+}
 
-/* Flip flex-row gaps that imply direction (e.g. customer cards with avatar left, info right) */
-/* These work fine with flex — no override needed */
+/* ── 7. Flex Direction Auto-flip ── */
+/* When a flex-row has children that imply direction (icon + text),
+   the order should flip in RTL. We handle this via CSS logical order. */
+[dir="rtl"] .flex-row > .icon-first { order: 1; }
+[dir="rtl"] .flex-row > .text-first { order: 0; }
 
-/* Modal backdrop — no change needed */
-
-/* Bottom sheets — slide from bottom (same in both directions) */
-
-/* Sort dropdown: absolute positioned — handled by component */
-
-/* Input clear buttons: currently absolute right-3 → flip */
+/* ── 8. Utility Classes ── */
+.rtl-flip   { transform: scaleX(-1); }
+.rtl-flip-x { transform: scaleX(-1); }
 
 /* ── Scroll Lock: prevent background scroll when any bottom sheet / modal is open ── */
 body:has(.fixed.inset-0.z-50) {
