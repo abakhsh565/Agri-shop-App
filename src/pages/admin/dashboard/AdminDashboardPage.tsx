@@ -378,8 +378,8 @@ export default function AdminDashboardPage() {
       {/* ── Total Sales card (lime hero): Total Sales · Transactions · Gross Profit ── */}
       <div className="px-4 animate-fade-in-up">
         <button
-          className="w-full rounded-[16px] p-5 text-start transition-transform active:scale-[0.98]"
-          style={{ background: "var(--brand)" }}
+          className="w-full rounded-[20px] p-5 text-start transition-transform active:scale-[0.98]"
+          style={{ background: "var(--brand)", boxShadow: "0 8px 20px rgba(132,204,22,0.28)" }}
           onClick={() => navigate("/admin/sales")}
         >
           <p className="text-[11px] font-bold uppercase tracking-widest mb-1" style={{ color: "rgba(0,0,0,0.55)" }}>
@@ -412,8 +412,8 @@ export default function AdminDashboardPage() {
         <div className="flex gap-3">
           <button
             onClick={() => navigate("/admin/sales")}
-            className="flex-1 rounded-[12px] p-4 flex flex-col gap-2 items-start transition-opacity active:opacity-70"
-            style={{ background: "var(--surface)", border: "1px solid var(--border-light)" }}
+            className="flex-1 rounded-[16px] p-4 flex flex-col gap-2 items-start transition-opacity active:opacity-70"
+            style={{ background: "var(--surface)", boxShadow: "var(--shadow-card)" }}
           >
             <p className="text-[11px] uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
               {t("sales.summaryPaidSales") ?? "Paid Sales"}
@@ -424,8 +424,8 @@ export default function AdminDashboardPage() {
           </button>
           <button
             onClick={() => navigate("/admin/sales")}
-            className="flex-1 rounded-[12px] p-4 flex flex-col gap-2 items-start transition-opacity active:opacity-70"
-            style={{ background: "var(--surface)", border: "1px solid var(--border-light)" }}
+            className="flex-1 rounded-[16px] p-4 flex flex-col gap-2 items-start transition-opacity active:opacity-70"
+            style={{ background: "var(--surface)", boxShadow: "var(--shadow-card)" }}
           >
             <p className="text-[11px] uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
               {t("sales.summaryCreditSales") ?? "Credit Sales"}
@@ -438,8 +438,8 @@ export default function AdminDashboardPage() {
 
         <button
           onClick={() => navigate("/admin/customers", { state: { filter: "credit" } })}
-          className="w-full rounded-[12px] p-4 flex items-center justify-between transition-opacity active:opacity-70"
-          style={{ background: "var(--surface)", border: "1px solid var(--border-light)" }}
+          className="w-full rounded-[16px] p-4 flex items-center justify-between transition-opacity active:opacity-70"
+          style={{ background: "var(--surface)", boxShadow: "var(--shadow-card)" }}
         >
           <div className="flex flex-col gap-1 items-start">
             <p className="text-[11px] uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
@@ -496,16 +496,18 @@ export default function AdminDashboardPage() {
                   {totalPayable > 0 && (
                     <button
                       onClick={() => navigate("/admin/companies")}
-                      className="flex items-start gap-3 rounded-[14px] p-4 transition-opacity active:opacity-70 text-start w-full"
-                      style={{ background: "#FCEBEB" }}
+                      className="flex items-start gap-3 rounded-[16px] p-3.5 transition-opacity active:opacity-70 text-start w-full"
+                      style={{ background: "var(--surface)", boxShadow: "var(--shadow-card)" }}
                     >
-                      <AlertTriangle size={20} color="#A32D2D" className="mt-0.5 shrink-0" />
+                      <div className="w-9 h-9 rounded-[10px] flex items-center justify-center shrink-0" style={{ background: "#FCEBEB" }}>
+                        <AlertTriangle size={18} color="#A32D2D" />
+                      </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-[14px] font-medium" style={{ color: "#791F1F" }}>{t("admin.supplierPayableDue")}</p>
-                        <p className="text-[13px] mt-1" style={{ color: "#791F1F", lineHeight: 1.5 }}>{formatCurrency(totalPayable)} {t("admin.totalDueToSuppliers")}</p>
+                        <p className="text-[14px] font-bold" style={{ color: "var(--text-primary)" }}>{t("admin.supplierPayableDue")}</p>
+                        <p className="text-[12.5px] font-medium mt-0.5" style={{ color: "var(--text-secondary)", lineHeight: 1.45 }}>{formatCurrency(totalPayable)} {t("admin.totalDueToSuppliers")}</p>
                         <div className="flex items-center justify-between mt-2">
-                          <span className="text-[11px]" style={{ color: "#A32D2D" }}>{t("admin.actionNeeded")}</span>
-                          <span className="text-[13px] font-medium" style={{ color: "#791F1F" }}>{t("admin.review")}</span>
+                          <span className="text-[11px] font-semibold" style={{ color: "#A32D2D" }}>{t("admin.actionNeeded")}</span>
+                          <span className="text-[12px] font-bold" style={{ color: "var(--text-primary)" }}>{t("admin.review")}</span>
                         </div>
                       </div>
                     </button>
@@ -514,16 +516,18 @@ export default function AdminDashboardPage() {
                   {delayedCount > 0 && (
                     <button
                       onClick={() => navigate("/admin/customers", { state: { paymentStatus: "delayed" } })}
-                      className="flex items-start gap-3 rounded-[14px] p-4 transition-opacity active:opacity-70 text-start w-full"
-                      style={{ background: "#FCEBEB" }}
+                      className="flex items-start gap-3 rounded-[16px] p-3.5 transition-opacity active:opacity-70 text-start w-full"
+                      style={{ background: "var(--surface)", boxShadow: "var(--shadow-card)" }}
                     >
-                      <AlertTriangle size={20} color="#A32D2D" className="mt-0.5 shrink-0" />
+                      <div className="w-9 h-9 rounded-[10px] flex items-center justify-center shrink-0" style={{ background: "#FCEBEB" }}>
+                        <AlertTriangle size={18} color="#A32D2D" />
+                      </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-[14px] font-medium" style={{ color: "#791F1F" }}>{t("admin.delayedCount").replace("{count}", String(delayedCount))}</p>
-                        <p className="text-[13px] mt-1" style={{ color: "#791F1F", lineHeight: 1.5 }}>{t("admin.delayedDesc")}</p>
+                        <p className="text-[14px] font-bold" style={{ color: "var(--text-primary)" }}>{t("admin.delayedCount").replace("{count}", String(delayedCount))}</p>
+                        <p className="text-[12.5px] font-medium mt-0.5" style={{ color: "var(--text-secondary)", lineHeight: 1.45 }}>{t("admin.delayedDesc")}</p>
                         <div className="flex items-center justify-between mt-2">
-                          <span className="text-[11px]" style={{ color: "#A32D2D" }}>{t("admin.followUpNeeded")}</span>
-                          <span className="text-[13px] font-medium" style={{ color: "#791F1F" }}>{t("admin.view")}</span>
+                          <span className="text-[11px] font-semibold" style={{ color: "#A32D2D" }}>{t("admin.followUpNeeded")}</span>
+                          <span className="text-[12px] font-bold" style={{ color: "var(--text-primary)" }}>{t("admin.view")}</span>
                         </div>
                       </div>
                     </button>
@@ -532,16 +536,18 @@ export default function AdminDashboardPage() {
                   {highRiskCount > 0 && (
                     <button
                       onClick={() => navigate("/admin/customers", { state: { paymentStatus: "high_risk" } })}
-                      className="flex items-start gap-3 rounded-[14px] p-4 transition-opacity active:opacity-70 text-start w-full"
-                      style={{ background: "#FCEBEB" }}
+                      className="flex items-start gap-3 rounded-[16px] p-3.5 transition-opacity active:opacity-70 text-start w-full"
+                      style={{ background: "var(--surface)", boxShadow: "var(--shadow-card)" }}
                     >
-                      <AlertTriangle size={20} color="#A32D2D" className="mt-0.5 shrink-0" />
+                      <div className="w-9 h-9 rounded-[10px] flex items-center justify-center shrink-0" style={{ background: "#FCEBEB" }}>
+                        <AlertTriangle size={18} color="#A32D2D" />
+                      </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-[14px] font-medium" style={{ color: "#791F1F" }}>{t("admin.highRiskCount").replace("{count}", String(highRiskCount))}</p>
-                        <p className="text-[13px] mt-1" style={{ color: "#791F1F", lineHeight: 1.5 }}>{t("admin.highRiskDesc")}</p>
+                        <p className="text-[14px] font-bold" style={{ color: "var(--text-primary)" }}>{t("admin.highRiskCount").replace("{count}", String(highRiskCount))}</p>
+                        <p className="text-[12.5px] font-medium mt-0.5" style={{ color: "var(--text-secondary)", lineHeight: 1.45 }}>{t("admin.highRiskDesc")}</p>
                         <div className="flex items-center justify-between mt-2">
-                          <span className="text-[11px]" style={{ color: "#A32D2D" }}>{t("admin.actionNeeded")}</span>
-                          <span className="text-[13px] font-medium" style={{ color: "#791F1F" }}>{t("admin.review")}</span>
+                          <span className="text-[11px] font-semibold" style={{ color: "#A32D2D" }}>{t("admin.actionNeeded")}</span>
+                          <span className="text-[12px] font-bold" style={{ color: "var(--text-primary)" }}>{t("admin.review")}</span>
                         </div>
                       </div>
                     </button>
@@ -550,16 +556,18 @@ export default function AdminDashboardPage() {
                   {creditLimitReached > 0 && (
                     <button
                       onClick={() => navigate("/admin/alerts/credit-overrides")}
-                      className="flex items-start gap-3 rounded-[14px] p-4 transition-opacity active:opacity-70 text-start w-full"
-                      style={{ background: "#FCEBEB" }}
+                      className="flex items-start gap-3 rounded-[16px] p-3.5 transition-opacity active:opacity-70 text-start w-full"
+                      style={{ background: "var(--surface)", boxShadow: "var(--shadow-card)" }}
                     >
-                      <AlertTriangle size={20} color="#A32D2D" className="mt-0.5 shrink-0" />
+                      <div className="w-9 h-9 rounded-[10px] flex items-center justify-center shrink-0" style={{ background: "#FCEBEB" }}>
+                        <AlertTriangle size={18} color="#A32D2D" />
+                      </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-[14px] font-medium" style={{ color: "#791F1F" }}>{t("admin.creditLimitReached")} ({creditLimitReached})</p>
-                        <p className="text-[13px] mt-1" style={{ color: "#791F1F", lineHeight: 1.5 }}>{t("admin.creditLimitDesc")}</p>
+                        <p className="text-[14px] font-bold" style={{ color: "var(--text-primary)" }}>{t("admin.creditLimitReached")} ({creditLimitReached})</p>
+                        <p className="text-[12.5px] font-medium mt-0.5" style={{ color: "var(--text-secondary)", lineHeight: 1.45 }}>{t("admin.creditLimitDesc")}</p>
                         <div className="flex items-center justify-between mt-2">
-                          <span className="text-[11px]" style={{ color: "#A32D2D" }}>{t("admin.actionNeeded")}</span>
-                          <span className="text-[13px] font-medium" style={{ color: "#791F1F" }}>{t("admin.review")}</span>
+                          <span className="text-[11px] font-semibold" style={{ color: "#A32D2D" }}>{t("admin.actionNeeded")}</span>
+                          <span className="text-[12px] font-bold" style={{ color: "var(--text-primary)" }}>{t("admin.review")}</span>
                         </div>
                       </div>
                     </button>
@@ -569,10 +577,12 @@ export default function AdminDashboardPage() {
             }
             /* All clear — red tier */
             return (
-              <div className="flex items-center gap-3 rounded-[14px] p-4" style={{ background: "var(--surface-2)" }}>
-                <CheckCircle2 size={20} style={{ color: "var(--brand-dark, #65a30d)" }} className="shrink-0" />
+              <div className="flex items-center gap-3 rounded-[16px] p-3.5" style={{ background: "var(--surface)", boxShadow: "var(--shadow-card)" }}>
+                <div className="w-9 h-9 rounded-[10px] flex items-center justify-center shrink-0" style={{ background: "#EAF3DE" }}>
+                  <CheckCircle2 size={18} style={{ color: "var(--brand-dark, #65a30d)" }} />
+                </div>
                 <div className="flex-1">
-                  <p className="text-[13px] font-medium" style={{ color: "var(--text-primary)" }}>{t("admin.allClear")}</p>
+                  <p className="text-[13.5px] font-bold" style={{ color: "var(--text-primary)" }}>{t("admin.allClear")}</p>
                 </div>
               </div>
             );
@@ -588,28 +598,32 @@ export default function AdminDashboardPage() {
                   {dueReminderCount > 0 && (
                     <button
                       onClick={() => navigate("/admin/alerts/reminders")}
-                      className="flex items-center gap-3 rounded-[14px] p-4 transition-opacity active:opacity-70 text-start w-full"
-                      style={{ background: "#FAEEDA" }}
+                      className="flex items-center gap-3 rounded-[16px] p-3.5 transition-opacity active:opacity-70 text-start w-full"
+                      style={{ background: "var(--surface)", boxShadow: "var(--shadow-card)" }}
                     >
-                      <Bell size={20} color="#854F0B" className="shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-[13px]" style={{ color: "#633806", lineHeight: 1.5 }}>{t("admin.remindersSentToday").replace("{count}", String(dueReminderCount))}</p>
+                      <div className="w-9 h-9 rounded-[10px] flex items-center justify-center shrink-0" style={{ background: "#FAEEDA" }}>
+                        <Bell size={18} color="#854F0B" />
                       </div>
-                      <span className="text-[13px] font-medium shrink-0" style={{ color: "#854F0B" }}>{t("admin.view")}</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[13.5px] font-semibold" style={{ color: "var(--text-primary)", lineHeight: 1.45 }}>{t("admin.remindersSentToday").replace("{count}", String(dueReminderCount))}</p>
+                      </div>
+                      <span className="text-[12px] font-bold shrink-0" style={{ color: "var(--text-primary)" }}>{t("admin.view")}</span>
                     </button>
                   )}
                   {/* Low stock */}
                   {lowStockCount > 0 && (
                     <button
                       onClick={() => navigate("/admin/alerts/inventory")}
-                      className="flex items-center gap-3 rounded-[14px] p-4 transition-opacity active:opacity-70 text-start w-full"
-                      style={{ background: "#FAEEDA" }}
+                      className="flex items-center gap-3 rounded-[16px] p-3.5 transition-opacity active:opacity-70 text-start w-full"
+                      style={{ background: "var(--surface)", boxShadow: "var(--shadow-card)" }}
                     >
-                      <AlertTriangle size={20} color="#854F0B" className="shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-[13px]" style={{ color: "#633806", lineHeight: 1.5 }}>{lowStockCount} {isUrdu ? "مصنوعات کم اسٹاک — reorder درکار" : "product" + (lowStockCount !== 1 ? "s" : "") + " low on stock — need reorder"}</p>
+                      <div className="w-9 h-9 rounded-[10px] flex items-center justify-center shrink-0" style={{ background: "#FAEEDA" }}>
+                        <AlertTriangle size={18} color="#854F0B" />
                       </div>
-                      <span className="text-[13px] font-medium shrink-0" style={{ color: "#854F0B" }}>{t("admin.view")}</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[13.5px] font-semibold" style={{ color: "var(--text-primary)", lineHeight: 1.45 }}>{lowStockCount} {isUrdu ? "مصنوعات کم اسٹاک — reorder درکار" : "product" + (lowStockCount !== 1 ? "s" : "") + " low on stock — need reorder"}</p>
+                      </div>
+                      <span className="text-[12px] font-bold shrink-0" style={{ color: "var(--text-primary)" }}>{t("admin.view")}</span>
                     </button>
                   )}
                 </>
@@ -617,10 +631,12 @@ export default function AdminDashboardPage() {
             }
             /* All clear — amber tier */
             return (
-              <div className="flex items-center gap-3 rounded-[14px] p-4" style={{ background: "var(--surface-2)" }}>
-                <CheckCircle2 size={20} style={{ color: "var(--brand-dark, #65a30d)" }} className="shrink-0" />
+              <div className="flex items-center gap-3 rounded-[16px] p-3.5" style={{ background: "var(--surface)", boxShadow: "var(--shadow-card)" }}>
+                <div className="w-9 h-9 rounded-[10px] flex items-center justify-center shrink-0" style={{ background: "#EAF3DE" }}>
+                  <CheckCircle2 size={18} style={{ color: "var(--brand-dark, #65a30d)" }} />
+                </div>
                 <div className="flex-1">
-                  <p className="text-[13px]" style={{ color: "var(--text-primary)", lineHeight: 1.5 }}>{t("admin.noPendingReminders")}</p>
+                  <p className="text-[13.5px] font-semibold" style={{ color: "var(--text-primary)", lineHeight: 1.45 }}>{t("admin.noPendingReminders")}</p>
                 </div>
               </div>
             );
@@ -647,25 +663,29 @@ export default function AdminDashboardPage() {
             }
             if (harvestAlerts.length > 0) {
               return harvestAlerts.map((alert, i) => (
-                <button key={i} onClick={() => navigate("/admin/customers", { state: { cropFilter: alert.cropName } })} className="flex items-center gap-3 rounded-[14px] p-4 active:opacity-70 w-full text-start" style={{ background: "#F1EFE8" }}>
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#5F5E5A" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
-                    <rect width="18" height="18" x="3" y="4" rx="2" ry="2" />
-                    <line x1="16" x2="16" y1="2" y2="6" />
-                    <line x1="8" x2="8" y1="2" y2="6" />
-                    <line x1="3" x2="21" y1="10" y2="10" />
-                  </svg>
+                <button key={i} onClick={() => navigate("/admin/customers", { state: { cropFilter: alert.cropName } })} className="flex items-center gap-3 rounded-[16px] p-3.5 active:opacity-70 w-full text-start" style={{ background: "var(--surface)", boxShadow: "var(--shadow-card)" }}>
+                  <div className="w-9 h-9 rounded-[10px] flex items-center justify-center shrink-0" style={{ background: "#F1EFE8" }}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#5F5E5A" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect width="18" height="18" x="3" y="4" rx="2" ry="2" />
+                      <line x1="16" x2="16" y1="2" y2="6" />
+                      <line x1="8" x2="8" y1="2" y2="6" />
+                      <line x1="3" x2="21" y1="10" y2="10" />
+                    </svg>
+                  </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-[13px]" style={{ color: "#444441", lineHeight: 1.5 }}>{alert.text}</p>
+                    <p className="text-[13.5px] font-semibold" style={{ color: "var(--text-primary)", lineHeight: 1.45 }}>{alert.text}</p>
                   </div>
                 </button>
               ));
             }
             /* All clear — gray tier */
             return (
-              <div className="flex items-center gap-3 rounded-[14px] p-4" style={{ background: "var(--surface-2)" }}>
-                <CheckCircle2 size={20} style={{ color: "var(--brand-dark, #65a30d)" }} className="shrink-0" />
+              <div className="flex items-center gap-3 rounded-[16px] p-3.5" style={{ background: "var(--surface)", boxShadow: "var(--shadow-card)" }}>
+                <div className="w-9 h-9 rounded-[10px] flex items-center justify-center shrink-0" style={{ background: "#EAF3DE" }}>
+                  <CheckCircle2 size={18} style={{ color: "var(--brand-dark, #65a30d)" }} />
+                </div>
                 <div className="flex-1">
-                  <p className="text-[13px]" style={{ color: "var(--text-primary)", lineHeight: 1.5 }}>{t("admin.noHarvestAlerts")}</p>
+                  <p className="text-[13.5px] font-semibold" style={{ color: "var(--text-primary)", lineHeight: 1.45 }}>{t("admin.noHarvestAlerts")}</p>
                 </div>
               </div>
             );
@@ -679,7 +699,7 @@ export default function AdminDashboardPage() {
           <p className="text-[11px] font-bold uppercase tracking-widest mb-3" style={{ color: "var(--text-secondary)" }}>
             {t("admin.employeePerformance")}
           </p>
-          <div className="rounded-[14px] overflow-hidden" style={{ border: "1px solid var(--border-light)" }}>
+          <div className="rounded-[16px] overflow-hidden" style={{ background: "var(--surface)", boxShadow: "var(--shadow-card)" }}>
             {empStats.map(({ emp, total, count, items }, i) => (
               <button
                 key={emp.id}
@@ -724,7 +744,7 @@ export default function AdminDashboardPage() {
               {t("common.viewAll") ?? "View all"}
             </button>
           </div>
-          <div className="rounded-[14px] overflow-hidden" style={{ border: "1px solid var(--divider)" }}>
+          <div className="rounded-[16px] overflow-hidden" style={{ background: "var(--surface)", boxShadow: "var(--shadow-card)" }}>
             {recentSales.map((sale, i) => {
               const cImg = getCustomerImg(sale.customerId);
               const cBg = initBgColor(sale.customerName);
