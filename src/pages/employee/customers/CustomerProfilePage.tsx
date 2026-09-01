@@ -355,10 +355,10 @@ export default function CustomerProfilePage() {
                   <div key={cfg.id} className="flex items-center justify-between py-2 px-2 rounded-lg" style={{ background: "rgba(99,153,34,0.05)" }}>
                     <div className="flex-1 min-w-0">
                       <p className="text-[12px] font-medium" style={{ color: "#1A1A1A" }}>
-                        {cfg.startDays}d {cfg.anchor === "after_credit" ? "after credit" : cfg.anchor === "after_due" ? "after due date" : cfg.anchor === "before_due" ? "before due date" : "before harvest"}
+                        {cfg.startDays}d {cfg.anchor === "after_credit" ? t("reminder.afterCredit") : cfg.anchor === "after_due" ? t("reminder.afterDueDate") : cfg.anchor === "before_due" ? t("reminder.beforeDueDate") : t("reminder.beforeHarvest")}
                       </p>
                       <p className="text-[11px]" style={{ color: "#8A8A85" }}>
-                        {cfg.repeat === "once" ? "One-time" : cfg.repeat === "interval" ? "Every " + cfg.intervalN + " " + cfg.intervalUnit : "Escalating"}
+                        {cfg.repeat === "once" ? t("reminder.oneTime") : cfg.repeat === "interval" ? t("reminder.every") + " " + cfg.intervalN + " " + t("reminder.days") : t("reminder.escalating")}
                       </p>
                     </div>
                     <div className="flex items-center gap-1">

@@ -351,8 +351,16 @@ export const translations = {
     "common.payment": "Payment",
     "common.purchases": "Purchases",
     "common.viewAll": "View all",
-    "common.sale": "sale",
-    "common.soldBy": "Sold by",
+    "common.sale": "sale",    "common.soldBy":             "Sold by",
+    // Reminder config labels
+    "reminder.afterCredit":      "after credit",
+    "reminder.afterDueDate":     "after due date",
+    "reminder.beforeDueDate":    "before due date",
+    "reminder.beforeHarvest":    "before harvest",
+    "reminder.oneTime":          "One-time",
+    "reminder.every":            "Every",
+    "reminder.escalating":       "Escalating",
+    "reminder.days":             "days",
   },
 
   ur: {
@@ -700,6 +708,15 @@ export const translations = {
     "common.viewAll":            "سب دیکھیں",
     "common.sale":               "فروخت",
     "common.soldBy":             "فروخت کنندہ",
+    // Reminder config labels
+    "reminder.afterCredit":      "ادھار دینے کے بعد",
+    "reminder.afterDueDate":     "ادائیگی کی تاریخ کے بعد",
+    "reminder.beforeDueDate":    "ادائیگی کی تاریخ سے پہلے",
+    "reminder.beforeHarvest":    "فصل کٹنی سے پہلے",
+    "reminder.oneTime":          "ایک بار",
+    "reminder.every":            "ہر",
+    "reminder.escalating":       "بڑھتی ہوئی سیکوئنس",
+    "reminder.days":             "دن",
   },
 } as const;
 
