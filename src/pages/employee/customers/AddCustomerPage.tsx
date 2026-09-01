@@ -13,6 +13,8 @@ import { useShellBase } from "@/lib/useShellBase";
 import { clearNav } from "@/lib/navContext";
 import type { ReminderConfig } from "@/types";
 import { Bell } from "lucide-react";
+import { KNOWN_CROPS } from "@/lib/recommendationEngine";
+import { saveCustomerCrops } from "@/lib/reminderEngine";
 
 function normalizePhone(p: string): string {
   return p.replace(/[\s\-()]/g, "").replace(/^\+?92/, "0");
@@ -44,6 +46,7 @@ export default function AddCustomerPage() {
   const [existingCustomerId, setExistingCustomerId] = useState<string | null>(null);
   const [showReminderConfig, setShowReminderConfig] = useState(false);
   const [reminderConfig, setReminderConfig] = useState<ReminderConfig | null>(null);
+  const [selectedCrops, setSelectedCrops] = useState<string[]>([]);
 
   async function handleSave() {
     const errs: Record<string, string> = {};
@@ -94,6 +97,10 @@ export default function AddCustomerPage() {
       if (imageUrl && newCustomer.id) {
         const { updateCustomerImage } = useCustomersStore.getState();
         await updateCustomerImage(newCustomer.id, imageUrl);
+      }
+      // Persist crop assignments
+      if (selectedCrops.length > 0 && newCustomer.id) {
+        await saveCustomerCrops(newCustomer.id, selectedCrops);
       }
       addToast(`${name} ${isUrdu ? "شامل کر دیا گیا" : "added successfully"}`, "success");
       clearNav();
@@ -195,6 +202,33 @@ export default function AddCustomerPage() {
                 color: "var(--text-primary)",
               }}
             />
+          </div>
+
+          {/* Crops */}
+          <div>
+            <p className="text-[11px] font-bold uppercase mb-2 tracking-wider" style={{ color: "var(--text-secondary)" }}>
+              Crops
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {KNOWN_CROPS.map(cropName => (
+                <button
+                  key={cropName}
+                  type="button"
+                  onClick={() => setSelectedCrops(prev => prev.includes(cropName) ? prev.filter(c => c !== cropName) : [...prev, cropName])}
+                  className="h-9 px-4 rounded-full text-[12px] font-medium transition-colors"
+                  style={{
+                    background: selectedCrops.includes(cropName) ? "var(--brand)" : "var(--surface-2)",
+                    color: selectedCrops.includes(cropName) ? "#0a0a0a" : "var(--text-secondary)",
+                    border: selectedCrops.includes(cropName) ? "none" : "1px solid var(--divider)",
+                  }}
+                >
+                  {cropName}
+                </button>
+              ))}
+            </div>
+            <p className="text-[11px] mt-1" style={{ color: "var(--text-secondary)" }}>
+              {isUrdu ? "گاہک کون سی فصلیں اگاتا ہے" : "What crops does this customer grow?"}
+            </p>
           </div>
 
           {/* Credit Limit + Reminder Config */}

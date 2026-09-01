@@ -66,6 +66,9 @@ const CROP_SEASON_WINDOWS: Record<string, Record<string, [number, number]>> = {
   },
 };
 
+/** List of known crops the owner can assign to customers. */
+export const KNOWN_CROPS: string[] = Object.keys(CROP_SEASON_WINDOWS);
+
 function isCategoryInSeason(category: string, cropName: string, now: Date): boolean {
   const windows = CROP_SEASON_WINDOWS[cropName];
   if (!windows) return false;

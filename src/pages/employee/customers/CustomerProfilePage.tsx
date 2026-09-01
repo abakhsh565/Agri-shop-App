@@ -12,7 +12,7 @@ import { formatCurrency, calculateCreditHealth, getCreditHealthStatusColor } fro
 import { useThemeStore } from "@/stores/themeStore";
 import { useShellBase } from "@/lib/useShellBase";
 import { History, Wallet, Bell, Pencil, Trash2, Receipt, Plus } from "lucide-react";
-import { getRecommendationsForCustomer } from "@/lib/recommendationEngine";
+import { getRecommendationsForCustomer, KNOWN_CROPS } from "@/lib/recommendationEngine";
 import { loadReminderConfigs, saveReminderConfig as saveReminderConfigToDb, loadCustomerCrops, saveCustomerCrops as saveCustomerCropsToDb, loadBusinessSettings, calculatePaymentStatus, getPaymentStatusLabel, getPaymentStatusColor } from "@/lib/reminderEngine";
 import { useProductsStore } from "@/stores/productsStore";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
@@ -503,10 +503,9 @@ export default function CustomerProfilePage() {
               <div>
                 <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1.5" style={{ color: "var(--text-secondary)" }}>Crops</label>
                 <div className="flex flex-wrap gap-2">
-                  {businessSettings.crops.map(crop => (
-                    <button key={crop.name} type="button" onClick={() => setEditCrops(prev => prev.includes(crop.name) ? prev.filter(c => c !== crop.name) : [...prev, crop.name])} className="h-9 px-4 rounded-full text-[12px] font-medium transition-colors" style={{ background: editCrops.includes(crop.name) ? "var(--brand)" : "var(--surface-2)", color: editCrops.includes(crop.name) ? "#0a0a0a" : "var(--text-secondary)", border: editCrops.includes(crop.name) ? "none" : "1px solid var(--divider)" }}>{crop.name}</button>
+                  {(businessSettings.crops.length > 0 ? businessSettings.crops.map(c => c.name) : KNOWN_CROPS).map(cropName => (
+                    <button key={cropName} type="button" onClick={() => setEditCrops(prev => prev.includes(cropName) ? prev.filter(c => c !== cropName) : [...prev, cropName])} className="h-9 px-4 rounded-full text-[12px] font-medium transition-colors" style={{ background: editCrops.includes(cropName) ? "var(--brand)" : "var(--surface-2)", color: editCrops.includes(cropName) ? "#0a0a0a" : "var(--text-secondary)", border: editCrops.includes(cropName) ? "none" : "1px solid var(--divider)" }}>{cropName}</button>
                   ))}
-                  {businessSettings.crops.length === 0 && <p className="text-[11px]" style={{ color: "var(--text-secondary)" }}>Configure crops in Business Settings first</p>}
                 </div>
               </div>
               <div>
