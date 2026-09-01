@@ -468,7 +468,7 @@ export default function AdminDashboardPage() {
             className="h-12 rounded-full font-bold text-[13px] flex items-center justify-center transition-transform active:scale-[0.97]"
             style={{ border: "1.5px solid var(--divider)", color: "var(--text-primary)", background: "transparent" }}
           >
-            Payment
+            {t("common.payment")}
           </button>
           <button
             onClick={() => navigate("/admin/purchases/new")}
@@ -501,11 +501,11 @@ export default function AdminDashboardPage() {
                     >
                       <AlertTriangle size={20} color="#A32D2D" className="mt-0.5 shrink-0" />
                       <div className="flex-1 min-w-0">
-                        <p className="text-[14px] font-medium" style={{ color: "#791F1F" }}>Supplier payable due</p>
-                        <p className="text-[13px] mt-1" style={{ color: "#791F1F", lineHeight: 1.5 }}>{formatCurrency(totalPayable)} total due to suppliers</p>
+                        <p className="text-[14px] font-medium" style={{ color: "#791F1F" }}>{t("admin.supplierPayableDue")}</p>
+                        <p className="text-[13px] mt-1" style={{ color: "#791F1F", lineHeight: 1.5 }}>{formatCurrency(totalPayable)} {t("admin.totalDueToSuppliers")}</p>
                         <div className="flex items-center justify-between mt-2">
-                          <span className="text-[11px]" style={{ color: "#A32D2D" }}>action needed</span>
-                          <span className="text-[13px] font-medium" style={{ color: "#791F1F" }}>Review</span>
+                          <span className="text-[11px]" style={{ color: "#A32D2D" }}>{t("admin.actionNeeded")}</span>
+                          <span className="text-[13px] font-medium" style={{ color: "#791F1F" }}>{t("admin.review")}</span>
                         </div>
                       </div>
                     </button>
@@ -519,11 +519,11 @@ export default function AdminDashboardPage() {
                     >
                       <AlertTriangle size={20} color="#A32D2D" className="mt-0.5 shrink-0" />
                       <div className="flex-1 min-w-0">
-                        <p className="text-[14px] font-medium" style={{ color: "#791F1F" }}>{delayedCount} customer{delayedCount !== 1 ? "s" : ""} delayed</p>
-                        <p className="text-[13px] mt-1" style={{ color: "#791F1F", lineHeight: 1.5 }}>Payment past due date but within 30 days</p>
+                        <p className="text-[14px] font-medium" style={{ color: "#791F1F" }}>{t("admin.delayedCount").replace("{count}", String(delayedCount))}</p>
+                        <p className="text-[13px] mt-1" style={{ color: "#791F1F", lineHeight: 1.5 }}>{t("admin.delayedDesc")}</p>
                         <div className="flex items-center justify-between mt-2">
-                          <span className="text-[11px]" style={{ color: "#A32D2D" }}>follow up needed</span>
-                          <span className="text-[13px] font-medium" style={{ color: "#791F1F" }}>View</span>
+                          <span className="text-[11px]" style={{ color: "#A32D2D" }}>{t("admin.followUpNeeded")}</span>
+                          <span className="text-[13px] font-medium" style={{ color: "#791F1F" }}>{t("admin.view")}</span>
                         </div>
                       </div>
                     </button>
@@ -537,11 +537,11 @@ export default function AdminDashboardPage() {
                     >
                       <AlertTriangle size={20} color="#A32D2D" className="mt-0.5 shrink-0" />
                       <div className="flex-1 min-w-0">
-                        <p className="text-[14px] font-medium" style={{ color: "#791F1F" }}>{highRiskCount} high-risk customer{highRiskCount !== 1 ? "s" : ""}</p>
-                        <p className="text-[13px] mt-1" style={{ color: "#791F1F", lineHeight: 1.5 }}>More than 30 days overdue — immediate action required</p>
+                        <p className="text-[14px] font-medium" style={{ color: "#791F1F" }}>{t("admin.highRiskCount").replace("{count}", String(highRiskCount))}</p>
+                        <p className="text-[13px] mt-1" style={{ color: "#791F1F", lineHeight: 1.5 }}>{t("admin.highRiskDesc")}</p>
                         <div className="flex items-center justify-between mt-2">
-                          <span className="text-[11px]" style={{ color: "#A32D2D" }}>action needed</span>
-                          <span className="text-[13px] font-medium" style={{ color: "#791F1F" }}>Review</span>
+                          <span className="text-[11px]" style={{ color: "#A32D2D" }}>{t("admin.actionNeeded")}</span>
+                          <span className="text-[13px] font-medium" style={{ color: "#791F1F" }}>{t("admin.review")}</span>
                         </div>
                       </div>
                     </button>
@@ -555,11 +555,11 @@ export default function AdminDashboardPage() {
                     >
                       <AlertTriangle size={20} color="#A32D2D" className="mt-0.5 shrink-0" />
                       <div className="flex-1 min-w-0">
-                        <p className="text-[14px] font-medium" style={{ color: "#791F1F" }}>{creditLimitReached} customer{creditLimitReached !== 1 ? "s" : ""} need attention</p>
-                        <p className="text-[13px] mt-1" style={{ color: "#791F1F", lineHeight: 1.5 }}>Credit limit reached or critical repayment situation</p>
+                        <p className="text-[14px] font-medium" style={{ color: "#791F1F" }}>{t("admin.creditLimitReached")} ({creditLimitReached})</p>
+                        <p className="text-[13px] mt-1" style={{ color: "#791F1F", lineHeight: 1.5 }}>{t("admin.creditLimitDesc")}</p>
                         <div className="flex items-center justify-between mt-2">
-                          <span className="text-[11px]" style={{ color: "#A32D2D" }}>action needed</span>
-                          <span className="text-[13px] font-medium" style={{ color: "#791F1F" }}>Review</span>
+                          <span className="text-[11px]" style={{ color: "#A32D2D" }}>{t("admin.actionNeeded")}</span>
+                          <span className="text-[13px] font-medium" style={{ color: "#791F1F" }}>{t("admin.review")}</span>
                         </div>
                       </div>
                     </button>
@@ -572,7 +572,7 @@ export default function AdminDashboardPage() {
               <div className="flex items-center gap-3 rounded-[14px] p-4" style={{ background: "var(--surface-2)" }}>
                 <CheckCircle2 size={20} style={{ color: "var(--brand-dark, #65a30d)" }} className="shrink-0" />
                 <div className="flex-1">
-                  <p className="text-[13px] font-medium" style={{ color: "var(--text-primary)" }}>All clear — no critical alerts</p>
+                  <p className="text-[13px] font-medium" style={{ color: "var(--text-primary)" }}>{t("admin.allClear")}</p>
                 </div>
               </div>
             );
@@ -593,9 +593,9 @@ export default function AdminDashboardPage() {
                     >
                       <Bell size={20} color="#854F0B" className="shrink-0" />
                       <div className="flex-1 min-w-0">
-                        <p className="text-[13px]" style={{ color: "#633806", lineHeight: 1.5 }}>{dueReminderCount} reminder{dueReminderCount !== 1 ? "s" : ""} ready to send</p>
+                        <p className="text-[13px]" style={{ color: "#633806", lineHeight: 1.5 }}>{t("admin.remindersSentToday").replace("{count}", String(dueReminderCount))}</p>
                       </div>
-                      <span className="text-[13px] font-medium shrink-0" style={{ color: "#854F0B" }}>View</span>
+                      <span className="text-[13px] font-medium shrink-0" style={{ color: "#854F0B" }}>{t("admin.view")}</span>
                     </button>
                   )}
                   {/* Low stock */}
@@ -607,9 +607,9 @@ export default function AdminDashboardPage() {
                     >
                       <AlertTriangle size={20} color="#854F0B" className="shrink-0" />
                       <div className="flex-1 min-w-0">
-                        <p className="text-[13px]" style={{ color: "#633806", lineHeight: 1.5 }}>{lowStockCount} product{lowStockCount !== 1 ? "s" : ""} low on stock — need reorder</p>
+                        <p className="text-[13px]" style={{ color: "#633806", lineHeight: 1.5 }}>{lowStockCount} {isUrdu ? "مصنوعات کم اسٹاک — reorder درکار" : "product" + (lowStockCount !== 1 ? "s" : "") + " low on stock — need reorder"}</p>
                       </div>
-                      <span className="text-[13px] font-medium shrink-0" style={{ color: "#854F0B" }}>View</span>
+                      <span className="text-[13px] font-medium shrink-0" style={{ color: "#854F0B" }}>{t("admin.view")}</span>
                     </button>
                   )}
                 </>
@@ -620,7 +620,7 @@ export default function AdminDashboardPage() {
               <div className="flex items-center gap-3 rounded-[14px] p-4" style={{ background: "var(--surface-2)" }}>
                 <CheckCircle2 size={20} style={{ color: "var(--brand-dark, #65a30d)" }} className="shrink-0" />
                 <div className="flex-1">
-                  <p className="text-[13px]" style={{ color: "var(--text-primary)", lineHeight: 1.5 }}>No pending reminders or low stock alerts</p>
+                  <p className="text-[13px]" style={{ color: "var(--text-primary)", lineHeight: 1.5 }}>{t("admin.noPendingReminders")}</p>
                 </div>
               </div>
             );
@@ -638,7 +638,9 @@ export default function AdminDashboardPage() {
               if (daysUntil <= 30 && daysUntil > 0) {
                 const affectedCustomers = customers.filter(c => c.outstandingBalance > 0 && customerCropsHas(c.id, crop.name)).length;
                 harvestAlerts.push({
-                  text: crop.name + " season starts in " + daysUntil + " days — " + affectedCustomers + " farmer" + (affectedCustomers !== 1 ? "s" : "") + " due for harvest reminders",
+                  text: t("admin.harvestSeasonSoon")
+                    .replace("{days}", String(daysUntil))
+                    .replace("{count}", String(affectedCustomers)),
                   cropName: crop.name,
                 });
               }
@@ -663,7 +665,7 @@ export default function AdminDashboardPage() {
               <div className="flex items-center gap-3 rounded-[14px] p-4" style={{ background: "var(--surface-2)" }}>
                 <CheckCircle2 size={20} style={{ color: "var(--brand-dark, #65a30d)" }} className="shrink-0" />
                 <div className="flex-1">
-                  <p className="text-[13px]" style={{ color: "var(--text-primary)", lineHeight: 1.5 }}>No upcoming harvest season alerts</p>
+                  <p className="text-[13px]" style={{ color: "var(--text-primary)", lineHeight: 1.5 }}>{t("admin.noHarvestAlerts")}</p>
                 </div>
               </div>
             );
@@ -747,7 +749,7 @@ export default function AdminDashboardPage() {
                   <div className="min-w-0">
                     <p className="text-[13px] font-bold truncate" style={{ color: "var(--text-primary)" }}>{sale.customerName}</p>
                     <p className="text-[10px] mt-0.5" style={{ color: "var(--text-secondary)" }}>{formatSmartDateTime(sale.createdAt, now)}</p>
-                    <p className="text-[11px] font-medium mt-0.5" style={{ color: "var(--text-secondary)" }}>Sold by: {sale.employeeName}</p>
+                    <p className="text-[11px] font-medium mt-0.5" style={{ color: "var(--text-secondary)" }}>{t("common.soldBy")}: {sale.employeeName}</p>
                   </div>
                 </div>
                 <div className="flex flex-col items-end gap-1 shrink-0">
