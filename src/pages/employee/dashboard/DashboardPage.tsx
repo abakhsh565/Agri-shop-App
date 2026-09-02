@@ -197,8 +197,8 @@ export default function DashboardPage() {
       {/* ── Metric card — brand lime ── */}
       <div className="px-4 animate-fade-in-up">
         <div
-          className="rounded-[16px] p-5 cursor-pointer transition-transform active:scale-[0.98]"
-          style={{ background: "var(--brand)" }}
+          className="rounded-[20px] p-5 cursor-pointer transition-transform active:scale-[0.98]"
+          style={{ background: "var(--brand)", boxShadow: "0 8px 20px rgba(132,204,22,0.28)" }}
           onClick={() => navigate("/employee/sales", { state: { tab: "all" } })}
         >
           {/* Label */}
@@ -292,11 +292,13 @@ export default function DashboardPage() {
         <p className="text-[11px] font-bold uppercase tracking-widest mb-3" style={{ color: "var(--text-secondary)" }}>
           {t("dashboard.recentSales")}
         </p>
-        <div className="rounded-[14px] overflow-hidden" style={{ border: "1px solid var(--divider)" }}>
+        <div className="rounded-[16px] overflow-hidden" style={{ background: "var(--surface)", boxShadow: "var(--shadow-card)" }}>
           {recentSales.length === 0 ? (
-            <div className="px-4 py-8 text-center">
-              <p className="text-2xl mb-1">📋</p>
-              <p className="text-[13px]" style={{ color: "var(--text-secondary)" }}>No sales yet today</p>
+            <div className="flex flex-col items-center justify-center py-10 px-6 text-center">
+              <div className="w-12 h-12 rounded-[14px] flex items-center justify-center mb-3" style={{ background: "var(--surface-2)" }}>
+                <span className="text-xl">📋</span>
+              </div>
+              <p className="text-[13px] font-semibold" style={{ color: "var(--text-secondary)" }}>No sales yet today</p>
             </div>
           ) : recentSales.map((sale, i) => {
             const cImg = getCustomerImg(sale.customerId);
