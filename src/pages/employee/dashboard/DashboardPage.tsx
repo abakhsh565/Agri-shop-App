@@ -115,8 +115,8 @@ export default function DashboardPage() {
       {showNotifs && (
         <div className="fixed inset-0" style={{ zIndex: 60 }} onClick={() => setShowNotifs(false)}>
           <div
-            className="fixed top-[88px] right-4 w-[280px] rounded-[16px] shadow-2xl overflow-hidden animate-scale-in"
-            style={{ zIndex: 61, background: "var(--surface)", border: "1px solid var(--divider)" }}
+            className="fixed top-[88px] w-[280px] rounded-[16px] shadow-2xl overflow-hidden animate-scale-in"
+            style={{ zIndex: 61, background: "var(--surface)", border: "1px solid var(--divider)", [isUrdu ? "left" : "right"]: 16 }}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="px-4 py-3" style={{ borderBottom: "1px solid var(--divider)" }}>
