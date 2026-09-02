@@ -1,5 +1,6 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Noto+Nastaliq+Urdu:wght@400..700&display=swap');
 
 @import 'tailwindcss';
 
@@ -118,6 +119,13 @@ body {
   -webkit-tap-highlight-color: transparent;
   -webkit-touch-callout: none;
   user-select: none;
+}
+
+/* Urdu script needs its own typeface — Inter has no Arabic-script glyphs,
+   so without this the OS's default fallback font renders (inconsistent
+   across devices, and usually plainer than the rest of the app). */
+html[dir="rtl"] body {
+  font-family: 'Noto Nastaliq Urdu', 'Inter', system-ui, sans-serif;
 }
 
 /* Text still selectable where it matters (inputs, editable fields). */
