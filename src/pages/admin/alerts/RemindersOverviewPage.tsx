@@ -645,27 +645,27 @@ export default function RemindersOverviewPage() {
           ))}
         </div>
 
-        {/* Sub tabs — premium segmented control, smaller */}
+        {/* Sub tabs — refined text links with active underline */}
         {currentSubTabs.length > 0 && (
-          <div className="flex items-center gap-1 p-1 rounded-[10px] overflow-x-auto no-scrollbar" style={{ background: "var(--surface-2)" }}>
+          <div className="flex items-center gap-5 overflow-x-auto no-scrollbar pt-1">
             {currentSubTabs.map(st => (
               <button
                 key={st.key}
                 onClick={() => setSubTab(st.key)}
-                className="flex items-center gap-1.5 py-1.5 px-3 rounded-[8px] text-[12px] font-semibold whitespace-nowrap transition-all shrink-0"
+                className="flex items-center gap-1.5 pb-2 text-[12px] font-medium whitespace-nowrap transition-all relative"
                 style={{
                   color: subTab === st.key ? "var(--text-primary)" : "var(--text-secondary)",
-                  background: subTab === st.key ? "var(--background)" : "transparent",
-                  boxShadow: subTab === st.key ? "0 1px 2px rgba(0,0,0,0.06)" : "none",
                 }}
               >
                 {st.label}
                 {st.count > 0 && (
-                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full" style={{
-                    background: subTab === st.key ? st.color : "var(--text-secondary)",
-                    color: subTab === st.key ? "#fff" : "var(--surface-2)",
-                    lineHeight: '1',
+                  <span className="text-[10px] font-bold w-5 h-5 flex items-center justify-center rounded-full" style={{
+                    background: subTab === st.key ? st.color : "var(--surface-2)",
+                    color: subTab === st.key ? "#fff" : "var(--text-secondary)",
                   }}>{st.count}</span>
+                )}
+                {subTab === st.key && (
+                  <div className="absolute bottom-0 left-0 right-0 h-[2px] rounded-full" style={{ background: st.color }} />
                 )}
               </button>
             ))}
