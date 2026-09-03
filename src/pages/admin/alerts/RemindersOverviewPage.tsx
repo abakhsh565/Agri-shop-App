@@ -623,8 +623,8 @@ export default function RemindersOverviewPage() {
       <NavHeader title={isUrdu ? "ایکشن سینٹر" : "Action Center"} />
 
       <div className="flex flex-col px-4 pt-4 pb-8 gap-4" style={{ overflowY: "auto", flex: 1 }}>
-        {/* Main tabs — clean line-based, no icons, matching reference */}
-        <div className="flex items-center" style={{ borderBottom: '1px solid var(--divider)' }}>
+        {/* Main tabs — premium segmented control */}
+        <div className="flex items-center gap-1 p-1 rounded-[12px]" style={{ background: "var(--surface-2)" }}>
           {([
             { key: "action" as const, label: isUrdu ? "عمل درکار" : "Action Needed" },
             { key: "followups" as const, label: isUrdu ? "فالو اپس" : "Follow Ups" },
@@ -633,41 +633,39 @@ export default function RemindersOverviewPage() {
             <button
               key={tab.key}
               onClick={() => { setMainTab(tab.key); setSubTab(tab.key === "action" ? "urgent" : tab.key === "followups" ? "ready" : ""); }}
-              className="flex-1 text-center py-2.5 text-[13px] font-semibold transition-colors relative"
+              className="flex-1 text-center py-2 rounded-[10px] text-[13px] font-semibold transition-all"
               style={{
                 color: mainTab === tab.key ? "var(--text-primary)" : "var(--text-secondary)",
+                background: mainTab === tab.key ? "var(--background)" : "transparent",
+                boxShadow: mainTab === tab.key ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
               }}
             >
               {tab.label}
-              {mainTab === tab.key && (
-                <div className="absolute bottom-0 left-1/4 right-1/4 h-[2px] rounded-full" style={{ background: "var(--text-primary)" }} />
-              )}
             </button>
           ))}
         </div>
 
-        {/* Sub tabs — line-based matching main tabs */}
+        {/* Sub tabs — premium segmented control, smaller */}
         {currentSubTabs.length > 0 && (
-          <div className="flex items-center overflow-x-auto no-scrollbar" style={{ borderBottom: '1px solid var(--divider)' }}>
+          <div className="flex items-center gap-1 p-1 rounded-[10px] overflow-x-auto no-scrollbar" style={{ background: "var(--surface-2)" }}>
             {currentSubTabs.map(st => (
               <button
                 key={st.key}
                 onClick={() => setSubTab(st.key)}
-                className="flex items-center gap-1.5 py-2.5 text-[12px] font-semibold whitespace-nowrap transition-colors relative px-1"
+                className="flex items-center gap-1.5 py-1.5 px-3 rounded-[8px] text-[12px] font-semibold whitespace-nowrap transition-all shrink-0"
                 style={{
                   color: subTab === st.key ? "var(--text-primary)" : "var(--text-secondary)",
+                  background: subTab === st.key ? "var(--background)" : "transparent",
+                  boxShadow: subTab === st.key ? "0 1px 2px rgba(0,0,0,0.06)" : "none",
                 }}
               >
                 {st.label}
                 {st.count > 0 && (
                   <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full" style={{
-                    background: subTab === st.key ? "var(--text-primary)" : "var(--surface-2)",
-                    color: subTab === st.key ? "var(--background)" : "var(--text-secondary)",
+                    background: subTab === st.key ? st.color : "var(--text-secondary)",
+                    color: subTab === st.key ? "#fff" : "var(--surface-2)",
                     lineHeight: '1',
                   }}>{st.count}</span>
-                )}
-                {subTab === st.key && (
-                  <div className="absolute bottom-0 left-1/6 right-1/6 h-[2px] rounded-full" style={{ background: st.color }} />
                 )}
               </button>
             ))}
