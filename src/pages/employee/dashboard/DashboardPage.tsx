@@ -5,7 +5,7 @@ import { useNotificationStore, type AppNotification } from "@/stores/notificatio
 import { useSalesStore } from "@/stores/salesStore";
 import PullToRefresh from "@/components/ui/PullToRefresh";
 import { useCustomersStore } from "@/stores/customersStore";
-import { formatSmartDateTime } from "@/lib/formatters";
+import { formatSmartDateTime, translateNotification } from "@/lib/formatters";
 import { useT } from "@/lib/i18n";
 import { generateReminders } from "@/lib/reminderEngine";
 import { useThemeStore } from "@/stores/themeStore";
@@ -46,7 +46,7 @@ function formatRs(n: number) {
 
 export default function DashboardPage() {
   const { user } = useAuthStore();
-  const { items: notifications, unread, load, subscribe, markAllRead } = useNotificationStore();
+  const { items: notifications, unread, load, subscribe, markAllRead, markOneRead } = useNotificationStore();
   const { language } = useThemeStore();
   const navigate = useNavigate();
   const t = useT();
@@ -115,35 +115,56 @@ export default function DashboardPage() {
       {showNotifs && (
         <div className="fixed inset-0" style={{ zIndex: 60 }} onClick={() => setShowNotifs(false)}>
           <div
-            className="fixed top-[88px] right-4 w-[280px] rounded-[16px] shadow-2xl overflow-hidden animate-scale-in"
-            style={{ zIndex: 61, background: "var(--surface)", border: "1px solid var(--divider)" }}
+            className="fixed top-[88px] right-4 w-[280px] rounded-[16px] shadow-2xl overflow-hidden animate-scale-in flex flex-col"
+            style={{ zIndex: 61, background: "var(--surface)", border: "1px solid var(--divider)", maxHeight: "360px" }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="px-4 py-3" style={{ borderBottom: "1px solid var(--divider)" }}>
-              <p className="text-[12px] font-bold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
+            {/* Header — clickable → full notifications page */}
+            <button
+              onClick={() => { navigate("/employee/notifications"); setShowNotifs(false); }}
+              className="px-4 py-3 flex items-center justify-between shrink-0 w-full active:opacity-70 transition-opacity"
+              style={{ borderBottom: "1px solid var(--divider)" }}
+            >
+              <p className="text-[12px] font-bold uppercase tracking-wider" style={{ color: "var(--text-primary)" }}>
                 {t("dashboard.notifications")}
               </p>
-            </div>
-            {notifications.length === 0 ? (
-              <div className="px-4 py-6 text-center">
-                <p className="text-[13px]" style={{ color: "var(--text-secondary)" }}>{t("dashboard.noNotifications")}</p>
+              <div className="flex items-center gap-2">
+                {unread() > 0 && (
+                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full" style={{ background: "var(--brand)", color: "#0a0a0a" }}>
+                    {unread()}
+                  </span>
+                )}
+                <span className="text-[10px]" style={{ color: "var(--text-secondary)" }}>View all</span>
               </div>
-            ) : (
-              notifications.map((n) => {
-                const route = employeeNotifRoute(n);
-                return (
-                  <button
-                    key={n.id}
-                    onClick={() => { if (route) { navigate(route); setShowNotifs(false); } }}
-                    className="w-full text-start px-4 py-3 active:bg-black/5 transition-colors"
-                    style={{ borderBottom: "1px solid var(--divider)" }}
-                  >
-                    <p className="text-[13px] font-semibold" style={{ color: "var(--text-primary)" }}>{n.title}</p>
-                    <p className="text-[12px] mt-0.5" style={{ color: "var(--text-secondary)" }}>{n.body}</p>
-                  </button>
-                );
-              })
-            )}
+            </button>
+            {/* Scrollable unread list */}
+            <div className="overflow-y-auto flex-1" style={{ maxHeight: "310px" }}>
+              {notifications.filter(n => !n.read).length === 0 ? (
+                <div className="px-4 py-6 text-center">
+                  <p className="text-[13px]" style={{ color: "var(--text-secondary)" }}>{t("dashboard.noNotifications") || "No new notifications"}</p>
+                </div>
+              ) : (
+                notifications.filter(n => !n.read).slice(0, 5).map((n) => {
+                  const tr = translateNotification(n.kind, n.title, n.body, t);
+                  return (
+                    <button
+                      key={n.id}
+                      onClick={() => { markOneRead(n.id); setShowNotifs(false); }}
+                      className="w-full text-start px-4 py-3 active:bg-black/5 transition-colors"
+                      style={{ borderBottom: "1px solid var(--divider)" }}
+                    >
+                      <div className="flex items-start gap-2">
+                        <div className="w-2 h-2 rounded-full mt-1.5 shrink-0" style={{ background: "var(--brand)" }} />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[13px] font-semibold" style={{ color: "var(--text-primary)" }}>{tr.title}</p>
+                          {tr.body && <p className="text-[12px] mt-0.5" style={{ color: "var(--text-secondary)" }}>{tr.body}</p>}
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -321,7 +342,7 @@ export default function DashboardPage() {
                 )}
                 <div className="min-w-0">
                   <p className="text-[13px] font-bold" style={{ color: "var(--text-primary)" }}>{sale.customerName}</p>
-                  <p className="text-[10px] mt-0.5" style={{ color: "var(--text-secondary)" }}>{formatSmartDateTime(sale.createdAt, now)}</p>
+                  <p className="text-[10px] mt-0.5" style={{ color: "var(--text-secondary)" }}>{formatSmartDateTime(sale.createdAt, now, t)}</p>
                 </div>
               </div>
               <div className="flex flex-col items-end gap-1 shrink-0">
@@ -330,11 +351,11 @@ export default function DashboardPage() {
                 </span>
                 {sale.paymentType !== "full" ? (
                   <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full" style={{ background: "rgba(239,68,68,0.1)", color: "#ef4444" }}>
-                    Credit
+                    {t("common.creditTag")}
                   </span>
                 ) : (
                   <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full" style={{ background: "rgba(132,204,22,0.15)", color: "var(--brand-dark)" }}>
-                    Paid
+                    {t("common.paidTag")}
                   </span>
                 )}
               </div>

@@ -67,7 +67,7 @@ export default function AdminDashboardPage() {
   const isUrdu = language === "ur";
   const [dateFilter, setDateFilter] = useState<DateFilter>("all");
   const [showNotifs, setShowNotifs] = useState(false);
-  const { items: notifications, unread, load, subscribe, markAllRead } = useNotificationStore();
+  const { items: notifications, unread, load, subscribe, markAllRead, markOneRead } = useNotificationStore();
   const mockSales = useSalesStore((s) => s.sales);
   const mockProducts = useProductsStore((s) => s.products);
   const mockCompanies = useCompaniesStore((s) => s.companies);
@@ -287,27 +287,36 @@ export default function AdminDashboardPage() {
             style={{ zIndex: 61, background: "var(--surface)", border: "1px solid var(--divider)", maxHeight: "360px" }}
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Header */}
-            <div className="px-4 py-3 flex items-center justify-between shrink-0" style={{ borderBottom: "1px solid var(--divider)" }}>
-              <p className="text-[12px] font-bold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
+            {/* Header — clickable → full notifications page */}
+            <button
+              onClick={() => { navigate("/admin/notifications"); setShowNotifs(false); }}
+              className="px-4 py-3 flex items-center justify-between shrink-0 w-full active:opacity-70 transition-opacity"
+              style={{ borderBottom: "1px solid var(--divider)" }}
+            >
+              <p className="text-[12px] font-bold uppercase tracking-wider" style={{ color: "var(--text-primary)" }}>
                 {t("dashboard.notifications")}
               </p>
-              {notifications.length > 0 && (
-                <button onClick={() => { markAllRead(); }} className="text-[11px] font-semibold" style={{ color: "var(--brand-dark, #65a30d)" }}>
-                  Mark all read
-                </button>
-              )}
-            </div>
+              <div className="flex items-center gap-2">
+                {unread() > 0 && (
+                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full" style={{ background: "var(--brand)", color: "#0a0a0a" }}>
+                    {unread()}
+                  </span>
+                )}
+                <span className="text-[10px]" style={{ color: "var(--text-secondary)" }}>View all</span>
+              </div>
+            </button>
 
             {/* Scrollable list */}
             <div className="overflow-y-auto flex-1" style={{ maxHeight: "310px" }}>
-              {notifications.length === 0 ? (
+              {notifications.filter(n => !n.read).length === 0 ? (
                 <div className="px-4 py-8 text-center">
                   <p className="text-[13px]" style={{ color: "var(--text-secondary)" }}>{t("dashboard.noNotifications") || "No notifications yet"}</p>
                 </div>
               ) : (
                 (() => {
-                  /* Group notifications by time period */
+                  /* Show only unread notifications, grouped by time, max 5 */
+                  const unreadNotifs = notifications.filter(n => !n.read).slice(0, 5);
+                  if (unreadNotifs.length === 0) return null;
                   const now = new Date();
                   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
                   const yesterdayStart = new Date(todayStart); yesterdayStart.setDate(yesterdayStart.getDate() - 1);
@@ -320,7 +329,7 @@ export default function AdminDashboardPage() {
                     { heading: "Earlier", items: [] },
                   ];
 
-                  for (const n of notifications) {
+                  for (const n of unreadNotifs) {
                     const d = new Date(n.created_at);
                     if (d >= todayStart) groups[0].items.push(n);
                     else if (d >= yesterdayStart) groups[1].items.push(n);
@@ -329,16 +338,7 @@ export default function AdminDashboardPage() {
                   }
 
                   const nonEmpty = groups.filter(g => g.items.length > 0);
-                  // Limit to 5 most recent notifications total
-                  let totalCount = 0;
-                  const limited: typeof nonEmpty = [];
-                  for (const g of nonEmpty) {
-                    const remaining = 5 - totalCount;
-                    if (remaining <= 0) break;
-                    const items = g.items.slice(0, remaining);
-                    limited.push({ ...g, items });
-                    totalCount += items.length;
-                  }
+                  const limited = nonEmpty;
 
                   return limited.map((group) => (
                     <div key={group.heading}>
@@ -350,7 +350,7 @@ export default function AdminDashboardPage() {
                         return (
                           <button
                             key={n.id}
-                            onClick={() => { if (route) { navigate(route); setShowNotifs(false); } }}
+                            onClick={() => { markOneRead(n.id); if (route) { navigate(route); } setShowNotifs(false); }}
                             className="w-full text-start px-4 py-3 active:bg-black/5 transition-colors"
                             style={{ borderBottom: "1px solid var(--divider)" }}
                           >

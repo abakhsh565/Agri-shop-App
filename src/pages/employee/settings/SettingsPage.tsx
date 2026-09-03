@@ -11,6 +11,7 @@ import { supabase } from "@/lib/supabase";
 import { useUIStore } from "@/stores/uiStore";
 import { Lock, Bell, Globe, Info, ChevronRight, Moon, Sun, ClipboardList, Smartphone, Camera, Loader2, User, Save } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { useNotificationStore } from "@/stores/notificationStore";
 
 const LANG_LABELS: Record<string, string> = { en: "English", ur: "اردو" };
 
@@ -232,7 +233,8 @@ export default function SettingsPage() {
               },
               {
                 icon: Bell, label: t("settings.notifications"),
-                right: "On", action: null,
+                right: null, action: () => navigate("/employee/notifications"),
+                badge: useNotificationStore.getState().unread(),
               },
               {
                 icon: ClipboardList, label: t("settings.activityLog"),
@@ -263,9 +265,13 @@ export default function SettingsPage() {
                     <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>{s.label}</span>
                   </div>
                   <div className="flex items-center gap-1">
-                    {s.right && (
+                    {'badge' in s && s.badge ? (
+                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full" style={{ background: "#ef4444", color: "#fff" }}>
+                        {s.badge}
+                      </span>
+                    ) : s.right ? (
                       <span className="text-sm" style={{ color: "var(--text-secondary)" }}>{s.right}</span>
-                    )}
+                    ) : null}
                     {s.action && <ChevronRight size={14} style={{ color: "var(--text-secondary)" }} />}
                   </div>
                 </button>

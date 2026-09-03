@@ -70,6 +70,7 @@ interface NotificationState {
   load: () => Promise<void>;
   subscribe: () => () => void;
   markAllRead: () => Promise<void>;
+  markOneRead: (id: string) => Promise<void>;
 }
 
 /**
@@ -156,5 +157,12 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
     if (unreadIds.length === 0) return;
     set((s) => ({ items: s.items.map((n) => ({ ...n, read: true })) }));
     await supabase.from("notifications").update({ read: true }).in("id", unreadIds);
+  },
+
+  markOneRead: async (id: string) => {
+    const item = get().items.find((n) => n.id === id);
+    if (!item || item.read) return;
+    set((s) => ({ items: s.items.map((n) => n.id === id ? { ...n, read: true } : n) }));
+    await supabase.from("notifications").update({ read: true }).eq("id", id);
   },
 }));
