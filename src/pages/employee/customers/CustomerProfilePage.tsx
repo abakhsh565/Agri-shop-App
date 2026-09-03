@@ -13,7 +13,7 @@ import { formatCurrency, calculateCreditHealth, getCreditHealthStatusColor } fro
 import { useThemeStore } from "@/stores/themeStore";
 import { useT } from "@/lib/i18n";
 import { useShellBase } from "@/lib/useShellBase";
-import { History, Wallet, Bell, Pencil, Trash2, Receipt, Plus } from "lucide-react";
+import { History, Wallet, Bell, Pencil, Trash2, Receipt, Plus, Package } from "lucide-react";
 import { getRecommendationsForCustomer, KNOWN_CROPS } from "@/lib/recommendationEngine";
 import { loadReminderConfigs, saveReminderConfig as saveReminderConfigToDb, loadCustomerCrops, saveCustomerCrops as saveCustomerCropsToDb, loadBusinessSettings, calculatePaymentStatus, getPaymentStatusLabel, getPaymentStatusColor, isDuplicateReminder } from "@/lib/reminderEngine";
 import { useProductsStore } from "@/stores/productsStore";
@@ -642,13 +642,6 @@ function RecommendedSection({ customerId }: { customerId: string | undefined }) 
   const recs = getRecommendationsForCustomer(customer, { customers, sales, products, customerCropsMap: cropsMap });
   if (recs.length === 0) return null;
 
-  const PRODUCT_ICONS: Record<string, string> = {
-    spray: "\uD83D\uDD2C",
-    seed: "\uD83C\uDF31",
-    fertilizer: "\uD83C\uDF3F",
-    other: "\uD83D\uDCE6",
-  };
-
   return (
     <div className="rounded-[16px] p-4" style={{ background: "var(--surface-2)" }}>
       <p className="text-[10px] font-bold uppercase tracking-wider mb-3" style={{ color: "#5A5A55" }}>
@@ -661,12 +654,13 @@ function RecommendedSection({ customerId }: { customerId: string | undefined }) 
             className="flex items-center gap-3 py-3"
             style={{ borderBottom: i < recs.length - 1 ? "0.5px solid var(--divider)" : "none" }}
           >
-            <div
-              className="size-10 rounded-full flex items-center justify-center shrink-0"
-              style={{ background: "#E8F5E0" }}
-            >
-              <span className="text-[16px]">{PRODUCT_ICONS[rec.product.category] || "\uD83D\uDCE6"}</span>
-            </div>
+            {rec.product.imageUrl ? (
+              <img src={rec.product.imageUrl} alt={rec.product.name} className="size-10 rounded-full object-cover shrink-0" style={{ background: "#E8F5E0" }} />
+            ) : (
+              <div className="size-10 rounded-full flex items-center justify-center shrink-0" style={{ background: "#E8F5E0" }}>
+                <Package size={16} style={{ color: "var(--brand-dark)" }} />
+              </div>
+            )}
             <div className="flex-1 min-w-0">
               <p className="text-[14px] font-medium" style={{ color: "var(--text-primary)" }}>
                 {rec.product.name}
@@ -693,7 +687,7 @@ function RecommendedSection({ customerId }: { customerId: string | undefined }) 
                 window.open('https://wa.me/' + waPhone + '?text=' + encodeURIComponent(msg), '_blank');
               }}
             >
-              <Plus size={16} color="#3B6D11" />
+              <Bell size={16} color="#3B6D11" />
             </button>
           </div>
         ))}

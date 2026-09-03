@@ -43,6 +43,10 @@ export default function ProductDetailPage() {
   const base = useShellBase();
   const t = useT();
   const isAdmin = base === "/admin";
+  const unitLabel = (unit: string) => {
+    const map: Record<string, string> = { liter: t("products.unitLiter"), kg: t("products.unitKg"), piece: t("products.unitPiece") };
+    return map[unit] ?? unit;
+  };
   const products = useProductsStore((s) => s.products);
   const product = products.find((p) => p.id === productId);
   const { addToast } = useUIStore();
@@ -190,7 +194,7 @@ export default function ProductDetailPage() {
           <div className="text-center" style={{ borderLeft: "1px solid var(--divider)", borderRight: "1px solid var(--divider)" }}>
             <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>{t("products.stock")}</p>
             <p className="text-sm font-bold mt-0.5" style={{ color: "var(--text-primary)" }}>
-              {totalStock} {product.baseUnit}
+              {totalStock} {unitLabel(product.baseUnit)}
             </p>
           </div>
           <div className="text-center">
@@ -261,7 +265,7 @@ export default function ProductDetailPage() {
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-bold truncate" style={{ color: "var(--text-primary)" }}>{v.name}</p>
                   <p className="text-[11px]" style={{ color: "var(--text-secondary)" }}>
-                    {v.unitSize} {product.baseUnit} · {formatCurrency(v.sellingPrice)}
+                    {v.unitSize} {unitLabel(product.baseUnit)} · {formatCurrency(v.sellingPrice)}
                   </p>
                 </div>
                 <div className="flex items-center gap-2.5 shrink-0">
@@ -462,18 +466,22 @@ function ProductCustomerRecommendations({ productId }: { productId: string }) {
             className="flex items-center gap-3 py-3"
             style={{ borderBottom: i < recs.length - 1 ? "1px solid var(--divider)" : "none" }}
           >
-            <div
-              className="w-10 h-10 rounded-full flex items-center justify-center text-[12px] font-bold shrink-0"
-              style={{ background: getAvatarColor(rec.customer.name), color: "#fff" }}
-            >
-              {getInitials(rec.customer.name)}
-            </div>
+            {rec.customer.imageUrl ? (
+              <img src={rec.customer.imageUrl} alt={rec.customer.name} className="w-10 h-10 rounded-full object-cover shrink-0" />
+            ) : (
+              <div
+                className="w-10 h-10 rounded-full flex items-center justify-center text-[12px] font-bold shrink-0"
+                style={{ background: getAvatarColor(rec.customer.name), color: "#fff" }}
+              >
+                {getInitials(rec.customer.name)}
+              </div>
+            )}
             <div className="flex-1 min-w-0">
               <p className="text-[14px] font-medium" style={{ color: "var(--text-primary)" }}>
                 {rec.customer.name}
               </p>
               <p className="text-[12px] mt-0.5" style={{ color: "var(--text-secondary)" }}>
-                {rec.reason}
+                {t(rec.reasonKey, rec.reasonParams)}
               </p>
             </div>
             <button
