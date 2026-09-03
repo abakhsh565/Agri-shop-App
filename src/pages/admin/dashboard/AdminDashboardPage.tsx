@@ -472,7 +472,7 @@ export default function AdminDashboardPage() {
         </div>
       </div>
 
-      {/* ── Alerts: 3 summary rows ── */}
+      {/* ── Quick Alerts: 3 summary rows with premium card design ── */}
       {(() => {
         const criticalCount = totalPayable > 0 ? 1 : 0;
         const followupCount = dueReminderCount + delayedCount;
@@ -488,7 +488,7 @@ export default function AdminDashboardPage() {
             harvestCustomerCount = customers.filter(c => c.outstandingBalance > 0 && customerCropsHas(c.id, crop.name)).length;
           }
         }
-        const items: { key: string; icon: React.ReactNode; title: string; subtitle: string; onClick: () => void; count: number }[] = [];
+        const items: { key: string; icon: React.ReactNode; title: string; subtitle: string; action: string; actionColor: string; cardBg: string; onClick: () => void; count: number }[] = [];
         const criticalTotal = highRiskCount + creditLimitReached + criticalCount + pendingCreditRequests;
         if (criticalTotal > 0) {
           const parts: string[] = [];
@@ -499,9 +499,12 @@ export default function AdminDashboardPage() {
           const urgentTab = highRiskCount > 0 ? "urgent" : creditLimitReached > 0 || pendingCreditRequests > 0 ? "medium" : "urgent";
           items.push({
             key: "critical",
-            icon: <AlertTriangle size={18} style={{ color: "var(--error)" }} />,
+            icon: <AlertTriangle size={18} />,
             title: isUrdu ? criticalTotal + " عمل درکار" : criticalTotal + " action" + (criticalTotal !== 1 ? "s" : "") + " needed",
             subtitle: parts.join(isUrdu ? " · " : ", "),
+            action: isUrdu ? "جائزہ" : "Review",
+            actionColor: "#D91313",
+            cardBg: "#FFFFFF",
             onClick: () => navigate("/admin/alerts/reminders", { state: { tab: "action", subTab: urgentTab } }),
             count: criticalTotal,
           });
@@ -512,9 +515,12 @@ export default function AdminDashboardPage() {
           if (delayedCount > 0) parts.push(delayedCount + (isUrdu ? " تاخیر" : " delayed"));
           items.push({
             key: "followups",
-            icon: <Bell size={18} style={{ color: "var(--warning)" }} />,
+            icon: <Bell size={18} />,
             title: isUrdu ? followupCount + " فالو اپ تیار" : followupCount + " follow-up" + (followupCount !== 1 ? "s" : "") + " ready",
             subtitle: parts.join(isUrdu ? " · " : ", "),
+            action: isUrdu ? "دیکھیں" : "View",
+            actionColor: "#D97706",
+            cardBg: "#FFFFFF",
             onClick: () => navigate("/admin/alerts/reminders", { state: { tab: "followups", subTab: "ready" } }),
             count: followupCount,
           });
@@ -522,31 +528,50 @@ export default function AdminDashboardPage() {
         if (harvestDays !== null) {
           items.push({
             key: "harvest",
-            icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--brand-dark)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" ry="2" /><line x1="16" x2="16" y1="2" y2="6" /><line x1="8" x2="8" y1="2" y2="6" /><line x1="3" x2="21" y1="10" y2="10" /></svg>,
+            icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#888888" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" ry="2" /><line x1="16" x2="16" y1="2" y2="6" /><line x1="8" x2="8" y1="2" y2="6" /><line x1="3" x2="21" y1="10" y2="10" /></svg>,
             title: isUrdu ? "فصل کا موسم " + harvestDays + " دن میں شروع" : "Harvest in " + harvestDays + " day" + (harvestDays !== 1 ? "s" : ""),
             subtitle: harvestCustomerCount > 0 ? harvestCustomerCount + (isUrdu ? " گاہک زیر التوا" : " customers pending") : "",
+            action: "",
+            actionColor: "#888888",
+            cardBg: "#FFFFFF",
             onClick: () => navigate("/admin/alerts/reminders", { state: { tab: "followups", subTab: "ready" } }),
             count: harvestDays,
           });
         }
         if (items.length === 0) return null;
         return (
-          <div className="px-4 pt-4 flex flex-col gap-2">
-            {items.map((item) => (
-              <button
-                key={item.key}
-                onClick={item.onClick}
-                className="flex items-center gap-3 px-4 py-3 rounded-[12px] w-full text-start active:opacity-70 transition-opacity"
-                style={{ background: "var(--surface-2)" }}
-              >
-                <div className="shrink-0">{item.icon}</div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-[13px] font-semibold" style={{ color: "var(--text-primary)" }}>{item.title}</p>
-                  {item.subtitle && <p className="text-[11px] mt-0.5" style={{ color: "var(--text-secondary)" }}>{item.subtitle}</p>}
-                </div>
-                <span className="text-[11px] font-medium" style={{ color: "var(--text-secondary)" }}>{isUrdu ? "جائزہ" : "View"}</span>
-              </button>
-            ))}
+          <div className="px-4 pt-4">
+            <div className="rounded-[16px] p-4 flex flex-col gap-2.5" style={{ background: "#F4F7FA" }}>
+              <p className="text-[11px] font-bold uppercase tracking-widest px-1" style={{ color: "#475467" }}>
+                {isUrdu ? "فوری اعلانات" : "Quick Alerts"}
+              </p>
+              {items.map((item) => (
+                <button
+                  key={item.key}
+                  onClick={item.onClick}
+                  className="flex items-start gap-3 p-3.5 rounded-[12px] w-full text-start active:opacity-70 transition-opacity"
+                  style={{ background: item.cardBg }}
+                >
+                  <div className="shrink-0 w-9 h-9 rounded-full flex items-center justify-center mt-0.5"
+                    style={{
+                      background: item.key === "critical" ? "#FFE9E4" : item.key === "followups" ? "#FEF3C7" : "#F1F5F9",
+                      color: item.key === "critical" ? "#D91313" : item.key === "followups" ? "#D97706" : "#888888",
+                    }}
+                  >
+                    {item.icon}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[14px] font-bold" style={{ color: "#0F172A" }}>{item.title}</p>
+                    {item.subtitle && <p className="text-[12px] mt-0.5" style={{ color: "#475467" }}>{item.subtitle}</p>}
+                  </div>
+                  {item.action && (
+                    <span className="text-[12px] font-semibold shrink-0 mt-1" style={{ color: item.actionColor }}>
+                      {item.action}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
           </div>
         );
       })()}
