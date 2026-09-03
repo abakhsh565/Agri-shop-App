@@ -10,7 +10,7 @@ import { formatCurrency } from "@/lib/formatters";
 import { useT } from "@/lib/i18n";
 import { generateReminders, generateReminderMessage, calculatePaymentStatus } from "@/lib/reminderEngine";
 import type { GeneratedReminder } from "@/types";
-import { MessageCircle, Smartphone, X, ChevronDown, ChevronUp, Bell, CheckCircle2, Clock, AlertTriangle, AlertOctagon, Info, Plus, Users, Trash2, Eye, Send } from "lucide-react";
+import { MessageCircle, Smartphone, X, ChevronDown, ChevronUp, Bell, CheckCircle2, Clock, AlertTriangle, AlertOctagon, Info, Plus, Users, Trash2, Eye, Send, XCircle } from "lucide-react";
 import GroupReminderSheet from "@/components/ui/GroupReminderSheet";
 import {
   saveLocalGroup,
@@ -356,6 +356,8 @@ export default function RemindersOverviewPage() {
     creditRequests.filter(r => r.status === "pending"),
   [creditRequests]);
 
+  const allCreditRequests = useMemo(() => creditRequests, [creditRequests]);
+
   /* ── Sub-tabs ── */
   const actionSubTabs = [
     { key: "urgent", label: isUrdu ? "انتہائی فوری" : "Highly Urgent", count: highRiskCustomers.length, color: "#dc2626" },
@@ -487,20 +489,20 @@ export default function RemindersOverviewPage() {
           </div>
         );
       case "credit_approval":
-        return pendingCreditRequests.length === 0 ? (
-          <EmptyState icon={<CheckCircle2 size={24} style={{ color: "var(--text-secondary)" }} />} title={isUrdu ? "کوئی درخواست نہیں" : "No pending requests"} subtitle={isUrdu ? "کوئی کریڈٹ حد بڑھانے کی درخواست زیر جائزہ نہیں۔" : "No credit limit increase requests pending."} />
+        return allCreditRequests.length === 0 ? (
+          <EmptyState icon={<CheckCircle2 size={24} style={{ color: "var(--text-secondary)" }} />} title={isUrdu ? "کوئی درخواست نہیں" : "No requests yet"} subtitle={isUrdu ? "کریڈٹ حد بڑھانے کی درخواستیں یہاں نظر آئیں گی۔" : "Credit limit increase requests will appear here."} />
         ) : (
           <div className="flex flex-col gap-2.5">
-            {pendingCreditRequests.map(req => (
+            {allCreditRequests.map(req => (
               <AlertCard
                 key={req.id}
-                icon={<AlertTriangle size={16} />}
+                icon={req.status === "approved" ? <CheckCircle2 size={16} /> : req.status === "rejected" ? <XCircle size={16} /> : <AlertTriangle size={16} />}
                 title={req.customerName}
-                subtitle={`${isUrdu ? "موجودہ" : "Current"}: ${formatCurrency(req.currentLimit)} → ${formatCurrency(req.requestedLimit)} · ${isUrdu ? "درخواست" : "By"}: ${req.requestedBy}`}
-                actionLabel={isUrdu ? "جائزہ" : "Review"}
-                cardBg="rgba(124, 58, 237, 0.06)"
-                iconBg="rgba(124, 58, 237, 0.1)"
-                iconColor="#7c3aed"
+                subtitle={`${formatCurrency(req.currentLimit)} → ${formatCurrency(req.requestedLimit)} · ${req.requestedBy}`}
+                actionLabel={req.status === "approved" ? (isUrdu ? "منظور شدہ" : "Approved") : req.status === "rejected" ? (isUrdu ? "مسترد" : "Rejected") : (isUrdu ? "جائزہ" : "Review")}
+                cardBg={req.status === "approved" ? "rgba(22, 163, 74, 0.06)" : req.status === "rejected" ? "rgba(220, 38, 38, 0.06)" : "rgba(124, 58, 237, 0.06)"}
+                iconBg={req.status === "approved" ? "rgba(22, 163, 74, 0.1)" : req.status === "rejected" ? "rgba(220, 38, 38, 0.1)" : "rgba(124, 58, 237, 0.1)"}
+                iconColor={req.status === "approved" ? "#16a34a" : req.status === "rejected" ? "#dc2626" : "#7c3aed"}
                 onClick={() => navigate(`/admin/alerts/credit-requests/${req.id}`)}
               />
             ))}
@@ -621,8 +623,8 @@ export default function RemindersOverviewPage() {
       <NavHeader title={isUrdu ? "ایکشن سینٹر" : "Action Center"} />
 
       <div className="flex flex-col px-4 pt-4 pb-8 gap-4" style={{ overflowY: "auto", flex: 1 }}>
-        {/* Main tabs — 3 top-level tabs */}
-        <div className="flex items-center gap-5">
+        {/* Main tabs — clean line-based, no icons, matching reference */}
+        <div className="flex items-center" style={{ borderBottom: '1px solid var(--divider)' }}>
           {([
             { key: "action" as const, label: isUrdu ? "عمل درکار" : "Action Needed" },
             { key: "followups" as const, label: isUrdu ? "فالو اپس" : "Follow Ups" },
@@ -631,46 +633,45 @@ export default function RemindersOverviewPage() {
             <button
               key={tab.key}
               onClick={() => { setMainTab(tab.key); setSubTab(tab.key === "action" ? "urgent" : tab.key === "followups" ? "ready" : ""); }}
-              className="text-[13px] font-semibold transition-colors pb-1 whitespace-nowrap"
+              className="flex-1 text-center py-2.5 text-[13px] font-semibold transition-colors relative"
               style={{
                 color: mainTab === tab.key ? "var(--text-primary)" : "var(--text-secondary)",
-                borderBottom: mainTab === tab.key ? "2px solid var(--text-primary)" : "2px solid transparent",
               }}
             >
               {tab.label}
+              {mainTab === tab.key && (
+                <div className="absolute bottom-0 left-1/4 right-1/4 h-[2px] rounded-full" style={{ background: "var(--text-primary)" }} />
+              )}
             </button>
           ))}
         </div>
 
-        {/* Sub tabs — only for Action Needed and Follow Ups */}
+        {/* Sub tabs — line-based matching main tabs */}
         {currentSubTabs.length > 0 && (
-          <>
-            <div className="flex gap-1.5 overflow-x-auto no-scrollbar py-1">
-              {currentSubTabs.map(st => (
-                <button
-                  key={st.key}
-                  onClick={() => setSubTab(st.key)}
-                  className="flex items-center gap-1 px-3.5 py-2 rounded-full text-[12px] font-semibold whitespace-nowrap transition-all"
-                  style={{
-                    background: subTab === st.key ? st.color : "var(--surface-2)",
-                    color: subTab === st.key ? "#fff" : "var(--text-secondary)",
-                  }}
-                >
-                  {st.label}
-                  {st.count > 0 && (
-                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full" style={{
-                      background: subTab === st.key ? "rgba(255,255,255,0.25)" : "var(--text-secondary)",
-                      color: subTab === st.key ? "#fff" : "var(--surface-2)",
-                      lineHeight: '1',
-                      minWidth: '16px',
-                      textAlign: 'center',
-                    }}>{st.count}</span>
-                  )}
-                </button>
-              ))}
-            </div>
-            <div style={{ borderBottom: '1px solid var(--divider)', marginTop: '-4px' }} />
-          </>
+          <div className="flex items-center overflow-x-auto no-scrollbar" style={{ borderBottom: '1px solid var(--divider)' }}>
+            {currentSubTabs.map(st => (
+              <button
+                key={st.key}
+                onClick={() => setSubTab(st.key)}
+                className="flex items-center gap-1.5 py-2.5 text-[12px] font-semibold whitespace-nowrap transition-colors relative px-1"
+                style={{
+                  color: subTab === st.key ? "var(--text-primary)" : "var(--text-secondary)",
+                }}
+              >
+                {st.label}
+                {st.count > 0 && (
+                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full" style={{
+                    background: subTab === st.key ? "var(--text-primary)" : "var(--surface-2)",
+                    color: subTab === st.key ? "var(--background)" : "var(--text-secondary)",
+                    lineHeight: '1',
+                  }}>{st.count}</span>
+                )}
+                {subTab === st.key && (
+                  <div className="absolute bottom-0 left-1/6 right-1/6 h-[2px] rounded-full" style={{ background: st.color }} />
+                )}
+              </button>
+            ))}
+          </div>
         )}
 
         {/* Tab content */}

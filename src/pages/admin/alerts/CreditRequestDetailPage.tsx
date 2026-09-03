@@ -14,6 +14,7 @@ import {
   rejectCreditRequest,
   type LocalCreditRequest,
 } from "@/lib/localGroupRegistry";
+import { calculatePaymentStatus, getPaymentStatusLabel, getPaymentStatusColor } from "@/lib/reminderEngine";
 
 export default function CreditRequestDetailPage() {
   const { requestId } = useParams<{ requestId: string }>();
@@ -121,7 +122,7 @@ export default function CreditRequestDetailPage() {
           <div className="rounded-[12px] px-4 py-3 flex items-center gap-2.5" style={{ background: "rgba(220, 38, 38, 0.06)", border: "1px solid rgba(220, 38, 38, 0.15)" }}>
             <AlertTriangle size={16} style={{ color: "#dc2626" }} />
             <p className="text-[13px] font-medium" style={{ color: "#991b1b" }}>
-              {isUrdu ? "کریڈٹ منظور شدہ — گاہک سرخ فہرست میں ہے" : "Credit approved for a customer marked red"}
+              {isUrdu ? "کریڈٹ منظور شدہ — گاہک پر خطرہ" : "Credit approved — customer flagged for attention"}
             </p>
           </div>
         )}
@@ -158,9 +159,16 @@ export default function CreditRequestDetailPage() {
             <span className="text-[13px]" style={{ color: "var(--text-secondary)" }}>{isUrdu ? "گاہک" : "Customer"}</span>
             <div className="flex items-center gap-2">
               <span className="text-[14px] font-semibold" style={{ color: "var(--text-primary)" }}>{request.customerName}</span>
-              {customer && customer.outstandingBalance > 0 && (
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: "#fee2e2", color: "#dc2626" }}>Red</span>
-              )}
+              {customer && (() => {
+                const status = calculatePaymentStatus(customer, new Date());
+                if (status === "paid") return null;
+                const sc = getPaymentStatusColor(status);
+                return (
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: sc.bg, color: sc.color }}>
+                    {getPaymentStatusLabel(status, isUrdu)}
+                  </span>
+                );
+              })()}
             </div>
           </div>
           {/* Amount */}
