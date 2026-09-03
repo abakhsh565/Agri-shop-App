@@ -5,7 +5,7 @@ import { useProductsStore } from "@/stores/productsStore";
 import { useCompaniesStore } from "@/stores/companiesStore";
 import { useThemeStore } from "@/stores/themeStore";
 import { formatCurrency } from "@/lib/formatters";
-import { AlertTriangle, Package, Truck, ChevronRight } from "lucide-react";
+import { AlertTriangle, Package, Truck, ChevronRight, CalendarClock } from "lucide-react";
 
 export default function InventoryAlertsPage() {
   const navigate = useNavigate();
@@ -25,6 +25,14 @@ export default function InventoryAlertsPage() {
     if (p.stockQty === 0) return false;
     const threshold = p.variants[0]?.lowStockThreshold ?? 5;
     return p.stockQty <= threshold * 2 && p.stockQty > threshold;
+  });
+  const now = Date.now();
+  const expiredProducts = products.filter((p) => p.expiryDate && new Date(p.expiryDate).getTime() < now);
+  const expiringSoonProducts = products.filter((p) => {
+    if (!p.expiryDate) return false;
+    const ms = new Date(p.expiryDate).getTime();
+    if (ms < now) return false;
+    return (ms - now) / 86400000 <= 30;
   });
 
   const totalPayable = companies.reduce((s, c) => s + c.outstandingPayable, 0);
@@ -77,6 +85,39 @@ export default function InventoryAlertsPage() {
             </div>
             <ChevronRight size={14} color="#A32D2D" />
           </button>
+        )}
+
+        {/* Expired products */}
+        {expiredProducts.length > 0 && (
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-widest mb-2" style={{ color: "#DC2626" }}>
+              {isUrdu ? "میعاد ختم" : "Expired"}
+            </p>
+            <div className="flex flex-col gap-2">
+              {expiredProducts.map((p) => (
+                <button
+                  key={p.id}
+                  onClick={() => navigate("/admin/inventory/" + p.id)}
+                  className="flex items-center gap-3 rounded-[14px] p-3.5 transition-opacity active:opacity-70 text-start w-full"
+                  style={{ background: "#FEF2F2", border: "1px solid #FECACA" }}
+                >
+                  <div
+                    className="size-9 rounded-full flex items-center justify-center shrink-0"
+                    style={{ background: "#FEE2E2" }}
+                  >
+                    <CalendarClock size={16} color="#DC2626" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[13px] font-medium truncate" style={{ color: "var(--text-primary)" }}>{p.name}</p>
+                    <p className="text-[11px]" style={{ color: "#DC2626" }}>
+                      {isUrdu ? "میعاد ختم: " : "Expired: "}{new Date(p.expiryDate!).toLocaleDateString(isUrdu ? "ur-PK" : "en-PK", { day: "numeric", month: "short", year: "numeric" })}
+                    </p>
+                  </div>
+                  <ChevronRight size={14} color="#DC2626" />
+                </button>
+              ))}
+            </div>
+          </div>
         )}
 
         {/* Out of stock */}
@@ -144,8 +185,44 @@ export default function InventoryAlertsPage() {
           </div>
         )}
 
+        {/* Expiring soon */}
+        {expiringSoonProducts.length > 0 && (
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-widest mb-2" style={{ color: "#D97706" }}>
+              {isUrdu ? "جلد میعاد ختم" : "Expiring Soon"}
+            </p>
+            <div className="flex flex-col gap-2">
+              {expiringSoonProducts.map((p) => {
+                const daysLeft = Math.ceil((new Date(p.expiryDate!).getTime() - now) / 86400000);
+                return (
+                  <button
+                    key={p.id}
+                    onClick={() => navigate("/admin/inventory/" + p.id)}
+                    className="flex items-center gap-3 rounded-[14px] p-3.5 transition-opacity active:opacity-70 text-start w-full"
+                    style={{ background: "#FFFBEB", border: "1px solid #FDE68A" }}
+                  >
+                    <div
+                      className="size-9 rounded-full flex items-center justify-center shrink-0"
+                      style={{ background: "#FEF3C7" }}
+                    >
+                      <CalendarClock size={16} color="#D97706" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[13px] font-medium truncate" style={{ color: "var(--text-primary)" }}>{p.name}</p>
+                      <p className="text-[11px]" style={{ color: "#D97706" }}>
+                        {isUrdu ? `${daysLeft} دن باقی` : `${daysLeft} day${daysLeft !== 1 ? "s" : ""} left`}
+                      </p>
+                    </div>
+                    <ChevronRight size={14} color="#D97706" />
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {/* All clear */}
-        {outOfStock.length === 0 && lowStock.length === 0 && totalPayable === 0 && (
+        {outOfStock.length === 0 && lowStock.length === 0 && totalPayable === 0 && expiredProducts.length === 0 && expiringSoonProducts.length === 0 && (
           <div
             className="rounded-[14px] p-8 flex flex-col items-center gap-3"
             style={{ border: "1px solid var(--divider)" }}

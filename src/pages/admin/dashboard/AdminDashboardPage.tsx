@@ -181,6 +181,115 @@ export default function AdminDashboardPage() {
   const delayedCount = customers.filter(c => c.outstandingBalance > 0 && calculatePaymentStatus(c, new Date()) === "delayed").length;
   const highRiskCount = customers.filter(c => c.outstandingBalance > 0 && calculatePaymentStatus(c, new Date()) === "high_risk").length;
 
+  // Harvest / crop-calendar signals
+  const harvestAlerts: { text: string; cropName: string }[] = [];
+  for (const crop of bizSettings.crops) {
+    const hv = new Date(now.getFullYear(), crop.harvestMonth - 1, crop.harvestDay || 1);
+    if (hv < now) hv.setFullYear(now.getFullYear() + 1);
+    const daysUntil = Math.ceil((hv.getTime() - now.getTime()) / 86400000);
+    if (daysUntil <= 30 && daysUntil > 0) {
+      const affectedCustomers = customers.filter(c => c.outstandingBalance > 0 && customerCropsHas(c.id, crop.name)).length;
+      harvestAlerts.push({
+        text: t("admin.harvestSeasonSoon").replace("{days}", String(daysUntil)).replace("{count}", String(affectedCustomers)),
+        cropName: crop.name,
+      });
+    }
+  }
+
+  // Expiry signals — agri-specific: expired chemicals/seeds are a liability, expiring-soon needs clearing first
+  const expiredProducts = mockProducts.filter(p => p.expiryDate && new Date(p.expiryDate).getTime() < now.getTime());
+  const expiringSoonProducts = mockProducts.filter(p => {
+    if (!p.expiryDate) return false;
+    const ms = new Date(p.expiryDate).getTime();
+    if (ms < now.getTime()) return false;
+    return (ms - now.getTime()) / 86400000 <= 30;
+  });
+
+  // ── Unified attention feed — every "needs attention" signal, one ranked list, one render path ──
+  const SEVERITY_STYLE = {
+    critical: { chipBg: "#FCEBEB", iconColor: "#A32D2D", metaColor: "#A32D2D" },
+    warning: { chipBg: "#FAEEDA", iconColor: "#854F0B", metaColor: "#854F0B" },
+    info: { chipBg: "#F1EFE8", iconColor: "#5F5E5A", metaColor: "var(--text-secondary)" },
+  };
+  const SEVERITY_RANK = { critical: 0, warning: 1, info: 2 };
+  const attentionItems = [
+    ...(totalPayable > 0 ? [{
+      id: "payable", severity: "critical" as const,
+      icon: <AlertTriangle size={18} color={SEVERITY_STYLE.critical.iconColor} />,
+      title: t("admin.supplierPayableDue"),
+      subtitle: `${formatCurrency(totalPayable)} ${t("admin.totalDueToSuppliers")}`,
+      metaText: t("admin.actionNeeded"), ctaText: t("admin.review"),
+      onClick: () => navigate("/admin/companies"),
+    }] : []),
+    ...(delayedCount > 0 ? [{
+      id: "delayed", severity: "critical" as const,
+      icon: <AlertTriangle size={18} color={SEVERITY_STYLE.critical.iconColor} />,
+      title: t("admin.delayedCount").replace("{count}", String(delayedCount)),
+      subtitle: t("admin.delayedDesc"),
+      metaText: t("admin.followUpNeeded"), ctaText: t("admin.view"),
+      onClick: () => navigate("/admin/customers", { state: { paymentStatus: "delayed" } }),
+    }] : []),
+    ...(highRiskCount > 0 ? [{
+      id: "highrisk", severity: "critical" as const,
+      icon: <AlertTriangle size={18} color={SEVERITY_STYLE.critical.iconColor} />,
+      title: t("admin.highRiskCount").replace("{count}", String(highRiskCount)),
+      subtitle: t("admin.highRiskDesc"),
+      metaText: t("admin.actionNeeded"), ctaText: t("admin.review"),
+      onClick: () => navigate("/admin/customers", { state: { paymentStatus: "high_risk" } }),
+    }] : []),
+    ...(creditLimitReached > 0 ? [{
+      id: "creditlimit", severity: "critical" as const,
+      icon: <AlertTriangle size={18} color={SEVERITY_STYLE.critical.iconColor} />,
+      title: `${t("admin.creditLimitReached")} (${creditLimitReached})`,
+      subtitle: t("admin.creditLimitDesc"),
+      metaText: t("admin.actionNeeded"), ctaText: t("admin.review"),
+      onClick: () => navigate("/admin/alerts/credit-overrides"),
+    }] : []),
+    ...(expiredProducts.length > 0 ? [{
+      id: "expired", severity: "critical" as const,
+      icon: <AlertTriangle size={18} color={SEVERITY_STYLE.critical.iconColor} />,
+      title: isUrdu ? `${expiredProducts.length} مصنوعات کی میعاد ختم ہو چکی` : `${expiredProducts.length} product${expiredProducts.length !== 1 ? "s" : ""} already expired`,
+      subtitle: isUrdu ? "فروخت سے پہلے ہٹائیں" : "Remove from sale before a customer buys one",
+      metaText: t("admin.actionNeeded"), ctaText: t("admin.review"),
+      onClick: () => navigate("/admin/alerts/inventory"),
+    }] : []),
+    ...(dueReminderCount > 0 ? [{
+      id: "reminders", severity: "warning" as const,
+      icon: <Bell size={18} color={SEVERITY_STYLE.warning.iconColor} />,
+      title: t("admin.remindersSentToday").replace("{count}", String(dueReminderCount)),
+      ctaText: t("admin.view"),
+      onClick: () => navigate("/admin/alerts/reminders"),
+    }] : []),
+    ...(lowStockCount > 0 ? [{
+      id: "lowstock", severity: "warning" as const,
+      icon: <AlertTriangle size={18} color={SEVERITY_STYLE.warning.iconColor} />,
+      title: isUrdu ? "مصنوعات کم اسٹاک — reorder درکار" : `${lowStockCount} product${lowStockCount !== 1 ? "s" : ""} low on stock — need reorder`,
+      ctaText: t("admin.view"),
+      onClick: () => navigate("/admin/alerts/inventory"),
+    }] : []),
+    ...(expiringSoonProducts.length > 0 ? [{
+      id: "expiringsoon", severity: "warning" as const,
+      icon: <AlertTriangle size={18} color={SEVERITY_STYLE.warning.iconColor} />,
+      title: isUrdu ? `${expiringSoonProducts.length} مصنوعات جلد میعاد ختم ہونے والی` : `${expiringSoonProducts.length} product${expiringSoonProducts.length !== 1 ? "s" : ""} expiring within 30 days`,
+      ctaText: t("admin.view"),
+      onClick: () => navigate("/admin/alerts/inventory"),
+    }] : []),
+    ...harvestAlerts.map((alert, i) => ({
+      id: `harvest-${i}`, severity: "info" as const,
+      icon: (
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={SEVERITY_STYLE.info.iconColor} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+          <rect width="18" height="18" x="3" y="4" rx="2" ry="2" />
+          <line x1="16" x2="16" y1="2" y2="6" />
+          <line x1="8" x2="8" y1="2" y2="6" />
+          <line x1="3" x2="21" y1="10" y2="10" />
+        </svg>
+      ),
+      title: alert.text,
+      ctaText: undefined as string | undefined,
+      onClick: () => navigate("/admin/customers", { state: { cropFilter: alert.cropName } }),
+    })),
+  ].sort((a, b) => SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity]);
+
   // Employee performance — filtered by selected date filter
   const empStats = mockEmployees.map((emp) => {
     const empSales = filtered.filter((s) => s.employeeId === emp.id);
@@ -486,210 +595,60 @@ export default function AdminDashboardPage() {
           {t("admin.quickAlerts")}
         </p>
         <div className="flex flex-col gap-2.5">
-          {/* TIER 1 — Red: Critical overrides (always shown) */}
-          {(() => {
-            const totalRed = creditLimitReached + (totalPayable > 0 ? 1 : 0) + delayedCount + highRiskCount;
-            if (totalRed > 0) {
+          {attentionItems.length > 0 ? (
+            attentionItems.map((item) => {
+              const style = SEVERITY_STYLE[item.severity];
+              const hasDetail = !!item.subtitle;
+              const Wrapper = item.onClick ? "button" : "div";
               return (
-                <>
-                  {/* Supplier payable due */}
-                  {totalPayable > 0 && (
-                    <button
-                      onClick={() => navigate("/admin/companies")}
-                      className="flex items-start gap-3 rounded-[16px] p-3.5 transition-opacity active:opacity-70 text-start w-full"
-                      style={{ background: "var(--surface)", boxShadow: "var(--shadow-card)" }}
-                    >
-                      <div className="w-9 h-9 rounded-[10px] flex items-center justify-center shrink-0" style={{ background: "#FCEBEB" }}>
-                        <AlertTriangle size={18} color="#A32D2D" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-[14px] font-bold" style={{ color: "var(--text-primary)" }}>{t("admin.supplierPayableDue")}</p>
-                        <p className="text-[12.5px] font-medium mt-0.5" style={{ color: "var(--text-secondary)", lineHeight: 1.45 }}>{formatCurrency(totalPayable)} {t("admin.totalDueToSuppliers")}</p>
-                        <div className="flex items-center justify-between mt-2">
-                          <span className="text-[11px] font-semibold" style={{ color: "#A32D2D" }}>{t("admin.actionNeeded")}</span>
-                          <span className="text-[12px] font-bold" style={{ color: "var(--text-primary)" }}>{t("admin.review")}</span>
-                        </div>
-                      </div>
-                    </button>
-                  )}
-                  {/* Delayed customers */}
-                  {delayedCount > 0 && (
-                    <button
-                      onClick={() => navigate("/admin/customers", { state: { paymentStatus: "delayed" } })}
-                      className="flex items-start gap-3 rounded-[16px] p-3.5 transition-opacity active:opacity-70 text-start w-full"
-                      style={{ background: "var(--surface)", boxShadow: "var(--shadow-card)" }}
-                    >
-                      <div className="w-9 h-9 rounded-[10px] flex items-center justify-center shrink-0" style={{ background: "#FCEBEB" }}>
-                        <AlertTriangle size={18} color="#A32D2D" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-[14px] font-bold" style={{ color: "var(--text-primary)" }}>{t("admin.delayedCount").replace("{count}", String(delayedCount))}</p>
-                        <p className="text-[12.5px] font-medium mt-0.5" style={{ color: "var(--text-secondary)", lineHeight: 1.45 }}>{t("admin.delayedDesc")}</p>
-                        <div className="flex items-center justify-between mt-2">
-                          <span className="text-[11px] font-semibold" style={{ color: "#A32D2D" }}>{t("admin.followUpNeeded")}</span>
-                          <span className="text-[12px] font-bold" style={{ color: "var(--text-primary)" }}>{t("admin.view")}</span>
-                        </div>
-                      </div>
-                    </button>
-                  )}
-                  {/* High risk customers */}
-                  {highRiskCount > 0 && (
-                    <button
-                      onClick={() => navigate("/admin/customers", { state: { paymentStatus: "high_risk" } })}
-                      className="flex items-start gap-3 rounded-[16px] p-3.5 transition-opacity active:opacity-70 text-start w-full"
-                      style={{ background: "var(--surface)", boxShadow: "var(--shadow-card)" }}
-                    >
-                      <div className="w-9 h-9 rounded-[10px] flex items-center justify-center shrink-0" style={{ background: "#FCEBEB" }}>
-                        <AlertTriangle size={18} color="#A32D2D" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-[14px] font-bold" style={{ color: "var(--text-primary)" }}>{t("admin.highRiskCount").replace("{count}", String(highRiskCount))}</p>
-                        <p className="text-[12.5px] font-medium mt-0.5" style={{ color: "var(--text-secondary)", lineHeight: 1.45 }}>{t("admin.highRiskDesc")}</p>
-                        <div className="flex items-center justify-between mt-2">
-                          <span className="text-[11px] font-semibold" style={{ color: "#A32D2D" }}>{t("admin.actionNeeded")}</span>
-                          <span className="text-[12px] font-bold" style={{ color: "var(--text-primary)" }}>{t("admin.review")}</span>
-                        </div>
-                      </div>
-                    </button>
-                  )}
-                  {/* Credit limit reached */}
-                  {creditLimitReached > 0 && (
-                    <button
-                      onClick={() => navigate("/admin/alerts/credit-overrides")}
-                      className="flex items-start gap-3 rounded-[16px] p-3.5 transition-opacity active:opacity-70 text-start w-full"
-                      style={{ background: "var(--surface)", boxShadow: "var(--shadow-card)" }}
-                    >
-                      <div className="w-9 h-9 rounded-[10px] flex items-center justify-center shrink-0" style={{ background: "#FCEBEB" }}>
-                        <AlertTriangle size={18} color="#A32D2D" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-[14px] font-bold" style={{ color: "var(--text-primary)" }}>{t("admin.creditLimitReached")} ({creditLimitReached})</p>
-                        <p className="text-[12.5px] font-medium mt-0.5" style={{ color: "var(--text-secondary)", lineHeight: 1.45 }}>{t("admin.creditLimitDesc")}</p>
-                        <div className="flex items-center justify-between mt-2">
-                          <span className="text-[11px] font-semibold" style={{ color: "#A32D2D" }}>{t("admin.actionNeeded")}</span>
-                          <span className="text-[12px] font-bold" style={{ color: "var(--text-primary)" }}>{t("admin.review")}</span>
-                        </div>
-                      </div>
-                    </button>
-                  )}
-                </>
-              );
-            }
-            /* All clear — red tier */
-            return (
-              <div className="flex items-center gap-3 rounded-[16px] p-3.5" style={{ background: "var(--surface)", boxShadow: "var(--shadow-card)" }}>
-                <div className="w-9 h-9 rounded-[10px] flex items-center justify-center shrink-0" style={{ background: "#EAF3DE" }}>
-                  <CheckCircle2 size={18} style={{ color: "var(--brand-dark, #65a30d)" }} />
-                </div>
-                <div className="flex-1">
-                  <p className="text-[13.5px] font-bold" style={{ color: "var(--text-primary)" }}>{t("admin.allClear")}</p>
-                </div>
-              </div>
-            );
-          })()}
-
-          {/* TIER 2 — Amber: Daily rollup (always shown) */}
-          {(() => {
-            const totalAmber = dueReminderCount + lowStockCount;
-            if (totalAmber > 0) {
-              return (
-                <>
-                  {/* Reminders batch */}
-                  {dueReminderCount > 0 && (
-                    <button
-                      onClick={() => navigate("/admin/alerts/reminders")}
-                      className="flex items-center gap-3 rounded-[16px] p-3.5 transition-opacity active:opacity-70 text-start w-full"
-                      style={{ background: "var(--surface)", boxShadow: "var(--shadow-card)" }}
-                    >
-                      <div className="w-9 h-9 rounded-[10px] flex items-center justify-center shrink-0" style={{ background: "#FAEEDA" }}>
-                        <Bell size={18} color="#854F0B" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-[13.5px] font-semibold" style={{ color: "var(--text-primary)", lineHeight: 1.45 }}>{t("admin.remindersSentToday").replace("{count}", String(dueReminderCount))}</p>
-                      </div>
-                      <span className="text-[12px] font-bold shrink-0" style={{ color: "var(--text-primary)" }}>{t("admin.view")}</span>
-                    </button>
-                  )}
-                  {/* Low stock */}
-                  {lowStockCount > 0 && (
-                    <button
-                      onClick={() => navigate("/admin/alerts/inventory")}
-                      className="flex items-center gap-3 rounded-[16px] p-3.5 transition-opacity active:opacity-70 text-start w-full"
-                      style={{ background: "var(--surface)", boxShadow: "var(--shadow-card)" }}
-                    >
-                      <div className="w-9 h-9 rounded-[10px] flex items-center justify-center shrink-0" style={{ background: "#FAEEDA" }}>
-                        <AlertTriangle size={18} color="#854F0B" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-[13.5px] font-semibold" style={{ color: "var(--text-primary)", lineHeight: 1.45 }}>{lowStockCount} {isUrdu ? "مصنوعات کم اسٹاک — reorder درکار" : "product" + (lowStockCount !== 1 ? "s" : "") + " low on stock — need reorder"}</p>
-                      </div>
-                      <span className="text-[12px] font-bold shrink-0" style={{ color: "var(--text-primary)" }}>{t("admin.view")}</span>
-                    </button>
-                  )}
-                </>
-              );
-            }
-            /* All clear — amber tier */
-            return (
-              <div className="flex items-center gap-3 rounded-[16px] p-3.5" style={{ background: "var(--surface)", boxShadow: "var(--shadow-card)" }}>
-                <div className="w-9 h-9 rounded-[10px] flex items-center justify-center shrink-0" style={{ background: "#EAF3DE" }}>
-                  <CheckCircle2 size={18} style={{ color: "var(--brand-dark, #65a30d)" }} />
-                </div>
-                <div className="flex-1">
-                  <p className="text-[13.5px] font-semibold" style={{ color: "var(--text-primary)", lineHeight: 1.45 }}>{t("admin.noPendingReminders")}</p>
-                </div>
-              </div>
-            );
-          })()}
-
-          {/* TIER 3 — Gray: Harvest / informational (always shown) */}
-          {(() => {
-            const biz = bizSettings;
-            const now = new Date();
-            const harvestAlerts: { text: string; cropName: string }[] = [];
-            for (const crop of biz.crops) {
-              const harvest = new Date(now.getFullYear(), crop.harvestMonth - 1, crop.harvestDay || 1);
-              if (harvest < now) harvest.setFullYear(now.getFullYear() + 1);
-              const daysUntil = Math.ceil((harvest.getTime() - now.getTime()) / 86400000);
-              if (daysUntil <= 30 && daysUntil > 0) {
-                const affectedCustomers = customers.filter(c => c.outstandingBalance > 0 && customerCropsHas(c.id, crop.name)).length;
-                harvestAlerts.push({
-                  text: t("admin.harvestSeasonSoon")
-                    .replace("{days}", String(daysUntil))
-                    .replace("{count}", String(affectedCustomers)),
-                  cropName: crop.name,
-                });
-              }
-            }
-            if (harvestAlerts.length > 0) {
-              return harvestAlerts.map((alert, i) => (
-                <button key={i} onClick={() => navigate("/admin/customers", { state: { cropFilter: alert.cropName } })} className="flex items-center gap-3 rounded-[16px] p-3.5 active:opacity-70 w-full text-start" style={{ background: "var(--surface)", boxShadow: "var(--shadow-card)" }}>
-                  <div className="w-9 h-9 rounded-[10px] flex items-center justify-center shrink-0" style={{ background: "#F1EFE8" }}>
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#5F5E5A" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                      <rect width="18" height="18" x="3" y="4" rx="2" ry="2" />
-                      <line x1="16" x2="16" y1="2" y2="6" />
-                      <line x1="8" x2="8" y1="2" y2="6" />
-                      <line x1="3" x2="21" y1="10" y2="10" />
-                    </svg>
+                <Wrapper
+                  key={item.id}
+                  {...(item.onClick ? { onClick: item.onClick } : {})}
+                  className={
+                    "flex " + (hasDetail ? "items-start" : "items-center") +
+                    " gap-3 rounded-[16px] p-3.5 w-full text-start" +
+                    (item.onClick ? " transition-opacity active:opacity-70" : "")
+                  }
+                  style={{ background: "var(--surface)", boxShadow: "var(--shadow-card)" }}
+                >
+                  <div className="w-9 h-9 rounded-[10px] flex items-center justify-center shrink-0" style={{ background: style.chipBg }}>
+                    {item.icon}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-[13.5px] font-semibold" style={{ color: "var(--text-primary)", lineHeight: 1.45 }}>{alert.text}</p>
+                    <p
+                      className={hasDetail ? "text-[14px] font-bold" : "text-[13.5px] font-semibold"}
+                      style={{ color: "var(--text-primary)", lineHeight: hasDetail ? undefined : 1.45 }}
+                    >
+                      {item.title}
+                    </p>
+                    {item.subtitle && (
+                      <p className="text-[12.5px] font-medium mt-0.5" style={{ color: "var(--text-secondary)", lineHeight: 1.45 }}>
+                        {item.subtitle}
+                      </p>
+                    )}
+                    {hasDetail && item.metaText && (
+                      <div className="flex items-center justify-between mt-2">
+                        <span className="text-[11px] font-semibold" style={{ color: style.metaColor }}>{item.metaText}</span>
+                        <span className="text-[12px] font-bold" style={{ color: "var(--text-primary)" }}>{item.ctaText}</span>
+                      </div>
+                    )}
                   </div>
-                </button>
-              ));
-            }
-            /* All clear — gray tier */
-            return (
-              <div className="flex items-center gap-3 rounded-[16px] p-3.5" style={{ background: "var(--surface)", boxShadow: "var(--shadow-card)" }}>
-                <div className="w-9 h-9 rounded-[10px] flex items-center justify-center shrink-0" style={{ background: "#EAF3DE" }}>
-                  <CheckCircle2 size={18} style={{ color: "var(--brand-dark, #65a30d)" }} />
-                </div>
-                <div className="flex-1">
-                  <p className="text-[13.5px] font-semibold" style={{ color: "var(--text-primary)", lineHeight: 1.45 }}>{t("admin.noHarvestAlerts")}</p>
-                </div>
+                  {!hasDetail && item.ctaText && (
+                    <span className="text-[12px] font-bold shrink-0" style={{ color: "var(--text-primary)" }}>{item.ctaText}</span>
+                  )}
+                </Wrapper>
+              );
+            })
+          ) : (
+            <div className="flex items-center gap-3 rounded-[16px] p-3.5" style={{ background: "var(--surface)", boxShadow: "var(--shadow-card)" }}>
+              <div className="w-9 h-9 rounded-[10px] flex items-center justify-center shrink-0" style={{ background: "#EAF3DE" }}>
+                <CheckCircle2 size={18} style={{ color: "var(--brand-dark, #65a30d)" }} />
               </div>
-            );
-          })()}
+              <div className="flex-1">
+                <p className="text-[13.5px] font-bold" style={{ color: "var(--text-primary)" }}>{t("admin.allClear")}</p>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
