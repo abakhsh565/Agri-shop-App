@@ -5,6 +5,7 @@ import NavHeader from "@/components/ui/NavHeader";
 import ImageUpload from "@/components/ui/ImageUpload";
 import { useCustomersStore } from "@/stores/customersStore";
 import { useUIStore } from "@/stores/uiStore";
+import { useAuthStore } from "@/stores/authStore";
 import { useSalesStore } from "@/stores/salesStore";
 import { fetchCustomerPayments } from "@/lib/db";
 import type { CustomerPayment } from "@/types";
@@ -14,7 +15,7 @@ import { useT } from "@/lib/i18n";
 import { useShellBase } from "@/lib/useShellBase";
 import { History, Wallet, Bell, Pencil, Trash2, Receipt, Plus } from "lucide-react";
 import { getRecommendationsForCustomer, KNOWN_CROPS } from "@/lib/recommendationEngine";
-import { loadReminderConfigs, saveReminderConfig as saveReminderConfigToDb, loadCustomerCrops, saveCustomerCrops as saveCustomerCropsToDb, loadBusinessSettings, calculatePaymentStatus, getPaymentStatusLabel, getPaymentStatusColor } from "@/lib/reminderEngine";
+import { loadReminderConfigs, saveReminderConfig as saveReminderConfigToDb, loadCustomerCrops, saveCustomerCrops as saveCustomerCropsToDb, loadBusinessSettings, calculatePaymentStatus, getPaymentStatusLabel, getPaymentStatusColor, isDuplicateReminder } from "@/lib/reminderEngine";
 import { useProductsStore } from "@/stores/productsStore";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import ReminderConfigSheet from "@/components/ui/ReminderConfigSheet";
@@ -48,6 +49,8 @@ export default function CustomerProfilePage() {
     loadBiz();
   }, []);
   const { addToast } = useUIStore();
+  const { user } = useAuthStore();
+  const isAdmin = user?.role === "admin" || user?.role === "co_admin";
 
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState("");
@@ -84,12 +87,17 @@ export default function CustomerProfilePage() {
 
   async function saveReminderConfig(cfg: ReminderConfig) {
     try {
+      // Duplicate check
+      if (isDuplicateReminder(cfg, reminderConfigs)) {
+        addToast(t("reminder.duplicateExists"), "error");
+        return;
+      }
       await saveReminderConfigToDb(customerId!, cfg);
       const configs = await loadReminderConfigs(customerId!);
       setReminderConfigs(configs);
       setShowReminderConfig(false);
-      addToast("Reminder saved", "success");
-    } catch { addToast("Failed to save reminder", "error"); }
+      addToast(t("customerProfile.reminderSaved"), "success");
+    } catch { addToast(t("customerProfile.reminderSaveFailed"), "error"); }
   }
 
   async function handleDeleteReminder(configId: string) {
@@ -98,17 +106,26 @@ export default function CustomerProfilePage() {
       await deleteReminderConfig(configId);
       const configs = await loadReminderConfigs(customerId!);
       setReminderConfigs(configs);
-      addToast("Reminder deleted", "success");
-    } catch { addToast("Failed to delete reminder", "error"); }
+      addToast(t("customerProfile.reminderDeleted"), "success");
+    } catch { addToast(t("customerProfile.reminderDeleteFailed"), "error"); }
   }
 
   async function handleSaveDueDate() {
+    // Reject past dates on frontend
+    if (editDueDate) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      if (new Date(editDueDate) < today) {
+        addToast(t("customerProfile.dueDatePastError"), "error");
+        return;
+      }
+    }
     try {
       const { updateDueDate } = useCustomersStore.getState();
       await updateDueDate(customerId!, editDueDate || null);
       setShowEditDueDate(false);
-      addToast(editDueDate ? "Due date updated" : "Due date removed", "success");
-    } catch { addToast("Failed to update due date", "error"); }
+      addToast(editDueDate ? t("customerProfile.dueDateUpdated") : t("customerProfile.dueDateRemoved"), "success");
+    } catch { addToast(t("customerProfile.dueDateUpdateFailed"), "error"); }
   }
 
   function startEdit() {
@@ -124,25 +141,40 @@ export default function CustomerProfilePage() {
 
   async function saveEdit() {
     if (!customerId || !customer) return;
-    if (!editName.trim()) { addToast("Name is required", "error"); return; }
-    if (!editPhone.trim()) { addToast("Phone is required", "error"); return; }
+    if (!editName.trim()) { addToast(t("customerProfile.nameRequired"), "error"); return; }
+    if (!editPhone.trim()) { addToast(t("customerProfile.phoneRequired"), "error"); return; }
     const allCustomers = useCustomersStore.getState().customers;
     const duplicate = allCustomers.find((c) => c.phone === editPhone.trim() && c.id !== customerId && !c.isArchived);
     if (duplicate) {
-      addToast("Phone number already registered with \"" + duplicate.name + "\"", "error");
+      addToast(t("customerProfile.phoneAlreadyRegistered") + "\"" + duplicate.name + "\"", "error");
       return;
     }
     setSaving(true);
     try {
       const { supabase } = await import("@/lib/supabase");
       const creditLim = editCreditLimit.trim() ? parseFloat(editCreditLimit.trim()) : 0;
+      const creditLimitChanged = !isNaN(creditLim) && creditLim !== customer.creditLimit;
+      
+      // Employee: submit credit limit request instead of direct edit
+      if (creditLimitChanged && !isAdmin) {
+        const { requestCreditLimitIncrease } = useCustomersStore.getState();
+        await requestCreditLimitIncrease({
+          customerId: customerId!,
+          customerName: customer.name,
+          currentLimit: customer.creditLimit,
+          requestedLimit: creditLim,
+          requestedBy: user?.name || user?.id || "Unknown",
+        });
+        addToast("Credit limit request submitted for approval", "success");
+      }
+      
       const { error } = await supabase
         .from("customers")
         .update({
           name: editName.trim(),
           phone: editPhone.trim(),
           address: editAddress.trim() || null,
-          credit_limit: isNaN(creditLim) ? 0 : creditLim,
+          credit_limit: creditLimitChanged && !isAdmin ? customer.creditLimit : (isNaN(creditLim) ? 0 : creditLim),
         })
         .eq("id", customerId);
       if (error) throw new Error(error.message);
@@ -153,9 +185,9 @@ export default function CustomerProfilePage() {
       setCustomerCrops([...editCrops]);
       await useCustomersStore.getState().load();
       setEditing(false);
-      addToast("Customer updated", "success");
+      addToast(t("customerProfile.customerUpdated"), "success");
     } catch (err) {
-      addToast(err instanceof Error ? err.message : "Could not update", "error");
+      addToast(err instanceof Error ? err.message : t("customerProfile.couldNotUpdate"), "error");
     } finally {
       setSaving(false);
     }
@@ -169,10 +201,10 @@ export default function CustomerProfilePage() {
       const { error } = await supabase.from("customers").delete().eq("id", customerId);
       if (error) throw new Error(error.message);
       await useCustomersStore.getState().load();
-      addToast("Customer deleted", "success");
+      addToast(t("customerProfile.customerDeleted"), "success");
       navigate(base + "/customers", { replace: true });
     } catch (err) {
-      addToast(err instanceof Error ? err.message : "Could not delete", "error");
+      addToast(err instanceof Error ? err.message : t("customerProfile.couldNotDelete"), "error");
     } finally {
       setDeleting(false);
       setShowDelete(false);
@@ -228,7 +260,7 @@ export default function CustomerProfilePage() {
            ═══════════════════════════════════════════ */}
         <div
           className="rounded-[16px] p-4 flex gap-3 items-start"
-          style={{ background: "#F6F5F1" }}
+          style={{ background: "var(--surface-2)" }}
         >
           <div className="shrink-0">
             {customer.imageUrl ? (
@@ -243,8 +275,8 @@ export default function CustomerProfilePage() {
             )}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-[17px] font-medium truncate" style={{ color: "#1A1A1A" }}>{customer.name}</p>
-            <p className="text-[13px] mt-0.5" style={{ color: "#8A8A85" }}>
+            <p className="text-[17px] font-medium truncate" style={{ color: "var(--text-primary)" }}>{customer.name}</p>
+            <p className="text-[13px] mt-0.5" style={{ color: "var(--text-secondary)" }}>
               {customer.phone}{customer.address ? " \u00a0\u00b7\u00a0 " + customer.address : ""}
             </p>
             <div
@@ -269,25 +301,24 @@ export default function CustomerProfilePage() {
 
         {/* ═══════════════════════════════════════════
             2. QUICK STATS — Purchases | Paid | Outstanding
-           ═══════════════════════════════════════════ */}
-        <div
+           ═══════════════════════════════════════════ */}          <div
           className="flex rounded-[16px] overflow-hidden"
-          style={{ border: "0.5px solid #E5E4DE", background: "#fff" }}
+          style={{ background: "var(--surface-2)" }}
         >
-          <div className="flex-1 text-center py-3.5" style={{ borderRight: "0.5px solid #E5E4DE" }}>
-            <p className="text-[10px] tracking-[0.5px] font-medium" style={{ color: "#8A8A85" }}>{t("customerProfile.purchases")}</p>
-            <p className="text-[15px] font-bold mt-1" style={{ color: "#1A1A1A" }}>
+          <div className="flex-1 text-center py-3.5" style={{ borderRight: "1px solid var(--divider)" }}>
+            <p className="text-[10px] tracking-[0.5px] font-medium" style={{ color: "var(--text-secondary)" }}>{t("customerProfile.purchases")}</p>
+            <p className="text-[15px] font-bold mt-1" style={{ color: "var(--text-primary)" }}>
               {formatCurrency(customer.totalPurchases || customerSales.reduce((a, s) => a + s.totalAmount, 0))}
             </p>
           </div>
-          <div className="flex-1 text-center py-3.5" style={{ borderRight: "0.5px solid #E5E4DE" }}>
-            <p className="text-[10px] tracking-[0.5px] font-medium" style={{ color: "#8A8A85" }}>{t("customerProfile.paid")}</p>
-            <p className="text-[15px] font-bold mt-1" style={{ color: "#1A1A1A" }}>
+          <div className="flex-1 text-center py-3.5" style={{ borderRight: "1px solid var(--divider)" }}>
+            <p className="text-[10px] tracking-[0.5px] font-medium" style={{ color: "var(--text-secondary)" }}>{t("customerProfile.paid")}</p>
+            <p className="text-[15px] font-bold mt-1" style={{ color: "var(--text-primary)" }}>
               {formatCurrency(effectivePaid)}
             </p>
           </div>
           <div className="flex-1 text-center py-3.5">
-            <p className="text-[10px] tracking-[0.5px] font-medium" style={{ color: "#8A8A85" }}>{t("customerProfile.outstanding")}</p>
+            <p className="text-[10px] tracking-[0.5px] font-medium" style={{ color: "var(--text-secondary)" }}>{t("customerProfile.outstanding")}</p>
             <p className="text-[15px] font-bold mt-1" style={{ color: "#D97706" }}>
               {formatCurrency(customer.outstandingBalance)}
             </p>
@@ -299,12 +330,12 @@ export default function CustomerProfilePage() {
            ═══════════════════════════════════════════ */}
         <div
           className="rounded-[16px] p-4"
-          style={{ background: "#F6F5F1" }}
+          style={{ background: "var(--surface-2)" }}
         >
           {/* Credit Limit — horizontal alignment */}
           <div className="flex items-center justify-between">
             <span className="text-[12px] font-medium tracking-[0.5px]" style={{ color: "#5A5A55" }}>{t("customerProfile.creditLimit")}</span>
-            <span className="text-[15px] font-bold" style={{ color: "#1A1A1A" }}>
+            <span className="text-[15px] font-bold" style={{ color: "var(--text-primary)" }}>
               {customer.creditLimit > 0 ? formatCurrency(customer.creditLimit) : "\u2014"}
             </span>
           </div>
@@ -312,14 +343,14 @@ export default function CustomerProfilePage() {
           {/* Progress bar */}
           {customer.creditLimit > 0 && (
             <>
-              <div className="h-[6px] rounded-full mt-3 overflow-hidden" style={{ background: "#E5E4DE" }}>
+              <div className="h-[6px] rounded-full mt-3 overflow-hidden" style={{ background: "var(--divider)" }}>
                 <div
                   className="h-full rounded-full"
                   style={{ width: usagePct + "%", background: utilColor }}
                 />
               </div>
               <div className="flex justify-between mt-1.5">
-                <span className="text-[11px]" style={{ color: "#8A8A85" }}>
+                <span className="text-[11px]" style={{ color: "var(--text-secondary)" }}>
                   {formatCurrency(customer.outstandingBalance)} {t("customerProfile.of")} {formatCurrency(customer.creditLimit)} {t("customerProfile.used")}
                 </span>
                 <span className="text-[11px] font-bold" style={{ color: "#3B6D11" }}>{usagePct}%</span>
@@ -328,41 +359,41 @@ export default function CustomerProfilePage() {
           )}
 
           {/* Due Date */}
-          <div className="mt-3 pt-3" style={{ borderTop: "0.5px solid #E5E4DE" }}>
+          <div className="mt-3 pt-3" style={{ borderTop: "0.5px solid var(--divider)" }}>
             <div className="flex justify-between items-center">
               <div>
-                <p className="text-[11px] font-medium tracking-wider" style={{ color: "#8A8A85" }}>{t("customerProfile.dueDate")}</p>
-                <p className="text-[14px] font-bold mt-0.5" style={{ color: customer.dueDate ? "#1A1A1A" : "#8A8A85" }}>
-                  {customer.dueDate ? new Date(customer.dueDate).toLocaleDateString("en-PK", { day: "numeric", month: "short", year: "numeric" }) : "Not set"}
+                <p className="text-[11px] font-medium tracking-wider" style={{ color: "var(--text-secondary)" }}>{t("customerProfile.dueDate")}</p>
+                <p className="text-[14px] font-bold mt-0.5" style={{ color: customer.dueDate ? "var(--text-primary)" : "var(--text-secondary)" }}>
+                  {customer.dueDate ? new Date(customer.dueDate).toLocaleDateString(isUrdu ? "ur-PK" : "en-PK", { day: "numeric", month: "short", year: "numeric" }) : t("common.notSet")}
                 </p>
               </div>
-              <button onClick={() => { setEditDueDate(customer.dueDate || ""); setShowEditDueDate(true); }} className="text-[12px] font-semibold px-3 py-1.5 rounded-full" style={{ background: "#F1EFE8", color: "#5A5A55" }}>
+              <button onClick={() => { setEditDueDate(customer.dueDate || ""); setShowEditDueDate(true); }} className="text-[12px] font-semibold px-3 py-1.5 rounded-full" style={{ background: "var(--surface-2)", color: "#5A5A55" }}>
                 {customer.dueDate ? t("customerProfile.edit") : t("common.save")}
               </button>
             </div>
           </div>
           {/* Reminder schedules */}
-          <div className="mt-3 pt-3" style={{ borderTop: "0.5px solid #E5E4DE" }}>
+          <div className="mt-3 pt-3" style={{ borderTop: "0.5px solid var(--divider)" }}>
             <div className="flex justify-between items-center mb-2">
-              <p className="text-[11px] font-medium tracking-wider" style={{ color: "#8A8A85" }}>{t("customerProfile.reminders")}</p>
-              <button onClick={() => { setEditingConfig(null); setShowReminderConfig(true); }} className="text-[12px] font-semibold px-3 py-1.5 rounded-full" style={{ background: "#F1EFE8", color: "#5A5A55" }}>{t("customerProfile.add")}</button>
+              <p className="text-[11px] font-medium tracking-wider" style={{ color: "var(--text-secondary)" }}>{t("customerProfile.reminders")}</p>
+              <button onClick={() => { setEditingConfig(null); setShowReminderConfig(true); }} className="text-[12px] font-semibold px-3 py-1.5 rounded-full" style={{ background: "var(--surface-2)", color: "#5A5A55" }}>{t("customerProfile.add")}</button>
             </div>
             {reminderConfigs.length === 0 ? (
-              <p className="text-[12px] py-1" style={{ color: "#8A8A85" }}>{t("common.noRemindersConfigured")}</p>
+              <p className="text-[12px] py-1" style={{ color: "var(--text-secondary)" }}>{t("common.noRemindersConfigured")}</p>
             ) : (
               <div className="flex flex-col gap-1.5">
                 {reminderConfigs.map((cfg: ReminderConfig) => (
                   <div key={cfg.id} className="flex items-center justify-between py-2 px-2 rounded-lg" style={{ background: "rgba(99,153,34,0.05)" }}>
                     <div className="flex-1 min-w-0">
-                      <p className="text-[12px] font-medium" style={{ color: "#1A1A1A" }}>
+                      <p className="text-[12px] font-medium" style={{ color: "var(--text-primary)" }}>
                         {cfg.startDays}d {cfg.anchor === "after_credit" ? t("reminder.afterCredit") : cfg.anchor === "after_due" ? t("reminder.afterDueDate") : cfg.anchor === "before_due" ? t("reminder.beforeDueDate") : t("reminder.beforeHarvest")}
                       </p>
-                      <p className="text-[11px]" style={{ color: "#8A8A85" }}>
+                      <p className="text-[11px]" style={{ color: "var(--text-secondary)" }}>
                         {cfg.repeat === "once" ? t("reminder.oneTime") : cfg.repeat === "interval" ? t("reminder.every") + " " + cfg.intervalN + " " + t("reminder.days") : t("reminder.escalating")}
                       </p>
                     </div>
                     <div className="flex items-center gap-1">
-                      <button onClick={() => { setEditingConfig(cfg); setShowReminderConfig(true); }} className="p-1"><Pencil size={14} color="#8A8A85" /></button>
+                      <button onClick={() => { setEditingConfig(cfg); setShowReminderConfig(true); }} className="p-1"><Pencil size={14} color="var(--text-secondary)" /></button>
                       <button onClick={() => handleDeleteReminder(cfg.id)} className="p-1"><Trash2 size={14} color="#D64545" /></button>
                     </div>
                   </div>
@@ -378,43 +409,43 @@ export default function CustomerProfilePage() {
         <RecommendedSection customerId={customerId} />
         <div
           className="rounded-[16px] overflow-hidden"
-          style={{ border: "0.5px solid #E5E4DE", background: "#fff" }}
+          style={{ border: "1px solid var(--border-light)" }}
         >
           {/* Purchase History */}
           <button
             onClick={() => navigate(base + "/customers/" + customerId + "/purchases")}
             className="w-full flex items-center gap-3 px-4 py-3.5"
-            style={{ borderBottom: "0.5px solid #E5E4DE" }}
+            style={{ borderBottom: "0.5px solid var(--divider)" }}
           >
             <History size={18} color="#639922" />
-            <span className="flex-1 text-start text-[14px]" style={{ color: "#1A1A1A" }}>{t("customerProfile.purchaseHistory")}</span>
+            <span className="flex-1 text-start text-[14px]" style={{ color: "var(--text-primary)" }}>{t("customerProfile.purchaseHistory")}</span>
           </button>
 
           {/* Payment History */}
           <button
             onClick={() => navigate(base + "/customers/" + customerId + "/payments")}
             className="w-full flex items-center gap-3 px-4 py-3.5"
-            style={{ borderBottom: "0.5px solid #E5E4DE" }}
+            style={{ borderBottom: "0.5px solid var(--divider)" }}
           >
             <Wallet size={18} color="#639922" />
-            <span className="flex-1 text-start text-[14px]" style={{ color: "#1A1A1A" }}>{t("customerProfile.paymentHistory")}</span>
+            <span className="flex-1 text-start text-[14px]" style={{ color: "var(--text-primary)" }}>{t("customerProfile.paymentHistory")}</span>
           </button>
 
           {/* Reminder History */}
           <button
             onClick={() => navigate(base + "/customers/" + customerId + "/reminders")}
             className="w-full flex items-center gap-3 px-4 py-3.5"
-            style={{ borderBottom: "0.5px solid #E5E4DE" }}
+            style={{ borderBottom: "0.5px solid var(--divider)" }}
           >
             <Bell size={18} color="#639922" />
-            <span className="flex-1 text-start text-[14px]" style={{ color: "#1A1A1A" }}>{t("customerProfile.reminderHistory")}</span>
+            <span className="flex-1 text-start text-[14px]" style={{ color: "var(--text-primary)" }}>{t("customerProfile.reminderHistory")}</span>
           </button>
 
           {/* Record Payment — green highlight */}
           <button
             onClick={() => navigate(base + "/customers/" + customerId + "/record-payment")}
             className="w-full flex items-center gap-3 px-4 py-3.5"
-            style={{ borderBottom: "0.5px solid #E5E4DE", background: "#F2F8EC" }}
+            style={{ borderBottom: "0.5px solid var(--divider)", background: "#F2F8EC" }}
           >
             <Receipt size={18} color="#3B6D11" />
             <span className="flex-1 text-start text-[14px] font-medium" style={{ color: "#3B6D11" }}>{t("customerProfile.recordPayment")}</span>
@@ -424,10 +455,10 @@ export default function CustomerProfilePage() {
           <button
             onClick={startEdit}
             className="w-full flex items-center gap-3 px-4 py-3.5"
-            style={{ borderBottom: "0.5px solid #E5E4DE" }}
+            style={{ borderBottom: "0.5px solid var(--divider)" }}
           >
             <Pencil size={18} color="#639922" />
-            <span className="flex-1 text-start text-[14px]" style={{ color: "#1A1A1A" }}>{t("customerProfile.editCustomer")}</span>
+            <span className="flex-1 text-start text-[14px]" style={{ color: "var(--text-primary)" }}>{t("customerProfile.editCustomer")}</span>
           </button>
 
           {/* Delete Customer */}
@@ -512,13 +543,20 @@ export default function CustomerProfilePage() {
               </div>
               <div>
                 <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1.5" style={{ color: "var(--text-secondary)" }}>{t("common.creditLimitOptional")}</label>
-                <input
-                  type="number"
-                  value={editCreditLimit}
-                  onChange={(e) => setEditCreditLimit(e.target.value)}
-                  className="w-full h-12 rounded-[24px] px-4 text-sm outline-none"
-                  style={{ background: "var(--surface-2)", border: "1px solid var(--divider)", color: "var(--text-primary)", borderRadius: "24px" }}
-                />
+                {isAdmin ? (
+                  <input
+                    type="number"
+                    value={editCreditLimit}
+                    onChange={(e) => setEditCreditLimit(e.target.value)}
+                    className="w-full h-12 rounded-[24px] px-4 text-sm outline-none"
+                    style={{ background: "var(--surface-2)", border: "1px solid var(--divider)", color: "var(--text-primary)", borderRadius: "24px" }}
+                  />
+                ) : (
+                  <div className="rounded-[14px] p-3" style={{ background: "var(--surface-2)", border: "1px solid var(--divider)" }}>
+                    <p className="text-[12px]" style={{ color: "var(--text-secondary)" }}>Current: {formatCurrency(customer.creditLimit)}</p>
+                    <p className="text-[11px] mt-1" style={{ color: "var(--text-secondary)" }}>To change, submit a request via Action Center.</p>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -528,7 +566,7 @@ export default function CustomerProfilePage() {
                 className="flex-1 h-11 rounded-full text-sm font-medium"
                 style={{ background: "var(--surface-2)", color: "var(--text-secondary)" }}
               >
-                Cancel
+                {t('common.cancel')}
               </button>
               <button
                 onClick={saveEdit}
@@ -548,15 +586,15 @@ export default function CustomerProfilePage() {
         <div className="fixed inset-0 z-50 flex items-end" style={{ background: 'rgba(0,0,0,0.5)' }} onClick={() => setShowEditDueDate(false)}>
           <div className="w-full max-w-[400px] mx-auto rounded-t-2xl p-5 flex flex-col gap-4" style={{ background: 'var(--surface)' }} onClick={e => e.stopPropagation()}>
             <div className="flex justify-center pt-1 pb-0"><div className="w-10 h-1 rounded-full" style={{ background: 'var(--divider)' }} /></div>
-            <p className="text-[16px] font-semibold" style={{ color: 'var(--text-primary)' }}>Payment Due Date</p>
-            <p className="text-[13px]" style={{ color: 'var(--text-secondary)' }}>Set the date by which the customer should pay their outstanding balance.</p>
+            <p className="text-[16px] font-semibold" style={{ color: 'var(--text-primary)' }}>{t('common.paymentDueDate')}</p>
+            <p className="text-[13px]" style={{ color: 'var(--text-secondary)' }}>{t('common.dueDateDescription')}</p>
             <div>
-              <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1.5" style={{ color: 'var(--text-secondary)' }}>Due Date</label>
-              <input type="date" value={editDueDate} onChange={e => setEditDueDate(e.target.value)} className="w-full h-12 rounded-[24px] px-4 text-sm outline-none" style={{ background: 'var(--surface-2)', border: '1px solid var(--divider)', color: 'var(--text-primary)', borderRadius: '24px' }} />
+              <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1.5" style={{ color: 'var(--text-secondary)' }}>{t('common.dueDate')}</label>
+              <input type="date" value={editDueDate} min={new Date().toISOString().split('T')[0]} onChange={e => setEditDueDate(e.target.value)} className="w-full h-12 rounded-[24px] px-4 text-sm outline-none" style={{ background: 'var(--surface-2)', border: '1px solid var(--divider)', color: 'var(--text-primary)', borderRadius: '24px' }} />
             </div>
             <div className="flex gap-3 mt-1">
-              <button onClick={() => setShowEditDueDate(false)} className="flex-1 h-11 rounded-full text-sm font-medium" style={{ background: 'var(--surface-2)', color: 'var(--text-secondary)' }}>Cancel</button>
-              <button onClick={handleSaveDueDate} className="flex-1 h-11 rounded-full text-sm font-bold" style={{ background: 'var(--brand)', color: '#0a0a0a' }}>Save</button>
+              <button onClick={() => setShowEditDueDate(false)} className="flex-1 h-11 rounded-full text-sm font-medium" style={{ background: 'var(--surface-2)', color: 'var(--text-secondary)' }}>{t('common.cancel')}</button>
+              <button onClick={handleSaveDueDate} className="flex-1 h-11 rounded-full text-sm font-bold" style={{ background: 'var(--brand)', color: '#0a0a0a' }}>{t('common.save')}</button>
             </div>
           </div>
         </div>
@@ -583,6 +621,7 @@ export default function CustomerProfilePage() {
    ═══════════════════════════════════════════════════════ */
 function RecommendedSection({ customerId }: { customerId: string | undefined }) {
   if (!customerId) return null;
+  const t = useT();
   const customers = useCustomersStore((s) => s.customers);
   const products = useProductsStore((s) => s.products);
   const productsReady = useProductsStore((s) => s.ready);
@@ -611,16 +650,16 @@ function RecommendedSection({ customerId }: { customerId: string | undefined }) 
   };
 
   return (
-    <div className="rounded-[16px] p-4" style={{ background: "#F6F5F1" }}>
+    <div className="rounded-[16px] p-4" style={{ background: "var(--surface-2)" }}>
       <p className="text-[10px] font-bold uppercase tracking-wider mb-3" style={{ color: "#5A5A55" }}>
-        RECOMMENDED FOR {customer.name.split(" ")[0].toUpperCase()}
+        {t("products.recommendedFor", { name: customer.name.split(" ")[0].toUpperCase() })}
       </p>
       <div className="flex flex-col">
         {recs.map((rec, i) => (
           <div
             key={rec.product.id}
             className="flex items-center gap-3 py-3"
-            style={{ borderBottom: i < recs.length - 1 ? "0.5px solid #E5E4DE" : "none" }}
+            style={{ borderBottom: i < recs.length - 1 ? "0.5px solid var(--divider)" : "none" }}
           >
             <div
               className="size-10 rounded-full flex items-center justify-center shrink-0"
@@ -629,11 +668,11 @@ function RecommendedSection({ customerId }: { customerId: string | undefined }) 
               <span className="text-[16px]">{PRODUCT_ICONS[rec.product.category] || "\uD83D\uDCE6"}</span>
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-[14px] font-medium" style={{ color: "#1A1A1A" }}>
+              <p className="text-[14px] font-medium" style={{ color: "var(--text-primary)" }}>
                 {rec.product.name}
               </p>
-              <p className="text-[12px] mt-0.5" style={{ color: "#8A8A85" }}>
-                {rec.reason}
+              <p className="text-[12px] mt-0.5" style={{ color: "var(--text-secondary)" }}>
+                {t(rec.reasonKey, rec.reasonParams)}
               </p>
             </div>
             <button

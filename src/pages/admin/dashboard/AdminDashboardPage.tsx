@@ -74,8 +74,9 @@ export default function AdminDashboardPage() {
   const mockEmployees = useEmployeesStore((s) => s.employees);
   const customers = useCustomersStore((s) => s.customers);
   const [totalReturns, setTotalReturns] = useState(0);
+  const [creditCollected, setCreditCollected] = useState(0);
 
-  // Fetch returns for net sales calculation
+  // Fetch returns + credit collected for net sales calculation
   useEffect(() => {
     async function fetchReturns() {
       try {
@@ -86,7 +87,17 @@ export default function AdminDashboardPage() {
         }
       } catch {}
     }
+    async function fetchCreditCollected() {
+      try {
+        const { data } = await supabase.from("customer_payments").select("amount");
+        if (data) {
+          const total = data.reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
+          setCreditCollected(total);
+        }
+      } catch {}
+    }
     fetchReturns();
+    fetchCreditCollected();
   }, []);
 
   function getCustomerImg(customerId: string) {
@@ -156,12 +167,18 @@ export default function AdminDashboardPage() {
     const bad = p.stockQty <= (p.variants[0]?.lowStockThreshold ?? 5);
     return c + (bad ? 1 : 0);
   }, 0);
+  const outOfStockCount = mockProducts.filter(p => p.stockQty === 0).length;
   const totalPayable = mockCompanies.reduce((s, c) => s + c.outstandingPayable, 0);
   
+  const [pendingCreditRequests, setPendingCreditRequests] = useState(0);
   const [dueReminders, setDueReminders] = useState<any[]>([]);
   const [bizSettings, setBizSettings] = useState<{crops: any[]}>({crops: []});
   const [customerCropsMap, setCustomerCropsMap] = useState<Record<string, string[]>>({});
   useEffect(() => {
+    // Check for pending credit limit requests
+    supabase.from("credit_limit_requests").select("id", { count: "exact", head: true }).eq("status", "pending")
+      .then(({ count }) => setPendingCreditRequests(count || 0))
+      .then(() => {}, () => {});
     loadBusinessSettings().then(setBizSettings).catch(() => {});
     // Load all customer crops for harvest alert filtering
     import("@/lib/reminderEngine").then(async (m) => {
@@ -218,11 +235,11 @@ export default function AdminDashboardPage() {
       <StatusBar />
 
       {/* ── Greeting header — saved name + current date ── */}
-      <div className="flex items-center gap-3 px-4 py-3">
+      <div className="flex items-center gap-2.5 px-4 py-3">
         {/* Owner avatar — taps to profile; uses saved photo when present */}
         <button
           onClick={() => navigate("/admin/settings")}
-          className="size-11 rounded-full flex items-center justify-center font-bold text-[15px] shrink-0 overflow-hidden transition-transform active:scale-90"
+          className="size-10 rounded-full flex items-center justify-center font-bold text-[14px] shrink-0 overflow-hidden transition-transform active:scale-90"
           style={{ background: "var(--brand)", color: "#0a0a0a" }}
         >
           {user?.photoUrl
@@ -231,28 +248,28 @@ export default function AdminDashboardPage() {
         </button>
 
         <div className="flex flex-col flex-1 min-w-0">
-          <p className="font-bold text-[17px] truncate" style={{ color: "var(--text-primary)" }}>
+          <p className="font-bold text-[16px] leading-tight" style={{ color: "var(--text-primary)" }}>
             {t(greetingKey)}, {displayName}
           </p>
-          <p className="text-[12px]" style={{ color: "var(--text-secondary)" }}>
+          <p className="text-[12px] mt-0.5" style={{ color: "var(--text-secondary)" }}>
             {todayLabel}
           </p>
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-1.5 shrink-0">
           <button
             onClick={() => navigate("/admin/search")}
             className="flex items-center justify-center rounded-full size-9 transition-colors active:opacity-60"
             style={{ background: "var(--surface-2)" }}
           >
-            <Search size={15} style={{ color: "var(--text-primary)" }} />
+            <Search size={16} style={{ color: "var(--text-primary)" }} />
           </button>
           <button
             onClick={() => { setShowNotifs((v) => !v); markAllRead(); }}
             className="flex items-center justify-center rounded-full size-9 relative transition-colors active:opacity-60"
             style={{ background: "var(--surface-2)" }}
           >
-            <Bell size={15} style={{ color: "var(--text-primary)" }} />
+            <Bell size={16} style={{ color: "var(--text-primary)" }} />
             {unread() > 0 && (
               <span className="absolute top-1 right-1 bg-red-500 text-white text-[8px] font-bold rounded-full min-w-[13px] h-[13px] flex items-center justify-center px-[2px]">
                 {unread()}
@@ -385,71 +402,46 @@ export default function AdminDashboardPage() {
           <p className="text-[11px] font-bold uppercase tracking-widest mb-1" style={{ color: "rgba(0,0,0,0.55)" }}>
             {t("admin.totalSales")}
           </p>
-          <p className="text-[34px] font-bold leading-none" style={{ color: "#0a0a0a" }}>
+          <p className="text-[28px] font-semibold leading-none" style={{ color: "#0a0a0a" }}>
             {formatRs(totalSales - totalReturns)}
           </p>
 
-          <div className="flex gap-6">
+          <div className="flex items-end justify-between mt-4">
             <div>
               <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "rgba(0,0,0,0.5)" }}>
-                {t("admin.transactions")}
+                {isUrdu ? "تخمینہ منافع" : "GROSS PROFIT"}
               </p>
-              <p className="text-[22px] font-bold" style={{ color: "#0a0a0a" }}>{txCount}</p>
+              <p className="text-[16px] font-semibold" style={{ color: "#0a0a0a" }}>{formatRs(grossProfit)}</p>
             </div>
-            <div className="w-px" style={{ background: "rgba(0,0,0,0.15)" }} />
+            <div className="w-px self-stretch mx-3" style={{ background: "rgba(0,0,0,0.15)" }} />
             <div>
               <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "rgba(0,0,0,0.5)" }}>
-                {t("admin.grossProfit")} ▲
+                {isUrdu ? "نقد وصولی" : "CREDIT COLLECT"}
               </p>
-              <p className="text-[22px] font-bold" style={{ color: "#0a0a0a" }}>{formatRs(grossProfit)}</p>
+              <div className="flex items-center gap-2">
+                <p className="text-[16px] font-semibold" style={{ color: "#0a0a0a" }}>{formatRs(creditCollected)}</p>
+                <p className="text-[11px] font-semibold" style={{ color: "rgba(220,38,38,0.9)" }}>
+                  {formatRs(totalOutstanding)} {isUrdu ? "واجب الادا" : "overdue"}
+                </p>
+              </div>
             </div>
           </div>
         </button>
       </div>
 
-      {/* ── Paid Sales · Credit Sales · Outstanding Credits ── */}
-      <div className="px-4 pt-3 flex flex-col gap-3 animate-fade-in-up">
-        <div className="flex gap-3">
-          <button
-            onClick={() => navigate("/admin/sales")}
-            className="flex-1 rounded-[12px] p-4 flex flex-col gap-2 items-start transition-opacity active:opacity-70"
-            style={{ background: "var(--surface)", border: "1px solid var(--border-light)" }}
-          >
-            <p className="text-[11px] uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
-              {t("sales.summaryPaidSales") ?? "Paid Sales"}
-            </p>
-            <p className="text-[20px] font-bold" style={{ color: "var(--brand-dark)" }}>
-              {formatRs(paidSales)}
-            </p>
-          </button>
-          <button
-            onClick={() => navigate("/admin/sales")}
-            className="flex-1 rounded-[12px] p-4 flex flex-col gap-2 items-start transition-opacity active:opacity-70"
-            style={{ background: "var(--surface)", border: "1px solid var(--border-light)" }}
-          >
-            <p className="text-[11px] uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
-              {t("sales.summaryCreditSales") ?? "Credit Sales"}
-            </p>
-            <p className="text-[20px] font-bold" style={{ color: "#ef4444" }}>
-              {formatRs(creditSales)}
-            </p>
-          </button>
-        </div>
-
-        <button
-          onClick={() => navigate("/admin/customers", { state: { filter: "credit" } })}
-          className="w-full rounded-[12px] p-4 flex items-center justify-between transition-opacity active:opacity-70"
-          style={{ background: "var(--surface)", border: "1px solid var(--border-light)" }}
-        >
-          <div className="flex flex-col gap-1 items-start">
-            <p className="text-[11px] uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
-              {t("admin.outstandingCredit") ?? "Outstanding Credits"}
-            </p>
-            <p className="text-[20px] font-bold" style={{ color: "#d97706" }}>
-              {formatRs(totalOutstanding)}
-            </p>
-          </div>
-          <ChevronRight size={18} style={{ color: "var(--text-secondary)" }} />
+      {/* ── Summary: Action needed · Follow-ups · Out of stock ── */}
+      <div className="px-4 pt-4 flex gap-2 animate-fade-in-up">
+        <button onClick={() => navigate('/admin/alerts/reminders', { state: { tab: 'action', subTab: 'urgent' } })} className="flex-1 flex items-center gap-2.5 py-2.5 px-3 rounded-[10px] active:opacity-70 transition-opacity" style={{ background: "var(--surface-2)" }}>
+          <p className="text-[16px] font-bold" style={{ color: (highRiskCount + creditLimitReached) > 0 ? "var(--error)" : "var(--text-secondary)" }}>{highRiskCount + creditLimitReached}</p>
+          <p className="text-[10px] font-medium leading-tight" style={{ color: "var(--text-secondary)" }}>{isUrdu ? "عمل درکار" : "Action needed"}</p>
+        </button>
+        <button onClick={() => navigate('/admin/alerts/reminders', { state: { tab: 'followups', subTab: 'ready' } })} className="flex-1 flex items-center gap-2.5 py-2.5 px-3 rounded-[10px] active:opacity-70 transition-opacity" style={{ background: "var(--surface-2)" }}>
+          <p className="text-[16px] font-bold" style={{ color: (delayedCount + dueReminderCount) > 0 ? "var(--warning)" : "var(--text-secondary)" }}>{delayedCount + dueReminderCount}</p>
+          <p className="text-[10px] font-medium leading-tight" style={{ color: "var(--text-secondary)" }}>{isUrdu ? "فالو اپ" : "Follow-ups"}</p>
+        </button>
+        <button onClick={() => navigate('/admin/alerts/inventory')} className="flex-1 flex items-center gap-2.5 py-2.5 px-3 rounded-[10px] active:opacity-70 transition-opacity" style={{ background: "var(--surface-2)" }}>
+          <p className="text-[16px] font-bold" style={{ color: outOfStockCount > 0 ? "var(--error)" : "var(--text-secondary)" }}>{outOfStockCount}</p>
+          <p className="text-[10px] font-medium leading-tight" style={{ color: "var(--text-secondary)" }}>{isUrdu ? "اسٹاک ختم" : "Out of stock"}</p>
         </button>
       </div>
 
@@ -468,7 +460,7 @@ export default function AdminDashboardPage() {
             className="h-12 rounded-full font-bold text-[13px] flex items-center justify-center transition-transform active:scale-[0.97]"
             style={{ border: "1.5px solid var(--divider)", color: "var(--text-primary)", background: "transparent" }}
           >
-            {t("common.payment")}
+            {isUrdu ? "ادائیگی" : "Record Payment"}
           </button>
           <button
             onClick={() => navigate("/admin/purchases/new")}
@@ -480,198 +472,84 @@ export default function AdminDashboardPage() {
         </div>
       </div>
 
-      {/* ── Quick Alerts ── */}
-      <div className="px-4 pt-5">
-        <p className="text-[11px] font-bold uppercase tracking-widest mb-3" style={{ color: "var(--text-secondary)" }}>
-          {t("admin.quickAlerts")}
-        </p>
-        <div className="flex flex-col gap-2.5">
-          {/* TIER 1 — Red: Critical overrides (always shown) */}
-          {(() => {
-            const totalRed = creditLimitReached + (totalPayable > 0 ? 1 : 0) + delayedCount + highRiskCount;
-            if (totalRed > 0) {
-              return (
-                <>
-                  {/* Supplier payable due */}
-                  {totalPayable > 0 && (
-                    <button
-                      onClick={() => navigate("/admin/companies")}
-                      className="flex items-start gap-3 rounded-[14px] p-4 transition-opacity active:opacity-70 text-start w-full"
-                      style={{ background: "#FCEBEB" }}
-                    >
-                      <AlertTriangle size={20} color="#A32D2D" className="mt-0.5 shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-[14px] font-medium" style={{ color: "#791F1F" }}>{t("admin.supplierPayableDue")}</p>
-                        <p className="text-[13px] mt-1" style={{ color: "#791F1F", lineHeight: 1.5 }}>{formatCurrency(totalPayable)} {t("admin.totalDueToSuppliers")}</p>
-                        <div className="flex items-center justify-between mt-2">
-                          <span className="text-[11px]" style={{ color: "#A32D2D" }}>{t("admin.actionNeeded")}</span>
-                          <span className="text-[13px] font-medium" style={{ color: "#791F1F" }}>{t("admin.review")}</span>
-                        </div>
-                      </div>
-                    </button>
-                  )}
-                  {/* Delayed customers */}
-                  {delayedCount > 0 && (
-                    <button
-                      onClick={() => navigate("/admin/customers", { state: { paymentStatus: "delayed" } })}
-                      className="flex items-start gap-3 rounded-[14px] p-4 transition-opacity active:opacity-70 text-start w-full"
-                      style={{ background: "#FCEBEB" }}
-                    >
-                      <AlertTriangle size={20} color="#A32D2D" className="mt-0.5 shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-[14px] font-medium" style={{ color: "#791F1F" }}>{t("admin.delayedCount").replace("{count}", String(delayedCount))}</p>
-                        <p className="text-[13px] mt-1" style={{ color: "#791F1F", lineHeight: 1.5 }}>{t("admin.delayedDesc")}</p>
-                        <div className="flex items-center justify-between mt-2">
-                          <span className="text-[11px]" style={{ color: "#A32D2D" }}>{t("admin.followUpNeeded")}</span>
-                          <span className="text-[13px] font-medium" style={{ color: "#791F1F" }}>{t("admin.view")}</span>
-                        </div>
-                      </div>
-                    </button>
-                  )}
-                  {/* High risk customers */}
-                  {highRiskCount > 0 && (
-                    <button
-                      onClick={() => navigate("/admin/customers", { state: { paymentStatus: "high_risk" } })}
-                      className="flex items-start gap-3 rounded-[14px] p-4 transition-opacity active:opacity-70 text-start w-full"
-                      style={{ background: "#FCEBEB" }}
-                    >
-                      <AlertTriangle size={20} color="#A32D2D" className="mt-0.5 shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-[14px] font-medium" style={{ color: "#791F1F" }}>{t("admin.highRiskCount").replace("{count}", String(highRiskCount))}</p>
-                        <p className="text-[13px] mt-1" style={{ color: "#791F1F", lineHeight: 1.5 }}>{t("admin.highRiskDesc")}</p>
-                        <div className="flex items-center justify-between mt-2">
-                          <span className="text-[11px]" style={{ color: "#A32D2D" }}>{t("admin.actionNeeded")}</span>
-                          <span className="text-[13px] font-medium" style={{ color: "#791F1F" }}>{t("admin.review")}</span>
-                        </div>
-                      </div>
-                    </button>
-                  )}
-                  {/* Credit limit reached */}
-                  {creditLimitReached > 0 && (
-                    <button
-                      onClick={() => navigate("/admin/alerts/credit-overrides")}
-                      className="flex items-start gap-3 rounded-[14px] p-4 transition-opacity active:opacity-70 text-start w-full"
-                      style={{ background: "#FCEBEB" }}
-                    >
-                      <AlertTriangle size={20} color="#A32D2D" className="mt-0.5 shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-[14px] font-medium" style={{ color: "#791F1F" }}>{t("admin.creditLimitReached")} ({creditLimitReached})</p>
-                        <p className="text-[13px] mt-1" style={{ color: "#791F1F", lineHeight: 1.5 }}>{t("admin.creditLimitDesc")}</p>
-                        <div className="flex items-center justify-between mt-2">
-                          <span className="text-[11px]" style={{ color: "#A32D2D" }}>{t("admin.actionNeeded")}</span>
-                          <span className="text-[13px] font-medium" style={{ color: "#791F1F" }}>{t("admin.review")}</span>
-                        </div>
-                      </div>
-                    </button>
-                  )}
-                </>
-              );
-            }
-            /* All clear — red tier */
-            return (
-              <div className="flex items-center gap-3 rounded-[14px] p-4" style={{ background: "var(--surface-2)" }}>
-                <CheckCircle2 size={20} style={{ color: "var(--brand-dark, #65a30d)" }} className="shrink-0" />
-                <div className="flex-1">
-                  <p className="text-[13px] font-medium" style={{ color: "var(--text-primary)" }}>{t("admin.allClear")}</p>
+      {/* ── Alerts: 3 summary rows ── */}
+      {(() => {
+        const criticalCount = totalPayable > 0 ? 1 : 0;
+        const followupCount = dueReminderCount + delayedCount;
+        let harvestDays: number | null = null;
+        let harvestCustomerCount = 0;
+        const nowRef = new Date();
+        for (const crop of bizSettings.crops) {
+          const harvest = new Date(nowRef.getFullYear(), crop.harvestMonth - 1, crop.harvestDay || 1);
+          if (harvest < nowRef) harvest.setFullYear(nowRef.getFullYear() + 1);
+          const d = Math.ceil((harvest.getTime() - nowRef.getTime()) / 86400000);
+          if (d > 0 && d <= 30 && (harvestDays === null || d < harvestDays)) {
+            harvestDays = d;
+            harvestCustomerCount = customers.filter(c => c.outstandingBalance > 0 && customerCropsHas(c.id, crop.name)).length;
+          }
+        }
+        const items: { key: string; icon: React.ReactNode; title: string; subtitle: string; onClick: () => void; count: number }[] = [];
+        const criticalTotal = highRiskCount + creditLimitReached + criticalCount + pendingCreditRequests;
+        if (criticalTotal > 0) {
+          const parts: string[] = [];
+          if (highRiskCount > 0) parts.push(highRiskCount + (isUrdu ? " اعلیٰ خطرہ" : " high-risk"));
+          if (creditLimitReached > 0) parts.push(creditLimitReached + (isUrdu ? " کریڈٹ حد" : " credit limit"));
+          if (criticalCount > 0) parts.push(isUrdu ? "سپلائر" : "supplier");
+          if (pendingCreditRequests > 0) parts.push(pendingCreditRequests + (isUrdu ? " درخواست" : " request" + (pendingCreditRequests > 1 ? "s" : "")));
+          const urgentTab = highRiskCount > 0 ? "urgent" : creditLimitReached > 0 || pendingCreditRequests > 0 ? "medium" : "urgent";
+          items.push({
+            key: "critical",
+            icon: <AlertTriangle size={18} style={{ color: "var(--error)" }} />,
+            title: isUrdu ? criticalTotal + " عمل درکار" : criticalTotal + " action" + (criticalTotal !== 1 ? "s" : "") + " needed",
+            subtitle: parts.join(isUrdu ? " · " : ", "),
+            onClick: () => navigate("/admin/alerts/reminders", { state: { tab: "action", subTab: urgentTab } }),
+            count: criticalTotal,
+          });
+        }
+        if (followupCount > 0) {
+          const parts: string[] = [];
+          if (dueReminderCount > 0) parts.push(dueReminderCount + (isUrdu ? " یاد دہانی" : " reminder" + (dueReminderCount !== 1 ? "s" : "")));
+          if (delayedCount > 0) parts.push(delayedCount + (isUrdu ? " تاخیر" : " delayed"));
+          items.push({
+            key: "followups",
+            icon: <Bell size={18} style={{ color: "var(--warning)" }} />,
+            title: isUrdu ? followupCount + " فالو اپ تیار" : followupCount + " follow-up" + (followupCount !== 1 ? "s" : "") + " ready",
+            subtitle: parts.join(isUrdu ? " · " : ", "),
+            onClick: () => navigate("/admin/alerts/reminders", { state: { tab: "followups", subTab: "ready" } }),
+            count: followupCount,
+          });
+        }
+        if (harvestDays !== null) {
+          items.push({
+            key: "harvest",
+            icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--brand-dark)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" ry="2" /><line x1="16" x2="16" y1="2" y2="6" /><line x1="8" x2="8" y1="2" y2="6" /><line x1="3" x2="21" y1="10" y2="10" /></svg>,
+            title: isUrdu ? "فصل کا موسم " + harvestDays + " دن میں شروع" : "Harvest in " + harvestDays + " day" + (harvestDays !== 1 ? "s" : ""),
+            subtitle: harvestCustomerCount > 0 ? harvestCustomerCount + (isUrdu ? " گاہک زیر التوا" : " customers pending") : "",
+            onClick: () => navigate("/admin/alerts/reminders", { state: { tab: "followups", subTab: "ready" } }),
+            count: harvestDays,
+          });
+        }
+        if (items.length === 0) return null;
+        return (
+          <div className="px-4 pt-4 flex flex-col gap-2">
+            {items.map((item) => (
+              <button
+                key={item.key}
+                onClick={item.onClick}
+                className="flex items-center gap-3 px-4 py-3 rounded-[12px] w-full text-start active:opacity-70 transition-opacity"
+                style={{ background: "var(--surface-2)" }}
+              >
+                <div className="shrink-0">{item.icon}</div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[13px] font-semibold" style={{ color: "var(--text-primary)" }}>{item.title}</p>
+                  {item.subtitle && <p className="text-[11px] mt-0.5" style={{ color: "var(--text-secondary)" }}>{item.subtitle}</p>}
                 </div>
-              </div>
-            );
-          })()}
-
-          {/* TIER 2 — Amber: Daily rollup (always shown) */}
-          {(() => {
-            const totalAmber = dueReminderCount + lowStockCount;
-            if (totalAmber > 0) {
-              return (
-                <>
-                  {/* Reminders batch */}
-                  {dueReminderCount > 0 && (
-                    <button
-                      onClick={() => navigate("/admin/alerts/reminders")}
-                      className="flex items-center gap-3 rounded-[14px] p-4 transition-opacity active:opacity-70 text-start w-full"
-                      style={{ background: "#FAEEDA" }}
-                    >
-                      <Bell size={20} color="#854F0B" className="shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-[13px]" style={{ color: "#633806", lineHeight: 1.5 }}>{t("admin.remindersSentToday").replace("{count}", String(dueReminderCount))}</p>
-                      </div>
-                      <span className="text-[13px] font-medium shrink-0" style={{ color: "#854F0B" }}>{t("admin.view")}</span>
-                    </button>
-                  )}
-                  {/* Low stock */}
-                  {lowStockCount > 0 && (
-                    <button
-                      onClick={() => navigate("/admin/alerts/inventory")}
-                      className="flex items-center gap-3 rounded-[14px] p-4 transition-opacity active:opacity-70 text-start w-full"
-                      style={{ background: "#FAEEDA" }}
-                    >
-                      <AlertTriangle size={20} color="#854F0B" className="shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-[13px]" style={{ color: "#633806", lineHeight: 1.5 }}>{lowStockCount} {isUrdu ? "مصنوعات کم اسٹاک — reorder درکار" : "product" + (lowStockCount !== 1 ? "s" : "") + " low on stock — need reorder"}</p>
-                      </div>
-                      <span className="text-[13px] font-medium shrink-0" style={{ color: "#854F0B" }}>{t("admin.view")}</span>
-                    </button>
-                  )}
-                </>
-              );
-            }
-            /* All clear — amber tier */
-            return (
-              <div className="flex items-center gap-3 rounded-[14px] p-4" style={{ background: "var(--surface-2)" }}>
-                <CheckCircle2 size={20} style={{ color: "var(--brand-dark, #65a30d)" }} className="shrink-0" />
-                <div className="flex-1">
-                  <p className="text-[13px]" style={{ color: "var(--text-primary)", lineHeight: 1.5 }}>{t("admin.noPendingReminders")}</p>
-                </div>
-              </div>
-            );
-          })()}
-
-          {/* TIER 3 — Gray: Harvest / informational (always shown) */}
-          {(() => {
-            const biz = bizSettings;
-            const now = new Date();
-            const harvestAlerts: { text: string; cropName: string }[] = [];
-            for (const crop of biz.crops) {
-              const harvest = new Date(now.getFullYear(), crop.harvestMonth - 1, crop.harvestDay || 1);
-              if (harvest < now) harvest.setFullYear(now.getFullYear() + 1);
-              const daysUntil = Math.ceil((harvest.getTime() - now.getTime()) / 86400000);
-              if (daysUntil <= 30 && daysUntil > 0) {
-                const affectedCustomers = customers.filter(c => c.outstandingBalance > 0 && customerCropsHas(c.id, crop.name)).length;
-                harvestAlerts.push({
-                  text: t("admin.harvestSeasonSoon")
-                    .replace("{days}", String(daysUntil))
-                    .replace("{count}", String(affectedCustomers)),
-                  cropName: crop.name,
-                });
-              }
-            }
-            if (harvestAlerts.length > 0) {
-              return harvestAlerts.map((alert, i) => (
-                <button key={i} onClick={() => navigate("/admin/customers", { state: { cropFilter: alert.cropName } })} className="flex items-center gap-3 rounded-[14px] p-4 active:opacity-70 w-full text-start" style={{ background: "#F1EFE8" }}>
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#5F5E5A" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
-                    <rect width="18" height="18" x="3" y="4" rx="2" ry="2" />
-                    <line x1="16" x2="16" y1="2" y2="6" />
-                    <line x1="8" x2="8" y1="2" y2="6" />
-                    <line x1="3" x2="21" y1="10" y2="10" />
-                  </svg>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[13px]" style={{ color: "#444441", lineHeight: 1.5 }}>{alert.text}</p>
-                  </div>
-                </button>
-              ));
-            }
-            /* All clear — gray tier */
-            return (
-              <div className="flex items-center gap-3 rounded-[14px] p-4" style={{ background: "var(--surface-2)" }}>
-                <CheckCircle2 size={20} style={{ color: "var(--brand-dark, #65a30d)" }} className="shrink-0" />
-                <div className="flex-1">
-                  <p className="text-[13px]" style={{ color: "var(--text-primary)", lineHeight: 1.5 }}>{t("admin.noHarvestAlerts")}</p>
-                </div>
-              </div>
-            );
-          })()}
-        </div>
-      </div>
+                <span className="text-[11px] font-medium" style={{ color: "var(--text-secondary)" }}>{isUrdu ? "جائزہ" : "View"}</span>
+              </button>
+            ))}
+          </div>
+        );
+      })()}
 
       {/* ── Employee Performance ── */}
       {empStats.length > 0 && (
@@ -696,7 +574,7 @@ export default function AdminDashboardPage() {
                   </div>
                   <div>
                     <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>{emp.name}</p>
-                    <p className="text-xs" style={{ color: "var(--text-secondary)" }}>{count} {count === 1 ? "sale" : "sales"} · {items} items</p>
+                    <p className="text-xs" style={{ color: "var(--text-secondary)" }}>{count} {isUrdu ? (count === 1 ? "فروخت" : "فروختیں") : (count === 1 ? "sale" : "sales")} · {items} {isUrdu ? "اشیاء" : "items"}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">

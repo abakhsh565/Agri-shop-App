@@ -40,24 +40,28 @@
   --muted-foreground: #888888;
   --accent: #000000;
   --accent-foreground: #ffffff;
-  --border: #000000;
-  --border-light: #e5e5e5;
-  --ring: rgba(0, 0, 0, 0.3);
-  --radius: 12px;
+  --border: #d4d4d4;
+  --border-light: #f0f0f0;
+  --ring: rgba(0, 0, 0, 0.15);
+  --radius: 14px;
   --radius-pill: 100px;
   --radius-input: 24px;
   --success: #84cc16;
   --warning: #f59e0b;
-  --error: #ef4444;
+  --error: #DC2626;
   --brand: #84cc16;
-  --brand-dark: #65a30d;
+  --brand-dark: #3f6212;
   --brand-light: #d9f99d;
   --surface: #ffffff;
   --surface-2: #f5f5f5;
   --surface-3: #eeeeee;
   --text-primary: #000000;
-  --text-secondary: #888888;
+  --text-secondary: #6B7280;
   --divider: #e5e5e5;
+  --error-bg: rgba(239,68,68,0.08);
+  --error-border: rgba(239,68,68,0.2);
+  --warning-bg: rgba(245,158,11,0.08);
+  --warning-border: rgba(245,158,11,0.2);
 }
 
 .dark {
@@ -78,7 +82,7 @@
   --ring: rgba(132, 204, 22, 0.4);
   --success: #84cc16;
   --warning: #f59e0b;
-  --error: #ef4444;
+  --error: #DC2626;
   --brand: #84cc16;
   --surface: #0a0a0a;
   --surface-2: #1a1a1a;
@@ -86,6 +90,10 @@
   --text-primary: #f5f5f5;
   --text-secondary: #a3a3a3;
   --divider: #2a2a2a;
+  --error-bg: rgba(239,68,68,0.15);
+  --error-border: rgba(239,68,68,0.3);
+  --warning-bg: rgba(245,158,11,0.12);
+  --warning-border: rgba(245,158,11,0.25);
 }
 
 * {
@@ -124,6 +132,349 @@ input,
 textarea,
 [contenteditable="true"] {
   user-select: text;
+}
+
+/* Global input polish — Claude-inspired clean style */
+input[type="text"],
+input[type="number"],
+input[type="tel"],
+input[type="email"],
+input[type="password"],
+input[type="date"],
+input[type="time"],
+input:not([type]) {
+  border-radius: 14px !important;
+  height: 46px !important;
+  font-size: 13px !important;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+select {
+  border-radius: 14px !important;
+  height: 46px !important;
+  font-size: 13px !important;
+}
+
+/* Global button polish — cleaner transitions */
+button {
+  transition: opacity 0.15s, transform 0.1s, background-color 0.15s;
+}
+
+/* Cleaner scrollbar */
+::-webkit-scrollbar {
+  width: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--divider);
+  border-radius: 4px;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   DESIGN SYSTEM — Claude-inspired premium UI foundation
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ── Card: the fundamental content container ── */
+.ds-card {
+  background: var(--surface);
+  border: 1px solid var(--divider);
+  border-radius: 16px;
+  padding: 16px;
+}
+.ds-card-lg {
+  background: var(--surface);
+  border: 1px solid var(--divider);
+  border-radius: 18px;
+  padding: 20px;
+}
+.ds-card-flat {
+  background: var(--surface-2);
+  border-radius: 14px;
+  padding: 16px;
+}
+
+/* ── Section: grouping with header ── */
+.ds-section {
+  padding: 0 20px;
+}
+.ds-section-title {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  margin-bottom: 10px;
+}
+
+/* ── ListItem: clean row with icon + text + optional action ── */
+.ds-list-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  transition: opacity 0.15s;
+}
+.ds-list-item:active {
+  opacity: 0.7;
+}
+.ds-list-item + .ds-list-item {
+  border-top: 1px solid var(--divider);
+}
+
+/* ── Button: consistent CTA styling ── */
+.ds-btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 46px;
+  padding: 0 24px;
+  border-radius: 14px;
+  font-size: 13px;
+  font-weight: 600;
+  background: #1a1a1a;
+  color: #fff;
+  transition: opacity 0.15s, transform 0.1s;
+}
+.ds-btn-primary:active {
+  transform: scale(0.98);
+  opacity: 0.85;
+}
+.ds-btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 46px;
+  padding: 0 24px;
+  border-radius: 14px;
+  font-size: 13px;
+  font-weight: 600;
+  background: var(--surface);
+  color: var(--text-primary);
+  border: 1px solid var(--divider);
+  transition: opacity 0.15s, transform 0.1s;
+}
+.ds-btn-secondary:active {
+  transform: scale(0.98);
+  opacity: 0.7;
+}
+.ds-btn-brand {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 46px;
+  padding: 0 24px;
+  border-radius: 14px;
+  font-size: 13px;
+  font-weight: 600;
+  background: var(--brand);
+  color: #0a0a0a;
+  transition: opacity 0.15s, transform 0.1s;
+}
+.ds-btn-brand:active {
+  transform: scale(0.98);
+  opacity: 0.85;
+}
+.ds-btn-danger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 46px;
+  padding: 0 24px;
+  border-radius: 14px;
+  font-size: 13px;
+  font-weight: 600;
+  background: var(--error);
+  color: #fff;
+  transition: opacity 0.15s, transform 0.1s;
+}
+.ds-btn-danger:active {
+  transform: scale(0.98);
+  opacity: 0.85;
+}
+.ds-btn-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 42px;
+  padding: 0 20px;
+  border-radius: 100px;
+  font-size: 13px;
+  font-weight: 600;
+  background: #1a1a1a;
+  color: #fff;
+  transition: opacity 0.15s, transform 0.1s;
+}
+.ds-btn-pill:active {
+  transform: scale(0.98);
+  opacity: 0.85;
+}
+.ds-btn-pill-outline {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 42px;
+  padding: 0 20px;
+  border-radius: 100px;
+  font-size: 13px;
+  font-weight: 600;
+  background: transparent;
+  color: var(--text-primary);
+  border: 1px solid var(--divider);
+  transition: opacity 0.15s, transform 0.1s;
+}
+.ds-btn-pill-outline:active {
+  transform: scale(0.98);
+  opacity: 0.7;
+}
+
+/* ── Badge: status indicators ── */
+.ds-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 100px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+/* ── Divider ── */
+.ds-divider {
+  height: 1px;
+  background: var(--divider);
+  margin: 0 20px;
+}
+
+/* ── Chip / Tag ── */
+.ds-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 14px;
+  border-radius: 100px;
+  font-size: 12px;
+  font-weight: 500;
+  background: var(--surface-2);
+  color: var(--text-primary);
+  border: 1px solid var(--divider);
+  transition: background 0.15s;
+}
+.ds-chip:active {
+  background: var(--surface-3);
+}
+.ds-chip-active {
+  background: #1a1a1a;
+  color: #fff;
+  border-color: #1a1a1a;
+}
+
+/* ── Empty state ── */
+.ds-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px;
+  text-align: center;
+}
+
+/* ── Stat card ── */
+.ds-stat {
+  background: var(--surface);
+  border: 1px solid var(--divider);
+  border-radius: 14px;
+  padding: 14px;
+}
+.ds-stat-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+.ds-stat-value {
+  font-size: 16px;
+  font-weight: 700;
+  margin-top: 4px;
+  color: var(--text-primary);
+}
+
+/* ── Icon container ── */
+.ds-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  flex-shrink: 0;
+}
+.ds-icon-sm {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
+/* ── Avatar ── */
+.ds-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+.ds-avatar-lg {
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+/* ── Input group ── */
+.ds-input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ds-input-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+/* ── Alert card ── */
+.ds-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px;
+  border-radius: 14px;
+  border: 1px solid var(--divider);
+}
+
+/* ── Tab bar ── */
+.ds-tabs {
+  display: flex;
+  gap: 6px;
+  padding: 0 20px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.ds-tabs::-webkit-scrollbar {
+  display: none;
 }
 
 /* ── Device safe-area insets (notch, status bar, gesture bar) ──
@@ -232,7 +583,9 @@ textarea,
    Covers hardcoded Tailwind utilities in legacy pages that haven't been
    migrated to CSS variables yet.                                        */
 
-/* Backgrounds */
+/* Backgrounds — map hardcoded colors to design tokens */
+.bg-white            { background-color: var(--surface) !important; }
+.bg-\[\#f5f5f5\]     { background-color: var(--surface-2) !important; }
 .dark .bg-white            { background-color: var(--background)  !important; }
 .dark .bg-\[\#f5f5f5\]     { background-color: var(--surface-2)   !important; }
 .dark .bg-\[\#eee\]        { background-color: var(--surface-3)   !important; }
@@ -242,13 +595,18 @@ textarea,
 /* Active/selected state: bg-black → brand */
 .dark .bg-black            { background-color: var(--brand)       !important; }
 
-/* Text */
+/* Text — map hardcoded colors to design tokens */
+.text-black          { color: var(--text-primary) !important; }
+.text-\[\#888\]      { color: var(--text-secondary) !important; }
+.text-\[\#888888\]   { color: var(--text-secondary) !important; }
 .dark .text-black          { color: var(--foreground)             !important; }
 .dark .text-\[\#888\]      { color: var(--muted-foreground)       !important; }
 .dark .text-\[\#888888\]   { color: var(--muted-foreground)       !important; }
 .dark .text-white          { color: #0a0a0a                       !important; } /* paired with bg-black → brand */
 
-/* Borders */
+/* Borders — map hardcoded colors to design tokens */
+.border-\[\#e5e5e5\] { border-color: var(--divider) !important; }
+.border-black        { border-color: var(--border) !important; }
 .dark .border-\[\#e5e5e5\] { border-color: var(--divider)         !important; }
 .dark .border-\[\#f5f5f5\] { border-color: var(--surface-3)       !important; }
 .dark .border-black        { border-color: var(--divider)         !important; }

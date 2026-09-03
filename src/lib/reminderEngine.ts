@@ -1,4 +1,5 @@
-import type { Customer, Sale, ReminderConfig, BusinessSettings, CropConfig, GeneratedReminder, PaymentStatus } from "@/types";
+import type { Customer, Sale, ReminderConfig, ReminderGroup, BusinessSettings, CropConfig, GeneratedReminder, PaymentStatus } from "@/types";
+import type { TranslateFn } from "@/lib/i18n";
 import { supabase } from "@/lib/supabase";
 
 // ─── Supabase Data Access ─────────────────────────────────────────────────────
@@ -30,6 +31,8 @@ export async function loadReminderConfigs(customerId: string): Promise<ReminderC
       ends: row.ends as ReminderConfig["ends"],
       endsDate: row.ends_date ?? null,
       endsCount: row.ends_count ?? 5,
+      groupId: row.group_id ?? null,
+      groupName: row.group_name ?? null,
     }));
   } catch {
     return [];
@@ -49,6 +52,8 @@ export async function saveReminderConfig(customerId: string, config: ReminderCon
     ends: config.ends,
     ends_date: config.endsDate || null,
     ends_count: config.endsCount,
+    group_id: config.groupId ?? null,
+    group_name: config.groupName ?? null,
     updated_at: new Date().toISOString(),
   };
 
@@ -62,6 +67,147 @@ export async function saveReminderConfig(customerId: string, config: ReminderCon
 
 export async function deleteReminderConfig(configId: string): Promise<void> {
   await supabase.from("reminder_configs").delete().eq("id", configId);
+}
+
+// ─── Group-based Reminders ─────────────────────────────────────────────────────
+
+/** Load all reminder groups (distinct group_ids) with their customer counts. */
+export async function loadReminderGroups(): Promise<ReminderGroup[]> {
+  try {
+    const { data } = await supabase
+      .from("reminder_configs")
+      .select("group_id, group_name, customer_id, anchor, start_days, repeat_type, interval_n, interval_unit, ends, created_at")
+      .not("group_id", "is", null);
+    if (!data || data.length === 0) return [];
+
+    // Load customer details for name/balance
+    const customerIds = [...new Set((data as any[]).map(r => r.customer_id))];
+    const { data: custRows } = await supabase
+      .from("customers")
+      .select("id, name, outstanding_balance, due_date")
+      .in("id", customerIds);
+    const custMap = new Map<string, any>();
+    (custRows || []).forEach((c: any) => custMap.set(c.id, c));
+
+    // Group by group_id
+    const groupMap = new Map<string, { name: string; customerIds: Set<string>; config: any; createdAt: string }>();
+    for (const row of data as any[]) {
+      const gId = row.group_id;
+      if (!groupMap.has(gId)) {
+        groupMap.set(gId, {
+          name: row.group_name || "Unnamed Group",
+          customerIds: new Set(),
+          config: {
+            triggerType: row.anchor || "before_due",
+            startDays: row.start_days || 3,
+            repeatType: row.repeat_type || "once",
+            intervalN: row.interval_n,
+            intervalUnit: row.interval_unit,
+            ends: row.ends,
+          },
+          createdAt: row.created_at || "",
+        });
+      }
+      groupMap.get(gId)!.customerIds.add(row.customer_id);
+    }
+
+    return Array.from(groupMap.entries()).map(([id, g]) => ({
+      id,
+      name: g.name,
+      createdAt: g.createdAt,
+      customerCount: g.customerIds.size,
+      customers: Array.from(g.customerIds).map(cId => {
+        const c = custMap.get(cId);
+        return {
+          id: cId,
+          name: c?.name || "Unknown",
+          outstandingBalance: c?.outstanding_balance || 0,
+          dueDate: c?.due_date || null,
+        };
+      }),
+      config: g.config,
+    }));
+  } catch {
+    return [];
+  }
+}
+
+/** Save a reminder config for multiple customers (group creation). */
+export async function saveReminderGroup(
+  config: ReminderConfig,
+  customerIds: string[],
+  groupName: string,
+): Promise<void> {
+  const groupId = config.groupId || crypto.randomUUID();
+  const configTemplate = {
+    enabled: config.enabled,
+    start_days: config.startDays,
+    anchor: config.anchor,
+    repeat_type: config.repeat,
+    interval_n: config.intervalN,
+    interval_unit: config.intervalUnit,
+    escalation: config.escalation,
+    ends: config.ends,
+    ends_date: config.endsDate || null,
+    ends_count: config.endsCount,
+    group_id: groupId,
+    group_name: groupName,
+    updated_at: new Date().toISOString(),
+  };
+
+  // Delete existing configs for this group first
+  await supabase.from("reminder_configs").delete().eq("group_id", groupId);
+
+  // Insert one config per customer
+  const rows = customerIds.map(customerId => ({
+    ...configTemplate,
+    customer_id: customerId,
+  }));
+  await supabase.from("reminder_configs").insert(rows);
+}
+
+/** Delete an entire reminder group and all its customer configs. */
+export async function deleteReminderGroup(groupId: string): Promise<void> {
+  await supabase.from("reminder_configs").delete().eq("group_id", groupId);
+}
+
+/** Check if a group-level duplicate exists for a customer. */
+export function isDuplicateGroupReminder(
+  newConfig: ReminderConfig,
+  existingConfigs: ReminderConfig[],
+  newGroupName: string,
+): boolean {
+  return existingConfigs.some(existing => {
+    if (existing.groupName !== newGroupName) return false;
+    // Same group name = same reminder → duplicate
+    if (existing.anchor !== newConfig.anchor) return false;
+    if (existing.startDays !== newConfig.startDays) return false;
+    if (existing.repeat !== newConfig.repeat) return false;
+    if (existing.intervalN !== newConfig.intervalN) return false;
+    if (existing.intervalUnit !== newConfig.intervalUnit) return false;
+    if (existing.ends !== newConfig.ends) return false;
+    return true;
+  });
+}
+
+/** Check if a new/edited reminder duplicates an existing one for the same customer. */
+export function isDuplicateReminder(newConfig: ReminderConfig, existingConfigs: ReminderConfig[]): boolean {
+  return existingConfigs.some(existing => {
+    if (existing.id === newConfig.id) return false; // same record being edited
+    if (existing.anchor !== newConfig.anchor) return false;
+    if (existing.startDays !== newConfig.startDays) return false;
+    if (existing.repeat !== newConfig.repeat) return false;
+    if (existing.intervalN !== newConfig.intervalN) return false;
+    if (existing.intervalUnit !== newConfig.intervalUnit) return false;
+    if (existing.ends !== newConfig.ends) return false;
+    if (existing.endsDate !== newConfig.endsDate) return false;
+    if (existing.endsCount !== newConfig.endsCount) return false;
+    // Compare escalation arrays
+    const escA = JSON.stringify(existing.escalation);
+    const escB = JSON.stringify(newConfig.escalation);
+    if (escA !== escB) return false;
+    return true;
+  });
 }
 
 export async function loadCustomerCrops(customerId: string): Promise<string[]> {
@@ -250,10 +396,16 @@ interface ReminderEngineInput {
   customers: Customer[];
   sales: Sale[];
   now?: Date;
+  t?: TranslateFn;
 }
 
 export async function generateReminders(input: ReminderEngineInput): Promise<GeneratedReminder[]> {
-  const { customers, sales, now: nowRef } = input;
+  const { customers, sales, now: nowRef, t } = input;
+  const _t = t ?? ((key: string, params?: Record<string, string | number>) => {
+    let text = key;
+    if (params) { for (const [k, v] of Object.entries(params)) { text = text.replace(new RegExp('\\{' + k + '\\}', 'g'), String(v)); } }
+    return text;
+  });
   const now = nowRef ?? new Date();
   const reminders: GeneratedReminder[] = [];
   const bizSettings = await loadBusinessSettings();
@@ -282,8 +434,26 @@ export async function generateReminders(input: ReminderEngineInput): Promise<Gen
         for (const cropName of customerCropNames) {
           const crop = bizSettings.crops.find(c => c.name === cropName);
           if (!crop) continue;
-          const triggerDate = getTriggerDate(config, customer, latestSale, crop, now);
+          let triggerDate = getTriggerDate(config, customer, latestSale, crop, now);
           if (!triggerDate) continue;
+          // For recurring interval reminders, advance to next occurrence after last send
+          if (config.repeat === "interval" && config.intervalN > 0 && sentCount > 0) {
+            try {
+              const { data: lastLogH } = await supabase
+                .from("reminder_logs")
+                .select("sent_at")
+                .eq("customer_id", customer.id)
+                .eq("config_id", config.id)
+                .order("sent_at", { ascending: false })
+                .limit(1)
+                .single();
+              if (lastLogH?.sent_at) {
+                const nextDateH = new Date(lastLogH.sent_at);
+                nextDateH.setDate(nextDateH.getDate() + config.intervalN);
+                if (nextDateH > triggerDate) triggerDate = nextDateH;
+              }
+            } catch {}
+          }
           const isFuture = triggerDate > now;
           const daysElapsed = isFuture ? 0 : getDaysSince(triggerDate.toISOString(), now);
           reminders.push({
@@ -291,18 +461,36 @@ export async function generateReminders(input: ReminderEngineInput): Promise<Gen
             customerPhone: customer.phone, outstanding: customer.outstandingBalance,
             dueDate: customer.dueDate, paymentStatus: calculatePaymentStatus(customer, now),
             configId: config.id, tone: determineTone(config, daysElapsed),
-            trigger: "harvest", triggerDetail: config.startDays + " days before " + cropName + " harvest",
+            trigger: "harvest", triggerDetail: _t(config.startDays === 1 ? "reminders.dayBeforeHarvest" : "reminders.daysBeforeHarvest", { n: config.startDays, crop: cropName }),
             cropName, config, triggerDate: triggerDate.toISOString(),
           });
         }
       } else {
-        const triggerDate = getTriggerDate(config, customer, latestSale, undefined, now);
+        let triggerDate = getTriggerDate(config, customer, latestSale, undefined, now);
         if (!triggerDate) continue;
+        // For recurring interval reminders, advance to next occurrence after last send
+        if (config.repeat === "interval" && config.intervalN > 0 && sentCount > 0) {
+          try {
+            const { data: lastLog } = await supabase
+              .from("reminder_logs")
+              .select("sent_at")
+              .eq("customer_id", customer.id)
+              .eq("config_id", config.id)
+              .order("sent_at", { ascending: false })
+              .limit(1)
+              .single();
+            if (lastLog?.sent_at) {
+              const nextDate = new Date(lastLog.sent_at);
+              nextDate.setDate(nextDate.getDate() + config.intervalN);
+              if (nextDate > triggerDate) triggerDate = nextDate;
+            }
+          } catch {}
+        }
         const isFuture = triggerDate > now;
         const daysElapsed = isFuture ? 0 : getDaysSince(triggerDate.toISOString(), now);
-        const label = config.anchor === "after_credit" ? config.startDays + " days after credit given"
-          : config.anchor === "after_due" ? config.startDays + " days after due date"
-          : config.startDays + " days before due date";
+        const label = config.anchor === "after_credit" ? _t("reminders.daysAfterCredit", { n: config.startDays })
+          : config.anchor === "after_due" ? _t("reminders.daysAfterDue", { n: config.startDays })
+          : _t(config.startDays === 1 ? "reminders.dayBeforeDue" : "reminders.daysBeforeDue", { n: config.startDays });
         reminders.push({
           customerId: customer.id, customerName: customer.name,
           customerPhone: customer.phone, outstanding: customer.outstandingBalance,
@@ -327,6 +515,10 @@ export function generateReminderMessage(reminder: GeneratedReminder): string {
 
 // ─── Helper: split reminders into tabs ────────────────────────────────────────
 
+function sameDay(a: Date, b: Date): boolean {
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+}
+
 export function categorizeReminders(
   reminders: GeneratedReminder[], sentConfigIds: Set<string>, now: Date,
 ): { ready: GeneratedReminder[]; future: GeneratedReminder[] } {
@@ -335,7 +527,11 @@ export function categorizeReminders(
   for (const r of reminders) {
     if (sentConfigIds.has(r.customerId + "-" + r.configId)) continue;
     const triggerDate = calcTriggerForCategory(r.config, r);
-    if (triggerDate && triggerDate > now) future.push(r);
+    if (!triggerDate) { ready.push(r); continue; }
+    // Compare calendar dates only (ignore time-of-day) to avoid timezone issues
+    const triggerDay = new Date(triggerDate.getFullYear(), triggerDate.getMonth(), triggerDate.getDate());
+    const nowDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    if (triggerDay > nowDay) future.push(r);
     else ready.push(r);
   }
   return { ready, future };
@@ -347,6 +543,12 @@ function calcTriggerForCategory(config: ReminderConfig, reminder: GeneratedRemin
   }
   if (config.anchor === "before_due" && reminder.dueDate) {
     const d = new Date(reminder.dueDate); d.setDate(d.getDate() - config.startDays); return d;
+  }
+  if (config.anchor === "before_harvest" && reminder.triggerDate) {
+    return new Date(reminder.triggerDate);
+  }
+  if (config.anchor === "after_credit" && reminder.triggerDate) {
+    return new Date(reminder.triggerDate);
   }
   return null;
 }

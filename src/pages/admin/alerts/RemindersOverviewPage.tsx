@@ -1,21 +1,36 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
-import { useCustomersStore } from "@/stores/customersStore";
+import { useCustomersStore, type CreditLimitRequest } from "@/stores/customersStore";
 import { useSalesStore } from "@/stores/salesStore";
+import { useProductsStore } from "@/stores/productsStore";
 import { useThemeStore } from "@/stores/themeStore";
 import { formatCurrency } from "@/lib/formatters";
 import { useT } from "@/lib/i18n";
-import { generateReminders, generateReminderMessage } from "@/lib/reminderEngine";
+import { generateReminders, generateReminderMessage, calculatePaymentStatus } from "@/lib/reminderEngine";
 import type { GeneratedReminder } from "@/types";
-import { MessageCircle, Smartphone, X, ChevronDown, ChevronUp, Bell, CheckCircle2, Clock } from "lucide-react";
+import { MessageCircle, Smartphone, X, ChevronDown, ChevronUp, Bell, CheckCircle2, Clock, AlertTriangle, AlertOctagon, Info, Plus, Users, Trash2, Eye, Send } from "lucide-react";
+import GroupReminderSheet from "@/components/ui/GroupReminderSheet";
+import {
+  saveLocalGroup,
+  loadLocalGroups,
+  deleteLocalGroup,
+  type LocalGroupEntry,
+} from "@/lib/localGroupRegistry";
+import {
+  getCreditRequests,
+  approveCreditRequest,
+  rejectCreditRequest,
+  type LocalCreditRequest,
+} from "@/lib/localGroupRegistry";
 
 /* ── Types ── */
 interface ReminderLogEntry {
   id: string;
   customerId: string;
   customerName?: string;
+  configId?: string;
   type: "gentle" | "firmer" | "final";
   message: string;
   channel: string;
@@ -31,27 +46,13 @@ async function loadAllReminderLogs(): Promise<ReminderLogEntry[]> {
       id: r.id,
       customerId: r.customer_id,
       customerName: r.customer_name,
+      configId: r.config_id,
       type: r.tone,
       message: r.message,
       channel: r.channel,
       sentAt: r.sent_at,
     }));
-  } catch { return getAllReminderLogsFromStorage(); }
-}
-
-function getAllReminderLogsFromStorage(): ReminderLogEntry[] {
-  const all: ReminderLogEntry[] = [];
-  for (let i = 0; i < localStorage.length; i++) {
-    const key = localStorage.key(i);
-    if (key?.startsWith("reminder_logs_")) {
-      try {
-        const logs = JSON.parse(localStorage.getItem(key) || "[]");
-        const valid = Array.isArray(logs) ? logs.filter((l: ReminderLogEntry) => l && l.id && l.sentAt) : [];
-        all.push(...valid);
-      } catch { /* skip */ }
-    }
-  }
-  return all.sort((a, b) => new Date(b.sentAt).getTime() - new Date(a.sentAt).getTime());
+  } catch { return []; }
 }
 
 async function logReminderToDb(customerId: string, customerName: string, entry: ReminderLogEntry) {
@@ -60,53 +61,36 @@ async function logReminderToDb(customerId: string, customerName: string, entry: 
     await supabase.from("reminder_logs").insert({
       customer_id: customerId,
       customer_name: customerName,
+      config_id: entry.configId || null,
       tone: entry.type,
       message: entry.message,
       channel: entry.channel,
       sent_at: entry.sentAt,
     });
-  } catch { /* fallback to localStorage */
-    const raw = localStorage.getItem("reminder_logs_" + customerId);
-    const logs = raw ? JSON.parse(raw) : [];
-    logs.unshift(entry);
-    localStorage.setItem("reminder_logs_" + customerId, JSON.stringify(logs));
-  }
+  } catch {}
 }
 
-/* ── Tone config using brand palette ── */
-const TONE_CONFIG: Record<string, { color: string; bg: string; label: string }> = {
-  gentle: { color: "var(--brand-dark, #65a30d)", bg: "var(--brand-light, #d9f99d)", label: "Gentle" },
-  firmer: { color: "#b45309", bg: "#fef3c7", label: "Firmer" },
-  final:  { color: "#dc2626", bg: "#fee2e2", label: "Final" },
+/* ── Tone config ── */
+const TONE_CONFIG: Record<string, { color: string; bg: string; labelKey: string }> = {
+  gentle: { color: "var(--brand-dark, #65a30d)", bg: "var(--brand-light, #d9f99d)", labelKey: "reminders.gentle" },
+  firmer: { color: "#b45309", bg: "#fef3c7", labelKey: "reminders.formal" },
+  final:  { color: "#dc2626", bg: "#fee2e2", labelKey: "reminders.final" },
 };
 
-const TAB_CONFIG = [
-  { key: "ready", labelKey: "common.readyToSend" as const, icon: MessageCircle },
-  { key: "future", labelKey: "common.futureReady" as const, icon: Clock },
-  { key: "sent", labelKey: "common.recentlySent" as const, icon: CheckCircle2 },
-] as const;
-
-type TabKey = typeof TAB_CONFIG[number]["key"];
-
-/* ── Helper: get initials ── */
+/* ── Helpers ── */
 function getInitials(name: string | undefined): string {
   const n = name || "U";
   return n.split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2);
 }
 
-/* ── Helper: get avatar color based on name hash ── */
 function getAvatarColor(name: string | undefined): string {
-  const colors = [
-    "#65a30d", "#2563eb", "#7c3aed", "#db2777", "#ea580c",
-    "#0891b2", "#4f46e5", "#16a34a", "#9333ea", "#dc2626",
-  ];
+  const colors = ["#3f6212","#2563eb","#7c3aed","#db2777","#ea580c","#0891b2","#4f46e5","#16a34a","#9333ea","#dc2626"];
   const n = name || "U";
   let hash = 0;
   for (let i = 0; i < n.length; i++) hash = n.charCodeAt(i) + ((hash << 5) - hash);
   return colors[Math.abs(hash) % colors.length];
 }
 
-/* ── Helper: relative time ── */
 function timeAgo(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime();
   const mins = Math.floor(diff / 60000);
@@ -118,156 +102,147 @@ function timeAgo(dateStr: string): string {
   return days + "d ago";
 }
 
-/* ── Reminder card (collapsible) ── */
+/* ── Alert card for Action Needed — matches homepage Quick Alerts style ── */
+function AlertCard({
+  icon,
+  title,
+  subtitle,
+  actionLabel,
+  cardBg,
+  iconBg,
+  iconColor,
+  onClick,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  subtitle: string;
+  actionLabel: string;
+  cardBg: string;
+  iconBg: string;
+  iconColor: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className="w-full rounded-[14px] p-4 flex items-start gap-3 text-start transition-opacity active:opacity-70"
+      style={{ background: cardBg }}
+    >
+      <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 mt-0.5" style={{ background: iconBg, color: iconColor }}>
+        {icon}
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-[14px] font-bold" style={{ color: "var(--text-primary)" }}>{title}</p>
+        <p className="text-[12px] mt-1 leading-relaxed" style={{ color: "var(--text-secondary)" }}>{subtitle}</p>
+      </div>
+      <span className="text-[12px] font-bold shrink-0 mt-1" style={{ color: "var(--brand-dark, #65a30d)" }}>
+        {actionLabel}
+      </span>
+    </button>
+  );
+}
+
+/* ── Reminder card (collapsible) — for Follow-ups ── */
 function ReminderCard({
   reminder,
   onSend,
+  onNavigate,
   isSent,
-  accentColor,
+  statusKey,
 }: {
   reminder: GeneratedReminder;
   onSend: (r: GeneratedReminder) => void;
+  onNavigate: (customerId: string) => void;
   isSent: boolean;
-  accentColor: string;
+  statusKey?: string;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const t = useT();
   const tc = TONE_CONFIG[reminder.tone] || TONE_CONFIG.gentle;
 
   return (
-    <div
-      className="rounded-[16px] overflow-hidden transition-all"
-      style={{
-        background: "var(--surface)",
-        border: "1px solid var(--divider)",
-      }}
-    >
-      {/* Card header — always visible */}
-      <button
-        className="w-full flex items-center gap-3 p-4 text-start"
-        onClick={() => setExpanded(!expanded)}
-      >
-        {/* Avatar */}
-        <div
-          className="w-11 h-11 rounded-full flex items-center justify-center text-[13px] font-bold shrink-0"
-          style={{ background: getAvatarColor(reminder.customerName), color: "#fff" }}
-        >
+    <div className="overflow-hidden transition-all" style={{ borderBottom: "1px solid var(--divider)" }}>
+      <button className="w-full flex items-center gap-3 p-4 text-start" onClick={() => setExpanded(!expanded)}>
+        <div className="w-11 h-11 rounded-full flex items-center justify-center text-[13px] font-bold shrink-0" style={{ background: getAvatarColor(reminder.customerName), color: "#fff" }}>
           {getInitials(reminder.customerName)}
         </div>
-
-        {/* Info */}
         <div className="flex-1 min-w-0">
-          <p className="text-[15px] font-semibold truncate" style={{ color: "var(--text-primary)" }}>
-            {reminder.customerName}
-          </p>
+          <p className="text-[15px] font-semibold truncate" style={{ color: "var(--text-primary)" }}>{reminder.customerName}</p>
           <p className="text-[13px] mt-0.5" style={{ color: "var(--text-secondary)" }}>
-            {formatCurrency(reminder.outstanding)} outstanding
+            {formatCurrency(reminder.outstanding)} {t("reminders.outstanding")}
           </p>
         </div>
-
-        {/* Chevron */}
         <div className="shrink-0 ms-1">
-          {expanded ? (
-            <ChevronUp size={18} style={{ color: "var(--text-secondary)" }} />
-          ) : (
-            <ChevronDown size={18} style={{ color: "var(--text-secondary)" }} />
-          )}
+          {expanded ? <ChevronUp size={18} style={{ color: "var(--text-secondary)" }} /> : <ChevronDown size={18} style={{ color: "var(--text-secondary)" }} />}
         </div>
       </button>
 
-      {/* Tags row — below header */}
-      <div className="px-4 pb-3 flex items-center gap-2 flex-wrap">
-        <span
-          className="text-[11px] font-bold px-2.5 py-1 rounded-full"
-          style={{ background: tc.bg, color: tc.color }}
-        >
-          {tc.label}
+      <div className="px-4 pb-3 pt-0 flex items-center gap-2 flex-wrap">
+        <span className="text-[11px] font-bold px-2.5 py-1 rounded-full" style={{ background: tc.bg, color: tc.color }}>
+          {t(tc.labelKey as any)}
         </span>
         {isSent ? (
-          <span
-            className="text-[11px] font-bold px-2.5 py-1 rounded-full"
-            style={{ background: "var(--brand-light, #d9f99d)", color: "var(--brand-dark, #65a30d)" }}
-          >
-            Sent
+          <span className="text-[11px] font-bold px-2.5 py-1 rounded-full" style={{ background: "var(--brand-light, #d9f99d)", color: "var(--brand-dark, #65a30d)" }}>
+            {t("reminders.sent")}
           </span>
         ) : (
-          <span
-            className="text-[11px] font-bold px-2.5 py-1 rounded-full"
-            style={{ background: "var(--surface-2)", color: "var(--text-secondary)" }}
-          >
-            Ready to Send
+          <span className="text-[11px] font-bold px-2.5 py-1 rounded-full" style={{ background: "var(--surface-2)", color: "var(--text-secondary)" }}>
+            {t(statusKey || "reminders.readyToSend")}
           </span>
         )}
-        <span className="text-[11px]" style={{ color: "var(--text-secondary)" }}>
-          {reminder.triggerDetail}
-        </span>
+        <span className="text-[11px]" style={{ color: "var(--text-secondary)" }}>{reminder.triggerDetail}</span>
       </div>
 
-      {/* Expanded — message + buttons */}
       {expanded && (
         <div className="px-4 pb-4 flex flex-col gap-3" style={{ borderTop: "1px solid var(--divider)" }}>
-          <p className="text-[10px] font-bold uppercase tracking-wider pt-3" style={{ color: "var(--text-secondary)" }}>
-            Message — Editable
-          </p>
-          <div
-            className="rounded-[14px] px-4 py-3"
-            style={{ background: "var(--surface-2)", border: "1px solid var(--divider)" }}
-          >
-            <p className="text-[13px] leading-relaxed" style={{ color: "var(--text-primary)" }}>
-              {generateReminderMessage(reminder)}
-            </p>
+          <p className="text-[10px] font-bold uppercase tracking-wider pt-3" style={{ color: "var(--text-secondary)" }}>Message</p>
+          <div className="rounded-[10px] px-3 py-2.5" style={{ background: "var(--surface-2)" }}>
+            <p className="text-[13px] leading-relaxed" style={{ color: "var(--text-primary)" }}>{generateReminderMessage(reminder)}</p>
           </div>
           <div className="flex gap-3">
-            <button
-              onClick={(e) => { e.stopPropagation(); onSend(reminder); }}
-              className="flex-1 h-12 rounded-full text-[14px] font-bold flex items-center justify-center gap-2"
-              style={{ background: "#25D366", color: "#fff" }}
-            >
+            <button onClick={(e) => { e.stopPropagation(); onSend(reminder); }} className="flex-1 h-12 rounded-full text-[14px] font-bold flex items-center justify-center gap-2" style={{ background: "#25D366", color: "#fff" }}>
               <MessageCircle size={18} /> WhatsApp
             </button>
-            <button
-              onClick={(e) => { e.stopPropagation(); onSend(reminder); }}
-              className="flex-1 h-12 rounded-full text-[14px] font-bold flex items-center justify-center gap-2"
-              style={{ background: "var(--text-primary)", color: "var(--background)" }}
-            >
+            <button onClick={(e) => { e.stopPropagation(); onSend(reminder); }} className="flex-1 h-12 rounded-full text-[14px] font-bold flex items-center justify-center gap-2" style={{ background: "var(--text-primary)", color: "var(--background)" }}>
               <Smartphone size={18} /> SMS
             </button>
           </div>
+          <button onClick={(e) => { e.stopPropagation(); onNavigate(reminder.customerId); }} className="w-full h-10 rounded-full text-[13px] font-semibold flex items-center justify-center gap-2" style={{ background: "var(--surface-2)", color: "var(--text-secondary)" }}>
+            {t("reminders.viewCustomer")}
+          </button>
         </div>
       )}
     </div>
   );
 }
 
-/* ── Activity item ── */
+/* ── Activity item for Sent ── */
 function ActivityItem({ log }: { log: ReminderLogEntry }) {
+  const t = useT();
   const tc = TONE_CONFIG[log.type] || TONE_CONFIG.gentle;
   const channel = (log.channel || "sent").toUpperCase();
   const name = log.customerName || "Customer";
   return (
-    <div
-      className="flex items-center gap-3 p-3 rounded-[12px]"
-      style={{ borderBottom: "1px solid var(--divider)" }}
-    >
-      <div
-        className="w-9 h-9 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0"
-        style={{ background: getAvatarColor(name), color: "#fff" }}
-      >
+    <div className="flex items-center gap-3 px-4 py-3" style={{ borderBottom: "1px solid var(--divider)" }}>
+      <div className="w-9 h-9 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0" style={{ background: getAvatarColor(name), color: "#fff" }}>
         {getInitials(name)}
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-[14px] font-medium" style={{ color: "var(--text-primary)" }}>
-          {name}
-        </p>
-        <p className="text-[12px]" style={{ color: "var(--text-secondary)" }}>
-          {tc.label} · {channel} · {timeAgo(log.sentAt)}
-        </p>
+        <p className="text-[14px] font-medium" style={{ color: "var(--text-primary)" }}>{name}</p>
+        <p className="text-[12px]" style={{ color: "var(--text-secondary)" }}>{t(tc.labelKey as any)} · {channel} · {timeAgo(log.sentAt)}</p>
       </div>
-      <span
-        className="text-[11px] font-bold px-2.5 py-1 rounded-full shrink-0"
-        style={{ background: "var(--brand-light, #d9f99d)", color: "var(--brand-dark, #65a30d)" }}
-      >
-        Sent
-      </span>
+      <span className="text-[11px] font-bold px-2.5 py-1 rounded-full shrink-0" style={{ background: "var(--brand-light, #d9f99d)", color: "var(--brand-dark, #65a30d)" }}>Sent</span>
+    </div>
+  );
+}
+
+/* ── EmptyState ── */
+function EmptyState({ icon, title, subtitle }: { icon: React.ReactNode; title: string; subtitle: string }) {
+  return (
+    <div className="py-10 flex flex-col items-center gap-2">
+      <div className="mb-1" style={{ color: "var(--text-secondary)", opacity: 0.5 }}>{icon}</div>
+      <p className="text-[13px] font-medium" style={{ color: "var(--text-primary)" }}>{title}</p>
+      <p className="text-[12px] text-center px-6" style={{ color: "var(--text-secondary)" }}>{subtitle}</p>
     </div>
   );
 }
@@ -275,57 +250,127 @@ function ActivityItem({ log }: { log: ReminderLogEntry }) {
 /* ── Main page ── */
 export default function RemindersOverviewPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const t = useT();
+  const navigateToCustomer = (customerId: string) => navigate(`/admin/customers/${customerId}`);
   const { language } = useThemeStore();
   const isUrdu = language === "ur";
   const customers = useCustomersStore((s) => s.customers);
   const sales = useSalesStore((s) => s.sales);
+  const products = useProductsStore((s) => s.products);
 
-  
+  /* ── Data ── */
   const [allReminders, setAllReminders] = useState<any[]>([]);
-  useEffect(() => {
-    generateReminders({ customers, sales }).then(setAllReminders);
-  }, [customers, sales]);
+  const [showGroupSheet, setShowGroupSheet] = useState(false);
+  const [reminderGroups, setReminderGroups] = useState<any[]>([]);
+  const [creditRequests, setCreditRequests] = useState<LocalCreditRequest[]>([]);
 
-  const [activeTab, setActiveTab] = useState<TabKey>("ready");
+  useEffect(() => {
+    generateReminders({ customers, sales, t }).then(setAllReminders);
+  }, [customers, sales]);
+  useEffect(() => {
+    loadLocalGroups().then(setReminderGroups);
+    setCreditRequests(getCreditRequests());
+  }, []);
+  // Refresh credit requests on mount and periodically
+  useEffect(() => {
+    const refresh = () => setCreditRequests(getCreditRequests());
+    refresh();
+    const timer = setInterval(refresh, 5000);
+    return () => clearInterval(timer);
+  }, []);
+
+  /* ── Tab State ── */
+  const stateTab = (location.state as any)?.tab as string | undefined;
+  const stateSubTab = (location.state as any)?.subTab as string | undefined;
+  const [mainTab, setMainTab] = useState<"action" | "followups" | "groups">(
+    stateTab === "followups" ? "followups" : stateTab === "groups" ? "groups" : "action"
+  );
+  const [subTab, setSubTab] = useState<string>(
+    stateSubTab || (stateTab === "followups" ? "ready" : stateTab === "groups" ? "" : "urgent")
+  );
+
+  useEffect(() => {
+    const t = (location.state as any)?.tab as string | undefined;
+    const s = (location.state as any)?.subTab as string | undefined;
+    if (t === "followups") { setMainTab("followups"); if (s) setSubTab(s); }
+    else if (t === "groups") { setMainTab("groups"); setSubTab(""); }
+    else if (t === "action") { setMainTab("action"); if (s) setSubTab(s); }
+  }, [location.state]);
+
   const [editingReminder, setEditingReminder] = useState<GeneratedReminder | null>(null);
   const [editMessage, setEditMessage] = useState("");
   const [sentKeys, setSentKeys] = useState<Set<string>>(new Set());
   const [allLogs, setAllLogs] = useState<ReminderLogEntry[]>([]);
-  useEffect(() => { loadAllReminderLogs().then(setAllLogs); }, []);
+  const [creditAction, setCreditAction] = useState<{ request: LocalCreditRequest; action: "approve" | "reject" } | null>(null);
 
-  // Refresh logs periodically
+  useEffect(() => { loadAllReminderLogs().then(setAllLogs); }, []);
   useEffect(() => {
     const timer = setInterval(() => loadAllReminderLogs().then(setAllLogs), 10000);
     return () => clearInterval(timer);
   }, []);
 
-  // Lock background scroll when bottom sheet open
   useEffect(() => {
-    if (editingReminder) {
-      document.body.style.overflow = "hidden";
-    } else {
-      document.body.style.overflow = "";
-    }
+    if (editingReminder) { document.body.style.overflow = "hidden"; } else { document.body.style.overflow = ""; }
     return () => { document.body.style.overflow = ""; };
   }, [editingReminder]);
 
-  // Filter reminders into tabs
   const now = new Date();
-  const readyReminders = useMemo(() => {
-    return allReminders.filter(r => !sentKeys.has(r.customerId + "-sent") && new Date(r.triggerDate) <= now);
-  }, [allReminders, sentKeys]);
 
-  const futureReminders = useMemo(() => {
-    return allReminders.filter(r => !sentKeys.has(r.customerId + "-sent") && new Date(r.triggerDate) > now);
-  }, [allReminders, sentKeys]);
+  /* ── Action Needed categories ── */
+  const highRiskCustomers = useMemo(() =>
+    customers.filter(c => c.outstandingBalance > 0 && calculatePaymentStatus(c, now) === "high_risk"),
+  [customers]);
+
+  const delayedCustomers = useMemo(() =>
+    customers.filter(c => c.outstandingBalance > 0 && calculatePaymentStatus(c, now) === "delayed"),
+  [customers]);
+
+  const creditLimitCustomers = useMemo(() =>
+    customers.filter(c => c.outstandingBalance > 0 && c.creditLimit > 0 && c.outstandingBalance >= c.creditLimit),
+  [customers]);
+
+  const lowStockProducts = useMemo(() =>
+    products.filter(p => p.stockQty <= (p.variants?.[0]?.lowStockThreshold ?? 5)),
+  [products]);
+
+  /* ── Follow-ups categories ── */
+  const readyReminders = useMemo(() =>
+    allReminders.filter(r => !sentKeys.has(r.customerId + "-sent") && new Date(r.triggerDate) <= now),
+  [allReminders, sentKeys]);
+
+  const upcomingReminders = useMemo(() =>
+    allReminders.filter(r => !sentKeys.has(r.customerId + "-sent") && new Date(r.triggerDate) > now),
+  [allReminders, sentKeys]);
 
   const sentLogs = useMemo(() => allLogs, [allLogs]);
 
-  const configuredCount = useMemo(() => {
-    const unique = new Set(allReminders.map(r => r.customerId));
-    return unique.size;
-  }, [allReminders]);
+  const mediumCount = useMemo(() => {
+    const ids = new Set<string>();
+    delayedCustomers.forEach(c => ids.add(c.id));
+    creditLimitCustomers.forEach(c => ids.add(c.id));
+    return ids.size;
+  }, [delayedCustomers, creditLimitCustomers]);
+
+  const pendingCreditRequests = useMemo(() =>
+    creditRequests.filter(r => r.status === "pending"),
+  [creditRequests]);
+
+  /* ── Sub-tabs ── */
+  const actionSubTabs = [
+    { key: "urgent", label: isUrdu ? "انتہائی فوری" : "Highly Urgent", count: highRiskCustomers.length, color: "#dc2626" },
+    { key: "medium", label: isUrdu ? "درمیانہ" : "Medium", count: mediumCount, color: "#d97706" },
+    { key: "normal", label: isUrdu ? "نارمل" : "Normal", count: lowStockProducts.length, color: "var(--brand-dark, #65a30d)" },
+    { key: "credit_approval", label: isUrdu ? "کریڈٹ" : "Credit", count: pendingCreditRequests.length, color: "#7c3aed" },
+  ];
+
+  const followupSubTabs = [
+    { key: "ready", label: isUrdu ? "تیار" : "Ready", count: readyReminders.length, color: "var(--brand-dark, #65a30d)" },
+    { key: "upcoming", label: isUrdu ? "آنے والے" : "Upcoming", count: upcomingReminders.length, color: "#2563eb" },
+    { key: "recently_sent", label: isUrdu ? "حالیہ" : "Recently Sent", count: sentLogs.length, color: "var(--text-secondary)" },
+  ];
+
+  const currentSubTabs = mainTab === "action" ? actionSubTabs : mainTab === "followups" ? followupSubTabs : [];
 
   function openSendSheet(reminder: GeneratedReminder) {
     setEditingReminder(reminder);
@@ -349,6 +394,7 @@ export default function RemindersOverviewPage() {
       id: "rem-" + Date.now(),
       customerId: editingReminder.customerId,
       customerName: editingReminder.customerName,
+      configId: editingReminder.configId,
       type: editingReminder.tone,
       message: editMessage,
       channel,
@@ -357,123 +403,275 @@ export default function RemindersOverviewPage() {
     setEditingReminder(null);
   }, [editingReminder, editMessage]);
 
-  function renderTabContent() {
-    switch (activeTab) {
+  /* ── Credit request actions ── */
+  const handleCreditAction = useCallback(async () => {
+    if (!creditAction) return;
+    try {
+      if (creditAction.action === "approve") {
+        await approveCreditRequest(creditAction.request.id, "Admin");
+      } else {
+        await rejectCreditRequest(creditAction.request.id, "Admin");
+      }
+      setCreditRequests(getCreditRequests());
+      setCreditAction(null);
+    } catch (err) {
+      console.error("Credit action failed:", err);
+    }
+  }, [creditAction]);
+
+  /* ── Render action needed ── */
+  function renderActionContent() {
+    switch (subTab) {
+      case "urgent":
+        return highRiskCustomers.length === 0 ? (
+          <EmptyState icon={<AlertOctagon size={24} style={{ color: "var(--text-secondary)" }} />} title={isUrdu ? "کوئی فوری کارروئی نہیں" : "No urgent actions"} subtitle={isUrdu ? "کوئی گاہک 31+ دن سے وقف نہیں۔" : "No customers are 31+ days overdue."} />
+        ) : (
+          <div className="flex flex-col gap-2.5">
+            {highRiskCustomers.map(c => (
+              <AlertCard
+                key={c.id}
+                icon={<AlertOctagon size={16} />}
+                title={c.name}
+                subtitle={`${formatCurrency(c.outstandingBalance)} ${isUrdu ? "واجب الادا" : "overdue"} · ${isUrdu ? "وقف" : "Due"}: ${c.dueDate ? new Date(c.dueDate).toLocaleDateString() : "—"}`}
+                actionLabel={isUrdu ? "جائزہ" : "Review"}
+                cardBg="rgba(220, 38, 38, 0.06)"
+                iconBg="rgba(220, 38, 38, 0.1)"
+                iconColor="#dc2626"
+                onClick={() => navigateToCustomer(c.id)}
+              />
+            ))}
+          </div>
+        );
+      case "medium":
+        const mediumMap = new Map<string, { id: string; name: string; balance: number; tag: string; detail: string }>();
+        delayedCustomers.forEach(c => mediumMap.set(c.id, { id: c.id, name: c.name, balance: c.outstandingBalance, tag: isUrdu ? "ڈیلےڈ" : "Delayed", detail: `${isUrdu ? "وقف" : "Due"}: ${c.dueDate ? new Date(c.dueDate).toLocaleDateString() : "—"}` }));
+        creditLimitCustomers.forEach(c => { if (!mediumMap.has(c.id)) mediumMap.set(c.id, { id: c.id, name: c.name, balance: c.outstandingBalance, tag: isUrdu ? "کریڈٹ حد" : "Credit Limit", detail: `${isUrdu ? "حد" : "Limit"}: ${formatCurrency(c.creditLimit)}` }); });
+        const mediumItems = Array.from(mediumMap.values());
+        return mediumItems.length === 0 ? (
+          <EmptyState icon={<AlertTriangle size={24} style={{ color: "var(--text-secondary)" }} />} title={isUrdu ? "کوئی درمیانہ کارروئی نہیں" : "No medium actions"} subtitle={isUrdu ? "سب کچھ ٹھیک چل رہا ہے۔" : "Everything looks fine."} />
+        ) : (
+          <div className="flex flex-col gap-2.5">
+            {mediumItems.map(item => (
+              <AlertCard
+                key={item.id}
+                icon={<AlertTriangle size={16} />}
+                title={item.name}
+                subtitle={`${formatCurrency(item.balance)} ${isUrdu ? "واجب الادا" : "outstanding"} · ${item.detail}`}
+                actionLabel={isUrdu ? "جائزہ" : "Review"}
+                cardBg="rgba(217, 119, 6, 0.06)"
+                iconBg="rgba(217, 119, 6, 0.1)"
+                iconColor="#d97706"
+                onClick={() => navigateToCustomer(item.id)}
+              />
+            ))}
+          </div>
+        );
+      case "normal":
+        return lowStockProducts.length === 0 ? (
+          <EmptyState icon={<Info size={24} style={{ color: "var(--text-secondary)" }} />} title={isUrdu ? "کوئی نارمل اعلان نہیں" : "No normal alerts"} subtitle={isUrdu ? "اسٹاک مناسب ہے۔" : "Stock levels are fine."} />
+        ) : (
+          <div className="flex flex-col gap-2.5">
+            {lowStockProducts.map(p => (
+              <AlertCard
+                key={p.id}
+                icon={<Info size={16} />}
+                title={p.name}
+                subtitle={`${p.stockQty} ${isUrdu ? "باقی" : "remaining"} · ${isUrdu ? "کل" : "Total"}: ${p.stockQty}`}
+                actionLabel={isUrdu ? "دیکھیں" : "View"}
+                cardBg="var(--surface-2)"
+                iconBg="rgba(101, 163, 13, 0.1)"
+                iconColor="var(--brand-dark, #65a30d)"
+                onClick={() => navigate(`/admin/products/${p.id}`)}
+              />
+            ))}
+          </div>
+        );
+      case "credit_approval":
+        return pendingCreditRequests.length === 0 ? (
+          <EmptyState icon={<CheckCircle2 size={24} style={{ color: "var(--text-secondary)" }} />} title={isUrdu ? "کوئی درخواست نہیں" : "No pending requests"} subtitle={isUrdu ? "کوئی کریڈٹ حد بڑھانے کی درخواست زیر جائزہ نہیں۔" : "No credit limit increase requests pending."} />
+        ) : (
+          <div className="flex flex-col gap-2.5">
+            {pendingCreditRequests.map(req => (
+              <AlertCard
+                key={req.id}
+                icon={<AlertTriangle size={16} />}
+                title={req.customerName}
+                subtitle={`${isUrdu ? "موجودہ" : "Current"}: ${formatCurrency(req.currentLimit)} → ${formatCurrency(req.requestedLimit)} · ${isUrdu ? "درخواست" : "By"}: ${req.requestedBy}`}
+                actionLabel={isUrdu ? "جائزہ" : "Review"}
+                cardBg="rgba(124, 58, 237, 0.06)"
+                iconBg="rgba(124, 58, 237, 0.1)"
+                iconColor="#7c3aed"
+                onClick={() => navigate(`/admin/alerts/credit-requests/${req.id}`)}
+              />
+            ))}
+          </div>
+        );
+      default:
+        return null;
+    }
+  }
+
+  /* ── Render follow-ups ── */
+  function renderFollowupsContent() {
+    switch (subTab) {
       case "ready":
         return readyReminders.length === 0 ? (
-          <EmptyState
-            icon={<CheckCircle2 size={24} style={{ color: "var(--text-secondary)" }} />}
-            title="All caught up"
-            subtitle="No reminders are due right now. They'll appear here when trigger conditions are met."
-          />
-        ) : (
-          <div className="flex flex-col gap-2.5">
-            {readyReminders.map((r, i) => (
-              <ReminderCard
-                key={i}
-                reminder={r}
-                onSend={openSendSheet}
-                isSent={false}
-                accentColor="var(--brand)"
-              />
-            ))}
-          </div>
-        );
-
-      case "future":
-        return futureReminders.length === 0 ? (
-          <EmptyState
-            icon={<Clock size={24} style={{ color: "var(--text-secondary)" }} />}
-            title="No future reminders"
-            subtitle="Configure reminder schedules on customer profiles to see upcoming reminders here."
-          />
-        ) : (
-          <div className="flex flex-col gap-2.5">
-            {futureReminders.map((r, i) => (
-              <ReminderCard
-                key={i}
-                reminder={r}
-                onSend={openSendSheet}
-                isSent={false}
-                accentColor="var(--brand)"
-              />
-            ))}
-          </div>
-        );
-
-      case "sent":
-        return sentLogs.length === 0 ? (
-          <EmptyState
-            icon={<Bell size={24} style={{ color: "var(--text-secondary)" }} />}
-            title="No sent reminders yet"
-            subtitle="Reminders you send will appear here with full details."
-          />
+          <EmptyState icon={<CheckCircle2 size={24} style={{ color: "var(--text-secondary)" }} />} title={isUrdu ? "سب ہو گیا" : "All caught up"} subtitle={isUrdu ? "کوئی یاد دہانی فی الحال ضروری نہیں۔" : "No reminders are due right now."} />
         ) : (
           <div className="flex flex-col">
+            {readyReminders.map((r, i) => (
+              <ReminderCard key={i} reminder={r} onSend={openSendSheet} onNavigate={navigateToCustomer} isSent={false} statusKey="reminders.readyToSend" />
+            ))}
+          </div>
+        );
+      case "upcoming":
+        return upcomingReminders.length === 0 ? (
+          <EmptyState icon={<Clock size={24} style={{ color: "var(--text-secondary)" }} />} title={isUrdu ? "کوئی آنے والی یاد دہانی نہیں" : "No upcoming reminders"} subtitle={isUrdu ? "گاہک پروفائلز پر یاد دہانی کی ترتیب دیں۔" : "Configure reminder schedules on customer profiles."} />
+        ) : (
+          <div className="flex flex-col">
+            {upcomingReminders.map((r, i) => (
+              <ReminderCard key={i} reminder={r} onSend={openSendSheet} onNavigate={navigateToCustomer} isSent={false} statusKey="reminders.futureReady" />
+            ))}
+          </div>
+        );
+      case "recently_sent":
+        return sentLogs.length === 0 ? (
+          <EmptyState icon={<CheckCircle2 size={24} style={{ color: "var(--text-secondary)" }} />} title={isUrdu ? "ابھی تک کچھ نہیں بھیجا" : "Nothing sent yet"} subtitle={isUrdu ? "پہلی یاد دہانی بھیجنے کے بعد یہاں نظر آئے گی۔" : "Sent reminders will appear here after you send them."} />
+        ) : (
+          <div>
             {sentLogs.map((log, i) => (
               <ActivityItem key={log.id || i} log={log} />
             ))}
           </div>
         );
+      default:
+        return null;
+    }
+  }
+
+  /* ── Render group reminder tab ── */
+  function renderGroupsContent() {
+    return (
+      <div className="flex flex-col">
+        {reminderGroups.length === 0 ? (
+          <div className="flex flex-col items-center gap-3">
+            <EmptyState
+              icon={<Users size={24} style={{ color: "var(--text-secondary)" }} />}
+              title={isUrdu ? "کوئی گروپ نہیں" : "No groups yet"}
+              subtitle={isUrdu ? "گروپ یاد دہانی بنائیں تاکہ متعدد گاہکوں کو ایک ساتھ شامل کیا جا سکے۔" : "Create a group reminder to manage multiple customers together."}
+            />
+            <button
+              onClick={() => setShowGroupSheet(true)}
+              className="flex items-center justify-center gap-2 h-11 rounded-full text-[13px] font-bold transition-transform active:scale-[0.97]"
+              style={{ background: "var(--brand)", color: "#0a0a0a" }}
+            >
+              <Plus size={15} /> {isUrdu ? "گروپ یاد دہانی بنائیں" : "Create Group Reminder"}
+            </button>
+          </div>
+        ) : (
+          <div>
+            {reminderGroups.map((group) => (
+              <button
+                key={group.id}
+                onClick={() => navigate(`/admin/alerts/groups/${group.id}`)}
+                className="w-full px-4 py-3.5 flex items-center gap-3 text-start transition-opacity active:opacity-70"
+                style={{ borderBottom: "1px solid var(--divider)" }}
+              >
+                <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0" style={{ background: "#ede9fe", color: "#7c3aed" }}>
+                  <Users size={18} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[14px] font-semibold truncate" style={{ color: "var(--text-primary)" }}>{group.name}</p>
+                  <p className="text-[12px] mt-0.5" style={{ color: "var(--text-secondary)" }}>
+                    {group.customerCount} {isUrdu ? "گاہک" : "customers"} · {group.config?.anchor === "before_due" ? `${group.config.startDays}d ${isUrdu ? "قبل از وقف" : "before due"}` : group.config?.anchor === "before_harvest" ? `${group.config.startDays}d ${isUrdu ? "قبل از کٹائی" : "before harvest"}` : "—"}
+                  </p>
+                </div>
+                <ChevronDown size={16} style={{ color: "var(--text-secondary)", transform: "rotate(-90deg)" }} />
+              </button>
+            ))}
+            {/* Create button below groups list */}
+            <div className="px-4 pt-4">
+              <button
+                onClick={() => setShowGroupSheet(true)}
+                className="flex items-center justify-center gap-2 h-11 w-full rounded-full text-[13px] font-bold transition-transform active:scale-[0.97]"
+                style={{ background: "var(--brand)", color: "#0a0a0a" }}
+              >
+                <Plus size={15} /> {isUrdu ? "نیا گروپ بنائیں" : "Create New Group"}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  /* ── Tab Content Switcher ── */
+  function renderTabContent() {
+    switch (mainTab) {
+      case "action": return renderActionContent();
+      case "followups": return renderFollowupsContent();
+      case "groups": return renderGroupsContent();
+      default: return null;
     }
   }
 
   return (
-    <div
-      className="flex flex-col w-full min-h-full"
-      style={{ background: "var(--background)", direction: isUrdu ? "rtl" : "ltr" }}
-    >
+    <div className="flex flex-col w-full min-h-full" style={{ background: "var(--background)", direction: isUrdu ? "rtl" : "ltr" }}>
       <StatusBar />
-      <NavHeader title="Reminders" />
+      <NavHeader title={isUrdu ? "ایکشن سینٹر" : "Action Center"} />
 
-      <div className="flex flex-col gap-4 px-4 pt-4 pb-8">
-        {/* Summary cards */}
-        <div className="flex gap-2.5">
-          <SummaryCard
-            label="CONFIGURED"
-            value={configuredCount}
-            bg="var(--brand-light, #d9f99d)"
-            labelColor="var(--brand-dark, #65a30d)"
-            valueColor="var(--brand-dark, #65a30d)"
-          />
-          <SummaryCard
-            label="DUE NOW"
-            value={readyReminders.length}
-            bg="#fef3c7"
-            labelColor="#b45309"
-            valueColor="#b45309"
-          />
-          <SummaryCard
-            label="SENT"
-            value={sentLogs.length}
-            bg="var(--surface-2)"
-            labelColor="var(--text-secondary)"
-            valueColor="var(--text-primary)"
-          />
+      <div className="flex flex-col px-4 pt-4 pb-8 gap-4" style={{ overflowY: "auto", flex: 1 }}>
+        {/* Main tabs — 3 top-level tabs */}
+        <div className="flex items-center gap-5">
+          {([
+            { key: "action" as const, label: isUrdu ? "عمل درکار" : "Action Needed" },
+            { key: "followups" as const, label: isUrdu ? "فالو اپس" : "Follow Ups" },
+            { key: "groups" as const, label: isUrdu ? "گروپ ریمائنڈر" : "Group Reminder" },
+          ] as const).map(tab => (
+            <button
+              key={tab.key}
+              onClick={() => { setMainTab(tab.key); setSubTab(tab.key === "action" ? "urgent" : tab.key === "followups" ? "ready" : ""); }}
+              className="text-[13px] font-semibold transition-colors pb-1 whitespace-nowrap"
+              style={{
+                color: mainTab === tab.key ? "var(--text-primary)" : "var(--text-secondary)",
+                borderBottom: mainTab === tab.key ? "2px solid var(--text-primary)" : "2px solid transparent",
+              }}
+            >
+              {tab.label}
+            </button>
+          ))}
         </div>
 
-        {/* Tabs */}
-        <div className="flex gap-1 p-1 rounded-[14px]" style={{ background: "var(--surface-2)" }}>
-          {TAB_CONFIG.map(tab => {
-            const Icon = tab.icon;
-            const isActive = activeTab === tab.key;
-            return (
-              <button
-                key={tab.key}
-                onClick={() => setActiveTab(tab.key)}
-                className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-[10px] text-[12px] font-semibold transition-all"
-                style={{
-                  background: isActive ? "var(--surface)" : "transparent",
-                  color: isActive ? "var(--text-primary)" : "var(--text-secondary)",
-                  boxShadow: isActive ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
-                }}
-              >
-                <Icon size={14} />
-                {t(tab.labelKey)}
-              </button>
-            );
-          })}
-        </div>
+        {/* Sub tabs — only for Action Needed and Follow Ups */}
+        {currentSubTabs.length > 0 && (
+          <>
+            <div className="flex gap-1.5 overflow-x-auto no-scrollbar py-1">
+              {currentSubTabs.map(st => (
+                <button
+                  key={st.key}
+                  onClick={() => setSubTab(st.key)}
+                  className="flex items-center gap-1 px-3.5 py-2 rounded-full text-[12px] font-semibold whitespace-nowrap transition-all"
+                  style={{
+                    background: subTab === st.key ? st.color : "var(--surface-2)",
+                    color: subTab === st.key ? "#fff" : "var(--text-secondary)",
+                  }}
+                >
+                  {st.label}
+                  {st.count > 0 && (
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full" style={{
+                      background: subTab === st.key ? "rgba(255,255,255,0.25)" : "var(--text-secondary)",
+                      color: subTab === st.key ? "#fff" : "var(--surface-2)",
+                      lineHeight: '1',
+                      minWidth: '16px',
+                      textAlign: 'center',
+                    }}>{st.count}</span>
+                  )}
+                </button>
+              ))}
+            </div>
+            <div style={{ borderBottom: '1px solid var(--divider)', marginTop: '-4px' }} />
+          </>
+        )}
 
         {/* Tab content */}
         {renderTabContent()}
@@ -481,99 +679,42 @@ export default function RemindersOverviewPage() {
 
       {/* Send reminder bottom sheet */}
       {editingReminder && (
-        <div
-          className="fixed inset-0 z-50 flex items-end"
-          style={{ background: "rgba(0,0,0,0.5)" }}
-          onClick={() => setEditingReminder(null)}
-        >
-          <div
-            className="w-full max-w-[390px] mx-auto rounded-t-[24px] flex flex-col"
-            style={{ background: "var(--surface)", maxHeight: "85vh" }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Handle */}
+        <div className="fixed inset-0 z-50 flex items-end" style={{ background: "rgba(0,0,0,0.5)" }} onClick={() => setEditingReminder(null)}>
+          <div className="w-full max-w-[390px] mx-auto rounded-t-[24px] flex flex-col" style={{ background: "var(--surface)", maxHeight: "85vh" }} onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-center pt-3 pb-1">
               <div className="w-10 h-1 rounded-full" style={{ background: "var(--divider)" }} />
             </div>
-
-            {/* Header */}
             <div className="px-5 pb-4 flex items-center justify-between">
-              <p className="text-[16px] font-semibold" style={{ color: "var(--text-primary)" }}>
-                Send Reminder
-              </p>
-              <button
-                onClick={() => setEditingReminder(null)}
-                className="size-8 rounded-full flex items-center justify-center"
-                style={{ background: "var(--surface-2)" }}
-              >
+              <p className="text-[16px] font-semibold" style={{ color: "var(--text-primary)" }}>{isUrdu ? "یاد دہانی بھیجیں" : "Send Reminder"}</p>
+              <button onClick={() => setEditingReminder(null)} className="size-8 rounded-full flex items-center justify-center" style={{ background: "var(--surface-2)" }}>
                 <X size={16} style={{ color: "var(--text-secondary)" }} />
               </button>
             </div>
-
             <div className="px-5 pb-6 flex flex-col gap-4 overflow-y-auto" style={{ flex: 1 }}>
-              {/* Customer info */}
               <div className="flex items-center gap-3">
-                <div
-                  className="w-11 h-11 rounded-full flex items-center justify-center text-[13px] font-bold shrink-0"
-                  style={{ background: getAvatarColor(editingReminder.customerName), color: "#fff" }}
-                >
+                <div className="w-11 h-11 rounded-full flex items-center justify-center text-[13px] font-bold shrink-0" style={{ background: getAvatarColor(editingReminder.customerName), color: "#fff" }}>
                   {getInitials(editingReminder.customerName)}
                 </div>
                 <div>
-                  <p className="text-[14px] font-medium" style={{ color: "var(--text-primary)" }}>
-                    {editingReminder.customerName}
-                  </p>
-                  <p className="text-[12px]" style={{ color: "var(--text-secondary)" }}>
-                    {editingReminder.customerPhone}
-                  </p>
+                  <p className="text-[14px] font-medium" style={{ color: "var(--text-primary)" }}>{editingReminder.customerName}</p>
+                  <p className="text-[12px]" style={{ color: "var(--text-secondary)" }}>{editingReminder.customerPhone}</p>
                 </div>
               </div>
-
-              {/* Tone + trigger */}
               <div className="flex items-center gap-2">
-                <span
-                  className="text-[11px] font-bold px-2.5 py-1 rounded-full"
-                  style={{ background: TONE_CONFIG[editingReminder.tone].bg, color: TONE_CONFIG[editingReminder.tone].color }}
-                >
-                  {TONE_CONFIG[editingReminder.tone].label}
+                <span className="text-[11px] font-bold px-2.5 py-1 rounded-full" style={{ background: TONE_CONFIG[editingReminder.tone].bg, color: TONE_CONFIG[editingReminder.tone].color }}>
+                  {t(TONE_CONFIG[editingReminder.tone].labelKey as any)}
                 </span>
-                <span className="text-[11px]" style={{ color: "var(--text-secondary)" }}>
-                  {editingReminder.triggerDetail}
-                </span>
+                <span className="text-[11px]" style={{ color: "var(--text-secondary)" }}>{editingReminder.triggerDetail}</span>
               </div>
-
-              {/* Message */}
               <div>
-                <label className="text-[11px] font-semibold uppercase tracking-wider block mb-2" style={{ color: "var(--text-secondary)" }}>
-                  Message — Editable
-                </label>
-                <textarea
-                  value={editMessage}
-                  onChange={(e) => setEditMessage(e.target.value)}
-                  rows={5}
-                  className="w-full rounded-[14px] px-4 py-3 text-[13px] outline-none resize-none"
-                  style={{
-                    background: "var(--surface-2)",
-                    color: "var(--text-primary)",
-                    border: "1px solid var(--divider)",
-                  }}
-                />
+                <label className="text-[11px] font-semibold uppercase tracking-wider block mb-2" style={{ color: "var(--text-secondary)" }}>Message</label>
+                <textarea value={editMessage} onChange={(e) => setEditMessage(e.target.value)} rows={5} className="w-full rounded-[14px] px-4 py-3 text-[13px] outline-none resize-none" style={{ background: "var(--surface-2)", color: "var(--text-primary)", border: "1px solid var(--divider)" }} />
               </div>
-
-              {/* Action buttons */}
               <div className="flex gap-3">
-                <button
-                  onClick={() => handleSend("whatsapp")}
-                  className="flex-1 h-12 rounded-full text-[14px] font-bold flex items-center justify-center gap-2"
-                  style={{ background: "#25D366", color: "#fff" }}
-                >
+                <button onClick={() => handleSend("whatsapp")} className="flex-1 h-12 rounded-full text-[14px] font-bold flex items-center justify-center gap-2" style={{ background: "#25D366", color: "#fff" }}>
                   <MessageCircle size={18} /> WhatsApp
                 </button>
-                <button
-                  onClick={() => handleSend("sms")}
-                  className="flex-1 h-12 rounded-full text-[14px] font-bold flex items-center justify-center gap-2"
-                  style={{ background: "var(--text-primary)", color: "var(--background)" }}
-                >
+                <button onClick={() => handleSend("sms")} className="flex-1 h-12 rounded-full text-[14px] font-bold flex items-center justify-center gap-2" style={{ background: "var(--text-primary)", color: "var(--background)" }}>
                   <Smartphone size={18} /> SMS
                 </button>
               </div>
@@ -581,56 +722,64 @@ export default function RemindersOverviewPage() {
           </div>
         </div>
       )}
-    </div>
-  );
-}
 
-/* ── Sub-components ── */
+      {/* Group Reminder Sheet */}
+      {showGroupSheet && (
+        <GroupReminderSheet
+          onSave={async (config, customerIds, name) => {
+            try {
+              await saveLocalGroup(config, customerIds, name);
+              setShowGroupSheet(false);
+              generateReminders({ customers, sales, t }).then(setAllReminders);
+              loadLocalGroups().then(setReminderGroups);
+            } catch (err) {
+              console.error("Failed to save group:", err);
+            }
+          }}
+          onClose={() => setShowGroupSheet(false)}
+        />
+      )}
 
-function SummaryCard({
-  label,
-  value,
-  bg,
-  labelColor,
-  valueColor,
-}: {
-  label: string;
-  value: number;
-  bg: string;
-  labelColor: string;
-  valueColor: string;
-}) {
-  return (
-    <div className="flex-1 rounded-[14px] p-3.5" style={{ background: bg }}>
-      <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: labelColor }}>
-        {label}
-      </p>
-      <p className="text-[20px] font-bold mt-0.5" style={{ color: valueColor }}>
-        {value}
-      </p>
-    </div>
-  );
-}
-
-function EmptyState({
-  icon,
-  title,
-  subtitle,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  subtitle: string;
-}) {
-  return (
-    <div
-      className="rounded-[14px] p-8 flex flex-col items-center gap-3"
-      style={{ border: "1px solid var(--divider)" }}
-    >
-      <div className="size-12 rounded-full flex items-center justify-center" style={{ background: "var(--surface-2)" }}>
-        {icon}
-      </div>
-      <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>{title}</p>
-      <p className="text-xs text-center" style={{ color: "var(--text-secondary)" }}>{subtitle}</p>
+      {/* Credit Request Action Sheet */}
+      {creditAction && (
+        <div className="fixed inset-0 z-50 flex items-end" style={{ background: "rgba(0,0,0,0.5)" }} onClick={() => setCreditAction(null)}>
+          <div className="w-full max-w-[390px] mx-auto rounded-t-[24px] flex flex-col p-5 gap-4" style={{ background: "var(--surface)" }} onClick={(e) => e.stopPropagation()}>
+            <div className="flex justify-center pb-1">
+              <div className="w-10 h-1 rounded-full" style={{ background: "var(--divider)" }} />
+            </div>
+            <p className="text-[16px] font-semibold" style={{ color: "var(--text-primary)" }}>
+              {creditAction.action === "approve" ? (isUrdu ? "درخواست منظور کریں" : "Approve Request") : (isUrdu ? "درخواست رد کریں" : "Reject Request")}
+            </p>
+            <div className="rounded-[12px] p-3 text-[13px]" style={{ background: "var(--surface-2)" }}>
+              <p style={{ color: "var(--text-primary)" }} className="font-semibold">{creditAction.request.customerName}</p>
+              <p className="mt-1" style={{ color: "var(--text-secondary)" }}>
+                {isUrdu ? "موجودہ حد" : "Current"}: {formatCurrency(creditAction.request.currentLimit)} → {isUrdu ? "نئی حد" : "New"}: {formatCurrency(creditAction.request.requestedLimit)}
+              </p>
+              <p style={{ color: "var(--text-secondary)" }}>
+                {isUrdu ? "درخواست" : "By"}: {creditAction.request.requestedBy}
+              </p>
+              {creditAction.request.reason && (
+                <p className="mt-1" style={{ color: "var(--text-secondary)" }}>
+                  {isUrdu ? "وجہ" : "Reason"}: {creditAction.request.reason}
+                </p>
+              )}
+            </div>
+            <div className="flex gap-3">
+              {creditAction.action === "reject" && (
+                <button onClick={handleCreditAction} className="flex-1 h-12 rounded-full text-[14px] font-bold" style={{ background: "#dc2626", color: "#fff" }}>
+                  {isUrdu ? "رد کریں" : "Reject"}
+                </button>
+              )}
+              <button onClick={handleCreditAction} className="flex-1 h-12 rounded-full text-[14px] font-bold" style={{ background: creditAction.action === "approve" ? "var(--brand)" : "var(--surface-2)", color: creditAction.action === "approve" ? "#0a0a0a" : "var(--text-primary)" }}>
+                {creditAction.action === "approve" ? (isUrdu ? "منظور کریں" : "Approve") : (isUrdu ? "رد کریں" : "Reject")}
+              </button>
+              <button onClick={() => setCreditAction(null)} className="flex-1 h-12 rounded-full text-[14px] font-bold" style={{ background: "var(--surface-2)", color: "var(--text-secondary)" }}>
+                {isUrdu ? "منسوخ" : "Cancel"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
