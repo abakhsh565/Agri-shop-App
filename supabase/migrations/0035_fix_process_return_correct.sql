@@ -72,6 +72,11 @@ BEGIN
     END IF;
   END IF;
 
+  -- RESET after idempotency check: SELECT INTO with no rows sets variables to NULL
+  v_total_refund := 0;
+  v_return_id := NULL;
+  v_return_number := NULL;
+
   IF v_reason = '' OR v_reason IS NULL THEN
     RAISE EXCEPTION 'REASON_REQUIRED';
   END IF;
