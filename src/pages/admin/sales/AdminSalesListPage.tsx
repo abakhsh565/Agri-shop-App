@@ -106,7 +106,7 @@ export default function AdminSalesListPage() {
   const total     = filtered.reduce((s, x) => s + x.totalAmount, 0);
   const profit    = Math.round(total * 0.2);
   const paidSalesAmount = filtered.filter(s => s.paymentType === "full").reduce((s, x) => s + x.totalAmount, 0);
-  const creditSalesAmount = filtered.filter(s => s.paymentType !== "full").reduce((s, x) => s + x.totalAmount, 0);
+  const creditSalesAmount = filtered.reduce((s, x) => s + Math.max(0, x.totalAmount - x.amountPaid), 0);
 
   const DATE_FILTERS: { key: DateFilter; label: string }[] = [
     { key: "today",       label: t("sales.today") },

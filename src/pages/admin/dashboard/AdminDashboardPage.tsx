@@ -169,9 +169,7 @@ export default function AdminDashboardPage() {
   const totalSales = filtered.reduce((s, x) => s + x.totalAmount, 0);
   const txCount = filtered.length;
   const paidSales = filtered.reduce((s, x) => s + x.amountPaid, 0);
-  const creditSales = filtered
-    .filter((s) => s.paymentType !== "full")
-    .reduce((s, x) => s + x.totalAmount, 0);
+  const creditSales = filtered.reduce((s, x) => s + Math.max(0, x.totalAmount - x.amountPaid), 0);
   const grossProfit = filtered.reduce(
     (sum, sale) =>
       sum +
