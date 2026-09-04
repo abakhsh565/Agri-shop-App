@@ -14,7 +14,7 @@ export function PaymentBadge({ type, outstandingBalance }: PaymentBadgeProps) {
         className="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold uppercase whitespace-nowrap"
         style={{
           background: "rgba(132,204,22,0.15)",
-          color: "#65a30d",
+          color: "#3f6212",
           border: "1px solid rgba(132,204,22,0.35)",
         }}
       >
@@ -39,11 +39,12 @@ export function PaymentBadge({ type, outstandingBalance }: PaymentBadgeProps) {
 interface StockBadgeProps {
   status: StockStatus;
   outline?: boolean;
+  t?: (key: string) => string;
 }
 
-export function StockBadge({ status, outline }: StockBadgeProps) {
+export function StockBadge({ status, outline, t }: StockBadgeProps) {
   const color = getStockStatusColor(status);
-  const label = getStockStatusLabel(status);
+  const label = getStockStatusLabel(status, t);
 
   if (outline) {
     return (
@@ -75,7 +76,7 @@ export function CategoryChip({ label }: { label: string }) {
 
 export function CreditHealthBadge({ health }: { health: "good" | "warning" | "over_limit" }) {
   const cfg = {
-    good:       { label: "Good",       bg: "rgba(132,204,22,0.12)", color: "#65a30d", bd: "rgba(132,204,22,0.35)" },
+    good:       { label: "Good",       bg: "rgba(132,204,22,0.12)", color: "#3f6212", bd: "rgba(132,204,22,0.35)" },
     warning:    { label: "Warning",    bg: "rgba(245,158,11,0.12)", color: "#d97706", bd: "rgba(245,158,11,0.35)" },
     over_limit: { label: "Over Limit", bg: "rgba(239,68,68,0.12)",  color: "#dc2626", bd: "rgba(239,68,68,0.35)" },
   }[health];

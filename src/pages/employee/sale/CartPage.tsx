@@ -304,6 +304,7 @@ export default function CartPage() {
           <input
             type="date"
             value={dueDate}
+            min={new Date().toISOString().split('T')[0]}
             onChange={(e) => setDueDate(e.target.value)}
             className="w-full h-12 rounded-[24px] border border-[#e5e5e5] px-4 text-sm text-black outline-none"
           />

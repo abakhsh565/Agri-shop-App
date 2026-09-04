@@ -40,13 +40,13 @@ export default function ConfirmDialog({
         style={{ background: "var(--surface)", border: "1px solid var(--divider)" }}
         onClick={(e) => e.stopPropagation()}
       >
-        <p className="text-base font-bold mb-1.5" style={{ color: "var(--text-primary)" }}>{title}</p>
+        <p className="text-[15px] font-bold mb-1" style={{ color: "var(--text-primary)" }}>{title}</p>
         <p className="text-[13px] leading-relaxed mb-5" style={{ color: "var(--text-secondary)" }}>{message}</p>
         <div className="flex gap-2.5">
           <button
             onClick={onCancel}
             disabled={loading}
-            className="flex-1 h-11 rounded-full text-sm font-bold disabled:opacity-50"
+            className="flex-1 h-[44px] rounded-[12px] text-[13px] font-semibold disabled:opacity-50"
             style={{ background: "var(--surface-2)", color: "var(--text-primary)", border: "1px solid var(--divider)" }}
           >
             {cancelLabel}
@@ -54,10 +54,10 @@ export default function ConfirmDialog({
           <button
             onClick={onConfirm}
             disabled={loading}
-            className="flex-1 h-11 rounded-full text-sm font-bold disabled:opacity-50"
+            className="flex-1 h-[44px] rounded-[12px] text-[13px] font-semibold disabled:opacity-50"
             style={{
-              background: destructive ? "var(--error)" : "var(--brand)",
-              color: destructive ? "#fff" : "#0a0a0a",
+              background: destructive ? "var(--error)" : "#1a1a1a",
+              color: destructive ? "#fff" : "#fff",
             }}
           >
             {loading ? "Working…" : confirmLabel}

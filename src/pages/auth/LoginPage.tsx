@@ -50,8 +50,8 @@ export default function LoginPage() {
       <div className="flex flex-col flex-1 justify-between">
         <div className="flex flex-col gap-8 p-6">
           <div className="flex flex-col gap-2">
-            <p className="text-[28px] font-bold text-black">Welcome back</p>
-            <p className="text-sm text-[#888]">Enter your phone number to sign in</p>
+            <p className="text-[26px] font-bold" style={{ color: "var(--text-primary)" }}>Welcome back</p>
+            <p className="text-[14px]" style={{ color: "var(--text-secondary)" }}>Enter your phone number to sign in</p>
           </div>
           <div className="flex flex-col gap-4">
             <Input
@@ -64,7 +64,7 @@ export default function LoginPage() {
               autoComplete="tel"
               onKeyDown={(e) => e.key === "Enter" && handleSignIn()}
             />
-            <p className="text-xs text-[#888]">
+            <p className="text-[12px]" style={{ color: "var(--text-secondary)" }}>
               We'll text you a 6-digit verification code.
             </p>
           </div>

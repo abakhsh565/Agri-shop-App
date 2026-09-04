@@ -46,6 +46,11 @@ export default function RecordCustomerPaymentPage() {
         method,
         notes,
       });
+      // Invalidate cache so load() fetches fresh data from Supabase
+      try {
+        localStorage.removeItem("agrishop_cache_customers");
+        await useCustomersStore.getState().load();
+      } catch {}
       addToast(`${formatCurrency(paid)} recorded`, "success");
       notifyPaymentReceived(customer!.name, paid, customer!.id);
       navigate(`${base}/customers/${customerId}`, { replace: true });

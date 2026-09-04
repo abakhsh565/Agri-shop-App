@@ -79,9 +79,10 @@ export const useProductsStore = create<ProductsState>((set, get) => ({
     // Stale-while-revalidate: show cached data immediately if available
     const cached = getCachedData<Product[]>(CACHE_KEY);
     const stale = isCacheStale(CACHE_KEY);
+    const storeEmpty = get().products.length === 0;
 
-    if (cached && !stale) {
-      // Cache is fresh — use it, skip network
+    if (cached && !stale && !storeEmpty) {
+      // Cache is fresh AND store has data — use cache, skip network
       set({ products: cached, loading: false, ready: true });
       return;
     }

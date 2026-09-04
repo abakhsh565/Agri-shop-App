@@ -153,6 +153,12 @@ export async function verifyOTPAndResolveUser(
 
 // ─── Session helpers ──────────────────────────────────────────────────────────
 export async function signOut(): Promise<void> {
+  // Terminate Supabase auth session if one exists
+  try {
+    await supabase.auth.signOut();
+  } catch {
+    // Ignore — Supabase session may not exist
+  }
   window.localStorage.removeItem("agri_auth");
 }
 

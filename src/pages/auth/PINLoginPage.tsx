@@ -4,7 +4,7 @@ import AuthLayout from "@/components/layout/AuthLayout";
 import NavHeader from "@/components/ui/NavHeader";
 import PINInput from "@/components/ui/PINInput";
 import Button from "@/components/ui/Button";
-import { verifyPin, clearPin } from "@/lib/pinLock";
+import { verifyPin, verifyPinDetailed, clearPin } from "@/lib/pinLock";
 import { useAuthStore } from "@/stores/authStore";
 import { getUserFromSession } from "@/lib/auth";
 import type { User } from "@/types";
@@ -43,8 +43,8 @@ export default function PINLoginPage() {
     if (val.length < 4 || verifying) return;
     setVerifying(true);
     try {
-      const ok = await verifyPin(user.id, val);
-      if (ok) {
+      const result = await verifyPinDetailed(user.id, val);
+      if (result.status === "ok") {
         // PIN correct → re-fetch latest user data from DB to ensure
         // profile changes made by admin (or elsewhere) are reflected
         const freshUser = await getUserFromSession();
@@ -52,12 +52,21 @@ export default function PINLoginPage() {
         const dest = user.role === "admin" || user.role === "co_admin"
           ? "/admin/dashboard" : "/employee/dashboard";
         navigate(dest, { replace: true });
-      } else {
-        // PIN wrong or not set on this device → auto-fallback to OTP
-        clearPin(user.id);
+      } else if (result.status === "no_pin") {
+        // PIN was never set or storage was cleared → go to OTP flow
         setPendingPhone(user.phone);
         setPendingFlow("login");
         navigate("/login/otp", { replace: true, state: { user } });
+      } else if (result.status === "error") {
+        // Decryption/storage error — NOT a wrong PIN
+        // Do NOT clear the PIN. Show error and allow retry.
+        setError("Storage error. Please try again.");
+        setPinValue("");
+      } else {
+        // result.status === "wrong" — genuinely incorrect PIN
+        // Allow retry, do NOT delete the stored PIN
+        setError("Incorrect PIN. Try again.");
+        setPinValue("");
       }
     } finally {
       setVerifying(false);

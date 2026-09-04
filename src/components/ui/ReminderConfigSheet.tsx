@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { X, ChevronDown } from "lucide-react";
+import { useT } from "@/lib/i18n";
 import type { ReminderConfig, ReminderRepeat, ReminderEnds, ReminderAnchor } from "@/types";
 
 const DEFAULT_CONFIG: ReminderConfig = {
@@ -20,27 +21,27 @@ const DEFAULT_CONFIG: ReminderConfig = {
   endsCount: 5,
 };
 
-const ANCHOR_LABELS: Record<ReminderAnchor, string> = {
-  after_credit: "after credit given",
-  after_due: "after due date",
-  before_due: "before due date",
-  before_harvest: "before harvest season",
+const ANCHOR_KEYS: Record<ReminderAnchor, string> = {
+  after_credit: "reminder.afterCreditGiven",
+  after_due: "reminder.afterDueDateFull",
+  before_due: "reminder.beforeDueDateFull",
+  before_harvest: "reminder.beforeHarvestFull",
 };
 
-function buildSummary(config: ReminderConfig): string {
-  const anchorText = ANCHOR_LABELS[config.anchor];
+function buildSummary(config: ReminderConfig, t: (key: string, fallback?: string) => string): string {
+  const anchorText = t(ANCHOR_KEYS[config.anchor]);
   let endsText = "";
-  if (config.ends === "paid") endsText = "stops automatically once the balance is paid";
-  else if (config.ends === "date") endsText = "stops on " + (config.endsDate || "the selected date");
-  else endsText = "stops after " + config.endsCount + " reminders";
+  if (config.ends === "paid") endsText = t("reminder.untilPaid", "stops automatically once the balance is paid");
+  else if (config.ends === "date") endsText = t("reminder.specificDate", "On a specific date") + " — " + (config.endsDate || "");
+  else endsText = t("reminder.afterCount", "After a number of reminders") + " — " + config.endsCount;
 
   if (config.repeat === "once") {
-    return "Sends one reminder " + config.startDays + " days " + anchorText + ", then " + endsText + ".";
+    return config.startDays + " " + t("reminder.days", "days") + " " + anchorText + " \u2014 " + endsText;
   } else if (config.repeat === "interval") {
-    return "Starting " + config.startDays + " days " + anchorText + ", sends a reminder every " + config.intervalN + " " + config.intervalUnit + " \u2014 " + endsText + ".";
+    return config.startDays + " " + t("reminder.days", "days") + " " + anchorText + ", " + t("reminder.every") + " " + config.intervalN + " " + t("reminder." + config.intervalUnit, config.intervalUnit) + " \u2014 " + endsText;
   } else {
-    const parts = config.escalation.map(function(s) { return s.tone + " at day " + s.day; });
-    return "Sends a " + parts.join(", a ") + " \u2014 " + endsText + ".";
+    const parts = config.escalation.map(function(s) { return s.day + " " + t("reminder.day", "day"); });
+    return config.startDays + " " + t("reminder.days", "days") + " " + anchorText + " \u2014 " + parts.join(", ") + " \u2014 " + endsText;
   }
 }
 
@@ -51,6 +52,7 @@ interface Props {
 }
 
 export default function ReminderConfigSheet({ config, onSave, onClose }: Props) {
+  const t = useT();
   const [local, setLocal] = useState<ReminderConfig>(config ?? { ...DEFAULT_CONFIG, id: "new-" + Date.now() });
 
   // Lock background scroll
@@ -102,7 +104,7 @@ export default function ReminderConfigSheet({ config, onSave, onClose }: Props) 
 
         {/* Header */}
         <div className="px-5 pb-4 flex items-center justify-between">
-          <p className="text-[16px] font-semibold" style={{ color: "var(--text-primary)" }}>Configure Reminder</p>
+          <p className="text-[16px] font-semibold" style={{ color: "var(--text-primary)" }}>{t("reminder.configTitle")}</p>
           <button
             onClick={onClose}
             className="size-8 rounded-full flex items-center justify-center"
@@ -117,7 +119,7 @@ export default function ReminderConfigSheet({ config, onSave, onClose }: Props) 
 
           {/* Start reminders */}
           <div>
-            <p className={labelCls} style={{ color: "var(--text-secondary)" }}>Start reminders</p>
+            <p className={labelCls} style={{ color: "var(--text-secondary)" }}>{t("reminder.startReminders")}</p>
             <div className="flex items-center gap-2">
               <input
                 type="number"
@@ -127,7 +129,7 @@ export default function ReminderConfigSheet({ config, onSave, onClose }: Props) 
                 className="h-12 px-4 text-sm w-[72px] outline-none font-medium"
                 style={fieldStyle}
               />
-              <span className="text-[13px]" style={{ color: "var(--text-secondary)" }}>days</span>
+              <span className="text-[13px]" style={{ color: "var(--text-secondary)" }}>{t("reminder.days")}</span>
               <div className="flex-1 relative">
                 <select
                   value={local.anchor}
@@ -135,10 +137,10 @@ export default function ReminderConfigSheet({ config, onSave, onClose }: Props) 
                   className="w-full h-12 px-4 pe-10 text-[13px] outline-none appearance-none font-medium"
                   style={fieldStyle}
                 >
-              <option value="after_credit">after credit given</option>
-              <option value="before_due">before due date</option>
-              <option value="after_due">after due date</option>
-              <option value="before_harvest">before harvest season</option>
+              <option value="after_credit">{t("reminder.afterCreditGiven")}</option>
+              <option value="before_due">{t("reminder.beforeDueDateFull")}</option>
+              <option value="after_due">{t("reminder.afterDueDateFull")}</option>
+              <option value="before_harvest">{t("reminder.beforeHarvestFull")}</option>
                 </select>
                 <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: "var(--text-secondary)" }} />
               </div>
@@ -147,7 +149,7 @@ export default function ReminderConfigSheet({ config, onSave, onClose }: Props) 
 
           {/* Repeat */}
           <div>
-            <p className={labelCls} style={{ color: "var(--text-secondary)" }}>Repeat</p>
+            <p className={labelCls} style={{ color: "var(--text-secondary)" }}>{t("reminder.repeat")}</p>
             <div className="relative">
               <select
                 value={local.repeat}
@@ -155,9 +157,9 @@ export default function ReminderConfigSheet({ config, onSave, onClose }: Props) 
                 className="w-full h-12 px-4 pe-10 text-[13px] outline-none appearance-none font-medium"
                 style={fieldStyle}
               >
-                <option value="once">One-time reminder</option>
-                <option value="interval">Every fixed interval</option>
-                <option value="escalate">Escalating sequence</option>
+                <option value="once">{t("reminder.oneTimeReminder")}</option>
+                <option value="interval">{t("reminder.fixedInterval")}</option>
+                <option value="escalate">{t("reminder.escalatingSeq")}</option>
               </select>
               <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: "var(--text-secondary)" }} />
             </div>
@@ -167,7 +169,7 @@ export default function ReminderConfigSheet({ config, onSave, onClose }: Props) 
           {local.repeat === "interval" && (
             <div className="ps-4">
               <div className="flex items-center gap-2">
-                <span className="text-[13px]" style={{ color: "var(--text-secondary)" }}>Every</span>
+                <span className="text-[13px]" style={{ color: "var(--text-secondary)" }}>{t("reminder.every")}</span>
                 <input
                   type="number"
                   value={local.intervalN}
@@ -183,8 +185,8 @@ export default function ReminderConfigSheet({ config, onSave, onClose }: Props) 
                     className="h-12 px-3 pe-8 text-[13px] outline-none appearance-none font-medium"
                     style={fieldStyle}
                   >
-                    <option value="days">days</option>
-                    <option value="weeks">weeks</option>
+                    <option value="days">{t("reminder.days")}</option>
+                    <option value="weeks">{t("reminder.weeks")}</option>
                   </select>
                   <ChevronDown size={12} className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: "var(--text-secondary)" }} />
                 </div>
@@ -197,8 +199,8 @@ export default function ReminderConfigSheet({ config, onSave, onClose }: Props) 
             <div className="ps-4 flex flex-col gap-3">
               {local.escalation.map((step, i) => (
                 <div key={i} className="flex items-center gap-3">
-                  <span className="text-[13px] w-[96px] shrink-0 font-medium" style={{ color: "var(--text-secondary)" }}>{step.label}</span>
-                  <span className="text-[12px]" style={{ color: "var(--text-muted, var(--text-secondary))" }}>day</span>
+                  <span className="text-[13px] w-[96px] shrink-0 font-medium" style={{ color: "var(--text-secondary)" }}>{step.label === "Gentle" ? t("reminder.gentle") : step.label === "Firmer" ? t("reminder.firmer") : t("reminder.finalNotice")}</span>
+                  <span className="text-[12px]" style={{ color: "var(--text-muted, var(--text-secondary))" }}>{t("reminder.day")}</span>
                   <input
                     type="number"
                     value={step.day}
@@ -214,7 +216,7 @@ export default function ReminderConfigSheet({ config, onSave, onClose }: Props) 
 
           {/* Ends */}
           <div>
-            <p className={labelCls} style={{ color: "var(--text-secondary)" }}>Ends</p>
+            <p className={labelCls} style={{ color: "var(--text-secondary)" }}>{t("reminder.ends")}</p>
             <div className="relative">
               <select
                 value={local.ends}
@@ -222,9 +224,9 @@ export default function ReminderConfigSheet({ config, onSave, onClose }: Props) 
                 className="w-full h-12 px-4 pe-10 text-[13px] outline-none appearance-none font-medium"
                 style={fieldStyle}
               >
-                <option value="paid">Until paid in full</option>
-                <option value="date">On a specific date</option>
-                <option value="count">After a number of reminders</option>
+                <option value="paid">{t("reminder.untilPaid")}</option>
+                <option value="date">{t("reminder.specificDate")}</option>
+                <option value="count">{t("reminder.afterCount")}</option>
               </select>
               <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: "var(--text-secondary)" }} />
             </div>
@@ -254,7 +256,7 @@ export default function ReminderConfigSheet({ config, onSave, onClose }: Props) 
                 className="h-12 px-4 text-sm w-[80px] outline-none font-medium"
                 style={fieldStyle}
               />
-              <span className="text-[13px]" style={{ color: "var(--text-secondary)" }}>reminders</span>
+              <span className="text-[13px]" style={{ color: "var(--text-secondary)" }}>{t("reminder.reminders")}</span>
             </div>
           )}
 
@@ -263,7 +265,7 @@ export default function ReminderConfigSheet({ config, onSave, onClose }: Props) 
             className="rounded-[14px] p-4 text-[13px] leading-relaxed"
             style={{ background: "var(--surface-2)", color: "var(--text-primary)", border: "1px solid var(--brand, #639922)", borderLeft: "3px solid var(--brand, #639922)" }}
           >
-            {buildSummary(local)}
+            {buildSummary(local, t)}
           </div>
 
           {/* Save button */}
@@ -272,7 +274,7 @@ export default function ReminderConfigSheet({ config, onSave, onClose }: Props) 
             className="w-full h-12 rounded-full text-[14px] font-bold transition-opacity active:opacity-80"
             style={{ background: "var(--brand)", color: "#0a0a0a" }}
           >
-            Save Reminder Schedule
+            {t("reminder.saveSchedule")}
           </button>
         </div>
       </div>

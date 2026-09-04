@@ -108,11 +108,11 @@ export default function CompaniesListPage() {
                   {company.name}
                 </p>
                 <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
-                  {pCount} product{pCount !== 1 ? "s" : ""}
+                  {pCount} {pCount !== 1 ? t("company.products") : t("company.product")}
                 </p>
                 {hasPayable ? (
                   <p className="text-xs font-semibold" style={{ color: "#ef4444" }}>
-                    {formatCurrency(company.outstandingPayable)} due
+                    {formatCurrency(company.outstandingPayable)} {t("company.due")}
                   </p>
                 ) : (
                   <p className="text-xs font-semibold" style={{ color: "#16a34a" }}>

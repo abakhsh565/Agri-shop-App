@@ -447,24 +447,24 @@ export default function AdminDashboardPage() {
 
       {/* ── Quick Actions ── */}
       <div className="px-4 pt-5">
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-3 gap-2.5">
           <button
             onClick={() => navigate("/admin/sale")}
-            className="h-12 rounded-full font-bold text-[13px] flex items-center justify-center transition-transform active:scale-[0.97]"
+            className="h-10 rounded-xl font-semibold text-[12px] flex items-center justify-center transition-transform active:scale-[0.97]"
             style={{ background: "var(--brand)", color: "#0a0a0a" }}
           >
             {t("dashboard.newSale")}
           </button>
           <button
             onClick={() => navigate("/admin/customers")}
-            className="h-12 rounded-full font-bold text-[13px] flex items-center justify-center transition-transform active:scale-[0.97]"
+            className="h-10 rounded-xl font-semibold text-[12px] flex items-center justify-center transition-transform active:scale-[0.97]"
             style={{ border: "1.5px solid var(--divider)", color: "var(--text-primary)", background: "transparent" }}
           >
             {isUrdu ? "ادائیگی" : "Record Payment"}
           </button>
           <button
             onClick={() => navigate("/admin/purchases/new")}
-            className="h-12 rounded-full font-bold text-[13px] flex items-center justify-center transition-transform active:scale-[0.97]"
+            className="h-10 rounded-xl font-semibold text-[12px] flex items-center justify-center transition-transform active:scale-[0.97]"
             style={{ border: "1.5px solid var(--divider)", color: "var(--text-primary)", background: "transparent" }}
           >
             {t("admin.purchases") ?? "Purchase"}

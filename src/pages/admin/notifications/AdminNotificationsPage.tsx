@@ -6,7 +6,7 @@ import { useNotificationStore, type AppNotification } from "@/stores/notificatio
 import { useThemeStore } from "@/stores/themeStore";
 import { useCurrentTime } from "@/lib/useCurrentTime";
 import { useT } from "@/lib/i18n";
-import { formatSmartDateTime } from "@/lib/formatters";
+import { formatSmartDateTime, translateNotification } from "@/lib/formatters";
 import {
   Bell, ShoppingCart, CreditCard, RotateCcw, Package,
   AlertTriangle, Users, Truck, Info,
@@ -51,7 +51,7 @@ const KIND_ICON: Record<string, any> = {
 /** Group notifications by time period */
 type TimeGroup = { label: string; items: AppNotification[] };
 
-function groupByTime(items: AppNotification[], now: Date): TimeGroup[] {
+function groupByTime(items: AppNotification[], now: Date, t: any): TimeGroup[] {
   const today = now.toISOString().split("T")[0];
   const yesterdayDate = new Date(now);
   yesterdayDate.setDate(yesterdayDate.getDate() - 1);
@@ -62,21 +62,22 @@ function groupByTime(items: AppNotification[], now: Date): TimeGroup[] {
   monthAgo.setMonth(monthAgo.getMonth() - 1);
 
   const groups: Record<string, AppNotification[]> = {
-    "Today": [],
-    "Yesterday": [],
-    "This Week": [],
-    "This Month": [],
-    "Earlier": [],
+    [t("notifications.groupToday")]: [],
+    [t("notifications.groupYesterday")]: [],
+    [t("notifications.groupThisWeek")]: [],
+    [t("notifications.groupThisMonth")]: [],
+    [t("notifications.groupEarlier")]: [],
   };
+  const keys = [t("notifications.groupToday"), t("notifications.groupYesterday"), t("notifications.groupThisWeek"), t("notifications.groupThisMonth"), t("notifications.groupEarlier")];
 
   for (const n of items) {
     const d = n.created_at.split("T")[0];
     const dt = new Date(n.created_at);
-    if (d === today) groups["Today"].push(n);
-    else if (d === yesterday) groups["Yesterday"].push(n);
-    else if (dt >= weekAgo) groups["This Week"].push(n);
-    else if (dt >= monthAgo) groups["This Month"].push(n);
-    else groups["Earlier"].push(n);
+    if (d === today) groups[keys[0]].push(n);
+    else if (d === yesterday) groups[keys[1]].push(n);
+    else if (dt >= weekAgo) groups[keys[2]].push(n);
+    else if (dt >= monthAgo) groups[keys[3]].push(n);
+    else groups[keys[4]].push(n);
   }
 
   return Object.entries(groups)
@@ -98,7 +99,7 @@ export default function AdminNotificationsPage() {
     return unsub;
   }, []);
 
-  const groups = useMemo(() => groupByTime(items, now), [items, now]);
+  const groups = useMemo(() => groupByTime(items, now, t), [items, now, t]);
 
   return (
     <div
@@ -107,7 +108,7 @@ export default function AdminNotificationsPage() {
     >
       <StatusBar />
       <NavHeader
-        title="Notifications"
+        title={t("notifications.title")}
         
         right={
           items.some((n) => !n.read) ? (
@@ -116,7 +117,7 @@ export default function AdminNotificationsPage() {
               className="text-xs font-semibold"
               style={{ color: "var(--brand-dark)" }}
             >
-              Mark all read
+              {t("notifications.markAllRead")}
             </button>
           ) : null
         }
@@ -124,7 +125,7 @@ export default function AdminNotificationsPage() {
 
       {loading && !ready ? (
         <div className="flex flex-col items-center py-20 gap-2">
-          <p className="text-sm" style={{ color: "var(--text-secondary)" }}>Loading…</p>
+          <p className="text-sm" style={{ color: "var(--text-secondary)" }}>{t("notifications.loading")}</p>
         </div>
       ) : items.length === 0 ? (
         <div className="flex flex-col items-center py-20 gap-3 px-8 text-center">
@@ -159,6 +160,7 @@ export default function AdminNotificationsPage() {
               <div className="flex flex-col mx-4">
                 {group.items.map((n, i) => {
                   const Icon = KIND_ICON[n.kind] ?? Info;
+                  const tr = translateNotification(n.kind, n.title, n.body, t);
                   return (
                     <button
                       key={n.id}
@@ -182,17 +184,17 @@ export default function AdminNotificationsPage() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
                           <p className="text-sm font-bold truncate" style={{ color: "var(--text-primary)" }}>
-                            {n.title}
+                            {tr.title}
                           </p>
                           {!n.read && (
                             <span className="w-2 h-2 rounded-full shrink-0" style={{ background: "var(--brand)" }} />
                           )}
                         </div>
-                        {n.body && (
-                          <p className="text-xs mt-0.5" style={{ color: "var(--text-secondary)" }}>{n.body}</p>
+                        {tr.body && (
+                          <p className="text-xs mt-0.5" style={{ color: "var(--text-secondary)" }}>{tr.body}</p>
                         )}
                         <p className="text-[11px] mt-1" style={{ color: "var(--text-secondary)" }}>
-                          {formatSmartDateTime(n.created_at, now)}
+                          {formatSmartDateTime(n.created_at, now, t)}
                         </p>
                       </div>
                     </button>

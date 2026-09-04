@@ -284,9 +284,9 @@ export default function CustomersListPage() {
                       </div>
                       <div className="flex items-center justify-between mt-0.5">
                         <p className="text-[10px]" style={{ color: "var(--text-secondary)" }}>
-                          {creditUsed}% used
+                          {creditUsed}{t("credit.percentUsed")}
                         </p>
-                        {(() => { const sc = useSalesStore.getState().sales.filter((s) => s.customerId === c.id); const scCount = sc.length; const fullTotal = sc.filter((s) => s.paymentType === "full").reduce((a, s) => a + s.totalAmount, 0); const ep = c.totalPaid + fullTotal; const hasCredit = sc.some((s) => s.paymentType !== "full"); const ch = calculateCreditHealth(c, scCount, null, ep, hasCredit); const chColor = getCreditHealthStatusColor(ch.status); return (<span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full" style={{ color: chColor, background: chColor + "22" }}>{ch.headline}</span>); })()}
+                        {(() => { const sc = useSalesStore.getState().sales.filter((s) => s.customerId === c.id); const scCount = sc.length; const fullTotal = sc.filter((s) => s.paymentType === "full").reduce((a, s) => a + s.totalAmount, 0); const ep = c.totalPaid + fullTotal; const hasCredit = sc.some((s) => s.paymentType !== "full"); const ch = calculateCreditHealth(c, scCount, null, ep, hasCredit); const chColor = getCreditHealthStatusColor(ch.status); const hlKey = ch.status === 'green' ? 'credit.reliable' : ch.status === 'yellow' ? 'credit.caution' : ch.status === 'red' ? 'credit.risk' : ch.status === 'cash_customer' ? 'credit.cashCustomer' : 'credit.notEnoughHistory'; return (<span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full" style={{ color: chColor, background: chColor + "22" }}>{t(hlKey as any)}</span>); })()}
                       </div>
                     </div>
                   ) : (
@@ -334,7 +334,7 @@ export default function CustomersListPage() {
             className="pointer-events-auto ps-4 pe-5 rounded-full flex items-center gap-2 text-sm font-bold active:scale-95 transition-transform"
             style={{ background: "var(--brand)", color: "#0a0a0a", height: "52px", boxShadow: "0 6px 20px rgba(0,0,0,0.25)" }}
           >
-            <Plus size={20} strokeWidth={2.5} /> {t("customers.title")}
+            <Plus size={20} strokeWidth={2.5} /> {isUrdu ? "گاہک شامل کریں" : "Add Customer"}
           </button>
         </div>
       </div>

@@ -86,8 +86,10 @@ import AdminReturnConfirmPage from "@/pages/admin/returns/AdminReturnConfirmPage
 import AdminReturnSuccessPage from "@/pages/admin/returns/AdminReturnSuccessPage";
 import CreditOverridesPage from "@/pages/admin/alerts/CreditOverridesPage";
 import CreditOverrideDetailPage from "@/pages/admin/alerts/CreditOverrideDetailPage";
+import CreditRequestDetailPage from "@/pages/admin/alerts/CreditRequestDetailPage";
 import RemindersOverviewPage from "@/pages/admin/alerts/RemindersOverviewPage";
 import InventoryAlertsPage from "@/pages/admin/alerts/InventoryAlertsPage";
+import GroupDetailPage from "@/pages/admin/alerts/GroupDetailPage";
 
 export const router = createBrowserRouter([
   { path: "/", element: <SplashPage /> },
@@ -141,6 +143,8 @@ export const router = createBrowserRouter([
       { path: "alerts/credit-overrides/:customerId", element: <CreditOverrideDetailPage /> },
       { path: "alerts/reminders", element: <RemindersOverviewPage /> },
       { path: "alerts/inventory", element: <InventoryAlertsPage /> },
+      { path: "alerts/credit-requests/:requestId", element: <CreditRequestDetailPage /> },
+      { path: "alerts/groups/:groupId", element: <GroupDetailPage /> },
       { path: "more",       element: <MoreMenuPage /> },
       { path: "employees",  element: <EmployeesListPage /> },
       { path: "employees/new", element: <AddEmployeePage /> },

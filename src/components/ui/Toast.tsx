@@ -10,15 +10,15 @@ export default function ToastContainer() {
     <div className="fixed left-1/2 -translate-x-1/2 z-50 flex flex-col gap-2 w-[calc(100%-32px)] max-w-sm" style={{ bottom: "calc(var(--tabbar-height, 72px) + 16px)" }}>
       {toasts.map((t) => {
         const styles = {
-          success: "bg-black text-white",
+          success: "bg-[#1a1a1a] text-white",
           error: "bg-[#ef4444] text-white",
           warning: "bg-[#f59e0b] text-white",
-          info: "bg-black text-white",
+          info: "bg-[#1a1a1a] text-white",
         };
         return (
           <div
             key={t.id}
-            className={`flex items-center justify-between gap-3 px-4 py-3 rounded-2xl shadow-lg text-sm font-medium ${styles[t.type]}`}
+            className={`flex items-center justify-between gap-3 px-4 py-3.5 rounded-[14px] shadow-lg text-[13px] font-medium ${styles[t.type]}`}
           >
             <span>{t.message}</span>
             <button onClick={() => removeToast(t.id)} className="shrink-0">

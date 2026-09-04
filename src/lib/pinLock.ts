@@ -27,11 +27,34 @@ export function hasPin(userId: string): boolean {
   return secureHas(KEY(userId));
 }
 
+/**
+ * Result type that distinguishes between "no PIN set" and "decryption error".
+ */
+export type PinVerifyResult =
+  | { status: "ok" }
+  | { status: "wrong" }
+  | { status: "no_pin" }
+  | { status: "error" };
+
 export async function verifyPin(userId: string, pin: string): Promise<boolean> {
   const stored = await secureGet(KEY(userId));
-  // If no PIN was ever set on this device, don't trap the user out.
   if (!stored) return false;
   return stored === (await digest(userId, pin));
+}
+
+/**
+ * Verify PIN with detailed result — distinguishes wrong PIN from storage errors.
+ */
+export async function verifyPinDetailed(userId: string, pin: string): Promise<PinVerifyResult> {
+  try {
+    const stored = await secureGet(KEY(userId));
+    if (!stored) return { status: "no_pin" };
+    const matches = stored === (await digest(userId, pin));
+    return matches ? { status: "ok" } : { status: "wrong" };
+  } catch {
+    // Decryption/storage failure — NOT a wrong PIN
+    return { status: "error" };
+  }
 }
 
 export function clearPin(userId: string): void {

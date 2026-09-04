@@ -82,17 +82,17 @@ export default function EmployeeDetailPage() {
   const creditPct = creditExtended > 0 ? Math.min(100, Math.round((creditPaidBack / creditExtended) * 100)) : 0;
 
   const initials = emp.name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase();
-  const roleLabel = emp.role === "co_admin" ? "Co-Admin" : emp.role === "admin" ? "Admin" : "Employee";
+  const roleLabel = emp.role === "co_admin" ? t("emp.coAdmin") : emp.role === "admin" ? t("emp.admin") : t("emp.employee");
   const isActive = emp.isActive;
 
-  const pl = (n: number, s: string) => `${n} ${n === 1 ? s : s + "s"}`;
+  const pl = (n: number, singular: string, plural: string) => `${n} ${n === 1 ? singular : plural}`;
   const stats = [
     { icon: TrendingUp, label: t("admin.totalRevenue"), value: formatCurrency(totalRevenue), color: "var(--brand)" },
-    { icon: ShoppingCart, label: t("admin.totalSales"), value: pl(totalTransactions, "sale"), color: "#3b82f6" },
-    { icon: Package, label: t("employee.itemsSold"), value: pl(totalItems, "item"), color: "#8b5cf6" },
-    { icon: Users, label: t("admin.customersServed"), value: pl(uniqueCustomers.length, "customer"), color: "#06b6d4" },
-    { icon: Calendar, label: "Today", value: `${pl(todayTransactions, "sale")} · ${formatCurrency(todayRevenue)}`, color: "#f59e0b" },
-    { icon: ShieldCheck, label: "Avg. Sale", value: formatCurrency(avgSaleValue), color: "#ec4899" },
+    { icon: ShoppingCart, label: t("admin.totalSales"), value: pl(totalTransactions, t("emp.sale"), t("emp.sales")), color: "#3b82f6" },
+    { icon: Package, label: t("employee.itemsSold"), value: pl(totalItems, t("emp.item"), t("emp.items")), color: "#8b5cf6" },
+    { icon: Users, label: t("admin.customersServed"), value: pl(uniqueCustomers.length, t("emp.customer"), t("emp.customers")), color: "#06b6d4" },
+    { icon: Calendar, label: t("emp.today"), value: `${pl(todayTransactions, t("emp.sale"), t("emp.sales"))} · ${formatCurrency(todayRevenue)}`, color: "#f59e0b" },
+    { icon: ShieldCheck, label: t("emp.avgSale"), value: formatCurrency(avgSaleValue), color: "#ec4899" },
   ];
 
   async function setActive(next: boolean) {
@@ -365,7 +365,7 @@ export default function EmployeeDetailPage() {
                   <div className="flex items-center gap-2">
                     <p className="text-[13px] font-bold truncate" style={{ color: "var(--text-primary)" }}>{sale.customerName}</p>
                     <span className="text-[10px] shrink-0" style={{ color: "var(--text-secondary)" }}>
-                      {formatSmartDateTime(sale.createdAt, now)}
+                      {formatSmartDateTime(sale.createdAt, now, t)}
                     </span>
                   </div>
                   <p className="text-[10px] mt-0.5" style={{ color: "var(--text-secondary)", opacity: 0.7 }}>

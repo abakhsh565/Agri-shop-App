@@ -110,13 +110,15 @@ export default function AdminSalesListPage() {
     });
   const total     = filtered.reduce((s, x) => s + x.totalAmount, 0);
   const profit    = Math.round(total * 0.2);
+  const paidSalesAmount = filtered.filter(s => s.paymentType === "full").reduce((s, x) => s + x.totalAmount, 0);
+  const creditSalesAmount = filtered.filter(s => s.paymentType !== "full").reduce((s, x) => s + x.totalAmount, 0);
 
   const DATE_FILTERS: { key: DateFilter; label: string }[] = [
     { key: "today",       label: t("sales.today") },
     { key: "yesterday",   label: t("sales.yesterday") },
     { key: "this_week",   label: t("sales.thisWeek") },
     { key: "this_month",  label: t("sales.thisMonth") ?? "This Month" },
-    { key: "custom",      label: "Custom" },
+    { key: "custom",      label: t("sales.customFilter") },
   ];
 
   const todayISO = now.toISOString().split("T")[0];
@@ -151,22 +153,45 @@ export default function AdminSalesListPage() {
         <div className="w-8" />
       </div>
 
-      {/* Summary strip with profit */}
+      {/* Summary strip */}
       <div
         className="mx-4 rounded-xl px-4 py-3 flex items-center justify-between"
         style={{ background: "var(--surface-2)" }}
       >
-        <div>
-          <p className="text-[10px] uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
-            {summaryLabel}
-          </p>
-          <p className="text-[13px] font-bold" style={{ color: "var(--brand-dark)" }}>
-            {t("admin.grossProfit")}: {formatCurrency(profit)}
-          </p>
-        </div>
+        <p className="text-[10px] uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
+          {summaryLabel}
+        </p>
         <p className="text-base font-bold" style={{ color: "var(--text-primary)" }}>
           {formatCurrency(total)}
         </p>
+      </div>
+
+      {/* ── Paid Sales · Credit Sales · Gross Profit ── */}
+      <div className="px-4 pt-3 flex gap-2">
+        <div className="flex-1 rounded-[12px] p-3 flex flex-col gap-1 items-start" style={{ background: "var(--surface)", border: "1px solid var(--border-light)" }}>
+          <p className="text-[10px] uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
+            {isUrdu ? "ادا شدہ فروخت" : "Paid Sales"}
+          </p>
+          <p className="text-[16px] font-bold" style={{ color: "var(--brand-dark)" }}>
+            {formatCurrency(paidSalesAmount)}
+          </p>
+        </div>
+        <div className="flex-1 rounded-[12px] p-3 flex flex-col gap-1 items-start" style={{ background: "var(--surface)", border: "1px solid var(--border-light)" }}>
+          <p className="text-[10px] uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
+            {isUrdu ? "ادھار فروخت" : "Credit Sales"}
+          </p>
+          <p className="text-[16px] font-bold" style={{ color: "#ef4444" }}>
+            {formatCurrency(creditSalesAmount)}
+          </p>
+        </div>
+        <div className="flex-1 rounded-[12px] p-3 flex flex-col gap-1 items-start" style={{ background: "var(--surface)", border: "1px solid var(--border-light)" }}>
+          <p className="text-[10px] uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
+            {isUrdu ? "تخمینہ منافع" : "Gross Profit"}
+          </p>
+          <p className="text-[16px] font-bold" style={{ color: "var(--brand-dark)" }}>
+            {formatCurrency(profit)}
+          </p>
+        </div>
       </div>
 
       {/* Search + Sort */}
@@ -179,7 +204,7 @@ export default function AdminSalesListPage() {
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search customer, employee, or sale #"
+            placeholder={t("sales.searchPlaceholder")}
             className="flex-1 bg-transparent text-[13px] outline-none"
             style={{ color: "var(--text-primary)" }}
           />
@@ -365,9 +390,16 @@ export default function AdminSalesListPage() {
 
       {/* Sales list with date sections */}
       {filtered.length === 0 ? (
-        <div className="flex flex-col items-center py-16 gap-2">
+        <div className="flex flex-col items-center py-16 gap-3">
           <p className="text-3xl">📋</p>
           <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>{t("sales.noSales")}</p>
+          <button
+            onClick={() => navigate("/admin/sale")}
+            className="h-10 px-5 rounded-full text-[13px] font-bold active:scale-95 transition-transform"
+            style={{ background: "var(--brand)", color: "#0a0a0a" }}
+          >
+            {isUrdu ? "نئی فروخت" : "New Sale"}
+          </button>
         </div>
       ) : (
         <div className="flex flex-col pb-8">
@@ -399,7 +431,7 @@ export default function AdminSalesListPage() {
                       )}
                       <div className="min-w-0">
                         <p className="text-[13px] font-bold truncate" style={{ color: "var(--text-primary)" }}>{sale.customerName}</p>
-                        <p className="text-[10px] mt-0.5" style={{ color: "var(--text-secondary)" }}>{formatSmartDateTime(sale.createdAt, now)}</p>
+                        <p className="text-[10px] mt-0.5" style={{ color: "var(--text-secondary)" }}>{formatSmartDateTime(sale.createdAt, now, t)}</p>
                         <p className="text-[11px] font-medium mt-0.5" style={{ color: "var(--text-secondary)" }}>{t("saleDetail.soldBy")}: {sale.employeeName}</p>
                       </div>
                     </div>
@@ -409,11 +441,11 @@ export default function AdminSalesListPage() {
                       </span>
                       {sale.paymentType !== "full" ? (
                         <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full" style={{ background: "rgba(239,68,68,0.1)", color: "#ef4444" }}>
-                          Credit
+                          {t("common.creditTag")}
                         </span>
                       ) : (
                         <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full" style={{ background: "rgba(132,204,22,0.15)", color: "var(--brand-dark)" }}>
-                          Paid
+                          {t("common.paidTag")}
                         </span>
                       )}
                     </div>

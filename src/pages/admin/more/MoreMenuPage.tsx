@@ -12,11 +12,10 @@ const TILES = [
   { labelKey: "admin.inventory" as const, icon: Layers,       path: "/admin/products",   color: "#84cc16" },
   { labelKey: "admin.payments"  as const, icon: CreditCard,   path: "/admin/payments",   color: "#10b981" },
   { labelKey: "admin.settings"  as const, icon: Settings,     path: "/admin/settings",   color: "#6b7280" },
-  { label: "Stock Movements",  icon: History,       path: "/admin/inventory/movements", color: "#6366f1" },
-  { label: "Reorder Suggestions", icon: AlertTriangle, path: "/admin/inventory/reorder",    color: "#d97706" },
-  { label: "Daily Cash",       icon: Calculator,    path: "/admin/payments/daily-cash",  color: "#059669" },
-  { label: "Generate Barcodes", icon: ScanLine,      path: "/admin/inventory/barcodes",   color: "#6366f1" },
-  { labelKey: "admin.customers" as const, icon: Users, path: "/admin/customers", color: "#8b5cf6" },
+  { labelKey: "admin.stockMovements" as any, label: "Stock Movements",  icon: History,       path: "/admin/inventory/movements", color: "#6366f1" },
+  { labelKey: "admin.reorderSuggestions" as any, label: "Reorder Suggestions", icon: AlertTriangle, path: "/admin/inventory/reorder",    color: "#d97706" },
+  { labelKey: "admin.dailyCash" as any, label: "Daily Cash",       icon: Calculator,    path: "/admin/payments/daily-cash",  color: "#059669" },
+  { labelKey: "admin.generateBarcodes" as any, label: "Generate Barcodes", icon: ScanLine,      path: "/admin/inventory/barcodes",   color: "#6366f1" },
 ];
 
 export default function MoreMenuPage() {
@@ -44,28 +43,31 @@ export default function MoreMenuPage() {
         </div>
       </div>
 
-      {/* Grid */}
-      <div className="px-4 pt-4 pb-4 grid grid-cols-2 gap-3">
-        {TILES.map((tile) => {
-          const Icon = tile.icon;
-          const displayLabel = "labelKey" in tile ? t(tile.labelKey as any) : (tile as any).label;
-          return (
-            <button
-              key={tile.path}
-              onClick={() => navigate(tile.path)}
-              className="flex flex-col items-start gap-3 rounded-[16px] p-4 transition-transform active:scale-[0.97]"
-              style={{ background: "var(--surface)", border: "1px solid var(--divider)" }}
-            >
-              <div
-                className="size-10 rounded-[10px] flex items-center justify-center"
-                style={{ background: tile.color + "22" }}
+      {/* Clean list */}
+      <div className="px-4 pt-3 pb-4">
+        <div className="rounded-[14px] overflow-hidden" style={{ background: "var(--surface)", border: "1px solid var(--border-light)" }}>
+          {TILES.map((tile, idx) => {
+            const Icon = tile.icon;
+            const displayLabel = "labelKey" in tile ? t(tile.labelKey as any) : (tile as any).label;
+            return (
+              <button
+                key={tile.path}
+                onClick={() => navigate(tile.path)}
+                className="w-full flex items-center gap-3.5 px-4 py-3.5 transition-opacity active:opacity-70 text-start"
+                style={{ borderBottom: idx < TILES.length - 1 ? "1px solid var(--divider)" : "none" }}
               >
-                <Icon size={20} style={{ color: tile.color }} />
-              </div>
-              <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>{displayLabel}</p>
-            </button>
-          );
-        })}
+                <div
+                  className="size-9 rounded-[10px] flex items-center justify-center shrink-0"
+                  style={{ background: tile.color + "18" }}
+                >
+                  <Icon size={18} style={{ color: tile.color }} />
+                </div>
+                <p className="flex-1 text-[14px] font-semibold" style={{ color: "var(--text-primary)" }}>{displayLabel}</p>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+              </button>
+            );
+          })}
+        </div>
       </div>
     </div>
   );

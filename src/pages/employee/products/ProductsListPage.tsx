@@ -154,7 +154,7 @@ export default function ProductsListPage() {
                         className="text-[10px] font-semibold"
                         style={{ color: getStockStatusColor(status) }}
                       >
-                        {getStockStatusLabel(status)}
+                        {getStockStatusLabel(status, t)}
                       </span>
                       {p.barcode && (
                         <span className="text-[10px] font-mono" style={{ color: "var(--text-secondary)" }}>
@@ -183,7 +183,7 @@ export default function ProductsListPage() {
               className="pointer-events-auto h-13 ps-4 pe-5 rounded-full flex items-center gap-2 text-sm font-bold shadow-lg active:scale-95 transition-transform"
               style={{ background: "var(--brand)", color: "#0a0a0a", height: "52px", boxShadow: "0 6px 20px rgba(0,0,0,0.25)" }}
             >
-              <Plus size={20} strokeWidth={2.5} /> Product
+              <Plus size={20} strokeWidth={2.5} /> {t("products.addButton")}
             </button>
           </div>
         </div>

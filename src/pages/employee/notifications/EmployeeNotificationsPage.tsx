@@ -5,7 +5,7 @@ import NavHeader from "@/components/ui/NavHeader";
 import { useNotificationStore, type AppNotification } from "@/stores/notificationStore";
 import { useCurrentTime } from "@/lib/useCurrentTime";
 import { useT } from "@/lib/i18n";
-import { formatSmartDateTime } from "@/lib/formatters";
+import { formatSmartDateTime, translateNotification } from "@/lib/formatters";
 import {
   Bell, ShoppingCart, CreditCard, RotateCcw, Package,
   AlertTriangle, Info,
@@ -141,6 +141,7 @@ export default function EmployeeNotificationsPage() {
               <div className="flex flex-col mx-4">
                 {group.items.map((n, i) => {
                   const Icon = KIND_ICON[n.kind] ?? Info;
+                  const tr = translateNotification(n.kind, n.title, n.body, t);
                   return (
                     <button
                       key={n.id}
@@ -164,17 +165,17 @@ export default function EmployeeNotificationsPage() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
                           <p className="text-sm font-bold truncate" style={{ color: "var(--text-primary)" }}>
-                            {n.title}
+                            {tr.title}
                           </p>
                           {!n.read && (
                             <span className="w-2 h-2 rounded-full shrink-0" style={{ background: "var(--brand)" }} />
                           )}
                         </div>
-                        {n.body && (
-                          <p className="text-xs mt-0.5" style={{ color: "var(--text-secondary)" }}>{n.body}</p>
+                        {tr.body && (
+                          <p className="text-xs mt-0.5" style={{ color: "var(--text-secondary)" }}>{tr.body}</p>
                         )}
                         <p className="text-[11px] mt-1" style={{ color: "var(--text-secondary)" }}>
-                          {formatSmartDateTime(n.created_at, now)}
+                          {formatSmartDateTime(n.created_at, now, t)}
                         </p>
                       </div>
                     </button>

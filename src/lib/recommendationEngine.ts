@@ -18,15 +18,19 @@ interface RecommendationInput {
 interface ProductRecommendation {
   product: Product;
   reason: string;
+  reasonKey: "recommendation.missingFromBasket" | "recommendation.dueAgain" | "recommendation.seasonWindowOpen";
   reasonTag: "missing_from_basket" | "due_again" | "season_window_open";
   cropName: string;
+  reasonParams: Record<string, string>;
 }
 
 interface CustomerRecommendation {
   customer: Customer;
   reason: string;
+  reasonKey: "recommendation.missingFromBasket" | "recommendation.dueAgain" | "recommendation.seasonWindowOpen";
   reasonTag: "missing_from_basket" | "due_again" | "season_window_open";
   cropName: string;
+  reasonParams: Record<string, string>;
 }
 
 // Crops are loaded from Supabase by the calling component and passed in.
@@ -142,8 +146,10 @@ export function getRecommendationsForCustomer(
         recommendations.push({
           product,
           reason: cropName + " \u00B7 missing from this season\u2019s basket",
+          reasonKey: "recommendation.missingFromBasket",
           reasonTag: "missing_from_basket",
           cropName,
+          reasonParams: { crop: cropName },
         });
         break; // One recommendation per product max
       }
@@ -153,8 +159,10 @@ export function getRecommendationsForCustomer(
         recommendations.push({
           product,
           reason: cropName + " \u00B7 due again, last bought " + formatDaysAgo(daysSinceLastBought),
+          reasonKey: "recommendation.dueAgain",
           reasonTag: "due_again",
           cropName,
+          reasonParams: { crop: cropName, days: formatDaysAgo(daysSinceLastBought) },
         });
         break;
       }
@@ -164,8 +172,10 @@ export function getRecommendationsForCustomer(
         recommendations.push({
           product,
           reason: cropName + " \u00B7 growing season window is open",
+          reasonKey: "recommendation.seasonWindowOpen",
           reasonTag: "season_window_open",
           cropName,
+          reasonParams: { crop: cropName },
         });
         break;
       }
@@ -224,8 +234,10 @@ export function getRecommendationsForProduct(
         recommendations.push({
           customer,
           reason: cropName + " \u00B7 missing from this season\u2019s basket",
+          reasonKey: "recommendation.missingFromBasket",
           reasonTag: "missing_from_basket",
           cropName,
+          reasonParams: { crop: cropName },
         });
         break;
       }
@@ -235,8 +247,10 @@ export function getRecommendationsForProduct(
         recommendations.push({
           customer,
           reason: cropName + " \u00B7 due again, last bought " + formatDaysAgo(daysSinceLastBought),
+          reasonKey: "recommendation.dueAgain",
           reasonTag: "due_again",
           cropName,
+          reasonParams: { crop: cropName, days: formatDaysAgo(daysSinceLastBought) },
         });
         break;
       }

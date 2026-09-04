@@ -149,8 +149,9 @@ export const useSalesStore = create<SalesState>((set, get) => ({
     // Stale-while-revalidate
     const cached = getLocalCache<Sale[]>(CACHE_KEY);
     const stale = isLocalStale(CACHE_KEY);
+    const storeEmpty = get().sales.length === 0;
 
-    if (cached && !stale) {
+    if (cached && !stale && !storeEmpty) {
       set({ sales: cached, loading: false, ready: true });
       return;
     }

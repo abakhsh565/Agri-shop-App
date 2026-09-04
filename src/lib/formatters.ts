@@ -27,7 +27,7 @@ export function formatTime(iso: string): string {
  *  - Yesterday at 12:00 PM
  *  - 12 Mar 2026 at 3:45 PM
  */
-export function formatSmartDateTime(iso: string, now?: Date): string {
+export function formatSmartDateTime(iso: string, now?: Date, t?: TranslateFn): string {
   const d = new Date(iso);
   const ref = now ?? new Date();
   const time = d.toLocaleTimeString("en-PK", { hour: "numeric", minute: "2-digit", hour12: true });
@@ -38,9 +38,10 @@ export function formatSmartDateTime(iso: string, now?: Date): string {
   yesterday.setDate(ref.getDate() - 1);
   const yesterdayStr = yesterday.toISOString().split("T")[0];
 
-  if (dateStr === todayStr) return `Today at ${time}`;
-  if (dateStr === yesterdayStr) return `Yesterday at ${time}`;
-  return `${d.toLocaleDateString("en-PK", { day: "numeric", month: "short", year: "numeric" })} at ${time}`;
+  const dateLabel = d.toLocaleDateString("en-PK", { day: "numeric", month: "short", year: "numeric" });
+  if (dateStr === todayStr) return t ? t("time.todayAt", { time }) : `Today at ${time}`;
+  if (dateStr === yesterdayStr) return t ? t("time.yesterdayAt", { time }) : `Yesterday at ${time}`;
+  return t ? t("time.dateTimeAt", { date: dateLabel, time }) : `${dateLabel} at ${time}`;
 }
 
 /**
@@ -58,10 +59,65 @@ export function timeAgo(iso: string, now?: Date): string {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
+export function translateNotification(
+  kind: string, title: string, body: string | null,
+  t: TranslateFn,
+): { title: string; body: string | null } {
+  const amt = (s: string) => s.replace(/Rs\.\s*/g, '').replace(/,/g, '').trim();
+  switch (kind) {
+    case 'sale': {
+      const num = title.replace(/^New sale\s*/i, '').replace(/^Sale voided\s*/i, '').trim();
+      if (/voided/i.test(title)) {
+        const a = amt(body?.split('voided')?.[1] ?? '');
+        const actor = body?.split('voided')?.[0]?.trim() ?? '';
+        return { title: t('notif.saleVoided', { number: num }), body: t('notif.voidedBody', { actor, amount: a }) };
+      }
+      const parts = body?.split('sold to') ?? [];
+      const actor = parts[0]?.trim() ?? '';
+      const rest = parts[1]?.trim() ?? '';
+      const customer = rest.split('Rs.')[0]?.trim() ?? rest;
+      const a = amt(rest.split('Rs.')[1] ?? '');
+      return { title: t('notif.newSale', { number: num }), body: t('notif.saleBody', { actor, customer, amount: a }) };
+    }
+    case 'purchase': {
+      const num = title.replace(/^Stock received\s*/i, '').trim();
+      const company = body?.split('Rs.')?.[0]?.trim() ?? '';
+      const a = amt(body?.split('Rs.')?.[1] ?? '');
+      return { title: t('notif.stockReceived', { number: num }), body: t('notif.purchaseBody', { company, amount: a }) };
+    }
+    case 'stock_adjust': {
+      const product = title.replace(/^Stock adjusted:\s*/i, '').trim();
+      return { title: t('notif.stockAdjusted', { product }), body: t('notif.stockAdjBody', { product, type: '', change: '', after: '' }) };
+    }
+    case 'payment': {
+      const a = amt(title.replace(/^Payment received:\s*/i, ''));
+      const customer = body?.split('paid')?.[0]?.trim() ?? '';
+      return { title: t('notif.paymentReceived', { amount: a }), body: t('notif.paymentBody', { customer, amount: a }) };
+    }
+    case 'return': {
+      const customer = title.replace(/^Return from\s*/i, '').trim();
+      const a = amt(body ?? '');
+      return { title: t('notif.returnFrom', { customer }), body: t('notif.returnBody', { amount: a }) };
+    }
+    case 'low_stock': {
+      const product = title.replace(/^(Low stock|Out of stock):\s*/i, '').trim();
+      if (/out of stock/i.test(title)) {
+        return { title: t('notif.outOfStock', { product }), body: t('notif.outOfStockBody', { product }) };
+      }
+      const count = body?.match(/(\d+)\s*units/)?.[1] ?? '';
+      const threshold = body?.match(/threshold:\s*(\d+)/)?.[1] ?? '';
+      return { title: t('notif.lowStock', { product }), body: t('notif.lowStockBody', { product, count, threshold }) };
+    }
+    default:
+      return { title, body };
+  }
+}
+
 export function formatPhone(phone: string): string {
   return phone.replace(/(\+92|0)(\d{3})(\d{7})/, "+92 $2 $3");
 }
 
+import type { TranslateFn } from "@/lib/i18n";
 import type { CreditHealth, CreditHealthStatus, ReminderStatus, Customer } from "@/types";
 
 export function getCreditHealth(outstanding: number, limit: number): CreditHealth {
@@ -273,10 +329,10 @@ export function getStockStatus(qty: number, threshold: number): StockStatus {
   return "in_stock";
 }
 
-export function getStockStatusLabel(status: StockStatus): string {
-  if (status === "in_stock") return "In Stock";
-  if (status === "low_stock") return "Low Stock";
-  return "Out of Stock";
+export function getStockStatusLabel(status: StockStatus, t?: any): string {
+  if (status === "in_stock") return t ? t("products.inStock") : "In Stock";
+  if (status === "low_stock") return t ? t("products.lowStock") : "Low Stock";
+  return t ? t("products.outOfStock") : "Out of Stock";
 }
 
 export function getStockStatusColor(status: StockStatus): string {

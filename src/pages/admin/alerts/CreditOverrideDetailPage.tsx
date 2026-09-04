@@ -4,6 +4,7 @@ import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
 import { useCustomersStore } from "@/stores/customersStore";
 import { useThemeStore } from "@/stores/themeStore";
+import { useT } from "@/lib/i18n";
 import { formatCurrency, formatSmartDateTime } from "@/lib/formatters";
 import { AlertTriangle, ChevronRight, CheckCircle2 } from "lucide-react";
 
@@ -11,6 +12,7 @@ export default function CreditOverrideDetailPage() {
   const navigate = useNavigate();
   const { customerId } = useParams();
   const { language } = useThemeStore();
+  const t = useT();
   const isUrdu = language === "ur";
   const customers = useCustomersStore((s) => s.customers);
   const [reviewed, setReviewed] = useState(false);
@@ -74,7 +76,7 @@ export default function CreditOverrideDetailPage() {
               ),
             },
             { label: "Amount", value: formatCurrency(customer.outstandingBalance) },
-            { label: "When", value: formatSmartDateTime(customer.createdAt) },
+            { label: t("common.when") ?? "When", value: formatSmartDateTime(customer.createdAt, undefined, t) },
           ].map((row, i, arr) => (
             <div
               key={row.label}

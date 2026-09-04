@@ -8,12 +8,14 @@ import { fetchPurchases } from "@/lib/db";
 import type { Purchase } from "@/types";
 import { formatCurrency, formatDate } from "@/lib/formatters";
 import { useThemeStore } from "@/stores/themeStore";
+import { useT } from "@/lib/i18n";
 import { Phone, User, MapPin, PackagePlus, Wallet, ShoppingCart } from "lucide-react";
 
 export default function CompanyDetailPage() {
   const { companyId } = useParams();
   const navigate = useNavigate();
   const { language } = useThemeStore();
+  const t = useT();
   const isUrdu = language === "ur";
 
   const companies = useCompaniesStore((s) => s.companies);
@@ -36,10 +38,10 @@ export default function CompanyDetailPage() {
   if (!company) return (
     <div style={{ background: "var(--background)", color: "var(--text-primary)" }} className="flex flex-col min-h-full">
       <StatusBar />
-      <NavHeader title="Company" />
+      <NavHeader title={t("company.title")} />
       <div className="flex flex-col items-center py-20 gap-2">
         <p className="text-3xl">🔍</p>
-        <p className="text-sm" style={{ color: "var(--text-secondary)" }}>Company not found</p>
+        <p className="text-sm" style={{ color: "var(--text-secondary)" }}>{t("company.notFound")}</p>
       </div>
     </div>
   );
@@ -55,60 +57,66 @@ export default function CompanyDetailPage() {
       <StatusBar />
       <NavHeader title={company.name} />
 
-      {company.logoUrl && (
-        <div className="flex justify-center pt-3">
-          <img src={company.logoUrl} alt={company.name} className="size-16 rounded-full object-cover"
-            style={{ border: "1px solid var(--divider)" }} />
-        </div>
-      )}
+      {/* Logo + Name hero */}
+      <div className="flex flex-col items-center pt-4 pb-1">
+        {company.logoUrl ? (
+          <img src={company.logoUrl} alt={company.name} className="size-[72px] rounded-[18px] object-cover"
+            style={{ border: "2px solid var(--divider)" }} />
+        ) : (
+          <div className="size-[72px] rounded-[18px] flex items-center justify-center text-2xl font-bold"
+            style={{ background: "var(--surface-2)", color: "var(--text-secondary)", border: "2px solid var(--divider)" }}>
+            {company.name.charAt(0).toUpperCase()}
+          </div>
+        )}
+      </div>
 
-      {/* Financial summary (admin-only, PRD §19) */}
-      <div className="px-4 pt-3">
-        <div className="rounded-[16px] p-5" style={{ background: company.outstandingPayable > 0 ? "var(--brand)" : "var(--surface-2)", border: company.outstandingPayable > 0 ? "none" : "1px solid var(--divider)" }}>
-          <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: company.outstandingPayable > 0 ? "rgba(0,0,0,0.55)" : "var(--text-secondary)" }}>
-            Current Payable
+      {/* Financial summary — clean white card */}
+      <div className="px-5 pt-4">
+        <div className="rounded-[18px] p-6 text-center" style={{ background: "var(--surface)", border: "1px solid var(--divider)" }}>
+          <p className="text-[11px] font-semibold tracking-wide" style={{ color: "var(--text-secondary)" }}>
+            {t("company.currentPayable")}
           </p>
-          <p className="text-[30px] font-bold" style={{ color: company.outstandingPayable > 0 ? "#0a0a0a" : "var(--text-primary)" }}>
+          <p className="text-[34px] font-extrabold mt-1 tracking-tight" style={{ color: company.outstandingPayable > 0 ? "var(--error, #ef4444)" : "var(--text-primary)" }}>
             {formatCurrency(company.outstandingPayable)}
           </p>
         </div>
       </div>
 
-      {/* Quick Actions — Order Stock + Record Payment */}
-      <div className="px-4 pt-3 flex gap-2">
+      {/* Quick Actions — dark primary CTA */}
+      <div className="px-5 pt-4 flex gap-3">
         <button
           onClick={() => navigate(`/admin/purchases/new?companyId=${company.id}`)}
-          className="flex-1 h-12 rounded-full text-sm font-bold flex items-center justify-center gap-2 active:scale-[0.98] transition-transform"
-          style={{ background: "var(--brand)", color: "#0a0a0a" }}
+          className="flex-1 h-[46px] rounded-[14px] text-[13px] font-bold flex items-center justify-center gap-2 active:scale-[0.98] transition-transform"
+          style={{ background: "#1a1a1a", color: "#fff" }}
         >
-          <ShoppingCart size={16} /> Order Stock
+          <ShoppingCart size={16} /> {t("company.orderStock")}
         </button>
         <button
           onClick={() => navigate(`/admin/payments/supplier/${company.id}`)}
-          className="flex-1 h-12 rounded-full text-sm font-bold flex items-center justify-center gap-2 active:scale-[0.98] transition-transform"
-          style={{ background: "var(--surface-2)", color: "var(--text-primary)", border: "1px solid var(--divider)" }}
+          className="flex-1 h-[46px] rounded-[14px] text-[13px] font-bold flex items-center justify-center gap-2 active:scale-[0.98] transition-transform"
+          style={{ background: "var(--surface)", color: "var(--text-primary)", border: "1px solid var(--divider)" }}
         >
-          <Wallet size={16} /> Record Payment
+          <Wallet size={16} /> {t("company.recordPayment")}
         </button>
       </div>
 
-      {/* Totals */}
-      <div className="grid grid-cols-2 gap-3 px-4 pt-3">
-        <div className="rounded-[14px] p-4" style={{ background: "var(--surface-2)", border: "1px solid var(--divider)" }}>
-          <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>Total Purchased</p>
-          <p className="text-base font-bold mt-0.5" style={{ color: "var(--text-primary)" }}>{formatCurrency(company.totalPurchases)}</p>
+      {/* Totals — clean side-by-side cards */}
+      <div className="px-5 pt-4 flex gap-3">
+        <div className="flex-1 rounded-[16px] p-4" style={{ background: "var(--surface)", border: "1px solid var(--divider)" }}>
+          <p className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: "var(--text-secondary)" }}>{t("company.totalPurchased")}</p>
+          <p className="text-[15px] font-bold mt-1" style={{ color: "var(--text-primary)" }}>{formatCurrency(company.totalPurchases)}</p>
         </div>
-        <div className="rounded-[14px] p-4" style={{ background: "var(--surface-2)", border: "1px solid var(--divider)" }}>
-          <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>Total Paid</p>
-          <p className="text-base font-bold mt-0.5" style={{ color: "var(--brand-dark)" }}>{formatCurrency(totalPaid)}</p>
+        <div className="flex-1 rounded-[16px] p-4" style={{ background: "var(--surface)", border: "1px solid var(--divider)" }}>
+          <p className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: "var(--text-secondary)" }}>{t("company.totalPaid")}</p>
+          <p className="text-[15px] font-bold mt-1" style={{ color: "var(--brand-dark, #16a34a)" }}>{formatCurrency(totalPaid)}</p>
         </div>
       </div>
 
-      {/* Contact */}
+      {/* Contact — clean card */}
       {(company.contactPerson || company.phone || company.address) && (
-        <div className="px-4 pt-5">
-          <p className="text-[11px] font-bold uppercase tracking-widest mb-2" style={{ color: "var(--text-secondary)" }}>Contact</p>
-          <div className="rounded-[14px] overflow-hidden" style={{ border: "1px solid var(--divider)" }}>
+        <div className="px-5 pt-6">
+          <p className="text-[12px] font-semibold mb-2.5" style={{ color: "var(--text-secondary)" }}>{t("company.contact")}</p>
+          <div className="rounded-[16px] overflow-hidden" style={{ border: "1px solid var(--divider)" }}>
             {company.contactPerson && <ContactRow icon={User} value={company.contactPerson} />}
             {company.phone && <ContactRow icon={Phone} value={company.phone} />}
             {company.address && <ContactRow icon={MapPin} value={company.address} last />}
@@ -116,18 +124,18 @@ export default function CompanyDetailPage() {
         </div>
       )}
 
-      {/* Products supplied */}
-      <div className="px-4 pt-5">
-        <p className="text-[11px] font-bold uppercase tracking-widest mb-2" style={{ color: "var(--text-secondary)" }}>
-          Products Supplied ({products.length})
+      {/* Products supplied — clean chips */}
+      <div className="px-5 pt-6">
+        <p className="text-[12px] font-semibold mb-2.5" style={{ color: "var(--text-secondary)" }}>
+          {t("company.productsSupplied", { count: String(products.length) })}
         </p>
         {products.length === 0 ? (
-          <p className="text-xs" style={{ color: "var(--text-secondary)" }}>No products linked to this supplier yet.</p>
+          <p className="text-[13px]" style={{ color: "var(--text-secondary)" }}>{t("company.noProducts")}</p>
         ) : (
           <div className="flex flex-wrap gap-2">
             {products.map((p) => (
-              <span key={p.id} className="text-xs font-medium px-3 py-1.5 rounded-full"
-                style={{ background: "var(--surface-2)", color: "var(--text-primary)", border: "1px solid var(--divider)" }}>
+              <span key={p.id} className="text-[12px] font-medium px-3.5 py-[7px] rounded-full"
+                style={{ background: "var(--surface)", color: "var(--text-primary)", border: "1px solid var(--divider)" }}>
                 {p.name}
               </span>
             ))}
@@ -135,30 +143,30 @@ export default function CompanyDetailPage() {
         )}
       </div>
 
-      {/* Purchase history */}
-      <div className="px-4 pt-5 pb-6">
-        <p className="text-[11px] font-bold uppercase tracking-widest mb-2" style={{ color: "var(--text-secondary)" }}>Purchase History</p>
+      {/* Purchase history — clean list cards */}
+      <div className="px-5 pt-6 pb-8">
+        <p className="text-[12px] font-semibold mb-2.5" style={{ color: "var(--text-secondary)" }}>{t("company.purchaseHistory")}</p>
         {purchases.length === 0 ? (
-          <p className="text-xs" style={{ color: "var(--text-secondary)" }}>No purchases recorded yet.</p>
+          <p className="text-[13px]" style={{ color: "var(--text-secondary)" }}>{t("company.noPurchases")}</p>
         ) : (
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-2.5">
             {purchases.map((p) => (
-              <div key={p.id} className="flex items-center justify-between rounded-[14px] p-3.5"
+              <div key={p.id} className="flex items-center justify-between rounded-[16px] p-4"
                 style={{ background: "var(--surface)", border: "1px solid var(--divider)" }}>
                 <div className="flex items-center gap-3">
-                  <div className="size-8 rounded-[9px] flex items-center justify-center shrink-0"
-                    style={{ background: "rgba(132,204,22,0.15)", color: "var(--brand-dark)" }}>
-                    <PackagePlus size={15} />
+                  <div className="size-9 rounded-[10px] flex items-center justify-center shrink-0"
+                    style={{ background: "rgba(132,204,22,0.12)", color: "var(--brand-dark, #16a34a)" }}>
+                    <PackagePlus size={16} />
                   </div>
                   <div>
-                    <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>{p.purchaseNumber}</p>
-                    <p className="text-[11px]" style={{ color: "var(--text-secondary)" }}>{formatDate(p.createdAt)}</p>
+                    <p className="text-[13px] font-semibold" style={{ color: "var(--text-primary)" }}>{p.purchaseNumber}</p>
+                    <p className="text-[11px] mt-0.5" style={{ color: "var(--text-secondary)" }}>{formatDate(p.createdAt)}</p>
                   </div>
                 </div>
                 <div className="text-end">
-                  <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>{formatCurrency(p.totalAmount)}</p>
+                  <p className="text-[13px] font-bold" style={{ color: "var(--text-primary)" }}>{formatCurrency(p.totalAmount)}</p>
                   {p.outstandingPayable > 0 && (
-                    <p className="text-[11px]" style={{ color: "var(--error)" }}>{formatCurrency(p.outstandingPayable)} payable</p>
+                    <p className="text-[11px] mt-0.5" style={{ color: "var(--error, #ef4444)" }}>{formatCurrency(p.outstandingPayable)} {t("company.payable")}</p>
                   )}
                 </div>
               </div>
@@ -174,8 +182,11 @@ function ContactRow({ icon: Icon, value, last }: { icon: typeof Phone; value: st
   return (
     <div className="flex items-center gap-3 px-4 py-3.5"
       style={{ borderBottom: last ? "none" : "1px solid var(--divider)", background: "var(--surface)" }}>
-      <Icon size={16} style={{ color: "var(--brand)" }} />
-      <span className="text-sm" style={{ color: "var(--text-primary)" }}>{value}</span>
+      <div className="size-7 rounded-full flex items-center justify-center shrink-0"
+        style={{ background: "rgba(132,204,22,0.1)" }}>
+        <Icon size={14} style={{ color: "var(--brand-dark, #16a34a)" }} />
+      </div>
+      <span className="text-[13px]" style={{ color: "var(--text-primary)" }}>{value}</span>
     </div>
   );
 }

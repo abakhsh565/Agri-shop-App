@@ -51,12 +51,12 @@ export default function SelectSheet({
       onClick={onClose}
     >
       <div
-        className="w-full max-w-[480px] mx-auto rounded-t-[22px] max-h-[75vh] flex flex-col animate-slide-up"
-        style={{ background: "var(--surface)", border: "1px solid var(--divider)" }}
+        className="w-full max-w-[480px] mx-auto rounded-t-[20px] max-h-[75vh] flex flex-col animate-slide-up"
+        style={{ background: "var(--surface)", borderTop: "1px solid var(--divider)" }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-5 pt-4 pb-2">
-          <p className="text-base font-bold" style={{ color: "var(--text-primary)" }}>{title}</p>
+        <div className="flex items-center justify-between px-5 pt-4 pb-3">
+          <p className="text-[15px] font-bold" style={{ color: "var(--text-primary)" }}>{title}</p>
           <button onClick={onClose} className="size-8 rounded-full flex items-center justify-center"
             style={{ background: "var(--surface-2)", color: "var(--text-secondary)" }}>
             <X size={16} />
@@ -64,8 +64,8 @@ export default function SelectSheet({
         </div>
 
         {searchable && (
-          <div className="px-5 pb-2">
-            <div className="flex items-center gap-2 h-10 rounded-full px-3"
+          <div className="px-5 pb-3">
+            <div className="flex items-center gap-2 h-[40px] rounded-[12px] px-3"
               style={{ background: "var(--surface-2)", border: "1px solid var(--divider)" }}>
               <Search size={14} style={{ color: "var(--text-secondary)" }} />
               <input
@@ -82,7 +82,7 @@ export default function SelectSheet({
 
         <div className="overflow-y-auto px-3 pb-6 pt-1">
           {filtered.length === 0 ? (
-            <p className="text-center text-sm py-8" style={{ color: "var(--text-secondary)" }}>{emptyLabel}</p>
+            <p className="text-center text-[13px] py-8" style={{ color: "var(--text-secondary)" }}>{emptyLabel}</p>
           ) : (
             filtered.map((o) => {
               const isSel = o.value === selected;
@@ -90,8 +90,8 @@ export default function SelectSheet({
                 <button
                   key={o.value}
                   onClick={() => { onSelect(o.value); onClose(); }}
-                  className="flex items-center justify-between w-full px-3 py-3.5 rounded-[12px] text-start active:opacity-70"
-                  style={{ background: isSel ? "rgba(132,204,22,0.1)" : "transparent" }}
+                  className="flex items-center justify-between w-full px-3 py-3 rounded-[12px] text-start active:opacity-70"
+                  style={{ background: isSel ? "rgba(132,204,22,0.08)" : "transparent" }}
                 >
                   <div className="flex items-center gap-3 min-w-0">
                     {o.imageUrl ? (

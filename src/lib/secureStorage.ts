@@ -1,11 +1,12 @@
 /**
  * Secure Storage Wrapper
  *
- * Provides encrypted localStorage for sensitive data like auth tokens and PINs.
+ * Provides encrypted localStorage for sensitive data like PINs.
  * Uses Web Crypto API for encryption/decryption.
  *
- * Note: This is defense-in-depth. The primary security should come from
- * Supabase RLS and proper authentication flows.
+ * The encryption key is stored in localStorage (not sessionStorage) so it
+ * persists across app/browser restarts. This is defense-in-depth — the
+ * primary security comes from Supabase RLS and the PIN being a SHA-256 hash.
  */
 
 const ENCRYPTION_KEY_NAME = "agrishop_enc_key";
@@ -14,11 +15,10 @@ const KEY_LENGTH = 256;
 
 /**
  * Get or create an encryption key for this device.
- * Stored in IndexedDB for persistence.
+ * Stored in localStorage for persistence across app restarts.
  */
 async function getEncryptionKey(): Promise<CryptoKey> {
-  // Check if we already have a key
-  const existing = sessionStorage.getItem(ENCRYPTION_KEY_NAME);
+  const existing = localStorage.getItem(ENCRYPTION_KEY_NAME);
   if (existing) {
     const keyData = JSON.parse(existing);
     return crypto.subtle.importKey(
@@ -37,9 +37,8 @@ async function getEncryptionKey(): Promise<CryptoKey> {
     ["encrypt", "decrypt"]
   );
 
-  // Export and store
   const exported = await crypto.subtle.exportKey("jwk", key);
-  sessionStorage.setItem(ENCRYPTION_KEY_NAME, JSON.stringify(exported));
+  localStorage.setItem(ENCRYPTION_KEY_NAME, JSON.stringify(exported));
 
   return key;
 }
@@ -48,57 +47,44 @@ async function getEncryptionKey(): Promise<CryptoKey> {
  * Encrypt a string value.
  */
 export async function encrypt(value: string): Promise<string> {
-  try {
-    const key = await getEncryptionKey();
-    const iv = crypto.getRandomValues(new Uint8Array(12));
-    const encoded = new TextEncoder().encode(value);
+  const key = await getEncryptionKey();
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const encoded = new TextEncoder().encode(value);
 
-    const encrypted = await crypto.subtle.encrypt(
-      { name: ALGORITHM, iv },
-      key,
-      encoded
-    );
+  const encrypted = await crypto.subtle.encrypt(
+    { name: ALGORITHM, iv },
+    key,
+    encoded
+  );
 
-    // Combine IV + ciphertext and base64 encode
-    const combined = new Uint8Array(iv.length + encrypted.byteLength);
-    combined.set(iv);
-    combined.set(new Uint8Array(encrypted), iv.length);
+  const combined = new Uint8Array(iv.length + encrypted.byteLength);
+  combined.set(iv);
+  combined.set(new Uint8Array(encrypted), iv.length);
 
-    return btoa(String.fromCharCode(...combined));
-  } catch {
-    // Fallback: base64 encode (not secure, but prevents plaintext storage)
-    return btoa(value);
-  }
+  return btoa(String.fromCharCode(...combined));
 }
 
 /**
  * Decrypt an encrypted string value.
+ * Throws on decryption failure so callers can distinguish
+ * "key/data lost" from "wrong PIN".
  */
 export async function decrypt(encryptedValue: string): Promise<string> {
-  try {
-    const key = await getEncryptionKey();
-    const combined = Uint8Array.from(atob(encryptedValue), (c) =>
-      c.charCodeAt(0)
-    );
+  const key = await getEncryptionKey();
+  const combined = Uint8Array.from(atob(encryptedValue), (c) =>
+    c.charCodeAt(0)
+  );
 
-    const iv = combined.slice(0, 12);
-    const ciphertext = combined.slice(12);
+  const iv = combined.slice(0, 12);
+  const ciphertext = combined.slice(12);
 
-    const decrypted = await crypto.subtle.decrypt(
-      { name: ALGORITHM, iv },
-      key,
-      ciphertext
-    );
+  const decrypted = await crypto.subtle.decrypt(
+    { name: ALGORITHM, iv },
+    key,
+    ciphertext
+  );
 
-    return new TextDecoder().decode(decrypted);
-  } catch {
-    // Fallback: base64 decode
-    try {
-      return atob(encryptedValue);
-    } catch {
-      return encryptedValue;
-    }
-  }
+  return new TextDecoder().decode(decrypted);
 }
 
 /**

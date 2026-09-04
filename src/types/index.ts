@@ -49,6 +49,24 @@ export interface ReminderConfig {
   ends: ReminderEnds;
   endsDate: string | null;
   endsCount: number;
+  groupId?: string | null;
+  groupName?: string | null;
+}
+
+export interface ReminderGroup {
+  id: string;
+  name: string;
+  createdAt: string;
+  customerCount: number;
+  customers: { id: string; name: string; outstandingBalance: number; dueDate: string | null }[];
+  config?: {
+    triggerType: string;
+    startDays: number;
+    repeatType: string;
+    intervalN?: number;
+    intervalUnit?: string;
+    ends?: string;
+  };
 }
 // ─── Business / Crop Settings ──────────────────────────────────────────────────
 

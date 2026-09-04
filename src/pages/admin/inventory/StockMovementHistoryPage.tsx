@@ -4,6 +4,7 @@ import NavHeader from "@/components/ui/NavHeader";
 import { useThemeStore } from "@/stores/themeStore";
 import { useProductsStore } from "@/stores/productsStore";
 import { useSalesStore } from "@/stores/salesStore";
+import { useT } from "@/lib/i18n";
 import { formatCurrency, formatSmartDateTime } from "@/lib/formatters";
 import { useCurrentTime } from "@/lib/useCurrentTime";
 import { ArrowUpCircle, ArrowDownCircle, RefreshCw, Package } from "lucide-react";
@@ -22,6 +23,7 @@ interface Movement {
 
 export default function StockMovementHistoryPage() {
   const { language } = useThemeStore();
+  const t = useT();
   const isUrdu = language === "ur";
   const products = useProductsStore((s) => s.products);
   const sales = useSalesStore((s) => s.sales);
@@ -115,7 +117,7 @@ export default function StockMovementHistoryPage() {
                 <p className="text-sm font-bold" style={{ color: mov.qtyChange > 0 ? "#22c55e" : "var(--error)" }}>
                   {mov.qtyChange > 0 ? "+" : ""}{mov.qtyChange}
                 </p>
-                <p className="text-[10px]" style={{ color: "var(--text-secondary)" }}>{formatSmartDateTime(mov.createdAt, now)}</p>
+                <p className="text-[10px]" style={{ color: "var(--text-secondary)" }}>{formatSmartDateTime(mov.createdAt, now, t)}</p>
               </div>
             </div>
           ))}

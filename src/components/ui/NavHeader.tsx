@@ -50,7 +50,7 @@ export default function NavHeader({ title, backTo, onBack, right, noBack }: NavH
 
   return (
     <div
-      className="flex h-11 items-center px-4 relative shrink-0 w-full"
+      className="flex h-[48px] items-center px-5 relative shrink-0 w-full"
       style={{ background: "var(--background)" }}
     >
       {!noBack && (
@@ -63,7 +63,7 @@ export default function NavHeader({ title, backTo, onBack, right, noBack }: NavH
         </button>
       )}
       <p
-        className="text-base font-bold w-full text-center"
+        className="text-[15px] font-bold w-full text-center"
         style={{ color: "var(--text-primary)" }}
       >
         {title}
