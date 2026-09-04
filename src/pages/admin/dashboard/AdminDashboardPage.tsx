@@ -73,26 +73,30 @@ export default function AdminDashboardPage() {
   const mockCompanies = useCompaniesStore((s) => s.companies);
   const mockEmployees = useEmployeesStore((s) => s.employees);
   const customers = useCustomersStore((s) => s.customers);
-  const [totalReturns, setTotalReturns] = useState(0);
-  const [creditCollected, setCreditCollected] = useState(0);
+  const [allReturns, setAllReturns] = useState<{ amount: number; createdAt: string }[]>([]);
+  const [allPayments, setAllPayments] = useState<{ amount: number; createdAt: string }[]>([]);
 
-  // Fetch returns + credit collected for net sales calculation
+  // Fetch returns + credit collected — store raw rows so we can filter by date range
   useEffect(() => {
     async function fetchReturns() {
       try {
         const { data } = await supabase.from("returns").select("total_refund, created_at");
         if (data) {
-          const total = data.reduce((s: number, r: any) => s + Number(r.total_refund || 0), 0);
-          setTotalReturns(total);
+          setAllReturns(data.map((r: any) => ({
+            amount: Number(r.total_refund || 0),
+            createdAt: r.created_at || "",
+          })));
         }
       } catch {}
     }
     async function fetchCreditCollected() {
       try {
-        const { data } = await supabase.from("customer_payments").select("amount");
+        const { data } = await supabase.from("customer_payments").select("amount, created_at");
         if (data) {
-          const total = data.reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
-          setCreditCollected(total);
+          setAllPayments(data.map((p: any) => ({
+            amount: Number(p.amount || 0),
+            createdAt: p.created_at || "",
+          })));
         }
       } catch {}
     }
@@ -123,8 +127,13 @@ export default function AdminDashboardPage() {
   const yesterdayStr = yesterday.toISOString().split("T")[0];
 
   function inFilter(s: (typeof mockSales)[0]) {
+    return dateInRange(s.createdAt);
+  }
+
+  // Generic date-range check — works for any ISO date string
+  function dateInRange(isoStr: string): boolean {
     if (dateFilter === "all") return true;
-    const d = s.createdAt.split("T")[0];
+    const d = isoStr.split("T")[0];
     if (dateFilter === "today") return d === todayStr;
     if (dateFilter === "yesterday") return d === yesterdayStr;
     if (dateFilter === "this_week") {
@@ -154,11 +163,18 @@ export default function AdminDashboardPage() {
       sale.items.reduce((s, it) => s + (it.unitPrice - (variantCost.get(it.variantId ?? '') ?? 0)) * it.qty, 0),
     0,
   );
+  // Returns + credit collected — same date filter as sales
+  const totalReturns = allReturns
+    .filter((r) => dateInRange(r.createdAt))
+    .reduce((s, r) => s + r.amount, 0);
+  const creditCollected = allPayments
+    .filter((p) => dateInRange(p.createdAt))
+    .reduce((s, p) => s + p.amount, 0);
   // Outstanding = customer amounts currently owed (a live balance, not period-scoped).
   const totalOutstanding = customers.reduce((s, c) => s + c.outstandingBalance, 0);
 
-  // Recent sales (most recent first) — matches employee dashboard count
-  const recentSales = [...allActive]
+  // Recent sales — filtered by selected date range, most recent first
+  const recentSales = [...filtered]
     .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
     .slice(0, 3);
 
