@@ -27,13 +27,22 @@ export default function InventoryAlertsPage() {
     return p.stockQty <= threshold * 2 && p.stockQty > threshold;
   });
   const now = Date.now();
-  const expiredProducts = products.filter((p) => p.expiryDate && new Date(p.expiryDate).getTime() < now);
-  const expiringSoonProducts = products.filter((p) => {
-    if (!p.expiryDate) return false;
-    const ms = new Date(p.expiryDate).getTime();
-    if (ms < now) return false;
-    return (ms - now) / 86400000 <= 30;
-  });
+  function earliestExpiry(p: (typeof products)[number]): string | null {
+    const dates = p.variants.map((v) => v.expiryDate).filter((d): d is string => !!d);
+    if (dates.length === 0) return null;
+    return dates.sort((a, b) => new Date(a).getTime() - new Date(b).getTime())[0];
+  }
+  const expiredProducts = products
+    .map((p) => ({ product: p, expiryDate: earliestExpiry(p) }))
+    .filter((x): x is { product: (typeof products)[number]; expiryDate: string } => !!x.expiryDate && new Date(x.expiryDate).getTime() < now);
+  const expiringSoonProducts = products
+    .map((p) => ({ product: p, expiryDate: earliestExpiry(p) }))
+    .filter((x): x is { product: (typeof products)[number]; expiryDate: string } => {
+      if (!x.expiryDate) return false;
+      const ms = new Date(x.expiryDate).getTime();
+      if (ms < now) return false;
+      return (ms - now) / 86400000 <= 30;
+    });
 
   const totalPayable = companies.reduce((s, c) => s + c.outstandingPayable, 0);
 
@@ -94,7 +103,7 @@ export default function InventoryAlertsPage() {
               {isUrdu ? "میعاد ختم" : "Expired"}
             </p>
             <div className="flex flex-col gap-2">
-              {expiredProducts.map((p) => (
+              {expiredProducts.map(({ product: p, expiryDate }) => (
                 <button
                   key={p.id}
                   onClick={() => navigate("/admin/inventory/" + p.id)}
@@ -110,7 +119,7 @@ export default function InventoryAlertsPage() {
                   <div className="flex-1 min-w-0">
                     <p className="text-[13px] font-medium truncate" style={{ color: "var(--text-primary)" }}>{p.name}</p>
                     <p className="text-[11px]" style={{ color: "#DC2626" }}>
-                      {isUrdu ? "میعاد ختم: " : "Expired: "}{new Date(p.expiryDate!).toLocaleDateString(isUrdu ? "ur-PK" : "en-PK", { day: "numeric", month: "short", year: "numeric" })}
+                      {isUrdu ? "میعاد ختم: " : "Expired: "}{new Date(expiryDate).toLocaleDateString(isUrdu ? "ur-PK" : "en-PK", { day: "numeric", month: "short", year: "numeric" })}
                     </p>
                   </div>
                   <ChevronRight size={14} color="#DC2626" />
@@ -192,8 +201,8 @@ export default function InventoryAlertsPage() {
               {isUrdu ? "جلد میعاد ختم" : "Expiring Soon"}
             </p>
             <div className="flex flex-col gap-2">
-              {expiringSoonProducts.map((p) => {
-                const daysLeft = Math.ceil((new Date(p.expiryDate!).getTime() - now) / 86400000);
+              {expiringSoonProducts.map(({ product: p, expiryDate }) => {
+                const daysLeft = Math.ceil((new Date(expiryDate).getTime() - now) / 86400000);
                 return (
                   <button
                     key={p.id}

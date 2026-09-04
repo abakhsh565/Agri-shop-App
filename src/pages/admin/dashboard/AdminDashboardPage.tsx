@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import type { ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "@/stores/authStore";
 import { useNotificationStore, type AppNotification } from "@/stores/notificationStore";
@@ -197,12 +198,14 @@ export default function AdminDashboardPage() {
   }
 
   // Expiry signals — agri-specific: expired chemicals/seeds are a liability, expiring-soon needs clearing first
-  const expiredProducts = mockProducts.filter(p => p.expiryDate && new Date(p.expiryDate).getTime() < now.getTime());
+  const expiredProducts = mockProducts.filter(p => p.variants.some(v => v.expiryDate && new Date(v.expiryDate).getTime() < now.getTime()));
   const expiringSoonProducts = mockProducts.filter(p => {
-    if (!p.expiryDate) return false;
-    const ms = new Date(p.expiryDate).getTime();
-    if (ms < now.getTime()) return false;
-    return (ms - now.getTime()) / 86400000 <= 30;
+    return p.variants.some(v => {
+      if (!v.expiryDate) return false;
+      const ms = new Date(v.expiryDate).getTime();
+      if (ms < now.getTime()) return false;
+      return (ms - now.getTime()) / 86400000 <= 30;
+    });
   });
 
   // ── Unified attention feed — every "needs attention" signal, one ranked list, one render path ──
@@ -212,7 +215,17 @@ export default function AdminDashboardPage() {
     info: { chipBg: "#F1EFE8", iconColor: "#5F5E5A", metaColor: "var(--text-secondary)" },
   };
   const SEVERITY_RANK = { critical: 0, warning: 1, info: 2 };
-  const attentionItems = [
+  type AttentionItem = {
+    id: string;
+    severity: "critical" | "warning" | "info";
+    icon: ReactNode;
+    title: string;
+    subtitle?: string;
+    metaText?: string;
+    ctaText?: string;
+    onClick: () => void;
+  };
+  const attentionItems: AttentionItem[] = [
     ...(totalPayable > 0 ? [{
       id: "payable", severity: "critical" as const,
       icon: <AlertTriangle size={18} color={SEVERITY_STYLE.critical.iconColor} />,
@@ -599,15 +612,13 @@ export default function AdminDashboardPage() {
             attentionItems.map((item) => {
               const style = SEVERITY_STYLE[item.severity];
               const hasDetail = !!item.subtitle;
-              const Wrapper = item.onClick ? "button" : "div";
               return (
-                <Wrapper
+                <button
                   key={item.id}
-                  {...(item.onClick ? { onClick: item.onClick } : {})}
+                  onClick={item.onClick}
                   className={
                     "flex " + (hasDetail ? "items-start" : "items-center") +
-                    " gap-3 rounded-[16px] p-3.5 w-full text-start" +
-                    (item.onClick ? " transition-opacity active:opacity-70" : "")
+                    " gap-3 rounded-[16px] p-3.5 w-full text-start transition-opacity active:opacity-70"
                   }
                   style={{ background: "var(--surface)", boxShadow: "var(--shadow-card)" }}
                 >
@@ -636,7 +647,7 @@ export default function AdminDashboardPage() {
                   {!hasDetail && item.ctaText && (
                     <span className="text-[12px] font-bold shrink-0" style={{ color: "var(--text-primary)" }}>{item.ctaText}</span>
                   )}
-                </Wrapper>
+                </button>
               );
             })
           ) : (
