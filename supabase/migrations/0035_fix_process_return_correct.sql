@@ -39,6 +39,10 @@ DECLARE
   v_processed_by_name text;
   v_sale_payment_type text;
   v_credit_return_total numeric(14,4) := 0;
+  v_item_value numeric;
+  v_sale_total numeric;
+  v_sale_paid numeric;
+  v_credit_ratio numeric := 1;
 BEGIN
   v_customer_name := COALESCE(payload->>'customer_name', payload->>'customerName', 'Customer');
   v_resolution := COALESCE(payload->>'resolution', 'refund_cash');
@@ -151,14 +155,16 @@ BEGIN
       WHERE id = COALESCE((v_item->>'product_id')::uuid, (v_item->>'productId')::uuid);
     END IF;
 
-    -- Track credit-sale return total for outstanding adjustment
+    -- Track credit portion of return for outstanding adjustment
+    -- For mixed paid/credit sales, only the credit portion reduces outstanding
     IF v_sale_payment_type IS NOT NULL AND v_sale_payment_type != 'full' AND v_customer_id IS NOT NULL THEN
-      v_credit_return_total := v_credit_return_total
-        + (v_item->>'qty')::int * COALESCE(
-            (v_item->>'unit_price')::numeric,
-            (v_item->>'unitPrice')::numeric,
-            0
-          );
+      v_item_value := (v_item->>'qty')::int * COALESCE((v_item->>'unit_price')::numeric, (v_item->>'unitPrice')::numeric, 0);
+      SELECT total_amount, amount_paid INTO v_sale_total, v_sale_paid FROM sales WHERE id = v_sale_id;
+      v_credit_ratio := 1;
+      IF v_sale_total > 0 AND v_sale_paid > 0 THEN
+        v_credit_ratio := GREATEST(0, (v_sale_total - v_sale_paid) / v_sale_total);
+      END IF;
+      v_credit_return_total := v_credit_return_total + ROUND(v_item_value * v_credit_ratio, 4);
     END IF;
   END LOOP;
 
