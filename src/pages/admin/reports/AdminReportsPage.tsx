@@ -8,6 +8,7 @@ import { useProductsStore } from "@/stores/productsStore";
 import { useCustomersStore } from "@/stores/customersStore";
 import { useCompaniesStore } from "@/stores/companiesStore";
 import { TrendingUp, Receipt, Wallet, AlertTriangle, Calendar } from "lucide-react";
+import { pkToday } from "@/lib/pkDate";
 
 type Period = "today" | "week" | "month" | "all" | "custom";
 
@@ -60,7 +61,7 @@ export default function AdminReportsPage() {
   }, [mockProducts]);
 
   const now = new Date();
-  const todayISO = now.toISOString().split("T")[0];
+  const todayISO = pkToday();
 
   const report = useMemo(() => {
     const { from, to } = startOf(period, customFrom, customTo);

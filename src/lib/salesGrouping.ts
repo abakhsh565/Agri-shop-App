@@ -1,4 +1,5 @@
 import type { Sale } from "@/types";
+import { pkDate, pkDateFromISO, pkToday, pkYesterday, pkWeekStart, pkMonthStart } from "@/lib/pkDate";
 
 export interface SalesSection {
   label: string;
@@ -10,17 +11,10 @@ export interface SalesSection {
  * Sales within each section are sorted newest-first.
  */
 export function groupSalesByDateSections(sales: Sale[], now: Date): SalesSection[] {
-  const todayStr = now.toISOString().split("T")[0];
-
-  const yesterday = new Date(now);
-  yesterday.setDate(now.getDate() - 1);
-  const yesterdayStr = yesterday.toISOString().split("T")[0];
-
-  const weekStart = new Date(now);
-  weekStart.setDate(now.getDate() - now.getDay());
-  weekStart.setHours(0, 0, 0, 0);
-
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const todayStr = pkDate(now);
+  const yesterdayStr = pkYesterday();
+  const weekStartStr = pkWeekStart();
+  const monthStartStr = pkMonthStart();
 
   const groups: Record<string, Sale[]> = {
     "Today": [],
@@ -31,16 +25,15 @@ export function groupSalesByDateSections(sales: Sale[], now: Date): SalesSection
   };
 
   for (const sale of sales) {
-    const d = sale.createdAt.split("T")[0];
-    const saleDate = new Date(d + "T12:00:00");
+    const d = pkDateFromISO(sale.createdAt);
 
     if (d === todayStr) {
       groups["Today"].push(sale);
     } else if (d === yesterdayStr) {
       groups["Yesterday"].push(sale);
-    } else if (saleDate >= weekStart) {
+    } else if (d >= weekStartStr) {
       groups["This Week"].push(sale);
-    } else if (saleDate >= monthStart) {
+    } else if (d >= monthStartStr) {
       groups["This Month"].push(sale);
     } else {
       groups["Earlier"].push(sale);

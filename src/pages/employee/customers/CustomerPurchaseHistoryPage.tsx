@@ -6,6 +6,7 @@ import { PaymentBadge, CreditHealthBadge } from "@/components/ui/Badge";
 import { useCustomersStore } from "@/stores/customersStore";
 import { useSalesStore } from "@/stores/salesStore";
 import { formatCurrency, formatDate, getCreditHealth } from "@/lib/formatters";
+import { pkToday, pkDateFromISO } from "@/lib/pkDate";
 import { useT } from "@/lib/i18n";
 import { useThemeStore } from "@/stores/themeStore";
 import { useAuthStore } from "@/stores/authStore";
@@ -47,7 +48,7 @@ export default function CustomerPurchaseHistoryPage() {
     { key: "custom",  label: "Custom" },
   ];
 
-  const todayISO = new Date().toISOString().split("T")[0];
+  const todayISO = pkToday();
 
   function inFilter(sale: (typeof sales)[0]) {
     if (filter === "all") return true;
@@ -56,7 +57,7 @@ export default function CustomerPurchaseHistoryPage() {
     if (filter === "month") return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
     if (filter === "3months") { const cutoff = new Date(); cutoff.setMonth(cutoff.getMonth() - 3); return d >= cutoff; }
     if (filter === "custom") {
-      const ds = sale.createdAt.split("T")[0];
+      const ds = pkDateFromISO(sale.createdAt);
       if (customFrom && customTo) return ds >= customFrom && ds <= customTo;
       if (customFrom) return ds >= customFrom;
       if (customTo) return ds <= customTo;

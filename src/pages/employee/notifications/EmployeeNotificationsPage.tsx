@@ -6,6 +6,7 @@ import { useNotificationStore, type AppNotification } from "@/stores/notificatio
 import { useCurrentTime } from "@/lib/useCurrentTime";
 import { useT } from "@/lib/i18n";
 import { formatSmartDateTime, translateNotification } from "@/lib/formatters";
+import { pkDate, pkDateFromISO, pkToday, pkYesterday } from "@/lib/pkDate";
 import {
   Bell, ShoppingCart, CreditCard, RotateCcw, Package,
   AlertTriangle, Info,
@@ -41,14 +42,8 @@ const KIND_ICON: Record<string, any> = {
 type TimeGroup = { label: string; items: AppNotification[] };
 
 function groupByTime(items: AppNotification[], now: Date): TimeGroup[] {
-  const today = now.toISOString().split("T")[0];
-  const yesterdayDate = new Date(now);
-  yesterdayDate.setDate(yesterdayDate.getDate() - 1);
-  const yesterday = yesterdayDate.toISOString().split("T")[0];
-  const weekAgo = new Date(now);
-  weekAgo.setDate(weekAgo.getDate() - 7);
-  const monthAgo = new Date(now);
-  monthAgo.setMonth(monthAgo.getMonth() - 1);
+  const todayStr = pkDate(now);
+  const yesterdayStr = pkYesterday();
 
   const groups: Record<string, AppNotification[]> = {
     "Today": [],
@@ -59,12 +54,11 @@ function groupByTime(items: AppNotification[], now: Date): TimeGroup[] {
   };
 
   for (const n of items) {
-    const d = n.created_at.split("T")[0];
-    const dt = new Date(n.created_at);
-    if (d === today) groups["Today"].push(n);
-    else if (d === yesterday) groups["Yesterday"].push(n);
-    else if (dt >= weekAgo) groups["This Week"].push(n);
-    else if (dt >= monthAgo) groups["This Month"].push(n);
+    const d = pkDateFromISO(n.created_at);
+    if (d === todayStr) groups["Today"].push(n);
+    else if (d === yesterdayStr) groups["Yesterday"].push(n);
+    else if (d >= pkDate(new Date(now.getTime() - 7 * 86400000))) groups["This Week"].push(n);
+    else if (d >= pkDate(new Date(now.getFullYear(), now.getMonth(), 1))) groups["This Month"].push(n);
     else groups["Earlier"].push(n);
   }
 

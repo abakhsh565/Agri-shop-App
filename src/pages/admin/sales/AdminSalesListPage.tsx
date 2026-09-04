@@ -11,6 +11,7 @@ import { useCurrentTime } from "@/lib/useCurrentTime";
 import type { Sale } from "@/types";
 import { Search, Calendar, SlidersHorizontal, Check } from "lucide-react";
 import { groupSalesByDateSections } from "@/lib/salesGrouping";
+import { pkDate, pkDateFromISO, pkToday, pkYesterday, pkWeekStart, pkMonthStart } from "@/lib/pkDate";
 
 function initBgColor(name: string) {
   const colors = ["#84cc16","#3b82f6","#8b5cf6","#f59e0b","#06b6d4","#ec4899"];
@@ -57,21 +58,15 @@ export default function AdminSalesListPage() {
 
   const now = useCurrentTime();
   const today = now;
-  const todayStr = today.toISOString().split("T")[0];
-  const yesterday = new Date(today); yesterday.setDate(today.getDate() - 1);
-  const yesterdayStr = yesterday.toISOString().split("T")[0];
+  const todayStr = pkToday();
+  const yesterdayStr = pkYesterday();
 
   function inDate(sale: Sale) {
-    const d = sale.createdAt.split("T")[0];
+    const d = pkDateFromISO(sale.createdAt);
     if (dateFilter === "today")     return d === todayStr;
     if (dateFilter === "yesterday") return d === yesterdayStr;
-    if (dateFilter === "this_month") {
-      return new Date(d).getMonth() === now.getMonth() && new Date(d).getFullYear() === now.getFullYear();
-    }
-    if (dateFilter === "this_week") {
-      const weekStart = new Date(); weekStart.setDate(weekStart.getDate() - weekStart.getDay());
-      return new Date(d) >= weekStart;
-    }
+    if (dateFilter === "this_month") return d >= pkMonthStart();
+    if (dateFilter === "this_week") return d >= pkWeekStart();
     if (dateFilter === "custom") {
       if (customFrom && customTo) return d >= customFrom && d <= customTo;
       if (customFrom) return d >= customFrom;
@@ -121,7 +116,7 @@ export default function AdminSalesListPage() {
     { key: "custom",      label: t("sales.customFilter") },
   ];
 
-  const todayISO = now.toISOString().split("T")[0];
+  const todayISO = pkToday();
 
   function applyCustomDates() {
     setShowDateModal(false);

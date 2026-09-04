@@ -7,6 +7,7 @@ import { useCustomersStore } from "@/stores/customersStore";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
 import { formatCurrency, formatSmartDateTime } from "@/lib/formatters";
+import { pkToday, pkDateFromISO } from "@/lib/pkDate";
 import { useUIStore } from "@/stores/uiStore";
 import { useAuthStore } from "@/stores/authStore";
 import { useCurrentTime } from "@/lib/useCurrentTime";
@@ -51,13 +52,13 @@ export default function EmployeeDetailPage() {
   );
 
   const empSales = sales.filter((s: Sale) => !s.isVoided && (s.employeeId === emp.id || s.employeeName === emp.name));
-  const todayStr = now.toISOString().split("T")[0];
+  const todayStr = pkToday();
 
   // Performance stats
   const totalRevenue = empSales.reduce((sum, x) => sum + x.totalAmount, 0);
   const totalTransactions = empSales.length;
   const avgSaleValue = totalTransactions > 0 ? Math.round(totalRevenue / totalTransactions) : 0;
-  const todaySales = empSales.filter(s => s.createdAt.split("T")[0] === todayStr);
+  const todaySales = empSales.filter(s => pkDateFromISO(s.createdAt) === todayStr);
   const todayRevenue = todaySales.reduce((sum, x) => sum + x.totalAmount, 0);
   const todayTransactions = todaySales.length;
 

@@ -11,6 +11,7 @@ import { generateReminders } from "@/lib/reminderEngine";
 import { useThemeStore } from "@/stores/themeStore";
 import { useCurrentTime } from "@/lib/useCurrentTime";
 import { ShoppingCart, CreditCard, ChevronRight, Bell, Search, ArrowRight } from "lucide-react";
+import { pkToday, pkDateFromISO } from "@/lib/pkDate";
 import StatusBar from "@/components/ui/StatusBar";
 
 function initBgColor(name: string) {
@@ -83,8 +84,8 @@ export default function DashboardPage() {
   });
 
   // Live metrics
-  const todayStr = today.toISOString().split("T")[0];
-  const todaySales = mockSales.filter((s) => !s.isVoided && s.createdAt.startsWith(todayStr));
+  const todayStr = pkToday();
+  const todaySales = mockSales.filter((s) => !s.isVoided && pkDateFromISO(s.createdAt) === todayStr);
   const salesToUse = todaySales.length > 0 ? todaySales : mockSales.filter((s) => !s.isVoided);
   const totalAmount  = salesToUse.reduce((s, x) => s + x.totalAmount, 0);
   const paidAmount   = salesToUse.filter((s) => s.paymentType === "full").reduce((s, x) => s + x.amountPaid, 0);

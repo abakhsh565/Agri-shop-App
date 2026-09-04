@@ -31,12 +31,9 @@ export function formatSmartDateTime(iso: string, now?: Date, t?: TranslateFn): s
   const d = new Date(iso);
   const ref = now ?? new Date();
   const time = d.toLocaleTimeString("en-PK", { hour: "numeric", minute: "2-digit", hour12: true });
-  const todayStr = ref.toISOString().split("T")[0];
-  const dateStr = iso.split("T")[0];
-
-  const yesterday = new Date(ref);
-  yesterday.setDate(ref.getDate() - 1);
-  const yesterdayStr = yesterday.toISOString().split("T")[0];
+  const todayStr = pkDate(ref);
+  const dateStr = pkDateFromISO(iso);
+  const yesterdayStr = pkYesterday();
 
   const dateLabel = d.toLocaleDateString("en-PK", { day: "numeric", month: "short", year: "numeric" });
   if (dateStr === todayStr) return t ? t("time.todayAt", { time }) : `Today at ${time}`;
@@ -118,6 +115,7 @@ export function formatPhone(phone: string): string {
 }
 
 import type { TranslateFn } from "@/lib/i18n";
+import { pkDate, pkDateFromISO, pkToday, pkYesterday } from "@/lib/pkDate";
 import type { CreditHealth, CreditHealthStatus, ReminderStatus, Customer } from "@/types";
 
 export function getCreditHealth(outstanding: number, limit: number): CreditHealth {
@@ -282,7 +280,7 @@ export function calculateReminderStatus(
       lastPaymentDaysAgo: null,
       reminderState: "overdue",
       reminderMessage: "No payment recorded - follow up required",
-      nextReminderDate: nextDate.toISOString().split("T")[0],
+      nextReminderDate: pkDate(nextDate),
     };
   }
 
@@ -319,7 +317,7 @@ export function calculateReminderStatus(
     lastPaymentDaysAgo,
     reminderState: state,
     reminderMessage: message,
-    nextReminderDate: daysUntilNext > 0 ? nextDate.toISOString().split("T")[0] : null,
+    nextReminderDate: daysUntilNext > 0 ? pkDate(nextDate) : null,
   };
 }
 

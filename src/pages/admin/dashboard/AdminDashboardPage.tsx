@@ -121,27 +121,42 @@ export default function AdminDashboardPage() {
     weekday: "long", day: "numeric", month: "long",
   });
 
-  // Date helpers
-  const todayStr = today.toISOString().split("T")[0];
-  const yesterday = new Date(today); yesterday.setDate(today.getDate() - 1);
-  const yesterdayStr = yesterday.toISOString().split("T")[0];
+  // Date helpers — use Pakistan local time (Asia/Karachi, UTC+5) for all date comparisons.
+  // en-CA locale produces YYYY-MM-DD format.
+  const PKT = "Asia/Karachi";
+  function pkDate(date: Date): string {
+    return date.toLocaleDateString("en-CA", { timeZone: PKT });
+  }
+  function pkDateFromISO(isoStr: string): string {
+    return pkDate(new Date(isoStr));
+  }
+
+  const todayStr = pkDate(today);
+  const yesterdayDate = new Date(today);
+  yesterdayDate.setDate(today.getDate() - 1);
+  const yesterdayStr = pkDate(yesterdayDate);
 
   function inFilter(s: (typeof mockSales)[0]) {
     return dateInRange(s.createdAt);
   }
 
-  // Generic date-range check — works for any ISO date string
+  // Generic date-range check — extracts Pakistan local date from any ISO string
   function dateInRange(isoStr: string): boolean {
     if (dateFilter === "all") return true;
-    const d = isoStr.split("T")[0];
+    const d = pkDateFromISO(isoStr);
     if (dateFilter === "today") return d === todayStr;
     if (dateFilter === "yesterday") return d === yesterdayStr;
     if (dateFilter === "this_week") {
-      const ws = new Date(); ws.setDate(ws.getDate() - ws.getDay());
-      return new Date(d) >= ws;
+      // Get Sunday of this week in PKT
+      const nowPkt = new Date(today.toLocaleString("en-US", { timeZone: PKT }));
+      const dayOfWeek = nowPkt.getDay(); // 0=Sun, 1=Mon, ... 6=Sat
+      const sunday = new Date(nowPkt);
+      sunday.setDate(nowPkt.getDate() - dayOfWeek);
+      return d >= pkDate(sunday);
     }
-    const ms = new Date(today.getFullYear(), today.getMonth(), 1);
-    return new Date(d) >= ms;
+    // This month: first of current month in PKT
+    const monthStart = pkDate(new Date(today.getFullYear(), today.getMonth(), 1));
+    return d >= monthStart;
   }
 
   const allActive = mockSales.filter((s) => !s.isVoided);

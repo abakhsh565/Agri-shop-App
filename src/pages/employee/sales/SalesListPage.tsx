@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
 import PullToRefresh from "@/components/ui/PullToRefresh";
 import { formatCurrency, formatSmartDateTime } from "@/lib/formatters";
+import { pkToday, pkYesterday, pkDateFromISO, pkWeekStart, pkMonthStart } from "@/lib/pkDate";
 import { useT } from "@/lib/i18n";
 import { useThemeStore } from "@/stores/themeStore";
 import { useSalesStore } from "@/stores/salesStore";
@@ -67,21 +68,15 @@ export default function SalesListPage() {
   }
 
   const today = now;
-  const todayStr = today.toISOString().split("T")[0];
-  const yesterday = new Date(today); yesterday.setDate(today.getDate() - 1);
-  const yesterdayStr = yesterday.toISOString().split("T")[0];
+  const todayStr = pkToday();
+  const yesterdayStr = pkYesterday();
 
   function inDate(sale: Sale) {
-    const d = sale.createdAt.split("T")[0];
+    const d = pkDateFromISO(sale.createdAt);
     if (dateFilter === "today")     return d === todayStr;
     if (dateFilter === "yesterday") return d === yesterdayStr;
-    if (dateFilter === "this_week") {
-      const weekStart = new Date(); weekStart.setDate(weekStart.getDate() - weekStart.getDay());
-      return new Date(d) >= weekStart;
-    }
-    if (dateFilter === "this_month") {
-      return new Date(d).getMonth() === now.getMonth() && new Date(d).getFullYear() === now.getFullYear();
-    }
+    if (dateFilter === "this_week") return d >= pkWeekStart();
+    if (dateFilter === "this_month") return d >= pkMonthStart();
     if (dateFilter === "custom") {
       if (customFrom && customTo) return d >= customFrom && d <= customTo;
       if (customFrom) return d >= customFrom;
@@ -114,7 +109,7 @@ export default function SalesListPage() {
     { key: "custom",     label: t("sale.custom") },
   ];
 
-  const todayISO = now.toISOString().split("T")[0];
+  const todayISO = pkToday();
 
   function applyCustomDates() {
     setShowDateModal(false);
