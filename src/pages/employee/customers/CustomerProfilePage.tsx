@@ -7,7 +7,7 @@ import { useCustomersStore } from "@/stores/customersStore";
 import { useUIStore } from "@/stores/uiStore";
 import { useAuthStore } from "@/stores/authStore";
 import { useSalesStore } from "@/stores/salesStore";
-import { fetchCustomerPayments } from "@/lib/db";
+import { fetchCustomerPayments, rpcArchiveCustomer } from "@/lib/db";
 import type { CustomerPayment } from "@/types";
 import { formatCurrency, calculateCreditHealth, getCreditHealthStatusColor } from "@/lib/formatters";
 import { useThemeStore } from "@/stores/themeStore";
@@ -197,9 +197,7 @@ export default function CustomerProfilePage() {
     if (!customerId) return;
     setDeleting(true);
     try {
-      const { supabase } = await import("@/lib/supabase");
-      const { error } = await supabase.from("customers").delete().eq("id", customerId);
-      if (error) throw new Error(error.message);
+      await rpcArchiveCustomer(customerId);
       await useCustomersStore.getState().load();
       addToast(t("customerProfile.customerDeleted"), "success");
       navigate(base + "/customers", { replace: true });
@@ -600,12 +598,12 @@ export default function CustomerProfilePage() {
         </div>
       )}
 
-      {/* Delete Confirmation */}
+      {/* Archive Confirmation */}
       <ConfirmDialog
         open={showDelete}
-        title={t("common.delete")}
-        message={t("common.deleteCustomerConfirm")}
-        confirmLabel={deleting ? t("common.saving") : t("common.delete")}
+        title={t("customerProfile.deleteCustomer")}
+        message={t("common.archiveCustomerConfirm")}
+        confirmLabel={deleting ? t("common.saving") : t("customerProfile.deleteCustomer")}
         onConfirm={handleDelete}
         onCancel={() => setShowDelete(false)}
         destructive

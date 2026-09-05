@@ -22,12 +22,14 @@ $env:PORT='5173'; npx vite --host 0.0.0.0 --port 5173
 
 Default port from `vite.config.ts` is 8443 with `strictPort: true`. Using `--port 5173` overrides that.
 
-For background (detached) mode on Windows:
+For background (detached) mode on Windows, the reliable form uses `node.exe` directly (not `npm.cmd`):
 ```powershell
-Start-Process -FilePath 'node.exe' -ArgumentList 'node_modules/vite/bin/vite.js','--host','0.0.0.0','--port','5175' -WorkingDirectory '<project-root>' -RedirectStandardOutput '<log>' -RedirectStandardError '<log>.err' -WindowStyle Hidden -PassThru | Select-Object -ExpandProperty Id
+$log = '<log>'
+$logErr = "$log.err"
+$pid = (Start-Process -FilePath 'node.exe' -ArgumentList 'node_modules\vite\bin\vite.js','--host','0.0.0.0','--port','<port>' -WorkingDirectory '<project-root>' -RedirectStandardOutput $log -RedirectStandardError $logErr -WindowStyle Hidden -PassThru).Id
 ```
 
-Note: ports 5173 and 5174 may already be in use on this machine. 5175 works reliably.
+Pick a free port. 5173/5174/5175 may already be in use; 5176 is currently in use by this thread's preview (pid 19472).
 
 ## Reproduce artifacts
 

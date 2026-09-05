@@ -11,6 +11,7 @@ interface CompanyRow {
   logo_url: string | null;
   outstanding_payable: number;
   total_purchases: number;
+  due_date: string | null;
   created_at: string;
 }
 
@@ -24,6 +25,7 @@ function companyFromRow(r: CompanyRow): Company {
     logoUrl: r.logo_url ?? undefined,
     outstandingPayable: Number(r.outstanding_payable),
     totalPurchases: Number(r.total_purchases),
+    dueDate: r.due_date ?? null,
     createdAt: r.created_at,
   };
 }

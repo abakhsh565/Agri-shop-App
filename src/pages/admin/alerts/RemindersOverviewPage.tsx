@@ -5,10 +5,12 @@ import NavHeader from "@/components/ui/NavHeader";
 import { useCustomersStore, type CreditLimitRequest } from "@/stores/customersStore";
 import { useSalesStore } from "@/stores/salesStore";
 import { useProductsStore } from "@/stores/productsStore";
+import { useCompaniesStore } from "@/stores/companiesStore";
 import { useThemeStore } from "@/stores/themeStore";
+import { computeLiveSignals, type LiveSignal, type SignalCategory } from "@/lib/signalEngine";
 import { formatCurrency } from "@/lib/formatters";
 import { useT } from "@/lib/i18n";
-import { generateReminders, generateReminderMessage, calculatePaymentStatus } from "@/lib/reminderEngine";
+import { generateReminders, generateReminderMessage, calculatePaymentStatus, markOccurrenceSent, categorizeReminders } from "@/lib/reminderEngine";
 import type { GeneratedReminder } from "@/types";
 import { MessageCircle, Smartphone, X, ChevronDown, ChevronUp, Bell, CheckCircle2, Clock, AlertTriangle, AlertOctagon, Info, Plus, Users, Trash2, Eye, Send, XCircle } from "lucide-react";
 import GroupReminderSheet from "@/components/ui/GroupReminderSheet";
@@ -258,6 +260,7 @@ export default function RemindersOverviewPage() {
   const customers = useCustomersStore((s) => s.customers);
   const sales = useSalesStore((s) => s.sales);
   const products = useProductsStore((s) => s.products);
+  const companies = useCompaniesStore((s) => s.companies);
 
   /* ── Data ── */
   const [allReminders, setAllReminders] = useState<any[]>([]);
@@ -287,7 +290,7 @@ export default function RemindersOverviewPage() {
     stateTab === "followups" ? "followups" : stateTab === "groups" ? "groups" : "action"
   );
   const [subTab, setSubTab] = useState<string>(
-    stateSubTab || (stateTab === "followups" ? "ready" : stateTab === "groups" ? "" : "urgent")
+    stateSubTab || (stateTab === "followups" ? "ready" : stateTab === "groups" ? "" : "critical")
   );
 
   useEffect(() => {
@@ -295,12 +298,12 @@ export default function RemindersOverviewPage() {
     const s = (location.state as any)?.subTab as string | undefined;
     if (t === "followups") { setMainTab("followups"); if (s) setSubTab(s); }
     else if (t === "groups") { setMainTab("groups"); setSubTab(""); }
-    else if (t === "action") { setMainTab("action"); if (s) setSubTab(s); }
+    else if (t === "action") { setMainTab("action"); if (s) setSubTab(s); else setSubTab("critical"); }
   }, [location.state]);
 
   const [editingReminder, setEditingReminder] = useState<GeneratedReminder | null>(null);
   const [editMessage, setEditMessage] = useState("");
-  const [sentKeys, setSentKeys] = useState<Set<string>>(new Set());
+  const [sentOccurrenceKeys, setSentOccurrenceKeys] = useState<Set<string>>(new Set());
   const [allLogs, setAllLogs] = useState<ReminderLogEntry[]>([]);
   const [creditAction, setCreditAction] = useState<{ request: LocalCreditRequest; action: "approve" | "reject" } | null>(null);
 
@@ -317,7 +320,24 @@ export default function RemindersOverviewPage() {
 
   const now = new Date();
 
-  /* ── Action Needed categories ── */
+  /* ── Live Signals from Signal Engine ── */
+  const liveSignals = useMemo(() =>
+    computeLiveSignals({ customers, products, companies, now }),
+  [customers, products, companies]);
+
+  const criticalSignals = useMemo(() =>
+    liveSignals.filter(s => s.severity === "critical"),
+  [liveSignals]);
+
+  const warningSignals = useMemo(() =>
+    liveSignals.filter(s => s.severity === "warning"),
+  [liveSignals]);
+
+  const infoSignals = useMemo(() =>
+    liveSignals.filter(s => s.severity === "info"),
+  [liveSignals]);
+
+  /* ── Keep legacy for backward compat ── */
   const highRiskCustomers = useMemo(() =>
     customers.filter(c => c.outstandingBalance > 0 && calculatePaymentStatus(c, now) === "high_risk"),
   [customers]);
@@ -334,14 +354,20 @@ export default function RemindersOverviewPage() {
     products.filter(p => p.stockQty <= (p.variants?.[0]?.lowStockThreshold ?? 5)),
   [products]);
 
-  /* ── Follow-ups categories ── */
-  const readyReminders = useMemo(() =>
-    allReminders.filter(r => !sentKeys.has(r.customerId + "-sent") && new Date(r.triggerDate) <= now),
-  [allReminders, sentKeys]);
+  /* ── Follow-ups categories ──
+   * Use occurrence key (persistent identity) instead of customerId.
+   * Occurrences with status 'sent' are excluded by generateReminders (only returns 'due' status).
+   * sentOccurrenceKeys handles immediate UI updates before DB re-read.
+   */
+  const readyReminders = useMemo(() => {
+    const { ready, future } = categorizeReminders(allReminders, sentOccurrenceKeys, now);
+    return ready;
+  }, [allReminders, sentOccurrenceKeys, now]);
 
-  const upcomingReminders = useMemo(() =>
-    allReminders.filter(r => !sentKeys.has(r.customerId + "-sent") && new Date(r.triggerDate) > now),
-  [allReminders, sentKeys]);
+  const upcomingReminders = useMemo(() => {
+    const { ready, future } = categorizeReminders(allReminders, sentOccurrenceKeys, now);
+    return future;
+  }, [allReminders, sentOccurrenceKeys, now]);
 
   const sentLogs = useMemo(() => allLogs, [allLogs]);
 
@@ -358,12 +384,11 @@ export default function RemindersOverviewPage() {
 
   const allCreditRequests = useMemo(() => creditRequests, [creditRequests]);
 
-  /* ── Sub-tabs ── */
+  /* ── Sub-tabs using live signals ── */
   const actionSubTabs = [
-    { key: "urgent", label: isUrdu ? "انتہائی فوری" : "Highly Urgent", count: highRiskCustomers.length, color: "#dc2626" },
-    { key: "medium", label: isUrdu ? "درمیانہ" : "Medium", count: mediumCount, color: "#d97706" },
-    { key: "normal", label: isUrdu ? "نارمل" : "Normal", count: lowStockProducts.length, color: "var(--brand-dark, #65a30d)" },
-    { key: "credit_approval", label: isUrdu ? "کریڈٹ" : "Credit", count: pendingCreditRequests.length, color: "#7c3aed" },
+    { key: "critical", label: isUrdu ? "انتہائی فوری" : "Critical", count: criticalSignals.length, color: "#dc2626" },
+    { key: "warning", label: isUrdu ? "انتباہ" : "Warning", count: warningSignals.length, color: "#d97706" },
+    { key: "info", label: isUrdu ? "معلومات" : "Info", count: infoSignals.length, color: "#2563eb" },
   ];
 
   const followupSubTabs = [
@@ -379,12 +404,40 @@ export default function RemindersOverviewPage() {
     setEditMessage(generateReminderMessage(reminder));
   }
 
-  const handleSend = useCallback((channel: "whatsapp" | "sms") => {
+  const handleSend = useCallback(async (channel: "whatsapp" | "sms") => {
     if (!editingReminder) return;
     const phone = editingReminder.customerPhone.replace(/[^0-9+]/g, "");
     const encodedMsg = encodeURIComponent(editMessage);
-    const key = editingReminder.customerId + "-sent";
+    const occKey = editingReminder._occurrenceKey || editingReminder.configId;
 
+    // Persist reminder state to DB FIRST, before any external side effects.
+    // This ensures the internal reminder state stays consistent even if the
+    // external WhatsApp/SMS window fails to open or is blocked.
+    if (editingReminder._occurrenceId) {
+      await markOccurrenceSent(
+        editingReminder._occurrenceId,
+        editingReminder.customerId,
+        editingReminder.customerName,
+        editingReminder.configId,
+        editingReminder.tone,
+        editMessage,
+        channel,
+      );
+    } else {
+      // Fallback for reminders without occurrence tracking
+      await logReminderToDb(editingReminder.customerId, editingReminder.customerName, {
+        id: "rem-" + Date.now(),
+        customerId: editingReminder.customerId,
+        customerName: editingReminder.customerName,
+        configId: editingReminder.configId,
+        type: editingReminder.tone,
+        message: editMessage,
+        channel,
+        sentAt: new Date().toISOString(),
+      });
+    }
+
+    // Open external messaging window AFTER DB persistence is complete.
     if (channel === "whatsapp") {
       const waPhone = phone.startsWith("+") ? phone.slice(1) : phone.startsWith("0") ? "92" + phone.slice(1) : phone;
       window.open("https://wa.me/" + waPhone + "?text=" + encodedMsg, "_blank");
@@ -392,16 +445,9 @@ export default function RemindersOverviewPage() {
       window.open("sms:" + phone + "?body=" + encodedMsg, "_blank");
     }
 
-    logReminderToDb(editingReminder.customerId, editingReminder.customerName, {
-      id: "rem-" + Date.now(),
-      customerId: editingReminder.customerId,
-      customerName: editingReminder.customerName,
-      configId: editingReminder.configId,
-      type: editingReminder.tone,
-      message: editMessage,
-      channel,
-      sentAt: new Date().toISOString(),
-    }).then(() => { setSentKeys(prev => new Set([...prev, key])); loadAllReminderLogs().then(setAllLogs); });
+    // Immediate UI update: mark this occurrence key as sent
+    setSentOccurrenceKeys(prev => new Set([...prev, occKey]));
+    loadAllReminderLogs().then(setAllLogs);
     setEditingReminder(null);
   }, [editingReminder, editMessage]);
 
@@ -421,91 +467,60 @@ export default function RemindersOverviewPage() {
     }
   }, [creditAction]);
 
-  /* ── Render action needed ── */
+  /* ── Render action needed (signal-based) ── */
+  function renderSignalCard(signal: LiveSignal) {
+    const severityConfig: Record<string, { cardBg: string; iconBg: string; iconColor: string; icon: React.ReactNode }> = {
+      critical: { cardBg: "rgba(220, 38, 38, 0.06)", iconBg: "rgba(220, 38, 38, 0.1)", iconColor: "#dc2626", icon: <AlertOctagon size={16} /> },
+      warning: { cardBg: "rgba(217, 119, 6, 0.06)", iconBg: "rgba(217, 119, 6, 0.1)", iconColor: "#d97706", icon: <AlertTriangle size={16} /> },
+      info: { cardBg: "var(--surface-2)", iconBg: "rgba(37, 99, 235, 0.1)", iconColor: "#2563eb", icon: <Info size={16} /> },
+    };
+    const config = severityConfig[signal.severity] || severityConfig.info;
+
+    const onClick = () => {
+      if (signal.entity_type === "customer") navigateToCustomer(signal.entity_id);
+      else if (signal.entity_type === "product") navigate(`/admin/products/${signal.entity_id}`);
+      else if (signal.entity_type === "company") navigate("/admin/companies");
+    };
+
+    return (
+      <AlertCard
+        key={signal.id}
+        icon={config.icon}
+        title={signal.title}
+        subtitle={signal.detail}
+        actionLabel={isUrdu ? "جائزہ" : "Review"}
+        cardBg={config.cardBg}
+        iconBg={config.iconBg}
+        iconColor={config.iconColor}
+        onClick={onClick}
+      />
+    );
+  }
+
   function renderActionContent() {
     switch (subTab) {
-      case "urgent":
-        return highRiskCustomers.length === 0 ? (
-          <EmptyState icon={<AlertOctagon size={24} style={{ color: "var(--text-secondary)" }} />} title={isUrdu ? "کوئی فوری کارروئی نہیں" : "No urgent actions"} subtitle={isUrdu ? "کوئی گاہک 31+ دن سے وقف نہیں۔" : "No customers are 31+ days overdue."} />
+      case "critical":
+        return criticalSignals.length === 0 ? (
+          <EmptyState icon={<AlertOctagon size={24} style={{ color: "var(--text-secondary)" }} />} title={isUrdu ? "کوئی فوری کارروئی نہیں" : "No critical actions"} subtitle={isUrdu ? "کوئی فوری مسائل نہیں۔" : "No critical business signals right now."} />
         ) : (
           <div className="flex flex-col gap-2.5">
-            {highRiskCustomers.map(c => (
-              <AlertCard
-                key={c.id}
-                icon={<AlertOctagon size={16} />}
-                title={c.name}
-                subtitle={`${formatCurrency(c.outstandingBalance)} ${isUrdu ? "واجب الادا" : "overdue"} · ${isUrdu ? "وقف" : "Due"}: ${c.dueDate ? new Date(c.dueDate).toLocaleDateString() : "—"}`}
-                actionLabel={isUrdu ? "جائزہ" : "Review"}
-                cardBg="rgba(220, 38, 38, 0.06)"
-                iconBg="rgba(220, 38, 38, 0.1)"
-                iconColor="#dc2626"
-                onClick={() => navigateToCustomer(c.id)}
-              />
-            ))}
+            {criticalSignals.map(s => renderSignalCard(s))}
           </div>
         );
-      case "medium":
-        const mediumMap = new Map<string, { id: string; name: string; balance: number; tag: string; detail: string }>();
-        delayedCustomers.forEach(c => mediumMap.set(c.id, { id: c.id, name: c.name, balance: c.outstandingBalance, tag: isUrdu ? "ڈیلےڈ" : "Delayed", detail: `${isUrdu ? "وقف" : "Due"}: ${c.dueDate ? new Date(c.dueDate).toLocaleDateString() : "—"}` }));
-        creditLimitCustomers.forEach(c => { if (!mediumMap.has(c.id)) mediumMap.set(c.id, { id: c.id, name: c.name, balance: c.outstandingBalance, tag: isUrdu ? "کریڈٹ حد" : "Credit Limit", detail: `${isUrdu ? "حد" : "Limit"}: ${formatCurrency(c.creditLimit)}` }); });
-        const mediumItems = Array.from(mediumMap.values());
-        return mediumItems.length === 0 ? (
-          <EmptyState icon={<AlertTriangle size={24} style={{ color: "var(--text-secondary)" }} />} title={isUrdu ? "کوئی درمیانہ کارروئی نہیں" : "No medium actions"} subtitle={isUrdu ? "سب کچھ ٹھیک چل رہا ہے۔" : "Everything looks fine."} />
+      case "warning":
+        return warningSignals.length === 0 ? (
+          <EmptyState icon={<AlertTriangle size={24} style={{ color: "var(--text-secondary)" }} />} title={isUrdu ? "کوئی انتباہ نہیں" : "No warnings"} subtitle={isUrdu ? "سب کچھ ٹھیک چل رہا ہے۔" : "Everything looks fine."} />
         ) : (
           <div className="flex flex-col gap-2.5">
-            {mediumItems.map(item => (
-              <AlertCard
-                key={item.id}
-                icon={<AlertTriangle size={16} />}
-                title={item.name}
-                subtitle={`${formatCurrency(item.balance)} ${isUrdu ? "واجب الادا" : "outstanding"} · ${item.detail}`}
-                actionLabel={isUrdu ? "جائزہ" : "Review"}
-                cardBg="rgba(217, 119, 6, 0.06)"
-                iconBg="rgba(217, 119, 6, 0.1)"
-                iconColor="#d97706"
-                onClick={() => navigateToCustomer(item.id)}
-              />
-            ))}
+            {warningSignals.map(s => renderSignalCard(s))}
           </div>
         );
-      case "normal":
-        return lowStockProducts.length === 0 ? (
-          <EmptyState icon={<Info size={24} style={{ color: "var(--text-secondary)" }} />} title={isUrdu ? "کوئی نارمل اعلان نہیں" : "No normal alerts"} subtitle={isUrdu ? "اسٹاک مناسب ہے۔" : "Stock levels are fine."} />
+      case "info":
+        return infoSignals.length === 0 ? (
+          <EmptyState icon={<Info size={24} style={{ color: "var(--text-secondary)" }} />} title={isUrdu ? "کوئی معلوماتی اعلان نہیں" : "No info signals"} subtitle={isUrdu ? "سب کچھ مکمل ہے۔" : "All information is complete."} />
         ) : (
           <div className="flex flex-col gap-2.5">
-            {lowStockProducts.map(p => (
-              <AlertCard
-                key={p.id}
-                icon={<Info size={16} />}
-                title={p.name}
-                subtitle={`${p.stockQty} ${isUrdu ? "باقی" : "remaining"} · ${isUrdu ? "کل" : "Total"}: ${p.stockQty}`}
-                actionLabel={isUrdu ? "دیکھیں" : "View"}
-                cardBg="var(--surface-2)"
-                iconBg="rgba(101, 163, 13, 0.1)"
-                iconColor="var(--brand-dark, #65a30d)"
-                onClick={() => navigate(`/admin/products/${p.id}`)}
-              />
-            ))}
-          </div>
-        );
-      case "credit_approval":
-        return allCreditRequests.length === 0 ? (
-          <EmptyState icon={<CheckCircle2 size={24} style={{ color: "var(--text-secondary)" }} />} title={isUrdu ? "کوئی درخواست نہیں" : "No requests yet"} subtitle={isUrdu ? "کریڈٹ حد بڑھانے کی درخواستیں یہاں نظر آئیں گی۔" : "Credit limit increase requests will appear here."} />
-        ) : (
-          <div className="flex flex-col gap-2.5">
-            {allCreditRequests.map(req => (
-              <AlertCard
-                key={req.id}
-                icon={req.status === "approved" ? <CheckCircle2 size={16} /> : req.status === "rejected" ? <XCircle size={16} /> : <AlertTriangle size={16} />}
-                title={req.customerName}
-                subtitle={`${formatCurrency(req.currentLimit)} → ${formatCurrency(req.requestedLimit)} · ${req.requestedBy}`}
-                actionLabel={req.status === "approved" ? (isUrdu ? "منظور شدہ" : "Approved") : req.status === "rejected" ? (isUrdu ? "مسترد" : "Rejected") : (isUrdu ? "جائزہ" : "Review")}
-                cardBg={req.status === "approved" ? "rgba(22, 163, 74, 0.06)" : req.status === "rejected" ? "rgba(220, 38, 38, 0.06)" : "rgba(124, 58, 237, 0.06)"}
-                iconBg={req.status === "approved" ? "rgba(22, 163, 74, 0.1)" : req.status === "rejected" ? "rgba(220, 38, 38, 0.1)" : "rgba(124, 58, 237, 0.1)"}
-                iconColor={req.status === "approved" ? "#16a34a" : req.status === "rejected" ? "#dc2626" : "#7c3aed"}
-                onClick={() => navigate(`/admin/alerts/credit-requests/${req.id}`)}
-              />
-            ))}
+            {infoSignals.map(s => renderSignalCard(s))}
           </div>
         );
       default:
@@ -626,14 +641,14 @@ export default function RemindersOverviewPage() {
         {/* Main tabs — premium segmented control */}
         <div className="flex items-center gap-1 p-1 rounded-[12px]" style={{ background: "var(--surface-2)" }}>
           {([
-            { key: "action" as const, label: isUrdu ? "عمل درکار" : "Action Needed" },
+            { key: "action" as const, label: isUrdu ? "عمل درکار" : "Action Needed", count: liveSignals.length },
             { key: "followups" as const, label: isUrdu ? "فالو اپس" : "Follow Ups" },
             { key: "groups" as const, label: isUrdu ? "گروپ ریمائنڈر" : "Group Reminder" },
           ] as const).map(tab => (
             <button
               key={tab.key}
-              onClick={() => { setMainTab(tab.key); setSubTab(tab.key === "action" ? "urgent" : tab.key === "followups" ? "ready" : ""); }}
-              className="flex-1 text-center py-2 rounded-[10px] text-[13px] font-semibold transition-all"
+              onClick={() => { setMainTab(tab.key); setSubTab(tab.key === "action" ? "critical" : tab.key === "followups" ? "ready" : ""); }}
+              className="flex-1 text-center py-2 rounded-[10px] text-[13px] font-semibold transition-all flex items-center justify-center gap-1.5"
               style={{
                 color: mainTab === tab.key ? "var(--text-primary)" : "var(--text-secondary)",
                 background: mainTab === tab.key ? "var(--background)" : "transparent",
@@ -641,6 +656,11 @@ export default function RemindersOverviewPage() {
               }}
             >
               {tab.label}
+              {"count" in tab && (tab as any).count > 0 && (
+                <span className="text-[10px] font-bold w-5 h-5 flex items-center justify-center rounded-full" style={{ background: mainTab === tab.key ? "var(--brand-dark, #65a30d)" : "var(--surface-2)", color: mainTab === tab.key ? "#fff" : "var(--text-secondary)", fontSize: '10px' }}>
+                  {(tab as any).count}
+                </span>
+              )}
             </button>
           ))}
         </div>

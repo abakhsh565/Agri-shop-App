@@ -283,7 +283,8 @@ export const translations = {
     "customerProfile.add":        "+ Add",
     "customerProfile.reminderHistory": "Reminder History",
     "customerProfile.editCustomer":    "Edit Customer",
-    "customerProfile.deleteCustomer":  "Delete Customer",
+    "customerProfile.deleteCustomer":  "Archive Customer",
+    "common.archiveCustomerConfirm": "Are you sure you want to archive this customer? They will be removed from active lists but their history is preserved.",
     // Quick alerts
     "admin.allClear":             "All clear — no critical alerts",
     "admin.noPendingReminders":   "No pending reminders or low stock alerts",
@@ -1005,7 +1006,8 @@ export const translations = {
     "customerProfile.add":        "+ شامل کریں",
     "customerProfile.reminderHistory": "یاد دہانی کی تاریخ",
     "customerProfile.editCustomer":    "گاہک میں ترمیم",
-    "customerProfile.deleteCustomer":  "گاہک حذف کریں",
+    "customerProfile.deleteCustomer":  "گاہک آرکائیو کریں",
+    "common.archiveCustomerConfirm": "کیا آپ واقعی یہ گاہک آرکائیو کرنا چاہتے ہیں؟ یہ فعال فہرستوں سے ہٹ جائے گا لیکن اس کی تاریخ محفوظ رہے گی۔",
     // Quick alerts
     "admin.allClear":             "سب صاف — کوئی اہم انتباہ نہیں",
     "admin.noPendingReminders":   "کوئی زیر التوا یاد دہانیاں یا کم اسٹاک انتباہ نہیں",

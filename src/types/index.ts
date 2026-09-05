@@ -118,6 +118,13 @@ export interface GeneratedReminder {
 
   config: ReminderConfig;
 
+  /** Persistent occurrence ID from reminder_occurrences table */
+  _occurrenceId?: string;
+  /** Deterministic occurrence key (config_id + occurrence_number + stage + crop) */
+  _occurrenceKey?: string;
+  /** Current status: scheduled | due | sent | completed | cancelled */
+  _occurrenceStatus?: string;
+
 }
 
 
@@ -328,6 +335,7 @@ export interface Company {
   logoUrl?: string;
   outstandingPayable: number;
   totalPurchases: number;
+  dueDate?: string | null;
   createdAt: string;
 }
 
