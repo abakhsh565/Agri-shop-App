@@ -197,6 +197,11 @@ export default function AdminDashboardPage() {
     }
   }
 
+  // Data-hygiene signals — these don't mean money is at risk directly, they mean
+  // the reminder system silently can't do its job for these customers
+  const noDueDateCustomers = customers.filter(c => c.outstandingBalance > 0 && !c.dueDate);
+  const noCropCustomers = customers.filter(c => c.outstandingBalance > 0 && (customerCropsMap[c.id]?.length ?? 0) === 0);
+
   // Expiry signals — agri-specific: expired chemicals/seeds are a liability, expiring-soon needs clearing first
   const expiredProducts = mockProducts.filter(p => p.variants.some(v => v.expiryDate && new Date(v.expiryDate).getTime() < now.getTime()));
   const expiringSoonProducts = mockProducts.filter(p => {
@@ -286,6 +291,22 @@ export default function AdminDashboardPage() {
       title: isUrdu ? `${expiringSoonProducts.length} مصنوعات جلد میعاد ختم ہونے والی` : `${expiringSoonProducts.length} product${expiringSoonProducts.length !== 1 ? "s" : ""} expiring within 30 days`,
       ctaText: t("admin.view"),
       onClick: () => navigate("/admin/alerts/inventory"),
+    }] : []),
+    ...(noDueDateCustomers.length > 0 ? [{
+      id: "nodue", severity: "warning" as const,
+      icon: <AlertTriangle size={18} color={SEVERITY_STYLE.warning.iconColor} />,
+      title: isUrdu ? `${noDueDateCustomers.length} گاہکوں کی واپسی کی تاریخ مقرر نہیں` : `${noDueDateCustomers.length} customer${noDueDateCustomers.length !== 1 ? "s" : ""} have no due date set`,
+      subtitle: isUrdu ? "جب تک ٹھیک نہیں ہوتا، ان کے لیے یاد دہانیاں شیڈول نہیں ہو سکتیں" : "Reminders can't be scheduled for them until this is fixed",
+      ctaText: t("admin.view"),
+      onClick: () => navigate("/admin/customers"),
+    }] : []),
+    ...(noCropCustomers.length > 0 ? [{
+      id: "nocrop", severity: "warning" as const,
+      icon: <AlertTriangle size={18} color={SEVERITY_STYLE.warning.iconColor} />,
+      title: isUrdu ? `${noCropCustomers.length} گاہکوں کی کوئی فصل منسلک نہیں` : `${noCropCustomers.length} customer${noCropCustomers.length !== 1 ? "s" : ""} have no crop linked`,
+      subtitle: isUrdu ? "فصل کی بنیاد پر یاد دہانیاں ان کے لیے کام نہیں کریں گی" : "Harvest-based reminders won't work for them",
+      ctaText: t("admin.view"),
+      onClick: () => navigate("/admin/customers"),
     }] : []),
     ...harvestAlerts.map((alert, i) => ({
       id: `harvest-${i}`, severity: "info" as const,
