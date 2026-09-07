@@ -1,5 +1,6 @@
-export function formatCurrency(amount: number): string {
-  return `Rs. ${amount.toLocaleString("en-PK")}`;
+export function formatCurrency(amount: number | null | undefined): string {
+  const safe = typeof amount === 'number' && !isNaN(amount) ? amount : 0;
+  return `Rs. ${safe.toLocaleString("en-PK")}`;
 }
 
 export function formatDate(iso: string): string {
