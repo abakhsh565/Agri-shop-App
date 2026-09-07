@@ -74,8 +74,6 @@ export async function saveReminderConfig(customerId: string, config: ReminderCon
     ends: config.ends,
     ends_date: config.endsDate || null,
     ends_count: config.endsCount,
-    group_id: config.groupId ?? null,
-    group_name: config.groupName ?? null,
     updated_at: new Date().toISOString(),
   };
 
