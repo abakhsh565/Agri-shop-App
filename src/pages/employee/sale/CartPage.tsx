@@ -54,16 +54,24 @@ export default function CartPage() {
   const creditHealth = customer ? getCreditHealth(creditAfterSale, customer.creditLimit) : "good" as const;
   const creditOverLimit = customer ? customer.creditLimit > 0 && creditAfterSale > customer.creditLimit : false;
 
+  // Credit lifecycle enforcement flags
+  const hasCreditPortion = paymentType === "partial" && total - amountPaid > 0;
+  const creditLimitNotSet = hasCreditPortion && customer && customer.creditLimit <= 0;
+  const dueDateNotSet = hasCreditPortion && !dueDate;
+  const creditSaleBlocked = hasCreditPortion && (creditLimitNotSet || dueDateNotSet || creditOverLimit);
+
   async function handleCompleteSale() {
+    if (completingRef.current) return;
     if (!items.length) { addToast(t("sale.addAtLeastOne"), "warning"); return; }
     if (!customer) { addToast(t("sale.selectCustomerFirst"), "warning"); navigate(`${base}/sale`, { state: { fromCart: true } }); return; }
     if (paymentType === "partial" && amountTouched && parsedAmount !== null && parsedAmount < 0) { addToast(t("sale.amountCannotBeNegative"), "warning"); return; }
 
-    setCompleting(true);
     completingRef.current = true;
+    setCompleting(true);
     try {
       const outstandingBalance = total - amountPaid;
       const sale = await createSale({
+        dueDate: dueDate || undefined,
         customerId: customer!.id,
         customerName: customer!.name,
         customerPhone: customer!.phone,
@@ -100,13 +108,7 @@ export default function CartPage() {
           }
         }
       }
-      // Save due date to customer if partial/credit and date was set
-      if (paymentType === "partial" && dueDate) {
-        try {
-          const { updateDueDate } = await import("@/stores/customersStore").then(m => m.useCustomersStore.getState());
-          await updateDueDate(customer!.id, dueDate);
-        } catch {}
-      }
+      // Due date is now persisted atomically inside the create_sale RPC.
       // Navigate first, then clear cart — clearing first causes the <Navigate>
       // guard in this component to fire and redirect away from the success page.
       navigate(`${base}/sale/success`, { state: { sale }, replace: true });
@@ -300,7 +302,7 @@ export default function CartPage() {
             onFocus={() => setAmountTouched(true)}
           />
           <p className="text-xs font-bold text-black uppercase mb-2 mt-4">{t("sale.paymentDueDate")}</p>
-          <p className="text-[12px] text-[#888] mb-2">{t("sale.dueDateOptional")}</p>
+          <p className="text-[12px] text-[#888] mb-2">{hasCreditPortion ? t("sale.dueDateRequired") : t("sale.dueDateOptional")}</p>
           <input
             type="date"
             value={dueDate}
@@ -348,10 +350,12 @@ export default function CartPage() {
         ) : (
           <Button
             onClick={handleCompleteSale}
-            disabled={completing || items.length === 0}
+            disabled={completing || items.length === 0 || creditSaleBlocked}
             className="w-full"
           >
-            {completing ? t("sale.processing") : t("sale.completeSaleWith").replace("{amount}", formatCurrency(total))}
+            {completing ? t("sale.processing") : creditSaleBlocked && hasCreditPortion
+              ? creditLimitNotSet ? t("sale.setCreditLimitFirst") : dueDateNotSet ? t("sale.selectDueDateFirst") : t("sale.overCreditLimit")
+              : t("sale.completeSaleWith").replace("{amount}", formatCurrency(total))}
           </Button>
         )}
       </div>

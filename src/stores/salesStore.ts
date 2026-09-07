@@ -112,6 +112,7 @@ export interface NewSaleInput {
   paymentType: Sale["paymentType"];
   paymentMethod: Sale["paymentMethod"];
   note?: string;
+  dueDate?: string;
 }
 
 interface SalesState {
@@ -219,6 +220,7 @@ export const useSalesStore = create<SalesState>((set, get) => ({
       paymentMethod: input.paymentMethod,
       amountPaid: input.amountPaid,
       note: input.note,
+      dueDate: input.dueDate,
       items: input.items.map((it) => ({
         productId: it.productId ?? '',
         productName: it.productName,

@@ -1,4 +1,5 @@
 import { Trash2 } from "lucide-react";
+import { useState, useCallback } from "react";
 
 interface QuantityCounterProps {
   qty: number;
@@ -8,6 +9,12 @@ interface QuantityCounterProps {
   deleteOnOne?: boolean;
   onDelete?: () => void;
   size?: "sm" | "md";
+}
+
+function clampAndRound(value: number, min: number, max: number | undefined, step: number): number {
+  const rounded = Math.round(value / step) * step;
+  const clamped = Math.max(min, max ? Math.min(rounded, max) : rounded);
+  return Math.round(clamped * 1000) / 1000; // avoid floating point drift
 }
 
 export default function QuantityCounter({
@@ -21,6 +28,21 @@ export default function QuantityCounter({
 }: QuantityCounterProps) {
   const isSmall = size === "sm";
   const minQty = step;
+  const [inputValue, setInputValue] = useState("");
+  const [isFocused, setIsFocused] = useState(false);
+
+  const commitInput = useCallback(() => {
+    if (inputValue === "") {
+      setIsFocused(false);
+      return;
+    }
+    const parsed = parseFloat(inputValue);
+    if (!isNaN(parsed) && parsed >= minQty) {
+      onChange(clampAndRound(parsed, minQty, max, step));
+    }
+    setInputValue("");
+    setIsFocused(false);
+  }, [inputValue, minQty, max, step, onChange]);
 
   function decrement() {
     if (qty <= minQty && deleteOnOne) {
@@ -28,7 +50,7 @@ export default function QuantityCounter({
       return;
     }
     if (qty > minQty) {
-      const next = Math.round((qty - step) * 1000) / 1000; // avoid floating point drift
+      const next = Math.round((qty - step) * 1000) / 1000;
       onChange(Math.max(minQty, next));
     }
   }
@@ -46,6 +68,8 @@ export default function QuantityCounter({
   const displayQty = step < 1
     ? qty.toFixed(step <= 0.25 ? 2 : 1).replace(/\.?0+$/, "")
     : String(Math.round(qty));
+
+  const inputWidth = isSmall ? "w-12" : "w-14";
 
   return (
     <div className="flex items-center gap-3">
@@ -67,9 +91,34 @@ export default function QuantityCounter({
         )}
       </button>
 
-      <span className={`font-bold text-black ${isSmall ? "text-base min-w-[2.5rem]" : "text-lg min-w-[3rem]"} text-center`}>
-        {displayQty}
-      </span>
+      {isFocused ? (
+        <input
+          type="number"
+          inputMode="numeric"
+          value={inputValue}
+          onChange={(e) => setInputValue(e.target.value)}
+          onBlur={commitInput}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              commitInput();
+            }
+          }}
+          min={minQty}
+          max={max}
+          step={step}
+          autoFocus
+          className={`${inputWidth} text-center font-bold text-black bg-white border border-gray-300 rounded-lg outline-none focus:border-[var(--brand)] ${isSmall ? "text-base" : "text-lg"}`}
+        />
+      ) : (
+        <button
+          type="button"
+          onClick={() => { setIsFocused(true); setInputValue(""); }}
+          className={`${inputWidth} text-center font-bold text-black bg-transparent border border-transparent rounded-lg hover:border-gray-200 ${isSmall ? "text-base min-w-[2.5rem]" : "text-lg min-w-[3rem]"}`}
+        >
+          {displayQty}
+        </button>
+      )}
 
       <button
         type="button"

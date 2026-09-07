@@ -95,32 +95,19 @@ export async function verifyOTPAndResolveUser(
   // MVP: accept hardcoded OTP "123456"
   if (token !== DEV_OTP) return { status: "wrong_otp" };
 
-  // Find the matching app profile row.
-  // Try both formats: with and without + prefix
+  // Find the matching app profile row via SECURITY DEFINER RPC.
+  // The users table is RLS-protected (anon cannot SELECT), so we use
+  // lookup_user_by_phone() which bypasses RLS safely.
   let existing = null;
   let lookupErr = null;
   
-  // First try exact match (no + prefix)
-  const result1 = await supabase
-    .from("users")
-    .select("*")
-    .eq("phone", e164)
-    .maybeSingle();
+  const { data: rpcUser, error: rpcErr } = await supabase
+    .rpc("lookup_user_by_phone", { p_phone: e164 });
   
-  if (result1.data) {
-    existing = result1.data;
+  if (rpcUser) {
+    existing = rpcUser;
   } else {
-    // Try with + prefix
-    const result2 = await supabase
-      .from("users")
-      .select("*")
-      .eq("phone", "+" + e164)
-      .maybeSingle();
-    if (result2.data) {
-      existing = result2.data;
-    } else {
-      lookupErr = result1.error || result2.error;
-    }
+    lookupErr = rpcErr;
   }
   if (lookupErr) return { status: "error", message: lookupErr!.message };
 
@@ -172,12 +159,9 @@ export async function getUserFromSession(): Promise<User | null> {
     const parsed = JSON.parse(saved);
     const user: User | null = parsed?.state?.user ?? null;
     if (!user) return null;
-    // Verify user still exists and is active in DB
+    // Verify user still exists and is active in DB via SECURITY DEFINER RPC
     const { data } = await supabase
-      .from("users")
-      .select("*")
-      .eq("id", user.id)
-      .maybeSingle();
+      .rpc("lookup_user_by_phone", { p_phone: user.phone });
     if (data && (data as UserRow).is_active) return userFromRow(data as UserRow);
   } catch { /* invalid session */ }
   window.localStorage.removeItem("agri_auth");

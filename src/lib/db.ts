@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase";
+import { useAuthStore } from "@/stores/authStore";
 import type {
   Purchase,
   PurchaseItem,
@@ -77,7 +78,8 @@ export async function rpcRecordSupplierPayment(payload: {
   method: PaymentMethod;
   notes?: string;
 }): Promise<{ id: string; payableAfter: number }> {
-  const { data, error } = await supabase.rpc("record_supplier_payment", { payload });
+  const actorId = useAuthStore.getState().user?.id;
+  const { data, error } = await supabase.rpc("record_supplier_payment", { payload: { ...payload, actorId } });
   if (error) throw new Error(friendly(error.message));
   return data as any;
 }
@@ -90,7 +92,8 @@ export async function rpcAdjustStock(payload: {
   qty: number;
   reason?: string;
 }): Promise<{ id: string; qtyBefore: number; qtyChange: number; qtyAfter: number }> {
-  const { data, error } = await supabase.rpc("adjust_stock", { payload });
+  const actorId = useAuthStore.getState().user?.id;
+  const { data, error } = await supabase.rpc("adjust_stock", { payload: { ...payload, actorId } });
   if (error) throw new Error(friendly(error.message));
   return data as any;
 }
@@ -105,7 +108,8 @@ export async function rpcCreateProduct(payload: {
   barcode?: string;
   variants: { name: string; sellingPrice: number; costPrice: number; unitSize: number; qtyStep: number; lowStockThreshold: number }[];
 }): Promise<{ id: string }> {
-  const { data, error } = await supabase.rpc("create_product", { payload });
+  const actorId = useAuthStore.getState().user?.id;
+  const { data, error } = await supabase.rpc("create_product", { payload: { ...payload, actorId } });
   if (error) throw new Error(friendly(error.message));
   return data as any;
 }
@@ -121,7 +125,8 @@ export async function rpcUpdateProduct(payload: {
   barcode?: string;
   variants: { id?: string; name: string; sellingPrice: number; costPrice: number; unitSize?: number; qtyStep?: number; lowStockThreshold: number }[];
 }): Promise<{ id: string }> {
-  const { data, error } = await supabase.rpc("update_product", { payload });
+  const actorId = useAuthStore.getState().user?.id;
+  const { data, error } = await supabase.rpc("update_product", { payload: { ...payload, actorId } });
   if (error) throw new Error(friendly(error.message));
   return data as any;
 }
@@ -129,7 +134,8 @@ export async function rpcUpdateProduct(payload: {
 export async function rpcDeleteProduct(payload: {
   id: string;
 }): Promise<{ id: string; deactivated: boolean }> {
-  const { data, error } = await supabase.rpc("delete_product", { payload });
+  const actorId = useAuthStore.getState().user?.id;
+  const { data, error } = await supabase.rpc("delete_product", { payload: { ...payload, actorId } });
   if (error) throw new Error(friendly(error.message));
   return data as any;
 }
@@ -341,6 +347,7 @@ export async function rpcVoidSale(saleId: string, reason: string): Promise<void>
   const { error } = await supabase.rpc("void_sale", {
     p_sale_id: saleId,
     p_reason: reason,
+    p_voided_by: useAuthStore.getState().user?.id ?? null,
   });
   if (error) throw new Error(friendly(error.message));
 }
