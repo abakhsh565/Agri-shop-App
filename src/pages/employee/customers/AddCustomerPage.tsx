@@ -105,8 +105,9 @@ export default function AddCustomerPage() {
       addToast(`${name} ${isUrdu ? "شامل کر دیا گیا" : "added successfully"}`, "success");
       clearNav();
       navigate(`${base}/customers`, { replace: true });
-    } catch (e) {
-      setErrors({ phone: e instanceof Error ? e.message : String(e) });
+    } catch (e: any) {
+      const msg = e?.message || e?.error?.message || (typeof e === 'string' ? e : String(e));
+      setErrors({ phone: msg });
     } finally {
       setLoading(false);
     }
