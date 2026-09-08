@@ -1,5 +1,5 @@
 /**
- * Observation Bot Panel
+ * John — Observation Bot Panel
  * 
  * Admin component for viewing system observations, feedback, and insights.
  * 
@@ -8,7 +8,7 @@
  */
 
 import { useState, useEffect } from 'react';
-import { observationBot } from '@/lib/observationBot';
+import { john } from '@/lib/observationBot';
 import { useT } from '@/lib/i18n';
 
 interface Tab {
@@ -30,10 +30,10 @@ export default function ObservationBotPanel() {
   }, []);
 
   const loadData = () => {
-    setReport(observationBot.generateReport());
-    setActions(observationBot.getActions().slice(-50).reverse());
-    setErrors(observationBot.getErrors().slice(-50).reverse());
-    setFeedback(observationBot.getFeedback().reverse());
+    setReport(john.generateReport());
+    setActions(john.getActions().slice(-50).reverse());
+    setErrors(john.getErrors().slice(-50).reverse());
+    setFeedback(john.getFeedback().reverse());
   };
 
   const tabs: Tab[] = [
@@ -44,7 +44,7 @@ export default function ObservationBotPanel() {
   ];
 
   const handleExport = () => {
-    const data = observationBot.exportData();
+    const data = john.exportData();
     const blob = new Blob([data], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -55,8 +55,8 @@ export default function ObservationBotPanel() {
   };
 
   const handleClear = () => {
-    if (confirm(t('confirm_clear') || 'Clear all observation data?')) {
-      observationBot.clearData();
+    if (confirm(t('confirm_clear') || 'Clear all John data?')) {
+      john.clearData();
       loadData();
     }
   };
@@ -65,7 +65,7 @@ export default function ObservationBotPanel() {
     <div className="p-4 bg-white dark:bg-gray-800 rounded-lg shadow">
       <div className="flex justify-between items-center mb-4">
         <h2 className="text-lg font-bold">
-          {t('observation_bot') || '🔍 Observation Bot'}
+          {t('observation_bot') || '👁️ John — Observer'}
         </h2>
         <div className="flex gap-2">
           <button

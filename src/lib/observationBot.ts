@@ -1,5 +1,5 @@
 /**
- * Observation Bot — System Monitor & Feedback Collector
+ * John — System Monitor & Feedback Collector
  * 
  * Monitors the application for:
  * - User actions and navigation patterns
@@ -9,10 +9,10 @@
  * - Feedback collection
  * 
  * Usage:
- *   import { observationBot } from '@/lib/observationBot';
- *   observationBot.trackAction('customer_created', { customerId: '123' });
- *   observationBot.trackError('payment_failed', error);
- *   observationBot.logFeedback('The search is slow', 'usability');
+ *   import { john } from '@/lib/observationBot';
+ *   john.trackAction('customer_created', { customerId: '123' });
+ *   john.trackError('payment_failed', error);
+ *   john.logFeedback('The search is slow', 'usability');
  */
 
 interface trackedAction {
@@ -53,13 +53,14 @@ interface PerformanceMetric {
   context?: Record<string, any>;
 }
 
-class ObservationBot {
+class John {
   private actions: trackedAction[] = [];
   private errors: TrackedError[] = [];
   private feedback: Feedback[] = [];
   private performance: PerformanceMetric[] = [];
   private sessionId: string;
   private userId?: string;
+  public name = 'John';
 
   constructor() {
     this.sessionId = this.generateId();
@@ -128,7 +129,7 @@ class ObservationBot {
     this.actions.push(action);
     this.saveToStorage();
     
-    console.log(`[ObservationBot] Action: ${type}`, data);
+    console.log(`[John] Action: ${type}`, data);
   }
 
   trackError(type: string, error: Error | string, context?: Record<string, any>): void {
@@ -144,7 +145,7 @@ class ObservationBot {
     this.errors.push(trackedError);
     this.saveToStorage();
     
-    console.error(`[ObservationBot] Error: ${type}`, error);
+    console.error(`[John] Error: ${type}`, error);
   }
 
   logFeedback(message: string, category: Feedback['category'] = 'other', screen?: string): void {
@@ -160,7 +161,7 @@ class ObservationBot {
     this.feedback.push(feedback);
     this.saveToStorage();
     
-    console.log(`[ObservationBot] Feedback: ${category}`, message);
+    console.log(`[John] Feedback: ${category}`, message);
   }
 
   trackPerformance(name: string, value: number, unit: string = 'ms', context?: Record<string, any>): void {
@@ -354,27 +355,30 @@ ${this.generateScalingInsights()}
     this.feedback = [];
     this.performance = [];
     this.saveToStorage();
-    console.log('[ObservationBot] Data cleared');
+    console.log('[John] Data cleared');
   }
 }
 
 // Singleton instance
-export const observationBot = new ObservationBot();
+export const john = new John();
+
+// Backward compatibility alias
+export const observationBot = john;
 
 // Convenience exports for tracking common patterns
 export const trackNavigation = (from: string, to: string) => {
-  observationBot.trackAction('navigation', { from, to });
+  john.trackAction('navigation', { from, to });
 };
 
 export const trackUserAction = (action: string, data?: Record<string, any>) => {
-  observationBot.trackAction(`user_${action}`, data);
+  john.trackAction(`user_${action}`, data);
 };
 
 export const trackSystemError = (error: Error | string, context?: Record<string, any>) => {
-  observationBot.trackError('system_error', error, context);
+  john.trackError('system_error', error, context);
 };
 
 export const trackPerformance = (name: string, startTime: number) => {
   const duration = Date.now() - startTime;
-  observationBot.trackPerformance(name, duration);
+  john.trackPerformance(name, duration);
 };

@@ -17,7 +17,7 @@ const TILES = [
   { labelKey: "admin.reorderSuggestions" as any, label: "Reorder Suggestions", icon: AlertTriangle, path: "/admin/inventory/reorder",    color: "#d97706" },
   { labelKey: "admin.dailyCash" as any, label: "Daily Cash",       icon: Calculator,    path: "/admin/payments/daily-cash",  color: "#059669" },
   { labelKey: "admin.generateBarcodes" as any, label: "Generate Barcodes", icon: ScanLine,      path: "/admin/inventory/barcodes",   color: "#6366f1" },
-  { labelKey: "admin.observationBot" as any, label: "Observation Bot", icon: Eye,           path: "/admin/observation-bot",   color: "#ec4899" },
+  { labelKey: "admin.observationBot" as any, label: "John", icon: Eye,           path: "/admin/observation-bot",   color: "#ec4899" },
 ];
 
 export default function MoreMenuPage() {

@@ -1,5 +1,5 @@
 /**
- * React Hook for Observation Bot
+ * React Hook for John (Observation Bot)
  * 
  * Provides easy integration of observation tracking in components.
  * 
@@ -9,7 +9,7 @@
  */
 
 import { useEffect, useCallback } from 'react';
-import { observationBot } from '@/lib/observationBot';
+import { john } from '@/lib/observationBot';
 
 interface UseObservationBotOptions {
   screenName?: string;
@@ -28,31 +28,31 @@ export function useObservationBot(options: UseObservationBotOptions = {}): UseOb
 
   useEffect(() => {
     if (userId) {
-      observationBot.setUserId(userId);
+      john.setUserId(userId);
     }
   }, [userId]);
 
   useEffect(() => {
     if (screenName) {
-      observationBot.trackAction('screen_view', { screen: screenName });
+      john.trackAction('screen_view', { screen: screenName });
     }
   }, [screenName]);
 
   const trackAction = useCallback((type: string, data?: Record<string, any>) => {
-    observationBot.trackAction(type, { ...data, screen: screenName });
+    john.trackAction(type, { ...data, screen: screenName });
   }, [screenName]);
 
   const trackError = useCallback((type: string, error: Error | string) => {
-    observationBot.trackError(type, error, { screen: screenName });
+    john.trackError(type, error, { screen: screenName });
   }, [screenName]);
 
   const logFeedback = useCallback((message: string, category: 'usability' | 'bug' | 'feature' | 'performance' | 'other' = 'other') => {
-    observationBot.logFeedback(message, category, screenName);
+    john.logFeedback(message, category, screenName);
   }, [screenName]);
 
   const trackPerformance = useCallback((name: string, startTime: number) => {
     const duration = Date.now() - startTime;
-    observationBot.trackPerformance(name, duration, 'ms', { screen: screenName });
+    john.trackPerformance(name, duration, 'ms', { screen: screenName });
   }, [screenName]);
 
   return {
