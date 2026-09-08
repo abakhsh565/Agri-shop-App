@@ -89,7 +89,7 @@ export default function InventoryAlertsPage() {
               {outOfStock.map((p) => (
                 <button
                   key={p.id}
-                  onClick={() => navigate("/admin/inventory/" + p.id)}
+                  onClick={() => navigate("/admin/inventory/" + p.id + "/adjust")}
                   className="flex items-center gap-3 rounded-[14px] p-3.5 transition-opacity active:opacity-70 text-start w-full"
                   style={{ background: "#FEF2F2", border: "1px solid #FECACA" }}
                 >
@@ -122,7 +122,7 @@ export default function InventoryAlertsPage() {
                 return (
                   <button
                     key={p.id}
-                    onClick={() => navigate("/admin/inventory/" + p.id)}
+                    onClick={() => navigate("/admin/inventory/" + p.id + "/adjust")}
                     className="flex items-center gap-3 rounded-[14px] p-3.5 transition-opacity active:opacity-70 text-start w-full"
                     style={{ background: "#FFFBEB", border: "1px solid #FDE68A" }}
                   >
