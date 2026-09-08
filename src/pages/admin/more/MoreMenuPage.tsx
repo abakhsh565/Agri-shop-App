@@ -1,10 +1,11 @@
 import { useNavigate } from "react-router-dom";
 import { useThemeStore } from "@/stores/themeStore";
 import { useT } from "@/lib/i18n";
-import { Package, Building2, Users, ShoppingCart, BarChart2, Layers, CreditCard, Settings, History, AlertTriangle, Calculator, ScanLine } from "lucide-react";
+import { Package, Building2, Users, UserCheck, ShoppingCart, BarChart2, Layers, CreditCard, Settings, History, AlertTriangle, Calculator, ScanLine } from "lucide-react";
 import StatusBar from "@/components/ui/StatusBar";
 
 const TILES = [
+  { labelKey: "admin.customers" as const, icon: UserCheck,    path: "/admin/customers",  color: "#3b82f6" },
   { labelKey: "admin.companies" as const, icon: Building2,    path: "/admin/companies",  color: "#84cc16" },
   { labelKey: "admin.employees" as const, icon: Users,        path: "/admin/employees",  color: "#8b5cf6" },
   { labelKey: "admin.purchases" as const, icon: ShoppingCart, path: "/admin/purchases",  color: "#f59e0b" },

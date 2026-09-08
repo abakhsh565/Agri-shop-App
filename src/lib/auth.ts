@@ -68,9 +68,18 @@ async function touchLogin(userId: string, isFirst: boolean): Promise<void> {
 
 // ─── OTP send ────────────────────────────────────────────────────────────────
 // For MVP: hardcoded OTP "123456" — no Twilio/SMS required.
+// Also triggers Supabase Auth OTP to establish a server-verifiable session.
 export async function sendOTP(
   phone: string
 ): Promise<{ success: boolean; error?: string }> {
+  const e164 = normalizePhone(phone);
+  // Trigger Supabase Auth OTP (for test numbers, the OTP is also "123456")
+  const { error } = await supabase.auth.signInWithOtp({ phone: e164 });
+  if (error) {
+    // Non-fatal: Supabase Auth OTP may fail for unconfigured numbers
+    // The app OTP still works independently
+    console.warn('Supabase Auth OTP send failed (non-fatal):', error.message);
+  }
   return { success: true };
 }
 
@@ -94,6 +103,25 @@ export async function verifyOTPAndResolveUser(
 
   // MVP: accept hardcoded OTP "123456"
   if (token !== DEV_OTP) return { status: "wrong_otp" };
+
+  // Try to establish Supabase Auth session for trusted identity
+  // This creates a JWT that RPCs can use to verify the actor
+  try {
+    const { data: authData, error: authError } = await supabase.auth.verifyOtp({
+      phone: e164,
+      token: token,
+      type: 'sms'
+    });
+    if (authError) {
+      // Non-fatal: continue with app-only auth
+      console.warn('Supabase Auth verify failed (non-fatal):', authError.message);
+    } else if (authData?.session) {
+      console.log('Supabase Auth session established for trusted identity');
+    }
+  } catch (e) {
+    // Non-fatal: continue with app-only auth
+    console.warn('Supabase Auth session setup failed (non-fatal):', e);
+  }
 
   // Find the matching app profile row via SECURITY DEFINER RPC.
   // The users table is RLS-protected (anon cannot SELECT), so we use

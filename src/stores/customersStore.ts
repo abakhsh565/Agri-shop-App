@@ -166,15 +166,22 @@ export const useCustomersStore = create<CustomersState>((set, get) => ({
       created_by: asUuidOrNull(input.createdBy),
     };
 
-    // Try online first
+    // Try online first - use RPC for secure creation
     try {
-      const { data, error } = await supabase
-        .from("customers")
-        .insert(rowPayload)
-        .select()
-        .single();
+      const { data, error } = await supabase.rpc("create_customer", {
+        payload: rowPayload,
+      });
       if (error) throw error;
-      const customer = customerFromRow(data as CustomerRow);
+      
+      // Fetch the newly created customer
+      const { data: newCustomer, error: fetchError } = await supabase
+        .from("customers")
+        .select("*")
+        .eq("id", data.id)
+        .single();
+      if (fetchError) throw fetchError;
+      
+      const customer = customerFromRow(newCustomer as CustomerRow);
       set({ customers: [customer, ...get().customers] });
       setCachedData(CACHE_KEY, [customer, ...get().customers]);
       return customer;
@@ -205,10 +212,10 @@ export const useCustomersStore = create<CustomersState>((set, get) => ({
   },
 
   updateCustomerImage: async (id, imageUrl) => {
-    const { error } = await supabase
-      .from("customers")
-      .update({ image_url: imageUrl })
-      .eq("id", id);
+    const { error } = await supabase.rpc("update_customer_image", {
+      p_customer_id: id,
+      p_image_url: imageUrl,
+    });
     if (error) throw new Error(error.message);
     set({
       customers: get().customers.map((c) =>
@@ -218,19 +225,10 @@ export const useCustomersStore = create<CustomersState>((set, get) => ({
   },
 
   archiveCustomer: async (id) => {
-    // Try RPC first (works if migration 0027 is deployed)
-    const { error: rpcErr } = await supabase.rpc("archive_customer", {
+    const { error } = await supabase.rpc("archive_customer", {
       p_customer_id: id,
     });
-    if (rpcErr) {
-      // Fallback: direct update (bypasses RLS via SECURITY DEFINER not available)
-      const { error } = await supabase
-        .from("customers")
-        .update({ is_archived: true, archived_at: new Date().toISOString() })
-        .eq("id", id)
-        .select();
-      if (error) throw new Error(error.message);
-    }
+    if (error) throw new Error(error.message);
     set({
       customers: get().customers.map((c) =>
         c.id === id ? { ...c, isArchived: true, archivedAt: new Date().toISOString() } : c
@@ -239,19 +237,10 @@ export const useCustomersStore = create<CustomersState>((set, get) => ({
   },
 
   restoreCustomer: async (id) => {
-    // Try RPC first (works if migration 0027 is deployed)
-    const { error: rpcErr } = await supabase.rpc("restore_customer", {
+    const { error } = await supabase.rpc("restore_customer", {
       p_customer_id: id,
     });
-    if (rpcErr) {
-      // Fallback: direct update
-      const { error } = await supabase
-        .from("customers")
-        .update({ is_archived: false, archived_at: null, archived_by: null })
-        .eq("id", id)
-        .select();
-      if (error) throw new Error(error.message);
-    }
+    if (error) throw new Error(error.message);
     set({
       customers: get().customers.map((c) =>
         c.id === id ? { ...c, isArchived: false, archivedAt: null, archivedBy: null } : c
@@ -270,10 +259,10 @@ export const useCustomersStore = create<CustomersState>((set, get) => ({
     }
     // Invalidate cache so next load() fetches fresh data
     localStorage.removeItem("agrishop_cache_customers");
-    const { error } = await supabase
-      .from("customers")
-      .update({ due_date: dueDate })
-      .eq("id", id);
+    const { error } = await supabase.rpc("update_customer_due_date", {
+      p_customer_id: id,
+      p_due_date: dueDate || '',
+    });
     if (error) throw new Error(error.message);
     set({
       customers: get().customers.map((c) =>
