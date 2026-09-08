@@ -29,6 +29,7 @@ import EmployeeLayout from "@/components/layout/EmployeeLayout";
 import AdminLayout from "@/components/layout/AdminLayout";
 
 // Admin pages
+import ObservationBotPage from "@/pages/admin/more/ObservationBotPage";
 const AdminDashboardPage = React.lazy(() => import("@/pages/admin/dashboard/AdminDashboardPage"));
 const AdminSalesListPage = React.lazy(() => import("@/pages/admin/sales/AdminSalesListPage"));
 const AdminSaleDetailPage = React.lazy(() => import("@/pages/admin/sales/AdminSaleDetailPage"));
@@ -168,6 +169,7 @@ export const router = createBrowserRouter([
       { path: "inventory/movements", element: <StockMovementHistoryPage /> },
       { path: "inventory/reorder", element: <ReorderSuggestionsPage /> },
       { path: "inventory/barcodes", element: <BarcodeGeneratePage /> },
+      { path: "observation-bot", element: <ObservationBotPage /> },
       { path: "sales/:saleId/return", element: <AdminReturnSelectItemsPage /> },
       { path: "sales/:saleId/return/confirm", element: <AdminReturnConfirmPage /> },
       { path: "sales/:saleId/return/success", element: <AdminReturnSuccessPage /> },
