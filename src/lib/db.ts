@@ -67,7 +67,8 @@ export async function rpcRecordCustomerPayment(payload: {
   method: PaymentMethod;
   notes?: string;
 }): Promise<{ id: string; balanceAfter: number }> {
-  const { data, error } = await supabase.rpc("record_customer_payment", { payload });
+  const actorId = useAuthStore.getState().user?.id;
+  const { data, error } = await supabase.rpc("record_customer_payment", { payload: { ...payload, actorId } });
   if (error) throw new Error(friendly(error.message));
   return data as any;
 }
@@ -168,7 +169,12 @@ export async function rpcProcessReturn(payload: {
 
   const { data, error } = await supabase.rpc("process_return", { payload: rpcPayload });
   if (error) throw new Error(friendly(error.message));
-  return data as any;
+  // Map snake_case RPC response to camelCase for UI consumption
+  return {
+    id: data.id,
+    returnNumber: data.return_number,
+    totalRefund: Number(data.total_refund ?? 0),
+  };
 }
 
 // Turn raw Postgres exception text into a human message for the UI.

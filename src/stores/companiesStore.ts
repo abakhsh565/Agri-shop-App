@@ -44,6 +44,13 @@ interface CompaniesState {
     address?: string;
     logoUrl?: string;
   }) => Promise<Company>;
+  updateCompany: (id: string, input: {
+    name?: string;
+    contactPerson?: string;
+    phone?: string;
+    address?: string;
+    logoUrl?: string;
+  }) => Promise<void>;
 }
 
 let channel: ReturnType<typeof supabase.channel> | null = null;
@@ -102,5 +109,34 @@ export const useCompaniesStore = create<CompaniesState>((set, get) => ({
     const company = companyFromRow(data as CompanyRow);
     set({ companies: [company, ...get().companies] });
     return company;
+  },
+
+  updateCompany: async (id, input) => {
+    const { error } = await supabase
+      .from("companies")
+      .update({
+        name: input.name,
+        contact_person: input.contactPerson,
+        phone: input.phone,
+        address: input.address,
+        logo_url: input.logoUrl,
+      })
+      .eq("id", id);
+    if (error) throw new Error(error.message);
+    // Update local state
+    set({
+      companies: get().companies.map((c) =>
+        c.id === id
+          ? {
+              ...c,
+              ...(input.name !== undefined && { name: input.name }),
+              ...(input.contactPerson !== undefined && { contactPerson: input.contactPerson }),
+              ...(input.phone !== undefined && { phone: input.phone }),
+              ...(input.address !== undefined && { address: input.address }),
+              ...(input.logoUrl !== undefined && { logoUrl: input.logoUrl }),
+            }
+          : c
+      ),
+    });
   },
 }));
