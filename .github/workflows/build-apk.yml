@@ -11,7 +11,6 @@ jobs:
     permissions:
       actions: write
       contents: read
-      artifacts: write
     steps:
       - name: Checkout Code
         uses: actions/checkout@v7
@@ -59,33 +58,40 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleDebug
 
-      - name: Cleanup Old Artifacts
+      - name: Delete ALL Old Artifacts (Free Storage)
         if: always()
         uses: actions/github-script@v7
         with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            try {
-              const list = await github.rest.actions.listWorkflowRunArtifacts({
+            // Delete ALL artifacts from ALL previous runs
+            let page = 1;
+            let deleted = 0;
+            while (true) {
+              const list = await github.rest.actions.listArtifactsForRepo({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                run_id: context.runId,
+                per_page: 100,
+                page: page,
               });
-              const total = list.data.total_count;
-              console.log(`Found ${total} artifacts`);
-              if (total > 1) {
-                const toDelete = list.data.artifacts.slice(0, -1);
-                for (const a of toDelete) {
+              if (list.data.artifacts.length === 0) break;
+              for (const artifact of list.data.artifacts) {
+                try {
                   await github.rest.actions.deleteArtifact({
                     owner: context.repo.owner,
                     repo: context.repo.repo,
-                    artifact_id: a.id,
+                    artifact_id: artifact.id,
                   });
-                  console.log(`Deleted: ${a.name}`);
+                  console.log(`Deleted: ${artifact.name} (${artifact.id})`);
+                  deleted++;
+                } catch (e) {
+                  console.log(`Skip: ${artifact.name} - ${e.message}`);
                 }
               }
-            } catch (e) {
-              console.log('Cleanup skipped:', e.message);
+              page++;
+              if (list.data.artifacts.length < 100) break;
             }
+            console.log(`Total deleted: ${deleted} artifacts`);
 
       - name: Upload APK Artifact
         if: success()
@@ -94,5 +100,5 @@ jobs:
         with:
           name: app-debug-${{ github.run_number }}
           path: android/app/build/outputs/apk/debug/app-debug.apk
-          retention-days: 7
+          retention-days: 1
           overwrite: true
