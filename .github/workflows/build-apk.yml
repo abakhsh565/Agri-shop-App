@@ -8,18 +8,22 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: read
+      artifacts: write
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: 'npm'
 
       - name: Setup Java
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: 'zulu'
           java-version: '21'
@@ -55,8 +59,40 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleDebug
 
-      - name: Upload APK Artifact
-        uses: actions/upload-artifact@v4
+      - name: Cleanup Old Artifacts
+        if: always()
+        uses: actions/github-script@v7
         with:
-          name: app-debug-apk
+          script: |
+            try {
+              const list = await github.rest.actions.listWorkflowRunArtifacts({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                run_id: context.runId,
+              });
+              const total = list.data.total_count;
+              console.log(`Found ${total} artifacts`);
+              if (total > 1) {
+                const toDelete = list.data.artifacts.slice(0, -1);
+                for (const a of toDelete) {
+                  await github.rest.actions.deleteArtifact({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    artifact_id: a.id,
+                  });
+                  console.log(`Deleted: ${a.name}`);
+                }
+              }
+            } catch (e) {
+              console.log('Cleanup skipped:', e.message);
+            }
+
+      - name: Upload APK Artifact
+        if: success()
+        uses: actions/upload-artifact@v7
+        continue-on-error: true
+        with:
+          name: app-debug-${{ github.run_number }}
           path: android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 7
+          overwrite: true
