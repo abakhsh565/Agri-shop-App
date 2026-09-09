@@ -310,9 +310,8 @@ export default function CustomerProfilePage() {
             </p>
           </div>
           <div className="flex-1 text-center py-3.5" style={{ borderRight: "1px solid var(--divider)" }}>
-            <p className="text-[10px] tracking-[0.5px] font-medium" style={{ color: "var(--text-secondary)" }}>{t("customerProfile.paid")}</p>
-            <p className="text-[15px] font-bold mt-1" style={{ color: "var(--text-primary)" }}>
-              {formatCurrency(effectivePaid)}
+            <p className="text-[10px] tracking-[0.5px] font-medium" style={{ color: "var(--text-secondary)" }}>{t("customerProfile.paid")}</p>              <p className="text-[15px] font-bold mt-1" style={{ color: "var(--text-primary)" }}>
+              {formatCurrency(customer.totalPaid || 0)}
             </p>
           </div>
           <div className="flex-1 text-center py-3.5">
