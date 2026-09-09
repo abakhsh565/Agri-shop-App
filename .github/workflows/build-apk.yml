@@ -58,7 +58,16 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleDebug
 
-      - name: Delete Old Artifacts
+      - name: Upload APK Artifact
+        if: success()
+        uses: actions/upload-artifact@v7
+        with:
+          name: app-debug
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 3
+          overwrite: true
+
+      - name: Cleanup Old Artifacts
         if: always()
         uses: actions/github-script@v7
         with:
@@ -74,26 +83,20 @@ jobs:
               });
               if (list.data.artifacts.length === 0) break;
               for (const artifact of list.data.artifacts) {
-                try {
-                  await github.rest.actions.deleteArtifact({
-                    owner: context.repo.owner,
-                    repo: context.repo.repo,
-                    artifact_id: artifact.id,
-                  });
-                  deleted++;
-                } catch (e) {}
+                // Only delete artifacts older than 1 day, keep the current run's artifact
+                const age = Date.now() - new Date(artifact.created_at).getTime();
+                if (age > 86400000 && artifact.name.startsWith('app-debug')) {
+                  try {
+                    await github.rest.actions.deleteArtifact({
+                      owner: context.repo.owner,
+                      repo: context.repo.repo,
+                      artifact_id: artifact.id,
+                    });
+                    deleted++;
+                  } catch (e) {}
+                }
               }
               if (list.data.artifacts.length < 100) break;
               page++;
             }
             console.log(`Deleted ${deleted} old artifacts`);
-
-      - name: Upload APK Artifact
-        if: success()
-        continue-on-error: true
-        uses: actions/upload-artifact@v7
-        with:
-          name: app-debug-${{ github.run_number }}
-          path: android/app/build/outputs/apk/debug/app-debug.apk
-          retention-days: 1
-          overwrite: true
