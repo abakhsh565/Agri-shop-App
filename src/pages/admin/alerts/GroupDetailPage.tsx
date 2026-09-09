@@ -6,7 +6,7 @@ import { useThemeStore } from "@/stores/themeStore";
 import { useT } from "@/lib/i18n";
 import { formatCurrency } from "@/lib/formatters";
 import { loadLocalGroups, deleteLocalGroup, updateLocalGroup } from "@/lib/localGroupRegistry";
-import { Users, Trash2, ChevronLeft, Bell, Pencil } from "lucide-react";
+import { Users, Trash2, ChevronLeft, Bell, MoreVertical } from "lucide-react";
 import GroupReminderSheet from "@/components/ui/GroupReminderSheet";
 
 const TRIGGER_LABELS: Record<string, { en: string; ur: string }> = {
@@ -27,6 +27,7 @@ export default function GroupDetailPage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
 
   useEffect(() => {
     loadLocalGroups().then((groups) => {
@@ -91,6 +92,26 @@ export default function GroupDetailPage() {
               {group.customerCount} {isUrdu ? "گاہک" : "customers"} · {activeCount} {isUrdu ? "فعال" : "active"} · {completedCount} {isUrdu ? "مکمل" : "completed"}
             </p>
           </div>
+          <div className="relative">
+            <button onClick={() => setShowMenu(!showMenu)} className="w-9 h-9 rounded-full flex items-center justify-center" style={{ background: "var(--surface-2)" }}>
+              <MoreVertical size={18} style={{ color: "var(--text-primary)" }} />
+            </button>
+            {showMenu && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setShowMenu(false)} />
+                <div className="absolute right-0 top-full mt-1 z-50 w-[160px] rounded-[12px] overflow-hidden" style={{ background: "var(--surface)", border: "1px solid var(--divider)", boxShadow: "0 4px 12px rgba(0,0,0,0.15)" }}>
+                  <button onClick={() => { setShowMenu(false); setEditing(true); }} className="w-full flex items-center gap-2.5 px-4 py-3 text-[13px] font-medium" style={{ color: "var(--text-primary)" }}>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
+                    {isUrdu ? "ترمیم" : "Edit"}
+                  </button>
+                  <button onClick={() => { setShowMenu(false); setShowDeleteConfirm(true); }} className="w-full flex items-center gap-2.5 px-4 py-3 text-[13px] font-medium" style={{ color: "#dc2626" }}>
+                    <Trash2 size={15} />
+                    {isUrdu ? "حذف" : "Delete"}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
         </div>
 
         {/* Reminder config */}
@@ -147,21 +168,7 @@ export default function GroupDetailPage() {
           </div>
         </div>
 
-        {/* Edit + Delete group */}
-        <button
-          onClick={() => setEditing(true)}
-          className="flex items-center justify-center gap-2 h-11 rounded-full text-[13px] font-semibold"
-          style={{ background: "var(--brand)", color: "#0a0a0a" }}
-        >
-          <Pencil size={15} /> {isUrdu ? "گروپ ترمیم کریں" : "Edit Group"}
-        </button>
-        <button
-          onClick={() => setShowDeleteConfirm(true)}
-          className="flex items-center justify-center gap-2 h-11 rounded-full text-[13px] font-semibold"
-          style={{ border: "1px solid #dc2626", color: "#dc2626", background: "transparent" }}
-        >
-          <Trash2 size={15} /> {isUrdu ? "گروپ حذف کریں" : "Delete Group"}
-        </button>
+
       </div>
 
       {/* Delete confirmation */}
