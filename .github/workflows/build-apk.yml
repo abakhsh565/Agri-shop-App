@@ -16,12 +16,21 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: 'npm'
 
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
           java-version: '21'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK Platform 35
+        run: |
+          sdkmanager --install "platforms;android-35" "build-tools;35.0.0"
+          yes | sdkmanager --licenses || true
 
       - name: Install Dependencies
         run: npm install --legacy-peer-deps
@@ -31,8 +40,6 @@ jobs:
 
       - name: Setup Android Platform
         run: |
-          # Remove stale platform if it exists, then re-add cleanly
-          npx cap remove android 2>/dev/null || true
           rm -rf android/
           npx cap add android
 
