@@ -59,14 +59,11 @@ jobs:
           ./gradlew assembleDebug
 
       - name: Delete ALL Old Artifacts (Free Storage)
-        if: always()
         uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            // Delete ALL artifacts from ALL previous runs
-            let page = 1;
-            let deleted = 0;
+            let page = 1, deleted = 0;
             while (true) {
               const list = await github.rest.actions.listArtifactsForRepo({
                 owner: context.repo.owner,
@@ -88,15 +85,13 @@ jobs:
                   console.log(`Skip: ${artifact.name} - ${e.message}`);
                 }
               }
-              page++;
               if (list.data.artifacts.length < 100) break;
+              page++;
             }
             console.log(`Total deleted: ${deleted} artifacts`);
 
       - name: Upload APK Artifact
-        if: success()
         uses: actions/upload-artifact@v7
-        continue-on-error: true
         with:
           name: app-debug-${{ github.run_number }}
           path: android/app/build/outputs/apk/debug/app-debug.apk
