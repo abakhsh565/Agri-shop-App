@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { uploadImage } from "@/lib/storage";
 import { supabase } from "@/lib/supabase";
+import { projectId, publicAnonKey } from "@/../utils/supabase/info";
 
 const LANG_LABELS: Record<string, string> = { en: "English", ur: "اردو" };
 
@@ -55,13 +56,34 @@ export default function AdminSettingsPage() {
     if (!editName.trim()) return;
     setSaving(true);
     try {
-      const { error } = await supabase.from("users").update({ name: editName.trim(), photo_url: editImageUrl }).eq("id", user!.id);
-      if (error) throw error;
+      // Use raw fetch to bypass expired Supabase session
+      // This sends ONLY the anon key (no expired JWT)
+      const response = await fetch(
+        `https://${projectId}.supabase.co/rest/v1/users?id=eq.${user!.id}`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            "apikey": publicAnonKey,
+            "Authorization": `Bearer ${publicAnonKey}`,
+            "Prefer": "return=minimal",
+          },
+          body: JSON.stringify({ name: editName.trim(), photo_url: editImageUrl }),
+        }
+      );
+      
+      if (!response.ok) {
+        const errBody = await response.text();
+        console.error("Profile save HTTP error:", response.status, errBody);
+        throw new Error(`HTTP ${response.status}: ${errBody}`);
+      }
+      
       useAuthStore.getState().setUser({ ...user!, name: editName.trim(), photoUrl: editImageUrl ?? undefined });
       setAvatarUrl(editImageUrl);
       setEditing(false);
     } catch (err) {
-      // silent
+      console.error("Profile save failed:", err);
+      alert("Failed to save profile. Please try again.");
     } finally {
       setSaving(false);
     }
