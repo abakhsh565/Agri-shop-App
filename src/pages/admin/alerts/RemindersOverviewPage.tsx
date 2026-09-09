@@ -32,6 +32,7 @@ interface ReminderLogEntry {
   id: string;
   customerId: string;
   customerName?: string;
+  customerImageUrl?: string;
   configId?: string;
   type: "gentle" | "firmer" | "final";
   message: string;
@@ -44,10 +45,17 @@ async function loadAllReminderLogs(): Promise<ReminderLogEntry[]> {
     const { supabase } = await import("@/lib/supabase");
     const { data } = await supabase.from("reminder_logs").select("*").order("sent_at", { ascending: false }).limit(50);
     if (!data) return [];
+    const customerIds = [...new Set(data.map((r: any) => r.customer_id).filter(Boolean))];
+    let customerMap: Record<string, string> = {};
+    if (customerIds.length > 0) {
+      const { data: custs } = await supabase.from("customers").select("id, image_url").in("id", customerIds);
+      (custs || []).forEach((c: any) => { customerMap[c.id] = c.image_url; });
+    }
     return data.map((r: any) => ({
       id: r.id,
       customerId: r.customer_id,
       customerName: r.customer_name,
+      customerImageUrl: customerMap[r.customer_id] || undefined,
       configId: r.config_id,
       type: r.tone,
       message: r.message,
@@ -226,9 +234,7 @@ function ActivityItem({ log }: { log: ReminderLogEntry }) {
   const name = log.customerName || "Customer";
   return (
     <div className="flex items-center gap-3 px-4 py-3" style={{ borderBottom: "1px solid var(--divider)" }}>
-      <div className="w-9 h-9 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0" style={{ background: getAvatarColor(name), color: "#fff" }}>
-        {getInitials(name)}
-      </div>
+      {log.customerImageUrl ? (<img src={log.customerImageUrl} alt="" className="w-9 h-9 rounded-full object-cover shrink-0" />) : (<div className="w-9 h-9 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0" style={{ background: getAvatarColor(name), color: "#fff" }}>{getInitials(name)}</div>)}
       <div className="flex-1 min-w-0">
         <p className="text-[14px] font-medium" style={{ color: "var(--text-primary)" }}>{name}</p>
         <p className="text-[12px]" style={{ color: "var(--text-secondary)" }}>{t(tc.labelKey as any)} · {channel} · {timeAgo(log.sentAt)}</p>
@@ -556,9 +562,36 @@ export default function RemindersOverviewPage() {
           <EmptyState icon={<CheckCircle2 size={24} style={{ color: "var(--text-secondary)" }} />} title={isUrdu ? "ابھی تک کچھ نہیں بھیجا" : "Nothing sent yet"} subtitle={isUrdu ? "پہلی یاد دہانی بھیجنے کے بعد یہاں نظر آئے گی۔" : "Sent reminders will appear here after you send them."} />
         ) : (
           <div>
-            {sentLogs.map((log, i) => (
-              <ActivityItem key={log.id || i} log={log} />
-            ))}
+            {(() => {
+              const tenDaysAgo = new Date();
+              tenDaysAgo.setDate(tenDaysAgo.getDate() - 10);
+              const recentLogs = sentLogs.filter(l => new Date(l.sentAt) >= tenDaysAgo);
+              const now2 = new Date();
+              const todayStr = now2.toISOString().split("T")[0];
+              const yesterday = new Date(now2); yesterday.setDate(yesterday.getDate() - 1);
+              const yesterdayStr = yesterday.toISOString().split("T")[0];
+              const groups: { heading: string; items: typeof recentLogs }[] = [];
+              const byDate = new Map<string, typeof recentLogs>();
+              for (const log of recentLogs) {
+                const d = new Date(log.sentAt).toISOString().split("T")[0];
+                if (!byDate.has(d)) byDate.set(d, []);
+                byDate.get(d)!.push(log);
+              }
+              for (const [date, items] of byDate) {
+                let heading = date;
+                if (date === todayStr) heading = isUrdu ? "آج" : "Today";
+                else if (date === yesterdayStr) heading = isUrdu ? "کل" : "Yesterday";
+                groups.push({ heading, items });
+              }
+              return groups.map(g => (
+                <div key={g.heading}>
+                  <p className="px-4 pt-3 pb-1 text-[10px] font-bold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>{g.heading}</p>
+                  {g.items.map((log, i) => (
+                    <ActivityItem key={log.id || i} log={log} />
+                  ))}
+                </div>
+              ));
+            })()}
           </div>
         );
       default:
@@ -641,7 +674,7 @@ export default function RemindersOverviewPage() {
         {/* Main tabs — premium segmented control */}
         <div className="flex items-center gap-1 p-1 rounded-[12px]" style={{ background: "var(--surface-2)" }}>
           {([
-            { key: "action" as const, label: isUrdu ? "عمل درکار" : "Action Needed", count: liveSignals.length },
+            { key: "action" as const, label: isUrdu ? "عمل درکار" : "Actions" },
             { key: "followups" as const, label: isUrdu ? "فالو اپس" : "Follow Ups" },
             { key: "groups" as const, label: isUrdu ? "گروپ ریمائنڈر" : "Group Reminder" },
           ] as const).map(tab => (
@@ -680,12 +713,12 @@ export default function RemindersOverviewPage() {
                 {st.label}
                 {st.count > 0 && (
                   <span className="text-[10px] font-bold w-5 h-5 flex items-center justify-center rounded-full" style={{
-                    background: subTab === st.key ? st.color : "var(--surface-2)",
+                    background: subTab === st.key ? "var(--text-secondary)" : "var(--surface-2)",
                     color: subTab === st.key ? "#fff" : "var(--text-secondary)",
                   }}>{st.count}</span>
                 )}
                 {subTab === st.key && (
-                  <div className="absolute bottom-0 left-0 right-0 h-[2px] rounded-full" style={{ background: st.color }} />
+                  <div className="absolute bottom-0 left-0 right-0 h-[2px] rounded-full" style={{ background: "var(--text-secondary)" }} />
                 )}
               </button>
             ))}

@@ -30,6 +30,7 @@ interface UserRow {
   deactivated_at: string | null;
   deactivated_by: string | null;
   created_by: string | null;
+  photo_url: string | null;
   created_at: string;
 }
 
@@ -50,6 +51,7 @@ function userFromRow(r: UserRow): User {
     deactivatedBy: r.deactivated_by,
     createdAt: r.created_at,
     createdBy: r.created_by,
+    photoUrl: r.photo_url ?? undefined,
   };
 }
 

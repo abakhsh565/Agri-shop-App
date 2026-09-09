@@ -132,7 +132,7 @@ export async function loadLocalGroups(): Promise<
     name: string;
     createdAt: string;
     customerCount: number;
-    customers: Array<{ id: string; name: string; outstandingBalance: number; dueDate: string | null }>;
+    customers: Array<{ id: string; name: string; outstandingBalance: number; dueDate: string | null; imageUrl?: string }>;
     config: any;
   }>
 > {
@@ -146,7 +146,7 @@ export async function loadLocalGroups(): Promise<
   // Fetch customer details from Supabase
   const { data: custRows } = await supabase
     .from("customers")
-    .select("id, name, outstanding_balance, due_date")
+    .select("id, name, outstanding_balance, due_date, image_url")
     .in("id", allCustomerIds);
 
   const custMap = new Map<string, any>();
@@ -164,6 +164,7 @@ export async function loadLocalGroups(): Promise<
         name: c?.name || "Unknown",
         outstandingBalance: c?.outstanding_balance || 0,
         dueDate: c?.due_date || null,
+        imageUrl: c?.image_url || undefined,
       };
     }),
     config: g.config,
@@ -190,6 +191,71 @@ export async function deleteLocalGroup(groupId: string): Promise<void> {
   // Remove from localStorage
   const filtered = groups.filter((g) => g.id !== groupId);
   writeGroupRegistry(filtered);
+}
+
+/** Update a group: update individual reminder_configs in Supabase + update metadata in localStorage */
+export async function updateLocalGroup(
+  groupId: string,
+  config: ReminderConfig,
+  customerIds: string[],
+  name: string
+): Promise<void> {
+  const groups = readGroupRegistry();
+  const idx = groups.findIndex((g) => g.id === groupId);
+  if (idx === -1) return;
+
+  const oldGroup = groups[idx];
+
+  // Remove old reminder_configs from Supabase
+  for (const customerId of oldGroup.customerIds) {
+    await supabase
+      .from("reminder_configs")
+      .delete()
+      .eq("customer_id", customerId)
+      .eq("anchor", oldGroup.config.anchor)
+      .eq("start_days", oldGroup.config.startDays);
+  }
+
+  // Create new reminder_configs in Supabase
+  const configPayload = {
+    anchor: config.anchor,
+    start_days: config.startDays,
+    repeat_type: config.repeat,
+    interval_n: config.intervalN,
+    interval_unit: config.intervalUnit,
+    escalation: config.escalation,
+    ends: config.ends,
+    ends_date: config.endsDate,
+    ends_count: config.endsCount,
+    enabled: config.enabled,
+  };
+
+  for (const customerId of customerIds) {
+    await supabase.from("reminder_configs").insert({
+      customer_id: customerId,
+      ...configPayload,
+    });
+  }
+
+  // Update localStorage
+  groups[idx] = {
+    ...oldGroup,
+    name,
+    config: {
+      enabled: config.enabled,
+      startDays: config.startDays,
+      anchor: config.anchor,
+      repeatType: config.repeat,
+      intervalN: config.intervalN,
+      intervalUnit: config.intervalUnit,
+      escalation: config.escalation,
+      ends: config.ends,
+      endsDate: config.endsDate,
+      endsCount: config.endsCount,
+    },
+    customerIds,
+  };
+  writeGroupRegistry(groups);
 }
 
 /** Get a single group by ID */

@@ -88,8 +88,7 @@ export default function CustomerSelector({ selectedIds, onChange, filterFn, maxS
               <button key={c.id} onClick={() => toggle(c.id)}
                 className="flex items-center gap-3 p-3 rounded-[12px] text-start transition-colors"
                 style={{ background: isSelected ? "var(--brand-light, #d9f99d)" : "transparent", border: isSelected ? "1px solid var(--brand-dark, #65a30d)" : "1px solid transparent" }}>
-                <div className="w-9 h-9 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0"
-                  style={{ background: getAvatarColor(c.name), color: "#fff" }}>{getInitials(c.name)}</div>
+                {c.imageUrl ? (<img src={c.imageUrl} alt="" className="w-9 h-9 rounded-full object-cover shrink-0" />) : (<div className="w-9 h-9 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0" style={{ background: getAvatarColor(c.name), color: "#fff" }}>{getInitials(c.name)}</div>)}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <p className="text-[13px] font-semibold truncate" style={{ color: "var(--text-primary)" }}>{c.name}</p>

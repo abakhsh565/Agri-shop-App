@@ -5,8 +5,9 @@ import NavHeader from "@/components/ui/NavHeader";
 import { useThemeStore } from "@/stores/themeStore";
 import { useT } from "@/lib/i18n";
 import { formatCurrency } from "@/lib/formatters";
-import { loadLocalGroups, deleteLocalGroup } from "@/lib/localGroupRegistry";
-import { Users, Trash2, ChevronLeft, Bell } from "lucide-react";
+import { loadLocalGroups, deleteLocalGroup, updateLocalGroup } from "@/lib/localGroupRegistry";
+import { Users, Trash2, ChevronLeft, Bell, Pencil } from "lucide-react";
+import GroupReminderSheet from "@/components/ui/GroupReminderSheet";
 
 const TRIGGER_LABELS: Record<string, { en: string; ur: string }> = {
   before_due: { en: "Before due date", ur: "وقف سے پہلے" },
@@ -25,6 +26,7 @@ export default function GroupDetailPage() {
   const [loading, setLoading] = useState(true);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [editing, setEditing] = useState(false);
 
   useEffect(() => {
     loadLocalGroups().then((groups) => {
@@ -129,12 +131,7 @@ export default function GroupDetailPage() {
                 className="w-full px-4 py-3.5 flex items-center gap-3 text-start transition-opacity active:opacity-70"
                 style={{ borderBottom: "1px solid var(--divider)" }}
               >
-                <div
-                  className="w-10 h-10 rounded-full flex items-center justify-center text-[12px] font-bold shrink-0"
-                  style={{ background: customer.outstandingBalance > 0 ? "#fee2e2" : "#d9f99d", color: customer.outstandingBalance > 0 ? "#dc2626" : "#3f6212" }}
-                >
-                  {customer.name.charAt(0).toUpperCase()}
-                </div>
+                {customer.imageUrl ? (<img src={customer.imageUrl} alt="" className="w-10 h-10 rounded-full object-cover shrink-0" />) : (<div className="w-10 h-10 rounded-full flex items-center justify-center text-[12px] font-bold shrink-0" style={{ background: customer.outstandingBalance > 0 ? "#fee2e2" : "#d9f99d", color: customer.outstandingBalance > 0 ? "#dc2626" : "#3f6212" }}>{customer.name.charAt(0).toUpperCase()}</div>)}
                 <div className="flex-1 min-w-0">
                   <p className="text-[14px] font-semibold truncate" style={{ color: "var(--text-primary)" }}>{customer.name}</p>
                   <p className="text-[12px] mt-0.5" style={{ color: "var(--text-secondary)" }}>
@@ -150,7 +147,14 @@ export default function GroupDetailPage() {
           </div>
         </div>
 
-        {/* Delete group */}
+        {/* Edit + Delete group */}
+        <button
+          onClick={() => setEditing(true)}
+          className="flex items-center justify-center gap-2 h-11 rounded-full text-[13px] font-semibold"
+          style={{ background: "var(--brand)", color: "#0a0a0a" }}
+        >
+          <Pencil size={15} /> {isUrdu ? "گروپ ترمیم کریں" : "Edit Group"}
+        </button>
         <button
           onClick={() => setShowDeleteConfirm(true)}
           className="flex items-center justify-center gap-2 h-11 rounded-full text-[13px] font-semibold"
@@ -180,6 +184,23 @@ export default function GroupDetailPage() {
             </div>
           </div>
         </div>
+      )}
+      {/* Edit Group Sheet */}
+      {editing && group && (
+        <GroupReminderSheet
+          config={group.config}
+          selectedCustomerIds={group.customerIds}
+          groupName={group.name}
+          onSave={async (config, customerIds, name) => {
+            await updateLocalGroup(group.id, config, customerIds, name);
+            setEditing(false);
+            // Reload
+            const groups = await loadLocalGroups();
+            const updated = groups.find((g: any) => g.id === group.id);
+            if (updated) setGroup(updated);
+          }}
+          onClose={() => setEditing(false)}
+        />
       )}
     </div>
   );

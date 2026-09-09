@@ -86,12 +86,7 @@ export default function CreditOverridesPage() {
                 className="flex items-center gap-3 rounded-[14px] p-4 transition-opacity active:opacity-70 text-start w-full"
                 style={{ background: "var(--surface)", border: "1px solid var(--divider)" }}
               >
-                <div
-                  className="size-10 rounded-full flex items-center justify-center text-sm font-bold shrink-0"
-                  style={{ background: "#FCEBEB", color: "#A32D2D" }}
-                >
-                  {o.customer.name.charAt(0).toUpperCase()}
-                </div>
+                {o.customer.imageUrl ? (<img src={o.customer.imageUrl} alt="" className="size-10 rounded-full object-cover shrink-0" />) : (<div className="size-10 rounded-full flex items-center justify-center text-sm font-bold shrink-0" style={{ background: "#FCEBEB", color: "#A32D2D" }}>{o.customer.name.charAt(0).toUpperCase()}</div>)}
                 <div className="flex-1 min-w-0">
                   <p className="text-[14px] font-medium truncate" style={{ color: "var(--text-primary)" }}>
                     {o.customer.name}

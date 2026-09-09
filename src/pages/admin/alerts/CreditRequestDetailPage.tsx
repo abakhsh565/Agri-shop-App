@@ -134,9 +134,7 @@ export default function CreditRequestDetailPage() {
             className="rounded-[12px] p-4 flex items-center gap-3 text-start transition-opacity active:opacity-70"
             style={{ background: "var(--surface-2)" }}
           >
-            <div className="w-11 h-11 rounded-full flex items-center justify-center text-[14px] font-bold shrink-0" style={{ background: customer.outstandingBalance > 0 ? "#fee2e2" : "#d9f99d", color: customer.outstandingBalance > 0 ? "#dc2626" : "#166534" }}>
-              {customer.name.charAt(0).toUpperCase()}
-            </div>
+            {customer.imageUrl ? (<img src={customer.imageUrl} alt="" className="w-11 h-11 rounded-full object-cover shrink-0" />) : (<div className="w-11 h-11 rounded-full flex items-center justify-center text-[14px] font-bold shrink-0" style={{ background: customer.outstandingBalance > 0 ? "#fee2e2" : "#d9f99d", color: customer.outstandingBalance > 0 ? "#dc2626" : "#166534" }}>{customer.name.charAt(0).toUpperCase()}</div>)}
             <div className="flex-1 min-w-0">
               <p className="text-[15px] font-semibold" style={{ color: "var(--text-primary)" }}>{customer.name}</p>
               <p className="text-[12px] mt-0.5" style={{ color: customer.outstandingBalance > 0 ? "#dc2626" : "var(--text-secondary)" }}>

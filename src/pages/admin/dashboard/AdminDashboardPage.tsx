@@ -294,7 +294,7 @@ export default function AdminDashboardPage() {
             <Search size={16} style={{ color: "var(--text-primary)" }} />
           </button>
           <button
-            onClick={() => { setShowNotifs((v) => !v); markAllRead(); }}
+            onClick={() => setShowNotifs((v) => !v)}
             className="flex items-center justify-center rounded-full size-9 relative transition-colors active:opacity-60"
             style={{ background: "var(--surface-2)" }}
           >
@@ -331,7 +331,7 @@ export default function AdminDashboardPage() {
                     {unread()}
                   </span>
                 )}
-                <span className="text-[10px]" style={{ color: "var(--text-secondary)" }}>View all</span>
+                <span className="text-[10px] font-semibold" style={{ color: "var(--brand-dark, #65a30d)" }} onClick={(e) => { e.stopPropagation(); markAllRead(); }}>Mark all read</span>
               </div>
             </button>
 
@@ -460,7 +460,7 @@ export default function AdminDashboardPage() {
 
       {/* ── Summary: Action needed · Follow-ups · Out of stock ── */}
       <div className="px-4 pt-4 flex gap-2 animate-fade-in-up">
-        <button onClick={() => navigate('/admin/alerts/reminders', { state: { tab: 'action', subTab: 'urgent' } })} className="flex-1 flex items-center gap-2.5 py-2.5 px-3 rounded-[10px] active:opacity-70 transition-opacity" style={{ background: "var(--surface-2)" }}>
+        <button onClick={() => navigate('/admin/alerts/reminders', { state: { tab: 'action', subTab: 'critical' } })} className="flex-1 flex items-center gap-2.5 py-2.5 px-3 rounded-[10px] active:opacity-70 transition-opacity" style={{ background: "var(--surface-2)" }}>
           <p className="text-[16px] font-bold" style={{ color: (highRiskCount + creditLimitReached) > 0 ? "var(--error)" : "var(--text-secondary)" }}>{highRiskCount + creditLimitReached}</p>
           <p className="text-[10px] font-medium leading-tight" style={{ color: "var(--text-secondary)" }}>{isUrdu ? "عمل درکار" : "Action needed"}</p>
         </button>
@@ -525,7 +525,7 @@ export default function AdminDashboardPage() {
           if (creditLimitReached > 0) parts.push(creditLimitReached + (isUrdu ? " کریڈٹ حد" : " credit limit"));
           if (criticalCount > 0) parts.push(isUrdu ? "سپلائر" : "supplier");
           if (pendingCreditRequests > 0) parts.push(pendingCreditRequests + (isUrdu ? " درخواست" : " request" + (pendingCreditRequests > 1 ? "s" : "")));
-          const urgentTab = highRiskCount > 0 ? "urgent" : creditLimitReached > 0 || pendingCreditRequests > 0 ? "medium" : "urgent";
+          const urgentTab = highRiskCount > 0 ? "critical" : creditLimitReached > 0 || pendingCreditRequests > 0 ? "warning" : "critical";
           items.push({
             key: "critical",
             icon: <AlertTriangle size={18} />,
