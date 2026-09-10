@@ -7,7 +7,8 @@ import { useSalesStore } from "@/stores/salesStore";
 import { useProductsStore } from "@/stores/productsStore";
 import { useCompaniesStore } from "@/stores/companiesStore";
 import { useThemeStore } from "@/stores/themeStore";
-import { computeLiveSignals, type LiveSignal, type SignalCategory } from "@/lib/signalEngine";
+import { computeLiveSignals, type LiveSignal, type SignalCategory, type SignalSeverity, type SignalAction, type CreditRequestInput } from "@/lib/signalEngine";
+import { markSignalReviewed, isSignalSuppressed, isSignalEscalated, getSuppressionInterval, cleanupOldRecords } from "@/lib/signalSuppression";
 import { formatCurrency } from "@/lib/formatters";
 import { useT } from "@/lib/i18n";
 import { generateReminders, generateReminderMessage, calculatePaymentStatus, markOccurrenceSent, categorizeReminders } from "@/lib/reminderEngine";
@@ -21,7 +22,7 @@ import {
   type LocalGroupEntry,
 } from "@/lib/localGroupRegistry";
 import {
-  getCreditRequests,
+  getCreditRequestsDB,
   approveCreditRequest,
   rejectCreditRequest,
   type LocalCreditRequest,
@@ -279,11 +280,11 @@ export default function RemindersOverviewPage() {
   }, [customers, sales]);
   useEffect(() => {
     loadLocalGroups().then(setReminderGroups);
-    setCreditRequests(getCreditRequests());
+    getCreditRequestsDB().then(setCreditRequests);
   }, []);
   // Refresh credit requests on mount and periodically
   useEffect(() => {
-    const refresh = () => setCreditRequests(getCreditRequests());
+    const refresh = () => getCreditRequestsDB().then(setCreditRequests);
     refresh();
     const timer = setInterval(refresh, 5000);
     return () => clearInterval(timer);
@@ -326,39 +327,69 @@ export default function RemindersOverviewPage() {
 
   const now = new Date();
 
-  /* ── Live Signals from Signal Engine ── */
-  const liveSignals = useMemo(() =>
-    computeLiveSignals({ customers, products, companies, now }),
-  [customers, products, companies]);
+  /* ── Signal Suppression ── */
+  const [suppressionVersion, setSuppressionVersion] = useState(0);
+
+  useEffect(() => { cleanupOldRecords(); }, []);
+
+  const handleReviewed = useCallback((signal: LiveSignal) => {
+    markSignalReviewed(signal);
+    setSuppressionVersion(v => v + 1);
+  }, []);
+
+  /* ── Pending credit requests as Critical signals ── */
+  const creditRequestSignals: LiveSignal[] = useMemo(() =>
+    creditRequests
+      .filter(r => r.status === "pending")
+      .map(r => ({
+        id: `credit-request-${r.id}`,
+        category: "credit_limit" as SignalCategory,
+        severity: "critical" as SignalSeverity,
+        priority: 85,
+        entity_type: "customer" as const,
+        entity_id: r.customerId,
+        entity_name: r.customerName,
+        title: r.customerName,
+        detail: `Credit increase request: Rs. ${Math.round(r.currentLimit).toLocaleString("en-PK")} \u2192 Rs. ${Math.round(r.requestedLimit).toLocaleString("en-PK")}`,
+        reason: `${r.customerName} is requesting a credit limit increase from Rs. ${Math.round(r.currentLimit).toLocaleString("en-PK")} to Rs. ${Math.round(r.requestedLimit).toLocaleString("en-PK")}${r.reason ? `. Reason: ${r.reason}` : ""}.`,
+        recommendedAction: "Approve or reject the request.",
+        signalAction: "approve_reject" as SignalAction,
+        value: r.requestedLimit,
+        threshold: r.currentLimit,
+        created_at: r.createdAt,
+      })),
+  [creditRequests]);
+
+  /* ── Live Signals from Signal Engine + Credit Requests ── */
+  const liveSignals = useMemo(() => {
+    const engineSignals = computeLiveSignals({ customers, products, companies, now });
+    return [...creditRequestSignals, ...engineSignals].sort((a, b) => b.priority - a.priority);
+  }, [customers, products, companies, creditRequestSignals]);
+
+  /* ── Filter through suppression ── */
+  const visibleSignals = useMemo(() =>
+    liveSignals.filter(s => {
+      // Critical signals are never suppressed
+      if (s.severity === "critical") return true;
+      // Check escalation — if escalated, always show
+      if (isSignalEscalated(s)) return true;
+      // Check suppression
+      const interval = getSuppressionInterval(s.severity);
+      return !isSignalSuppressed(s.id, interval);
+    }),
+  [liveSignals, suppressionVersion]);
 
   const criticalSignals = useMemo(() =>
-    liveSignals.filter(s => s.severity === "critical"),
-  [liveSignals]);
+    visibleSignals.filter(s => s.severity === "critical"),
+  [visibleSignals]);
 
   const warningSignals = useMemo(() =>
-    liveSignals.filter(s => s.severity === "warning"),
-  [liveSignals]);
+    visibleSignals.filter(s => s.severity === "warning"),
+  [visibleSignals]);
 
   const infoSignals = useMemo(() =>
-    liveSignals.filter(s => s.severity === "info"),
-  [liveSignals]);
-
-  /* ── Keep legacy for backward compat ── */
-  const highRiskCustomers = useMemo(() =>
-    customers.filter(c => c.outstandingBalance > 0 && calculatePaymentStatus(c, now) === "high_risk"),
-  [customers]);
-
-  const delayedCustomers = useMemo(() =>
-    customers.filter(c => c.outstandingBalance > 0 && calculatePaymentStatus(c, now) === "delayed"),
-  [customers]);
-
-  const creditLimitCustomers = useMemo(() =>
-    customers.filter(c => c.outstandingBalance > 0 && c.creditLimit > 0 && c.outstandingBalance >= c.creditLimit),
-  [customers]);
-
-  const lowStockProducts = useMemo(() =>
-    products.filter(p => p.stockQty <= (p.variants?.[0]?.lowStockThreshold ?? 5)),
-  [products]);
+    visibleSignals.filter(s => s.severity === "info"),
+  [visibleSignals]);
 
   /* ── Follow-ups categories ──
    * Use occurrence key (persistent identity) instead of customerId.
@@ -377,18 +408,6 @@ export default function RemindersOverviewPage() {
 
   const sentLogs = useMemo(() => allLogs, [allLogs]);
 
-  const mediumCount = useMemo(() => {
-    const ids = new Set<string>();
-    delayedCustomers.forEach(c => ids.add(c.id));
-    creditLimitCustomers.forEach(c => ids.add(c.id));
-    return ids.size;
-  }, [delayedCustomers, creditLimitCustomers]);
-
-  const pendingCreditRequests = useMemo(() =>
-    creditRequests.filter(r => r.status === "pending"),
-  [creditRequests]);
-
-  const allCreditRequests = useMemo(() => creditRequests, [creditRequests]);
 
   /* ── Sub-tabs using live signals ── */
   const actionSubTabs = [
@@ -466,7 +485,7 @@ export default function RemindersOverviewPage() {
       } else {
         await rejectCreditRequest(creditAction.request.id, "Admin");
       }
-      setCreditRequests(getCreditRequests());
+      getCreditRequestsDB().then(setCreditRequests);
       setCreditAction(null);
     } catch (err) {
       console.error("Credit action failed:", err);
@@ -498,7 +517,12 @@ export default function RemindersOverviewPage() {
         cardBg={config.cardBg}
         iconBg={config.iconBg}
         iconColor={config.iconColor}
-        onClick={onClick}
+        onClick={() => {
+          // Suppress non-critical signals on review
+          if (signal.severity !== "critical") handleReviewed(signal);
+          // Navigate to entity
+          onClick();
+        }}
       />
     );
   }

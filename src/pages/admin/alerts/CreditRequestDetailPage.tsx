@@ -9,7 +9,7 @@ import { formatCurrency } from "@/lib/formatters";
 import { useT } from "@/lib/i18n";
 import { ArrowLeft, AlertTriangle, ChevronRight, CheckCircle2, XCircle } from "lucide-react";
 import {
-  getCreditRequests,
+  getCreditRequestsDB,
   approveCreditRequest,
   rejectCreditRequest,
   type LocalCreditRequest,
@@ -30,10 +30,12 @@ export default function CreditRequestDetailPage() {
   const [processing, setProcessing] = useState(false);
 
   useEffect(() => {
-    const requests = getCreditRequests();
+    (async () => {
+      const requests = await getCreditRequestsDB();
     const found = requests.find((r) => r.id === requestId) || null;
     setRequest(found);
     setLoading(false);
+    })();
   }, [requestId]);
 
   const customer = request ? customers.find((c) => c.id === request.customerId) : null;

@@ -367,22 +367,18 @@ async function ensureOccurrence(occ: {
     .single();
   if (existing) return existing as OccurrenceRow;
 
-  // Insert new — no fallback, throw on failure
-  const { data: inserted, error: insertErr } = await supabase
-    .from("reminder_occurrences")
-    .insert({
-      config_id: occ.config_id,
-      customer_id: occ.customer_id,
-      occurrence_number: occ.occurrence_number,
-      stage: occ.stage,
-      crop_name: occ.crop_name,
-      occurrence_key: occ.occurrence_key,
-      scheduled_date: occ.scheduled_date,
-      status: occ.status,
-      tone: occ.tone,
-    })
-    .select()
-    .single();
+  // Insert via SECURITY DEFINER RPC (RLS blocks direct anon writes)
+  const { data: inserted, error: insertErr } = await supabase.rpc("upsert_reminder_occurrence", { payload: {
+    config_id: occ.config_id,
+    customer_id: occ.customer_id,
+    occurrence_number: occ.occurrence_number,
+    stage: occ.stage,
+    crop_name: occ.crop_name,
+    occurrence_key: occ.occurrence_key,
+    scheduled_date: occ.scheduled_date,
+    status: occ.status,
+    tone: occ.tone,
+  }});
   if (insertErr) {
     throw new Error(`Failed to persist occurrence ${occ.occurrence_key}: ${insertErr.message}`);
   }
@@ -800,7 +796,7 @@ async function ensureOccurrencesForHarvest(
         const existing = results.find(o => o && o.occurrence_key === key);
         if (existing) {
           if (existing.status === "scheduled" && schedDate <= todayPk) {
-            await supabase.from("reminder_occurrences").update({ status: "due", updated_at: new Date().toISOString() }).eq("id", existing.id);
+            await supabase.rpc("update_reminder_occurrence_status", { payload: { occurrence_id: existing.id, status: "due" } });
             existing.status = "due";
           }
           continue;
@@ -845,7 +841,7 @@ async function ensureOccurrencesForHarvest(
         const existing = results.find(o => o && o.occurrence_key === key);
         if (existing) {
           if (existing.status === "scheduled" && schedDate <= todayPk) {
-            await supabase.from("reminder_occurrences").update({ status: "due", updated_at: new Date().toISOString() }).eq("id", existing.id);
+            await supabase.rpc("update_reminder_occurrence_status", { payload: { occurrence_id: existing.id, status: "due" } });
             existing.status = "due";
           }
           continue;
@@ -986,17 +982,14 @@ export async function markOccurrenceSent(
 
   const wasAlreadySent = existingOcc && existingOcc.status === "sent" && existingOcc.sent_at;
 
-  // Update occurrence status (idempotent — safe to call multiple times)
-  await supabase
-    .from("reminder_occurrences")
-    .update({
-      status: "sent",
-      sent_at: now,
-      sent_channel: channel,
-      message,
-      updated_at: now,
-    })
-    .eq("id", occurrenceId);
+  // Update occurrence status via RPC (RLS blocks direct anon writes)
+  await supabase.rpc("update_reminder_occurrence_status", { payload: {
+    occurrence_id: occurrenceId,
+    status: "sent",
+    sent_at: now,
+    sent_channel: channel,
+    message,
+  }});
 
   // Insert exactly one reminder_log per occurrence.
   // Skip if already sent to prevent duplicate logs from double-clicks/retries.

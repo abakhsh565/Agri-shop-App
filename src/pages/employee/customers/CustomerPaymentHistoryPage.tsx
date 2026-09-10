@@ -9,7 +9,7 @@ import type { CustomerPayment } from "@/types";
 import { formatCurrency, formatDate, getCreditHealth } from "@/lib/formatters";
 import { useT } from "@/lib/i18n";
 import { useThemeStore } from "@/stores/themeStore";
-import { getCreditRequests, type LocalCreditRequest } from "@/lib/localGroupRegistry";
+import { getCreditRequestsDB, type LocalCreditRequest } from "@/lib/localGroupRegistry";
 import { CheckCircle2, XCircle, ArrowUpRight } from "lucide-react";
 
 export default function CustomerPaymentHistoryPage() {
@@ -34,7 +34,7 @@ export default function CustomerPaymentHistoryPage() {
   }, [customerId]);
 
   useEffect(() => {
-    setCreditRequests(getCreditRequests().filter(r => r.customerId === customerId));
+    getCreditRequestsDB().then(reqs => setCreditRequests(reqs.filter(r => r.customerId === customerId)));
   }, [customerId]);
 
   if (!customer) return null;

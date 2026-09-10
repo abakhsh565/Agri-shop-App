@@ -12,7 +12,12 @@
     "cap:android": "cap open android",
     "cap:ios": "cap open ios",
     "registry:build": "node changes/registry-sync.mjs build",
-    "registry:ingest": "node changes/registry-sync.mjs ingest"
+    "registry:ingest": "node changes/registry-sync.mjs ingest",
+    "test": "vitest run",
+    "test:unit": "vitest run tests/unit/",
+    "test:integration": "vitest run tests/integration/",
+    "test:e2e": "npx playwright test",
+    "test:all": "vitest run && npx playwright test"
   },
   "dependencies": {
     "@capacitor-mlkit/barcode-scanning": "^7.5.0",
@@ -36,18 +41,22 @@
     "@capacitor/cli": "^7.6.8",
     "@capacitor/ios": "^7.6.8",
     "@electric-sql/pglite": "^0.5.5",
+    "@playwright/test": "^1.63.0",
     "@tailwindcss/vite": "^4.0.0",
     "@types/node": "^22.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^6.0.0",
+    "@vitest/coverage-v8": "^5.0.0",
     "agentation": "^3.0.2",
+    "esbuild": "^0.28.2",
     "exceljs": "^4.4.0",
     "oxfmt": "^0.2.0",
     "pg": "^8.23.0",
     "supabase": "^2.115.0",
     "tailwindcss": "^4.0.0",
     "typescript": "^5.7.0",
-    "vite": "^8.0.0"
+    "vite": "^8.0.0",
+    "vitest": "^5.0.0"
   }
 }

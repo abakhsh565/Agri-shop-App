@@ -265,10 +265,12 @@ export async function getLocalGroup(groupId: string) {
 }
 
 // ── Credit Limit Requests ──
+// DB is the authoritative source. localStorage serves only as a
+// fallback cache so the UI works when Supabase is unreachable.
 
-const CREDIT_KEY = "agri_credit_requests";
+const CREDIT_KEY = 'agri_credit_requests';
 
-function readCreditRequests(): LocalCreditRequest[] {
+function readLocalCache(): LocalCreditRequest[] {
   try {
     const raw = localStorage.getItem(CREDIT_KEY);
     return raw ? JSON.parse(raw) : [];
@@ -277,11 +279,29 @@ function readCreditRequests(): LocalCreditRequest[] {
   }
 }
 
-function writeCreditRequests(reqs: LocalCreditRequest[]): void {
-  localStorage.setItem(CREDIT_KEY, JSON.stringify(reqs));
+function writeLocalCache(reqs: LocalCreditRequest[]): void {
+  try { localStorage.setItem(CREDIT_KEY, JSON.stringify(reqs)); } catch {}
 }
 
-/** Create a credit limit increase request */
+/** Map a DB row to LocalCreditRequest */
+function rowToRequest(r: any): LocalCreditRequest {
+  return {
+    id: r.id,
+    customerId: r.customer_id,
+    customerName: r.customer_name,
+    requestedBy: r.requested_by,
+    currentLimit: Number(r.current_limit),
+    requestedLimit: Number(r.requested_limit),
+    status: r.status,
+    reviewedBy: r.reviewed_by ?? null,
+    reviewedAt: r.reviewed_at ?? null,
+    rejectionReason: r.rejection_reason ?? null,
+    reason: (r as any).reason ?? '',
+    createdAt: r.created_at,
+  };
+}
+
+/** Create a credit limit increase request — persists to DB, falls back to localStorage */
 export async function createCreditRequest(params: {
   customerId: string;
   customerName: string;
@@ -290,76 +310,167 @@ export async function createCreditRequest(params: {
   requestedLimit: number;
   reason: string;
 }): Promise<LocalCreditRequest> {
-  const requests = readCreditRequests();
-
-  // Check for existing pending request for same customer
-  const existing = requests.find(
-    (r) => r.customerId === params.customerId && r.status === "pending"
-  );
-  if (existing) {
-    throw new Error("A pending credit limit request already exists for this customer.");
+  // Try DB first
+  try {
+    const { data, error } = await supabase.rpc('create_credit_limit_request', {
+      payload: {
+        customer_id: params.customerId,
+        customer_name: params.customerName,
+        requested_by: params.requestedBy,
+        current_limit: params.currentLimit,
+        requested_limit: params.requestedLimit,
+        reason: params.reason,
+      },
+    });
+    if (error) throw error;
+    if (data) {
+      const req: LocalCreditRequest = {
+        id: data.id,
+        ...params,
+        status: 'pending',
+        reviewedBy: null,
+        reviewedAt: null,
+        rejectionReason: null,
+        createdAt: new Date().toISOString(),
+      };
+      // Update local cache
+      const cache = readLocalCache();
+      cache.push(req);
+      writeLocalCache(cache);
+      return req;
+    }
+  } catch {
+    // Fall through to localStorage
   }
 
+  // Fallback: localStorage only
+  const requests = readLocalCache();
+  const existing = requests.find(
+    (r) => r.customerId === params.customerId && r.status === 'pending'
+  );
+  if (existing) {
+    throw new Error('A pending credit limit request already exists for this customer.');
+  }
   const newRequest: LocalCreditRequest = {
-    id: "cr-" + Date.now() + "-" + Math.random().toString(36).slice(2, 8),
+    id: 'cr-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8),
     ...params,
-    status: "pending",
+    status: 'pending',
     reviewedBy: null,
     reviewedAt: null,
     rejectionReason: null,
     createdAt: new Date().toISOString(),
   };
-
   requests.push(newRequest);
-  writeCreditRequests(requests);
+  writeLocalCache(requests);
   return newRequest;
 }
 
-/** Get all credit requests (optionally filtered by status) */
-export function getCreditRequests(status?: "pending" | "approved" | "rejected"): LocalCreditRequest[] {
-  const requests = readCreditRequests();
+/** Get all credit requests — DB primary, localStorage fallback */
+export async function getCreditRequestsDB(): Promise<LocalCreditRequest[]> {
+  try {
+    const { data, error } = await supabase
+      .from('credit_limit_requests')
+      .select('*')
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    if (data && data.length > 0) {
+      const requests = data.map(rowToRequest);
+      writeLocalCache(requests); // sync cache
+      return requests;
+    }
+  } catch {
+    // Fall through to localStorage
+  }
+  return readLocalCache();
+}
+
+/** Synchronous getter — reads from localStorage cache only.
+ *  Use getCreditRequestsDB() for authoritative data.
+ *  The cache is refreshed by getCreditRequestsDB() calls. */
+export function getCreditRequests(status?: 'pending' | 'approved' | 'rejected'): LocalCreditRequest[] {
+  const requests = readLocalCache();
   if (status) return requests.filter((r) => r.status === status);
   return requests;
 }
 
-/** Approve a credit limit request — updates customer credit_limit in Supabase */
+/** Approve a credit limit request — DB authoritative, updates cache */
 export async function approveCreditRequest(
   requestId: string,
   reviewedBy: string
 ): Promise<void> {
-  const requests = readCreditRequests();
-  const req = requests.find((r) => r.id === requestId && r.status === "pending");
-  if (!req) throw new Error("Request not found or already processed.");
+  // Try DB RPC first
+  try {
+    const { error } = await supabase.rpc('approve_credit_limit_request', {
+      p_request_id: requestId,
+      p_reviewed_by: reviewedBy,
+    });
+    if (error) throw error;
+    // Update local cache
+    const cache = readLocalCache();
+    const req = cache.find((r) => r.id === requestId);
+    if (req) {
+      req.status = 'approved';
+      req.reviewedBy = reviewedBy;
+      req.reviewedAt = new Date().toISOString();
+      writeLocalCache(cache);
+    }
+    return;
+  } catch {
+    // Fall through to localStorage
+  }
 
-  // Update customer's credit_limit in Supabase
+  // Fallback: localStorage
+  const requests = readLocalCache();
+  const req = requests.find((r) => r.id === requestId && r.status === 'pending');
+  if (!req) throw new Error('Request not found or already processed.');
   const { error } = await supabase
-    .from("customers")
+    .from('customers')
     .update({ credit_limit: req.requestedLimit, updated_at: new Date().toISOString() })
-    .eq("id", req.customerId);
-
+    .eq('id', req.customerId);
   if (error) throw error;
-
-  // Mark request as approved
-  req.status = "approved";
+  req.status = 'approved';
   req.reviewedBy = reviewedBy;
   req.reviewedAt = new Date().toISOString();
   req.rejectionReason = null;
-  writeCreditRequests(requests);
+  writeLocalCache(requests);
 }
 
-/** Reject a credit limit request */
+/** Reject a credit limit request — DB authoritative, updates cache */
 export async function rejectCreditRequest(
   requestId: string,
   reviewedBy: string,
   reason?: string
 ): Promise<void> {
-  const requests = readCreditRequests();
-  const req = requests.find((r) => r.id === requestId && r.status === "pending");
-  if (!req) throw new Error("Request not found or already processed.");
+  // Try DB RPC first
+  try {
+    const { error } = await supabase.rpc('reject_credit_limit_request', {
+      p_request_id: requestId,
+      p_reviewed_by: reviewedBy,
+      p_reason: reason ?? null,
+    });
+    if (error) throw error;
+    // Update local cache
+    const cache = readLocalCache();
+    const req = cache.find((r) => r.id === requestId);
+    if (req) {
+      req.status = 'rejected';
+      req.reviewedBy = reviewedBy;
+      req.reviewedAt = new Date().toISOString();
+      req.rejectionReason = reason || null;
+      writeLocalCache(cache);
+    }
+    return;
+  } catch {
+    // Fall through to localStorage
+  }
 
-  req.status = "rejected";
+  // Fallback: localStorage
+  const requests = readLocalCache();
+  const req = requests.find((r) => r.id === requestId && r.status === 'pending');
+  if (!req) throw new Error('Request not found or already processed.');
+  req.status = 'rejected';
   req.reviewedBy = reviewedBy;
   req.reviewedAt = new Date().toISOString();
   req.rejectionReason = reason || null;
-  writeCreditRequests(requests);
+  writeLocalCache(requests);
 }
