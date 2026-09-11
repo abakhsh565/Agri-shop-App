@@ -3,13 +3,45 @@
  *
  * Connects to the isolated QA Supabase project.
  * NEVER connects to production.
+ * Credentials are loaded from .env.qa or environment variables.
  */
 
 import { createClient } from '@supabase/supabase-js';
+import pg from 'pg';
+import * as fs from 'fs';
+import * as path from 'path';
 
-const QA_URL = 'https://bpybjrjenwccowvtrevu.supabase.co';
-const QA_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJweWJqcmplbndjY293dnRyZXZ1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkwMjY1NzIsImV4cCI6MjEwNDYwMjU3Mn0.nHzYWdjmZ_TEp_2mzqeinCNoXeLvVdvOETgvJXxldS0';
-const QA_SERVICE_ROLE = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJweWJqcmplbndjY293dnRyZXZ1Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4OTAyNjU3MiwiZXhwIjoyMTA0NjAyNTcyfQ.QHa62c7sOzuQCj3fiyIPDXNhk0C1wox-FVcBfA3SJnY';
+/** Load .env.qa into process.env if not already loaded */
+function loadQaEnv() {
+  if (process.env.QA_SUPABASE_URL) return;
+  try {
+    // Try multiple path resolution strategies
+    const candidates = [
+      path.resolve(process.cwd(), '.env.qa'),
+      path.resolve(process.cwd(), '../../.env.qa'),
+    ];
+    for (const envPath of candidates) {
+      if (fs.existsSync(envPath)) {
+        const content = fs.readFileSync(envPath, 'utf-8');
+        for (const line of content.split('\n')) {
+          const trimmed = line.trim();
+          if (!trimmed || trimmed.startsWith('#')) continue;
+          const eqIdx = trimmed.indexOf('=');
+          if (eqIdx === -1) continue;
+          const key = trimmed.slice(0, eqIdx).trim();
+          const val = trimmed.slice(eqIdx + 1).trim();
+          if (!process.env[key]) process.env[key] = val;
+        }
+        return;
+      }
+    }
+  } catch { /* .env.qa not found — rely on environment */ }
+}
+loadQaEnv();
+
+const QA_URL = process.env.QA_SUPABASE_URL || 'https://bpybjrjenwccowvtrevu.supabase.co';
+const QA_ANON_KEY = process.env.QA_SUPABASE_ANON_KEY || '';
+const QA_SERVICE_ROLE = process.env.QA_SUPABASE_SERVICE_ROLE || '';
 
 /** Service-role client (bypasses RLS, for test setup/teardown) */
 export const qaServiceClient = createClient(QA_URL, QA_SERVICE_ROLE);
@@ -18,11 +50,9 @@ export const qaServiceClient = createClient(QA_URL, QA_SERVICE_ROLE);
 export const qaAnonClient = createClient(QA_URL, QA_ANON_KEY);
 
 /** Direct PostgreSQL client for SQL execution */
-import pg from 'pg';
-
-const QA_DB_HOST = 'aws-0-ap-northeast-1.pooler.supabase.com';
-const QA_DB_USER = 'postgres.bpybjrjenwccowvtrevu';
-const QA_DB_PASS = 'LptUWZQm4TZrRksv4nAtFUHk3YG6rO';
+const QA_DB_HOST = process.env.QA_DB_HOST || '';
+const QA_DB_USER = process.env.QA_DB_USER || '';
+const QA_DB_PASS = process.env.QA_DB_PASS || '';
 
 export function getDbClient() {
   return new pg.Client({

@@ -28,9 +28,15 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: 'npm run dev',
+    // Use --mode qa so Vite loads .env.qa → QA Supabase instead of production
+    command: 'npx vite --mode qa --port 5173',
     url: 'http://localhost:5173',
     reuseExistingServer: true,
     timeout: 60000,
+    env: {
+      VITE_SUPABASE_URL: 'https://bpybjrjenwccowvtrevu.supabase.co',
+      VITE_SUPABASE_ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJweWJqcmplbndjY293dnRyZXZ1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkwMjY1NzIsImV4cCI6MjEwNDYwMjU3Mn0.nHzYWdjmZ_TEp_2mzqeinCNoXeLvVdvOETgvJXxldS0',
+      VITE_SUPABASE_PROJECT_ID: 'bpybjrjenwccowvtrevu',
+    },
   },
 });

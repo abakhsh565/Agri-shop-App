@@ -6,15 +6,48 @@
  */
 
 import { type Page, type TestInfo } from '@playwright/test';
+import * as fs from 'fs';
+import * as path from 'path';
 
-// QA DB credentials (matches tests/setup/qa-client.ts)
-const QA_URL = 'https://bpybjrjenwccowvtrevu.supabase.co';
-const QA_SERVICE_ROLE = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJweWJqcmplbndjY293dnRyZXZ1Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4OTAyNjU3MiwiZXhwIjoyMTA0NjAyNTcyfQ.QHa62c7sOzuQCj3fiyIPDXNhk0C1wox-FVcBfA3SJnY';
-const QA_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJweWJqcmplbndjY293dnRyZXZ1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkwMjY1NzIsImV4cCI6MjEwNDYwMjU3Mn0.nHzYWdjmZ_TEp_2mzqeinCNoXeLvVdvOETgvJXxldS0';
+/**
+ * Load .env.qa into process.env if not already loaded.
+ * This runs in Node.js (not the browser), so it's safe for test-only credentials.
+ */
+function loadQaEnv() {
+  if (process.env.QA_SUPABASE_URL) return; // already loaded
+  try {
+    const candidates = [
+      path.resolve(process.cwd(), '.env.qa'),
+      path.resolve(process.cwd(), '../../.env.qa'),
+    ];
+    for (const envPath of candidates) {
+      if (fs.existsSync(envPath)) {
+        const content = fs.readFileSync(envPath, 'utf-8');
+        for (const line of content.split('\n')) {
+          const trimmed = line.trim();
+          if (!trimmed || trimmed.startsWith('#')) continue;
+          const eqIdx = trimmed.indexOf('=');
+          if (eqIdx === -1) continue;
+          const key = trimmed.slice(0, eqIdx).trim();
+          const val = trimmed.slice(eqIdx + 1).trim();
+          if (!process.env[key]) process.env[key] = val;
+        }
+        return;
+      }
+    }
+  } catch { /* .env.qa not found — rely on environment */ }
+}
+// Load BEFORE reading env vars
+loadQaEnv();
 
-const QA_DB_HOST = 'aws-0-ap-northeast-1.pooler.supabase.com';
-const QA_DB_USER = 'postgres.bpybjrjenwccowvtrevu';
-const QA_DB_PASS = 'LptUWZQm4TZrRksv4nAtFUHk3YG6rO';
+// QA DB credentials — read from environment variables (never hardcode)
+const QA_URL = process.env.QA_SUPABASE_URL || 'https://bpybjrjenwccowvtrevu.supabase.co';
+const QA_SERVICE_ROLE = process.env.QA_SUPABASE_SERVICE_ROLE || '';
+const QA_ANON_KEY = process.env.QA_SUPABASE_ANON_KEY || '';
+
+const QA_DB_HOST = process.env.QA_DB_HOST || '';
+const QA_DB_USER = process.env.QA_DB_USER || '';
+const QA_DB_PASS = process.env.QA_DB_PASS || '';
 
 /** Test user IDs */
 export const QA_IDS = {

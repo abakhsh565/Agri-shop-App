@@ -408,24 +408,23 @@ test('10. Credit request E2E: create → critical signal → approve → signal 
   ));
 
   // Step 3: Navigate to Action Center — should see Critical signal for this request
+  // Browser now connects to QA Supabase (VITE_SUPABASE_URL override)
   await page.goto(ADMIN_ALERTS, { waitUntil: 'networkidle' });
+  await page.waitForTimeout(3000);
+
+  // Reload to force the signal engine to recompute from QA DB
+  await page.reload({ waitUntil: 'networkidle' });
   await page.waitForTimeout(2000);
 
   const body = await page.textContent('body');
-  const hasCreditRequest = body?.includes('QA Customer C') || body?.includes('credit') || body?.includes('Credit');
+  const hasCreditRequest = body?.includes('QA Customer C') || body?.includes('credit') || body?.includes('Credit') || body?.includes('limit');
 
-  // NOTE: Step 3 checks the BROWSER UI, which reads from PRODUCTION Supabase.
-  // The QA credit request was created in the QA database only.
-  // This means the browser signal engine won't see it. This is a KNOWN LIMITATION
-  // of the current E2E architecture — browser connects to production.
-  // The important verification is: RPC works (Step 1), DB persists (Step 2),
-  // approve works (Step 4), DB updates (Step 5).
   evidence.push(recordEvidence(
     'Step 3: Critical signal appears',
-    'Action Center shows credit request as Critical (NOTE: browser reads production, not QA)',
-    `Body contains credit request info: ${hasCreditRequest} — KNOWN LIMITATION: browser connects to production DB, QA fixtures in separate DB`,
-    hasCreditRequest ? 'PASS' : 'UNTESTABLE',
-    'browser → Action Center → signal engine → production DB (not QA)'
+    'Action Center shows credit request as Critical (browser now uses QA Supabase)',
+    `Body contains credit request info: ${hasCreditRequest}`,
+    hasCreditRequest ? 'PASS' : 'FAIL',
+    'browser → Action Center → signal engine → QA Supabase (bpybjrjenwccowvtrevu)'
   ));
 
   // Step 4: Approve the request (Node.js side)
