@@ -87,6 +87,8 @@ export function getDbClient(): pg.Client {
   const client = new pg.Client({
     connectionString: makeConnString(),
     ssl: { rejectUnauthorized: false },
+    // Force IPv4 — GitHub Actions runners lack IPv6 support
+    family: 4,
   });
 
   const originalQuery = client.query.bind(client);
@@ -129,6 +131,8 @@ export function getRawDbClient(): pg.Client {
   return new pg.Client({
     connectionString: makeConnString(),
     ssl: { rejectUnauthorized: false },
+    // Force IPv4 — GitHub Actions runners lack IPv6 support
+    family: 4,
   });
 }
 
