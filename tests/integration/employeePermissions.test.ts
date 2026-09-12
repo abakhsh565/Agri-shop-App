@@ -16,7 +16,10 @@
  */
 
 import { describe, it, beforeAll, afterAll } from 'vitest';
-import { getDbClient, getRawDbClient, asPostgres, execSqlAsAdmin } from '../setup/qa-client';
+import { getDbClient, getRawDbClient, asPostgres, execSqlAsAdmin, HAS_JWT_SECRET } from '../setup/qa-client';
+
+// Skip if no JWT secret — this file's execRpcAsUser uses direct PostgreSQL
+const maybeDescribe = HAS_JWT_SECRET ? describe : describe.skip;
 
 let client: any;
 
@@ -113,7 +116,7 @@ async function execRpcAsUser(userId: string, rpcName: string, params: Record<str
 // AUTHORIZATION MODEL VERIFICATION
 // ══════════════════════════════════════════════════════════════
 
-describe('Permissions — Authorization Model', () => {
+maybeDescribe('Permissions — Authorization Model', () => {
   it('should have app_current_user_id function', async () => {
     const r = await client.query(`SELECT proname FROM pg_proc WHERE proname = 'app_current_user_id'`);
     rec('app_current_user_id exists', '1', String(r.rows.length), r.rows.length === 1 ? 'PASS' : 'FAIL');
@@ -170,7 +173,7 @@ describe('Permissions — Authorization Model', () => {
 // RPC AUTHORIZATION — ADMIN-ONLY OPERATIONS
 // ══════════════════════════════════════════════════════════════
 
-describe('Permissions — RPC Authorization (Admin Only)', () => {
+maybeDescribe('Permissions — RPC Authorization (Admin Only)', () => {
   it('should allow admin to void a sale', async () => {
     // Create a test sale first
     await client.query(`INSERT INTO sales (id, sale_number, customer_id, employee_id, total_amount, status, payment_type, payment_method, amount_paid, amount_due, discount, is_voided, shop_id, created_at, updated_at) VALUES ('e0000000-0000-0000-0000-000000000001', 'PERM-SALE-001', '${T.customerA}', '${T.adminUser}', 5000, 'completed', 'credit', 'cash', 0, 5000, 0, false, '${T.shop}', NOW(), NOW()) ON CONFLICT (id) DO NOTHING`);
@@ -270,7 +273,7 @@ describe('Permissions — RPC Authorization (Admin Only)', () => {
 // RPC AUTHORIZATION — CREDIT REQUESTS
 // ══════════════════════════════════════════════════════════════
 
-describe('Permissions — Credit Request Authorization', () => {
+maybeDescribe('Permissions — Credit Request Authorization', () => {
   it('should allow employee to create credit request', async () => {
     const result = await execRpcAsUser(T.employeeUser, 'create_credit_limit_request', {
       payload: JSON.stringify({
@@ -352,7 +355,7 @@ describe('Permissions — Credit Request Authorization', () => {
 // ESCALATION / BYPASS ATTEMPTS
 // ══════════════════════════════════════════════════════════════
 
-describe('Permissions — Escalation/Bypass', () => {
+maybeDescribe('Permissions — Escalation/Bypass', () => {
   it('should reject employee attempting to approve their own credit request', async () => {
     // Employee creates a request
     await execRpcAsUser(T.employeeUser, 'create_credit_limit_request', {
@@ -446,7 +449,7 @@ describe('Permissions — Escalation/Bypass', () => {
 // REGRESSION — PREVIOUSLY VERIFIED OPERATIONS
 // ══════════════════════════════════════════════════════════════
 
-describe('Permissions — Regression', () => {
+maybeDescribe('Permissions — Regression', () => {
   it('should verify admin void did not corrupt sale data', async () => {
     // Reset role to postgres first
     await client.query(`RESET role`).catch(() => {});

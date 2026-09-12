@@ -50,6 +50,8 @@ const QA_URL = cleanUrl(process.env.QA_SUPABASE_URL || 'https://bpybjrjenwccowvt
 const QA_SERVICE_ROLE = process.env.QA_SUPABASE_SERVICE_ROLE || '';
 const QA_ANON_KEY = process.env.QA_SUPABASE_ANON_KEY || '';
 
+import { createClient } from '@supabase/supabase-js';
+
 const QA_DB_HOST = process.env.QA_DB_HOST || '';
 const QA_DB_USER = process.env.QA_DB_USER || '';
 const QA_DB_PASS = process.env.QA_DB_PASS || '';
@@ -69,25 +71,21 @@ export const QA_IDS = {
   companyA: '50000000-0000-0000-0000-000000000001',
 } as const;
 
+const _svcClient = createClient(QA_URL, QA_SERVICE_ROLE);
+
 /**
- * Execute raw SQL against the QA database via HTTP API.
- * Uses the REST approach — direct SQL via pg client.
+ * Execute raw SQL against the QA database via run_sql HTTP API.
+ * Uses service-role to bypass RLS.
  */
 export async function execSql(sql: string): Promise<any[]> {
-  const pg = await import('pg');
-  const client = new pg.default.Client({
-    connectionString: `postgresql://${QA_DB_USER}:${QA_DB_PASS}@${QA_DB_HOST}:6543/postgres`,
-    options: '-c role=postgres',
-    ssl: { rejectUnauthorized: false },
-    // Force IPv4 — GitHub Actions runners lack IPv6 support
-    family: 4,
-  });
-  await client.connect();
+  const { data, error } = await _svcClient.rpc('run_sql', { sql_query: sql });
+  if (error) throw new Error(`execSql: ${error.message}`);
+  if (!data || data === 'ok') return [];
   try {
-    const result = await client.query(sql);
-    return result.rows;
-  } finally {
-    await client.end();
+    const parsed = JSON.parse(data);
+    return Array.isArray(parsed) ? parsed : [parsed];
+  } catch {
+    return [{ result: data }];
   }
 }
 

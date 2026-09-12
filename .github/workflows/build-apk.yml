@@ -30,31 +30,6 @@ jobs:
       - name: Install Dependencies
         run: npm install --legacy-peer-deps
 
-      # GitHub Actions lacks IPv6 support but the Supabase pooler hostname
-      # may only resolve to AAAA records via the default DNS resolver.
-      # Resolve via Google DNS (which has A records) and inject into /etc/hosts
-      # so ALL processes (pg, node, playwright) resolve to IPv4.
-      - name: Resolve DB host to IPv4 for CI
-        run: |
-          echo "Resolving $QA_DB_HOST to IPv4 via Google DNS..."
-          IPV4=$(dig @8.8.8.8 +short +time=5 A "$QA_DB_HOST" | head -1)
-          if [ -n "$IPV4" ]; then
-            echo "$IPV4 $QA_DB_HOST" | sudo tee -a /etc/hosts
-            echo "SUCCESS: $QA_DB_HOST -> $IPV4"
-          else
-            echo "ERROR: Could not resolve $QA_DB_HOST to IPv4"
-            exit 1
-          fi
-
-      - name: Debug — Verify QA env vars are set
-        run: |
-          echo "QA_SUPABASE_URL length: ${#QA_SUPABASE_URL}"
-          echo "QA_SUPABASE_ANON_KEY length: ${#QA_SUPABASE_ANON_KEY}"
-          echo "QA_SUPABASE_SERVICE_ROLE length: ${#QA_SUPABASE_SERVICE_ROLE}"
-          echo "QA_DB_HOST length: ${#QA_DB_HOST}"
-          echo "QA_DB_USER length: ${#QA_DB_USER}"
-          echo "QA_DB_PASS length: ${#QA_DB_PASS}"
-
       # ─── Unit + Integration Tests (Vitest) ──────────────────────────
       - name: Run Vitest (unit + integration)
         run: npx vitest run --reporter=verbose

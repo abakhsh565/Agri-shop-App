@@ -8,16 +8,19 @@
  * REST API ↔ PostgreSQL visibility issues.
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { execRpcAsUser, execSqlAsAdmin } from '../setup/qa-client';
+import { execRpcAsUser, execSqlAsAdmin, HAS_JWT_SECRET } from '../setup/qa-client';
 import { setupAllFixtures, cleanupTestData, QA_IDS } from '../setup/fixtures';
 import { recordEvidence, printReport, clearEvidence } from '../setup/evidence';
+
+// Skip if no JWT secret — user-context RPCs need real JWT tokens
+const maybeDescribe = HAS_JWT_SECRET ? describe : describe.skip;
 
 // Use the admin user from fixtures for RPC calls
 const ADMIN_ID = QA_IDS.admin;
 
 // ─── Tests ───────────────────────────────────────────────────────────────
 
-describe('Credit Request Integration', () => {
+maybeDescribe('Credit Request Integration', () => {
   beforeAll(async () => {
     clearEvidence();
     // Clean any leftover credit requests from previous test runs

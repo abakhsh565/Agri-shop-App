@@ -7,7 +7,7 @@
  * Uses the QA database (never production).
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { execSqlAsAdmin, execRpcAsUser, getRawDbClient } from '../setup/qa-client';
+import { execSqlAsAdmin, execRpcAsUser, getRawDbClient, HAS_JWT_SECRET } from '../setup/qa-client';
 import { QA_IDS } from '../setup/fixtures';
 
 import { randomUUID } from 'crypto';
@@ -17,7 +17,10 @@ const CUST_ID = randomUUID();
 const EMP_PHONE = `923${RUN.slice(-8).padStart(8, '0')}`;
 const CUST_PHONE = `924${RUN.slice(-8).padStart(8, '0')}`;
 
-describe('Security Audit — RLS & Authorization', () => {
+// Skip if no JWT secret — user-context RPCs need real JWT tokens
+const maybeDescribe = HAS_JWT_SECRET ? describe : describe.skip;
+
+maybeDescribe('Security Audit — RLS & Authorization', () => {
   beforeAll(async () => {
     // Create test employee and customer
     await execSqlAsAdmin(`

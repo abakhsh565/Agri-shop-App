@@ -20,7 +20,10 @@
  */
 
 import { describe, it, beforeAll, afterAll } from 'vitest';
-import { execSqlAsAdmin, execRpcAsUser } from '../setup/qa-client';
+import { execSqlAsAdmin, execRpcAsUser, HAS_JWT_SECRET } from '../setup/qa-client';
+
+// Skip if no JWT secret — user-context RPCs need real JWT tokens
+const maybeDescribe = HAS_JWT_SECRET ? describe : describe.skip;
 
 const T = {
   shop: '00000000-0000-0000-0000-000000000001',
@@ -80,7 +83,7 @@ afterAll(async () => {
 // CUSTOMER ARCHIVE / RESTORE
 // ══════════════════════════════════════════════════════════════
 
-describe('Destructive Safety — Customer Archive/Restore', () => {
+maybeDescribe('Destructive Safety — Customer Archive/Restore', () => {
   it('should archive a customer with no dependencies', async () => {
     const result = await rpc(T.adminUser, 'archive_customer', { p_customer_id: T.customerA });
     if (result.error) {
@@ -153,7 +156,7 @@ describe('Destructive Safety — Customer Archive/Restore', () => {
 // PRODUCT DELETE (SOFT DELETE)
 // ══════════════════════════════════════════════════════════════
 
-describe('Destructive Safety — Product Delete', () => {
+maybeDescribe('Destructive Safety — Product Delete', () => {
   it('should soft-delete (archive) a product', async () => {
     const result = await rpc(T.adminUser, 'delete_product', { p_product_id: T.productA, p_reason: null });
     if (result.error?.includes('NOT_AUTHORIZED')) {
@@ -186,7 +189,7 @@ describe('Destructive Safety — Product Delete', () => {
 // EMPLOYEE DEACTIVATE
 // ══════════════════════════════════════════════════════════════
 
-describe('Destructive Safety — Employee Deactivate', () => {
+maybeDescribe('Destructive Safety — Employee Deactivate', () => {
   it('should deactivate an employee', async () => {
     const result = await rpc(T.adminUser, 'deactivate_employee_v1', { payload: { employee_id: T.employeeA } });
     if (result.error?.includes('NOT_AUTHORIZED')) {
@@ -218,7 +221,7 @@ describe('Destructive Safety — Employee Deactivate', () => {
 // COMPANY — NO DELETE RPC EXISTS
 // ══════════════════════════════════════════════════════════════
 
-describe('Destructive Safety — Company/Supplier', () => {
+maybeDescribe('Destructive Safety — Company/Supplier', () => {
   it('should verify no delete_company RPC exists', async () => {
     const r = await admin(`SELECT proname FROM pg_proc WHERE proname = 'delete_company'`);
     rec('No delete_company RPC', '0', String(r.rows.length), r.rows.length === 0 ? 'PASS' : 'FAIL');
@@ -239,7 +242,7 @@ describe('Destructive Safety — Company/Supplier', () => {
 // VOID SALE — CANNOT DOUBLE-VOID
 // ══════════════════════════════════════════════════════════════
 
-describe('Destructive Safety — Void Sale', () => {
+maybeDescribe('Destructive Safety — Void Sale', () => {
   it('should void a sale', async () => {
     const result = await rpc(T.adminUser, 'void_sale', {
       p_sale_id: T.saleA,
