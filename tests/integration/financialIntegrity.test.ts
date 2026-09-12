@@ -12,7 +12,7 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { getDbClient, asPostgres, disableTriggers, enableTriggers, execSql } from '../setup/qa-client';
+import { getDbClient, asPostgres, disableTriggers, enableTriggers, execSql, execSqlAsAdmin } from '../setup/qa-client';
 
 let client: any;
 
@@ -73,23 +73,23 @@ afterAll(async () => {
 });
 
 async function cleanupTestData() {
+  // Use fresh connections for cleanup (pooler may drop idle connections)
+  const q = async (sql: string) => { try { await execSqlAsAdmin(sql); } catch {} };
   const ids = [TEST.saleA, TEST.saleB, TEST.returnA, TEST.voidA];
   for (const id of ids) {
-    try { await client.query(`DELETE FROM sale_items WHERE sale_id = '${id}'`); } catch {}
-    try { await client.query(`DELETE FROM sales WHERE id = '${id}'`); } catch {}
+    await q(`DELETE FROM sale_items WHERE sale_id = '${id}'`);
+    await q(`DELETE FROM sales WHERE id = '${id}'`);
   }
-  try { await client.query(`DELETE FROM return_items WHERE return_id = '${TEST.returnA}'`); } catch {}
-  try { await client.query(`DELETE FROM returns WHERE id = '${TEST.returnA}'`); } catch {}
-  try { await client.query(`DELETE FROM voids WHERE sale_id IN ('${TEST.saleA}', '${TEST.saleB}')`); } catch {}
-  try { await client.query(`DELETE FROM customer_payments WHERE id IN ('${TEST.paymentA}', '${TEST.paymentB}')`); } catch {}
-  try { await client.query(`DELETE FROM supplier_payments WHERE id = '${TEST.supplierPaymentA}'`); } catch {}
-  try { await client.query(`DELETE FROM inventory_movements WHERE product_id = '${TEST.productA}'`); } catch {}
+  await q(`DELETE FROM return_items WHERE return_id = '${TEST.returnA}'`);
+  await q(`DELETE FROM returns WHERE id = '${TEST.returnA}'`);
+  await q(`DELETE FROM voids WHERE sale_id IN ('${TEST.saleA}', '${TEST.saleB}')`);
+  await q(`DELETE FROM customer_payments WHERE id IN ('${TEST.paymentA}', '${TEST.paymentB}')`);
+  await q(`DELETE FROM supplier_payments WHERE id = '${TEST.supplierPaymentA}'`);
+  await q(`DELETE FROM inventory_movements WHERE product_id = '${TEST.productA}'`);
   // Reset customer balances
-  try {
-    await client.query(`UPDATE customers SET outstanding_balance = 0, total_purchases = 0, total_paid = 0, credit_limit = CASE WHEN id = '${TEST.customerA}' THEN 100000 WHEN id = '${TEST.customerB}' THEN 50000 WHEN id = '${TEST.customerC}' THEN 25000 ELSE credit_limit END WHERE id IN ('${TEST.customerA}', '${TEST.customerB}', '${TEST.customerC}')`);
-  } catch {}
+  await q(`UPDATE customers SET outstanding_balance = 0, total_purchases = 0, total_paid = 0, credit_limit = CASE WHEN id = '${TEST.customerA}' THEN 100000 WHEN id = '${TEST.customerB}' THEN 50000 WHEN id = '${TEST.customerC}' THEN 25000 ELSE credit_limit END WHERE id IN ('${TEST.customerA}', '${TEST.customerB}', '${TEST.customerC}')`);
   // Reset supplier
-  try { await client.query(`UPDATE companies SET outstanding_payable = 0, total_purchases = 0 WHERE id = '${TEST.companyA}'`); } catch {}
+  await q(`UPDATE companies SET outstanding_payable = 0, total_purchases = 0 WHERE id = '${TEST.companyA}'`);
 }
 
 // ── Customer Financial Tests ──

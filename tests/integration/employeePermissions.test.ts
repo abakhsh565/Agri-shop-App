@@ -60,14 +60,15 @@ afterAll(async () => {
 });
 
 async function cleanup() {
+  const q = async (sql: string) => { try { await execSqlAsAdmin(sql); } catch {} };
   for (const t of ['sale_items', 'sales', 'return_items', 'returns', 'voids', 'customer_payments', 'credit_limit_requests', 'inventory_movements', 'reminder_configs', 'reminder_occurrences']) {
-    try { await client.query(`DELETE FROM ${t} WHERE shop_id = '${T.shop}' OR customer_id = '${T.customerA}' OR product_id = '${T.productA}'`); } catch {}
+    await q(`DELETE FROM ${t} WHERE shop_id = '${T.shop}' OR customer_id = '${T.customerA}' OR product_id = '${T.productA}'`);
   }
-  try { await client.query(`DELETE FROM product_variants WHERE id = '${T.variantA}'`); } catch {}
-  try { await client.query(`DELETE FROM products WHERE id = '${T.productA}'`); } catch {}
-  try { await client.query(`DELETE FROM companies WHERE id = '${T.companyA}'`); } catch {}
-  try { await client.query(`DELETE FROM customers WHERE id = '${T.customerA}'`); } catch {}
-  try { await client.query(`DELETE FROM users WHERE id IN ('${T.adminUser}', '${T.employeeUser}')`); } catch {}
+  await q(`DELETE FROM product_variants WHERE id = '${T.variantA}'`);
+  await q(`DELETE FROM products WHERE id = '${T.productA}'`);
+  await q(`DELETE FROM companies WHERE id = '${T.companyA}'`);
+  await q(`DELETE FROM customers WHERE id = '${T.customerA}'`);
+  await q(`DELETE FROM users WHERE id IN ('${T.adminUser}', '${T.employeeUser}')`);
 }
 
 /**

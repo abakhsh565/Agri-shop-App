@@ -9,7 +9,7 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { getDbClient, asPostgres, disableTriggers, enableTriggers, execSql } from '../setup/qa-client';
+import { getDbClient, asPostgres, disableTriggers, enableTriggers, execSql, execSqlAsAdmin } from '../setup/qa-client';
 
 let client: any;
 
@@ -64,16 +64,17 @@ afterAll(async () => {
 });
 
 async function cleanupTestData() {
+  const q = async (sql: string) => { try { await execSqlAsAdmin(sql); } catch {} };
   for (const id of [TEST.saleA, TEST.saleB, TEST.saleC]) {
-    try { await client.query(`DELETE FROM sale_items WHERE sale_id = '${id}'`); } catch {}
-    try { await client.query(`DELETE FROM sales WHERE id = '${id}'`); } catch {}
+    await q(`DELETE FROM sale_items WHERE sale_id = '${id}'`);
+    await q(`DELETE FROM sales WHERE id = '${id}'`);
   }
-  try { await client.query(`DELETE FROM return_items WHERE return_id = '${TEST.returnA}'`); } catch {}
-  try { await client.query(`DELETE FROM returns WHERE id = '${TEST.returnA}'`); } catch {}
-  try { await client.query(`DELETE FROM voids WHERE sale_id IN ('${TEST.saleA}', '${TEST.saleB}', '${TEST.saleC}')`); } catch {}
-  try { await client.query(`DELETE FROM inventory_movements WHERE product_id IN ('${TEST.productA}', '${TEST.productB}')`); } catch {}
-  try { await client.query(`UPDATE product_variants SET stock_qty = CASE WHEN id = '${TEST.variantA}' THEN 100 WHEN id = '${TEST.variantB}' THEN 50 ELSE stock_qty END WHERE id IN ('${TEST.variantA}', '${TEST.variantB}')`); } catch {}
-  try { await client.query(`UPDATE products SET stock_qty = CASE WHEN id = '${TEST.productA}' THEN 100 WHEN id = '${TEST.productB}' THEN 50 ELSE stock_qty END WHERE id IN ('${TEST.productA}', '${TEST.productB}')`); } catch {}
+  await q(`DELETE FROM return_items WHERE return_id = '${TEST.returnA}'`);
+  await q(`DELETE FROM returns WHERE id = '${TEST.returnA}'`);
+  await q(`DELETE FROM voids WHERE sale_id IN ('${TEST.saleA}', '${TEST.saleB}', '${TEST.saleC}')`);
+  await q(`DELETE FROM inventory_movements WHERE product_id IN ('${TEST.productA}', '${TEST.productB}')`);
+  await q(`UPDATE product_variants SET stock_qty = CASE WHEN id = '${TEST.variantA}' THEN 100 WHEN id = '${TEST.variantB}' THEN 50 ELSE stock_qty END WHERE id IN ('${TEST.variantA}', '${TEST.variantB}')`);
+  await q(`UPDATE products SET stock_qty = CASE WHEN id = '${TEST.productA}' THEN 100 WHEN id = '${TEST.productB}' THEN 50 ELSE stock_qty END WHERE id IN ('${TEST.productA}', '${TEST.productB}')`);
 }
 
 // ── Product Creation Tests ──
