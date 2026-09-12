@@ -23,6 +23,7 @@ import { createClient } from '@supabase/supabase-js';
 import pg from 'pg';
 import * as fs from 'fs';
 import * as path from 'path';
+import dns from 'dns';
 
 /** Load .env.qa into process.env if not already loaded */
 function loadQaEnv() {
@@ -71,8 +72,22 @@ const QA_DB_HOST = process.env.QA_DB_HOST || '';
 const QA_DB_USER = process.env.QA_DB_USER || '';
 const QA_DB_PASS = process.env.QA_DB_PASS || '';
 
+/** Resolve hostname to IPv4 at module load — avoids IPv6 ENETUNREACH in CI */
+function resolveIPv4Sync(host: string): string {
+  try {
+    const result = dns.lookupSync(host, { family: 4 });
+    console.error(`[qa-client] Resolved ${host} -> IPv4 ${result.address}`);
+    return result.address;
+  } catch {
+    console.error(`[qa-client] IPv4 lookup failed for ${host}, using hostname directly`);
+    return host;
+  }
+}
+
+const QA_DB_HOST_IPV4 = QA_DB_HOST ? resolveIPv4Sync(QA_DB_HOST) : '';
+
 function makeConnString(): string {
-  return `postgresql://${QA_DB_USER}:${QA_DB_PASS}@${QA_DB_HOST}:6543/postgres`;
+  return `postgresql://${QA_DB_USER}:${QA_DB_PASS}@${QA_DB_HOST_IPV4}:6543/postgres`;
 }
 
 /**
@@ -87,7 +102,6 @@ export function getDbClient(): pg.Client {
   const client = new pg.Client({
     connectionString: makeConnString(),
     ssl: { rejectUnauthorized: false },
-    // Force IPv4 — GitHub Actions runners lack IPv6 support
     family: 4,
   });
 
