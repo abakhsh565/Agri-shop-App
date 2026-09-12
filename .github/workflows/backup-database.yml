@@ -1,0 +1,64 @@
+name: Backup Production Database
+
+on:
+  schedule:
+    # Run daily at 02:00 UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: 'Reason for manual backup'
+        required: false
+
+jobs:
+  backup:
+    name: Create Database Backup
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      QA_DB_HOST: ${{ secrets.QA_DB_HOST }}
+      QA_DB_USER: ${{ secrets.QA_DB_USER }}
+      QA_DB_PASS: ${{ secrets.QA_DB_PASS }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm install --legacy-peer-deps
+
+      - name: Create Backup
+        run: node scripts/backup-database.mjs
+
+      - name: Upload Backup Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: database-backup-${{ github.run_number }}
+          path: backups/backup-*.sql
+          retention-days: 30
+
+      - name: Report Status
+        if: success()
+        run: |
+          echo "═══════════════════════════════════════════════════════════"
+          echo "  ✅ BACKUP COMPLETE"
+          echo "  Run: ${{ github.run_number }}"
+          echo "  Time: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          echo "  Artifact: database-backup-${{ github.run_number }}"
+          echo "  Retention: 30 days"
+          echo "═══════════════════════════════════════════════════════════"
+
+      - name: Report Failure
+        if: failure()
+        run: |
+          echo "═══════════════════════════════════════════════════════════"
+          echo "  ❌ BACKUP FAILED"
+          echo "  Run: ${{ github.run_number }}"
+          echo "  Time: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          echo "  Action required: Check workflow logs"
+          echo "═══════════════════════════════════════════════════════════"
