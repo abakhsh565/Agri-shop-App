@@ -51,16 +51,14 @@ function loadQaEnv() {
 }
 loadQaEnv();
 
-const QA_URL = process.env.QA_SUPABASE_URL || 'https://bpybjrjenwccowvtrevu.supabase.co';
+/** Strip surrounding brackets that some tools add to URLs (e.g., [https://...]) */
+function cleanUrl(url: string): string {
+  return url.replace(/^\[|\]$/g, '').trim();
+}
+
+const QA_URL = cleanUrl(process.env.QA_SUPABASE_URL || 'https://bpybjrjenwccowvtrevu.supabase.co');
 const QA_ANON_KEY = process.env.QA_SUPABASE_ANON_KEY || '';
 const QA_SERVICE_ROLE = process.env.QA_SUPABASE_SERVICE_ROLE || '';
-
-// Debug: log env var status on module load (CI debugging)
-if (!process.env.QA_URL_DEBUGGED) {
-  process.env.QA_URL_DEBUGGED = '1';
-  console.error(`[qa-client] QA_URL length=${QA_URL.length}, valid=${/^https?:\/\//.test(QA_URL)}, first10=${QA_URL.slice(0,10)}`);
-  console.error(`[qa-client] QA_SERVICE_ROLE length=${QA_SERVICE_ROLE.length}, first10=${QA_SERVICE_ROLE.slice(0,10)}`);
-}
 
 /** Service-role client (bypasses RLS, for test setup/teardown) */
 export const qaServiceClient = createClient(QA_URL, QA_SERVICE_ROLE);

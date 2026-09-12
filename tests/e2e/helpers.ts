@@ -40,8 +40,13 @@ function loadQaEnv() {
 // Load BEFORE reading env vars
 loadQaEnv();
 
+/** Strip surrounding brackets that some tools add to URLs (e.g., [https://...]) */
+function cleanUrl(url: string): string {
+  return url.replace(/^\[|\]$/g, '').trim();
+}
+
 // QA DB credentials — read from environment variables (never hardcode)
-const QA_URL = process.env.QA_SUPABASE_URL || 'https://bpybjrjenwccowvtrevu.supabase.co';
+const QA_URL = cleanUrl(process.env.QA_SUPABASE_URL || 'https://bpybjrjenwccowvtrevu.supabase.co');
 const QA_SERVICE_ROLE = process.env.QA_SUPABASE_SERVICE_ROLE || '';
 const QA_ANON_KEY = process.env.QA_SUPABASE_ANON_KEY || '';
 
