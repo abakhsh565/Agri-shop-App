@@ -72,6 +72,7 @@ export async function execSql(sql: string): Promise<any[]> {
   const pg = await import('pg');
   const client = new pg.default.Client({
     connectionString: `postgresql://${QA_DB_USER}:${QA_DB_PASS}@${QA_DB_HOST}:6543/postgres`,
+    options: '-c role=postgres',
     ssl: { rejectUnauthorized: false },
   });
   await client.connect();

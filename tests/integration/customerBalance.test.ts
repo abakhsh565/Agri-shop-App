@@ -7,7 +7,7 @@
  * Outstanding = correct financial balance
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { execSql } from '../setup/qa-client';
+import { execSqlAsAdmin } from '../setup/qa-client';
 import { setupAllFixtures, cleanupTestData, QA_IDS } from '../setup/fixtures';
 import { recordEvidence, printReport, clearEvidence } from '../setup/evidence';
 
@@ -26,7 +26,7 @@ describe('Customer Balance Integrity', () => {
 
   describe('Baseline Customer State', () => {
     it('should have correct initial balances for QA Customer A', async () => {
-      const result = await execSql(
+      const result = await execSqlAsAdmin(
         `SELECT outstanding_balance, total_purchases, total_paid, credit_limit
          FROM customers WHERE id = '${QA_IDS.customerA}'`
       );
@@ -46,7 +46,7 @@ describe('Customer Balance Integrity', () => {
     });
 
     it('should have correct initial balances for QA Customer B', async () => {
-      const result = await execSql(
+      const result = await execSqlAsAdmin(
         `SELECT outstanding_balance, total_purchases, total_paid, credit_limit
          FROM customers WHERE id = '${QA_IDS.customerB}'`
       );
@@ -67,7 +67,7 @@ describe('Customer Balance Integrity', () => {
     });
 
     it('should have zero outstanding for QA Customer C', async () => {
-      const result = await execSql(
+      const result = await execSqlAsAdmin(
         `SELECT outstanding_balance, total_purchases, total_paid
          FROM customers WHERE id = '${QA_IDS.customerC}'`
       );
@@ -88,7 +88,7 @@ describe('Customer Balance Integrity', () => {
   describe('Payment Integrity', () => {
     it('should verify no duplicate payments exist for QA customers', async () => {
       // Check that customer_payments table has no duplicate records
-      const result = await execSql(`
+      const result = await execSqlAsAdmin(`
         SELECT customer_id, count(*) as payment_count, sum(amount) as total_amount
         FROM customer_payments
         WHERE customer_id IN ('${QA_IDS.customerA}', '${QA_IDS.customerB}', '${QA_IDS.customerC}')
@@ -108,7 +108,7 @@ describe('Customer Balance Integrity', () => {
 
   describe('No Orphaned Data', () => {
     it('should have no orphaned sale_items', async () => {
-      const result = await execSql(`
+      const result = await execSqlAsAdmin(`
         SELECT count(*) as orphan_count
         FROM sale_items si
         LEFT JOIN sales s ON si.sale_id = s.id
@@ -126,7 +126,7 @@ describe('Customer Balance Integrity', () => {
     });
 
     it('should have no orphaned return_items', async () => {
-      const result = await execSql(`
+      const result = await execSqlAsAdmin(`
         SELECT count(*) as orphan_count
         FROM return_items ri
         LEFT JOIN returns r ON ri.return_id = r.id

@@ -9,9 +9,9 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { getDbClient, execSql } from '../setup/qa-client';
+import { getDbClient, asPostgres, disableTriggers, enableTriggers, execSql } from '../setup/qa-client';
 
-let client: ReturnType<typeof getDbClient> extends Promise<infer T> ? T : never;
+let client: any;
 
 const TEST = {
   shop: '00000000-0000-0000-0000-000000000001',
@@ -39,12 +39,10 @@ function record(test: string, expected: string, actual: string, result: 'PASS' |
 }
 
 beforeAll(async () => {
-  const pg = await import('pg');
-  client = new pg.Client({
-    connectionString: `postgresql://postgres.bpybjrjenwccowvtrevu:LptUWZQm4TZrRksv4nAtFUHk3YG6rO@aws-0-ap-northeast-1.pooler.supabase.com:6543/postgres`,
-    ssl: { rejectUnauthorized: false },
-  });
+  client = getDbClient();
   await client.connect();
+  // Disable protect_* triggers so direct SQL can simulate sale/return/void workflows
+  await disableTriggers(client);
   await cleanupTestData();
 
   // Create fixtures
@@ -56,6 +54,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  await enableTriggers(client).catch(() => {});
   await cleanupTestData();
   await client?.end();
   const passed = TEST.evidence.filter(e => e.result === 'PASS').length;

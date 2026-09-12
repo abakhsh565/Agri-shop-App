@@ -6,7 +6,7 @@
  * Never leaves QA records behind.
  */
 
-import { execSql } from './qa-client';
+import { execSqlAsAdmin, execSql } from './qa-client';
 
 // ─── Deterministic Test IDs ──────────────────────────────────────────────
 
@@ -27,7 +27,7 @@ export const QA_IDS = {
 // ─── Setup Functions ─────────────────────────────────────────────────────
 
 export async function setupUsers() {
-  await execSql(`
+  await execSqlAsAdmin(`
     INSERT INTO users (id, name, phone, role, is_original_owner, is_active, shop_id)
     VALUES
       ('${QA_IDS.admin}', 'QA Admin', '923009999999', 'admin', true, true, '${QA_IDS.shop}'),
@@ -37,9 +37,10 @@ export async function setupUsers() {
 }
 
 export async function setupCustomers() {
-  // Delete any existing customers with our test phone numbers (handles unique phone constraint)
-  await execSql(`DELETE FROM customers WHERE phone IN ('923001111111', '923002222222', '923003333333')`);
-  await execSql(`
+  // Delete any FK-referencing records first, then customers with our test phone numbers
+  await execSqlAsAdmin(`DELETE FROM credit_limit_requests WHERE customer_id IN (SELECT id FROM customers WHERE phone IN ('923001111111', '923002222222', '923003333333'))`);
+  await execSqlAsAdmin(`DELETE FROM customers WHERE phone IN ('923001111111', '923002222222', '923003333333')`);
+  await execSqlAsAdmin(`
     INSERT INTO customers (id, name, phone, credit_limit, outstanding_balance, total_purchases, total_paid, shop_id, created_by)
     VALUES
       ('${QA_IDS.customerA}', 'QA Customer A', '923001111111', 50000, 30000, 80000, 50000, '${QA_IDS.shop}', 'QA'),
@@ -50,7 +51,7 @@ export async function setupCustomers() {
 }
 
 export async function setupProducts() {
-  await execSql(`
+  await execSqlAsAdmin(`
     INSERT INTO products (id, name, company_id, category, stock_qty, shop_id)
     VALUES
       ('${QA_IDS.productA}', 'QA Product A', '${QA_IDS.companyA}', 'seed', 100, '${QA_IDS.shop}'),
@@ -66,7 +67,7 @@ export async function setupProducts() {
 }
 
 export async function setupCompanies() {
-  await execSql(`
+  await execSqlAsAdmin(`
     INSERT INTO companies (id, name, outstanding_payable, total_purchases, shop_id)
     VALUES
       ('${QA_IDS.companyA}', 'QA Supplier A', 15000, 50000, '${QA_IDS.shop}')
@@ -85,38 +86,45 @@ export async function setupAllFixtures() {
 // ─── Cleanup Functions ───────────────────────────────────────────────────
 
 export async function cleanupTestData() {
-  const tables = [
-    'reminder_logs', 'reminder_occurrences', 'reminder_configs',
-    'credit_limit_requests', 'return_items', 'returns',
-    'sale_items', 'sales', 'customer_payments', 'payments',
-    'supplier_payments', 'inventory_movements', 'stock_adjustments',
-    'purchase_items', 'purchases', 'audit_events', 'activity_log',
-    'customer_crops', 'notifications', 'voids',
+  // Only delete QA fixture data — not all data in the table
+  const customerIds = `('${QA_IDS.customerA}', '${QA_IDS.customerB}', '${QA_IDS.customerC}')`;
+  const userIds = `('${QA_IDS.admin}', '${QA_IDS.employee}')`;
+
+  // Delete child records that reference QA customers/products/users
+  const childDeletes = [
+    `DELETE FROM sale_items WHERE sale_id IN (SELECT id FROM sales WHERE customer_id IN ${customerIds})`,
+    `DELETE FROM sales WHERE customer_id IN ${customerIds}`,
+    `DELETE FROM return_items WHERE return_id IN (SELECT id FROM returns WHERE customer_id IN ${customerIds})`,
+    `DELETE FROM returns WHERE customer_id IN ${customerIds}`,
+    `DELETE FROM voids WHERE sale_id IN (SELECT id FROM sales WHERE customer_id IN ${customerIds})`,
+    `DELETE FROM customer_payments WHERE customer_id IN ${customerIds}`,
+    `DELETE FROM credit_limit_requests WHERE customer_id IN ${customerIds}`,
+    `DELETE FROM inventory_movements WHERE product_id IN ('${QA_IDS.productA}', '${QA_IDS.productB}')`,
+    `DELETE FROM reminder_logs`,
+    `DELETE FROM reminder_occurrences`,
+    `DELETE FROM reminder_configs`,
   ];
 
-  for (const table of tables) {
-    try {
-      await execSql(`DELETE FROM ${table}`);
-    } catch { /* ignore */ }
+  for (const sql of childDeletes) {
+    try { await execSqlAsAdmin(sql); } catch { /* ignore */ }
   }
 
-  try {
-    await execSql(`DELETE FROM customers WHERE id IN ('${QA_IDS.customerA}', '${QA_IDS.customerB}', '${QA_IDS.customerC}')`);
-    await execSql(`DELETE FROM product_variants WHERE product_id IN ('${QA_IDS.productA}', '${QA_IDS.productB}')`);
-    await execSql(`DELETE FROM products WHERE id IN ('${QA_IDS.productA}', '${QA_IDS.productB}')`);
-    await execSql(`DELETE FROM companies WHERE id IN ('${QA_IDS.companyA}')`);
-    await execSql(`DELETE FROM users WHERE id IN ('${QA_IDS.admin}', '${QA_IDS.employee}')`);
-  } catch { /* ignore */ }
+  // Delete parent records
+  try { await execSqlAsAdmin(`DELETE FROM product_variants WHERE product_id IN ('${QA_IDS.productA}', '${QA_IDS.productB}')`); } catch {}
+  try { await execSqlAsAdmin(`DELETE FROM products WHERE id IN ('${QA_IDS.productA}', '${QA_IDS.productB}')`); } catch {}
+  try { await execSqlAsAdmin(`DELETE FROM companies WHERE id IN ('${QA_IDS.companyA}')`); } catch {}
+  try { await execSqlAsAdmin(`DELETE FROM customers WHERE id IN ${customerIds}`); } catch {}
+  try { await execSqlAsAdmin(`DELETE FROM users WHERE id IN ${userIds}`); } catch {}
 }
 
 // ─── Verification Functions ──────────────────────────────────────────────
 
 export async function getTableCount(table: string): Promise<number> {
-  const result = await execSql(`SELECT count(*) as n FROM ${table}`);
+  const result = await execSqlAsAdmin(`SELECT count(*) as n FROM ${table}`);
   return parseInt(result.rows[0].n);
 }
 
 export async function getTableRow(table: string, where: string): Promise<Record<string, any> | null> {
-  const result = await execSql(`SELECT * FROM ${table} WHERE ${where} LIMIT 1`);
+  const result = await execSqlAsAdmin(`SELECT * FROM ${table} WHERE ${where} LIMIT 1`);
   return result.rows[0] || null;
 }
