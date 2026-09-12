@@ -75,11 +75,19 @@ const QA_DB_PASS = process.env.QA_DB_PASS || '';
 /** Resolve hostname to IPv4 at module load — avoids IPv6 ENETUNREACH in CI */
 function resolveIPv4Sync(host: string): string {
   try {
-    const result = dns.lookupSync(host, { family: 4 });
-    console.error(`[qa-client] Resolved ${host} -> IPv4 ${result.address}`);
-    return result.address;
-  } catch {
-    console.error(`[qa-client] IPv4 lookup failed for ${host}, using hostname directly`);
+    const result = dns.lookupSync(host, { family: 4, all: true });
+    // all:true returns array; find the first IPv4 entry
+    const ipv4 = Array.isArray(result) ? result.find(r => r.family === 4) : null;
+    if (ipv4) {
+      console.error(`[qa-client] Resolved ${host} -> IPv4 ${ipv4.address}`);
+      return ipv4.address;
+    }
+    // If no IPv4 found, try without family constraint
+    const any = Array.isArray(result) ? result[0] : result;
+    console.error(`[qa-client] No IPv4 for ${host}, using ${any.address} (family=${any.family})`);
+    return any.address;
+  } catch (e: any) {
+    console.error(`[qa-client] DNS lookup failed for ${host}: ${e.message}, using hostname`);
     return host;
   }
 }
