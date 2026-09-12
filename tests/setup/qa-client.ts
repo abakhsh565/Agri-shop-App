@@ -23,7 +23,6 @@ import { createClient } from '@supabase/supabase-js';
 import pg from 'pg';
 import * as fs from 'fs';
 import * as path from 'path';
-import dns from 'dns';
 
 /** Load .env.qa into process.env if not already loaded */
 function loadQaEnv() {
@@ -72,30 +71,14 @@ const QA_DB_HOST = process.env.QA_DB_HOST || '';
 const QA_DB_USER = process.env.QA_DB_USER || '';
 const QA_DB_PASS = process.env.QA_DB_PASS || '';
 
-/** Resolve hostname to IPv4 at module load — avoids IPv6 ENETUNREACH in CI */
-function resolveIPv4Sync(host: string): string {
-  try {
-    const result = dns.lookupSync(host, { family: 4, all: true });
-    // all:true returns array; find the first IPv4 entry
-    const ipv4 = Array.isArray(result) ? result.find(r => r.family === 4) : null;
-    if (ipv4) {
-      console.error(`[qa-client] Resolved ${host} -> IPv4 ${ipv4.address}`);
-      return ipv4.address;
-    }
-    // If no IPv4 found, try without family constraint
-    const any = Array.isArray(result) ? result[0] : result;
-    console.error(`[qa-client] No IPv4 for ${host}, using ${any.address} (family=${any.family})`);
-    return any.address;
-  } catch (e: any) {
-    console.error(`[qa-client] DNS lookup failed for ${host}: ${e.message}, using hostname`);
-    return host;
-  }
-}
-
-const QA_DB_HOST_IPV4 = QA_DB_HOST ? resolveIPv4Sync(QA_DB_HOST) : '';
-
+/**
+ * IPv4 is forced via two mechanisms:
+ * 1. NODE_OPTIONS='--dns-result-order=ipv4first' (set in CI workflow and vitest.config.ts)
+ * 2. family: 4 on pg.Client (forces IPv4 socket)
+ * No custom DNS resolution needed — lookupSync fails in Vitest ESM context.
+ */
 function makeConnString(): string {
-  return `postgresql://${QA_DB_USER}:${QA_DB_PASS}@${QA_DB_HOST_IPV4}:6543/postgres`;
+  return `postgresql://${QA_DB_USER}:${QA_DB_PASS}@${QA_DB_HOST}:6543/postgres`;
 }
 
 /**
