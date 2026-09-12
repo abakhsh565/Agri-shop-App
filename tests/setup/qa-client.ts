@@ -72,13 +72,34 @@ const QA_DB_USER = process.env.QA_DB_USER || '';
 const QA_DB_PASS = process.env.QA_DB_PASS || '';
 
 /**
- * IPv4 is forced via two mechanisms:
- * 1. NODE_OPTIONS='--dns-result-order=ipv4first' (set in CI workflow and vitest.config.ts)
- * 2. family: 4 on pg.Client (forces IPv4 socket)
- * No custom DNS resolution needed — lookupSync fails in Vitest ESM context.
+ * Resolve hostname to IPv4 using child_process (works in all environments,
+ * including Vitest ESM where dns.lookupSync is unavailable).
+ * Falls back to raw hostname if resolution fails.
  */
+function resolveIPv4Sync(host: string): string {
+  if (!host) return host;
+  try {
+    const { execSync } = require('child_process');
+    // Use node's built-in dns module in a subprocess to bypass ESM transforms
+    const result = execSync(
+      `node -e "require('dns').resolve4('${host}', (e,addrs) => { if(e||!addrs||!addrs.length) process.exit(1); console.log(addrs[0]); })"`,
+      { timeout: 5000, stdio: ['pipe', 'pipe', 'pipe'] }
+    ).toString().trim();
+    if (result) {
+      console.error(`[qa-client] Resolved ${host} -> IPv4 ${result}`);
+      return result;
+    }
+  } catch (e: any) {
+    console.error(`[qa-client] IPv4 resolution failed for ${host}: ${e.message}, using hostname`);
+  }
+  return host;
+}
+
+// Resolve once at module load — cached for all connections
+const QA_DB_HOST_IPV4 = QA_DB_HOST ? resolveIPv4Sync(QA_DB_HOST) : '';
+
 function makeConnString(): string {
-  return `postgresql://${QA_DB_USER}:${QA_DB_PASS}@${QA_DB_HOST}:6543/postgres`;
+  return `postgresql://${QA_DB_USER}:${QA_DB_PASS}@${QA_DB_HOST_IPV4}:6543/postgres`;
 }
 
 /**
