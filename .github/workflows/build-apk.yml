@@ -6,7 +6,60 @@ on:
   workflow_dispatch:
 
 jobs:
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm install --legacy-peer-deps
+
+      # ─── Create .env.qa from GitHub Secrets ─────────────────────────
+      # These are QA-only credentials. Production credentials are NEVER used.
+      - name: Create QA environment file
+        run: |
+          echo "VITE_SUPABASE_URL=${{ secrets.QA_SUPABASE_URL }}" > .env.qa
+          echo "VITE_SUPABASE_ANON_KEY=${{ secrets.QA_SUPABASE_ANON_KEY }}" >> .env.qa
+          echo "VITE_SUPABASE_PROJECT_ID=bpybjrjenwccowvtrevu" >> .env.qa
+          echo "QA_SUPABASE_URL=${{ secrets.QA_SUPABASE_URL }}" >> .env.qa
+          echo "QA_SUPABASE_ANON_KEY=${{ secrets.QA_SUPABASE_ANON_KEY }}" >> .env.qa
+          echo "QA_SUPABASE_SERVICE_ROLE=${{ secrets.QA_SUPABASE_SERVICE_ROLE }}" >> .env.qa
+          echo "QA_DB_HOST=${{ secrets.QA_DB_HOST }}" >> .env.qa
+          echo "QA_DB_USER=${{ secrets.QA_DB_USER }}" >> .env.qa
+          echo "QA_DB_PASS=${{ secrets.QA_DB_PASS }}" >> .env.qa
+
+      # ─── Unit + Integration Tests (Vitest) ──────────────────────────
+      - name: Run Vitest (unit + integration)
+        run: npx vitest run --reporter=verbose
+
+      # ─── Browser E2E Tests (Playwright) ─────────────────────────────
+      - name: Install Playwright Browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Run Playwright E2E
+        run: npx playwright test
+
+      # ─── Upload test artifacts on failure ────────────────────────────
+      - name: Upload Playwright Report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: tests/e2e/results.json
+          retention-days: 7
+
   build:
+    name: Build APK
+    needs: [test]
     runs-on: ubuntu-latest
     permissions:
       actions: write
