@@ -136,11 +136,20 @@ export async function execRpcAsUser(
   rpcName: string,
   params: Record<string, any>
 ): Promise<{ data: any; error: string | null }> {
+  // Look up user phone for JWT claims (get_authenticated_user_id needs it)
+  let userPhone = '';
+  try {
+    const lookup = await execSqlAsAdmin(`SELECT phone FROM users WHERE id = '${userId}'`);
+    if (lookup.rows[0]?.phone) userPhone = lookup.rows[0].phone;
+  } catch { /* user may not exist */ }
+
   const client = getRawDbClient();
   await client.connect();
   try {
     await client.query('BEGIN');
-    await client.query(`SELECT set_config('request.jwt.claims', '${JSON.stringify({ sub: userId })}', true)`);
+    const jwtClaims = { sub: userId };
+    if (userPhone) (jwtClaims as any).phone = userPhone;
+    await client.query(`SELECT set_config('request.jwt.claims', '${JSON.stringify(jwtClaims)}', true)`);
     await client.query("SET LOCAL role = 'authenticated'");
     const paramStr = Object.entries(params)
       .map(([k, v]) => {
