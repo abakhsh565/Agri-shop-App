@@ -17,8 +17,6 @@ jobs:
       QA_DB_HOST: ${{ secrets.QA_DB_HOST }}
       QA_DB_USER: ${{ secrets.QA_DB_USER }}
       QA_DB_PASS: ${{ secrets.QA_DB_PASS }}
-      # Force IPv4 DNS resolution — GitHub Actions lacks IPv6 support
-      NODE_OPTIONS: '--dns-result-order=ipv4first'
     steps:
       - name: Checkout Code
         uses: actions/checkout@v7
@@ -31,6 +29,22 @@ jobs:
 
       - name: Install Dependencies
         run: npm install --legacy-peer-deps
+
+      # GitHub Actions lacks IPv6 support but the Supabase pooler hostname
+      # may only resolve to AAAA records via the default DNS resolver.
+      # Resolve via Google DNS (which has A records) and inject into /etc/hosts
+      # so ALL processes (pg, node, playwright) resolve to IPv4.
+      - name: Resolve DB host to IPv4 for CI
+        run: |
+          echo "Resolving $QA_DB_HOST to IPv4 via Google DNS..."
+          IPV4=$(dig @8.8.8.8 +short +time=5 A "$QA_DB_HOST" | head -1)
+          if [ -n "$IPV4" ]; then
+            echo "$IPV4 $QA_DB_HOST" | sudo tee -a /etc/hosts
+            echo "SUCCESS: $QA_DB_HOST -> $IPV4"
+          else
+            echo "ERROR: Could not resolve $QA_DB_HOST to IPv4"
+            exit 1
+          fi
 
       - name: Debug — Verify QA env vars are set
         run: |
