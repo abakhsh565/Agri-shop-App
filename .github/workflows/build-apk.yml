@@ -10,6 +10,14 @@ jobs:
     name: Run Tests
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      # QA-only credentials. Production credentials are NEVER used.
+      QA_SUPABASE_URL: ${{ secrets.QA_SUPABASE_URL }}
+      QA_SUPABASE_ANON_KEY: ${{ secrets.QA_SUPABASE_ANON_KEY }}
+      QA_SUPABASE_SERVICE_ROLE: ${{ secrets.QA_SUPABASE_SERVICE_ROLE }}
+      QA_DB_HOST: ${{ secrets.QA_DB_HOST }}
+      QA_DB_USER: ${{ secrets.QA_DB_USER }}
+      QA_DB_PASS: ${{ secrets.QA_DB_PASS }}
     steps:
       - name: Checkout Code
         uses: actions/checkout@v7
@@ -23,20 +31,6 @@ jobs:
       - name: Install Dependencies
         run: npm install --legacy-peer-deps
 
-      # ─── Create .env.qa from GitHub Secrets ─────────────────────────
-      # These are QA-only credentials. Production credentials are NEVER used.
-      - name: Create QA environment file
-        run: |
-          echo "VITE_SUPABASE_URL=${{ secrets.QA_SUPABASE_URL }}" > .env.qa
-          echo "VITE_SUPABASE_ANON_KEY=${{ secrets.QA_SUPABASE_ANON_KEY }}" >> .env.qa
-          echo "VITE_SUPABASE_PROJECT_ID=bpybjrjenwccowvtrevu" >> .env.qa
-          echo "QA_SUPABASE_URL=${{ secrets.QA_SUPABASE_URL }}" >> .env.qa
-          echo "QA_SUPABASE_ANON_KEY=${{ secrets.QA_SUPABASE_ANON_KEY }}" >> .env.qa
-          echo "QA_SUPABASE_SERVICE_ROLE=${{ secrets.QA_SUPABASE_SERVICE_ROLE }}" >> .env.qa
-          echo "QA_DB_HOST=${{ secrets.QA_DB_HOST }}" >> .env.qa
-          echo "QA_DB_USER=${{ secrets.QA_DB_USER }}" >> .env.qa
-          echo "QA_DB_PASS=${{ secrets.QA_DB_PASS }}" >> .env.qa
-
       # ─── Unit + Integration Tests (Vitest) ──────────────────────────
       - name: Run Vitest (unit + integration)
         run: npx vitest run --reporter=verbose
@@ -47,6 +41,11 @@ jobs:
 
       - name: Run Playwright E2E
         run: npx playwright test
+        env:
+          # Playwright dev server needs these for the browser app
+          VITE_SUPABASE_URL: ${{ secrets.QA_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.QA_SUPABASE_ANON_KEY }}
+          VITE_SUPABASE_PROJECT_ID: bpybjrjenwccowvtrevu
 
       # ─── Upload test artifacts on failure ────────────────────────────
       - name: Upload Playwright Report
