@@ -11,7 +11,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
-      # QA-only credentials. Production credentials are NEVER used.
       QA_SUPABASE_URL: ${{ secrets.QA_SUPABASE_URL }}
       QA_SUPABASE_ANON_KEY: ${{ secrets.QA_SUPABASE_ANON_KEY }}
       QA_SUPABASE_SERVICE_ROLE: ${{ secrets.QA_SUPABASE_SERVICE_ROLE }}
@@ -31,6 +30,15 @@ jobs:
       - name: Install Dependencies
         run: npm install --legacy-peer-deps
 
+      - name: Debug — Verify QA env vars are set
+        run: |
+          echo "QA_SUPABASE_URL length: ${#QA_SUPABASE_URL}"
+          echo "QA_SUPABASE_ANON_KEY length: ${#QA_SUPABASE_ANON_KEY}"
+          echo "QA_SUPABASE_SERVICE_ROLE length: ${#QA_SUPABASE_SERVICE_ROLE}"
+          echo "QA_DB_HOST length: ${#QA_DB_HOST}"
+          echo "QA_DB_USER length: ${#QA_DB_USER}"
+          echo "QA_DB_PASS length: ${#QA_DB_PASS}"
+
       # ─── Unit + Integration Tests (Vitest) ──────────────────────────
       - name: Run Vitest (unit + integration)
         run: npx vitest run --reporter=verbose
@@ -42,12 +50,10 @@ jobs:
       - name: Run Playwright E2E
         run: npx playwright test
         env:
-          # Playwright dev server needs these for the browser app
           VITE_SUPABASE_URL: ${{ secrets.QA_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.QA_SUPABASE_ANON_KEY }}
           VITE_SUPABASE_PROJECT_ID: bpybjrjenwccowvtrevu
 
-      # ─── Upload test artifacts on failure ────────────────────────────
       - name: Upload Playwright Report
         if: failure()
         uses: actions/upload-artifact@v4
