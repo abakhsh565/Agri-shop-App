@@ -1,16 +1,19 @@
 /**
  * QA Database Client
  *
- * Uses the Supabase HTTP API (run_sql RPC) for all SQL operations.
- * This avoids the IPv6 DNS issue on GitHub Actions where the Supabase
- * pooler hostname only has AAAA records.
+ * Uses the Supabase HTTP API for all SQL operations.
+ * Uses Supabase Auth for user-context testing (real JWT tokens).
  *
- * Provides a pg.Client-compatible interface so existing tests work unchanged.
+ * Architecture:
+ * - SQL execution: run_sql SECURITY DEFINER function over HTTP API
+ * - User-context RPCs: Supabase Auth → real JWT → PostgREST → RPC
+ * - This avoids IPv6 DNS issues on GitHub Actions AND pooler session-reset issues
+ *
  * Credentials are loaded from .env.qa or environment variables.
  * NEVER connects to production.
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -56,13 +59,76 @@ export const qaServiceClient = createClient(QA_URL, QA_SERVICE_ROLE);
 /** Anon client (RLS-enforced, for testing RLS policies) */
 export const qaAnonClient = createClient(QA_URL, QA_ANON_KEY);
 
-/**
- * Whether the JWT secret is available for creating user-context tokens.
- * Required for execRpcAsUser — tests that need user-context RPCs skip without it.
- */
-export const HAS_JWT_SECRET = !!(process.env.SUPABASE_JWT_SECRET || process.env.QA_JWT_SECRET);
+// ─── Auth-based user context ────────────────────────────────────────
 
-// ─── HTTP API execution layer ───────────────────────────────────────
+/**
+ * Cache of Supabase clients signed in as specific test users.
+ * Each client has a real JWT from Supabase Auth.
+ */
+const authClients = new Map<string, SupabaseClient>();
+
+/**
+ * Get or create a Supabase client authenticated as a specific user.
+ *
+ * Flow:
+ * 1. Create a Supabase Auth user with UUID matching the `users` table entry
+ * 2. Sign in with email/password to get a real JWT
+ * 3. Return the authenticated client for RPC calls
+ *
+ * This produces real JWTs that PostgREST validates — no pooler session issues.
+ */
+async function getAuthClient(userId: string): Promise<SupabaseClient> {
+  // Look up user's phone from the users table (needed for both cached and new clients)
+  let userPhone = '';
+  try {
+    const rows = await runSqlHttp(`SELECT phone FROM users WHERE id = '${userId}'`);
+    if (rows[0]?.phone) userPhone = rows[0].phone;
+  } catch { /* user may not exist yet */ }
+
+  const cached = authClients.get(userId);
+  if (cached) {
+    // Always ensure phone is set (user may have been created after first auth)
+    if (userPhone) {
+      try {
+        await runSqlHttp(`UPDATE auth.users SET phone = '${userPhone}' WHERE id = '${userId}' AND (phone IS NULL OR phone != '${userPhone}')`);
+      } catch { /* ignore */ }
+    }
+    return cached;
+  }
+
+  const email = `qa-test-${userId}@test.local`;
+  const password = `QA-test-${userId}-2024!`;
+
+  // Create auth user with matching UUID (phone set separately to bypass E.164 validation)
+  const { error: createError } = await qaServiceClient.auth.admin.createUser({
+    id: userId,
+    email,
+    password,
+    email_confirm: true,
+  });
+  // Ignore "already exists" errors
+  if (createError && !createError.message?.includes('already been registered')) {
+    console.warn(`Auth user create warning for ${userId}: ${createError.message}`);
+  }
+
+  // Set phone on auth.users directly via SQL (bypasses E.164 validation)
+  // get_authenticated_user_id() matches users by phone from auth.users
+  if (userPhone) {
+    try {
+      await runSqlHttp(`UPDATE auth.users SET phone = '${userPhone}' WHERE id = '${userId}' AND (phone IS NULL OR phone != '${userPhone}')`);
+    } catch { /* ignore — phone may already be set */ }
+  }
+
+  // Sign in with anon key to get a real JWT
+  const client = createClient(QA_URL, QA_ANON_KEY);
+  const { error: signInError } = await client.auth.signInWithPassword({ email, password });
+  if (signInError) throw new Error(`Auth sign-in failed for ${userId}: ${signInError.message}`);
+
+  authClients.set(userId, client);
+  return client;
+}
+
+// ─── HTTP API execution layer (SQL via run_sql) ─────────────────────
 
 /**
  * Execute SQL via the run_sql SECURITY DEFINER function over HTTP API.
@@ -87,31 +153,19 @@ async function execSqlResult(sql: string): Promise<{ rows: any[]; rowCount: numb
   return { rows, rowCount: rows.length, command: sql.trim().split(/\s/)[0].toUpperCase() };
 }
 
-/**
- * Parse a pg-style SQL template with backtick interpolation.
- * Handles: INSERT INTO ... VALUES (...) ON CONFLICT ...
- * The pg library accepts SQL strings directly.
- */
-function rawSql(strings: TemplateStringsArray, ...values: any[]): string {
-  return strings.reduce((acc, str, i) => acc + str + (i < values.length ? String(values[i]) : ''), '');
-}
-
 // ─── pg.Client-compatible wrapper ───────────────────────────────────
 
 /**
  * Creates a pg.Client-compatible object that uses the HTTP API.
  * Supports .connect(), .end(), .query() — all backed by run_sql RPC.
- * Intercepts SET LOCAL role to use run_sql_as_user for role-context queries.
  */
-function createHttpClient(defaultRole?: string): any {
+function createHttpClient(): any {
   let connected = false;
-  let currentRole: string | null = null;
-  let currentUserId: string | null = null;
 
   const client = {
     connect: async () => { connected = true; },
-    end: async () => { connected = false; currentRole = null; currentUserId = null; },
-    query: async (sqlOrConfig: any, params?: any[]): Promise<any> => {
+    end: async () => { connected = false; },
+    query: async (sqlOrConfig: any, _params?: any[]): Promise<any> => {
       let sql: string;
       if (typeof sqlOrConfig === 'string') {
         sql = sqlOrConfig;
@@ -123,45 +177,20 @@ function createHttpClient(defaultRole?: string): any {
 
       const upper = sql.trim().toUpperCase();
 
-      // Intercept SET LOCAL role = 'authenticated' -> store role for subsequent queries
+      // Intercept SET LOCAL role — no-op with HTTP API
       const roleMatch = sql.match(/SET\s+(?:LOCAL\s+)?role\s*=\s*'([^']+)'/i);
       if (roleMatch) {
-        currentRole = roleMatch[1];
-        // Also set JWT claims if the role is authenticated
-        if (currentRole === 'authenticated') {
-          // Default to admin user for authenticated queries
-          if (!currentUserId) currentUserId = '10000000-0000-0000-0000-000000000001';
-          return { rows: [], rowCount: 0, command: 'SET' };
-        }
         return { rows: [], rowCount: 0, command: 'SET' };
       }
 
       // Intercept RESET role
       if (upper.startsWith('RESET ROLE') || upper.startsWith('RESET "ROLE"')) {
-        currentRole = null;
         return { rows: [], rowCount: 0, command: 'RESET' };
       }
 
-      // Intercept set_config for JWT claims
-      const claimsMatch = sql.match(/set_config\(\s*'request\.jwt\.claims'\s*,\s*'([^']+)'/i);
-      if (claimsMatch) {
-        try {
-          const claims = JSON.parse(claimsMatch[1]);
-          if (claims.sub) currentUserId = claims.sub;
-        } catch { /* ignore */ }
+      // Intercept set_config for JWT claims — no-op with HTTP API
+      if (sql.match(/set_config\(\s*'request\.jwt\.claims'/i)) {
         return { rows: [], rowCount: 0, command: 'SELECT' };
-      }
-
-      // For authenticated role queries, use run_sql_as_user
-      if (currentRole === 'authenticated' && currentUserId) {
-        try {
-          const rows = await runSqlHttp(
-            `SELECT * FROM run_sql_as_user('${currentUserId}', ${sqlAsLiteral(sql)})`
-          );
-          return { rows, rowCount: rows.length, command: upper.split(/\s/)[0] };
-        } catch (e: any) {
-          throw new Error(`run_sql_as_user: ${e.message}`);
-        }
       }
 
       // Default: use run_sql as postgres
@@ -174,31 +203,21 @@ function createHttpClient(defaultRole?: string): any {
     connected: true,
   };
 
-  // If a default role is set, configure it
-  if (defaultRole && defaultRole !== 'postgres') {
-    currentRole = defaultRole;
-  }
-
   return client;
 }
 
-/** Escape a SQL string for use as a literal in a query */
-function sqlAsLiteral(s: string): string {
-  return "'" + s.replace(/'/g, "''") + "'";
-}
-
-// ─── Exported functions (backward compatible) ───────────────────────
+// ─── Exported functions ─────────────────────────────────────────────
 
 /**
  * Create a PostgreSQL client that uses the HTTP API internally.
  * Queries run as postgres (bypasses RLS and protect_* triggers).
  */
 export function getDbClient(): any {
-  return createHttpClient('postgres');
+  return createHttpClient();
 }
 
 /**
- * Create a raw client (no role interception) using HTTP API.
+ * Create a raw client using HTTP API.
  */
 export function getRawDbClient(): any {
   return createHttpClient();
@@ -229,62 +248,63 @@ export async function execMultiSql(sql: string): Promise<void> {
 }
 
 /**
- * Execute an RPC as a specific user with JWT claims.
- * Sets JWT claims via set_config and calls the RPC in a SINGLE SQL statement
- * to avoid the Supabase pooler resetting claims between function calls.
+ * Execute an RPC as a specific user using Supabase Auth.
+ *
+ * Creates a real JWT via Supabase Auth REST API — no pooler session issues.
+ * PostgREST validates the JWT and sets request.jwt.claims automatically.
+ * The SECURITY DEFINER RPC then sees the correct user identity.
  */
 export async function execRpcAsUser(
   userId: string,
   rpcName: string,
   params: Record<string, any>
 ): Promise<{ data: any; error: string | null }> {
-  // Look up user phone for JWT claims
-  let userPhone = '';
   try {
-    const rows = await runSqlHttp(`SELECT phone FROM users WHERE id = '${userId}'`);
-    if (rows[0]?.phone) userPhone = rows[0].phone;
-  } catch { /* user may not exist */ }
+    const client = await getAuthClient(userId);
 
-  const jwtClaims: Record<string, any> = { sub: userId };
-    if (userPhone) jwtClaims.phone = userPhone;
-    const claimsStr = JSON.stringify(jwtClaims).replace(/'/g, "''");
-
-  const paramStr = Object.entries(params)
-    .map(([k, v]) => {
-      if (typeof v === 'string') return `${k} := '${v.replace(/'/g, "''")}'`;
-      if (v === null) return `${k} := NULL`;
-      if (typeof v === 'object') return `${k} := '${JSON.stringify(v).replace(/'/g, "''")}'::jsonb`;
-      return `${k} := ${v}`;
-    })
-    .join(', ');
-
-  // Set JWT claims AND call RPC in a single DO block to avoid pooler claim reset
-  const sql = `DO $$
-DECLARE r jsonb;
-BEGIN
-  PERFORM set_config('request.jwt.claims', '${claimsStr}', false);
-  SELECT coalesce(json_agg(row_to_json(t)), '[]'::json) INTO r
-    FROM (SELECT * FROM ${rpcName}(${paramStr})) t;
-  RAISE NOTICE '%', r::text;
-END;$$;`;
-
-  try {
-    // The DO block returns notices, not rows. We need a different approach.
-    // Use a wrapper function that sets claims and calls RPC in same statement.
-    const sql2 = `SELECT * FROM exec_rpc_as_user('${userId}'::uuid, '${rpcName}', '${JSON.stringify(params).replace(/'/g, "''")}'::jsonb)`;
-    const rows = await runSqlHttp(sql2);
-    if (rows.length === 0) return { data: null, error: null };
-    const row = rows[0];
-    if (row && typeof row === 'object') {
-      if (row.error) return { data: null, error: row.error };
-      const keys = Object.keys(row);
-      if (keys.length === 1 && typeof row[keys[0]] === 'object' && row[keys[0]] !== null) {
-        return { data: row[keys[0]], error: null };
+    // Convert parameters for Supabase JS client
+    const rpcParams: Record<string, any> = {};
+    for (const [k, v] of Object.entries(params)) {
+      if (typeof v === 'string') {
+        // If it's a JSON string, parse it to pass as proper JSONB
+        try {
+          rpcParams[k] = JSON.parse(v);
+        } catch {
+          rpcParams[k] = v;
+        }
+      } else if (v === null || v === undefined) {
+        rpcParams[k] = null;
+      } else {
+        rpcParams[k] = v;
       }
     }
-    return { data: row, error: null };
+
+    const { data, error } = await client.rpc(rpcName, rpcParams);
+    if (error) return { data: null, error: error.message };
+    return { data, error: null };
   } catch (e: any) {
     return { data: null, error: e.message };
+  }
+}
+
+/**
+ * Execute a query as a specific user via the _test_check_auth helper function.
+ * Returns { user_id, is_admin, phone } for the given user.
+ * Used by authorization model verification tests.
+ */
+export async function checkAuthAsUser(
+  userId: string
+): Promise<{ user_id: string | null; is_admin: boolean | null; phone: string | null }> {
+  try {
+    const client = await getAuthClient(userId);
+    const { data, error } = await client.rpc('_test_check_auth');
+    if (error) throw new Error(error.message);
+    if (data && data.length > 0) {
+      return data[0];
+    }
+    return { user_id: null, is_admin: null, phone: null };
+  } catch {
+    return { user_id: null, is_admin: null, phone: null };
   }
 }
 

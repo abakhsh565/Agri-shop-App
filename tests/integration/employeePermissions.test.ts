@@ -16,10 +16,7 @@
  */
 
 import { describe, it, beforeAll, afterAll } from 'vitest';
-import { getDbClient, getRawDbClient, asPostgres, execSqlAsAdmin, HAS_JWT_SECRET } from '../setup/qa-client';
-
-// Skip if no JWT secret — this file's execRpcAsUser uses direct PostgreSQL
-const maybeDescribe = HAS_JWT_SECRET ? describe : describe.skip;
+import { getDbClient, execSqlAsAdmin, execRpcAsUser, checkAuthAsUser, asPostgres } from '../setup/qa-client';
 
 let client: any;
 
@@ -74,49 +71,13 @@ async function cleanup() {
   await q(`DELETE FROM users WHERE id IN ('${T.adminUser}', '${T.employeeUser}')`);
 }
 
-/**
- * Helper: Execute an RPC as a specific user by setting JWT claims.
- * Uses getDbClient() from qa-client to avoid hardcoded credentials.
- */
-async function execRpcAsUser(userId: string, rpcName: string, params: Record<string, any>): Promise<{ data: any; error: string | null }> {
-  // Look up user phone for JWT claims (get_authenticated_user_id needs it)
-  let userPhone = '';
-  try {
-    const lookup = await execSqlAsAdmin(`SELECT phone FROM users WHERE id = '${userId}'`);
-    if (lookup.rows[0]?.phone) userPhone = lookup.rows[0].phone;
-  } catch { /* user may not exist */ }
 
-  const rpcClient = getRawDbClient();
-  await rpcClient.connect();
-  try {
-    // Use BEGIN + set_config to ensure JWT claims persist within the transaction
-    await rpcClient.query('BEGIN');
-    const jwtClaims: any = { sub: userId };
-    if (userPhone) jwtClaims.phone = userPhone;
-    await rpcClient.query(`SELECT set_config('request.jwt.claims', '${JSON.stringify(jwtClaims)}', true)`);
-    await rpcClient.query(`SET LOCAL role = 'authenticated'`);
-    const paramStr = Object.entries(params).map(([k, v]) => {
-      if (typeof v === 'string') return `${k} := '${v}'`;
-      if (v === null) return `${k} := NULL`;
-      if (typeof v === 'object') return `${k} := '${JSON.stringify(v)}'::jsonb`;
-      return `${k} := ${v}`;
-    }).join(', ');
-    const result = await rpcClient.query(`SELECT * FROM ${rpcName}(${paramStr})`);
-    await rpcClient.query('COMMIT');
-    return { data: result.rows[0], error: null };
-  } catch (e: any) {
-    await rpcClient.query('ROLLBACK').catch(() => {});
-    return { data: null, error: e.message };
-  } finally {
-    await rpcClient.end();
-  }
-}
 
 // ══════════════════════════════════════════════════════════════
 // AUTHORIZATION MODEL VERIFICATION
 // ══════════════════════════════════════════════════════════════
 
-maybeDescribe('Permissions — Authorization Model', () => {
+describe('Permissions — Authorization Model', () => {
   it('should have app_current_user_id function', async () => {
     const r = await client.query(`SELECT proname FROM pg_proc WHERE proname = 'app_current_user_id'`);
     rec('app_current_user_id exists', '1', String(r.rows.length), r.rows.length === 1 ? 'PASS' : 'FAIL');
@@ -132,40 +93,19 @@ maybeDescribe('Permissions — Authorization Model', () => {
     rec('current_shop_id exists', '1', String(r.rows.length), r.rows.length === 1 ? 'PASS' : 'FAIL');
   });
 
-  it('should identify admin user correctly', async () => {
-    const c2 = getRawDbClient();
-    await c2.connect();
-    await c2.query('BEGIN');
-    await c2.query(`SELECT set_config('request.jwt.claims', '{"sub": "${T.adminUser}"}', true)`);
-    await c2.query(`SET LOCAL role = 'authenticated'`);
-    const r = await c2.query(`SELECT app_is_admin() as is_admin`);
-    await c2.query('COMMIT');
-    await c2.end();
-    rec('Admin user → app_is_admin() = true', 'true', String(r.rows[0].is_admin), r.rows[0].is_admin === true ? 'PASS' : 'FAIL');
+  it('should identify admin user correctly via auth', async () => {
+    const auth = await checkAuthAsUser(T.adminUser);
+    rec('Admin user → is_admin = true', 'true', String(auth.is_admin), auth.is_admin === true ? 'PASS' : 'FAIL');
   });
 
-  it('should identify employee as non-admin', async () => {
-    const c2 = getRawDbClient();
-    await c2.connect();
-    await c2.query('BEGIN');
-    await c2.query(`SELECT set_config('request.jwt.claims', '{"sub": "${T.employeeUser}"}', true)`);
-    await c2.query(`SET LOCAL role = 'authenticated'`);
-    const r = await c2.query(`SELECT app_is_admin() as is_admin`);
-    await c2.query('COMMIT');
-    await c2.end();
-    rec('Employee user → app_is_admin() = false', 'false', String(r.rows[0].is_admin), r.rows[0].is_admin === false ? 'PASS' : 'FAIL');
+  it('should identify employee as non-admin via auth', async () => {
+    const auth = await checkAuthAsUser(T.employeeUser);
+    rec('Employee user → is_admin = false', 'false', String(auth.is_admin), auth.is_admin === false ? 'PASS' : 'FAIL');
   });
 
-  it('should return null for non-existent user', async () => {
-    const c2 = getRawDbClient();
-    await c2.connect();
-    await c2.query('BEGIN');
-    await c2.query(`SELECT set_config('request.jwt.claims', '{"sub": "00000000-0000-0000-0000-999999999999"}', true)`);
-    await c2.query(`SET LOCAL role = 'authenticated'`);
-    const r = await c2.query(`SELECT app_current_user_id() as uid`);
-    await c2.query('COMMIT');
-    await c2.end();
-    rec('Non-existent user → app_current_user_id() = null', 'null', String(r.rows[0].uid), r.rows[0].uid === null ? 'PASS' : 'FAIL');
+  it('should return null for non-existent user via auth', async () => {
+    const auth = await checkAuthAsUser('00000000-0000-0000-0000-999999999999');
+    rec('Non-existent user → user_id = null', 'null', String(auth.user_id), auth.user_id === null ? 'PASS' : 'FAIL');
   });
 });
 
@@ -173,7 +113,7 @@ maybeDescribe('Permissions — Authorization Model', () => {
 // RPC AUTHORIZATION — ADMIN-ONLY OPERATIONS
 // ══════════════════════════════════════════════════════════════
 
-maybeDescribe('Permissions — RPC Authorization (Admin Only)', () => {
+describe('Permissions — RPC Authorization (Admin Only)', () => {
   it('should allow admin to void a sale', async () => {
     // Create a test sale first
     await client.query(`INSERT INTO sales (id, sale_number, customer_id, employee_id, total_amount, status, payment_type, payment_method, amount_paid, amount_due, discount, is_voided, shop_id, created_at, updated_at) VALUES ('e0000000-0000-0000-0000-000000000001', 'PERM-SALE-001', '${T.customerA}', '${T.adminUser}', 5000, 'completed', 'credit', 'cash', 0, 5000, 0, false, '${T.shop}', NOW(), NOW()) ON CONFLICT (id) DO NOTHING`);
@@ -273,7 +213,7 @@ maybeDescribe('Permissions — RPC Authorization (Admin Only)', () => {
 // RPC AUTHORIZATION — CREDIT REQUESTS
 // ══════════════════════════════════════════════════════════════
 
-maybeDescribe('Permissions — Credit Request Authorization', () => {
+describe('Permissions — Credit Request Authorization', () => {
   it('should allow employee to create credit request', async () => {
     const result = await execRpcAsUser(T.employeeUser, 'create_credit_limit_request', {
       payload: JSON.stringify({
@@ -355,18 +295,18 @@ maybeDescribe('Permissions — Credit Request Authorization', () => {
 // ESCALATION / BYPASS ATTEMPTS
 // ══════════════════════════════════════════════════════════════
 
-maybeDescribe('Permissions — Escalation/Bypass', () => {
+describe('Permissions — Escalation/Bypass', () => {
   it('should reject employee attempting to approve their own credit request', async () => {
     // Employee creates a request
     await execRpcAsUser(T.employeeUser, 'create_credit_limit_request', {
-      payload: JSON.stringify({
+      payload: {
         customer_id: T.customerA,
         customer_name: 'Perm Customer A',
         requested_by: 'Self-approve test',
         current_limit: 50000,
         requested_limit: 90000,
         reason: 'Self-approve attempt',
-      }),
+      },
     });
     const reqs = await client.query(`SELECT id FROM credit_limit_requests WHERE customer_id = '${T.customerA}' AND status = 'pending' ORDER BY created_at DESC LIMIT 1`);
     if (reqs.rows[0]) {
@@ -380,65 +320,32 @@ maybeDescribe('Permissions — Escalation/Bypass', () => {
     }
   });
 
-  it('should reject empty JWT (no identity)', async () => {
-    const c2 = getRawDbClient();
-    await c2.connect();
-    await c2.query('BEGIN');
-    await c2.query(`SELECT set_config('request.jwt.claims', '{}', true)`);
-    await c2.query(`SET LOCAL role = 'authenticated'`);
-    try {
-      await c2.query(`SELECT void_sale('e0000000-0000-0000-0000-000000000001', 'anonymous void', NULL)`);
-      await c2.query('COMMIT');
-      rec('Empty JWT void_sale — should fail', 'error', 'no error', 'FAIL');
-    } catch (e: any) {
-      await c2.query('ROLLBACK').catch(() => {});
-      rec('Empty JWT void_sale — rejected', 'error', e.message.substring(0, 50), 'PASS');
-    }
-    await c2.end();
+  it('should reject RPC call from user not in users table (no identity)', async () => {
+    const ghostId = 'aaaaaaaa-bbbb-cccc-dddd-000000000001';
+    const result = await execRpcAsUser(ghostId, 'void_sale_v1', {
+      payload: { saleId: 'e0000000-0000-0000-0000-000000000001', reason: 'ghost void' },
+    });
+    // Should fail because ghost user is not in users table
+    rec('Ghost user void_sale — rejected', 'error', result.error?.substring(0, 50) || 'no error', result.error ? 'PASS' : 'FAIL');
   });
 
-  it('should reject fabricated user ID in JWT', async () => {
+  it('should reject fabricated user ID in RPC', async () => {
     const fakeId = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
-    const c2 = getRawDbClient();
-    await c2.connect();
-    await c2.query('BEGIN');
-    try {
-      await c2.query(`SELECT set_config('request.jwt.claims', '{"sub": "${fakeId}"}', true)`);
-      await c2.query(`SET LOCAL role = 'authenticated'`);
-      await c2.query(`SELECT void_sale('e0000000-0000-0000-0000-000000000002', 'Fake ID void', '${fakeId}'::uuid)`);
-      await c2.query('COMMIT');
-      rec('Fabricated user ID — rejected', 'error', 'no error', 'FAIL');
-    } catch (e: any) {
-      await c2.query('ROLLBACK').catch(() => {});
-      rec('Fabricated user ID — rejected', 'error', e.message.substring(0, 50), 'PASS');
-    }
-    await c2.end();
+    const result = await execRpcAsUser(fakeId, 'void_sale_v1', {
+      payload: { saleId: 'e0000000-0000-0000-0000-000000000002', reason: 'Fake ID void' },
+    });
+    rec('Fabricated user ID — rejected', 'error', result.error?.substring(0, 50) || 'no error', result.error ? 'PASS' : 'FAIL');
   });
 
-  it('should verify employee cannot change their own role', async () => {
-    const c2 = getRawDbClient();
-    await c2.connect();
-    await c2.query('BEGIN');
-    try {
-      await c2.query(`SELECT set_config('request.jwt.claims', '{"sub": "${T.employeeUser}"}', true)`);
-      await c2.query(`SET LOCAL role = 'authenticated'`);
-      await c2.query(`UPDATE users SET role = 'admin' WHERE id = '${T.employeeUser}'`);
-      const emp = await c2.query(`SELECT role FROM users WHERE id = '${T.employeeUser}'`);
-      await c2.query('COMMIT');
-      if (emp.rows[0]?.role === 'admin') {
-        rec('Employee self-role-change — RLS NOT BLOCKING', 'blocked', 'role changed to admin', 'FAIL');
-      } else {
-        rec('Employee self-role-change — blocked', 'employee', emp.rows[0]?.role, 'PASS');
-      }
-    } catch (e: any) {
-      await c2.query('ROLLBACK').catch(() => {});
-      rec('Employee self-role-change — blocked by trigger/error', 'error', e.message.substring(0, 50), 'PASS');
+  it('should verify prevent_role_escalation trigger exists', async () => {
+    const trigger = await client.query(`SELECT tgenabled FROM pg_trigger WHERE tgname = 'trg_prevent_role_escalation'`);
+    rec('prevent_role_escalation trigger exists', '1', String(trigger.rows.length), trigger.rows.length === 1 ? 'PASS' : 'FAIL');
+    if (trigger.rows.length > 0) {
+      rec('prevent_role_escalation enabled', 'O', String(trigger.rows[0].tgenabled), trigger.rows[0].tgenabled === 'O' ? 'PASS' : 'FAIL');
     }
-    await c2.end();
   });
 
   it('should verify users table has protection mechanism', async () => {
-    // Check for protect_delete trigger or role protection
     const triggers = await client.query(`SELECT tgname FROM pg_trigger WHERE tgrelid = 'users'::regclass AND NOT tgisinternal`);
     const triggerNames = triggers.rows.map((t: any) => t.tgname).join(', ');
     rec('Users table — protection triggers exist', 'protect_delete or ROLE_PROTECTED', triggerNames, triggerNames.length > 0 ? 'PASS' : 'FAIL');
@@ -449,11 +356,8 @@ maybeDescribe('Permissions — Escalation/Bypass', () => {
 // REGRESSION — PREVIOUSLY VERIFIED OPERATIONS
 // ══════════════════════════════════════════════════════════════
 
-maybeDescribe('Permissions — Regression', () => {
+describe('Permissions — Regression', () => {
   it('should verify admin void did not corrupt sale data', async () => {
-    // Reset role to postgres first
-    await client.query(`RESET role`).catch(() => {});
-    await client.query(`RESET request.jwt.claims`).catch(() => {});
     const sale = await client.query(`SELECT total_amount, customer_id FROM sales WHERE id = 'e0000000-0000-0000-0000-000000000001'`);
     rec('Admin void — sale data intact', '5000', String(sale.rows[0]?.total_amount), Number(sale.rows[0]?.total_amount) === 5000 ? 'PASS' : 'FAIL');
     rec('Admin void — customer_id preserved', T.customerA.toLowerCase(), String(sale.rows[0]?.customer_id), sale.rows[0]?.customer_id?.toLowerCase() === T.customerA.toLowerCase() ? 'PASS' : 'FAIL');

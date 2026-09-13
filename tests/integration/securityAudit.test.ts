@@ -7,7 +7,7 @@
  * Uses the QA database (never production).
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { execSqlAsAdmin, execRpcAsUser, getRawDbClient, HAS_JWT_SECRET } from '../setup/qa-client';
+import { execSqlAsAdmin, execRpcAsUser } from '../setup/qa-client';
 import { QA_IDS } from '../setup/fixtures';
 
 import { randomUUID } from 'crypto';
@@ -17,10 +17,7 @@ const CUST_ID = randomUUID();
 const EMP_PHONE = `923${RUN.slice(-8).padStart(8, '0')}`;
 const CUST_PHONE = `924${RUN.slice(-8).padStart(8, '0')}`;
 
-// Skip if no JWT secret — user-context RPCs need real JWT tokens
-const maybeDescribe = HAS_JWT_SECRET ? describe : describe.skip;
-
-maybeDescribe('Security Audit — RLS & Authorization', () => {
+describe('Security Audit — RLS & Authorization', () => {
   beforeAll(async () => {
     // Create test employee and customer
     await execSqlAsAdmin(`
@@ -324,8 +321,11 @@ maybeDescribe('Security Audit — RLS & Authorization', () => {
 
   it('Employee: can update own profile fields (name, phone, photo)', async () => {
     // Employee should be able to update their own name
+    await execSqlAsAdmin(
+      `UPDATE users SET name = 'Updated Employee Name' WHERE id = '${EMP_ID}'`
+    );
     const result = await execSqlAsAdmin(
-      `UPDATE users SET name = 'Updated Employee Name' WHERE id = '${EMP_ID}' RETURNING name`
+      `SELECT name FROM users WHERE id = '${EMP_ID}'`
     );
     expect(result.rows[0].name).toBe('Updated Employee Name');
 
