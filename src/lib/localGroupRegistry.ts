@@ -13,6 +13,7 @@
  */
 
 import { supabase } from "@/lib/supabase";
+import { useAuthStore } from "@/stores/authStore";
 import type { ReminderConfig } from "@/types";
 
 // ── Types ──
@@ -320,6 +321,7 @@ export async function createCreditRequest(params: {
         current_limit: params.currentLimit,
         requested_limit: params.requestedLimit,
         reason: params.reason,
+        actorId: useAuthStore.getState().user?.id ?? null,
       },
     });
     if (error) throw error;
@@ -400,9 +402,10 @@ export async function approveCreditRequest(
 ): Promise<void> {
   // Try DB RPC first
   try {
-    const { error } = await supabase.rpc('approve_credit_limit_request', {
+    const { error } = await supabase.rpc('approve_credit_limit_request_v2', {
       p_request_id: requestId,
       p_reviewed_by: reviewedBy,
+      p_actor_id: useAuthStore.getState().user?.id ?? null,
     });
     if (error) throw error;
     // Update local cache
@@ -443,10 +446,11 @@ export async function rejectCreditRequest(
 ): Promise<void> {
   // Try DB RPC first
   try {
-    const { error } = await supabase.rpc('reject_credit_limit_request', {
+    const { error } = await supabase.rpc('reject_credit_limit_request_v2', {
       p_request_id: requestId,
       p_reviewed_by: reviewedBy,
       p_reason: reason ?? null,
+      p_actor_id: useAuthStore.getState().user?.id ?? null,
     });
     if (error) throw error;
     // Update local cache

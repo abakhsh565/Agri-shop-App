@@ -32,7 +32,7 @@ export async function setupUsers() {
     VALUES
       ('${QA_IDS.admin}', 'QA Admin', '923009999999', 'admin', true, true, '${QA_IDS.shop}'),
       ('${QA_IDS.employee}', 'QA Employee', '923008888888', 'employee', false, true, '${QA_IDS.shop}')
-    ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, is_active = true;
+    ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, phone = EXCLUDED.phone, role = EXCLUDED.role, is_active = EXCLUDED.is_active;
   `);
 }
 

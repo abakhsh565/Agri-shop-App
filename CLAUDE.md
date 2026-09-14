@@ -42,3 +42,18 @@ For multi-step tasks, state a brief plan:
 Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
 ---
 **These guidelines are working if:** fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, and clarifying questions come before implementation rather than after mistakes.
+
+## 5. Permanent System Requirements
+**RTL/LTR + Urdu support is mandatory for all user-facing UI.**
+
+This project serves English (LTR) and Urdu (RTL) users. Any new or modified user-facing UI must automatically satisfy:
+- Use `ps-*`/`pe-*` (not `pl-*`/`pr-*`) and `ms-*`/`me-*` (not `ml-*`/`mr-*`) for directional padding/margins
+- Use `text-start`/`text-end` (not `text-left`/`text-right`) for text alignment
+- Use `start-*`/`end-*` (not `left-*`/`right-*`) for CSS positioning where possible
+- Use `useT()` from `@/lib/i18n` for ALL user-facing text
+- Add EN and UR translations for every new i18n key before merging
+- Use `direction: isUrdu ? "rtl" : "ltr"` on page root divs
+- Test in both English/LTR and Urdu/RTL modes before declaring PASS
+- Do not ask for permission to support Urdu/RTL — it is a permanent requirement
+
+Exceptions require explicit human approval and must be documented as approved exceptions.

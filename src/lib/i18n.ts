@@ -156,6 +156,10 @@ export const translations = {
     "recordPayment.confirm":     "Confirm Payment",
     "recordPayment.errEmpty":    "Enter a valid amount",
     "recordPayment.errExceeds":  "Amount exceeds outstanding balance",
+    "recordPayment.splitPayment": "Split Payment",
+    "recordPayment.paymentSplits": "Payment Splits",
+    "recordPayment.autoFill":     "Auto-fill remaining",
+    "recordPayment.addSplit":     "Add split",
 
     // Products detail
     "products.variants":   "variants",
@@ -163,6 +167,16 @@ export const translations = {
     "products.packSizes":  "Pack Sizes & Pricing",
     "products.infoNotice": "Catalog editing restricted. Contact store admin for changes.",
     "products.unitsLeft":  "units left",
+    "products.category.spray": "Spray",
+    "products.category.seed": "Seed",
+    "products.category.fertilizer": "Fertilizer",
+    "products.category.other": "Other",
+    "products.unit.kg": "KG",
+    "products.unit.liter": "Liter",
+    "products.unit.piece": "Piece",
+    "products.cameraUnavailable": "Camera unavailable",
+    "products.enterNameFirst": "Enter product name first",
+    "products.barcodeExists": "Barcode already exists",
 
     // Activity
     "activity.title":   "Activity Log",
@@ -883,6 +897,10 @@ export const translations = {
     "recordPayment.confirm":     "ادائیگی کی تصدیق کریں",
     "recordPayment.errEmpty":    "درست رقم درج کریں",
     "recordPayment.errExceeds":  "رقم بقایا سے زیادہ ہے",
+    "recordPayment.splitPayment": "تقسیم شدہ ادائیگی",
+    "recordPayment.paymentSplits": "ادائیگی کی تقسیم",
+    "recordPayment.autoFill":     "باقی رقم خود بخود بھریں",
+    "recordPayment.addSplit":     "تقسیم شامل کریں",
 
     // Products detail
     "products.variants":   "ورژن",
@@ -890,6 +908,16 @@ export const translations = {
     "products.packSizes":  "پیک سائز اور قیمت",
     "products.infoNotice": "کیٹالاگ تبدیل کرنا محدود ہے۔ ایڈمن سے رابطہ کریں۔",
     "products.unitsLeft":  "یونٹ باقی",
+    "products.category.spray": "اسپرے",
+    "products.category.seed": "بیج",
+    "products.category.fertilizer": "کھاد",
+    "products.category.other": "دیگر",
+    "products.unit.kg": "کلوگرام",
+    "products.unit.liter": "لیٹر",
+    "products.unit.piece": "عدد",
+    "products.cameraUnavailable": "کیمرا دستیاب نہیں ہے",
+    "products.enterNameFirst": "پہلے پروڈکٹ کا نام درج کریں",
+    "products.barcodeExists": "بارکوڈ پہلے سے موجود ہے",
 
     // Activity
     "activity.title":   "سرگرمی لاگ",

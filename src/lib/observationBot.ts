@@ -53,6 +53,37 @@ interface PerformanceMetric {
   context?: Record<string, any>;
 }
 
+// Incident reporting guard — prevents recursive incident generation
+let _incidentReportingDisabled = false;
+
+// Component mapping: error types to system components
+const COMPONENT_MAP: Record<string, string> = {
+  unhandled_error: 'ui',
+  unhandled_promise_rejection: 'ui',
+  payment_failed: 'payments',
+  sale_error: 'sales',
+  inventory_error: 'inventory',
+  customer_error: 'customers',
+  auth_error: 'auth',
+  sync_error: 'ui',
+  network_error: 'infrastructure',
+  rpc_error: 'infrastructure',
+  default: 'ui',
+};
+
+// Severity mapping: error types to severity levels
+const SEVERITY_MAP: Record<string, string> = {
+  unhandled_error: 'high',
+  unhandled_promise_rejection: 'high',
+  payment_failed: 'critical',
+  sale_error: 'critical',
+  inventory_error: 'high',
+  auth_error: 'critical',
+  network_error: 'medium',
+  rpc_error: 'high',
+  default: 'medium',
+};
+
 class John {
   private actions: trackedAction[] = [];
   private errors: TrackedError[] = [];
@@ -146,6 +177,61 @@ class John {
     this.saveToStorage();
     
     console.error(`[John] Error: ${type}`, error);
+
+    // Fire-and-forget: report to server incident system
+    // Never block the application. Never generate recursive incidents.
+    this.reportToIncidentSystem(type, error, context).catch(() => {});
+  }
+
+  /**
+   * Report error to server incident system via record_incident RPC.
+   * Fire-and-forget: failures are silently ignored.
+   * Prevents recursive incident generation.
+   */
+  private async reportToIncidentSystem(
+    type: string,
+    error: Error | string,
+    context?: Record<string, any>
+  ): Promise<void> {
+    // Guard: prevent recursive incident reporting
+    if (_incidentReportingDisabled) return;
+
+    try {
+      // Dynamic import to avoid circular dependencies and bundle bloat
+      const { supabase } = await import('@/lib/supabase');
+
+      const message = typeof error === 'string' ? error : error.message;
+      const stack = error instanceof Error ? error.stack : undefined;
+      const component = COMPONENT_MAP[type] || COMPONENT_MAP.default;
+      const severity = SEVERITY_MAP[type] || SEVERITY_MAP.default;
+
+      // Build sanitized context (only allowlisted fields)
+      const sanitizedContext: Record<string, string> = {};
+      if (context?.screen) sanitizedContext.screen = String(context.screen).slice(0, 100);
+      if (context?.entity_type) sanitizedContext.entity_type = String(context.entity_type).slice(0, 50);
+      if (context?.entity_id) sanitizedContext.entity_id = String(context.entity_id).slice(0, 100);
+      if (context?.operation) sanitizedContext.operation = String(context.operation).slice(0, 50);
+
+      // Call record_incident RPC — SECURITY DEFINER handles sanitization server-side
+      const { error: rpcError } = await supabase.rpc('record_incident', {
+        p_type: 'error',
+        p_severity: severity,
+        p_source: 'client',
+        p_component: component,
+        p_message: message,
+        p_context: sanitizedContext,
+        p_stack_trace: stack || null,
+        p_user_action: context?.screen ? `screen:${context.screen}` : null,
+      });
+
+      // If RPC fails, silently ignore — do NOT generate another incident
+      if (rpcError) {
+        console.warn('[John] Incident report failed (non-critical):', rpcError.message);
+      }
+    } catch {
+      // Silently ignore all errors — never break the application
+      // Never generate recursive incidents
+    }
   }
 
   logFeedback(message: string, category: Feedback['category'] = 'other', screen?: string): void {

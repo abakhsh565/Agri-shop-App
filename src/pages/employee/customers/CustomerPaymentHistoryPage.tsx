@@ -133,7 +133,7 @@ export default function CustomerPaymentHistoryPage() {
                       {formatDate(p.createdAt)}
                     </p>
                     <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
-                      {t("sale.paymentMethod")}: {p.method === "cash" ? t("sale.cash") : t("sale.bankTransfer")}
+                      {t("sale.paymentMethod")}: {String(p.method) === "split" ? (isUrdu ? "تقسیم شدہ" : "Split Payment") : p.method === "cash" ? t("sale.cash") : t("sale.bankTransfer")}
                     </p>
                     <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
                       {isUrdu ? "درج کیا:" : "Rec:"} {p.recordedByName}

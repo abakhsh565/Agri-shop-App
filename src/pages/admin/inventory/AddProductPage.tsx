@@ -8,22 +8,23 @@ import { useProductsStore } from "@/stores/productsStore";
 import { rpcCreateProduct, rpcUpdateProduct } from "@/lib/db";
 import { useUIStore } from "@/stores/uiStore";
 import { useThemeStore } from "@/stores/themeStore";
+import { useT } from "@/lib/i18n";
 import { clearNav } from "@/lib/navContext";
 import type { ProductCategory, BaseUnit } from "@/types";
 import { ChevronDown, Plus, Trash2, Scan } from "lucide-react";
 import { generateProductBarcode } from "@/lib/barcode";
 
-const CATEGORIES: { key: ProductCategory; label: string }[] = [
-  { key: "spray", label: "Spray" },
-  { key: "seed", label: "Seed" },
-  { key: "fertilizer", label: "Fertilizer" },
-  { key: "other", label: "Other" },
+const CATEGORIES: { key: ProductCategory; i18nKey: string }[] = [
+  { key: "spray", i18nKey: "products.category.spray" },
+  { key: "seed", i18nKey: "products.category.seed" },
+  { key: "fertilizer", i18nKey: "products.category.fertilizer" },
+  { key: "other", i18nKey: "products.category.other" },
 ];
 
-const BASE_UNITS: { key: BaseUnit; label: string }[] = [
-  { key: "kg", label: "KG" },
-  { key: "liter", label: "Liter" },
-  { key: "piece", label: "Piece" },
+const BASE_UNITS: { key: BaseUnit; i18nKey: string }[] = [
+  { key: "kg", i18nKey: "products.unit.kg" },
+  { key: "liter", i18nKey: "products.unit.liter" },
+  { key: "piece", i18nKey: "products.unit.piece" },
 ];
 
 interface VariantDraft {
@@ -49,6 +50,7 @@ export default function AddProductPage() {
   const { addToast } = useUIStore();
   const { language } = useThemeStore();
   const isUrdu = language === "ur";
+  const t = useT();
   const companies = useCompaniesStore((s) => s.companies);
   const existing = useProductsStore((s) => s.products.find((p) => p.id === productId));
   const isEdit = Boolean(productId);
@@ -199,7 +201,7 @@ export default function AddProductPage() {
                       addToast(`Scanned: ${result.barcode}`, "success");
                     }
                   } catch {
-                    addToast("Camera unavailable", "error");
+                    addToast(t('products.cameraUnavailable'), "error");
                   }
                 }}
                 className="h-12 w-12 rounded-full flex items-center justify-center shrink-0"
@@ -212,11 +214,11 @@ export default function AddProductPage() {
               type="button"
               onClick={() => {
                 if (!name.trim()) {
-                  addToast("Enter product name first", "error");
+                  addToast(t('products.enterNameFirst'), "error");
                   return;
                 }
                 if (barcode.trim()) {
-                  addToast("Barcode already exists", "error");
+                  addToast(t('products.barcodeExists'), "error");
                   return;
                 }
                 const generated = generateProductBarcode(name.trim());
@@ -236,7 +238,7 @@ export default function AddProductPage() {
             <div className="relative">
               <select value={company} onChange={(e) => setCompany(e.target.value)}
                 className="w-full h-12 rounded-[24px] px-4 pe-10 text-sm outline-none appearance-none" style={fieldStyle}>
-                <option value="">Select supplier…</option>
+                <option value="">{t('supplier.selectSupplier')}…</option>
                 {companies.map((c) => <option key={c.id} value={c.name}>{c.name}</option>)}
               </select>
               <ChevronDown size={16} className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: "var(--text-secondary)" }} />
@@ -245,7 +247,7 @@ export default function AddProductPage() {
 
           {/* Category */}
           <div>
-            <p className={labelCls} style={{ color: "var(--text-secondary)" }}>Category</p>
+            <p className={labelCls} style={{ color: "var(--text-secondary)" }}>{isUrdu ? 'کیٹیگری' : 'Category'}</p>
             <div className="flex flex-wrap gap-2">
               {CATEGORIES.map((c) => (
                 <button key={c.key} onClick={() => setCategory(c.key)}
@@ -255,7 +257,7 @@ export default function AddProductPage() {
                     color: category === c.key ? "#0a0a0a" : "var(--text-secondary)",
                     border: category === c.key ? "none" : "1px solid var(--divider)",
                   }}>
-                  {c.label}
+                  {t(c.i18nKey)}
                 </button>
               ))}
             </div>
@@ -263,7 +265,7 @@ export default function AddProductPage() {
 
           {/* Base Unit */}
           <div>
-            <p className={labelCls} style={{ color: "var(--text-secondary)" }}>Base Unit</p>
+            <p className={labelCls} style={{ color: "var(--text-secondary)" }}>{isUrdu ? 'بنیادی اکائی' : 'Base Unit'}</p>
             <div className="flex gap-2">
               {BASE_UNITS.map((u) => (
                 <button key={u.key} onClick={() => setBaseUnit(u.key)}
@@ -273,7 +275,7 @@ export default function AddProductPage() {
                     color: baseUnit === u.key ? "#0a0a0a" : "var(--text-secondary)",
                     border: baseUnit === u.key ? "none" : "1px solid var(--divider)",
                   }}>
-                  {u.label}
+                  {t(u.i18nKey)}
                 </button>
               ))}
             </div>

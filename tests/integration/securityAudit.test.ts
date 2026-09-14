@@ -8,7 +8,8 @@
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { execSqlAsAdmin, execRpcAsUser } from '../setup/qa-client';
-import { QA_IDS } from '../setup/fixtures';
+import { invalidateAuthCache } from '../setup/qa-client';
+import { QA_IDS, setupUsers } from '../setup/fixtures';
 
 import { randomUUID } from 'crypto';
 const RUN = Date.now().toString(36);
@@ -19,6 +20,8 @@ const CUST_PHONE = `924${RUN.slice(-8).padStart(8, '0')}`;
 
 describe('Security Audit — RLS & Authorization', () => {
   beforeAll(async () => {
+    // Ensure QA admin and employee exist (other tests may have cleaned them up)
+    await setupUsers();
     // Create test employee and customer
     await execSqlAsAdmin(`
       INSERT INTO users (id, name, phone, role, is_original_owner, is_active, shop_id)
@@ -362,11 +365,27 @@ describe('Security Audit — RLS & Authorization', () => {
       `UPDATE customers SET credit_limit = 10000 WHERE id = '${CUST_ID}'`
     );
 
+    // Force fresh auth — ensure admin phone + role are consistent
+    invalidateAuthCache();
+    await execSqlAsAdmin(`UPDATE users SET phone = '923009999999', role = 'admin', is_active = true WHERE id = '${QA_IDS.admin}'`);
+    await execSqlAsAdmin(`UPDATE auth.users SET phone = '923009999999' WHERE id = '${QA_IDS.admin}'`);
+
+    // Ensure admin exists with correct state (other tests delete it via cleanupTestData)
+    await execSqlAsAdmin(`
+      INSERT INTO users (id, name, phone, role, is_original_owner, is_active, shop_id)
+      VALUES ('${QA_IDS.admin}', 'QA Admin', '923009999999', 'admin', true, true, '${QA_IDS.shop}')
+      ON CONFLICT (id) DO UPDATE SET phone = '923009999999', role = 'admin', is_active = true
+    `);
+    await execSqlAsAdmin(`UPDATE auth.users SET phone = '923009999999' WHERE id = '${QA_IDS.admin}'`);
+
     // Archive the customer
-    await execRpcAsUser(QA_IDS.admin, 'archive_customer', {
+    const archiveResult = await execRpcAsUser(QA_IDS.admin, 'archive_customer', {
       p_customer_id: CUST_ID,
       p_archived_by: QA_IDS.admin,
     });
+    if (archiveResult.error) {
+      console.error('[archive_customer error]', archiveResult.error);
+    }
 
     // Verify customer is archived but all data preserved
     const db = await execSqlAsAdmin(

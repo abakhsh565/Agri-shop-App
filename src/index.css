@@ -680,26 +680,56 @@ button {
 }
 
 /* ── 2. Absolute Positioning — Auto-flip ── */
-/* flip right-N to left-N and vice versa */
+/* Flip physical left/right absolute positioning classes in RTL */
+html[dir="rtl"] .absolute.left-0   { left: auto !important; right: 0 !important; }
+html[dir="rtl"] .absolute.left-1   { left: auto !important; right: 0.25rem !important; }
+html[dir="rtl"] .absolute.left-2   { left: auto !important; right: 0.5rem !important; }
+html[dir="rtl"] .absolute.left-3   { left: auto !important; right: 0.75rem !important; }
+html[dir="rtl"] .absolute.left-4   { left: auto !important; right: 1rem !important; }
+html[dir="rtl"] .absolute.left-5   { left: auto !important; right: 1.25rem !important; }
+html[dir="rtl"] .absolute.right-0  { right: auto !important; left: 0 !important; }
+html[dir="rtl"] .absolute.right-1  { right: auto !important; left: 0.25rem !important; }
+html[dir="rtl"] .absolute.right-2  { right: auto !important; left: 0.5rem !important; }
+html[dir="rtl"] .absolute.right-3  { right: auto !important; left: 0.75rem !important; }
+html[dir="rtl"] .absolute.right-4  { right: auto !important; left: 1rem !important; }
+html[dir="rtl"] .absolute.right-5  { right: auto !important; left: 1.25rem !important; }
+html[dir="rtl"] .absolute.-right-1 { right: auto !important; left: -0.25rem !important; }
+html[dir="rtl"] .absolute.-right-2 { right: auto !important; left: -0.5rem !important; }
+html[dir="rtl"] .absolute.-left-1  { left: auto !important; right: -0.25rem !important; }
+html[dir="rtl"] .absolute.-left-2  { left: auto !important; right: -0.5rem !important; }
+
+/* Also handle inline style absolute positioning */
 [dir="rtl"] [style*="right:"][style*="position: absolute"],
 [dir="rtl"] [style*="left:"][style*="position: absolute"] {
-  /* handled by individual components using logical properties */
+  /* handled by individual components using logical properties or CSS above */
 }
 
 /* ── 3. Legacy Text Alignment — Auto-flip ── */
 [dir="rtl"] .text-left  { text-align: start !important; }
 [dir="rtl"] .text-right { text-align: end !important; }
 
+/* ── 3b. Padding Auto-flip (physical → logical) ── */
+[dir="rtl"] .pl-2  { padding-left: 0 !important; padding-right: 0.5rem !important; }
+[dir="rtl"] .pl-3  { padding-left: 0 !important; padding-right: 0.75rem !important; }
+[dir="rtl"] .pl-4  { padding-left: 0 !important; padding-right: 1rem !important; }
+[dir="rtl"] .pl-5  { padding-left: 0 !important; padding-right: 1.25rem !important; }
+[dir="rtl"] .pl-6  { padding-left: 0 !important; padding-right: 1.5rem !important; }
+[dir="rtl"] .pl-8  { padding-left: 0 !important; padding-right: 2rem !important; }
+[dir="rtl"] .pl-10 { padding-left: 0 !important; padding-right: 2.5rem !important; }
+[dir="rtl"] .pr-2  { padding-right: 0 !important; padding-left: 0.5rem !important; }
+[dir="rtl"] .pr-3  { padding-right: 0 !important; padding-left: 0.75rem !important; }
+[dir="rtl"] .pr-4  { padding-right: 0 !important; padding-left: 1rem !important; }
+[dir="rtl"] .pr-5  { padding-right: 0 !important; padding-left: 1.25rem !important; }
+[dir="rtl"] .pr-6  { padding-right: 0 !important; padding-left: 1.5rem !important; }
+[dir="rtl"] .pr-8  { padding-right: 0 !important; padding-left: 2rem !important; }
+[dir="rtl"] .pr-10 { padding-right: 0 !important; padding-left: 2.5rem !important; }
+
 /* ── 4. Scrollbar Direction ── */
 [dir="rtl"] {
   direction: rtl;
 }
 
-/* ── 5. Input Clear Buttons (absolute right-3) ── */
-[dir="rtl"] .absolute.right-3 {
-  right: auto !important;
-  left: 0.75rem !important;
-}
+/* ── 5. Input Clear Buttons — handled by absolute right-3 override above ── */
 
 /* ── 6. Badge/Dot Positioning (absolute top-right) ── */
 [dir="rtl"] .absolute.-right-1,

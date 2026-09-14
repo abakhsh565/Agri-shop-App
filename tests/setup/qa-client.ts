@@ -87,11 +87,18 @@ async function getAuthClient(userId: string): Promise<SupabaseClient> {
 
   const cached = authClients.get(userId);
   if (cached) {
-    // Always ensure phone is set (user may have been created after first auth)
+    // Ensure phone matches current users table value
+    // If phone changed (e.g., another test modified it), JWT is stale — re-authenticate
     if (userPhone) {
-      try {
-        await runSqlHttp(`UPDATE auth.users SET phone = '${userPhone}' WHERE id = '${userId}' AND (phone IS NULL OR phone != '${userPhone}')`);
-      } catch { /* ignore */ }
+      // Get current auth.users phone
+      const authPhoneRows = await runSqlHttp(`SELECT phone FROM auth.users WHERE id = '${userId}'`);
+      const currentAuthPhone = authPhoneRows[0]?.phone || '';
+      
+      if (currentAuthPhone !== userPhone) {
+        // Phone changed — evict cache and re-authenticate with fresh JWT
+        authClients.delete(userId);
+        return getAuthClient(userId);
+      }
     }
     return cached;
   }
@@ -116,7 +123,10 @@ async function getAuthClient(userId: string): Promise<SupabaseClient> {
   if (userPhone) {
     try {
       await runSqlHttp(`UPDATE auth.users SET phone = '${userPhone}' WHERE id = '${userId}' AND (phone IS NULL OR phone != '${userPhone}')`);
-    } catch { /* ignore — phone may already be set */ }
+    } catch {
+      // Retry once
+      await runSqlHttp(`UPDATE auth.users SET phone = '${userPhone}' WHERE id = '${userId}'`);
+    }
   }
 
   // Sign in with anon key to get a real JWT
@@ -257,7 +267,8 @@ export async function execMultiSql(sql: string): Promise<void> {
 export async function execRpcAsUser(
   userId: string,
   rpcName: string,
-  params: Record<string, any>
+  params: Record<string, any>,
+  _retry = true
 ): Promise<{ data: any; error: string | null }> {
   try {
     const client = await getAuthClient(userId);
@@ -266,7 +277,6 @@ export async function execRpcAsUser(
     const rpcParams: Record<string, any> = {};
     for (const [k, v] of Object.entries(params)) {
       if (typeof v === 'string') {
-        // If it's a JSON string, parse it to pass as proper JSONB
         try {
           rpcParams[k] = JSON.parse(v);
         } catch {
@@ -280,7 +290,14 @@ export async function execRpcAsUser(
     }
 
     const { data, error } = await client.rpc(rpcName, rpcParams);
-    if (error) return { data: null, error: error.message };
+    if (error) {
+      // If NOT_AUTHENTICATED, the JWT may be stale — evict and retry once
+      if (_retry && error.message?.includes('NOT_AUTHENTICATED')) {
+        authClients.delete(userId);
+        return execRpcAsUser(userId, rpcName, params, false);
+      }
+      return { data: null, error: error.message };
+    }
     return { data, error: null };
   } catch (e: any) {
     return { data: null, error: e.message };
@@ -337,3 +354,12 @@ export async function asPostgres(_client?: any): Promise<void> {}
 
 /** Set role to authenticated — no-op with HTTP API (role set per-query) */
 export async function asAuthenticated(_client?: any): Promise<void> {}
+
+/**
+ * Invalidate all cached auth clients.
+ * Forces re-authentication on next execRpcAsUser call.
+ * Use when other tests may have modified user data that affects JWT validity.
+ */
+export function invalidateAuthCache(): void {
+  authClients.clear();
+}

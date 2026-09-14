@@ -63,12 +63,15 @@ export async function rpcCreatePurchase(payload: {
 
 export async function rpcRecordCustomerPayment(payload: {
   customerId: string;
-  amount: number;
-  method: PaymentMethod;
+  amount?: number;
+  method?: PaymentMethod;
   notes?: string;
-}): Promise<{ id: string; balanceAfter: number }> {
+  splits?: { amount: number; method: PaymentMethod }[];
+  idempotencyKey?: string;
+}): Promise<{ id: string; balanceAfter: number; splitCount?: number; totalAmount?: number }> {
   const actorId = useAuthStore.getState().user?.id;
-  const { data, error } = await supabase.rpc("record_customer_payment", { payload: { ...payload, actorId } });
+  const idempotency_key = payload.idempotencyKey ?? crypto.randomUUID();
+  const { data, error } = await supabase.rpc("record_customer_payment", { payload: { ...payload, actorId, idempotency_key } });
   if (error) throw new Error(friendly(error.message));
   return data as any;
 }
@@ -192,6 +195,8 @@ function friendly(msg: string): string {
   if (msg.includes("SALE_NOT_FOUND")) return "The original sale was not found.";
   if (msg.includes("INVALID_QTY")) return "Return quantity must be at least 1.";
   if (msg.includes("null value")) return "A required field is missing. Please run the SQL migration (0014_return_enhancements.sql) in Supabase.";
+  if (msg.includes("CUSTOMER_NOT_FOUND")) return "Customer not found.";
+  if (msg.includes("INVALID_SPLIT")) return "Each split amount must be positive.";
   return msg;
 }
 
@@ -252,6 +257,7 @@ interface CustomerPaymentRow {
   id: string; customer_id: string; amount: number; method: PaymentMethod;
   notes: string | null; recorded_by: string | null; recorded_by_name: string | null;
   balance_after: number; created_at: string;
+  payment_group_id: string | null; split_index: number | null;
 }
 
 export async function fetchCustomerPayments(customerId?: string): Promise<CustomerPayment[]> {
@@ -259,17 +265,54 @@ export async function fetchCustomerPayments(customerId?: string): Promise<Custom
   if (customerId) q = q.eq("customer_id", customerId);
   const { data, error } = await q.limit(200);
   if (error) throw new Error(error.message);
-  return (data as CustomerPaymentRow[]).map((r) => ({
-    id: r.id,
-    customerId: r.customer_id,
-    amount: Number(r.amount),
-    method: r.method,
-    notes: r.notes ?? undefined,
-    recordedBy: r.recorded_by ?? "",
-    recordedByName: r.recorded_by_name ?? "",
-    balanceAfter: Number(r.balance_after),
-    createdAt: r.created_at,
-  }));
+
+  const rows = data as CustomerPaymentRow[];
+
+  // Group split payments by payment_group_id
+  const groups = new Map<string, CustomerPaymentRow[]>();
+  const singles: CustomerPayment[] = [];
+
+  for (const r of rows) {
+    const groupId = r.payment_group_id || r.id;
+    const isSplit = groupId !== r.id || (rows.filter((x) => x.payment_group_id === groupId).length > 1);
+
+    if (isSplit) {
+      if (!groups.has(groupId)) groups.set(groupId, []);
+      groups.get(groupId)!.push(r);
+    } else {
+      singles.push({
+        id: r.id,
+        customerId: r.customer_id,
+        amount: Number(r.amount),
+        method: r.method,
+        notes: r.notes ?? undefined,
+        recordedBy: r.recorded_by ?? "",
+        recordedByName: r.recorded_by_name ?? "",
+        balanceAfter: Number(r.balance_after),
+        createdAt: r.created_at,
+      });
+    }
+  }
+
+  // Convert split groups to grouped payment entries
+  for (const [groupId, groupRows] of groups) {
+    const sorted = groupRows.sort((a, b) => (a.split_index ?? 0) - (b.split_index ?? 0));
+    const total = sorted.reduce((sum, r) => sum + Number(r.amount), 0);
+    singles.push({
+      id: groupId,
+      customerId: sorted[0].customer_id,
+      amount: total,
+      method: sorted.length === 1 ? sorted[0].method : ("split" as PaymentMethod),
+      notes: sorted[0].notes ?? undefined,
+      recordedBy: sorted[0].recorded_by ?? "",
+      recordedByName: sorted[0].recorded_by_name ?? "",
+      balanceAfter: Number(sorted[0].balance_after),
+      createdAt: sorted[0].created_at,
+    });
+  }
+
+  // Sort by date descending
+  return singles.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 }
 
 interface StockAdjustmentRow {
@@ -334,8 +377,10 @@ export async function fetchReturns(): Promise<Return[]> {
 // ─── Customer Archive / Restore ──────────────────────────────────────────────
 
 export async function rpcArchiveCustomer(customerId: string): Promise<void> {
+  const actorId = useAuthStore.getState().user?.id;
   const { error } = await supabase.rpc("archive_customer", {
     p_customer_id: customerId,
+    p_archived_by: actorId,
   });
   if (error) throw new Error(friendly(error.message));
 }
