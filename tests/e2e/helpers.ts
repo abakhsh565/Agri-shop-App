@@ -51,16 +51,8 @@ const QA_SERVICE_ROLE = process.env.QA_SUPABASE_SERVICE_ROLE || '';
 const QA_ANON_KEY = process.env.QA_SUPABASE_ANON_KEY || '';
 
 // ── Environment Guard ────────────────────────────────────────
-// Prevents E2E tests from accidentally running against production.
-const QA_PROJECT_ID = 'bpybjrjenwccowvtrevu';
-const _extractedId = QA_URL.match(/\/\/([^.]+)\.supabase\.co/)?.[1] ?? '';
-if (_extractedId && _extractedId !== QA_PROJECT_ID) {
-  throw new Error(
-    `[ENVIRONMENT MISMATCH] E2E tests must run against QA (${QA_PROJECT_ID}). ` +
-    `Connected to: ${_extractedId}. Set QA_SUPABASE_URL correctly.`
-  );
-}
-console.log(`[EnvGuard] E2E environment: ${_extractedId}`);
+import { assertQaProject } from '../setup/env-guard';
+assertQaProject(QA_URL);
 
 import { createClient } from '@supabase/supabase-js';
 

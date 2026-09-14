@@ -61,12 +61,12 @@ beforeAll(async () => {
   await cleanup();
 
   // Create fixtures using execSqlAsAdmin (bypasses RLS)
-  await admin(`INSERT INTO users (id, name, phone, role, is_original_owner, is_active, shop_id) VALUES ('${T.adminUser}', 'Destruct Test Admin', '92300DST0000', 'admin', true, true, '${T.shop}') ON CONFLICT (id) DO NOTHING`);
-  await admin(`INSERT INTO users (id, name, phone, role, is_original_owner, is_active, shop_id) VALUES ('${T.employeeA}', 'Destruct Test Employee', '92300DST0001', 'employee', false, true, '${T.shop}') ON CONFLICT (id) DO NOTHING`);
-  await admin(`INSERT INTO companies (id, name, outstanding_payable, total_purchases, shop_id) VALUES ('${T.companyA}', 'Destruct Test Supplier', 0, 0, '${T.shop}') ON CONFLICT (id) DO NOTHING`);
-  await admin(`INSERT INTO customers (id, name, phone, credit_limit, outstanding_balance, total_purchases, total_paid, shop_id, created_by, is_archived) VALUES ('${T.customerA}', 'Destruct Customer A', '92300DST1001', 50000, 0, 0, 0, '${T.shop}', 'QA', false), ('${T.customerB}', 'Destruct Customer B', '92300DST1002', 50000, 0, 0, 0, '${T.shop}', 'QA', false) ON CONFLICT (id) DO NOTHING`);
-  await admin(`INSERT INTO products (id, name, company_id, category, stock_qty, shop_id) VALUES ('${T.productA}', 'Destruct Test Product', '${T.companyA}', 'seed', 100, '${T.shop}') ON CONFLICT (id) DO NOTHING`);
-  await admin(`INSERT INTO product_variants (id, product_id, name, selling_price, cost_price, unit_size, low_stock_threshold, stock_qty) VALUES ('${T.variantA}', '${T.productA}', '1kg', 5000, 3000, 1, 10, 100) ON CONFLICT (id) DO NOTHING`);
+  await admin(`INSERT INTO users (id, name, phone, role, is_original_owner, is_active, shop_id) VALUES ('${T.adminUser}', 'Destruct Test Admin', '92300DST0000', 'admin', true, true, '${T.shop}') ON CONFLICT (id) DO UPDATE SET is_active = true, role = 'admin'`);
+  await admin(`INSERT INTO users (id, name, phone, role, is_original_owner, is_active, shop_id) VALUES ('${T.employeeA}', 'Destruct Test Employee', '92300DST0001', 'employee', false, true, '${T.shop}') ON CONFLICT (id) DO UPDATE SET is_active = true, role = 'employee'`);
+  await admin(`INSERT INTO companies (id, name, outstanding_payable, total_purchases, shop_id) VALUES ('${T.companyA}', 'Destruct Test Supplier', 0, 0, '${T.shop}') ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name`);
+  await admin(`INSERT INTO customers (id, name, phone, credit_limit, outstanding_balance, total_purchases, total_paid, shop_id, created_by, is_archived) VALUES ('${T.customerA}', 'Destruct Customer A', '92300DST1001', 50000, 0, 0, 0, '${T.shop}', 'QA', false), ('${T.customerB}', 'Destruct Customer B', '92300DST1002', 50000, 0, 0, 0, '${T.shop}', 'QA', false) ON CONFLICT (id) DO UPDATE SET is_archived = false, name = EXCLUDED.name`);
+  await admin(`INSERT INTO products (id, name, company_id, category, stock_qty, shop_id) VALUES ('${T.productA}', 'Destruct Test Product', '${T.companyA}', 'seed', 100, '${T.shop}') ON CONFLICT (id) DO UPDATE SET is_active = true, stock_qty = EXCLUDED.stock_qty`);
+  await admin(`INSERT INTO product_variants (id, product_id, name, selling_price, cost_price, unit_size, low_stock_threshold, stock_qty) VALUES ('${T.variantA}', '${T.productA}', '1kg', 5000, 3000, 1, 10, 100) ON CONFLICT (id) DO UPDATE SET stock_qty = EXCLUDED.stock_qty, is_active = true`);
 });
 
 afterAll(async () => {
@@ -124,8 +124,8 @@ describe('Destructive Safety — Customer Archive/Restore', () => {
 
   it('should archive customer B with sales history', async () => {
     // Create a sale for customer B
-    await admin(`INSERT INTO sales (id, sale_number, customer_id, employee_id, total_amount, status, payment_type, payment_method, amount_paid, amount_due, discount, is_voided, shop_id, created_at, updated_at) VALUES ('${T.saleA}', 'DST-SALE-001', '${T.customerB}', '${T.employeeA}', 10000, 'completed', 'credit', 'cash', 0, 10000, 0, false, '${T.shop}', NOW(), NOW()) ON CONFLICT (id) DO NOTHING`);
-    await admin(`INSERT INTO sale_items (id, sale_id, product_id, product_name, variant_id, variant_name, qty, unit_price, line_total) VALUES ('${T.saleItemA}', '${T.saleA}', '${T.productA}', 'Destruct Test Product', '${T.variantA}', '1kg', 2, 5000, 10000) ON CONFLICT (id) DO NOTHING`);
+    await admin(`INSERT INTO sales (id, sale_number, customer_id, employee_id, total_amount, status, payment_type, payment_method, amount_paid, amount_due, discount, is_voided, shop_id, created_at, updated_at) VALUES ('${T.saleA}', 'DST-SALE-001', '${T.customerB}', '${T.employeeA}', 10000, 'completed', 'credit', 'cash', 0, 10000, 0, false, '${T.shop}', NOW(), NOW()) ON CONFLICT (id) DO UPDATE SET is_voided = false, void_reason = null`);
+    await admin(`INSERT INTO sale_items (id, sale_id, product_id, product_name, variant_id, variant_name, qty, unit_price, line_total) VALUES ('${T.saleItemA}', '${T.saleA}', '${T.productA}', 'Destruct Test Product', '${T.variantA}', '1kg', 2, 5000, 10000) ON CONFLICT (id) DO UPDATE SET qty = EXCLUDED.qty, line_total = EXCLUDED.line_total`);
 
     const result = await rpc(T.adminUser, 'archive_customer', { p_customer_id: T.customerB });
     if (result.error) {

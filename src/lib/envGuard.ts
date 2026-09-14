@@ -53,7 +53,8 @@ export function isProductionProject(): boolean {
 
 /**
  * Log environment info on app startup.
- * Safe to call in production — just logs, never throws.
+ * In dev/QA mode: throws if connected to production.
+ * In production mode: just logs (safe for end users).
  */
 export function logEnvironmentInfo(): void {
   const projectId = getCurrentProjectId();
@@ -66,36 +67,46 @@ export function logEnvironmentInfo(): void {
       : "color: green; font-weight: bold"
   );
 
-  if (isProductionProject()) {
-    console.warn(
-      "[EnvGuard] WARNING: You are connected to the PRODUCTION Supabase project. " +
-      "Any changes will affect real data. Use .env.local to point to QA for development."
+  // In development mode (Vite dev), hard-fail if connected to production
+  // This prevents the exact bug where .env.local is missing and tests hit production
+  if (import.meta.env.DEV && isProductionProject()) {
+    throw new Error(
+      `[ENVIRONMENT MISMATCH] Dev server connected to PRODUCTION (${projectId}). ` +
+      `Create .env.local with VITE_SUPABASE_URL pointing to QA. ` +
+      `See .env.local.example for reference.`
     );
   }
 }
 
 /**
  * Assert the environment is QA. Throws if connected to production or unknown.
- * Use in test setup only — never in production code paths.
+ * Can be called with an explicit URL (for tests) or uses the browser's supabaseUrl.
+ *
+ * Usage:
+ *   assertQaEnvironment()           — browser (reads from supabase.ts)
+ *   assertQaEnvironment(url)        — test/CI (reads from env var)
  */
-export function assertQaEnvironment(): void {
-  const projectId = getCurrentProjectId();
+export function assertQaEnvironment(urlOverride?: string): void {
+  const url = urlOverride || supabaseUrl;
+  const projectId = extractProjectId(url);
   if (!projectId) {
     throw new Error(
-      `[ENVIRONMENT MISMATCH] Cannot determine Supabase project from URL: ${supabaseUrl}`
+      `[ENVIRONMENT MISMATCH] Cannot determine Supabase project from URL: ${url}`
     );
   }
-  if (isProductionProject()) {
+  if (projectId === PRODUCTION_PROJECT_ID) {
     throw new Error(
       `[ENVIRONMENT MISMATCH] Tests must not run against PRODUCTION. ` +
-      `Connected to: ${projectId} (${supabaseUrl}). ` +
-      `Set VITE_SUPABASE_URL to the QA project in .env.local or environment variables.`
+      `Connected to: ${projectId} (${url}). ` +
+      `Set the correct QA project URL in .env.local or environment variables.`
     );
   }
-  if (!isQaProject()) {
-    console.warn(
-      `[ENVIRONMENT WARNING] Connected to unknown project: ${projectId}. ` +
-      `Expected QA project: ${QA_PROJECT_ID}`
+  if (projectId !== QA_PROJECT_ID) {
+    throw new Error(
+      `[ENVIRONMENT MISMATCH] Expected QA project ${QA_PROJECT_ID}. ` +
+      `Connected to: ${projectId} (${url}).`
     );
   }
+  // Correct environment confirmed
+  console.log(`[EnvGuard] Environment verified: ${projectId}`);
 }

@@ -42,12 +42,12 @@ beforeAll(async () => {
   await asPostgres(client);
   await cleanup();
 
-  // Create test users
-  await client.query(`INSERT INTO users (id, name, phone, role, is_original_owner, is_active, shop_id) VALUES ('${T.adminUser}', 'Perm Test Admin', '92300PERM0001', 'admin', true, true, '${T.shop}'), ('${T.employeeUser}', 'Perm Test Employee', '92300PERM0002', 'employee', false, true, '${T.shop}') ON CONFLICT (id) DO NOTHING`);
-  await client.query(`INSERT INTO companies (id, name, outstanding_payable, total_purchases, shop_id) VALUES ('${T.companyA}', 'Perm Test Supplier', 0, 0, '${T.shop}') ON CONFLICT (id) DO NOTHING`);
-  await client.query(`INSERT INTO customers (id, name, phone, credit_limit, outstanding_balance, total_purchases, total_paid, shop_id, created_by) VALUES ('${T.customerA}', 'Perm Customer A', '92300PERM1001', 50000, 0, 0, 0, '${T.shop}', 'QA') ON CONFLICT (id) DO NOTHING`);
-  await client.query(`INSERT INTO products (id, name, company_id, category, stock_qty, shop_id) VALUES ('${T.productA}', 'Perm Test Product', '${T.companyA}', 'seed', 100, '${T.shop}') ON CONFLICT (id) DO NOTHING`);
-  await client.query(`INSERT INTO product_variants (id, product_id, name, selling_price, cost_price, unit_size, low_stock_threshold, stock_qty) VALUES ('${T.variantA}', '${T.productA}', '1kg', 5000, 3000, 1, 10, 100) ON CONFLICT (id) DO NOTHING`);
+  // Create test users — use DO UPDATE to reset state from any previous run
+  await client.query(`INSERT INTO users (id, name, phone, role, is_original_owner, is_active, shop_id) VALUES ('${T.adminUser}', 'Perm Test Admin', '92300PERM0001', 'admin', true, true, '${T.shop}'), ('${T.employeeUser}', 'Perm Test Employee', '92300PERM0002', 'employee', false, true, '${T.shop}') ON CONFLICT (id) DO UPDATE SET is_active = EXCLUDED.is_active, role = EXCLUDED.role`);
+  await client.query(`INSERT INTO companies (id, name, outstanding_payable, total_purchases, shop_id) VALUES ('${T.companyA}', 'Perm Test Supplier', 0, 0, '${T.shop}') ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name`);
+  await client.query(`INSERT INTO customers (id, name, phone, credit_limit, outstanding_balance, total_purchases, total_paid, shop_id, created_by) VALUES ('${T.customerA}', 'Perm Customer A', '92300PERM1001', 50000, 0, 0, 0, '${T.shop}', 'QA') ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, is_archived = false`);
+  await client.query(`INSERT INTO products (id, name, company_id, category, stock_qty, shop_id) VALUES ('${T.productA}', 'Perm Test Product', '${T.companyA}', 'seed', 100, '${T.shop}') ON CONFLICT (id) DO UPDATE SET is_active = true, stock_qty = EXCLUDED.stock_qty`);
+  await client.query(`INSERT INTO product_variants (id, product_id, name, selling_price, cost_price, unit_size, low_stock_threshold, stock_qty) VALUES ('${T.variantA}', '${T.productA}', '1kg', 5000, 3000, 1, 10, 100) ON CONFLICT (id) DO UPDATE SET stock_qty = EXCLUDED.stock_qty, is_active = true`);
 });
 
 afterAll(async () => {
@@ -116,7 +116,7 @@ describe('Permissions — Authorization Model', () => {
 describe('Permissions — RPC Authorization (Admin Only)', () => {
   it('should allow admin to void a sale', async () => {
     // Create a test sale first
-    await client.query(`INSERT INTO sales (id, sale_number, customer_id, employee_id, total_amount, status, payment_type, payment_method, amount_paid, amount_due, discount, is_voided, shop_id, created_at, updated_at) VALUES ('e0000000-0000-0000-0000-000000000001', 'PERM-SALE-001', '${T.customerA}', '${T.adminUser}', 5000, 'completed', 'credit', 'cash', 0, 5000, 0, false, '${T.shop}', NOW(), NOW()) ON CONFLICT (id) DO NOTHING`);
+    await client.query(`INSERT INTO sales (id, sale_number, customer_id, employee_id, total_amount, status, payment_type, payment_method, amount_paid, amount_due, discount, is_voided, shop_id, created_at, updated_at) VALUES ('e0000000-0000-0000-0000-000000000001', 'PERM-SALE-001', '${T.customerA}', '${T.adminUser}', 5000, 'completed', 'credit', 'cash', 0, 5000, 0, false, '${T.shop}', NOW(), NOW()) ON CONFLICT (id) DO UPDATE SET is_voided = false, void_reason = null, voided_by = null`);
 
     const result = await execRpcAsUser(T.adminUser, 'void_sale', {
       p_sale_id: 'e0000000-0000-0000-0000-000000000001',
@@ -132,7 +132,7 @@ describe('Permissions — RPC Authorization (Admin Only)', () => {
 
   it('should reject employee void_sale with NOT_AUTHORIZED', async () => {
     // Create another test sale
-    await client.query(`INSERT INTO sales (id, sale_number, customer_id, employee_id, total_amount, status, payment_type, payment_method, amount_paid, amount_due, discount, is_voided, shop_id, created_at, updated_at) VALUES ('e0000000-0000-0000-0000-000000000002', 'PERM-SALE-002', '${T.customerA}', '${T.employeeUser}', 5000, 'completed', 'credit', 'cash', 0, 5000, 0, false, '${T.shop}', NOW(), NOW()) ON CONFLICT (id) DO NOTHING`);
+    await client.query(`INSERT INTO sales (id, sale_number, customer_id, employee_id, total_amount, status, payment_type, payment_method, amount_paid, amount_due, discount, is_voided, shop_id, created_at, updated_at) VALUES ('e0000000-0000-0000-0000-000000000002', 'PERM-SALE-002', '${T.customerA}', '${T.employeeUser}', 5000, 'completed', 'credit', 'cash', 0, 5000, 0, false, '${T.shop}', NOW(), NOW()) ON CONFLICT (id) DO UPDATE SET is_voided = false, void_reason = null, voided_by = null`);
 
     const result = await execRpcAsUser(T.employeeUser, 'void_sale', {
       p_sale_id: 'e0000000-0000-0000-0000-000000000002',
