@@ -85,7 +85,7 @@ describe('Payment Idempotency', () => {
     }
     pgClient = new Client({
       host: process.env.QA_DB_HOST, user: process.env.QA_DB_USER, password: process.env.QA_DB_PASS,
-      database: 'postgres', ssl: { rejectUnauthorized: false }
+      database: 'postgres', ssl: { rejectUnauthorized: false }, family: 4
     });
     await pgClient.connect();
 

@@ -45,7 +45,7 @@ function loadQaEnv() {
       if (key === 'QA_SUPABASE_SERVICE_ROLE') qaServiceKey = val;
     }
   }
-  if (!qaUrl) qaUrl = process.env.QA_SUPABASE_URL || '';
+  if (!qaUrl) qaUrl = (process.env.QA_SUPABASE_URL || '').replace(/^\[|\]$/g, '').trim();
   if (!qaAnonKey) qaAnonKey = process.env.QA_SUPABASE_ANON_KEY || '';
   if (!qaServiceKey) qaServiceKey = process.env.QA_SUPABASE_SERVICE_ROLE || '';
 }
