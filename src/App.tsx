@@ -6,8 +6,12 @@ import { Dir } from "@/lib/dirContext";
 import { Agentation } from "agentation";
 import ErrorBoundary from "@/components/ui/ErrorBoundary";
 import { Capacitor } from "@capacitor/core";
+import { logEnvironmentInfo } from "@/lib/envGuard";
 
 const isNative = Capacitor.isNativePlatform();
+
+// Log environment on startup — never hides which project we're connected to
+logEnvironmentInfo();
 
 export default function App() {
   const { theme, language } = useThemeStore();

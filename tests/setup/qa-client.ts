@@ -53,6 +53,19 @@ const QA_URL = cleanUrl(process.env.QA_SUPABASE_URL || 'https://bpybjrjenwccowvt
 const QA_ANON_KEY = process.env.QA_SUPABASE_ANON_KEY || '';
 const QA_SERVICE_ROLE = process.env.QA_SUPABASE_SERVICE_ROLE || '';
 
+// ── Environment Guard ────────────────────────────────────────
+// Prevents tests from accidentally running against production.
+const QA_PROJECT_ID = 'bpybjrjenwccowvtrevu';
+const _extractedId = QA_URL.match(/\/\/([^.]+)\.supabase\.co/)?.[1] ?? '';
+if (_extractedId && _extractedId !== QA_PROJECT_ID) {
+  throw new Error(
+    `[ENVIRONMENT MISMATCH] Tests must run against QA project (${QA_PROJECT_ID}). ` +
+    `Connected to: ${_extractedId} (${QA_URL}). ` +
+    `Set QA_SUPABASE_URL to the correct QA project.`
+  );
+}
+console.log(`[EnvGuard] Test environment: ${_extractedId} (${QA_URL})`);
+
 /** Service-role client (bypasses RLS, for test setup/teardown) */
 export const qaServiceClient = createClient(QA_URL, QA_SERVICE_ROLE);
 
