@@ -58,7 +58,9 @@ function currentBranch() {
 }
 
 function isWorkingClean() {
-  return git('status --porcelain') === '';
+  // Only block on modified tracked files, not untracked artifacts
+  const modified = git('status --porcelain --.Modified  --Changed');
+  return modified === '';
 }
 
 function shortHash() {
