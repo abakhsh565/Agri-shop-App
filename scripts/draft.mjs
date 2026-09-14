@@ -65,7 +65,10 @@ function isWorkingClean() {
   const ignoreDirs = ['.engineering-os/', '.freebuff/'];
   const lines = status.split('\n').filter(l => l.trim());
   return lines.every(l => {
-    const file = l.substring(3);
+    // Porcelain format: XY <space> <path> — path starts after "XY " (index 3)
+    // but handle cases where XY is only 1 char (e.g., 'M ' not ' M ')
+    const trimmed = l.replace(/\r$/, ''); // strip CRLF
+    const file = trimmed.replace(/^[MDATRC! ?]{1,2} /, '');
     if (ignoreDirs.some(d => file.startsWith(d))) return true;
     return !sourceExts.test(file);
   });
