@@ -17,9 +17,9 @@ import { createClient } from '@supabase/supabase-js';
 import * as fs from 'fs';
 import * as path from 'path';
 
-// Load QA credentials
-let qaUrl = '', qaAnonKey = '', qaServiceKey = '';
+// Load QA credentials from env vars (CI) or .env.qa (local)
 function loadQaEnv() {
+  if (process.env.QA_SUPABASE_URL) return;
   const envPath = path.resolve(process.cwd(), '.env.qa');
   if (fs.existsSync(envPath)) {
     for (const line of fs.readFileSync(envPath, 'utf-8').split('\n')) {
@@ -29,13 +29,15 @@ function loadQaEnv() {
       if (eq === -1) continue;
       const key = t.slice(0, eq).trim();
       const val = t.slice(eq + 1).trim();
-      if (key === 'QA_SUPABASE_URL') qaUrl = val.replace(/^\[|\]$/g, '');
-      if (key === 'QA_SUPABASE_ANON_KEY') qaAnonKey = val;
-      if (key === 'QA_SUPABASE_SERVICE_ROLE') qaServiceKey = val;
+      if (!process.env[key]) process.env[key] = val;
     }
   }
 }
 loadQaEnv();
+
+const qaUrl = (process.env.QA_SUPABASE_URL || '').replace(/^\[|\]$/g, '').trim();
+const qaAnonKey = process.env.QA_SUPABASE_ANON_KEY || '';
+const qaServiceKey = process.env.QA_SUPABASE_SERVICE_ROLE || '';
 
 const anonClient = createClient(qaUrl, qaAnonKey);
 const serviceClient = createClient(qaUrl, qaServiceKey);

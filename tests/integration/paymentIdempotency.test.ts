@@ -71,15 +71,20 @@ async function recordSplitPayment(splits: { amount: number; method: string }[], 
 
 describe('Payment Idempotency', () => {
   beforeAll(async () => {
-    // Load QA DB credentials from .env.qa
-    const fs = require('fs');
-    const env: Record<string, string> = {};
-    for (const line of fs.readFileSync('.env.qa', 'utf8').split('\n')) {
-      const t = line.trim(); if (!t || t.startsWith('#')) continue;
-      const i = t.indexOf('='); if (i > 0) env[t.slice(0, i).trim()] = t.slice(i + 1).trim();
+    // Load QA DB credentials from env vars (CI) or .env.qa (local)
+    if (!process.env.QA_DB_HOST) {
+      const fs = require('fs');
+      const envPath = require('path').resolve(process.cwd(), '.env.qa');
+      if (fs.existsSync(envPath)) {
+        for (const line of fs.readFileSync(envPath, 'utf8').split('\n')) {
+          const t = line.trim(); if (!t || t.startsWith('#')) continue;
+          const i = t.indexOf('='); if (i > 0 && !process.env[t.slice(0, i).trim()])
+            process.env[t.slice(0, i).trim()] = t.slice(i + 1).trim();
+        }
+      }
     }
     pgClient = new Client({
-      host: env.QA_DB_HOST, user: env.QA_DB_USER, password: env.QA_DB_PASS,
+      host: process.env.QA_DB_HOST, user: process.env.QA_DB_USER, password: process.env.QA_DB_PASS,
       database: 'postgres', ssl: { rejectUnauthorized: false }
     });
     await pgClient.connect();
