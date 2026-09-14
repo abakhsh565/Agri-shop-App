@@ -58,13 +58,15 @@ function currentBranch() {
 }
 
 function isWorkingClean() {
-  // Block on modified tracked source files, not runtime artifacts
+  // Block on modified tracked source files, not runtime artifacts or Engineering OS state
   const status = git('status --porcelain --untracked-files=no');
   if (!status) return true;
   const sourceExts = /\.(ts|tsx|js|mjs|cjs|json|sql|md|yml|yaml|css|html)$/;
+  const ignoreDirs = ['.engineering-os/', '.freebuff/'];
   const lines = status.split('\n').filter(l => l.trim());
   return lines.every(l => {
     const file = l.substring(3);
+    if (ignoreDirs.some(d => file.startsWith(d))) return true;
     return !sourceExts.test(file);
   });
 }
