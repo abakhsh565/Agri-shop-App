@@ -46,15 +46,19 @@ async function admin(sql: string) { return execSqlAsAdmin(sql); }
 async function rpc(userId: string, name: string, params: Record<string, any>) { return execRpcAsUser(userId, name, params); }
 
 async function cleanup() {
-  for (const t of ['sale_items', 'sales', 'return_items', 'returns', 'voids', 'customer_payments', 'inventory_movements']) {
-    try { await admin(`DELETE FROM ${t} WHERE shop_id = '${T.shop}' OR customer_id IN ('${T.customerA}','${T.customerB}') OR product_id = '${T.productA}'`); } catch {}
+  // First undo destructive state changes BEFORE deleting (FK order matters)
+  try { await admin(`UPDATE users SET is_active = true, deactivated_at = NULL, deactivated_by = NULL WHERE id = '${T.employeeA}'`); } catch {}
+  try { await admin(`UPDATE products SET is_active = true WHERE id = '${T.productA}'`); } catch {}
+  try { await admin(`UPDATE customers SET is_archived = false, archived_at = NULL, archived_by = NULL WHERE id IN ('${T.customerA}','${T.customerB}')`); } catch {}
+  // Un-void any voided sales for this test's IDs before deleting
+  try { await admin(`UPDATE sales SET is_voided = false, voided_at = NULL, voided_by = NULL, void_reason = NULL WHERE id = '${T.saleA}'`); } catch {}
+  // Delete in FK-safe order — only our specific test records
+  for (const t of ['inventory_movements', 'voids', 'sale_items', 'sales', 'return_items', 'returns', 'customer_payments']) {
+    try { await admin(`DELETE FROM ${t} WHERE customer_id IN ('${T.customerA}','${T.customerB}') OR product_id = '${T.productA}'`); } catch {}
   }
   try { await admin(`DELETE FROM product_variants WHERE id = '${T.variantA}'`); } catch {}
   try { await admin(`DELETE FROM products WHERE id = '${T.productA}'`); } catch {}
   try { await admin(`DELETE FROM companies WHERE id = '${T.companyA}'`); } catch {}
-  try { await admin(`UPDATE customers SET is_archived = false, archived_at = NULL, archived_by = NULL WHERE id IN ('${T.customerA}','${T.customerB}')`); } catch {}
-  try { await admin(`UPDATE users SET is_active = true, deactivated_at = NULL, deactivated_by = NULL WHERE id = '${T.employeeA}'`); } catch {}
-  try { await admin(`UPDATE products SET is_active = true WHERE id = '${T.productA}'`); } catch {}
 }
 
 beforeAll(async () => {
@@ -124,7 +128,8 @@ describe('Destructive Safety — Customer Archive/Restore', () => {
 
   it('should archive customer B with sales history', async () => {
     // Create a sale for customer B
-    await admin(`INSERT INTO sales (id, sale_number, customer_id, employee_id, total_amount, status, payment_type, payment_method, amount_paid, amount_due, discount, is_voided, shop_id, created_at, updated_at) VALUES ('${T.saleA}', 'DST-SALE-001', '${T.customerB}', '${T.employeeA}', 10000, 'completed', 'credit', 'cash', 0, 10000, 0, false, '${T.shop}', NOW(), NOW()) ON CONFLICT (id) DO UPDATE SET is_voided = false, void_reason = null`);
+    await admin(`DELETE FROM sales WHERE id = '${T.saleA}'`);
+    await admin(`INSERT INTO sales (id, sale_number, customer_id, employee_id, total_amount, status, payment_type, payment_method, amount_paid, amount_due, discount, is_voided, shop_id, created_at, updated_at) VALUES ('${T.saleA}', 'DST-SALE-001', '${T.customerB}', '${T.employeeA}', 10000, 'completed', 'credit', 'cash', 0, 10000, 0, false, '${T.shop}', NOW(), NOW())`);
     await admin(`INSERT INTO sale_items (id, sale_id, product_id, product_name, variant_id, variant_name, qty, unit_price, line_total) VALUES ('${T.saleItemA}', '${T.saleA}', '${T.productA}', 'Destruct Test Product', '${T.variantA}', '1kg', 2, 5000, 10000) ON CONFLICT (id) DO UPDATE SET qty = EXCLUDED.qty, line_total = EXCLUDED.line_total`);
 
     const result = await rpc(T.adminUser, 'archive_customer', { p_customer_id: T.customerB });

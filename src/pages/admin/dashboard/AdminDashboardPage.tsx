@@ -17,10 +17,11 @@ import { useT } from "@/lib/i18n";
 import { AlertTriangle, TrendingUp, ChevronRight, TrendingDown, ShoppingCart, Search, Bell, Wallet, CheckCircle2 } from "lucide-react";
 import StatusBar from "@/components/ui/StatusBar";
 
-function initBgColor(name: string) {
+function initBgColor(name: string | null | undefined) {
+  const safeName = String(name ?? '');
   const colors = ["#84cc16","#3b82f6","#8b5cf6","#f59e0b","#06b6d4","#ec4899"];
   let hash = 0;
-  for (const c of name) hash = (hash * 31 + c.charCodeAt(0)) & 0xffff;
+  for (const c of safeName) hash = (hash * 31 + c.charCodeAt(0)) & 0xffff;
   return colors[hash % colors.length];
 }
 
@@ -624,7 +625,7 @@ export default function AdminDashboardPage() {
                     className="size-8 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0"
                     style={{ background: initBgColor(emp.name) }}
                   >
-                    {emp.name.charAt(0)}
+                    {(emp.name ?? '?').charAt(0)}
                   </div>
                   <div>
                     <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>{emp.name}</p>
@@ -675,7 +676,7 @@ export default function AdminDashboardPage() {
                     <img src={cImg} alt={sale.customerName} className="size-9 rounded-full object-cover shrink-0" />
                   ) : (
                     <div className="size-9 rounded-full shrink-0 flex items-center justify-center text-[11px] font-bold" style={{ background: cBg, color: "#fff" }}>
-                      {sale.customerName.charAt(0).toUpperCase()}
+                      {(sale.customerName ?? '?').charAt(0).toUpperCase()}
                     </div>
                   )}
                   <div className="min-w-0">

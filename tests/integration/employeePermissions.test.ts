@@ -61,8 +61,10 @@ afterAll(async () => {
 
 async function cleanup() {
   const q = async (sql: string) => { try { await execSqlAsAdmin(sql); } catch {} };
-  for (const t of ['sale_items', 'sales', 'return_items', 'returns', 'voids', 'customer_payments', 'credit_limit_requests', 'inventory_movements', 'reminder_configs', 'reminder_occurrences']) {
-    await q(`DELETE FROM ${t} WHERE shop_id = '${T.shop}' OR customer_id = '${T.customerA}' OR product_id = '${T.productA}'`);
+  // Un-void any voided sales for test IDs before deleting (FK order)
+  await q(`UPDATE sales SET is_voided = false, voided_at = NULL, voided_by = NULL, void_reason = NULL WHERE id IN ('e0000000-0000-0000-0000-000000000001', 'e0000000-0000-0000-0000-000000000002')`);
+  for (const t of ['inventory_movements', 'voids', 'sale_items', 'sales', 'return_items', 'returns', 'customer_payments', 'credit_limit_requests', 'reminder_configs', 'reminder_occurrences']) {
+    await q(`DELETE FROM ${t} WHERE customer_id = '${T.customerA}' OR product_id = '${T.productA}'`);
   }
   await q(`DELETE FROM product_variants WHERE id = '${T.variantA}'`);
   await q(`DELETE FROM products WHERE id = '${T.productA}'`);
@@ -115,8 +117,9 @@ describe('Permissions — Authorization Model', () => {
 
 describe('Permissions — RPC Authorization (Admin Only)', () => {
   it('should allow admin to void a sale', async () => {
-    // Create a test sale first
-    await client.query(`INSERT INTO sales (id, sale_number, customer_id, employee_id, total_amount, status, payment_type, payment_method, amount_paid, amount_due, discount, is_voided, shop_id, created_at, updated_at) VALUES ('e0000000-0000-0000-0000-000000000001', 'PERM-SALE-001', '${T.customerA}', '${T.adminUser}', 5000, 'completed', 'credit', 'cash', 0, 5000, 0, false, '${T.shop}', NOW(), NOW()) ON CONFLICT (id) DO UPDATE SET is_voided = false, void_reason = null, voided_by = null`);
+    // Delete any previous state, then create fresh
+    await execSqlAsAdmin(`DELETE FROM sales WHERE id = 'e0000000-0000-0000-0000-000000000001'`);
+    await client.query(`INSERT INTO sales (id, sale_number, customer_id, employee_id, total_amount, status, payment_type, payment_method, amount_paid, amount_due, discount, is_voided, shop_id, created_at, updated_at) VALUES ('e0000000-0000-0000-0000-000000000001', 'PERM-SALE-001', '${T.customerA}', '${T.adminUser}', 5000, 'completed', 'credit', 'cash', 0, 5000, 0, false, '${T.shop}', NOW(), NOW())`);
 
     const result = await execRpcAsUser(T.adminUser, 'void_sale', {
       p_sale_id: 'e0000000-0000-0000-0000-000000000001',
@@ -131,8 +134,9 @@ describe('Permissions — RPC Authorization (Admin Only)', () => {
   });
 
   it('should reject employee void_sale with NOT_AUTHORIZED', async () => {
-    // Create another test sale
-    await client.query(`INSERT INTO sales (id, sale_number, customer_id, employee_id, total_amount, status, payment_type, payment_method, amount_paid, amount_due, discount, is_voided, shop_id, created_at, updated_at) VALUES ('e0000000-0000-0000-0000-000000000002', 'PERM-SALE-002', '${T.customerA}', '${T.employeeUser}', 5000, 'completed', 'credit', 'cash', 0, 5000, 0, false, '${T.shop}', NOW(), NOW()) ON CONFLICT (id) DO UPDATE SET is_voided = false, void_reason = null, voided_by = null`);
+    // Delete any previous state, then create fresh
+    await execSqlAsAdmin(`DELETE FROM sales WHERE id = 'e0000000-0000-0000-0000-000000000002'`);
+    await client.query(`INSERT INTO sales (id, sale_number, customer_id, employee_id, total_amount, status, payment_type, payment_method, amount_paid, amount_due, discount, is_voided, shop_id, created_at, updated_at) VALUES ('e0000000-0000-0000-0000-000000000002', 'PERM-SALE-002', '${T.customerA}', '${T.employeeUser}', 5000, 'completed', 'credit', 'cash', 0, 5000, 0, false, '${T.shop}', NOW(), NOW())`);
 
     const result = await execRpcAsUser(T.employeeUser, 'void_sale', {
       p_sale_id: 'e0000000-0000-0000-0000-000000000002',
