@@ -58,9 +58,15 @@ function currentBranch() {
 }
 
 function isWorkingClean() {
-  // Only block on modified tracked files (M or D prefix in column 1), not untracked (??)
+  // Block on modified tracked source files, not runtime artifacts
   const status = git('status --porcelain --untracked-files=no');
-  return status === '';
+  if (!status) return true;
+  const sourceExts = /\.(ts|tsx|js|mjs|cjs|json|sql|md|yml|yaml|css|html)$/;
+  const lines = status.split('\n').filter(l => l.trim());
+  return lines.every(l => {
+    const file = l.substring(3);
+    return !sourceExts.test(file);
+  });
 }
 
 function shortHash() {
