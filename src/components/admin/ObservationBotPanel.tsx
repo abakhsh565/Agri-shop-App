@@ -18,7 +18,7 @@ interface Tab {
 }
 
 export default function ObservationBotPanel() {
-  const { t } = useT();
+  const t = useT();
   const [activeTab, setActiveTab] = useState('overview');
   const [report, setReport] = useState('');
   const [actions, setActions] = useState<any[]>([]);
