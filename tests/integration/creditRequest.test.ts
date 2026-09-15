@@ -20,7 +20,6 @@ const ADMIN_ID = QA_IDS.admin;
 describe('Credit Request Integration', () => {
   beforeAll(async () => {
     clearEvidence();
-    // Clean any leftover credit requests from previous test runs
     await execSqlAsAdmin('DELETE FROM credit_limit_requests');
     await setupAllFixtures();
   });

@@ -24,9 +24,10 @@ interface SearchResult {
   path: string;
 }
 
-function initBgColor(name: string) {
+function initBgColor(name: string | null | undefined) {
   const colors = ["#84cc16","#3b82f6","#8b5cf6","#f59e0b","#06b6d4","#ec4899"];
   let hash = 0;
+  if (!name) return colors[0];
   for (const c of name) hash = (hash * 31 + c.charCodeAt(0)) & 0xffff;
   return colors[hash % colors.length];
 }
@@ -79,14 +80,14 @@ export default function SearchPage() {
     // Products
     if (activeFilter === "all" || activeFilter === "product") {
       products
-        .filter((p) => p.name.toLowerCase().includes(q) || p.company.toLowerCase().includes(q))
+        .filter((p) => p.name?.toLowerCase().includes(q) || (p.company ?? '').toLowerCase().includes(q))
         .forEach((p) => {
           const totalStock = p.stockQty;
           items.push({
             id: p.id,
             type: "product",
             title: p.name,
-            subtitle: `${p.company} · ${p.variants.length} variants`,
+            subtitle: `${p.company || t('search.unknownSupplier') || 'Supplier'} · ${p.variants.length} variants`,
             badge: `${totalStock} units`,
             path: isAdmin ? `/admin/products/${p.id}` : `${base}/products/${p.id}`,
           });
@@ -96,7 +97,7 @@ export default function SearchPage() {
     // Customers
     if (activeFilter === "all" || activeFilter === "customer") {
       customers
-        .filter((c) => c.name.toLowerCase().includes(q) || c.phone.includes(q))
+        .filter((c) => (c.name ?? '').toLowerCase().includes(q) || (c.phone ?? '').includes(q))
         .forEach((c) => {
           items.push({
             id: c.id,
@@ -114,9 +115,9 @@ export default function SearchPage() {
       sales
         .filter(
           (s) =>
-            s.customerName.toLowerCase().includes(q) ||
-            s.saleNumber.toLowerCase().includes(q) ||
-            s.employeeName.toLowerCase().includes(q) ||
+            (s.customerName ?? '').toLowerCase().includes(q) ||
+            (s.saleNumber ?? '').toLowerCase().includes(q) ||
+            (s.employeeName ?? '').toLowerCase().includes(q) ||
             formatCurrency(s.totalAmount).toLowerCase().includes(q)
         )
         .forEach((s) => {
@@ -134,7 +135,7 @@ export default function SearchPage() {
     // Employees (admin only)
     if (isAdmin && (activeFilter === "all" || activeFilter === "employee")) {
       employees
-        .filter((e) => e.name.toLowerCase().includes(q) || e.phone?.includes(q))
+        .filter((e) => (e.name ?? '').toLowerCase().includes(q) || e.phone?.includes(q))
         .forEach((e) => {
           items.push({
             id: e.id,
@@ -150,7 +151,7 @@ export default function SearchPage() {
     // Companies (admin only)
     if (isAdmin && (activeFilter === "all" || activeFilter === "company")) {
       companies
-        .filter((c) => c.name.toLowerCase().includes(q) || c.phone?.includes(q))
+        .filter((c) => (c.name ?? '').toLowerCase().includes(q) || c.phone?.includes(q))
         .forEach((c) => {
           items.push({
             id: c.id,

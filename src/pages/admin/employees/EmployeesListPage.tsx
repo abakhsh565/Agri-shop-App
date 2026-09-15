@@ -55,7 +55,7 @@ export default function EmployeesListPage() {
                 className="size-11 rounded-full flex items-center justify-center font-bold text-[16px] shrink-0"
                 style={{ background: "var(--brand)", color: "#0a0a0a" }}
               >
-                {emp.name.charAt(0)}
+                {emp.name ? emp.name.charAt(0) : "?"}
               </div>
 
               {/* Info */}

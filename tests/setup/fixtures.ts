@@ -4,9 +4,12 @@
  * Creates controlled test data with deterministic IDs.
  * Every fixture has setup, cleanup, and verification.
  * Never leaves QA records behind.
+ *
+ * Uses execSqlAsAdmin which now routes through direct PG connection,
+ * bypassing PgBouncer pooler visibility issues.
  */
 
-import { execSqlAsAdmin, execSql } from './qa-client';
+import { execSqlAsAdmin, qaServiceClient } from './qa-client';
 
 // ─── Deterministic Test IDs ──────────────────────────────────────────────
 
@@ -37,7 +40,6 @@ export async function setupUsers() {
 }
 
 export async function setupCustomers() {
-  // Delete any FK-referencing records first, then customers with our test phone numbers
   await execSqlAsAdmin(`DELETE FROM credit_limit_requests WHERE customer_id IN (SELECT id FROM customers WHERE phone IN ('923001111111', '923002222222', '923003333333'))`);
   await execSqlAsAdmin(`DELETE FROM customers WHERE phone IN ('923001111111', '923002222222', '923003333333')`);
   await execSqlAsAdmin(`
@@ -46,7 +48,10 @@ export async function setupCustomers() {
       ('${QA_IDS.customerA}', 'QA Customer A', '923001111111', 50000, 30000, 80000, 50000, '${QA_IDS.shop}', 'QA'),
       ('${QA_IDS.customerB}', 'QA Customer B', '923002222222', 25000, 26000, 40000, 14000, '${QA_IDS.shop}', 'QA'),
       ('${QA_IDS.customerC}', 'QA Customer C', '923003333333', 10000, 0, 15000, 15000, '${QA_IDS.shop}', 'QA')
-    ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name;
+    ON CONFLICT (id) DO UPDATE SET
+      name = EXCLUDED.name, credit_limit = EXCLUDED.credit_limit,
+      outstanding_balance = EXCLUDED.outstanding_balance, total_purchases = EXCLUDED.total_purchases,
+      total_paid = EXCLUDED.total_paid;
   `);
 }
 
@@ -75,22 +80,51 @@ export async function setupCompanies() {
   `);
 }
 
-/** Setup all fixtures */
+/** Setup all fixtures and wait for PostgREST pooler visibility */
 export async function setupAllFixtures() {
   await setupUsers();
   await setupCompanies();
   await setupCustomers();
   await setupProducts();
+  // Wait for PostgREST pooler to see the new data
+  await waitForPostgRESTVisibility();
+}
+
+/**
+ * Wait for PostgREST to see critical fixture records.
+ * Direct PG commits are immediate, but PostgREST pooler may delay.
+ * Poll via PostgREST until customerC is visible.
+ */
+async function waitForPostgRESTVisibility(maxRetries = 10, delayMs = 300): Promise<void> {
+  // Use advisory lock as synchronization barrier: forces all PostgREST connections
+  // to commit pending transactions before proceeding
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      await qaServiceClient.rpc('run_sql', { sql_query: 'SELECT pg_advisory_lock(42)' });
+      await qaServiceClient.rpc('run_sql', { sql_query: 'SELECT pg_advisory_unlock(42)' });
+      break;
+    } catch { await new Promise(r => setTimeout(r, 500)); }
+  }
+  // Also poll for visibility as a safety net
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      const { data, error } = await qaServiceClient
+        .from('customers')
+        .select('id')
+        .eq('id', QA_IDS.customerC)
+        .single();
+      if (data && !error) return;
+    } catch { /* not visible yet */ }
+    await new Promise(r => setTimeout(r, delayMs));
+  }
 }
 
 // ─── Cleanup Functions ───────────────────────────────────────────────────
 
 export async function cleanupTestData() {
-  // Only delete QA fixture data — not all data in the table
   const customerIds = `('${QA_IDS.customerA}', '${QA_IDS.customerB}', '${QA_IDS.customerC}')`;
   const userIds = `('${QA_IDS.admin}', '${QA_IDS.employee}')`;
 
-  // Delete child records that reference QA customers/products/users
   const childDeletes = [
     `DELETE FROM sale_items WHERE sale_id IN (SELECT id FROM sales WHERE customer_id IN ${customerIds})`,
     `DELETE FROM sales WHERE customer_id IN ${customerIds}`,
@@ -109,7 +143,6 @@ export async function cleanupTestData() {
     try { await execSqlAsAdmin(sql); } catch { /* ignore */ }
   }
 
-  // Delete parent records
   try { await execSqlAsAdmin(`DELETE FROM product_variants WHERE product_id IN ('${QA_IDS.productA}', '${QA_IDS.productB}')`); } catch {}
   try { await execSqlAsAdmin(`DELETE FROM products WHERE id IN ('${QA_IDS.productA}', '${QA_IDS.productB}')`); } catch {}
   try { await execSqlAsAdmin(`DELETE FROM companies WHERE id IN ('${QA_IDS.companyA}')`); } catch {}

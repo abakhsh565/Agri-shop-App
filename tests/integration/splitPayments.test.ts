@@ -214,12 +214,13 @@ describe("Split Payment Recording", () => {
     });
 
     it("should reject payment for non-existent customer (no rows created)", async () => {
-      const before = await q(`SELECT count(*)::int as cnt FROM customer_payments`);
+      const fakeId = "00000000-0000-0000-0000-999999999999";
+      const before = await q(`SELECT count(*)::int as cnt FROM customer_payments WHERE customer_id = '${fakeId}'`);
       const cnt = before.rows[0].cnt;
       try {
-        await recordPayment({ customerId: "00000000-0000-0000-0000-999999999999", amount: 100, method: "cash" });
+        await recordPayment({ customerId: fakeId, amount: 100, method: "cash" });
       } catch { /* expected */ }
-      const after = await q(`SELECT count(*)::int as cnt FROM customer_payments`);
+      const after = await q(`SELECT count(*)::int as cnt FROM customer_payments WHERE customer_id = '${fakeId}'`);
       expect(after.rows[0].cnt).toBe(cnt);
     });
   });

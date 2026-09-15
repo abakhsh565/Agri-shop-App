@@ -10,7 +10,6 @@ export default defineConfig({
     hookTimeout: 120000,
     setupFiles: ['tests/setup/localStorage-mock.cjs'],
     pool: 'forks',
-    poolOptions: { forks: { singleFork: true } },
   },
   resolve: {
     alias: {

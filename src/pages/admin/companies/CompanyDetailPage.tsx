@@ -65,7 +65,7 @@ export default function CompanyDetailPage() {
         ) : (
           <div className="size-[72px] rounded-[18px] flex items-center justify-center text-2xl font-bold"
             style={{ background: "var(--surface-2)", color: "var(--text-secondary)", border: "2px solid var(--divider)" }}>
-            {company.name.charAt(0).toUpperCase()}
+            {company.name ? company.name.charAt(0) : "?".toUpperCase()}
           </div>
         )}
       </div>

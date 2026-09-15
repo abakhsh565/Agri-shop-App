@@ -25,9 +25,10 @@ const SORT_OPTIONS: { key: SortKey; labelKey: string }[] = [
   { key: "lowest", labelKey: "admin.sortLowestAmount" },
 ];
 
-function initBgColor(name: string) {
+function initBgColor(name: string | null | undefined) {
   const colors = ["#84cc16","#3b82f6","#8b5cf6","#f59e0b","#06b6d4","#ec4899"];
   let hash = 0;
+  if (!name) return colors[0];
   for (const c of name) hash = (hash * 31 + c.charCodeAt(0)) & 0xffff;
   return colors[hash % colors.length];
 }

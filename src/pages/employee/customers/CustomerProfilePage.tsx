@@ -21,9 +21,10 @@ import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import ReminderConfigSheet from "@/components/ui/ReminderConfigSheet";
 import type { ReminderConfig, BusinessSettings, CropConfig } from "@/types";
 
-function initBgColor(name: string) {
+function initBgColor(name: string | null | undefined) {
   const colors = ["#ec1e79","#84cc16","#3b82f6","#8b5cf6","#f59e0b","#06b6d4"];
   let hash = 0;
+  if (!name) return colors[0];
   for (const c of name) hash = (hash * 31 + c.charCodeAt(0)) & 0xffff;
   return colors[hash % colors.length];
 }

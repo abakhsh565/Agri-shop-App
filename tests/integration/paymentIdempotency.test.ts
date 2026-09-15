@@ -7,14 +7,12 @@
  * - Concurrent duplicate → safe
  * - NULL key → backward compatible
  *
- * Uses the QA database via run_sql HTTP API (no direct PostgreSQL).
+ * Uses execRpcAsUser for all RPC calls (real JWT auth path — production-like).
+ * Uses execSqlAsAdmin for data verification reads (direct PG for immediate visibility).
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { randomUUID } from 'crypto';
-import { getDbClient, execSqlAsAdmin } from '../setup/qa-client';
-
-let client: any;
-function q(sql: string) { return client.query(sql); }
+import { execRpcAsUser, execSqlAsAdmin } from '../setup/qa-client';
 
 const TEST = {
   customer: randomUUID(),
@@ -23,21 +21,17 @@ const TEST = {
   initialBalance: 50000,
 };
 
-/** Call record_customer_payment via string-interpolated SQL (matches splitPayments pattern) */
+/** Call record_customer_payment via Supabase Auth RPC (real JWT path) */
 async function callRecordPayment(payload: Record<string, any>) {
-  const jsonPayload = JSON.stringify(payload).replace(/'/g, "''");
-  const result = await q(`SELECT record_customer_payment('${jsonPayload}'::jsonb) as result`);
-  const raw = result.rows?.[0]?.result;
-  if (typeof raw === 'string') {
-    const parsed = JSON.parse(raw);
-    if (parsed.error) throw new Error(parsed.error);
-    return parsed;
-  }
-  return raw;
+  const { data, error } = await execRpcAsUser(TEST.adminId, 'record_customer_payment', { payload });
+  if (error) throw new Error(error);
+  return data;
 }
 
 async function getBalance() {
-  const r = await q(`SELECT outstanding_balance, total_paid FROM customers WHERE id = '${TEST.customer}'`);
+  const r = await execSqlAsAdmin(
+    `SELECT outstanding_balance, total_paid FROM customers WHERE id = '${TEST.customer}'`
+  );
   const row = r.rows?.[0] ?? {};
   return { balance: Number(row.outstanding_balance ?? 0), totalPaid: Number(row.total_paid ?? 0) };
 }
@@ -46,7 +40,7 @@ async function getPaymentCount(idempotencyKey?: string) {
   const where = idempotencyKey
     ? `WHERE idempotency_key = '${idempotencyKey}'`
     : `WHERE customer_id = '${TEST.customer}'`;
-  const r = await q(`SELECT count(*)::int as cnt FROM customer_payments ${where}`);
+  const r = await execSqlAsAdmin(`SELECT count(*)::int as cnt FROM customer_payments ${where}`);
   return Number(r.rows?.[0]?.cnt ?? 0);
 }
 
@@ -75,8 +69,6 @@ async function recordSplitPayment(splits: { amount: number; method: string }[], 
 
 describe('Payment Idempotency', () => {
   beforeAll(async () => {
-    client = getDbClient();
-    await client.connect();
     await execSqlAsAdmin(`INSERT INTO users (id, name, phone, role, is_original_owner, is_active, shop_id)
       VALUES ('${TEST.adminId}', 'QA Admin', '923009999999', 'admin', true, true, '${TEST.shop}')
       ON CONFLICT (id) DO UPDATE SET role = 'admin', is_active = true`);
@@ -88,7 +80,6 @@ describe('Payment Idempotency', () => {
   afterAll(async () => {
     await execSqlAsAdmin(`DELETE FROM customer_payments WHERE customer_id = '${TEST.customer}'`).catch(() => {});
     await execSqlAsAdmin(`DELETE FROM customers WHERE id = '${TEST.customer}'`).catch(() => {});
-    await client?.end?.().catch(() => {});
   });
 
   it('1. Normal single payment', async () => {
@@ -190,18 +181,24 @@ describe('Payment Idempotency', () => {
   });
 
   it('9. Non-existent customer rejected', async () => {
-    const result = await callRecordPayment({
-      customerId: randomUUID(),
-      amount: 100,
-      method: 'cash',
-      idempotency_key: randomUUID(),
-      actorId: TEST.adminId,
-    });
+    let result: any;
+    try {
+      result = await callRecordPayment({
+        customerId: randomUUID(),
+        amount: 100,
+        method: 'cash',
+        idempotency_key: randomUUID(),
+        actorId: TEST.adminId,
+      });
+    } catch (e: any) {
+      expect(e.message).toContain('CUSTOMER_NOT_FOUND');
+      return;
+    }
     expect(result?.error || !result).toBeTruthy();
   });
 
   it('10. All payments visible in history', async () => {
-    const r = await q(
+    const r = await execSqlAsAdmin(
       `SELECT count(*)::int as cnt FROM customer_payments WHERE customer_id = '${TEST.customer}'`
     );
     const count = Number(r.rows?.[0]?.cnt ?? 0);
@@ -209,9 +206,9 @@ describe('Payment Idempotency', () => {
   });
 
   it('11. Total paid in customer record matches sum of payments', async () => {
-    const custR = await q(`SELECT total_paid FROM customers WHERE id = '${TEST.customer}'`);
+    const custR = await execSqlAsAdmin(`SELECT total_paid FROM customers WHERE id = '${TEST.customer}'`);
     const totalPaidCustomer = Number(custR.rows?.[0]?.total_paid ?? 0);
-    const payR = await q(`SELECT COALESCE(SUM(amount), 0)::numeric as total FROM customer_payments WHERE customer_id = '${TEST.customer}'`);
+    const payR = await execSqlAsAdmin(`SELECT COALESCE(SUM(amount), 0)::numeric as total FROM customer_payments WHERE customer_id = '${TEST.customer}'`);
     const totalPayments = Number(payR.rows?.[0]?.total ?? 0);
     expect(totalPaidCustomer).toBeCloseTo(totalPayments, 0);
   });
@@ -265,7 +262,7 @@ describe('Payment Idempotency', () => {
   it('15. Payment amount is correct in DB row', async () => {
     const key = randomUUID();
     await recordPayment(777, 'bank_transfer', key);
-    const r = await q(`SELECT amount FROM customer_payments WHERE idempotency_key = '${key}'`);
+    const r = await execSqlAsAdmin(`SELECT amount FROM customer_payments WHERE idempotency_key = '${key}'`);
     expect(r.rows?.length).toBe(1);
     expect(Number(r.rows?.[0]?.amount)).toBe(777);
   });

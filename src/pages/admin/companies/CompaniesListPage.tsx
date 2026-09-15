@@ -98,7 +98,7 @@ export default function CompaniesListPage() {
                   className="size-11 rounded-full flex items-center justify-center font-bold text-[16px] shrink-0"
                   style={{ background: color + "22", color }}
                 >
-                  {company.name.charAt(0)}
+                  {company.name ? company.name.charAt(0) : "?"}
                 </div>
               )}
 

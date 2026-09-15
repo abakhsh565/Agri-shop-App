@@ -58,11 +58,18 @@ serve(async (req: Request) => {
     // 3. Get business settings for crop configs
     const { data: bizSettings } = await supabase
       .from("business_settings")
-      .select("crops")
+      .select("setting_value")
+      .eq("setting_key", "crops")
       .limit(1)
       .single();
 
-    const crops = bizSettings?.crops || [];
+    let crops: any[] = [];
+    if (bizSettings?.setting_value) {
+      try {
+        crops = typeof bizSettings.setting_value === "string" ? JSON.parse(bizSettings.setting_value) : bizSettings.setting_value;
+        if (!Array.isArray(crops)) crops = [];
+      } catch { crops = []; }
+    }
 
     // 4. Process each customer
     for (const customer of customers) {

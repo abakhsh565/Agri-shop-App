@@ -152,7 +152,7 @@ export default function GroupDetailPage() {
                 className="w-full px-4 py-3.5 flex items-center gap-3 text-start transition-opacity active:opacity-70"
                 style={{ borderBottom: "1px solid var(--divider)" }}
               >
-                {customer.imageUrl ? (<img src={customer.imageUrl} alt="" className="w-10 h-10 rounded-full object-cover shrink-0" />) : (<div className="w-10 h-10 rounded-full flex items-center justify-center text-[12px] font-bold shrink-0" style={{ background: customer.outstandingBalance > 0 ? "#fee2e2" : "#d9f99d", color: customer.outstandingBalance > 0 ? "#dc2626" : "#3f6212" }}>{customer.name.charAt(0).toUpperCase()}</div>)}
+                {customer.imageUrl ? (<img src={customer.imageUrl} alt="" className="w-10 h-10 rounded-full object-cover shrink-0" />) : (<div className="w-10 h-10 rounded-full flex items-center justify-center text-[12px] font-bold shrink-0" style={{ background: customer.outstandingBalance > 0 ? "#fee2e2" : "#d9f99d", color: customer.outstandingBalance > 0 ? "#dc2626" : "#3f6212" }}>{customer.name ? customer.name.charAt(0) : "?".toUpperCase()}</div>)}
                 <div className="flex-1 min-w-0">
                   <p className="text-[14px] font-semibold truncate" style={{ color: "var(--text-primary)" }}>{customer.name}</p>
                   <p className="text-[12px] mt-0.5" style={{ color: "var(--text-secondary)" }}>

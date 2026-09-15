@@ -20,7 +20,7 @@
  */
 
 import { describe, it, beforeAll, afterAll } from 'vitest';
-import { execSqlAsAdmin, execRpcAsUser } from '../setup/qa-client';
+import { execSqlAsAdmin, execRpcAsUser, qaServiceClient } from '../setup/qa-client';
 
 
 const T = {
@@ -48,7 +48,7 @@ async function rpc(userId: string, name: string, params: Record<string, any>) { 
 async function cleanup() {
   // First undo destructive state changes BEFORE deleting (FK order matters)
   try { await admin(`UPDATE users SET is_active = true, deactivated_at = NULL, deactivated_by = NULL WHERE id = '${T.employeeA}'`); } catch {}
-  try { await admin(`UPDATE products SET is_active = true WHERE id = '${T.productA}'`); } catch {}
+  try { await admin(`UPDATE products SET is_active = true, deleted_at = NULL WHERE id = '${T.productA}'`); } catch {}
   try { await admin(`UPDATE customers SET is_archived = false, archived_at = NULL, archived_by = NULL WHERE id IN ('${T.customerA}','${T.customerB}')`); } catch {}
   // Un-void any voided sales for this test's IDs before deleting
   try { await admin(`UPDATE sales SET is_voided = false, voided_at = NULL, voided_by = NULL, void_reason = NULL WHERE id = '${T.saleA}'`); } catch {}
@@ -71,6 +71,15 @@ beforeAll(async () => {
   await admin(`INSERT INTO customers (id, name, phone, credit_limit, outstanding_balance, total_purchases, total_paid, shop_id, created_by, is_archived) VALUES ('${T.customerA}', 'Destruct Customer A', '92300DST1001', 50000, 0, 0, 0, '${T.shop}', 'QA', false), ('${T.customerB}', 'Destruct Customer B', '92300DST1002', 50000, 0, 0, 0, '${T.shop}', 'QA', false) ON CONFLICT (id) DO UPDATE SET is_archived = false, name = EXCLUDED.name`);
   await admin(`INSERT INTO products (id, name, company_id, category, stock_qty, shop_id) VALUES ('${T.productA}', 'Destruct Test Product', '${T.companyA}', 'seed', 100, '${T.shop}') ON CONFLICT (id) DO UPDATE SET is_active = true, stock_qty = EXCLUDED.stock_qty`);
   await admin(`INSERT INTO product_variants (id, product_id, name, selling_price, cost_price, unit_size, low_stock_threshold, stock_qty) VALUES ('${T.variantA}', '${T.productA}', '1kg', 5000, 3000, 1, 10, 100) ON CONFLICT (id) DO UPDATE SET stock_qty = EXCLUDED.stock_qty, is_active = true`);
+
+  // Wait for PostgREST pooler to see the fixtures (direct PG writes may not be visible yet)
+  for (let i = 0; i < 10; i++) {
+    try {
+      const { data } = await qaServiceClient.from('users').select('id').eq('id', T.adminUser).single();
+      if (data) break;
+    } catch { /* not visible yet */ }
+    await new Promise(r => setTimeout(r, 300));
+  }
 });
 
 afterAll(async () => {
@@ -161,7 +170,7 @@ describe('Destructive Safety — Customer Archive/Restore', () => {
 
 describe('Destructive Safety — Product Delete', () => {
   it('should soft-delete (archive) a product', async () => {
-    const result = await rpc(T.adminUser, 'delete_product', { p_product_id: T.productA, p_reason: null });
+    const result = await rpc(T.adminUser, 'delete_product', { payload: { id: T.productA } });
     if (result.error?.includes('NOT_AUTHORIZED')) {
       rec('Delete product — returns result', 'no NOT_AUTHORIZED', 'NOT_AUTHORIZED', 'FAIL');
       return;
@@ -194,7 +203,7 @@ describe('Destructive Safety — Product Delete', () => {
 
 describe('Destructive Safety — Employee Deactivate', () => {
   it('should deactivate an employee', async () => {
-    const result = await rpc(T.adminUser, 'deactivate_employee_v1', { payload: { employee_id: T.employeeA } });
+    const result = await rpc(T.adminUser, 'deactivate_employee_v1', { payload: { employeeId: T.employeeA } });
     if (result.error?.includes('NOT_AUTHORIZED')) {
       rec('Deactivate employee — NOT_AUTHORIZED', 'NOT_AUTHORIZED', 'NOT_AUTHORIZED', 'FAIL');
       return;

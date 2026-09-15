@@ -258,18 +258,33 @@ export async function saveCustomerCrops(customerId: string, crops: string[]): Pr
 
 export async function loadBusinessSettings(): Promise<BusinessSettings> {
   try {
-    const { data } = await supabase.from("business_settings").select("crops").limit(1).single();
-    if (data?.crops) return { crops: typeof data.crops === "string" ? JSON.parse(data.crops) : data.crops };
+    const { data } = await supabase.from("business_settings")
+      .select("setting_value")
+      .eq("setting_key", "crops")
+      .limit(1)
+      .single();
+    if (data?.setting_value) {
+      const parsed = typeof data.setting_value === "string" ? JSON.parse(data.setting_value) : data.setting_value;
+      return { crops: Array.isArray(parsed) ? parsed : [] };
+    }
   } catch {}
   return { crops: [] };
 }
 
 export async function saveBusinessSettings(settings: BusinessSettings): Promise<void> {
-  const { data: existing } = await supabase.from("business_settings").select("id").limit(1).single();
+  const { data: existing } = await supabase.from("business_settings")
+    .select("id")
+    .eq("setting_key", "crops")
+    .limit(1)
+    .single();
+  const value = JSON.stringify(settings.crops);
   if (existing) {
-    await supabase.from("business_settings").update({ crops: settings.crops, updated_at: new Date().toISOString() }).eq("id", existing.id);
+    await supabase.from("business_settings")
+      .update({ setting_value: value, updated_at: new Date().toISOString() })
+      .eq("id", existing.id);
   } else {
-    await supabase.from("business_settings").insert({ crops: settings.crops });
+    await supabase.from("business_settings")
+      .insert({ setting_key: "crops", setting_value: value });
   }
 }
 

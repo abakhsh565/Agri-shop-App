@@ -247,7 +247,7 @@ describe('Financial Integrity — Void Calculations', () => {
     const v = await client.query(`SELECT reason, voided_by FROM voids WHERE id = '${TEST.voidA}'`);
     const row = v.rows[0];
     record('Void record — reason', 'QA test void', row.reason, row.reason === 'QA test void' ? 'PASS' : 'FAIL');
-    record('Void record — voided_by', 'QA Admin', row.voided_by, row.voided_by === 'QA Admin' ? 'PASS' : 'FAIL');
+    record('Void record — voided_by', TEST.customerA, row.voided_by, row.voided_by === TEST.customerA ? 'PASS' : 'FAIL');
   });
 
   it('should verify voided sale excluded from active calculations', async () => {

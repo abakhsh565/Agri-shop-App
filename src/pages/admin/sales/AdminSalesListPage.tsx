@@ -13,8 +13,9 @@ import { Search, Calendar, SlidersHorizontal, Check } from "lucide-react";
 import { groupSalesByDateSections } from "@/lib/salesGrouping";
 import { pkDate, pkDateFromISO, pkToday, pkYesterday, pkWeekStart, pkMonthStart } from "@/lib/pkDate";
 
-function initBgColor(name: string) {
+function initBgColor(name: string | null | undefined) {
   const colors = ["#84cc16","#3b82f6","#8b5cf6","#f59e0b","#06b6d4","#ec4899"];
+  if (!name) return colors[0];
   let hash = 0;
   for (const c of name) hash = (hash * 31 + c.charCodeAt(0)) & 0xffff;
   return colors[hash % colors.length];
@@ -421,7 +422,7 @@ export default function AdminSalesListPage() {
                         <img src={cImg} alt={sale.customerName} className="size-10 rounded-full object-cover shrink-0" />
                       ) : (
                         <div className="size-10 rounded-full shrink-0 flex items-center justify-center text-sm font-bold" style={{ background: cBg, color: "#fff" }}>
-                          {sale.customerName.charAt(0).toUpperCase()}
+                          {(sale.customerName || '?').charAt(0).toUpperCase()}
                         </div>
                       )}
                       <div className="min-w-0">

@@ -63,6 +63,46 @@ export const qaServiceClient = createClient(QA_URL, QA_SERVICE_ROLE);
 /** Anon client (RLS-enforced, for testing RLS policies) */
 export const qaAnonClient = createClient(QA_URL, QA_ANON_KEY);
 
+// ─── Direct PG Client (bypasses pooler for fixture setup/teardown) ──────
+
+import { Client } from 'pg';
+
+const QA_DB_HOST = process.env.QA_DB_HOST || '';
+const QA_DB_USER = process.env.QA_DB_USER || '';
+const QA_DB_PASS = process.env.QA_DB_PASS || '';
+
+let _directClient: Client | null = null;
+
+/**
+ * Get a direct PostgreSQL connection (bypasses PgBouncer pooler).
+ * This ensures writes are immediately visible to all subsequent queries.
+ */
+export async function getDirectClient(): Promise<Client> {
+  if (_directClient) return _directClient;
+  if (!QA_DB_HOST || !QA_DB_USER || !QA_DB_PASS) {
+    throw new Error('QA_DB_HOST/QA_DB_USER/QA_DB_PASS not set — cannot create direct PG client');
+  }
+  _directClient = new Client({
+    host: QA_DB_HOST,
+    user: QA_DB_USER,
+    password: QA_DB_PASS,
+    database: 'postgres',
+    ssl: { rejectUnauthorized: false },
+  });
+  await _directClient.connect();
+  return _directClient;
+}
+
+/**
+ * Execute SQL via direct PostgreSQL connection (bypasses pooler).
+ * Use for fixture setup/teardown where immediate visibility is required.
+ */
+export async function execSqlDirect(sql: string): Promise<{ rows: any[]; rowCount: number; command: string }> {
+  const client = await getDirectClient();
+  const result = await client.query(sql);
+  return { rows: result.rows, rowCount: result.rowCount ?? 0, command: result.command };
+}
+
 // ─── Auth-based user context ────────────────────────────────────────
 
 /**
@@ -83,9 +123,10 @@ const authClients = new Map<string, SupabaseClient>();
  */
 async function getAuthClient(userId: string): Promise<SupabaseClient> {
   // Look up user's phone from the users table (needed for both cached and new clients)
+  // Use direct PG to bypass pooler visibility issues
   let userPhone = '';
   try {
-    const rows = await runSqlHttp(`SELECT phone FROM users WHERE id = '${userId}'`);
+    const { rows } = await execSqlDirect(`SELECT phone FROM users WHERE id = '${userId}'`);
     if (rows[0]?.phone) userPhone = rows[0].phone;
   } catch { /* user may not exist yet */ }
 
@@ -94,8 +135,8 @@ async function getAuthClient(userId: string): Promise<SupabaseClient> {
     // Ensure phone matches current users table value
     // If phone changed (e.g., another test modified it), JWT is stale — re-authenticate
     if (userPhone) {
-      // Get current auth.users phone
-      const authPhoneRows = await runSqlHttp(`SELECT phone FROM auth.users WHERE id = '${userId}'`);
+      // Get current auth.users phone (use direct PG for visibility)
+      const { rows: authPhoneRows } = await execSqlDirect(`SELECT phone FROM auth.users WHERE id = '${userId}'`);
       const currentAuthPhone = authPhoneRows[0]?.phone || '';
       
       if (currentAuthPhone !== userPhone) {
@@ -207,8 +248,8 @@ function createHttpClient(): any {
         return { rows: [], rowCount: 0, command: 'SELECT' };
       }
 
-      // Default: use run_sql as postgres
-      return execSqlResult(sql);
+      // Default: use direct PG connection for immediate visibility
+      return execSqlDirect(sql);
     },
     on: () => {},
     removeListener: () => {},
@@ -238,17 +279,23 @@ export function getRawDbClient(): any {
 }
 
 /**
- * Execute SQL as postgres (bypasses RLS and triggers) via HTTP API.
+ * Execute SQL as postgres (bypasses RLS and triggers).
+ * Uses direct PG connection to bypass PgBouncer pooler visibility issues.
+ * Falls back to HTTP API if direct connection is not available.
  */
 export async function execSqlAsAdmin(sql: string): Promise<{ rows: any[]; rowCount: number; command: string }> {
-  return execSqlResult(sql);
+  try {
+    return await execSqlDirect(sql);
+  } catch {
+    return execSqlResult(sql);
+  }
 }
 
 /**
- * Execute SQL (same as execSqlAsAdmin — both use service-role key).
+ * Execute SQL (same as execSqlAsAdmin — both use direct PG).
  */
 export async function execSql(sql: string): Promise<{ rows: any[]; rowCount: number; command: string }> {
-  return execSqlResult(sql);
+  return execSqlAsAdmin(sql);
 }
 
 /**
@@ -274,38 +321,51 @@ export async function execRpcAsUser(
   params: Record<string, any>,
   _retry = true
 ): Promise<{ data: any; error: string | null }> {
-  try {
-    const client = await getAuthClient(userId);
+  // Max retries for pooler visibility issues
+  const maxPoolerRetries = 3;
+  for (let attempt = 0; attempt <= maxPoolerRetries; attempt++) {
+    try {
+      const client = await getAuthClient(userId);
 
-    // Convert parameters for Supabase JS client
-    const rpcParams: Record<string, any> = {};
-    for (const [k, v] of Object.entries(params)) {
-      if (typeof v === 'string') {
-        try {
-          rpcParams[k] = JSON.parse(v);
-        } catch {
+      // Convert parameters for Supabase JS client
+      const rpcParams: Record<string, any> = {};
+      for (const [k, v] of Object.entries(params)) {
+        if (typeof v === 'string') {
+          try {
+            rpcParams[k] = JSON.parse(v);
+          } catch {
+            rpcParams[k] = v;
+          }
+        } else if (v === null || v === undefined) {
+          rpcParams[k] = null;
+        } else {
           rpcParams[k] = v;
         }
-      } else if (v === null || v === undefined) {
-        rpcParams[k] = null;
-      } else {
-        rpcParams[k] = v;
       }
-    }
 
-    const { data, error } = await client.rpc(rpcName, rpcParams);
-    if (error) {
-      // If NOT_AUTHENTICATED, the JWT may be stale — evict and retry once
-      if (_retry && error.message?.includes('NOT_AUTHENTICATED')) {
-        authClients.delete(userId);
-        return execRpcAsUser(userId, rpcName, params, false);
+      const { data, error } = await client.rpc(rpcName, rpcParams);
+      if (error) {
+        // If NOT_AUTHENTICATED, the JWT may be stale — evict and retry once
+        if (_retry && error.message?.includes('NOT_AUTHENTICATED')) {
+          authClients.delete(userId);
+          return execRpcAsUser(userId, rpcName, params, false);
+        }
+        // If FK constraint violation or pooler visibility issue, retry after delay
+        if (attempt < maxPoolerRetries && (
+          error.message?.includes('violates foreign key') ||
+          error.message?.includes('does not exist')
+        )) {
+          await new Promise(r => setTimeout(r, 500));
+          continue;
+        }
+        return { data: null, error: error.message };
       }
-      return { data: null, error: error.message };
+      return { data, error: null };
+    } catch (e: any) {
+      return { data: null, error: e.message };
     }
-    return { data, error: null };
-  } catch (e: any) {
-    return { data: null, error: e.message };
   }
+  return { data: null, error: 'max retries exceeded' };
 }
 
 /**
