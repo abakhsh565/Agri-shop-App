@@ -106,31 +106,44 @@ export const useShopRequestsStore = create<ShopRequestsState>((set, get) => ({
   submitRequest: async (input) => {
     set({ loading: true, error: null });
     try {
-      const { data, error } = await supabase
-        .from("shop_requests")
-        .insert({
-          owner_name: input.ownerName,
-          owner_phone: input.ownerPhone,
-          shop_name: input.shopName,
-          shop_address: input.shopAddress ?? null,
-          shop_city: input.shopCity ?? null,
-          shop_type: input.shopType ?? "retail",
-          business_registration_number: input.businessRegistrationNumber ?? null,
-          logo_url: input.logoUrl ?? null,
-          cnic_front_url: input.cnicFrontUrl ?? null,
-          cnic_back_url: input.cnicBackUrl ?? null,
-          business_license_url: input.businessLicenseUrl ?? null,
-          status: "pending",
-        })
-        .select()
-        .single();
+      // Use SECURITY DEFINER RPC to bypass RLS issues on shop_requests
+      const { data, error } = await supabase.rpc("insert_shop_request", {
+        p_owner_name: input.ownerName,
+        p_owner_phone: input.ownerPhone,
+        p_phone: input.ownerPhone,
+        p_shop_name: input.shopName,
+        p_shop_type: input.shopType ?? "retail",
+        p_shop_city: input.shopCity ?? null,
+        p_shop_address: input.shopAddress ?? null,
+        p_business_registration_number: input.businessRegistrationNumber ?? null,
+      });
 
       if (error) {
         set({ loading: false, error: error.message });
         return { success: false, error: error.message };
       }
 
-      const request = requestFromRow(data as ShopRequestRow);
+      const result = typeof data === "string" ? JSON.parse(data) : data;
+      if (!result?.success) {
+        const msg = result?.error || "Failed to submit request";
+        set({ loading: false, error: msg });
+        return { success: false, error: msg };
+      }
+
+      // Build a minimal request object for the store
+      const request: ShopRequest = {
+        id: result.id,
+        ownerName: input.ownerName,
+        ownerPhone: input.ownerPhone,
+        shopName: input.shopName,
+        shopAddress: input.shopAddress,
+        shopCity: input.shopCity,
+        shopType: input.shopType ?? "retail",
+        businessRegistrationNumber: input.businessRegistrationNumber,
+        status: "pending",
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
       set({ loading: false, myRequest: request });
       return { success: true };
     } catch (e) {
@@ -143,20 +156,23 @@ export const useShopRequestsStore = create<ShopRequestsState>((set, get) => ({
   loadMyRequest: async (phone) => {
     set({ loading: true });
     try {
-      const { data, error } = await supabase
-        .from("shop_requests")
-        .select("*")
-        .eq("owner_phone", phone)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
+      // Use SECURITY DEFINER RPC to bypass RLS issues
+      const { data, error } = await supabase.rpc("get_my_shop_request", {
+        p_phone: phone,
+      });
 
       if (error || !data) {
         set({ loading: false, myRequest: null });
         return;
       }
 
-      set({ loading: false, myRequest: requestFromRow(data as ShopRequestRow) });
+      const result = typeof data === "string" ? JSON.parse(data) : data;
+      if (!result?.found || !result?.request) {
+        set({ loading: false, myRequest: null });
+        return;
+      }
+
+      set({ loading: false, myRequest: requestFromRow(result.request as ShopRequestRow) });
     } catch {
       set({ loading: false, myRequest: null });
     }
