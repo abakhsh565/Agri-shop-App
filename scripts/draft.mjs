@@ -241,19 +241,27 @@ function cmdVerify(slug) {
     // execSync throws on non-zero exit; capture output from error
     vitestOutput = (e.stdout || '') + (e.stderr || '');
   }
-  // Match multiple Vitest output patterns:
-  //   "Tests  280 passed"         (all pass)
-  //   "Tests  279 passed | 1 failed"  (some fail)
-  //   "Test Files  17 passed"     (file-level)
+  // Match Vitest output patterns:
+  //   "Tests  280 passed"          (summary format)
+  //   "Test Files  17 passed"      (file-level)
+  //   "Total: 280, PASS: 280, FAIL: 0"  (verbose format)
   const passedMatch = vitestOutput.match(/Tests\s+(\d+)\s+passed/);
-  const failedMatch = vitestOutput.match(/(\d+)\s+failed/);
   const fileMatch = vitestOutput.match(/Test Files\s+(\d+)\s+passed/);
-  if (passedMatch && !failedMatch) {
-    testPassed = true;
-    console.log(`  Vitest: ${passedMatch[0]}`);
+  const totalMatch = vitestOutput.match(/Total:\s*(\d+),\s*PASS:\s*(\d+),\s*FAIL:\s*(\d+)/);
+  if (totalMatch) {
+    const total = parseInt(totalMatch[1]);
+    const pass = parseInt(totalMatch[2]);
+    const fail = parseInt(totalMatch[3]);
+    testPassed = fail === 0 && total > 0;
+    console.log(`  Vitest: ${totalMatch[0]}`);
+  } else if (passedMatch) {
+    const failM = vitestOutput.match(/(\d+)\s+failed/);
+    testPassed = !failM;
+    console.log(`  Vitest: ${passedMatch[0]}${failM ? ' | ' + failM[0] : ''}`);
   } else if (fileMatch) {
-    testPassed = !failedMatch;
-    console.log(`  Vitest: ${fileMatch[0]}${failedMatch ? ' | ' + failedMatch[0] : ''}`);
+    const failM = vitestOutput.match(/(\d+)\s+failed/);
+    testPassed = !failM;
+    console.log(`  Vitest: ${fileMatch[0]}${failM ? ' | ' + failM[0] : ''}`);
   } else {
     console.log('  Vitest: could not parse output');
   }
