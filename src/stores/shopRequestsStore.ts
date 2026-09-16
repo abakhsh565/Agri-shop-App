@@ -202,18 +202,22 @@ export const useShopRequestsStore = create<ShopRequestsState>((set, get) => ({
   approveRequest: async (requestId) => {
     set({ loading: true, error: null });
     try {
-      const { error } = await supabase
-        .from("shop_requests")
-        .update({
-          status: "approved",
-          reviewed_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", requestId);
+      // Use the SECURITY DEFINER RPC which creates shop + user
+      const { data, error } = await supabase.rpc("approve_shop_request", {
+        request_id: requestId,
+        admin_id: (await supabase.auth.getUser()).data.user?.id,
+      });
 
       if (error) {
         set({ loading: false, error: error.message });
         return { success: false, error: error.message };
+      }
+
+      const result = typeof data === "string" ? JSON.parse(data) : data;
+      if (!result?.success) {
+        const msg = result?.error || "Failed to approve request";
+        set({ loading: false, error: msg });
+        return { success: false, error: msg };
       }
 
       await get().loadAllRequests();
