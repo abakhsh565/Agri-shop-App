@@ -1,23 +1,4 @@
 {
-  "drafts": [
-    {
-      "slug": "draft-a",
-      "branch": "draft/draft-a",
-      "description": "Isolation test A",
-      "baseBranch": "main",
-      "baseCommit": "fcb9938",
-      "createdAt": "2026-09-14T13:45:11.687Z",
-      "status": "accepted",
-      "verification": {
-        "state": "verified",
-        "lastTestRun": "2026-09-14T13:49:46.582Z",
-        "testResults": null,
-        "evidence": [
-          "Manual verification for accept test"
-        ]
-      },
-      "acceptedAt": "2026-09-14T13:49:47.279Z"
-    }
-  ],
+  "drafts": [],
   "version": 1
 }

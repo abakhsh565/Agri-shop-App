@@ -1,5 +1,0 @@
-DRAFT A MARKER
-Created in: draft-a branch
-Purpose: Prove Draft A and Draft B are isolated
-Content: This file exists ONLY in Draft A. If Draft B can see it, isolation failed.
-Timestamp: proof of independent workspace
