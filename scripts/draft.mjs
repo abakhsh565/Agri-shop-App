@@ -62,7 +62,7 @@ function isWorkingClean() {
   const status = git('status --porcelain --untracked-files=no');
   if (!status) return true;
   const sourceExts = /\.(ts|tsx|js|mjs|cjs|json|sql|md|yml|yaml|css|html)$/;
-  const ignoreDirs = ['.engineering-os/', '.freebuff/'];
+  const ignoreDirs = ['.engineering-os/', '.freebuff/', 'supabase/.temp/'];
   const lines = status.split('\n').filter(l => l.trim());
   return lines.every(l => {
     // Porcelain format: XY <space> <path> — path starts after "XY " (index 3)
@@ -231,16 +231,31 @@ function cmdVerify(slug) {
 
   // Run tests
   let testPassed = false;
+  let vitestOutput = '';
   try {
     console.log('  Running Vitest...');
-    const vitestResult = execSync('npx vitest run --reporter=verbose 2>&1', {
+    vitestOutput = execSync('npx vitest run --reporter=verbose 2>&1', {
       cwd: ROOT, encoding: 'utf8', timeout: 300000
     });
-    const testMatch = vitestResult.match(/Tests\s+(\d+)\s+passed/);
-    testPassed = !!testMatch;
-    console.log(`  Vitest: ${testMatch ? testMatch[0] : 'completed'}`);
   } catch (e) {
-    console.log('  Vitest: some tests failed');
+    // execSync throws on non-zero exit; capture output from error
+    vitestOutput = (e.stdout || '') + (e.stderr || '');
+  }
+  // Match multiple Vitest output patterns:
+  //   "Tests  280 passed"         (all pass)
+  //   "Tests  279 passed | 1 failed"  (some fail)
+  //   "Test Files  17 passed"     (file-level)
+  const passedMatch = vitestOutput.match(/Tests\s+(\d+)\s+passed/);
+  const failedMatch = vitestOutput.match(/(\d+)\s+failed/);
+  const fileMatch = vitestOutput.match(/Test Files\s+(\d+)\s+passed/);
+  if (passedMatch && !failedMatch) {
+    testPassed = true;
+    console.log(`  Vitest: ${passedMatch[0]}`);
+  } else if (fileMatch) {
+    testPassed = !failedMatch;
+    console.log(`  Vitest: ${fileMatch[0]}${failedMatch ? ' | ' + failedMatch[0] : ''}`);
+  } else {
+    console.log('  Vitest: could not parse output');
   }
 
   // Build check
