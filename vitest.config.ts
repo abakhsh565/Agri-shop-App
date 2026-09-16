@@ -9,6 +9,7 @@ export default defineConfig({
     testTimeout: 30000,
     hookTimeout: 120000,
     setupFiles: ['tests/setup/localStorage-mock.cjs'],
+    globalSetup: 'tests/setup/global-teardown.ts',
     pool: 'forks',
   },
   resolve: {

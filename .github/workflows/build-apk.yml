@@ -53,6 +53,13 @@ jobs:
           path: tests/e2e/results.json
           retention-days: 7
 
+      # ─── Clean QA Database After Tests ──────────────────────────────
+      - name: Clean QA Database
+        if: always()
+        run: node scripts/clean-test-data.mjs
+        env:
+          QA_DATABASE_URL: postgresql://${{ secrets.QA_DB_USER }}:${{ secrets.QA_DB_PASS }}@${{ secrets.QA_DB_HOST }}:5432/postgres
+
   build:
     name: Build APK
     needs: [test]
