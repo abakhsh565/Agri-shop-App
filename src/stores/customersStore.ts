@@ -173,15 +173,20 @@ export const useCustomersStore = create<CustomersState>((set, get) => ({
       });
       if (error) throw error;
       
-      // Fetch the newly created customer
-      const { data: newCustomer, error: fetchError } = await supabase
-        .from("customers")
-        .select("*")
-        .eq("id", data.id)
-        .single();
-      if (fetchError) throw fetchError;
-      
-      const customer = customerFromRow(newCustomer as CustomerRow);
+      // Build customer from RPC response + input data (avoids fragile re-fetch)
+      const customer: Customer = {
+        id: data.id,
+        name: input.name,
+        phone: input.phone,
+        address: input.address,
+        creditLimit: input.creditLimit ?? 0,
+        outstandingBalance: 0,
+        totalPurchases: 0,
+        totalPaid: 0,
+        dueDate: null,
+        createdAt: new Date().toISOString(),
+        createdBy: input.createdBy ?? "",
+      };
       set({ customers: [customer, ...get().customers] });
       setCachedData(CACHE_KEY, [customer, ...get().customers]);
       return customer;
