@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { supabase } from "@/lib/supabase";
-import { getCachedData, setCachedData, isCacheStale } from "@/lib/localCache";
+import { getCachedData, setCachedData, isCacheStale, clearCachedData } from "@/lib/localCache";
 import { enqueueOperation } from "@/lib/offlineQueue";
 import type { Customer } from "@/types";
 
@@ -125,6 +125,7 @@ export const useCustomersStore = create<CustomersState>((set, get) => ({
       const { data, error } = await supabase
         .from("customers")
         .select("*")
+        .eq("is_archived", false)
         .order("name");
       if (error) {
         if (!cached) {
@@ -234,11 +235,10 @@ export const useCustomersStore = create<CustomersState>((set, get) => ({
       p_customer_id: id,
     });
     if (error) throw new Error(error.message);
-    set({
-      customers: get().customers.map((c) =>
-        c.id === id ? { ...c, isArchived: true, archivedAt: new Date().toISOString() } : c
-      ),
-    });
+    // Remove from local list + invalidate cache so stale data doesn't reappear
+    const remaining = get().customers.filter((c) => c.id !== id);
+    set({ customers: remaining });
+    setCachedData(CACHE_KEY, remaining);
   },
 
   restoreCustomer: async (id) => {
@@ -246,11 +246,9 @@ export const useCustomersStore = create<CustomersState>((set, get) => ({
       p_customer_id: id,
     });
     if (error) throw new Error(error.message);
-    set({
-      customers: get().customers.map((c) =>
-        c.id === id ? { ...c, isArchived: false, archivedAt: null, archivedBy: null } : c
-      ),
-    });
+    // Invalidate cache so next load() fetches fresh data from DB
+    clearCachedData(CACHE_KEY);
+    await get().load();
   },
 
   updateDueDate: async (id, dueDate) => {
