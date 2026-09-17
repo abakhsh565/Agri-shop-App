@@ -199,7 +199,16 @@ export default function CustomerProfilePage() {
     setDeleting(true);
     try {
       await rpcArchiveCustomer(customerId);
-      await useCustomersStore.getState().load();
+      // Remove from local store + invalidate cache immediately
+      // (load() may fail with 401 if session expired, but archive succeeded)
+      const store = useCustomersStore.getState();
+      const remaining = store.customers.filter((c) => c.id !== customerId);
+      useCustomersStore.setState({ customers: remaining });
+      // Also update cache to prevent stale data from reappearing on navigation
+      try {
+        const { setCachedData } = await import("@/lib/localCache");
+        setCachedData("customers", remaining);
+      } catch { /* cache update non-critical */ }
       addToast(t("customerProfile.customerDeleted"), "success");
       navigate(base + "/customers", { replace: true });
     } catch (err) {

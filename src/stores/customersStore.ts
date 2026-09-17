@@ -188,8 +188,9 @@ export const useCustomersStore = create<CustomersState>((set, get) => ({
         createdAt: new Date().toISOString(),
         createdBy: input.createdBy ?? "",
       };
-      set({ customers: [customer, ...get().customers] });
-      setCachedData(CACHE_KEY, [customer, ...get().customers]);
+      const updated = [customer, ...get().customers];
+      set({ customers: updated });
+      setCachedData(CACHE_KEY, updated);
       return customer;
     } catch (err) {
       // If network error, queue for later
@@ -208,8 +209,9 @@ export const useCustomersStore = create<CustomersState>((set, get) => ({
           createdAt: new Date().toISOString(),
           createdBy: input.createdBy ?? "",
         };
-        set({ customers: [tempCustomer, ...get().customers] });
-        setCachedData(CACHE_KEY, [tempCustomer, ...get().customers]);
+        const updatedOffline = [tempCustomer, ...get().customers];
+        set({ customers: updatedOffline });
+        setCachedData(CACHE_KEY, updatedOffline);
         enqueueOperation({ type: "create_customer", payload: rowPayload });
         return tempCustomer;
       }
