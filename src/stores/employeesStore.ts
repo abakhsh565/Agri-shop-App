@@ -44,10 +44,6 @@ function userFromRow(r: UserRow): User {
   };
 }
 
-const UUID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const asUuidOrNull = (id?: string | null) =>
-  id && UUID_RE.test(id) ? id : null;
 
 interface EmployeesState {
   employees: User[];
@@ -126,27 +122,14 @@ export const useEmployeesStore = create<EmployeesState>((set, get) => ({
   },
 
   setActive: async (id, active, byUserId) => {
-    const patch: Record<string, unknown> = { is_active: active };
-    if (!active) {
-      patch.deactivated_at = new Date().toISOString();
-      patch.deactivated_by = asUuidOrNull(byUserId);
-    } else {
-      patch.deactivated_at = null;
-      patch.deactivated_by = null;
-    }
-    const { error } = await supabase.from("users").update(patch).eq("id", id);
-    if (error) throw new Error(error.message);
-    set({
-      employees: get().employees.map((e) =>
-        e.id === id
-          ? {
-              ...e,
-              isActive: active,
-              deactivatedAt: active ? null : (patch.deactivated_at as string),
-              deactivatedBy: active ? null : (patch.deactivated_by as string | null),
-            }
-          : e
-      ),
+    // Use backend RPC instead of direct UPDATE.
+    // RPC handles: admin auth, tenant isolation, membership sync, audit logging.
+    const rpcName = active ? "activate_employee_v1" : "deactivate_employee_v1";
+    const { data, error } = await supabase.rpc(rpcName, {
+      payload: { employeeId: id },
     });
+    if (error) throw new Error(error.message);
+    // Reload to get fresh state from DB (membership status, timestamps, etc.)
+    await get().load();
   },
 }));
