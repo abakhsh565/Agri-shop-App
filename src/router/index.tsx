@@ -14,6 +14,7 @@ import DeactivatedPage from "@/pages/auth/DeactivatedPage";
 import UnderReviewPage from "@/pages/auth/UnderReviewPage";
 import RejectedPage from "@/pages/auth/RejectedPage";
 import SetupDemoPage from "@/pages/auth/SetupDemoPage";
+import PermissionGuard from "@/components/auth/PermissionGuard";
 
 // Registration
 import RegisterPhonePage from "@/pages/register/RegisterPhonePage";
@@ -122,57 +123,116 @@ export const router = createBrowserRouter([
     children: [
       { index: true, element: <Navigate to="/admin/dashboard" replace /> },
       { path: "dashboard",  element: <AdminDashboardPage /> },
-      { path: "sale",       element: <SelectCustomerPage /> },
-      { path: "sale/products", element: <BrowseProductsPage /> },
-      { path: "sale/products/:productId", element: <VariantSelectorPage /> },
-      { path: "sale/cart",  element: <CartPage /> },
-
-      { path: "sale/success", element: <SaleSuccessPage /> },
-      { path: "sales",      element: <AdminSalesListPage /> },
-      { path: "sales/:saleId", element: <AdminSaleDetailPage /> },
-      { path: "inventory/new", element: <AddProductPage /> },
-      { path: "inventory/:productId/edit", element: <AddProductPage /> },
-      { path: "inventory/:productId/adjust", element: <InventoryAdjustPage /> },
-      { path: "customers",  element: <CustomersListPage /> },
-      { path: "customers/new", element: <AddCustomerPage /> },
-      { path: "customers/:customerId", element: <CustomerProfilePage /> },
-      { path: "customers/:customerId/purchases", element: <CustomerPurchaseHistoryPage /> },
-      { path: "customers/:customerId/payments",  element: <CustomerPaymentHistoryPage /> },
-      { path: "customers/:customerId/record-payment", element: <RecordCustomerPaymentPage /> },
-      { path: "customers/:customerId/reminders", element: <ReminderHistoryPage /> },
-      { path: "alerts/credit-overrides", element: <CreditOverridesPage /> },
-      { path: "alerts/credit-overrides/:customerId", element: <CreditOverrideDetailPage /> },
-      { path: "alerts/reminders", element: <RemindersOverviewPage /> },
-      { path: "alerts/inventory", element: <InventoryAlertsPage /> },
-      { path: "alerts/credit-requests/:requestId", element: <CreditRequestDetailPage /> },
-      { path: "alerts/groups/:groupId", element: <GroupDetailPage /> },
       { path: "more",       element: <MoreMenuPage /> },
-      { path: "employees",  element: <EmployeesListPage /> },
-      { path: "employees/new", element: <AddEmployeePage /> },
-      { path: "employees/:employeeId", element: <EmployeeDetailPage /> },
-      { path: "companies",  element: <CompaniesListPage /> },
-      { path: "companies/new", element: <AddCompanyPage /> },
-      { path: "companies/:companyId", element: <CompanyDetailPage /> },
-      { path: "settings",   element: <AdminSettingsPage /> },
-      { path: "activity",   element: <ActivityLogPage /> },
-      { path: "notifications", element: <AdminNotificationsPage /> },
       { path: "search", element: <SearchPage /> },
-      { path: "products",   element: <ProductsListPage /> },
-      { path: "products/:productId", element: <ProductDetailPage /> },
-      { path: "purchases",  element: <AdminPurchasesPage /> },
-      { path: "purchases/new", element: <RecordPurchasePage /> },
-      { path: "reports",    element: <AdminReportsPage /> },
-      { path: "payments",   element: <AdminPaymentsPage /> },
-      { path: "payments/supplier/:companyId", element: <RecordSupplierPaymentPage /> },
-      { path: "payments/daily-cash", element: <DailyCashReconciliationPage /> },
-      { path: "purchases/:purchaseId", element: <PurchaseDetailPage /> },
-      { path: "inventory/movements", element: <StockMovementHistoryPage /> },
-      { path: "inventory/reorder", element: <ReorderSuggestionsPage /> },
-      { path: "inventory/barcodes", element: <BarcodeGeneratePage /> },
       { path: "observation-bot", element: <ObservationBotPage /> },
-      { path: "sales/:saleId/return", element: <AdminReturnSelectItemsPage /> },
-      { path: "sales/:saleId/return/confirm", element: <AdminReturnConfirmPage /> },
-      { path: "sales/:saleId/return/success", element: <AdminReturnSuccessPage /> },
+
+      // ── Customers (requires customers.view) ──────────────────────────────
+      { element: <PermissionGuard requires="customers.view" />,
+        children: [
+          { path: "customers",  element: <CustomersListPage /> },
+          { path: "customers/new", element: <AddCustomerPage /> },
+          { path: "customers/:customerId", element: <CustomerProfilePage /> },
+          { path: "customers/:customerId/purchases", element: <CustomerPurchaseHistoryPage /> },
+          { path: "customers/:customerId/payments",  element: <CustomerPaymentHistoryPage /> },
+          { path: "customers/:customerId/record-payment", element: <RecordCustomerPaymentPage /> },
+          { path: "customers/:customerId/reminders", element: <ReminderHistoryPage /> },
+        ] },
+
+      // ── Products (requires products.view) ────────────────────────────────
+      { element: <PermissionGuard requires="products.view" />,
+        children: [
+          { path: "products",   element: <ProductsListPage /> },
+          { path: "products/:productId", element: <ProductDetailPage /> },
+          { path: "inventory/new", element: <AddProductPage /> },
+          { path: "inventory/:productId/edit", element: <AddProductPage /> },
+          { path: "inventory/:productId/adjust", element: <InventoryAdjustPage /> },
+          { path: "inventory/movements", element: <StockMovementHistoryPage /> },
+          { path: "inventory/reorder", element: <ReorderSuggestionsPage /> },
+          { path: "inventory/barcodes", element: <BarcodeGeneratePage /> },
+        ] },
+
+      // ── Sales (requires sales.view) ──────────────────────────────────────
+      { element: <PermissionGuard requires="sales.view" />,
+        children: [
+          { path: "sale",       element: <SelectCustomerPage /> },
+          { path: "sale/products", element: <BrowseProductsPage /> },
+          { path: "sale/products/:productId", element: <VariantSelectorPage /> },
+          { path: "sale/cart",  element: <CartPage /> },
+          { path: "sale/success", element: <SaleSuccessPage /> },
+          { path: "sales",      element: <AdminSalesListPage /> },
+          { path: "sales/:saleId", element: <AdminSaleDetailPage /> },
+          { path: "sales/:saleId/return", element: <AdminReturnSelectItemsPage /> },
+          { path: "sales/:saleId/return/confirm", element: <AdminReturnConfirmPage /> },
+          { path: "sales/:saleId/return/success", element: <AdminReturnSuccessPage /> },
+        ] },
+
+      // ── Purchases (requires purchases.view) ──────────────────────────────
+      { element: <PermissionGuard requires="purchases.view" />,
+        children: [
+          { path: "purchases",  element: <AdminPurchasesPage /> },
+          { path: "purchases/new", element: <RecordPurchasePage /> },
+          { path: "purchases/:purchaseId", element: <PurchaseDetailPage /> },
+        ] },
+
+      // ── Payments (requires payments.view) ────────────────────────────────
+      { element: <PermissionGuard requires="payments.view" />,
+        children: [
+          { path: "payments",   element: <AdminPaymentsPage /> },
+          { path: "payments/supplier/:companyId", element: <RecordSupplierPaymentPage /> },
+          { path: "payments/daily-cash", element: <DailyCashReconciliationPage /> },
+        ] },
+
+      // ── Suppliers/Companies (requires companies.view) ────────────────────
+      { element: <PermissionGuard requires="companies.view" />,
+        children: [
+          { path: "companies",  element: <CompaniesListPage /> },
+          { path: "companies/new", element: <AddCompanyPage /> },
+          { path: "companies/:companyId", element: <CompanyDetailPage /> },
+        ] },
+
+      // ── Employees (requires employees.view) ──────────────────────────────
+      { element: <PermissionGuard requires="employees.view" />,
+        children: [
+          { path: "employees",  element: <EmployeesListPage /> },
+          { path: "employees/new", element: <AddEmployeePage /> },
+          { path: "employees/:employeeId", element: <EmployeeDetailPage /> },
+        ] },
+
+      // ── Reports (requires reports.view) ──────────────────────────────────
+      { element: <PermissionGuard requires="reports.view" />,
+        children: [
+          { path: "reports",    element: <AdminReportsPage /> },
+        ] },
+
+      // ── Settings (requires settings.view) ────────────────────────────────
+      { element: <PermissionGuard requires="settings.view" />,
+        children: [
+          { path: "settings",   element: <AdminSettingsPage /> },
+        ] },
+
+      // ── Activity (requires activity.view) ────────────────────────────────
+      { element: <PermissionGuard requires="activity.view" />,
+        children: [
+          { path: "activity",   element: <ActivityLogPage /> },
+        ] },
+
+      // ── Notifications (requires notifications.view) ──────────────────────
+      { element: <PermissionGuard requires="notifications.view" />,
+        children: [
+          { path: "notifications", element: <AdminNotificationsPage /> },
+        ] },
+
+      // ── Alerts (requires alerts.view) ────────────────────────────────────
+      { element: <PermissionGuard requires="alerts.view" />,
+        children: [
+          { path: "alerts/credit-overrides", element: <CreditOverridesPage /> },
+          { path: "alerts/credit-overrides/:customerId", element: <CreditOverrideDetailPage /> },
+          { path: "alerts/reminders", element: <RemindersOverviewPage /> },
+          { path: "alerts/inventory", element: <InventoryAlertsPage /> },
+          { path: "alerts/credit-requests/:requestId", element: <CreditRequestDetailPage /> },
+          { path: "alerts/groups/:groupId", element: <GroupDetailPage /> },
+        ] },
     ],
   }],
   },
