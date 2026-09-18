@@ -199,6 +199,7 @@ export interface ProductVariant {
   sku?: string;
   sellingPrice: number;
   costPrice: number;
+  stockQty: number;
   unitSize: number;
   qtyStep: number;
   lowStockThreshold: number;

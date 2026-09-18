@@ -194,10 +194,16 @@ export default function AdminDashboardPage() {
 
   // Alerts
   const lowStockCount = mockProducts.reduce((c, p) => {
-    const bad = p.stockQty <= (p.variants[0]?.lowStockThreshold ?? 5);
+    // Check variant-level stock (not product-level)
+    const variantStock = p.variants.reduce((sum, v) => sum + (v.stockQty ?? 0), 0);
+    const threshold = p.variants.length > 0 ? Math.min(...p.variants.map((v) => v.lowStockThreshold)) : 5;
+    const bad = variantStock > 0 && variantStock <= threshold;
     return c + (bad ? 1 : 0);
   }, 0);
-  const outOfStockCount = mockProducts.filter(p => p.stockQty === 0).length;
+  const outOfStockCount = mockProducts.filter(p => {
+    const variantStock = p.variants.reduce((sum, v) => sum + (v.stockQty ?? 0), 0);
+    return variantStock === 0;
+  }).length;
   const totalPayable = mockCompanies.reduce((s, c) => s + c.outstandingPayable, 0);
   
   const [pendingCreditRequests, setPendingCreditRequests] = useState(0);
@@ -433,7 +439,7 @@ export default function AdminDashboardPage() {
             {t("admin.totalSales")}
           </p>
           <p className="text-[28px] font-semibold leading-none" style={{ color: "#0a0a0a" }}>
-            {formatRs(totalSales - totalReturns)}
+            {formatRs(totalSales)}
           </p>
 
           <div className="flex items-end justify-between mt-4">

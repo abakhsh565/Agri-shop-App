@@ -14,7 +14,8 @@ const CACHE_KEY = "products";
 interface ProductRow {
   id: string;
   name: string;
-  company: string;
+  company: string | null;
+  company_id: string | null;
   category: ProductCategory;
   image_url: string | null;
   barcode: string | null;
@@ -29,6 +30,7 @@ interface VariantRow {
   sku: string | null;
   selling_price: number;
   cost_price?: number;
+  stock_qty: number;
   unit_size: number | null;
   qty_step: number | null;
   low_stock_threshold: number;
@@ -43,6 +45,7 @@ function variantFromRow(r: VariantRow): ProductVariant {
     sku: r.sku ?? undefined,
     sellingPrice: Number(r.selling_price),
     costPrice: Number(r.cost_price ?? 0),
+    stockQty: Number(r.stock_qty ?? 0),
     unitSize: Number(r.unit_size ?? 1),
     qtyStep: Number(r.qty_step ?? 1),
     lowStockThreshold: r.low_stock_threshold,
@@ -120,17 +123,30 @@ export const useProductsStore = create<ProductsState>((set, get) => ({
         byProduct.set(v.product_id, list);
       }
 
-      const products: Product[] = ((prods as ProductRow[]) ?? []).map((p) => ({
-        id: p.id,
-        name: p.name,
-        company: p.company,
-        category: p.category,
-        imageUrl: p.image_url ?? undefined,
-        barcode: p.barcode ?? undefined,
-        baseUnit: (p.base_unit as BaseUnit) ?? "piece",
-        stockQty: Number(p.stock_qty ?? 0),
-        variants: byProduct.get(p.id) ?? [],
-      }));
+      // Resolve company names for products (company_id → company name)
+      const companyRows = (await supabase.from("companies").select("id, name")).data ?? [];
+      const companyMap = new Map(companyRows.map((c: any) => [c.id, c.name]));
+
+      const products: Product[] = ((prods as ProductRow[]) ?? []).map((p) => {
+        const variants = byProduct.get(p.id) ?? [];
+        // Compute total stock from variants (not from products.stock_qty which may be stale)
+        const computedStockQty = variants.length > 0
+          ? variants.reduce((sum, v) => sum + (v.stockQty ?? 0), 0)
+          : Number(p.stock_qty ?? 0);
+        // Resolve company name: prefer company_id lookup, fallback to legacy company column
+        const companyName = p.company_id ? companyMap.get(p.company_id) ?? p.company : p.company ?? "";
+        return {
+          id: p.id,
+          name: p.name,
+          company: companyName,
+          category: p.category,
+          imageUrl: p.image_url ?? undefined,
+          barcode: p.barcode ?? undefined,
+          baseUnit: (p.base_unit as BaseUnit) ?? "piece",
+          stockQty: computedStockQty,
+          variants,
+        };
+      });
 
       // Save to cache
       setCachedData(CACHE_KEY, products);

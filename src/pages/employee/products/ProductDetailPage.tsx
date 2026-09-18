@@ -254,7 +254,7 @@ export default function ProductDetailPage() {
 
           {/* Variants list */}
           {product.variants.map((v, i) => {
-            const available = Math.floor(product.stockQty / v.unitSize);
+            const available = v.stockQty ?? 0;
             const vStatus = available === 0 ? "out_of_stock" : available <= v.lowStockThreshold ? "low_stock" : "in_stock";
             const vColor = getStockStatusColor(vStatus);
             return (

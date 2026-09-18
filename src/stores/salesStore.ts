@@ -30,16 +30,15 @@ interface SaleRow {
   id: string;
   sale_number: string;
   customer_id: string | null;
-  customer_name: string;
+  customer_name_snapshot: string;
   customer_phone: string | null;
   customer_address: string | null;
   employee_id: string | null;
   employee_name: string;
-  subtotal: number;
-  tax_amount: number;
   total_amount: number;
+  discount: number;
   amount_paid: number;
-  outstanding_balance: number;
+  amount_due: number;
   payment_type: Sale["paymentType"];
   payment_method: Sale["paymentMethod"];
   is_voided: boolean;
@@ -72,17 +71,17 @@ function saleFromRow(r: SaleRow): Sale {
     id: r.id,
     saleNumber: r.sale_number,
     customerId: r.customer_id ?? "",
-    customerName: r.customer_name,
+    customerName: r.customer_name_snapshot,
     customerPhone: r.customer_phone ?? undefined,
     customerAddress: r.customer_address ?? undefined,
     employeeId: r.employee_id ?? "",
     employeeName: r.employee_name,
     items: (r.sale_items ?? []).map(itemFromRow),
-    subtotal: Number(r.subtotal),
-    taxAmount: Number(r.tax_amount),
+    subtotal: Number(r.total_amount),
+    taxAmount: 0,
     totalAmount: Number(r.total_amount),
     amountPaid: Number(r.amount_paid),
-    outstandingBalance: Number(r.outstanding_balance),
+    outstandingBalance: Number(r.amount_due),
     paymentType: r.payment_type,
     paymentMethod: r.payment_method,
     isVoided: r.is_voided,

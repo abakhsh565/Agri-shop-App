@@ -46,7 +46,7 @@ export default function ProductsListPage() {
   });
 
   function productStatus(p: Product) {
-    const statuses = p.variants.map((v) => getStockStatus(p.stockQty, v.lowStockThreshold));
+    const statuses = p.variants.map((v) => getStockStatus(v.stockQty, v.lowStockThreshold));
     if (statuses.every((s) => s === "out_of_stock")) return "out_of_stock" as const;
     if (statuses.some((s) => s === "low_stock"))     return "low_stock" as const;
     return "in_stock" as const;
