@@ -59,3 +59,36 @@ export function isCurrentUserAdmin(): boolean {
 export function isCurrentUserOwner(): boolean {
   return getCurrentMembershipRole() === "owner";
 }
+
+// ── Permission checks ────────────────────────────────────────────────────────
+
+/**
+ * Get the current user's granted permissions.
+ * Owner gets all permissions implicitly.
+ */
+export function getCurrentPermissions(): string[] {
+  const user = useAuthStore.getState().user;
+  if (!user) return [];
+  // Owner has all permissions implicitly
+  if (user.membershipRole === "owner") return ["*"];
+  return user.permissions ?? [];
+}
+
+/**
+ * Check if the current user has a specific permission.
+ * Owner always has all permissions.
+ */
+export function hasPermission(code: string): boolean {
+  const perms = getCurrentPermissions();
+  if (perms.includes("*")) return true;
+  return perms.includes(code);
+}
+
+/**
+ * Check if the current user can access a module (any action).
+ */
+export function canAccessModule(module: string): boolean {
+  const perms = getCurrentPermissions();
+  if (perms.includes("*")) return true;
+  return perms.some(p => p.startsWith(module + "."));
+}

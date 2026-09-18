@@ -145,6 +145,31 @@ export interface Membership {
 export type MembershipRole = 'owner' | 'admin' | 'employee';
 export type MembershipStatus = 'active' | 'suspended' | 'pending';
 
+// ── RBAC Permissions ─────────────────────────────────────────────────────────
+export interface Permission {
+  id: string;
+  code: string;       // e.g. 'customers.view'
+  module: string;     // e.g. 'customers'
+  action: string;     // e.g. 'view'
+  labelEn: string;
+  labelUr: string;
+}
+
+export type PermissionCode =
+  | 'customers.view' | 'customers.create' | 'customers.edit' | 'customers.delete' | 'customers.payments'
+  | 'products.view' | 'products.create' | 'products.edit' | 'products.delete'
+  | 'sales.view' | 'sales.create' | 'sales.void'
+  | 'returns.view' | 'returns.create'
+  | 'purchases.view' | 'purchases.create'
+  | 'payments.view' | 'payments.supplier'
+  | 'inventory.view' | 'inventory.adjust'
+  | 'companies.view' | 'companies.create' | 'companies.edit'
+  | 'reports.view'
+  | 'employees.view' | 'employees.manage'
+  | 'settings.view' | 'settings.edit'
+  | 'activity.view' | 'notifications.view'
+  | 'alerts.view' | 'alerts.manage';
+
 export interface User {
   id: string;
   name: string;
@@ -167,6 +192,7 @@ export interface User {
   membershipId?: string;
   membershipRole?: MembershipRole;  // owner/admin/employee via membership
   membershipStatus?: MembershipStatus;
+  permissions?: string[];  // granted permission codes (owner gets all implicitly)
   branchScope?: string[] | null;
 }
 

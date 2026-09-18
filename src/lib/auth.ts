@@ -72,6 +72,18 @@ function userFromRow(r: UserRow): User {
   };
 }
 
+// Load user permissions via get_my_permissions() SECURITY DEFINER RPC.
+// Owner gets all permissions implicitly; admin/employee get explicit grants.
+async function loadPermissions(): Promise<string[]> {
+  try {
+    const { data, error } = await supabase.rpc("get_my_permissions");
+    if (error || !data) return [];
+    return Array.isArray(data) ? data : [];
+  } catch {
+    return [];
+  }
+}
+
 // Best-effort login-timestamp write. Never throws: if the column is somehow
 // missing on an out-of-date deployment, login must still succeed.
 async function touchLogin(userId: string, isFirst: boolean): Promise<void> {
@@ -197,8 +209,8 @@ export async function verifyOTPAndResolveUser(
     if (!row.is_active) return { status: "deactivated" };
     void touchLogin(row.id, !row.first_login_at);
     const user = userFromRow(row);
-    // Membership context is loaded in getUserFromSession() after session is fully established.
-    // Do NOT query memberships here — the JWT may not be ready yet.
+    // Load permissions after auth session is established
+    user.permissions = await loadPermissions();
     return { status: "ok", user };
   }
 
@@ -250,8 +262,9 @@ export async function getUserFromSession(): Promise<User | null> {
     const { data } = await supabase
       .rpc("lookup_user_by_phone", { p_phone: savedUser.phone });
     if (data && (data as UserRow).is_active) {
-      // userFromRow now includes tenant_id/membership fields from the RPC response
-      return userFromRow(data as UserRow);
+      const user = userFromRow(data as UserRow);
+      user.permissions = await loadPermissions();
+      return user;
     }
   } catch { /* invalid session */ }
   window.localStorage.removeItem("agri_auth");

@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { supabase } from "@/lib/supabase";
-import type { User, UserRole } from "@/types";
+import type { User, UserRole, MembershipRole } from "@/types";
 
 // Employees ARE rows in the `users` table (the same table auth resolves login
 // against). Admins manage them; RLS lets admins read/insert/update all users.
@@ -54,13 +54,22 @@ interface EmployeesState {
   subscribe: () => () => void;
   createEmployee: (input: {
     name: string;
-    phone: string; // already normalized (E.164 digits)
+    phone: string;
     role: Exclude<UserRole, "admin">;
+    membershipRole?: MembershipRole;
     jobTitle?: string;
     photoUrl?: string;
+    permissions?: string[];
+    branchScope?: string[] | null;
     createdBy?: string | null;
   }) => Promise<User>;
   setActive: (id: string, active: boolean, byUserId?: string | null) => Promise<void>;
+  updateAccess: (employeeId: string, input: {
+    membershipRole?: MembershipRole;
+    permissions?: string[];
+    branchScope?: string[] | null;
+  }) => Promise<void>;
+  loadEmployeePermissions: (employeeId: string) => Promise<string[]>;
 }
 
 let channel: ReturnType<typeof supabase.channel> | null = null;
@@ -109,16 +118,48 @@ export const useEmployeesStore = create<EmployeesState>((set, get) => ({
         name: input.name,
         phone: input.phone,
         role: input.role,
+        membershipRole: input.membershipRole ?? null,
         jobTitle: input.jobTitle ?? null,
         photoUrl: input.photoUrl ?? null,
+        permissions: input.permissions ?? null,
+        branchScope: input.branchScope ?? null,
         createdBy: input.createdBy ?? null,
       },
     });
     if (error) throw new Error(error.message);
-    // Reload employees to get the full record with correct employee_number
     await get().load();
     const created = get().employees.find((e) => e.id === data.id);
     return created!;
+  },
+
+  updateAccess: async (employeeId, input) => {
+    const { error } = await supabase.rpc("update_employee_access", {
+      payload: {
+        employeeId,
+        membershipRole: input.membershipRole ?? undefined,
+        permissions: input.permissions ?? undefined,
+        branchScope: input.branchScope === undefined ? undefined : input.branchScope,
+      },
+    });
+    if (error) throw new Error(error.message);
+    await get().load();
+  },
+
+  loadEmployeePermissions: async (employeeId) => {
+    // For the current user, use get_my_permissions().
+    // For other employees, query user_permissions directly.
+    const currentUser = (await import("@/stores/authStore")).useAuthStore.getState().user;
+    if (currentUser?.id === employeeId) {
+      const { data } = await supabase.rpc("get_my_permissions");
+      return Array.isArray(data) ? data : [];
+    }
+    // Query via direct table access (RLS allows admin to see same-tenant users)
+    const { data } = await supabase
+      .from("user_permissions")
+      .select("permissions(code)")
+      .eq("user_id", employeeId);
+    if (!data) return [];
+    return data.map((r: any) => r.permissions?.code).filter(Boolean);
   },
 
   setActive: async (id, active, byUserId) => {

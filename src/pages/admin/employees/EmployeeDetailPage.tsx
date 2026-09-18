@@ -1,22 +1,25 @@
+import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useThemeStore } from "@/stores/themeStore";
 import { useT } from "@/lib/i18n";
 import { useEmployeesStore } from "@/stores/employeesStore";
+import { usePermissionsStore } from "@/stores/permissionsStore";
 import { useSalesStore } from "@/stores/salesStore";
 import { useCustomersStore } from "@/stores/customersStore";
+import { useAuthStore } from "@/stores/authStore";
+import { useUIStore } from "@/stores/uiStore";
+import { supabase } from "@/lib/supabase";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
 import { formatCurrency, formatSmartDateTime } from "@/lib/formatters";
 import { pkToday, pkDateFromISO } from "@/lib/pkDate";
-import { useUIStore } from "@/stores/uiStore";
-import { useAuthStore } from "@/stores/authStore";
 import { useCurrentTime } from "@/lib/useCurrentTime";
 import {
   Phone, Briefcase, Hash, ShieldCheck, UserX, UserCheck,
   TrendingUp, ShoppingCart, Users, Calendar, ChevronRight,
-  Eye, Package
+  Eye, Package, Settings, ChevronDown, Check, X, Building2,
 } from "lucide-react";
-import type { Sale } from "@/types";
+import type { Sale, MembershipRole, PermissionCode } from "@/types";
 
 function initBgColor(name: string | null | undefined) {
   const colors = ["#84cc16","#3b82f6","#8b5cf6","#f59e0b","#06b6d4","#ec4899"];
@@ -25,6 +28,30 @@ function initBgColor(name: string | null | undefined) {
   for (const c of name) hash = (hash * 31 + c.charCodeAt(0)) & 0xffff;
   return colors[hash % colors.length];
 }
+
+// Permission modules grouped for the UI
+const PERMISSION_MODULES = [
+  { module: "customers", label: "Customers", icon: Users },
+  { module: "products", label: "Products", icon: Package },
+  { module: "sales", label: "Sales", icon: ShoppingCart },
+  { module: "returns", label: "Returns", icon: Package },
+  { module: "purchases", label: "Purchases", icon: Package },
+  { module: "payments", label: "Payments", icon: Package },
+  { module: "inventory", label: "Inventory", icon: Package },
+  { module: "companies", label: "Suppliers", icon: Building2 },
+  { module: "reports", label: "Reports", icon: TrendingUp },
+  { module: "employees", label: "Employees", icon: Users },
+  { module: "settings", label: "Settings", icon: Settings },
+  { module: "activity", label: "Activity", icon: Eye },
+  { module: "notifications", label: "Notifications", icon: Eye },
+  { module: "alerts", label: "Alerts", icon: Eye },
+];
+
+const ROLE_OPTIONS: { value: MembershipRole; label: string; description: string }[] = [
+  { value: "owner", label: "Owner", description: "Full access to everything" },
+  { value: "admin", label: "Admin", description: "Manage all operations" },
+  { value: "employee", label: "Employee", description: "Assigned permissions only" },
+];
 
 export default function EmployeeDetailPage() {
   const { employeeId } = useParams<{ employeeId: string }>();
@@ -36,11 +63,44 @@ export default function EmployeeDetailPage() {
   const isUrdu = language === "ur";
   const employees = useEmployeesStore((s) => s.employees);
   const setActiveAction = useEmployeesStore((s) => s.setActive);
+  const updateAccess = useEmployeesStore((s) => s.updateAccess);
+  const loadEmpPerms = useEmployeesStore((s) => s.loadEmployeePermissions);
   const sales = useSalesStore((s) => s.sales);
   const customers = useCustomersStore((s) => s.customers);
+  const permissionsStore = usePermissionsStore();
   const now = useCurrentTime();
 
   const emp = employees.find((e) => e.id === employeeId);
+
+  // Permission editing state
+  const [showPermEditor, setShowPermEditor] = useState(false);
+  const [editRole, setEditRole] = useState<MembershipRole>("employee");
+  const [editPerms, setEditPerms] = useState<Set<string>>(new Set());
+  const [editBranchScope, setEditBranchScope] = useState<string[] | null>(null);
+  const [empPerms, setEmpPerms] = useState<string[]>([]);
+  const [branches, setBranches] = useState<{ id: string; name: string }[]>([]);
+  const [saving, setSaving] = useState(false);
+
+  // Load permissions and branches on mount
+  useEffect(() => {
+    permissionsStore.load();
+    // Load branches
+    supabase.from("branches").select("id, name").eq("is_active", true).then(({ data }) => {
+      setBranches((data as any[]) ?? []);
+    });
+  }, []);
+
+  // Load employee's current permissions when emp changes
+  useEffect(() => {
+    if (emp && employeeId) {
+      setEditRole(emp.membershipRole ?? "employee");
+      loadEmpPerms(employeeId).then((perms) => {
+        setEmpPerms(perms);
+        setEditPerms(new Set(perms));
+      });
+    }
+  }, [emp?.id]);
+
   if (!emp) return (
     <div style={{ background: "var(--background)", color: "var(--text-primary)" }} className="flex flex-col min-h-full">
       <StatusBar />
@@ -53,49 +113,65 @@ export default function EmployeeDetailPage() {
   );
 
   const empSales = sales.filter((s: Sale) => !s.isVoided && (s.employeeId === emp.id || s.employeeName === emp.name));
+  const recentSales = [...empSales].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 5);
   const todayStr = pkToday();
-
-  // Performance stats
   const totalRevenue = empSales.reduce((sum, x) => sum + x.totalAmount, 0);
   const totalTransactions = empSales.length;
-  const avgSaleValue = totalTransactions > 0 ? Math.round(totalRevenue / totalTransactions) : 0;
   const todaySales = empSales.filter(s => pkDateFromISO(s.createdAt) === todayStr);
   const todayRevenue = todaySales.reduce((sum, x) => sum + x.totalAmount, 0);
   const todayTransactions = todaySales.length;
-
-  // Unique customers served
-  const customerIds = [...new Set(empSales.map(s => s.customerId).filter(Boolean))];
-  const uniqueCustomers = customerIds
-    .map(id => customers.find(c => c.id === id))
-    .filter(Boolean);
-
-  // Total items sold
   const totalItems = empSales.reduce((sum, s) => sum + s.items.reduce((isum, it) => isum + it.qty, 0), 0);
-
-  // Recent sales (last 5)
-  const recentSales = [...empSales].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 5);
-
-  // Sales by payment type
-  const paidSales = empSales.filter(s => s.paymentType === "full");
-  const creditSales = empSales.filter(s => s.paymentType !== "full");
-  const creditOutstanding = creditSales.reduce((sum, s) => sum + (s.outstandingBalance || 0), 0);
-  const creditExtended = creditSales.reduce((sum, s) => sum + s.totalAmount, 0);
-  const creditPaidBack = creditExtended - creditOutstanding;
-  const creditPct = creditExtended > 0 ? Math.min(100, Math.round((creditPaidBack / creditExtended) * 100)) : 0;
+  const customerIds = [...new Set(empSales.map(s => s.customerId).filter(Boolean))];
+  const uniqueCustomers = customerIds.map(id => customers.find(c => c.id === id)).filter(Boolean);
 
   const initials = emp.name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase();
-  const roleLabel = emp.role === "co_admin" ? t("emp.coAdmin") : emp.role === "admin" ? t("emp.admin") : t("emp.employee");
+  const roleLabel = emp.membershipRole === "owner" ? "Owner" : emp.membershipRole === "admin" ? "Admin" : "Employee";
   const isActive = emp.isActive;
+  const pl = (n: number, s: string, p: string) => `${n} ${n === 1 ? s : p}`;
 
-  const pl = (n: number, singular: string, plural: string) => `${n} ${n === 1 ? singular : plural}`;
-  const stats = [
-    { icon: TrendingUp, label: t("admin.totalRevenue"), value: formatCurrency(totalRevenue), color: "var(--brand)" },
-    { icon: ShoppingCart, label: t("admin.totalSales"), value: pl(totalTransactions, t("emp.sale"), t("emp.sales")), color: "#3b82f6" },
-    { icon: Package, label: t("employee.itemsSold"), value: pl(totalItems, t("emp.item"), t("emp.items")), color: "#8b5cf6" },
-    { icon: Users, label: t("admin.customersServed"), value: pl(uniqueCustomers.length, t("emp.customer"), t("emp.customers")), color: "#06b6d4" },
-    { icon: Calendar, label: t("emp.today"), value: `${pl(todayTransactions, t("emp.sale"), t("emp.sales"))} · ${formatCurrency(todayRevenue)}`, color: "#f59e0b" },
-    { icon: ShieldCheck, label: t("emp.avgSale"), value: formatCurrency(avgSaleValue), color: "#ec4899" },
-  ];
+  // Save role/permission/branch changes
+  async function saveAccessChanges() {
+    if (!employeeId) return;
+    setSaving(true);
+    try {
+      await updateAccess(employeeId, {
+        membershipRole: editRole,
+        permissions: editRole === "owner" ? [] : Array.from(editPerms),
+        branchScope: editBranchScope,
+      });
+      addToast("Employee access updated", "success");
+      setShowPermEditor(false);
+      // Reload permissions display
+      const fresh = await loadEmpPerms(employeeId);
+      setEmpPerms(fresh);
+    } catch (e) {
+      addToast(e instanceof Error ? e.message : "Failed to update access", "error");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function togglePerm(code: string) {
+    setEditPerms((prev) => {
+      const next = new Set(prev);
+      if (next.has(code)) next.delete(code);
+      else next.add(code);
+      return next;
+    });
+  }
+
+  function toggleModulePerms(module: string) {
+    const modulePerms = permissionsStore.getByModule(module);
+    const allSelected = modulePerms.every((p) => editPerms.has(p.code));
+    setEditPerms((prev) => {
+      const next = new Set(prev);
+      for (const p of modulePerms) {
+        if (allSelected) next.delete(p.code);
+        else next.add(p.code);
+      }
+      return next;
+    });
+  }
 
   async function setActive(next: boolean) {
     try {
@@ -136,7 +212,7 @@ export default function EmployeeDetailPage() {
           <div className="flex-1 min-w-0">
             <p className="text-lg font-bold truncate" style={{ color: "var(--text-primary)" }}>{emp.name}</p>
             <p className="text-sm mt-0.5" style={{ color: "var(--text-secondary)" }}>{emp.jobTitle ?? roleLabel}</p>
-            <div className="flex items-center gap-2 mt-2">
+            <div className="flex items-center gap-2 mt-2 flex-wrap">
               <span
                 className="text-xs font-bold px-2.5 py-0.5 rounded-full"
                 style={isActive
@@ -152,6 +228,14 @@ export default function EmployeeDetailPage() {
               >
                 {roleLabel}
               </span>
+              {emp.membershipRole !== "owner" && empPerms.length > 0 && (
+                <span
+                  className="text-xs font-medium px-2.5 py-0.5 rounded-full"
+                  style={{ background: "rgba(59,130,246,0.1)", color: "#3b82f6" }}
+                >
+                  {empPerms.length} permissions
+                </span>
+              )}
             </div>
           </div>
         </div>
@@ -162,14 +246,11 @@ export default function EmployeeDetailPage() {
         <p className="text-[11px] font-bold uppercase tracking-widest mb-3" style={{ color: "var(--text-secondary)" }}>
           Contact & Details
         </p>
-        <div
-          className="rounded-xl overflow-hidden"
-          style={{ border: "1px solid var(--border-light)" }}
-        >
+        <div className="rounded-xl overflow-hidden" style={{ border: "1px solid var(--border-light)" }}>
           {[
             { icon: Phone, label: "Phone", value: emp.phone },
             { icon: Hash, label: "Employee #", value: emp.employeeNumber ?? "—" },
-            { icon: Briefcase, label: "Role", value: roleLabel },
+            { icon: ShieldCheck, label: "Role", value: roleLabel },
           ].map(({ icon: Icon, label, value }, i, arr) => (
             <div
               key={label}
@@ -186,23 +267,204 @@ export default function EmployeeDetailPage() {
         </div>
       </div>
 
+      {/* Access Management — only for admin viewing non-owner employees */}
+      {user?.membershipRole === "owner" && !emp.isOriginalOwner && (
+        <div className="px-4 pt-5 animate-fade-in-up delay-100">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-[11px] font-bold uppercase tracking-widest" style={{ color: "var(--text-secondary)" }}>
+              Access Management
+            </p>
+            <button
+              onClick={() => setShowPermEditor(!showPermEditor)}
+              className="text-xs font-semibold flex items-center gap-1"
+              style={{ color: "var(--brand)" }}
+            >
+              <Settings size={12} />
+              {showPermEditor ? "Close" : "Edit Access"}
+            </button>
+          </div>
+
+          {showPermEditor ? (
+            <div className="rounded-xl overflow-hidden" style={{ border: "1px solid var(--border-light)" }}>
+              {/* Role selector */}
+              <div className="px-4 py-3" style={{ background: "var(--surface-2)" }}>
+                <p className="text-xs font-bold mb-2" style={{ color: "var(--text-secondary)" }}>ROLE</p>
+                <div className="flex gap-2">
+                  {ROLE_OPTIONS.map((opt) => (
+                    <button
+                      key={opt.value}
+                      onClick={() => setEditRole(opt.value)}
+                      className="flex-1 py-2 rounded-lg text-xs font-semibold transition-all"
+                      style={{
+                        background: editRole === opt.value ? "var(--brand)" : "var(--surface)",
+                        color: editRole === opt.value ? "#0a0a0a" : "var(--text-secondary)",
+                        border: `1px solid ${editRole === opt.value ? "var(--brand)" : "var(--divider)"}`,
+                      }}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-[10px] mt-1.5" style={{ color: "var(--text-secondary)" }}>
+                  {ROLE_OPTIONS.find((r) => r.value === editRole)?.description}
+                </p>
+              </div>
+
+              {/* Branch scope (if branches exist) */}
+              {branches.length > 0 && (
+                <div className="px-4 py-3" style={{ borderTop: "1px solid var(--divider)" }}>
+                  <p className="text-xs font-bold mb-2" style={{ color: "var(--text-secondary)" }}>BRANCH SCOPE</p>
+                  <div className="flex gap-2 flex-wrap">
+                    <button
+                      onClick={() => setEditBranchScope(null)}
+                      className="px-3 py-1.5 rounded-lg text-xs font-semibold"
+                      style={{
+                        background: editBranchScope === null ? "var(--brand)" : "var(--surface)",
+                        color: editBranchScope === null ? "#0a0a0a" : "var(--text-secondary)",
+                        border: `1px solid ${editBranchScope === null ? "var(--brand)" : "var(--divider)"}`,
+                      }}
+                    >
+                      All Branches
+                    </button>
+                    {branches.map((b) => (
+                      <button
+                        key={b.id}
+                        onClick={() => {
+                          setEditBranchScope((prev) => {
+                            if (!prev) return [b.id];
+                            if (prev.includes(b.id)) return prev.filter((id) => id !== b.id);
+                            return [...prev, b.id];
+                          });
+                        }}
+                        className="px-3 py-1.5 rounded-lg text-xs font-semibold"
+                        style={{
+                          background: editBranchScope?.includes(b.id) ? "var(--brand)" : "var(--surface)",
+                          color: editBranchScope?.includes(b.id) ? "#0a0a0a" : "var(--text-secondary)",
+                          border: `1px solid ${editBranchScope?.includes(b.id) ? "var(--brand)" : "var(--divider)"}`,
+                        }}
+                      >
+                        {b.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Permissions — only for non-owner roles */}
+              {editRole !== "owner" && (
+                <div className="px-4 py-3" style={{ borderTop: "1px solid var(--divider)" }}>
+                  <p className="text-xs font-bold mb-2" style={{ color: "var(--text-secondary)" }}>PERMISSIONS</p>
+                  <div className="space-y-2 max-h-[400px] overflow-y-auto">
+                    {PERMISSION_MODULES.map(({ module: mod, label, icon: ModIcon }) => {
+                      const modulePerms = permissionsStore.getByModule(mod);
+                      if (modulePerms.length === 0) return null;
+                      const selectedCount = modulePerms.filter((p) => editPerms.has(p.code)).length;
+                      const allSelected = selectedCount === modulePerms.length;
+                      return (
+                        <div key={mod}>
+                          <button
+                            onClick={() => toggleModulePerms(mod)}
+                            className="flex items-center justify-between w-full py-2 px-3 rounded-lg"
+                            style={{
+                              background: allSelected ? "rgba(132,204,22,0.1)" : "var(--surface)",
+                              border: "1px solid var(--divider)",
+                            }}
+                          >
+                            <div className="flex items-center gap-2">
+                              <ModIcon size={14} style={{ color: allSelected ? "var(--brand)" : "var(--text-secondary)" }} />
+                              <span className="text-xs font-semibold" style={{ color: "var(--text-primary)" }}>{label}</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-[10px]" style={{ color: "var(--text-secondary)" }}>
+                                {selectedCount}/{modulePerms.length}
+                              </span>
+                              {allSelected && <Check size={12} style={{ color: "var(--brand)" }} />}
+                            </div>
+                          </button>
+                          {/* Individual permissions within module */}
+                          {selectedCount > 0 && selectedCount < modulePerms.length && (
+                            <div className="flex flex-wrap gap-1 mt-1 ps-6">
+                              {modulePerms.map((p) => (
+                                <button
+                                  key={p.code}
+                                  onClick={() => togglePerm(p.code)}
+                                  className="text-[10px] px-2 py-0.5 rounded-full"
+                                  style={{
+                                    background: editPerms.has(p.code) ? "var(--brand)" : "var(--surface)",
+                                    color: editPerms.has(p.code) ? "#0a0a0a" : "var(--text-secondary)",
+                                    border: "1px solid var(--divider)",
+                                  }}
+                                >
+                                  {p.action}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Save button */}
+              <div className="px-4 py-3" style={{ borderTop: "1px solid var(--divider)" }}>
+                <button
+                  onClick={saveAccessChanges}
+                  disabled={saving}
+                  className="w-full h-10 rounded-xl font-bold text-sm"
+                  style={{ background: "var(--brand)", color: "#0a0a0a" }}
+                >
+                  {saving ? "Saving..." : "Save Access Changes"}
+                </button>
+              </div>
+            </div>
+          ) : (
+            /* Summary view when not editing */
+            <div className="rounded-xl overflow-hidden" style={{ border: "1px solid var(--border-light)" }}>
+              <div className="px-4 py-3 flex items-center justify-between">
+                <span className="text-sm" style={{ color: "var(--text-secondary)" }}>Role</span>
+                <span className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>{roleLabel}</span>
+              </div>
+              <div className="px-4 py-3 flex items-center justify-between" style={{ borderTop: "1px solid var(--divider)" }}>
+                <span className="text-sm" style={{ color: "var(--text-secondary)" }}>Branch</span>
+                <span className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>
+                  {emp.branchScope ? `${emp.branchScope.length} branch(es)` : "All branches"}
+                </span>
+              </div>
+              {emp.membershipRole !== "owner" && (
+                <div className="px-4 py-3 flex items-center justify-between" style={{ borderTop: "1px solid var(--divider)" }}>
+                  <span className="text-sm" style={{ color: "var(--text-secondary)" }}>Permissions</span>
+                  <span className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>
+                    {empPerms.length} granted
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Performance Stats */}
-      <div className="px-4 pt-5 animate-fade-in-up delay-100">
+      <div className="px-4 pt-5 animate-fade-in-up delay-[125ms]">
         <p className="text-[11px] font-bold uppercase tracking-widest mb-3" style={{ color: "var(--text-secondary)" }}>
           Performance Overview
         </p>
         <div className="grid grid-cols-2 gap-3">
-          {stats.map(({ icon: Icon, label, value, color }) => (
+          {[
+            { icon: TrendingUp, label: "Total Revenue", value: formatCurrency(totalRevenue), color: "var(--brand)" },
+            { icon: ShoppingCart, label: "Total Sales", value: pl(totalTransactions, "sale", "sales"), color: "#3b82f6" },
+            { icon: Package, label: "Items Sold", value: pl(totalItems, "item", "items"), color: "#8b5cf6" },
+            { icon: Users, label: "Customers", value: pl(uniqueCustomers.length, "customer", "customers"), color: "#06b6d4" },
+            { icon: Calendar, label: "Today", value: `${pl(todayTransactions, "sale", "sales")} · ${formatCurrency(todayRevenue)}`, color: "#f59e0b" },
+          ].map(({ icon: Icon, label, value, color }) => (
             <div
               key={label}
               className="rounded-xl p-3.5"
               style={{ background: "var(--surface-2)", border: "1px solid var(--border-light)" }}
             >
               <div className="flex items-center gap-2 mb-1.5">
-                <div
-                  className="w-6 h-6 rounded-full flex items-center justify-center"
-                  style={{ background: `${color}20` }}
-                >
+                <div className="w-6 h-6 rounded-full flex items-center justify-center" style={{ background: `${color}20` }}>
                   <Icon size={12} style={{ color }} />
                 </div>
                 <span className="text-[10px] font-medium" style={{ color: "var(--text-secondary)" }}>{label}</span>
@@ -213,122 +475,8 @@ export default function EmployeeDetailPage() {
         </div>
       </div>
 
-      {/* Payment Breakdown */}
-      <div className="px-4 pt-5 animate-fade-in-up delay-125">
-        <p className="text-[11px] font-bold uppercase tracking-widest mb-3" style={{ color: "var(--text-secondary)" }}>
-          Payment Breakdown
-        </p>
-        <div
-          className="rounded-xl overflow-hidden"
-          style={{ border: "1px solid var(--border-light)" }}
-        >
-          {[
-            { label: "Paid Sales", value: `${paidSales.length} (${formatCurrency(paidSales.reduce((s, x) => s + x.totalAmount, 0))})`, color: "var(--brand-dark)" },
-            { label: "Credit Sales", value: `${creditSales.length} (${formatCurrency(creditSales.reduce((s, x) => s + x.totalAmount, 0))})`, color: "#f59e0b" },
-            { label: "Outstanding Balance", value: formatCurrency(creditOutstanding), color: creditOutstanding > 0 ? "#dc2626" : "var(--brand-dark)" },
-          ].map(({ label, value, color }, i, arr) => (
-            <div
-              key={label}
-              className="flex items-center justify-between px-4 py-3"
-              style={{ borderBottom: i < arr.length - 1 ? "1px solid var(--divider)" : "none" }}
-            >
-              <span className="text-sm" style={{ color: "var(--text-secondary)" }}>{label}</span>
-              <span className="text-sm font-bold" style={{ color }}>{value}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Credit Extension Summary */}
-      {creditExtended > 0 && (
-        <div className="px-4 pt-5 animate-fade-in-up delay-[135ms]">
-          <p className="text-[11px] font-bold uppercase tracking-widest mb-3" style={{ color: "var(--text-secondary)" }}>
-            Credit Extended
-          </p>
-          <div
-            className="rounded-xl overflow-hidden"
-            style={{ border: "1px solid var(--border-light)" }}
-          >
-            <div className="px-4 py-3 flex items-center justify-between" style={{ background: "var(--surface-2)" }}>
-              <span className="text-xs font-bold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>Collection Progress</span>
-              <span
-                className="text-[10px] font-bold px-2 py-0.5 rounded-full"
-                style={{ color: creditPct >= 80 ? "#22c55e" : creditPct >= 50 ? "#f59e0b" : "#ef4444", background: (creditPct >= 80 ? "#22c55e" : creditPct >= 50 ? "#f59e0b" : "#ef4444") + "22" }}
-              >
-                {creditPct}% collected
-              </span>
-            </div>
-            <div className="px-4 py-3">
-              <div className="h-2 rounded-full w-full" style={{ background: "var(--divider)" }}>
-                <div
-                  className="h-full rounded-full transition-all"
-                  style={{ width: `${creditPct}%`, background: creditPct >= 80 ? "#22c55e" : creditPct >= 50 ? "#f59e0b" : "#ef4444" }}
-                />
-              </div>
-              <div className="flex items-center justify-between mt-2">
-                <div>
-                  <p className="text-[10px] uppercase" style={{ color: "var(--text-secondary)" }}>Extended</p>
-                  <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>{formatCurrency(creditExtended)}</p>
-                </div>
-                <div className="text-center">
-                  <p className="text-[10px] uppercase" style={{ color: "var(--text-secondary)" }}>Collected</p>
-                  <p className="text-sm font-bold" style={{ color: "#22c55e" }}>{formatCurrency(creditPaidBack)}</p>
-                </div>
-                <div className="text-end">
-                  <p className="text-[10px] uppercase" style={{ color: "var(--text-secondary)" }}>Outstanding</p>
-                  <p className="text-sm font-bold" style={{ color: creditOutstanding > 0 ? "#ef4444" : "var(--text-primary)" }}>{formatCurrency(creditOutstanding)}</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Customers Served */}
-      {uniqueCustomers.length > 0 && (
-        <div className="px-4 pt-5 animate-fade-in-up delay-150">
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-[11px] font-bold uppercase tracking-widest" style={{ color: "var(--text-secondary)" }}>
-              Customers Served ({uniqueCustomers.length})
-            </p>
-          </div>
-          <div className="flex gap-2 overflow-x-auto pb-1" style={{ WebkitOverflowScrolling: "touch" }}>
-            {uniqueCustomers.map((c) => {
-              if (!c) return null;
-              const cBg = initBgColor(c.name);
-              const custSales = empSales.filter(s => s.customerId === c.id);
-              const custTotal = custSales.reduce((s, x) => s + x.totalAmount, 0);
-              return (
-                <button
-                  key={c.id}
-                  onClick={() => navigate(`/admin/customers/${c.id}`)}
-                  className="flex flex-col items-center gap-1.5 min-w-[80px] shrink-0"
-                >
-                  {c.imageUrl ? (
-                    <img src={c.imageUrl} alt={c.name} className="w-11 h-11 rounded-full object-cover" />
-                  ) : (
-                    <div
-                      className="w-11 h-11 rounded-full flex items-center justify-center text-sm font-bold"
-                      style={{ background: cBg, color: "#fff" }}
-                    >
-                      {c.name ? c.name.charAt(0) : "?"}
-                    </div>
-                  )}
-                  <span className="text-[10px] font-semibold truncate max-w-[72px]" style={{ color: "var(--text-primary)" }}>
-                    {c.name.split(" ")[0]}
-                  </span>
-                  <span className="text-[9px]" style={{ color: "var(--text-secondary)" }}>
-                    {custSales.length} sale{custSales.length !== 1 ? "s" : ""}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
       {/* Recent Sales */}
-      <div className="px-4 pt-5 animate-fade-in-up delay-[175ms]">
+      <div className="px-4 pt-5 animate-fade-in-up delay-[150ms]">
         <div className="flex items-center justify-between mb-3">
           <p className="text-[11px] font-bold uppercase tracking-widest" style={{ color: "var(--text-secondary)" }}>
             Recent Sales ({empSales.length})
@@ -344,24 +492,18 @@ export default function EmployeeDetailPage() {
           )}
         </div>
         {recentSales.length === 0 ? (
-          <div
-            className="rounded-xl p-6 text-center"
-            style={{ background: "var(--surface-2)", border: "1px solid var(--border-light)" }}
-          >
+          <div className="rounded-xl p-6 text-center" style={{ background: "var(--surface-2)", border: "1px solid var(--border-light)" }}>
             <ShoppingCart size={20} className="mx-auto mb-2" style={{ color: "var(--text-secondary)" }} />
             <p className="text-sm" style={{ color: "var(--text-secondary)" }}>No sales yet</p>
           </div>
         ) : (
-          <div
-            className="rounded-xl overflow-hidden"
-            style={{ border: "1px solid var(--border-light)" }}
-          >
-            {recentSales.map((sale, i) => (
+          <div className="rounded-xl overflow-hidden" style={{ border: "1px solid var(--border-light)" }}>
+            {[...empSales].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 5).map((sale, i) => (
               <button
                 key={sale.id}
                 onClick={() => navigate(`/admin/sales/${sale.id}`)}
                 className="flex items-center justify-between px-4 py-3 w-full text-start transition-opacity active:opacity-70"
-                style={{ borderBottom: i < recentSales.length - 1 ? "1px solid var(--divider)" : "none" }}
+                style={{ borderBottom: i < 4 ? "1px solid var(--divider)" : "none" }}
               >
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
@@ -384,7 +526,7 @@ export default function EmployeeDetailPage() {
       </div>
 
       {/* Quick Actions */}
-      <div className="px-4 pt-5 animate-fade-in-up delay-[200ms]">
+      <div className="px-4 pt-5 animate-fade-in-up delay-[175ms]">
         <p className="text-[11px] font-bold uppercase tracking-widest mb-3" style={{ color: "var(--text-secondary)" }}>
           Actions
         </p>
@@ -410,7 +552,7 @@ export default function EmployeeDetailPage() {
 
       {/* Deactivate / reactivate */}
       {!emp.isOriginalOwner && (
-        <div className="px-4 pt-5 pb-6 animate-fade-in-up delay-[225ms]">
+        <div className="px-4 pt-5 pb-6 animate-fade-in-up delay-[200ms]">
           {isActive ? (
             <button
               className="w-full h-12 rounded-full font-bold text-sm flex items-center justify-center gap-2"
