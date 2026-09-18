@@ -108,27 +108,21 @@ export const useEmployeesStore = create<EmployeesState>((set, get) => ({
   },
 
   createEmployee: async (input) => {
-    const existing = get().employees;
-    const nextNum = existing.length + 1;
-    const { data, error } = await supabase
-      .from("users")
-      .insert({
+    const { data, error } = await supabase.rpc("create_employee", {
+      payload: {
         name: input.name,
         phone: input.phone,
         role: input.role,
-        is_original_owner: false,
-        is_active: true,
-        employee_number: "EMP-" + String(nextNum).padStart(3, "0"),
-        job_title: input.jobTitle ?? null,
-        photo_url: input.photoUrl ?? null,
-        created_by: asUuidOrNull(input.createdBy),
-      })
-      .select()
-      .single();
+        jobTitle: input.jobTitle ?? null,
+        photoUrl: input.photoUrl ?? null,
+        createdBy: input.createdBy ?? null,
+      },
+    });
     if (error) throw new Error(error.message);
-    const user = userFromRow(data as UserRow);
-    set({ employees: [...existing, user] });
-    return user;
+    // Reload employees to get the full record with correct employee_number
+    await get().load();
+    const created = get().employees.find((e) => e.id === data.id);
+    return created!;
   },
 
   setActive: async (id, active, byUserId) => {
