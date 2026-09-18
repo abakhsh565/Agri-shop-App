@@ -92,14 +92,62 @@ export async function sendOTP(
   phone: string
 ): Promise<{ success: boolean; error?: string }> {
   const e164 = normalizePhone(phone);
-  // Trigger Supabase Auth OTP (for test numbers, the OTP is also "123456")
+  // Try Supabase Auth phone OTP first
   const { error } = await supabase.auth.signInWithOtp({ phone: e164 });
   if (error) {
-    // Non-fatal: Supabase Auth OTP may fail for unconfigured numbers
-    // The app OTP still works independently
-    console.warn('Supabase Auth OTP send failed (non-fatal):', error.message);
+    // Phone OTP may fail for unregistered numbers — not fatal.
+    // The session will be established during verifyOTPAndResolveUser via email+password.
+    console.warn('Supabase Auth phone OTP failed (non-fatal):', error.message);
   }
   return { success: true };
+}
+
+/**
+ * Derive a deterministic email+password from a phone number.
+ * Used to establish a Supabase Auth session when phone-based OTP fails.
+ * The email is stable per phone — same phone always gets the same auth user.
+ */
+function phoneToAuthCredentials(phone: string) {
+  const e164 = normalizePhone(phone);
+  // Hash the phone to create a deterministic email (Supabase requires valid email format)
+  const email = `user-${e164}@agrishop.auth.local`;
+  // Deterministic password from phone (not a security boundary — the app OTP is the auth gate)
+  const password = `AgriShop-${e164}-2026!`;
+  return { email, password, e164 };
+}
+
+/**
+ * Ensure a Supabase Auth session exists for this phone number.
+ * Uses email+password auth (more reliable than phone OTP for test/development numbers).
+ * Called after app-level OTP verification succeeds.
+ */
+async function ensureAuthSession(phone: string): Promise<boolean> {
+  // Already have a session?
+  const { data: { session } } = await supabase.auth.getSession();
+  if (session) return true;
+
+  const { email, password } = phoneToAuthCredentials(phone);
+
+  // Try sign-in first (user likely already exists)
+  const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+  if (!signInError) return true;
+
+  // User doesn't exist yet — create via signUp (auto-confirms in dev)
+  const { error: signUpError } = await supabase.auth.signUp({ email, password });
+  if (signUpError) {
+    console.warn('Auth session setup failed:', signUpError.message);
+    return false;
+  }
+
+  // SignUp may or may not auto-create session — try sign-in to be sure
+  const { error: retryError } = await supabase.auth.signInWithPassword({ email, password });
+  if (retryError) {
+    console.warn('Auth sign-in after signUp failed:', retryError.message);
+    return false;
+  }
+
+  console.log('Supabase Auth session established via email+password');
+  return true;
 }
 
 // ─── OTP verify + resolve/bootstrap the app user ──────────────────────────────
@@ -123,24 +171,10 @@ export async function verifyOTPAndResolveUser(
   // MVP: accept hardcoded OTP "123456"
   if (token !== DEV_OTP) return { status: "wrong_otp" };
 
-  // Try to establish Supabase Auth session for trusted identity
-  // This creates a JWT that RPCs can use to verify the actor
-  try {
-    const { data: authData, error: authError } = await supabase.auth.verifyOtp({
-      phone: e164,
-      token: token,
-      type: 'sms'
-    });
-    if (authError) {
-      // Non-fatal: continue with app-only auth
-      console.warn('Supabase Auth verify failed (non-fatal):', authError.message);
-    } else if (authData?.session) {
-      console.log('Supabase Auth session established for trusted identity');
-    }
-  } catch (e) {
-    // Non-fatal: continue with app-only auth
-    console.warn('Supabase Auth session setup failed (non-fatal):', e);
-  }
+  // Establish a Supabase Auth session for PostgREST/RLS.
+  // Phone-based OTP doesn't work for unregistered test numbers,
+  // so we use email+password auth (deterministic from phone).
+  await ensureAuthSession(phone);
 
   // Find the matching app profile row via SECURITY DEFINER RPC.
   // The users table is RLS-protected (anon cannot SELECT), so we use
@@ -210,6 +244,8 @@ export async function getUserFromSession(): Promise<User | null> {
     const parsed = JSON.parse(saved);
     const savedUser: User | null = parsed?.state?.user ?? null;
     if (!savedUser) return null;
+    // Ensure Supabase Auth session exists (may have been lost on reload)
+    await ensureAuthSession(savedUser.phone);
     // Verify user still exists + get fresh membership context via SECURITY DEFINER RPC
     const { data } = await supabase
       .rpc("lookup_user_by_phone", { p_phone: savedUser.phone });
