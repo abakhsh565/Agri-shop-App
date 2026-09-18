@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { supabase } from "@/lib/supabase";
+import { useAuthStore } from "@/stores/authStore";
 import type { Company } from "@/types";
 
 interface CompanyRow {
@@ -94,19 +95,32 @@ export const useCompaniesStore = create<CompaniesState>((set, get) => ({
   },
 
   createCompany: async (input) => {
-    const { data, error } = await supabase
-      .from("companies")
-      .insert({
+    // Use SECURITY DEFINER RPC — bypasses RLS which requires valid JWT session.
+    // The RPC resolves tenant context from JWT claims server-side.
+    const { data, error } = await supabase.rpc("create_company", {
+      payload: {
         name: input.name,
-        contact_person: input.contactPerson ?? null,
+        contactPerson: input.contactPerson ?? null,
         phone: input.phone ?? null,
         address: input.address ?? null,
-        logo_url: input.logoUrl ?? null,
-      })
-      .select()
-      .single();
+        logoUrl: input.logoUrl ?? null,
+        userId: useAuthStore.getState().user?.id ?? null,
+      },
+    });
     if (error) throw new Error(error.message);
-    const company = companyFromRow(data as CompanyRow);
+    // RPC returns { id, name } — build the company object from the input
+    const company: Company = {
+      id: data.id,
+      name: data.name,
+      contactPerson: input.contactPerson,
+      phone: input.phone,
+      address: input.address,
+      logoUrl: input.logoUrl,
+      outstandingPayable: 0,
+      totalPurchases: 0,
+      dueDate: null,
+      createdAt: new Date().toISOString(),
+    };
     set({ companies: [company, ...get().companies] });
     return company;
   },

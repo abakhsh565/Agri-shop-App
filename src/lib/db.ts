@@ -43,7 +43,8 @@ export async function rpcCreateSale(payload: {
   note?: string;
   items: SaleLineInput[];
 }): Promise<{ id: string; saleNumber: string; totalAmount: number; amountPaid: number; outstandingBalance: number }> {
-  const { data, error } = await supabase.rpc("create_sale", { payload });
+  const userId = useAuthStore.getState().user?.id ?? null;
+  const { data, error } = await supabase.rpc("create_sale", { payload: { ...payload, userId } });
   if (error) throw new Error(friendly(error.message));
   return data as any;
 }
@@ -56,7 +57,8 @@ export async function rpcCreatePurchase(payload: {
   note?: string;
   items: { productId?: string; productName: string; variantId?: string; variantName: string; qty: number; costPrice: number }[];
 }): Promise<{ id: string; purchaseNumber: string; totalAmount: number; outstandingPayable: number }> {
-  const { data, error } = await supabase.rpc("create_purchase", { payload });
+  const userId = useAuthStore.getState().user?.id ?? null;
+  const { data, error } = await supabase.rpc("create_purchase", { payload: { ...payload, userId } });
   if (error) throw new Error(friendly(error.message));
   return data as any;
 }
@@ -113,7 +115,7 @@ export async function rpcCreateProduct(payload: {
   variants: { name: string; sellingPrice: number; costPrice: number; unitSize: number; qtyStep: number; lowStockThreshold: number }[];
 }): Promise<{ id: string }> {
   const actorId = useAuthStore.getState().user?.id;
-  const { data, error } = await supabase.rpc("create_product", { payload: { ...payload, actorId } });
+  const { data, error } = await supabase.rpc("create_product", { payload: { ...payload, actorId, userId: actorId } });
   if (error) throw new Error(friendly(error.message));
   return data as any;
 }

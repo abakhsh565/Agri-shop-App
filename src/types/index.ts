@@ -133,6 +133,18 @@ export type ReturnResolution = "refund_cash" | "credit_note";
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 
+export interface Membership {
+  id: string;
+  tenantId: string;
+  role: MembershipRole;
+  status: MembershipStatus;
+  branchScope: string[] | null;  // null = all branches
+  createdAt: string;
+}
+
+export type MembershipRole = 'owner' | 'admin' | 'employee';
+export type MembershipStatus = 'active' | 'suspended' | 'pending';
+
 export interface User {
   id: string;
   name: string;
@@ -150,6 +162,12 @@ export interface User {
   deactivatedBy: string | null;
   createdAt: string;
   createdBy: string | null;
+  // ── Membership context (loaded at login, persisted) ──
+  tenantId?: string;   // current active tenant
+  membershipId?: string;
+  membershipRole?: MembershipRole;  // owner/admin/employee via membership
+  membershipStatus?: MembershipStatus;
+  branchScope?: string[] | null;
 }
 
 export interface AuthSession {

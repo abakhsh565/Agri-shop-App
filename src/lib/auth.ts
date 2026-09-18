@@ -1,5 +1,5 @@
 import { supabase } from "@/lib/supabase";
-import type { User, UserRole } from "@/types";
+import type { User, UserRole, MembershipRole, MembershipStatus } from "@/types";
 
 // ─── Phone normalization ─────────────────────────────────────────────────────
 // The UI collects local Pakistani numbers ("03001234567"); Supabase Auth needs
@@ -32,16 +32,27 @@ interface UserRow {
   created_by: string | null;
   photo_url: string | null;
   created_at: string;
+  shop_id: string | null;
+  // Membership fields (from migration 0096 enhanced lookup)
+  tenant_id?: string | null;
+  membership_id?: string | null;
+  membership_role?: string | null;
+  membership_status?: string | null;
+  branch_scope?: string[] | null;
 }
 
 function userFromRow(r: UserRow): User {
+  // Resolve tenant context: prefer membership-based, fallback to shop_id
+  const tenantId = r.tenant_id || r.shop_id || undefined;
+  const membershipRole = (r.membership_role || (r.role === "admin" ? "admin" : "employee")) as MembershipRole;
+  const membershipStatus = (r.membership_status || "active") as MembershipStatus;
   return {
     id: r.id,
     name: r.name,
     phone: r.phone,
     role: r.role,
     isOriginalOwner: r.is_original_owner,
-    pin: "", // PIN moves to a hashed column in Step 2; not used client-side
+    pin: "",
     isActive: r.is_active,
     employeeNumber: r.employee_number ?? undefined,
     jobTitle: r.job_title ?? undefined,
@@ -52,6 +63,12 @@ function userFromRow(r: UserRow): User {
     createdAt: r.created_at,
     createdBy: r.created_by,
     photoUrl: r.photo_url ?? undefined,
+    // Membership / tenant context
+    tenantId,
+    membershipId: r.membership_id ?? undefined,
+    membershipRole,
+    membershipStatus,
+    branchScope: r.branch_scope ?? undefined,
   };
 }
 
@@ -145,7 +162,10 @@ export async function verifyOTPAndResolveUser(
     const row = existing as UserRow;
     if (!row.is_active) return { status: "deactivated" };
     void touchLogin(row.id, !row.first_login_at);
-    return { status: "ok", user: userFromRow(row) };
+    const user = userFromRow(row);
+    // Membership context is loaded in getUserFromSession() after session is fully established.
+    // Do NOT query memberships here — the JWT may not be ready yet.
+    return { status: "ok", user };
   }
 
   // No user profile found — check if there's a pending shop registration
@@ -181,18 +201,22 @@ export async function signOut(): Promise<void> {
 
 // Resolve the app user from an existing Supabase session (used on app load so a
 // logged-in user survives refreshes without re-entering OTP).
+// Membership/tenant context is resolved server-side by lookup_user_by_phone
+// (SECURITY DEFINER) — no additional RLS-dependent query needed.
 export async function getUserFromSession(): Promise<User | null> {
-  // Read from zustand persist store (agri_auth)
   const saved = window.localStorage.getItem("agri_auth");
   if (!saved) return null;
   try {
     const parsed = JSON.parse(saved);
-    const user: User | null = parsed?.state?.user ?? null;
-    if (!user) return null;
-    // Verify user still exists and is active in DB via SECURITY DEFINER RPC
+    const savedUser: User | null = parsed?.state?.user ?? null;
+    if (!savedUser) return null;
+    // Verify user still exists + get fresh membership context via SECURITY DEFINER RPC
     const { data } = await supabase
-      .rpc("lookup_user_by_phone", { p_phone: user.phone });
-    if (data && (data as UserRow).is_active) return userFromRow(data as UserRow);
+      .rpc("lookup_user_by_phone", { p_phone: savedUser.phone });
+    if (data && (data as UserRow).is_active) {
+      // userFromRow now includes tenant_id/membership fields from the RPC response
+      return userFromRow(data as UserRow);
+    }
   } catch { /* invalid session */ }
   window.localStorage.removeItem("agri_auth");
   return null;

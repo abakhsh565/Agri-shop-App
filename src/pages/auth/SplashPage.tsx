@@ -15,8 +15,9 @@ export default function SplashPage() {
         // Re-fetch latest user data from DB so admin-made changes (name, photo, etc.) are reflected
         const freshUser = await getUserFromSession();
         const latestUser = freshUser ?? user;
-        // Update local store with fresh data
-        if (freshUser && (freshUser.name !== user.name || freshUser.photoUrl !== user.photoUrl)) {
+        // Always update local store — membership fields (tenantId, role, etc.)
+        // may have changed since last save and must be persisted.
+        if (freshUser) {
           useAuthStore.getState().setUser(freshUser);
         }
         if (hasPin(latestUser.id)) {

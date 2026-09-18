@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { supabase } from "@/lib/supabase";
+import { useAuthStore } from "@/stores/authStore";
 import { getCachedData, setCachedData, isCacheStale, clearCachedData } from "@/lib/localCache";
 import { enqueueOperation } from "@/lib/offlineQueue";
 import type { Customer } from "@/types";
@@ -165,6 +166,7 @@ export const useCustomersStore = create<CustomersState>((set, get) => ({
       address: input.address ?? null,
       credit_limit: input.creditLimit ?? 0,
       created_by: asUuidOrNull(input.createdBy),
+      userId: useAuthStore.getState().user?.id ?? null,
     };
 
     // Try online first - use RPC for secure creation
