@@ -170,6 +170,31 @@ export type PermissionCode =
   | 'activity.view' | 'notifications.view'
   | 'alerts.view' | 'alerts.manage';
 
+// ── RBAC Roles & Business Areas ──────────────────────────────────────────────
+export interface Role {
+  id: string;
+  tenantId: string;
+  name: string;
+  description: string | null;
+  isSystem: boolean;
+  createdAt: string;
+  updatedAt: string;
+  // Computed from joins
+  permissionCount?: number;
+  memberCount?: number;
+  permissions?: string[];  // permission codes
+}
+
+export interface BusinessArea {
+  id: string;
+  tenantId: string;
+  code: string;       // e.g. 'sales'
+  nameEn: string;
+  nameUr: string;
+  sortOrder: number;
+  isActive: boolean;
+}
+
 export interface User {
   id: string;
   name: string;

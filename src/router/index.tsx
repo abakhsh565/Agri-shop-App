@@ -42,6 +42,7 @@ import CompaniesListPage from "@/pages/admin/companies/CompaniesListPage";
 import AddCompanyPage from "@/pages/admin/companies/AddCompanyPage";
 import CompanyDetailPage from "@/pages/admin/companies/CompanyDetailPage";
 import AdminSettingsPage from "@/pages/admin/settings/AdminSettingsPage";
+import RolesAccessPage from "@/pages/admin/settings/RolesAccessPage";
 import AdminNotificationsPage from "@/pages/admin/notifications/AdminNotificationsPage";
 import AddEmployeePage from "@/pages/admin/employees/AddEmployeePage";
 const AdminPurchasesPage = React.lazy(() => import("@/pages/admin/purchases/AdminPurchasesPage"));
@@ -209,6 +210,7 @@ export const router = createBrowserRouter([
       { element: <PermissionGuard requires="settings.view" />,
         children: [
           { path: "settings",   element: <AdminSettingsPage /> },
+          { path: "settings/roles", element: <RolesAccessPage /> },
         ] },
 
       // ── Activity (requires activity.view) ────────────────────────────────
