@@ -143,32 +143,59 @@ describe('Security Audit — RLS & Authorization', () => {
 
   // ─── RPC: Missing auth checks (documented findings) ───────────────────────
 
-  it('RPC: archive_customer requires authentication', async () => {
-    // Employee can archive (auth check present)
-    const result = await execRpcAsUser(EMP_ID, 'archive_customer', {
+  it('RPC: archive_customer requires the customers.delete permission', async () => {
+    // Employee (no membership / no customers.delete) must be rejected.
+    // NOTE: this assertion was inverted when migration 0112 added the
+    // authoritative permission guard — archive was previously unprotected.
+    const denied = await execRpcAsUser(EMP_ID, 'archive_customer', {
       p_customer_id: CUST_ID,
       p_archived_by: EMP_ID,
     });
-    expect(result.error).toBeNull();
+    expect(denied.error).toBeTruthy();
+    expect(denied.error).toContain('NOT_AUTHORIZED');
 
-    // Restore the customer
+    // Nothing was mutated by the rejected call.
+    const afterDenied = await execSqlAsAdmin(
+      `SELECT is_archived FROM customers WHERE id = '${CUST_ID}'`
+    );
+    expect(afterDenied.rows[0]?.is_archived).toBe(false);
+
+    // Owner/admin still holds the permission and can archive.
+    const allowed = await execRpcAsUser(QA_IDS.admin, 'archive_customer', {
+      p_customer_id: CUST_ID,
+      p_archived_by: QA_IDS.admin,
+    });
+    expect(allowed.error).toBeNull();
+
     await execRpcAsUser(QA_IDS.admin, 'restore_customer', {
       p_customer_id: CUST_ID,
     });
   });
 
-  it('RPC: restore_customer requires authentication', async () => {
+  it('RPC: restore_customer requires the customers.delete permission', async () => {
     // First archive
     await execRpcAsUser(QA_IDS.admin, 'archive_customer', {
       p_customer_id: CUST_ID,
       p_archived_by: QA_IDS.admin,
     });
 
-    // Employee can restore (auth check present)
-    const result = await execRpcAsUser(EMP_ID, 'restore_customer', {
+    // Employee must be rejected (was previously unprotected).
+    const denied = await execRpcAsUser(EMP_ID, 'restore_customer', {
       p_customer_id: CUST_ID,
     });
-    expect(result.error).toBeNull();
+    expect(denied.error).toBeTruthy();
+    expect(denied.error).toContain('NOT_AUTHORIZED');
+
+    const stillArchived = await execSqlAsAdmin(
+      `SELECT is_archived FROM customers WHERE id = '${CUST_ID}'`
+    );
+    expect(stillArchived.rows[0]?.is_archived).toBe(true);
+
+    // Admin can restore.
+    const allowed = await execRpcAsUser(QA_IDS.admin, 'restore_customer', {
+      p_customer_id: CUST_ID,
+    });
+    expect(allowed.error).toBeNull();
   });
 
   it('RPC: delete_credit_limit_request requires admin authorization', async () => {

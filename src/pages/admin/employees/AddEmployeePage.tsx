@@ -6,17 +6,14 @@ import ImageUpload from "@/components/ui/ImageUpload";
 import { useEmployeesStore } from "@/stores/employeesStore";
 import { useUIStore } from "@/stores/uiStore";
 import { useAuthStore } from "@/stores/authStore";
+import { useRolesStore } from "@/stores/rolesStore";
+import { usePermissionsStore } from "@/stores/permissionsStore";
 import { useThemeStore } from "@/stores/themeStore";
 import { normalizePhone } from "@/lib/auth";
 import { clearNav } from "@/lib/navContext";
 import { supabase } from "@/lib/supabase";
 import { Check, ChevronRight, User, Shield, Building2, ClipboardCheck } from "lucide-react";
 import type { MembershipRole } from "@/types";
-
-const ROLES: { value: MembershipRole; label: string; description: string; defaultPerms: string }[] = [
-  { value: "employee", label: "Employee", description: "Shop floor access — sales, customers, products", defaultPerms: "6 default permissions (sales, customers, products, inventory view)" },
-  { value: "admin", label: "Admin", description: "Full management access including reports", defaultPerms: "30 permissions (all except employee management & settings)" },
-];
 
 type Step = "info" | "role" | "branch" | "review";
 
@@ -28,6 +25,8 @@ export default function AddEmployeePage() {
   const isUrdu = language === "ur";
   const employees = useEmployeesStore((s) => s.employees);
   const createEmployee = useEmployeesStore((s) => s.createEmployee);
+  const rolesStore = useRolesStore();
+  const permissionsStore = usePermissionsStore();
 
   const [step, setStep] = useState<Step>("info");
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
@@ -35,12 +34,16 @@ export default function AddEmployeePage() {
   const [phone, setPhone] = useState("");
   const [jobTitle, setJobTitle] = useState("");
   const [role, setRole] = useState<MembershipRole>("employee");
+  const [roleId, setRoleId] = useState<string | null>(null);
+  const [selectedRolePermissions, setSelectedRolePermissions] = useState<string[]>([]);
   const [branchScope, setBranchScope] = useState<string[] | null>(null);
   const [branches, setBranches] = useState<{ id: string; name: string; is_default: boolean }[]>([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
+    rolesStore.load();
+    permissionsStore.load();
     supabase.from("branches").select("id, name, is_default").eq("is_active", true).then(({ data }) => {
       const b = (data as any[]) ?? [];
       setBranches(b);
@@ -48,6 +51,14 @@ export default function AddEmployeePage() {
       if (b.length === 1) setBranchScope([b[0].id]);
     });
   }, []);
+
+  useEffect(() => {
+    const firstRole = rolesStore.roles.find((r) => !r.isSystem) ?? rolesStore.roles[0];
+    if (!roleId && firstRole) {
+      setRoleId(firstRole.id);
+      rolesStore.getRolePermissions(firstRole.id).then(setSelectedRolePermissions);
+    }
+  }, [rolesStore.roles.length]);
 
   const steps: { key: Step; label: string; icon: typeof User }[] = [
     { key: "info", label: "Info", icon: User },
@@ -90,8 +101,9 @@ export default function AddEmployeePage() {
       await createEmployee({
         name: name.trim(),
         phone: normalizePhone(phone),
-        role: "employee", // Legacy field, ignored by RPC
+        role: "employee", // Legacy field retained for compatibility
         membershipRole: role,
+        roleId: roleId ?? undefined,
         jobTitle: jobTitle.trim() || undefined,
         photoUrl: photoUrl ?? undefined,
         branchScope: branchScope,
@@ -113,10 +125,37 @@ export default function AddEmployeePage() {
     color: "var(--text-primary)",
   } as const;
 
-  const roleObj = ROLES.find((r) => r.value === role);
+  const roleObj = rolesStore.roles.find((r) => r.id === roleId);
   const branchNames = branchScope === null
     ? "All branches"
     : branches.filter((b) => branchScope.includes(b.id)).map((b) => b.name).join(", ") || "All branches";
+
+  // Business-language labels so the owner never sees raw codes like sales.create.
+  const MODULE_LABELS: Record<string, string> = {
+    sales: "Sales", customers: "Customers", products: "Products", inventory: "Inventory",
+    purchases: "Purchases", payments: "Payments", companies: "Suppliers", returns: "Returns",
+    employees: "Employees", reports: "Reports", settings: "Settings", activity: "Activity",
+    notifications: "Notifications", alerts: "Alerts",
+  };
+  const ACTION_LABELS: Record<string, string> = {
+    view: "View", create: "Create", edit: "Edit", delete: "Delete", void: "Void",
+    payments: "Record payments", adjust: "Adjust stock", supplier: "Record payment", manage: "Manage",
+  };
+
+  /** Group the selected role's defaults into business areas for display. */
+  function inheritedAccessByArea(): { label: string; actions: string[] }[] {
+    const byModule = new Map<string, string[]>();
+    for (const code of selectedRolePermissions) {
+      const perm = permissionsStore.permissions.find((p) => p.code === code);
+      const mod = perm?.module ?? code.split(".")[0];
+      const action = perm?.action ?? code.split(".")[1] ?? "";
+      byModule.set(mod, [...(byModule.get(mod) ?? []), ACTION_LABELS[action] ?? action]);
+    }
+    return [...byModule.entries()].map(([mod, actions]) => ({
+      label: MODULE_LABELS[mod] ?? mod,
+      actions,
+    }));
+  }
 
   return (
     <div
@@ -206,12 +245,16 @@ export default function AddEmployeePage() {
               What access level should {name.split(" ")[0]} have?
             </p>
             <div className="flex flex-col gap-3">
-              {ROLES.map((r) => {
-                const selected = role === r.value;
+              {rolesStore.roles.map((r) => {
+                const selected = roleId === r.id;
                 return (
                   <button
-                    key={r.value}
-                    onClick={() => setRole(r.value)}
+                    key={r.id}
+                    onClick={() => {
+                      setRoleId(r.id);
+                      setRole(r.name.toLowerCase().includes("admin") ? "admin" : "employee");
+                      rolesStore.getRolePermissions(r.id).then(setSelectedRolePermissions);
+                    }}
                     className="flex items-start gap-3 p-4 rounded-[14px] text-start transition-colors"
                     style={{
                       background: "var(--surface)",
@@ -225,14 +268,38 @@ export default function AddEmployeePage() {
                       {selected && <div className="w-2.5 h-2.5 rounded-full" style={{ background: "var(--brand)" }} />}
                     </div>
                     <div>
-                      <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>{r.label}</p>
-                      <p className="text-xs mt-0.5" style={{ color: "var(--text-secondary)" }}>{r.description}</p>
-                      <p className="text-[10px] mt-1" style={{ color: "var(--brand)" }}>{r.defaultPerms}</p>
+                      <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>{r.name}</p>
+                      <p className="text-xs mt-0.5" style={{ color: "var(--text-secondary)" }}>{r.description ?? "Configured access profile"}</p>
+                      <p className="text-[10px] mt-1" style={{ color: "var(--brand)" }}>{selected ? `${selectedRolePermissions.length} default permissions` : "Role defaults"}</p>
                     </div>
                   </button>
                 );
               })}
             </div>
+
+            {/* Inherited access preview for the selected role */}
+            {roleObj && (
+              <div className="rounded-xl p-3" style={{ background: "var(--surface)", border: "1px solid var(--divider)" }}>
+                <p className="text-[11px] font-bold uppercase tracking-wider mb-2" style={{ color: "var(--text-secondary)" }}>
+                  Default access from {roleObj.name}
+                </p>
+                {inheritedAccessByArea().length === 0 ? (
+                  <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
+                    This access profile has no permissions yet.
+                  </p>
+                ) : (
+                  inheritedAccessByArea().map(({ label, actions }) => (
+                    <div key={label} className="flex items-start justify-between gap-3 py-1">
+                      <span className="text-xs font-semibold" style={{ color: "var(--text-primary)" }}>{label}</span>
+                      <span className="text-xs text-end" style={{ color: "var(--text-secondary)" }}>{actions.join(", ")}</span>
+                    </div>
+                  ))
+                )}
+                <p className="text-[10px] mt-2" style={{ color: "var(--text-secondary)" }}>
+                  Inherited automatically. Adjust individual permissions later from Employee Detail.
+                </p>
+              </div>
+            )}
           </>
         )}
 
@@ -313,9 +380,9 @@ export default function AddEmployeePage() {
                 { label: "Name", value: name },
                 { label: "Phone", value: phone },
                 { label: "Job Title", value: jobTitle || "—" },
-                { label: "Role", value: roleObj?.label ?? role },
+                { label: "Role", value: roleObj?.name ?? role },
                 { label: "Branch", value: branchNames },
-                { label: "Access", value: roleObj?.defaultPerms ?? "" },
+                { label: "Access", value: roleObj ? `Inherited from ${roleObj.name} (${selectedRolePermissions.length})` : "Role defaults" },
               ].map(({ label, value }, i, arr) => (
                 <div
                   key={label}

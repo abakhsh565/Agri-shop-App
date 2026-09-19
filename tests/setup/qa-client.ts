@@ -112,6 +112,25 @@ export async function execSqlDirect(sql: string): Promise<{ rows: any[]; rowCoun
 const authClients = new Map<string, SupabaseClient>();
 
 /**
+ * Normalise a phone the same way the application does (src/lib/auth.ts).
+ * A Supabase Auth user has exactly ONE email, so tests must derive the same
+ * credentials the browser session uses — otherwise the test's private scheme
+ * collides with the real session for the same user id.
+ */
+function normalizeE164(input: string): string {
+  const digits = String(input).replace(/\D/g, '');
+  if (digits.startsWith('0')) return '92' + digits.slice(1);
+  if (digits.startsWith('92')) return digits;
+  return '92' + digits;
+}
+
+/** Same deterministic credentials the app uses for phone → Auth session. */
+function phoneToAuthCredentials(phone: string) {
+  const e164 = normalizeE164(phone);
+  return { email: `user-${e164}@agrishop.auth.local`, password: `AgriShop-${e164}-2026!` };
+}
+
+/**
  * Get or create a Supabase client authenticated as a specific user.
  *
  * Flow:
@@ -148,8 +167,31 @@ async function getAuthClient(userId: string): Promise<SupabaseClient> {
     return cached;
   }
 
-  const email = `qa-test-${userId}@test.local`;
-  const password = `QA-test-${userId}-2024!`;
+  // Derive the SAME credentials the app uses. Without a phone there is no app
+  // credential, so fall back to an id-scoped address.
+  const appCred = userPhone ? phoneToAuthCredentials(userPhone) : null;
+  let email = appCred?.email ?? `qa-test-${userId}@test.local`;
+  let password = appCred?.password ?? `QA-test-${userId}-2024!`;
+
+  // A Supabase Auth row has ONE email. If this phone-derived email is already
+  // owned by a different, still-live app user, fall back to an id-scoped
+  // address; if it is owned by an ORPHAN auth row (its app user was deleted by
+  // an earlier run's cleanup) reclaim it, because that row would otherwise make
+  // every future run fail with "User not found".
+  if (appCred) {
+    const { rows: owners } = await execSqlDirect(
+      `SELECT id FROM auth.users WHERE email = '${email}' AND id <> '${userId}'`
+    );
+    for (const owner of owners) {
+      const { rows: liveAppUser } = await execSqlDirect(`SELECT id FROM users WHERE id = '${owner.id}'`);
+      if (liveAppUser.length > 0) {
+        email = `qa-test-${userId}@test.local`;
+        password = `QA-test-${userId}-2024!`;
+        break;
+      }
+      await execSqlDirect(`DELETE FROM auth.users WHERE id = '${owner.id}'`);
+    }
+  }
 
   // Create auth user with matching UUID (phone set separately to bypass E.164 validation)
   const { error: createError } = await qaServiceClient.auth.admin.createUser({
@@ -161,6 +203,18 @@ async function getAuthClient(userId: string): Promise<SupabaseClient> {
   // Ignore "already exists" errors
   if (createError && !createError.message?.includes('already been registered')) {
     console.warn(`Auth user create warning for ${userId}: ${createError.message}`);
+  }
+
+  // Self-heal: an auth row left behind by an earlier run (or by app-side
+  // provisioning) may hold a different email/password. Normalise it so sign-in
+  // with the deterministic credentials always succeeds for this user id.
+  const { error: repairError } = await qaServiceClient.auth.admin.updateUserById(userId, {
+    email,
+    password,
+    email_confirm: true,
+  });
+  if (repairError) {
+    throw new Error(`Auth credential repair failed for ${userId} (${email}): ${repairError.message}`);
   }
 
   // Set phone on auth.users directly via SQL (bypasses E.164 validation)
@@ -366,6 +420,61 @@ export async function execRpcAsUser(
     }
   }
   return { data: null, error: 'max retries exceeded' };
+}
+
+/**
+ * Read a table as a specific user through PostgREST + RLS.
+ * Used to prove tenant isolation at the real client path (not service-role SQL).
+ */
+export async function selectAsUser(
+  userId: string,
+  table: string,
+  columns = '*',
+  filters: Record<string, string> = {}
+): Promise<{ data: any[] | null; error: string | null }> {
+  try {
+    const client = await getAuthClient(userId);
+    let query = client.from(table).select(columns);
+    for (const [key, value] of Object.entries(filters)) query = query.eq(key, value);
+    const { data, error } = await query;
+    return { data: (data as any[]) ?? null, error: error?.message ?? null };
+  } catch (e: any) {
+    return { data: null, error: e.message };
+  }
+}
+
+/**
+ * INSERT a row as a specific user through PostgREST, so RLS policies and column
+ * defaults (`shop_id DEFAULT current_shop_id()`) are exercised for real.
+ */
+export async function insertAsUser(
+  userId: string,
+  table: string,
+  row: Record<string, any>
+): Promise<{ data: any[] | null; error: string | null }> {
+  try {
+    const client = await getAuthClient(userId);
+    const { data, error } = await client.from(table).insert(row).select('*');
+    return { data: (data as any[]) ?? null, error: error?.message ?? null };
+  } catch (e: any) {
+    return { data: null, error: e.message };
+  }
+}
+
+/** DELETE rows as a specific user through PostgREST (RLS enforced). */
+export async function deleteAsUser(
+  userId: string,
+  table: string,
+  column: string,
+  value: string
+): Promise<{ error: string | null }> {
+  try {
+    const client = await getAuthClient(userId);
+    const { error } = await client.from(table).delete().eq(column, value);
+    return { error: error?.message ?? null };
+  } catch (e: any) {
+    return { error: e.message };
+  }
 }
 
 /**

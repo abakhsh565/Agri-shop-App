@@ -740,6 +740,9 @@ export const translations = {
     "notif.lowStockBody": "{product} has {count} units remaining (threshold: {threshold})",
     "notif.outOfStock": "Out of stock: {product}",
     "notif.outOfStockBody": "{product} is now out of stock",
+
+    // Auth session bootstrap
+    "auth.sessionFailed": "Could not start a secure session for this account. Please try again, or ask the shop owner to re-provision your login.",
   },
 
   ur: {
@@ -1473,6 +1476,9 @@ export const translations = {
     "notif.lowStockBody": "{product} میں {count} یونٹس باقی ہیں (حدود: {threshold})",
     "notif.outOfStock": "اسٹاک ختم: {product}",
     "notif.outOfStockBody": "{product} اب اسٹاک میں نہیں ہے",
+
+    // Auth session bootstrap
+    "auth.sessionFailed": "اس اکاؤنٹ کے لیے محفوظ سیشن شروع نہیں ہو سکا۔ دوبارہ کوشش کریں، یا دکان کے مالک سے اپنا لاگ ان دوبارہ بنانے کو کہیں۔",
   },
 } as const;
 

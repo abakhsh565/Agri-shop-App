@@ -132,34 +132,40 @@ function phoneToAuthCredentials(phone: string) {
  * Ensure a Supabase Auth session exists for this phone number.
  * Uses email+password auth (more reliable than phone OTP for test/development numbers).
  * Called after app-level OTP verification succeeds.
+ *
+ * A Supabase Auth session is REQUIRED for every RLS-protected read and for every
+ * authorized RPC: without a JWT the browser silently degrades to 401 responses
+ * and the whole app renders empty. So this must report failure, never swallow it.
  */
-async function ensureAuthSession(phone: string): Promise<boolean> {
+export const SESSION_SETUP_FAILED = 'SESSION_SETUP_FAILED';
+
+async function ensureAuthSession(phone: string): Promise<{ ok: boolean; error?: string }> {
   // Already have a session?
   const { data: { session } } = await supabase.auth.getSession();
-  if (session) return true;
+  if (session) return { ok: true };
 
   const { email, password } = phoneToAuthCredentials(phone);
 
   // Try sign-in first (user likely already exists)
-  const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
-  if (!signInError) return true;
+  const signIn = await supabase.auth.signInWithPassword({ email, password });
+  if (!signIn.error) return { ok: true };
 
   // User doesn't exist yet — create via signUp (auto-confirms in dev)
-  const { error: signUpError } = await supabase.auth.signUp({ email, password });
-  if (signUpError) {
-    console.warn('Auth session setup failed:', signUpError.message);
-    return false;
+  const signUp = await supabase.auth.signUp({ email, password });
+  if (signUp.error) {
+    console.warn('Auth session setup failed:', signIn.error.message, '/', signUp.error.message);
+    return { ok: false, error: `${signIn.error.message}; ${signUp.error.message}` };
   }
 
   // SignUp may or may not auto-create session — try sign-in to be sure
-  const { error: retryError } = await supabase.auth.signInWithPassword({ email, password });
-  if (retryError) {
-    console.warn('Auth sign-in after signUp failed:', retryError.message);
-    return false;
+  const retry = await supabase.auth.signInWithPassword({ email, password });
+  if (retry.error) {
+    console.warn('Auth sign-in after signUp failed:', retry.error.message);
+    return { ok: false, error: retry.error.message };
   }
 
   console.log('Supabase Auth session established via email+password');
-  return true;
+  return { ok: true };
 }
 
 // ─── OTP verify + resolve/bootstrap the app user ──────────────────────────────
@@ -186,7 +192,13 @@ export async function verifyOTPAndResolveUser(
   // Establish a Supabase Auth session for PostgREST/RLS.
   // Phone-based OTP doesn't work for unregistered test numbers,
   // so we use email+password auth (deterministic from phone).
-  await ensureAuthSession(phone);
+  // A missing session must be surfaced: otherwise every RLS read returns 401
+  // and the user lands in an app that looks empty for no visible reason.
+  const session = await ensureAuthSession(phone);
+  if (!session.ok) {
+    console.error('Could not establish Supabase Auth session:', session.error);
+    return { status: "error", message: SESSION_SETUP_FAILED };
+  }
 
   // Find the matching app profile row via SECURITY DEFINER RPC.
   // The users table is RLS-protected (anon cannot SELECT), so we use
@@ -256,8 +268,15 @@ export async function getUserFromSession(): Promise<User | null> {
     const parsed = JSON.parse(saved);
     const savedUser: User | null = parsed?.state?.user ?? null;
     if (!savedUser) return null;
-    // Ensure Supabase Auth session exists (may have been lost on reload)
-    await ensureAuthSession(savedUser.phone);
+    // Ensure Supabase Auth session exists (may have been lost on reload).
+    // If it cannot be established, do NOT continue with an unauthenticated
+    // client: clear the session so the user signs in again and sees the reason.
+    const session = await ensureAuthSession(savedUser.phone);
+    if (!session.ok) {
+      console.warn('Dropping stored session — Supabase Auth session unavailable:', session.error);
+      window.localStorage.removeItem("agri_auth");
+      return null;
+    }
     // Verify user still exists + get fresh membership context via SECURITY DEFINER RPC
     const { data } = await supabase
       .rpc("lookup_user_by_phone", { p_phone: savedUser.phone });

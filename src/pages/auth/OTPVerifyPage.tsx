@@ -4,9 +4,10 @@ import AuthLayout from "@/components/layout/AuthLayout";
 import NavHeader from "@/components/ui/NavHeader";
 import OTPInput from "@/components/ui/OTPInput";
 import Button from "@/components/ui/Button";
-import { verifyOTPAndResolveUser, sendOTP } from "@/lib/auth";
+import { verifyOTPAndResolveUser, sendOTP, SESSION_SETUP_FAILED } from "@/lib/auth";
 import { hasPin } from "@/lib/pinLock";
 import { useAuthStore } from "@/stores/authStore";
+import { useT } from "@/lib/i18n";
 
 const OTP_VALIDITY = 5 * 60;
 const MAX_ATTEMPTS = 5;
@@ -15,6 +16,7 @@ const RESEND_DELAY = 30;
 
 export default function OTPVerifyPage() {
   const navigate = useNavigate();
+  const t = useT();
   const { pendingPhone, setUser } = useAuthStore();
 
   const [otp, setOtp] = useState("");
@@ -109,7 +111,11 @@ export default function OTPVerifyPage() {
       if (result.status === "deactivated") { navigate("/login/deactivated"); return; }
       if (result.status === "pending") { navigate("/login/under-review"); return; }
       if (result.status === "rejected") { navigate("/login/rejected"); return; }
-      if (result.status === "error") { setError(result.message); setOtp(""); return; }
+      if (result.status === "error") {
+        setError(result.message === SESSION_SETUP_FAILED ? t("auth.sessionFailed") : result.message);
+        setOtp("");
+        return;
+      }
 
       // status === "ok"
       setUser(result.user);

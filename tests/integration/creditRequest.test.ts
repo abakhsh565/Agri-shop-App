@@ -20,7 +20,10 @@ const ADMIN_ID = QA_IDS.admin;
 describe('Credit Request Integration', () => {
   beforeAll(async () => {
     clearEvidence();
-    await execSqlAsAdmin('DELETE FROM credit_limit_requests');
+    // Only clear this suite's own customer. A global DELETE removed rows that
+    // other suites (securityAudit) had created in the same parallel run, which
+    // surfaced as 'Request not found or already processed' during approval.
+    await execSqlAsAdmin(`DELETE FROM credit_limit_requests WHERE customer_id = '${QA_IDS.customerC}'`);
     await setupAllFixtures();
   });
 

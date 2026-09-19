@@ -4,6 +4,7 @@ import { useThemeStore } from "@/stores/themeStore";
 import { useT } from "@/lib/i18n";
 import { useEmployeesStore } from "@/stores/employeesStore";
 import { usePermissionsStore } from "@/stores/permissionsStore";
+import { useRolesStore } from "@/stores/rolesStore";
 import { useSalesStore } from "@/stores/salesStore";
 import { useCustomersStore } from "@/stores/customersStore";
 import { useAuthStore } from "@/stores/authStore";
@@ -50,7 +51,7 @@ const PERMISSION_MODULES = [
 const ROLE_OPTIONS: { value: MembershipRole; label: string; description: string }[] = [
   { value: "owner", label: "Owner", description: "Full access to everything" },
   { value: "admin", label: "Admin", description: "Manage all operations" },
-  { value: "employee", label: "Employee", description: "Assigned permissions only" },
+  { value: "employee", label: "Employee", description: "Assigned role access" },
 ];
 
 export default function EmployeeDetailPage() {
@@ -65,9 +66,11 @@ export default function EmployeeDetailPage() {
   const setActiveAction = useEmployeesStore((s) => s.setActive);
   const updateAccess = useEmployeesStore((s) => s.updateAccess);
   const loadEmpPerms = useEmployeesStore((s) => s.loadEmployeePermissions);
+  const getEmployeeAccess = useEmployeesStore((s) => s.getEmployeeAccess);
   const sales = useSalesStore((s) => s.sales);
   const customers = useCustomersStore((s) => s.customers);
   const permissionsStore = usePermissionsStore();
+  const rolesStore = useRolesStore();
   const now = useCurrentTime();
 
   const emp = employees.find((e) => e.id === employeeId);
@@ -75,6 +78,8 @@ export default function EmployeeDetailPage() {
   // Permission editing state
   const [showPermEditor, setShowPermEditor] = useState(false);
   const [editRole, setEditRole] = useState<MembershipRole>("employee");
+  const [editRoleId, setEditRoleId] = useState<string | null>(null);
+  const [roleDefaults, setRoleDefaults] = useState<Set<string>>(new Set());
   const [editPerms, setEditPerms] = useState<Set<string>>(new Set());
   const [editBranchScope, setEditBranchScope] = useState<string[] | null>(null);
   const [empPerms, setEmpPerms] = useState<string[]>([]);
@@ -84,6 +89,7 @@ export default function EmployeeDetailPage() {
   // Load permissions and branches on mount
   useEffect(() => {
     permissionsStore.load();
+    rolesStore.load();
     // Load branches
     supabase.from("branches").select("id, name").eq("is_active", true).then(({ data }) => {
       setBranches((data as any[]) ?? []);
@@ -93,10 +99,13 @@ export default function EmployeeDetailPage() {
   // Load employee's current permissions when emp changes
   useEffect(() => {
     if (emp && employeeId) {
-      setEditRole(emp.membershipRole ?? "employee");
-      loadEmpPerms(employeeId).then((perms) => {
-        setEmpPerms(perms);
-        setEditPerms(new Set(perms));
+      getEmployeeAccess(employeeId).then((access) => {
+        setEditRole(access.membershipRole);
+        setEditRoleId(access.roleId);
+        setEditBranchScope(access.branchScope);
+        setRoleDefaults(new Set(access.defaults));
+        setEmpPerms(access.effective);
+        setEditPerms(new Set(access.effective));
       });
     }
   }, [emp?.id]);
@@ -127,6 +136,55 @@ export default function EmployeeDetailPage() {
   const initials = emp.name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase();
   const roleLabel = emp.membershipRole === "owner" ? "Owner" : emp.membershipRole === "admin" ? "Admin" : "Employee";
   const isActive = emp.isActive;
+
+  // Effective access = role defaults + employee exceptions. Keep the two
+  // visibly separate so an admin can always tell what came from the role and
+  // what was changed for this one person.
+  const effectiveSet = new Set(empPerms);
+  const addedCount = permissionsStore.permissions.filter(
+    (p) => effectiveSet.has(p.code) && !roleDefaults.has(p.code),
+  ).length;
+  const removedCount = permissionsStore.permissions.filter(
+    (p) => !effectiveSet.has(p.code) && roleDefaults.has(p.code),
+  ).length;
+  const roleTemplateName = editRoleId
+    ? rolesStore.roles.find((r) => r.id === editRoleId)?.name ?? "Custom profile"
+    : "No role profile";
+  const overrideCount = addedCount + removedCount;
+
+  // Classify a single permission so the editor can label it.
+  function permState(code: string): "inherited" | "added" | "removed" | "none" {
+    const inherited = roleDefaults.has(code);
+    const effective = editPerms.has(code);
+    if (inherited && effective) return "inherited";
+    if (!inherited && effective) return "added";
+    if (inherited && !effective) return "removed";
+    return "none";
+  }
+
+  const PERM_STATE_STYLE: Record<string, { bg: string; fg: string; hint: string }> = {
+    inherited: { bg: "var(--brand)", fg: "#0a0a0a", hint: "Inherited from role" },
+    added: { bg: "#3b82f6", fg: "#ffffff", hint: "Added for this employee" },
+    removed: { bg: "rgba(239,68,68,0.18)", fg: "#ef4444", hint: "Removed for this employee" },
+    none: { bg: "var(--surface)", fg: "var(--text-secondary)", hint: "Not granted" },
+  };
+
+  async function resetToRoleDefaults() {
+    if (!employeeId) return;
+    setSaving(true);
+    try {
+      await updateAccess(employeeId, { resetOverrides: true });
+      const fresh = await getEmployeeAccess(employeeId);
+      setRoleDefaults(new Set(fresh.defaults));
+      setEmpPerms(fresh.effective);
+      setEditPerms(new Set(fresh.effective));
+      addToast(`${emp!.name} now uses only their role access`, "success");
+    } catch (e) {
+      addToast(e instanceof Error ? e.message : "Could not reset access", "error");
+    } finally {
+      setSaving(false);
+    }
+  }
   const pl = (n: number, s: string, p: string) => `${n} ${n === 1 ? s : p}`;
 
   // Save role/permission/branch changes
@@ -134,16 +192,24 @@ export default function EmployeeDetailPage() {
     if (!employeeId) return;
     setSaving(true);
     try {
+      const overrides: Record<string, boolean> = {};
+      for (const permission of permissionsStore.permissions) {
+        const effective = editPerms.has(permission.code);
+        const inherited = roleDefaults.has(permission.code);
+        if (effective !== inherited) overrides[permission.code] = effective;
+      }
       await updateAccess(employeeId, {
         membershipRole: editRole,
-        permissions: editRole === "owner" ? [] : Array.from(editPerms),
+        roleId: editRoleId,
+        overrides: editRole === "owner" ? {} : overrides,
         branchScope: editBranchScope,
       });
       addToast("Employee access updated", "success");
       setShowPermEditor(false);
       // Reload permissions display
-      const fresh = await loadEmpPerms(employeeId);
-      setEmpPerms(fresh);
+      const fresh = await getEmployeeAccess(employeeId);
+      setRoleDefaults(new Set(fresh.defaults));
+      setEmpPerms(fresh.effective);
     } catch (e) {
       addToast(e instanceof Error ? e.message : "Failed to update access", "error");
     } finally {
@@ -308,6 +374,28 @@ export default function EmployeeDetailPage() {
                 <p className="text-[10px] mt-1.5" style={{ color: "var(--text-secondary)" }}>
                   {ROLE_OPTIONS.find((r) => r.value === editRole)?.description}
                 </p>
+                {editRole !== "owner" && rolesStore.roles.length > 0 && (
+                  <div className="mt-3">
+                    <p className="text-[10px] font-bold mb-1" style={{ color: "var(--text-secondary)" }}>ACCESS PROFILE</p>
+                    <select
+                      value={editRoleId ?? ""}
+                      onChange={(e) => {
+                        const nextId = e.target.value || null;
+                        setEditRoleId(nextId);
+                        if (nextId) rolesStore.getRolePermissions(nextId).then((perms) => {
+                          setRoleDefaults(new Set(perms));
+                          setEditPerms(new Set(perms));
+                        });
+                      }}
+                      className="w-full h-10 rounded-lg px-3 text-xs outline-none"
+                      style={{ background: "var(--surface)", border: "1px solid var(--divider)", color: "var(--text-primary)" }}
+                    >
+                      <option value="">No role template</option>
+                      {rolesStore.roles.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+                    </select>
+                    <p className="text-[10px] mt-1" style={{ color: "var(--text-secondary)" }}>Role defaults update automatically when the role is edited.</p>
+                  </div>
+                )}
               </div>
 
               {/* Branch scope (if branches exist) */}
@@ -384,20 +472,26 @@ export default function EmployeeDetailPage() {
                           {/* Individual permissions within module */}
                           {selectedCount > 0 && selectedCount < modulePerms.length && (
                             <div className="flex flex-wrap gap-1 mt-1 ps-6">
-                              {modulePerms.map((p) => (
-                                <button
-                                  key={p.code}
-                                  onClick={() => togglePerm(p.code)}
-                                  className="text-[10px] px-2 py-0.5 rounded-full"
-                                  style={{
-                                    background: editPerms.has(p.code) ? "var(--brand)" : "var(--surface)",
-                                    color: editPerms.has(p.code) ? "#0a0a0a" : "var(--text-secondary)",
-                                    border: "1px solid var(--divider)",
-                                  }}
-                                >
-                                  {p.action}
-                                </button>
-                              ))}
+                              {modulePerms.map((p) => {
+                                const state = permState(p.code);
+                                const s = PERM_STATE_STYLE[state];
+                                return (
+                                  <button
+                                    key={p.code}
+                                    onClick={() => togglePerm(p.code)}
+                                    title={s.hint}
+                                    className="text-[10px] px-2 py-0.5 rounded-full font-semibold"
+                                    style={{
+                                      background: s.bg,
+                                      color: s.fg,
+                                      border: state === "removed" ? "1px solid #ef4444" : "1px solid var(--divider)",
+                                    }}
+                                  >
+                                    {p.action}
+                                    {state === "added" ? " +" : state === "removed" ? " −" : ""}
+                                  </button>
+                                );
+                              })}
                             </div>
                           )}
                         </div>
@@ -407,16 +501,46 @@ export default function EmployeeDetailPage() {
                 </div>
               )}
 
-              {/* Save button */}
+              {/* Legend + Save */}
               <div className="px-4 py-3" style={{ borderTop: "1px solid var(--divider)" }}>
-                <button
-                  onClick={saveAccessChanges}
-                  disabled={saving}
-                  className="w-full h-10 rounded-xl font-bold text-sm"
-                  style={{ background: "var(--brand)", color: "#0a0a0a" }}
-                >
-                  {saving ? "Saving..." : "Save Access Changes"}
-                </button>
+                <div className="flex flex-wrap items-center gap-3 mb-3">
+                  {(["inherited", "added", "removed"] as const).map((k) => (
+                    <span key={k} className="flex items-center gap-1 text-[10px]" style={{ color: "var(--text-secondary)" }}>
+                      <span
+                        className="inline-block w-2.5 h-2.5 rounded-full"
+                        style={{ background: PERM_STATE_STYLE[k].bg, border: `1px solid ${PERM_STATE_STYLE[k].fg}` }}
+                      />
+                      {PERM_STATE_STYLE[k].hint}
+                    </span>
+                  ))}
+                </div>
+                <p className="text-[10px] mb-3" style={{ color: "var(--text-secondary)" }}>
+                  {roleTemplateName}: {roleDefaults.size} default permission(s)
+                  {overrideCount > 0 ? ` · ${addedCount} added, ${removedCount} removed for ${emp.name}` : " · no employee-specific changes"}
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={resetToRoleDefaults}
+                    disabled={saving || overrideCount === 0}
+                    className="flex-1 h-10 rounded-xl font-bold text-xs"
+                    style={{
+                      background: "var(--surface-2)",
+                      border: "1px solid var(--divider)",
+                      color: overrideCount === 0 ? "var(--text-secondary)" : "var(--text-primary)",
+                      opacity: saving || overrideCount === 0 ? 0.6 : 1,
+                    }}
+                  >
+                    Reset to Role Defaults
+                  </button>
+                  <button
+                    onClick={saveAccessChanges}
+                    disabled={saving}
+                    className="flex-1 h-10 rounded-xl font-bold text-sm"
+                    style={{ background: "var(--brand)", color: "#0a0a0a" }}
+                  >
+                    {saving ? "Saving..." : "Save Access Changes"}
+                  </button>
+                </div>
               </div>
             </div>
           ) : (
@@ -426,6 +550,12 @@ export default function EmployeeDetailPage() {
                 <span className="text-sm" style={{ color: "var(--text-secondary)" }}>Role</span>
                 <span className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>{roleLabel}</span>
               </div>
+              {emp.membershipRole !== "owner" && (
+                <div className="px-4 py-3 flex items-center justify-between" style={{ borderTop: "1px solid var(--divider)" }}>
+                  <span className="text-sm" style={{ color: "var(--text-secondary)" }}>Access profile</span>
+                  <span className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>{roleTemplateName}</span>
+                </div>
+              )}
               <div className="px-4 py-3 flex items-center justify-between" style={{ borderTop: "1px solid var(--divider)" }}>
                 <span className="text-sm" style={{ color: "var(--text-secondary)" }}>Branch</span>
                 <span className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>
@@ -433,12 +563,20 @@ export default function EmployeeDetailPage() {
                 </span>
               </div>
               {emp.membershipRole !== "owner" && (
-                <div className="px-4 py-3 flex items-center justify-between" style={{ borderTop: "1px solid var(--divider)" }}>
-                  <span className="text-sm" style={{ color: "var(--text-secondary)" }}>Permissions</span>
-                  <span className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>
-                    {empPerms.length} granted
-                  </span>
-                </div>
+                <>
+                  <div className="px-4 py-3 flex items-center justify-between" style={{ borderTop: "1px solid var(--divider)" }}>
+                    <span className="text-sm" style={{ color: "var(--text-secondary)" }}>Effective permissions</span>
+                    <span className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>
+                      {empPerms.length} granted
+                    </span>
+                  </div>
+                  <div className="px-4 py-3 flex items-center justify-between" style={{ borderTop: "1px solid var(--divider)" }}>
+                    <span className="text-sm" style={{ color: "var(--text-secondary)" }}>Employee exceptions</span>
+                    <span className="text-sm font-bold" style={{ color: overrideCount > 0 ? "#f59e0b" : "var(--text-primary)" }}>
+                      {overrideCount > 0 ? `${addedCount} added · ${removedCount} removed` : "None"}
+                    </span>
+                  </div>
+                </>
               )}
             </div>
           )}

@@ -123,7 +123,6 @@ async function waitForPostgRESTVisibility(maxRetries = 10, delayMs = 300): Promi
 
 export async function cleanupTestData() {
   const customerIds = `('${QA_IDS.customerA}', '${QA_IDS.customerB}', '${QA_IDS.customerC}')`;
-  const userIds = `('${QA_IDS.admin}', '${QA_IDS.employee}')`;
 
   const childDeletes = [
     `DELETE FROM sale_items WHERE sale_id IN (SELECT id FROM sales WHERE customer_id IN ${customerIds})`,
@@ -143,11 +142,12 @@ export async function cleanupTestData() {
     try { await execSqlAsAdmin(sql); } catch { /* ignore */ }
   }
 
-  try { await execSqlAsAdmin(`DELETE FROM product_variants WHERE product_id IN ('${QA_IDS.productA}', '${QA_IDS.productB}')`); } catch {}
-  try { await execSqlAsAdmin(`DELETE FROM products WHERE id IN ('${QA_IDS.productA}', '${QA_IDS.productB}')`); } catch {}
-  try { await execSqlAsAdmin(`DELETE FROM companies WHERE id IN ('${QA_IDS.companyA}')`); } catch {}
-  try { await execSqlAsAdmin(`DELETE FROM customers WHERE id IN ${customerIds}`); } catch {}
-  try { await execSqlAsAdmin(`DELETE FROM users WHERE id IN ${userIds}`); } catch {}
+  // The seeded identities (users, customers, products, company) are a SHARED
+  // baseline: several suites seed them through setupAllFixtures() and run in
+  // parallel in the same QA database. Deleting them here made a finishing suite
+  // wipe fixtures another suite was still using, which surfaced as unrelated
+  // failures such as CUSTOMER_NOT_FOUND. Only transactional children are
+  // removed, so suites stay isolated without destroying the shared baseline.
 }
 
 // ─── Verification Functions ──────────────────────────────────────────────

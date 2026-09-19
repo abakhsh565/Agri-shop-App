@@ -57,6 +57,7 @@ interface EmployeesState {
     phone: string;
     role: Exclude<UserRole, "admin">;
     membershipRole?: MembershipRole;
+    roleId?: string;
     jobTitle?: string;
     photoUrl?: string;
     permissions?: string[];
@@ -66,10 +67,14 @@ interface EmployeesState {
   setActive: (id: string, active: boolean, byUserId?: string | null) => Promise<void>;
   updateAccess: (employeeId: string, input: {
     membershipRole?: MembershipRole;
+    roleId?: string | null;
     permissions?: string[];
+    overrides?: Record<string, boolean>;
+    resetOverrides?: boolean;
     branchScope?: string[] | null;
   }) => Promise<void>;
   loadEmployeePermissions: (employeeId: string) => Promise<string[]>;
+  getEmployeeAccess: (employeeId: string) => Promise<{ roleId: string | null; membershipRole: MembershipRole; branchScope: string[] | null; defaults: string[]; overrides: Record<string, boolean>; effective: string[] }>;
 }
 
 let channel: ReturnType<typeof supabase.channel> | null = null;
@@ -119,6 +124,7 @@ export const useEmployeesStore = create<EmployeesState>((set, get) => ({
         phone: input.phone,
         role: input.role,
         membershipRole: input.membershipRole ?? null,
+        roleId: input.roleId ?? null,
         jobTitle: input.jobTitle ?? null,
         photoUrl: input.photoUrl ?? null,
         permissions: input.permissions ?? null,
@@ -137,12 +143,28 @@ export const useEmployeesStore = create<EmployeesState>((set, get) => ({
       payload: {
         employeeId,
         membershipRole: input.membershipRole ?? undefined,
+        roleId: input.roleId ?? undefined,
         permissions: input.permissions ?? undefined,
+        overrides: input.overrides ?? undefined,
+        resetOverrides: input.resetOverrides ?? undefined,
         branchScope: input.branchScope === undefined ? undefined : input.branchScope,
       },
     });
     if (error) throw new Error(error.message);
     await get().load();
+  },
+
+  getEmployeeAccess: async (employeeId) => {
+    const { data, error } = await supabase.rpc("get_employee_access", { p_employee_id: employeeId });
+    if (error) throw new Error(error.message);
+    return {
+      roleId: data?.roleId ?? null,
+      membershipRole: (data?.membershipRole ?? "employee") as MembershipRole,
+      branchScope: data?.branchScope ?? null,
+      defaults: Array.isArray(data?.defaults) ? data.defaults : [],
+      overrides: data?.overrides && typeof data.overrides === "object" ? data.overrides : {},
+      effective: Array.isArray(data?.effective) ? data.effective : [],
+    };
   },
 
   loadEmployeePermissions: async (employeeId) => {
