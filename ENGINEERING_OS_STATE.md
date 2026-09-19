@@ -28,14 +28,14 @@ Production has not been touched. Every claim below names the evidence that suppo
 | Audit | Verified | `audit_events` records role/access changes with the acting user; employee override save + reset both attributed. |
 | Live session behaviour | Verified | Role change / membership deactivation revoke access at the next authorization boundary; no stale client cache can grant it. |
 | Role lifecycle safety | Verified | `ROLE_IN_USE` (employees still on it), `SYSTEM_ROLE_READ_ONLY`. |
-| QA verification | Verified | 336/336 tests across 23 files; TypeScript clean; production build passes. |
+| QA verification | Verified | 337/337 tests across 23 files — **5 consecutive full runs, 0 failures**; TypeScript clean; production build passes. |
 | Permanent regression protection | Verified | `tests/integration/rbacInvariants.test.ts` fails the build if any original defect class returns. |
 
 ### Evidence commands
 
 ```bash
 node scripts/rbac-evidence.mjs        # live snapshot of the authorization foundation
-npx vitest run                        # full suite (336 tests)
+npx vitest run                        # full suite (337 tests, stable across repeated runs)
 npx tsc --noEmit && npm run build     # typecheck + production build
 node scripts/reset-qa-baseline.mjs    # restore the clean QA baseline
 node scripts/record-engineering-memory.mjs  # re-record verified learnings
@@ -44,6 +44,29 @@ node scripts/record-engineering-memory.mjs  # re-record verified learnings
 Engineering Memory now holds 8 active entries; the earlier entry that blamed
 PgBouncer pooler visibility for the intermittently failing credit-request test is
 **superseded** — the verified cause was shared-fixture teardown.
+
+### Test-suite stability (fixed, not tolerated)
+
+Two shared-fixture races were the real cause of the intermittent credit-request
+failure, and both are fixed:
+
+1. `setupCustomers()` deleted the fixture customers before re-inserting them,
+   opening a window where a parallel suite saw `CUSTOMER_NOT_FOUND`. It now only
+   upserts, which is atomic for concurrent readers.
+2. `cleanupTestData()` deletes credit requests for the shared customers A/B/C, and
+   `creditRequest.test.ts` created its request against `customerC` — so any suite
+   finishing mid-run wiped it. The suite now owns dedicated customers, so no
+   other suite can touch its data.
+
+A third cause was in the new guard itself: invariants C and D asserted global
+row-level conditions while other suites were mid-write. They now assert the
+structural guarantee (column + trigger present) plus a data check that excludes
+rows the current parallel run is still inserting. A real defect still fails.
+
+Known remaining test-infrastructure smell (not product): `qa-client.ts` shares one
+`pg.Client` per process and some suites issue concurrent queries on it, which pg
+warns about. It has not produced a failure; it is recorded here rather than
+silently ignored.
 
 ---
 

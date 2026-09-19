@@ -40,8 +40,10 @@ export async function setupUsers() {
 }
 
 export async function setupCustomers() {
-  await execSqlAsAdmin(`DELETE FROM credit_limit_requests WHERE customer_id IN (SELECT id FROM customers WHERE phone IN ('923001111111', '923002222222', '923003333333'))`);
-  await execSqlAsAdmin(`DELETE FROM customers WHERE phone IN ('923001111111', '923002222222', '923003333333')`);
+  // No DELETE before the insert. Deleting first opened a window in which a
+  // parallel suite that shares these fixtures saw CUSTOMER_NOT_FOUND; the
+  // upsert below already resets every value that matters, so re-seeding is
+  // atomic for concurrent readers.
   await execSqlAsAdmin(`
     INSERT INTO customers (id, name, phone, credit_limit, outstanding_balance, total_purchases, total_paid, shop_id, created_by)
     VALUES

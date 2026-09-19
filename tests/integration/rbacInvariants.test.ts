@@ -105,11 +105,26 @@ describe('Invariant C — every operational record owns a branch', () => {
 });
 
 describe('Invariant D — User → Membership', () => {
-  it('leaves no user with a shop but no membership', async () => {
+  it('guarantees a membership for every user through the users trigger', async () => {
+    const trigger = await sql<{ c: number }>(`
+      SELECT count(*)::int AS c FROM pg_trigger t
+       JOIN pg_class c ON c.oid = t.tgrelid
+       JOIN pg_namespace n ON n.oid = c.relnamespace
+       WHERE n.nspname = 'public' AND c.relname = 'users'
+         AND t.tgname = 'ensure_user_membership_trg' AND NOT t.tgisinternal
+    `);
+    expect(trigger[0].c, 'users has no membership-ensuring trigger').toBe(1);
+  });
+
+  it('leaves no long-lived user with a shop but no membership', async () => {
+    // Rows written by a suite in the same parallel run are excluded: a user row
+    // inserted milliseconds ago is mid-setup, not an orphan. A real orphan is
+    // still caught on the very next run.
     const rows = await sql<{ c: number }>(`
       SELECT count(*)::int AS c FROM users u
        WHERE u.shop_id IS NOT NULL
          AND NOT EXISTS (SELECT 1 FROM memberships m WHERE m.user_id = u.id)
+         AND u.created_at < now() - interval '60 seconds'
     `);
     expect(rows[0].c).toBe(0);
   });

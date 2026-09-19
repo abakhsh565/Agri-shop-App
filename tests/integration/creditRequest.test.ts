@@ -15,19 +15,35 @@ import { recordEvidence, printReport, clearEvidence } from '../setup/evidence';
 // Use the admin user from fixtures for RPC calls
 const ADMIN_ID = QA_IDS.admin;
 
+// Dedicated customers for THIS suite. The suite previously used the shared
+// customerB/customerC fixtures, but cleanupTestData() (run by several suites in
+// their afterAll) deletes credit_limit_requests for those shared customers, so a
+// parallel suite finishing mid-run wiped this suite's request and it failed with
+// CUSTOMER_NOT_FOUND / 'Request not found or already processed'. Owning the
+// fixture removes the interference entirely.
+const CR_CUSTOMER_C = 'c0c00000-0000-0000-0000-000000000001';
+const CR_CUSTOMER_B = 'c0c00000-0000-0000-0000-000000000002';
+
 // ─── Tests ───────────────────────────────────────────────────────────────
 
 describe('Credit Request Integration', () => {
   beforeAll(async () => {
     clearEvidence();
-    // Only clear this suite's own customer. A global DELETE removed rows that
-    // other suites (securityAudit) had created in the same parallel run, which
-    // surfaced as 'Request not found or already processed' during approval.
-    await execSqlAsAdmin(`DELETE FROM credit_limit_requests WHERE customer_id = '${QA_IDS.customerC}'`);
     await setupAllFixtures();
+    // This suite's own customers, with a known starting credit limit.
+    await execSqlAsAdmin(`DELETE FROM credit_limit_requests WHERE customer_id IN ('${CR_CUSTOMER_C}','${CR_CUSTOMER_B}')`);
+    await execSqlAsAdmin(`
+      INSERT INTO customers (id, name, phone, credit_limit, outstanding_balance, total_purchases, total_paid, shop_id, created_by)
+      VALUES
+        ('${CR_CUSTOMER_C}', 'QA Credit Customer C', '923006666001', 10000, 0, 15000, 15000, '${QA_IDS.shop}', 'QA'),
+        ('${CR_CUSTOMER_B}', 'QA Credit Customer B', '923006666002', 25000, 0, 40000, 14000, '${QA_IDS.shop}', 'QA')
+      ON CONFLICT (id) DO UPDATE SET credit_limit = EXCLUDED.credit_limit, outstanding_balance = EXCLUDED.outstanding_balance
+    `);
   });
 
   afterAll(async () => {
+    await execSqlAsAdmin(`DELETE FROM credit_limit_requests WHERE customer_id IN ('${CR_CUSTOMER_C}','${CR_CUSTOMER_B}')`).catch(() => {});
+    await execSqlAsAdmin(`DELETE FROM customers WHERE id IN ('${CR_CUSTOMER_C}','${CR_CUSTOMER_B}')`).catch(() => {});
     await cleanupTestData();
     printReport();
   });
@@ -38,7 +54,7 @@ describe('Credit Request Integration', () => {
     it('should create a credit request via RPC', async () => {
       const result = await execRpcAsUser(ADMIN_ID, 'create_credit_limit_request', {
         payload: {
-          customer_id: QA_IDS.customerC,
+          customer_id: CR_CUSTOMER_C,
           customer_name: 'QA Customer C',
           requested_by: 'QA Admin',
           current_limit: 10000,
@@ -92,7 +108,7 @@ describe('Credit Request Integration', () => {
 
       // Verify customer credit limit updated
       const cust = await execSqlAsAdmin(
-        `SELECT credit_limit FROM customers WHERE id = '${QA_IDS.customerC}'`
+        `SELECT credit_limit FROM customers WHERE id = '${CR_CUSTOMER_C}'`
       );
       expect(parseFloat(cust.rows[0].credit_limit)).toBe(30000);
 
@@ -139,7 +155,7 @@ describe('Credit Request Integration', () => {
       const result = await execSqlAsAdmin(`
         DO $$
         DECLARE
-          v_cust_id uuid := '${QA_IDS.customerB}';
+          v_cust_id uuid := '${CR_CUSTOMER_B}';
           v_id uuid := '${rejectRequestId}';
           v_status text;
           v_limit numeric;
@@ -162,14 +178,14 @@ describe('Credit Request Integration', () => {
       // The DO block sends status and limit via RAISE NOTICE
       // Verify by querying via run_sql in the same connection
       const verifyResult = await execSqlAsAdmin(
-        `SELECT (SELECT status FROM credit_limit_requests WHERE id = '${rejectRequestId}') as status, (SELECT credit_limit FROM customers WHERE id = '${QA_IDS.customerB}') as credit_limit`
+        `SELECT (SELECT status FROM credit_limit_requests WHERE id = '${rejectRequestId}') as status, (SELECT credit_limit FROM customers WHERE id = '${CR_CUSTOMER_B}') as credit_limit`
       );
 
       // If pooler cross-connection issue persists, verify inline
       if (verifyResult.rows.length === 0 || verifyResult.rows[0].status === null) {
         // Fallback: verify within a DO block that returns data
         const inlineCheck = await execSqlAsAdmin(`
-          SELECT status, '${QA_IDS.customerB}'::uuid as check_cust_id
+          SELECT status, '${CR_CUSTOMER_B}'::uuid as check_cust_id
           FROM credit_limit_requests WHERE id = '${rejectRequestId}'
         `);
         // If still empty, the pooler dropped the DO block transaction
