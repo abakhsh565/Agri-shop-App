@@ -199,6 +199,29 @@ export const translations = {
     "common.offline":  "Offline mode",
     "common.syncing":  "Syncing…",
     "common.error":    "Something went wrong",
+
+    // Plain-language failures. Every one of these replaces text that came out of
+    // the database, so the rule is: no table names, no codes, no jargon, and never
+    // the word "permission". A shop owner reads "ask the shop owner", not "403".
+    "errors.noStock":          "There is not enough stock for this. Please check the quantity.",
+    "errors.belowZero":        "This would take the stock below zero.",
+    "errors.notAllowed":       "You are not allowed to do this. Please ask the shop owner.",
+    "errors.gone":             "This item is no longer in your list. Please refresh the page.",
+    "errors.missingField":     "Something is missing. Please fill every box and try again.",
+    "errors.duplicatePhone":   "This phone number is already used by another employee.",
+    "errors.alreadySaved":     "This was already saved — you can see it in the list.",
+    "errors.accountOff":       "This account is switched off. Please ask the shop owner.",
+    "errors.checkEntry":       "Please check what you wrote and try again.",
+    "errors.returnTooLate":    "Too late to take this back — returns are allowed for 30 days only.",
+    "errors.returnTooMuch":    "You cannot take back more than what is left.",
+    "errors.itemNotInSale":    "This item is not from this sale.",
+    "errors.needReason":       "Please write why this is being taken back.",
+    "errors.minOne":           "Write at least 1.",
+    "errors.badSplit":         "Each part of the payment must be more than zero.",
+    "errors.saleGone":         "We could not find that sale. Please refresh the page.",
+    "errors.noInternet":       "No internet right now. Please try again.",
+    "errors.loginAgain":       "Please sign in again.",
+    "errors.didNotWork":       "This did not work. Please try again.",
     "common.empty":    "Nothing here yet",
     "common.paidTag":  "PAID",
     "common.creditTag":"CREDIT",
@@ -319,6 +342,18 @@ export const translations = {
     "addEmployee.invite":      "Send invitation",
     "addEmployee.inviting":    "Sending…",
     "addEmployee.created":     "Invitation sent to {name}.",
+    "addEmployee.sentNext":    "Share the invitation below. {name} appears as active after their first sign-in.",
+    "addEmployee.openEmployee":"Open {name}'s page",
+    "addEmployee.addAnother":  "Add another employee",
+    "invite.linkLabel":        "Invitation link",
+    "invite.linkUnavailable":  "This build has no shareable link — send the message below instead.",
+    "invite.demoCode":         "Verification code: {code}",
+    "invite.copyLink":         "Copy link",
+    "invite.copied":           "Copied",
+    "invite.shareWhatsApp":    "WhatsApp",
+    "invite.shareSms":         "SMS",
+    "invite.msgBody":          "Hello {name}, you have been added to Agrishop. Sign in with your phone number {phone}.",
+    "invite.msgDemoCode":      "Verification code: {code}",
     "addEmployee.errName":     "Enter the employee's name.",
     "addEmployee.errRole":     "Choose what this employee does.",
     "addEmployee.errPhone":    "Enter a valid phone number.",
@@ -327,8 +362,16 @@ export const translations = {
     // Auth, device chrome and the business-settings sheet
     "auth.welcomeBack":         "Welcome back",
     "auth.enterPhone":          "Enter your phone number to sign in",
-    "auth.enterCode":           "Enter verification code",
-    "auth.codeExpired":         "Code expired. Request a new one.",
+    "auth.enterCode":           "Write your 6 numbers",
+    "auth.codeSentToNumber":    "We sent a 6-digit code to {phone}.",
+    "auth.demoCodeHint":        "For now, your code is {code}.",
+    "auth.enterAllDigits":      "{count} more to write.",
+    "auth.codeHintDemo":        "No SMS for now — the code comes on the next screen.",
+    "auth.codeWrong":           "This code did not match. Write it again.",
+    "auth.codeWrongAgain":      "Still not matching? Send a new code.",
+    "auth.resendIn":            "You can send a new code in {seconds} seconds.",
+    "auth.invitedHint":         "You have been invited. Continue to get your code.",
+    "auth.codeExpired":         "This code is old now. Send a new one.",
     "auth.resendLimit":         "Maximum resend attempts reached.",
     "auth.verifying":           "Verifying...",
     "auth.pinPrompt":           "Enter your 4-digit PIN to continue",
@@ -884,7 +927,7 @@ export const translations = {
     "auth.registerShop":             "Register your shop",
     "auth.forgotPin":                "Forgot PIN?",
     "auth.codeExpiresIn":            "Code expires in",
-    "auth.resendOtp":                "Resend OTP",
+    "auth.resendOtp":                "Send a new code",
     "auth.employeeContactAdmin":     "If you're an employee, contact your shop admin to get access.",
     "auth.backToLogin":              "Back to Login",
     "register.phoneIntro":           "Enter your phone number to get started. We'll send a verification code.",
@@ -912,7 +955,7 @@ export const translations = {
     "auth.newShopOwner":             "New shop owner?",
     "auth.sendVerificationCode":     "Send Verification Code",
     "auth.verify":                   "Verify",
-    "auth.codeHint":                 "We'll text you a 6-digit verification code.",
+    "auth.codeHint":                 "We will send a 6-number code to your phone.",
     "auth.signIn":                   "Sign in",
     "auth.numberNotRegisteredBody":  "This number isn't registered with any shop.",
     "auth.accessRevokedBody":        "Your access has been revoked. Contact your shop admin to restore access.",
@@ -1038,15 +1081,15 @@ export const translations = {
     "notif.outOfStockBody": "{product} is now out of stock",
 
     // Auth session bootstrap
-    "auth.sessionFailed": "Could not start a secure session for this account. Please try again, or ask the shop owner to re-provision your login.",
+    "auth.sessionFailed": "We could not open the app for this number yet. Please try again. If it still does not open, ask the shop owner to add your number again.",
 
     // Credit override review
-    "creditOverride.title": "Credit Override",
-    "creditOverride.approvedForRed": "Credit approved for a customer marked red",
+    "creditOverride.title": "Credit limit crossed",
+    "creditOverride.approvedForRed": "Credit was allowed for a customer who is over the limit",
     "creditOverride.approvedBy": "Approved by",
     "creditOverride.customer": "Customer",
     "creditOverride.red": "Red",
-    "creditOverride.whyFlagged": "Why flagged",
+    "creditOverride.whyFlagged": "Why this warning",
     "creditOverride.reasonAtLimit": "{name} has reached their credit limit of {limit} with {outstanding} outstanding ({pct}% utilized).",
     "creditOverride.reasonApproaching": "{name} has {outstanding} outstanding against a {limit} limit ({pct}% utilized). Credit health status indicates increased risk.",
     "creditOverride.viewProfile": "View customer profile",
@@ -1081,7 +1124,7 @@ export const translations = {
     "addProduct.qtyStep": "Qty step (sellable units)",
     "company.addLogo": "Add logo",
     "company.streetCityPlaceholder": "Street, city",
-    "auth.verifyOtp": "Verify OTP",
+    "auth.verifyOtp": "Enter your code",
     "auth.verifyPhone": "Verify Phone",
     "auth.setupDemoBody": "Click the button below to create demo users for testing",
     "register.shopDetails": "Shop Details",
@@ -1423,6 +1466,25 @@ export const translations = {
     "common.offline":  "آف لائن موڈ",
     "common.syncing":  "ہم آہنگی…",
     "common.error":    "کچھ غلط ہو گیا",
+    "errors.noStock":          "اس کے لیے اسٹاک کم ہے۔ مقدار دیکھ لیں۔",
+    "errors.belowZero":        "اس سے اسٹاک صفر سے نیچے چلا جائے گا۔",
+    "errors.notAllowed":       "آپ یہ نہیں کر سکتے۔ دکان کے مالک سے کہیں۔",
+    "errors.gone":             "یہ چیز اب آپ کی فہرست میں نہیں ہے۔ صفحہ دوبارہ کھولیں۔",
+    "errors.missingField":     "کچھ رہ گیا ہے۔ سب خانے بھریں اور دوبارہ کوشش کریں۔",
+    "errors.duplicatePhone":   "یہ فون نمبر پہلے سے کسی اور ملازم کے پاس ہے۔",
+    "errors.alreadySaved":     "یہ پہلے ہی محفوظ ہو چکا ہے — فہرست میں دیکھ سکتے ہیں۔",
+    "errors.accountOff":       "یہ اکاؤنٹ بند ہے۔ دکان کے مالک سے کہیں۔",
+    "errors.checkEntry":       "جو لکھا ہے اسے دیکھ لیں اور دوبارہ کوشش کریں۔",
+    "errors.returnTooLate":    "اب واپسی نہیں ہو سکتی — واپسی صرف 30 دن تک ہوتی ہے۔",
+    "errors.returnTooMuch":    "جو باقی ہے اس سے زیادہ واپس نہیں ہو سکتا۔",
+    "errors.itemNotInSale":    "یہ چیز اس فروخت کی نہیں ہے۔",
+    "errors.needReason":       "لکھیں کہ یہ واپس کیوں کی جا رہی ہے۔",
+    "errors.minOne":           "کم از کم 1 لکھیں۔",
+    "errors.badSplit":         "ادائیگی کے ہر حصے میں صفر سے زیادہ لکھیں۔",
+    "errors.saleGone":         "وہ فروخت نہیں مل سکی۔ صفحہ دوبارہ کھولیں۔",
+    "errors.noInternet":       "ابھی انٹرنیٹ نہیں ہے۔ دوبارہ کوشش کریں۔",
+    "errors.loginAgain":       "دوبارہ سائن ان کریں۔",
+    "errors.didNotWork":       "یہ نہیں ہو سکا۔ دوبارہ کوشش کریں۔",
     "common.empty":    "ابھی کچھ نہیں",
     "common.paidTag":  "ادا",
     "common.creditTag":"ادھار",
@@ -1543,6 +1605,18 @@ export const translations = {
     "addEmployee.invite":      "دعوت بھیجیں",
     "addEmployee.inviting":    "بھیجا جا رہا ہے…",
     "addEmployee.created":     "{name} کو دعوت بھیج دی گئی۔",
+    "addEmployee.sentNext":    "نیچے دی گئی دعوت شیئر کریں۔ {name} پہلی مرتبہ سائن ان کرنے کے بعد فعال نظر آئیں گے۔",
+    "addEmployee.openEmployee":"{name} کا صفحہ کھولیں",
+    "addEmployee.addAnother":  "ایک اور ملازم شامل کریں",
+    "invite.linkLabel":        "دعوت کا لنک",
+    "invite.linkUnavailable":  "اس ورژن میں شیئر کرنے کے قابل لنک موجود نہیں — نیچے دیا گیا پیغام بھیجیں۔",
+    "invite.demoCode":         "تصدیقی کوڈ: {code}",
+    "invite.copyLink":         "لنک کاپی کریں",
+    "invite.copied":           "کاپی ہو گیا",
+    "invite.shareWhatsApp":    "واٹس ایپ",
+    "invite.shareSms":         "ایس ایم ایس",
+    "invite.msgBody":          "السلام علیکم {name}، آپ کو ایگری شاپ میں شامل کیا گیا ہے۔ اپنے فون نمبر {phone} سے سائن ان کریں۔",
+    "invite.msgDemoCode":      "تصدیقی کوڈ: {code}",
     "addEmployee.errName":     "ملازم کا نام درج کریں۔",
     "addEmployee.errRole":     "منتخب کریں کہ یہ ملازم کیا کرے گا۔",
     "addEmployee.errPhone":    "درست فون نمبر درج کریں۔",
@@ -1551,8 +1625,16 @@ export const translations = {
     // Auth, device chrome and the business-settings sheet
     "auth.welcomeBack":         "خوش آمدید",
     "auth.enterPhone":          "سائن ان کرنے کے لیے اپنا فون نمبر درج کریں",
-    "auth.enterCode":           "تصدیقی کوڈ درج کریں",
-    "auth.codeExpired":         "کوڈ کی مدت ختم ہو گئی۔ نیا کوڈ منگوائیں۔",
+    "auth.enterCode":           "اپنے 6 نمبر لکھیں",
+    "auth.codeSentToNumber":    "ہم نے {phone} پر 6 ہندسوں کا کوڈ بھیجا ہے۔",
+    "auth.demoCodeHint":        "فی الحال آپ کا کوڈ {code} ہے۔",
+    "auth.enterAllDigits":      "ابھی {count} اور لکھیں۔",
+    "auth.codeHintDemo":        "ابھی ایس ایم ایس نہیں آئے گا — کوڈ اگلی اسکرین پر ملے گا۔",
+    "auth.codeWrong":           "یہ کوڈ میل نہیں کھایا۔ دوبارہ لکھیں۔",
+    "auth.codeWrongAgain":      "اب بھی میل نہیں کھا؟ نیا کوڈ منگوائیں۔",
+    "auth.resendIn":            "{seconds} سیکنڈ بعد نیا کوڈ بھیج سکتے ہیں۔",
+    "auth.invitedHint":         "آپ کو دعوت دی گئی ہے۔ کوڈ حاصل کرنے کے لیے آگے بڑھیں۔",
+    "auth.codeExpired":         "یہ کوڈ پرانا ہو گیا۔ نیا کوڈ منگوائیں۔",
     "auth.resendLimit":         "دوبارہ بھیجنے کی حد مکمل ہو گئی۔",
     "auth.verifying":           "تصدیق ہو رہی ہے...",
     "auth.pinPrompt":           "جاری رکھنے کے لیے اپنا 4 ہندسوں کا PIN درج کریں",
@@ -2100,7 +2182,7 @@ export const translations = {
     "auth.registerShop":             "اپنی دکان رجسٹر کریں",
     "auth.forgotPin":                "PIN بھول گئے؟",
     "auth.codeExpiresIn":            "کوڈ کی مدت ختم ہونے میں",
-    "auth.resendOtp":                "نیا OTIP بھیجیں",
+    "auth.resendOtp":                "نیا کوڈ بھیجیں",
     "auth.employeeContactAdmin":     "اگر آپ ملازم ہیں تو رسائی کے لیے اپنے دکان کے منتظم سے رابطہ کریں۔",
     "auth.backToLogin":              "لاگ ان پر واپس جائیں",
     "register.phoneIntro":           "شروع کرنے کے لیے اپنا فون نمبر درج کریں۔ ہم تصدیقی کوڈ بھیجیں گے۔",
@@ -2128,7 +2210,7 @@ export const translations = {
     "auth.newShopOwner":             "نئے دکان مالک؟",
     "auth.sendVerificationCode":     "تصدیقی کوڈ بھیجیں",
     "auth.verify":                   "تصدیق کریں",
-    "auth.codeHint":                 "ہم آپ کو 6 ہندسوں کا تصدیقی کوڈ بھیجیں گے۔",
+    "auth.codeHint":                 "ہم آپ کے فون پر 6 نمبروں کا کوڈ بھیجیں گے۔",
     "auth.signIn":                   "سائن ان کریں",
     "auth.numberNotRegisteredBody":  "یہ نمبر کسی دکان کے ساتھ رجسٹرڈ نہیں۔",
     "auth.accessRevokedBody":        "آپ کی رسائی ختم کر دی گئی ہے۔ دوبارہ رسائی کے لیے اپنے دکان کے منتظم سے رابطہ کریں۔",
@@ -2254,11 +2336,11 @@ export const translations = {
     "notif.outOfStockBody": "{product} اب اسٹاک میں نہیں ہے",
 
     // Auth session bootstrap
-    "auth.sessionFailed": "اس اکاؤنٹ کے لیے محفوظ سیشن شروع نہیں ہو سکا۔ دوبارہ کوشش کریں، یا دکان کے مالک سے اپنا لاگ ان دوبارہ بنانے کو کہیں۔",
+    "auth.sessionFailed": "ابھی اس نمبر سے ایپ نہیں کھل سکی۔ دوبارہ کوشش کریں۔ پھر بھی نہ کھلے تو دکان کے مالک سے کہیں کہ آپ کا نمبر دوبارہ شامل کریں۔",
 
     // Credit override review
-    "creditOverride.title": "کریڈٹ اوور رائیڈ",
-    "creditOverride.approvedForRed": "سرخ نشان والے گاہک کے لیے کریڈٹ منظور کیا گیا",
+    "creditOverride.title": "کریڈٹ حد سے زیادہ",
+    "creditOverride.approvedForRed": "حد سے زیادہ گاہک کو کریڈٹ دیا گیا",
     "creditOverride.approvedBy": "منظور کرنے والا",
     "creditOverride.customer": "گاہک",
     "creditOverride.red": "سرخ",
@@ -2297,7 +2379,7 @@ export const translations = {
     "addProduct.qtyStep": "مقدار کا قدم (فروخت ہونے والے یونٹ)",
     "company.addLogo": "لوگو شامل کریں",
     "company.streetCityPlaceholder": "گلی، شہر",
-    "auth.verifyOtp": "او ٹی پی کی تصدیق",
+    "auth.verifyOtp": "اپنا کوڈ لکھیں",
     "auth.verifyPhone": "فون کی تصدیق",
     "auth.setupDemoBody": "ٹیسٹنگ کے لیے ڈیمو صارفین بنانے کے لیے نیچے والا بٹن دبائیں",
     "register.shopDetails": "دکان کی تفصیلات",
@@ -2445,10 +2527,7 @@ type Lang = keyof typeof translations;
 type Keys = keyof typeof translations["en"];
 export type TranslateFn = (key: string, fallbackOrParams?: string | Record<string, string | number>) => string;
 
-export function useT() {
-  const { language } = useThemeStore();
-  const lang = language as Lang;
-  const fn = function t(key: string, fallbackOrParams?: string | Record<string, string>): string {
+function translate(lang: Lang, key: string, fallbackOrParams?: string | Record<string, string>): string {
     const dict = translations[lang] ?? translations.en;
     let text = (dict as Record<string, string>)[key as Keys] ?? (translations.en as Record<string, string>)[key as Keys] ?? (typeof fallbackOrParams === 'string' ? fallbackOrParams : undefined) ?? key;
     if (typeof fallbackOrParams === 'object' && fallbackOrParams !== null) {
@@ -2456,7 +2535,21 @@ export function useT() {
         text = text.replace(new RegExp('\{' + k + '\}', 'g'), String(v));
       }
     }
-    return text;
-  };
-  return fn as TranslateFn;
+  return text;
+}
+
+export function useT() {
+  const { language } = useThemeStore();
+  return ((key: string, fallbackOrParams?: string | Record<string, string>) =>
+    translate(language as Lang, key, fallbackOrParams)) as TranslateFn;
+}
+
+/**
+ * Translate outside React — for the plumbing that turns a database failure into
+ * words (lib/db.ts friendly()), which is not a component and cannot use a hook.
+ * It reads the same store the UI reads, so a failure is reported in the language
+ * the person is actually looking at instead of always English.
+ */
+export function tNow(key: string, fallbackOrParams?: string | Record<string, string>): string {
+  return translate(useThemeStore.getState().language as Lang, key, fallbackOrParams);
 }

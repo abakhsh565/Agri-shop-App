@@ -42,9 +42,17 @@ async function login(page: Page, phone: string) {
   await page.getByRole('button', { name: 'Send Code' }).click();
   await page.waitForURL(/\/login\/otp/, { timeout: 20000 });
 
-  const boxes = page.locator('input[inputmode="numeric"]:not([tabindex="-1"])');
+  const boxes = page.locator('[data-testid^="otp-digit-"]');
   await expect(boxes).toHaveCount(6);
-  for (let i = 0; i < OTP.length; i++) await boxes.nth(i).fill(OTP[i]);
+  // Six keystrokes with the component's own focus advance — filling boxes by
+  // index raced with it and could leave the code a digit short.
+  await boxes.first().click();
+  await page.keyboard.type(OTP);
+  // Verify the entry, not just the outcome: a code typed one box off submits
+  // nothing and reports nothing, so a silent no-op here means "we typed it wrong".
+  for (let i = 0; i < OTP.length; i++) {
+    await expect(boxes.nth(i), `OTP digit ${i + 1} is not the one that was typed`).toHaveValue(OTP[i]);
+  }
 
   await page.waitForURL(/pin-set|\/login\/pin|\/admin\/dashboard|\/employee\/dashboard/, { timeout: 30000 });
 
@@ -214,11 +222,39 @@ test.describe('Employee job & access — simple for the owner, exact underneath'
     expect(review, 'the confirmation does not show the chosen branch').toContain(branch.name);
 
     await page.getByRole('button', { name: 'Send invitation' }).click();
-    // The flow lands on the new employee, whose page is where the invitation and
-    // its next step are visible — not on a list where nothing says what happens.
+
+    // The confirmation comes FIRST, in place, because the invitation is the one
+    // thing the owner has to hand over — and this is the moment they decided to
+    // add this person. Landing on the employee's page (or the list) left the
+    // owner with the person added and nothing to give them.
+    await expect(page.getByTestId('invite-sent-title')).toBeVisible({ timeout: 30000 });
+    await page.waitForTimeout(1200);
+
+    const inviteLink = (await page.getByTestId('invite-link').innerText()).trim();
+    expect(
+      inviteLink,
+      'the invitation link does not carry the employee\u2019s number, so the person still has to guess what to type'
+    ).toContain(`/login?phone=${NEW_PHONE_DB}`);
+    expect(inviteLink.startsWith('http'), 'the invitation link is not a link anybody can open').toBe(true);
+
+    const wa = await page.getByTestId('invite-whatsapp').getAttribute('href');
+    expect(wa, 'the WhatsApp share target does not address the employee').toContain(`wa.me/${NEW_PHONE_DB}`);
+    const sms = await page.getByTestId('invite-sms').getAttribute('href');
+    expect(sms, 'the SMS share target does not address the employee').toContain(`sms:+${NEW_PHONE_DB}`);
+
+    // The confirmation must say what happens next, not only that it worked.
+    expect(await bodyText(page), 'the confirmation does not say what happens next').toContain('first sign-in');
+
+    // …and then on to their page, where the invitation is shown again for the
+    // owner who comes back because the person never signed in.
+    await page.getByTestId('invite-open-employee').click();
     await page.waitForURL(/\/admin\/employees\/[0-9a-f-]{36}$/, { timeout: 30000 });
     await page.waitForTimeout(2500);
     expect(await bodyText(page), 'the invited employee page is not shown after inviting').toContain('Invitation sent');
+    expect(
+      (await page.getByTestId('invite-link').first().innerText()).trim(),
+      'the invited employee\u2019s page does not offer the invitation the owner needs to re-send'
+    ).toBe(inviteLink);
 
     // ── Database is the judge ──
     const [created] = await execSql(`SELECT id, name, phone FROM users WHERE phone = '${NEW_PHONE_DB}'`);
@@ -271,6 +307,26 @@ test.describe('Employee job & access — simple for the owner, exact underneath'
     // The destructive action must name what it actually does at this state.
     expect(detail, 'cancelling an invitation is offered as a deactivation').toContain('Cancel invitation');
     expect(detail, 'a pending employee is offered "Deactivate employee"').not.toContain('Deactivate employee');
+
+    // ── The invitation the owner shared must actually work for the person ──
+    // Open it the way the employee would: no session of ours, nothing typed.
+    // A link that only says the right phone number but does not fill it in is
+    // not an invitation, it is a notification.
+    await page.evaluate(() => {
+      Object.keys(localStorage)
+        .filter((k) => k.startsWith('sb-'))
+        .forEach((k) => localStorage.removeItem(k));
+    });
+    await page.goto(inviteLink);
+    await page.waitForTimeout(1500);
+    await expect(
+      page.getByPlaceholder('e.g. 03001234567'),
+      'the invitation link does not fill in the employee\u2019s number'
+    ).toHaveValue(NEW_PHONE_DB);
+    expect(
+      await bodyText(page),
+      'the invited person is not told why the number is already filled in'
+    ).toContain('You have been invited');
   });
 
   test('3. The same flow in Urdu: RTL, translated, no English copy leaking', async ({ page }) => {
@@ -434,6 +490,10 @@ test.describe('Employee job & access — simple for the owner, exact underneath'
     expect(summary, 'the confirmation does not say access was customized').toContain('changes from Sales Employee');
 
     await page.getByRole('button', { name: 'Send invitation' }).click();
+    // The invitation is confirmed in place first (see test 2), then the owner
+    // moves on to the employee's page.
+    await expect(page.getByTestId('invite-sent-title')).toBeVisible({ timeout: 30000 });
+    await page.getByTestId('invite-open-employee').click();
     await page.waitForURL(/\/admin\/employees\/[0-9a-f-]{36}$/, { timeout: 30000 });
     await page.waitForTimeout(2000);
     const [ovr] = await execSql(`SELECT id FROM users WHERE phone = '${OVR_PHONE_DB}'`);
@@ -476,5 +536,33 @@ test.describe('Employee job & access — simple for the owner, exact underneath'
     expect(await bodyText(page), 'the screen claims a difference the role already provides').not.toContain('changed for');
     const accessRow = await page.getByText('Access', { exact: true }).first().locator('xpath=..').innerText();
     expect(accessRow, 'the newly granted area is missing from the access line').toContain('Suppliers');
+  });
+
+  test('7. A partly typed code says so instead of waiting in silence', async ({ page }) => {
+    // The failure this pins down cost real time: the code is only checked once all
+    // six digits are in, so five digits produced no error, no message and no
+    // submit — indistinguishable from a frozen screen, and easy to misread as the
+    // app ignoring a correct code. Entering a code one box off is the same shape.
+    await page.goto(`${BASE}/login`);
+    await page.getByPlaceholder('e.g. 03001234567').fill(OWNER_PHONE);
+    await page.getByRole('button', { name: 'Send Code' }).click();
+    await page.waitForURL(/\/login\/otp/, { timeout: 20000 });
+
+    const boxes = page.locator('[data-testid^="otp-digit-"]');
+    await expect(boxes).toHaveCount(6);
+    for (let i = 0; i < 5; i++) await boxes.nth(i).fill('12345'[i]);
+
+    const notice = page.getByTestId('otp-incomplete');
+    await expect(notice, 'a five-digit code is entered in silence').toBeVisible();
+    // It says how many are still missing, in words rather than a count with a
+    // plural that breaks at 1.
+    expect(await notice.innerText(), 'the notice does not say what is missing').toContain('1 more to write');
+    await page.waitForTimeout(3000);
+    expect(page.url(), 'a five-digit code was submitted anyway').toContain('/login/otp');
+
+    // No confirm button: the sixth number submits on its own, exactly as before.
+    await boxes.nth(5).fill('6');
+    await expect(notice, 'the notice survives a complete code').toBeHidden();
+    await page.waitForURL(/pin-set|\/login\/pin|\/admin\/dashboard|\/employee\/dashboard/, { timeout: 30000 });
   });
 });

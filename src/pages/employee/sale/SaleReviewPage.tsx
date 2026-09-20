@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useNavigate, Navigate } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
@@ -21,6 +21,13 @@ export default function SaleReviewPage() {
   const [amountPaid, setAmountPaid] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // A tap that lands twice must not become two sales. The ref blocks the second
+  // handler synchronously (state updates are too late for a double tap), and the
+  // key makes the database the authority: a retry of the SAME attempt returns the
+  // sale that already exists. The key is retired after success so the next sale is
+  // a new one.
+  const submittingRef = useRef(false);
+  const submissionKeyRef = useRef<string | null>(null);
 
   if (!customer || !items.length) return <Navigate to={`${base}/sale/cart`} replace />;
 
@@ -30,10 +37,14 @@ export default function SaleReviewPage() {
   const paymentType = outstanding > 0 ? (paid > 0 ? "partial" : "credit") : "full";
 
   async function handleComplete() {
+    if (submittingRef.current) return;
+    submittingRef.current = true;
+    if (!submissionKeyRef.current) submissionKeyRef.current = crypto.randomUUID();
     setLoading(true);
     setError(null);
     try {
       const newSale = await createSale({
+        idempotencyKey: submissionKeyRef.current,
         customerId: customer!.id,
         customerName: customer!.name,
         employeeId: user?.id ?? "",
@@ -57,11 +68,16 @@ export default function SaleReviewPage() {
         paymentType,
         paymentMethod,
       });
+      // Done: this attempt's key retires, so the next sale is a new sale.
+      submissionKeyRef.current = null;
       clearCart();
       navigate(`${base}/sale/success`, { state: { sale: newSale }, replace: true });
     } catch (e) {
+      // Keep the key: if the failure was the response going missing rather than the
+      // sale, retrying with the same key returns that sale instead of duplicating it.
       setError(e instanceof Error ? e.message : "Could not complete the sale. Please try again.");
     } finally {
+      submittingRef.current = false;
       setLoading(false);
     }
   }

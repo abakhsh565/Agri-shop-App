@@ -12,11 +12,12 @@ import { useT } from "@/lib/i18n";
 import { usePermissionLabels } from "@/lib/permissionLabels";
 import { applyOverrides, diffOverrides, overrideCount } from "@/lib/accessModel";
 import EmployeeAccessEditor from "@/components/admin/EmployeeAccessEditor";
+import InviteLinkCard from "@/components/admin/InviteLinkCard";
 import { useThemeStore } from "@/stores/themeStore";
 import { normalizePhone } from "@/lib/auth";
 import { clearNav } from "@/lib/navContext";
 import { supabase } from "@/lib/supabase";
-import { Check, ChevronRight, User, Shield, MapPin } from "lucide-react";
+import { Check, CheckCircle2, ChevronRight, User, Shield, MapPin } from "lucide-react";
 
 /**
  * Add Employee — three decisions, one on each step:
@@ -33,8 +34,10 @@ import { Check, ChevronRight, User, Shield, MapPin } from "lucide-react";
  *     it from the caller's tenant. The screen cannot influence it.
  *
  * Adding somebody ISSUES AN INVITATION (see migration 0129): the membership is
- * pending until they sign in with their own phone number, so the last step says
- * what happens next and the flow lands on their page in the invited state.
+ * pending until they sign in with their own phone number. The last step says
+ * what happens next, and the flow ends on a confirmation that hands the owner
+ * the invitation itself — the link and the share actions — because the employee
+ * cannot sign in without it.
  */
 type Step = "who" | "role" | "where";
 
@@ -52,6 +55,9 @@ export default function AddEmployeePage() {
   const permissionsStore = usePermissionsStore();
 
   const [step, setStep] = useState<Step>("who");
+  // Set when the invitation has actually been created: the flow then shows the
+  // invitation instead of navigating away from it.
+  const [sent, setSent] = useState<{ id: string | null; name: string; phone: string } | null>(null);
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
@@ -110,6 +116,20 @@ export default function AddEmployeePage() {
     }
   }
 
+  /** Clear the form so the owner can add the next person without leaving. */
+  function resetForm() {
+    setSent(null);
+    setStep("who");
+    setName("");
+    setPhone("");
+    setPhotoUrl(null);
+    setRoleId(null);
+    setSelectedRolePermissions([]);
+    setAccessValue(new Set());
+    setCustomizing(false);
+    setError("");
+  }
+
   function prevStep() {
     setError("");
     if (step === "role") setStep("who");
@@ -135,9 +155,10 @@ export default function AddEmployeePage() {
       });
       addToast(t("addEmployee.created", { name: name.trim() }), "success");
       clearNav();
-      // Land on the new employee instead of the list: their page is where the
-      // owner can see the invitation went out and what happens next.
-      navigate(created?.id ? `/admin/employees/${created.id}` : "/admin/employees", { replace: true });
+      // Show the invitation rather than leaving the screen: the link is the one
+      // thing the owner must hand over, and it is only here that they have just
+      // decided to add this person.
+      setSent({ id: created?.id ?? null, name: name.trim(), phone: normalizePhone(phone) });
     } catch (e) {
       setError(e instanceof Error ? e.message : t("addEmployee.errFailed"));
       setLoading(false);
@@ -274,6 +295,51 @@ export default function AddEmployeePage() {
           </div>
           </div>
         )}
+      </div>
+    );
+  }
+
+  // Confirmation: the invitation exists now, so what follows is handing it over.
+  if (sent) {
+    return (
+      <div
+        className="flex flex-col w-full min-h-full"
+        style={{ background: "var(--background)", direction: isUrdu ? "rtl" : "ltr" }}
+      >
+        <StatusBar />
+        <NavHeader title={t("addEmployee.title")} />
+
+        <div className="flex-1 flex flex-col gap-4 p-4 animate-fade-in-up">
+          <div className="flex flex-col items-center text-center gap-2 pt-4 pb-2">
+            <CheckCircle2 size={40} style={{ color: "var(--brand)" }} />
+            <p className="text-lg font-bold" style={{ color: "var(--text-primary)" }} data-testid="invite-sent-title">
+              {t("addEmployee.created", { name: sent.name })}
+            </p>
+            <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
+              {t("addEmployee.sentNext", { name: firstName })}
+            </p>
+          </div>
+
+          <InviteLinkCard name={sent.name} phone={sent.phone} />
+        </div>
+
+        <div className="p-4 pb-6 flex gap-3">
+          <button
+            onClick={resetForm}
+            className="h-12 px-6 rounded-full font-bold text-sm"
+            style={{ background: "var(--surface-2)", border: "1px solid var(--divider)", color: "var(--text-primary)" }}
+          >
+            {t("addEmployee.addAnother")}
+          </button>
+          <button
+            onClick={() => navigate(sent.id ? `/admin/employees/${sent.id}` : "/admin/employees", { replace: true })}
+            className="flex-1 h-12 rounded-full font-bold text-sm"
+            style={{ background: "var(--brand)", color: "#0a0a0a" }}
+            data-testid="invite-open-employee"
+          >
+            {t("addEmployee.openEmployee", { name: firstName })}
+          </button>
+        </div>
       </div>
     );
   }

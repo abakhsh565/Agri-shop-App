@@ -202,10 +202,22 @@ export async function loginViaUi(page: Page, phone: string) {
   await page.getByRole('button', { name: 'Send Code' }).click();
   await page.waitForURL(/\/login\/otp/, { timeout: 20000 });
 
-  const boxes = page.locator('input[inputmode="numeric"]:not([tabindex="-1"])');
+  // The digit boxes, addressed by role rather than position: the OTP field also
+  // contains an off-screen autofill input, and a partly-typed code produces NO
+  // error at all (submission waits for the sixth digit), so an entry that lands
+  // one box off looks exactly like a frozen screen.
+  const boxes = page.locator('[data-testid^="otp-digit-"]');
   await expect(boxes).toHaveCount(6);
+  // Type it the way a person does: six keystrokes, focus advancing on its own.
+  // Filling each box by index raced with that auto-advance (a fill could land on
+  // a box the component had already moved past, leaving the code one digit short
+  // — which submits nothing and reports nothing).
+  await boxes.first().click();
+  await page.keyboard.type(OTP);
+  // Assert what actually landed before trusting the navigation: "the page did not
+  // move" must never be the only symptom of a mis-entered code.
   for (let i = 0; i < OTP.length; i++) {
-    await boxes.nth(i).fill(OTP[i]);
+    await expect(boxes.nth(i), `OTP digit ${i + 1} is not the one that was typed`).toHaveValue(OTP[i]);
   }
 
   await page.waitForURL(/pin-set|\/admin\/dashboard|\/employee\/dashboard/, { timeout: 30000 });

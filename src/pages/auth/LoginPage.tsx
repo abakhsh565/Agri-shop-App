@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import AuthLayout from "@/components/layout/AuthLayout";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 import { sendOTP } from "@/lib/auth";
+import { isDemoOtpMode } from "@/lib/authMode";
 import { useAuthStore } from "@/stores/authStore";
 import { useT } from "@/lib/i18n";
 
@@ -12,7 +13,11 @@ export default function LoginPage() {
   const navigate = useNavigate();
   const { setPendingPhone, setPendingFlow, setIsNewDevice } = useAuthStore();
 
-  const [phone, setPhone] = useState("");
+  // An invitation link carries the employee's number, so they do not have to
+  // type it: /login?phone=923001234567 (see lib/appInvite.ts).
+  const [searchParams] = useSearchParams();
+  const invitedPhone = (searchParams.get("phone") ?? "").replace(/\s/g, "");
+  const [phone, setPhone] = useState(invitedPhone);
   const [loading, setLoading] = useState(false);
   const [phoneError, setPhoneError] = useState("");
 
@@ -56,6 +61,17 @@ export default function LoginPage() {
             <p className="text-[14px]" style={{ color: "var(--text-secondary)" }}>{t("auth.enterPhone")}</p>
           </div>
           <div className="flex flex-col gap-4">
+            {invitedPhone && (
+              <div
+                className="rounded-xl px-3 py-2"
+                style={{ background: "var(--surface-2)", border: "1px solid var(--divider)" }}
+                data-testid="invited-hint"
+              >
+                <p className="text-[12px]" style={{ color: "var(--text-secondary)" }}>
+                  {t("auth.invitedHint")}
+                </p>
+              </div>
+            )}
             <Input
               label={t("auth.phoneNumber")}
               type="tel"
@@ -67,7 +83,7 @@ export default function LoginPage() {
               onKeyDown={(e) => e.key === "Enter" && handleSignIn()}
             />
             <p className="text-[12px]" style={{ color: "var(--text-secondary)" }}>
-              {t("auth.codeHint")}
+              {isDemoOtpMode ? t("auth.codeHintDemo") : t("auth.codeHint")}
             </p>
           </div>
         </div>

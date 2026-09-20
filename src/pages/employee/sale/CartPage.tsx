@@ -32,6 +32,10 @@ export default function CartPage() {
   const [dueDate, setDueDate] = useState(customer?.dueDate ?? "");
   const [completing, setCompleting] = useState(false);
   const completingRef = useRef(false);
+  // One key per logical attempt. The database claims it (0134), so a double tap or
+  // a retry after a lost response returns the sale that already exists instead of
+  // charging the customer twice. Retired on success, kept on failure.
+  const submissionKeyRef = useRef<string | null>(null);
 
   // Show cart even without customer — user can scan products first, select customer later
 
@@ -67,10 +71,12 @@ export default function CartPage() {
     if (paymentType === "partial" && amountTouched && parsedAmount !== null && parsedAmount < 0) { addToast(t("sale.amountCannotBeNegative"), "warning"); return; }
 
     completingRef.current = true;
+    if (!submissionKeyRef.current) submissionKeyRef.current = crypto.randomUUID();
     setCompleting(true);
     try {
       const outstandingBalance = total - amountPaid;
       const sale = await createSale({
+        idempotencyKey: submissionKeyRef.current,
         dueDate: dueDate || undefined,
         customerId: customer!.id,
         customerName: customer!.name,
@@ -116,6 +122,7 @@ export default function CartPage() {
       // Due date is now persisted atomically inside the create_sale RPC.
       // Navigate first, then clear cart — clearing first causes the <Navigate>
       // guard in this component to fire and redirect away from the success page.
+      submissionKeyRef.current = null;
       navigate(`${base}/sale/success`, { state: { sale }, replace: true });
       clearCart();
     } catch (e) {

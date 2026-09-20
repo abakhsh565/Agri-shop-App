@@ -66,11 +66,16 @@ async function login(page: Page, phone: string) {
   await page.getByRole('button', { name: 'Send Code' }).click();
   await page.waitForURL(/\/login\/otp/, { timeout: 20000 });
 
-  // Six OTP boxes (the component also renders one hidden autofill input).
-  const boxes = page.locator('input[inputmode="numeric"]:not([tabindex="-1"])');
+  // Six OTP boxes, addressed by role: the component also renders an off-screen
+  // autofill input, and a code typed one box off submits and reports nothing.
+  const boxes = page.locator('[data-testid^="otp-digit-"]');
   await expect(boxes).toHaveCount(6);
+  // Type it as a person would (focus advances by itself); filling by index raced
+  // with that advance and could leave the code a digit short.
+  await boxes.first().click();
+  await page.keyboard.type(OTP);
   for (let i = 0; i < OTP.length; i++) {
-    await boxes.nth(i).fill(OTP[i]);
+    await expect(boxes.nth(i), `OTP digit ${i + 1} is not the one that was typed`).toHaveValue(OTP[i]);
   }
 
   // Auto-verify navigates to PIN setup (first login) or straight to a dashboard.

@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase";
+import { tNow } from "@/lib/i18n";
 import { useAuthStore } from "@/stores/authStore";
 import type {
   Purchase,
@@ -31,6 +32,8 @@ export interface SaleLineInput {
 }
 
 export async function rpcCreateSale(payload: {
+  /** Claimed by the database so one confirm cannot create two sales (0134). */
+  idempotencyKey?: string;
   customerId?: string | null;
   customerName: string;
   customerPhone?: string;
@@ -184,23 +187,45 @@ export async function rpcProcessReturn(payload: {
 
 // Turn raw Postgres exception text into a human message for the UI.
 function friendly(msg: string): string {
-  if (msg.includes("INSUFFICIENT_STOCK")) return "Not enough stock for one or more items.";
-  if (msg.includes("NEGATIVE_STOCK")) return "That adjustment would make stock negative.";
-  if (msg.includes("VARIANT_NOT_FOUND")) return "One of the selected items no longer exists.";
-  if (msg.includes("NOT_AUTHORIZED")) return "You don't have permission to do that.";
-  if (msg.includes("PRODUCT_NOT_FOUND")) return "That product no longer exists.";
-  if (msg.includes("REASON_REQUIRED")) return "A return reason is required.";
-  if (msg.includes("RETURN_WINDOW_EXPIRED")) return "Return window has expired (30 days).";
-  if (msg.includes("EXCESS_RETURN")) return "Cannot return more than the remaining quantity.";
-  if (msg.includes("ITEM_NOT_OWNED")) return "This item does not belong to the selected sale.";
-  if (msg.includes("SALE_ITEM_NOT_FOUND")) return "One of the return items no longer exists.";
-  if (msg.includes("SALE_NOT_FOUND")) return "The original sale was not found.";
-  if (msg.includes("INVALID_QTY")) return "Return quantity must be at least 1.";
-  if (msg.includes("null value")) return "A required field is missing. Please run the SQL migration (0014_return_enhancements.sql) in Supabase.";
-  if (msg.includes("CUSTOMER_NOT_FOUND")) return "Customer not found.";
-  if (msg.includes("INVALID_SPLIT")) return "Each split amount must be positive.";
-  return msg;
+  const m = msg ?? "";
+  if (/INSUFFICIENT_STOCK/.test(m)) return tNow("errors.noStock");
+  if (/NEGATIVE_STOCK|below zero/i.test(m)) return tNow("errors.belowZero");
+  if (/NOT_AUTHORIZED|permission denied|not allowed|PGRST301/i.test(m)) return tNow("errors.notAllowed");
+  if (/VARIANT_NOT_FOUND|PRODUCT_NOT_FOUND|SALE_ITEM_NOT_FOUND|does not exist|no longer exists/i.test(m))
+    return tNow("errors.gone");
+  if (/REASON_REQUIRED/.test(m)) return tNow("errors.needReason");
+  if (/RETURN_WINDOW_EXPIRED/.test(m)) return tNow("errors.returnTooLate");
+  if (/EXCESS_RETURN/.test(m)) return tNow("errors.returnTooMuch");
+  if (/ITEM_NOT_OWNED/.test(m)) return tNow("errors.itemNotInSale");
+  if (/SALE_NOT_FOUND/.test(m)) return tNow("errors.saleGone");
+  if (/INVALID_QTY/.test(m)) return tNow("errors.minOne");
+  if (/CUSTOMER_NOT_FOUND/.test(m)) return tNow("errors.gone");
+  if (/INVALID_SPLIT/.test(m)) return tNow("errors.badSplit");
+  if (/DUPLICATE_PHONE|duplicate key.*users_phone/i.test(m)) return tNow("errors.duplicatePhone");
+  // 0134: the same sale submitted twice. Not a failure the owner should have to
+  // interpret — the sale exists, and the list shows it.
+  if (/DUPLICATE_SUBMISSION/.test(m)) return tNow("errors.alreadySaved");
+  if (/ACCOUNT_INACTIVE/.test(m)) return tNow("errors.accountOff");
+  if (/NOT_AUTHENTICATED|JWT|invalid claim/i.test(m)) return tNow("errors.loginAgain");
+  if (/^VALIDATION|VALIDATION:/i.test(m) || /check constraint|invalid input syntax/i.test(m))
+    return tNow("errors.checkEntry");
+  // Missing/blank column, or a NOT NULL the payload did not fill.
+  if (/null value|not-null|NOT NULL/i.test(m)) return tNow("errors.missingField");
+  // Offline, DNS, timeout, aborted request.
+  if (/failed to fetch|networkerror|network request failed|timeout|timed out|offline|ERR_NETWORK/i.test(m))
+    return tNow("errors.noInternet");
+  // Anything else from the database is a developer's sentence, not an owner's:
+  // "insert or update on table \"sales\" violates foreign key constraint …" used to
+  // be shown exactly as written. Say something a shop owner can act on instead.
+  return tNow("errors.didNotWork");
 }
+
+/**
+ * The same mapping, reachable from the microcopy guard test. Raw database
+ * failures are the most common way technical wording reaches a shop owner's
+ * screen, so the mapping itself is what the test pins down.
+ */
+export { friendly as friendlyForTest };
 
 // ─── Read-only history fetchers ────────────────────────────────────────────
 

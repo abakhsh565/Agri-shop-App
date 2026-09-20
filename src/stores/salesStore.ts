@@ -114,6 +114,13 @@ export interface NewSaleInput {
   paymentMethod: Sale["paymentMethod"];
   note?: string;
   dueDate?: string;
+  /**
+   * Identifies one logical "confirm this sale" attempt. The database claims it
+   * atomically, so a double tap or a retry after a lost response returns the
+   * sale that was already created instead of creating a second one. Optional so
+   * scripts/tests can still call the RPC without one.
+   */
+  idempotencyKey?: string;
 }
 
 interface SalesState {
@@ -211,6 +218,7 @@ export const useSalesStore = create<SalesState>((set, get) => ({
     const paymentLabel = input.paymentType === "full" ? "Paid" : "Credit";
 
     const rpcPayload = {
+      idempotencyKey: input.idempotencyKey,
       customerId: asUuidOrNull(input.customerId) ?? undefined,
       customerName: input.customerName,
       customerPhone: input.customerPhone,

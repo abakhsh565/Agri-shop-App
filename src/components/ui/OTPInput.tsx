@@ -46,14 +46,6 @@ export default function OTPInput({ value, onChange, length = 6, disabled, error 
 
   return (
     <div className="flex gap-3 justify-center">
-      {/* Hidden input for OTP auto-detection (Web OTP API / SMS autofill) */}
-      <input
-        type="text"
-        inputMode="numeric"
-        autoComplete="one-time-code"
-        className="absolute opacity-0 w-0 h-0 pointer-events-none"
-        tabIndex={-1}
-      />
       {Array.from({ length }).map((_, i) => (
         <input
           key={i}
@@ -65,6 +57,7 @@ export default function OTPInput({ value, onChange, length = 6, disabled, error 
           autoFocus={i === 0}
           value={digits[i] || ""}
           disabled={disabled}
+          data-testid={`otp-digit-${i}`}
           onChange={(e) => handleChange(i, e.target.value)}
           onKeyDown={(e) => handleKey(i, e)}
           onPaste={handlePaste}
@@ -77,6 +70,21 @@ export default function OTPInput({ value, onChange, length = 6, disabled, error 
           `}
         />
       ))}
+      {/* Off-screen target for OTP auto-detection (Web OTP API / SMS autofill).
+          Deliberately AFTER the digit boxes: when it came first in the DOM, the
+          first text field on screen was an invisible one, so anything that
+          addressed the fields in order put the first digit where nobody could
+          see it — the visible row then read "23456" while the person believed
+          they had typed "123456", and nothing submitted. */}
+      <input
+        type="text"
+        inputMode="numeric"
+        autoComplete="one-time-code"
+        aria-hidden="true"
+        data-testid="otp-autofill"
+        className="absolute opacity-0 w-0 h-0 pointer-events-none"
+        tabIndex={-1}
+      />
     </div>
   );
 }

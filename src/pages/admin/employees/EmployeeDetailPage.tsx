@@ -5,6 +5,7 @@ import { useT } from "@/lib/i18n";
 import { usePermissionLabels } from "@/lib/permissionLabels";
 import { applyOverrides, diffOverrides, overrideCount, overridesToStore } from "@/lib/accessModel";
 import EmployeeAccessEditor from "@/components/admin/EmployeeAccessEditor";
+import InviteLinkCard from "@/components/admin/InviteLinkCard";
 import { useEmployeesStore } from "@/stores/employeesStore";
 import { usePermissionsStore } from "@/stores/permissionsStore";
 import { useRolesStore } from "@/stores/rolesStore";
@@ -467,7 +468,7 @@ export default function EmployeeDetailPage() {
       {/* Invited: they have never signed in, so there is no work to report and
           showing zeros as "performance" would read as a real result. */}
       {isInvited && (
-        <div className="px-4 pt-5 animate-fade-in-up delay-[125ms]">
+        <div className="px-4 pt-5 flex flex-col gap-3 animate-fade-in-up delay-[125ms]">
           <div className="rounded-xl p-4 flex items-start gap-3" style={{ background: "var(--surface-2)", border: "1px solid var(--border-light)" }}>
             <Clock size={16} className="shrink-0 mt-0.5" style={{ color: "#f59e0b" }} />
             <div>
@@ -475,6 +476,10 @@ export default function EmployeeDetailPage() {
               <p className="text-xs mt-1" style={{ color: "var(--text-secondary)" }}>{t("empDetail.invitedHint", { name: emp.name })}</p>
             </div>
           </div>
+          {/* The invitation itself lives here too: the owner often adds somebody
+              and only shares it later — or has to resend it because the person
+              never signed in. */}
+          <InviteLinkCard name={emp.name} phone={emp.phone} />
         </div>
       )}
 

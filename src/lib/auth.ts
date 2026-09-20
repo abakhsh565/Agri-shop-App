@@ -1,5 +1,6 @@
 import { supabase } from "@/lib/supabase";
 import type { User, UserRole, MembershipRole, MembershipStatus } from "@/types";
+import { DEMO_OTP_CODE, isDemoOtpMode } from "@/lib/authMode";
 
 // ─── Phone normalization ─────────────────────────────────────────────────────
 // The UI collects local Pakistani numbers ("03001234567"); Supabase Auth needs
@@ -98,18 +99,25 @@ async function touchLogin(userId: string, isFirst: boolean): Promise<void> {
 }
 
 // ─── OTP send ────────────────────────────────────────────────────────────────
-// For MVP: hardcoded OTP "123456" — no Twilio/SMS required.
-// Also triggers Supabase Auth OTP to establish a server-verifiable session.
+// Which code is accepted, and how it is delivered, is decided in one place
+// (lib/authMode.ts) so switching to a live SMS provider touches nothing here.
 export async function sendOTP(
   phone: string
 ): Promise<{ success: boolean; error?: string }> {
   const e164 = normalizePhone(phone);
-  // Try Supabase Auth phone OTP first
+
+  // Demo mode: there is no SMS provider, so there is nothing to send and the
+  // code is the shared constant. Reporting success is accurate — the person can
+  // complete sign-in (the invitation carries the code).
+  if (isDemoOtpMode) return { success: true };
+
+  // Live mode: Supabase Auth sends the one-time code over SMS.
   const { error } = await supabase.auth.signInWithOtp({ phone: e164 });
   if (error) {
-    // Phone OTP may fail for unregistered numbers — not fatal.
-    // The session will be established during verifyOTPAndResolveUser via email+password.
-    console.warn('Supabase Auth phone OTP failed (non-fatal):', error.message);
+    // A code that was never sent must be reported, not swallowed: the person
+    // would otherwise wait for an SMS that is not coming.
+    console.warn('Supabase Auth phone OTP failed:', error.message);
+    return { success: false, error: error.message };
   }
   return { success: true };
 }
@@ -139,16 +147,30 @@ function phoneToAuthCredentials(phone: string) {
  */
 export const SESSION_SETUP_FAILED = 'SESSION_SETUP_FAILED';
 
-async function ensureAuthSession(phone: string): Promise<{ ok: boolean; error?: string }> {
-  // Already have a session?
+/** Is a Supabase Auth session present? (The live SMS path establishes it itself.) */
+async function hasAuthSession(): Promise<boolean> {
   const { data: { session } } = await supabase.auth.getSession();
-  if (session) return { ok: true };
+  return !!session;
+}
 
+async function ensureAuthSession(phone: string): Promise<{ ok: boolean; error?: string }> {
   const { email, password } = phoneToAuthCredentials(phone);
+
+  // A session that belongs to a DIFFERENT account is not this person's identity.
+  // Accepting it rendered the app as the person signing in while every RLS read
+  // and RPC ran with the previous user's JWT — observed in QA: an invited
+  // employee "signed in" on a device where the owner's session was still live,
+  // so the owner's identity performed the employee's onboarding call. Whoever the
+  // device last served must be signed out first.
+  const { data: { session } } = await supabase.auth.getSession();
+  if (session) {
+    if (session.user?.email === email) return { ok: true };
+    await supabase.auth.signOut();
+  }
 
   // Try sign-in first (user likely already exists)
   const signIn = await supabase.auth.signInWithPassword({ email, password });
-  if (!signIn.error) return { ok: true };
+  if (!signIn.error) return confirmIdentity(signIn.data.user?.email, email);
 
   // User doesn't exist yet — create via signUp (auto-confirms in dev)
   const signUp = await supabase.auth.signUp({ email, password });
@@ -165,7 +187,14 @@ async function ensureAuthSession(phone: string): Promise<{ ok: boolean; error?: 
   }
 
   console.log('Supabase Auth session established via email+password');
-  return { ok: true };
+  return confirmIdentity(retry.data.user?.email, email);
+}
+
+/** The session we just established must be the one we asked for. */
+function confirmIdentity(actual: string | undefined, expected: string): { ok: boolean; error?: string } {
+  if (actual === expected) return { ok: true };
+  console.warn('Auth session identity mismatch:', actual, '!=', expected);
+  return { ok: false, error: `identity mismatch: ${actual ?? 'none'} != ${expected}` };
 }
 
 /**
@@ -198,23 +227,30 @@ export type ResolveResult =
   | { status: "wrong_otp" }
   | { status: "error"; message: string };
 
-const DEV_OTP = "123456";
-
 export async function verifyOTPAndResolveUser(
   phone: string,
   token: string
 ): Promise<ResolveResult> {
   const e164 = normalizePhone(phone);
 
-  // MVP: accept hardcoded OTP "123456"
-  if (token !== DEV_OTP) return { status: "wrong_otp" };
+  if (isDemoOtpMode) {
+    // Demo mode: the shared constant stands in for the SMS.
+    if (token !== DEMO_OTP_CODE) return { status: "wrong_otp" };
+  } else {
+    // Live mode: Supabase verifies the code it sent, and establishes the
+    // session as part of doing so.
+    const { error } = await supabase.auth.verifyOtp({ phone: e164, token, type: "sms" });
+    if (error) return { status: "wrong_otp" };
+  }
 
   // Establish a Supabase Auth session for PostgREST/RLS.
-  // Phone-based OTP doesn't work for unregistered test numbers,
-  // so we use email+password auth (deterministic from phone).
-  // A missing session must be surfaced: otherwise every RLS read returns 401
-  // and the user lands in an app that looks empty for no visible reason.
-  const session = await ensureAuthSession(phone);
+  // In demo mode phone-based OTP doesn't work for unregistered test numbers, so
+  // we bridge with email+password auth (deterministic from phone), and a missing
+  // session must be surfaced: otherwise every RLS read returns 401 and the user
+  // lands in an app that looks empty for no visible reason.
+  const session = isDemoOtpMode
+    ? await ensureAuthSession(phone)
+    : { ok: await hasAuthSession() };
   if (!session.ok) {
     console.error('Could not establish Supabase Auth session:', session.error);
     return { status: "error", message: SESSION_SETUP_FAILED };
