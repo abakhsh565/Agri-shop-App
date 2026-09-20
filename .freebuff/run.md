@@ -12,13 +12,21 @@
 ## How to run the server
 
 ```bash
-PORT=5173 npx vite --host 0.0.0.0 --port 5173
+PORT=5173 npx vite --mode qa --host 0.0.0.0 --port 5173
 ```
 
 On Windows PowerShell:
 ```powershell
-$env:PORT='5173'; npx vite --host 0.0.0.0 --port 5173
+$env:PORT='5173'; npx vite --mode qa --host 0.0.0.0 --port 5173
 ```
+
+`--mode qa` is required, not optional. It is what makes Vite load `.env.qa` and
+therefore the QA Supabase project (`bpybjrjenwccowvtrevu`). Without it the server falls
+back to `.env.local` or the scaffold default in `utils/supabase/info.tsx`, which is how a
+test can silently end up reading production data. `src/lib/envGuard.ts` hard-fails a dev
+server that points at production, and `assertQaEnvironment()` asserts QA server-side; the
+Playwright config reuses an already-running server on 5173, so a server on the wrong mode
+would be reused silently. Playwright's own `webServer` command already passes `--mode qa`.
 
 Default port from `vite.config.ts` is 8443 with `strictPort: true`. Using `--port 5173` overrides that.
 
@@ -26,10 +34,13 @@ For background (detached) mode on Windows, the reliable form uses `node.exe` dir
 ```powershell
 $log = '<log>'
 $logErr = "$log.err"
-$pid = (Start-Process -FilePath 'node.exe' -ArgumentList 'node_modules\vite\bin\vite.js','--host','0.0.0.0','--port','<port>' -WorkingDirectory '<project-root>' -RedirectStandardOutput $log -RedirectStandardError $logErr -WindowStyle Hidden -PassThru).Id
+$pid = (Start-Process -FilePath 'node.exe' -ArgumentList 'node_modules\vite\bin\vite.js','--mode','qa','--host','0.0.0.0','--port','<port>' -WorkingDirectory '<project-root>' -RedirectStandardOutput $log -RedirectStandardError $logErr -WindowStyle Hidden -PassThru).Id
 ```
 
-Pick a free port. 5173/5174/5175 may already be in use; 5176 is currently in use by this thread's preview (pid 19472).
+Pick a free port. 5173/5174/5175 may already be in use; 5173 is currently used by this
+thread's preview. Do not kill a running server with a process filter matching `vite` from
+the same shell — the filter also matches the shell running the command and kills it (and
+the `Start-Process` in the same command line) before it starts. Match the pid instead.
 
 ## Reproduce artifacts
 
