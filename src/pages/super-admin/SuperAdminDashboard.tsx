@@ -9,13 +9,14 @@ import {
   Clock, CheckCircle, XCircle, Eye, ChevronRight,
   Store, User, MapPin, Calendar, Filter
 } from "lucide-react";
+import { useT } from "@/lib/i18n";
 
-const STATUS_TABS: { key: ShopRequestStatus | "all"; label: string; color: string }[] = [
-  { key: "all", label: "All", color: "var(--text-primary)" },
-  { key: "pending", label: "Pending", color: "#f59e0b" },
-  { key: "hold", label: "On Hold", color: "#8b5cf6" },
-  { key: "approved", label: "Approved", color: "#22c55e" },
-  { key: "rejected", label: "Rejected", color: "#ef4444" },
+const STATUS_TABS: { key: ShopRequestStatus | "all"; labelKey: string; color: string }[] = [
+  { key: "all", labelKey: "superAdmin.tab.all", color: "var(--text-primary)" },
+  { key: "pending", labelKey: "superAdmin.status.pending", color: "#f59e0b" },
+  { key: "hold", labelKey: "superAdmin.status.hold", color: "#8b5cf6" },
+  { key: "approved", labelKey: "superAdmin.status.approved", color: "#22c55e" },
+  { key: "rejected", labelKey: "superAdmin.status.rejected", color: "#ef4444" },
 ];
 
 const STATUS_ICONS: Record<ShopRequestStatus, typeof Clock> = {
@@ -33,6 +34,7 @@ const STATUS_COLORS: Record<ShopRequestStatus, { bg: string; fg: string }> = {
 };
 
 export default function SuperAdminDashboard() {
+  const t = useT();
   const navigate = useNavigate();
   const { requests, loading, loadAllRequests, approveRequest, rejectRequest } = useShopRequestsStore();
   const { addToast } = useUIStore();
@@ -65,10 +67,10 @@ export default function SuperAdminDashboard() {
     try {
       const result = await approveRequest(request.id);
       if (result.success) {
-        addToast(`${request.shopName} approved!`, "success");
+        addToast(t("superAdmin.approvedToast", { shop: request.shopName }), "success");
         setSelectedRequest(null);
       } else {
-        addToast(result.error || "Failed to approve", "error");
+        addToast(result.error || t("superAdmin.approveFailed"), "error");
       }
     } finally {
       setActionLoading(false);
@@ -81,12 +83,12 @@ export default function SuperAdminDashboard() {
     try {
       const result = await rejectRequest(selectedRequest.id, rejectReason || undefined);
       if (result.success) {
-        addToast(`${selectedRequest.shopName} rejected`, "info");
+        addToast(t("superAdmin.rejectedToast", { shop: selectedRequest.shopName }), "info");
         setSelectedRequest(null);
         setShowRejectModal(false);
         setRejectReason("");
       } else {
-        addToast(result.error || "Failed to reject", "error");
+        addToast(result.error || t("superAdmin.rejectFailed"), "error");
       }
     } finally {
       setActionLoading(false);
@@ -101,10 +103,10 @@ export default function SuperAdminDashboard() {
       <div className="px-4 pt-2 pb-3 flex items-center justify-between">
         <div>
           <p className="text-[20px] font-bold" style={{ color: "var(--text-primary)" }}>
-            Shop Requests
+            {t("superAdmin.shopRequests")}
           </p>
           <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
-            Review and manage registrations
+            {t("superAdmin.subtitle")}
           </p>
         </div>
         <button
@@ -112,7 +114,7 @@ export default function SuperAdminDashboard() {
           className="h-9 px-4 rounded-full text-xs font-bold"
           style={{ background: "var(--surface)", color: "var(--text-secondary)", border: "1px solid var(--divider)" }}
         >
-          Logout
+          {t("superAdmin.logout")}
         </button>
       </div>
 
@@ -129,7 +131,7 @@ export default function SuperAdminDashboard() {
               border: activeTab === tab.key ? "none" : "1px solid var(--divider)",
             }}
           >
-            {tab.label}
+            {t(tab.labelKey)}
             {counts[tab.key] > 0 && (
               <span
                 className="ms-1 w-5 h-5 rounded-full text-[10px] flex items-center justify-center font-bold"
@@ -154,7 +156,11 @@ export default function SuperAdminDashboard() {
           <div className="flex flex-col items-center py-16 gap-3">
             <Store size={40} style={{ color: "var(--text-secondary)" }} />
             <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
-              No {activeTab !== "all" ? activeTab : ""} requests
+              {activeTab === "all"
+                ? t("superAdmin.noRequests")
+                : t("superAdmin.noFilteredRequests", {
+                    tab: t(STATUS_TABS.find((s) => s.key === activeTab)?.labelKey ?? "superAdmin.tab.all").toLowerCase(),
+                  })}
             </p>
           </div>
         ) : (
@@ -196,7 +202,7 @@ export default function SuperAdminDashboard() {
                 >
                   <StatusIcon size={12} color={statusColor.fg} />
                   <span className="text-[10px] font-bold capitalize" style={{ color: statusColor.fg }}>
-                    {req.status.replace("_", " ")}
+                    {t("superAdmin.status." + req.status)}
                   </span>
                 </div>
               </button>
@@ -220,7 +226,7 @@ export default function SuperAdminDashboard() {
             {/* Header */}
             <div className="flex items-center justify-between">
               <p className="text-base font-bold" style={{ color: "var(--text-primary)" }}>
-                Shop Request
+                {t("superAdmin.shopRequest")}
               </p>
               <button onClick={() => setSelectedRequest(null)}>
                 <XCircle size={20} style={{ color: "var(--text-secondary)" }} />
@@ -229,16 +235,16 @@ export default function SuperAdminDashboard() {
 
             {/* Shop Info */}
             <div className="flex flex-col gap-3">
-              <InfoRow icon={Store} label="Shop" value={selectedRequest.shopName} />
-              <InfoRow icon={User} label="Owner" value={selectedRequest.ownerName} />
-              <InfoRow icon={User} label="Phone" value={selectedRequest.ownerPhone} />
+              <InfoRow icon={Store} label={t("superAdmin.shop")} value={selectedRequest.shopName} />
+              <InfoRow icon={User} label={t("superAdmin.owner")} value={selectedRequest.ownerName} />
+              <InfoRow icon={User} label={t("common.phone")} value={selectedRequest.ownerPhone} />
               {selectedRequest.shopCity && (
-                <InfoRow icon={MapPin} label="City" value={selectedRequest.shopCity} />
+                <InfoRow icon={MapPin} label={t("superAdmin.city")} value={selectedRequest.shopCity} />
               )}
               {selectedRequest.shopAddress && (
-                <InfoRow icon={MapPin} label="Address" value={selectedRequest.shopAddress} />
+                <InfoRow icon={MapPin} label={t("common.address")} value={selectedRequest.shopAddress} />
               )}
-              <InfoRow icon={Calendar} label="Submitted" value={new Date(selectedRequest.createdAt).toLocaleString()} />
+              <InfoRow icon={Calendar} label={t("common.submitted")} value={new Date(selectedRequest.createdAt).toLocaleString()} />
             </div>
 
             {/* Rejection Reason */}
@@ -247,7 +253,7 @@ export default function SuperAdminDashboard() {
                 className="p-3 rounded-[12px]"
                 style={{ background: "rgba(239,68,68,0.05)", border: "1px solid rgba(239,68,68,0.2)" }}
               >
-                <p className="text-xs font-bold mb-1" style={{ color: "#ef4444" }}>Rejection Reason</p>
+                <p className="text-xs font-bold mb-1" style={{ color: "#ef4444" }}>{t("admin.rejectionReason")}</p>
                 <p className="text-sm" style={{ color: "var(--text-primary)" }}>{selectedRequest.rejectionReason}</p>
               </div>
             )}
@@ -262,7 +268,7 @@ export default function SuperAdminDashboard() {
                   style={{ background: "var(--surface-2)", color: "#ef4444", border: "1px solid var(--divider)" }}
                 >
                   <XCircle size={16} />
-                  Reject
+                  {t("superAdmin.reject")}
                 </button>
                 <button
                   onClick={() => handleApprove(selectedRequest)}
@@ -275,7 +281,7 @@ export default function SuperAdminDashboard() {
                   ) : (
                     <>
                       <CheckCircle size={16} />
-                      Approve
+                      {t("superAdmin.approve")}
                     </>
                   )}
                 </button>
@@ -298,15 +304,15 @@ export default function SuperAdminDashboard() {
             onClick={(e) => e.stopPropagation()}
           >
             <p className="text-base font-bold" style={{ color: "var(--text-primary)" }}>
-              Reject Request
+              {t("superAdmin.rejectRequest")}
             </p>
             <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
-              Optional: Provide a reason for rejection
+              {t("superAdmin.rejectReasonHint")}
             </p>
             <textarea
               value={rejectReason}
               onChange={(e) => setRejectReason(e.target.value)}
-              placeholder="e.g. Incomplete documents..."
+              placeholder={t("superAdmin.rejectReasonPlaceholder")}
               rows={3}
               className="w-full rounded-[14px] p-3 text-sm outline-none resize-none"
               style={{
@@ -321,7 +327,7 @@ export default function SuperAdminDashboard() {
                 className="flex-1 h-10 rounded-full text-sm font-bold"
                 style={{ background: "var(--surface-2)", color: "var(--text-primary)" }}
               >
-                Cancel
+                {t("common.cancel")}
               </button>
               <button
                 onClick={handleReject}
@@ -329,7 +335,7 @@ export default function SuperAdminDashboard() {
                 className="flex-1 h-10 rounded-full text-sm font-bold"
                 style={{ background: "#ef4444", color: "#fff" }}
               >
-                {actionLoading ? "Rejecting..." : "Confirm Reject"}
+                {actionLoading ? t("superAdmin.rejecting") : t("superAdmin.confirmReject")}
               </button>
             </div>
           </div>

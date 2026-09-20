@@ -10,6 +10,7 @@ import { sendOTP, verifyOTPAndResolveUser } from "@/lib/auth";
 import { savePin } from "@/lib/pinLock";
 import { useAuthStore } from "@/stores/authStore";
 import type { User } from "@/types";
+import { useT } from "@/lib/i18n";
 
 type Step = "phone" | "otp" | "pin" | "confirm";
 
@@ -24,6 +25,7 @@ type Step = "phone" | "otp" | "pin" | "confirm";
  * 3. Set + Confirm new PIN → Dashboard
  */
 export default function ForgotPINPage() {
+  const t = useT();
   const navigate = useNavigate();
   const location = useLocation();
   const { setUser, setPendingPhone, setPendingFlow, pendingPhone } = useAuthStore();
@@ -118,27 +120,27 @@ export default function ForgotPINPage() {
 
   return (
     <AuthLayout>
-      <NavHeader title="Reset PIN" backTo="/login" />
+      <NavHeader title={t("auth.resetPin")} backTo="/login" />
       <div className="flex flex-col flex-1 items-center gap-8 p-6 pt-8">
 
         {/* Step 1: Enter phone (only if no user in state) */}
         {step === "phone" && (
           <>
             <div className="flex flex-col items-center gap-2 text-center">
-              <p className="text-xl font-bold text-black">Reset your PIN</p>
-              <p className="text-sm text-[#888]">Enter your phone number to verify your identity</p>
+              <p className="text-xl font-bold text-black">{t("auth.resetPin")}</p>
+              <p className="text-sm text-[#888]">{t("auth.verifyIdentity")}</p>
             </div>
             <div className="w-full flex flex-col gap-4">
               <Input
-                label="Phone Number"
+                label={t("common.phoneNumber")}
                 type="tel"
-                placeholder="e.g. 03001234567"
+                placeholder={t("common.phonePlaceholder")}
                 value={phone}
                 onChange={(e) => { setPhone(e.target.value); setError(""); }}
                 error={error}
               />
               <Button fullWidth onClick={handleSendOTP} loading={loading} disabled={!phone}>
-                Send Verification Code
+                {t("auth.sendVerificationCode")}
               </Button>
             </div>
           </>
@@ -148,19 +150,19 @@ export default function ForgotPINPage() {
         {step === "otp" && (
           <>
             <div className="flex flex-col items-center gap-2 text-center">
-              <p className="text-xl font-bold text-black">Verify your number</p>
-              <p className="text-sm text-[#888]">Enter the 6-digit code sent to <span className="font-medium text-black">{phone}</span></p>
+              <p className="text-xl font-bold text-black">{t("auth.verifyNumber")}</p>
+              <p className="text-sm text-[#888]">{t("auth.enterCodeSentTo", { phone })}</p>
             </div>
             <OTPInput value={otp} onChange={(v) => { setOtp(v); setError(""); }} error={!!error} />
             {error && <p className="text-sm text-[#ef4444] text-center">{error}</p>}
             {loading && (
               <div className="flex items-center gap-2">
                 <div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin" />
-                <p className="text-sm text-[#888]">Verifying...</p>
+                <p className="text-sm text-[#888]">{t("auth.verifying")}</p>
               </div>
             )}
             <Button fullWidth onClick={handleVerifyOTP} loading={loading} disabled={otp.length < 6}>
-              Verify
+              {t("auth.verify")}
             </Button>
           </>
         )}
@@ -170,12 +172,12 @@ export default function ForgotPINPage() {
           <>
             <div className="flex flex-col items-center gap-2 text-center">
               <p className="text-xl font-bold text-black">
-                {step === "pin" ? "Set a new 4-digit PIN" : "Confirm your PIN"}
+                {step === "pin" ? t("auth.setNewPin") : t("auth.confirmPin")}
               </p>
               <p className="text-sm text-[#888]">
                 {step === "pin"
-                  ? "You'll use this PIN to sign in on this device"
-                  : "Re-enter your PIN to confirm"}
+                  ? t("auth.pinSetHintLogin")
+                  : t("auth.pinReenterHint")}
               </p>
               {error && <p className="text-sm text-[#ef4444]">{error}</p>}
             </div>

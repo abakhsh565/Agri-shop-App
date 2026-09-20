@@ -8,9 +8,32 @@
  */
 
 const { createClient } = require('@supabase/supabase-js');
+const fs = require('fs');
+const path = require('path');
 
-const URL = 'https://bpybjrjenwccowvtrevu.supabase.co';
-const KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJweWJqcmplbndjY293dnRyZXZ1Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4OTAyNjU3MiwiZXhwIjoyMTA0NjAyNTcyfQ.QHa62c7sOzuQCj3fiyIPDXNhk0C1wox-FVcBfA3SJnY';
+// Credentials come from .env.qa / environment only. A service-role key bypasses
+// RLS, so it must never be committed or bundled into client code.
+function loadQaEnv() {
+  const envPath = path.resolve(process.cwd(), '.env.qa');
+  if (!fs.existsSync(envPath)) return;
+  for (const line of fs.readFileSync(envPath, 'utf-8').split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    const eqIdx = trimmed.indexOf('=');
+    if (eqIdx === -1) continue;
+    const key = trimmed.slice(0, eqIdx).trim();
+    const val = trimmed.slice(eqIdx + 1).trim().replace(/^["']|["']$/g, '');
+    if (!process.env[key]) process.env[key] = val;
+  }
+}
+loadQaEnv();
+
+const URL = process.env.QA_SUPABASE_URL;
+const KEY = process.env.QA_SUPABASE_SERVICE_ROLE;
+if (!URL || !KEY) {
+  console.error('QA_SUPABASE_URL and QA_SUPABASE_SERVICE_ROLE must be set (.env.qa or environment).');
+  process.exit(1);
+}
 
 const c = createClient(URL, KEY);
 

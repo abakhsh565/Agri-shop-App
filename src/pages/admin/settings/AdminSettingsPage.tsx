@@ -344,7 +344,7 @@ export default function AdminSettingsPage() {
           <div className="rounded-xl overflow-hidden" style={{ border: "1px solid var(--border-light)" }}>
             {[
               { icon: Users,       label: t("admin.employees") ?? "Employees",  action: () => navigate("/admin/employees") },
-              { icon: ShieldCheck, label: "Roles & Access",                     action: () => navigate("/admin/settings/roles") },
+              { icon: ShieldCheck, label: t("settings.rolesAccess"),          action: () => navigate("/admin/settings/roles") },
               { icon: Building2,   label: t("admin.companies")  ?? "Companies", action: () => navigate("/admin/companies") },
               { icon: Package,     label: t("admin.inventory")  ?? "Inventory", action: () => navigate("/admin/products") },
             ].map((row, i, arr) => {

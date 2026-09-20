@@ -38,7 +38,7 @@ export default function AdminPaymentsPage() {
       style={{ background: "var(--background)", direction: isUrdu ? "rtl" : "ltr" }}
     >
       <StatusBar />
-      <NavHeader title="Payments" />
+      <NavHeader title={t("admin.payments")} />
 
       {/* Balance cards */}
       <div className="grid grid-cols-2 gap-3 px-4 pt-3">
@@ -47,7 +47,7 @@ export default function AdminPaymentsPage() {
           className="rounded-[14px] p-4 text-start"
           style={{ background: "var(--surface-2)", border: `1.5px solid ${tab === "customers" ? "var(--brand)" : "var(--divider)"}` }}
         >
-          <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "var(--text-secondary)" }}>Customers owe us</p>
+          <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "var(--text-secondary)" }}>{t("admin.customersOweUs")}</p>
           <p className="text-lg font-bold mt-1" style={{ color: "var(--brand-dark)" }}>{formatCurrency(totalReceivable)}</p>
         </button>
         <button
@@ -80,7 +80,7 @@ export default function AdminPaymentsPage() {
       {/* List */}
       {tab === "customers" ? (
         owedByCustomers.length === 0 ? (
-          <EmptyState icon="✅" title="No customer credit outstanding" subtitle="Everyone is paid up." />
+          <EmptyState icon="✅" title={t("payments.noOutstanding")} subtitle={t("payments.allPaidUp")} />
         ) : (
           <div className="flex flex-col px-4 gap-3 pt-4 pb-6">
             {owedByCustomers.map((c) => (
@@ -97,7 +97,7 @@ export default function AdminPaymentsPage() {
                 <div className="flex items-center gap-2 shrink-0">
                   <div className="text-end">
                     <p className="text-sm font-bold" style={{ color: "var(--error)" }}>{formatCurrency(c.outstandingBalance)}</p>
-                    <p className="text-[10px]" style={{ color: "var(--text-secondary)" }}>Record payment</p>
+                    <p className="text-[10px]" style={{ color: "var(--text-secondary)" }}>{t("admin.recordPayment")}</p>
                   </div>
                   <ChevronRight size={16} style={{ color: "var(--text-secondary)" }} />
                 </div>
@@ -123,7 +123,7 @@ export default function AdminPaymentsPage() {
               <div className="flex items-center gap-2 shrink-0">
                 <div className="text-end">
                   <p className="text-sm font-bold" style={{ color: "var(--error)" }}>{formatCurrency(c.outstandingPayable)}</p>
-                  <p className="text-[10px]" style={{ color: "var(--text-secondary)" }}>Record payment</p>
+                  <p className="text-[10px]" style={{ color: "var(--text-secondary)" }}>{t("admin.recordPayment")}</p>
                 </div>
                 <ChevronRight size={16} style={{ color: "var(--text-secondary)" }} />
               </div>

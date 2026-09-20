@@ -7,12 +7,6 @@ import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
 import { Plus, ChevronRight } from "lucide-react";
 
-function roleLabel(role: string) {
-  if (role === "admin") return "Admin";
-  if (role === "co_admin") return "Co-Admin";
-  return "Employee";
-}
-
 function statusColor(emp: User) {
   if (!emp.isActive) return { bg: "#fee2e2", color: "#dc2626" };
   return { bg: "var(--brand)22", color: "var(--brand-dark)" };
@@ -38,7 +32,7 @@ export default function EmployeesListPage() {
         {ready && employees.length === 0 && (
           <div className="flex flex-col items-center py-20 gap-2">
             <p className="text-3xl">👥</p>
-            <p className="text-sm" style={{ color: "var(--text-secondary)" }}>No employees yet</p>
+            <p className="text-sm" style={{ color: "var(--text-secondary)" }}>{t("empList.empty")}</p>
           </div>
         )}
         {employees.map((emp) => {
@@ -62,12 +56,14 @@ export default function EmployeesListPage() {
               <div className="flex flex-col flex-1 min-w-0 gap-0.5">
                 <div className="flex items-center gap-2">
                   <p className="text-sm font-bold truncate" style={{ color: "var(--text-primary)" }}>{emp.name}</p>
-                  <span
-                    className="shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full"
-                    style={{ background: "var(--surface-2)", color: "var(--text-secondary)" }}
-                  >
-                    {roleLabel(emp.role)}
-                  </span>
+                  {emp.isOriginalOwner && (
+                    <span
+                      className="shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full"
+                      style={{ background: "var(--surface-2)", color: "var(--text-secondary)" }}
+                    >
+                      {t("settings.owner")}
+                    </span>
+                  )}
                 </div>
                 <p className="text-xs" style={{ color: "var(--text-secondary)" }}>{emp.phone}</p>
                 <div className="flex items-center gap-2 mt-1">
@@ -97,7 +93,7 @@ export default function EmployeesListPage() {
             className="pointer-events-auto h-13 ps-4 pe-5 rounded-full flex items-center gap-2 text-sm font-bold shadow-lg active:scale-95 transition-transform"
             style={{ background: "var(--brand)", color: "#0a0a0a", height: "52px", boxShadow: "0 6px 20px rgba(0,0,0,0.25)" }}
           >
-            <Plus size={20} strokeWidth={2.5} /> Employee
+            <Plus size={20} strokeWidth={2.5} /> {t("empList.add")}
           </button>
         </div>
       </div>

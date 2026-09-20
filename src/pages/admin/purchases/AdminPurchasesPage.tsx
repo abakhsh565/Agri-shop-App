@@ -37,7 +37,7 @@ export default function AdminPurchasesPage() {
       style={{ background: "var(--background)", direction: isUrdu ? "rtl" : "ltr" }}
     >
       <StatusBar />
-      <NavHeader title="Purchases / Stock-In" />
+      <NavHeader title={t("purchases.listTitle")} />
 
       {/* Payable summary */}
       <div className="px-4 pt-3">
@@ -101,7 +101,7 @@ export default function AdminPurchasesPage() {
                       ? { background: "rgba(245,158,11,0.15)", color: "var(--warning)" }
                       : { background: "rgba(132,204,22,0.15)", color: "var(--brand-dark)" }}
                   >
-                    {unpaid ? "PAYABLE" : "PAID"}
+                    {unpaid ? t("purchases.payableTag") : t("common.paidTag")}
                   </span>
                 </div>
 
@@ -135,7 +135,7 @@ export default function AdminPurchasesPage() {
             className="pointer-events-auto ps-4 pe-5 rounded-full flex items-center gap-2 text-sm font-bold active:scale-95 transition-transform"
             style={{ background: "var(--brand)", color: "#0a0a0a", height: "52px", boxShadow: "0 6px 20px rgba(0,0,0,0.25)" }}
           >
-            <PackagePlus size={20} strokeWidth={2.5} /> Record Purchase
+            <PackagePlus size={20} strokeWidth={2.5} /> {t("purchase.record")}
           </button>
         </div>
       </div>

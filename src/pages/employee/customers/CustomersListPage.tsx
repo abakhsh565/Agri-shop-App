@@ -219,7 +219,7 @@ export default function CustomersListPage() {
       {/* Customer list */}
       {!ready ? (
         <div className="flex flex-col items-center py-16 gap-3">
-          <p className="text-[13px]" style={{ color: "var(--text-secondary)" }}>Loading...</p>
+          <p className="text-[13px]" style={{ color: "var(--text-secondary)" }}>{t("common.loading")}</p>
         </div>
       ) : sorted.length === 0 ? (
         <div className="flex flex-col items-center py-16 gap-3">

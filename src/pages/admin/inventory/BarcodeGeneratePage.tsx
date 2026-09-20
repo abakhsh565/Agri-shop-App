@@ -7,6 +7,7 @@ import { useUIStore } from "@/stores/uiStore";
 import { barcodeToSvg, generateProductBarcode } from "@/lib/barcode";
 import { formatCurrency } from "@/lib/formatters";
 import { Download, Share2, Check, Package, Copy } from "lucide-react";
+import { useT } from "@/lib/i18n";
 
 const CATEGORY_COLOR: Record<string, { bg: string; fg: string }> = {
   spray: { bg: "rgba(59,130,246,0.1)", fg: "#3b82f6" },
@@ -16,6 +17,7 @@ const CATEGORY_COLOR: Record<string, { bg: string; fg: string }> = {
 };
 
 export default function BarcodeGeneratePage() {
+  const t = useT();
   const navigate = useNavigate();
   const products = useProductsStore((s) => s.products);
   const { addToast } = useUIStore();
@@ -48,7 +50,7 @@ export default function BarcodeGeneratePage() {
 
   function generate() {
     if (selected.size === 0) {
-      addToast("Select at least one product", "warning");
+      addToast(t("barcode.selectAtLeastOne"), "warning");
       return;
     }
     setStep("preview");
@@ -119,16 +121,16 @@ export default function BarcodeGeneratePage() {
     return (
       <div className="flex flex-col w-full min-h-full" style={{ background: "var(--background)" }}>
         <StatusBar />
-        <NavHeader title="Generate Barcodes" />
+        <NavHeader title={t("admin.generateBarcodes")} />
 
         {/* Info banner */}
         <div className="mx-4 mt-2 rounded-xl p-3" style={{ background: "rgba(59,130,246,0.08)", border: "1px solid rgba(59,130,246,0.2)" }}>
           <p className="text-xs font-semibold" style={{ color: "#3b82f6" }}>
-            {eligibleProducts.length} product{eligibleProducts.length !== 1 ? "s" : ""} without barcodes — select to generate 1 barcode each
+            {t("admin.productsWithoutBarcodes", { count: eligibleProducts.length })}
           </p>
           {maxEligible === 0 && (
             <p className="text-xs mt-1" style={{ color: "var(--text-secondary)" }}>
-              All products already have barcodes
+              {t("admin.allHaveBarcodes")}
             </p>
           )}
         </div>
@@ -136,10 +138,10 @@ export default function BarcodeGeneratePage() {
         <div className="px-4 pb-2 flex items-center gap-2 pt-2">
           <button onClick={selectAll} className="h-8 px-4 rounded-full text-xs font-medium"
             style={{ background: "var(--surface-2)", color: "var(--text-secondary)" }}>
-            Select All ({maxEligible})
+            {t("barcode.selectAll", { count: maxEligible })}
           </button>
           <span className="text-xs" style={{ color: "var(--text-secondary)" }}>
-            {selected.size} selected
+            {t("barcode.selectedCount", { count: selected.size })}
           </span>
         </div>
 
@@ -173,8 +175,8 @@ export default function BarcodeGeneratePage() {
           {eligibleProducts.length === 0 && (
             <div className="flex flex-col items-center py-16 gap-2">
               <Package size={40} style={{ color: "var(--text-secondary)" }} />
-              <p className="text-sm" style={{ color: "var(--text-secondary)" }}>All products already have barcodes</p>
-              <button onClick={() => navigate(-1)} className="text-sm font-bold" style={{ color: "var(--brand)" }}>Go back</button>
+              <p className="text-sm" style={{ color: "var(--text-secondary)" }}>{t("admin.allHaveBarcodes")}</p>
+              <button onClick={() => navigate(-1)} className="text-sm font-bold" style={{ color: "var(--brand)" }}>{t("common.goBack")}</button>
             </div>
           )}
         </div>
@@ -185,7 +187,7 @@ export default function BarcodeGeneratePage() {
             <button onClick={generate}
               className="w-full h-12 rounded-full font-bold text-sm transition-all active:scale-[0.97]"
               style={{ background: "var(--brand)", color: "#0a0a0a" }}>
-              Generate {selected.size} Barcode{selected.size !== 1 ? "s" : ""} (1 per product)
+              {t("barcode.generateCount", { count: selected.size })}
             </button>
           </div>
         )}
@@ -197,7 +199,7 @@ export default function BarcodeGeneratePage() {
   return (
     <div className="flex flex-col w-full min-h-full" style={{ background: "var(--background)" }}>
       <StatusBar />
-      <NavHeader title="Barcode Preview" onBack={() => setStep("select")} />
+      <NavHeader title={t("inventory.barcodePreview")} onBack={() => setStep("select")} />
 
       <div ref={printRef} className="flex flex-col px-4 gap-3 pb-4">
         {labels.map(({ product, barcode, copies }) => {
@@ -238,7 +240,7 @@ export default function BarcodeGeneratePage() {
         <button onClick={printLabels}
           className="w-full h-12 rounded-full font-bold text-sm transition-all active:scale-[0.97]"
           style={{ background: "var(--brand)", color: "#0a0a0a" }}>
-          Print All Labels
+          {t("admin.printAllLabels")}
         </button>
       </div>
     </div>

@@ -39,7 +39,7 @@ export default function MoreMenuPage() {
           className="rounded-[16px] p-5"
           style={{ background: "var(--brand)" }}
         >
-          <p className="text-[13px] font-bold" style={{ color: "rgba(0,0,0,0.6)" }}>Main Shop</p>
+          <p className="text-[13px] font-bold" style={{ color: "rgba(0,0,0,0.6)" }}>{t("admin.mainShop")}</p>
           <p className="text-[22px] font-bold" style={{ color: "#0a0a0a" }}>{t("admin.ownerSuite")}</p>
           <p className="text-[12px] mt-1" style={{ color: "rgba(0,0,0,0.55)" }}>{t("admin.ownerAccess")}</p>
         </div>

@@ -45,7 +45,7 @@ function buildFeed(
       id: "sale-" + s.id,
       kind: "sale",
       title: `Sale to ${s.customerName}`,
-      subtitle: `${s.saleNumber} · ${s.paymentType === "full" ? "Paid in full" : "Credit / partial"}`,
+      subtitle: `${s.saleNumber} · ${s.paymentType === "full" ? t("activity.paidInFull") : t("activity.creditPartial")}`,
       amount: s.totalAmount,
       actor: s.employeeName,
       at: s.createdAt,
@@ -144,7 +144,7 @@ export default function ActivityLogPage() {
               {t("activity.totalActivity")}
             </p>
             <p className="text-xl font-bold mt-1" style={{ color: "var(--text-primary)" }}>
-              {allActivities.length} events
+              {t("activity.eventCount", { count: allActivities.length })}
             </p>
           </div>
           <div className="text-end">
@@ -180,7 +180,7 @@ export default function ActivityLogPage() {
         {shown.length === 0 && (
           <div className="flex flex-col items-center py-16 gap-3">
             <TrendingUp size={40} style={{ color: "var(--text-secondary)", opacity: 0.3 }} />
-            <p className="text-sm" style={{ color: "var(--text-secondary)" }}>No activity recorded yet</p>
+            <p className="text-sm" style={{ color: "var(--text-secondary)" }}>{t("admin.noActivityYet")}</p>
           </div>
         )}
         {shown.map((activity, i) => {

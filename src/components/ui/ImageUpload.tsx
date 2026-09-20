@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { Camera, ImagePlus, Loader2, X } from "lucide-react";
 import { uploadImage, type ImageBucket } from "@/lib/storage";
+import { useT } from "@/lib/i18n";
 
 interface ImageUploadProps {
   bucket: ImageBucket;
@@ -24,6 +25,7 @@ export default function ImageUpload({
   shape = "square",
   label = "Add photo",
 }: ImageUploadProps) {
+  const t = useT();
   const inputRef = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState<string | null>(value ?? null);
   const [busy, setBusy] = useState(false);
@@ -111,7 +113,7 @@ export default function ImageUpload({
           className="flex items-center gap-1 text-[11px] font-medium"
           style={{ color: "var(--text-secondary)" }}
         >
-          <X size={12} /> Remove
+          <X size={12} /> {t("common.remove")}
         </button>
       )}
 

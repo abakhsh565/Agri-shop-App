@@ -4,12 +4,14 @@ import NavHeader from "@/components/ui/NavHeader";
 import { useCustomersStore } from "@/stores/customersStore";
 import { useSalesStore } from "@/stores/salesStore";
 import { useThemeStore } from "@/stores/themeStore";
+import { useT } from "@/lib/i18n";
 import { formatCurrency, calculateCreditHealth } from "@/lib/formatters";
 import { AlertTriangle, ChevronRight } from "lucide-react";
 
 export default function CreditOverridesPage() {
   const navigate = useNavigate();
   const { language } = useThemeStore();
+  const t = useT();
   const isUrdu = language === "ur";
   const customers = useCustomersStore((s) => s.customers);
   const sales = useSalesStore((s) => s.sales);
@@ -39,7 +41,7 @@ export default function CreditOverridesPage() {
       style={{ background: "var(--background)", direction: isUrdu ? "rtl" : "ltr" }}
     >
       <StatusBar />
-      <NavHeader title="Credit Overrides" />
+      <NavHeader title={t("creditOverrides.title")} />
 
       <div className="flex flex-col gap-3 px-4 pt-4 pb-8">
         {/* Summary banner */}
@@ -50,10 +52,10 @@ export default function CreditOverridesPage() {
           <AlertTriangle size={20} color="#A32D2D" className="mt-0.5 shrink-0" />
           <div>
             <p className="text-[14px] font-medium" style={{ color: "#791F1F" }}>
-              {overrides.length} customer{overrides.length !== 1 ? "s" : ""} flagged for review
+              {overrides.length === 1 ? t("creditOverrides.flaggedOne") : t("creditOverrides.flagged", { count: String(overrides.length) })}
             </p>
             <p className="text-[12px] mt-1" style={{ color: "#A32D2D", lineHeight: 1.5 }}>
-              These customers have high credit utilization or poor repayment history. Review before extending further credit.
+              {t("creditOverrides.body")}
             </p>
           </div>
         </div>
@@ -71,10 +73,10 @@ export default function CreditOverridesPage() {
               <AlertTriangle size={20} color="#3B6D11" />
             </div>
             <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
-              No credit overrides
+              {t("creditOverrides.empty")}
             </p>
             <p className="text-xs text-center" style={{ color: "var(--text-secondary)" }}>
-              All customers are within acceptable credit limits.
+              {t("creditOverrides.emptyBody")}
             </p>
           </div>
         ) : (
@@ -92,7 +94,7 @@ export default function CreditOverridesPage() {
                     {o.customer.name}
                   </p>
                   <p className="text-[12px] mt-0.5" style={{ color: "var(--text-secondary)" }}>
-                    {formatCurrency(o.customer.outstandingBalance)} outstanding · {o.usagePct}% of limit used
+                    {t("creditOverrides.limitUsed", { outstanding: formatCurrency(o.customer.outstandingBalance), pct: String(o.usagePct) })}
                   </p>
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">

@@ -8,6 +8,7 @@ import { verifyPin, verifyPinDetailed, clearPin } from "@/lib/pinLock";
 import { useAuthStore } from "@/stores/authStore";
 import { getUserFromSession } from "@/lib/auth";
 import type { User } from "@/types";
+import { useT } from "@/lib/i18n";
 
 /**
  * Single-step PIN login screen.
@@ -17,6 +18,7 @@ import type { User } from "@/types";
  * If "Forgot PIN" → auto-redirect to forgot PIN flow.
  */
 export default function PINLoginPage() {
+  const t = useT();
   const navigate = useNavigate();
   const location = useLocation();
   const { setUser, setPendingPhone, setPendingFlow } = useAuthStore();
@@ -87,7 +89,7 @@ export default function PINLoginPage() {
 
   return (
     <AuthLayout>
-      <NavHeader title="Sign In" backTo="/login" />
+      <NavHeader title={t("auth.signIn")} backTo="/login" />
       <div className="flex flex-col flex-1 items-center gap-5 sm:gap-8 px-4 py-4 sm:p-6 sm:pt-8">
         <div className="flex flex-col items-center gap-1.5 sm:gap-2 text-center">
           {user.photoUrl ? (
@@ -103,7 +105,7 @@ export default function PINLoginPage() {
           <p className="text-lg sm:text-xl font-bold text-black">
             Welcome, {user.name.split(" ")[0]}
           </p>
-          <p className="text-xs sm:text-sm text-[#888]">Enter your 4-digit PIN to continue</p>
+          <p className="text-xs sm:text-sm text-[#888]">{t("auth.pinPrompt")}</p>
           {error && (
             <p className="text-xs sm:text-sm text-[#ef4444]">{error}</p>
           )}
@@ -114,12 +116,12 @@ export default function PINLoginPage() {
         {verifying && (
           <div className="flex items-center gap-2">
             <div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin" />
-            <p className="text-xs sm:text-sm text-[#888]">Verifying...</p>
+            <p className="text-xs sm:text-sm text-[#888]">{t("auth.verifying")}</p>
           </div>
         )}
 
         <button onClick={handleForgotPIN} className="text-xs sm:text-sm font-medium text-[#888] underline underline-offset-2">
-          Forgot PIN?
+          {t("auth.forgotPin")}
         </button>
       </div>
     </AuthLayout>

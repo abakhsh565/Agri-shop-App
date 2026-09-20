@@ -119,7 +119,7 @@ export default function ReturnConfirmPage() {
     >
       <div>
         <StatusBar />
-        <NavHeader title="Confirm Return" />
+        <NavHeader title={t("returns.confirm")} />
 
         {/* Estimated refund */}
         <div
@@ -127,7 +127,7 @@ export default function ReturnConfirmPage() {
           style={{ border: "1px solid var(--divider)" }}
         >
           <p className="text-[10px] uppercase" style={{ color: "var(--text-secondary)" }}>
-            Estimated Refund
+            {t("returns.estimatedRefund")}
           </p>
           <p
             className="text-[28px] font-bold mt-1"
@@ -144,12 +144,12 @@ export default function ReturnConfirmPage() {
               className="text-xs font-bold uppercase mb-2"
               style={{ color: "var(--text-secondary)" }}
             >
-              Return Reason <span style={{ color: "#ef4444" }}>*</span>
+              {t("returns.reason")}<span style={{ color: "#ef4444" }}>*</span>
             </p>
             <input
               value={reason}
               onChange={(e) => setReason(e.target.value)}
-              placeholder="e.g. Customer changed mind, defective product..."
+              placeholder={t("returns.reasonPlaceholder")}
               className="w-full h-11 rounded-full px-4 text-sm outline-none"
               style={{
                 background: "var(--surface-2)",
@@ -159,7 +159,7 @@ export default function ReturnConfirmPage() {
             />
             {!reason.trim() && (
               <p className="text-[11px] mt-1 ms-4" style={{ color: "var(--text-secondary)" }}>
-                Reason is required to process return
+                {t("returns.reasonRequired")}
               </p>
             )}
           </div>
@@ -170,7 +170,7 @@ export default function ReturnConfirmPage() {
               className="text-xs font-bold uppercase mb-2"
               style={{ color: "var(--text-secondary)" }}
             >
-              Returning Items
+              {t("admin.returningItems")}
             </p>
             <div
               className="rounded-[14px] overflow-hidden"
@@ -229,7 +229,7 @@ export default function ReturnConfirmPage() {
               className="text-xs font-bold uppercase mb-2"
               style={{ color: "var(--text-secondary)" }}
             >
-              Resolution Method
+              {t("admin.resolutionMethod")}
             </p>
             <div className="flex gap-2">
               {(
@@ -278,7 +278,7 @@ export default function ReturnConfirmPage() {
                 className="text-xs font-bold uppercase mb-1"
                 style={{ color: "var(--text-primary)" }}
               >
-                Refund Processing
+                {t("admin.refundProcessing")}
               </p>
               <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
                 {formatCurrency(liveTotal)} will be{" "}
@@ -302,7 +302,7 @@ export default function ReturnConfirmPage() {
           loading={loading}
           disabled={!reason.trim()}
         >
-          Confirm Return
+          {t("returns.confirm")}
         </Button>
       </div>
     </div>

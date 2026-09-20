@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { scanFromCamera } from "@/lib/barcode";
 import { useUIStore } from "@/stores/uiStore";
+import { useT } from "@/lib/i18n";
 import { Scan, X, Keyboard } from "lucide-react";
 
 interface ScanButtonProps {
@@ -20,6 +21,7 @@ export default function ScanButton({ onScan, label = "Scan", size = "md" }: Scan
   const [manualCode, setManualCode] = useState("");
   const [scanning, setScanning] = useState(false);
   const { addToast } = useUIStore();
+  const t = useT();
 
   async function handleScan() {
     setScanning(true);
@@ -79,7 +81,7 @@ export default function ScanButton({ onScan, label = "Scan", size = "md" }: Scan
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between">
-              <p className="text-base font-bold" style={{ color: "var(--text-primary)" }}>Enter Barcode</p>
+              <p className="text-base font-bold" style={{ color: "var(--text-primary)" }}>{t("common.enterBarcode")}</p>
               <button onClick={() => setShowManual(false)}>
                 <X size={18} style={{ color: "var(--text-secondary)" }} />
               </button>
@@ -88,7 +90,7 @@ export default function ScanButton({ onScan, label = "Scan", size = "md" }: Scan
             <div className="flex items-center gap-2">
               <Keyboard size={16} style={{ color: "var(--text-secondary)" }} />
               <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
-                Type or scan barcode with USB scanner
+                {t("scan.manualHint")}
               </p>
             </div>
 
@@ -99,7 +101,7 @@ export default function ScanButton({ onScan, label = "Scan", size = "md" }: Scan
               onKeyDown={(e) => {
                 if (e.key === "Enter") handleManualSubmit();
               }}
-              placeholder="e.g. AGS-HMSK-01"
+              placeholder={t("common.barcodePlaceholder")}
               className="w-full h-12 rounded-full px-4 text-sm outline-none font-mono"
               style={{
                 background: "var(--surface-2)",
@@ -114,7 +116,7 @@ export default function ScanButton({ onScan, label = "Scan", size = "md" }: Scan
               className="w-full h-12 rounded-full font-bold text-sm disabled:opacity-50"
               style={{ background: "var(--brand)", color: "#0a0a0a" }}
             >
-              Look up product
+              {t("scan.lookUpProduct")}
             </button>
           </div>
         </div>

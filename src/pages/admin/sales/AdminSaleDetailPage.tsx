@@ -164,7 +164,7 @@ export default function AdminSaleDetailPage() {
       createdAt: sale!.createdAt, totalAmount: sale!.totalAmount, amountPaid: sale!.amountPaid,
       outstandingBalance: sale!.outstandingBalance, subtotal: sale!.subtotal,
       items: sale!.items.map((it) => ({ productName: it.productName, variantName: it.variantName, qty: it.qty, unitPrice: it.unitPrice })),
-    });
+    }, t);
     if (!blob) { addToast(t("saleDetail.failedReceipt"), "error"); return; }
     const fileName = `receipt-${sale!.saleNumber}.png`;
     try {
@@ -194,7 +194,7 @@ export default function AdminSaleDetailPage() {
       createdAt: sale!.createdAt, totalAmount: sale!.totalAmount, amountPaid: sale!.amountPaid,
       outstandingBalance: sale!.outstandingBalance, subtotal: sale!.subtotal,
       items: sale!.items.map((it) => ({ productName: it.productName, variantName: it.variantName, qty: it.qty, unitPrice: it.unitPrice })),
-    });
+    }, t);
     if (blob) {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a"); a.href = url; a.download = `receipt-${sale!.saleNumber}.png`; a.click();
@@ -225,7 +225,7 @@ export default function AdminSaleDetailPage() {
 
       {isVoided && (
         <div className="mx-4 mt-2 rounded-xl p-3 text-center" style={{ background: "#fee2e2", border: "1px solid #fca5a5" }}>
-          <p className="text-sm font-bold" style={{ color: "#dc2626" }}>This sale has been voided</p>
+          <p className="text-sm font-bold" style={{ color: "#dc2626" }}>{t("admin.saleVoided")}</p>
           {voidReason && <p className="text-xs mt-0.5" style={{ color: "#ef4444" }}>Reason: {voidReason}</p>}
         </div>
       )}
@@ -285,7 +285,7 @@ export default function AdminSaleDetailPage() {
                     </p>
                     {isFullyReturned && (
                       <span className="inline-block text-[10px] font-semibold px-2 py-0.5 rounded-full mt-1" style={{ background: "rgba(239,68,68,0.1)", color: "#ef4444" }}>
-                        Returned
+                        {t("saleDetail.returned")}
                       </span>
                     )}
                     {isPartialReturned && (
@@ -316,7 +316,7 @@ export default function AdminSaleDetailPage() {
         {returns.length > 0 && (
           <div>
             <p className="text-xs font-bold uppercase mb-2 tracking-wider" style={{ color: "var(--text-secondary)" }}>
-              Return History
+              {t("saleDetail.returnHistory")}
             </p>
             <div className="flex flex-col gap-3">
               {returns.map((ret) => (
@@ -458,7 +458,7 @@ export default function AdminSaleDetailPage() {
             <p className="text-sm text-center" style={{ color: "var(--text-secondary)" }}>{t("admin.voidConfirm")}</p>
             <div>
               <p className="text-xs font-bold uppercase tracking-wider mb-2" style={{ color: "var(--text-secondary)" }}>{t("admin.voidReason")}</p>
-              <input value={voidReason} onChange={(e) => setVoidReason(e.target.value)} placeholder="e.g. Customer returned goods"
+              <input value={voidReason} onChange={(e) => setVoidReason(e.target.value)} placeholder={t("sale.voidReasonPlaceholder")}
                 className="w-full h-11 rounded-full px-4 text-sm outline-none"
                 style={{ background: "var(--surface-2)", border: "1px solid var(--divider)", color: "var(--text-primary)" }} />
             </div>

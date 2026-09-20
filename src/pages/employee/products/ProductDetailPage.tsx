@@ -374,7 +374,7 @@ export default function ProductDetailPage() {
             </div>
             {/* Name input */}
             <div className="mb-5">
-              <label className="text-[11px] font-semibold uppercase tracking-wider mb-1.5 block" style={{ color: "var(--text-secondary)" }}>Product Name</label>
+              <label className="text-[11px] font-semibold uppercase tracking-wider mb-1.5 block" style={{ color: "var(--text-secondary)" }}>{t("common.productName")}</label>
               <input
                 autoFocus
                 value={editName}
@@ -389,13 +389,13 @@ export default function ProductDetailPage() {
                 onClick={() => setEditing(false)}
                 className="flex-1 h-12 rounded-full text-sm font-bold"
                 style={{ border: "1px solid var(--divider)", color: "var(--text-primary)" }}
-              >Cancel</button>
+              >{t("common.cancel")}</button>
               <button
                 onClick={saveEdit}
                 disabled={saving || !editName.trim()}
                 className="flex-1 h-12 rounded-full text-sm font-bold disabled:opacity-50"
                 style={{ background: "var(--brand)", color: "#0a0a0a" }}
-              >{saving ? "Saving..." : "Save"}</button>
+              >{saving ? t("common.saving") : t("common.save")}</button>
             </div>
           </div>
         </div>

@@ -236,7 +236,7 @@ export default function AddCustomerPage() {
           <div>
             <div className="flex items-center justify-between mb-2">
               <p className="text-[11px] font-bold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
-                Credit Limit (Optional)
+                {t("customers.creditLimit")} {t("common.optional")}
               </p>
               <button
                 type="button"
@@ -244,7 +244,7 @@ export default function AddCustomerPage() {
                 className="flex items-center gap-1.5 h-7 px-2.5 rounded-full text-[10px] font-semibold"
                 style={{ background: reminderConfig ? "var(--brand-light, #d9f99d)" : "var(--surface-2)", color: reminderConfig ? "var(--brand-dark, #65a30d)" : "var(--text-secondary)", border: "1px solid var(--divider)" }}
               >
-                <Bell size={12} /> Reminder
+                <Bell size={12} /> {t("customer.reminder")}
               </button>
             </div>
             <input

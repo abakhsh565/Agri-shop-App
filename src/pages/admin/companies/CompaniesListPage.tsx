@@ -68,7 +68,7 @@ export default function CompaniesListPage() {
         <div className="flex flex-col items-center py-20 gap-2">
           <p className="text-3xl">🏢</p>
           <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
-            {search ? "No companies match your search." : "No companies yet."}
+            {search ? t("companies.noMatch") : t("companies.empty")}
           </p>
         </div>
       )}

@@ -48,8 +48,8 @@ export default function SaleSuccessPage() {
   };
 
   async function handleShare() {
-    const blob = await renderReceiptBlob(s);
-    if (!blob) { addToast("Failed to generate receipt image", "error"); return; }
+    const blob = await renderReceiptBlob(s, t);
+    if (!blob) { addToast(t("saleSuccess.failedGenerate"), "error"); return; }
     const base64 = await new Promise<string>((resolve) => {
       const reader = new FileReader();
       reader.onloadend = () => resolve((reader.result as string).split(",")[1]);
@@ -75,7 +75,7 @@ export default function SaleSuccessPage() {
   }
 
   async function handleDownload() {
-    const blob = await renderReceiptBlob(s);
+    const blob = await renderReceiptBlob(s, t);
     if (!blob) { addToast(t("saleSuccess.failedGenerate"), "error"); return; }
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a"); a.href = url; a.download = `receipt-${s.saleNumber}.png`; a.click();

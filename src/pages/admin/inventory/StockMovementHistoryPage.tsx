@@ -84,7 +84,7 @@ export default function StockMovementHistoryPage() {
       style={{ background: "var(--background)", direction: isUrdu ? "rtl" : "ltr" }}
     >
       <StatusBar />
-      <NavHeader title="Stock Movements" />
+      <NavHeader title={t("admin.stockMovements")} />
 
       {loading ? (
         <div className="flex-1 flex items-center justify-center py-16">
@@ -93,8 +93,8 @@ export default function StockMovementHistoryPage() {
       ) : movements.length === 0 ? (
         <div className="flex-1 flex flex-col items-center justify-center py-16 gap-2">
           <Package size={32} style={{ color: "var(--text-secondary)" }} />
-          <p className="text-sm" style={{ color: "var(--text-secondary)" }}>No stock movements yet</p>
-          <p className="text-xs" style={{ color: "var(--text-secondary)" }}>Movements appear here after sales, purchases, and adjustments</p>
+          <p className="text-sm" style={{ color: "var(--text-secondary)" }}>{t("admin.noStockMovements")}</p>
+          <p className="text-xs" style={{ color: "var(--text-secondary)" }}>{t("admin.movementsAppearAfter")}</p>
         </div>
       ) : (
         <div className="flex flex-col">

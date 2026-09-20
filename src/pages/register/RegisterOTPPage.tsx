@@ -6,6 +6,7 @@ import OTPInput from "@/components/ui/OTPInput";
 import { verifyOTPAndResolveUser, sendOTP, normalizePhone } from "@/lib/auth";
 import { useAuthStore } from "@/stores/authStore";
 import { useShopRequestsStore } from "@/stores/shopRequestsStore";
+import { useT } from "@/lib/i18n";
 
 const OTP_VALIDITY = 5 * 60;
 const MAX_ATTEMPTS = 5;
@@ -13,6 +14,7 @@ const MAX_RESENDS = 3;
 const RESEND_DELAY = 30;
 
 export default function RegisterOTPPage() {
+  const t = useT();
   const navigate = useNavigate();
   const { pendingPhone, setUser } = useAuthStore();
   const { myRequest, loadMyRequest } = useShopRequestsStore();
@@ -128,10 +130,10 @@ export default function RegisterOTPPage() {
 
   return (
     <AuthLayout>
-      <NavHeader title="Verify Phone" backTo="/register" />
+      <NavHeader title={t("auth.verifyPhone")} backTo="/register" />
       <div className="flex flex-col gap-8 p-6 flex-1">
         <div className="flex flex-col gap-2">
-          <p className="text-xl font-bold text-black">Enter verification code</p>
+          <p className="text-xl font-bold text-black">{t("auth.enterCode")}</p>
           <p className="text-sm text-[#888]">
             We sent a 6-digit code to{" "}
             <span className="font-medium text-black">{pendingPhone}</span>
@@ -149,12 +151,12 @@ export default function RegisterOTPPage() {
 
         {!expired && !locked && (
           <p className="text-sm text-[#888] text-center">
-            Code expires in <span className="font-medium text-black">{formatTime(countdown)}</span>
+            {t("auth.codeExpiresIn")}<span className="font-medium text-black">{formatTime(countdown)}</span>
           </p>
         )}
 
         {expired && !locked && (
-          <p className="text-sm text-[#ef4444] text-center">Code expired. Request a new one.</p>
+          <p className="text-sm text-[#ef4444] text-center">{t("auth.codeExpired")}</p>
         )}
 
         {locked && (
@@ -166,7 +168,7 @@ export default function RegisterOTPPage() {
         {loading && (
           <div className="flex items-center justify-center gap-2 py-3">
             <div className="w-5 h-5 border-2 border-black border-t-transparent rounded-full animate-spin" />
-            <p className="text-sm text-[#888]">Verifying...</p>
+            <p className="text-sm text-[#888]">{t("auth.verifying")}</p>
           </div>
         )}
 
@@ -174,13 +176,13 @@ export default function RegisterOTPPage() {
           {resendCountdown > 0 ? (
             <p className="text-sm text-[#888]">Resend in {resendCountdown}s</p>
           ) : resends >= MAX_RESENDS ? (
-            <p className="text-sm text-[#ef4444]">Maximum resend attempts reached.</p>
+            <p className="text-sm text-[#ef4444]">{t("auth.resendLimit")}</p>
           ) : (
             <button
               onClick={handleResend}
               className="text-sm font-medium text-black underline underline-offset-2"
             >
-              Resend OTP
+              {t("auth.resendOtp")}
             </button>
           )}
         </div>

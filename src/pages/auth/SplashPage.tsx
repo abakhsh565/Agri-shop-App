@@ -4,8 +4,10 @@ import { useAuthStore } from "@/stores/authStore";
 import { hasPin } from "@/lib/pinLock";
 import { getUserFromSession } from "@/lib/auth";
 import StatusBar from "@/components/ui/StatusBar";
+import { useT } from "@/lib/i18n";
 
 export default function SplashPage() {
+  const t = useT();
   const { user } = useAuthStore();
   const navigate = useNavigate();
 
@@ -49,11 +51,11 @@ export default function SplashPage() {
         </div>
         <div className="flex flex-col items-center gap-2 text-center">
           <p className="text-[32px] font-bold text-black">AgriShop</p>
-          <p className="text-sm text-[#888]">Smart Retail for Agriculture</p>
+          <p className="text-sm text-[#888]">{t("auth.tagline")}</p>
         </div>
       </div>
       <div className="flex flex-col items-center p-6">
-        <p className="text-[11px] text-[#888] uppercase tracking-wide">Employee Facing App</p>
+        <p className="text-[11px] text-[#888] uppercase tracking-wide">{t("auth.employeeApp")}</p>
       </div>
     </div>
   );

@@ -87,8 +87,8 @@ export default function SearchPage() {
             id: p.id,
             type: "product",
             title: p.name,
-            subtitle: `${p.company || t('search.unknownSupplier') || 'Supplier'} · ${p.variants.length} variants`,
-            badge: `${totalStock} units`,
+            subtitle: `${p.company || t('search.unknownSupplier')} · ${p.variants.length} ${t('products.variants')}`,
+            badge: `${totalStock} ${t('common.units')}`,
             path: isAdmin ? `/admin/products/${p.id}` : `${base}/products/${p.id}`,
           });
         });

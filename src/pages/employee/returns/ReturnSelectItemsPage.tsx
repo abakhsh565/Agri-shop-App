@@ -103,7 +103,7 @@ export default function ReturnSelectItemsPage() {
       <div className="flex flex-col w-full min-h-full items-center justify-center" style={{ background: "var(--background)" }}>
         <StatusBar />
         <NavHeader title={t("returns.title")} />
-        <p className="text-sm" style={{ color: "var(--text-secondary)" }}>Loading...</p>
+        <p className="text-sm" style={{ color: "var(--text-secondary)" }}>{t("common.loading")}</p>
       </div>
     );
   }
@@ -165,7 +165,7 @@ export default function ReturnSelectItemsPage() {
                         className="text-xs font-semibold px-3 py-1 rounded-full"
                         style={{ background: "rgba(239,68,68,0.1)", color: "#ef4444" }}
                       >
-                        Fully returned
+                        {t("returns.fullyReturned")}
                       </span>
                     </div>
                   ) : (

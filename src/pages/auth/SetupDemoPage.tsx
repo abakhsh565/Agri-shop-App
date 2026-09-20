@@ -2,8 +2,10 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import AuthLayout from "@/components/layout/AuthLayout";
 import { supabase } from "@/lib/supabase";
+import { useT } from "@/lib/i18n";
 
 export default function SetupDemoPage() {
+  const t = useT();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<string>("");
@@ -85,9 +87,9 @@ export default function SetupDemoPage() {
     <AuthLayout>
       <div className="flex flex-col flex-1 items-center justify-center p-6 gap-6">
         <div className="text-center">
-          <p className="text-[28px] font-bold text-black">Setup Demo Users</p>
+          <p className="text-[28px] font-bold text-black">{t("auth.setupDemoUsers")}</p>
           <p className="text-sm text-[#888] mt-2">
-            Click the button below to create demo users for testing
+            {t("auth.setupDemoBody")}
           </p>
         </div>
 
@@ -97,7 +99,7 @@ export default function SetupDemoPage() {
           className="w-full h-12 rounded-full font-bold text-sm"
           style={{ background: "#000", color: "#fff" }}
         >
-          {loading ? "Setting up..." : "Create Demo Users"}
+          {loading ? t("auth.settingUp") : t("auth.createDemoUsers")}
         </button>
 
         {result && (
@@ -110,7 +112,7 @@ export default function SetupDemoPage() {
           onClick={() => navigate("/login")}
           className="text-sm text-[#888] underline"
         >
-          Back to Login
+          {t("auth.backToLogin")}
         </button>
       </div>
     </AuthLayout>

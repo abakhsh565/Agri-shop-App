@@ -1,7 +1,9 @@
 import AuthLayout from "@/components/layout/AuthLayout";
 import NavHeader from "@/components/ui/NavHeader";
+import { useT } from "@/lib/i18n";
 
 export default function DeactivatedPage() {
+  const t = useT();
   return (
     <AuthLayout>
       <NavHeader title="" backTo="/login" />
@@ -10,9 +12,9 @@ export default function DeactivatedPage() {
           ⛔
         </div>
         <div className="flex flex-col gap-2">
-          <p className="text-xl font-bold text-black">Access revoked</p>
+          <p className="text-xl font-bold text-black">{t("auth.accessRevoked")}</p>
           <p className="text-sm text-[#888]">
-            Your access has been revoked. Contact your shop admin to restore access.
+            {t("auth.accessRevokedBody")}
           </p>
         </div>
       </div>

@@ -7,14 +7,16 @@ import { useAuthStore } from "@/stores/authStore";
 import { useShopRequestsStore } from "@/stores/shopRequestsStore";
 import { useUIStore } from "@/stores/uiStore";
 import { normalizePhone } from "@/lib/auth";
+import { useT } from "@/lib/i18n";
 
 const SHOP_TYPES = [
-  { key: "retail", label: "Retail Shop", hint: "Sell directly to customers" },
-  { key: "wholesale", label: "Wholesale", hint: "Sell in bulk to businesses" },
-  { key: "both", label: "Both", hint: "Retail + Wholesale" },
+  { key: "retail", labelKey: "register.type.retail", hintKey: "register.type.retailHint" },
+  { key: "wholesale", labelKey: "register.type.wholesale", hintKey: "register.type.wholesaleHint" },
+  { key: "both", labelKey: "register.type.both", hintKey: "register.type.bothHint" },
 ];
 
 export default function RegisterShopDetailsPage() {
+  const t = useT();
   const navigate = useNavigate();
   const { pendingPhone } = useAuthStore();
   const { submitRequest, loading } = useShopRequestsStore();
@@ -38,11 +40,11 @@ export default function RegisterShopDetailsPage() {
   async function handleSubmit() {
     setError("");
     if (!ownerName.trim()) {
-      setError("Enter your name");
+      setError(t("register.errName"));
       return;
     }
     if (!shopName.trim()) {
-      setError("Enter your shop name");
+      setError(t("register.errShopName"));
       return;
     }
 
@@ -59,17 +61,17 @@ export default function RegisterShopDetailsPage() {
     });
 
     if (result.success) {
-      addToast("Registration submitted! We'll review your request soon.", "success");
+      addToast(t("register.submitted"), "success");
       navigate("/register/status", { replace: true });
     } else {
-      setError(result.error || "Failed to submit. Try again.");
+      setError(result.error || t("register.errSubmit"));
     }
   }
 
   return (
     <div className="flex flex-col w-full min-h-full" style={{ background: "var(--background)" }}>
       <StatusBar />
-      <NavHeader title="Shop Details" backTo="/register" />
+      <NavHeader title={t("register.shopDetails")} backTo="/register" />
 
       <div className="flex flex-col gap-5 p-4 flex-1">
         {/* Logo */}
@@ -79,19 +81,19 @@ export default function RegisterShopDetailsPage() {
             value={logoUrl}
             onChange={setLogoUrl}
             shape="square"
-            label="Shop Logo"
+            label={t("register.shopLogo")}
           />
         </div>
 
         {/* Owner Name */}
         <div>
           <p className="text-[11px] font-bold uppercase mb-2 tracking-wider" style={{ color: "var(--text-secondary)" }}>
-            Your Full Name
+            {t("register.fullName")}
           </p>
           <input
             value={ownerName}
             onChange={(e) => setOwnerName(e.target.value)}
-            placeholder="e.g. Muhammad Ali"
+            placeholder={t("register.ownerNamePlaceholder")}
             className="w-full h-12 rounded-[24px] px-4 text-sm outline-none"
             style={fieldStyle}
           />
@@ -100,12 +102,12 @@ export default function RegisterShopDetailsPage() {
         {/* Shop Name */}
         <div>
           <p className="text-[11px] font-bold uppercase mb-2 tracking-wider" style={{ color: "var(--text-secondary)" }}>
-            Shop / Business Name
+            {t("register.shopName")}
           </p>
           <input
             value={shopName}
             onChange={(e) => setShopName(e.target.value)}
-            placeholder="e.g. Khan Agricultural Store"
+            placeholder={t("register.shopNamePlaceholder")}
             className="w-full h-12 rounded-[24px] px-4 text-sm outline-none"
             style={fieldStyle}
           />
@@ -114,28 +116,28 @@ export default function RegisterShopDetailsPage() {
         {/* Shop Type */}
         <div>
           <p className="text-[11px] font-bold uppercase mb-2 tracking-wider" style={{ color: "var(--text-secondary)" }}>
-            Business Type
+            {t("register.businessType")}
           </p>
           <div className="flex flex-col gap-2">
-            {SHOP_TYPES.map((t) => (
+            {SHOP_TYPES.map((opt) => (
               <button
-                key={t.key}
-                onClick={() => setShopType(t.key)}
+                key={opt.key}
+                onClick={() => setShopType(opt.key)}
                 className="flex items-start gap-3 p-4 rounded-[14px] text-start transition-colors"
                 style={{
                   background: "var(--surface)",
-                  border: `1.5px solid ${shopType === t.key ? "var(--brand)" : "var(--divider)"}`,
+                  border: `1.5px solid ${shopType === opt.key ? "var(--brand)" : "var(--divider)"}`,
                 }}
               >
                 <div
                   className="w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 mt-0.5"
-                  style={{ borderColor: shopType === t.key ? "var(--brand)" : "var(--text-secondary)" }}
+                  style={{ borderColor: shopType === opt.key ? "var(--brand)" : "var(--text-secondary)" }}
                 >
-                  {shopType === t.key && <div className="w-2.5 h-2.5 rounded-full" style={{ background: "var(--brand)" }} />}
+                  {shopType === opt.key && <div className="w-2.5 h-2.5 rounded-full" style={{ background: "var(--brand)" }} />}
                 </div>
                 <div>
-                  <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>{t.label}</p>
-                  <p className="text-xs mt-0.5" style={{ color: "var(--text-secondary)" }}>{t.hint}</p>
+                  <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>{t(opt.labelKey)}</p>
+                  <p className="text-xs mt-0.5" style={{ color: "var(--text-secondary)" }}>{t(opt.hintKey)}</p>
                 </div>
               </button>
             ))}
@@ -145,12 +147,12 @@ export default function RegisterShopDetailsPage() {
         {/* City */}
         <div>
           <p className="text-[11px] font-bold uppercase mb-2 tracking-wider" style={{ color: "var(--text-secondary)" }}>
-            City
+            {t("register.city")}
           </p>
           <input
             value={shopCity}
             onChange={(e) => setShopCity(e.target.value)}
-            placeholder="e.g. Lahore"
+            placeholder={t("register.cityPlaceholder")}
             className="w-full h-12 rounded-[24px] px-4 text-sm outline-none"
             style={fieldStyle}
           />
@@ -159,12 +161,12 @@ export default function RegisterShopDetailsPage() {
         {/* Address */}
         <div>
           <p className="text-[11px] font-bold uppercase mb-2 tracking-wider" style={{ color: "var(--text-secondary)" }}>
-            Shop Address
+            {t("register.shopAddress")}
           </p>
           <input
             value={shopAddress}
             onChange={(e) => setShopAddress(e.target.value)}
-            placeholder="e.g. Main Market, Shop 12"
+            placeholder={t("register.addressPlaceholder")}
             className="w-full h-12 rounded-[24px] px-4 text-sm outline-none"
             style={fieldStyle}
           />
@@ -173,12 +175,12 @@ export default function RegisterShopDetailsPage() {
         {/* Business Registration */}
         <div>
           <p className="text-[11px] font-bold uppercase mb-2 tracking-wider" style={{ color: "var(--text-secondary)" }}>
-            Business Registration # <span style={{ opacity: 0.6 }}>(optional)</span>
+            {t("register.businessReg")} <span style={{ opacity: 0.6 }}>{t("common.optional")}</span>
           </p>
           <input
             value={businessRegNumber}
             onChange={(e) => setBusinessRegNumber(e.target.value)}
-            placeholder="NTN or other registration number"
+            placeholder={t("register.taxNumberPlaceholder")}
             className="w-full h-12 rounded-[24px] px-4 text-sm outline-none"
             style={fieldStyle}
           />
@@ -194,7 +196,7 @@ export default function RegisterShopDetailsPage() {
           className="w-full h-12 rounded-full font-bold text-sm transition-all active:scale-[0.98] disabled:opacity-50"
           style={{ background: "var(--brand)", color: "#0a0a0a" }}
         >
-          {loading ? "Submitting..." : "Submit Registration"}
+          {loading ? t("common.submitting") : t("register.submit")}
         </button>
       </div>
     </div>

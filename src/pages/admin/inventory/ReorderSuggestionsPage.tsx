@@ -7,8 +7,10 @@ import { useProductsStore } from "@/stores/productsStore";
 import { useCompaniesStore } from "@/stores/companiesStore";
 import { getStockStatus, getStockStatusColor, formatCurrency } from "@/lib/formatters";
 import { Package, AlertTriangle, ArrowRight, ShoppingCart } from "lucide-react";
+import { useT } from "@/lib/i18n";
 
 export default function ReorderSuggestionsPage() {
+  const t = useT();
   const { language } = useThemeStore();
   const isUrdu = language === "ur";
   const navigate = useNavigate();
@@ -63,15 +65,15 @@ export default function ReorderSuggestionsPage() {
       style={{ background: "var(--background)", direction: isUrdu ? "rtl" : "ltr" }}
     >
       <StatusBar />
-      <NavHeader title="Reorder Suggestions" />
+      <NavHeader title={t("admin.reorderSuggestions")} />
 
       <div className="px-4 pt-3 pb-2">
         <div className="flex items-center gap-2 rounded-[14px] p-3" style={{ background: "rgba(217,119,6,0.08)", border: "1px solid rgba(217,119,6,0.2)" }}>
           <AlertTriangle size={16} style={{ color: "#d97706" }} />
           <p className="text-xs" style={{ color: "#92400e" }}>
             {suggestions.length === 0
-              ? "All products are well-stocked"
-              : `${suggestions.length} item${suggestions.length > 1 ? "s" : ""} need restocking`}
+              ? t("admin.wellStocked")
+              : t("admin.needRestocking", { count: suggestions.length })}
           </p>
         </div>
       </div>
@@ -79,8 +81,8 @@ export default function ReorderSuggestionsPage() {
       {suggestions.length === 0 ? (
         <div className="flex-1 flex flex-col items-center justify-center py-16 gap-2">
           <Package size={32} style={{ color: "var(--text-secondary)" }} />
-          <p className="text-sm" style={{ color: "var(--text-secondary)" }}>No restocking needed</p>
-          <p className="text-xs" style={{ color: "var(--text-secondary)" }}>All products are above their low-stock thresholds</p>
+          <p className="text-sm" style={{ color: "var(--text-secondary)" }}>{t("admin.noRestockingNeeded")}</p>
+          <p className="text-xs" style={{ color: "var(--text-secondary)" }}>{t("admin.allAboveThresholds")}</p>
         </div>
       ) : (
         <div className="flex flex-col mx-4 gap-3 pb-24">

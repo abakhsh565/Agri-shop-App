@@ -8,14 +8,25 @@ import { useUIStore } from "@/stores/uiStore";
 import { useAuthStore } from "@/stores/authStore";
 import { useRolesStore } from "@/stores/rolesStore";
 import { usePermissionsStore } from "@/stores/permissionsStore";
+import { useT } from "@/lib/i18n";
+import { usePermissionLabels } from "@/lib/permissionLabels";
 import { useThemeStore } from "@/stores/themeStore";
 import { normalizePhone } from "@/lib/auth";
 import { clearNav } from "@/lib/navContext";
 import { supabase } from "@/lib/supabase";
-import { Check, ChevronRight, User, Shield, Building2, ClipboardCheck } from "lucide-react";
+import { Check, ChevronRight, User, Shield, ClipboardCheck } from "lucide-react";
 import type { MembershipRole } from "@/types";
 
-type Step = "info" | "role" | "branch" | "review";
+/**
+ * Add Employee — three decisions only:
+ *   1. who they are      (name, phone, optional photo and job title)
+ *   2. what they do      (role, and a branch only when there is a real choice)
+ *   3. confirm
+ *
+ * Access is not a decision here: it comes from the selected role. The owner changes
+ * individual access later from the employee's page, where "Customize access" lives.
+ */
+type Step = "who" | "job" | "review";
 
 export default function AddEmployeePage() {
   const navigate = useNavigate();
@@ -23,12 +34,14 @@ export default function AddEmployeePage() {
   const { user } = useAuthStore();
   const { language } = useThemeStore();
   const isUrdu = language === "ur";
+  const t = useT();
+  const { areaLabel, actionLabel } = usePermissionLabels();
   const employees = useEmployeesStore((s) => s.employees);
   const createEmployee = useEmployeesStore((s) => s.createEmployee);
   const rolesStore = useRolesStore();
   const permissionsStore = usePermissionsStore();
 
-  const [step, setStep] = useState<Step>("info");
+  const [step, setStep] = useState<Step>("who");
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
@@ -47,7 +60,7 @@ export default function AddEmployeePage() {
     supabase.from("branches").select("id, name, is_default").eq("is_active", true).then(({ data }) => {
       const b = (data as any[]) ?? [];
       setBranches(b);
-      // Auto-assign if only one branch
+      // One branch is not a decision — assign it.
       if (b.length === 1) setBranchScope([b[0].id]);
     });
   }, []);
@@ -61,37 +74,35 @@ export default function AddEmployeePage() {
   }, [rolesStore.roles.length]);
 
   const steps: { key: Step; label: string; icon: typeof User }[] = [
-    { key: "info", label: "Info", icon: User },
-    { key: "role", label: "Role", icon: Shield },
-    { key: "branch", label: "Branch", icon: Building2 },
-    { key: "review", label: "Review", icon: ClipboardCheck },
+    { key: "who", label: t("addEmployee.stepWho"), icon: User },
+    { key: "job", label: t("addEmployee.stepJob"), icon: Shield },
+    { key: "review", label: t("addEmployee.stepReview"), icon: ClipboardCheck },
   ];
 
   const currentStepIdx = steps.findIndex((s) => s.key === step);
+  const firstName = name.trim().split(" ")[0] || "";
 
-  function validateInfo(): boolean {
+  function validateWho(): boolean {
     setError("");
-    if (!name.trim()) { setError("Enter the employee's name."); return false; }
+    if (!name.trim()) { setError(t("addEmployee.errName")); return false; }
     const digits = phone.replace(/\D/g, "");
-    if (digits.length < 10) { setError("Enter a valid phone number."); return false; }
+    if (digits.length < 10) { setError(t("addEmployee.errPhone")); return false; }
     const normalized = normalizePhone(phone);
     if (employees.some((e) => normalizePhone(e.phone) === normalized)) {
-      setError("An employee with this phone number already exists.");
+      setError(t("addEmployee.errPhoneUsed"));
       return false;
     }
     return true;
   }
 
   function nextStep() {
-    if (step === "info") { if (!validateInfo()) return; setStep("role"); return; }
-    if (step === "role") { setStep("branch"); return; }
-    if (step === "branch") { setStep("review"); return; }
+    if (step === "who") { if (!validateWho()) return; setStep("job"); return; }
+    if (step === "job") { setStep("review"); return; }
   }
 
   function prevStep() {
-    if (step === "role") setStep("info");
-    else if (step === "branch") setStep("role");
-    else if (step === "review") setStep("branch");
+    if (step === "job") setStep("who");
+    else if (step === "review") setStep("job");
   }
 
   async function handleCreate() {
@@ -109,11 +120,11 @@ export default function AddEmployeePage() {
         branchScope: branchScope,
         createdBy: user?.id,
       });
-      addToast(`${name.trim()} added. They can sign in with their phone number.`, "success");
+      addToast(t("addEmployee.created", { name: name.trim() }), "success");
       clearNav();
       navigate("/admin/employees", { replace: true });
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not add employee.");
+      setError(e instanceof Error ? e.message : t("addEmployee.errFailed"));
     } finally {
       setLoading(false);
     }
@@ -127,35 +138,22 @@ export default function AddEmployeePage() {
 
   const roleObj = rolesStore.roles.find((r) => r.id === roleId);
   const branchNames = branchScope === null
-    ? "All branches"
-    : branches.filter((b) => branchScope.includes(b.id)).map((b) => b.name).join(", ") || "All branches";
+    ? t("addEmployee.allBranches")
+    : branches.filter((b) => branchScope.includes(b.id)).map((b) => b.name).join(", ") || t("addEmployee.allBranches");
 
-  // Business-language labels so the owner never sees raw codes like sales.create.
-  const MODULE_LABELS: Record<string, string> = {
-    sales: "Sales", customers: "Customers", products: "Products", inventory: "Inventory",
-    purchases: "Purchases", payments: "Payments", companies: "Suppliers", returns: "Returns",
-    employees: "Employees", reports: "Reports", settings: "Settings", activity: "Activity",
-    notifications: "Notifications", alerts: "Alerts",
-  };
-  const ACTION_LABELS: Record<string, string> = {
-    view: "View", create: "Create", edit: "Edit", delete: "Delete", void: "Void",
-    payments: "Record payments", adjust: "Adjust stock", supplier: "Record payment", manage: "Manage",
-  };
-
-  /** Group the selected role's defaults into business areas for display. */
-  function inheritedAccessByArea(): { label: string; actions: string[] }[] {
+  /** The selected role's access, grouped into business areas the owner recognises. */
+  function accessByArea(): { label: string; actions: string[] }[] {
     const byModule = new Map<string, string[]>();
     for (const code of selectedRolePermissions) {
       const perm = permissionsStore.permissions.find((p) => p.code === code);
       const mod = perm?.module ?? code.split(".")[0];
       const action = perm?.action ?? code.split(".")[1] ?? "";
-      byModule.set(mod, [...(byModule.get(mod) ?? []), ACTION_LABELS[action] ?? action]);
+      byModule.set(mod, [...(byModule.get(mod) ?? []), actionLabel(action)]);
     }
-    return [...byModule.entries()].map(([mod, actions]) => ({
-      label: MODULE_LABELS[mod] ?? mod,
-      actions,
-    }));
+    return [...byModule.entries()].map(([mod, actions]) => ({ label: areaLabel(mod), actions }));
   }
+
+  const accessSummary = accessByArea().map((a) => a.label).join(", ");
 
   return (
     <div
@@ -163,7 +161,7 @@ export default function AddEmployeePage() {
       style={{ background: "var(--background)", direction: isUrdu ? "rtl" : "ltr" }}
     >
       <StatusBar />
-      <NavHeader title="Add Employee" />
+      <NavHeader title={t("addEmployee.title")} />
 
       {/* Step indicator */}
       <div className="flex items-center justify-center gap-1 px-4 pt-3">
@@ -187,20 +185,20 @@ export default function AddEmployeePage() {
       </div>
 
       <div className="flex-1 flex flex-col p-4 gap-4">
-        {/* Step 1: Basic Info */}
-        {step === "info" && (
+        {/* Step 1: who they are */}
+        {step === "who" && (
           <>
             <div className="flex justify-center pt-1">
-              <ImageUpload bucket="employee-photos" value={photoUrl} onChange={setPhotoUrl} shape="circle" label="Add photo" />
+              <ImageUpload bucket="employee-photos" value={photoUrl} onChange={setPhotoUrl} shape="circle" label={t("addEmployee.addPhoto")} />
             </div>
             <div>
               <p className="text-[11px] font-bold uppercase mb-2 tracking-wider" style={{ color: "var(--text-secondary)" }}>
-                Full Name *
+                {t("addEmployee.name")} *
               </p>
               <input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="e.g. Bilal Ahmed"
+                placeholder={t("addEmployee.nameHint")}
                 className="w-full h-12 rounded-[24px] px-4 text-sm outline-none"
                 style={fieldStyle}
                 autoFocus
@@ -208,7 +206,7 @@ export default function AddEmployeePage() {
             </div>
             <div>
               <p className="text-[11px] font-bold uppercase mb-2 tracking-wider" style={{ color: "var(--text-secondary)" }}>
-                Phone Number *
+                {t("addEmployee.phone")} *
               </p>
               <input
                 type="tel"
@@ -220,17 +218,17 @@ export default function AddEmployeePage() {
                 style={fieldStyle}
               />
               <p className="text-[11px] mt-1" style={{ color: "var(--text-secondary)" }}>
-                They sign in with this number via one-time code.
+                {t("addEmployee.phoneHint")}
               </p>
             </div>
             <div>
               <p className="text-[11px] font-bold uppercase mb-2 tracking-wider" style={{ color: "var(--text-secondary)" }}>
-                Job Title <span style={{ opacity: 0.6 }}>(optional)</span>
+                {t("addEmployee.jobTitle")}
               </p>
               <input
                 value={jobTitle}
                 onChange={(e) => setJobTitle(e.target.value)}
-                placeholder="e.g. Sales Associate"
+                placeholder={t("addEmployee.jobTitleHint")}
                 className="w-full h-12 rounded-[24px] px-4 text-sm outline-none"
                 style={fieldStyle}
               />
@@ -238,11 +236,11 @@ export default function AddEmployeePage() {
           </>
         )}
 
-        {/* Step 2: Role Selection */}
-        {step === "role" && (
+        {/* Step 2: what they do, and where */}
+        {step === "job" && (
           <>
             <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>
-              What access level should {name.split(" ")[0]} have?
+              {t("addEmployee.roleQuestion", { name: firstName })}
             </p>
             <div className="flex flex-col gap-3">
               {rolesStore.roles.map((r) => {
@@ -269,120 +267,115 @@ export default function AddEmployeePage() {
                     </div>
                     <div>
                       <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>{r.name}</p>
-                      <p className="text-xs mt-0.5" style={{ color: "var(--text-secondary)" }}>{r.description ?? "Configured access profile"}</p>
-                      <p className="text-[10px] mt-1" style={{ color: "var(--brand)" }}>{selected ? `${selectedRolePermissions.length} default permissions` : "Role defaults"}</p>
+                      {r.description && (
+                        <p className="text-xs mt-0.5" style={{ color: "var(--text-secondary)" }}>{r.description}</p>
+                      )}
                     </div>
                   </button>
                 );
               })}
             </div>
 
-            {/* Inherited access preview for the selected role */}
+            {/* Access this role gives — plain business areas, no permission codes */}
             {roleObj && (
               <div className="rounded-xl p-3" style={{ background: "var(--surface)", border: "1px solid var(--divider)" }}>
                 <p className="text-[11px] font-bold uppercase tracking-wider mb-2" style={{ color: "var(--text-secondary)" }}>
-                  Default access from {roleObj.name}
+                  {t("addEmployee.roleAccess")}
                 </p>
-                {inheritedAccessByArea().length === 0 ? (
-                  <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
-                    This access profile has no permissions yet.
-                  </p>
+                {accessByArea().length === 0 ? (
+                  <p className="text-xs" style={{ color: "var(--text-secondary)" }}>{t("addEmployee.noRoleAccess")}</p>
                 ) : (
-                  inheritedAccessByArea().map(({ label, actions }) => (
+                  accessByArea().map(({ label, actions }) => (
                     <div key={label} className="flex items-start justify-between gap-3 py-1">
                       <span className="text-xs font-semibold" style={{ color: "var(--text-primary)" }}>{label}</span>
                       <span className="text-xs text-end" style={{ color: "var(--text-secondary)" }}>{actions.join(", ")}</span>
                     </div>
                   ))
                 )}
-                <p className="text-[10px] mt-2" style={{ color: "var(--text-secondary)" }}>
-                  Inherited automatically. Adjust individual permissions later from Employee Detail.
-                </p>
               </div>
             )}
-          </>
-        )}
 
-        {/* Step 3: Branch Selection */}
-        {step === "branch" && (
-          <>
-            <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>
-              Which branch(es) can {name.split(" ")[0]} access?
-            </p>
-            {branches.length <= 1 ? (
-              <div className="p-4 rounded-xl" style={{ background: "var(--surface)", border: "1px solid var(--divider)" }}>
-                <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
-                  {branches.length === 1 ? `Auto-assigned to: ${branches[0].name}` : "No branches configured yet."}
+            {/* Where they work — only a real choice when more than one branch exists */}
+            {branches.length > 1 && (
+              <>
+                <p className="text-sm font-bold pt-1" style={{ color: "var(--text-primary)" }}>
+                  {t("addEmployee.branchQuestion", { name: firstName })}
                 </p>
-              </div>
-            ) : (
-              <div className="flex flex-col gap-2">
-                <button
-                  onClick={() => setBranchScope(null)}
-                  className="flex items-center gap-3 p-4 rounded-[14px] text-start"
-                  style={{
-                    background: "var(--surface)",
-                    border: `1.5px solid ${branchScope === null ? "var(--brand)" : "var(--divider)"}`,
-                  }}
-                >
-                  <div
-                    className="w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0"
-                    style={{ borderColor: branchScope === null ? "var(--brand)" : "var(--text-secondary)" }}
-                  >
-                    {branchScope === null && <div className="w-2.5 h-2.5 rounded-full" style={{ background: "var(--brand)" }} />}
-                  </div>
-                  <div>
-                    <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>All Branches</p>
-                    <p className="text-xs" style={{ color: "var(--text-secondary)" }}>Access all branches</p>
-                  </div>
-                </button>
-                {branches.map((b) => (
+                <div className="flex flex-col gap-2">
                   <button
-                    key={b.id}
-                    onClick={() => {
-                      setBranchScope((prev) => {
-                        if (!prev) return [b.id];
-                        if (prev.includes(b.id)) return prev.filter((id) => id !== b.id);
-                        return [...prev, b.id];
-                      });
-                    }}
+                    onClick={() => setBranchScope(null)}
                     className="flex items-center gap-3 p-4 rounded-[14px] text-start"
                     style={{
                       background: "var(--surface)",
-                      border: `1.5px solid ${branchScope?.includes(b.id) ? "var(--brand)" : "var(--divider)"}`,
+                      border: `1.5px solid ${branchScope === null ? "var(--brand)" : "var(--divider)"}`,
                     }}
                   >
                     <div
                       className="w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0"
-                      style={{ borderColor: branchScope?.includes(b.id) ? "var(--brand)" : "var(--text-secondary)" }}
+                      style={{ borderColor: branchScope === null ? "var(--brand)" : "var(--text-secondary)" }}
                     >
-                      {branchScope?.includes(b.id) && <div className="w-2.5 h-2.5 rounded-full" style={{ background: "var(--brand)" }} />}
+                      {branchScope === null && <div className="w-2.5 h-2.5 rounded-full" style={{ background: "var(--brand)" }} />}
                     </div>
-                    <div>
-                      <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>{b.name}</p>
-                      {b.is_default && <p className="text-[10px]" style={{ color: "var(--brand)" }}>Main branch</p>}
-                    </div>
+                    <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>{t("addEmployee.allBranches")}</p>
                   </button>
-                ))}
+                  {branches.map((b) => (
+                    <button
+                      key={b.id}
+                      onClick={() => {
+                        setBranchScope((prev) => {
+                          if (!prev) return [b.id];
+                          if (prev.includes(b.id)) return prev.filter((id) => id !== b.id);
+                          return [...prev, b.id];
+                        });
+                      }}
+                      className="flex items-center gap-3 p-4 rounded-[14px] text-start"
+                      style={{
+                        background: "var(--surface)",
+                        border: `1.5px solid ${branchScope?.includes(b.id) ? "var(--brand)" : "var(--divider)"}`,
+                      }}
+                    >
+                      <div
+                        className="w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0"
+                        style={{ borderColor: branchScope?.includes(b.id) ? "var(--brand)" : "var(--text-secondary)" }}
+                      >
+                        {branchScope?.includes(b.id) && <div className="w-2.5 h-2.5 rounded-full" style={{ background: "var(--brand)" }} />}
+                      </div>
+                      <div>
+                        <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>{b.name}</p>
+                        {b.is_default && <p className="text-[10px]" style={{ color: "var(--brand)" }}>{t("addEmployee.mainBranch")}</p>}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+            {branches.length === 1 && (
+              <div className="rounded-xl p-3" style={{ background: "var(--surface)", border: "1px solid var(--divider)" }}>
+                <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
+                  {t("addEmployee.worksAt", { branch: branches[0].name })}
+                </p>
+              </div>
+            )}
+            {branches.length === 0 && (
+              <div className="rounded-xl p-3" style={{ background: "var(--surface)", border: "1px solid var(--divider)" }}>
+                <p className="text-xs" style={{ color: "var(--text-secondary)" }}>{t("addEmployee.noBranches")}</p>
               </div>
             )}
           </>
         )}
 
-        {/* Step 4: Review */}
+        {/* Step 3: confirm */}
         {step === "review" && (
           <>
-            <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>
-              Review before creating
-            </p>
+            <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>{t("addEmployee.reviewTitle")}</p>
             <div className="rounded-xl overflow-hidden" style={{ border: "1px solid var(--border-light)" }}>
               {[
-                { label: "Name", value: name },
-                { label: "Phone", value: phone },
-                { label: "Job Title", value: jobTitle || "—" },
-                { label: "Role", value: roleObj?.name ?? role },
-                { label: "Branch", value: branchNames },
-                { label: "Access", value: roleObj ? `Inherited from ${roleObj.name} (${selectedRolePermissions.length})` : "Role defaults" },
+                { label: t("addEmployee.labelName"), value: name },
+                { label: t("addEmployee.labelPhone"), value: phone },
+                ...(jobTitle.trim() ? [{ label: t("addEmployee.labelJobTitle"), value: jobTitle }] : []),
+                { label: t("addEmployee.labelRole"), value: roleObj?.name ?? role },
+                { label: t("addEmployee.labelBranch"), value: branchNames },
+                { label: t("addEmployee.labelAccess"), value: accessSummary || t("addEmployee.noRoleAccess") },
               ].map(({ label, value }, i, arr) => (
                 <div
                   key={label}
@@ -394,9 +387,7 @@ export default function AddEmployeePage() {
                 </div>
               ))}
             </div>
-            <p className="text-[11px]" style={{ color: "var(--text-secondary)" }}>
-              They can sign in immediately with their phone number. You can change their role, permissions, and branch access anytime from Employee Detail.
-            </p>
+            <p className="text-[11px]" style={{ color: "var(--text-secondary)" }}>{t("addEmployee.reviewHint")}</p>
           </>
         )}
 
@@ -405,13 +396,13 @@ export default function AddEmployeePage() {
 
       {/* Bottom buttons */}
       <div className="p-4 pb-6 flex gap-3">
-        {step !== "info" && (
+        {step !== "who" && (
           <button
             onClick={prevStep}
             className="h-12 px-6 rounded-full font-bold text-sm"
             style={{ background: "var(--surface-2)", border: "1px solid var(--divider)", color: "var(--text-primary)" }}
           >
-            Back
+            {t("addEmployee.back")}
           </button>
         )}
         {step === "review" ? (
@@ -421,7 +412,7 @@ export default function AddEmployeePage() {
             className="flex-1 h-12 rounded-full font-bold text-sm transition-all active:scale-[0.98] disabled:opacity-50"
             style={{ background: "var(--brand)", color: "#0a0a0a" }}
           >
-            {loading ? "Creating…" : "Create Employee"}
+            {loading ? t("addEmployee.creating") : t("addEmployee.create")}
           </button>
         ) : (
           <button
@@ -429,7 +420,7 @@ export default function AddEmployeePage() {
             className="flex-1 h-12 rounded-full font-bold text-sm flex items-center justify-center gap-2"
             style={{ background: "var(--brand)", color: "#0a0a0a" }}
           >
-            {step === "info" ? "Next" : step === "role" ? "Next" : "Review"}
+            {step === "who" ? t("addEmployee.next") : t("addEmployee.review")}
             <ChevronRight size={16} />
           </button>
         )}

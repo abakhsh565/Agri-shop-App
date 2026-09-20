@@ -9,6 +9,7 @@ import { useAuthStore } from "@/stores/authStore";
 import { useUIStore } from "@/stores/uiStore";
 import { useThemeStore } from "@/stores/themeStore";
 import type { AdjustmentType } from "@/types";
+import { useT } from "@/lib/i18n";
 
 const TYPES: { key: AdjustmentType; label: string; hint: string }[] = [
   { key: "add", label: "Add", hint: "Received / found extra stock" },
@@ -23,6 +24,7 @@ const REASONS: Record<AdjustmentType, string[]> = {
 };
 
 export default function InventoryAdjustPage() {
+  const t = useT();
   const { productId } = useParams();
   const navigate = useNavigate();
   const { addToast } = useUIStore();
@@ -42,10 +44,10 @@ export default function InventoryAdjustPage() {
   if (!product) return (
     <div style={{ background: "var(--background)", color: "var(--text-primary)" }} className="flex flex-col min-h-full">
       <StatusBar />
-      <NavHeader title="Adjust Stock" />
+      <NavHeader title={t("admin.adjustStock")} />
       <div className="flex flex-col items-center py-20 gap-2">
         <p className="text-3xl">🔍</p>
-        <p className="text-sm" style={{ color: "var(--text-secondary)" }}>Product not found</p>
+        <p className="text-sm" style={{ color: "var(--text-secondary)" }}>{t("admin.productNotFound")}</p>
       </div>
     </div>
   );
@@ -110,7 +112,7 @@ export default function InventoryAdjustPage() {
     >
       <div>
         <StatusBar />
-        <NavHeader title="Adjust Stock" />
+        <NavHeader title={t("admin.adjustStock")} />
 
         <div className="flex flex-col gap-5 p-4">
           <div>
@@ -120,7 +122,7 @@ export default function InventoryAdjustPage() {
 
           {/* Variant */}
           <div>
-            <p className={labelCls} style={{ color: "var(--text-secondary)" }}>Unit / Variant</p>
+            <p className={labelCls} style={{ color: "var(--text-secondary)" }}>{t("admin.unitVariant")}</p>
             <div className="flex flex-col gap-2">
               {product.variants.map((v) => {
                 const selected = v.id === variantId;
@@ -147,7 +149,7 @@ export default function InventoryAdjustPage() {
 
           {/* Adjustment type */}
           <div>
-            <p className={labelCls} style={{ color: "var(--text-secondary)" }}>Adjustment</p>
+            <p className={labelCls} style={{ color: "var(--text-secondary)" }}>{t("admin.adjustment")}</p>
             <div className="flex gap-2">
               {TYPES.map((tp) => (
                 <button key={tp.key} onClick={() => { setType(tp.key); setReason(""); }}
@@ -169,7 +171,7 @@ export default function InventoryAdjustPage() {
           {/* Amount */}
           <div>
             <p className={labelCls} style={{ color: "var(--text-secondary)" }}>
-              {type === "set" ? "Counted quantity" : "Quantity"}
+              {type === "set" ? t("admin.countedQuantity") : t("admin.quantity")}
             </p>
             <input type="number" inputMode="numeric" value={amount} onChange={(e) => setAmount(e.target.value)}
               placeholder="0" className="w-full h-12 rounded-[24px] px-4 text-sm outline-none" style={fieldStyle} />
@@ -177,7 +179,7 @@ export default function InventoryAdjustPage() {
 
           {/* Reason */}
           <div>
-            <p className={labelCls} style={{ color: "var(--text-secondary)" }}>Reason</p>
+            <p className={labelCls} style={{ color: "var(--text-secondary)" }}>{t("admin.reason")}</p>
             <div className="flex flex-wrap gap-2 mb-2">
               {REASONS[type].map((r) => (
                 <button key={r} onClick={() => setReason(r)}
@@ -191,13 +193,13 @@ export default function InventoryAdjustPage() {
                 </button>
               ))}
             </div>
-            <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Add a note (optional)"
+            <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder={t("inventory.adjustNotePlaceholder")}
               className="w-full h-11 rounded-[24px] px-4 text-sm outline-none" style={fieldStyle} />
           </div>
 
           {/* Preview */}
           <div className="rounded-[14px] p-4 flex items-center justify-between" style={{ background: "var(--surface-2)" }}>
-            <span className="text-sm" style={{ color: "var(--text-secondary)" }}>New stock level</span>
+            <span className="text-sm" style={{ color: "var(--text-secondary)" }}>{t("admin.newStockLevel")}</span>
             <span className="text-base font-bold" style={{ color: after < 0 ? "var(--error)" : "var(--text-primary)" }}>
               {before} → {after} units
             </span>
@@ -214,7 +216,7 @@ export default function InventoryAdjustPage() {
           className="w-full h-12 rounded-full font-bold text-sm transition-all active:scale-[0.98] disabled:opacity-50"
           style={{ background: "var(--brand)", color: "#0a0a0a" }}
         >
-          {loading ? "Saving…" : "Save Adjustment"}
+          {loading ? t("common.saving") : t("admin.saveAdjustment")}
         </button>
       </div>
     </div>

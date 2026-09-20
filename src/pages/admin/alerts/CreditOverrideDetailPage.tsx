@@ -22,9 +22,9 @@ export default function CreditOverrideDetailPage() {
     return (
       <div className="flex flex-col w-full min-h-full" style={{ background: "var(--background)" }}>
         <StatusBar />
-        <NavHeader title="Credit Override" />
+        <NavHeader title={t("creditOverride.title")} />
         <div className="flex-1 flex items-center justify-center">
-          <p className="text-sm" style={{ color: "var(--text-secondary)" }}>Customer not found</p>
+          <p className="text-sm" style={{ color: "var(--text-secondary)" }}>{t("admin.customerNotFound")}</p>
         </div>
       </div>
     );
@@ -40,7 +40,7 @@ export default function CreditOverrideDetailPage() {
       style={{ background: "var(--background)", direction: isUrdu ? "rtl" : "ltr" }}
     >
       <StatusBar />
-      <NavHeader title="Credit Override" />
+      <NavHeader title={t("creditOverride.title")} />
 
       <div className="flex flex-col gap-3 px-4 pt-4 pb-8">
         {/* Warning banner */}
@@ -50,7 +50,7 @@ export default function CreditOverrideDetailPage() {
         >
           <AlertTriangle size={20} color="#A32D2D" className="mt-0.5 shrink-0" />
           <p className="text-[14px] font-medium" style={{ color: "#791F1F", lineHeight: 1.5 }}>
-            Credit approved for a customer marked red
+            {t("creditOverride.approvedForRed")}
           </p>
         </div>
 
@@ -60,9 +60,9 @@ export default function CreditOverrideDetailPage() {
           style={{ background: "var(--surface)", border: "1px solid var(--divider)" }}
         >
           {[
-            { label: "Approved by", value: "Yaqoob Malik" },
+            { label: t("creditOverride.approvedBy"), value: "Yaqoob Malik" },
             {
-              label: "Customer",
+              label: t("creditOverride.customer"),
               value: (
                 <span className="flex items-center gap-2">
                   {customer.name}
@@ -70,12 +70,12 @@ export default function CreditOverrideDetailPage() {
                     className="text-[10px] font-bold px-2 py-0.5 rounded-full"
                     style={{ background: "#FEE2E2", color: "#DC2626" }}
                   >
-                    Red
+                    {t("creditOverride.red")}
                   </span>
                 </span>
               ),
             },
-            { label: "Amount", value: formatCurrency(customer.outstandingBalance) },
+            { label: t("common.amount"), value: formatCurrency(customer.outstandingBalance) },
             { label: t("common.when") ?? "When", value: formatSmartDateTime(customer.createdAt, undefined, t) },
           ].map((row, i, arr) => (
             <div
@@ -99,12 +99,12 @@ export default function CreditOverrideDetailPage() {
           style={{ background: "var(--surface-2)" }}
         >
           <p className="text-[10px] font-bold uppercase tracking-wider mb-2" style={{ color: "var(--text-secondary)" }}>
-            WHY FLAGGED
+            {t("creditOverride.whyFlagged")}
           </p>
           <p className="text-[14px] leading-relaxed" style={{ color: "var(--text-primary)" }}>
             {utilization >= 100
-              ? `${customer.name} has reached their credit limit of ${formatCurrency(customer.creditLimit)} with ${formatCurrency(customer.outstandingBalance)} outstanding (${utilization}% utilized).`
-              : `${customer.name} has ${formatCurrency(customer.outstandingBalance)} outstanding against a ${formatCurrency(customer.creditLimit)} limit (${utilization}% utilized). Credit health status indicates increased risk.`}
+              ? t("creditOverride.reasonAtLimit", { name: customer.name, limit: formatCurrency(customer.creditLimit), outstanding: formatCurrency(customer.outstandingBalance), pct: String(utilization) })
+              : t("creditOverride.reasonApproaching", { name: customer.name, limit: formatCurrency(customer.creditLimit), outstanding: formatCurrency(customer.outstandingBalance), pct: String(utilization) })}
           </p>
         </div>
 
@@ -115,7 +115,7 @@ export default function CreditOverrideDetailPage() {
           style={{ background: "var(--surface)", border: "1px solid var(--divider)" }}
         >
           <span className="text-[14px] font-medium" style={{ color: "var(--text-primary)" }}>
-            View customer profile
+            {t("creditOverride.viewProfile")}
           </span>
           <ChevronRight size={16} style={{ color: "var(--text-secondary)" }} />
         </button>
@@ -125,7 +125,7 @@ export default function CreditOverrideDetailPage() {
           <div className="flex items-center justify-center gap-2 py-3">
             <CheckCircle2 size={18} style={{ color: "var(--brand-dark, #65a30d)" }} />
             <span className="text-[14px] font-medium" style={{ color: "var(--brand-dark, #65a30d)" }}>
-              Reviewed
+              {t("creditOverride.reviewed")}
             </span>
           </div>
         ) : (
@@ -134,7 +134,7 @@ export default function CreditOverrideDetailPage() {
             className="w-full py-3 text-center"
           >
             <span className="text-[14px] font-medium" style={{ color: "var(--brand-dark, #65a30d)" }}>
-              Mark as reviewed
+              {t("creditOverride.markReviewed")}
             </span>
           </button>
         )}

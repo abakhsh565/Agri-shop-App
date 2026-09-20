@@ -171,7 +171,7 @@ export default function EmployeeLayout() {
               Offline mode — {pendingOpsCount > 0 ? `${pendingOpsCount} change(s) queued` : "working locally"}
             </span>
           </div>
-          <span className="text-[10px] opacity-60 uppercase tracking-wide">Auto-syncs on reconnect</span>
+          <span className="text-[10px] opacity-60 uppercase tracking-wide">{t("common.autoSyncOnReconnect")}</span>
         </div>
       )}
 
@@ -202,7 +202,7 @@ export default function EmployeeLayout() {
                 {user?.name?.charAt(0).toUpperCase()}
               </div>
               <p className="text-xl font-bold" style={{ color: "var(--text-primary)" }}>{user?.name}</p>
-              <p className="text-sm" style={{ color: "var(--text-secondary)" }}>Enter your PIN to continue</p>
+              <p className="text-sm" style={{ color: "var(--text-secondary)" }}>{t("auth.pinPrompt")}</p>
             </div>
             <PINInput value={pin} onChange={setPin} error={pinError} shake={pinShake} />
             <button
@@ -210,7 +210,7 @@ export default function EmployeeLayout() {
               className="text-sm underline underline-offset-2"
               style={{ color: "var(--text-secondary)" }}
             >
-              Not you? Sign out
+              {t("auth.notYouSignOut")}
             </button>
           </div>
         </div>
@@ -229,18 +229,18 @@ export default function EmployeeLayout() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between">
-              <p className="text-base font-bold" style={{ color: "var(--text-primary)" }}>Scan Barcode</p>
+              <p className="text-base font-bold" style={{ color: "var(--text-primary)" }}>{t("common.scanBarcode")}</p>
               <button onClick={() => setShowManualScan(false)} className="text-sm" style={{ color: "var(--text-secondary)" }}>✕</button>
             </div>
             <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
-              Camera not available. Enter barcode manually.
+              {t("scan.cameraUnavailable")}
             </p>
             <input
               autoFocus
               value={manualBarcode}
               onChange={(e) => setManualBarcode(e.target.value.toUpperCase())}
               onKeyDown={(e) => e.key === "Enter" && handleManualScanSubmit()}
-              placeholder="e.g. AGS-HMSK-01"
+              placeholder={t("common.barcodePlaceholder")}
               className="w-full h-12 rounded-full px-4 text-sm outline-none font-mono"
               style={{ background: "var(--surface-2)", border: "1px solid var(--divider)", color: "var(--text-primary)" }}
             />
@@ -250,7 +250,7 @@ export default function EmployeeLayout() {
               className="w-full h-12 rounded-full font-bold text-sm disabled:opacity-50"
               style={{ background: "var(--brand)", color: "#0a0a0a" }}
             >
-              Look up product
+              {t("scan.lookUpProduct")}
             </button>
           </div>
         </div>

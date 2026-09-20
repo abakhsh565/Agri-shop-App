@@ -1,5 +1,7 @@
 import { formatCurrency } from "@/lib/formatters";
 
+import type { TranslateFn } from "@/lib/i18n";
+
 function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
   ctx.beginPath();
   ctx.moveTo(x + r, y);
@@ -112,7 +114,7 @@ export function renderReceiptBlob(s: {
   createdAt: string; totalAmount: number; amountPaid: number;
   outstandingBalance: number; subtotal: number;
   items: { productName: string; variantName: string; qty: number; unitPrice: number }[];
-}): Promise<Blob | null> {
+}, t: TranslateFn): Promise<Blob | null> {
   return new Promise((resolve) => {
     try {
       const canvas = document.createElement("canvas");
@@ -125,14 +127,14 @@ export function renderReceiptBlob(s: {
       const sectionStart = headerHeight + 20;
 
       const detailLines = [
-        { label: "Sale #", value: s.saleNumber },
-        { label: "Date", value: formatDateLong(s.createdAt) },
-        { label: "Time", value: formatTime12(s.createdAt) },
-        { label: "Customer", value: s.customerName },
-        { label: "Phone", value: s.customerPhone || "N/A" },
-        { label: "Sold by", value: s.employeeName },
-        { label: "Method", value: s.paymentMethod === "cash" ? "Cash" : "Bank Transfer" },
-        { label: "Payment", value: s.paymentType === "full" ? "Full Payment" : "Partial / Credit" },
+        { label: t("receipt.saleNo"), value: s.saleNumber },
+        { label: t("receipt.date"), value: formatDateLong(s.createdAt) },
+        { label: t("receipt.time"), value: formatTime12(s.createdAt) },
+        { label: t("receipt.customer"), value: s.customerName },
+        { label: t("receipt.phone"), value: s.customerPhone || "N/A" },
+        { label: t("receipt.soldBy"), value: s.employeeName },
+        { label: t("receipt.method"), value: s.paymentMethod === "cash" ? t("receipt.cash") : t("receipt.bankTransfer") },
+        { label: t("receipt.payment"), value: s.paymentType === "full" ? t("receipt.fullPayment") : t("receipt.partialCredit") },
       ];
 
       const itemsHeight = s.items.length * 26 + 40;
@@ -186,7 +188,7 @@ export function renderReceiptBlob(s: {
       y += 12;
 
       ctx.font = "bold 12px sans-serif"; ctx.fillStyle = "#888888";
-      ctx.fillText("ITEMS", cardMargin + 24, y);
+      ctx.fillText(t("receipt.items"), cardMargin + 24, y);
       y += 18;
 
       for (const item of s.items) {
@@ -204,10 +206,10 @@ export function renderReceiptBlob(s: {
       y += 20;
 
       const summaryItems = [
-        { label: "Subtotal", value: formatCurrency(s.subtotal) },
-        { label: "Paid", value: formatCurrency(s.amountPaid), color: "#22c55e" },
+        { label: t("receipt.subtotal"), value: formatCurrency(s.subtotal) },
+        { label: t("receipt.paid"), value: formatCurrency(s.amountPaid), color: "#22c55e" },
         ...(s.outstandingBalance > 0
-          ? [{ label: "Outstanding", value: formatCurrency(s.outstandingBalance), color: "#ef4444" }]
+          ? [{ label: t("receipt.outstanding"), value: formatCurrency(s.outstandingBalance), color: "#ef4444" }]
           : []),
       ];
       for (const si of summaryItems) {
@@ -224,7 +226,7 @@ export function renderReceiptBlob(s: {
       ctx.beginPath(); ctx.moveTo(cardMargin + 24, y); ctx.lineTo(W - cardMargin - 24, y); ctx.stroke();
       y += 24;
       ctx.font = "bold 14px sans-serif"; ctx.fillStyle = "#1a1a1a";
-      ctx.fillText("TOTAL", cardMargin + 24, y);
+      ctx.fillText(t("receipt.total"), cardMargin + 24, y);
       ctx.font = "bold 20px sans-serif";
       ctx.textAlign = "right";
       ctx.fillText(formatCurrency(s.totalAmount), W - cardMargin - 24, y);

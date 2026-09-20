@@ -5,6 +5,7 @@ import { useAuthStore } from "@/stores/authStore";
 import { useShopRequestsStore } from "@/stores/shopRequestsStore";
 import { normalizePhone } from "@/lib/auth";
 import { Clock, CheckCircle, XCircle, RefreshCw } from "lucide-react";
+import { useT } from "@/lib/i18n";
 
 const STATUS_CONFIG = {
   pending: {
@@ -42,6 +43,7 @@ const STATUS_CONFIG = {
 };
 
 export default function RegisterStatusPage() {
+  const t = useT();
   const navigate = useNavigate();
   const { pendingPhone } = useAuthStore();
   const { myRequest, loadMyRequest, loading } = useShopRequestsStore();
@@ -105,23 +107,23 @@ export default function RegisterStatusPage() {
             style={{ background: "var(--surface)" }}
           >
             <p className="text-xs font-bold mb-3" style={{ color: "var(--text-secondary)" }}>
-              REGISTRATION DETAILS
+              {t("register.details")}
             </p>
             <div className="flex flex-col gap-2">
               <div className="flex justify-between">
-                <span className="text-sm" style={{ color: "var(--text-secondary)" }}>Shop Name</span>
+                <span className="text-sm" style={{ color: "var(--text-secondary)" }}>{t("common.shopName")}</span>
                 <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>{myRequest.shopName}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-sm" style={{ color: "var(--text-secondary)" }}>Owner</span>
+                <span className="text-sm" style={{ color: "var(--text-secondary)" }}>{t("settings.owner")}</span>
                 <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>{myRequest.ownerName}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-sm" style={{ color: "var(--text-secondary)" }}>Phone</span>
+                <span className="text-sm" style={{ color: "var(--text-secondary)" }}>{t("addEmployee.labelPhone")}</span>
                 <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>{myRequest.ownerPhone}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-sm" style={{ color: "var(--text-secondary)" }}>Submitted</span>
+                <span className="text-sm" style={{ color: "var(--text-secondary)" }}>{t("common.submitted")}</span>
                 <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
                   {new Date(myRequest.createdAt).toLocaleDateString()}
                 </span>
@@ -138,7 +140,7 @@ export default function RegisterStatusPage() {
               className="w-full h-12 rounded-full font-bold text-sm"
               style={{ background: "var(--brand)", color: "#0a0a0a" }}
             >
-              Login to Your Shop
+              {t("register.loginToShop")}
             </button>
           )}
 
@@ -148,7 +150,7 @@ export default function RegisterStatusPage() {
               className="w-full h-12 rounded-full font-bold text-sm"
               style={{ background: "var(--brand)", color: "#0a0a0a" }}
             >
-              Try Again
+              {t("common.tryAgain")}
             </button>
           )}
 
@@ -159,7 +161,7 @@ export default function RegisterStatusPage() {
               style={{ background: "var(--surface)", color: "var(--text-primary)", border: "1px solid var(--divider)" }}
             >
               <RefreshCw size={16} />
-              Refresh Status
+              {t("register.refreshStatus")}
             </button>
           )}
 
@@ -168,7 +170,7 @@ export default function RegisterStatusPage() {
             className="w-full h-12 rounded-full font-bold text-sm"
             style={{ background: "transparent", color: "var(--text-secondary)" }}
           >
-            Back to Login
+            {t("auth.backToLogin")}
           </button>
         </div>
       </div>

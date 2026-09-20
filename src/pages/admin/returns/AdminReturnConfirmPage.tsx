@@ -108,10 +108,10 @@ export default function AdminReturnConfirmPage() {
     <div className="flex flex-col w-full min-h-full justify-between" style={{ background: "var(--background)" }}>
       <div>
         <StatusBar />
-        <NavHeader title="Confirm Return" />
+        <NavHeader title={t("returns.confirm")} />
 
         <div className="mx-4 mt-3 rounded-[14px] p-4 text-center" style={{ border: "1px solid var(--divider)" }}>
-          <p className="text-[10px] uppercase" style={{ color: "var(--text-secondary)" }}>Estimated Refund</p>
+          <p className="text-[10px] uppercase" style={{ color: "var(--text-secondary)" }}>{t("returns.estimatedRefund")}</p>
           <p className="text-[28px] font-bold mt-1" style={{ color: "var(--text-primary)" }}>{formatCurrency(liveTotal)}</p>
         </div>
 
@@ -119,25 +119,25 @@ export default function AdminReturnConfirmPage() {
           {/* Mandatory Return Reason */}
           <div>
             <p className="text-xs font-bold uppercase mb-2" style={{ color: "var(--text-secondary)" }}>
-              Return Reason <span style={{ color: "#ef4444" }}>*</span>
+              {t("returns.reason")}<span style={{ color: "#ef4444" }}>*</span>
             </p>
             <input
               value={reason}
               onChange={(e) => setReason(e.target.value)}
-              placeholder="e.g. Customer changed mind, defective product..."
+              placeholder={t("returns.reasonPlaceholder")}
               className="w-full h-11 rounded-full px-4 text-sm outline-none"
               style={{ background: "var(--surface-2)", border: "1px solid var(--divider)", color: "var(--text-primary)" }}
             />
             {!reason.trim() && (
               <p className="text-[11px] mt-1 ms-4" style={{ color: "var(--text-secondary)" }}>
-                Reason is required to process return
+                {t("returns.reasonRequired")}
               </p>
             )}
           </div>
 
           {/* Items with editable prices */}
           <div>
-            <p className="text-xs font-bold uppercase mb-2" style={{ color: "var(--text-secondary)" }}>Returning Items</p>
+            <p className="text-xs font-bold uppercase mb-2" style={{ color: "var(--text-secondary)" }}>{t("admin.returningItems")}</p>
             <div className="rounded-[14px] overflow-hidden" style={{ border: "1px solid var(--divider)" }}>
               {items.map((item, i) => (
                 <div key={item.saleItemId} className="p-4" style={{ borderBottom: i < items.length - 1 ? "1px solid var(--divider)" : "none" }}>
@@ -164,7 +164,7 @@ export default function AdminReturnConfirmPage() {
 
           {/* Resolution method */}
           <div>
-            <p className="text-xs font-bold uppercase mb-2" style={{ color: "var(--text-secondary)" }}>Resolution Method</p>
+            <p className="text-xs font-bold uppercase mb-2" style={{ color: "var(--text-secondary)" }}>{t("admin.resolutionMethod")}</p>
             <div className="flex gap-2">
               {([ { key: "refund_cash" as const, label: t("return.refundCash") }, { key: "credit_note" as const, label: t("return.creditNote") } ]).map((opt) => (
                 <button key={opt.key} onClick={() => setResolution(opt.key)}
@@ -184,7 +184,7 @@ export default function AdminReturnConfirmPage() {
           <div className="rounded-[14px] p-4 flex gap-3" style={{ border: "1px solid var(--divider)" }}>
             <AlertTriangle size={16} className="shrink-0 mt-0.5" style={{ color: "var(--text-secondary)" }} />
             <div>
-              <p className="text-xs font-bold uppercase mb-1" style={{ color: "var(--text-primary)" }}>Refund Processing</p>
+              <p className="text-xs font-bold uppercase mb-1" style={{ color: "var(--text-primary)" }}>{t("admin.refundProcessing")}</p>
               <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
                 {formatCurrency(liveTotal)} will be{" "}
                 {resolution === "refund_cash" ? t("return.returnedDirectly") : t("return.addedAsCreditNote")}{" "}
@@ -197,7 +197,7 @@ export default function AdminReturnConfirmPage() {
 
       <div className="p-4">
         <Button fullWidth size="lg" onClick={handleConfirm} loading={loading} disabled={!reason.trim()}>
-          Confirm Return
+          {t("returns.confirm")}
         </Button>
       </div>
     </div>

@@ -110,7 +110,7 @@ export default function ProductsListPage() {
       {filtered.length === 0 ? (
         <div className="flex flex-col items-center py-16 gap-2">
           <p className="text-3xl">📦</p>
-          <p className="text-sm" style={{ color: "var(--text-secondary)" }}>No products found</p>
+          <p className="text-sm" style={{ color: "var(--text-secondary)" }}>{t("admin.noProducts")}</p>
         </div>
       ) : (
         <div className="flex flex-col">

@@ -78,12 +78,12 @@ export default function AdminReturnSuccessPage() {
         <button onClick={() => navigate("/admin/dashboard", { replace: true })}
           className="flex h-[48px] items-center justify-center gap-2 rounded-[24px] w-full font-bold text-[14px] transition-transform active:scale-[0.97]"
           style={{ background: "var(--brand)", color: "#0a0a0a" }}>
-          <Home size={16} strokeWidth={2.5} /> Back to Dashboard
+          <Home size={16} strokeWidth={2.5} /> {t("returns.backDashboard")}
         </button>
         <button onClick={() => navigate(`/admin/sales/${result.saleId}`)}
           className="flex h-[48px] items-center justify-center gap-2 rounded-[24px] w-full font-bold text-[14px] transition-transform active:scale-[0.97]"
           style={{ border: "1px solid var(--border-light)", color: "var(--text-primary)" }}>
-          <Receipt size={16} strokeWidth={2} /> View Original Sale
+          <Receipt size={16} strokeWidth={2} /> {t("returns.viewSale")}
         </button>
       </div>
     </div>

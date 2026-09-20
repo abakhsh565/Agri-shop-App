@@ -5,8 +5,10 @@ import NavHeader from "@/components/ui/NavHeader";
 import PINInput from "@/components/ui/PINInput";
 import { savePin } from "@/lib/pinLock";
 import { useAuthStore } from "@/stores/authStore";
+import { useT } from "@/lib/i18n";
 
 export default function PINSetPage() {
+  const t = useT();
   const navigate = useNavigate();
   const location = useLocation();
   const returnTo = (location.state as { returnTo?: string } | null)?.returnTo;
@@ -57,18 +59,18 @@ export default function PINSetPage() {
 
   return (
     <AuthLayout>
-      <NavHeader title={step === "set" ? "Set PIN" : "Confirm PIN"} noBack />
+      <NavHeader title={step === "set" ? t("auth.setPinBtn") : t("auth.confirmPinBtn")} noBack />
       <div className="flex flex-col flex-1 items-center gap-8 p-6 pt-12">
         <div className="flex flex-col items-center gap-2 text-center">
           <p className="text-xl font-bold text-black">
-            {step === "set" ? "Set a 4-digit PIN" : "Confirm your PIN"}
+            {step === "set" ? t("auth.setPinHelp") : t("auth.confirmPin")}
           </p>
           <p className="text-sm text-[#888]">
             {step === "set"
-              ? "You'll use this PIN to sign in quickly on this device"
-              : "Re-enter your PIN to confirm"}
+              ? t("auth.pinSetHintQuick")
+              : t("auth.pinReenterHint")}
           </p>
-          {error && <p className="text-sm text-[#ef4444]">PINs don't match. Try again.</p>}
+          {error && <p className="text-sm text-[#ef4444]">{t("auth.pinMismatch")}</p>}
         </div>
         <PINInput value={pin} onChange={handleChange} error={error} shake={shake} />
       </div>

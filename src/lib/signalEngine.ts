@@ -33,7 +33,8 @@ export interface LiveSignal {
   entity_id: string;
   entity_name: string;
   title: string;
-  detail: string;            // human-readable: what + why it matters
+  detailKey: string;         // i18n key — the UI resolves it with t(); never raw English
+  detailParams?: Record<string, string>; // values substituted into the detail text
   reason?: string;           // why this requires attention now
   recommendedAction?: string; // what the admin should do
   signalAction?: SignalAction; // how the UI should handle the action
@@ -99,7 +100,8 @@ function computeOverdueCreditSignals(
         entity_id: c.id,
         entity_name: c.name,
         title: c.name,
-        detail: `Rs. ${amount} overdue ${overdueDays} days`,
+        detailKey: "signal.detailOverdue",
+        detailParams: { amount: String(amount), days: String(overdueDays) },
         reason: `Payment of Rs. ${amount} was due ${overdueDays} day${overdueDays > 1 ? "s" : ""} ago and has not been received.`,
         recommendedAction: "Review customer payment history and follow up.",
         signalAction: "review" as SignalAction,
@@ -139,7 +141,8 @@ function computeCreditLimitSignals(
         entity_id: c.id,
         entity_name: c.name,
         title: c.name,
-        detail: `Rs. ${outstanding} of Rs. ${limit} limit (${usagePct}%)`,
+        detailKey: "signal.detailCreditLimit",
+        detailParams: { outstanding: String(outstanding), limit: String(limit), pct: String(usagePct) },
         reason: `${c.name} has exceeded their Rs. ${limit} credit limit by Rs. ${outstanding}. Outstanding credit should be reviewed.`,
         recommendedAction: "Review credit exposure and consider requesting payment.",
         signalAction: "review" as SignalAction,
@@ -171,7 +174,8 @@ function computeNoDueDateSignals(
       entity_id: c.id,
       entity_name: c.name,
       title: c.name,
-      detail: `Rs. ${Math.round(c.outstandingBalance).toLocaleString("en-PK")} outstanding — no due date set`,
+      detailKey: "signal.detailNoDueDate",
+      detailParams: { amount: Math.round(c.outstandingBalance).toLocaleString("en-PK") },
       reason: `${c.name} has an outstanding balance but no payment due date is configured.`,
       recommendedAction: "Set a due date to enable payment tracking.",
       signalAction: "review" as SignalAction,
@@ -201,7 +205,8 @@ function computeMissingInfoSignals(
         entity_id: c.id,
         entity_name: c.name,
         title: c.name,
-        detail: `Missing ${missing.join(" & ")}`,
+        detailKey: "signal.detailMissing",
+        detailParams: { fields: missing.join(" & ") },
         reason: `${c.name} is missing ${missing.join(" and ")} information.`,
         recommendedAction: "Update customer profile with complete information.",
         signalAction: "review" as SignalAction,
@@ -243,7 +248,8 @@ function computeSupplierPayableSignals(
           entity_id: c.id,
           entity_name: c.name,
           title: c.name,
-          detail: `Rs. ${amt} payable overdue ${overdueDays} days`,
+          detailKey: "signal.detailPayableOverdue",
+          detailParams: { amount: String(amt), days: String(overdueDays) },
           reason: `Payment of Rs. ${amt} to ${c.name} was due ${overdueDays} day${overdueDays > 1 ? "s" : ""} ago.`,
           recommendedAction: "Record supplier payment.",
           signalAction: "review" as SignalAction,
@@ -263,7 +269,8 @@ function computeSupplierPayableSignals(
           entity_id: c.id,
           entity_name: c.name,
           title: c.name,
-          detail: `Rs. ${amt} payable due today`,
+          detailKey: "signal.detailPayableToday",
+          detailParams: { amount: String(amt) },
           reason: `Rs. ${amt} payment to ${c.name} is due today.`,
           recommendedAction: "Record supplier payment before due date.",
           signalAction: "review" as SignalAction,
@@ -285,7 +292,8 @@ function computeSupplierPayableSignals(
         entity_id: c.id,
         entity_name: c.name,
         title: c.name,
-        detail: `Rs. ${amt} payable — no due date set`,
+        detailKey: "signal.detailPayableNoDue",
+        detailParams: { amount: String(amt) },
         reason: `${c.name} has an outstanding payable but no due date is configured.`,
         recommendedAction: "Set a due date for this supplier.",
         signalAction: "review" as SignalAction,
@@ -314,7 +322,7 @@ function computeOutOfStockSignals(
       entity_id: p.id,
       entity_name: p.name,
       title: p.name,
-      detail: `Out of stock`,
+      detailKey: "signal.detailOutOfStock",
       reason: `${p.name} has no stock available. Cannot fulfill customer orders.`,
       recommendedAction: "Review inventory and arrange replenishment.",
       signalAction: "review" as SignalAction,
@@ -349,7 +357,8 @@ function computeLowStockSignals(
         entity_id: p.id,
         entity_name: p.name,
         title: p.name,
-        detail: `${p.stockQty} remaining — threshold: ${threshold}`,
+        detailKey: "signal.detailLowStock",
+        detailParams: { qty: String(p.stockQty), threshold: String(threshold) },
         reason: `${p.name} is running low on stock (${p.stockQty} of ${threshold} threshold).`,
         recommendedAction: "Consider restocking soon.",
         signalAction: "review" as SignalAction,
@@ -378,12 +387,13 @@ function computeExpirySignals(
 
       // Signal fires when within warning window (including past expiry)
       if (daysUntil <= EXPIRY_WARNING_DAYS) {
-        const detail =
+        const detailKey =
           daysUntil < 0
-            ? `Expired ${Math.abs(daysUntil)} days ago`
+            ? "signal.detailExpired"
             : daysUntil === 0
-              ? "Expires today"
-              : `Expires in ${daysUntil} days`;
+              ? "signal.detailExpiresToday"
+              : "signal.detailExpiresIn";
+        const detailParams = { days: String(Math.abs(daysUntil)) };
 
         const productName = `${p.name} (${v.name})`;
         // Priority: fewer days = higher priority
@@ -397,7 +407,8 @@ function computeExpirySignals(
           entity_id: v.id,
           entity_name: `${p.name} — ${v.name}`,
           title: productName,
-          detail,
+          detailKey,
+          detailParams,
           reason: daysUntil <= 0
             ? `${productName} expired ${Math.abs(daysUntil)} days ago and cannot be sold.`
             : `${productName} expires in ${daysUntil} days. Consider selling or removing from inventory.`,
@@ -438,7 +449,8 @@ export function computeCreditRequestSignals(requests: CreditRequestInput[]): Liv
       entity_id: r.customerId,
       entity_name: r.customerName,
       title: r.customerName,
-      detail: "Credit increase request: Rs. " + current + " → Rs. " + requested,
+      detailKey: "signal.detailCreditRequest",
+      detailParams: { from: current, to: requested },
       reason: r.customerName + " is requesting a credit limit increase from Rs. " + current + " to Rs. " + requested + (r.reason ? ". Reason: " + r.reason : "") + ".",
       recommendedAction: "Approve or reject the request.",
       signalAction: "approve_reject" as SignalAction,

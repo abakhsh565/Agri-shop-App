@@ -136,7 +136,7 @@ export default function SaleReviewPage() {
           </div>
           <div className="flex justify-between py-1">
             <span className="text-sm text-[#888]">{t("saleReview.salesTax")}</span>
-            <span className="text-sm font-medium text-black">Rs. 0</span>
+            <span className="text-sm font-medium text-black">{formatCurrency(0)}</span>
           </div>
           <div className="border-t border-[#e5e5e5] my-2" />
           <div className="flex justify-between py-1">

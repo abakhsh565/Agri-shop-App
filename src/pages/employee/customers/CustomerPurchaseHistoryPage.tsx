@@ -118,7 +118,7 @@ export default function CustomerPurchaseHistoryPage() {
           </div>
           <div>
             <p className="text-[10px] uppercase" style={{ color: "var(--text-secondary)" }}>
-              Total Sales
+              {t("admin.totalSales")}
             </p>
             <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>
               {formatCurrency(totalSalesAmount)}
@@ -153,7 +153,7 @@ export default function CustomerPurchaseHistoryPage() {
           <div className="absolute inset-0 bg-black/40" />
           <div className="relative w-full max-w-md rounded-t-2xl p-5 pb-8 animate-slide-up" style={{ background: "var(--surface)" }} onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
-              <p className="text-[15px] font-bold" style={{ color: "var(--text-primary)" }}>Select Date Range</p>
+              <p className="text-[15px] font-bold" style={{ color: "var(--text-primary)" }}>{t("admin.selectDateRange")}</p>
               <button onClick={() => setShowDateModal(false)} className="text-xl" style={{ color: "var(--text-secondary)" }}>×</button>
             </div>
             <div className="flex gap-3">
@@ -167,8 +167,8 @@ export default function CustomerPurchaseHistoryPage() {
               </div>
             </div>
             <div className="flex gap-2 mt-4">
-              <button onClick={() => { setCustomFrom(""); setCustomTo(""); setFilter("custom"); setShowDateModal(false); }} className="flex-1 h-10 rounded-xl text-[13px] font-semibold" style={{ background: "var(--surface-2)", color: "var(--text-secondary)" }}>Clear</button>
-              <button onClick={() => { setShowDateModal(false); setFilter("custom"); }} className="flex-1 h-10 rounded-xl text-[13px] font-bold" style={{ background: "var(--brand)", color: "#0a0a0a" }}>Apply</button>
+              <button onClick={() => { setCustomFrom(""); setCustomTo(""); setFilter("custom"); setShowDateModal(false); }} className="flex-1 h-10 rounded-xl text-[13px] font-semibold" style={{ background: "var(--surface-2)", color: "var(--text-secondary)" }}>{t("reports.clear")}</button>
+              <button onClick={() => { setShowDateModal(false); setFilter("custom"); }} className="flex-1 h-10 rounded-xl text-[13px] font-bold" style={{ background: "var(--brand)", color: "#0a0a0a" }}>{t("reports.apply")}</button>
             </div>
           </div>
         </div>

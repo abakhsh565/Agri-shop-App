@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { X, Plus, Trash2 } from "lucide-react";
 import type { CropConfig, BusinessSettings } from "@/types";
+import { useT } from "@/lib/i18n";
 
 const PRESET_CROPS = ["Cotton", "Wheat", "Rice", "Sugarcane", "Maize", "Tobacco"];
 const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
@@ -14,6 +15,7 @@ function saveSettings(s: BusinessSettings) { localStorage.setItem("business_sett
 interface Props { onClose: () => void; onSave: () => void; }
 
 export default function BusinessSettingsSheet({ onClose, onSave }: Props) {
+  const t = useT();
   const [settings, setSettings] = useState<BusinessSettings>(loadSettings);
   const [customCrop, setCustomCrop] = useState("");
   const selectedNames = settings.crops.map(c => c.name);
@@ -80,7 +82,7 @@ export default function BusinessSettingsSheet({ onClose, onSave }: Props) {
 
         {/* Header */}
         <div className="px-5 pb-4 flex items-center justify-between">
-          <p className="text-[16px] font-semibold" style={{ color: "var(--text-primary)" }}>Business Settings</p>
+          <p className="text-[16px] font-semibold" style={{ color: "var(--text-primary)" }}>{t("common.businessSettings")}</p>
           <button
             onClick={onClose}
             className="size-8 rounded-full flex items-center justify-center"
@@ -95,7 +97,7 @@ export default function BusinessSettingsSheet({ onClose, onSave }: Props) {
 
           {/* Crop selection */}
           <div>
-            <p className={labelCls} style={{ color: "var(--text-secondary)" }}>Crops you deal with</p>
+            <p className={labelCls} style={{ color: "var(--text-secondary)" }}>{t("settings.cropsQuestion")}</p>
             <div className="flex flex-wrap gap-2">
               {PRESET_CROPS.map(crop => {
                 const active = selectedNames.includes(crop);
@@ -122,7 +124,7 @@ export default function BusinessSettingsSheet({ onClose, onSave }: Props) {
                 value={customCrop}
                 onChange={(e) => setCustomCrop(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter") addCustomCrop(); }}
-                placeholder="Add custom crop..."
+                placeholder={t("bizSettings.addCropPlaceholder")}
                 className="flex-1 h-12 px-4 text-[13px] outline-none"
                 style={{ ...fieldStyle, borderRadius: "24px" }}
               />
@@ -139,7 +141,7 @@ export default function BusinessSettingsSheet({ onClose, onSave }: Props) {
           {/* Harvest periods — card-based like Add Product variants */}
           {settings.crops.length > 0 && (
             <div>
-              <p className={labelCls} style={{ color: "var(--text-secondary)" }}>Harvest periods</p>
+              <p className={labelCls} style={{ color: "var(--text-secondary)" }}>{t("settings.harvestPeriods")}</p>
               <div className="flex flex-col gap-3">
                 {settings.crops.map(crop => (
                   <div
@@ -167,7 +169,7 @@ export default function BusinessSettingsSheet({ onClose, onSave }: Props) {
                     {/* Harvest month + day — full width selects matching Add Product */}
                     <div className="flex gap-2">
                       <div className="flex-1 relative">
-                        <p className="text-[10px] font-medium mb-1" style={{ color: "var(--text-secondary)" }}>Month</p>
+                        <p className="text-[10px] font-medium mb-1" style={{ color: "var(--text-secondary)" }}>{t("settings.month")}</p>
                         <select
                           value={crop.harvestMonth}
                           onChange={(e) => updateHarvestMonth(crop.name, parseInt(e.target.value))}
@@ -211,7 +213,7 @@ export default function BusinessSettingsSheet({ onClose, onSave }: Props) {
             className="w-full h-12 rounded-full text-[14px] font-bold transition-opacity active:opacity-80"
             style={{ background: "var(--brand)", color: "#0a0a0a" }}
           >
-            Save Business Settings
+            {t("settings.saveBusinessSettings")}
           </button>
         </div>
       </div>

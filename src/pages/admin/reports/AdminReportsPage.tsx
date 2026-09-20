@@ -9,15 +9,16 @@ import { useCustomersStore } from "@/stores/customersStore";
 import { useCompaniesStore } from "@/stores/companiesStore";
 import { TrendingUp, Receipt, Wallet, AlertTriangle, Calendar } from "lucide-react";
 import { pkToday } from "@/lib/pkDate";
+import { useT } from "@/lib/i18n";
 
 type Period = "today" | "week" | "month" | "all" | "custom";
 
-const PERIODS: { key: Period; label: string }[] = [
-  { key: "today", label: "Today" },
-  { key: "week", label: "This Week" },
-  { key: "month", label: "This Month" },
-  { key: "all", label: "All Time" },
-  { key: "custom", label: "Custom" },
+const PERIODS: { key: Period; labelKey: string }[] = [
+  { key: "today", labelKey: "sales.today" },
+  { key: "week", labelKey: "sales.thisWeek" },
+  { key: "month", labelKey: "sales.thisMonth" },
+  { key: "all", labelKey: "sales.allTime" },
+  { key: "custom", labelKey: "admin.customDateRange" },
 ];
 
 function startOf(period: Period, customFrom?: string, customTo?: string): { from: number; to: number } {
@@ -43,6 +44,7 @@ function startOf(period: Period, customFrom?: string, customTo?: string): { from
 }
 
 export default function AdminReportsPage() {
+  const t = useT();
   const { language } = useThemeStore();
   const isUrdu = language === "ur";
   const [period, setPeriod] = useState<Period>("month");
@@ -118,7 +120,7 @@ export default function AdminReportsPage() {
       style={{ background: "var(--background)", direction: isUrdu ? "rtl" : "ltr" }}
     >
       <StatusBar />
-      <NavHeader title="Reports" />
+      <NavHeader title={t("admin.reports")} />
 
       {/* Period filter — horizontal scroll */}
       <div
@@ -139,7 +141,7 @@ export default function AdminReportsPage() {
             }}
           >
             {p.key === "custom" && <Calendar size={12} className="inline me-1 -mt-0.5" />}
-            {p.label}
+            {t(p.labelKey)}
           </button>
         ))}
       </div>
@@ -157,39 +159,39 @@ export default function AdminReportsPage() {
       <div className="px-4 pt-3">
         <div className="rounded-[16px] p-5" style={{ background: "var(--brand)" }}>
           <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "rgba(0,0,0,0.55)" }}>
-            Gross Profit
+            {t("admin.grossProfit")}
           </p>
           <p className="text-[34px] font-bold leading-tight" style={{ color: "#0a0a0a" }}>
             {formatCurrency(report.grossProfit)}
           </p>
           <div className="flex items-center gap-1.5 mt-1" style={{ color: "rgba(0,0,0,0.7)" }}>
             <TrendingUp size={13} />
-            <span className="text-xs font-semibold">{report.margin.toFixed(1)}% margin · Revenue {formatCurrency(report.revenue)}</span>
+            <span className="text-xs font-semibold">{t("reports.marginRevenue", { margin: report.margin.toFixed(1), revenue: formatCurrency(report.revenue) })}</span>
           </div>
         </div>
       </div>
 
       {/* Stat grid */}
       <div className="grid grid-cols-2 gap-3 px-4 pt-3">
-        <Stat icon={Receipt} label="Transactions" value={String(report.count)} />
-        <Stat icon={Wallet} label="Cost of goods" value={formatCurrency(report.cogs)} />
-        <Stat icon={Wallet} label="Cash collected" value={formatCurrency(report.collected)} tone="good" />
-        <Stat icon={Wallet} label="On credit" value={formatCurrency(report.credit)} tone={report.credit > 0 ? "warn" : undefined} />
+        <Stat icon={Receipt} label={t("admin.transactions")} value={String(report.count)} />
+        <Stat icon={Wallet} label={t("reports.costOfGoods")} value={formatCurrency(report.cogs)} />
+        <Stat icon={Wallet} label={t("reports.cashCollected")} value={formatCurrency(report.collected)} tone="good" />
+        <Stat icon={Wallet} label={t("reports.onCredit")} value={formatCurrency(report.credit)} tone={report.credit > 0 ? "warn" : undefined} />
       </div>
 
       {/* Standing balances */}
       <div className="px-4 pt-5">
-        <SectionTitle>Standing balances</SectionTitle>
+        <SectionTitle>{t("reports.standingBalances")}</SectionTitle>
         <div className="rounded-[14px] overflow-hidden" style={{ border: "1px solid var(--divider)" }}>
-          <BalanceRow label="Customer credit outstanding" value={formatCurrency(report.outstandingCredit)} tone={report.outstandingCredit > 0 ? "warn" : "good"} />
-          <BalanceRow label="Supplier payable" value={formatCurrency(report.supplierPayable)} tone={report.supplierPayable > 0 ? "bad" : "good"} last />
+          <BalanceRow label={t("reports.customerCreditOutstanding")} value={formatCurrency(report.outstandingCredit)} tone={report.outstandingCredit > 0 ? "warn" : "good"} />
+          <BalanceRow label={t("reports.supplierPayable")} value={formatCurrency(report.supplierPayable)} tone={report.supplierPayable > 0 ? "bad" : "good"} last />
         </div>
       </div>
 
       {/* Top employees */}
       {report.topEmployees.length > 0 && (
         <div className="px-4 pt-5">
-          <SectionTitle>Sales by employee</SectionTitle>
+          <SectionTitle>{t("reports.salesByEmployee")}</SectionTitle>
           <div className="rounded-[14px] overflow-hidden" style={{ border: "1px solid var(--divider)" }}>
             {report.topEmployees.map((e, i, arr) => (
               <div key={`${e.name}-${i}`} className="flex items-center justify-between px-4 py-3"
@@ -205,7 +207,7 @@ export default function AdminReportsPage() {
       {/* Top products */}
       {report.topProducts.length > 0 && (
         <div className="px-4 pt-5 pb-2">
-          <SectionTitle>Top products</SectionTitle>
+          <SectionTitle>{t("reports.topProducts")}</SectionTitle>
           <div className="rounded-[14px] overflow-hidden" style={{ border: "1px solid var(--divider)" }}>
             {report.topProducts.map((p, i, arr) => (
               <div key={p.name} className="flex items-center justify-between px-4 py-3"
@@ -236,7 +238,7 @@ export default function AdminReportsPage() {
       {report.count === 0 && (
         <div className="flex flex-col items-center py-16 gap-2">
           <p className="text-3xl">📊</p>
-          <p className="text-sm" style={{ color: "var(--text-secondary)" }}>No sales in this period</p>
+          <p className="text-sm" style={{ color: "var(--text-secondary)" }}>{t("reports.noSalesInPeriod")}</p>
         </div>
       )}
 
@@ -245,7 +247,7 @@ export default function AdminReportsPage() {
         <div className="fixed inset-0 z-50 flex items-end" style={{ background: "rgba(0,0,0,0.5)" }} onClick={() => setShowDateModal(false)}>
           <div className="w-full max-w-[390px] mx-auto rounded-t-[24px] p-6 flex flex-col gap-4"
             style={{ background: "var(--surface)" }} onClick={(e) => e.stopPropagation()}>
-            <p className="text-base font-bold text-center" style={{ color: "var(--text-primary)" }}>Select Date Range</p>
+            <p className="text-base font-bold text-center" style={{ color: "var(--text-primary)" }}>{t("admin.selectDateRange")}</p>
             <div className="flex gap-3">
               <div className="flex-1">
                 <p className="text-xs font-bold uppercase mb-1" style={{ color: "var(--text-secondary)" }}>From</p>
@@ -260,9 +262,9 @@ export default function AdminReportsPage() {
             </div>
             <div className="flex gap-3">
               <button onClick={() => { setCustomFrom(""); setCustomTo(""); }}
-                className="flex-1 h-12 rounded-full text-sm font-bold" style={{ border: "1px solid var(--divider)", color: "var(--text-primary)" }}>Clear</button>
+                className="flex-1 h-12 rounded-full text-sm font-bold" style={{ border: "1px solid var(--divider)", color: "var(--text-primary)" }}>{t("reports.clear")}</button>
               <button onClick={() => setShowDateModal(false)}
-                className="flex-1 h-12 rounded-full text-sm font-bold" style={{ background: "var(--brand)", color: "#0a0a0a" }}>Apply</button>
+                className="flex-1 h-12 rounded-full text-sm font-bold" style={{ background: "var(--brand)", color: "#0a0a0a" }}>{t("reports.apply")}</button>
             </div>
           </div>
         </div>

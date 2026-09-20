@@ -18,7 +18,7 @@ Production has not been touched. Every claim below names the evidence that suppo
 | Permissions | Verified | `permissions` (32, with EN/UR labels). `get_effective_permissions()` / `has_effective_permission()` are the single source of truth. |
 | Role defaults | Verified | Changing a role updates every member on it, live (no permission snapshot copied onto the employee). Tests: rbacEnforcement propagation (added + removed). |
 | Employee overrides | Verified | `user_permissions.is_override`. Explicit allow and explicit deny both proven. Browser: Save → DB row → UI 6→7 permissions. |
-| Reset to role defaults | Verified | Browser: "Reset to Role Defaults" → DB override rows 0 → UI back to 6. |
+| Reset to role defaults | Verified | Browser: "Use role access only" → DB override rows 0 → UI back to the role's set. Also asserted in `tests/e2e/accessUx.spec.ts` (§1.8). |
 | Effective access | Verified | Role defaults + overrides + branch scope + active status, resolved server-side; `get_my_permissions()` returns the authoritative set. |
 | Branch scope | Verified | `branch_id` on 7 operational tables + 7 enforcement triggers + RESTRICTIVE read policies. 0 records without a branch. 9/9 branch tests. |
 | Backend authorization | Verified | 36 of 43 write RPCs carry an authorization guard; the remainder are internal/trigger helpers or admin-gated and are explicitly allowlisted. |
@@ -249,6 +249,139 @@ rather than silently changed.
   (10,000 + 7,200 + 5,000 + 5,000 = 27,200), and `create_sale` stamps `employee_id` from
   the authenticated actor, so every product-created sale is attributed. Unattributed rows
   can only come from raw fixture SQL. No business meaning changed.
+
+### 1.8 Employee / job-access screens speak the owner's language (and one real bug fell out)
+
+The award for the simplest thing to get wrong: the access screens were built from the
+inside out, showing the shop owner permission counts, "effective permissions",
+"employee exceptions", "inherited from role", "branch scope" and "role template" — and
+asking the same question twice (a legacy Owner/Admin/Employee chip beside the real role).
+They now read as three decisions and one optional step:
+
+| Screen | Now shows |
+|---|---|
+| Add Employee | **who** (name, phone, optional photo/job title) → **what job** (role, with the access it gives in business areas) → **where** (a branch only when more than one exists) → **Review** |
+| Employee Detail | Role · Can work at · Access (business areas) · **Customize access** on demand · Deactivate/Reactivate |
+| Customize access | Role, where they can work, then areas with plain actions; legend **Comes from their role / Only for this employee / Turned off for this employee**; **Use role access only** + **Save** |
+| Roles & Access | Each role described by what it does and the areas it opens, plus **Employees: n** from the membership rows |
+
+**The real bug this uncovered:** the employee list printed an "Admin" chip on *every*
+employee. `employeesStore` maps the `users` table, which has no `membership_role` column,
+so `emp.membershipRole` is always `undefined` and the ternary fell through to the admin
+label. The list now shows the **Owner** chip only for `isOriginalOwner`, and the detail
+page takes the authoritative role from `get_employee_access()`. The users list is not the
+membership; nothing owner-facing may branch on membership fields it does not carry.
+
+Second copy defect: `permissions.action` is not a closed verb set (it contains
+`supplier`), so the raw-action fallback printed `View, supplier`. Area and action wording
+now comes from one shared module (`src/lib/permissionLabels.ts` + `area.*`/`action.*` keys
+in **EN and UR**), and the Urdu legend, headings and buttons render correctly with RTL and
+zero horizontal overflow.
+
+Verified: `tests/e2e/accessUx.spec.ts` **5/5** — the areas shown for a role equal that
+role's `role_permissions` modules (exact set equality, recomputed from the QA database); a
+created employee lands with the chosen `role_id`, `status='active'` and `branch_scope`;
+Customize access writes an `is_override` row and **Use role access only** removes it; no
+EN copy leaks into the Urdu flow; QA baseline returns to 4 users / 0 overrides.
+
+### 1.8 EN/UR coverage sweep — three classes of hardcoded English closed (2026-09-20)
+
+A "no hardcoded user-facing English" gate cannot be checked by looking for one pattern.
+There are **three** classes, and the first sweep only caught the first:
+
+1. JSX text nodes on one line (`>Scan Barcode<`)
+2. **JSX text on its own line** (`>\n  Gross Profit\n<` — invisible to a line-based regex)
+3. **Strings in arrays/props/templates** (`{ key: "today", label: "Today" }`,
+   `label="Transactions"`, `` `<title>Print Barcodes</title>` ``)
+
+Closed in this pass: shell chrome (PIN prompt, barcode sheet, offline sync label,
+`ErrorBoundary` — a class component now renders a functional `ErrorFallback` that can use
+`useT()`), all auth screens (login, PIN, OTP, forgot-PIN, splash, deactivated, not
+registered, rejected, under review), purchase/inventory/payment/reports labels, empty
+states, returns, register flow, and the Reports screen end-to-end (its PERIODS array now
+carries `labelKey` and resolves through `t()` — the array is module-level, so it can never
+call a hook).
+
+Evidence: Reports in Urdu/RTL renders `رپورٹس · آج · اس ہفتے · اس مہینے · اب تک ·
+حسب ضرورت · مجموعی منافع · لین دین · سامان کی لاگت · وصول شدہ نقدی` with **zero horizontal
+overflow**; `Reports`/`Today`/`TRANSACTIONS`/`COST OF GOODS` were English before the change.
+Live login page in Urdu shows `خوش آمدید`, the phone hint, the 6-digit hint and `کوڈ بھیجیں`.
+
+**Permanent guard:** `tests/unit/i18nCoverage.test.ts` (8 checks) — every `t()` key in `src`
+must exist in **both** dictionaries (both quote styles), every `*Key` config property must
+resolve, no hardcoded JSX text / UI attribute / ternary label, the signal engine must hand
+the UI keys, an inline-bilingual ratchet, and the AST ratchet described in 1.9.
+348/348 tests, `tsc` clean, production build clean.
+
+**Deliberately not translated:** the `AgriShop` brand, `Rs.` currency prefix from
+`formatCurrency`, `src/imports/**` (unreferenced Figma mock-ups), the Observation Bot's
+generated diagnostic report body (an engineer-facing dump, not product copy), role names
+and descriptions (tenant data in the DB), and crop names (data).
+
+### 1.9 Three blind spots the browser found — the AST guard that closes them (2026-09-20)
+
+Translation coverage was re-checked by driving the **real Urdu UI through every route** and
+reading the rendered DOM, not by re-reading the sweep that had already "passed". It found
+three classes the pattern-based checks could not see:
+
+1. **Single-quoted calls.** `t('overview') || 'Overview'` — the guard only matched `t("…")`,
+   so the Observation Bot panel's 12 keys silently fell back to English in Urdu. The owner's
+   **More** menu also rendered the raw key `admin.observationBot` (referenced indirectly as
+   `labelKey: "admin.observationBot"` in a config array, never as a `t()` argument).
+2. **JSX text containing an expression or parentheses.** `Credit Limit (Optional)`,
+   `Stock ({baseUnit})`, `Actual inventory in {baseUnit}. Sellable units consume from this
+   pool.`, `Select All ({maxEligible})` — the text-node regex excluded `{}` and `()`.
+3. **One-sided ternaries and JSX expression literals.** `cond ? "All products are
+   well-stocked" : \`…\``, `{company ? company.name : "Select supplier…"}`, the barcode
+   screen's `Select All` / `N selected` / `Generate N Barcodes`. A regex needs *both* arms
+   to be literals, so these shipped English.
+
+Two smaller findings in the same pass: the base-unit **token** (`piece`) was interpolated
+straight into user-visible labels instead of its translated label (`products.unit.*`), and
+`products.variants` was translated as `ورژن` ("version"). Both corrected; unit labels now
+resolve through the unit's own i18n key.
+
+Closed in this pass: More menu, Observation Bot panel, barcode generation, reorder
+suggestions, record purchase, add product, add customer, activity log, employee
+notification groups, search results (`N variants` / `N units`), and the shop-registration
+form (business types, City, Business Registration, validation errors, submission toast).
+Live Urdu evidence: `آبزرویشن بوٹ` in the More menu (was the raw key), `👁️ جان — مشاہدہ کار /
+ایکسپورٹ / تازہ کریں / جائزہ / کارروائیاں / خرابیاں / رائے` on the Observation Bot screen,
+and zero English on `/admin/purchases/new`, `/admin/inventory/reorder`,
+`/admin/inventory/barcodes`, `/admin/customers/new`, `/admin/inventory/new`,
+`/register/shop-details`, `/employee/notifications`, all with `dir=rtl` and **0 px**
+horizontal overflow.
+
+**Prevention:** the guard now parses the JSX with the TypeScript AST
+(`ts.createSourceFile` + `ScriptKind.TSX`) and ratchets every rendered literal — JSX text
+nodes *and* string literals inside `{…}` — excluding keyboard tokens and the English arm of
+an inline bilingual ternary. Baseline 97 (measured, may only decrease); the same scan is
+what produced this fix list, so the gate is now able to see all three classes.
+
+### 1.10 Two test-suite defects root-caused — never labelled "flaky" (2026-09-20)
+
+**A. A suite that borrowed another suite's identity.** `rbacFoundation.test.ts` authenticated
+as `e1000000-…0001` — an admin `employeePermissions.test.ts` both seeds *and deletes* in its
+`afterAll`. On a clean database (or whenever that file had not run first) all four of its
+tests failed with `NOT_AUTHORIZED: tenant access denied`; it only passed by file order.
+Proven by running the file alone on a cleaned QA database: **4/4 fail before**, and after
+seeding its own private admin (the `users` insert also creates the owner membership via the
+`ensure_user_membership` trigger): **4/4 pass alone**. A per-file isolation audit then ran
+every integration suite alone on a clean database — 11/12 passed; the 12th was a transient
+3-in-a-row pass after re-run (see B-class timing below), not a fixture dependency.
+
+**B. A cleanup that wiped a parallel suite's rows.** `tests/setup/fixtures.ts`
+`cleanupTestData()` ran unscoped `DELETE FROM reminder_logs / reminder_occurrences /
+reminder_configs`. Three other suites call it in `beforeAll`, and they run in parallel with
+`tenantIsolationOps`, whose own reminder config vanished mid-test →
+`insert or update on table "reminder_occurrences" violates foreign key constraint
+"reminder_occurrences_config_id_fkey"`, about **1 run in 3**. The deletes are now scoped to
+the fixtures the helper owns — the same rule the file's own comment already states for
+identities. Evidence: 4 consecutive full integration runs, **21/21 files each, 0 failures**
+(before: 1 failure in 3 runs).
+
+Full-suite state after these fixes: **Vitest 348/348 across 25 files**, integration run
+repeatedly clean, and the Playwright suite re-run end-to-end.
 
 ---
 

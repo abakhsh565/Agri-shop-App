@@ -2,8 +2,10 @@ import AuthLayout from "@/components/layout/AuthLayout";
 import NavHeader from "@/components/ui/NavHeader";
 import Button from "@/components/ui/Button";
 import { useNavigate } from "react-router-dom";
+import { useT } from "@/lib/i18n";
 
 export default function NotRegisteredPage() {
+  const t = useT();
   const navigate = useNavigate();
   return (
     <AuthLayout>
@@ -13,16 +15,16 @@ export default function NotRegisteredPage() {
           🔒
         </div>
         <div className="flex flex-col gap-2">
-          <p className="text-xl font-bold text-black">Number not registered</p>
+          <p className="text-xl font-bold text-black">{t("auth.numberNotRegistered")}</p>
           <p className="text-sm text-[#888]">
-            This number isn't registered with any shop.
+            {t("auth.numberNotRegisteredBody")}
           </p>
           <p className="text-sm text-[#888]">
-            If you're an employee, contact your shop admin to get access.
+            {t("auth.employeeContactAdmin")}
           </p>
         </div>
         <Button fullWidth size="lg" onClick={() => navigate("/login")}>
-          Go Back
+          {t("common.goBack")}
         </Button>
       </div>
     </AuthLayout>

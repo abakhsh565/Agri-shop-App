@@ -132,12 +132,14 @@ describe('Signal Engine', () => {
       const customerAOverdue = overdue.find(s => s.entity_id === QA_IDS.customerA);
       expect(customerAOverdue).toBeDefined();
       expect(customerAOverdue!.severity).toBe('critical');
-      expect(customerAOverdue!.detail).toContain('30,000');
+      // The engine returns i18n keys, not English text; the UI resolves them.
+      expect(customerAOverdue!.detailKey).toBe('signal.detailOverdue');
+      expect(customerAOverdue!.detailParams!.amount).toContain('30,000');
 
       recordEvidence(
         'Overdue credit signal generated for past-due customer',
         'critical signal with Rs. 30,000 overdue',
-        `severity=${customerAOverdue!.severity}, detail=${customerAOverdue!.detail}`,
+        `severity=${customerAOverdue!.severity}, detailKey=${customerAOverdue!.detailKey}, amount=${customerAOverdue!.detailParams!.amount}`,
         'computeLiveSignals(mockData)',
         'PASS'
       );
@@ -160,7 +162,7 @@ describe('Signal Engine', () => {
       recordEvidence(
         'Credit limit warning for customer exceeding limit',
         'warning signal for Customer B (26000 > 25000)',
-        `severity=${customerBCredit!.severity}, detail=${customerBCredit!.detail}`,
+        `severity=${customerBCredit!.severity}, detailKey=${customerBCredit!.detailKey}`,
         'computeLiveSignals(mockData)',
         'PASS'
       );

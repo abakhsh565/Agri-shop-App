@@ -6,8 +6,10 @@ import { useThemeStore } from "@/stores/themeStore";
 import { formatCurrency, formatDateTime } from "@/lib/formatters";
 import { supabase } from "@/lib/supabase";
 import type { Purchase } from "@/types";
+import { useT } from "@/lib/i18n";
 
 export default function PurchaseDetailPage() {
+  const t = useT();
   const { purchaseId } = useParams();
   const { language } = useThemeStore();
   const isUrdu = language === "ur";
@@ -60,7 +62,7 @@ export default function PurchaseDetailPage() {
     return (
       <div className="flex flex-col w-full min-h-full" style={{ background: "var(--background)" }}>
         <StatusBar />
-        <NavHeader title="Purchase Detail" />
+        <NavHeader title={t("purchases.detailTitle")} />
         <div className="flex-1 flex items-center justify-center">
           <p className="text-sm" style={{ color: "var(--text-secondary)" }}>Loading…</p>
         </div>
@@ -72,9 +74,9 @@ export default function PurchaseDetailPage() {
     return (
       <div className="flex flex-col w-full min-h-full" style={{ background: "var(--background)" }}>
         <StatusBar />
-        <NavHeader title="Purchase Detail" />
+        <NavHeader title={t("purchases.detailTitle")} />
         <div className="flex-1 flex items-center justify-center">
-          <p className="text-sm" style={{ color: "var(--text-secondary)" }}>Purchase not found</p>
+          <p className="text-sm" style={{ color: "var(--text-secondary)" }}>{t("purchase.notFound")}</p>
         </div>
       </div>
     );
@@ -86,7 +88,7 @@ export default function PurchaseDetailPage() {
       style={{ background: "var(--background)", direction: isUrdu ? "rtl" : "ltr" }}
     >
       <StatusBar />
-      <NavHeader title="Purchase Detail" />
+      <NavHeader title={t("purchases.detailTitle")} />
 
       <div className="flex flex-col gap-4 p-4">
         {/* Header card */}
@@ -101,7 +103,7 @@ export default function PurchaseDetailPage() {
 
         {/* Items */}
         <div>
-          <p className="text-[11px] font-bold uppercase tracking-wider mb-2" style={{ color: "var(--text-secondary)" }}>Items Purchased</p>
+          <p className="text-[11px] font-bold uppercase tracking-wider mb-2" style={{ color: "var(--text-secondary)" }}>{t("purchase.itemsPurchased")}</p>
           <div className="rounded-[14px] overflow-hidden" style={{ border: "1px solid var(--divider)" }}>
             {purchase.items.map((item, i) => (
               <div
@@ -124,10 +126,10 @@ export default function PurchaseDetailPage() {
 
         {/* Payment summary */}
         <div className="rounded-[14px] p-4" style={{ background: "var(--surface)", border: "1px solid var(--divider)" }}>
-          <p className="text-[11px] font-bold uppercase tracking-wider mb-3" style={{ color: "var(--text-secondary)" }}>Payment Summary</p>
+          <p className="text-[11px] font-bold uppercase tracking-wider mb-3" style={{ color: "var(--text-secondary)" }}>{t("purchase.paymentSummary")}</p>
           <div className="flex flex-col gap-2">
             <div className="flex justify-between">
-              <span className="text-sm" style={{ color: "var(--text-secondary)" }}>Total Amount</span>
+              <span className="text-sm" style={{ color: "var(--text-secondary)" }}>{t("saleReview.totalAmount")}</span>
               <span className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>{formatCurrency(purchase.totalAmount)}</span>
             </div>
             <div className="flex justify-between">
@@ -136,14 +138,14 @@ export default function PurchaseDetailPage() {
             </div>
             {purchase.outstandingPayable > 0 && (
               <div className="flex justify-between">
-                <span className="text-sm" style={{ color: "var(--text-secondary)" }}>Outstanding Payable</span>
+                <span className="text-sm" style={{ color: "var(--text-secondary)" }}>{t("purchase.outstandingPayable")}</span>
                 <span className="text-sm font-bold" style={{ color: "var(--error)" }}>{formatCurrency(purchase.outstandingPayable)}</span>
               </div>
             )}
             <div className="border-t my-1" style={{ borderColor: "var(--divider)" }} />
             <div className="flex justify-between">
-              <span className="text-sm" style={{ color: "var(--text-secondary)" }}>Payment Method</span>
-              <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>{purchase.paymentMethod === "cash" ? "Cash" : "Bank Transfer"}</span>
+              <span className="text-sm" style={{ color: "var(--text-secondary)" }}>{t("sale.paymentMethod")}</span>
+              <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>{purchase.paymentMethod === "cash" ? t("sale.cash") : t("sale.bankTransfer")}</span>
             </div>
           </div>
         </div>

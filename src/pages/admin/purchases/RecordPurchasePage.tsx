@@ -11,8 +11,10 @@ import { useUIStore } from "@/stores/uiStore";
 import { useThemeStore } from "@/stores/themeStore";
 import type { PaymentMethod } from "@/types";
 import { ChevronDown, AlertTriangle } from "lucide-react";
+import { useT } from "@/lib/i18n";
 
 export default function RecordPurchasePage() {
+  const t = useT();
   const navigate = useNavigate();
   const { addToast } = useUIStore();
   const { language } = useThemeStore();
@@ -124,12 +126,12 @@ export default function RecordPurchasePage() {
     >
       <div>
         <StatusBar />
-        <NavHeader title={presetCompanyId ? "Order Stock" : "Record Stock Purchase"} />
+        <NavHeader title={presetCompanyId ? t("company.orderStock") : t("purchases.recordStockPurchase")} />
 
         <div className="flex flex-col gap-5 p-4">
           {/* Supplier */}
           <div>
-            <p className={labelCls} style={{ color: "var(--text-secondary)" }}>Supplier / Company</p>
+            <p className={labelCls} style={{ color: "var(--text-secondary)" }}>{t("supplier.selectLabel")}</p>
             {presetCompanyId ? (
               <div className="w-full h-12 rounded-[24px] px-4 text-sm flex items-center" style={{ ...fieldStyle, opacity: 0.8 }}>
                 <span style={{ color: "var(--text-primary)" }}>{company?.name || "Loading…"}</span>
@@ -142,7 +144,7 @@ export default function RecordPurchasePage() {
                 style={fieldStyle}
               >
                 <span style={{ color: company ? "var(--text-primary)" : "var(--text-secondary)" }}>
-                  {company ? company.name : "Select supplier…"}
+                  {company ? company.name : t("supplier.selectSupplier")}
                 </span>
                 <ChevronDown size={16} style={{ color: "var(--text-secondary)" }} />
               </button>
@@ -162,7 +164,7 @@ export default function RecordPurchasePage() {
           {/* Product */}
           {company && (
             <div>
-              <p className={labelCls} style={{ color: "var(--text-secondary)" }}>Product</p>
+              <p className={labelCls} style={{ color: "var(--text-secondary)" }}>{t("common.product")}</p>
               {companyProducts.length === 0 ? (
                 <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
                   No products linked to {company.name} yet. Add the product first.
@@ -186,7 +188,7 @@ export default function RecordPurchasePage() {
           {/* Variant */}
           {product && (
             <div>
-              <p className={labelCls} style={{ color: "var(--text-secondary)" }}>Unit / Variant</p>
+              <p className={labelCls} style={{ color: "var(--text-secondary)" }}>{t("admin.unitVariant")}</p>
               <div className="flex flex-col gap-2">
                 {product.variants.map((v) => {
                   const selected = v.id === variantId;
@@ -219,32 +221,32 @@ export default function RecordPurchasePage() {
             <>
               <div className="flex gap-3">
                 <div className="flex-1">
-                  <p className={labelCls} style={{ color: "var(--text-secondary)" }}>Quantity</p>
+                  <p className={labelCls} style={{ color: "var(--text-secondary)" }}>{t("admin.quantity")}</p>
                   <input type="number" inputMode="numeric" value={qty} onChange={(e) => setQty(e.target.value)}
                     placeholder="0" className="w-full h-12 rounded-[24px] px-4 text-sm outline-none" style={fieldStyle} />
                 </div>
                 <div className="flex-1">
-                  <p className={labelCls} style={{ color: "var(--text-secondary)" }}>Base Cost / unit</p>
+                  <p className={labelCls} style={{ color: "var(--text-secondary)" }}>{t("admin.baseCostUnit")}</p>
                   <input type="number" inputMode="numeric" value={costPrice} onChange={(e) => setCostPrice(e.target.value)}
                     placeholder="0" className="w-full h-12 rounded-[24px] px-4 text-sm outline-none" style={fieldStyle} />
                 </div>
               </div>
 
               <div>
-                <p className={labelCls} style={{ color: "var(--text-secondary)" }}>Selling Price / unit <span style={{ opacity: 0.6 }}>(current)</span></p>
+                <p className={labelCls} style={{ color: "var(--text-secondary)" }}>{t("admin.sellingPriceUnit")} <span style={{ opacity: 0.6 }}>{t("common.current")}</span></p>
                 <input type="number" inputMode="numeric" value={sellingPrice} onChange={(e) => setSellingPrice(e.target.value)}
                   placeholder="0" className="w-full h-12 rounded-[24px] px-4 text-sm outline-none" style={fieldStyle} />
               </div>
 
               {/* Payment */}
               <div>
-                <p className={labelCls} style={{ color: "var(--text-secondary)" }}>Amount Paid Now</p>
+                <p className={labelCls} style={{ color: "var(--text-secondary)" }}>{t("purchase.amountPaidNow")}</p>
                 <input type="number" inputMode="numeric" value={amountPaid} onChange={(e) => setAmountPaid(e.target.value)}
                   placeholder={formatCurrency(total)} className="w-full h-12 rounded-[24px] px-4 text-sm outline-none" style={fieldStyle} />
               </div>
 
               <div>
-                <p className={labelCls} style={{ color: "var(--text-secondary)" }}>Payment Method</p>
+                <p className={labelCls} style={{ color: "var(--text-secondary)" }}>{t("sale.paymentMethod")}</p>
                 <div className="flex gap-2">
                   {([{ key: "cash", label: "Cash" }, { key: "bank_transfer", label: "Bank Transfer" }] as const).map((m) => (
                     <button key={m.key} onClick={() => setMethod(m.key)}
@@ -262,10 +264,10 @@ export default function RecordPurchasePage() {
 
               {/* Summary */}
               <div className="rounded-[14px] p-4" style={{ background: "var(--surface-2)" }}>
-                <Row label="Purchase total" value={formatCurrency(total)} />
-                <Row label="Paid now" value={formatCurrency(paidNum)} />
+                <Row label={t("purchases.purchaseTotal")} value={formatCurrency(total)} />
+                <Row label={t("purchases.paidNow")} value={formatCurrency(paidNum)} />
                 <div className="h-px my-2" style={{ background: "var(--divider)" }} />
-                <Row label="New supplier payable" value={formatCurrency(payable)} bold highlight={payable > 0} />
+                <Row label={t("supplier.newPayable")} value={formatCurrency(payable)} bold highlight={payable > 0} />
               </div>
             </>
           )}
@@ -281,23 +283,23 @@ export default function RecordPurchasePage() {
           className="w-full h-12 rounded-full font-bold text-sm transition-all active:scale-[0.98] disabled:opacity-50"
           style={{ background: "var(--brand)", color: "#0a0a0a" }}
         >
-          {loading ? "Saving…" : "Save & Add to Inventory"}
+          {loading ? t("common.saving") : t("purchases.saveAndAdd")}
         </button>
       </div>
 
       <SelectSheet
         open={sheet === "company"}
-        title="Select supplier"
+        title={t("supplier.selectSupplier")}
         searchable
         options={companies.map((c) => ({ value: c.id, label: c.name, sub: c.outstandingPayable > 0 ? `Payable: ${formatCurrency(c.outstandingPayable)}` : undefined }))}
         selected={companyId}
-        emptyLabel="No companies yet. Add a company first."
+        emptyLabel={t("purchases.noCompanies")}
         onSelect={(id) => { setCompanyId(id); setProductId(""); setVariantId(""); }}
         onClose={() => setSheet(null)}
       />
       <SelectSheet
         open={sheet === "product"}
-        title="Select product"
+        title={t("purchases.selectProduct")}
         searchable
         options={productSheetOptions}
         selected={productId}

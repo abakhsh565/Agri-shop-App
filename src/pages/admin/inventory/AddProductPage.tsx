@@ -62,6 +62,8 @@ export default function AddProductPage() {
   const [category, setCategory] = useState<ProductCategory>(existing?.category ?? "spray");
   const [baseUnit, setBaseUnit] = useState<BaseUnit>(existing?.baseUnit ?? "piece");
   const [stockQty, setStockQty] = useState(existing ? String(existing.stockQty) : "");
+  // Display label for the base unit (the raw token is a storage value, not copy)
+  const unitLabel = t(BASE_UNITS.find((u) => u.key === baseUnit)?.i18nKey ?? "products.unit.piece");
   const [variants, setVariants] = useState<VariantDraft[]>(
     existing && existing.variants.length > 0
       ? existing.variants.map((v) => ({
@@ -164,29 +166,29 @@ export default function AddProductPage() {
     >
       <div>
         <StatusBar />
-        <NavHeader title={isEdit ? "Edit Product" : "Add Product"} />
+        <NavHeader title={isEdit ? t("products.editProduct") : t("products.addButton")} />
 
         <div className="flex flex-col gap-5 p-4">
           {/* Photo */}
           <div className="flex justify-center pt-1">
-            <ImageUpload bucket="product-images" value={imageUrl} onChange={setImageUrl} shape="square" label="Add photo" />
+            <ImageUpload bucket="product-images" value={imageUrl} onChange={setImageUrl} shape="square" label={t("addProduct.addPhoto")} />
           </div>
 
           {/* Name */}
           <div>
-            <p className={labelCls} style={{ color: "var(--text-secondary)" }}>Product Name</p>
-            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Karate Insecticide"
+            <p className={labelCls} style={{ color: "var(--text-secondary)" }}>{t("common.productName")}</p>
+            <input value={name} onChange={(e) => setName(e.target.value)} placeholder={t("addProduct.namePlaceholder")}
               className="w-full h-12 rounded-[24px] px-4 text-sm outline-none" style={fieldStyle} />
           </div>
 
           {/* Barcode */}
           <div>
-            <p className={labelCls} style={{ color: "var(--text-secondary)" }}>Barcode</p>
+            <p className={labelCls} style={{ color: "var(--text-secondary)" }}>{t("common.barcode")}</p>
             <div className="flex gap-2">
               <input
                 value={barcode}
                 onChange={(e) => setBarcode(e.target.value.toUpperCase())}
-                placeholder="Auto-generated if empty"
+                placeholder={t("addProduct.skuPlaceholder")}
                 className="flex-1 h-12 rounded-[24px] px-4 text-sm outline-none font-mono"
                 style={fieldStyle}
               />
@@ -228,13 +230,13 @@ export default function AddProductPage() {
               className="text-xs font-semibold mt-1.5 underline underline-offset-2"
               style={{ color: "var(--brand-dark)" }}
             >
-              Generate Barcode
+              {t("products.generateBarcode")}
             </button>
           </div>
 
           {/* Company */}
           <div>
-            <p className={labelCls} style={{ color: "var(--text-secondary)" }}>Supplier / Company</p>
+            <p className={labelCls} style={{ color: "var(--text-secondary)" }}>{t("supplier.selectLabel")}</p>
             <div className="relative">
               <select value={company} onChange={(e) => setCompany(e.target.value)}
                 className="w-full h-12 rounded-[24px] px-4 pe-10 text-sm outline-none appearance-none" style={fieldStyle}>
@@ -283,20 +285,20 @@ export default function AddProductPage() {
 
           {/* Stock (product-level) */}
           <div>
-            <p className={labelCls} style={{ color: "var(--text-secondary)" }}>Stock ({baseUnit})</p>
+            <p className={labelCls} style={{ color: "var(--text-secondary)" }}>{t("products.stock")} ({unitLabel})</p>
             <input type="number" inputMode="numeric" value={stockQty} onChange={(e) => setStockQty(e.target.value)}
               placeholder="0" className="w-full h-12 rounded-[24px] px-4 text-sm outline-none" style={fieldStyle} />
             <p className="text-[10px] mt-1" style={{ color: "var(--text-secondary)", direction: "ltr" }}>
-              Actual inventory in {baseUnit}. Sellable units consume from this pool.
+              {t("products.actualInventoryHint", { unit: unitLabel })}
             </p>
           </div>
 
           {/* Variants */}
           <div>
             <div className="flex items-center justify-between mb-2">
-              <p className={labelCls} style={{ color: "var(--text-secondary)", marginBottom: 0 }}>Units / Variants</p>
+              <p className={labelCls} style={{ color: "var(--text-secondary)", marginBottom: 0 }}>{t("common.unitsVariants")}</p>
               <button onClick={addVariant} className="flex items-center gap-1 text-xs font-bold" style={{ color: "var(--brand-dark)" }}>
-                <Plus size={14} /> Add unit
+                <Plus size={14} /> {t("product.addUnit")}
               </button>
             </div>
 
@@ -304,7 +306,7 @@ export default function AddProductPage() {
               {variants.map((v, i) => (
                 <div key={i} className="rounded-[14px] p-3.5" style={{ background: "var(--surface)", border: "1px solid var(--divider)" }}>
                   <div className="flex items-center gap-2 mb-2">
-                    <input value={v.name} onChange={(e) => setVariant(i, { name: e.target.value })} placeholder="Unit name — e.g. 500ml, 50kg"
+                    <input value={v.name} onChange={(e) => setVariant(i, { name: e.target.value })} placeholder={t("addProduct.unitNamePlaceholder")}
                       className="flex-1 h-10 rounded-[20px] px-3 text-sm outline-none" style={fieldStyle} />
                     {variants.length > 1 && (
                       <button onClick={() => removeVariant(i)} className="w-8 h-8 rounded-full flex items-center justify-center shrink-0"
@@ -314,12 +316,12 @@ export default function AddProductPage() {
                     )}
                   </div>
                   <div className="grid grid-cols-2 gap-2">
-                    <NumField label="Selling price per unit" value={v.sellingPrice} onChange={(x) => setVariant(i, { sellingPrice: x })} style={fieldStyle} />
-                    <NumField label="Base cost per {baseUnit}" value={v.costPrice} onChange={(x) => setVariant(i, { costPrice: x })} style={fieldStyle} />
-                    <NumField label="Unit size ({baseUnit})" value={v.unitSize} onChange={(x) => setVariant(i, { unitSize: x })} style={fieldStyle}
-                      hint={baseUnit === "piece" ? "1 = 1 piece" : `e.g. 0.5 = 500${baseUnit === "kg" ? "g" : "ml"}`} />
-                    <NumField label="Qty step (sellable units)" value={v.qtyStep} onChange={(x) => setVariant(i, { qtyStep: x })} style={fieldStyle}
-                      hint="Increments per tap (e.g. 1 = sell 1 unit at a time)" />
+                    <NumField label={t("addProduct.sellingPricePerUnit")} value={v.sellingPrice} onChange={(x) => setVariant(i, { sellingPrice: x })} style={fieldStyle} />
+                    <NumField label={t("addProduct.baseCostPerUnit", { unit: unitLabel })} value={v.costPrice} onChange={(x) => setVariant(i, { costPrice: x })} style={fieldStyle} />
+                    <NumField label={t("addProduct.unitSize", { unit: unitLabel })} value={v.unitSize} onChange={(x) => setVariant(i, { unitSize: x })} style={fieldStyle}
+                      hint={baseUnit === "piece" ? t("addProduct.hintPiece") : t("addProduct.hintFraction", { unit: baseUnit === "kg" ? "g" : "ml" })} />
+                    <NumField label={t("addProduct.qtyStep")} value={v.qtyStep} onChange={(x) => setVariant(i, { qtyStep: x })} style={fieldStyle}
+                      hint={t("addProduct.qtyStepHint")} />
                   </div>
                 </div>
               ))}
@@ -337,7 +339,7 @@ export default function AddProductPage() {
           className="w-full h-12 rounded-full font-bold text-sm transition-all active:scale-[0.98] disabled:opacity-50"
           style={{ background: "var(--brand)", color: "#0a0a0a" }}
         >
-          {loading ? "Saving…" : isEdit ? "Save Changes" : "Add Product"}
+          {loading ? "Saving…" : isEdit ? t("products.saveChanges") : t("products.addButton")}
         </button>
       </div>
     </div>

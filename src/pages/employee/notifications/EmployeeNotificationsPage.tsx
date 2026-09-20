@@ -39,7 +39,17 @@ const KIND_ICON: Record<string, any> = {
   low_stock: AlertTriangle,
 };
 
-type TimeGroup = { label: string; items: AppNotification[] };
+type TimeGroup = { key: string; labelKey: string; items: AppNotification[] };
+
+/** Bucket -> i18n key. The bucket name stays stable for grouping; only the
+ *  rendered label is translated (it was hardcoded English before). */
+const GROUP_KEYS: Record<string, string> = {
+  Today: "sales.today",
+  Yesterday: "sales.yesterday",
+  "This Week": "sales.thisWeek",
+  "This Month": "sales.thisMonth",
+  Earlier: "notifications.earlier",
+};
 
 function groupByTime(items: AppNotification[], now: Date): TimeGroup[] {
   const todayStr = pkDate(now);
@@ -64,7 +74,7 @@ function groupByTime(items: AppNotification[], now: Date): TimeGroup[] {
 
   return Object.entries(groups)
     .filter(([, items]) => items.length > 0)
-    .map(([label, items]) => ({ label, items }));
+    .map(([key, items]) => ({ key, labelKey: GROUP_KEYS[key] ?? key, items }));
 }
 
 export default function EmployeeNotificationsPage() {
@@ -85,7 +95,7 @@ export default function EmployeeNotificationsPage() {
     <div className="flex flex-col w-full min-h-full" style={{ background: "var(--background)" }}>
       <StatusBar />
       <NavHeader
-        title="Notifications"
+        title={t("dashboard.notifications")}
         
         right={
           items.some((n) => !n.read) ? (
@@ -94,7 +104,7 @@ export default function EmployeeNotificationsPage() {
               className="text-xs font-semibold"
               style={{ color: "var(--brand-dark)" }}
             >
-              Mark all read
+              {t("notifications.markAllRead")}
             </button>
           ) : null
         }
@@ -122,13 +132,13 @@ export default function EmployeeNotificationsPage() {
       ) : (
         <div className="flex flex-col pb-8">
           {groups.map((group) => (
-            <div key={group.label}>
+            <div key={group.key}>
               <div className="px-4 pt-5 pb-2">
                 <p
                   className="text-[11px] font-bold uppercase tracking-widest"
                   style={{ color: "var(--text-secondary)" }}
                 >
-                  {group.label}
+                  {t(group.labelKey)}
                 </p>
               </div>
 

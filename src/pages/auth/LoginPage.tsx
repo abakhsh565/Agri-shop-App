@@ -5,8 +5,10 @@ import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 import { sendOTP } from "@/lib/auth";
 import { useAuthStore } from "@/stores/authStore";
+import { useT } from "@/lib/i18n";
 
 export default function LoginPage() {
+  const t = useT();
   const navigate = useNavigate();
   const { setPendingPhone, setPendingFlow, setIsNewDevice } = useAuthStore();
 
@@ -50,14 +52,14 @@ export default function LoginPage() {
       <div className="flex flex-col flex-1 justify-between">
         <div className="flex flex-col gap-8 p-6">
           <div className="flex flex-col gap-2">
-            <p className="text-[26px] font-bold" style={{ color: "var(--text-primary)" }}>Welcome back</p>
-            <p className="text-[14px]" style={{ color: "var(--text-secondary)" }}>Enter your phone number to sign in</p>
+            <p className="text-[26px] font-bold" style={{ color: "var(--text-primary)" }}>{t("auth.welcomeBack")}</p>
+            <p className="text-[14px]" style={{ color: "var(--text-secondary)" }}>{t("auth.enterPhone")}</p>
           </div>
           <div className="flex flex-col gap-4">
             <Input
-              label="Phone Number"
+              label={t("auth.phoneNumber")}
               type="tel"
-              placeholder="e.g. 03001234567"
+              placeholder={t("common.phonePlaceholder")}
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
               error={phoneError}
@@ -65,7 +67,7 @@ export default function LoginPage() {
               onKeyDown={(e) => e.key === "Enter" && handleSignIn()}
             />
             <p className="text-[12px]" style={{ color: "var(--text-secondary)" }}>
-              We'll text you a 6-digit verification code.
+              {t("auth.codeHint")}
             </p>
           </div>
         </div>
@@ -78,12 +80,12 @@ export default function LoginPage() {
             loading={loading}
             disabled={!phone}
           >
-            Send Code
+            {t("auth.sendCode")}
           </Button>
           <p className="text-xs text-center text-[#888]">
-            New shop owner?{' '}
+            {t("auth.newShopOwner")}{' '}
             <button onClick={() => navigate("/register")} className="text-black font-medium underline">
-              Register your shop
+              {t("auth.registerShop")}
             </button>
           </p>
 

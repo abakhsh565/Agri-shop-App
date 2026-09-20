@@ -272,7 +272,7 @@ export default function AdminSalesListPage() {
             {mockEmployees.find((e) => e.id === employeeFilter)?.name ?? "Employee"} ✕
           </span>
           <button onClick={() => setEmployeeFilter(null)} className="text-xs" style={{ color: "var(--text-secondary)" }}>
-            Clear filter
+            {t("common.clearFilter")}
           </button>
         </div>
       )}
@@ -336,7 +336,7 @@ export default function AdminSalesListPage() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-4">
-              <p className="text-[15px] font-bold" style={{ color: "var(--text-primary)" }}>Select Date Range</p>
+              <p className="text-[15px] font-bold" style={{ color: "var(--text-primary)" }}>{t("admin.selectDateRange")}</p>
               <button onClick={() => setShowDateModal(false)} className="text-xl" style={{ color: "var(--text-secondary)" }}>×</button>
             </div>
             <div className="flex gap-3">
@@ -370,14 +370,14 @@ export default function AdminSalesListPage() {
                 className="flex-1 h-10 rounded-xl text-[13px] font-semibold"
                 style={{ background: "var(--surface-2)", color: "var(--text-secondary)" }}
               >
-                Clear
+                {t("reports.clear")}
               </button>
               <button
                 onClick={applyCustomDates}
                 className="flex-1 h-10 rounded-xl text-[13px] font-bold"
                 style={{ background: "var(--brand)", color: "#0a0a0a" }}
               >
-                Apply
+                {t("reports.apply")}
               </button>
             </div>
           </div>

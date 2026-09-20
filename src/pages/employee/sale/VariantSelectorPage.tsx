@@ -9,6 +9,7 @@ import { useProductsStore } from "@/stores/productsStore";
 import { formatCurrency } from "@/lib/formatters";
 import { useUIStore } from "@/stores/uiStore";
 import { useShellBase } from "@/lib/useShellBase";
+import { useT } from "@/lib/i18n";
 
 /**
  * Available units of a variant = its own stock of record (the level sales deduct
@@ -26,6 +27,7 @@ function stockStatusLabel(variant: { stockQty: number; qtyStep: number }): strin
 }
 
 export default function VariantSelectorPage() {
+  const t = useT();
   const { productId } = useParams();
   const navigate = useNavigate();
   const base = useShellBase();
@@ -65,7 +67,7 @@ export default function VariantSelectorPage() {
   return (
     <div className="flex flex-col w-full min-h-full" style={{ background: "var(--background)" }}>
       <StatusBar />
-      <NavHeader title="Product Details" />
+      <NavHeader title={t("sale.productDetails")} />
 
       {/* Product header card */}
       <div className="mx-4 mt-3 rounded-xl p-4 flex items-center gap-3 justify-between" style={{ background: "var(--surface-2)" }}>
@@ -81,7 +83,7 @@ export default function VariantSelectorPage() {
           className="h-8 px-3 rounded-full text-xs font-medium"
           style={{ border: "1px solid var(--divider)", color: "var(--text-primary)" }}
         >
-          Change
+          {t("common.change")}
         </button>
       </div>
 
@@ -94,7 +96,7 @@ export default function VariantSelectorPage() {
 
       {/* Variant selector */}
       <div className="px-4 pt-4">
-        <p className="text-[11px] font-bold uppercase mb-3 tracking-wider" style={{ color: "var(--text-secondary)" }}>Select sellable unit</p>
+        <p className="text-[11px] font-bold uppercase mb-3 tracking-wider" style={{ color: "var(--text-secondary)" }}>{t("common.selectSellableUnit")}</p>
         <div className="flex flex-col gap-2">
           {product.variants.map((v) => {
             const units = availableUnits(v);
@@ -137,7 +139,7 @@ export default function VariantSelectorPage() {
 
       {/* Quantity */}
       <div className="px-4 pt-5">
-        <p className="text-[11px] font-bold uppercase mb-3 tracking-wider" style={{ color: "var(--text-secondary)" }}>Quantity</p>
+        <p className="text-[11px] font-bold uppercase mb-3 tracking-wider" style={{ color: "var(--text-secondary)" }}>{t("admin.quantity")}</p>
         <div className="flex items-center justify-between rounded-xl h-[52px] px-4" style={{ border: "1px solid var(--divider)" }}>
           <QuantityCounter
             qty={qty}
@@ -164,7 +166,7 @@ export default function VariantSelectorPage() {
           onClick={handleAdd}
           disabled={!selectedVariant || isOOS}
         >
-          Add to Cart
+          {t("sale.addToCart")}
         </Button>
       </div>
     </div>

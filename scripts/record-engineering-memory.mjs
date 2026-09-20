@@ -194,6 +194,81 @@ const MEMORIES = [
       scopeStillOpen: 'the UNIT a variant holds (pack vs base unit) is not settled for the whole app: unit labels such as "Total stock: N kg" still assume base units, so that display question is recorded as a decision, not silently changed'
     },
   },
+  {
+    category: 'prevention_rule',
+    title: 'Shop-owner screens must speak business language, and the users list is not the membership',
+    component: 'src/pages/admin/employees/*, src/pages/admin/settings/RolesAccessPage.tsx, src/lib/permissionLabels.ts, src/lib/i18n.ts',
+    description:
+      'The employee/access screens shipped internal RBAC vocabulary to the shop owner: Permission counts, Effective permissions, Employee exceptions, Inherited from role, Reset to Role Defaults, Branch scope, Access profile, Role template — and the employee detail asked the same question twice (a legacy Owner/Admin/Employee chip next to the real role profile). Two hard facts came out of fixing it. (1) employeesStore.load() maps the users table only, and users has no membership_role column, so emp.membershipRole is ALWAYS undefined for listed employees: any UI branch on it is wrong. That is what made the simplified list print an Admin chip on every row; the authoritative membership role is what get_employee_access() returns, and isOriginalOwner is the reliable client-side owner flag. (2) permissions.action is not a closed verb set (it contains supplier), so rendering a raw action or code.split fallback leaks tokens like "supplier" into the UI. RULE: owner-facing access copy comes from one shared label module (permissionLabels + area./action. i18n keys, EN and UR), the access a screen shows must be the employee role rows read back from the database, advanced configuration is progressive disclosure behind a single Customize access action, and no screen may branch on membership fields the users list does not carry. Verified by tests/e2e/accessUx.spec.ts (5/5): areas shown for a role equal role_permissions modules, a created employee gets users + membership(role_id, status, branch_scope), Customize access stores is_override rows and Use role access only removes them.',
+    evidence: {
+      bugFound: 'list chip printed Admin on all four QA employees because emp.membershipRole was undefined and the ternary fell through to the admin label',
+      dbTruth: 'memberships: Shop Owner owner, Sales Employee employee, QA Admin owner, QA Employee employee | templates: Sales Employee / Inventory Clerk',
+      copyFix: 'employee detail now reads Role / Can work at / Access / Customize access, and the Urdu legend renders کردار سے / صرف اس ملازم کے لیے / اس ملازم کے لیے بند',
+      reconciliation: 'Sales Manager role shown on screen = role_permissions modules customers, inventory, products, reports, returns, sales (exact set equality asserted in the spec)',
+      regression: 'accessUx 5/5, Vitest 337/337, tsc clean, production build passes, QA baseline back to 4 users / 0 overrides'
+    },
+  },
+  {
+    category: 'failure_pattern',
+    title: 'The device PIN gate has two different routes, and a substring check silently breaks E2E login',
+    component: 'tests/e2e/accessUx.spec.ts (login helper), src/pages/auth/SplashPage.tsx, src/lib/pinLock.ts',
+    description:
+      'A new spec failed at login with a bare 30s navigation timeout. The cause was the helper, not the product: it treated "URL contains /login/pin" as the returning-user gate, but /login/pin-set contains that substring too. A fresh browser context has no device PIN, so SplashPage routes to /login/pin-set, where entering the PIN once only SETS it and the screen then asks for confirmation — the helper waited for a dashboard that could never appear. The same substring trap affects any check on localStorage keys such as agri_pin_<userId>. Note the two gates are genuinely different flows: /login/pin-set needs the PIN twice (set then confirm), /login/pin needs it once, and a full page load only reaches either when the store is empty at first paint. Verified behaviour after the fix: OTP verify -> /login/pin-set -> set+confirm 4321 -> /admin/dashboard, with agri_pin_<userId> present afterwards and deep links (for example /admin/employees/new) loading without re-locking.',
+    evidence: {
+      before: 'accessUx test 1 failed: waiting for navigation until "load" at the PIN branch, tests 2-5 did not run',
+      diagnostic: 'DIAG after-otp url: /login/pin-set | after-pin url: /admin/dashboard | pin keys: ["agri_pin_bfb26cc6-b32c-4d8f-a0b9-ac69caa1e483"] | deep-load url: /admin/employees/new',
+      afterFix: 'accessUx 5/5 passed in 1.0m'
+    },
+  },
+  {
+    category: 'failure_pattern',
+    title: 'QA cleanup was deleting the Engineering Memory table itself',
+    component: 'scripts/clean-test-data.mjs, tests/setup/global-teardown.ts, engineering_memory',
+    description:
+      'The QA data cleaner ran DELETE FROM engineering_memory as one of its tables, so every cleanup (and every post-suite tidy-up) silently destroyed the durable Engineering OS knowledge base: after a full Playwright run and one clean-test-data run the table held 0 rows even though 13 verified findings had just been recorded. Durable knowledge is not test data and must never be in a test-cleanup list; the vitest global teardown already omitted it, only the npm cleaner touched it. Fixed by removing engineering_memory from the cleaner with an explanatory comment, then re-recording the memories, and the recorder prints the active total so a wipe is visible in its output. RULE: a cleanup script may only delete data the tests created; anything that documents the system is out of bounds.',
+    evidence: {
+      symptom: 'engineering_memory: 0 rows after node scripts/clean-test-data.mjs (13 memories missing)',
+      cause: "clean-test-data.mjs table list contained 'engineering_memory'",
+      afterFix: 'node scripts/record-engineering-memory.mjs -> recorded 13 entries; memory by status: active=13'
+    },
+  },
+  {
+    category: 'failure_pattern',
+    title: 'A regex "no hardcoded English" gate cannot see four shapes of shipped English',
+    component: 'tests/unit/i18nCoverage.test.ts, src/pages/admin/more/MoreMenuPage.tsx, src/components/admin/ObservationBotPanel.tsx, src/lib/i18n.ts',
+    description:
+      'The EN/UR gate reported clean while the Urdu app still shipped English. Driving every real route in Urdu and reading the DOM found (1) single-quoted calls: ObservationBotPanel used t(\'overview\') and 11 more, which a t("...")-only scan cannot match, so the whole panel fell back to its English literals; (2) keys referenced indirectly as labelKey: "admin.observationBot" in a config array, where the key did not exist at all and the owner\'s More menu printed the raw key text; (3) JSX text containing an expression or parentheses, e.g. "Credit Limit (Optional)", "Stock ({baseUnit})", "Actual inventory in {baseUnit}. Sellable units consume from this pool."; (4) one-sided ternaries and JSX expression literals, e.g. cond ? "All products are well-stocked" : `…` and {company ? company.name : "Select supplier…"}, which a both-arms-are-literals regex needs two literals to catch. Two data defects rode along: the base-unit token ("piece") was interpolated into user-visible labels instead of its translated label (products.unit.*), and products.variants was translated as ورژن ("version"). RULE: translation coverage is proved by rendering the real UI in the non-default language and reading the DOM — a source scan can only prove the absence of the shapes it knows. The gate now parses the JSX with the TypeScript AST and ratchets every rendered literal (JSX text plus string literals inside {…}), excluding keyboard tokens and the English arm of an inline bilingual ternary.',
+    evidence: {
+      before: 'Urdu /admin/more rendered the raw key admin.observationBot; /admin/inventory/new rendered "Actual inventory in piece…"; /admin/purchases/new rendered "Select supplier…"; guard reported 7/7 pass',
+      afterFix: 'Urdu /admin/more -> آبزرویشن بوٹ; Observation Bot panel chrome in Urdu (👁️ جان — مشاہدہ کار / ایکسپورٹ / تازہ کریں / جائزہ / کارروائیاں / خرابیاں / رائے); zero English on /admin/purchases/new, /admin/inventory/reorder, /admin/inventory/barcodes, /admin/customers/new, /admin/inventory/new, /register/shop-details, /employee/notifications with dir=rtl and 0px overflow',
+      guard: 'tests/unit/i18nCoverage.test.ts 8/8, EN=UR=1107 keys, AST ratchet baseline 97 (measured; may only decrease)',
+      verified: '348/348 Vitest across 25 files; tsc clean; production build clean'
+    },
+  },
+  {
+    category: 'failure_pattern',
+    title: 'An integration suite that borrowed another suite\'s identity only passed by file order',
+    component: 'tests/integration/rbacFoundation.test.ts, tests/integration/employeePermissions.test.ts',
+    description:
+      'rbacFoundation.test.ts authenticated as e1000000-…0001, an admin that employeePermissions.test.ts both seeds and deletes in its afterAll. It never created that identity itself, so on a clean database every assertion failed with NOT_AUTHORIZED: tenant access denied and the file passed only when the other file happened to run first — the classic "intermittent integration failure" that gets labelled flaky. Proven by running the file alone on a cleaned QA database: 4/4 failed, then 4/4 passed after it seeded its own private admin (inserting the users row also creates the owner membership, via the ensure_user_membership trigger). Every integration suite was then run alone on a clean database to make sure no other file has the same coupling. RULE: a test file owns the identities it authenticates as; sharing an identity across files that also delete it is a latent order dependency, and "run the whole suite" is not evidence that a file is self-sufficient.',
+    evidence: {
+      before: 'npx vitest run tests/integration/rbacFoundation.test.ts on a cleaned QA DB -> 4 failed (NOT_AUTHORIZED: tenant access denied)',
+      afterFix: 'same command -> 4 passed, 12.4s; per-file isolation audit: 11/12 suites pass alone on a clean DB (the 12th passed twice on re-run)',
+      verified: 'full integration suite 21/21 files, four consecutive clean runs'
+    },
+  },
+  {
+    category: 'prevention_rule',
+    title: 'Shared-fixture cleanup must be scoped — an unscoped DELETE wiped a parallel suite\'s rows',
+    component: 'tests/setup/fixtures.ts, tests/integration/tenantIsolationOps.test.ts',
+    description:
+      'cleanupTestData() in tests/setup/fixtures.ts ran unscoped DELETEs on reminder_logs, reminder_occurrences and reminder_configs, and three suites call it in beforeAll. Running in parallel with tenantIsolationOps, it deleted that suite\'s own reminder config mid-test, so the very next RPC failed with: insert or update on table "reminder_occurrences" violates foreign key constraint "reminder_occurrences_config_id_fkey" — about one run in three, with no failing assertion in the guilty file. The file already documented the rule for identities ("deleting them here made a finishing suite wipe fixtures another suite was still using"); the reminder deletes were the last violation of it. They are now scoped to the fixture customers. RULE: a cleanup helper deletes only the rows its own fixtures own; any whole-table DELETE in a suite that runs in parallel is a cross-suite failure generator that will be reported as flakiness in an unrelated file.',
+    evidence: {
+      before: 'npx vitest run tests/integration/ -> 1 failed | 20 passed, error at tenantIsolationOps.test.ts:191 (FK reminder_occurrences_config_id_fkey), reproduced in 1 of 3 runs',
+      afterFix: 'four consecutive full integration runs -> 21 passed (21) each, 0 failures',
+      verified: 'full suite 348/348 Vitest; Playwright E2E re-run after the change'
+    },
+  },
 ];
 
 const client = await pool.connect();

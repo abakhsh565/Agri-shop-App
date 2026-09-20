@@ -2,8 +2,10 @@ import AuthLayout from "@/components/layout/AuthLayout";
 import NavHeader from "@/components/ui/NavHeader";
 import Button from "@/components/ui/Button";
 import { useNavigate } from "react-router-dom";
+import { useT } from "@/lib/i18n";
 
 export default function UnderReviewPage() {
+  const t = useT();
   const navigate = useNavigate();
   return (
     <AuthLayout>
@@ -13,16 +15,16 @@ export default function UnderReviewPage() {
           ⏳
         </div>
         <div className="flex flex-col gap-2">
-          <p className="text-xl font-bold text-black">Under Review</p>
+          <p className="text-xl font-bold text-black">{t("auth.underReview")}</p>
           <p className="text-sm text-[#888]">
-            Your shop registration has been submitted and is being reviewed by the admin.
+            {t("auth.underReviewBody")}
           </p>
           <p className="text-sm text-[#888]">
-            You'll be able to sign in once your account is approved.
+            {t("auth.underReviewHint")}
           </p>
         </div>
         <Button fullWidth size="lg" onClick={() => navigate("/login")}>
-          Back to Login
+          {t("auth.backToLogin")}
         </Button>
       </div>
     </AuthLayout>

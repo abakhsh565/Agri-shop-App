@@ -167,7 +167,7 @@ export default function SaleDetailPage() {
       createdAt: sale!.createdAt, totalAmount: sale!.totalAmount, amountPaid: sale!.amountPaid,
       outstandingBalance: sale!.outstandingBalance, subtotal: sale!.subtotal,
       items: sale!.items.map((it) => ({ productName: it.productName, variantName: it.variantName, qty: it.qty, unitPrice: it.unitPrice })),
-    });
+    }, t);
     if (!blob) { addToast(t("saleDetail.failedReceipt"), "error"); return; }
     const fileName = `receipt-${sale!.saleNumber}.png`;
     try {
@@ -181,7 +181,7 @@ export default function SaleDetailPage() {
     } catch {}
     const file = new File([blob], fileName, { type: "image/png" });
     if (navigator.share && navigator.canShare?.({ files: [file] })) {
-      try { await navigator.share({ title: "AgriShop Receipt", files: [file] }); return; } catch {}
+      try { await navigator.share({ title: t("saleSuccess.saleReceipt"), files: [file] }); return; } catch {}
     }
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a"); a.href = url; a.download = fileName; a.click();
@@ -197,7 +197,7 @@ export default function SaleDetailPage() {
       createdAt: sale!.createdAt, totalAmount: sale!.totalAmount, amountPaid: sale!.amountPaid,
       outstandingBalance: sale!.outstandingBalance, subtotal: sale!.subtotal,
       items: sale!.items.map((it) => ({ productName: it.productName, variantName: it.variantName, qty: it.qty, unitPrice: it.unitPrice })),
-    });
+    }, t);
     if (!blob) { addToast(t("saleDetail.failedReceipt"), "error"); return; }
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a"); a.href = url; a.download = `receipt-${sale!.saleNumber}.png`; a.click();

@@ -206,7 +206,7 @@ function ReminderCard({
 
       {expanded && (
         <div className="px-4 pb-4 flex flex-col gap-3" style={{ borderTop: "1px solid var(--divider)" }}>
-          <p className="text-[10px] font-bold uppercase tracking-wider pt-3" style={{ color: "var(--text-secondary)" }}>Message</p>
+          <p className="text-[10px] font-bold uppercase tracking-wider pt-3" style={{ color: "var(--text-secondary)" }}>{t("common.message")}</p>
           <div className="rounded-[10px] px-3 py-2.5" style={{ background: "var(--surface-2)" }}>
             <p className="text-[13px] leading-relaxed" style={{ color: "var(--text-primary)" }}>{generateReminderMessage(reminder)}</p>
           </div>
@@ -350,7 +350,8 @@ export default function RemindersOverviewPage() {
         entity_id: r.customerId,
         entity_name: r.customerName,
         title: r.customerName,
-        detail: `Credit increase request: Rs. ${Math.round(r.currentLimit).toLocaleString("en-PK")} \u2192 Rs. ${Math.round(r.requestedLimit).toLocaleString("en-PK")}`,
+        detailKey: "signal.detailCreditRequest",
+        detailParams: { from: Math.round(r.currentLimit).toLocaleString("en-PK"), to: Math.round(r.requestedLimit).toLocaleString("en-PK") },
         reason: `${r.customerName} is requesting a credit limit increase from Rs. ${Math.round(r.currentLimit).toLocaleString("en-PK")} to Rs. ${Math.round(r.requestedLimit).toLocaleString("en-PK")}${r.reason ? `. Reason: ${r.reason}` : ""}.`,
         recommendedAction: "Approve or reject the request.",
         signalAction: "approve_reject" as SignalAction,
@@ -512,7 +513,7 @@ export default function RemindersOverviewPage() {
         key={signal.id}
         icon={config.icon}
         title={signal.title}
-        subtitle={signal.detail}
+        subtitle={t(signal.detailKey, signal.detailParams)}
         actionLabel={isUrdu ? "جائزہ" : "Review"}
         cardBg={config.cardBg}
         iconBg={config.iconBg}
@@ -783,7 +784,7 @@ export default function RemindersOverviewPage() {
                 <span className="text-[11px]" style={{ color: "var(--text-secondary)" }}>{editingReminder.triggerDetail}</span>
               </div>
               <div>
-                <label className="text-[11px] font-semibold uppercase tracking-wider block mb-2" style={{ color: "var(--text-secondary)" }}>Message</label>
+                <label className="text-[11px] font-semibold uppercase tracking-wider block mb-2" style={{ color: "var(--text-secondary)" }}>{t("common.message")}</label>
                 <textarea value={editMessage} onChange={(e) => setEditMessage(e.target.value)} rows={5} className="w-full rounded-[14px] px-4 py-3 text-[13px] outline-none resize-none" style={{ background: "var(--surface-2)", color: "var(--text-primary)", border: "1px solid var(--divider)" }} />
               </div>
               <div className="flex gap-3">

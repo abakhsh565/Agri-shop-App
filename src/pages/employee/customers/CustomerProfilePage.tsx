@@ -561,7 +561,7 @@ export default function CustomerProfilePage() {
                 ) : (
                   <div className="rounded-[14px] p-3" style={{ background: "var(--surface-2)", border: "1px solid var(--divider)" }}>
                     <p className="text-[12px]" style={{ color: "var(--text-secondary)" }}>Current: {formatCurrency(customer.creditLimit)}</p>
-                    <p className="text-[11px] mt-1" style={{ color: "var(--text-secondary)" }}>To change, submit a request via Action Center.</p>
+                    <p className="text-[11px] mt-1" style={{ color: "var(--text-secondary)" }}>{t("customer.actionCenterHint")}</p>
                   </div>
                 )}
               </div>

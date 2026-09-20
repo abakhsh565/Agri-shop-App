@@ -6,6 +6,7 @@ import { useCustomersStore } from "@/stores/customersStore";
 import { useThemeStore } from "@/stores/themeStore";
 import { useShellBase } from "@/lib/useShellBase";
 import { Bell, Clock, AlertTriangle, CheckCircle } from "lucide-react";
+import { useT } from "@/lib/i18n";
 
 interface ReminderLogEntry {
   id: string;
@@ -40,6 +41,7 @@ const TYPE_CONFIG = {
 };
 
 export default function ReminderHistoryPage() {
+  const t = useT();
   const { customerId } = useParams();
   const navigate = useNavigate();
   const base = useShellBase();
@@ -85,7 +87,7 @@ export default function ReminderHistoryPage() {
       style={{ background: "var(--background)", direction: isUrdu ? "rtl" : "ltr" }}
     >
       <StatusBar />
-      <NavHeader title="Reminder History" />
+      <NavHeader title={t("customerProfile.reminderHistory")} />
 
       <div className="flex flex-col gap-3 px-4 pt-4 pb-8">
         {logs.length === 0 ? (
@@ -100,7 +102,7 @@ export default function ReminderHistoryPage() {
               <Bell size={20} style={{ color: "var(--text-secondary)" }} />
             </div>
             <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
-              No reminders sent yet
+              {t("reminders.noneSent")}
             </p>
             <p className="text-xs text-center" style={{ color: "var(--text-secondary)" }}>
               Configure a reminder schedule for {customer.name} to start tracking reminders.

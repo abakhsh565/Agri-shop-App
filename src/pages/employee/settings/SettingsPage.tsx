@@ -94,7 +94,7 @@ export default function SettingsPage() {
     >
       <div>
         <StatusBar />
-        <NavHeader title="Settings" />
+        <NavHeader title={t("settings.title")} />
 
         {/* Profile card */}
         <div

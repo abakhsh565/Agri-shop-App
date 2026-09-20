@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Search, Check, X } from "lucide-react";
+import { useT } from "@/lib/i18n";
 
 export interface SelectOption {
   value: string;
@@ -26,8 +27,9 @@ interface SelectSheetProps {
  */
 export default function SelectSheet({
   open, title, options, selected, searchable = false,
-  emptyLabel = "Nothing to choose from.", onSelect, onClose,
+  emptyLabel, onSelect, onClose,
 }: SelectSheetProps) {
+  const t = useT();
   const [query, setQuery] = useState("");
 
   useEffect(() => {
@@ -72,7 +74,7 @@ export default function SelectSheet({
                 autoFocus
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search…"
+                placeholder={t("common.searchPlaceholder")}
                 className="flex-1 bg-transparent text-[13px] outline-none"
                 style={{ color: "var(--text-primary)" }}
               />
@@ -82,7 +84,7 @@ export default function SelectSheet({
 
         <div className="overflow-y-auto px-3 pb-6 pt-1">
           {filtered.length === 0 ? (
-            <p className="text-center text-[13px] py-8" style={{ color: "var(--text-secondary)" }}>{emptyLabel}</p>
+            <p className="text-center text-[13px] py-8" style={{ color: "var(--text-secondary)" }}>{emptyLabel ?? t("common.nothingToChoose")}</p>
           ) : (
             filtered.map((o) => {
               const isSel = o.value === selected;

@@ -278,7 +278,7 @@ export default function RecordCustomerPaymentPage() {
                         className="text-[10px] font-bold px-2 py-0.5 rounded"
                         style={{ color: "var(--error)" }}
                       >
-                        Remove
+                        {t("common.remove")}
                       </button>
                     )}
                   </div>
@@ -287,7 +287,7 @@ export default function RecordCustomerPaymentPage() {
                     inputMode="numeric"
                     value={split.amount}
                     onChange={(e) => updateSplit(i, "amount", e.target.value)}
-                    placeholder="Amount"
+                    placeholder={t("common.amount")}
                     className="w-full h-10 rounded-xl px-3 text-sm font-bold outline-none"
                     style={{ background: "var(--background)", border: "1px solid var(--divider)", color: "var(--text-primary)" }}
                   />
@@ -321,7 +321,7 @@ export default function RecordCustomerPaymentPage() {
 
               {/* Split total */}
               <div className="flex justify-between items-center px-4 py-2 rounded-[10px]" style={{ background: "var(--surface-2)" }}>
-                <span className="text-xs" style={{ color: "var(--text-secondary)" }}>Total</span>
+                <span className="text-xs" style={{ color: "var(--text-secondary)" }}>{t("sale.total")}</span>
                 <span className="text-sm font-bold" style={{ color: totalPaid > customer.outstandingBalance ? "var(--error)" : "var(--text-primary)" }}>
                   {formatCurrency(totalPaid)} / {formatCurrency(customer.outstandingBalance)}
                 </span>

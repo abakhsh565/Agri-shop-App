@@ -159,10 +159,10 @@ export default function OTPVerifyPage() {
 
   return (
     <AuthLayout>
-      <NavHeader title="Verify OTP" backTo="/login" />
+      <NavHeader title={t("auth.verifyOtp")} backTo="/login" />
       <div className="flex flex-col gap-8 p-6 flex-1">
         <div className="flex flex-col gap-2">
-          <p className="text-xl font-bold text-black">Enter verification code</p>
+          <p className="text-xl font-bold text-black">{t("auth.enterCode")}</p>
           <p className="text-sm text-[#888]">
             We sent a 6-digit code to{" "}
             <span className="font-medium text-black">{pendingPhone}</span>
@@ -180,12 +180,12 @@ export default function OTPVerifyPage() {
 
         {!expired && !locked && (
           <p className="text-sm text-[#888] text-center">
-            Code expires in <span className="font-medium text-black">{formatTime(countdown)}</span>
+            {t("auth.codeExpiresIn")}<span className="font-medium text-black">{formatTime(countdown)}</span>
           </p>
         )}
 
         {expired && !locked && (
-          <p className="text-sm text-[#ef4444] text-center">Code expired. Request a new one.</p>
+          <p className="text-sm text-[#ef4444] text-center">{t("auth.codeExpired")}</p>
         )}
 
         {locked && (
@@ -197,7 +197,7 @@ export default function OTPVerifyPage() {
         {loading && (
           <div className="flex items-center justify-center gap-2 py-3">
             <div className="w-5 h-5 border-2 border-black border-t-transparent rounded-full animate-spin" />
-            <p className="text-sm text-[#888]">Verifying...</p>
+            <p className="text-sm text-[#888]">{t("auth.verifying")}</p>
           </div>
         )}
 
@@ -205,13 +205,13 @@ export default function OTPVerifyPage() {
           {resendCountdown > 0 ? (
             <p className="text-sm text-[#888]">Resend in {resendCountdown}s</p>
           ) : resends >= MAX_RESENDS ? (
-            <p className="text-sm text-[#ef4444]">Maximum resend attempts reached.</p>
+            <p className="text-sm text-[#ef4444]">{t("auth.resendLimit")}</p>
           ) : (
             <button
               onClick={handleResend}
               className="text-sm font-medium text-black underline underline-offset-2"
             >
-              Resend OTP
+              {t("auth.resendOtp")}
             </button>
           )}
         </div>
