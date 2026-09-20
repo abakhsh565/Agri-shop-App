@@ -70,6 +70,8 @@ afterAll(async () => {
   for (const e of TEST.evidence) {
     console.log(`[${e.result}] ${e.test}\n  Expected: ${e.expected}\n  Actual:   ${e.actual}`);
   }
+  // Printed FAIL evidence must fail the build.
+  expect(TEST.evidence.filter(e => e.result === 'FAIL').map(e => `${e.test}: expected ${e.expected}, got ${e.actual}`)).toEqual([]);
 });
 
 async function cleanupTestData() {

@@ -46,9 +46,11 @@ async function clean() {
   await c.connect();
   
   const tables = [
-    // Child tables first (FK order)
-    'sale_items', 'return_items',
-    'returns', 'sales', 'voids',
+    // Child tables first (FK order). return_items -> returns/sale_items,
+    // voids and returns -> sales, so both must go before sale_items/sales
+    // (deleting sales first fails on voids_sale_id_fkey and blocks customers).
+    'return_items', 'returns', 'voids',
+    'sale_items', 'sales',
     'purchase_items', 'supplier_payments', 'purchases',
     'customer_payments', 'payments', 'credit_limit_requests', 'customer_crops',
     'inventory_movements', 'stock_adjustments',
@@ -61,7 +63,8 @@ async function clean() {
     'reminder_logs', 'reminder_occurrences', 'reminder_configs',
     'price_history',
     'agent_tasks', 'agent_attempts',
-    'engineering_memory',
+    // engineering_memory is NOT test data — it is the durable Engineering OS
+    // knowledge base. Cleaning it erased 13 verified findings once already.
     'incident_reports',
     'drafts',
   ];

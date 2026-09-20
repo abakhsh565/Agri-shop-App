@@ -23,6 +23,10 @@ const OWNER_A = 'd1000000-0000-0000-0000-00000000000a';
 const OWNER_B = 'd1000000-0000-0000-0000-00000000000b';
 const EMP_A = 'd1000000-0000-0000-0000-0000000000e1';
 const ROLE_EMPLOYEE = 'a0000000-0000-0000-0000-000000000001'; // Sales Employee: no alerts.manage
+// This suite's OWN fixtures. It must not depend on a customer/config seeded by
+// another suite, and it must not wipe the live tenant's reminder configuration.
+const CFG_A = 'd1000000-0000-0000-0000-0000000000c1';
+const CUST_A = 'd1000000-0000-0000-0000-0000000000d1';
 const RUN = `QA Iso ${Date.now()}`;
 
 async function sql(query: string) {
@@ -30,10 +34,12 @@ async function sql(query: string) {
 }
 
 async function cleanup() {
-  await sql(`DELETE FROM reminder_occurrences WHERE shop_id IN ('${TENANT_A}','${TENANT_B}')`).catch(() => undefined);
-  await sql(`DELETE FROM reminder_configs WHERE shop_id IN ('${TENANT_A}','${TENANT_B}')`).catch(() => undefined);
-  await sql(`DELETE FROM reminder_logs WHERE shop_id IN ('${TENANT_A}','${TENANT_B}')`).catch(() => undefined);
+  await sql(`DELETE FROM reminder_occurrences WHERE config_id IN ('${CFG_A}') OR shop_id = '${TENANT_B}'`).catch(() => undefined);
+  // Only this suite's configuration — never the live tenant's own rows.
+  await sql(`DELETE FROM reminder_configs WHERE id = '${CFG_A}' OR name LIKE '${RUN}%' OR shop_id = '${TENANT_B}'`).catch(() => undefined);
+  await sql(`DELETE FROM reminder_logs WHERE shop_id = '${TENANT_B}'`).catch(() => undefined);
   await sql(`DELETE FROM audit_events WHERE user_id IN ('${OWNER_A}','${OWNER_B}','${EMP_A}')`).catch(() => undefined);
+  await sql(`DELETE FROM customers WHERE id = '${CUST_A}'`).catch(() => undefined);
   await sql(`DELETE FROM users WHERE id IN ('${OWNER_A}','${OWNER_B}','${EMP_A}')`).catch(() => undefined);
   await sql(`DELETE FROM shops WHERE id = '${TENANT_B}'`).catch(() => undefined);
 }
@@ -58,6 +64,18 @@ beforeAll(async () => {
      WHERE user_id = '${EMP_A}'
   `);
   await sql(`DELETE FROM user_permissions WHERE user_id = '${EMP_A}'`);
+
+  // Deterministic fixtures for the reminder tests below (idempotent).
+  await sql(`
+    INSERT INTO reminder_configs (id, name, type, anchor, offset_days, repeat_mode, channel, is_active, shop_id)
+    VALUES ('${CFG_A}', '${RUN} config base', 'credit', 'due_date', 0, 'once', 'sms', true, '${TENANT_A}')
+    ON CONFLICT (id) DO NOTHING
+  `);
+  await sql(`
+    INSERT INTO customers (id, name, phone, credit_limit, outstanding_balance, total_purchases, total_paid, shop_id, created_by)
+    VALUES ('${CUST_A}', '${RUN} Customer A', '923009780010', 100000, 0, 0, 0, '${TENANT_A}', 'QA')
+    ON CONFLICT (id) DO NOTHING
+  `);
 });
 
 afterAll(async () => {
@@ -117,16 +135,16 @@ describe('Reminder configuration — tenant-owned and writable', () => {
 
 describe('Reminder occurrence RPC — authorization and tenant scoping', () => {
   it('lets an owner with alerts.manage create an occurrence for its own tenant', async () => {
-    const configs = await sql(`SELECT id FROM reminder_configs WHERE shop_id = '${TENANT_A}' LIMIT 1`);
-    const configId = configs.rows[0]?.id;
-    expect(configId).toBeTruthy();
-    const customer = await sql(`SELECT id FROM customers WHERE shop_id = '${TENANT_A}' LIMIT 1`);
-    expect(customer.rows[0]?.id).toBeTruthy();
+    // Seeded by beforeAll — this suite owns these rows instead of borrowing them.
+    const config = await sql(`SELECT id FROM reminder_configs WHERE id = '${CFG_A}'`);
+    expect(config.rows[0]?.id, 'config fixture must exist').toBe(CFG_A);
+    const customer = await sql(`SELECT id FROM customers WHERE id = '${CUST_A}'`);
+    expect(customer.rows[0]?.id, 'customer fixture must exist').toBe(CUST_A);
 
     const res = await execRpcAsUser(OWNER_A, 'upsert_reminder_occurrence', {
       payload: {
-        config_id: configId,
-        customer_id: customer.rows[0].id,
+        config_id: CFG_A,
+        customer_id: CUST_A,
         occurrence_key: `qa-key-${Date.now()}`,
         occurrence_number: 1,
         stage: 'first',
@@ -147,10 +165,9 @@ describe('Reminder occurrence RPC — authorization and tenant scoping', () => {
   });
 
   it('rejects the same call from a member without alerts.manage', async () => {
-    const customerA = await sql(`SELECT id FROM customers WHERE shop_id = '${TENANT_A}' LIMIT 1`);
     const res = await execRpcAsUser(EMP_A, 'upsert_reminder_occurrence', {
       payload: {
-        customer_id: customerA.rows[0]?.id,
+        customer_id: CUST_A,
         occurrence_key: `qa-denied-${Date.now()}`,
         occurrence_number: 1,
         status: 'scheduled',
@@ -161,12 +178,10 @@ describe('Reminder occurrence RPC — authorization and tenant scoping', () => {
 
   it('does not return another tenant occurrence for the same key', async () => {
     const key = `qa-shared-${Date.now()}`;
-    const configA = await sql(`SELECT id FROM reminder_configs WHERE shop_id = '${TENANT_A}' LIMIT 1`);
-    const customerA = await sql(`SELECT id FROM customers WHERE shop_id = '${TENANT_A}' LIMIT 1`);
     const created = await execRpcAsUser(OWNER_A, 'upsert_reminder_occurrence', {
       payload: {
-        config_id: configA.rows[0].id,
-        customer_id: customerA.rows[0].id,
+        config_id: CFG_A,
+        customer_id: CUST_A,
         occurrence_key: key,
         occurrence_number: 1,
         scheduled_date: new Date().toISOString().slice(0, 10),
@@ -183,13 +198,11 @@ describe('Reminder occurrence RPC — authorization and tenant scoping', () => {
   });
 
   it('rejects a reminder occurrence referencing another tenant customer', async () => {
-    const customers = await sql(`SELECT id FROM customers WHERE shop_id = '${TENANT_A}' LIMIT 1`);
-    const foreignCustomer = customers.rows[0]?.id;
-    if (!foreignCustomer) return; // no customer fixture in this environment
-
+    // CUST_A belongs to tenant A; owner B must never be able to use it. The
+    // fixture is guaranteed above, so this test can never silently skip.
     const res = await execRpcAsUser(OWNER_B, 'upsert_reminder_occurrence', {
       payload: {
-        customer_id: foreignCustomer,
+        customer_id: CUST_A,
         occurrence_key: `qa-foreign-${Date.now()}`,
         occurrence_number: 1,
         status: 'scheduled',

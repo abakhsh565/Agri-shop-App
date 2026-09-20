@@ -88,6 +88,8 @@ afterAll(async () => {
   const failed = T.evidence.filter(e => e.result === 'FAIL').length;
   console.log(`\n=== DESTRUCTIVE SAFETY EVIDENCE ===\nTotal: ${T.evidence.length}, PASS: ${passed}, FAIL: ${failed}`);
   for (const e of T.evidence) console.log(`[${e.result}] ${e.test}\n  Expected: ${e.expected}\n  Actual:   ${e.actual}`);
+  // Printed FAIL evidence must fail the build.
+  expect(T.evidence.filter(e => e.result === 'FAIL').map(e => `${e.test}: expected ${e.expected}, got ${e.actual}`)).toEqual([]);
 });
 
 // ══════════════════════════════════════════════════════════════

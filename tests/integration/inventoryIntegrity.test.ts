@@ -58,10 +58,20 @@ afterAll(async () => {
   await cleanupTestData();
   await client?.end();
   const passed = TEST.evidence.filter(e => e.result === 'PASS').length;
-  const failed = TEST.evidence.filter(e => e.result === 'FAIL').length;
-  console.log(`\n=== INVENTORY + RETURN/VOID INTEGRITY EVIDENCE ===\nTotal: ${TEST.evidence.length}, PASS: ${passed}, FAIL: ${failed}`);
+  const failedEvidence = TEST.evidence.filter(e => e.result === 'FAIL');
+  console.log(`\n=== INVENTORY + RETURN/VOID INTEGRITY EVIDENCE ===\nTotal: ${TEST.evidence.length}, PASS: ${passed}, FAIL: ${failedEvidence.length}`);
   for (const e of TEST.evidence) console.log(`[${e.result}] ${e.test}\n  Expected: ${e.expected}\n  Actual:   ${e.actual}`);
+  // Printed FAIL evidence must fail the build — a suite that only logs its
+  // failures reports green while the invariant is broken.
+  expect(failedEvidence.map(e => `${e.test}: expected ${e.expected}, got ${e.actual}`)).toEqual([]);
 });
+
+/** Derived rollup vs the variants that own the stock. */
+async function rollupFor(productId: string): Promise<{ product: number; variantSum: number }> {
+  const p = await client.query(`SELECT stock_qty FROM products WHERE id = '${productId}'`);
+  const s = await client.query(`SELECT coalesce(sum(stock_qty),0) AS s FROM product_variants WHERE product_id = '${productId}' AND is_active = true`);
+  return { product: Number(p.rows[0]?.stock_qty ?? 0), variantSum: Number(s.rows[0]?.s ?? 0) };
+}
 
 async function cleanupTestData() {
   const q = async (sql: string) => { try { await execSqlAsAdmin(sql); } catch {} };
@@ -98,15 +108,18 @@ describe('Inventory Integrity — Sale Stock Decrease', () => {
     const saleQty = 3;
     await client.query(`INSERT INTO sales (id, sale_number, customer_id, employee_id, total_amount, status, payment_type, payment_method, amount_paid, amount_due, discount, is_voided, shop_id, created_at, updated_at) VALUES ('${TEST.saleA}', 'INV-SALE-001', '${TEST.customerA}', '${TEST.customerA}', ${saleQty * 5000}, 'completed', 'credit', 'cash', 0, ${saleQty * 5000}, 0, false, '${TEST.shop}', NOW(), NOW()) ON CONFLICT (id) DO NOTHING`);
     await client.query(`INSERT INTO sale_items (id, sale_id, product_id, product_name, variant_id, variant_name, qty, unit_price, line_total) VALUES ('${TEST.saleItemA}', '${TEST.saleA}', '${TEST.productA}', 'Inv Test Product A', '${TEST.variantA}', '1kg', ${saleQty}, 5000, ${saleQty * 5000}) ON CONFLICT (id) DO NOTHING`);
-    // Decrease stock
+    // Decrease stock. The variant is the stock of record (migration 0128); the
+    // app never writes products.stock_qty — a trigger derives it as the sum of
+    // the product's active variants, so writing it here would double-count.
     await client.query(`UPDATE product_variants SET stock_qty = stock_qty - ${saleQty} WHERE id = '${TEST.variantA}'`);
-    await client.query(`UPDATE products SET stock_qty = stock_qty - ${saleQty} WHERE id = '${TEST.productA}'`);
 
     const v = await client.query(`SELECT stock_qty FROM product_variants WHERE id = '${TEST.variantA}'`);
     record('Variant A after sale (3 units)', '97', String(v.rows[0].stock_qty), Number(v.rows[0].stock_qty) === 97 ? 'PASS' : 'FAIL');
 
-    const p = await client.query(`SELECT stock_qty FROM products WHERE id = '${TEST.productA}'`);
-    record('Product A after sale (3 units)', '97', String(p.rows[0].stock_qty), Number(p.rows[0].stock_qty) === 97 ? 'PASS' : 'FAIL');
+    // The derived product rollup must follow the variant.
+    const rollup = await rollupFor(TEST.productA);
+    record('Product A rollup after sale (derived)', '97', rollup.product, Number(rollup.product) === 97 ? 'PASS' : 'FAIL');
+    record('Product A rollup = SUM(active variants)', rollup.variantSum, rollup.product, rollup.product === rollup.variantSum ? 'PASS' : 'FAIL');
   });
 });
 
@@ -117,9 +130,8 @@ describe('Inventory Integrity — Partial Return', () => {
     const returnQty = 1;
     await client.query(`INSERT INTO returns (id, sale_id, customer_id, refund_amount, reason, processed_by, shop_id, created_at) VALUES ('${TEST.returnA}', '${TEST.saleA}', '${TEST.customerA}', 5000, 'QA partial return', '${TEST.customerA}', '${TEST.shop}', NOW()) ON CONFLICT (id) DO NOTHING`);
     await client.query(`INSERT INTO return_items (id, return_id, sale_item_id, product_id, product_name, variant_id, variant_name, qty_to_return, unit_price, refund_amount) VALUES ('${TEST.returnItemA}', '${TEST.returnA}', '${TEST.saleItemA}', '${TEST.productA}', 'Inv Test Product A', '${TEST.variantA}', '1kg', ${returnQty}, 5000, 5000) ON CONFLICT (id) DO NOTHING`);
-    // Restore stock
+    // Restore stock (variant only — the product rollup is derived)
     await client.query(`UPDATE product_variants SET stock_qty = stock_qty + ${returnQty} WHERE id = '${TEST.variantA}'`);
-    await client.query(`UPDATE products SET stock_qty = stock_qty + ${returnQty} WHERE id = '${TEST.productA}'`);
 
     const v = await client.query(`SELECT stock_qty FROM product_variants WHERE id = '${TEST.variantA}'`);
     record('Variant A after return (1 unit)', '98', String(v.rows[0].stock_qty), Number(v.rows[0].stock_qty) === 98 ? 'PASS' : 'FAIL');
@@ -140,9 +152,8 @@ describe('Inventory Integrity — Void Remaining', () => {
     const remainingQty = 2;
     await client.query(`INSERT INTO voids (id, sale_id, reason, voided_by, created_at) VALUES ('${TEST.voidA}', '${TEST.saleA}', 'QA void remaining', '${TEST.customerA}', NOW()) ON CONFLICT (id) DO NOTHING`);
     await client.query(`UPDATE sales SET is_voided = true, void_reason = 'QA void remaining', voided_by = '${TEST.customerA}', voided_at = NOW() WHERE id = '${TEST.saleA}'`);
-    // Restore only remaining quantity
+    // Restore only remaining quantity (variant only — the rollup is derived)
     await client.query(`UPDATE product_variants SET stock_qty = stock_qty + ${remainingQty} WHERE id = '${TEST.variantA}'`);
-    await client.query(`UPDATE products SET stock_qty = stock_qty + ${remainingQty} WHERE id = '${TEST.productA}'`);
 
     const v = await client.query(`SELECT stock_qty FROM product_variants WHERE id = '${TEST.variantA}'`);
     record('Variant A after void (remaining 2)', '100', String(v.rows[0].stock_qty), Number(v.rows[0].stock_qty) === 100 ? 'PASS' : 'FAIL');
@@ -240,10 +251,11 @@ describe('Inventory Integrity — Persistence', () => {
     record('Stock persistence re-query', String(v1.rows[0].stock_qty), String(v2.rows[0].stock_qty), v1.rows[0].stock_qty === v2.rows[0].stock_qty ? 'PASS' : 'FAIL');
   });
 
-  it('should verify product stock matches variant stock for single-variant products', async () => {
-    const p = await client.query(`SELECT stock_qty FROM products WHERE id = '${TEST.productA}'`);
-    const v = await client.query(`SELECT stock_qty FROM product_variants WHERE id = '${TEST.variantA}'`);
-    // Product stock_qty should match (for single-variant products)
-    record('Product/variant stock consistency', String(v.rows[0].stock_qty), String(p.rows[0].stock_qty), Number(p.rows[0].stock_qty) === Number(v.rows[0].stock_qty) ? 'PASS' : 'FAIL');
+  it('should keep the derived product rollup equal to its active variants', async () => {
+    // Product A has one active variant, so the derived rollup must equal it, and
+    // in every case it must equal SUM(active variants).
+    const rollup = await rollupFor(TEST.productA);
+    record('Product/variant stock consistency', rollup.variantSum, rollup.product, rollup.product === rollup.variantSum ? 'PASS' : 'FAIL');
+    record('Product A rollup equals its single variant', String((await client.query(`SELECT stock_qty FROM product_variants WHERE id = '${TEST.variantA}'`)).rows[0].stock_qty), rollup.product, rollup.product === Number((await client.query(`SELECT stock_qty FROM product_variants WHERE id = '${TEST.variantA}'`)).rows[0].stock_qty) ? 'PASS' : 'FAIL');
   });
 });

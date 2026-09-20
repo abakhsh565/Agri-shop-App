@@ -6,9 +6,37 @@
  */
 
 import pg from 'pg';
+import * as fs from 'fs';
+import * as path from 'path';
 
-const DATABASE_URL = process.env.QA_DATABASE_URL ||
-  'postgresql://postgres.bpybjrjenwccowvtrevu:LptUWZQm4TZrRksv4nAtFUHk3YG6rO@aws-0-ap-northeast-1.pooler.supabase.com:5432/postgres';
+/**
+ * Load .env.qa into process.env. QA credentials live in that untracked file
+ * (and in CI secrets) — never in source, so this file must not carry a fallback.
+ */
+function loadQaEnv() {
+  if (process.env.QA_DATABASE_URL) return;
+  const envPath = path.resolve(process.cwd(), '.env.qa');
+  if (!fs.existsSync(envPath)) return;
+  for (const line of fs.readFileSync(envPath, 'utf-8').split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    const eqIdx = trimmed.indexOf('=');
+    if (eqIdx === -1) continue;
+    const key = trimmed.slice(0, eqIdx).trim();
+    const val = trimmed.slice(eqIdx + 1).trim().replace(/^["']|["']$/g, '');
+    if (!process.env[key]) process.env[key] = val;
+  }
+}
+loadQaEnv();
+
+/** QA connection, built from environment (.env.qa or CI secrets) only. */
+function qaDatabaseUrl(): string {
+  const explicit = process.env.QA_DATABASE_URL;
+  if (explicit) return explicit;
+  const { QA_DB_USER, QA_DB_PASS, QA_DB_HOST } = process.env;
+  if (!QA_DB_USER || !QA_DB_PASS || !QA_DB_HOST) return '';
+  return `postgresql://${QA_DB_USER}:${QA_DB_PASS}@${QA_DB_HOST}:5432/postgres`;
+}
 
 const KEEP_PHONES = ['923001234567', '923001122334'];
 
@@ -18,10 +46,14 @@ export async function setup() {
 
 export async function teardown() {
   // Only clean if QA env is configured
-  if (!process.env.QA_DB_HOST && !process.env.QA_DATABASE_URL) return;
-  
+  const databaseUrl = qaDatabaseUrl();
+  if (!databaseUrl) {
+    console.log('[QA Cleanup] skipped — QA database credentials are not configured');
+    return;
+  }
+
   try {
-    const c = new pg.Client({ connectionString: DATABASE_URL, ssl: { rejectUnauthorized: false } });
+    const c = new pg.Client({ connectionString: databaseUrl, ssl: { rejectUnauthorized: false } });
     await c.connect();
     
     const tables = [

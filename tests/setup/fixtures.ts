@@ -135,9 +135,14 @@ export async function cleanupTestData() {
     `DELETE FROM customer_payments WHERE customer_id IN ${customerIds}`,
     `DELETE FROM credit_limit_requests WHERE customer_id IN ${customerIds}`,
     `DELETE FROM inventory_movements WHERE product_id IN ('${QA_IDS.productA}', '${QA_IDS.productB}')`,
-    `DELETE FROM reminder_logs`,
-    `DELETE FROM reminder_occurrences`,
-    `DELETE FROM reminder_configs`,
+    // Reminder rows must be scoped to the fixtures this helper owns. Unscoped
+    // whole-table deletes wiped a *parallel* suite's reminder config mid-test:
+    // tenantIsolationOps then failed with "insert or update on table
+    // reminder_occurrences violates foreign key constraint
+    // reminder_occurrences_config_id_fkey", intermittently, ~1 run in 3.
+    `DELETE FROM reminder_logs WHERE config_id IN (SELECT id FROM reminder_configs WHERE customer_id IN ${customerIds})`,
+    `DELETE FROM reminder_occurrences WHERE customer_id IN ${customerIds}`,
+    `DELETE FROM reminder_configs WHERE customer_id IN ${customerIds}`,
   ];
 
   for (const sql of childDeletes) {

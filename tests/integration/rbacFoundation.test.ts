@@ -2,7 +2,17 @@ import { describe, it, beforeAll, afterAll, expect } from 'vitest';
 import { execRpcAsUser, execSqlAsAdmin, qaServiceClient } from '../setup/qa-client';
 
 const tenant = '00000000-0000-0000-0000-000000000001';
-const admin = 'e1000000-0000-0000-0000-000000000001';
+/**
+ * This file owns its tenant-admin identity.
+ *
+ * It previously borrowed `e1000000-…0001`, which `employeePermissions.test.ts`
+ * seeds AND deletes in its own afterAll. On a clean database — or whenever that
+ * suite had not yet seeded it — every assertion here failed with
+ * "NOT_AUTHORIZED: tenant access denied", so the file only passed by run order.
+ * Seeding a private admin removes the cross-file coupling entirely.
+ */
+const admin = 'b1080000-0000-0000-0000-0000000000a1';
+const adminPhone = '923008880002';
 let employee = 'b1080000-0000-0000-0000-000000000001';
 const roleName = `QA RBAC ${Date.now()}`;
 let roleId = '';
@@ -12,7 +22,12 @@ let warehouseBranch = '';
 async function sql(query: string) { return execSqlAsAdmin(query); }
 
 beforeAll(async () => {
-  await qaServiceClient.auth.admin.updateUserById(admin, { password: `QA-test-${admin}-2024!` });
+  // The users insert also creates the owner membership (ensure_user_membership
+  // trigger), which is what gives this caller tenant access. The Supabase Auth
+  // credential is provisioned on demand by execRpcAsUser.
+  await sql(`INSERT INTO users (id, name, phone, role, is_original_owner, is_active, shop_id)
+    VALUES ('${admin}', 'QA RBAC Admin', '${adminPhone}', 'admin', true, true, '${tenant}')
+    ON CONFLICT (id) DO UPDATE SET is_active = true, role = 'admin', shop_id = EXCLUDED.shop_id`);
   await qaServiceClient.auth.admin.updateUserById(employee, { password: `QA-test-${employee}-2024!` }).catch(() => undefined);
   await sql(`DELETE FROM audit_events WHERE entity_id IN ('${employee}') OR details->>'name'='QA RBAC Employee'`);
   await sql(`DELETE FROM user_permissions WHERE user_id IN (SELECT id FROM users WHERE id='${employee}' OR phone='923008880001')`);
@@ -33,6 +48,10 @@ afterAll(async () => {
     await sql(`DELETE FROM roles WHERE id='${roleId}'`);
   }
   await sql(`DELETE FROM users WHERE id='${employee}'`);
+  // Remove the identity this file seeded (users delete cascades the membership).
+  await sql(`DELETE FROM user_permissions WHERE user_id='${admin}'`);
+  await sql(`DELETE FROM memberships WHERE user_id='${admin}'`);
+  await sql(`DELETE FROM users WHERE id='${admin}'`);
 });
 
 describe('Authoritative RBAC foundation', () => {

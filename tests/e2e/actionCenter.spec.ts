@@ -91,19 +91,26 @@ test('3. Action Center page loads with tabs', async ({ page }) => {
 
   await loginAsAdmin(page);
   await page.goto(ADMIN_ALERTS, { waitUntil: 'networkidle' });
-  await page.waitForTimeout(2000);
 
-  // Check the page loaded
+  // The signal tabs render only after the store hydrates, so WAIT for the real
+  // controls. Reading body text once after a fixed sleep raced hydration under
+  // full-suite load and saw a 25-character body (an empty shell) even though the
+  // page and its tabs do render — the same condition passes in isolation.
+  await expect(page.getByRole('button', { name: /^Actions/ }).first(), 'main "Actions" tab did not render').toBeVisible();
+  await expect(page.getByRole('button', { name: /Critical/ }).first(), '"Critical" tab did not render').toBeVisible();
+  await expect(page.getByRole('button', { name: /Warning/ }).first(), '"Warning" tab did not render').toBeVisible();
+  await expect(page.getByRole('button', { name: /Info/ }).first(), '"Info" tab did not render').toBeVisible();
+
   const content = await page.textContent('body');
-  const hasTabs = content?.includes('Critical') || content?.includes('Warning') || content?.includes('Info') || content?.includes('Actions');
   const pageLoaded = !content?.includes('page not found') && !content?.includes('404');
+  const hasTabs = content?.includes('Critical') || content?.includes('Warning') || content?.includes('Info') || content?.includes('Actions');
 
   evidence.push(recordEvidence(
     'Action Center loads',
-    'Page loads with signal tabs visible',
-    `Has tabs: ${hasTabs}, Page OK: ${pageLoaded}, Content length: ${content?.length || 0}`,
+    'Page loads with signal tabs (Actions / Critical / Warning / Info) rendered',
+    `Tabs rendered: ${hasTabs}, Page OK: ${pageLoaded}, Content length: ${content?.length || 0}`,
     (hasTabs && pageLoaded) ? 'PASS' : 'FAIL',
-    'browser → Action Center route → render'
+    'browser → Action Center route → rendered tab elements'
   ));
 
   writeEvidenceReport(evidence, test.info());
@@ -118,7 +125,11 @@ test('4. Sub-tabs Critical, Warning, Info are visible', async ({ page }) => {
 
   await loginAsAdmin(page);
   await page.goto(ADMIN_ALERTS, { waitUntil: 'networkidle' });
-  await page.waitForTimeout(2000);
+
+  // Same hydration race as test 3 — wait for the controls instead of sampling text.
+  await expect(page.getByRole('button', { name: /Critical/ }).first(), '"Critical" sub-tab did not render').toBeVisible();
+  await expect(page.getByRole('button', { name: /Warning/ }).first(), '"Warning" sub-tab did not render').toBeVisible();
+  await expect(page.getByRole('button', { name: /Info/ }).first(), '"Info" sub-tab did not render').toBeVisible();
 
   const body = await page.textContent('body');
 
