@@ -269,6 +269,36 @@ const MEMORIES = [
       verified: 'full suite 348/348 Vitest; Playwright E2E re-run after the change'
     },
   },
+  {
+    category: 'failure_pattern',
+    title: 'Scaffold defaults ship silently: the app title and description came from the Figma template',
+    component: '.figma/make/site.json, vite.config.ts (figmaSiteConfiguration), dist/index.html',
+    description:
+      'The built app carried <title>Figma Make App</title>, that same string as og:title, and the Figma product blurb ("Transform your Figma designs into fully functional web applications…") as <meta name="description">. Cause: vite.config.ts resolves the title as config.title ?? "Figma Make App", and .figma/make/site.json never defined a title — so the scaffold fallback was shipped as if it were product copy. Nothing failed, no test covered it, and the wrong value is only visible in the artifact (the browser tab, the OG card, the document metadata). The rendered <html lang>/<dir> were already correct because applyDirection() in stores/themeStore.ts sets them at runtime, so this was purely static document metadata — which is exactly why every rendered-UI check passed. RULE: a scaffold template default is not configuration. Any value resolved from a template with a ?? fallback must be verified in the built artifact, not in the source that relies on the fallback.',
+    evidence: {
+      before: "grep -o '<title>[^<]*</title>' dist/index.html -> <title>Figma Make App</title>; og:title Figma Make App; meta description = Figma marketing copy",
+      source: 'vite.config.ts:84 -> const title = config.title ?? "Figma Make App"; .figma/make/site.json had description+robots+accessibility only',
+      afterFix: "<title>AgriShop</title>, og:title AgriShop, description 'AgriShop — inventory, sales, purchases, customer credit and payments for agricultural retail shops.'",
+      verified: 'rebuilt and re-read the artifact (npm run build ✓ 2.83s); tsc clean; Vitest 348/348; Playwright 63/63',
+      regression: 'tests/unit/i18nCoverage.test.ts and the build step both run in CI',
+      fixedIn: '.figma/make/site.json'
+    },
+  },
+  {
+    category: 'prevention_rule',
+    title: 'A long E2E suite is not a hang: exit code 143 is the local wrapper, and this suite takes 16.9 minutes',
+    component: 'playwright.config.ts, tests/e2e/*.spec.ts (7 files, 63 tests)',
+    description:
+      'The full Playwright run appeared to "hang" and was reported as a failure twice. It is neither: the suite grew from 13 tests / 113 s (2026-09-14, crossScreenSync alone) to 63 tests / 16.9 min across 7 files, and any local invocation inside a 10-minute command budget is therefore killed by the wrapper. The tell is the reported symptom — "worker process exited unexpectedly (code=143, signal=null)": 143 = 128 + 15 = SIGTERM, i.e. the harness being terminated from outside, not a browser crash, not an assertion, and not a product failure. Because the JSON reporter writes results.json only at the end of a run, the file still held the previous run\'s figures, which made the aborted run look like it had silently passed. The workflow\'s own test job allows timeout-minutes: 60, so the real runtime is comfortably inside CI. RULE: before diagnosing "flaky" or "hang", compare the suite\'s measured runtime against the budget it was given, and read the exit code (143 = killed by the caller) instead of assuming the product regressed.',
+    evidence: {
+      measuredRuntime: 'npx playwright test (detached, log polled to completion) -> 63 passed (16.9m), 0 failed, 0 retried, 0 skipped',
+      perSpecFirst: 'every spec also verified alone first: accessUx 5/5, actionCenter 12/12, crossScreenSync 13/13, dashboardScope 5/5, imageSync 10/10, rtlLtr 16/16, splitPayment 2/2',
+      misreadSymptom: 'worker process exited unexpectedly (code=143, signal=null) -> local timeout wrapper SIGTERM, e.g. tests\\e2e\\actionCenter.spec.ts test 12 at a 200 s budget (needs ~3.6 min)',
+      staleArtifact: 'tests/e2e/results.json still showed startTime 2026-09-14 / expected 13 after the aborted run',
+      integrationResult: 'Vitest 348/348 across 25 files in the same session',
+      budgetInCi: 'build-apk.yml test job: timeout-minutes: 60'
+    },
+  },
 ];
 
 const client = await pool.connect();

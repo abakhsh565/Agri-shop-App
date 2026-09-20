@@ -383,6 +383,49 @@ identities. Evidence: 4 consecutive full integration runs, **21/21 files each, 0
 Full-suite state after these fixes: **Vitest 348/348 across 25 files**, integration run
 repeatedly clean, and the Playwright suite re-run end-to-end.
 
+### 1.11 The full suite run to the end, the "hang" disproved, and the app's own title (2026-09-20)
+
+**A. The complete Playwright suite passed sequentially, in one process.** The earlier
+full-suite attempts that ended in a timeout were investigated, not accepted: every spec
+was first run alone (all 63 passed), then the whole suite was launched detached and the
+log polled until it finished. Result: **63/63 passed in 16.9 min, 0 failed, 0 retried,
+0 skipped** — the ordering under which the previously-flaky integration defects appeared.
+
+**B. The "full-suite failure" was a local tool limit, and it was misdiagnosed once as a
+hang.** The suite now takes **16.9 min** (it grew from the 113 s / 13-test baseline recorded
+on 2026-09-14: 7 files, 63 tests). A local run is therefore capped by the 10-minute command
+budget, not by the app. The intermediate symptom `worker process exited unexpectedly
+(code=143, signal=null)` is `SIGTERM` from the local `timeout` wrapper (143 = 128 + 15),
+**not** a browser or test failure. The CI job allows `timeout-minutes: 60`, so 16.9 min is
+comfortably inside it. Expected runtime is now recorded so the next reader does not
+re-derive it as a defect.
+
+**C. A real shipped-UI defect: the app shipped the Figma template's title and description.**
+`.figma/make/site.json` carried no `title`, so `vite.config.ts` fell back to its default
+`"Figma Make App"`, and the template's marketing blurb was emitted as our `<meta
+name="description">` and `og:title`. Verified in the built artifact before the fix
+(`dist/index.html` → `<title>Figma Make App</title>`), and after it:
+`<title>AgriShop</title>` with an AgriShop description. The rendered `<html lang>`/`dir`
+were already correct — `applyDirection()` in `stores/themeStore.ts` sets both at runtime —
+so only the static document metadata was wrong.
+
+**Evidence commands**
+
+    npx vitest run                              # 348/348 across 25 files
+    npx tsc --noEmit                            # clean
+    npm run build                               # ✓ built in 2.83s
+    npm run build && grep -o '<title>[^<]*</title>' dist/index.html   # <title>AgriShop</title>
+    npx playwright test                         # 63/63, 16.9m (single sequential run)
+    node scripts/check-qa-connectivity.mjs      # QA reachable in 1302ms
+    node scripts/clean-test-data.mjs            # CLEAN — 0 rows removed, seed accounts kept
+
+**Open blocker (not a code defect): GitHub Actions cannot start a runner on this account.**
+Run 35524709132 (`build-apk.yml` on `acbc58c`) failed with *"The job was not started because
+recent account payments have failed or your spending limit needs to be increased"* — **zero
+steps executed**, so no result about this code was produced. The workflow's own commands were
+therefore reproduced locally against QA (connectivity check, Vitest, Playwright, build) and
+all pass; the APK job itself cannot be exercised until billing is resolved.
+
 ---
 
 ## 2. Explicitly Not Built
@@ -430,13 +473,18 @@ defects (§1.1, §1.2), both now fixed and verified. That is the intended shape 
 this stage: the anchor screen must show authoritative business data before any
 new form is added on top of it.
 
-**Do not start implementing forms yet.** The dashboard/form artifact is expected
-from the product owner, and it has not arrived — there is no new design or spec in
-the repository. The only dashboard artifacts present are older references
-(`Redesing/Home Dashboard admin.png`, `Redesing/Home dashboard.png`, four bottom-nav
-PNGs and `redesign-view.html`); these are images, so they must be described or
-supplied as a written spec before implementation, rather than guessed at. When it arrives, review it against this real system
-*before* writing code:
+**Superseded (2026-09-20): the wait for a new dashboard artifact is void.** The product
+owner locked the scope to the repository's own specification — `dev-guide-extracted/SCREENS.md`,
+`ROADMAP.md` and `changes/CR-008…CR-027` — so no external design file is required before
+implementing. The earlier conclusion that implementation must pause until a PNG arrives was
+wrong and is recorded here so it is not re-applied. The dashboard stage is now closed with
+reconciled evidence (§1.2, §1.4, §1.7, and the `dashboardScope` E2E suite reconciling the
+rendered figures against the database), and the remaining locked scope is the CR list above,
+not a single form. The only dashboard artifacts that were ever present are older image
+references (`Redesing/Home Dashboard admin.png`, `Redesing/Home dashboard.png`, four
+bottom-nav PNGs and `redesign-view.html`); they are now reference material only.
+
+Review any *future* artifact or CR against this real system *before* writing code:
 
 1. What does it represent in the actual business flow?
 2. Which stage does it belong to — existing functionality, next implementation,
