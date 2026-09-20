@@ -62,6 +62,8 @@ export default function EmployeeDetailPage() {
   // comes from the employee's membership via get_employee_access.
   const [empMembershipRole, setEmpMembershipRole] = useState<MembershipRole>("employee");
   const [empPerms, setEmpPerms] = useState<string[]>([]);
+  // The employee's own exceptions, straight from user_permissions.
+  const [storedOverrides, setStoredOverrides] = useState<Record<string, boolean>>({});
   const [branches, setBranches] = useState<{ id: string; name: string }[]>([]);
   const [saving, setSaving] = useState(false);
 
@@ -74,6 +76,36 @@ export default function EmployeeDetailPage() {
     });
   }, []);
 
+  /**
+   * The employee's access AS CONFIGURED: the role's defaults with this
+   * employee's exceptions applied. That is the model the database documents
+   * (role defaults + employee overrides), and it is the only form that is true in
+   * both membership states.
+   *
+   * get_employee_access also returns `effective` from the live permission
+   * resolver, which is correct for authorization and returns nothing while an
+   * invitation is still pending (every path requires status = 'active'). Showing
+   * that here reported "this role has no access" and counted the role's whole
+   * access set as "changed for" an employee the owner had just invited — the
+   * opposite of what the database said (12 defaults, 0 overrides).
+   */
+  function configuredAccess(defaults: string[], overrides: Record<string, boolean>): Set<string> {
+    const set = new Set(defaults);
+    for (const [code, granted] of Object.entries(overrides)) {
+      if (granted) set.add(code);
+      else set.delete(code);
+    }
+    return set;
+  }
+
+  function applyAccess(access: Awaited<ReturnType<typeof getEmployeeAccess>>) {
+    const configured = configuredAccess(access.defaults, access.overrides);
+    setRoleDefaults(new Set(access.defaults));
+    setStoredOverrides(access.overrides);
+    setEmpPerms([...configured]);
+    setEditPerms(new Set(configured));
+  }
+
   // Load this employee's current access
   useEffect(() => {
     if (emp && employeeId) {
@@ -81,9 +113,7 @@ export default function EmployeeDetailPage() {
         setEmpMembershipRole(access.membershipRole);
         setEditRoleId(access.roleId);
         setEditBranchScope(access.branchScope);
-        setRoleDefaults(new Set(access.defaults));
-        setEmpPerms(access.effective);
-        setEditPerms(new Set(access.effective));
+        applyAccess(access);
       });
     }
   }, [emp?.id]);
@@ -131,13 +161,10 @@ export default function EmployeeDetailPage() {
     permissionsStore.permissions.filter((p) => effectiveSet.has(p.code))
       .map((p) => p.module),
   )];
-  const addedCount = permissionsStore.permissions.filter(
-    (p) => effectiveSet.has(p.code) && !roleDefaults.has(p.code),
-  ).length;
-  const removedCount = permissionsStore.permissions.filter(
-    (p) => !effectiveSet.has(p.code) && roleDefaults.has(p.code),
-  ).length;
-  const overrideCount = addedCount + removedCount;
+  // Counted from the stored exceptions, not inferred by diffing the live set: a
+  // pending membership is denied by authorization, which is not a change the
+  // owner made.
+  const overrideCount = Object.keys(storedOverrides).length;
 
   const branchNames = editBranchScope === null
     ? t("addEmployee.allBranches")
@@ -165,10 +192,7 @@ export default function EmployeeDetailPage() {
     setSaving(true);
     try {
       await updateAccess(employeeId, { resetOverrides: true });
-      const fresh = await getEmployeeAccess(employeeId);
-      setRoleDefaults(new Set(fresh.defaults));
-      setEmpPerms(fresh.effective);
-      setEditPerms(new Set(fresh.effective));
+      applyAccess(await getEmployeeAccess(employeeId));
       addToast(t("empDetail.roleOnlyDone", { name: emp!.name }), "success");
     } catch (e) {
       addToast(e instanceof Error ? e.message : t("common.error"), "error");
@@ -194,10 +218,7 @@ export default function EmployeeDetailPage() {
       });
       addToast(t("empDetail.accessUpdated"), "success");
       setShowPermEditor(false);
-      const fresh = await getEmployeeAccess(employeeId);
-      setRoleDefaults(new Set(fresh.defaults));
-      setEmpPerms(fresh.effective);
-      setEditPerms(new Set(fresh.effective));
+      applyAccess(await getEmployeeAccess(employeeId));
     } catch (e) {
       addToast(e instanceof Error ? e.message : t("common.error"), "error");
     } finally {
@@ -230,8 +251,14 @@ export default function EmployeeDetailPage() {
   async function setActive(next: boolean) {
     try {
       await setActiveAction(emp!.id, next, user?.id);
+      // An invitation that has not been accepted is not an employment ending, so
+      // it must not be reported as one.
       addToast(
-        next ? t("empDetail.reactivated", { name: emp!.name }) : t("empDetail.deactivated", { name: emp!.name }),
+        next
+          ? t("empDetail.reactivated", { name: emp!.name })
+          : isInvited
+            ? t("empDetail.inviteCancelled", { name: emp!.name })
+            : t("empDetail.deactivated", { name: emp!.name }),
         next ? "success" : "info",
       );
     } catch (e) {
@@ -678,13 +705,15 @@ export default function EmployeeDetailPage() {
               className="w-full h-12 rounded-full font-bold text-sm flex items-center justify-center gap-2"
               style={{ border: "1.5px solid var(--error)", color: "var(--error)", background: "transparent" }}
               onClick={() => {
-                if (confirm(`${t("empDetail.deactivateQ", { name: emp.name })}\n\n${t("empDetail.deactivateHint")}`)) {
-                  setActive(false);
-                }
+                const question = isInvited
+                  ? t("empDetail.cancelInviteQ", { name: emp.name })
+                  : t("empDetail.deactivateQ", { name: emp.name });
+                const hint = isInvited ? t("empDetail.cancelInviteHint") : t("empDetail.deactivateHint");
+                if (confirm(`${question}\n\n${hint}`)) setActive(false);
               }}
             >
               <UserX size={15} />
-              {t("empDetail.deactivate")}
+              {t(isInvited ? "empDetail.cancelInvite" : "empDetail.deactivate")}
             </button>
           ) : (
             <button

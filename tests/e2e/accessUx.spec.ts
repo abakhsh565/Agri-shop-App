@@ -131,34 +131,53 @@ test.describe('Employee job & access — simple for the owner, exact underneath'
     // competing notion of what the person does.
     expect(step1, 'a separate job title field is back').not.toContain('Job title');
     expect(step1, 'step 1 exposes RBAC vocabulary').not.toMatch(JARGON);
+    // The owner can see the whole journey before walking it: the three steps are
+    // named, not three anonymous dots.
+    for (const name of ['Employee', 'Role', 'Where']) {
+      expect(step1, `the step rail does not name the "${name}" step`).toContain(name);
+    }
 
     await page.getByPlaceholder('e.g. Bilal Ahmed').fill(NEW_NAME);
     await page.getByPlaceholder('03001234567').fill(NEW_PHONE_LOCAL);
     await page.getByRole('button', { name: 'Next' }).click();
     await page.waitForTimeout(800);
 
-    // Step 2: the job, its access, and where they work — all in business words.
+    // Step 2 asks ONE thing: what they do. Branch used to be below the access
+    // panel on this same step, so the owner had to scroll past a read-only list
+    // to find a decision.
     const step2 = await bodyText(page);
     expect(step2).toContain('What does UX do?');
-    expect(step2).toContain('Access from this role');
-    expect(step2).toContain('Where can UX work?');
+    expect(step2, 'the branch decision is mixed into the role step again').not.toContain('Where can UX work?');
     expect(step2, 'step 2 exposes RBAC vocabulary').not.toMatch(JARGON);
+    // No role is preselected: a default would let the owner hand out access
+    // without ever deciding what the person does.
+    await expect(page.getByRole('button', { name: 'Next' })).toBeDisabled();
+    expect(step2, 'a role is preselected again').not.toContain('Access from this role');
 
-    // The role's access on screen must equal the role's rows in the database.
+    // Choosing a role answers "what access will they get?" in place: the access
+    // panel appears with the selected role, not after every other role card.
     await page.getByRole('button', { name: /Sales Manager/ }).first().click();
     await page.waitForTimeout(800);
+    expect(await bodyText(page)).toContain('Access from this role');
+    await expect(page.getByRole('button', { name: 'Next' })).toBeEnabled();
     const [shown, fromDb] = [await shownAreas(page), await dbAreasForRole('Sales Manager')];
     expect(shown.length, 'no areas rendered for the selected role').toBeGreaterThan(0);
     expect(shown.sort()).toEqual(fromDb.sort());
 
-    await page.getByRole('button', { name: 'Review' }).click();
+    await page.getByRole('button', { name: 'Next' }).click();
     await page.waitForTimeout(800);
+
+    // Step 3 asks where they work and confirms — the only screen that collects
+    // the details, and the only one that commits.
     const step3 = await bodyText(page);
+    expect(step3).toContain('Where can UX work?');
     for (const label of ['Check the details', 'Name', 'Phone', 'Role', 'Branch', 'Access']) {
-      expect(step3, `review step is missing "${label}"`).toContain(label);
+      expect(step3, `the confirmation step is missing "${label}"`).toContain(label);
     }
-    expect(step3).toContain('Create Employee');
-    expect(step3, 'review step exposes RBAC vocabulary').not.toMatch(JARGON);
+    // The button says what actually happens: adding somebody sends an invitation.
+    expect(step3).toContain('Send invitation');
+    expect(step3, 'the flow does not say what happens after the invite').toContain('sets their own PIN');
+    expect(step3, 'step 3 exposes RBAC vocabulary').not.toMatch(JARGON);
   });
 
   test('2. Creating from the simplified screen writes the right membership, then the list shows it', async ({ page }) => {
@@ -175,19 +194,24 @@ test.describe('Employee job & access — simple for the owner, exact underneath'
     await page.getByRole('button', { name: /Sales Manager/ }).first().click();
     await page.waitForTimeout(600);
 
+    await page.getByRole('button', { name: 'Next' }).click();
+    await page.waitForTimeout(800);
+
     // Choose one branch (the QA shop has two, so this is a real decision).
     const [branch] = await execSql(`SELECT id, name FROM branches WHERE is_active ORDER BY name LIMIT 1`);
     await page.getByRole('button', { name: new RegExp(branch.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')) }).first().click();
-    await page.getByRole('button', { name: 'Review' }).click();
-    await page.waitForTimeout(800);
+    await page.waitForTimeout(400);
 
     const review = await bodyText(page);
     expect(review).toContain('Sales Manager');
-    expect(review, 'review does not show the chosen branch').toContain(branch.name);
+    expect(review, 'the confirmation does not show the chosen branch').toContain(branch.name);
 
-    await page.getByRole('button', { name: 'Create Employee' }).click();
-    await page.waitForURL(/\/admin\/employees$/, { timeout: 30000 });
-    await page.waitForTimeout(1500);
+    await page.getByRole('button', { name: 'Send invitation' }).click();
+    // The flow lands on the new employee, whose page is where the invitation and
+    // its next step are visible — not on a list where nothing says what happens.
+    await page.waitForURL(/\/admin\/employees\/[0-9a-f-]{36}$/, { timeout: 30000 });
+    await page.waitForTimeout(2500);
+    expect(await bodyText(page), 'the invited employee page is not shown after inviting').toContain('Invitation sent');
 
     // ── Database is the judge ──
     const [created] = await execSql(`SELECT id, name, phone FROM users WHERE phone = '${NEW_PHONE_DB}'`);
@@ -209,8 +233,8 @@ test.describe('Employee job & access — simple for the owner, exact underneath'
 
     // Reload: the list must show the new employee, labelled as an invitation —
     // not as an active employee, which is what the owner would otherwise believe.
-    await page.reload();
-    await page.waitForTimeout(1500);
+    await page.goto(`${BASE}/admin/employees`);
+    await page.waitForTimeout(1800);
     const list = await bodyText(page);
     expect(list).toContain(NEW_NAME);
     expect(list, 'the invite is presented as an active employee').toContain('Invited');
@@ -223,6 +247,23 @@ test.describe('Employee job & access — simple for the owner, exact underneath'
     expect(detail).toContain('Invitation sent');
     expect(detail, 'performance is shown for an invited employee').not.toContain('Recent sales');
     expect(detail, 'the invite is presented as an active employee').toContain('Invited');
+
+    // An invitation is denied by authorization (membership is pending), and that
+    // denial must not be reported as an access configuration: the owner would see
+    // "this role has no access" and "changed for <name>" for an employee whose
+    // role carries 12 defaults and who has no exceptions at all.
+    const invitedAreas = (await page
+      .getByText('Access', { exact: true })
+      .first()
+      .locator('xpath=..')
+      .innerText()).toLowerCase();
+    for (const area of await dbAreasForRole('Sales Manager')) {
+      expect(invitedAreas, `the invited employee does not show the role's area "${area}"`).toContain(area);
+    }
+    expect(detail, 'a pending membership is reported as a change the owner made').not.toContain('changed for');
+    // The destructive action must name what it actually does at this state.
+    expect(detail, 'cancelling an invitation is offered as a deactivation').toContain('Cancel invitation');
+    expect(detail, 'a pending employee is offered "Deactivate employee"').not.toContain('Deactivate employee');
   });
 
   test('3. The same flow in Urdu: RTL, translated, no English copy leaking', async ({ page }) => {
@@ -246,15 +287,33 @@ test.describe('Employee job & access — simple for the owner, exact underneath'
     await page.getByRole('button', { name: 'آگے' }).click();
     await page.waitForTimeout(900);
 
+    // Step 2 is the role only — in Urdu, with the rail labelled in Urdu.
     const step2 = await bodyText(page);
     expect(step2).toContain('بلال کیا کام کرتا ہے؟');
-    expect(step2).toContain('اس کردار سے ملنے والی رسائی');
-    expect(step2).toContain('بلال کہاں کام کر سکتا ہے؟');
+    expect(step2).toContain('کردار');
+    expect(step2).toContain('کہاں');
+    expect(step2).not.toContain('بلال کہاں کام کر سکتا ہے؟');
     expect(step2).not.toContain('Access from this role');
     expect(step2).not.toContain('Where can');
 
-    const overflow = await page.evaluate(() => document.body.scrollWidth > document.body.clientWidth);
-    expect(overflow, 'horizontal overflow in the Urdu add-employee flow').toBe(false);
+    // The Urdu overflow check must cover every step, not just the first.
+    const overflowStep2 = await page.evaluate(() => document.body.scrollWidth > document.body.clientWidth);
+    expect(overflowStep2, 'horizontal overflow on the Urdu role step').toBe(false);
+
+    await page.getByRole('button', { name: /سیلز مینیجر|Sales Manager/ }).first().click();
+    await page.waitForTimeout(700);
+    // The role's access is stated in Urdu, in place, as soon as the role is chosen.
+    expect(await bodyText(page)).toContain('اس کردار سے ملنے والی رسائی');
+
+    await page.getByRole('button', { name: 'آگے' }).click();
+    await page.waitForTimeout(900);
+
+    const step3 = await bodyText(page);
+    expect(step3).toContain('بلال کہاں کام کر سکتا ہے؟');
+    expect(step3).toContain('دعوت بھیجیں');
+    expect(step3, 'English copy leaked into the Urdu confirmation step').not.toContain('Send invitation');
+    const overflowStep3 = await page.evaluate(() => document.body.scrollWidth > document.body.clientWidth);
+    expect(overflowStep3, 'horizontal overflow on the Urdu confirmation step').toBe(false);
   });
 
   test('4. Employee detail explains role, place and access without RBAC vocabulary', async ({ page }) => {

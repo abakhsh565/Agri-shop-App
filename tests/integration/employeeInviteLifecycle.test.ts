@@ -163,3 +163,81 @@ describe('Employee invite lifecycle — an invitation is not access', () => {
     expect(await statusOf(colleague)).toBe('active');
   });
 });
+
+/**
+ * The membership role (owner/admin/employee) is an AUTHORIZATION input, not a
+ * label: app_has_permission() returns true for 'owner' before reading a single
+ * permission, and users.role = 'admin' satisfies the RLS policies that guard
+ * writes to roles / role_permissions / user_permissions.
+ *
+ * It used to be supplied by the caller — create_employee read
+ * payload->>'membershipRole' and the Add Employee screen derived it from the
+ * selected role's DISPLAY NAME (name.includes("admin")). The four system roles
+ * contain no "admin", so every fixture passed and the hole only opened for a
+ * custom role an owner had named, e.g. "Branch Admin" — which then made that
+ * employee's users.role = 'admin' and let them rewrite the tenant's RBAC model
+ * through direct PostgREST. update_employee_access had the same field, one step
+ * further: membershipRole = 'owner' promoted an employee to full ownership.
+ *
+ * Both are closed. These tests lock the closure by the fields that are actually
+ * read during authorization, not by the RPC's return value.
+ */
+describe('Membership role is derived by the database, never supplied by the caller', () => {
+  const BYPASS = PHONES[3];
+  let bypassId = '';
+
+  it('ignores a caller-supplied membership role instead of applying it', async () => {
+    const created = await execRpcAsUser(OWNER, 'create_employee', {
+      payload: {
+        name: 'QA Role Escalation Probe',
+        phone: BYPASS,
+        membershipRole: 'admin', // the old frontend heuristic, replayed by hand
+        roleId: ROLE_SALES_EMPLOYEE,
+        branchScope: [branchId],
+      },
+    });
+    expect(created.error).toBeNull();
+    bypassId = created.data.id;
+    expect(created.data.membershipRole, 'the caller still controls the membership role').toBe('employee');
+
+    // The fields authorization actually reads.
+    const rows = await sql(`
+      SELECT u.role AS user_role, m.role AS membership_role
+        FROM users u JOIN memberships m ON m.user_id = u.id
+       WHERE u.id = '${bypassId}'`);
+    expect(rows.rows[0].user_role, 'a caller can still create an RLS-admin user').toBe('employee');
+    expect(rows.rows[0].membership_role).toBe('employee');
+  });
+
+  it('refuses an explicit request for owner rather than silently downgrading it', async () => {
+    const attempt = await execRpcAsUser(OWNER, 'create_employee', {
+      payload: { name: 'QA Owner Probe', phone: '923009660777', membershipRole: 'owner' },
+    });
+    expect(attempt.error ?? '').toContain('INVALID_EMPLOYEE_ROLE');
+    const rows = await sql(`SELECT count(*)::int AS c FROM users WHERE phone = '923009660777'`);
+    expect(rows.rows[0].c, 'a refused request still created a user').toBe(0);
+  });
+
+  it('cannot be used to promote a working employee to owner or admin', async () => {
+    expect(bypassId).toBeTruthy();
+    for (const role of ['owner', 'admin']) {
+      const attempt = await execRpcAsUser(OWNER, 'update_employee_access', {
+        payload: { employeeId: bypassId, membershipRole: role },
+      });
+      expect(attempt.error ?? '', `promotion to ${role} was accepted`).toContain('INVALID_EMPLOYEE_ROLE');
+    }
+    const rows = await sql(`
+      SELECT u.role AS user_role, m.role AS membership_role
+        FROM users u JOIN memberships m ON m.user_id = u.id
+       WHERE u.id = '${bypassId}'`);
+    expect(rows.rows[0].user_role).toBe('employee');
+    expect(rows.rows[0].membership_role).toBe('employee');
+
+    // The legitimate part of the same editor still works, so the refusal is not a
+    // blanket ban on the function.
+    const legit = await execRpcAsUser(OWNER, 'update_employee_access', {
+      payload: { employeeId: bypassId, membershipRole: 'employee', roleId: ROLE_SALES_EMPLOYEE, branchScope: [branchId] },
+    });
+    expect(legit.error).toBeNull();
+  });
+});

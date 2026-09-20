@@ -14,19 +14,27 @@ import { useThemeStore } from "@/stores/themeStore";
 import { normalizePhone } from "@/lib/auth";
 import { clearNav } from "@/lib/navContext";
 import { supabase } from "@/lib/supabase";
-import { Check, ChevronRight, User, Shield, ClipboardCheck } from "lucide-react";
-import type { MembershipRole } from "@/types";
+import { Check, ChevronRight, User, Shield, MapPin } from "lucide-react";
 
 /**
- * Add Employee — three decisions only:
- *   1. who they are      (name, phone, optional photo and job title)
- *   2. what they do      (role, and a branch only when there is a real choice)
- *   3. confirm
+ * Add Employee — three decisions, one on each step:
+ *   1. who they are   (name, phone, optional photo)
+ *   2. what they do   (role; the role carries the access)
+ *   3. where they work, and confirmation
  *
- * Access is not a decision here: it comes from the selected role. The owner changes
- * individual access later from the employee's page, where "Customize access" lives.
+ * Two things are deliberately NOT asked here:
+ *   * individual permissions — they come from the role and are edited later, on
+ *     the employee's page, where "Customize access" lives. Listing them twice
+ *     (once as the role's access, once to confirm) made the owner read the same
+ *     screen twice for no new information.
+ *   * a membership role — it is an authorization input, so the database derives
+ *     it from the caller's tenant. The screen cannot influence it.
+ *
+ * Adding somebody ISSUES AN INVITATION (see migration 0129): the membership is
+ * pending until they sign in with their own phone number, so the last step says
+ * what happens next and the flow lands on their page in the invited state.
  */
-type Step = "who" | "job" | "review";
+type Step = "who" | "role" | "where";
 
 export default function AddEmployeePage() {
   const navigate = useNavigate();
@@ -45,7 +53,6 @@ export default function AddEmployeePage() {
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
-  const [role, setRole] = useState<MembershipRole>("employee");
   const [roleId, setRoleId] = useState<string | null>(null);
   const [selectedRolePermissions, setSelectedRolePermissions] = useState<string[]>([]);
   const [branchScope, setBranchScope] = useState<string[] | null>(null);
@@ -64,18 +71,10 @@ export default function AddEmployeePage() {
     });
   }, []);
 
-  useEffect(() => {
-    const firstRole = rolesStore.roles.find((r) => !r.isSystem) ?? rolesStore.roles[0];
-    if (!roleId && firstRole) {
-      setRoleId(firstRole.id);
-      rolesStore.getRolePermissions(firstRole.id).then(setSelectedRolePermissions);
-    }
-  }, [rolesStore.roles.length]);
-
   const steps: { key: Step; label: string; icon: typeof User }[] = [
     { key: "who", label: t("addEmployee.stepWho"), icon: User },
-    { key: "job", label: t("addEmployee.stepJob"), icon: Shield },
-    { key: "review", label: t("addEmployee.stepReview"), icon: ClipboardCheck },
+    { key: "role", label: t("addEmployee.stepRole"), icon: Shield },
+    { key: "where", label: t("addEmployee.stepWhere"), icon: MapPin },
   ];
 
   const currentStepIdx = steps.findIndex((s) => s.key === step);
@@ -95,24 +94,28 @@ export default function AddEmployeePage() {
   }
 
   function nextStep() {
-    if (step === "who") { if (!validateWho()) return; setStep("job"); return; }
-    if (step === "job") { setStep("review"); return; }
+    setError("");
+    if (step === "who") { if (!validateWho()) return; setStep("role"); return; }
+    if (step === "role") {
+      if (!roleId) { setError(t("addEmployee.errRole")); return; }
+      setStep("where");
+    }
   }
 
   function prevStep() {
-    if (step === "job") setStep("who");
-    else if (step === "review") setStep("job");
+    setError("");
+    if (step === "role") setStep("who");
+    else if (step === "where") setStep("role");
   }
 
   async function handleCreate() {
     setError("");
     setLoading(true);
     try {
-      await createEmployee({
+      const created = await createEmployee({
         name: name.trim(),
         phone: normalizePhone(phone),
         role: "employee", // Legacy field retained for compatibility
-        membershipRole: role,
         roleId: roleId ?? undefined,
         photoUrl: photoUrl ?? undefined,
         branchScope: branchScope,
@@ -120,10 +123,11 @@ export default function AddEmployeePage() {
       });
       addToast(t("addEmployee.created", { name: name.trim() }), "success");
       clearNav();
-      navigate("/admin/employees", { replace: true });
+      // Land on the new employee instead of the list: their page is where the
+      // owner can see the invitation went out and what happens next.
+      navigate(created?.id ? `/admin/employees/${created.id}` : "/admin/employees", { replace: true });
     } catch (e) {
       setError(e instanceof Error ? e.message : t("addEmployee.errFailed"));
-    } finally {
       setLoading(false);
     }
   }
@@ -153,6 +157,59 @@ export default function AddEmployeePage() {
 
   const accessSummary = accessByArea().map((a) => a.label).join(", ");
 
+  /** One role card, with the access it carries shown directly beneath it. */
+  function roleCard(r: (typeof rolesStore.roles)[number]) {
+    const selected = roleId === r.id;
+    return (
+      <div key={r.id} className="flex flex-col gap-2">
+        <button
+          onClick={() => {
+            setError("");
+            setRoleId(r.id);
+            rolesStore.getRolePermissions(r.id).then(setSelectedRolePermissions);
+          }}
+          className="flex items-start gap-3 p-4 rounded-[14px] text-start transition-colors"
+          style={{
+            background: "var(--surface)",
+            border: `1.5px solid ${selected ? "var(--brand)" : "var(--divider)"}`,
+          }}
+        >
+          <div
+            className="w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 mt-0.5"
+            style={{ borderColor: selected ? "var(--brand)" : "var(--text-secondary)" }}
+          >
+            {selected && <div className="w-2.5 h-2.5 rounded-full" style={{ background: "var(--brand)" }} />}
+          </div>
+          <div>
+            <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>{r.name}</p>
+            {r.description && (
+              <p className="text-xs mt-0.5" style={{ color: "var(--text-secondary)" }}>{r.description}</p>
+            )}
+          </div>
+        </button>
+
+        {/* What choosing this role means — business areas and actions, no codes. */}
+        {selected && (
+          <div className="rounded-xl p-3 mx-1" style={{ background: "var(--surface-2)", border: "1px solid var(--divider)" }}>
+            <p className="text-[11px] font-bold uppercase tracking-wider mb-2" style={{ color: "var(--text-secondary)" }}>
+              {t("addEmployee.roleAccess")}
+            </p>
+            {accessByArea().length === 0 ? (
+              <p className="text-xs" style={{ color: "var(--text-secondary)" }}>{t("addEmployee.noRoleAccess")}</p>
+            ) : (
+              accessByArea().map(({ label, actions }) => (
+                <div key={label} className="flex items-start justify-between gap-3 py-1">
+                  <span className="text-xs font-semibold" style={{ color: "var(--text-primary)" }}>{label}</span>
+                  <span className="text-xs text-end" style={{ color: "var(--text-secondary)" }}>{actions.join(", ")}</span>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div
       className="flex flex-col w-full min-h-full"
@@ -161,34 +218,39 @@ export default function AddEmployeePage() {
       <StatusBar />
       <NavHeader title={t("addEmployee.title")} />
 
-      {/* Step indicator */}
-      <div className="flex items-center justify-center gap-1 px-4 pt-3">
+      {/* Step indicator — named, so the owner can see the whole journey up front */}
+      <div className="flex items-start justify-center gap-1 px-4 pt-3">
         {steps.map((s, i) => (
-          <div key={s.key} className="flex items-center gap-1">
-            <div
-              className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold"
-              style={{
-                background: i <= currentStepIdx ? "var(--brand)" : "var(--surface-2)",
-                color: i <= currentStepIdx ? "#0a0a0a" : "var(--text-secondary)",
-                border: `1px solid ${i <= currentStepIdx ? "var(--brand)" : "var(--divider)"}`,
-              }}
-            >
-              {i < currentStepIdx ? <Check size={12} /> : i + 1}
+          <div key={s.key} className="flex items-start gap-1">
+            <div className="flex flex-col items-center gap-1" style={{ width: 64 }}>
+              <div
+                className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold"
+                style={{
+                  background: i <= currentStepIdx ? "var(--brand)" : "var(--surface-2)",
+                  color: i <= currentStepIdx ? "#0a0a0a" : "var(--text-secondary)",
+                  border: `1px solid ${i <= currentStepIdx ? "var(--brand)" : "var(--divider)"}`,
+                }}
+              >
+                {i < currentStepIdx ? <Check size={12} /> : i + 1}
+              </div>
+              <span
+                className="text-[9px] text-center leading-tight truncate w-full"
+                style={{ color: i === currentStepIdx ? "var(--text-primary)" : "var(--text-secondary)" }}
+              >
+                {s.label}
+              </span>
             </div>
             {i < steps.length - 1 && (
-              <div className="w-6 h-0.5" style={{ background: i < currentStepIdx ? "var(--brand)" : "var(--divider)" }} />
+              <div className="w-5 h-0.5 mt-3.5" style={{ background: i < currentStepIdx ? "var(--brand)" : "var(--divider)" }} />
             )}
           </div>
         ))}
       </div>
 
       <div className="flex-1 flex flex-col p-4 gap-4">
-        {/* Step 1: who they are */}
+        {/* Step 1: who they are — the required fields come first. */}
         {step === "who" && (
           <>
-            <div className="flex justify-center pt-1">
-              <ImageUpload bucket="employee-photos" value={photoUrl} onChange={setPhotoUrl} shape="circle" label={t("addEmployee.addPhoto")} />
-            </div>
             <div>
               <p className="text-[11px] font-bold uppercase mb-2 tracking-wider" style={{ color: "var(--text-secondary)" }}>
                 {t("addEmployee.name")} *
@@ -219,72 +281,40 @@ export default function AddEmployeePage() {
                 {t("addEmployee.phoneHint")}
               </p>
             </div>
+            <div className="pt-1">
+              <p className="text-[11px] font-bold uppercase mb-2 tracking-wider" style={{ color: "var(--text-secondary)" }}>
+                {t("addEmployee.photoOptional")}
+              </p>
+              <div className="flex justify-center">
+                <ImageUpload bucket="employee-photos" value={photoUrl} onChange={setPhotoUrl} shape="circle" label={t("addEmployee.addPhoto")} />
+              </div>
+            </div>
           </>
         )}
 
-        {/* Step 2: what they do, and where */}
-        {step === "job" && (
+        {/* Step 2: what they do — one decision, and the access it carries. */}
+        {step === "role" && (
           <>
             <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>
               {t("addEmployee.roleQuestion", { name: firstName })}
             </p>
             <div className="flex flex-col gap-3">
-              {rolesStore.roles.map((r) => {
-                const selected = roleId === r.id;
-                return (
-                  <button
-                    key={r.id}
-                    onClick={() => {
-                      setRoleId(r.id);
-                      setRole(r.name.toLowerCase().includes("admin") ? "admin" : "employee");
-                      rolesStore.getRolePermissions(r.id).then(setSelectedRolePermissions);
-                    }}
-                    className="flex items-start gap-3 p-4 rounded-[14px] text-start transition-colors"
-                    style={{
-                      background: "var(--surface)",
-                      border: `1.5px solid ${selected ? "var(--brand)" : "var(--divider)"}`,
-                    }}
-                  >
-                    <div
-                      className="w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 mt-0.5"
-                      style={{ borderColor: selected ? "var(--brand)" : "var(--text-secondary)" }}
-                    >
-                      {selected && <div className="w-2.5 h-2.5 rounded-full" style={{ background: "var(--brand)" }} />}
-                    </div>
-                    <div>
-                      <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>{r.name}</p>
-                      {r.description && (
-                        <p className="text-xs mt-0.5" style={{ color: "var(--text-secondary)" }}>{r.description}</p>
-                      )}
-                    </div>
-                  </button>
-                );
-              })}
+              {rolesStore.roles.map(roleCard)}
             </div>
-
-            {/* Access this role gives — plain business areas, no permission codes */}
-            {roleObj && (
-              <div className="rounded-xl p-3" style={{ background: "var(--surface)", border: "1px solid var(--divider)" }}>
-                <p className="text-[11px] font-bold uppercase tracking-wider mb-2" style={{ color: "var(--text-secondary)" }}>
-                  {t("addEmployee.roleAccess")}
-                </p>
-                {accessByArea().length === 0 ? (
-                  <p className="text-xs" style={{ color: "var(--text-secondary)" }}>{t("addEmployee.noRoleAccess")}</p>
-                ) : (
-                  accessByArea().map(({ label, actions }) => (
-                    <div key={label} className="flex items-start justify-between gap-3 py-1">
-                      <span className="text-xs font-semibold" style={{ color: "var(--text-primary)" }}>{label}</span>
-                      <span className="text-xs text-end" style={{ color: "var(--text-secondary)" }}>{actions.join(", ")}</span>
-                    </div>
-                  ))
-                )}
-              </div>
+            {!roleId && (
+              <p className="text-[11px]" style={{ color: "var(--text-secondary)" }}>
+                {t("addEmployee.roleRequired")}
+              </p>
             )}
+          </>
+        )}
 
-            {/* Where they work — only a real choice when more than one branch exists */}
+        {/* Step 3: where they work, then confirm. */}
+        {step === "where" && (
+          <>
             {branches.length > 1 && (
               <>
-                <p className="text-sm font-bold pt-1" style={{ color: "var(--text-primary)" }}>
+                <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>
                   {t("addEmployee.branchQuestion", { name: firstName })}
                 </p>
                 <div className="flex flex-col gap-2">
@@ -347,18 +377,13 @@ export default function AddEmployeePage() {
                 <p className="text-xs" style={{ color: "var(--text-secondary)" }}>{t("addEmployee.noBranches")}</p>
               </div>
             )}
-          </>
-        )}
 
-        {/* Step 3: confirm */}
-        {step === "review" && (
-          <>
-            <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>{t("addEmployee.reviewTitle")}</p>
+            <p className="text-sm font-bold pt-1" style={{ color: "var(--text-primary)" }}>{t("addEmployee.reviewTitle")}</p>
             <div className="rounded-xl overflow-hidden" style={{ border: "1px solid var(--border-light)" }}>
               {[
                 { label: t("addEmployee.labelName"), value: name },
                 { label: t("addEmployee.labelPhone"), value: phone },
-                { label: t("addEmployee.labelRole"), value: roleObj?.name ?? role },
+                { label: t("addEmployee.labelRole"), value: roleObj?.name ?? "—" },
                 { label: t("addEmployee.labelBranch"), value: branchNames },
                 { label: t("addEmployee.labelAccess"), value: accessSummary || t("addEmployee.noRoleAccess") },
               ].map(({ label, value }, i, arr) => (
@@ -368,11 +393,13 @@ export default function AddEmployeePage() {
                   style={{ borderBottom: i < arr.length - 1 ? "1px solid var(--divider)" : "none" }}
                 >
                   <span className="text-sm" style={{ color: "var(--text-secondary)" }}>{label}</span>
-                  <span className="text-sm font-semibold text-end max-w-[60%] truncate" style={{ color: "var(--text-primary)" }}>{value}</span>
+                  <span className="text-sm font-semibold text-end max-w-[60%] break-words" style={{ color: "var(--text-primary)" }}>{value}</span>
                 </div>
               ))}
             </div>
-            <p className="text-[11px]" style={{ color: "var(--text-secondary)" }}>{t("addEmployee.reviewHint")}</p>
+            <p className="text-[11px]" style={{ color: "var(--text-secondary)" }}>
+              {t("addEmployee.inviteHint", { name: firstName })}
+            </p>
           </>
         )}
 
@@ -390,23 +417,24 @@ export default function AddEmployeePage() {
             {t("addEmployee.back")}
           </button>
         )}
-        {step === "review" ? (
+        {step === "where" ? (
           <button
             onClick={handleCreate}
             disabled={loading}
             className="flex-1 h-12 rounded-full font-bold text-sm transition-all active:scale-[0.98] disabled:opacity-50"
             style={{ background: "var(--brand)", color: "#0a0a0a" }}
           >
-            {loading ? t("addEmployee.creating") : t("addEmployee.create")}
+            {loading ? t("addEmployee.inviting") : t("addEmployee.invite")}
           </button>
         ) : (
           <button
             onClick={nextStep}
-            className="flex-1 h-12 rounded-full font-bold text-sm flex items-center justify-center gap-2"
+            disabled={step === "role" && !roleId}
+            className="flex-1 h-12 rounded-full font-bold text-sm flex items-center justify-center gap-2 disabled:opacity-50"
             style={{ background: "var(--brand)", color: "#0a0a0a" }}
           >
-            {step === "who" ? t("addEmployee.next") : t("addEmployee.review")}
-            <ChevronRight size={16} />
+            {t("addEmployee.next")}
+            <ChevronRight size={16} className={isUrdu ? "rotate-180" : ""} />
           </button>
         )}
       </div>

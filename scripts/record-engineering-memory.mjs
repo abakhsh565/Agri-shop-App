@@ -362,6 +362,36 @@ const MEMORIES = [
       fixedIn: '0130'
     },
   },
+  {
+    category: 'failure_pattern',
+    title: 'An authorization enum was supplied by the button that was pressed',
+    component: 'supabase/migrations/0131_derive_employee_membership_role.sql, create_employee, update_employee_access, src/pages/admin/employees/AddEmployeePage.tsx',
+    description:
+      'memberships.role and users.role are authorization inputs, not labels: app_has_permission() returns true for membership_role "owner" before reading a single permission row (0106), and RLS on roles / role_permissions / user_permissions grants INSERT/UPDATE/DELETE to any user whose users.role = "admin" (0106:114-141, 0107:108-147). Both were written from a payload the CLIENT composed. create_employee read payload->>"membershipRole", and the Add Employee screen derived that value from the selected role\'s DISPLAY NAME: setRole(r.name.toLowerCase().includes("admin") ? "admin" : "employee"). The four system roles are Sales Employee, Sales Manager, Store Manager and Inventory Clerk — not one contains "admin" — so the heuristic always produced "employee" in practice and every fixture agreed with it. It only misfired on a name an owner had invented, which is exactly the case no fixture covered: an owner naming a custom role "Branch Admin" created an employee with users.role = "admin", who could then rewrite the tenant\'s entire RBAC model through direct PostgREST. update_employee_access was the same field one step further: membershipRole = "owner" promoted an employee to full ownership (owner bypasses every permission check), reachable by a single manual RPC call even though no screen sent it. The tell was structural rather than behavioural — an enum that decides authorization was being invented in a .tsx file — so the fix is at the layer that already knows the caller and the tenant: 0131 derives the membership role in create_employee (employees are never owners) and refuses it in update_employee_access, and the frontend no longer sends it. RULES: if a value is read by a policy, a permission check or a role comparison, the database must derive it — never accept it from the client, and never infer it from a display string; and when a fixture set makes every case pass, check whether the code path depends on data the fixtures happen to contain (all four seeded role names are English and contain no "admin").',
+    evidence: {
+      escalationCreate: 'the old frontend heuristic replayed by hand: payload membershipRole="admin" produced users.role = "admin" and memberships.role = "admin"',
+      escalationUpdate: 'update_employee_access {employeeId, membershipRole:"owner"} returned success and wrote memberships.role = "owner" on 0108',
+      visibleOnlyWithInventedData: 'the four system role names contain no "admin", so 0 of the seeded roles could ever trigger it',
+      afterFix: 'create_employee ignores the field (users.role and memberships.role both stay "employee" for membershipRole="admin"), payload "owner" raises INVALID_EMPLOYEE_ROLE and writes no user row, and update_employee_access refuses "owner" and "admin" while its legitimate role/template/branch edits still succeed',
+      guardAtDbLayer: 'pg_proc.prosrc no longer matches either the payload read or the UPDATE users SET role = ... CASE ... rewrite',
+      regression: 'tests/integration/employeeInviteLifecycle.test.ts 8/8 (3 new), Vitest 362/362 across 27 files, tsc clean',
+      fixedIn: '0131'
+    },
+  },
+  {
+    category: 'failure_pattern',
+    title: 'A pending membership\'s authorization denial was drawn as an access configuration',
+    component: 'src/pages/admin/employees/EmployeeDetailPage.tsx, get_employee_access',
+    description:
+      'get_employee_access returns three different things: `defaults` (the role\'s role_permissions), `overrides` (this employee\'s user_permissions rows) and `effective` (get_effective_permissions, i.e. what the live resolver grants). Only `effective` depends on membership status, and it correctly returns NOTHING while an invitation is pending — every authorization path requires status = "active". The detail screen rendered `effective` as the access line and inferred the override count by diffing effective against defaults, so an employee the owner had just invited displayed "This role has no access yet." and "changed for <name>", against a database holding 12 role defaults and 0 overrides: the two statements were false in both directions and read as a configuration the owner had made. The screen now derives what it shows from role defaults + stored overrides — the model the DB documents — which is identical for an active employee and future-accurate for an invited one, and counts exceptions from user_permissions instead of inferring them from a denial. The same run surfaced a copy defect in the same state: the destructive action read "Deactivate employee" with "their sales and past activity stay on record" for somebody who had never worked, instead of "Cancel invitation". RULE: a display layer must not use an authorization result as a configuration statement — when those two can diverge (pending / suspended / denied), render the configured value and say what it is.',
+    evidence: {
+      db: "new employee: memberships.status=pending, users.role=employee, role template Sales Manager with 12 role_permissions rows, 0 user_permissions rows, branch_scope null",
+      screenBefore: 'Access: "This role has no access yet." + a "changed for UX Walkthrough Employee" line',
+      screenAfter: '"Customers, Inventory, Products, Reports, Returns, Sales"; no change line; destructive action reads "Cancel invitation"',
+      regression: 'tests/e2e/accessUx.spec.ts 5/5 (asserts the invited employee shows the role\'s DB areas, no "changed for", and no "Deactivate employee")',
+      fixedIn: 'EmployeeDetailPage (applyAccess), i18n empDetail.cancelInvite*'
+    },
+  },
 ];
 
 const client = await pool.connect();

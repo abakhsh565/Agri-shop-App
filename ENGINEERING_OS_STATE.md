@@ -547,6 +547,68 @@ authoritative contract of `inventory_movements` for returns needs confirming fir
 list, and whether the 0128 rollup trigger is expected to cover it). It is a reporting/history gap,
 not a stock-correctness one: the variant quantity itself is correct.
 
+### 1.15 Employee onboarding made obvious — and two defects it exposed (2026-09-21)
+
+Scope was the owner-facing onboarding experience only; the RBAC model, the pending → OTP →
+active lifecycle, role defaults, employee overrides and branch scope were all held as they were.
+
+**A. The flow asked the same thing twice and hid a decision behind a read-only list.** The
+three steps were Employee → "Job & Access" → Review, where step 2 carried the role question,
+the role's whole access panel **and** the branch question below it, and step 3 reprinted all of
+it as a second full sheet before the commit. Reordered to Employee → Role → Where, one decision
+per step: the branch question has its own named step, the role's access renders under the card
+that was just chosen (not after every other card), and the last step is the only place the
+details are collected. The step rail had names in i18n that were never rendered — three
+anonymous dots — so the journey now names itself (Employee / Role / Where, EN + UR).
+
+**B. Two things the flow should not have been asking at all.** Photo was the first control on
+step 1 despite being optional, ahead of both required fields; and no role is preselected any
+more, because a default let the owner hand out access by pressing Next without ever deciding
+what the person does (Next is disabled, with a plain-language reason).
+
+**C. The commit did not say what it was committing to.** Adding somebody issues an invitation
+(§1.12 A), but the button said "Create Employee" and the flow returned to the list with a
+toast, so nothing in the product said what happens next. It now says **Send invitation**, states
+that the employee signs in with this number and sets their own PIN, and lands on the new
+employee's page — where the invitation and its next step are visible.
+
+**D. An authorization enum was being invented in a .tsx file (real security defect, fixed).**
+`memberships.role` / `users.role` gate authorization, and both were written from a payload the
+client composed — `create_employee` read `payload->>'membershipRole'`, and Add Employee derived
+it from the selected role's **display name**
+(`r.name.toLowerCase().includes("admin") ? "admin" : "employee"`). All four system roles are
+English names with no "admin" in them, so it always produced `employee` and every fixture agreed
+— it only misfired on a name an owner had invented: "Branch Admin" produced `users.role =
+'admin'`, and 0106/0107 grant RLS INSERT/UPDATE/DELETE on `roles` and `role_permissions` to
+`users.role = 'admin'`, i.e. that employee could rewrite the tenant's whole RBAC model.
+`update_employee_access` was the same field one step further: `membershipRole = 'owner'` promoted
+an employee to full ownership. 0131 derives it in `create_employee`, refuses it in
+`update_employee_access`, and the frontend no longer sends it. Pinned by
+`employeeInviteLifecycle.test.ts` (8/8) by the fields authorization actually reads.
+
+**E. A pending membership's authorization denial was drawn as an access configuration.**
+`get_employee_access` returns `defaults`, `overrides` and `effective`; only `effective` depends
+on membership status and it correctly returns nothing while an invitation is pending. The detail
+screen rendered `effective` as the access line and inferred "changed for <name>" by diffing it
+against the defaults, so a just-invited employee showed "This role has no access yet" and a
+change line, against a database holding **12 role defaults and 0 overrides** — false in both
+directions. It now renders role defaults + stored overrides (the model the DB documents, and
+identical for an active employee) and counts exceptions from `user_permissions`. The same state
+also offered "Deactivate employee" with "their sales and past activity stay on record" for
+somebody who had never worked; it reads **Cancel invitation** with an honest confirm.
+
+**Evidence:** browser walkthrough of the whole journey (step 1 → step 3 → invited employee page),
+`accessUx.spec.ts` **5/5** (now asserts no preselected role, the branch question is *not* on the
+role step, the CTA, the Urdu rail, overflow on steps 2 and 3, the invited employee's areas,
+no false change line, and that "Deactivate employee" is absent), `employeeInviteLifecycle.test.ts`
+**8/8**, Vitest **362/362** across 27 files, `tsc` clean, QA baseline restored (4 users, 0 pending
+memberships, 2 branches, 4 roles).
+
+**Open, not silently decided:** role *names and descriptions* are tenant data stored in English
+("Sales Manager", "Shop floor: sales, customers, product viewing"), so they render as entered in
+Urdu mode. That is data, not UI copy — translating it would mean either a translation table keyed
+by role or seeded Urdu role text, which is a product decision (see §2).
+
 ---
 
 ## 2. Explicitly Not Built

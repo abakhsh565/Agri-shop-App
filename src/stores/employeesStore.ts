@@ -60,7 +60,6 @@ interface EmployeesState {
     name: string;
     phone: string;
     role: Exclude<UserRole, "admin">;
-    membershipRole?: MembershipRole;
     roleId?: string;
     jobTitle?: string;
     photoUrl?: string;
@@ -70,7 +69,6 @@ interface EmployeesState {
   }) => Promise<User>;
   setActive: (id: string, active: boolean, byUserId?: string | null) => Promise<void>;
   updateAccess: (employeeId: string, input: {
-    membershipRole?: MembershipRole;
     roleId?: string | null;
     permissions?: string[];
     overrides?: Record<string, boolean>;
@@ -135,7 +133,8 @@ export const useEmployeesStore = create<EmployeesState>((set, get) => ({
         name: input.name,
         phone: input.phone,
         role: input.role,
-        membershipRole: input.membershipRole ?? null,
+        // No membership role is sent: it is an authorization input that the
+        // database derives (migration 0131).
         roleId: input.roleId ?? null,
         jobTitle: input.jobTitle ?? null,
         photoUrl: input.photoUrl ?? null,
@@ -154,7 +153,6 @@ export const useEmployeesStore = create<EmployeesState>((set, get) => ({
     const { error } = await supabase.rpc("update_employee_access", {
       payload: {
         employeeId,
-        membershipRole: input.membershipRole ?? undefined,
         roleId: input.roleId ?? undefined,
         permissions: input.permissions ?? undefined,
         overrides: input.overrides ?? undefined,
