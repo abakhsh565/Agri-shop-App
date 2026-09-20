@@ -45,7 +45,6 @@ export default function AddEmployeePage() {
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
-  const [jobTitle, setJobTitle] = useState("");
   const [role, setRole] = useState<MembershipRole>("employee");
   const [roleId, setRoleId] = useState<string | null>(null);
   const [selectedRolePermissions, setSelectedRolePermissions] = useState<string[]>([]);
@@ -115,7 +114,6 @@ export default function AddEmployeePage() {
         role: "employee", // Legacy field retained for compatibility
         membershipRole: role,
         roleId: roleId ?? undefined,
-        jobTitle: jobTitle.trim() || undefined,
         photoUrl: photoUrl ?? undefined,
         branchScope: branchScope,
         createdBy: user?.id,
@@ -220,18 +218,6 @@ export default function AddEmployeePage() {
               <p className="text-[11px] mt-1" style={{ color: "var(--text-secondary)" }}>
                 {t("addEmployee.phoneHint")}
               </p>
-            </div>
-            <div>
-              <p className="text-[11px] font-bold uppercase mb-2 tracking-wider" style={{ color: "var(--text-secondary)" }}>
-                {t("addEmployee.jobTitle")}
-              </p>
-              <input
-                value={jobTitle}
-                onChange={(e) => setJobTitle(e.target.value)}
-                placeholder={t("addEmployee.jobTitleHint")}
-                className="w-full h-12 rounded-[24px] px-4 text-sm outline-none"
-                style={fieldStyle}
-              />
             </div>
           </>
         )}
@@ -372,7 +358,6 @@ export default function AddEmployeePage() {
               {[
                 { label: t("addEmployee.labelName"), value: name },
                 { label: t("addEmployee.labelPhone"), value: phone },
-                ...(jobTitle.trim() ? [{ label: t("addEmployee.labelJobTitle"), value: jobTitle }] : []),
                 { label: t("addEmployee.labelRole"), value: roleObj?.name ?? role },
                 { label: t("addEmployee.labelBranch"), value: branchNames },
                 { label: t("addEmployee.labelAccess"), value: accessSummary || t("addEmployee.noRoleAccess") },

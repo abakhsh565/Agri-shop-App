@@ -168,6 +168,26 @@ async function ensureAuthSession(phone: string): Promise<{ ok: boolean; error?: 
   return { ok: true };
 }
 
+/**
+ * An invited employee completes onboarding with their first verified sign-in.
+ *
+ * The invitation is a `pending` membership, which every authorization path
+ * rejects (they all require status = 'active'), so a freshly added employee can
+ * authenticate but cannot read or change anything until this runs.
+ *
+ * Activation is decided server-side inside complete_member_onboarding() from the
+ * caller's own JWT — never from anything this client sends — so calling it cannot
+ * grant access the database would not already allow: it only moves the CALLER'S
+ * OWN membership from 'pending' to 'active', and never revives a suspended one.
+ */
+async function completeOnboardingIfInvited(user: User): Promise<string | null> {
+  if (user.membershipStatus !== "pending") return null;
+  const { error } = await supabase.rpc("complete_member_onboarding");
+  if (error) return error.message;
+  user.membershipStatus = "active";
+  return null;
+}
+
 // ─── OTP verify + resolve/bootstrap the app user ──────────────────────────────
 export type ResolveResult =
   | { status: "ok"; user: User }
@@ -221,7 +241,12 @@ export async function verifyOTPAndResolveUser(
     if (!row.is_active) return { status: "deactivated" };
     void touchLogin(row.id, !row.first_login_at);
     const user = userFromRow(row);
-    // Load permissions after auth session is established
+    // First verified sign-in of an invited employee IS the onboarding step.
+    // A failure here must be surfaced: continuing would land the user in an app
+    // where every read and write is denied, looking inexplicably empty.
+    const onboardError = await completeOnboardingIfInvited(user);
+    if (onboardError) return { status: "error", message: onboardError };
+    // Load permissions after the membership is active and the session is established
     user.permissions = await loadPermissions();
     return { status: "ok", user };
   }
@@ -282,6 +307,11 @@ export async function getUserFromSession(): Promise<User | null> {
       .rpc("lookup_user_by_phone", { p_phone: savedUser.phone });
     if (data && (data as UserRow).is_active) {
       const user = userFromRow(data as UserRow);
+      // Best-effort on restore: if the invite was accepted on another device the
+      // membership is already active and this is a no-op, so a reload must never
+      // be blocked by it.
+      const onboardError = await completeOnboardingIfInvited(user);
+      if (onboardError) console.warn('Onboarding completion failed on restore:', onboardError);
       user.permissions = await loadPermissions();
       return user;
     }

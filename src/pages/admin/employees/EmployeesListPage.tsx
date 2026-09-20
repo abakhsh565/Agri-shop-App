@@ -9,7 +9,16 @@ import { Plus, ChevronRight } from "lucide-react";
 
 function statusColor(emp: User) {
   if (!emp.isActive) return { bg: "#fee2e2", color: "#dc2626" };
+  // An invite is not yet a working employee, so it must not read as "Active".
+  if (emp.membershipStatus === "pending") return { bg: "rgba(245,158,11,0.15)", color: "#b45309" };
   return { bg: "var(--brand)22", color: "var(--brand-dark)" };
+}
+
+// What the owner needs to know about this person right now.
+function statusLabel(emp: User, t: (key: string) => string) {
+  if (!emp.isActive) return t("employees.deactivated");
+  if (emp.membershipStatus === "pending") return t("employees.invited");
+  return t("employees.active");
 }
 
 export default function EmployeesListPage() {
@@ -71,7 +80,7 @@ export default function EmployeesListPage() {
                     className="text-[10px] font-bold px-2 py-0.5 rounded-full"
                     style={{ background: bg, color }}
                   >
-                    {emp.isActive ? t("employees.active") : t("employees.deactivated")}
+                    {statusLabel(emp, t)}
                   </span>
                 </div>
               </div>

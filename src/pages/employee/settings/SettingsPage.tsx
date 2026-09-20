@@ -138,8 +138,8 @@ export default function SettingsPage() {
               </button>
             </div>
             <p className="text-xs mt-0.5" style={{ color: "var(--text-secondary)" }}>
-              {user?.jobTitle ?? "Store Associate"}
-              {user?.employeeNumber ? ` · Emp #${user.employeeNumber}` : ""}
+              {user?.membershipRole === "owner" ? t("settings.owner") : t("search.employee")}
+              {user?.employeeNumber ? ` · ${t("empDetail.number")} ${user.employeeNumber}` : ""}
             </p>
             <p className="text-xs" style={{ color: "var(--text-secondary)" }}>{user?.phone}</p>
           </div>

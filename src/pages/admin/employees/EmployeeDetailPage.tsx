@@ -17,7 +17,7 @@ import { formatCurrency, formatSmartDateTime } from "@/lib/formatters";
 import { pkToday, pkDateFromISO } from "@/lib/pkDate";
 import { useCurrentTime } from "@/lib/useCurrentTime";
 import {
-  Phone, Hash, ShieldCheck, UserX, UserCheck,
+  Phone, Hash, ShieldCheck, UserX, UserCheck, Clock,
   TrendingUp, ShoppingCart, Users, Calendar, ChevronRight,
   Eye, Check,
 } from "lucide-react";
@@ -99,7 +99,10 @@ export default function EmployeeDetailPage() {
     </div>
   );
 
-  const empSales = sales.filter((s: Sale) => !s.isVoided && (s.employeeId === emp.id || s.employeeName === emp.name));
+  // Attribution is strictly by employee id. sales.employee_id is NOT NULL, so the
+  // old `|| s.employeeName === emp.name` fallback had no legitimate purpose and
+  // credited one person's sales to any colleague sharing their name.
+  const empSales = sales.filter((s: Sale) => !s.isVoided && s.employeeId === emp.id);
   const recentSales = [...empSales].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 5);
   const todayStr = pkToday();
   const totalRevenue = empSales.reduce((sum, x) => sum + x.totalAmount, 0);
@@ -113,6 +116,9 @@ export default function EmployeeDetailPage() {
 
   const initials = emp.name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase();
   const isActive = emp.isActive;
+  // An invitation that has not been accepted yet: the person holds a membership
+  // but every authorization path denies it until they sign in for the first time.
+  const isInvited = emp.membershipStatus === "pending";
   const isOwner = empMembershipRole === "owner";
   const roleTemplateName = editRoleId
     ? rolesStore.roles.find((r) => r.id === editRoleId)?.name ?? t("empDetail.noRole")
@@ -259,9 +265,6 @@ export default function EmployeeDetailPage() {
           )}
           <div className="flex-1 min-w-0">
             <p className="text-lg font-bold truncate" style={{ color: "var(--text-primary)" }}>{emp.name}</p>
-            {emp.jobTitle && (
-              <p className="text-sm mt-0.5" style={{ color: "var(--text-secondary)" }}>{emp.jobTitle}</p>
-            )}
             <div className="flex items-center gap-2 mt-2 flex-wrap">
               <span
                 className="text-xs font-bold px-2.5 py-0.5 rounded-full"
@@ -270,7 +273,7 @@ export default function EmployeeDetailPage() {
                   : { background: "#fee2e2", color: "#dc2626" }
                 }
               >
-                {isActive ? t("employees.active") : t("employees.deactivated")}
+                {isInvited && isActive ? t("employees.invited") : isActive ? t("employees.active") : t("employees.deactivated")}
               </span>
               {isOwner && (
                 <span
@@ -547,7 +550,22 @@ export default function EmployeeDetailPage() {
         )}
       </div>
 
-      {/* Performance */}
+      {/* Invited: they have never signed in, so there is no work to report and
+          showing zeros as "performance" would read as a real result. */}
+      {isInvited && (
+        <div className="px-4 pt-5 animate-fade-in-up delay-[125ms]">
+          <div className="rounded-xl p-4 flex items-start gap-3" style={{ background: "var(--surface-2)", border: "1px solid var(--border-light)" }}>
+            <Clock size={16} className="shrink-0 mt-0.5" style={{ color: "#f59e0b" }} />
+            <div>
+              <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>{t("empDetail.invitedTitle")}</p>
+              <p className="text-xs mt-1" style={{ color: "var(--text-secondary)" }}>{t("empDetail.invitedHint", { name: emp.name })}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Performance — only once the person has actually completed onboarding */}
+      {!isInvited && (
       <div className="px-4 pt-5 animate-fade-in-up delay-[125ms]">
         <p className="text-[11px] font-bold uppercase tracking-widest mb-3" style={{ color: "var(--text-secondary)" }}>
           {t("empDetail.performance")}
@@ -576,8 +594,10 @@ export default function EmployeeDetailPage() {
           ))}
         </div>
       </div>
+      )}
 
       {/* Recent sales */}
+      {!isInvited && (
       <div className="px-4 pt-5 animate-fade-in-up delay-[150ms]">
         <div className="flex items-center justify-between mb-3">
           <p className="text-[11px] font-bold uppercase tracking-widest" style={{ color: "var(--text-secondary)" }}>
@@ -626,6 +646,7 @@ export default function EmployeeDetailPage() {
           </div>
         )}
       </div>
+      )}
 
       {/* Actions */}
       <div className="px-4 pt-5 animate-fade-in-up delay-[175ms]">

@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { supabase } from "@/lib/supabase";
-import type { User, UserRole, MembershipRole } from "@/types";
+import type { User, UserRole, MembershipRole, MembershipStatus } from "@/types";
 
 // Employees ARE rows in the `users` table (the same table auth resolves login
 // against). Admins manage them; RLS lets admins read/insert/update all users.
@@ -23,7 +23,10 @@ interface UserRow {
   created_at: string;
 }
 
-function userFromRow(r: UserRow): User {
+// `membershipStatus` comes from the memberships table, not from `users` — that
+// table has no status column, and memberships is what authorization reads. It is
+// the authoritative invite/active state the owner sees.
+function userFromRow(r: UserRow, membershipStatus?: MembershipStatus): User {
   return {
     id: r.id,
     name: r.name,
@@ -32,6 +35,7 @@ function userFromRow(r: UserRow): User {
     isOriginalOwner: r.is_original_owner,
     pin: "",
     isActive: r.is_active,
+    membershipStatus,
     employeeNumber: r.employee_number ?? undefined,
     jobTitle: r.job_title ?? undefined,
     photoUrl: r.photo_url ?? undefined,
@@ -95,8 +99,16 @@ export const useEmployeesStore = create<EmployeesState>((set, get) => ({
       set({ loading: false, ready: true, error: error.message });
       return;
     }
+    // Read the membership status alongside, so the list can distinguish an
+    // invitation that has not been accepted from an employee who works here.
+    const { data: memberships } = await supabase
+      .from("memberships")
+      .select("user_id, status");
+    const statusByUser = new Map<string, MembershipStatus>(
+      (memberships ?? []).map((m) => [m.user_id as string, m.status as MembershipStatus])
+    );
     set({
-      employees: (data as UserRow[]).map(userFromRow),
+      employees: (data as UserRow[]).map((r) => userFromRow(r, statusByUser.get(r.id))),
       loading: false,
       ready: true,
     });

@@ -17,6 +17,7 @@
     "test:unit": "vitest run tests/unit/",
     "test:integration": "vitest run tests/integration/",
     "test:e2e": "npx playwright test",
+    "test:e2e:lanes": "node scripts/run-e2e-lanes.mjs",
     "test:all": "vitest run && npx playwright test"
   },
   "dependencies": {

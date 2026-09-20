@@ -75,10 +75,19 @@ describe('Authoritative RBAC foundation', () => {
     });
     expect(created.error).toBeNull();
     employee = created.data.id;
-    const rows = await sql(`SELECT m.role_id,m.branch_scope,(SELECT count(*) FROM user_permissions up WHERE up.user_id='${employee}')::int AS overrides FROM memberships m WHERE m.user_id='${employee}'`);
+    const rows = await sql(`SELECT m.role_id,m.branch_scope,m.status,(SELECT count(*) FROM user_permissions up WHERE up.user_id='${employee}')::int AS overrides FROM memberships m WHERE m.user_id='${employee}'`);
     expect(rows.rows[0].role_id).toBe(roleId);
     expect(rows.rows[0].branch_scope).toContain(mainBranch);
     expect(rows.rows[0].overrides).toBe(0);
+    // A newly added employee is INVITED, not working: role assignment is not access.
+    expect(rows.rows[0].status).toBe('pending');
+
+    // The invite is accepted by the employee's own first verified sign-in.
+    const onboard = await execRpcAsUser(employee, 'complete_member_onboarding', {});
+    expect(onboard.error).toBeNull();
+    expect(onboard.data.activated).toBe(1);
+    const after = await sql(`SELECT status FROM memberships WHERE user_id='${employee}'`);
+    expect(after.rows[0].status).toBe('active');
   });
 
   it('resolves role defaults and enforces branch scope through an authenticated RPC', async () => {

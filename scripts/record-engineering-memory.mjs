@@ -299,6 +299,51 @@ const MEMORIES = [
       budgetInCi: 'build-apk.yml test job: timeout-minutes: 60'
     },
   },
+  {
+    category: 'technical_decision',
+    title: 'Adding an employee issues an INVITATION; role assignment is not access',
+    component: 'supabase/migrations/0129_employee_invite_lifecycle.sql, src/lib/auth.ts, employeesStore, EmployeesListPage, EmployeeDetailPage',
+    description:
+      'create_employee (0113) wrote memberships.status = active directly, so a person the owner had merely added already held full tenant access before ever signing in. That collapsed three different things into one: the invitation, the employee record, and the person\'s access. The locked intent separates them — adding somebody ISSUES AN INVITE, and the employee becomes active only when they complete onboarding. The activation point had to be derived from facts rather than chosen: the device PIN is deliberately device-only (lib/pinLock.ts hashes it into localStorage and never sends it, so users.pin_hash is unused and there is NO server-visible "PIN set" event), which leaves a successful phone OTP — which also establishes the JWT that app_current_user_id() reads — as the only server-observable proof that the invitee accepted. So complete_member_onboarding() is a SECURITY DEFINER RPC that activates ONLY the caller\'s own memberships, ONLY from pending, and refuses if the user row is not active: it cannot grant access to another user, cannot revive a suspended membership, and cannot create tenant access that did not already exist. A second hole had to be closed in sync_membership_status(): that trigger derived status purely from users.is_active, so (a) reactivating a still-pending invite promoted it, and (b) cancelling an invite (deactivate -> suspended) and re-enabling it LOST the pending marker and restored access to somebody who had never signed in. The rule is now that reactivation returns an employee who has never signed in (first_login_at/last_login_at both NULL, and not the original owner) to pending. RULE: "who may access tenant data" must be a state the database can prove, not a state the add-employee form happens to leave behind.',
+    evidence: {
+      before: "create_employee -> memberships.status = 'active' for a brand-new user; employees list showed them as Active",
+      afterCreate: "memberships.status = 'pending'; get_my_permissions() = []; create_customer refused; customers table unchanged (no row)",
+      afterOnboarding: "complete_member_onboarding() as the invitee -> activated=1, status active, role defaults (Sales Employee) in force; second call -> activated=0",
+      cannotEscalate: "an active employee calling complete_member_onboarding() left a pending colleague pending; a deactivated invitee calling it raised ACCOUNT_NOT_ACTIVE-equivalent error and stayed suspended",
+      reactivation: "pending -> deactivate -> suspended -> reactivate -> pending (not active), and still zero permissions until onboarding",
+      grants: "authenticated:EXECUTE only (REVOKE ... FROM PUBLIC, anon, house rule from 0115/0116/0121)",
+      regression: 'tests/integration/employeeInviteLifecycle.test.ts 5/5; rbacFoundation + rbacEnforcement 26/26; accessUx E2E 5/5; Vitest 353/353; tsc clean; build clean',
+      fixedIn: '0129 + auth.ts/employeesStore/EmployeesListPage/EmployeeDetailPage'
+    },
+  },
+  {
+    category: 'failure_pattern',
+    title: 'Performance must be attributed by employee id — a name fallback invents results for the wrong person',
+    component: 'src/pages/admin/employees/EmployeeDetailPage.tsx',
+    description:
+      'Employee performance filtered sales with `s.employeeId === emp.id || s.employeeName === emp.name`. sales.employee_id is NOT NULL, so the name arm had no legitimate purpose — and it is exactly how a brand-new employee came to display somebody else\'s revenue, sales count and recent-sale list as their own: any colleague sharing their name contributed to their numbers. This is the concrete form of the reported "pending employee shows fake performance": the screen was not inventing numbers, it was borrowing another person\'s. The name arm is removed, and operational data is now gated on the inviter having accepted: an employee whose membership is still pending sees an "Invitation sent" state instead of a Performance panel and a Recent sales list, because zeros presented under a Performance heading read as a result rather than as absence. RULE: attribute people from stable ids; a display-name snapshot is for showing, never for joining, and never silently widens a filter.',
+    evidence: {
+      before: 'empSales = sales.filter((s) => !s.isVoided && (s.employeeId === emp.id || s.employeeName === emp.name))',
+      columnTrap: 'information_schema: sales.employee_id uuid NOT NULL — the fallback could only ever add false positives',
+      afterFix: 'empSales = sales.filter((s) => !s.isVoided && s.employeeId === emp.id); invited employees render t("empDetail.invitedTitle") and no Performance/Recent sales',
+      browser: 'tests/e2e/accessUx.spec.ts: after creating an employee the list contains "Invited", the detail contains "Invitation sent" and does NOT contain "Recent sales"',
+      regression: 'tests/e2e/accessUx.spec.ts 5/5; crossScreenSync 13/13'
+    },
+  },
+  {
+    category: 'prevention_rule',
+    title: 'Split the E2E lanes by what each spec asserts, not by how long it takes',
+    component: 'scripts/run-e2e-lanes.mjs, package.json (test:e2e:lanes), tests/e2e/*.spec.ts',
+    description:
+      'The browser suite reached 63 tests / ~17 minutes serially, which is longer than a local command budget and therefore slowed every verification cycle. Raising the worker count globally is unsafe for a specific, checkable reason: dashboardScope.spec.ts reconciles the figures RENDERED on the dashboard against aggregate queries over the same tenant, and actionCenter.spec.ts counts tenant-wide signals and badges, so any spec that concurrently inserts a sale or customer in that tenant changes the aggregate between the UI read and the DB read and fails the assertion for a reason unrelated to the product. The partition therefore follows what a spec ASSERTS: specs that mint their own rows (crossScreenSync/imageSync/splitPayment use randomUUID()/Date.now(), rtlLtr only renders, accessUx asserts on the entity it just created) run in a parallel lane, and the tenant-wide reconcilers run in a serial lane. Lanes run one after the other — running them simultaneously would put writers back beside the reconcilers and reintroduce the interference the split exists to prevent. RULE: parallelize tests by isolation property, never by runtime; a test that asserts a whole-tenant aggregate may never share a database moment with a test that writes to that tenant.',
+    evidence: {
+      before: 'npx playwright test -> 63 passed (16.9m), workers=1',
+      after: 'node scripts/run-e2e-lanes.mjs -> isolated lane 33 passed (3m30s, workers=4) + reconcilers lane 30 passed (6m51s, workers=1); total 10m21s, 0 failed, 0 flaky',
+      measured: '39% less wall clock for identical coverage (63 tests)',
+      isolatedLaneSerialEquivalent: 'the same 4 files took ~7.6m serially, so the parallel lane alone is ~54% faster',
+      whySafe: 'every one of the 63 tests had already been proven to pass on its own before the lanes were introduced'
+    },
+  },
 ];
 
 const client = await pool.connect();

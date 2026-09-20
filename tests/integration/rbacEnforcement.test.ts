@@ -168,6 +168,32 @@ describe('RBAC enforcement — role defaults propagate to employees', () => {
       `SELECT count(*)::int AS c FROM user_permissions WHERE user_id IN ('${empAhmed}','${empBilal}')`
     );
     expect(overrides.rows[0].c).toBe(0);
+
+    // Adding an employee ISSUES AN INVITATION. The membership is pending, so the
+    // invitee holds no access at all until they complete onboarding — and a role
+    // assignment alone must never be what grants it.
+    const invited = await sql(
+      `SELECT status FROM memberships WHERE user_id IN ('${empAhmed}','${empBilal}')`
+    );
+    expect(invited.rows.map((r) => r.status)).toEqual(['pending', 'pending']);
+    const invitedPerms = await execRpcAsUser(empAhmed, 'get_my_permissions', {});
+    expect(invitedPerms.data ?? []).toEqual([]);
+
+    // Onboarding completes with the invitee's own verified sign-in.
+    const onboard = await execRpcAsUser(empAhmed, 'complete_member_onboarding', {});
+    expect(onboard.error).toBeNull();
+    expect(onboard.data.activated).toBe(1);
+    const onboardBilal = await execRpcAsUser(empBilal, 'complete_member_onboarding', {});
+    expect(onboardBilal.error).toBeNull();
+    const accepted = await sql(
+      `SELECT status FROM memberships WHERE user_id IN ('${empAhmed}','${empBilal}')`
+    );
+    expect(accepted.rows.map((r) => r.status)).toEqual(['active', 'active']);
+
+    // Onboarding is idempotent: a second call activates nothing (no double-login effect).
+    const again = await execRpcAsUser(empAhmed, 'complete_member_onboarding', {});
+    expect(again.error).toBeNull();
+    expect(again.data.activated).toBe(0);
   });
 
   it('propagates an added permission to every employee on the role', async () => {

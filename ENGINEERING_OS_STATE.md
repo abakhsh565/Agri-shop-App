@@ -426,6 +426,68 @@ steps executed**, so no result about this code was produced. The workflow's own 
 therefore reproduced locally against QA (connectivity check, Vitest, Playwright, build) and
 all pass; the APK job itself cannot be exercised until billing is resolved.
 
+### 1.12 The employee lifecycle, and one defect wearing its clothes (2026-09-20)
+
+**A. Adding an employee now issues an INVITATION.** `create_employee` (0113) wrote
+`memberships.status = 'active'` directly, so a person the owner had merely added already
+held full tenant access before ever signing in — the invitation, the employee record and the
+person's access were all the same act. The activation point was not chosen, it was derived:
+the device PIN is device-only (`lib/pinLock.ts` hashes it into localStorage and never sends
+it, so `users.pin_hash` is unused and there is **no** server-visible "PIN set" event), which
+leaves a successful phone OTP — the event that also establishes the JWT
+`app_current_user_id()` reads — as the only server-observable proof that the invitee
+accepted. `complete_member_onboarding()` is therefore a SECURITY DEFINER RPC that activates
+**only the caller's own** memberships, **only from `pending`**, and refuses while the user row
+is inactive. A second hole was closed in `sync_membership_status()`: because it derived status
+purely from `users.is_active`, reactivating a pending invite promoted it, and cancelling an
+invite then re-enabling it *lost* the pending marker and restored access to somebody who had
+never signed in. Reactivation now returns an employee who has never signed in to `pending`.
+
+**B. The "fake performance" on an employee page was borrowed data, not invented data.**
+The performance panel filtered sales with
+`s.employeeId === emp.id || s.employeeName === emp.name`. `sales.employee_id` is **NOT NULL**,
+so the name arm could only ever add false positives: any colleague sharing a name fed their
+revenue, sale count and recent-sale list into this person's screen. The name arm is gone, and
+operational data is gated on the invitation having been accepted — a pending employee sees an
+"Invitation sent" state rather than zeros under a Performance heading (which read as a result
+rather than as absence).
+
+**C. Role is the job profile, so the separate job-title field is gone.** Step 1 of Add
+Employee asked "what do they do?" for the role *and* offered a free-text "Job title
+(optional)". The field, its review row and the `jobTitle` argument are removed; the column
+stays for existing rows (nothing is destroyed). Two surfaces that used `jobTitle` as a
+stand-in for a person's role were corrected with it: the employee settings screen showed the
+hardcoded English `"Store Associate"` for anyone without one — which the removal would have
+made *always* visible in Urdu mode — and the employee detail header printed a second,
+competing answer to "what does this person do?".
+
+**D. The E2E suite got 39% faster without touching coverage.** 63 tests serially took
+16.9 min. Raising the worker count globally is unsafe for a checkable reason: `dashboardScope`
+reconciles rendered figures against same-tenant aggregates and `actionCenter` counts
+same-tenant signals, so a concurrent writer changes the aggregate between the UI read and the
+DB read. The lanes are therefore split by **what each spec asserts** — writers-that-mint-their-
+own-rows in a parallel lane, tenant-wide reconcilers in a serial lane, one lane after the
+other.
+
+**Evidence**
+
+    node scripts/deploy-single.mjs supabase/migrations/0129_employee_invite_lifecycle.sql
+    npx vitest run                                  # 353/353 across 26 files
+    npx tsc --noEmit                                # clean
+    npm run build                                   # ✓ built
+    npx playwright test tests/e2e/accessUx.spec.ts  # 5/5 (invite labelled, no performance)
+    npx playwright test tests/e2e/crossScreenSync.spec.ts   # 13/13
+    node scripts/run-e2e-lanes.mjs                  # 63/63 in 10m21s (was 16.9m serial)
+
+New regression suite `tests/integration/employeeInviteLifecycle.test.ts` (5 tests) proves the
+security properties rather than the UI state: an invited employee resolves to no permissions
+and a real `create_customer` is refused with **no row created**; onboarding activates once and
+is idempotent; an active employee cannot activate a colleague's invite; a suspended membership
+is never revived by the deactivated person signing in; and a cancelled invite returns to
+`pending`, not to `active`. `tests/e2e/accessUx.spec.ts` now asserts against the locked intent
+— that the review step does **not** contain "Job title", and that a new employee is labelled
+"Invited" with no "Recent sales" panel.
+
 ---
 
 ## 2. Explicitly Not Built

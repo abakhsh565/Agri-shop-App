@@ -254,6 +254,7 @@ export const translations = {
 
     // Employees
     "employees.active":      "Active",
+    "employees.invited":     "Invited",
     "employees.onLeave":     "On Leave",
     "employees.deactivated": "Deactivated",
 
@@ -375,6 +376,8 @@ export const translations = {
     "empDetail.reactivate":     "Reactivate employee",
     "empDetail.deactivated":    "{name} deactivated — past sales are preserved",
     "empDetail.reactivated":    "{name} reactivated",
+    "empDetail.invitedTitle":   "Invitation sent",
+    "empDetail.invitedHint":    "{name} can sign in with their phone number. They will appear here as active after their first sign-in.",
     "empDetail.performance":    "Performance",
     "empDetail.totalRevenue":   "Total revenue",
     "empDetail.totalSales":     "Sales",
@@ -1468,6 +1471,7 @@ export const translations = {
 
     // Employees
     "employees.active":      "فعال",
+    "employees.invited":     "مدعو",
     "employees.onLeave":     "چھٹی پر",
     "employees.deactivated": "غیر فعال",
 
@@ -1589,6 +1593,8 @@ export const translations = {
     "empDetail.reactivate":     "ملازم دوبارہ فعال کریں",
     "empDetail.deactivated":    "{name} غیر فعال ہو گئے — پرانی فروخت محفوظ ہے",
     "empDetail.reactivated":    "{name} دوبارہ فعال ہو گئے",
+    "empDetail.invitedTitle":   "دعوت نامہ بھیج دیا گیا",
+    "empDetail.invitedHint":    "{name} اپنے فون نمبر سے سائن ان کر سکتے ہیں۔ پہلی مرتبہ سائن ان کرنے کے بعد وہ یہاں فعال نظر آئیں گے۔",
     "empDetail.performance":    "کارکردگی",
     "empDetail.totalRevenue":   "کل آمدنی",
     "empDetail.totalSales":     "فروخت",

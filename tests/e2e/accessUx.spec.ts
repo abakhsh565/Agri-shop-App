@@ -126,7 +126,10 @@ test.describe('Employee job & access — simple for the owner, exact underneath'
     expect(step1).toContain('Add Employee');
     expect(step1).toContain('Full name');
     expect(step1).toContain('Phone number');
-    expect(step1).toContain('Job title (optional)');
+    // The role IS the job profile (locked intent), so asking for a separate job
+    // title would be the same question twice and would give the owner a second,
+    // competing notion of what the person does.
+    expect(step1, 'a separate job title field is back').not.toContain('Job title');
     expect(step1, 'step 1 exposes RBAC vocabulary').not.toMatch(JARGON);
 
     await page.getByPlaceholder('e.g. Bilal Ahmed').fill(NEW_NAME);
@@ -197,14 +200,29 @@ test.describe('Employee job & access — simple for the owner, exact underneath'
        WHERE m.user_id = '${created.id}'`);
     expect(membership, 'membership row was not created').toBeTruthy();
     expect(membership.template).toBe('Sales Manager');
-    expect(membership.status).toBe('active');
+    // Adding somebody is an INVITATION: the role is assigned, but the membership
+    // is pending until they complete onboarding with their own first sign-in.
+    // A role must never be what grants access.
+    expect(membership.status).toBe('pending');
     expect(membership.tenant_id).toBe('00000000-0000-0000-0000-000000000001');
     expect(String(membership.branch_scope)).toContain(branch.id);
 
-    // Reload: the list must show the new employee.
+    // Reload: the list must show the new employee, labelled as an invitation —
+    // not as an active employee, which is what the owner would otherwise believe.
     await page.reload();
     await page.waitForTimeout(1500);
-    expect(await bodyText(page)).toContain(NEW_NAME);
+    const list = await bodyText(page);
+    expect(list).toContain(NEW_NAME);
+    expect(list, 'the invite is presented as an active employee').toContain('Invited');
+
+    // The detail screen must not present operational numbers for somebody who has
+    // never worked: zeros (or worse, a colleague's sales) would read as a result.
+    await page.goto(`${BASE}/admin/employees/${created.id}`);
+    await page.waitForTimeout(1800);
+    const detail = await bodyText(page);
+    expect(detail).toContain('Invitation sent');
+    expect(detail, 'performance is shown for an invited employee').not.toContain('Recent sales');
+    expect(detail, 'the invite is presented as an active employee').toContain('Invited');
   });
 
   test('3. The same flow in Urdu: RTL, translated, no English copy leaking', async ({ page }) => {
