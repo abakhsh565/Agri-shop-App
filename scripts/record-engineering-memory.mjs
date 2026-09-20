@@ -344,6 +344,24 @@ const MEMORIES = [
       whySafe: 'every one of the 63 tests had already been proven to pass on its own before the lanes were introduced'
     },
   },
+  {
+    category: 'failure_pattern',
+    title: 'A function rewrite dropped every return rule — and a SELECT INTO nulled the refund on the way back',
+    component: 'supabase/migrations/0130_restore_return_integrity_guards.sql, process_return, src/lib/db.ts',
+    description:
+      '0052 was the last version of process_return that enforced the return rules. 0112 rewrote the function to add the RBAC gate and to follow the variant-stock schema — and silently dropped every rule with it, leaving only an existence check: a return could be made on a VOIDED sale (double-restoring stock that void had already restored), for MORE than was sold, from a line belonging to a DIFFERENT sale, with a client-chosen unit price, without a reason, and repeatedly — even though the client has always sent an idempotency_key and returns.idempotency_key has been UNIQUE since 0014. Two fingerprints identified the loss without needing to know 0052 existed: (1) src/lib/db.ts maps RETURN_WINDOW_EXPIRED / EXCESS_RETURN / ITEM_NOT_OWNED / SALE_ITEM_NOT_FOUND / REASON_REQUIRED to friendly messages — error codes nothing could produce any more; (2) db.ts reads data.return_number / data.total_refund while the live function returned camelCase, so the return number rendered undefined and the refund 0. RESTORING the guards then produced a second defect that only a behavioural check could catch: my restored version ran an idempotency `SELECT r.id, r.return_number, r.total_refund INTO v_id, v_return_number, v_total` before the work, and plpgsql assigns NULL to EVERY target when no row matches — so the `v_total numeric(14,4) := 0` initialisation was wiped, every refund was computed from NULL, total_refund was stored as NULL, and `outstanding_balance = GREATEST(0, outstanding_balance - NULL)` propagated the NULL into the customer balance. All six guard tests passed while the happy path wrote NULL; only asserting the VALUE of a successful return exposed it. 0052 had carried an explicit `v_total_refund := 0; v_return_id := NULL; v_return_number := NULL;` reset line after that lookup, and dropping it was the entire bug. RULES: when a migration rewrites a function, diff the guards, not just the signature — and treat frontend error strings and response-key mappings that nothing produces as evidence of deleted behaviour; and after a SELECT ... INTO used as an existence probe, never assume the declared initialiser survived.',
+    evidence: {
+      droppedGuards: "process_return before 0130 guarded only SALE_NOT_FOUND; BUSINESS-RULES.md §8 requires non-voided origin, per-item quantity cap, and same-sale lines",
+      fingerprint1: 'src/lib/db.ts friendly() maps RETURN_WINDOW_EXPIRED, EXCESS_RETURN, ITEM_NOT_OWNED, SALE_ITEM_NOT_FOUND, REASON_REQUIRED — none producible by the live function',
+      fingerprint2: 'db.ts reads data.return_number/data.total_refund; live function returned returnNumber/totalRefund, so both were undefined/0',
+      nullableTrap: "returns.total_refund is nullable with default 0; a NULL refund silently propagated to customers.outstanding_balance via GREATEST(0, x - NULL)",
+      reproducedDirectly: "select process_return(payload) with SET LOCAL role authenticated + jwt claims -> {\"total_refund\":null} in both the response AND the stored row",
+      afterFix: 'valid return of qty 2 at 100 -> total_refund 200 (response and stored row), customer balance not null; retry with the same key -> same id, idempotent true, total_refund 200, no second row',
+      negativeCoverage: 'voided sale / qty above sold / line from another sale / inflated unit price / missing reason are rejected AND asserted to write no row',
+      regression: 'tests/integration/returnIntegrityGuards.test.ts 6/6; Vitest 359/359 across 27 files; tsc clean; build clean',
+      fixedIn: '0130'
+    },
+  },
 ];
 
 const client = await pool.connect();

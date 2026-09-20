@@ -488,6 +488,65 @@ is never revived by the deactivated person signing in; and a cancelled invite re
 — that the review step does **not** contain "Job title", and that a new employee is labelled
 "Invited" with no "Recent sales" panel.
 
+### 1.13 The returns path was missing every rule it was supposed to enforce (2026-09-20)
+
+**A. A function rewrite silently deleted the return rules.** 0052 was the last version of
+`process_return` that enforced anything. 0112 rewrote the function to add the RBAC gate and to
+follow the 0128 schema — and left only an existence check, so a return could be made on a
+**voided** sale (double-restoring stock that the void had already restored), for **more than was
+sold**, from a line belonging to a **different sale**, at a **client-chosen unit price**, with
+**no reason**, and **repeatedly**. The client has always sent an `idempotency_key`
+(`src/lib/db.ts:170`) and `returns.idempotency_key` has been UNIQUE since 0014, yet nothing read
+it: a retried or double-submitted return created a SECOND refund and restored stock twice.
+
+Two fingerprints identified the loss without needing to know 0052 existed: `db.ts` maps
+`RETURN_WINDOW_EXPIRED` / `EXCESS_RETURN` / `ITEM_NOT_OWNED` / `SALE_ITEM_NOT_FOUND` /
+`REASON_REQUIRED` to user-facing messages — error codes nothing could produce any more — and it
+reads `data.return_number` / `data.total_refund` while the live function returned camelCase, so
+the return number rendered as `undefined` and the refund as `0`. All are restored in **0130**,
+with the RBAC gate from 0112 kept intact.
+
+**B. Restoring the guards introduced a NULL that only a value assertion could catch.** The
+restored function ran an idempotency probe — `SELECT r.id, r.return_number, r.total_refund
+INTO v_id, v_return_number, v_total` — and plpgsql assigns NULL to **every** target when no row
+matches, wiping the `v_total numeric(14,4) := 0` initialiser. Every refund was therefore computed
+from NULL, stored as NULL (`returns.total_refund` is nullable), and propagated into the customer
+balance through `GREATEST(0, outstanding_balance - NULL)`. **All six guard tests passed while the
+happy path wrote NULL**; it was reproduced with no client at all (`SET LOCAL role authenticated`
++ JWT claims → `{"total_refund":null}` in both the response and the row). 0052 had an explicit
+`v_total_refund := 0; v_return_id := NULL; v_return_number := NULL;` reset line after that probe;
+dropping it was the whole bug. Both the guards and the value are now pinned by tests.
+
+**C. Flagged for a product decision — not changed.** For a return, `process_return` reduces
+`customers.outstanding_balance` by the full refund for **both** resolutions. BUSINESS-RULES.md
+§8 says a **cash refund leaves outstanding unaffected** (cash is handed back) and only a **credit
+adjustment** reduces it; 0052 instead reduced it by the credit *ratio* of a partially-paid sale.
+The live behaviour matches neither. Two historical implementations and the spec disagree, so the
+right answer is a business call, not a technical one — see the DECISION REQUIRED note below.
+Nothing was changed here because guessing would silently rewrite how every shop's customer
+balances move.
+
+**Evidence**
+
+    node scripts/deploy-single.mjs supabase/migrations/0130_restore_return_integrity_guards.sql
+    npx vitest run tests/integration/returnIntegrityGuards.test.ts   # 6/6
+    npx vitest run                                                  # 359/359 across 27 files
+    npx tsc --noEmit ; npm run build                                # clean
+
+`tests/integration/returnIntegrityGuards.test.ts` proves each rule behaviourally through the real
+RPC **and asserts that no row was written** when a return is rejected — "it threw" is not evidence
+that nothing was refunded. It also pins the value of a successful return, the stored row, the
+non-NULL customer balance, and idempotency (same key → same return id, no second row).
+
+### 1.14 Return movement history is incomplete (found, not yet fixed)
+
+Sales write `inventory_movements` (0128), but the 0112 `process_return` restores
+`product_variants.stock_qty` without recording a movement — 0052 did write a `'return'` movement.
+So a returned item's stock history has a gap. This is recorded rather than fixed because the
+authoritative contract of `inventory_movements` for returns needs confirming first (movement type
+list, and whether the 0128 rollup trigger is expected to cover it). It is a reporting/history gap,
+not a stock-correctness one: the variant quantity itself is correct.
+
 ---
 
 ## 2. Explicitly Not Built
