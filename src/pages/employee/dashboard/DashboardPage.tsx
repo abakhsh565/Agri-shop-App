@@ -96,6 +96,8 @@ export default function DashboardPage() {
   const qtySold      = salesToUse.reduce((s, x) => s + x.items.reduce((q, it) => q + it.qty, 0), 0);
   const recentSales  = mockSales.filter((s) => !s.isVoided).slice(0, 3);
   const badgeCount   = unread();
+  // Spec EMP-DASH-HOME: today's sales, transactions, customers served, paid/credit.
+  const customersServed = new Set(salesToUse.map((s) => s.customerId).filter(Boolean)).size;
 
   async function handleRefresh() {
     await useSalesStore.getState().load();
@@ -136,7 +138,7 @@ export default function DashboardPage() {
                     {unread()}
                   </span>
                 )}
-                <span className="text-[10px]" style={{ color: "var(--text-secondary)" }}>View all</span>
+                <span className="text-[10px]" style={{ color: "var(--text-secondary)" }}>{t("common.viewAll")}</span>
               </div>
             </button>
             {/* Scrollable unread list */}
@@ -285,6 +287,22 @@ export default function DashboardPage() {
       </div>
 
 
+      {/* ── Today's activity: Transactions · Customers served ── */}
+      <div className="px-4 pt-3 flex gap-2.5 animate-fade-in-up delay-75">
+        <div className="flex-1 rounded-[12px] px-4 py-3" style={{ background: "var(--surface-2)" }}>
+          <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
+            {t("admin.transactions")}
+          </p>
+          <p className="text-[18px] font-bold mt-0.5" style={{ color: "var(--text-primary)" }}>{txCount}</p>
+        </div>
+        <div className="flex-1 rounded-[12px] px-4 py-3" style={{ background: "var(--surface-2)" }}>
+          <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
+            {t("admin.customersServed")}
+          </p>
+          <p className="text-[18px] font-bold mt-0.5" style={{ color: "var(--text-primary)" }}>{customersServed}</p>
+        </div>
+      </div>
+
       {/* ── Quick Actions ── */}
       <div className="px-4 pt-4 animate-fade-in-up delay-75">
         <p className="text-[11px] font-bold uppercase tracking-widest mb-3" style={{ color: "var(--text-secondary)" }}>
@@ -319,7 +337,7 @@ export default function DashboardPage() {
           {recentSales.length === 0 ? (
             <div className="px-4 py-8 text-center">
               <p className="text-2xl mb-1">📋</p>
-              <p className="text-[13px]" style={{ color: "var(--text-secondary)" }}>No sales yet today</p>
+              <p className="text-[13px]" style={{ color: "var(--text-secondary)" }}>{t("admin.noSalesYetToday")}</p>
             </div>
           ) : recentSales.map((sale, i) => {
             const cImg = getCustomerImg(sale.customerId);

@@ -310,6 +310,12 @@ export interface SaleItem {
   unitSize: number;
   baseUnit: string;
   lineTotal: number;
+  /**
+   * Line cost of goods recorded at the time of sale (cost x qty).
+   * Undefined only for rows recorded before COGS snapshots existed; those fall
+   * back to the current variant cost. Never treat a missing cost as zero.
+   */
+  cogsAmount?: number;
 }
 
 export interface Sale {

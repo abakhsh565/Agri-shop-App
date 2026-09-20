@@ -24,6 +24,7 @@ interface SaleItemRow {
   unit_size: number | null;
   base_unit: string | null;
   line_total: number;
+  cogs_amount: number | null;
 }
 
 interface SaleRow {
@@ -63,6 +64,7 @@ function itemFromRow(r: SaleItemRow): SaleItem {
     unitSize: Number(r.unit_size ?? 1),
     baseUnit: r.base_unit ?? "piece",
     lineTotal: Number(r.line_total),
+    cogsAmount: r.cogs_amount == null ? undefined : Number(r.cogs_amount),
   };
 }
 

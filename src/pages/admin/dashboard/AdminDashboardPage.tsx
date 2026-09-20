@@ -11,7 +11,7 @@ import { useCompaniesStore } from "@/stores/companiesStore";
 import PullToRefresh from "@/components/ui/PullToRefresh";
 import { useCustomersStore } from "@/stores/customersStore";
 import { supabase } from "@/lib/supabase";
-import { formatCurrency, formatSmartDateTime } from "@/lib/formatters";
+import { formatCurrency, formatSmartDateTime, productLowStockThreshold } from "@/lib/formatters";
 import { generateReminders, calculatePaymentStatus, loadBusinessSettings } from "@/lib/reminderEngine";
 import { useT } from "@/lib/i18n";
 import { AlertTriangle, TrendingUp, ChevronRight, TrendingDown, ShoppingCart, Search, Bell, Wallet, CheckCircle2 } from "lucide-react";
@@ -163,7 +163,10 @@ export default function AdminDashboardPage() {
   const allActive = mockSales.filter((s) => !s.isVoided);
   const filtered = dateFilter === "all" ? allActive : allActive.filter(inFilter);
 
-  // Cost lookup for real gross profit (admin-only figure — cost vs selling price).
+  // Fallback cost lookup, used only for lines recorded before COGS snapshots
+  // existed. It is built from the products store, which loads ACTIVE products
+  // only, so it MUST NOT be the primary source: a deactivated product would
+  // silently cost zero and overstate profit.
   const variantCost = new Map<string, number>();
   mockProducts.forEach((p) => p.variants.forEach((v) => variantCost.set(v.id, v.costPrice)));
 
@@ -171,10 +174,18 @@ export default function AdminDashboardPage() {
   const txCount = filtered.length;
   const paidSales = filtered.reduce((s, x) => s + x.amountPaid, 0);
   const creditSales = filtered.reduce((s, x) => s + Math.max(0, x.totalAmount - x.amountPaid), 0);
+  // Gross profit = line revenue - recorded line COGS. The cost comes from the
+  // sale item's own snapshot (stamped at sale time), so an item whose product has
+  // since been deactivated cannot silently cost zero. Falls back to the current
+  // variant cost only when a line carries no recorded COGS.
   const grossProfit = filtered.reduce(
     (sum, sale) =>
       sum +
-      sale.items.reduce((s, it) => s + (it.unitPrice - (variantCost.get(it.variantId ?? '') ?? 0)) * it.qty, 0),
+      sale.items.reduce((s, it) => {
+        const revenue = it.unitPrice * it.qty;
+        const cost = it.cogsAmount ?? (variantCost.get(it.variantId ?? '') ?? 0) * it.qty;
+        return s + (revenue - cost);
+      }, 0),
     0,
   );
   // Returns + credit collected — same date filter as sales
@@ -192,18 +203,21 @@ export default function AdminDashboardPage() {
     .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
     .slice(0, 3);
 
-  // Alerts
+  // Alerts — stock of record is the variant; p.stockQty is its derived total.
   const lowStockCount = mockProducts.reduce((c, p) => {
-    // Check variant-level stock (not product-level)
-    const variantStock = p.variants.reduce((sum, v) => sum + (v.stockQty ?? 0), 0);
-    const threshold = p.variants.length > 0 ? Math.min(...p.variants.map((v) => v.lowStockThreshold)) : 5;
-    const bad = variantStock > 0 && variantStock <= threshold;
+    const bad = p.stockQty > 0 && p.stockQty <= productLowStockThreshold(p.variants);
     return c + (bad ? 1 : 0);
   }, 0);
-  const outOfStockCount = mockProducts.filter(p => {
-    const variantStock = p.variants.reduce((sum, v) => sum + (v.stockQty ?? 0), 0);
-    return variantStock === 0;
-  }).length;
+  const outOfStockCount = mockProducts.filter(p => p.stockQty <= 0).length;
+  // Expiring (spec: ADM-DASH-HOME) — active variants whose expiry date falls in
+  // the next 30 days. Already-expired stock is a different state and is not
+  // counted here.
+  const expiringCount = mockProducts.reduce((c, p) =>
+    c + p.variants.filter((v) => {
+      if (!v.expiryDate) return false;
+      const days = (new Date(v.expiryDate).getTime() - now.getTime()) / 86400000;
+      return days >= 0 && days <= 30;
+    }).length, 0);
   const totalPayable = mockCompanies.reduce((s, c) => s + c.outstandingPayable, 0);
   
   const [pendingCreditRequests, setPendingCreditRequests] = useState(0);
@@ -338,7 +352,7 @@ export default function AdminDashboardPage() {
                     {unread()}
                   </span>
                 )}
-                <span className="text-[10px] font-semibold" style={{ color: "var(--brand-dark, #65a30d)" }} onClick={(e) => { e.stopPropagation(); markAllRead(); }}>Mark all read</span>
+                <span className="text-[10px] font-semibold" style={{ color: "var(--brand-dark, #65a30d)" }} onClick={(e) => { e.stopPropagation(); markAllRead(); }}>{t("notifications.markAllRead")}</span>
               </div>
             </button>
 
@@ -359,10 +373,10 @@ export default function AdminDashboardPage() {
                   const weekStart = new Date(todayStart); weekStart.setDate(weekStart.getDate() - 7);
 
                   const groups: { heading: string; items: typeof notifications }[] = [
-                    { heading: "Today", items: [] },
-                    { heading: "Yesterday", items: [] },
-                    { heading: "Last week", items: [] },
-                    { heading: "Earlier", items: [] },
+                    { heading: t("notifications.groupToday"), items: [] },
+                    { heading: t("notifications.groupYesterday"), items: [] },
+                    { heading: t("notifications.groupThisWeek"), items: [] },
+                    { heading: t("notifications.groupEarlier"), items: [] },
                   ];
 
                   for (const n of unreadNotifs) {
@@ -465,6 +479,34 @@ export default function AdminDashboardPage() {
         </button>
       </div>
 
+      {/* ── Period figures: Paid Sales · Credit Sales (spec: ADM-DASH-HOME) ── */}
+      <div className="px-4 pt-3 flex gap-2.5 animate-fade-in-up">
+        <button
+          onClick={() => navigate("/admin/sales", { state: { tab: "paid" } })}
+          className="flex-1 rounded-[12px] px-4 py-3 text-start transition-transform active:scale-[0.98]"
+          style={{ background: "var(--surface-2)" }}
+        >
+          <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
+            {t("dashboard.paid")}
+          </p>
+          <p className="text-[16px] font-semibold mt-0.5" style={{ color: "var(--text-primary)" }}>
+            {formatRs(paidSales)}
+          </p>
+        </button>
+        <button
+          onClick={() => navigate("/admin/sales", { state: { tab: "credit" } })}
+          className="flex-1 rounded-[12px] px-4 py-3 text-start transition-transform active:scale-[0.98]"
+          style={{ background: "var(--surface-2)" }}
+        >
+          <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
+            {t("dashboard.credit")}
+          </p>
+          <p className="text-[16px] font-semibold mt-0.5" style={{ color: "var(--text-primary)" }}>
+            {formatRs(creditSales)}
+          </p>
+        </button>
+      </div>
+
       {/* ── Summary: Action needed · Follow-ups · Out of stock ── */}
       <div className="px-4 pt-4 flex gap-2 animate-fade-in-up">
         <button onClick={() => navigate('/admin/alerts/reminders', { state: { tab: 'action', subTab: 'critical' } })} className="flex-1 flex items-center gap-2.5 py-2.5 px-3 rounded-[10px] active:opacity-70 transition-opacity" style={{ background: "var(--surface-2)" }}>
@@ -478,6 +520,22 @@ export default function AdminDashboardPage() {
         <button onClick={() => navigate('/admin/alerts/inventory')} className="flex-1 flex items-center gap-2.5 py-2.5 px-3 rounded-[10px] active:opacity-70 transition-opacity" style={{ background: "var(--surface-2)" }}>
           <p className="text-[16px] font-bold" style={{ color: outOfStockCount > 0 ? "var(--error)" : "var(--text-secondary)" }}>{outOfStockCount}</p>
           <p className="text-[10px] font-medium leading-tight" style={{ color: "var(--text-secondary)" }}>{isUrdu ? "اسٹاک ختم" : "Out of stock"}</p>
+        </button>
+      </div>
+
+      {/* ── Stock & payables: Low stock · Supplier payable · Expiring (spec: ADM-DASH-HOME) ── */}
+      <div className="px-4 pt-2 flex gap-2 animate-fade-in-up">
+        <button onClick={() => navigate('/admin/alerts/inventory')} className="flex-1 flex items-center gap-2.5 py-2.5 px-3 rounded-[10px] active:opacity-70 transition-opacity" style={{ background: "var(--surface-2)" }}>
+          <p className="text-[16px] font-bold" style={{ color: lowStockCount > 0 ? "var(--warning)" : "var(--text-secondary)" }}>{lowStockCount}</p>
+          <p className="text-[10px] font-medium leading-tight" style={{ color: "var(--text-secondary)" }}>{t("admin.lowStockAlert")}</p>
+        </button>
+        <button onClick={() => navigate('/admin/payments')} className="flex-1 flex items-center gap-2.5 py-2.5 px-3 rounded-[10px] active:opacity-70 transition-opacity" style={{ background: "var(--surface-2)" }}>
+          <p className="text-[13px] font-bold" style={{ color: totalPayable > 0 ? "var(--error)" : "var(--text-secondary)" }}>{formatRs(totalPayable)}</p>
+          <p className="text-[10px] font-medium leading-tight" style={{ color: "var(--text-secondary)" }}>{t("admin.supplierPayable")}</p>
+        </button>
+        <button onClick={() => navigate('/admin/alerts/inventory')} className="flex-1 flex items-center gap-2.5 py-2.5 px-3 rounded-[10px] active:opacity-70 transition-opacity" style={{ background: "var(--surface-2)" }}>
+          <p className="text-[16px] font-bold" style={{ color: expiringCount > 0 ? "var(--warning)" : "var(--text-secondary)" }}>{expiringCount}</p>
+          <p className="text-[10px] font-medium leading-tight" style={{ color: "var(--text-secondary)" }}>{t("admin.expiringSoon")}</p>
         </button>
       </div>
 
@@ -697,11 +755,11 @@ export default function AdminDashboardPage() {
                   </span>
                   {sale.paymentType !== "full" ? (
                     <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full" style={{ background: "rgba(239,68,68,0.1)", color: "#ef4444" }}>
-                      Credit
+                      {t("common.creditTag")}
                     </span>
                   ) : (
                     <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full" style={{ background: "rgba(132,204,22,0.15)", color: "var(--brand-dark)" }}>
-                      Paid
+                      {t("common.paidTag")}
                     </span>
                   )}
                 </div>
