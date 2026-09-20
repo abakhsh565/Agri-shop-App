@@ -76,6 +76,17 @@ beforeAll(async () => {
     VALUES ('${OWNER}', 'QA Override Owner', '923009670099', 'admin', true, true, '${TENANT}')
     ON CONFLICT (id) DO UPDATE SET is_active = true, is_original_owner = true, shop_id = EXCLUDED.shop_id
   `);
+  // The User→Membership trigger (0113) is AFTER INSERT only, so an owner row
+  // that already exists — a previous run's leftovers, because cleanup() removes
+  // only this suite's employee — never gets a membership, and then every
+  // authorized RPC fails with NOT_AUTHORIZED while the suite looks broken.
+  // Ensure it explicitly, which is exactly the invariant 0113 guarantees.
+  await sql(`
+    INSERT INTO memberships (user_id, tenant_id, role, status)
+    VALUES ('${OWNER}', '${TENANT}', 'owner', 'active')
+    ON CONFLICT (user_id, tenant_id) DO UPDATE
+      SET role = 'owner', status = 'active', updated_at = now()
+  `);
   const b = await sql(
     `SELECT id FROM branches WHERE tenant_id = '${TENANT}' AND is_active = true ORDER BY is_default DESC, created_at LIMIT 1`
   );

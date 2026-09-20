@@ -38,7 +38,18 @@ function qaDatabaseUrl(): string {
   return `postgresql://${QA_DB_USER}:${QA_DB_PASS}@${QA_DB_HOST}:5432/postgres`;
 }
 
-const KEEP_PHONES = ['923001234567', '923001122334'];
+// MUST match KEEP_PHONES in scripts/clean-test-data.mjs (the canonical list).
+//
+// WHY THIS IS NOT COSMETIC: a QA account's Supabase Auth credential lives in
+// auth.users, and deleting the users row deletes the credential. The app cannot
+// re-create it on its own (signUp yields no session until the email is confirmed),
+// so the next sign-in fails with "could not start a secure session" — the QA admin
+// and employee become unloginable by hand until some Playwright spec happens to
+// re-seed them. This list held only 2 of the 4 fixture phones, so EVERY vitest run
+// silently deleted QA Admin (923009999999) and QA Employee (923008888888).
+// tests/unit/qaFixtureKeepList.test.ts now fails if the two lists ever drift apart
+// again.
+const KEEP_PHONES = ['923001234567', '923001122334', '923009999999', '923008888888'];
 
 export async function setup() {
   // No-op before tests

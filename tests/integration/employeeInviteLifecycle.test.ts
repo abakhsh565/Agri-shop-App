@@ -18,7 +18,7 @@
  */
 
 import { describe, it, beforeAll, afterAll, expect } from 'vitest';
-import { execRpcAsUser, execSqlAsAdmin } from '../setup/qa-client';
+import { execRpcAsUser, execSqlAsAdmin, qaAnonClient } from '../setup/qa-client';
 
 const TENANT = '00000000-0000-0000-0000-000000000001';
 const OWNER = 'c2000000-0000-0000-0000-000000000001';
@@ -56,6 +56,15 @@ beforeAll(async () => {
     INSERT INTO users (id, name, phone, role, is_original_owner, is_active, shop_id)
     VALUES ('${OWNER}', 'QA Invite Owner', '${PHONES[0]}', 'admin', true, true, '${TENANT}')
     ON CONFLICT (id) DO UPDATE SET is_active = true, is_original_owner = true, shop_id = EXCLUDED.shop_id
+  `);
+  // Same reason as employeeAccessOverrides: the User→Membership trigger (0113)
+  // fires on INSERT only, so a surviving owner row from an earlier run would
+  // otherwise have no membership and every RPC would answer NOT_AUTHORIZED.
+  await sql(`
+    INSERT INTO memberships (user_id, tenant_id, role, status)
+    VALUES ('${OWNER}', '${TENANT}', 'owner', 'active')
+    ON CONFLICT (user_id, tenant_id) DO UPDATE
+      SET role = 'owner', status = 'active', updated_at = now()
   `);
   const b = await sql(
     `SELECT id FROM branches WHERE tenant_id = '${TENANT}' AND is_active = true ORDER BY is_default DESC, created_at LIMIT 1`
@@ -239,5 +248,96 @@ describe('Membership role is derived by the database, never supplied by the call
       payload: { employeeId: bypassId, membershipRole: 'employee', roleId: ROLE_SALES_EMPLOYEE, branchScope: [branchId] },
     });
     expect(legit.error).toBeNull();
+  });
+});
+
+/**
+ * An invitation must be USABLE by the person who receives it.
+ *
+ * THE DEFECT THIS LOCKS (found by manual QA, invisible to this suite)
+ *   app_current_user_id() reads the JWT `sub`, so an employee's Supabase Auth
+ *   identity must have id = users.id. Only `scripts/provision-auth-sessions.mjs`
+ *   ever created one, so a freshly invited employee could open the invite link,
+ *   receive a code, type it — and land on "we could not open the app for this
+ *   number yet". Migration 0135 provisions the identity as part of the invitation.
+ *
+ * WHY THIS FILE COULD NOT CATCH IT BEFORE: execRpcAsUser() calls getAuthClient(),
+ * which CREATES a missing credential so the test can act as the user. The harness
+ * supplied exactly what the product did not, so every assertion stayed green while
+ * the real flow was impossible. These assertions therefore read auth.users
+ * directly, after create_employee and BEFORE any test-side sign-in, and then prove
+ * the credential works through a plain client that provisions nothing.
+ */
+describe('An invitation is usable: the invitee can actually sign in', () => {
+  const PHONE = '923009660005';
+  let inviteeId = '';
+
+  beforeAll(async () => {
+    await sql(`DELETE FROM user_permissions WHERE user_id IN (SELECT id FROM users WHERE phone = '${PHONE}')`).catch(() => undefined);
+    await sql(`DELETE FROM memberships WHERE user_id IN (SELECT id FROM users WHERE phone = '${PHONE}')`).catch(() => undefined);
+    await sql(`DELETE FROM auth.identities WHERE user_id IN (SELECT id FROM users WHERE phone = '${PHONE}')`).catch(() => undefined);
+    await sql(`DELETE FROM auth.users WHERE id IN (SELECT id FROM users WHERE phone = '${PHONE}')`).catch(() => undefined);
+    await sql(`DELETE FROM users WHERE phone = '${PHONE}'`).catch(() => undefined);
+  });
+
+  afterAll(async () => {
+    await sql(`DELETE FROM user_permissions WHERE user_id = '${inviteeId}'`).catch(() => undefined);
+    await sql(`DELETE FROM memberships WHERE user_id = '${inviteeId}'`).catch(() => undefined);
+    await sql(`DELETE FROM audit_events WHERE entity_id = '${inviteeId}' OR user_id = '${inviteeId}'`).catch(() => undefined);
+    await sql(`DELETE FROM users WHERE id = '${inviteeId}'`).catch(() => undefined);
+    await sql(`DELETE FROM auth.identities WHERE user_id = '${inviteeId}'`).catch(() => undefined);
+    await sql(`DELETE FROM auth.users WHERE id = '${inviteeId}'`).catch(() => undefined);
+  });
+
+  it('creates the login with the employee, so the invite can be accepted', async () => {
+    const created = await execRpcAsUser(OWNER, 'create_employee', {
+      payload: { name: 'QA Usable Invite', phone: PHONE, roleId: ROLE_SALES_EMPLOYEE, branchScope: [branchId] },
+    });
+    expect(created.error).toBeNull();
+    inviteeId = created.data.id;
+
+    // No test-side provisioning has run for this user at this point.
+    const auth = await sql(
+      `SELECT id::text, email FROM auth.users WHERE id = '${inviteeId}'`
+    );
+    expect(auth.rows.length, 'inviting an employee did not create their login').toBe(1);
+    // The exact credential the app derives from the phone (src/lib/auth.ts).
+    expect(auth.rows[0].email).toBe('user-923009660005@agrishop.auth.local');
+    const identity = await sql(
+      `SELECT count(*)::int AS n FROM auth.identities WHERE user_id = '${inviteeId}'`
+    );
+    expect(identity.rows[0].n, 'login exists but has no provider identity').toBe(1);
+
+    // Still an invitation: having a login is not having access.
+    expect(await statusOf(inviteeId)).toBe('pending');
+    const perms = await execRpcAsUser(OWNER, 'create_employee', {
+      payload: { name: 'QA Usable Invite 2', phone: '923009660006', roleId: ROLE_SALES_EMPLOYEE },
+    });
+    expect(perms.error).toBeNull();
+    await sql(`DELETE FROM user_permissions WHERE user_id = '${perms.data.id}'`).catch(() => undefined);
+    await sql(`DELETE FROM memberships WHERE user_id = '${perms.data.id}'`).catch(() => undefined);
+    await sql(`DELETE FROM auth.identities WHERE user_id = '${perms.data.id}'`).catch(() => undefined);
+    await sql(`DELETE FROM auth.users WHERE id = '${perms.data.id}'`).catch(() => undefined);
+    await sql(`DELETE FROM users WHERE id = '${perms.data.id}'`).catch(() => undefined);
+  });
+
+  it('accepts the invitation with the app\'s own credential and no help from the tests', async () => {
+    expect(inviteeId).toBeTruthy();
+
+    // qaAnonClient signs in exactly as the browser does — no credential minting.
+    const signIn = await qaAnonClient.auth.signInWithPassword({
+      email: 'user-923009660005@agrishop.auth.local',
+      password: 'AgriShop-923009660005-2026!',
+    });
+    expect(signIn.error, `the invitee cannot sign in: ${signIn.error?.message}`).toBeNull();
+    // The identity is the app user: authorization resolves for them, not for a stranger.
+    expect(signIn.data.user?.id).toBe(inviteeId);
+
+    const onboard = await qaAnonClient.rpc('complete_member_onboarding');
+    expect(onboard.error).toBeNull();
+    expect(onboard.data.activated).toBe(1);
+    expect(await statusOf(inviteeId)).toBe('active');
+
+    await qaAnonClient.auth.signOut();
   });
 });

@@ -424,6 +424,127 @@ const MEMORIES = [
       fixedIn: '0132'
     },
   },
+  {
+    category: 'failure_pattern',
+    title: 'The sign-in lookup hid a pending membership, so an invitation could never activate',
+    component: 'supabase/migrations/0133_lookup_returns_pending_membership.sql, lookup_user_by_phone, src/lib/auth.ts',
+    description:
+      'lookup_user_by_phone() merged membership data only when status = \'active\'. An invited employee\'s membership is \'pending\' (0129), so the row was absent from the response entirely and the client fell back to its default for a missing status — "active". complete_member_onboarding() therefore never ran: signing in with an invitation left the membership pending forever, which every authorization path (RLS, authorize_business_action) rejects, so the person could authenticate and then do nothing for no visible reason. 0133 returns the caller\'s own membership regardless of status, preferring an active one when a user has several, because the sign-in path needs to know an invite is pending — that is what activates it. Security is unchanged in kind: the function still selects by the supplied phone and returns only that same user\'s row, and activation still only moves the CALLER\'S OWN membership from pending to active from their JWT.',
+    evidence: {
+      before: 'QA invitee signed in; memberships.status still pending, updated_at == created_at, no member_onboarding_completed audit row, while users.last_login_at advanced',
+      after: 'lookup_user_by_phone(\'923007770001\')->>membership_status = pending via the anon client (the exact call the browser makes before a session exists)',
+      regression: 'tests/unit/appInvite.test.ts 7/7, accessUx 6/6, vitest 373/373, tsc clean, production build clean',
+      fixedIn: '0133'
+    },
+  },
+  {
+    category: 'failure_pattern',
+    title: 'A sign-in accepted a session that belonged to somebody else',
+    component: 'src/lib/auth.ts ensureAuthSession',
+    description:
+      'ensureAuthSession() treated ANY existing Supabase session as proof for whichever phone was being verified, and the invitation link is exactly the case where a different person is at the device: the owner adds an employee on the shop phone, the employee opens the link on it. In QA the invited employee "signed in" while the owner\'s session was still live — the app rendered as the invitee while every RLS read and RPC ran with the owner\'s JWT, and the owner\'s identity performed the employee\'s onboarding call (complete_member_onboarding returned activated 0, touchLogin wrote the invitee\'s last_login as the owner). The session must now belong to the phone being verified: a foreign session is signed out first, and the identity of the session just established is confirmed against the derived one, otherwise sign-in fails loudly instead of continuing as the wrong actor.',
+    evidence: {
+      observed: 'network trace during the invitee sign-in showed lookup_user_by_phone -> complete_member_onboarding -> get_my_permissions with the owner session active; memberships row untouched',
+      after: 'with a clean session the foreign-session guard fires and the screen reports the real failure instead of signing anyone in',
+      regression: 'vitest 373/373, accessUx 6/6',
+      fixedIn: 'src/lib/auth.ts'
+    },
+  },
+  {
+    category: 'failure_pattern',
+    title: 'A double tap on Confirm created two sales — the confirm path had no idempotency at all',
+    component: 'supabase/migrations/0134_sale_idempotency.sql, src/pages/employee/sale/{CartPage,SaleReviewPage}.tsx, src/stores/salesStore.ts',
+    description:
+      'Reported by the product owner: one sale, double-tapped confirm, two sales in the system. create_sale() had no idempotency of any kind — every call inserted a sale and deducted stock again — and SaleReviewPage had no re-entry guard (CartPage did, via a ref, which is why the same bug could not be reproduced on that path). The returns path had an idempotency_key since 0052; sales never did. 0134 adds a ledger claimed by (shop_id, idempotency_key) with INSERT ... ON CONFLICT DO NOTHING — atomic under concurrency, so two simultaneous taps cannot both win — and turns create_sale into a thin wrapper whose inner implementation is renamed with EXECUTE revoked, so the unchecked path is unreachable from a browser and no money or inventory logic was rewritten. The confirm button now sends a key that is generated once per attempt, retired on success and KEPT on failure, so a retry after a lost response returns the sale that exists rather than charging the customer twice. The Engineering OS invariant suite immediately caught two things in this migration: an RLS-enabled table with zero policies, and a client-callable write RPC without a visible authorization guard — both fixed in the migration rather than by adding exceptions to the guards.',
+    evidence: {
+      before: 'no idempotency column or ledger on sales; two calls with identical payload created two rows and deducted stock twice',
+      after: 'two SIMULTANEOUS calls with one key -> 1 sale (second response duplicate:true, same id), stock 50 -> 48 once; sequential retry -> still 1 sale; un-keyed call -> unchanged behaviour (2 sales, for scripts/tests); oversell attempt -> INSUFFICIENT_STOCK, and the SAME key then succeeds, so a failed attempt never burns the key',
+      guards: 'rbacInvariants 6/6 after the migration fixes (explicit deny-all policy; authorize_business_action visible on the client-callable wrapper)',
+      regression: 'vitest 377/377, tsc clean, production build clean',
+      fixedIn: '0134'
+    },
+  },
+  {
+    category: 'failure_pattern',
+    title: 'The database phrased the failure, so the shop owner read it — and always in English',
+    component: 'src/lib/db.ts friendly(), src/lib/i18n.ts tNow(), translations errors.*',
+    description:
+      'friendly() mapped a handful of codes and then returned the raw message, so an owner could be shown "insert or update on table \"sales\" violates foreign key constraint \"sales_customer_id_fkey\"", "permission denied for table users", "JWT expired" or a PGRST301 code — and one existing mapping told them to run a SQL migration in Supabase. It was also English-only in a bilingual app: friendly() is called from stores and lib code that cannot use a React hook. Now every known code maps to a plain sentence (errors.* keys, EN and UR), unknown text never passes through, and tNow() reads the same language store the UI does so the message arrives in the language being read. A permanent guard (tests/unit/microcopy.test.ts) scans every string in BOTH dictionaries for technical wording and feeds real Postgres/PostgREST failures through the mapping, asserting none comes back as written or in jargon.',
+    evidence: {
+      before: 'raw database sentences reached toasts/setError by design (return msg); "Credit Override" was the app\'s only jargon title on a shop-owner screen',
+      after: 'microcopy guard 4/4: 2,274 key/value pairs contain no technical wording, no raw failure text passes through, and every errors.* key exists in EN and UR',
+      userFacing: 'the OTP screen error became "We could not open the app for this number yet. Please try again…" (was "Could not start a secure session… re-provision your login")',
+      regression: 'vitest 377/377, tsc clean, build clean',
+      fixedIn: 'src/lib/db.ts + i18n tNow'
+    },
+  },
+  {
+    category: 'prevention_rule',
+    title: 'A code field that submits only when complete is silent when it is not — say what is missing, and assert what was typed',
+    component: 'src/components/ui/OTPInput.tsx, src/pages/auth/OTPVerifyPage.tsx, tests/e2e/{helpers,accessUx,dashboardScope}',
+    description:
+      'The OTP field renders an off-screen autofill input BEFORE the six digit boxes. Anything addressing the fields in order (a person, a screen reader, an automation run) put the first digit into the invisible one, so the boxes read 23456 while the operator believed they had typed 123456 — and because submission waits for the sixth number, nothing happened and nothing was reported. This cost repeated failed sign-ins for two weeks of manual verification while every Playwright spec passed, because the specs used the correct selector and nothing asserted the entered value. Three fixes, all durable: the autofill input now comes AFTER the boxes (and carries data-testid=otp-autofill), each digit box has data-testid=otp-digit-N so fields are addressed by role, and the E2E helpers now type the code as a human does (click the first box, six keystrokes) and then ASSERT all six values before trusting the navigation — a mistyped code now fails loudly as "OTP digit N is not the one that was typed" instead of looking like a frozen screen. The screen itself reports "{count} more to write." and there is still no confirm button: the sixth number submits on its own.',
+    evidence: {
+      reproduced: 'preview DOM showed 7 text inputs, the first hidden with value "1" and the visible boxes 2,3,4,5,6,""',
+      fixed: 'accessUx 7/7 including a new test that five of six numbers is visible, does not submit, and completes on the sixth; dashboardScope 5/5 with the new typing helper',
+      regression: 'vitest 377/377, tsc clean, build clean',
+      fixedIn: 'OTPInput + OTPVerifyPage + e2e helpers'
+    },
+  },
+  {
+    category: 'technical_decision',
+    title: 'A new employee has no Supabase identity that matches their app user, so acceptance needs a privileged step',
+    component: 'src/lib/auth.ts phoneToAuthCredentials, scripts/provision-auth-sessions.mjs, app_current_user_id()',
+    description:
+      'app_current_user_id() reads the JWT sub, so the auth identity must EQUAL public.users.id — which is why the sanctioned provisioner creates auth users with admin.auth.admin.createUser({ id: user.id }). That privileged step exists only for seeded users. When a brand-new invitee accepts an invitation, ensureAuthSession() has to mint an identity itself, and Supabase rejects the fabricated local domain: "Email address \"user-923007770001@agrishop.auth.local\" is invalid". So an invited employee can open the link and receive the code but cannot obtain a working identity until somebody runs the service-role provisioner for their id. The person-facing result is the honest "Could not start a secure session for this account…" screen rather than a silently empty app. This is an architecture/security decision (server-side provisioning at invitation time, or phone auth with app identity resolved from the verified phone claim) and is deliberately NOT decided unilaterally.',
+    evidence: {
+      clientError: 'Auth session setup failed: Invalid login credentials / Email address "user-923007770001@agrishop.auth.local" is invalid',
+      userVisible: '"Could not start a secure session for this account. Please try again, or ask the shop owner to re-provision your login." on /login/otp',
+      workingMechanism: 'scripts/provision-auth-sessions.mjs documents the intent (id: user.id) and refuses to run outside the QA project',
+      status: 'escalated to the product owner; not fixed without their decision'
+    },
+  },
+  {
+    category: 'failure_pattern',
+    title: 'An invited employee could not get in: the invitation never created the login it depends on',
+    component: 'supabase/migrations/0135_provision_member_login.sql, 0136_canonical_phone_lookup.sql, 0137_create_employee_guard_at_entry.sql, public.create_employee, public.lookup_user_by_phone',
+    description:
+      'The invitation sent, the code arrived and was correct, and sign-in still ended on the secure-session screen — because app_current_user_id() reads the JWT sub, so an employee auth identity must have id = public.users.id, and the only thing that ever created one was the operator-run scripts/provision-auth-sessions.mjs. The client could not repair it: Supabase rejects the fabricated local domain at signUp and rate-limits signUp on top, so the app must not mint identities from the browser at all. Fixed with a privileged, authorized step at invitation time: provision_member_login(user) begins with authorize_business_action(employees.manage), is limited to a user inside the caller own tenant, is idempotent (an existing row is repaired, never duplicated), and writes the same credential the app already derives (user-<e164>@agrishop.auth.local), so no client change and no new secret to hand over. create_employee (0135, re-stated with an explicit entry-point guard in 0137) calls it after the invite is written and tolerates failure by recording member_login_provision_failed, so a provisioning problem never loses the employee record. A second defect surfaced on the same path: lookup_user_by_phone compared raw strings while sign-in always queries with the normalized e164 form, so an employee stored in local format (a local 0300… number) was unreachable and a correctly typed code answered that the number is not registered with any shop. Both sides now compare through one IMMUTABLE helper, public.canonical_phone(). Note for production: writing to the auth schema directly is version-dependent; the equivalent admin-API call inside a server-side function is the long-term home, and the gate, the idempotency and the credential contract stay the same either way.',
+    evidence: {
+      beforeFix: 'the secure-session error screen on /login/otp after a correct code (reproduced in the browser)',
+      afterFix: 'browser: invite link to code 123456 to Set PIN to /employee/dashboard; DB: membership pending before sign-in and active after, first_login_at set, login exists with id = user id, get_my_permissions returned the role defaults',
+      apiLevel: 'owner JWT invites, auth.users row exists with id = employee id, employee signs in with the derived credential (no error, jwt sub = user id), complete_member_onboarding activated=1, permissions resolve',
+      falsification: 'with provision_member_login dropped, the new regression test fails with inviting an employee did not create their login and the invitee cannot sign in, while the other 8 tests still pass, proving the failure tolerance',
+      regression: 'vitest 381/381 (31 files, two consecutive runs), tsc clean, production build clean, accessUx 7/7, QA baseline with 0 employees missing a login',
+      fixedIn: '0135 + 0136 + 0137; test: tests/integration/employeeInviteLifecycle.test.ts (An invitation is usable)'
+    },
+  },
+  {
+    category: 'prevention_rule',
+    title: 'The vitest teardown deleted live QA credentials, so the accounts could not be signed into afterwards',
+    component: 'tests/setup/global-teardown.ts, scripts/clean-test-data.mjs, tests/unit/qaFixtureKeepList.test.ts',
+    description:
+      'Two files list the QA accounts a cleanup must preserve, and they disagreed: scripts/clean-test-data.mjs kept four (with a comment warning that deleting a users row deletes its auth.users credential, which the app cannot re-create), while tests/setup/global-teardown.ts, which runs after EVERY vitest run, kept two. So every test run silently deleted QA Admin (923009999999) and QA Employee (923008888888), rows and credentials alike. The next manual or scripted sign-in then failed with the secure-session or not-registered message, intermittently because it only happened after a vitest run, which reads exactly like a product bug and cost real time to trace. The teardown now keeps all four, and tests/unit/qaFixtureKeepList.test.ts fails if the two lists ever drift apart again, reading the values from both files rather than importing them so the guard survives a refactor.',
+    evidence: {
+      reproduced: 'after a full vitest run there was no auth.users row for 923009999999 and no QA Admin row in public.users',
+      afterFix: 'the same credential survived a full vitest run',
+      restoration: 'node scripts/provision-auth-sessions.mjs reported 2 already valid, 2 created',
+      regression: 'vitest 381/381; the guard test fails if either list changes'
+    },
+  },
+  {
+    category: 'prevention_rule',
+    title: 'A suite that re-inserts its own owner relied on an INSERT-only trigger and failed intermittently as NOT_AUTHORIZED',
+    component: 'tests/integration/employeeAccessOverrides.test.ts, tests/integration/employeeInviteLifecycle.test.ts, public.ensure_user_membership (0113)',
+    description:
+      'Both suites seed their own owner with INSERT … ON CONFLICT DO UPDATE, but the User-to-Membership invariant is an AFTER INSERT trigger, so on any run where the owner row already existed no membership was created and every authorized RPC then answered NOT_AUTHORIZED: tenant access denied. Because the first test owns the id the later tests use, one failure cascaded into four, including misleading invalid-uuid errors that look like product defects. It appeared only on the second and later runs, and only when other cleanup had removed the membership, which is why it read as flakiness. Both suites now ensure the owner membership with an idempotent upsert, the same thing the invariant guarantees, so the result no longer depends on what a previous run left behind. Verified by running the affected suites twice consecutively, including the exact re-run that used to fail.',
+    evidence: {
+      symptom: 'NOT_AUTHORIZED: tenant access denied on create_employee, then 3 cascade failures in the same file',
+      rootCause: 'AFTER INSERT trigger plus ON CONFLICT DO UPDATE on a surviving row means no membership is created',
+      fixed: 'employeeAccessOverrides 4/4 and employeeInviteLifecycle 10/10 on run 1; employeeAccessOverrides 4/4 on the immediate re-run',
+      regression: 'vitest 381/381 on two consecutive full runs'
+    },
+  },
 ];
 
 const client = await pool.connect();
@@ -469,6 +590,26 @@ try {
       [row.id, right.rows[0]?.id ?? null]
     );
     console.log(`superseded ${row.id} (wrong pooler root cause)`);
+  }
+
+  // Superseded: the entry that recorded this as an unresolved architecture
+  // decision. It is now fixed and proven, so it must stop reading as the current
+  // state of the system.
+  const resolved = await client.query(
+    `SELECT id FROM engineering_memory
+      WHERE title = 'An invited employee could not get in: the invitation never created the login it depends on'`
+  );
+  const unresolved = await client.query(
+    `SELECT id FROM engineering_memory
+      WHERE title = 'A new employee has no Supabase identity that matches their app user, so acceptance needs a privileged step'`
+  );
+  for (const row of unresolved.rows) {
+    await client.query(
+      `UPDATE engineering_memory SET status = 'superseded', superseded_by = $2, updated_at = now()
+        WHERE id = $1`,
+      [row.id, resolved.rows[0]?.id ?? null]
+    );
+    console.log(`superseded ${row.id} (invitation login gap is now fixed)`);
   }
 
   const totals = await client.query(

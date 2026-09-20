@@ -1,6 +1,6 @@
 # Engineering OS — Project State
 
-**As of:** 2026-09-20 · **Commit:** `972b3b9` (foundation) + uncommitted dashboard-correctness work (0124–0127) · **Environment:** QA only (`bpybjrjenwccowvtrevu`)
+**As of:** 2026-09-21 · **Commit:** `372738c` (last verified) + uncommitted invitation-acceptance work (0135–0137) · **Environment:** QA only (`bpybjrjenwccowvtrevu`)
 
 Production has not been touched. Every claim below names the evidence that supports it.
 
@@ -21,7 +21,8 @@ Production has not been touched. Every claim below names the evidence that suppo
 | Reset to role defaults | Verified | Browser: "Use role access only" → DB override rows 0 → UI back to the role's set. Also asserted in `tests/e2e/accessUx.spec.ts` (§1.8). |
 | Effective access | Verified | Role defaults + overrides + branch scope + active status, resolved server-side; `get_my_permissions()` returns the authoritative set. |
 | Branch scope | Verified | `branch_id` on 7 operational tables + 7 enforcement triggers + RESTRICTIVE read policies. 0 records without a branch. 9/9 branch tests. |
-| Backend authorization | Verified | 36 of 43 write RPCs carry an authorization guard; the remainder are internal/trigger helpers or admin-gated and are explicitly allowlisted. |
+| Backend authorization | Verified | 36 of 43 write RPCs carry an authorization guard; the remainder are internal/trigger helpers or admin-gated and are explicitly allowlisted. `create_employee` now carries its own entry-point guard and asserts tenant context (0137). |
+| Invitation acceptance | Verified | An invited employee can sign in and activate: `provision_member_login` (0135) creates the identity with `id = users.id` as part of the invitation; one canonical phone form on both sides (0136). Browser + API evidence and a falsified regression test in §1.17. |
 | RLS correctness | Verified | 0 app-facing tables with RLS enabled and zero policies (the failure mode that silently broke `shops`, settings and reminders). |
 | Anonymous-write protection | Verified | anon-executable writes: 23 → 1 (`insert_shop_request`, the registration form). |
 | Tenant isolation | Verified | Real JWT tests: cannot read or mutate another tenant's rows, roles, business areas, employees, or run its RPCs. Cross-tenant writes refused. |
@@ -653,6 +654,80 @@ keeps them), `employeeAccessOverrides.test.ts` **4/4** (real JWT → PostgREST �
 with the employee, both grant and denial reach authorization, role change keeps them, reset
 clears them), Vitest **366/366** across 28 files, `tsc` clean, production build clean, QA baseline
 restored (4 users, 2 owners, 0 pending memberships, 0 override rows, 4 roles, 2 branches).
+
+---
+
+### 1.17 An invitation can finally be accepted — and the three defects that hid it (2026-09-21)
+
+**The reported symptom.** An invited employee opened the invite link, received the code,
+typed it correctly, and landed on *"Could not start a secure session for this account."*
+The invitation had never been usable — the product asked for trust in a credential it could
+not supply.
+
+**Root cause.** `app_current_user_id()` reads the JWT `sub`, so an employee's Supabase Auth
+identity must have `id = public.users.id`. Only `scripts/provision-auth-sessions.mjs` ever
+created one, and that is an operator step, so a new invitee could hold a session for an
+identity the app did not recognize. The browser cannot repair this: Supabase rejects the
+fabricated local domain at `signUp` (*"Email address … is invalid"*) and rate-limits `signUp`
+on top, so the app must not be minting identities at all.
+
+**Fix (0135 + 0136 + 0137).** `provision_member_login(user)` — SECURITY DEFINER, guarded by
+`authorize_business_action('employees.manage')`, restricted to a user inside the caller's own
+tenant, idempotent (an existing row is repaired, never duplicated), writing the same derived
+credential the app already signs in with, so no client change and no new secret to hand over.
+`create_employee` calls it after writing the invite and tolerates failure by recording
+`member_login_provision_failed`, so a provisioning problem never loses the employee record.
+0137 restates the wrapper with its **own** entry-point guard (Invariant E caught that the
+delegating wrapper's authority was invisible) and asserts the employee landed in the tenant
+the guard authorized.
+
+**Second defect on the same path.** `lookup_user_by_phone` compared raw strings while sign-in
+always queries the normalized e164 form, so an employee stored in local format (`0300…`) was
+unreachable — a correctly typed code answered *"this number isn't registered with any shop"*.
+Both sides now compare through one IMMUTABLE helper, `public.canonical_phone()`.
+
+**Verified.** Browser: invite link → code `123456` → Set PIN → `/employee/dashboard`, with
+membership `pending` before sign-in and `active` after, `first_login_at` set, login with
+`id = user id`, `get_my_permissions()` returning the role defaults. API: owner JWT invites →
+`auth.users` row exists with `id = employee id` → employee signs in with the derived credential
+(no error, `jwt sub = user id`) → `complete_member_onboarding` `activated: 1`.
+**Falsification:** with `provision_member_login` dropped, the new regression test fails with
+*"inviting an employee did not create their login"* and *"the invitee cannot sign in"* — the
+exact user-facing symptom — while the other 8 tests still pass, proving the tolerance path.
+
+**Why the suite could not catch it before.** `execRpcAsUser()` calls `getAuthClient()`, which
+CREATES a missing credential so the test can act as the user. The harness supplied exactly what
+the product did not. The new test therefore reads `auth.users` directly after `create_employee`,
+before any test-side sign-in, and then accepts the invite through a plain client that
+provisions nothing.
+
+**Two test-infrastructure defects found while proving it (both root-caused, neither "flaky").**
+
+1. `tests/setup/global-teardown.ts` kept only 2 of the 4 QA fixture phones, while
+   `scripts/clean-test-data.mjs` kept 4 and documented why (deleting a `users` row deletes its
+   `auth.users` credential, which the app cannot re-create). So **every** `vitest run` deleted
+   QA Admin and QA Employee — rows and credentials — and the next sign-in failed with the
+   secure-session / not-registered message that looks like a product bug.
+   `tests/unit/qaFixtureKeepList.test.ts` now fails if the two lists ever disagree.
+2. `employeeAccessOverrides` / `employeeInviteLifecycle` seed their own owner with
+   `INSERT … ON CONFLICT DO UPDATE`, but the User→Membership invariant is an **AFTER INSERT**
+   trigger — so on any run where that owner row survived, no membership existed and every RPC
+   answered `NOT_AUTHORIZED: tenant access denied`, cascading into 3 more failures with
+   misleading invalid-uuid errors. Both now ensure the membership explicitly, and the suites
+   were re-run consecutively (including the exact re-run that used to fail).
+
+**Regression at this point:** vitest **381/381 across 31 files, two consecutive full runs** ·
+tsc clean · production build clean · `accessUx` 7/7 in real Chrome · QA baseline
+2 users / 0 pending / 0 overrides / 4 roles / 2 branches / **0 employees without a login** ·
+Engineering Memory `active=35, superseded=1` · production untouched.
+
+**Open, not silently decided.** (a) The invitation is delivered by hand today (copy/WhatsApp/SMS
+of a link that carries the code in demo mode); a real SMS provider is a product decision, and
+`VITE_OTP_DELIVERY=sms` is the single switch. (b) Writing to the `auth` schema directly is
+version-dependent — the equivalent admin-API call inside a server-side function is the
+long-term home; the gate, idempotency and credential contract stay the same either way.
+(c) Role *names and descriptions* are tenant data, so they render as entered in Urdu mode;
+translating them means a translation table or seeded Urdu role text.
 
 ---
 
