@@ -9,7 +9,7 @@ import { useProductsStore } from "@/stores/productsStore";
 import { useUIStore } from "@/stores/uiStore";
 import { useShellBase } from "@/lib/useShellBase";
 import { useT } from "@/lib/i18n";
-import { getStockStatus } from "@/lib/formatters";
+import { getStockStatus, productLowStockThreshold } from "@/lib/formatters";
 import { ChevronRight } from "lucide-react";
 import ScanButton from "@/components/ui/ScanButton";
 import type { ProductCategory } from "@/types";
@@ -56,14 +56,17 @@ export default function BrowseProductsPage() {
       addToast(`${product.name} is out of stock`, "warning");
       return;
     }
-    const inStockVariants = product.variants.filter((v) => Math.floor(product.stockQty / v.unitSize) > 0);
+    // A variant is sellable when ITS OWN stock of record is positive; sales deduct
+    // from that level, so the product total must not gate an individual variant.
+    const inStockVariants = product.variants.filter((v) => v.stockQty > 0);
     if (inStockVariants.length === 0) {
       addToast(`${product.name} is out of stock`, "warning");
       return;
     }
     if (inStockVariants.length === 1) {
       const v = inStockVariants[0];
-      const maxU = Math.floor(product.stockQty / v.unitSize);
+      const step = v.qtyStep > 0 ? v.qtyStep : 1;
+      const maxU = Math.floor(v.stockQty / step) * step;
       const { addItem } = useCartStore.getState();
       addItem({
         productId: product.id,
@@ -180,7 +183,7 @@ export default function BrowseProductsPage() {
                     >
                       {t(CATEGORY_LABEL_KEY[p.category] as any) || p.category}
                     </span>
-                    <StockBadge status={getStockStatus(p.stockQty, 5)} outline />
+                    <StockBadge status={getStockStatus(p.stockQty, productLowStockThreshold(p.variants))} outline />
                   </div>
 
                 </div>

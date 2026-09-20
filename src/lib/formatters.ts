@@ -322,6 +322,17 @@ export function calculateReminderStatus(
   };
 }
 
+/**
+ * Inventory: `products.stock_qty` is the derived total of the product's variants
+ * (maintained by trigger), and each variant carries its own low-stock threshold.
+ * A product is measured against its most demanding variant, so every screen that
+ * reports "low stock" applies the same rule instead of picking a variant or
+ * comparing a product total against one arbitrary threshold.
+ */
+export function productLowStockThreshold(variants: { lowStockThreshold: number }[]): number {
+  return variants.length > 0 ? Math.min(...variants.map((v) => v.lowStockThreshold)) : 5;
+}
+
 export function getStockStatus(qty: number, threshold: number): StockStatus {
   if (qty <= 0) return "out_of_stock";
   if (qty <= threshold) return "low_stock";

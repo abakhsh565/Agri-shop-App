@@ -4,7 +4,7 @@ import NavHeader from "@/components/ui/NavHeader";
 import { useProductsStore } from "@/stores/productsStore";
 import { useCompaniesStore } from "@/stores/companiesStore";
 import { useThemeStore } from "@/stores/themeStore";
-import { formatCurrency } from "@/lib/formatters";
+import { formatCurrency, productLowStockThreshold } from "@/lib/formatters";
 import { AlertTriangle, Package, Truck, ChevronRight } from "lucide-react";
 
 export default function InventoryAlertsPage() {
@@ -14,17 +14,19 @@ export default function InventoryAlertsPage() {
   const products = useProductsStore((s) => s.products);
   const companies = useCompaniesStore((s) => s.companies);
 
-  // Categorize products
-  const outOfStock = products.filter((p) => p.stockQty === 0);
+  // Categorize products with the shared inventory rule (see
+  // productLowStockThreshold): the product total is its variants' total, measured
+  // against the most demanding variant threshold, and it is only "low" when there
+  // is still stock to sell.
+  const thresholdFor = (p: (typeof products)[number]) => productLowStockThreshold(p.variants);
+  const outOfStock = products.filter((p) => p.stockQty <= 0);
   const lowStock = products.filter((p) => {
-    if (p.stockQty === 0) return false;
-    const threshold = p.variants[0]?.lowStockThreshold ?? 5;
-    return p.stockQty <= threshold;
+    if (p.stockQty <= 0) return false;
+    return p.stockQty <= thresholdFor(p);
   });
   const reorderNeeded = products.filter((p) => {
-    if (p.stockQty === 0) return false;
-    const threshold = p.variants[0]?.lowStockThreshold ?? 5;
-    return p.stockQty <= threshold * 2 && p.stockQty > threshold;
+    if (p.stockQty <= thresholdFor(p)) return false;
+    return p.stockQty <= thresholdFor(p) * 2;
   });
 
   const totalPayable = companies.reduce((s, c) => s + c.outstandingPayable, 0);
@@ -118,7 +120,7 @@ export default function InventoryAlertsPage() {
             </p>
             <div className="flex flex-col gap-2">
               {lowStock.map((p) => {
-                const threshold = p.variants[0]?.lowStockThreshold ?? 5;
+                const threshold = productLowStockThreshold(p.variants);
                 return (
                   <button
                     key={p.id}

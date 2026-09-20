@@ -97,15 +97,20 @@ export default function CartPage() {
         paymentMethod,
         paymentType,
       });
-      // Check for low stock after sale
+      // Check for low stock after sale — a per-VARIANT condition, because that is
+      // the level sales deduct from. The store still holds pre-sale quantities, so
+      // subtract what this sale took, once per variant (never once per line).
       const products = useProductsStore.getState().products;
+      const soldByVariant = new Map<string, number>();
       for (const it of items) {
-        const product = products.find((p) => p.id === it.productId);
-        if (product) {
-          const variant = product.variants.find((v) => v.id === it.variantId);
-          if (variant) {
-            checkAndNotifyLowStock(product.id, product.name, product.stockQty, variant.lowStockThreshold);
-          }
+        if (!it.variantId) continue;
+        soldByVariant.set(it.variantId, (soldByVariant.get(it.variantId) ?? 0) + it.qty);
+      }
+      for (const [variantId, soldQty] of soldByVariant) {
+        const product = products.find((p) => p.variants.some((v) => v.id === variantId));
+        const variant = product?.variants.find((v) => v.id === variantId);
+        if (product && variant) {
+          checkAndNotifyLowStock(product.id, product.name, variant.stockQty - soldQty, variant.lowStockThreshold);
         }
       }
       // Due date is now persisted atomically inside the create_sale RPC.
@@ -220,14 +225,16 @@ export default function CartPage() {
                 addToast(`${product.name} is out of stock`, "warning");
                 return;
               }
-              const inStock = product.variants.filter((v) => Math.floor(product.stockQty / v.unitSize) > 0);
+              // A variant is sellable when ITS OWN stock of record is positive.
+              const inStock = product.variants.filter((v) => v.stockQty > 0);
               if (inStock.length === 0) {
                 addToast(`${product.name} is out of stock`, "warning");
                 return;
               }
               if (inStock.length === 1) {
                 const v = inStock[0];
-                const maxU = Math.floor(product.stockQty / v.unitSize);
+                const step = v.qtyStep > 0 ? v.qtyStep : 1;
+                const maxU = Math.floor(v.stockQty / step) * step;
                 useCartStore.getState().addItem({
                   productId: product.id,
                   productName: product.name,

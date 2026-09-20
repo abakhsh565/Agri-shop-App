@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
-import { formatCurrency, getStockStatus } from "@/lib/formatters";
+import { formatCurrency, getStockStatus, productLowStockThreshold } from "@/lib/formatters";
 import { useThemeStore } from "@/stores/themeStore";
 import { useSalesStore } from "@/stores/salesStore";
 import { useProductsStore } from "@/stores/productsStore";
@@ -78,7 +78,11 @@ export default function AdminReportsPage() {
       byEmployee[s.employeeId ?? 'unknown'] ??= { name: s.employeeName, total: 0 };
       byEmployee[s.employeeId ?? 'unknown'].total += s.totalAmount;
       for (const it of s.items) {
-        cogs += (variantCost[it.variantId ?? ''] ?? 0) * it.qty;
+        // Recorded line COGS (snapshot taken at sale time). The variant lookup is
+        // only a fallback for lines written before COGS snapshots existed — it must
+        // not be the primary source, because the products store holds ACTIVE
+        // products only, so a deactivated product would silently cost zero.
+        cogs += it.cogsAmount ?? (variantCost[it.variantId ?? ''] ?? 0) * it.qty;
         byProduct[it.productId ?? 'unknown'] ??= { name: it.productName, total: 0, qty: 0 };
         byProduct[it.productId ?? 'unknown'].total += it.lineTotal;
         byProduct[it.productId ?? 'unknown'].qty += it.qty;
@@ -92,9 +96,13 @@ export default function AdminReportsPage() {
 
     const outstandingCredit = mockCustomers.reduce((t, c) => t + c.outstandingBalance, 0);
     const supplierPayable = mockCompanies.reduce((t, c) => t + c.outstandingPayable, 0);
+    // Same inventory rule as the dashboard and alerts (see
+    // productLowStockThreshold): the product is "low" only while it still has
+    // sellable stock, and it is measured against its most demanding variant.
     let lowStock = 0;
-    for (const p of mockProducts) for (const v of p.variants) {
-      if (getStockStatus(p.stockQty, v.lowStockThreshold) !== "in_stock") lowStock++;
+    for (const p of mockProducts) {
+      const threshold = productLowStockThreshold(p.variants);
+      if (p.stockQty > 0 && getStockStatus(p.stockQty, threshold) !== "in_stock") lowStock++;
     }
 
     return {

@@ -10,16 +10,18 @@ import { formatCurrency } from "@/lib/formatters";
 import { useUIStore } from "@/stores/uiStore";
 import { useShellBase } from "@/lib/useShellBase";
 
-/** Available units for a variant = floor(product.stockQty / variant.unitSize) */
-function availableUnits(stockQty: number, unitSize: number): number {
-  if (unitSize <= 0) return 0;
-  return Math.floor(stockQty / unitSize);
+/**
+ * Available units of a variant = its own stock of record (the level sales deduct
+ * from), floored to the sale step so the counter can never exceed real stock.
+ */
+function availableUnits(variant: { stockQty: number; qtyStep: number }): number {
+  const step = variant.qtyStep > 0 ? variant.qtyStep : 1;
+  return Math.floor(variant.stockQty / step) * step;
 }
 
-function stockStatusLabel(stockQty: number, unitSize: number, baseUnit: string): string {
-  if (stockQty <= 0) return "Out of stock";
-  const units = availableUnits(stockQty, unitSize);
-  if (units === 0) return "Out of stock";
+function stockStatusLabel(variant: { stockQty: number; qtyStep: number }): string {
+  const units = availableUnits(variant);
+  if (units <= 0) return "Out of stock";
   return `${units} available`;
 }
 
@@ -38,7 +40,7 @@ export default function VariantSelectorPage() {
   if (!product) return null;
 
   const selectedVariant = product.variants.find((v) => v.id === selectedVariantId);
-  const maxUnits = selectedVariant ? availableUnits(product.stockQty, selectedVariant.unitSize) : 0;
+  const maxUnits = selectedVariant ? availableUnits(selectedVariant) : 0;
   const isOOS = maxUnits === 0;
 
   function handleAdd() {
@@ -95,7 +97,7 @@ export default function VariantSelectorPage() {
         <p className="text-[11px] font-bold uppercase mb-3 tracking-wider" style={{ color: "var(--text-secondary)" }}>Select sellable unit</p>
         <div className="flex flex-col gap-2">
           {product.variants.map((v) => {
-            const units = availableUnits(product.stockQty, v.unitSize);
+            const units = availableUnits(v);
             const isSelected = v.id === selectedVariantId;
             const oos = units === 0;
             return (
@@ -146,7 +148,7 @@ export default function VariantSelectorPage() {
         </div>
         {selectedVariant && (
           <p className="text-xs mt-2" style={{ color: "var(--text-secondary)" }}>
-            {stockStatusLabel(product.stockQty, selectedVariant.unitSize, product.baseUnit)} ·
+            {stockStatusLabel(selectedVariant)} ·
             {product.baseUnit !== "piece" && ` ${selectedVariant.unitSize} ${product.baseUnit} per unit`}
           </p>
         )}
