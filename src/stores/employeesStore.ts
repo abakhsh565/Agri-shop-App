@@ -63,7 +63,8 @@ interface EmployeesState {
     roleId?: string;
     jobTitle?: string;
     photoUrl?: string;
-    permissions?: string[];
+    /** This employee's exceptions to the role's defaults (code → granted). */
+    overrides?: Record<string, boolean>;
     branchScope?: string[] | null;
     createdBy?: string | null;
   }) => Promise<User>;
@@ -138,7 +139,7 @@ export const useEmployeesStore = create<EmployeesState>((set, get) => ({
         roleId: input.roleId ?? null,
         jobTitle: input.jobTitle ?? null,
         photoUrl: input.photoUrl ?? null,
-        permissions: input.permissions ?? null,
+        overrides: input.overrides ?? null,
         branchScope: input.branchScope ?? null,
         createdBy: input.createdBy ?? null,
       },

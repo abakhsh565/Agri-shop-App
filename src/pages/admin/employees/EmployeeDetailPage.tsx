@@ -3,6 +3,8 @@ import { useNavigate, useParams } from "react-router-dom";
 import { useThemeStore } from "@/stores/themeStore";
 import { useT } from "@/lib/i18n";
 import { usePermissionLabels } from "@/lib/permissionLabels";
+import { applyOverrides, diffOverrides, overrideCount, overridesToStore } from "@/lib/accessModel";
+import EmployeeAccessEditor from "@/components/admin/EmployeeAccessEditor";
 import { useEmployeesStore } from "@/stores/employeesStore";
 import { usePermissionsStore } from "@/stores/permissionsStore";
 import { useRolesStore } from "@/stores/rolesStore";
@@ -19,7 +21,7 @@ import { useCurrentTime } from "@/lib/useCurrentTime";
 import {
   Phone, Hash, ShieldCheck, UserX, UserCheck, Clock,
   TrendingUp, ShoppingCart, Users, Calendar, ChevronRight,
-  Eye, Check,
+  Eye,
 } from "lucide-react";
 import type { Sale, MembershipRole } from "@/types";
 
@@ -36,7 +38,7 @@ export default function EmployeeDetailPage() {
   const navigate = useNavigate();
   const { language } = useThemeStore();
   const t = useT();
-  const { areaLabel, actionLabel, areaIcon } = usePermissionLabels();
+  const { areaLabel } = usePermissionLabels();
   const { addToast } = useUIStore();
   const { user } = useAuthStore();
   const isUrdu = language === "ur";
@@ -77,29 +79,18 @@ export default function EmployeeDetailPage() {
   }, []);
 
   /**
-   * The employee's access AS CONFIGURED: the role's defaults with this
-   * employee's exceptions applied. That is the model the database documents
-   * (role defaults + employee overrides), and it is the only form that is true in
-   * both membership states.
+   * Load the employee's access as configured: the role's defaults with their own
+   * exceptions applied (see lib/accessModel). That is the model the database
+   * documents, and the only form that is true in both membership states.
    *
    * get_employee_access also returns `effective` from the live permission
    * resolver, which is correct for authorization and returns nothing while an
    * invitation is still pending (every path requires status = 'active'). Showing
-   * that here reported "this role has no access" and counted the role's whole
-   * access set as "changed for" an employee the owner had just invited — the
-   * opposite of what the database said (12 defaults, 0 overrides).
+   * that here reported "this role has no access" for an employee whose role
+   * carried 12 defaults.
    */
-  function configuredAccess(defaults: string[], overrides: Record<string, boolean>): Set<string> {
-    const set = new Set(defaults);
-    for (const [code, granted] of Object.entries(overrides)) {
-      if (granted) set.add(code);
-      else set.delete(code);
-    }
-    return set;
-  }
-
   function applyAccess(access: Awaited<ReturnType<typeof getEmployeeAccess>>) {
-    const configured = configuredAccess(access.defaults, access.overrides);
+    const configured = applyOverrides(access.defaults, access.overrides);
     setRoleDefaults(new Set(access.defaults));
     setStoredOverrides(access.overrides);
     setEmpPerms([...configured]);
@@ -161,37 +152,26 @@ export default function EmployeeDetailPage() {
     permissionsStore.permissions.filter((p) => effectiveSet.has(p.code))
       .map((p) => p.module),
   )];
-  // Counted from the stored exceptions, not inferred by diffing the live set: a
-  // pending membership is denied by authorization, which is not a change the
-  // owner made.
-  const overrideCount = Object.keys(storedOverrides).length;
+  // "Changed" means the access above differs from the role — the current edit state
+  // while editing, otherwise the access as loaded. Diffing the LIVE permission set is
+  // deliberately not used: a pending membership is denied by authorization, which is
+  // not a change the owner made.
+  const storedCount = overrideCount(storedOverrides);
+  const changeCount = overrideCount(diffOverrides(editPerms, roleDefaults));
+  // Stored rows may include exceptions the role now covers on its own; they are kept
+  // (see lib/accessModel) but they do not change the access, so they do not turn the
+  // reset button into a lie either.
+  const hasOverridesToClear = changeCount > 0 || storedCount > 0;
 
   const branchNames = editBranchScope === null
     ? t("addEmployee.allBranches")
     : branches.filter((b) => editBranchScope.includes(b.id)).map((b) => b.name).join(", ") || t("addEmployee.allBranches");
 
-  // How a single action relates to the role — used only inside "Customize access".
-  function permState(code: string): "fromRole" | "onlyThis" | "offForThis" | "none" {
-    const inherited = roleDefaults.has(code);
-    const effective = editPerms.has(code);
-    if (inherited && effective) return "fromRole";
-    if (!inherited && effective) return "onlyThis";
-    if (inherited && !effective) return "offForThis";
-    return "none";
-  }
-
-  const PERM_STATE_STYLE: Record<string, { bg: string; fg: string }> = {
-    fromRole: { bg: "var(--brand)", fg: "#0a0a0a" },
-    onlyThis: { bg: "#3b82f6", fg: "#ffffff" },
-    offForThis: { bg: "rgba(239,68,68,0.18)", fg: "#ef4444" },
-    none: { bg: "var(--surface)", fg: "var(--text-secondary)" },
-  };
-
   async function resetToRoleDefaults() {
     if (!employeeId) return;
     setSaving(true);
     try {
-      await updateAccess(employeeId, { resetOverrides: true });
+      await updateAccess(employeeId, { roleId: editRoleId, resetOverrides: true });
       applyAccess(await getEmployeeAccess(employeeId));
       addToast(t("empDetail.roleOnlyDone", { name: emp!.name }), "success");
     } catch (e) {
@@ -205,12 +185,10 @@ export default function EmployeeDetailPage() {
     if (!employeeId) return;
     setSaving(true);
     try {
-      const overrides: Record<string, boolean> = {};
-      for (const permission of permissionsStore.permissions) {
-        const effective = editPerms.has(permission.code);
-        const inherited = roleDefaults.has(permission.code);
-        if (effective !== inherited) overrides[permission.code] = effective;
-      }
+      // The employee's exceptions relative to the SELECTED role, plus any stored
+      // exception the role now covers on its own (a role change must not retire an
+      // earlier decision, which is how the database resolves access).
+      const overrides = overridesToStore(editPerms, roleDefaults, storedOverrides);
       await updateAccess(employeeId, {
         roleId: editRoleId,
         overrides,
@@ -224,28 +202,6 @@ export default function EmployeeDetailPage() {
     } finally {
       setSaving(false);
     }
-  }
-
-  function togglePerm(code: string) {
-    setEditPerms((prev) => {
-      const next = new Set(prev);
-      if (next.has(code)) next.delete(code);
-      else next.add(code);
-      return next;
-    });
-  }
-
-  function toggleModulePerms(module: string) {
-    const modulePerms = permissionsStore.getByModule(module);
-    const allSelected = modulePerms.every((p) => editPerms.has(p.code));
-    setEditPerms((prev) => {
-      const next = new Set(prev);
-      for (const p of modulePerms) {
-        if (allSelected) next.delete(p.code);
-        else next.add(p.code);
-      }
-      return next;
-    });
   }
 
   async function setActive(next: boolean) {
@@ -374,7 +330,10 @@ export default function EmployeeDetailPage() {
                         setEditRoleId(r.id);
                         rolesStore.getRolePermissions(r.id).then((perms) => {
                           setRoleDefaults(new Set(perms));
-                          setEditPerms(new Set(perms));
+                          // A role supplies the defaults; it does not erase what the
+                          // owner set for this person. New defaults + their existing
+                          // exceptions, which is what the database resolves.
+                          setEditPerms(applyOverrides(perms, storedOverrides));
                         });
                       }}
                       className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-start"
@@ -440,82 +399,10 @@ export default function EmployeeDetailPage() {
               <p className="text-xs font-bold mb-2" style={{ color: "var(--text-secondary)" }}>
                 {t("empDetail.access")}
               </p>
-              <div className="space-y-2 max-h-[400px] overflow-y-auto">
-                {permissionsStore.permissions.length === 0 && (
-                  <p className="text-xs" style={{ color: "var(--text-secondary)" }}>{t("common.loading")}</p>
-                )}
-                {[...new Set(permissionsStore.permissions.map((p) => p.module))].map((mod) => {
-                  const modulePerms = permissionsStore.getByModule(mod);
-                  if (modulePerms.length === 0) return null;
-                  const selectedCount = modulePerms.filter((p) => editPerms.has(p.code)).length;
-                  const allSelected = selectedCount === modulePerms.length;
-                  return (
-                    <div key={mod}>
-                      <button
-                        onClick={() => toggleModulePerms(mod)}
-                        className="flex items-center justify-between w-full py-2 px-3 rounded-lg"
-                        style={{
-                          background: allSelected ? "rgba(132,204,22,0.1)" : "var(--surface)",
-                          border: `1px solid ${selectedCount > 0 ? "var(--brand)" : "var(--divider)"}`,
-                        }}
-                      >
-                        <div className="flex items-center gap-2">
-                          <span className="text-base">{areaIcon(mod)}</span>
-                          <span className="text-xs font-semibold" style={{ color: "var(--text-primary)" }}>{areaLabel(mod)}</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {allSelected ? (
-                            <>
-                              <span className="text-[10px]" style={{ color: "var(--text-secondary)" }}>{t("empDetail.areaFull")}</span>
-                              <Check size={12} style={{ color: "var(--brand)" }} />
-                            </>
-                          ) : selectedCount === 0 ? (
-                            <span className="text-[10px]" style={{ color: "var(--text-secondary)" }}>{t("empDetail.areaNone")}</span>
-                          ) : null}
-                        </div>
-                      </button>
-                      {/* Individual actions — only shown when the area is partly granted */}
-                      {selectedCount > 0 && selectedCount < modulePerms.length && (
-                        <div className="flex flex-wrap gap-1 mt-1 ps-6">
-                          {modulePerms.map((p) => {
-                            const state = permState(p.code);
-                            const s = PERM_STATE_STYLE[state];
-                            return (
-                              <button
-                                key={p.code}
-                                onClick={() => togglePerm(p.code)}
-                                className="text-[10px] px-2 py-0.5 rounded-full font-semibold"
-                                style={{
-                                  background: s.bg,
-                                  color: s.fg,
-                                  border: state === "offForThis" ? "1px solid #ef4444" : "1px solid var(--divider)",
-                                }}
-                              >
-                                {actionLabel(p.action)}
-                                {state === "onlyThis" ? " +" : state === "offForThis" ? " −" : ""}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-              <div className="flex flex-wrap items-center gap-3 mt-3">
-                {(["fromRole", "onlyThis", "offForThis"] as const).map((k) => (
-                  <span key={k} className="flex items-center gap-1 text-[10px]" style={{ color: "var(--text-secondary)" }}>
-                    <span
-                      className="inline-block w-2.5 h-2.5 rounded-full"
-                      style={{ background: PERM_STATE_STYLE[k].bg, border: `1px solid ${PERM_STATE_STYLE[k].fg}` }}
-                    />
-                    {t(k === "fromRole" ? "empDetail.fromRole" : k === "onlyThis" ? "empDetail.onlyThis" : "empDetail.offForThis")}
-                  </span>
-                ))}
-              </div>
+              <EmployeeAccessEditor roleDefaults={roleDefaults} value={editPerms} onChange={setEditPerms} />
               <p className="text-[10px] mt-2" style={{ color: "var(--text-secondary)" }}>
                 {roleTemplateName}
-                {overrideCount > 0 ? ` · ${t("empDetail.changedFor", { name: emp.name })}` : ""}
+                {changeCount > 0 ? ` · ${t("empDetail.changedFor", { name: emp.name })}` : ""}
               </p>
             </div>
 
@@ -523,13 +410,13 @@ export default function EmployeeDetailPage() {
             <div className="px-4 py-3 flex gap-2" style={{ borderTop: "1px solid var(--divider)" }}>
               <button
                 onClick={resetToRoleDefaults}
-                disabled={saving || overrideCount === 0}
+                disabled={saving || !hasOverridesToClear}
                 className="flex-1 h-10 rounded-xl font-bold text-xs"
                 style={{
                   background: "var(--surface-2)",
                   border: "1px solid var(--divider)",
-                  color: overrideCount === 0 ? "var(--text-secondary)" : "var(--text-primary)",
-                  opacity: saving || overrideCount === 0 ? 0.6 : 1,
+                  color: !hasOverridesToClear ? "var(--text-secondary)" : "var(--text-primary)",
+                  opacity: saving || !hasOverridesToClear ? 0.6 : 1,
                 }}
               >
                 {t("empDetail.roleOnly")}
@@ -566,7 +453,7 @@ export default function EmployeeDetailPage() {
                     : t("addEmployee.noRoleAccess")}
               </span>
             </div>
-            {overrideCount > 0 && (
+            {changeCount > 0 && (
               <div className="px-4 py-3" style={{ borderTop: "1px solid var(--divider)" }}>
                 <p className="text-[11px]" style={{ color: "var(--text-secondary)" }}>
                   {t("empDetail.changedFor", { name: emp.name })}

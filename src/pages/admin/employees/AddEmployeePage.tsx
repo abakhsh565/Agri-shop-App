@@ -10,6 +10,8 @@ import { useRolesStore } from "@/stores/rolesStore";
 import { usePermissionsStore } from "@/stores/permissionsStore";
 import { useT } from "@/lib/i18n";
 import { usePermissionLabels } from "@/lib/permissionLabels";
+import { applyOverrides, diffOverrides, overrideCount } from "@/lib/accessModel";
+import EmployeeAccessEditor from "@/components/admin/EmployeeAccessEditor";
 import { useThemeStore } from "@/stores/themeStore";
 import { normalizePhone } from "@/lib/auth";
 import { clearNav } from "@/lib/navContext";
@@ -54,7 +56,13 @@ export default function AddEmployeePage() {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [roleId, setRoleId] = useState<string | null>(null);
+  // The selected role's reusable defaults.
   const [selectedRolePermissions, setSelectedRolePermissions] = useState<string[]>([]);
+  // What this employee will actually have: the role's defaults with any exception
+  // the owner adds below. Starts equal to the defaults, so "no customization" is
+  // a state rather than something the owner has to re-enter.
+  const [accessValue, setAccessValue] = useState<Set<string>>(new Set());
+  const [customizing, setCustomizing] = useState(false);
   const [branchScope, setBranchScope] = useState<string[] | null>(null);
   const [branches, setBranches] = useState<{ id: string; name: string; is_default: boolean }[]>([]);
   const [error, setError] = useState("");
@@ -117,6 +125,10 @@ export default function AddEmployeePage() {
         phone: normalizePhone(phone),
         role: "employee", // Legacy field retained for compatibility
         roleId: roleId ?? undefined,
+        // The employee's exceptions, written with the employee in one transaction:
+        // creating them and then configuring them would leave a half-configured
+        // person behind if the second call failed.
+        overrides,
         photoUrl: photoUrl ?? undefined,
         branchScope: branchScope,
         createdBy: user?.id,
@@ -139,14 +151,21 @@ export default function AddEmployeePage() {
   } as const;
 
   const roleObj = rolesStore.roles.find((r) => r.id === roleId);
+  const roleDefaultSet = new Set(selectedRolePermissions);
+  const overrides = diffOverrides(accessValue, roleDefaultSet);
+  const changeCount = overrideCount(overrides);
   const branchNames = branchScope === null
     ? t("addEmployee.allBranches")
     : branches.filter((b) => branchScope.includes(b.id)).map((b) => b.name).join(", ") || t("addEmployee.allBranches");
 
-  /** The selected role's access, grouped into business areas the owner recognises. */
+  /**
+   * The employee's access (role defaults with any exception applied), grouped into
+   * the business areas the owner recognises. Reads the edit set, not the role's raw
+   * defaults, so the summary can never disagree with what will be stored.
+   */
   function accessByArea(): { label: string; actions: string[] }[] {
     const byModule = new Map<string, string[]>();
-    for (const code of selectedRolePermissions) {
+    for (const code of accessValue) {
       const perm = permissionsStore.permissions.find((p) => p.code === code);
       const mod = perm?.module ?? code.split(".")[0];
       const action = perm?.action ?? code.split(".")[1] ?? "";
@@ -166,7 +185,13 @@ export default function AddEmployeePage() {
           onClick={() => {
             setError("");
             setRoleId(r.id);
-            rolesStore.getRolePermissions(r.id).then(setSelectedRolePermissions);
+            setCustomizing(false);
+            rolesStore.getRolePermissions(r.id).then((perms) => {
+              setSelectedRolePermissions(perms);
+              // Choosing a role replaces the defaults; it does not touch the
+              // employee, who does not exist yet.
+              setAccessValue(applyOverrides(perms, {}));
+            });
           }}
           className="flex items-start gap-3 p-4 rounded-[14px] text-start transition-colors"
           style={{
@@ -188,22 +213,65 @@ export default function AddEmployeePage() {
           </div>
         </button>
 
-        {/* What choosing this role means — business areas and actions, no codes. */}
+        {/* What choosing this role means — business areas and actions, no codes.
+            While the owner is customizing, the editor replaces this read-only view
+            rather than listing the same areas twice. */}
         {selected && (
           <div className="rounded-xl p-3 mx-1" style={{ background: "var(--surface-2)", border: "1px solid var(--divider)" }}>
-            <p className="text-[11px] font-bold uppercase tracking-wider mb-2" style={{ color: "var(--text-secondary)" }}>
-              {t("addEmployee.roleAccess")}
-            </p>
-            {accessByArea().length === 0 ? (
-              <p className="text-xs" style={{ color: "var(--text-secondary)" }}>{t("addEmployee.noRoleAccess")}</p>
+          {customizing ? (
+            <>
+              <p className="text-[11px] font-bold uppercase tracking-wider mb-2" style={{ color: "var(--text-secondary)" }}>
+                {t("addEmployee.effectiveAccess", { name: firstName })}
+              </p>
+              <EmployeeAccessEditor roleDefaults={roleDefaultSet} value={accessValue} onChange={setAccessValue} />
+            </>
+          ) : (
+            <>
+              <p className="text-[11px] font-bold uppercase tracking-wider mb-2" style={{ color: "var(--text-secondary)" }}>
+                {t("addEmployee.roleAccess")}
+              </p>
+              {accessByArea().length === 0 ? (
+                <p className="text-xs" style={{ color: "var(--text-secondary)" }}>{t("addEmployee.noRoleAccess")}</p>
+              ) : (
+                accessByArea().map(({ label, actions }) => (
+                  <div key={label} data-testid="access-area-row" className="flex items-start justify-between gap-3 py-1">
+                    <span className="text-xs font-semibold" style={{ color: "var(--text-primary)" }}>{label}</span>
+                    <span className="text-xs text-end" style={{ color: "var(--text-secondary)" }}>{actions.join(", ")}</span>
+                  </div>
+                ))
+              )}
+            </>
+          )}
+
+          {/* Access is customizable here and now: sending an invitation must not
+              require leaving the flow to open the employee's page. */}
+          <div className="flex items-center justify-between gap-3 mt-3 pt-3" style={{ borderTop: "1px solid var(--divider)" }}>
+            <span className="text-[10px]" style={{ color: "var(--text-secondary)" }}>
+              {changeCount > 0
+                ? t("addEmployee.customized", { count: changeCount, role: r.name })
+                : t("addEmployee.roleAccessDefault")}
+            </span>
+            {customizing ? (
+              <button
+                onClick={() => {
+                  setAccessValue(applyOverrides(selectedRolePermissions, {}));
+                  setCustomizing(false);
+                }}
+                className="text-[10px] font-bold shrink-0"
+                style={{ color: "var(--brand)" }}
+              >
+                {t("empDetail.roleOnly")}
+              </button>
             ) : (
-              accessByArea().map(({ label, actions }) => (
-                <div key={label} className="flex items-start justify-between gap-3 py-1">
-                  <span className="text-xs font-semibold" style={{ color: "var(--text-primary)" }}>{label}</span>
-                  <span className="text-xs text-end" style={{ color: "var(--text-secondary)" }}>{actions.join(", ")}</span>
-                </div>
-              ))
+              <button
+                onClick={() => setCustomizing(true)}
+                className="text-[10px] font-bold shrink-0"
+                style={{ color: "var(--brand)" }}
+              >
+                {t("addEmployee.customizeAccess", { name: firstName })}
+              </button>
             )}
+          </div>
           </div>
         )}
       </div>
@@ -397,6 +465,11 @@ export default function AddEmployeePage() {
                 </div>
               ))}
             </div>
+            {changeCount > 0 && (
+              <p className="text-[11px] font-semibold" style={{ color: "var(--brand)" }}>
+                {t("addEmployee.customized", { count: changeCount, role: roleObj?.name ?? "" })}
+              </p>
+            )}
             <p className="text-[11px]" style={{ color: "var(--text-secondary)" }}>
               {t("addEmployee.inviteHint", { name: firstName })}
             </p>

@@ -29,6 +29,10 @@ const NEW_NAME = 'UX Check Employee';
 const NEW_PHONE_LOCAL = '03007770011';
 const NEW_PHONE_DB = '923007770011';
 
+const OVR_NAME = 'UX Override Employee';
+const OVR_PHONE_LOCAL = '03007770033';
+const OVR_PHONE_DB = '923007770033';
+
 /** RBAC vocabulary that must never reach the shop owner's screen. */
 const JARGON = /permission|inherit|override|effective|branch scope|scope|matrix|granular/i;
 
@@ -93,9 +97,11 @@ async function dbAreasForRole(roleName: string): Promise<string[]> {
 async function shownAreas(page: Page): Promise<string[]> {
   const panel = page.locator('p').filter({ hasText: 'Access from this role' }).first();
   await expect(panel).toBeVisible();
-  // Each row is <div><span>area</span><span>actions</span></div>
+  // Each row is <div data-testid="access-area-row"><span>area</span><span>actions</span></div>.
+  // Addressed by its own hook rather than by position, so adding a row to the
+  // panel cannot silently change what this compares against the database.
   const labels = await page
-    .locator('xpath=//p[contains(text(),"Access from this role")]/following-sibling::div/span[1]')
+    .locator('[data-testid="access-area-row"] span:first-child')
     .allInnerTexts();
   return labels.map((l) => l.trim().toLowerCase()).filter(Boolean);
 }
@@ -112,6 +118,7 @@ test.describe.configure({ mode: 'serial' });
 
 test.describe('Employee job & access — simple for the owner, exact underneath', () => {
   test.afterAll(async () => {
+    await deleteEmployeeByPhone(OVR_PHONE_DB);
     await deleteEmployeeByPhone(NEW_PHONE_DB);
     // never leave the QA employee with employee-specific access
     await execSql(`DELETE FROM user_permissions WHERE user_id = '${QA_EMPLOYEE_ID}' AND is_override = true`).catch(() => undefined);
@@ -314,6 +321,21 @@ test.describe('Employee job & access — simple for the owner, exact underneath'
     expect(step3, 'English copy leaked into the Urdu confirmation step').not.toContain('Send invitation');
     const overflowStep3 = await page.evaluate(() => document.body.scrollWidth > document.body.clientWidth);
     expect(overflowStep3, 'horizontal overflow on the Urdu confirmation step').toBe(false);
+
+    // Customizing access in Urdu: the label, the states and the "as it is" default.
+    await page.getByRole('button', { name: 'واپس' }).click();
+    await page.waitForTimeout(700);
+    const step2b = await bodyText(page);
+    expect(step2b).toContain('رسائی میں تبدیلی');
+    expect(step2b).toContain('کردار کی رسائی ویسے ہی رہے گی');
+    await page.getByRole('button', { name: 'رسائی میں تبدیلی' }).click();
+    await page.waitForTimeout(700);
+    const editing = await bodyText(page);
+    expect(editing).toContain('کی رسائی');
+    expect(editing).toContain('کردار سے');
+    expect(editing, 'English copy leaked into the Urdu access editor').not.toContain('Customize access');
+    const overflowEditor = await page.evaluate(() => document.body.scrollWidth > document.body.clientWidth);
+    expect(overflowEditor, 'horizontal overflow in the Urdu access editor').toBe(false);
   });
 
   test('4. Employee detail explains role, place and access without RBAC vocabulary', async ({ page }) => {
@@ -374,5 +396,85 @@ test.describe('Employee job & access — simple for the owner, exact underneath'
       SELECT count(*)::text AS n FROM user_permissions
        WHERE user_id = '${QA_EMPLOYEE_ID}' AND is_override = true`);
     expect(Number(left.n), 'reset did not remove the employee-specific access').toBe(0);
+  });
+
+  test('6. Access can be customized while inviting, and a role change keeps those exceptions', async ({ page }) => {
+    await deleteEmployeeByPhone(OVR_PHONE_DB);
+
+    await login(page, OWNER_PHONE);
+    await page.goto(`${BASE}/admin/employees/new`);
+    await page.waitForTimeout(1000);
+    await page.getByPlaceholder('e.g. Bilal Ahmed').fill(OVR_NAME);
+    await page.getByPlaceholder('03001234567').fill(OVR_PHONE_LOCAL);
+    await page.getByRole('button', { name: 'Next' }).click();
+    await page.waitForTimeout(800);
+
+    await page.getByRole('button', { name: /Sales Employee/ }).first().click();
+    await page.waitForTimeout(800);
+    const roleStep = await bodyText(page);
+    // The role's access is a STARTING POINT the owner can change here, not a
+    // conclusion they would have to leave the flow to adjust.
+    expect(roleStep).toContain('Access from this role');
+    expect(roleStep).toContain("Uses the role's access as it is");
+
+    await page.getByRole('button', { name: 'Customize access' }).click();
+    await page.waitForTimeout(600);
+    // Suppliers is outside a Sales Employee's role, so granting it is a real
+    // exception and must be visible as one.
+    await page.locator('button').filter({ hasText: /^🏭\s*Suppliers/ }).first().click();
+    await page.waitForTimeout(500);
+    expect(await bodyText(page), 'a customization is not reported to the owner').toContain('changes from Sales Employee');
+    // The editor replaces the read-only list instead of listing the same areas twice.
+    expect(await bodyText(page)).not.toContain('Access from this role');
+
+    await page.getByRole('button', { name: 'Next' }).click();
+    await page.waitForTimeout(800);
+    const summary = await bodyText(page);
+    expect(summary, 'the confirmation omits the customized area').toContain('Suppliers');
+    expect(summary, 'the confirmation does not say access was customized').toContain('changes from Sales Employee');
+
+    await page.getByRole('button', { name: 'Send invitation' }).click();
+    await page.waitForURL(/\/admin\/employees\/[0-9a-f-]{36}$/, { timeout: 30000 });
+    await page.waitForTimeout(2000);
+    const [ovr] = await execSql(`SELECT id FROM users WHERE phone = '${OVR_PHONE_DB}'`);
+    expect(ovr, 'the employee was not created').toBeTruthy();
+
+    // ── Database is the judge: the exceptions were written with the employee ──
+    const stored = await execSql(`
+      SELECT p.code, up.is_granted
+        FROM user_permissions up JOIN permissions p ON p.id = up.permission_id
+       WHERE up.user_id = '${ovr.id}' AND up.is_override = true ORDER BY p.code`);
+    expect(stored.length, 'the customization made during onboarding was not stored').toBeGreaterThan(0);
+    expect(stored.every((s: { is_granted: boolean }) => s.is_granted === true)).toBe(true);
+    const [membership] = await execSql(`SELECT status FROM memberships WHERE user_id = '${ovr.id}'`);
+    expect(membership.status, 'customizing an employee made them active').toBe('pending');
+
+    // The detail screen reports the exceptions the access above does not show.
+    expect(await bodyText(page), 'the stored customization is invisible on the employee page').toContain('changed for');
+
+    // ── A role change keeps what the owner set for this person ──
+    await page.getByRole('button', { name: 'Customize access' }).click();
+    await page.waitForTimeout(700);
+    await page.getByRole('button', { name: /Store Manager/ }).first().click();
+    await page.waitForTimeout(800);
+    await page.getByRole('button', { name: 'Save', exact: true }).click();
+    await page.waitForTimeout(2500);
+
+    // Store Manager happens to grant Suppliers on its own, so the exception is now
+    // redundant for ACCESS — but it is still the owner's recorded decision and must
+    // survive, exactly as the database resolves it (update_employee_access does not
+    // touch user_permissions when the role changes).
+    const after = await execSql(`
+      SELECT p.code FROM user_permissions up JOIN permissions p ON p.id = up.permission_id
+       WHERE up.user_id = '${ovr.id}' AND up.is_override = true AND up.is_granted = true ORDER BY p.code`);
+    expect(after.length, 'changing the role silently discarded the employee\'s exceptions').toBe(stored.length);
+    const [roleNow] = await execSql(`
+      SELECT r.name FROM memberships m JOIN roles r ON r.id = m.role_id WHERE m.user_id = '${ovr.id}'`);
+    expect(roleNow.name).toBe('Store Manager');
+    // And the screen stops claiming a difference, because the access now equals the
+    // role — the exception is on file, not in force.
+    expect(await bodyText(page), 'the screen claims a difference the role already provides').not.toContain('changed for');
+    const accessRow = await page.getByText('Access', { exact: true }).first().locator('xpath=..').innerText();
+    expect(accessRow, 'the newly granted area is missing from the access line').toContain('Suppliers');
   });
 });

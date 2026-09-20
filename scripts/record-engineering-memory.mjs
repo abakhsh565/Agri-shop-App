@@ -392,6 +392,38 @@ const MEMORIES = [
       fixedIn: 'EmployeeDetailPage (applyAccess), i18n empDetail.cancelInvite*'
     },
   },
+  {
+    category: 'failure_pattern',
+    title: 'Changing an employee\'s role silently deleted the exceptions the owner had set for them',
+    component: 'src/pages/admin/employees/EmployeeDetailPage.tsx, src/lib/accessModel.ts',
+    description:
+      'The access editor held the selected role\'s DEFAULTS as its edit state, so choosing a different role called setEditPerms(new Set(perms)) and threw away the employee\'s own exceptions; Save then sent overrides = diff(edit state, the new role) = {} — and because the key was present, update_employee_access took its `ELSIF payload ? overrides` branch and DELETEd every user_permissions row for that employee. Reproduced in the browser against the live QA database: granted Suppliers to the QA employee (3 rows, is_granted = true), opened Customize access, selected Store Manager, pressed Save — overrides_left went from 3 to 0 with no warning, no confirmation and no message; the "changed for" line simply disappeared. The database\'s own rule is the opposite: update_employee_access only touches user_permissions when the payload asks it to, and 0108 resolves effective = (role defaults ∪ granted) ∖ denied, so an exception is independent of which role supplies the defaults. The UI was not merely coarse — it was destructive, and it discarded owner intent on the exact screen whose purpose is to record it. The fix is a shared, one-definition model (src/lib/accessModel.ts): the editor\'s value is the effective set, a role change re-derives it as applyOverrides(newDefaults, storedExceptions), and Save writes overridesToStore(...), which keeps a stored exception that is currently a no-op for the new role (a grant the role already covers, or a denial of something it does not grant) so a later role change cannot resurrect or lose a decision by accident, while the owner\'s current edit state always wins. RULE: when a screen sends a whole collection to an RPC that replaces that collection, an empty diff is a DELETE — check what the writer does with an empty set before treating "nothing changed" as harmless.',
+    evidence: {
+      browserReproduction: 'QA employee had 3 companies.* overrides (is_granted=true); after selecting a different role in Customize access and pressing Save: "overrides_left": 0, role_now: "Store Manager"',
+      silentLoss: 'no toast, no confirm, no "changed" line — the exception simply stopped existing',
+      serverContrast: 'update_employee_access with roleId alone (no overrides key) leaves user_permissions untouched — asserted by tests/integration/employeeAccessOverrides.test.ts',
+      resolver: '0108 get_effective_permissions = (role defaults ∪ granted) EXCEPT denied; requires membership status active; 0107\'s older version unioned every is_override row and ignored is_granted — the newer definition is the authoritative one',
+      afterFix: 'the same flow keeps all 3 rows, the editor shows the exceptions against the new role, and the screen stops reporting a difference when the new role already provides that access',
+      regression: 'tests/e2e/accessUx.spec.ts 6/6 (new test 6), tests/integration/employeeAccessOverrides.test.ts 4/4, Vitest 366/366 across 28 files, tsc clean',
+      fixedIn: 'accessModel.ts + EmployeeDetailPage'
+    },
+  },
+  {
+    category: 'technical_decision',
+    title: 'An employee\'s access exceptions are written WITH the employee, and a role only supplies defaults',
+    component: 'supabase/migrations/0132_employee_overrides_on_create.sql, create_employee, AddEmployeePage',
+    description:
+      'Customizing an employee used to require leaving the flow: create_employee accepted a legacy `permissions` field and ignored it, so the owner had to invite the person and then open their page to change one thing — two writes for one decision, and a half-configured employee if the second failed. 0132 gives create_employee the same `overrides` object update_employee_access already takes ({"<code>": true|false}) and writes those rows in the same transaction, skipping codes that do not exist rather than failing the whole creation on a foreign key. The model the owner is shown, and the one the database enforces, is now stated once in src/lib/accessModel.ts and rendered by one component (src/components/admin/EmployeeAccessEditor.tsx) in both places: role defaults are the starting point, the employee\'s exceptions are the only thing the editor calls "yours", and the confirmation step shows the effective result — so an owner sees what will happen before they commit, and can still change it later on the employee page with the same control. Authorization is unchanged: the write still begins with authorize_business_action(\'employees.manage\'), the membership is still created pending (0129), and holding exceptions grants nothing until the invitee completes their own first sign-in — asserted, not assumed.',
+    evidence: {
+      createdWithExceptions: 'create_employee {overrides: {companies.view:true, sales.create:false, not.a.real.code:true}} -> overrides: 2 stored, unknown code skipped, membership pending, get_my_permissions still []',
+      authorizationHonoursBoth: 'after onboarding: companies.view present although the role does not grant it; sales.create absent although the role does',
+      roleChangeKeeps: 'role switched to Store Manager -> both rows still present and effective access = new defaults with those exceptions',
+      reset: 'resetOverrides -> 0 rows and effective permissions equal the role defaults exactly',
+      browser: 'Deferred Suppliers area granted while inviting: "3 changes from Sales Employee" shown on the role step and on the confirmation, and the stored rows verified in the database',
+      regression: 'tests/integration/employeeAccessOverrides.test.ts 4/4, accessUx 6/6, EN + UR with RTL overflow checks',
+      fixedIn: '0132'
+    },
+  },
 ];
 
 const client = await pool.connect();

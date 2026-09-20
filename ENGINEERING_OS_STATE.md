@@ -609,6 +609,51 @@ memberships, 2 branches, 4 roles).
 Urdu mode. That is data, not UI copy — translating it would mean either a translation table keyed
 by role or seeded Urdu role text, which is a product decision (see §2).
 
+### 1.16 Access can be managed where the decision is made — and a role change no longer deletes it (2026-09-21)
+
+**A. The access model is now one definition, rendered in both places.** The rule the
+database enforces is `effective = (role defaults ∪ granted overrides) ∖ denied overrides`
+(0108 `get_effective_permissions`). That now lives in `src/lib/accessModel.ts`
+(`applyOverrides`, `diffOverrides`, `overridesToStore`) and is drawn by one component,
+`EmployeeAccessEditor`, used both in Add Employee and on the employee page — so the owner
+cannot get two different answers to "what will this person actually have?" depending on which
+screen they are on.
+
+**B. Access can be customized while inviting.** `create_employee` accepted a legacy
+`permissions` field and ignored it, so customizing somebody meant creating them and then
+opening their page to change one thing — two writes for one decision, and a half-configured
+employee if the second failed. 0132 accepts the same `overrides` object
+`update_employee_access` already takes and writes it in the same transaction (unknown codes are
+skipped, not fatal). The role step says the role's access is the starting point
+(`Uses the role's access as it is`), offers **Customize access** in place, and the confirmation
+step reports the effective result plus `N changes from <role>`. Authorization is untouched: the
+write still requires `employees.manage`, the membership is still `pending`, and holding
+exceptions grants nothing until the invitee signs in for the first time (asserted).
+
+**C. A role change used to delete the employee's exceptions (real defect, fixed).** The editor
+held the selected role's defaults as its edit state, so choosing a different role reset it and
+Save then sent `overrides = {}` — which `update_employee_access` takes as "replace the whole
+collection", i.e. `DELETE FROM user_permissions WHERE is_override`. Reproduced against the live
+database: 3 granted `companies.*` rows → open Customize access → select Store Manager → Save →
+**0 rows**, with no warning and no message; the "changed for" line just disappeared. The server
+rule is the opposite (a role change leaves `user_permissions` alone), so the screen was
+destroying owner intent on the very surface whose purpose is to record it. The editor's value is
+now the effective set, a role change re-derives it as `applyOverrides(newDefaults, stored)`, and
+Save writes `overridesToStore(...)` — the visible differences plus any stored exception that is
+currently a no-op for the selected role, so the owner's decisions survive a role change instead
+of quietly retiring or resurrecting themselves.
+
+**Not part of this change:** role names and descriptions remain English tenant data (role *names*
+are shown as entered), which stays an open product decision recorded below.
+
+**Evidence:** browser walkthrough of the role step and confirmation in EN (customization made in
+flow: "3 changes from Sales Employee", Suppliers in the effective access) and UR/RTL;
+`accessUx.spec.ts` **6/6** (new test 6 covers in-flow customization → stored rows → role change
+keeps them), `employeeAccessOverrides.test.ts` **4/4** (real JWT → PostgREST → RPC → DB: written
+with the employee, both grant and denial reach authorization, role change keeps them, reset
+clears them), Vitest **366/366** across 28 files, `tsc` clean, production build clean, QA baseline
+restored (4 users, 2 owners, 0 pending memberships, 0 override rows, 4 roles, 2 branches).
+
 ---
 
 ## 2. Explicitly Not Built
