@@ -38,6 +38,18 @@ jobs:
       - name: Install Playwright Browsers
         run: npx playwright install --with-deps chromium
 
+      # The E2E suite signs in through the real login flow, which needs each app
+      # user to have a confirmed Supabase Auth credential. Re-provisioning is
+      # idempotent and repairs a QA database that was cleaned without one.
+      - name: Provision QA Auth Sessions
+        run: node scripts/provision-auth-sessions.mjs
+        env:
+          QA_SUPABASE_URL: ${{ secrets.QA_SUPABASE_URL }}
+          QA_SUPABASE_SERVICE_ROLE: ${{ secrets.QA_SUPABASE_SERVICE_ROLE }}
+          QA_DB_HOST: ${{ secrets.QA_DB_HOST }}
+          QA_DB_USER: ${{ secrets.QA_DB_USER }}
+          QA_DB_PASS: ${{ secrets.QA_DB_PASS }}
+
       - name: Run Playwright E2E
         run: npx playwright test
         env:

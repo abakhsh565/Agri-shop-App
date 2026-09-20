@@ -55,7 +55,7 @@ test.describe('Cross-Screen Synchronization', () => {
     // Verify original name on list
     await page.goto(`${BASE_URL}/employee/customers`);
     await page.waitForLoadState('networkidle');
-    expect(await page.locator('text=Sync Customer').first().isVisible()).toBe(true);
+    await expect(page.locator('text=Sync Customer').first()).toBeVisible();
 
     // Update name via DB
     await execSql(`UPDATE customers SET name = 'Sync Customer UPDATED' WHERE id = '${CUST_ID}'`);
@@ -67,12 +67,12 @@ test.describe('Cross-Screen Synchronization', () => {
     // Navigate back to list — should show updated name
     await page.goto(`${BASE_URL}/employee/customers`);
     await page.waitForLoadState('networkidle');
-    expect(await page.locator('text=Sync Customer UPDATED').first().isVisible()).toBe(true);
+    await expect(page.locator('text=Sync Customer UPDATED').first()).toBeVisible();
 
     // Hard reload — still updated
     await page.reload();
     await page.waitForLoadState('networkidle');
-    expect(await page.locator('text=Sync Customer UPDATED').first().isVisible()).toBe(true);
+    await expect(page.locator('text=Sync Customer UPDATED').first()).toBeVisible();
 
     // Verify DB
     const db = await execSql(`SELECT name FROM customers WHERE id = '${CUST_ID}'`);
@@ -155,7 +155,7 @@ test.describe('Cross-Screen Synchronization', () => {
     // Verify original
     await page.goto(`${BASE_URL}/employee/products`);
     await page.waitForLoadState('networkidle');
-    expect(await page.locator('text=Sync Product').first().isVisible()).toBe(true);
+    await expect(page.locator('text=Sync Product').first()).toBeVisible();
 
     // Update name
     await execSql(`UPDATE products SET name = 'Sync Product UPDATED' WHERE id = '${PROD_ID}'`);
@@ -165,12 +165,12 @@ test.describe('Cross-Screen Synchronization', () => {
     await page.waitForLoadState('networkidle');
     await page.goto(`${BASE_URL}/employee/products`);
     await page.waitForLoadState('networkidle');
-    expect(await page.locator('text=Sync Product UPDATED').first().isVisible()).toBe(true);
+    await expect(page.locator('text=Sync Product UPDATED').first()).toBeVisible();
 
     // Hard reload
     await page.reload();
     await page.waitForLoadState('networkidle');
-    expect(await page.locator('text=Sync Product UPDATED').first().isVisible()).toBe(true);
+    await expect(page.locator('text=Sync Product UPDATED').first()).toBeVisible();
 
     // Verify DB
     const db = await execSql(`SELECT name FROM products WHERE id = '${PROD_ID}'`);
@@ -232,7 +232,7 @@ test.describe('Cross-Screen Synchronization', () => {
     // Verify original
     await page.goto(`${BASE_URL}/admin/companies`);
     await page.waitForLoadState('networkidle');
-    expect(await page.locator('text=Sync Supplier').first().isVisible()).toBe(true);
+    await expect(page.locator('text=Sync Supplier').first()).toBeVisible();
 
     // Update name
     await execSql(`UPDATE companies SET name = 'Sync Supplier UPDATED' WHERE id = '${COMP_ID}'`);
@@ -242,12 +242,12 @@ test.describe('Cross-Screen Synchronization', () => {
     await page.waitForLoadState('networkidle');
     await page.goto(`${BASE_URL}/admin/companies`);
     await page.waitForLoadState('networkidle');
-    expect(await page.locator('text=Sync Supplier UPDATED').first().isVisible()).toBe(true);
+    await expect(page.locator('text=Sync Supplier UPDATED').first()).toBeVisible();
 
     // Hard reload
     await page.reload();
     await page.waitForLoadState('networkidle');
-    expect(await page.locator('text=Sync Supplier UPDATED').first().isVisible()).toBe(true);
+    await expect(page.locator('text=Sync Supplier UPDATED').first()).toBeVisible();
 
     // Verify DB
     const db = await execSql(`SELECT name FROM companies WHERE id = '${COMP_ID}'`);
@@ -287,7 +287,7 @@ test.describe('Cross-Screen Synchronization', () => {
     // Verify original
     await page.goto(`${BASE_URL}/admin/employees`);
     await page.waitForLoadState('networkidle');
-    expect(await page.locator('text=Sync Employee').first().isVisible()).toBe(true);
+    await expect(page.locator('text=Sync Employee').first()).toBeVisible();
 
     // Update name
     await execSql(`UPDATE users SET name = 'Sync Employee UPDATED' WHERE id = '${EMP_ID}'`);
@@ -297,12 +297,12 @@ test.describe('Cross-Screen Synchronization', () => {
     await page.waitForLoadState('networkidle');
     await page.goto(`${BASE_URL}/admin/employees`);
     await page.waitForLoadState('networkidle');
-    expect(await page.locator('text=Sync Employee UPDATED').first().isVisible()).toBe(true);
+    await expect(page.locator('text=Sync Employee UPDATED').first()).toBeVisible();
 
     // Hard reload
     await page.reload();
     await page.waitForLoadState('networkidle');
-    expect(await page.locator('text=Sync Employee UPDATED').first().isVisible()).toBe(true);
+    await expect(page.locator('text=Sync Employee UPDATED').first()).toBeVisible();
 
     // Verify DB
     const db = await execSql(`SELECT name FROM users WHERE id = '${EMP_ID}'`);
@@ -347,7 +347,7 @@ test.describe('Cross-Screen Synchronization', () => {
     // Navigate through multiple screens
     await page.goto(`${BASE_URL}/employee/customers`);
     await page.waitForLoadState('networkidle');
-    expect(await page.locator('text=Nav Test').first().isVisible()).toBe(true);
+    await expect(page.locator('text=Nav Test').first()).toBeVisible();
 
     await page.goto(`${BASE_URL}/employee/customers/${CUST_ID}`);
     await page.waitForLoadState('networkidle');
@@ -357,7 +357,7 @@ test.describe('Cross-Screen Synchronization', () => {
 
     await page.goto(`${BASE_URL}/employee/customers`);
     await page.waitForLoadState('networkidle');
-    expect(await page.locator('text=Nav Test').first().isVisible()).toBe(true);
+    await expect(page.locator('text=Nav Test').first()).toBeVisible();
 
     // Verify DB
     const db = await execSql(`SELECT name FROM customers WHERE id = '${CUST_ID}'`);

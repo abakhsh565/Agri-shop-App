@@ -5,7 +5,7 @@
  * for Playwright browser tests.
  */
 
-import { type Page, type TestInfo } from '@playwright/test';
+import { expect, type Page, type TestInfo } from '@playwright/test';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -60,6 +60,12 @@ const QA_DB_HOST = process.env.QA_DB_HOST || '';
 const QA_DB_USER = process.env.QA_DB_USER || '';
 const QA_DB_PASS = process.env.QA_DB_PASS || '';
 
+/** The app under test (Playwright's baseURL) */
+const BASE_URL = 'http://localhost:5173';
+
+/** Local (dialable) form of the QA admin phone used by the real login flow */
+const ADMIN_LOGIN_PHONE = '03009999999'; // 923009999999 -> 03009999999
+
 /** Test user IDs */
 export const QA_IDS = {
   shop: '00000000-0000-0000-0000-000000000001',
@@ -107,13 +113,126 @@ export async function supabaseAnon(sql: string): Promise<any> {
   return resp.json();
 }
 
+/** Same derivation the app uses: local PK number -> 92XXXXXXXXXX */
+function normalizePhone(input: string): string {
+  const digits = String(input).replace(/\D/g, '');
+  if (digits.startsWith('0')) return '92' + digits.slice(1);
+  if (digits.startsWith('92')) return digits;
+  return '92' + digits;
+}
+
+/**
+ * Guarantee a QA app user has a usable Supabase Auth credential.
+ *
+ * WHY: the app signs in with email+password derived from the phone and falls back
+ * to signUp when that fails. signUp requires an email confirmation and is
+ * rate-limited, so a fixture user that exists in `users` but has no credential
+ * can NEVER sign in from a clean database — every spec then fails for an
+ * infrastructure reason that has nothing to do with the feature under test.
+ * QA provisions credentials out-of-band with `email_confirm: true`
+ * (scripts/provision-auth-sessions.mjs); the harness does the same here.
+ */
+const _ensuredPhones = new Set<string>();
+
+export async function ensureAuthSession(phone: string): Promise<void> {
+  const e164 = normalizePhone(phone);
+  // Once per phone per worker. Every spec logs in, so probing the auth endpoint on
+  // each login would multiply requests (and invite provider rate limiting) for no
+  // extra information.
+  if (_ensuredPhones.has(e164)) return;
+
+  const email = `user-${e164}@agrishop.auth.local`;
+  const password = `AgriShop-${e164}-2026!`;
+
+  const probe = createClient(QA_URL, QA_ANON_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
+  const attempt = await probe.auth.signInWithPassword({ email, password });
+  if (!attempt.error) {
+    await probe.auth.signOut().catch(() => undefined);
+    _ensuredPhones.add(e164);
+    return;
+  }
+
+  const rows = await execSql(`SELECT id FROM users WHERE phone = '${e164}' LIMIT 1`);
+  const id = rows[0]?.id as string | undefined;
+  if (!id) throw new Error(`ensureAuthSession: no users row for ${e164}`);
+
+  const admin = createClient(QA_URL, QA_SERVICE_ROLE, { auth: { persistSession: false, autoRefreshToken: false } });
+  const existing = await admin.auth.admin.getUserById(id);
+  if (existing.data?.user) {
+    const { error } = await admin.auth.admin.updateUserById(id, { email, password, email_confirm: true, phone: e164 });
+    if (error) throw new Error(`ensureAuthSession (update ${e164}): ${error.message}`);
+  } else {
+    const { error } = await admin.auth.admin.createUser({ id, email, password, email_confirm: true, phone: e164 });
+    if (error) throw new Error(`ensureAuthSession (create ${e164}): ${error.message}`);
+  }
+
+  _ensuredPhones.add(e164);
+}
+
+/**
+ * Establish a REAL Supabase Auth session by driving the app's own login flow
+ * (phone -> dev OTP -> set/confirm PIN).
+ *
+ * WHY THIS EXISTS: the backend now derives the acting user from the JWT and
+ * enforces permissions, RLS and branch scope. Injecting localStorage alone (the
+ * old approach) leaves the page with NO session, so every RLS-protected read
+ * returns 401 and every tenant-owned write is refused — the screens then render
+ * empty and RPC-based assertions fail for reasons unrelated to the feature under
+ * test. Verified cause of the previously failing E2E specs.
+ */
+export async function loginViaUi(page: Page, phone: string) {
+  const OTP = '123456';
+  const PIN = '4321';
+
+  // The credential must exist before the UI can sign in (see ensureAuthSession).
+  await ensureAuthSession(phone);
+
+  // Start clean so a re-entry during a test re-runs the flow instead of being
+  // redirected away from /login by the authenticated route guard.
+  await page.goto(`${BASE_URL}/login`).catch(() => undefined);
+  await page.evaluate(() => {
+    localStorage.removeItem('agri_auth');
+    for (const k of Object.keys(localStorage)) {
+      if (/^sb-/.test(k)) localStorage.removeItem(k);
+    }
+  }).catch(() => undefined);
+
+  await page.goto(`${BASE_URL}/login`);
+  await page.getByPlaceholder('e.g. 03001234567').fill(phone);
+  await page.getByRole('button', { name: 'Send Code' }).click();
+  await page.waitForURL(/\/login\/otp/, { timeout: 20000 });
+
+  const boxes = page.locator('input[inputmode="numeric"]:not([tabindex="-1"])');
+  await expect(boxes).toHaveCount(6);
+  for (let i = 0; i < OTP.length; i++) {
+    await boxes.nth(i).fill(OTP[i]);
+  }
+
+  await page.waitForURL(/pin-set|\/admin\/dashboard|\/employee\/dashboard/, { timeout: 30000 });
+  if (page.url().includes('pin-set')) {
+    for (const d of PIN) await page.getByRole('button', { name: d, exact: true }).first().click();
+    await page.waitForTimeout(400);
+    for (const d of PIN) await page.getByRole('button', { name: d, exact: true }).first().click();
+    await page.waitForURL(/\/(admin|employee)\/dashboard/, { timeout: 30000 });
+  }
+  await page.waitForTimeout(1200); // let stores hydrate from Supabase
+}
+
 /** Inject admin auth state into the page's localStorage */
 export async function injectAdminAuth(page: Page) {
+  // The QA admin's REAL membership in the QA database is owner/active, and the
+  // admin routes are gated by PermissionGuard, which reads membershipRole and
+  // permissions from this persisted user. Omitting them makes deep /admin/*
+  // navigation silently redirect to the dashboard (guards deny), so the fixture
+  // must mirror the authoritative membership row rather than a legacy role only.
   const adminUser = {
     id: QA_IDS.admin,
     name: 'QA Admin',
     phone: '923009999999',
     role: 'admin',
+    tenantId: QA_IDS.shop,
+    membershipRole: 'owner',
+    permissions: ['*'],
     isOriginalOwner: true,
     pin: '1234',
     isActive: true,
@@ -124,6 +243,10 @@ export async function injectAdminAuth(page: Page) {
     createdAt: new Date().toISOString(),
     createdBy: null,
   };
+
+  // A real session is required before the injected identity is useful, because
+  // the backend authorizes from the JWT rather than from client state.
+  await loginViaUi(page, ADMIN_LOGIN_PHONE);
 
   await page.evaluate((user) => {
     // Set Zustand persist auth state
