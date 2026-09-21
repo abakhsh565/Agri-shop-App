@@ -83,4 +83,103 @@ describe('migrations are replayable', () => {
       'two files share a migration version, so `supabase db push` fails on a fresh database with a duplicate key — merge them into one file for that version',
     ).toEqual([]);
   });
+
+  /**
+   * `CREATE OR REPLACE FUNCTION` matches an existing function by argument TYPES,
+   * so redefining one with a renamed parameter raises
+   * `42P13 cannot change name of input parameter` instead of replacing it. Where
+   * the argument count differs it is a new overload and legal — only a same-count
+   * rename fails.
+   *
+   * This caught three real ones: 0015 redefined create_sale, create_purchase and
+   * process_return with `p_payload` where 0012/0014 had established `payload`, and
+   * 0112 swapped the 2nd and 3rd parameters of reject_credit_limit_request. Each
+   * now drops the old signature first, like 0025/0027/0028 already did.
+   */
+  it('no migration renames a parameter of a function it redefines', () => {
+    const files = fs.readdirSync(dir).filter((f) => f.endsWith('.sql')).sort();
+    const signatures = new Map<string, string[]>();
+    const offenders: string[] = [];
+
+    for (const file of files) {
+      const sql = fs.readFileSync(path.join(dir, file), 'utf8');
+      const dropped = new Set(
+        [...sql.matchAll(/DROP\s+FUNCTION\s+(?:IF\s+EXISTS\s+)?([a-z_][\w.]*)\s*\(/gi)].map((m) =>
+          m[1].toLowerCase(),
+        ),
+      );
+
+      for (const [, rawName, params] of sql.matchAll(
+        /CREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\s+([a-z_][\w.]*)\s*\(([^)]*)\)/gi,
+      )) {
+        const name = rawName.toLowerCase();
+        const declared = params
+          .split(',')
+          .map((p) => p.trim())
+          .filter(Boolean)
+          .map((p) => {
+            const named = p.match(/^(?:IN|OUT|INOUT)?\s*([a-z_]\w*)\s+/i);
+            return (named ? named[1] : p).toLowerCase();
+          });
+
+        const previous = signatures.get(name);
+        if (
+          previous &&
+          previous.length === declared.length &&
+          previous.join(',') !== declared.join(',') &&
+          !dropped.has(name)
+        ) {
+          offenders.push(
+            `${file}: ${name} is redefined as (${declared.join(',')}) but is (${previous.join(',')}) — drop it first, or the replay fails with 42P13`,
+          );
+        }
+        signatures.set(name, declared);
+      }
+    }
+
+    expect(
+      offenders,
+      'these redefinitions rename a parameter, which `CREATE OR REPLACE FUNCTION` refuses — DROP the old signature in the same file first',
+    ).toEqual([]);
+  });
+
+  /**
+   * This directory is a PATCH SET, not a baseline, and that must stay explicit.
+   *
+   * No migration here creates the application's base tables — `users`,
+   * `products`, `customers`, `shops`, `sales` appear in none of them. 0009 is
+   * named `complete_schema`, but its first statements are
+   * `ALTER TABLE users ADD COLUMN shop_id uuid REFERENCES shops(id)` and an
+   * `INSERT INTO shops`: it assumes a provisioned database. Replaying the
+   * directory onto an EMPTY database therefore fails immediately at 0009 with
+   * `relation "users" does not exist` and cascades — 79 of 133 files fail.
+   *
+   * That is not a defect to fix file by file; it is what this directory IS, and
+   * it is the reason a Supabase preview branch (a fork of the provisioned
+   * project) replays 0012 onward on top of its own schema. Fresh provisioning
+   * needs a baseline dumped from the real database.
+   *
+   * If someone ever adds a base-table definition here, the premise has changed
+   * and this test fails so the team re-decides instead of silently inheriting a
+   * half-baseline.
+   */
+  it('stays honest that it is a patch set and not a from-scratch baseline', () => {
+    const files = fs.readdirSync(dir).filter((f) => f.endsWith('.sql'));
+    const baseTables = ['users', 'products', 'customers', 'shops', 'sales'];
+    const creating: string[] = [];
+
+    for (const file of files) {
+      const sql = fs.readFileSync(path.join(dir, file), 'utf8');
+      for (const table of baseTables) {
+        if (new RegExp(`CREATE\\s+TABLE\\s+(IF\\s+NOT\\s+EXISTS\\s+)?(public\\.)?${table}\\b`, 'i').test(sql)) {
+          creating.push(`${file} creates ${table}`);
+        }
+      }
+    }
+
+    expect(
+      creating,
+      'the directory now creates base tables, so it is no longer purely a patch set — a from-scratch baseline may now be possible, and the migration strategy should be re-decided rather than left implicit',
+    ).toEqual([]);
+  });
 });

@@ -724,6 +724,22 @@ const MEMORIES = [
       notAttempted: 'recording versions on the parent project or squashing to a baseline — both are decisions for the project owner, and the second rewrites migration history'
     },
   },
+  {
+    category: 'technical_decision',
+    title: 'supabase/migrations is a patch set, not a baseline: no migration creates the base tables, so it can never build the schema from nothing',
+    component: 'supabase/migrations (0009_complete_schema.sql and all 133 files), tests/unit/migrationReplayability.test.ts',
+    description:
+      'Asked why the preview database already had adjust_stock(payload) before the migration that first defines it, the answer turned out to be about the directory itself. 0009 is named `complete_schema` but its first statements are `ALTER TABLE users ADD COLUMN shop_id uuid REFERENCES shops(id)` and `INSERT INTO shops(...)`: it assumes a provisioned database. NO file in the directory creates `users`, `products`, `customers`, `shops` or `sales` — only `memberships` (0094) and `roles` (0107) are created here. Replayed onto an EMPTY in-process Postgres (PGlite) with Supabase scaffolding stubbed, 0009 fails at once with `relation "users" does not exist` and it cascades to 54/133 applied and 79 failures. The parent database is not behind its ledger but ahead of it: its schema carries the state produced by the END of the history (roles, user_permissions, business_areas, reminder_configs, engineering_memory, sales.branch_id, adjust_stock(payload jsonb)) while its schema_migrations records only 0009, 0010, 0011. That is the whole explanation for a preview branch: it forks the provisioned project, inherits the 3-row ledger, and replays 0012 onward on top of a schema that already contains those objects. RULE: before treating a replay failure as a file defect, ask what the migration directory is FOR — a directory that has never created the base schema is an archive of patches applied to a provisioned database, and "make it replay from zero" is a different project (a baseline dumped from the real database), not a series of edits. Also: a test that would fail forever by design is not protection, it is noise.',
+    evidence: {
+      emptyReplay: 'PGlite with auth/storage/supabase_migrations schemas, API roles and auth.uid()/role()/jwt() stubbed → 54/133 applied, 79 failures, first failure 0009 `relation "users" does not exist`',
+      baseTablesCreatedByMigrations: 'users, products, customers, shops, sales → none; memberships (0094) and roles (0107) → yes',
+      parentLedger: 'supabase_migrations.schema_migrations on QA: 0009 complete_schema, 0010 comprehensive_rls, 0011 new_rpc_functions — three rows',
+      parentSchemaIsCurrent: 'roles, user_permissions, business_areas, reminder_configs, engineering_memory, sales.branch_id and adjust_stock(payload jsonb) all present',
+      projects: 'QA = bpybjrjenwccowvtrevu (.env.qa and .env.local), production = gkswcfljxlutkfdvvqng (src/lib/envGuard.ts); no production credentials exist in the checkout, so production was never reachable from this work',
+      guardsAdded: 'migrationReplayability now also fails on a same-arity parameter rename without a DROP (falsified: removing the create_purchase DROP made it fail) and on the directory creating a base table (so the strategy is re-decided rather than inherited)',
+      guardDeliberatelyOmitted: 'a from-zero replay assertion — it would fail forever by design, and a permanently red test is indistinguishable from no test'
+    },
+  },
 ];
 
 const client = await pool.connect();

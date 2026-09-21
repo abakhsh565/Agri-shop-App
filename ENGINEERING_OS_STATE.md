@@ -942,7 +942,61 @@ Content preservation is asserted byte-for-byte when the merge is written, and
 `migrationReplayability` now fails on any shared version (falsified: duplicating a file
 made it name `0015: 0015_flexible_units.sql, 0015_zz_temp_duplicate.sql`).
 
-**Why the preview check cannot be made green by editing migration files.** Two failures
+### Migration state — authoritative determination (evidence, not inference)
+
+Asked why the preview environment has objects before the migration that defines them, the answer is
+not a fork detail. It is that **`supabase/migrations` is a patch set, not a baseline, and cannot
+produce the application's schema from nothing under any circumstances.**
+
+Evidence, all read-only:
+
+| Question | Finding |
+|---|---|
+| Which versions does the parent record as applied? | **Only 0009, 0010, 0011** — `complete_schema`, `comprehensive_rls`, `new_rpc_functions` |
+| Is 0009 a baseline? | **No.** Its first statements are `ALTER TABLE users ADD COLUMN shop_id uuid REFERENCES shops(id)` and `INSERT INTO shops(...)`: it assumes a provisioned database. It is a *patch named complete_schema* |
+| Does any migration create the base tables? | **No.** Nothing creates `users`, `products`, `customers`, `shops` or `sales` (checked across all 133 files). Only `memberships` (0094) and `roles` (0107) are created here |
+| Is the parent's schema behind its ledger? | **The opposite.** The parent has `roles`, `user_permissions`, `business_areas`, `reminder_configs`, `engineering_memory`, `sales.branch_id` and `adjust_stock(payload jsonb)` — i.e. the state produced by the END of the history, while its ledger stops at 0011 |
+| Can the directory replay onto an empty database? | **No.** Replayed onto an empty in-process Postgres with Supabase's scaffolding stubbed, 0009 fails immediately with `relation "users" does not exist` and the failure cascades: **54/133 applied, 79 failures** |
+| Why does the preview collide with `adjust_stock`? | `adjust_stock` appears nowhere before 0015, so a function that does not exist yet can only already exist if the database already has it. The preview branch forks the provisioned project and inherits a 3-row ledger, so 0012 onward replays on top of a schema that already contains their objects |
+
+**What this means.** Two defect classes were being reported as one:
+
+* **DB-independent** — real defects that would fail anywhere: 0012's split identifier, the ten duplicate
+  versions (both fixed in this session). These block fresh provisioning and were worth fixing on their own merits.
+* **Fork-dependent** — cannot fail on an empty database, only on a fork that already has the schema: the
+  `42P13` parameter renames. The `DROP`-first edits made in this session are still correct (0015 is simply the
+  file that was missing the pattern 0025/0027/0028 already use), but they are not *sufficient*, because the next
+  fork-only conflict is always waiting.
+
+**The decision, which is the project owner's and not a fix.** A preview branch always starts from the
+provisioned schema, so replaying 0012+ there is wrong regardless of file contents:
+
+* **A — synchronize the ledger** with what the parent schema actually reflects (`supabase migration repair
+  --status applied`), so the fork inherits a complete history and future migrations get a meaningful check.
+  This writes to the parent database, so it is not done unilaterally here; note also that it makes the
+  *ledger* truthful without making the directory *replayable*.
+* **B — build a baseline** by dumping the real schema, for anyone who wants to provision a fresh environment.
+  The directory cannot supply it (see the 54/133 above). This rewrites history, so it is a deliberate call.
+
+Neither was performed. No production database was touched: `.env.qa` and `.env.local` both point at the QA
+project `bpybjrjenwccowvtrevu`, production is the separate project `gkswcfljxlutkfdvvqng`, and no credentials
+for it exist in this checkout.
+
+### Permanent protection added
+
+`tests/unit/migrationReplayability.test.ts` now has four checks, each falsified by deliberately breaking it:
+
+1. no identifier split across a line break (caught the real 0012 defect)
+2. no two files sharing a version (caught all ten real collisions)
+3. no same-arity parameter rename without a `DROP` (caught the three real 42P13 cases)
+4. the directory must stay honest that it is a patch set — it fails if a base table ever *is* created here, so
+   the strategy gets re-decided instead of inherited silently
+
+A fifth check is deliberately **not** added: "the chain applies to an empty database" would fail forever by
+design, because the base schema is not in this directory (54/133). A permanently-red test is indistinguishable
+from no test — that is the same lesson the preview check taught.
+
+**Beyond the migration question, the preview check cannot be made green by editing migration files.** Two failures
 later the shape repeated: `42P13 cannot change name of input parameter "payload"` at 0015,
 and after that `42809 "idx_customers_phone_unique" is a partial index — Cannot create a
 primary key or unique constraint using such an index`. The 0015 one is decisive, because
