@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { useNavigate, useLocation, useParams } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
@@ -40,6 +40,13 @@ export default function ReturnConfirmPage() {
   const [reason, setReason] = useState("");
   const [loading, setLoading] = useState(false);
 
+  // One confirm = one return. `loading` only disables the button after React
+  // re-renders, so a double tap gets two calls through first; the ref stops the
+  // second synchronously, and the key is minted once per attempt and HELD, so
+  // both taps carry the same key and the database records one return.
+  const submittingRef = useRef(false);
+  const submissionKeyRef = useRef<string | null>(null);
+
   // Calculate live refund total from edited prices
   const liveTotal = useMemo(
     () => items.reduce((sum, it) => sum + it.editedUnitPrice * (it.qtyToReturn ?? 0), 0),
@@ -55,10 +62,13 @@ export default function ReturnConfirmPage() {
   }
 
   async function handleConfirm() {
+    if (submittingRef.current) return;
     if (!reason.trim()) {
       addToast("Please enter a return reason", "error");
       return;
     }
+    submittingRef.current = true;
+    if (!submissionKeyRef.current) submissionKeyRef.current = `ret-${saleId}-${crypto.randomUUID()}`;
     setLoading(true);
     try {
       // Enrich each return item with productId/variantId from the original sale
@@ -76,8 +86,8 @@ export default function ReturnConfirmPage() {
         };
       });
 
-      // Generate idempotency key for offline safety
-      const idempotencyKey = `ret-${saleId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      // The attempt's key: both taps of one confirm carry the same one.
+      const idempotencyKey = submissionKeyRef.current;
 
       const rpcResult = await rpcProcessReturn({
         saleId,
@@ -104,10 +114,15 @@ export default function ReturnConfirmPage() {
         processedBy: currentUser?.name ?? "—",
       };
       notifyReturnProcessed(sale?.customerName ?? "Customer", rpcResult.totalRefund, saleId ?? "");
+      // Done: this attempt's key retires, so the next return is a new return.
+      submissionKeyRef.current = null;
       navigate(`/employee/sales/${saleId}/return/success`, { state: { result }, replace: true });
     } catch (e) {
+      // The key is KEPT on failure: the return may have been recorded and only the
+      // answer lost, so the retry must return that one, not process a second.
       addToast(e instanceof Error ? e.message : "Could not process return.", "error");
     } finally {
+      submittingRef.current = false;
       setLoading(false);
     }
   }

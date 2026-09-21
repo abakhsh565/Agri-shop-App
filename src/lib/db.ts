@@ -86,9 +86,13 @@ export async function rpcRecordSupplierPayment(payload: {
   amount: number;
   method: PaymentMethod;
   notes?: string;
-}): Promise<{ id: string; payableAfter: number }> {
+  /** Claimed by the database so one confirm cannot record two payments (0138). */
+  idempotencyKey?: string;
+}): Promise<{ id: string; payableAfter: number; idempotent?: boolean }> {
   const actorId = useAuthStore.getState().user?.id;
-  const { data, error } = await supabase.rpc("record_supplier_payment", { payload: { ...payload, actorId } });
+  const { data, error } = await supabase.rpc("record_supplier_payment", {
+    payload: { ...payload, actorId, idempotencyKey: payload.idempotencyKey },
+  });
   if (error) throw new Error(friendly(error.message));
   return data as any;
 }
@@ -100,7 +104,9 @@ export async function rpcAdjustStock(payload: {
   adjustmentType: AdjustmentType;
   qty: number;
   reason?: string;
-}): Promise<{ id: string; qtyBefore: number; qtyChange: number; qtyAfter: number }> {
+  /** Claimed by the database so one confirm cannot adjust stock twice (0139). */
+  idempotencyKey?: string;
+}): Promise<{ id: string; qtyBefore: number; qtyChange: number; qtyAfter: number; idempotent?: boolean }> {
   const actorId = useAuthStore.getState().user?.id;
   const { data, error } = await supabase.rpc("adjust_stock", { payload: { ...payload, actorId } });
   if (error) throw new Error(friendly(error.message));

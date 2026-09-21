@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
@@ -41,6 +41,14 @@ export default function InventoryAdjustPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
+  // One confirm = one adjustment. `loading` only disables the button after React
+  // re-renders, so a double tap gets two calls through first; the ref stops the
+  // second synchronously, and the key — minted once per attempt and held — makes
+  // the database apply the adjustment once even if the answer to the first call
+  // was lost (0139).
+  const submittingRef = useRef(false);
+  const submissionKeyRef = useRef<string | null>(null);
+
   if (!product) return (
     <div style={{ background: "var(--background)", color: "var(--text-primary)" }} className="flex flex-col min-h-full">
       <StatusBar />
@@ -59,6 +67,7 @@ export default function InventoryAdjustPage() {
   const change = after - before;
 
   async function handleSave() {
+    if (submittingRef.current) return;
     setError("");
     if (!product || !variant) { setError("Select a unit / variant."); return; }
     if (amt <= 0 && type !== "set") { setError("Enter an amount greater than zero."); return; }
@@ -67,6 +76,8 @@ export default function InventoryAdjustPage() {
     if (after < 0) { setError("Adjustment would make stock negative. Remove at most " + before + "."); return; }
     if (change === 0) { setError("This does not change the stock level."); return; }
 
+    submittingRef.current = true;
+    if (!submissionKeyRef.current) submissionKeyRef.current = crypto.randomUUID();
     setLoading(true);
     try {
       const res = await rpcAdjustStock({
@@ -76,7 +87,10 @@ export default function InventoryAdjustPage() {
         adjustmentType: type,
         qty: amt,
         reason: reason.trim() || undefined,
+        idempotencyKey: submissionKeyRef.current,
       });
+      // Done: this attempt's key retires, so the next adjustment is a new one.
+      submissionKeyRef.current = null;
 
       addToast(`${product.name} · ${variant.name} → ${res.qtyAfter} units`, "success");
       // Create notification (client-side fallback for when migration 0015 isn't applied)
@@ -92,8 +106,11 @@ export default function InventoryAdjustPage() {
       } catch { /* notification is best-effort */ }
       navigate("/admin/products", { replace: true });
     } catch (err) {
+      // The key is KEPT on failure: the adjustment may have been applied and only
+      // the answer lost, so the retry must return that one, not apply a second.
       setError(err instanceof Error ? err.message : "Could not adjust stock.");
     } finally {
+      submittingRef.current = false;
       setLoading(false);
     }
   }

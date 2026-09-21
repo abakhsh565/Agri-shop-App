@@ -545,6 +545,32 @@ const MEMORIES = [
       regression: 'vitest 381/381 on two consecutive full runs'
     },
   },
+  {
+    category: 'failure_pattern',
+    title: 'The sale fix was one instance of a class: supplier payments, voids, returns and stock adjustments all duplicated on a double tap',
+    component: 'supabase/migrations/0138_payment_and_void_single_action.sql, 0139_adjust_stock_idempotency.sql, src/lib/db.ts, src/pages/**/{RecordSupplierPaymentPage,RecordCustomerPaymentPage,ReturnConfirmPage,AdminReturnConfirmPage,InventoryAdjustPage}.tsx',
+    description:
+      'After the reported double-tap sale defect was fixed in 0134, every other consequential money/inventory action was submitted the same way a double tap submits it (two simultaneous calls, real JWT) and judged on the database:\n\n  * record_supplier_payment had NO idempotency at all — two payments recorded, payable reduced twice (10,000 -> 9,000 instead of 9,500). Money the shop never paid. Fixed by mirroring 0080: an idempotency_key column with a partial unique index, and the key CLAIMED by the insert BEFORE the payable moves, so a duplicate loses the claim and cannot touch the balance.\n  * void_sale read is_voided and then acted on it — a read-then-act race. Both concurrent calls passed the check, both inserted a voids row and an inventory movement, and both wrote product_variants.stock_qty (a lost update, so the restored quantity was whatever the last writer computed). Fixed by reading the sale FOR UPDATE, which holds the decision until it is carried out; the loser waits, sees the truth and is refused with the message the UI already shows.\n  * adjust_stock had no idempotency either — the adjustment applied twice, moving stock 50 -> 60 and logging two movements for one decision. Fixed in 0139 with the same claim-then-apply shape.\n  * the payment and return PAGES minted their idempotency key inside the submit handler, so even the paths that HAD a unique index sent a different key on each tap — the database had nothing to de-duplicate on. Every such page now holds one key per attempt (minted once, retired on success, kept on failure so a retry after a lost response returns the original action) and refuses a re-entrant confirm synchronously, because the button\'s disabled state only applies after React re-renders.\n\nVerified in the browser by dispatching both clicks in ONE JavaScript task, which is the only faithful reproduction of a double tap: two awaited Playwright clicks are not, because the browser re-renders between them and the button is already disabled. Removing the client guard fails that test with Received: 2.',
+    evidence: {
+      before: '.freebuff/tmp/prove-duplicate-taps.mjs and prove-more-taps.mjs against QA: supplier payment 2 rows / payable 10000->9000; double void 2 voids + 2 movements; return with a per-call key 2 returns, stock 48->50 instead of 49; adjustment 2 movements, stock 50->60 instead of 55; customer payment submitted the way the old page submitted it 2 rows, balance 1000->400',
+      after: 'same scripts: one payment / payable 9500; one void, one movement, stock restored once; one return, stock +1; one adjustment, stock +5; two simultaneous customer payments on one key 1 row, balance 700',
+      browser: 'tests/e2e/doubleTapSafety.spec.ts 2/2 — double tap on the customer payment confirm and on the supplier payment confirm each record exactly ONE row, and the balance/payable move once; falsification: with the client guard removed the same test fails with Received: 2',
+      permanent: 'tests/integration/duplicateActionSafety.test.ts 7/7 (concurrent duplicate, sequential retry returning idempotent:true, and un-keyed backward compatibility for both supplier payments and adjustments; concurrent void refused with "already voided" and stock restored once)',
+      regression: 'vitest 388/388 across 32 files, tsc clean, production build clean; splitPayment 2/2 and crossScreenSync 13/13 unaffected',
+      fixedIn: '0138 + 0139 + the five pages above'
+    },
+  },
+  {
+    category: 'prevention_rule',
+    title: 'A key minted inside the submit handler de-duplicates nothing',
+    component: 'src/pages/**/RecordCustomerPaymentPage.tsx, RecordSupplierPaymentPage.tsx, InventoryAdjustPage.tsx, {AdminReturnConfirmPage,ReturnConfirmPage}.tsx',
+    description:
+      'The sale path already did this correctly (a ref holding one key per attempt), but every other money page generated its key as the first statement of the handler. A unique index can only reject a duplicate if both submissions carry the SAME key, so a page that mints a fresh key per call guarantees two rows per tap no matter how good the database guard is — the idempotency was present, tested with a hand-written shared key, and still ineffective in the product. The rule: the key belongs to the ATTEMPT, not to the call. It is minted once when the attempt starts, held across every retry of that attempt, retired when the action succeeds, and kept when it fails so a retry after a lost response returns the recorded action instead of repeating it. A synchronous re-entry guard (a ref, not the loading state) accompanies it, because React applies disabled only on the next render.',
+    evidence: {
+      illustration: 'the same business action is two rows with a per-call key and one row with a per-attempt key (probe A vs A2 in prove-duplicate-taps.mjs)',
+      enforcedBy: 'tests/e2e/doubleTapSafety.spec.ts (browser, two clicks in one task) and tests/integration/duplicateActionSafety.test.ts (database, simultaneous calls)'
+    },
+  },
 ];
 
 const client = await pool.connect();

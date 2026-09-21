@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
@@ -35,6 +35,14 @@ export default function RecordCustomerPaymentPage() {
   const [notes, setNotes] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  // One confirm = one payment. The button's `disabled` only applies after React
+  // re-renders, so a double tap reaches this function twice; the ref stops the
+  // second call synchronously, and the key — minted once per attempt and held —
+  // makes the database return the first payment instead of recording a second
+  // one if the answer to the first call was lost.
+  const submittingRef = useRef(false);
+  const submissionKeyRef = useRef<string | null>(null);
 
   // Split payment state
   const [splitMode, setSplitMode] = useState(false);
@@ -76,6 +84,7 @@ export default function RecordCustomerPaymentPage() {
   }
 
   async function handleConfirm() {
+    if (submittingRef.current) return;
     setError("");
     if (totalPaid <= 0) { setError(t("recordPayment.errEmpty")); return; }
     if (totalPaid > customer!.outstandingBalance) { setError(t("recordPayment.errExceeds")); return; }
@@ -90,12 +99,15 @@ export default function RecordCustomerPaymentPage() {
       }
     }
 
+    submittingRef.current = true;
+    if (!submissionKeyRef.current) submissionKeyRef.current = crypto.randomUUID();
     setLoading(true);
     try {
       if (splitMode) {
         await rpcRecordCustomerPayment({
           customerId: customer!.id,
           notes,
+          idempotencyKey: submissionKeyRef.current,
           splits: splits
             .filter((s) => (Number(s.amount) || 0) > 0)
             .map((s) => ({ amount: Number(s.amount), method: s.method })),
@@ -106,8 +118,11 @@ export default function RecordCustomerPaymentPage() {
           amount: totalPaid,
           method,
           notes,
+          idempotencyKey: submissionKeyRef.current,
         });
       }
+      // Done: this attempt's key retires, so the next payment is a new payment.
+      submissionKeyRef.current = null;
       // Invalidate cache so load() fetches fresh data from Supabase
       try {
         localStorage.removeItem("agrishop_cache_customers");
@@ -117,8 +132,11 @@ export default function RecordCustomerPaymentPage() {
       notifyPaymentReceived(customer!.name, totalPaid, customer!.id);
       navigate(`${base}/customers/${customerId}`, { replace: true });
     } catch (e) {
+      // The key is KEPT on failure: the attempt may have reached the database and
+      // only the answer was lost, so the retry must not be a new payment.
       setError(e instanceof Error ? e.message : String(e));
     } finally {
+      submittingRef.current = false;
       setLoading(false);
     }
   }

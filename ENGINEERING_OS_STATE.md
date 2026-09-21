@@ -1,6 +1,6 @@
 # Engineering OS — Project State
 
-**As of:** 2026-09-21 · **Commit:** `372738c` (last verified) + uncommitted invitation-acceptance work (0135–0137) · **Environment:** QA only (`bpybjrjenwccowvtrevu`)
+**As of:** 2026-09-21 · **Commit:** `dc334cd` (last verified) + uncommitted duplicate-action work (0138–0139) · **Environment:** QA only (`bpybjrjenwccowvtrevu`)
 
 Production has not been touched. Every claim below names the evidence that supports it.
 
@@ -29,7 +29,8 @@ Production has not been touched. Every claim below names the evidence that suppo
 | Audit | Verified | `audit_events` records role/access changes with the acting user; employee override save + reset both attributed. |
 | Live session behaviour | Verified | Role change / membership deactivation revoke access at the next authorization boundary; no stale client cache can grant it. |
 | Role lifecycle safety | Verified | `ROLE_IN_USE` (employees still on it), `SYSTEM_ROLE_READ_ONLY`. |
-| QA verification | Verified | 337/337 Vitest across 23 files (5 consecutive full runs, 0 failures); **58/58 Playwright E2E, 0 failures**; TypeScript clean; production build passes. |
+| QA verification | Verified | 388/388 Vitest across 32 files; TypeScript clean; production build passes; Playwright run in real Chrome — 58/58 at the last full run, plus 17/17 for the suites affected by the latest change (§1.18). |
+| Duplicate-action safety | Verified | One confirm = one action, protected in the database, for sale (0134), supplier payment and void (0138) and stock adjustment (0139); every money page holds one key per attempt. Browser double-tap proof + falsification, and a permanent integration suite — see §1.18. |
 | Permanent regression protection | Verified | `tests/integration/rbacInvariants.test.ts` fails the build if any original defect class returns. |
 | Display attribution integrity | Verified | Every denormalized party name is backfilled and structurally stamped (0124/0125) — see §1.1. |
 
@@ -728,6 +729,55 @@ version-dependent — the equivalent admin-API call inside a server-side functio
 long-term home; the gate, idempotency and credential contract stay the same either way.
 (c) Role *names and descriptions* are tenant data, so they render as entered in Urdu mode;
 translating them means a translation table or seeded Urdu role text.
+
+---
+
+### 1.18 The double-tap fix was one instance of a class (2026-09-21)
+
+The owner's report — *"I double-click confirm and it creates two sales"* — was fixed for
+sales in 0134. Rather than close it there, **every** consequential money/inventory action was
+submitted the way the UI submits it (two simultaneous calls with a real JWT) and judged on the
+database. Three more instances were real:
+
+| Action | Defect found (reproduced on QA) | Fix |
+|---|---|---|
+| Record supplier payment | No idempotency at all — two payments recorded, payable reduced twice (10,000 → 9,000 instead of 9,500). Money the shop never paid. | **0138**: `idempotency_key` + partial unique index; the key is CLAIMED by the insert before the payable moves |
+| Void a sale | Read-then-act race: both calls passed the `is_voided` check, wrote two `voids` rows, two inventory movements, and both wrote the variant stock (a lost update, so the restored quantity was whatever the last writer computed) | **0138**: the sale is read `FOR UPDATE`, so the decision is held until it is carried out; the loser waits, sees the truth, and is refused with the message the UI already shows |
+| Adjust stock | No idempotency either — the adjustment applied twice, moving stock 50 → 60 and logging two movements for one decision | **0139**: same claim-then-apply shape |
+
+**The client half, which the database cannot cover.** The payment and return **pages** minted
+their key inside the submit handler, so even the paths that already had a unique index sent a
+different key on each tap — the guard was present, tested, and still ineffective in the
+product. Every one of those pages now holds **one key per attempt** (minted once, retired on
+success, kept on failure so a retry after a lost response returns the recorded action instead
+of repeating it) and refuses a re-entrant confirm synchronously, because the button's
+`disabled` state only applies on the next render. That last point is the whole bug: React
+re-renders *after* the handler, so a second click in the same task reaches the RPC twice.
+
+**Evidence.**
+
+- Database, real JWT (`.freebuff/tmp/prove-duplicate-taps.mjs`, `prove-more-taps.mjs`): before
+  → supplier payment 2 rows / payable 9,000, double void 2 voids + 2 movements, return 2 rows
+  and stock 48→50 (instead of 49), adjustment 2 movements and stock 50→60 (instead of 55),
+  customer payment submitted the old way 2 rows / balance 1,000→400. After → one row each,
+  money and stock moving once.
+- Browser (`tests/e2e/doubleTapSafety.spec.ts`, 2/2): both clicks are dispatched in **one
+  JavaScript task**, which is the only faithful reproduction of a double tap — two awaited
+  Playwright clicks are not, because the browser re-renders between them and the button is
+  already disabled. Double-tapping the customer and supplier payment confirms each records
+  exactly **one** row and moves the balance/payable once.
+- **Falsification:** with the page's re-entry guard removed the browser test fails with
+  `Received: 2` — the reported defect, reproduced by the test.
+- Permanent regression: `tests/integration/duplicateActionSafety.test.ts` 7/7 (concurrent
+  duplicate, sequential retry returning `idempotent:true`, and un-keyed backward compatibility
+  for supplier payments and adjustments; a concurrent void refused with *"already voided"* and
+  stock restored once).
+
+**Regression at this point:** vitest **388/388 across 32 files** · `tsc` clean · production
+build clean · affected E2E re-run in real Chrome: `doubleTapSafety` 2/2, `splitPayment` 2/2,
+`crossScreenSync` 13/13 (the full Playwright suite was not re-run for this change) · QA
+baseline clean (4 users, 0 sales/payments/voids/adjustments, 0 users without a membership) ·
+Engineering Memory `active=37, superseded=1` · production untouched.
 
 ---
 

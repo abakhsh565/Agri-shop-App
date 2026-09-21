@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { useNavigate, useLocation, useParams } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
@@ -35,6 +35,13 @@ export default function AdminReturnConfirmPage() {
   const [reason, setReason] = useState("");
   const [loading, setLoading] = useState(false);
 
+  // One confirm = one return. `loading` only disables the button after React
+  // re-renders, so a double tap gets two calls through first; the ref stops the
+  // second synchronously, and the key is minted once per attempt and HELD, so
+  // both taps carry the same key and the database records one return.
+  const submittingRef = useRef(false);
+  const submissionKeyRef = useRef<string | null>(null);
+
   const liveTotal = useMemo(
     () => items.reduce((sum, it) => sum + it.editedUnitPrice * (it.qtyToReturn ?? 0), 0),
     [items]
@@ -47,10 +54,13 @@ export default function AdminReturnConfirmPage() {
   }
 
   async function handleConfirm() {
+    if (submittingRef.current) return;
     if (!reason.trim()) {
       addToast("Please enter a return reason", "error");
       return;
     }
+    submittingRef.current = true;
+    if (!submissionKeyRef.current) submissionKeyRef.current = `ret-${saleId}-${crypto.randomUUID()}`;
     setLoading(true);
     try {
       // Build RPC items from editable items
@@ -68,7 +78,8 @@ export default function AdminReturnConfirmPage() {
         };
       });
 
-      const idempotencyKey = `ret-${saleId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      // The attempt's key: both taps of one confirm carry the same one.
+      const idempotencyKey = submissionKeyRef.current;
 
       // Use the same atomic RPC as the Employee path
       const rpcResult = await rpcProcessReturn({
@@ -96,10 +107,15 @@ export default function AdminReturnConfirmPage() {
         processedBy: currentUser?.name ?? "—",
       };
       notifyReturnProcessed(sale?.customerName ?? "Customer", rpcResult.totalRefund, saleId ?? "");
+      // Done: this attempt's key retires, so the next return is a new return.
+      submissionKeyRef.current = null;
       navigate(`/admin/sales/${saleId}/return/success`, { state: { result }, replace: true });
     } catch (e) {
+      // The key is KEPT on failure: the return may have been recorded and only the
+      // answer lost, so the retry must return that one, not process a second.
       addToast(e instanceof Error ? e.message : "Could not process return.", "error");
     } finally {
+      submittingRef.current = false;
       setLoading(false);
     }
   }

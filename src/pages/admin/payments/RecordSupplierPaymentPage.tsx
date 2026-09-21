@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
@@ -26,16 +26,27 @@ export default function RecordSupplierPaymentPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
+  // One confirm = one payment. `loading` only disables the button after React
+  // re-renders, so a double tap gets two calls through before that happens; the
+  // ref stops the second one synchronously. The key is minted once per attempt
+  // and held, so a retry after a lost response returns the payment the shop
+  // already recorded instead of paying the supplier twice (0138).
+  const submittingRef = useRef(false);
+  const submissionKeyRef = useRef<string | null>(null);
+
   if (!company) return null;
 
   const paid = Number(amount) || 0;
   const newPayable = Math.max(0, company.outstandingPayable - paid);
 
   async function handleConfirm() {
+    if (submittingRef.current) return;
     setError("");
     if (paid <= 0) { setError("Enter an amount greater than zero."); return; }
     if (paid > company!.outstandingPayable) { setError("Amount exceeds the outstanding payable."); return; }
 
+    submittingRef.current = true;
+    if (!submissionKeyRef.current) submissionKeyRef.current = crypto.randomUUID();
     setLoading(true);
     try {
       // PRD §9 / §21: reduce payable; payment is a permanent event (never rewrites history).
@@ -44,13 +55,19 @@ export default function RecordSupplierPaymentPage() {
         amount: paid,
         method,
         notes: "",
+        idempotencyKey: submissionKeyRef.current,
       });
+      // Done: this attempt's key retires, so a later payment is a new payment.
+      submissionKeyRef.current = null;
 
       addToast(`${formatCurrency(paid)} paid to ${company!.name}`, "success");
       navigate("/admin/payments", { replace: true });
     } catch (e) {
+      // The key is KEPT on failure: the attempt may have reached the database and
+      // only the answer was lost, so the retry must not be treated as a new payment.
       setError(e instanceof Error ? e.message : "Could not record payment. Please try again.");
     } finally {
+      submittingRef.current = false;
       setLoading(false);
     }
   }
