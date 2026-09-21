@@ -895,6 +895,11 @@ END;
 $function$;
 GRANT EXECUTE ON FUNCTION public.approve_credit_limit_request(uuid, text) TO authenticated;
 
+-- 0066/0083 defined this as (p_request_id, p_reviewed_by, p_rejection_reason).
+-- The argument TYPES are the same, so CREATE OR REPLACE would try to replace it
+-- and refuse: "cannot change name of input parameter". Drop the old signature.
+DROP FUNCTION IF EXISTS public.reject_credit_limit_request(uuid, text, text);
+
 CREATE OR REPLACE FUNCTION public.reject_credit_limit_request(p_request_id uuid, p_rejection_reason text, p_reviewed_by text)
 RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public'

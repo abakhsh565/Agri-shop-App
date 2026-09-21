@@ -84,6 +84,13 @@ CREATE INDEX IF NOT EXISTS idx_products_stock_qty ON products (stock_qty);
 -- Uses numeric(14,4) to avoid floating-point accumulation errors.
 -- Oversell is rejected by the WHERE stock_qty >= deduction condition.
 
+-- CREATE OR REPLACE cannot change an input parameter's name, and 0012 already
+-- created this function as create_sale(payload jsonb). Drop it first, the same
+-- way 0025/0027/0028 do, so applying the migrations in order to a fresh database
+-- does not stop here with "cannot change name of input parameter payload".
+DROP FUNCTION IF EXISTS create_sale(p_payload jsonb);
+DROP FUNCTION IF EXISTS create_sale(payload jsonb);
+
 CREATE OR REPLACE FUNCTION create_sale(p_payload jsonb)
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -213,6 +220,11 @@ $$;
 -- STEP 6: Atomic RPC — create_purchase (adds product-level stock)
 -- ═══════════════════════════════════════════════════════════════════════════════
 
+-- Same rename problem as create_sale above: 0012 created this as
+-- create_purchase(payload jsonb), and CREATE OR REPLACE cannot rename it.
+DROP FUNCTION IF EXISTS create_purchase(p_payload jsonb);
+DROP FUNCTION IF EXISTS create_purchase(payload jsonb);
+
 CREATE OR REPLACE FUNCTION create_purchase(p_payload jsonb)
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -341,6 +353,10 @@ $$;
 -- ═══════════════════════════════════════════════════════════════════════════════
 -- STEP 8: Atomic RPC — process_return (restores stock using historical unitSize)
 -- ═══════════════════════════════════════════════════════════════════════════════
+
+-- Same rename problem: 0014 created this as process_return(payload jsonb).
+DROP FUNCTION IF EXISTS process_return(p_payload jsonb);
+DROP FUNCTION IF EXISTS process_return(payload jsonb);
 
 CREATE OR REPLACE FUNCTION process_return(p_payload jsonb)
 RETURNS jsonb
