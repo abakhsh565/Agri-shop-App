@@ -1,3 +1,10 @@
+-- MERGED: two files shared migration version 0058, which makes a
+-- fresh `supabase db push` fail with a duplicate key on
+-- supabase_migrations.schema_migrations. Both bodies follow, in the order the
+-- runner would have applied them:
+--   1. 0058_fix_admin_profile_rls.sql
+--   2. 0058_grant_archive_restore_anon.sql
+
 -- ============================================================
 -- Migration 0058: Fix Admin Profile Save
 --
@@ -41,4 +48,16 @@ CREATE POLICY "users_select" ON users
   USING (true);
 
 -- Force PostgREST to reload schema
+NOTIFY pgrst, 'reload schema';
+
+-- ============================================================
+-- Migration 0058: Grant Archive/Restore RPCs to Anon
+-- ============================================================
+
+-- Grant archive_customer to anon
+GRANT EXECUTE ON FUNCTION archive_customer(uuid, uuid) TO anon;
+
+-- Grant restore_customer to anon
+GRANT EXECUTE ON FUNCTION restore_customer(uuid) TO anon;
+
 NOTIFY pgrst, 'reload schema';

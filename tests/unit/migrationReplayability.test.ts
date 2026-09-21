@@ -49,4 +49,38 @@ describe('migrations are replayable', () => {
       'these migration lines split an identifier across a line break, so a fresh replay fails with a syntax error — join them back into one statement',
     ).toEqual([]);
   });
+
+  /**
+   * Two files may not share a version number.
+   *
+   * The runner records each applied file in
+   * `supabase_migrations.schema_migrations` keyed by version, so the second file
+   * of a shared version fails with
+   * `duplicate key value violates unique constraint "schema_migrations_pkey"`
+   * and a fresh database can never be provisioned. Ten versions collided here
+   * (0014, 0028, 0029, 0042, 0047, 0056, 0057, 0058, 0091, 20260903) — the reason
+   * the Supabase Preview check reported the failure at 0014.
+   *
+   * Fixing a collision by merging the two files into one keeps the statements in
+   * their original order and introduces no version that an existing database
+   * would treat as unapplied.
+   */
+  it('no two migrations share a version number', () => {
+    const files = fs.readdirSync(dir).filter((f) => f.endsWith('.sql'));
+    const byVersion = new Map<string, string[]>();
+
+    for (const file of files) {
+      const version = file.split('_')[0];
+      byVersion.set(version, [...(byVersion.get(version) ?? []), file]);
+    }
+
+    const collisions = [...byVersion.entries()]
+      .filter(([, list]) => list.length > 1)
+      .map(([version, list]) => `${version}: ${list.sort().join(', ')}`);
+
+    expect(
+      collisions,
+      'two files share a migration version, so `supabase db push` fails on a fresh database with a duplicate key — merge them into one file for that version',
+    ).toEqual([]);
+  });
 });

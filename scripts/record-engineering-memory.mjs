@@ -695,6 +695,21 @@ const MEMORIES = [
       scope: 'one file (authStore.ts), 35 lines; no authorization, RPC or business rule touched',
     },
   },
+  {
+    category: 'failure_pattern',
+    title: 'Ten migration versions collided, so a fresh database could never be provisioned at all',
+    component: 'supabase/migrations (0014, 0028, 0029, 0042, 0047, 0056, 0057, 0058, 0091, 20260903), tests/unit/migrationReplayability.test.ts',
+    description:
+      'Once migration 0012 could be replayed, the Supabase Preview check advanced past it and stopped on `ERROR: duplicate key value violates unique constraint "schema_migrations_pkey" Key (version)=(0014) already exists`. The migration runner records every applied file in supabase_migrations.schema_migrations KEYED BY VERSION, so two files sharing a version can never both be applied: the second always collides. Ten versions were shared by two files each. The reason nothing ever noticed is the same as for 0012, and it is worth stating plainly: these files were written in pairs and applied by hand in the SQL editor (several say so in their own header), so the CLI bookkeeping path was never exercised — QA has only versions 0009, 0010 and 0011 recorded. Only a FRESH database pays, and the only thing that provisions a fresh database is the preview branch, whose check had been red for so long that its failure was being read as background noise. RULE: a directory of migrations that no automation has ever applied from scratch is not a deployment path, it is an archive; and a permanently-red check is indistinguishable from no check.',
+    evidence: {
+      symptom: 'Supabase Preview: duplicate key value violates unique constraint "schema_migrations_pkey", Key (version)=(0014) already exists',
+      collisions: '0014, 0028, 0029, 0042, 0047, 0056, 0057, 0058, 0091, 20260903 — found by grouping the filenames by version prefix, not by reading them',
+      fixShape: 'each pair merged into ONE file for that version, both bodies in the runner\'s original order; no new version is introduced, so an existing database re-runs nothing; migrations 143 -> 133',
+      contentProof: 'the merge script asserts the written file equals header + both bodies byte-for-byte and re-reads it; nothing was retyped by hand',
+      guard: 'tests/unit/migrationReplayability.test.ts now fails on any shared version — falsified by duplicating a file, which produced "0015: 0015_flexible_units.sql, 0015_zz_temp_duplicate.sql"',
+      regression: 'vitest 401/401 across 36 files, tsc clean, production build clean, accessUx + otpResume 9/9'
+    },
+  },
 ];
 
 const client = await pool.connect();

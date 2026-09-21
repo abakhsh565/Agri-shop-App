@@ -1,3 +1,19 @@
+-- MERGED: two files shared migration version 0047, which makes a
+-- fresh `supabase db push` fail with a duplicate key on
+-- supabase_migrations.schema_migrations. Both bodies follow, in the order the
+-- runner would have applied them:
+--   1. 0047_add_unit_size_to_purchase_items.sql
+--   2. 0047_fix_purchase_rpcs.sql
+
+-- 0047: Add missing unit_size column to purchase_items
+-- The create_purchase RPC (migrations 0027-0029) inserts unit_size but the column
+-- was never added to the table, causing "column unit_size does not exist" error.
+
+ALTER TABLE purchase_items
+  ADD COLUMN IF NOT EXISTS unit_size numeric(14,4) NOT NULL DEFAULT 1;
+
+NOTIFY pgrst, 'reload schema';
+
 -- 0047: Fix purchase_items schema + create_purchase RPC
 -- Two issues:
 -- 1. purchase_items.unit_size column missing (RPC tries to INSERT it)

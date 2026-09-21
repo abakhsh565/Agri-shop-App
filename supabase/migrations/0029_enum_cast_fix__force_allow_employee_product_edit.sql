@@ -1,3 +1,10 @@
+-- MERGED: two files shared migration version 0029, which makes a
+-- fresh `supabase db push` fail with a duplicate key on
+-- supabase_migrations.schema_migrations. Both bodies follow, in the order the
+-- runner would have applied them:
+--   1. 0029_enum_cast_fix.sql
+--   2. 0029_force_allow_employee_product_edit.sql
+
 -- FINAL FIX: Add enum type casts to all 6 functions
 -- payment_method, adjustment_kind, payment_type are PostgreSQL ENUMs
 
@@ -24,3 +31,23 @@ CREATE OR REPLACE FUNCTION create_purchase(payload jsonb) RETURNS jsonb LANGUAGE
 DROP FUNCTION IF EXISTS process_return(payload jsonb);
 DROP FUNCTION IF EXISTS process_return(p_payload jsonb);
 CREATE OR REPLACE FUNCTION process_return(payload jsonb) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$ DECLARE v_id uuid; v_number text; v_total numeric(14,4) := 0; v_item jsonb; BEGIN v_number := 'RET-' || LPAD(FLOOR(RANDOM()*99999)::text, 5, '0'); INSERT INTO returns (id, return_number, sale_id, customer_id, customer_name, total_refund, resolution, shop_id, created_at, updated_at) VALUES (gen_random_uuid(), v_number, NULLIF(payload->>'saleId','')::uuid, NULLIF(payload->>'customerId','')::uuid, COALESCE(payload->>'customerName','Customer'), 0, 'refund', '00000000-0000-0000-0000-000000000001', now(), now()) RETURNING id INTO v_id; FOR v_item IN SELECT * FROM jsonb_array_elements(COALESCE(payload->'items','[]'::jsonb)) LOOP v_total := v_total + (v_item->>'lineTotal')::numeric; INSERT INTO return_items (id, return_id, sale_item_id, product_id, variant_id, product_name, variant_name, qty, unit_price, line_total) VALUES (gen_random_uuid(), v_id, NULLIF(v_item->>'saleItemId','')::uuid, NULLIF(v_item->>'productId','')::uuid, NULLIF(v_item->>'variantId','')::uuid, v_item->>'productName', COALESCE(v_item->>'variantName',''), (v_item->>'qty')::numeric, (v_item->>'unitPrice')::numeric, (v_item->>'lineTotal')::numeric); UPDATE products SET stock_qty = stock_qty + (v_item->>'qty')::numeric WHERE id = NULLIF(v_item->>'productId','')::uuid; END LOOP; UPDATE returns SET total_refund = v_total WHERE id = v_id; RETURN jsonb_build_object('id', v_id, 'returnNumber', v_number, 'refundAmount', v_total); END; $$;
+
+-- Force drop and recreate the products update policy
+-- This handles cases where the policy name varies (quoted vs unquoted)
+
+DO $$ 
+BEGIN
+  -- Drop all existing update policies on products
+  DROP POLICY IF EXISTS products_admin_update ON products;
+  DROP POLICY IF EXISTS "products_admin_update" ON products;
+  DROP POLICY IF EXISTS products_update_all ON products;
+  DROP POLICY IF EXISTS "products_update_all" ON products;
+  DROP POLICY IF EXISTS products_owner_update ON products;
+  DROP POLICY IF EXISTS "products_owner_update" ON products;
+END $$;
+
+-- Create a single permissive policy that allows any authenticated user to update products
+CREATE POLICY "products_update_all" ON products
+  FOR UPDATE
+  USING (true)
+  WITH CHECK (true);

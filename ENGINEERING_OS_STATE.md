@@ -928,6 +928,20 @@ there. Reproduced in an in-process Postgres: the corrupt text fails with CI's
 byte-identical message, the joined line replays without error, and reintroducing the split
 makes `tests/unit/migrationReplayability.test.ts` fail naming `0012…:167`.
 
+**Fixed — ten migration versions collided, so a fresh database could never be
+provisioned.** With 0012 joined, the check moved past it and failed at
+`ERROR: duplicate key value violates unique constraint "schema_migrations_pkey"
+Key (version)=(0014) already exists`. Two files shared version 0014, and the runner keys
+its bookkeeping on the version, so the second one always fails. Ten versions collided in
+total (0014, 0028, 0029, 0042, 0047, 0056, 0057, 0058, 0091, 20260903): these were
+authored in pairs and applied by hand in the SQL editor, which is why nothing ever
+noticed. Each pair is now ONE file per version containing both bodies in the order the
+runner would have used them — the version set is unchanged, so no existing database
+re-runs anything, and no statement moves relative to another. Migrations 143 → 133.
+Content preservation is asserted byte-for-byte when the merge is written, and
+`migrationReplayability` now fails on any shared version (falsified: duplicating a file
+made it name `0015: 0015_flexible_units.sql, 0015_zz_temp_duplicate.sql`).
+
 **Blocked, needs the account owner — no workflow job can start.** Every run of
 `build-apk.yml` and `backup-database.yml` fails with the job never reaching a runner:
 `runner_name=""`, `steps=0`, whole job 3 seconds (`2026-09-21T15:37:19Z` →
@@ -958,5 +972,9 @@ worked around: a locally built APK is not the release artifact.
    test-helper change (it was 77 passed / 1 infrastructure failure before it); the affected
    run is green at **22/22** for the seven specs this stage touches, and CI would otherwise
    supply the full run if item 1 did not block it.
-7. The migration fix still needs the `Supabase Preview` check itself to go green on the
-   next push; the local replay proves the file parses, only the check proves it lands.
+7. The migration fixes (0012 joined, ten collisions merged) still need the `Supabase
+   Preview` check to reach a green conclusion on the next push. The 0012 fix is already
+   proven to have moved the check forward — it went from failing in seconds at
+   `utstanding_payable` to failing later at 0014 — but nothing here has yet proven that a
+   fresh database replays the whole directory, and these files have never been replayed
+   from scratch by anything.

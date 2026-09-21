@@ -1,3 +1,10 @@
+-- MERGED: two files shared migration version 20260903, which makes a
+-- fresh `supabase db push` fail with a duplicate key on
+-- supabase_migrations.schema_migrations. Both bodies follow, in the order the
+-- runner would have applied them:
+--   1. 20260903_credit_limit_requests.sql
+--   2. 20260903_reminder_groups.sql
+
 -- Create credit_limit_requests table
 -- Tracks employee requests to increase customer credit limits that need admin approval
 CREATE TABLE IF NOT EXISTS credit_limit_requests (
@@ -85,3 +92,12 @@ CREATE POLICY "Allow insert for authenticated" ON credit_limit_requests
 -- Allow authenticated users to update (admins approving/rejecting)
 CREATE POLICY "Allow update for authenticated" ON credit_limit_requests
   FOR UPDATE USING (auth.role() = 'authenticated');
+
+-- Add group columns to reminder_configs for global/group-based reminders
+-- A group_name groups multiple customers under one reminder configuration
+-- group_id is a UUID that links customers to the same reminder group
+ALTER TABLE reminder_configs ADD COLUMN IF NOT EXISTS group_id UUID;
+ALTER TABLE reminder_configs ADD COLUMN IF NOT EXISTS group_name TEXT;
+
+-- Index for quick group lookups
+CREATE INDEX IF NOT EXISTS idx_reminder_configs_group ON reminder_configs(group_id) WHERE group_id IS NOT NULL;
