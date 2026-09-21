@@ -29,7 +29,7 @@ Production has not been touched. Every claim below names the evidence that suppo
 | Audit | Verified | `audit_events` records role/access changes with the acting user; employee override save + reset both attributed. |
 | Live session behaviour | Verified | Role change / membership deactivation revoke access at the next authorization boundary; no stale client cache can grant it. |
 | Role lifecycle safety | Verified | `ROLE_IN_USE` (employees still on it), `SYSTEM_ROLE_READ_ONLY`. |
-| QA verification | Verified | 388/388 Vitest across 32 files; TypeScript clean; production build passes; Playwright run in real Chrome — 58/58 at the last full run, plus 17/17 for the suites affected by the latest change (§1.18). |
+| QA verification | Verified | **389/389 Vitest across 33 files, 3 consecutive full runs** (after resolving two fixture-identity collisions — §1.18); TypeScript clean; production build passes; Playwright in real Chrome — 58/58 at the last full run, plus 19/19 for the suites affected by the latest change. |
 | Duplicate-action safety | Verified | One confirm = one action, protected in the database, for sale (0134), supplier payment and void (0138) and stock adjustment (0139); every money page holds one key per attempt. Browser double-tap proof + falsification, and a permanent integration suite — see §1.18. |
 | Permanent regression protection | Verified | `tests/integration/rbacInvariants.test.ts` fails the build if any original defect class returns. |
 | Display attribution integrity | Verified | Every denormalized party name is backfilled and structurally stamped (0124/0125) — see §1.1. |
@@ -773,11 +773,34 @@ re-renders *after* the handler, so a second click in the same task reaches the R
   for supplier payments and adjustments; a concurrent void refused with *"already voided"* and
   stock restored once).
 
-**Regression at this point:** vitest **388/388 across 32 files** · `tsc` clean · production
-build clean · affected E2E re-run in real Chrome: `doubleTapSafety` 2/2, `splitPayment` 2/2,
-`crossScreenSync` 13/13 (the full Playwright suite was not re-run for this change) · QA
-baseline clean (4 users, 0 sales/payments/voids/adjustments, 0 users without a membership) ·
-Engineering Memory `active=37, superseded=1` · production untouched.
+**Two test-infrastructure root causes found while proving the above (neither "flaky").**
+
+1. `employeeAccessOverrides` failed about 1 full run in 4 with `NOT_AUTHORIZED: tenant access
+denied` on `create_employee` — for an owner it had just authorized, and its own precondition
+assertions passed moments earlier. Instrumenting the refusal named it in one run:
+`jwt-sub=<the owner> user-row=[] membership=[]` — the actor was right and the rows were GONE.
+Two suites declared the same owner UUID (`c3000000-…-0001`) with different phones; because one
+suite's upsert did not refresh `phone`, the shared row kept the other's number, so whichever
+suite cleaned up first deleted a row the other was mid-run using. The same scan found a second
+instance (`branchScopeEnforcement` asserted against a shop `tenantIsolationOps` **deletes and
+recreates**) and a third, subtler one (`duplicateActionSafety` built its sale and stock movement
+on the shared QA baseline, which neighbours' cleanup deletes — surfacing as "Sale not found" on
+both halves of a concurrent void, and an adjustment movement count of 0). All three now own
+their identifiers, and `tests/unit/fixtureIdCollision.test.ts` fails the build if two files ever
+claim one id again (with a documented allowlist for values shared on purpose: the seeded QA
+baseline, system roles, the nil UUID).
+2. The fix for the void dialog's double fire needed a test that could actually see the client
+guard: the first version asserted only the final row count and **passed with the guard removed**,
+because the database already covered the outcome. It now samples the toast surface for the whole
+life of a toast (they self-dismiss after 3s, so one check at the end is vacuous) with a control
+that the success toast was observed, and fails on the right symptom when the guard is gone.
+
+**Regression at this point:** vitest **389/389 across 33 files, 3 consecutive full runs** ·
+`tsc` clean · production build clean · affected E2E in real Chrome: `doubleTapSafety` 2/2,
+`voidSaleSafety` 1/1, `splitPayment` 2/2, `crossScreenSync` 13/13 (the full Playwright suite
+was not re-run for this change) · QA baseline clean (4 users, 0 sales/payments/voids/
+adjustments, 0 users without a membership) · Engineering Memory `active=39, superseded=1` ·
+production untouched.
 
 ---
 

@@ -26,10 +26,18 @@ import { QA_IDS, setupAllFixtures, cleanupTestData } from '../setup/fixtures';
 
 const TENANT = QA_IDS.shop;
 const OWNER = QA_IDS.admin;
-const CUSTOMER = QA_IDS.customerA;
-const COMPANY = QA_IDS.companyA;
-const PRODUCT = QA_IDS.productA;
-const VARIANT = QA_IDS.variantA;
+// This suite's own customer, and its own supplier company, for the rows it creates
+// and then voids. The shared QA baseline (customerA, companyA) is cleaned up by
+// every other suite that calls cleanupTestData()/cleanupFixtures(), which deletes
+// ALL sales for those customers — including one this suite had just created, which
+// surfaced as "Sale not found" on both halves of the concurrent void.
+const CUSTOMER = 'c4000000-0000-0000-0000-0000000000c1';
+const COMPANY = 'c4000000-0000-0000-0000-0000000000c2';
+// ...and its own product + variant: cleanupTestData() deletes the inventory
+// movements of the shared productA/productB, which removed this suite's adjustment
+// movement mid-run (asserted count came back 0).
+const PRODUCT = 'c4000000-0000-0000-0000-0000000000d1';
+const VARIANT = 'c4000000-0000-0000-0000-0000000000d2';
 
 /** RPC that must succeed, returning its result. */
 async function rpc(name: string, params: Record<string, unknown>, userId = OWNER) {
@@ -59,7 +67,7 @@ async function makeSale(idempotencyKey: string) {
   const sale = await rpc('create_sale', {
     payload: {
       customerId: CUSTOMER,
-      customerName: 'QA Customer A',
+      customerName: 'QA Dup-safe Customer',
       employeeId: OWNER,
       employeeName: 'QA Admin',
       paymentType: 'credit',
@@ -88,12 +96,38 @@ beforeAll(async () => {
     VALUES ('${OWNER}', '${TENANT}', 'owner', 'active')
     ON CONFLICT (user_id, tenant_id) DO UPDATE SET role = 'owner', status = 'active', updated_at = now()
   `);
-  await execSqlAsAdmin(`UPDATE companies SET outstanding_payable = 15000 WHERE id = '${COMPANY}'`);
+  await execSqlAsAdmin(`
+    INSERT INTO products (id, name, category, base_unit, stock_qty, shop_id, is_active, created_at, updated_at)
+    VALUES ('${PRODUCT}', 'QA Dup-safe Product', 'spray', 'piece', 100, '${TENANT}', true, now(), now())
+    ON CONFLICT (id) DO UPDATE SET is_active = true
+  `);
+  await execSqlAsAdmin(`
+    INSERT INTO product_variants (id, product_id, name, selling_price, cost_price, unit_size, qty_step, low_stock_threshold, stock_qty, is_active)
+    VALUES ('${VARIANT}', '${PRODUCT}', 'QA Variant', 500, 300, 1, 1, 5, 100, true)
+    ON CONFLICT (id) DO UPDATE SET stock_qty = 100, is_active = true
+  `);
+  await execSqlAsAdmin(`
+    INSERT INTO customers (id, name, phone, credit_limit, outstanding_balance, total_purchases, total_paid, shop_id, created_by)
+    VALUES ('${CUSTOMER}', 'QA Dup-safe Customer', '923009771001', 50000, 0, 0, 0, '${TENANT}', 'QA')
+    ON CONFLICT (id) DO UPDATE SET outstanding_balance = 0, total_purchases = 0, total_paid = 0
+  `);
+  await execSqlAsAdmin(`
+    INSERT INTO companies (id, name, outstanding_payable, total_purchases, shop_id)
+    VALUES ('${COMPANY}', 'QA Dup-safe Supplier', 15000, 50000, '${TENANT}')
+    ON CONFLICT (id) DO UPDATE SET outstanding_payable = 15000
+  `);
   await setVariantStock(100);
 });
 
 afterAll(async () => {
   await execSqlAsAdmin(`DELETE FROM supplier_payments WHERE company_id = '${COMPANY}'`);
+  await execSqlAsAdmin(`DELETE FROM customer_payments WHERE customer_id = '${CUSTOMER}'`).catch(() => undefined);
+  await execSqlAsAdmin(`DELETE FROM customers WHERE id = '${CUSTOMER}'`).catch(() => undefined);
+  await execSqlAsAdmin(`DELETE FROM companies WHERE id = '${COMPANY}'`).catch(() => undefined);
+  await execSqlAsAdmin(`DELETE FROM inventory_movements WHERE product_id = '${PRODUCT}'`).catch(() => undefined);
+  await execSqlAsAdmin(`DELETE FROM stock_adjustments WHERE product_id = '${PRODUCT}'`).catch(() => undefined);
+  await execSqlAsAdmin(`DELETE FROM product_variants WHERE id = '${VARIANT}'`).catch(() => undefined);
+  await execSqlAsAdmin(`DELETE FROM products WHERE id = '${PRODUCT}'`).catch(() => undefined);
   await execSqlAsAdmin(`DELETE FROM stock_adjustments WHERE idempotency_key LIKE 'qa-dupsafe-%'`);
   // Removes this suite's sales, voids, returns and movements for the shared
   // fixtures, without touching the baseline the other suites rely on.
@@ -160,9 +194,12 @@ describe('Duplicate action safety', () => {
     ]);
 
     // Exactly one of the two is refused — voiding a voided sale is still an error.
-    const refused = [a, b].filter((r) => r.error !== null);
-    expect(refused.length).toBe(1);
-    expect(refused[0].error).toMatch(/already voided/i);
+    // The errors travel with the assertion: a bare count cannot be told apart from
+    // a shared-fixture race (which shows up as NOT_AUTHORIZED on BOTH calls).
+    const errors = [a.error, b.error];
+    const refused = errors.filter((e) => e !== null);
+    expect(refused.length, `expected one refusal, got: ${JSON.stringify(errors)}`).toBe(1);
+    expect(refused[0]).toMatch(/already voided/i);
 
     const voids = await scalar(`SELECT count(*)::int AS n FROM voids WHERE sale_id = '${saleId}'`);
     const movements = await scalar(

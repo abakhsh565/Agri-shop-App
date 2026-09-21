@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
@@ -45,6 +45,8 @@ export default function AdminSaleDetailPage() {
   const isUrdu = language === "ur";
   const [showVoidDialog, setShowVoidDialog] = useState(false);
   const [voidReason, setVoidReason] = useState("");
+  const [voiding, setVoiding] = useState(false);
+  const voidingRef = useRef(false);
   const [isVoided, setIsVoided] = useState(false);
 
   const liveSales = useSalesStore((s) => s.sales);
@@ -203,7 +205,12 @@ export default function AdminSaleDetailPage() {
   }
 
   async function handleVoid() {
-    if (!voidReason.trim()) return;
+    // A second tap lands before React re-renders, so `disabled` alone would let two
+    // void calls out — and the second one would answer "already voided" as an ERROR
+    // toast right after the owner successfully voided the sale.
+    if (voidingRef.current || !voidReason.trim()) return;
+    voidingRef.current = true;
+    setVoiding(true);
     try {
       const { rpcVoidSale } = await import("@/lib/db");
       await rpcVoidSale(sale!.id, voidReason.trim());
@@ -212,6 +219,9 @@ export default function AdminSaleDetailPage() {
       addToast("Sale voided successfully", "success");
     } catch (err) {
       addToast(err instanceof Error ? err.message : "Failed to void sale", "error");
+    } finally {
+      voidingRef.current = false;
+      setVoiding(false);
     }
   }
 
@@ -454,8 +464,12 @@ export default function AdminSaleDetailPage() {
         <div className="fixed inset-0 z-50 flex items-end" style={{ background: "rgba(0,0,0,0.5)" }} onClick={() => setShowVoidDialog(false)}>
           <div className="w-full max-w-[390px] mx-auto rounded-t-[24px] p-6 flex flex-col gap-4" style={{ background: "var(--surface)" }} onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-center"><div className="w-10 h-1 rounded-full" style={{ background: "var(--divider)" }} /></div>
-            <p className="text-base font-bold text-center" style={{ color: "var(--text-primary)" }}>{t("admin.voidSale")}</p>
-            <p className="text-sm text-center" style={{ color: "var(--text-secondary)" }}>{t("admin.voidConfirm")}</p>
+            <p className="text-base font-bold text-center" style={{ color: "var(--text-primary)" }}>
+              {t("admin.voidConfirmTitle", { number: sale?.saleNumber ?? "" })}
+            </p>
+            <p className="text-sm text-center" style={{ color: "var(--text-secondary)" }}>
+              {t("admin.voidConfirm", { number: sale?.saleNumber ?? "" })}
+            </p>
             <div>
               <p className="text-xs font-bold uppercase tracking-wider mb-2" style={{ color: "var(--text-secondary)" }}>{t("admin.voidReason")}</p>
               <input value={voidReason} onChange={(e) => setVoidReason(e.target.value)} placeholder={t("sale.voidReasonPlaceholder")}
@@ -463,10 +477,10 @@ export default function AdminSaleDetailPage() {
                 style={{ background: "var(--surface-2)", border: "1px solid var(--divider)", color: "var(--text-primary)" }} />
             </div>
             <div className="flex gap-3">
-              <button onClick={() => setShowVoidDialog(false)} className="flex-1 h-12 rounded-full text-sm font-bold"
+              <button onClick={() => setShowVoidDialog(false)} disabled={voiding} className="flex-1 h-12 rounded-full text-sm font-bold disabled:opacity-50"
                 style={{ border: "1px solid var(--divider)", color: "var(--text-primary)" }}>{t("common.cancel")}</button>
-              <button onClick={handleVoid} disabled={!voidReason.trim()} className="flex-1 h-12 rounded-full text-sm font-bold disabled:opacity-50"
-                style={{ background: "var(--error)", color: "#fff" }}>{t("admin.voidSale")}</button>
+              <button onClick={handleVoid} disabled={!voidReason.trim() || voiding} className="flex-1 h-12 rounded-full text-sm font-bold disabled:opacity-50"
+                style={{ background: "var(--error)", color: "#fff" }}>{voiding ? t("admin.voiding") : t("admin.voidSale")}</button>
             </div>
           </div>
         </div>

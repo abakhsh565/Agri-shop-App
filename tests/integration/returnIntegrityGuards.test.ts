@@ -76,7 +76,11 @@ beforeAll(async () => {
   await sql(`
     INSERT INTO users (id, name, phone, role, is_original_owner, is_active, shop_id)
     VALUES ('${OWNER}', 'QA Return Owner', '${PHONE}', 'admin', true, true, '${TENANT}')
-    ON CONFLICT (id) DO UPDATE SET is_active = true, is_original_owner = true, shop_id = EXCLUDED.shop_id
+    -- phone is part of the conflict update too: without it a row first created by
+    -- another suite under the same id keeps THAT phone, and this suite's cleanup
+    -- (DELETE … WHERE phone = …) then deletes a row it does not own.
+    ON CONFLICT (id) DO UPDATE SET is_active = true, is_original_owner = true,
+      shop_id = EXCLUDED.shop_id, phone = EXCLUDED.phone
   `);
   await sql(`
     INSERT INTO customers (id, name, phone, credit_limit, outstanding_balance, total_purchases, total_paid, shop_id, created_by)

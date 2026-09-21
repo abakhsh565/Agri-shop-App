@@ -21,10 +21,16 @@
  */
 
 import { describe, it, beforeAll, afterAll, expect } from 'vitest';
-import { execRpcAsUser, execSqlAsAdmin } from '../setup/qa-client';
+import { execRpcAsUser, execSqlAsAdmin, checkAuthAsUser } from '../setup/qa-client';
 
 const TENANT = '00000000-0000-0000-0000-000000000001';
-const OWNER = 'c3000000-0000-0000-0000-000000000001';
+// Must not be shared with another suite. It was 'c3000000-…-0001', which
+// returnIntegrityGuards also claims for a different owner: whichever suite cleaned
+// up first deleted the row the other was mid-run using, and the surviving suite then
+// answered "NOT_AUTHORIZED: tenant access denied" for an owner it had just
+// authorized. tests/unit/fixtureIdCollision.test.ts now fails if that ever happens
+// again.
+const OWNER = 'c3000000-0000-0000-0000-000000000009';
 const ROLE_SALES_EMPLOYEE = 'a0000000-0000-0000-0000-000000000001';
 const ROLE_STORE_MANAGER = 'a0000000-0000-0000-0000-000000000003';
 const EMP_PHONE = '923009670001';
@@ -34,6 +40,32 @@ let employeeId = '';
 
 async function sql(query: string) {
   return execSqlAsAdmin(query);
+}
+
+/**
+ * create_employee, with the failure explained.
+ *
+ * `NOT_AUTHORIZED: tenant access denied` means "the caller has no active
+ * membership", and when it appeared intermittently under parallel load it could
+ * not be told apart from a genuine product refusal: the message names neither the
+ * caller the database saw nor the membership row it judged. This helper captures
+ * both at the moment of refusal, so an intermittent failure arrives with its own
+ * evidence instead of a guess.
+ */
+async function createEmployee(payload: Record<string, unknown>) {
+  const r = await execRpcAsUser(OWNER, 'create_employee', { payload });
+  if (r.error) {
+    const [who, user, membership] = await Promise.all([
+      checkAuthAsUser(OWNER).catch((e) => ({ error: String(e) })),
+      sql(`SELECT id, phone, shop_id, is_active FROM users WHERE id = '${OWNER}'`).catch(() => null),
+      sql(`SELECT user_id, tenant_id, role, status FROM memberships WHERE user_id = '${OWNER}'`).catch(() => null),
+    ]);
+    throw new Error(
+      `create_employee refused: ${r.error} :: jwt-sub=${JSON.stringify(who)} ` +
+      `user-row=${JSON.stringify(user?.rows ?? [])} membership=${JSON.stringify(membership?.rows ?? [])}`
+    );
+  }
+  return r;
 }
 
 async function cleanup() {
@@ -74,7 +106,8 @@ beforeAll(async () => {
   await sql(`
     INSERT INTO users (id, name, phone, role, is_original_owner, is_active, shop_id)
     VALUES ('${OWNER}', 'QA Override Owner', '923009670099', 'admin', true, true, '${TENANT}')
-    ON CONFLICT (id) DO UPDATE SET is_active = true, is_original_owner = true, shop_id = EXCLUDED.shop_id
+    ON CONFLICT (id) DO UPDATE SET is_active = true, is_original_owner = true,
+      shop_id = EXCLUDED.shop_id, phone = EXCLUDED.phone
   `);
   // The User→Membership trigger (0113) is AFTER INSERT only, so an owner row
   // that already exists — a previous run's leftovers, because cleanup() removes
@@ -92,6 +125,21 @@ beforeAll(async () => {
   );
   branchId = b.rows[0]?.id;
   expect(branchId).toBeTruthy();
+
+  // Assert the precondition THROUGH the API this suite will be authorized by.
+  // Without this, a harness write that has not become visible to PostgREST yet
+  // shows up as NOT_AUTHORIZED on the first create_employee — a test-infrastructure
+  // race reporting itself as the product refusing an owner, which is exactly how it
+  // was misread before. It failed intermittently under parallel load.
+  const membership = await sql(
+    `SELECT m.status, m.tenant_id FROM memberships m WHERE m.user_id = '${OWNER}'`
+  );
+  expect(
+    membership.rows[0]?.status,
+    'the suite owner must have an ACTIVE membership before any authorized RPC runs'
+  ).toBe('active');
+  const perms = await execRpcAsUser(OWNER, 'get_my_permissions', {});
+  expect(perms.error, 'the owner must be authorized through the real JWT path').toBeNull();
 });
 
 afterAll(async () => {
@@ -102,14 +150,12 @@ afterAll(async () => {
 
 describe('Employee access = role defaults + this employee\'s exceptions', () => {
   it('writes the exceptions with the employee, skipping codes that do not exist', async () => {
-    const created = await execRpcAsUser(OWNER, 'create_employee', {
-      payload: {
-        name: 'QA Override Employee',
-        phone: EMP_PHONE,
-        roleId: ROLE_SALES_EMPLOYEE,
-        branchScope: [branchId],
-        overrides: { 'companies.view': true, 'sales.create': false, 'not.a.real.code': true },
-      },
+    const created = await createEmployee({
+      name: 'QA Override Employee',
+      phone: EMP_PHONE,
+      roleId: ROLE_SALES_EMPLOYEE,
+      branchScope: [branchId],
+      overrides: { 'companies.view': true, 'sales.create': false, 'not.a.real.code': true },
     });
     expect(created.error).toBeNull();
     employeeId = created.data.id;

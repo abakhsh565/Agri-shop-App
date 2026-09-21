@@ -17,6 +17,11 @@ import { describe, it, beforeAll, afterAll, expect } from 'vitest';
 import { execSqlAsAdmin, insertAsUser, selectAsUser } from '../setup/qa-client';
 
 const TENANT_A = '00000000-0000-0000-0000-000000000001';
+// A tenant of this suite's own. It used to borrow '00000000-…-c0c0', which
+// tenantIsolationOps DELETES in its cleanup and recreates in its setup — so the
+// "another tenant" this suite asserts against could vanish underneath it.
+// tests/unit/fixtureIdCollision.test.ts now fails on a shared row-creating id.
+const TENANT_B = 'd2000000-0000-0000-0000-00000000b0b0';
 const OWNER_A = 'd2000000-0000-0000-0000-00000000000a';
 const EMP_MAIN = 'd2000000-0000-0000-0000-0000000000e1';
 const EMP_BOTH = 'd2000000-0000-0000-0000-0000000000e2';
@@ -33,6 +38,8 @@ async function cleanup() {
   await sql(`DELETE FROM sales WHERE sale_number LIKE '${TAG}%' OR sale_number LIKE 'QA-BRANCH-%'`).catch(() => undefined);
   await sql(`DELETE FROM audit_events WHERE user_id IN ('${OWNER_A}','${EMP_MAIN}','${EMP_BOTH}')`).catch(() => undefined);
   await sql(`DELETE FROM users WHERE id IN ('${OWNER_A}','${EMP_MAIN}','${EMP_BOTH}')`).catch(() => undefined);
+  await sql(`DELETE FROM branches WHERE tenant_id = '${TENANT_B}'`).catch(() => undefined);
+  await sql(`DELETE FROM shops WHERE id = '${TENANT_B}'`).catch(() => undefined);
 }
 
 function saleRow(suffix: string, employeeId: string, branchId?: string) {
@@ -50,6 +57,10 @@ function saleRow(suffix: string, employeeId: string, branchId?: string) {
 
 beforeAll(async () => {
   await cleanup();
+
+  // The "other tenant" has to exist for real, so the refusal is a tenant boundary
+  // and not a foreign key.
+  await sql(`INSERT INTO shops (id, name) VALUES ('${TENANT_B}', 'QA Branch Tenant B') ON CONFLICT (id) DO NOTHING`);
 
   const branches = await sql(
     `SELECT id, name FROM branches WHERE tenant_id = '${TENANT_A}' AND is_active = true ORDER BY is_default DESC, created_at`
@@ -144,7 +155,7 @@ describe('Branch scope — tenant boundary still holds', () => {
   it('refuses a record addressed to another tenant', async () => {
     const res = await insertAsUser(EMP_BOTH, 'sales', {
       ...saleRow('cross-tenant', EMP_BOTH, warehouseBranch),
-      shop_id: '00000000-0000-0000-0000-00000000c0c0',
+      shop_id: TENANT_B,
     });
     expect(res.error).not.toBeNull();
     const persisted = await sql(`SELECT count(*)::int AS c FROM sales WHERE sale_number = '${TAG}-cross-tenant'`);

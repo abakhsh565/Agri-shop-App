@@ -270,7 +270,9 @@ export const translations = {
 
     // Admin sale detail
     "admin.voidSale":    "Void Sale",
-    "admin.voidConfirm": "Are you sure you want to void this sale?",
+    "admin.voidConfirm": "Sale {number} will be cancelled. The items go back into stock, the customer's balance is corrected, and the record stays in the history.",
+    "admin.voidConfirmTitle": "Cancel sale {number}?",
+    "admin.voiding": "Cancelling...",
     "admin.voidReason":  "Void Reason",
     "admin.netProfit":   "Net Profit",
     "admin.baseCost":    "Base Cost",
@@ -1533,7 +1535,9 @@ export const translations = {
 
     // Admin sale detail
     "admin.voidSale":    "فروخت منسوخ کریں",
-    "admin.voidConfirm": "کیا آپ یہ فروخت منسوخ کرنا چاہتے ہیں؟",
+    "admin.voidConfirm": "فروخت {number} منسوخ ہو جائے گی۔ سامان دوبارہ اسٹاک میں چلا جائے گا، گاہک کا حساب درست ہو جائے گا، اور ریکارڈ تاریخ میں محفوظ رہے گا۔",
+    "admin.voidConfirmTitle": "فروخت {number} منسوخ کریں؟",
+    "admin.voiding": "منسوخ ہو رہی ہے...",
     "admin.voidReason":  "منسوخی کی وجہ",
     "admin.netProfit":   "خالص منافع",
     "admin.baseCost":    "بنیادی لاگت",

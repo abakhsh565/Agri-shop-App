@@ -97,9 +97,26 @@ export async function getDirectClient(): Promise<Client> {
  * Execute SQL via direct PostgreSQL connection (bypasses pooler).
  * Use for fixture setup/teardown where immediate visibility is required.
  */
+/**
+ * One pg.Client cannot run two queries at once. Suites run in parallel against
+ * this shared connection, and pg says so itself: "Calling client.query() when the
+ * client is already executing a query is deprecated" (node --trace-deprecation
+ * shows it during a normal run). The rejected call then reached
+ * execSqlAsAdmin()'s catch, which falls back to the HTTP pooler — whose
+ * visibility is DELAYED — so a fixture write could be invisible to PostgREST for
+ * a moment and an authorization check would answer NOT_AUTHORIZED for a member
+ * that exists. Queries are therefore queued on the shared client: each caller
+ * still awaits its own result, the socket just stops being shared mid-flight.
+ */
+let _directQueue: Promise<unknown> = Promise.resolve();
+
 export async function execSqlDirect(sql: string): Promise<{ rows: any[]; rowCount: number; command: string }> {
   const client = await getDirectClient();
-  const result = await client.query(sql);
+  const attempt = _directQueue.then(() => client.query(sql));
+  // Keep the chain alive whatever this query did, so one rejection cannot block
+  // every later query on the connection.
+  _directQueue = attempt.then(() => undefined, () => undefined);
+  const result = await attempt;
   return { rows: result.rows, rowCount: result.rowCount ?? 0, command: result.command };
 }
 

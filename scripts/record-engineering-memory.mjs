@@ -571,6 +571,30 @@ const MEMORIES = [
       enforcedBy: 'tests/e2e/doubleTapSafety.spec.ts (browser, two clicks in one task) and tests/integration/duplicateActionSafety.test.ts (database, simultaneous calls)'
     },
   },
+  {
+    category: 'failure_pattern',
+    title: 'Two suites claimed the same owner UUID, so one deleted the row the other was mid-run using',
+    component: 'tests/integration/{employeeAccessOverrides,returnIntegrityGuards,branchScopeEnforcement,tenantIsolationOps}.test.ts, tests/integration/employeeAccessOverrides.test.ts createEmployee(), tests/unit/fixtureIdCollision.test.ts',
+    description:
+      'employeeAccessOverrides failed intermittently (about 1 full run in 4) with NOT_AUTHORIZED: tenant access denied on create_employee — for an owner it had just authorized, in the same run. It could not be told apart from a genuine product refusal: the message names neither the caller the database saw nor the membership it judged, and the suite\'s own precondition assertions PASSED moments earlier. Instrumenting the refusal settled it in one run: jwt-sub=<the owner> user-row=[] membership=[] — the actor was right and the rows were GONE. Two suites declared the same deterministic owner id (c3000000-…-0001): returnIntegrityGuards with phone 923009550001 and employeeAccessOverrides with 923009670099. Because the second suite\'s upsert did not refresh phone, the shared row kept the first suite\'s number, so whichever suite cleaned up first deleted a row the other was still using, cascading its membership away. The same scan found a second instance (branchScopeEnforcement asserted against shop 00000000-…-c0c0, which tenantIsolationOps DELETES in cleanup and recreates in setup) and a third, subtler one: duplicateActionSafety created its sale/stock movement on the SHARED QA baseline customer/product, so a finishing neighbour\'s cleanupTestData()/cleanupFixtures() deleted them mid-test (symptoms: "Sale not found" on both halves of a concurrent void, and an adjustment movement count of 0). All three are fixed by owning the identity, and tests/unit/fixtureIdCollision.test.ts fails the build if two files ever claim one id again — with a documented allowlist for values shared on purpose (the seeded QA baseline, system roles, the nil UUID).',
+    evidence: {
+      diagnostic: 'create_employee refused: NOT_AUTHORIZED: tenant access denied :: jwt-sub={user_id:c3000000-…-0001} user-row=[] membership=[]',
+      before: '2 failures in 8 consecutive full runs, each failing 1-4 tests in employeeAccessOverrides',
+      after: '3 consecutive full runs green: 389/389 across 33 files',
+      guard: 'fixtureIdCollision.test.ts caught both remaining collisions when first added (TENANT_B, and the shared baseline ids which are allowlisted with their reason)'
+    },
+  },
+  {
+    category: 'prevention_rule',
+    title: 'A test that judged only the OUTCOME could not see the client guard it was supposed to prove',
+    component: 'tests/e2e/voidSaleSafety.spec.ts, src/pages/admin/sales/AdminSaleDetailPage.tsx',
+    description:
+      'The void dialog said "Are you sure you want to void this sale?" — no sale number, no statement of what voiding does to stock, the balance or the history, on the most consequential action in the app. It also had no re-entry protection, so a double tap sent two void calls; the database correctly refuses the second, which meant the owner saw "This did not work. Please try again." (friendly()\'s sentence for an unrecognised refusal) immediately after a successful void. The first version of the browser test asserted only the final row count, so it PASSED with the guard removed: the database was already covering the outcome. It was rewritten to sample the toast surface for the whole life of a toast (they self-dismiss after 3s, so a single check at the end is vacuous) with a control assertion that the success toast WAS observed. It then failed for the right reason — Received: true on the failure sentence — and passes with the guard restored. The lesson: a test for a client-side guard must assert the client-visible SYMPTOM, and must prove its own detector works.',
+    evidence: {
+      copy: 'EN "Cancel sale {number}?" / "Sale {number} will be cancelled. The items go back into stock, the customer\'s balance is corrected, and the record stays in the history." + UR, plus a Cancelling… progress label',
+      browser: 'voidSaleSafety.spec.ts 1/1 in real Chrome: dialog names the sale, no "are you sure", reason required, double tap in ONE task voids once, stock restored once, no failure toast; falsification: removing the guard fails with "the second tap must not report a failure after the void already succeeded"'
+    },
+  },
 ];
 
 const client = await pool.connect();
