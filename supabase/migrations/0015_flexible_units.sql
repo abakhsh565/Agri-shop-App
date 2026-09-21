@@ -295,6 +295,14 @@ $$;
 -- STEP 7: Atomic RPC — adjust_stock (adjusts product-level stock)
 -- ═══════════════════════════════════════════════════════════════════════════════
 
+-- This file is the first to define adjust_stock in the repository, so the only
+-- thing it can collide with is an adjust_stock that already exists in the
+-- database — which is exactly the case on a Supabase preview branch, since the
+-- branch is forked from the project's current schema and the versions above are
+-- not recorded there. Drop whatever signature exists before redefining.
+DROP FUNCTION IF EXISTS adjust_stock(p_payload jsonb);
+DROP FUNCTION IF EXISTS adjust_stock(payload jsonb);
+
 CREATE OR REPLACE FUNCTION adjust_stock(p_payload jsonb)
 RETURNS jsonb
 LANGUAGE plpgsql
