@@ -11,7 +11,7 @@ import { useCompaniesStore } from "@/stores/companiesStore";
 import PullToRefresh from "@/components/ui/PullToRefresh";
 import { useCustomersStore } from "@/stores/customersStore";
 import { supabase } from "@/lib/supabase";
-import { formatCurrency, formatSmartDateTime, productLowStockThreshold } from "@/lib/formatters";
+import { formatCurrency, formatSmartDateTime } from "@/lib/formatters";
 import { generateReminders, calculatePaymentStatus, loadBusinessSettings } from "@/lib/reminderEngine";
 import { useT } from "@/lib/i18n";
 import { AlertTriangle, TrendingUp, ChevronRight, TrendingDown, ShoppingCart, Search, Bell, Wallet, CheckCircle2 } from "lucide-react";
@@ -172,20 +172,23 @@ export default function AdminDashboardPage() {
 
   const totalSales = filtered.reduce((s, x) => s + x.totalAmount, 0);
   const txCount = filtered.length;
-  const paidSales = filtered.reduce((s, x) => s + x.amountPaid, 0);
-  const creditSales = filtered.reduce((s, x) => s + Math.max(0, x.totalAmount - x.amountPaid), 0);
-  // Gross profit = line revenue - recorded line COGS. The cost comes from the
-  // sale item's own snapshot (stamped at sale time), so an item whose product has
-  // since been deactivated cannot silently cost zero. Falls back to the current
-  // variant cost only when a line carries no recorded COGS.
+  // Gross profit = sale revenue - recorded line COGS, on the SAME authoritative
+  // revenue the reports use: the sale's own stored total_amount (stamped by
+  // create_sale). Recomputing the revenue from unit_price * qty looks equivalent
+  // but is not — the database rounds each line separately, so the two drift
+  // apart on fractional quantities, and Home would then disagree with Reports
+  // about the same period. COGS comes from the sale item's own snapshot (taken at
+  // sale time), so an item whose product has since been deactivated cannot
+  // silently cost zero; the current variant cost is only a fallback for lines
+  // written before COGS snapshots existed.
   const grossProfit = filtered.reduce(
     (sum, sale) =>
       sum +
-      sale.items.reduce((s, it) => {
-        const revenue = it.unitPrice * it.qty;
-        const cost = it.cogsAmount ?? (variantCost.get(it.variantId ?? '') ?? 0) * it.qty;
-        return s + (revenue - cost);
-      }, 0),
+      (sale.totalAmount -
+        sale.items.reduce(
+          (s, it) => s + (it.cogsAmount ?? (variantCost.get(it.variantId ?? '') ?? 0) * it.qty),
+          0,
+        )),
     0,
   );
   // Returns + credit collected — same date filter as sales
@@ -204,20 +207,7 @@ export default function AdminDashboardPage() {
     .slice(0, 3);
 
   // Alerts — stock of record is the variant; p.stockQty is its derived total.
-  const lowStockCount = mockProducts.reduce((c, p) => {
-    const bad = p.stockQty > 0 && p.stockQty <= productLowStockThreshold(p.variants);
-    return c + (bad ? 1 : 0);
-  }, 0);
   const outOfStockCount = mockProducts.filter(p => p.stockQty <= 0).length;
-  // Expiring (spec: ADM-DASH-HOME) — active variants whose expiry date falls in
-  // the next 30 days. Already-expired stock is a different state and is not
-  // counted here.
-  const expiringCount = mockProducts.reduce((c, p) =>
-    c + p.variants.filter((v) => {
-      if (!v.expiryDate) return false;
-      const days = (new Date(v.expiryDate).getTime() - now.getTime()) / 86400000;
-      return days >= 0 && days <= 30;
-    }).length, 0);
   const totalPayable = mockCompanies.reduce((s, c) => s + c.outstandingPayable, 0);
   
   const [pendingCreditRequests, setPendingCreditRequests] = useState(0);
@@ -470,40 +460,12 @@ export default function AdminDashboardPage() {
               </p>
               <div className="flex items-center gap-2">
                 <p className="text-[16px] font-semibold" style={{ color: "#0a0a0a" }}>{formatRs(creditCollected)}</p>
-                <p className="text-[11px] font-semibold" style={{ color: "rgba(220,38,38,0.9)" }}>
+                <p className="text-[11px] font-semibold" style={{ color: "rgba(0,0,0,0.5)" }}>
                   {formatRs(totalOutstanding)} {isUrdu ? "واجب الادا" : "overdue"}
                 </p>
               </div>
             </div>
           </div>
-        </button>
-      </div>
-
-      {/* ── Period figures: Paid Sales · Credit Sales (spec: ADM-DASH-HOME) ── */}
-      <div className="px-4 pt-3 flex gap-2.5 animate-fade-in-up">
-        <button
-          onClick={() => navigate("/admin/sales", { state: { tab: "paid" } })}
-          className="flex-1 rounded-[12px] px-4 py-3 text-start transition-transform active:scale-[0.98]"
-          style={{ background: "var(--surface-2)" }}
-        >
-          <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
-            {t("dashboard.paid")}
-          </p>
-          <p className="text-[16px] font-semibold mt-0.5" style={{ color: "var(--text-primary)" }}>
-            {formatRs(paidSales)}
-          </p>
-        </button>
-        <button
-          onClick={() => navigate("/admin/sales", { state: { tab: "credit" } })}
-          className="flex-1 rounded-[12px] px-4 py-3 text-start transition-transform active:scale-[0.98]"
-          style={{ background: "var(--surface-2)" }}
-        >
-          <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
-            {t("dashboard.credit")}
-          </p>
-          <p className="text-[16px] font-semibold mt-0.5" style={{ color: "var(--text-primary)" }}>
-            {formatRs(creditSales)}
-          </p>
         </button>
       </div>
 
@@ -520,22 +482,6 @@ export default function AdminDashboardPage() {
         <button onClick={() => navigate('/admin/alerts/inventory')} className="flex-1 flex items-center gap-2.5 py-2.5 px-3 rounded-[10px] active:opacity-70 transition-opacity" style={{ background: "var(--surface-2)" }}>
           <p className="text-[16px] font-bold" style={{ color: outOfStockCount > 0 ? "var(--error)" : "var(--text-secondary)" }}>{outOfStockCount}</p>
           <p className="text-[10px] font-medium leading-tight" style={{ color: "var(--text-secondary)" }}>{isUrdu ? "اسٹاک ختم" : "Out of stock"}</p>
-        </button>
-      </div>
-
-      {/* ── Stock & payables: Low stock · Supplier payable · Expiring (spec: ADM-DASH-HOME) ── */}
-      <div className="px-4 pt-2 flex gap-2 animate-fade-in-up">
-        <button onClick={() => navigate('/admin/alerts/inventory')} className="flex-1 flex items-center gap-2.5 py-2.5 px-3 rounded-[10px] active:opacity-70 transition-opacity" style={{ background: "var(--surface-2)" }}>
-          <p className="text-[16px] font-bold" style={{ color: lowStockCount > 0 ? "var(--warning)" : "var(--text-secondary)" }}>{lowStockCount}</p>
-          <p className="text-[10px] font-medium leading-tight" style={{ color: "var(--text-secondary)" }}>{t("admin.lowStockAlert")}</p>
-        </button>
-        <button onClick={() => navigate('/admin/payments')} className="flex-1 flex items-center gap-2.5 py-2.5 px-3 rounded-[10px] active:opacity-70 transition-opacity" style={{ background: "var(--surface-2)" }}>
-          <p className="text-[13px] font-bold" style={{ color: totalPayable > 0 ? "var(--error)" : "var(--text-secondary)" }}>{formatRs(totalPayable)}</p>
-          <p className="text-[10px] font-medium leading-tight" style={{ color: "var(--text-secondary)" }}>{t("admin.supplierPayable")}</p>
-        </button>
-        <button onClick={() => navigate('/admin/alerts/inventory')} className="flex-1 flex items-center gap-2.5 py-2.5 px-3 rounded-[10px] active:opacity-70 transition-opacity" style={{ background: "var(--surface-2)" }}>
-          <p className="text-[16px] font-bold" style={{ color: expiringCount > 0 ? "var(--warning)" : "var(--text-secondary)" }}>{expiringCount}</p>
-          <p className="text-[10px] font-medium leading-tight" style={{ color: "var(--text-secondary)" }}>{t("admin.expiringSoon")}</p>
         </button>
       </div>
 

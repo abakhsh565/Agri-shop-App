@@ -30,7 +30,6 @@ import EmployeeLayout from "@/components/layout/EmployeeLayout";
 import AdminLayout from "@/components/layout/AdminLayout";
 
 // Admin pages
-import ObservationBotPage from "@/pages/admin/more/ObservationBotPage";
 const AdminDashboardPage = React.lazy(() => import("@/pages/admin/dashboard/AdminDashboardPage"));
 const AdminSalesListPage = React.lazy(() => import("@/pages/admin/sales/AdminSalesListPage"));
 const AdminSaleDetailPage = React.lazy(() => import("@/pages/admin/sales/AdminSaleDetailPage"));
@@ -126,7 +125,6 @@ export const router = createBrowserRouter([
       { path: "dashboard",  element: <AdminDashboardPage /> },
       { path: "more",       element: <MoreMenuPage /> },
       { path: "search", element: <SearchPage /> },
-      { path: "observation-bot", element: <ObservationBotPage /> },
 
       // ── Customers (requires customers.view) ──────────────────────────────
       { element: <PermissionGuard requires="customers.view" />,

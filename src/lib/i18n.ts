@@ -2285,10 +2285,10 @@ export const translations = {
     "purchases.noStockIns":           "ابھی تک کوئی اسٹاک ان نہیں",
     "purchases.noStockInsDesc":       "انوینٹری شامل کرنے اور سپلائر ادائیگیوں کو ٹریک کرنے کے لیے خریداری درج کریں۔",
     // Payments page
-    "payments.weOweSuppliers":       "ہم سپلائرز کا قرض ہیں",
-    "payments.customerCredit":       "گاہک کریڈٹ",
-    "payments.supplierPayables":     "سپلائر ادائیگیاں",
-    "payments.noSupplierPayables":   "کوئی سپلائر ادائیگی نہیں",
+    "payments.weOweSuppliers":       "سپلائرز کو دینا ہے",
+    "payments.customerCredit":       "گاہک کا ادھار",
+    "payments.supplierPayables":     "سپلائرز کو دینا",
+    "payments.noSupplierPayables":   "سپلائرز کو دینا باقی نہیں",
     "payments.allSuppliersSettled":  "تمام سپلائرز کی ادائیگی ہو گئی۔",
     // Employee detail
     "employee.itemsSold":            "فروخت کی اشیاء",

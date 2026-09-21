@@ -1,7 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import { useThemeStore } from "@/stores/themeStore";
 import { useT } from "@/lib/i18n";
-import { Package, Building2, Users, UserCheck, ShoppingCart, BarChart2, Layers, CreditCard, Settings, History, AlertTriangle, Calculator, ScanLine, Eye } from "lucide-react";
+import { Package, Building2, Users, UserCheck, ShoppingCart, BarChart2, Layers, CreditCard, Settings, History, AlertTriangle, Calculator, ScanLine } from "lucide-react";
 import StatusBar from "@/components/ui/StatusBar";
 
 const TILES = [
@@ -17,7 +17,6 @@ const TILES = [
   { labelKey: "admin.reorderSuggestions" as any, label: "Reorder Suggestions", icon: AlertTriangle, path: "/admin/inventory/reorder",    color: "#d97706" },
   { labelKey: "admin.dailyCash" as any, label: "Daily Cash",       icon: Calculator,    path: "/admin/payments/daily-cash",  color: "#059669" },
   { labelKey: "admin.generateBarcodes" as any, label: "Generate Barcodes", icon: ScanLine,      path: "/admin/inventory/barcodes",   color: "#6366f1" },
-  { labelKey: "admin.observationBot" as any, label: "John", icon: Eye,           path: "/admin/observation-bot",   color: "#ec4899" },
 ];
 
 export default function MoreMenuPage() {
