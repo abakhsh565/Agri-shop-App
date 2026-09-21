@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useThemeStore } from "@/stores/themeStore";
 import { useT } from "@/lib/i18n";
@@ -15,6 +15,7 @@ import { useAuthStore } from "@/stores/authStore";
 import { useUIStore } from "@/stores/uiStore";
 import { supabase } from "@/lib/supabase";
 import StatusBar from "@/components/ui/StatusBar";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import NavHeader from "@/components/ui/NavHeader";
 import { formatCurrency, formatSmartDateTime } from "@/lib/formatters";
 import { pkToday, pkDateFromISO } from "@/lib/pkDate";
@@ -69,6 +70,10 @@ export default function EmployeeDetailPage() {
   const [storedOverrides, setStoredOverrides] = useState<Record<string, boolean>>({});
   const [branches, setBranches] = useState<{ id: string; name: string }[]>([]);
   const [saving, setSaving] = useState(false);
+  // Which consequential access change the owner is confirming, if any.
+  const [confirmAction, setConfirmAction] = useState<null | "deactivate" | "cancelInvite" | "reactivate">(null);
+  const [statusBusy, setStatusBusy] = useState(false);
+  const statusBusyRef = useRef(false);
 
   // Load permissions and branches on mount
   useEffect(() => {
@@ -202,6 +207,27 @@ export default function EmployeeDetailPage() {
       addToast(e instanceof Error ? e.message : t("common.error"), "error");
     } finally {
       setSaving(false);
+    }
+  }
+
+  /**
+   * One tap = one action.
+   *
+   * A REF, not the `statusBusy` state: React batches, so two clicks dispatched in the
+   * same task both read the pre-render value of a state variable and both go out. The
+   * ref is written synchronously, so the second click sees it. (The void confirmation
+   * needed the same treatment for the same reason.)
+   */
+  async function runStatusChange() {
+    if (statusBusyRef.current || !confirmAction) return;
+    statusBusyRef.current = true;
+    setStatusBusy(true);
+    try {
+      await setActive(confirmAction === "reactivate");
+      setConfirmAction(null);
+    } finally {
+      statusBusyRef.current = false;
+      setStatusBusy(false);
     }
   }
 
@@ -596,13 +622,7 @@ export default function EmployeeDetailPage() {
             <button
               className="w-full h-12 rounded-full font-bold text-sm flex items-center justify-center gap-2"
               style={{ border: "1.5px solid var(--error)", color: "var(--error)", background: "transparent" }}
-              onClick={() => {
-                const question = isInvited
-                  ? t("empDetail.cancelInviteQ", { name: emp.name })
-                  : t("empDetail.deactivateQ", { name: emp.name });
-                const hint = isInvited ? t("empDetail.cancelInviteHint") : t("empDetail.deactivateHint");
-                if (confirm(`${question}\n\n${hint}`)) setActive(false);
-              }}
+              onClick={() => setConfirmAction(isInvited ? "cancelInvite" : "deactivate")}
             >
               <UserX size={15} />
               {t(isInvited ? "empDetail.cancelInvite" : "empDetail.deactivate")}
@@ -611,7 +631,7 @@ export default function EmployeeDetailPage() {
             <button
               className="w-full h-12 rounded-full font-bold text-sm flex items-center justify-center gap-2"
               style={{ background: "var(--brand)", color: "#0a0a0a" }}
-              onClick={() => setActive(true)}
+              onClick={() => setConfirmAction("reactivate")}
             >
               <UserCheck size={15} />
               {t("empDetail.reactivate")}
@@ -619,6 +639,37 @@ export default function EmployeeDetailPage() {
           )}
         </div>
       )}
+
+      {/* Contextual confirmation: names the employee and states what the change does. */}
+      <ConfirmDialog
+        open={confirmAction !== null}
+        title={
+          confirmAction === "cancelInvite"
+            ? t("empDetail.cancelInviteQ", { name: emp.name })
+            : confirmAction === "reactivate"
+              ? t("empDetail.reactivateQ", { name: emp.name })
+              : t("empDetail.deactivateQ", { name: emp.name })
+        }
+        message={
+          confirmAction === "cancelInvite"
+            ? t("empDetail.cancelInviteHint")
+            : confirmAction === "reactivate"
+              ? t("empDetail.reactivateHint")
+              : t("empDetail.deactivateHint")
+        }
+        confirmLabel={
+          confirmAction === "cancelInvite"
+            ? t("empDetail.cancelInvite")
+            : confirmAction === "reactivate"
+              ? t("empDetail.reactivate")
+              : t("empDetail.deactivate")
+        }
+        cancelLabel={t("common.cancel")}
+        destructive={confirmAction !== "reactivate"}
+        loading={statusBusy}
+        onConfirm={runStatusChange}
+        onCancel={() => !statusBusy && setConfirmAction(null)}
+      />
     </div>
   );
 }

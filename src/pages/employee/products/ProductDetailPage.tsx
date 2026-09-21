@@ -404,7 +404,7 @@ export default function ProductDetailPage() {
       <ConfirmDialog
         open={toDelete}
         title={t("products.confirmDelete")}
-        message={`${product.name} will be removed. If it has past sales, it's archived instead of deleted.`}
+        message={t("products.deleteConfirmBody", { name: product.name })}
         confirmLabel={t("common.delete")}
         destructive
         loading={deleting}
@@ -493,12 +493,15 @@ function ProductCustomerRecommendations({ productId }: { productId: string }) {
                 const waPhone = phone.startsWith('+') ? phone.slice(1) : phone.startsWith('0') ? '92' + phone.slice(1) : phone;
                 const firstName = rec.customer.name.split(' ')[0];
                 let msg = '';
+                // The message the owner SENDS a farmer: it must be in the language
+                // the owner is reading, not always English.
+                const waParams = { name: firstName, product: product.name, crop: rec.cropName };
                 if (rec.reasonTag === 'missing_from_basket') {
-                  msg = `Hi ${firstName}, the ${product.name} is needed for your ${rec.cropName} season but we haven't seen an order yet. Would you like me to set one aside for you?`;
+                  msg = t('whatsapp.orderReminder', waParams);
                 } else if (rec.reasonTag === 'due_again') {
-                  msg = `Hi ${firstName}, it's been a while since your last ${product.name} order for ${rec.cropName}. Time to restock?`;
+                  msg = t('whatsapp.restockReminder', waParams);
                 } else {
-                  msg = `Hi ${firstName}, ${product.name} is in season for your ${rec.cropName} — thought you might need it.`;
+                  msg = t('whatsapp.inSeasonReminder', waParams);
                 }
                 window.open('https://wa.me/' + waPhone + '?text=' + encodeURIComponent(msg), '_blank');
               }}

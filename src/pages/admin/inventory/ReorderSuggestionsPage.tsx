@@ -103,8 +103,8 @@ export default function ReorderSuggestionsPage() {
                     <p className="text-xs" style={{ color: "var(--text-secondary)" }}>{s.company} · {s.variantName}</p>
                   </div>
                   <div className="text-end shrink-0">
-                    <p className="text-sm font-bold" style={{ color }}>{s.stockQty} left</p>
-                    <p className="text-[10px]" style={{ color: "var(--text-secondary)" }}>Threshold: {s.threshold}</p>
+                    <p className="text-sm font-bold" style={{ color }}>{s.stockQty} {t("common.left")}</p>
+                    <p className="text-[10px]" style={{ color: "var(--text-secondary)" }}>{t("common.thresholdValue", { value: s.threshold })}</p>
                   </div>
                 </div>
 
@@ -128,7 +128,7 @@ export default function ReorderSuggestionsPage() {
                     className="flex items-center justify-center gap-2 w-full h-10 rounded-full text-xs font-bold transition-colors active:opacity-70"
                     style={{ background: "var(--brand)", color: "#0a0a0a" }}
                   >
-                    <ShoppingCart size={13} /> Order from {s.company} <ArrowRight size={14} />
+                    <ShoppingCart size={13} /> {t("common.orderFrom", { name: s.company })} <ArrowRight size={14} />
                   </button>
                 </div>
               </div>

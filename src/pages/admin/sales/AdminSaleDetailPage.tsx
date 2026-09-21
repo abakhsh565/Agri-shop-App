@@ -216,9 +216,9 @@ export default function AdminSaleDetailPage() {
       await rpcVoidSale(sale!.id, voidReason.trim());
       setIsVoided(true);
       setShowVoidDialog(false);
-      addToast("Sale voided successfully", "success");
+      addToast(t("copy.saleCancelled"), "success");
     } catch (err) {
-      addToast(err instanceof Error ? err.message : "Failed to void sale", "error");
+      addToast(err instanceof Error ? err.message : t("admin.voidSaleFailed"), "error");
     } finally {
       voidingRef.current = false;
       setVoiding(false);
@@ -236,7 +236,7 @@ export default function AdminSaleDetailPage() {
       {isVoided && (
         <div className="mx-4 mt-2 rounded-xl p-3 text-center" style={{ background: "#fee2e2", border: "1px solid #fca5a5" }}>
           <p className="text-sm font-bold" style={{ color: "#dc2626" }}>{t("admin.saleVoided")}</p>
-          {voidReason && <p className="text-xs mt-0.5" style={{ color: "#ef4444" }}>Reason: {voidReason}</p>}
+          {voidReason && <p className="text-xs mt-0.5" style={{ color: "#ef4444" }}>{t("admin.reason")}: {voidReason}</p>}
         </div>
       )}
 

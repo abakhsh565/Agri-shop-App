@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { Capacitor } from "@capacitor/core";
 import { App } from "@capacitor/app";
 import { isDashboardPath, clearNav } from "@/lib/navContext";
+import { tNow } from "@/lib/i18n";
 import { useUIStore } from "@/stores/uiStore";
 
 /**
@@ -33,7 +34,7 @@ export default function BackButtonHandler() {
         }
       } else {
         lastBackPress.current = now;
-        addToast("Press back again to exit", "info");
+        addToast(tNow("copy.pressBackAgain"), "info");
       }
       return;
     }

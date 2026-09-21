@@ -77,7 +77,7 @@ export default function InventoryAlertsPage() {
             <Truck size={18} color="#A32D2D" className="shrink-0" />
             <div className="flex-1 min-w-0">
               <p className="text-[13px] font-medium" style={{ color: "#791F1F" }}>{t("admin.supplierPayableDue")}</p>
-              <p className="text-[12px] mt-0.5" style={{ color: "#A32D2D" }}>{formatCurrency(totalPayable)} total due</p>
+              <p className="text-[12px] mt-0.5" style={{ color: "#A32D2D" }}>{t("common.totalDue", { amount: formatCurrency(totalPayable) })}</p>
             </div>
             <ChevronRight size={14} color="#A32D2D" />
           </button>
@@ -105,7 +105,7 @@ export default function InventoryAlertsPage() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-[13px] font-medium truncate" style={{ color: "var(--text-primary)" }}>{p.name}</p>
-                    <p className="text-[11px]" style={{ color: "#DC2626" }}>0 units in stock</p>
+                    <p className="text-[11px]" style={{ color: "#DC2626" }}>{t("common.unitsInStock", { count: p.stockQty })}</p>
                   </div>
                   <ChevronRight size={14} style={{ color: "var(--text-secondary)" }} />
                 </button>
@@ -138,7 +138,7 @@ export default function InventoryAlertsPage() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-[13px] font-medium truncate" style={{ color: "var(--text-primary)" }}>{p.name}</p>
-                      <p className="text-[11px]" style={{ color: "#D97706" }}>{p.stockQty} units — threshold: {threshold}</p>
+                      <p className="text-[11px]" style={{ color: "#D97706" }}>{t("common.unitsThreshold", { count: p.stockQty, threshold })}</p>
                     </div>
                     <ChevronRight size={14} style={{ color: "var(--text-secondary)" }} />
                   </button>

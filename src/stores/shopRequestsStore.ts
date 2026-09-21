@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { supabase } from "@/lib/supabase";
+import { tNow } from "@/lib/i18n";
 
 export type ShopRequestStatus = "pending" | "approved" | "hold" | "rejected";
 
@@ -125,7 +126,9 @@ export const useShopRequestsStore = create<ShopRequestsState>((set, get) => ({
 
       const result = typeof data === "string" ? JSON.parse(data) : data;
       if (!result?.success) {
-        const msg = result?.error || "Failed to submit request";
+        // These two used to be English strings, so a shop owner submitting a
+        // registration request in Urdu got an English failure message.
+        const msg = result?.error || tNow("errors.requestSubmitFailed");
         set({ loading: false, error: msg });
         return { success: false, error: msg };
       }
@@ -215,7 +218,7 @@ export const useShopRequestsStore = create<ShopRequestsState>((set, get) => ({
 
       const result = typeof data === "string" ? JSON.parse(data) : data;
       if (!result?.success) {
-        const msg = result?.error || "Failed to approve request";
+        const msg = result?.error || tNow("errors.requestApproveFailed");
         set({ loading: false, error: msg });
         return { success: false, error: msg };
       }

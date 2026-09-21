@@ -301,8 +301,8 @@ export default function ReturnConfirmPage() {
                   ? t("return.returnedDirectly")
                   : t("return.addedAsCreditNote")}{" "}
                 {sale
-                  ? `${sale.customerName}. Original invoice ${sale.saleNumber} remains preserved.`
-                  : "to the customer."}
+                  ? t("common.originalInvoiceKept", { customer: sale.customerName, invoice: sale.saleNumber })
+                  : t("common.toTheCustomer")}
               </p>
             </div>
           </div>

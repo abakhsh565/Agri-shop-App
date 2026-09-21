@@ -885,3 +885,52 @@ Urdu/RTL + English/LTR (`ps-*`/`pe-*`, `text-start`/`text-end`, `useT()`, EN **a
 keys) · QA evidence.
 
 **NO ACTUAL EVIDENCE = NO PASS = NO ADVANCEMENT.**
+
+---
+
+## Stage: consequential-action safety closure (2026-09-21)
+
+Started as verification of one change (the employee deactivate/reactivate confirmation)
+and closed the whole class it belongs to. Every item below has real evidence: real Chrome
+through Playwright, or a real JWT through PostgREST into the RPC, judged on the database.
+
+### What was found, and what was done
+
+| # | Defect (all reproduced first) | Fix | Evidence |
+|---|---|---|---|
+| 1 | Employee deactivate/reactivate confirmation guarded by React STATE. Two clicks in one task both read the pre-render `false`, so two `deactivate_employee_v1` calls went out and the owner saw an ERROR right after the deactivation had succeeded | `statusBusyRef` | `employeeStatusSafety` 3/3; falsified: reverting to the state guard gives `Received: 2` |
+| 2 | `delete_role` confirmation had the identical flaw | `deletingRef` | `roleDeleteSafety` 1/1; falsified: `Received: 2` |
+| 3 | Four create screens had NO re-entry guard at all — only `disabled={loading}`, which is applied on the re-render: Add Employee, Record Purchase, Add Product, Add Company | `creatingRef` / `savingRef` | `reentrancyGuard` unit guard; falsified by removing one |
+| 4 | **Recording a purchase failed completely.** `purchase_items.line_total` is NOT NULL and the RPC read it from a field the page never sends, so every purchase raised `null value in column "line_total"` and rolled back — no purchase, no stock, no payable. The same NULL propagated into the total, and there was no idempotency and no actor either | Migration 0140 | `createOnceSafety` 2/2: one purchase, stock 0→3, payable 300; falsified: without the key, 2 purchases |
+| 5 | **Opening stock typed on Add Product was discarded.** `create_product` reads stock from each variant; the form collects one figure and sent it at product level, so every product was created with 0 stock while the field's own hint promises sellable units come out of it | Page now sends it where the database reads it (single unit row) | `productOpeningStock` E2E |
+| 6 | A SQL error reported in-band looked like data: `execSql`/`runSqlHttp` returned `{error}` as a row, so a failed fixture write read as "the row isn't there" and the spec blamed the product | Both helpers throw | the first run of `employeeStatusSafety` failed on a product assertion that was really a bad fixture enum value |
+| 7 | `"Saving…"` hardcoded on Add Product — English in Urdu mode; the existing guards do not see a literal inside a JSX ternary | `t("common.saving")` | source |
+
+Durable prevention: `tests/unit/reentrancyGuard.test.ts` fails on any
+`if (<boolean useState>) return;` in `src/`, on any listed consequential submit that lost
+its ref, and on any submit that stopped claiming its idempotency key.
+
+### PRODUCTION READY: NO — remaining blockers
+
+1. **The full Playwright suite result is one spec short of clean.** The clean run
+   (nothing else touching the QA database) was **77 passed / 1 failed**, and the single
+   failure is `voidSaleSafety` at **0 ms** with `execSql: TypeError: fetch failed` inside
+   `setupFixtures` — a network blip reaching the QA endpoint during fixture setup, not a
+   product or logic failure. Re-running the affected lanes together
+   (`voidSaleSafety`, `employeeStatusSafety`, `roleDeleteSafety`, `productOpeningStock`)
+   gave **5 passed / 1 failed**, where the failure was the new opening-stock spec, which
+   then passed on its own and was falsified (reverting the fix → `Received: 0`).
+   Everything green must be re-established in ONE run before this can be called done.
+2. **Opening stock with more than one unit row is an open product decision.** The form has
+   one stock field and the product may have several units; the fix applies it to the single
+   unit row. For two or more units the form cannot express per-unit opening stock — needs
+   either per-unit fields or hiding the single field. Not guessed at.
+3. **`void_sale` does not receive an idempotency key from the screen.** The ref guard plus
+   the 0138 `FOR UPDATE` refusal make a double tap safe, but a retry after a lost answer
+   reports an error instead of returning the original void.
+4. `create_product` / `create_company` are ref-guarded in the UI but have no database
+   idempotency, so a lost-answer retry could duplicate.
+5. Employee-side screens still hold English literals (the earlier microcopy pass was
+   scoped to the admin side).
+6. Nothing from this stage or the previous microcopy stage is committed — the work is all
+   in the working tree and must be reviewed as one diff before any commit.

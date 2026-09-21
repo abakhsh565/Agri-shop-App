@@ -62,12 +62,12 @@ export default function PINLoginPage() {
       } else if (result.status === "error") {
         // Decryption/storage error — NOT a wrong PIN
         // Do NOT clear the PIN. Show error and allow retry.
-        setError("Storage error. Please try again.");
+        setError(t("copy.storageError"));
         setPinValue("");
       } else {
         // result.status === "wrong" — genuinely incorrect PIN
         // Allow retry, do NOT delete the stored PIN
-        setError("Incorrect PIN. Try again.");
+        setError(t("copy.pinWrong"));
         setPinValue("");
       }
     } finally {

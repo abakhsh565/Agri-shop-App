@@ -118,7 +118,7 @@ export default function AdminPaymentsPage() {
             >
               <div className="min-w-0">
                 <p className="text-sm font-bold truncate" style={{ color: "var(--text-primary)" }}>{c.name}</p>
-                <p className="text-xs" style={{ color: "var(--text-secondary)" }}>{c.contactPerson ?? c.phone ?? "Supplier"}</p>
+                <p className="text-xs" style={{ color: "var(--text-secondary)" }}>{c.contactPerson ?? c.phone ?? t("common.supplier")}</p>
               </div>
               <div className="flex items-center gap-2 shrink-0">
                 <div className="text-end">

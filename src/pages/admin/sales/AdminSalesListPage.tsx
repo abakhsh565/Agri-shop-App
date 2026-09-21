@@ -269,7 +269,7 @@ export default function AdminSalesListPage() {
       {employeeFilter && (
         <div className="px-4 pt-2 flex items-center gap-2">
           <span className="text-xs font-semibold px-3 py-1.5 rounded-full" style={{ background: "var(--brand)", color: "#0a0a0a" }}>
-            {mockEmployees.find((e) => e.id === employeeFilter)?.name ?? "Employee"} ✕
+            {mockEmployees.find((e) => e.id === employeeFilter)?.name ?? t("common.employee")} ✕
           </span>
           <button onClick={() => setEmployeeFilter(null)} className="text-xs" style={{ color: "var(--text-secondary)" }}>
             {t("common.clearFilter")}
@@ -341,7 +341,7 @@ export default function AdminSalesListPage() {
             </div>
             <div className="flex gap-3">
               <div className="flex-1">
-                <label className="text-[11px] font-semibold uppercase tracking-wider mb-1 block" style={{ color: "var(--text-secondary)" }}>From</label>
+                <label className="text-[11px] font-semibold uppercase tracking-wider mb-1 block" style={{ color: "var(--text-secondary)" }}>{t("admin.from")}</label>
                 <input
                   type="date"
                   value={customFrom}
@@ -352,7 +352,7 @@ export default function AdminSalesListPage() {
                 />
               </div>
               <div className="flex-1">
-                <label className="text-[11px] font-semibold uppercase tracking-wider mb-1 block" style={{ color: "var(--text-secondary)" }}>To</label>
+                <label className="text-[11px] font-semibold uppercase tracking-wider mb-1 block" style={{ color: "var(--text-secondary)" }}>{t("admin.to")}</label>
                 <input
                   type="date"
                   value={customTo}

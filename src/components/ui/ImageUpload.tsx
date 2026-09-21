@@ -1,7 +1,8 @@
 import { useRef, useState } from "react";
 import { Camera, ImagePlus, Loader2, X } from "lucide-react";
 import { uploadImage, type ImageBucket } from "@/lib/storage";
-import { useT } from "@/lib/i18n";
+import { useT, tNow } from "@/lib/i18n";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
 
 interface ImageUploadProps {
   bucket: ImageBucket;
@@ -23,13 +24,17 @@ export default function ImageUpload({
   value,
   onChange,
   shape = "square",
-  label = "Add photo",
+  label,
 }: ImageUploadProps) {
   const t = useT();
+  // The default label used to be the English string "Add photo", so any call site
+  // that omitted it showed English to an owner reading Urdu.
+  const labelText = label ?? t("common.addPhoto");
   const inputRef = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState<string | null>(value ?? null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [confirmRemove, setConfirmRemove] = useState(false);
 
   const radius = shape === "circle" ? "9999px" : "16px";
 
@@ -49,7 +54,8 @@ export default function ImageUpload({
       setPreview(url);
       onChange(url);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Upload failed");
+      // The raw uploader error is not something a shop owner can act on.
+      setError(tNow("errors.uploadFailed"));
       setPreview(value ?? null);
       onChange(value ?? null);
     } finally {
@@ -61,6 +67,7 @@ export default function ImageUpload({
   function clear() {
     setPreview(null);
     setError(null);
+    setConfirmRemove(false);
     onChange(null);
   }
 
@@ -82,11 +89,11 @@ export default function ImageUpload({
         }}
       >
         {preview ? (
-          <img src={preview} alt={label} className="w-full h-full object-cover" />
+          <img src={preview} alt={labelText} className="w-full h-full object-cover" />
         ) : (
           <div className="flex flex-col items-center gap-1" style={{ color: "var(--text-secondary)" }}>
             <ImagePlus size={22} />
-            <span className="text-[11px] font-medium">{label}</span>
+            <span className="text-[11px] font-medium">{labelText}</span>
           </div>
         )}
 
@@ -109,7 +116,7 @@ export default function ImageUpload({
       {preview && !busy && (
         <button
           type="button"
-          onClick={clear}
+          onClick={() => setConfirmRemove(true)}
           className="flex items-center gap-1 text-[11px] font-medium"
           style={{ color: "var(--text-secondary)" }}
         >
@@ -122,6 +129,17 @@ export default function ImageUpload({
           {error}
         </p>
       )}
+
+      <ConfirmDialog
+        open={confirmRemove}
+        title={tNow("common.removePhotoQ")}
+        message={tNow("common.removePhotoHint")}
+        confirmLabel={tNow("common.removePhotoAction")}
+        cancelLabel={tNow("common.cancel")}
+        destructive
+        onConfirm={clear}
+        onCancel={() => setConfirmRemove(false)}
+      />
     </div>
   );
 }

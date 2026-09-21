@@ -58,8 +58,10 @@ export async function rpcCreatePurchase(payload: {
   paymentMethod: PaymentMethod;
   amountPaid: number;
   note?: string;
+  /** Claimed by the database so one confirm cannot receive the same delivery twice (0140). */
+  idempotencyKey?: string;
   items: { productId?: string; productName: string; variantId?: string; variantName: string; qty: number; costPrice: number }[];
-}): Promise<{ id: string; purchaseNumber: string; totalAmount: number; outstandingPayable: number }> {
+}): Promise<{ id: string; purchaseNumber: string; totalAmount: number; outstandingPayable: number; idempotent?: boolean }> {
   const userId = useAuthStore.getState().user?.id ?? null;
   const { data, error } = await supabase.rpc("create_purchase", { payload: { ...payload, userId } });
   if (error) throw new Error(friendly(error.message));
@@ -121,7 +123,8 @@ export async function rpcCreateProduct(payload: {
   stockQty: number;
   imageUrl?: string;
   barcode?: string;
-  variants: { name: string; sellingPrice: number; costPrice: number; unitSize: number; qtyStep: number; lowStockThreshold: number }[];
+  /** Opening stock belongs to the VARIANT, which is the stock of record (0128). */
+  variants: { name: string; sellingPrice: number; costPrice: number; unitSize: number; qtyStep: number; lowStockThreshold: number; stockQty?: number }[];
 }): Promise<{ id: string }> {
   const actorId = useAuthStore.getState().user?.id;
   const { data, error } = await supabase.rpc("create_product", { payload: { ...payload, actorId, userId: actorId } });

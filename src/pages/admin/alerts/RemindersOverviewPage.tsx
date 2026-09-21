@@ -10,7 +10,7 @@ import { useThemeStore } from "@/stores/themeStore";
 import { computeLiveSignals, type LiveSignal, type SignalCategory, type SignalSeverity, type SignalAction, type CreditRequestInput } from "@/lib/signalEngine";
 import { markSignalReviewed, isSignalSuppressed, isSignalEscalated, getSuppressionInterval, cleanupOldRecords } from "@/lib/signalSuppression";
 import { formatCurrency } from "@/lib/formatters";
-import { useT } from "@/lib/i18n";
+import { useT, tNow } from "@/lib/i18n";
 import { generateReminders, generateReminderMessage, calculatePaymentStatus, markOccurrenceSent, categorizeReminders } from "@/lib/reminderEngine";
 import type { GeneratedReminder } from "@/types";
 import { MessageCircle, Smartphone, X, ChevronDown, ChevronUp, Bell, CheckCircle2, Clock, AlertTriangle, AlertOctagon, Info, Plus, Users, Trash2, Eye, Send, XCircle } from "lucide-react";
@@ -232,7 +232,7 @@ function ActivityItem({ log }: { log: ReminderLogEntry }) {
   const t = useT();
   const tc = TONE_CONFIG[log.type] || TONE_CONFIG.gentle;
   const channel = (log.channel || "sent").toUpperCase();
-  const name = log.customerName || "Customer";
+  const name = log.customerName || t("common.customer");
   return (
     <div className="flex items-center gap-3 px-4 py-3" style={{ borderBottom: "1px solid var(--divider)" }}>
       {log.customerImageUrl ? (<img src={log.customerImageUrl} alt="" className="w-9 h-9 rounded-full object-cover shrink-0" />) : (<div className="w-9 h-9 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0" style={{ background: getAvatarColor(name), color: "#fff" }}>{getInitials(name)}</div>)}
@@ -240,7 +240,7 @@ function ActivityItem({ log }: { log: ReminderLogEntry }) {
         <p className="text-[14px] font-medium" style={{ color: "var(--text-primary)" }}>{name}</p>
         <p className="text-[12px]" style={{ color: "var(--text-secondary)" }}>{t(tc.labelKey as any)} · {channel} · {timeAgo(log.sentAt)}</p>
       </div>
-      <span className="text-[11px] font-bold px-2.5 py-1 rounded-full shrink-0" style={{ background: "var(--brand-light, #d9f99d)", color: "var(--brand-dark, #65a30d)" }}>Sent</span>
+      <span className="text-[11px] font-bold px-2.5 py-1 rounded-full shrink-0" style={{ background: "var(--brand-light, #d9f99d)", color: "var(--brand-dark, #65a30d)" }}>{t("common.sent")}</span>
     </div>
   );
 }
@@ -352,7 +352,11 @@ export default function RemindersOverviewPage() {
         title: r.customerName,
         detailKey: "signal.detailCreditRequest",
         detailParams: { from: Math.round(r.currentLimit).toLocaleString("en-PK"), to: Math.round(r.requestedLimit).toLocaleString("en-PK") },
-        reason: `${r.customerName} is requesting a credit limit increase from Rs. ${Math.round(r.currentLimit).toLocaleString("en-PK")} to Rs. ${Math.round(r.requestedLimit).toLocaleString("en-PK")}${r.reason ? `. Reason: ${r.reason}` : ""}.`,
+        reason: `${tNow("common.creditRequestReason", {
+          name: r.customerName,
+          from: Math.round(r.currentLimit).toLocaleString("en-PK"),
+          to: Math.round(r.requestedLimit).toLocaleString("en-PK"),
+        })}${r.reason ? ` ${tNow("admin.reason")}: ${r.reason}` : ""}`,
         recommendedAction: "Approve or reject the request.",
         signalAction: "approve_reject" as SignalAction,
         value: r.requestedLimit,
@@ -837,7 +841,7 @@ export default function RemindersOverviewPage() {
               </p>
               {creditAction.request.reason && (
                 <p className="mt-1" style={{ color: "var(--text-secondary)" }}>
-                  {isUrdu ? "وجہ" : "Reason"}: {creditAction.request.reason}
+                  {t("admin.reason")}: {creditAction.request.reason}
                 </p>
               )}
             </div>

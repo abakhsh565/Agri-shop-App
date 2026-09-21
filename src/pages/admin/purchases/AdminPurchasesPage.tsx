@@ -65,7 +65,7 @@ export default function AdminPurchasesPage() {
 
       {loading ? (
         <div className="flex flex-col items-center py-20 gap-2">
-          <p className="text-sm" style={{ color: "var(--text-secondary)" }}>Loading…</p>
+          <p className="text-sm" style={{ color: "var(--text-secondary)" }}>{t("common.loading")}</p>
         </div>
       ) : purchases.length === 0 ? (
         <EmptyState icon="📦" title={t("purchases.noStockIns")} subtitle={t("purchases.noStockInsDesc")} />
@@ -107,13 +107,13 @@ export default function AdminPurchasesPage() {
 
                 <div className="flex items-center justify-between mt-3 pt-3" style={{ borderTop: "1px solid var(--divider)" }}>
                   <span className="text-xs" style={{ color: "var(--text-secondary)" }}>
-                    {p.items.length} line{p.items.length > 1 ? "s" : ""} · {units} units
+                    {t("common.itemsCount", { count: p.items.length })} · {t("common.unitsCount", { count: units })}
                   </span>
                   <div className="text-end">
                     <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>{formatCurrency(p.totalAmount)}</p>
                     {unpaid && (
                       <p className="text-[11px]" style={{ color: "var(--error)" }}>
-                        {formatCurrency(p.outstandingPayable)} payable
+                        {formatCurrency(p.outstandingPayable)} {t("common.payable")}
                       </p>
                     )}
                   </div>

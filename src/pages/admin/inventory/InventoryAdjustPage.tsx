@@ -69,12 +69,12 @@ export default function InventoryAdjustPage() {
   async function handleSave() {
     if (submittingRef.current) return;
     setError("");
-    if (!product || !variant) { setError("Select a unit / variant."); return; }
-    if (amt <= 0 && type !== "set") { setError("Enter an amount greater than zero."); return; }
-    if (type === "set" && amount === "") { setError("Enter the counted quantity."); return; }
+    if (!product || !variant) { setError(t("copy.selectUnitFirst")); return; }
+    if (amt <= 0 && type !== "set") { setError(t("copy.enterQty")); return; }
+    if (type === "set" && amount === "") { setError(t("copy.enterCountedQty")); return; }
     // Inventory can never go negative (Non-Negotiable Rules).
-    if (after < 0) { setError("Adjustment would make stock negative. Remove at most " + before + "."); return; }
-    if (change === 0) { setError("This does not change the stock level."); return; }
+    if (after < 0) { setError(t("copy.stockWouldGoNegative", { have: String(before) })); return; }
+    if (change === 0) { setError(t("copy.stockUnchanged")); return; }
 
     submittingRef.current = true;
     if (!submissionKeyRef.current) submissionKeyRef.current = crypto.randomUUID();
@@ -92,7 +92,7 @@ export default function InventoryAdjustPage() {
       // Done: this attempt's key retires, so the next adjustment is a new one.
       submissionKeyRef.current = null;
 
-      addToast(`${product.name} · ${variant.name} → ${res.qtyAfter} units`, "success");
+      addToast(t("copy.stockNow", { product: product.name, variant: variant.name, qty: String(res.qtyAfter) }), "success");
       // Create notification (client-side fallback for when migration 0015 isn't applied)
       try {
         const user = useAuthStore.getState().user;
@@ -108,7 +108,7 @@ export default function InventoryAdjustPage() {
     } catch (err) {
       // The key is KEPT on failure: the adjustment may have been applied and only
       // the answer lost, so the retry must return that one, not apply a second.
-      setError(err instanceof Error ? err.message : "Could not adjust stock.");
+      setError(err instanceof Error ? err.message : t("errors.adjustStockFailed"));
     } finally {
       submittingRef.current = false;
       setLoading(false);
@@ -152,7 +152,7 @@ export default function InventoryAdjustPage() {
                   >
                     <div>
                       <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>{v.name}</p>
-                      <p className="text-xs" style={{ color: "var(--text-secondary)" }}>{product.stockQty} {product.baseUnit} in stock</p>
+                      <p className="text-xs" style={{ color: "var(--text-secondary)" }}>{product.stockQty} {product.baseUnit} {t("common.inStock")}</p>
                     </div>
                     <div className="w-5 h-5 rounded-full border-2 flex items-center justify-center"
                       style={{ borderColor: selected ? "var(--brand)" : "var(--text-secondary)" }}>

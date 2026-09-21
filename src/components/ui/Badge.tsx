@@ -1,6 +1,7 @@
 import type { PaymentType, StockStatus } from "@/types";
 import { getStockStatusLabel, getStockStatusColor } from "@/lib/formatters";
 import { formatCurrency } from "@/lib/formatters";
+import { tNow } from "@/lib/i18n";
 
 interface PaymentBadgeProps {
   type: PaymentType;
@@ -8,6 +9,9 @@ interface PaymentBadgeProps {
 }
 
 export function PaymentBadge({ type, outstandingBalance }: PaymentBadgeProps) {
+  // "PAID" and "CREDIT" were written straight into the JSX, so an owner reading Urdu
+  // saw English badges on every sales and purchases list.
+  const paid = tNow("common.paid");
   if (type === "full") {
     return (
       <span
@@ -18,7 +22,7 @@ export function PaymentBadge({ type, outstandingBalance }: PaymentBadgeProps) {
           border: "1px solid rgba(132,204,22,0.35)",
         }}
       >
-        PAID
+        {paid}
       </span>
     );
   }
@@ -31,7 +35,7 @@ export function PaymentBadge({ type, outstandingBalance }: PaymentBadgeProps) {
         border: "1px solid rgba(245,158,11,0.35)",
       }}
     >
-      {outstandingBalance ? `CREDIT · ${formatCurrency(outstandingBalance)}` : "CREDIT"}
+      {outstandingBalance ? `${tNow("common.creditTag")} · ${formatCurrency(outstandingBalance)}` : tNow("common.creditTag")}
     </span>
   );
 }

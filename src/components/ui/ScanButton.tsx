@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { scanFromCamera } from "@/lib/barcode";
 import { useUIStore } from "@/stores/uiStore";
-import { useT } from "@/lib/i18n";
+import { useT, tNow } from "@/lib/i18n";
 import { Scan, X, Keyboard } from "lucide-react";
 
 interface ScanButtonProps {
@@ -16,7 +16,10 @@ interface ScanButtonProps {
  * - If camera unavailable → shows manual entry input
  * - Also handles USB scanner keyboard input when focused
  */
-export default function ScanButton({ onScan, label = "Scan", size = "md" }: ScanButtonProps) {
+export default function ScanButton({ onScan, label, size = "md" }: ScanButtonProps) {
+  // The default label used to be the English word "Scan", so a caller that omitted
+  // it showed English to an owner reading Urdu.
+  const labelText = label ?? tNow("scan");
   const [showManual, setShowManual] = useState(false);
   const [manualCode, setManualCode] = useState("");
   const [scanning, setScanning] = useState(false);
@@ -31,11 +34,11 @@ export default function ScanButton({ onScan, label = "Scan", size = "md" }: Scan
         onScan(result.barcode);
       } else {
         // Camera not available or permission denied — show manual entry
-        addToast("Camera not available. Enter barcode manually.", "warning");
+        addToast(tNow("copy.cameraUnavailable"), "warning");
         setShowManual(true);
       }
     } catch (err) {
-      addToast("Camera error: " + (err instanceof Error ? err.message : "Use manual entry"), "error");
+      addToast(tNow("copy.cameraFailed"), "error");
       setShowManual(true);
     } finally {
       setScanning(false);
@@ -65,7 +68,7 @@ export default function ScanButton({ onScan, label = "Scan", size = "md" }: Scan
         style={{ background: "var(--surface-2)", color: "var(--text-primary)", border: "1px solid var(--divider)" }}
       >
         <Scan size={size === "sm" ? 13 : 15} />
-        {scanning ? "Scanning…" : label}
+        {scanning ? tNow("common.scanning") : labelText}
       </button>
 
       {/* Manual entry modal */}

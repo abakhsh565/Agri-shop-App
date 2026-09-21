@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
@@ -73,6 +73,7 @@ export default function AddEmployeePage() {
   const [branches, setBranches] = useState<{ id: string; name: string; is_default: boolean }[]>([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const creatingRef = useRef(false);
 
   useEffect(() => {
     rolesStore.load();
@@ -137,6 +138,12 @@ export default function AddEmployeePage() {
   }
 
   async function handleCreate() {
+    // A ref, not `loading`: React batches, so two taps in one task both read the
+    // pre-render `false` and the owner ends up with TWO employees from one decision.
+    // Held until the screen changes; released only when the attempt failed, which
+    // keeps the button disabled while the invitation screen renders (as before).
+    if (creatingRef.current) return;
+    creatingRef.current = true;
     setError("");
     setLoading(true);
     try {
@@ -162,6 +169,7 @@ export default function AddEmployeePage() {
     } catch (e) {
       setError(e instanceof Error ? e.message : t("addEmployee.errFailed"));
       setLoading(false);
+      creatingRef.current = false;
     }
   }
 

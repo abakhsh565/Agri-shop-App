@@ -91,12 +91,22 @@ export async function execSql(sql: string): Promise<any[]> {
   const { data, error } = await _svcClient.rpc('run_sql', { sql_query: sql });
   if (error) throw new Error(`execSql: ${error.message}`);
   if (!data || data === 'ok') return [];
-  try {
-    const parsed = JSON.parse(data);
-    return Array.isArray(parsed) ? parsed : [parsed];
-  } catch {
-    return [{ result: data }];
+  let parsed: unknown = data;
+  if (typeof data === 'string') {
+    try {
+      parsed = JSON.parse(data);
+    } catch {
+      return [{ result: data }];
+    }
   }
+  // run_sql reports SQL errors IN BAND, as {error}. Handing that back as if it were a
+  // row made a failed fixture write indistinguishable from "the row isn't there": a
+  // spec then asserts against an empty table and blames the product. A 'cash' value in
+  // the payment_type enum produced exactly that — a missing sale row, no error.
+  if (parsed && typeof parsed === 'object' && !Array.isArray(parsed) && 'error' in parsed) {
+    throw new Error(`execSql: ${String((parsed as { error: unknown }).error)}`);
+  }
+  return Array.isArray(parsed) ? parsed : [parsed];
 }
 
 /** Execute SQL via Supabase REST (anon client, respects RLS) */

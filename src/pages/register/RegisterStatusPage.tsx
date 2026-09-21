@@ -95,7 +95,7 @@ export default function RegisterStatusPage() {
             className="w-full p-4 rounded-[14px]"
             style={{ background: "rgba(239,68,68,0.05)", border: "1px solid rgba(239,68,68,0.2)" }}
           >
-            <p className="text-xs font-bold mb-1" style={{ color: "#ef4444" }}>Reason:</p>
+            <p className="text-xs font-bold mb-1" style={{ color: "#ef4444" }}>{t("admin.reason")}:</p>
             <p className="text-sm" style={{ color: "var(--text-primary)" }}>{myRequest.rejectionReason}</p>
           </div>
         )}

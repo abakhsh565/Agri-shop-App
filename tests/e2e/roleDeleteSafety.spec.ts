@@ -1,0 +1,123 @@
+/**
+ * E2E: deleting a role fires exactly once, and reports the truth about what happened.
+ *
+ * The same defect fixed on the employee confirmation and the void dialog lived here
+ * too: the guard was React state (`deleting`). React batches, so two clicks dispatched
+ * in one task both read the pre-render value `false`, both reach `delete_role`, and the
+ * second is refused with ROLE_NOT_FOUND_OR_NOT_AUTHORIZED — so the owner is shown an
+ * ERROR immediately after the deletion that actually succeeded.
+ *
+ * Two clicks in ONE task, one RPC expected, judged on the database. The spec refuses to
+ * run if the button is already disabled, so it cannot pass by proving nothing.
+ *
+ * QA database only; the throwaway role is deleted again.
+ */
+import { test, expect, type Page } from '@playwright/test';
+import { QA_IDS, execSql, setupFixtures, cleanupFixtures, injectAdminAuth } from './helpers';
+
+const BASE_URL = 'http://localhost:5173';
+const ROLE_ID = 'aaaa0000-0000-4000-8000-000000000001';
+const ROLE_NAME = `QA Throwaway Role ${Date.now().toString(36).toUpperCase()}`;
+
+async function roleExists() {
+  const rows = await execSql(`SELECT count(*)::int AS n FROM roles WHERE id = '${ROLE_ID}'`);
+  return Number(rows[0].n) === 1;
+}
+
+/** The toast surface, read without Playwright's auto-wait (most reads are empty). */
+function toastText(page: Page) {
+  return page
+    .evaluate(() => {
+      const el = document.querySelector('div.fixed[style*="--tabbar-height"]');
+      return el ? (el as HTMLElement).innerText : '';
+    })
+    .catch(() => '');
+}
+
+async function collectToasts(page: Page, ms = 6000) {
+  let seen = '';
+  for (let waited = 0; waited < ms; waited += 100) {
+    seen += `\n${await toastText(page)}`;
+    await page.waitForTimeout(100);
+  }
+  return seen;
+}
+
+test.describe('Role delete safety', () => {
+  test.beforeAll(async () => {
+    await setupFixtures();
+    await execSql(`
+      INSERT INTO roles (id, tenant_id, name, description, is_system)
+      VALUES ('${ROLE_ID}', '${QA_IDS.shop}', '${ROLE_NAME}', 'QA throwaway role', false)
+      ON CONFLICT (id) DO NOTHING
+    `);
+  });
+
+  test.afterAll(async () => {
+    await execSql(`DELETE FROM role_permissions WHERE role_id = '${ROLE_ID}'`).catch(() => {});
+    await execSql(`DELETE FROM roles WHERE id = '${ROLE_ID}'`).catch(() => {});
+    await cleanupFixtures();
+  });
+
+  test('a double tap deletes the role once and does not report a failure', async ({ page }) => {
+    await injectAdminAuth(page);
+
+    const deletions: string[] = [];
+    page.on('request', (req) => {
+      if (req.url().includes('/rpc/delete_role')) deletions.push(req.url());
+    });
+
+    await page.goto(`${BASE_URL}/admin/settings/roles`);
+    await page.waitForLoadState('networkidle');
+
+    await expect(page.getByText(ROLE_NAME).first()).toBeVisible({ timeout: 15000 });
+
+    // The row's action buttons carry icons, not labels: walk up from the role's name to
+    // the first container holding them and press the last one (edit is rendered first,
+    // and the delete button only exists for roles that are not built in).
+    await page.evaluate((name) => {
+      const label = Array.from(document.querySelectorAll('p')).find(
+        (el) => (el.textContent || '').trim() === name
+      );
+      if (!label) throw new Error(`role row not found: ${name}`);
+      let node: HTMLElement | null = label;
+      let buttons: HTMLButtonElement[] = [];
+      while (node && buttons.length < 2) {
+        node = node.parentElement;
+        if (!node) break;
+        buttons = Array.from(node.querySelectorAll('button')) as HTMLButtonElement[];
+      }
+      const del = buttons[buttons.length - 1];
+      if (!del) throw new Error('delete button not found in the role row');
+      del.click();
+    }, ROLE_NAME);
+
+    await expect(page.getByText('Delete this role?')).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText(new RegExp(`No employee is using ${ROLE_NAME}`, 'i'))).toBeVisible();
+
+    await page.evaluate(() => {
+      const btns = Array.from(document.querySelectorAll('button')).filter(
+        (b) => (b.textContent || '').trim().toLowerCase() === 'delete role'
+      ) as HTMLButtonElement[];
+      const btn = btns[btns.length - 1];
+      if (!btn) throw new Error('delete confirm button not found');
+      if (btn.disabled) throw new Error('the confirm button was already disabled — the second tap never lands');
+      btn.click();
+      btn.click();
+    });
+
+    const toasts = await collectToasts(page);
+
+    expect(toasts, 'control: the success toast must be observed, or this check proves nothing')
+      .toContain('Role deleted');
+    expect(
+      /did not work|not found|not authorized/i.test(toasts),
+      'the second tap must not report a failure after the deletion already succeeded'
+    ).toBe(false);
+
+    expect(deletions.length, 'control: the tap must actually reach the backend').toBeGreaterThan(0);
+    expect(deletions.length, 'a double tap must send exactly one delete').toBe(1);
+
+    expect(await roleExists(), 'the role must be gone from the database').toBe(false);
+  });
+});

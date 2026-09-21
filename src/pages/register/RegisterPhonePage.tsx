@@ -27,7 +27,7 @@ export default function RegisterPhonePage() {
     const cleanPhone = phone.replace(/\s/g, "");
 
     if (!validatePhone(cleanPhone)) {
-      setPhoneError("Enter a valid phone number (e.g. 03001234567)");
+      setPhoneError(t("auth.errPhoneFormat"));
       return;
     }
 
@@ -45,7 +45,7 @@ export default function RegisterPhonePage() {
 
       const result = await sendOTP(cleanPhone);
       if (!result.success) {
-        setPhoneError(result.error || "Could not send the code. Try again.");
+        setPhoneError(result.error || t("auth.errSendCode"));
         return;
       }
 

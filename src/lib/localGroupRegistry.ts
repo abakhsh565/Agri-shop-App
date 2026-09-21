@@ -15,6 +15,7 @@
 import { supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/stores/authStore";
 import type { ReminderConfig } from "@/types";
+import { tNow } from "@/lib/i18n";
 
 // ── Types ──
 
@@ -162,7 +163,7 @@ export async function loadLocalGroups(): Promise<
       const c = custMap.get(cId);
       return {
         id: cId,
-        name: c?.name || "Unknown",
+        name: c?.name || tNow("common.unknown"),
         outstandingBalance: c?.outstanding_balance || 0,
         dueDate: c?.due_date || null,
         imageUrl: c?.image_url || undefined,

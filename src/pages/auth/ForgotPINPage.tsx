@@ -49,7 +49,7 @@ export default function ForgotPINPage() {
   }, []);
 
   async function handleSendOTP() {
-    if (!phone.trim()) { setError("Enter your phone number"); return; }
+    if (!phone.trim()) { setError(t("copy.enterPhone")); return; }
     setLoading(true);
     setError("");
     try {
@@ -57,7 +57,7 @@ export default function ForgotPINPage() {
       await sendOTP(phone.trim());
       setStep("otp");
     } catch {
-      setError("Could not send code");
+      setError(t("copy.sendCodeFailed"));
     } finally {
       setLoading(false);
     }
@@ -69,11 +69,11 @@ export default function ForgotPINPage() {
     setError("");
     try {
       const result = await verifyOTPAndResolveUser(phone, otp);
-      if (result.status === "wrong_otp") { setError("Incorrect code. Try again."); setOtp(""); return; }
-      if (result.status === "not_registered") { setError("Number not registered"); return; }
-      if (result.status === "deactivated") { setError("Account deactivated"); return; }
-      if (result.status === "pending") { setError("Registration under review"); return; }
-      if (result.status === "rejected") { setError("Registration rejected"); return; }
+      if (result.status === "wrong_otp") { setError(t("auth.codeWrong")); setOtp(""); return; }
+      if (result.status === "not_registered") { setError(t("auth.numberNotRegistered")); return; }
+      if (result.status === "deactivated") { setError(t("copy.accountDeactivated")); return; }
+      if (result.status === "pending") { setError(t("auth.underReview")); return; }
+      if (result.status === "rejected") { setError(t("auth.rejected")); return; }
       if (result.status === "error") { setError(result.message); return; }
       // OTP correct — set user and go to PIN creation
       setUser(result.user);
@@ -92,7 +92,7 @@ export default function ForgotPINPage() {
     } else {
       // Confirm step
       if (val !== firstPin) {
-        setError("PINs don't match. Try again.");
+        setError(t("auth.pinMismatch"));
         setShake(true);
         setTimeout(() => { setShake(false); setError(""); setStep("pin"); setFirstPin(""); setConfirmPin(""); }, 600);
         return;

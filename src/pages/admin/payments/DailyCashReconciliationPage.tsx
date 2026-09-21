@@ -51,11 +51,11 @@ export default function DailyCashReconciliationPage() {
 
   function handleSave() {
     if (!countedCash || Number(countedCash) <= 0) {
-      addToast("Enter the counted cash amount", "warning");
+      addToast(t("copy.enterCountedCash"), "warning");
       return;
     }
     setSaved(true);
-    addToast("Cash reconciliation saved", "success");
+    addToast(t("copy.cashSaved"), "success");
   }
 
   const varianceColor =

@@ -150,7 +150,7 @@ export default function AdminReportsPage() {
       {period === "custom" && (customFrom || customTo) && (
         <div className="px-4 pt-1 pb-1">
           <p className="text-xs font-semibold" style={{ color: "var(--brand-dark)" }}>
-            {customFrom || "Start"} → {customTo || todayISO}
+            {customFrom || t("admin.from")} → {customTo || todayISO}
           </p>
         </div>
       )}
@@ -250,12 +250,12 @@ export default function AdminReportsPage() {
             <p className="text-base font-bold text-center" style={{ color: "var(--text-primary)" }}>{t("admin.selectDateRange")}</p>
             <div className="flex gap-3">
               <div className="flex-1">
-                <p className="text-xs font-bold uppercase mb-1" style={{ color: "var(--text-secondary)" }}>From</p>
+                <p className="text-xs font-bold uppercase mb-1" style={{ color: "var(--text-secondary)" }}>{t("admin.from")}</p>
                 <input type="date" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)}
                   className="w-full h-11 rounded-full px-4 text-sm outline-none" style={{ background: "var(--surface-2)", border: "1px solid var(--divider)", color: "var(--text-primary)" }} />
               </div>
               <div className="flex-1">
-                <p className="text-xs font-bold uppercase mb-1" style={{ color: "var(--text-secondary)" }}>To</p>
+                <p className="text-xs font-bold uppercase mb-1" style={{ color: "var(--text-secondary)" }}>{t("admin.to")}</p>
                 <input type="date" value={customTo} max={todayISO} onChange={(e) => setCustomTo(e.target.value)}
                   className="w-full h-11 rounded-full px-4 text-sm outline-none" style={{ background: "var(--surface-2)", border: "1px solid var(--divider)", color: "var(--text-primary)" }} />
               </div>

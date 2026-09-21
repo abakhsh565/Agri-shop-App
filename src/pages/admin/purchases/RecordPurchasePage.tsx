@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
@@ -35,6 +35,8 @@ export default function RecordPurchasePage() {
   const [method, setMethod] = useState<PaymentMethod>("cash");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const savingRef = useRef(false);
+  const submissionKeyRef = useRef<string | null>(null);
   const [sheet, setSheet] = useState<null | "company" | "product">(null);
 
   // Pre-select company when coming from Company Detail (Order Stock)
@@ -79,11 +81,20 @@ export default function RecordPurchasePage() {
 
   async function handleSave() {
     setError("");
-    if (!company) { setError("Select a supplier."); return; }
-    if (!product || !variant) { setError("Select a product and variant."); return; }
-    if (qtyNum <= 0) { setError("Enter a quantity greater than zero."); return; }
-    if (costNum <= 0) { setError("Enter the purchase (base) cost."); return; }
+    if (!company) { setError(t("copy.selectSupplier")); return; }
+    if (!product || !variant) { setError(t("copy.selectProductAndUnit")); return; }
+    if (qtyNum <= 0) { setError(t("copy.enterQty")); return; }
+    if (costNum <= 0) { setError(t("copy.enterPurchaseCost")); return; }
 
+    // A ref, not `loading`: React batches, so two taps in one task both read the
+    // pre-render `false` and one delivery is received twice — stock up twice, the
+    // supplier's payable up twice, two purchase records.
+    if (savingRef.current) return;
+    savingRef.current = true;
+    // One key per attempt, held across a retry: the attempt may have reached the
+    // database and only the answer been lost, so a retry must be recognised as the
+    // same delivery rather than a second one (0140 claims it in the database).
+    if (!submissionKeyRef.current) submissionKeyRef.current = crypto.randomUUID();
     setLoading(true);
     try {
       await rpcCreatePurchase({
@@ -92,6 +103,7 @@ export default function RecordPurchasePage() {
         paymentMethod: method,
         amountPaid: paidNum,
         note: "",
+        idempotencyKey: submissionKeyRef.current,
         items: [{
           productId: product.id,
           productName: product.name,
@@ -102,11 +114,15 @@ export default function RecordPurchasePage() {
         }],
       });
 
-      addToast(`Stocked ${qtyNum} × ${variant.name} · ${formatCurrency(total)}`, "success");
+      // Done: this attempt's key retires, so a later delivery is a new purchase.
+      submissionKeyRef.current = null;
+      addToast(t("copy.stockedPurchase", { qty: String(qtyNum), variant: variant.name, amount: formatCurrency(total) }), "success");
       navigate("/admin/purchases", { replace: true });
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not record purchase. Please try again.");
+      // The key is KEPT on failure: the retry must not be treated as a new delivery.
+      setError(e instanceof Error ? e.message : t("errors.recordPurchaseFailed"));
     } finally {
+      savingRef.current = false;
       setLoading(false);
     }
   }
@@ -134,7 +150,7 @@ export default function RecordPurchasePage() {
             <p className={labelCls} style={{ color: "var(--text-secondary)" }}>{t("supplier.selectLabel")}</p>
             {presetCompanyId ? (
               <div className="w-full h-12 rounded-[24px] px-4 text-sm flex items-center" style={{ ...fieldStyle, opacity: 0.8 }}>
-                <span style={{ color: "var(--text-primary)" }}>{company?.name || "Loading…"}</span>
+                <span style={{ color: "var(--text-primary)" }}>{company?.name || t("common.loading")}</span>
               </div>
             ) : (
               <button
@@ -291,7 +307,13 @@ export default function RecordPurchasePage() {
         open={sheet === "company"}
         title={t("supplier.selectSupplier")}
         searchable
-        options={companies.map((c) => ({ value: c.id, label: c.name, sub: c.outstandingPayable > 0 ? `Payable: ${formatCurrency(c.outstandingPayable)}` : undefined }))}
+        options={companies.map((c) => ({
+          value: c.id,
+          label: c.name,
+          sub: c.outstandingPayable > 0
+            ? t("common.payableAmount", { amount: formatCurrency(c.outstandingPayable) })
+            : undefined,
+        }))}
         selected={companyId}
         emptyLabel={t("purchases.noCompanies")}
         onSelect={(id) => { setCompanyId(id); setProductId(""); setVariantId(""); }}
@@ -303,7 +325,9 @@ export default function RecordPurchasePage() {
         searchable
         options={productSheetOptions}
         selected={productId}
-        emptyLabel={company ? `No products linked to ${company.name} yet.` : "Select a supplier first."}
+        emptyLabel={company
+          ? t("purchases.noProductsForSupplier", { name: company.name })
+          : t("purchases.selectSupplierFirst")}
         onSelect={(id) => { setProductId(id); setVariantId(""); }}
         onClose={() => setSheet(null)}
       />

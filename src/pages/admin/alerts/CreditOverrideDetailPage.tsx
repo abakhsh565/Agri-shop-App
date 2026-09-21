@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
@@ -15,7 +15,28 @@ export default function CreditOverrideDetailPage() {
   const t = useT();
   const isUrdu = language === "ur";
   const customers = useCustomersStore((s) => s.customers);
+  const loadCreditLimitRequests = useCustomersStore((s) => s.loadCreditLimitRequests);
   const [reviewed, setReviewed] = useState(false);
+  // Who actually approved this override. This screen used to print the literal name
+  // "Yaqoob Malik" for every customer, which told the owner a specific person had
+  // approved it when nobody had.
+  const [approvedBy, setApprovedBy] = useState<string | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    loadCreditLimitRequests()
+      .then((requests) => {
+        if (!alive) return;
+        const approved = requests.find(
+          (r) => r.customerId === customerId && r.status === "approved" && r.reviewedBy,
+        );
+        setApprovedBy(approved?.reviewedBy ?? null);
+      })
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [customerId, loadCreditLimitRequests]);
 
   const customer = customers.find((c) => c.id === customerId);
   if (!customer) {
@@ -60,7 +81,7 @@ export default function CreditOverrideDetailPage() {
           style={{ background: "var(--surface)", border: "1px solid var(--divider)" }}
         >
           {[
-            { label: t("creditOverride.approvedBy"), value: "Yaqoob Malik" },
+            ...(approvedBy ? [{ label: t("creditOverride.approvedBy"), value: approvedBy }] : []),
             {
               label: t("creditOverride.customer"),
               value: (
@@ -76,7 +97,7 @@ export default function CreditOverrideDetailPage() {
               ),
             },
             { label: t("common.amount"), value: formatCurrency(customer.outstandingBalance) },
-            { label: t("common.when") ?? "When", value: formatSmartDateTime(customer.createdAt, undefined, t) },
+            { label: t("common.when"), value: formatSmartDateTime(customer.createdAt, undefined, t) },
           ].map((row, i, arr) => (
             <div
               key={row.label}

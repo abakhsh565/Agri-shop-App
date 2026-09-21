@@ -95,7 +95,13 @@ test.describe('Image Synchronization — All Entities', () => {
     await page.locator('button').filter({ hasText: /Edit|edit/ }).first().click();
     await page.waitForTimeout(500);
     const rm = page.locator('button:has-text("Remove")').first();
-    if (await rm.isVisible()) { await rm.click(); await page.waitForTimeout(500); }
+    if (await rm.isVisible()) {
+      await rm.click();
+      // Removing a picture is now confirmed in the app's own dialog (a browser
+      // popup cannot carry translated buttons), so the test must confirm it.
+      await page.getByRole('button', { name: 'Remove photo', exact: true }).last().click();
+      await page.waitForTimeout(800);
+    }
     await page.locator('button').filter({ hasText: /Save|save/ }).last().click();
     await page.waitForTimeout(2000);
 

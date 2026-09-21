@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
@@ -26,15 +26,20 @@ export default function AddCompanyPage() {
   const [address, setAddress] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const savingRef = useRef(false);
 
   async function handleSave() {
     setError("");
-    if (!name.trim()) { setError("Enter the company / supplier name."); return; }
+    if (!name.trim()) { setError(t("copy.enterCompanyName")); return; }
     if (companies.some((c) => c.name.toLowerCase() === name.trim().toLowerCase())) {
-      setError("A company with this name already exists.");
+      setError(t("copy.companyExists"));
       return;
     }
 
+    // A ref, not `loading`: React batches, so two taps in one task both read the
+    // pre-render `false` and the same supplier is created twice.
+    if (savingRef.current) return;
+    savingRef.current = true;
     setLoading(true);
     try {
       await createCompany({
@@ -45,12 +50,13 @@ export default function AddCompanyPage() {
         logoUrl: logoUrl ?? undefined,
       });
 
-      addToast(`${name.trim()} added`, "success");
+      addToast(t("copy.added", { name: name.trim() }), "success");
       clearNav();
       navigate("/admin/companies", { replace: true });
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not add company. Please try again.");
+      setError(e instanceof Error ? e.message : t("errors.addCompanyFailed"));
     } finally {
+      savingRef.current = false;
       setLoading(false);
     }
   }

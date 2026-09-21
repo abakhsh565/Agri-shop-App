@@ -9,8 +9,6 @@ import { useShopRequestsStore } from "@/stores/shopRequestsStore";
 import { useT } from "@/lib/i18n";
 
 const OTP_VALIDITY = 5 * 60;
-const MAX_ATTEMPTS = 5;
-const MAX_RESENDS = 3;
 const RESEND_DELAY = 30;
 
 export default function RegisterOTPPage() {
@@ -22,12 +20,9 @@ export default function RegisterOTPPage() {
   const [otp, setOtp] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [attempts, setAttempts] = useState(0);
-  const [resends, setResends] = useState(0);
+  const [wrongTries, setWrongTries] = useState(0);
   const [countdown, setCountdown] = useState(OTP_VALIDITY);
   const [resendCountdown, setResendCountdown] = useState(0);
-  const [locked, setLocked] = useState(false);
-  const [lockTime, setLockTime] = useState(0);
   const verifying = useRef(false);
 
   useEffect(() => {
@@ -45,23 +40,12 @@ export default function RegisterOTPPage() {
     return () => clearInterval(t);
   }, [resendCountdown]);
 
-  useEffect(() => {
-    if (lockTime <= 0) return;
-    const t = setInterval(() => {
-      setLockTime((c) => {
-        if (c <= 1) { setLocked(false); return 0; }
-        return c - 1;
-      });
-    }, 1000);
-    return () => clearInterval(t);
-  }, [lockTime]);
-
   function formatTime(s: number) {
     return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
   }
 
   async function handleVerify() {
-    if (locked || otp.length < 6) return;
+    if (otp.length < 6) return;
     setLoading(true);
     setError("");
     try {
@@ -69,15 +53,12 @@ export default function RegisterOTPPage() {
       const result = await verifyOTPAndResolveUser(pendingPhone, otp);
 
       if (result.status === "wrong_otp") {
-        const newAttempts = attempts + 1;
-        setAttempts(newAttempts);
-        if (newAttempts >= MAX_ATTEMPTS) {
-          setLocked(true);
-          setLockTime(10 * 60);
-          setError("Too many incorrect attempts. Try again in 10 minutes.");
-        } else {
-          setError(`Incorrect code. ${MAX_ATTEMPTS - newAttempts} attempts remaining.`);
-        }
+        // A person may write the code as many times as they need — there is no
+        // lockout. After a few wrong tries the message stops counting and points at
+        // the useful action instead (same rule as the sign-in code screen).
+        const tries = wrongTries + 1;
+        setWrongTries(tries);
+        setError(t(tries >= 3 ? "auth.codeWrongAgain" : "auth.codeWrong"));
         setOtp("");
         return;
       }
@@ -107,13 +88,12 @@ export default function RegisterOTPPage() {
   }
 
   async function handleResend() {
-    if (resends >= MAX_RESENDS) return;
+
     if (resendCountdown > 0) return;
     await sendOTP(pendingPhone);
-    setResends((r) => r + 1);
     setResendCountdown(RESEND_DELAY);
     setCountdown(OTP_VALIDITY);
-    setAttempts(0);
+    setWrongTries(0);
     setOtp("");
     setError("");
   }
@@ -122,11 +102,11 @@ export default function RegisterOTPPage() {
 
   // Auto-verify when 6 digits are entered
   useEffect(() => {
-    if (otp.length === 6 && !locked && !expired && !loading && !verifying.current) {
+    if (otp.length === 6 && !expired && !loading && !verifying.current) {
       verifying.current = true;
       handleVerify().finally(() => { verifying.current = false; });
     }
-  }, [otp, locked, expired, loading]);
+  }, [otp, expired, loading]);
 
   return (
     <AuthLayout>
@@ -143,26 +123,20 @@ export default function RegisterOTPPage() {
         <OTPInput
           value={otp}
           onChange={(v) => { setOtp(v); setError(""); }}
-          disabled={locked || expired}
+          disabled={expired}
           error={!!error}
         />
 
         {error && <p className="text-sm text-[#ef4444] text-center">{error}</p>}
 
-        {!expired && !locked && (
+        {!expired && (
           <p className="text-sm text-[#888] text-center">
             {t("auth.codeExpiresIn")}<span className="font-medium text-black">{formatTime(countdown)}</span>
           </p>
         )}
 
-        {expired && !locked && (
+        {expired && (
           <p className="text-sm text-[#ef4444] text-center">{t("auth.codeExpired")}</p>
-        )}
-
-        {locked && (
-          <p className="text-sm text-[#ef4444] text-center">
-            Too many attempts. Try again in {formatTime(lockTime)}.
-          </p>
         )}
 
         {loading && (
@@ -174,9 +148,7 @@ export default function RegisterOTPPage() {
 
         <div className="text-center">
           {resendCountdown > 0 ? (
-            <p className="text-sm text-[#888]">Resend in {resendCountdown}s</p>
-          ) : resends >= MAX_RESENDS ? (
-            <p className="text-sm text-[#ef4444]">{t("auth.resendLimit")}</p>
+            <p className="text-sm text-[#888]">{t("auth.resendIn", { seconds: String(resendCountdown) })}</p>
           ) : (
             <button
               onClick={handleResend}

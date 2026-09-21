@@ -595,6 +595,78 @@ const MEMORIES = [
       browser: 'voidSaleSafety.spec.ts 1/1 in real Chrome: dialog names the sale, no "are you sure", reason required, double tap in ONE task voids once, stock restored once, no failure toast; falsification: removing the guard fails with "the second tap must not report a failure after the void already succeeded"'
     },
   },
+  {
+    category: 'prevention_rule',
+    title: 'A browser confirm() carries the app copy but not the app buttons, so it cannot be translated',
+    component: 'src/pages/admin/employees/EmployeeDetailPage.tsx, src/pages/admin/settings/RolesAccessPage.tsx, src/components/ui/ConfirmDialog.tsx, src/components/ui/ImageUpload.tsx, tests/unit/microcopy.test.ts',
+    description:
+      'Employee deactivate/cancel-invitation and role delete asked for confirmation with window.confirm(). The text inside it came from t(), so the sentence looked translated — but the buttons belong to the browser: they read OK/Cancel in the browser language, in the browser order, with no RTL mirroring. Reactivation had no confirmation at all, and removing a picture happened on one tap. All four now use ConfirmDialog, which takes translated labels and mirrors its row under RTL. ConfirmDialog also defaulted cancelLabel to the literal "Cancel", so a caller that omitted it showed English to an Urdu reader; the default is now tNow("common.cancel"). Each site holds a re-entry guard (statusBusy / deleting / confirmRemove) so one tap is one action even before React re-renders. Prevention: microcopy.test.ts fails on any (window.)confirm( in src.',
+    evidence: {
+      browser: 'overlayRtl.spec.ts 2/2 in real Chrome: the dialog opens, is centred in both directions, its cancel/action row MIRRORS between LTR and RTL, Escape closes it, the Urdu dialog shows no English "Cancel"; the supplier sheet is bottom-anchored and centred in both directions with no horizontal scroll',
+      gap: 'the old rtlLtr case named "ConfirmDialog: centered in both directions" only asserted document.documentElement.dir and never opened a dialog',
+      notApplicable: 'supplier delete/archive is not a product action — destructiveSafety.test.ts already proves no delete_company and no archive_company RPC exists, so there is nothing to confirm'
+    },
+  },
+  {
+    category: 'failure_pattern',
+    title: 'Three shapes of hardcoded English were invisible to every string scan',
+    component: 'src/lib/i18n.ts, src/pages/employee/products/ProductDetailPage.tsx, src/pages/admin/purchases/RecordPurchasePage.tsx, src/pages/employee/{sale/CartPage,returns/ReturnConfirmPage,search/SearchPage}.tsx, tests/unit/{microcopy,i18nCoverage}.test.ts',
+    description:
+      'The existing guards read JSX text nodes, UI attribute literals, t() keys and the FIRST argument of addToast/setError. Four real English leaks slipped past all of them, each for a different structural reason. (1) A template literal in a JSX attribute: `message={`\${product.name} will be removed. If it has past sales, it\'s archived instead of deleted.`}` — it is a TemplateExpression, so it is neither a string literal nor a text node. (2) A literal behind the `:` of a ternary as a call argument: addToast(err instanceof Error ? err.message : "Failed to void sale", "error") — "Failed to void sale" sat in the wrong position for the first-argument rule. (3) English prose written into the message the owner SENDS a customer: the three WhatsApp reminder sentences were duplicated across two screens, so a shopkeeper messaging a farmer sent English. (4) Short labels and counts with no capitalised sentence shape: "Threshold: 10", "35 left", "0 units in stock", "PAID", "Sent", "From", "Payable: Rs. 500". Each shape now has a guard, and every guard was falsified by putting one real leak back.',
+    evidence: {
+      fixed: 'admin side 32 JSX literals + 8 hardcoded messages + 3 WhatsApp sentences + all count/label strings; JSX literal ratchet lowered 97 to 65, inline bilingual 148 to 146',
+      guards: 'microcopy.test.ts (message functions incl. later arguments; raw English `||`/`??` fallbacks; native confirm) and i18nCoverage.test.ts (prose inside a template literal) — all four zero-baseline assertions',
+      note: 'the class-list filter must test the SHAPE (several hyphenated tokens and no `letter.` punctuation) — listing Tailwind prefixes matched the prose "…it\'s archived…" on its `it`s-` token and hid the very leak the check was added for'
+    },
+  },
+  {
+    category: 'failure_pattern',
+    title: 'Two E2E expectations were stale after copy moved into the dictionary, and one overlay test measured an animation',
+    component: 'tests/e2e/voidSaleSafety.spec.ts, tests/e2e/imageSync.spec.ts, tests/e2e/overlayRtl.spec.ts',
+    description:
+      'voidSaleSafety looked for a button named /void sale/i while the shipped label is t("admin.voidSale") = "Cancel Sale" ("void" is database vocabulary; an owner says cancel). It failed with a 10s click timeout, which reads like a broken screen and is not. The same file then looked for the success toast text "Sale voided successfully", which had become t("copy.saleCancelled") — its own control assertion caught that, which is why the control exists. imageSync clicked Remove then Save; the new confirmation dialog now intercepts the Save click, and the test must confirm the removal (updated to the real requirement, not weakened). Separately, the new overlay test read the sheet 171px above the bottom: the sheet slides up with animate-slide-up, and getBoundingClientRect includes the in-flight transform, so it was sampling the animation. The anchor is now polled. Also: the "nearest fixed ancestor of a marker" heuristic resolved to the app frame, not the sheet backdrop — measuring by the component\'s own contract (fixed backdrop with justify-end whose first child is the panel) is exact.',
+    evidence: {
+      after: 'voidSaleSafety 1/1, imageSync 10/10, overlayRtl 2/2 in real Chrome; affected E2E lanes 29/29 (accessUx, adminMicrocopy, overlayRtl, rtlLtr)'
+    },
+  },
+  {
+    category: 'failure_pattern',
+    title: 'A confirm guarded by React state fires twice for one double tap (found on the employee and role confirmations, and missing entirely on four create screens)',
+    component: 'src/pages/admin/employees/EmployeeDetailPage.tsx, src/pages/admin/settings/RolesAccessPage.tsx, src/pages/admin/employees/AddEmployeePage.tsx, src/pages/admin/purchases/RecordPurchasePage.tsx, src/pages/admin/inventory/AddProductPage.tsx, src/pages/admin/companies/AddCompanyPage.tsx, tests/unit/reentrancyGuard.test.ts',
+    description:
+      'The owner reported this class three times ("double-click confirm… it is created twice"). Fixing the visible cases did not close the class: deactivating an employee and deleting a role were still guarded by React STATE (`if (statusBusy) return;`, `if (deleting) return;`). React batches, so two clicks dispatched in one JavaScript task — what a double tap is — both read the pre-render false and both reach the RPC. The database then refuses the second with ALREADY_DEACTIVATED / ROLE_NOT_FOUND_OR_AUTHORIZED, so the owner was shown an ERROR immediately after an action that had SUCCEEDED. Four create screens (employee, purchase, product, supplier) had no re-entry guard at all, only disabled={loading} — which is applied on the re-render, so it cannot stop a second click in the same task either. RULE: a confirmation or submit handler must guard re-entry with a ref written synchronously (`if (busyRef.current) return; busyRef.current = true;`), and disabled={loading} is presentation only, never protection. For money/inventory the backend must also claim an idempotency key, because a lost answer cannot be told apart from a lost request. Permanent guard: tests/unit/reentrancyGuard.test.ts fails on any `if (<boolean useState>) return;` in src/ and on any listed consequential submit that lost its ref, so deleting the protection cannot silently pass.',
+    evidence: {
+      measuredBefore: 'with the old state guard, a double tap on Deactivate sent 2 deactivate_employee_v1 requests and the owner saw "This did not work" right after the deactivation succeeded; a double tap on Delete role sent 2 delete_role requests',
+      measuredAfter: 'employeeStatusSafety (3/3) and roleDeleteSafety (1/1) in real Chrome: exactly one RPC, success reported, no failure text; cancel sends zero requests',
+      falsification: 'reverting the ref to the state guard fails both specs (Received: 2); removing savingRef from AddCompanyPage fails the unit guard naming src/pages/admin/companies/AddCompanyPage.tsx:41',
+      regression: 'tests/e2e/employeeStatusSafety.spec.ts, tests/e2e/roleDeleteSafety.spec.ts, tests/unit/reentrancyGuard.test.ts'
+    },
+  },
+  {
+    category: 'failure_pattern',
+    title: 'Recording a purchase failed completely: a NOT NULL column the client never sent, plus no idempotency and no actor',
+    component: 'supabase/migrations/0140_purchase_records_once.sql, src/lib/db.ts (rpcCreatePurchase), src/pages/admin/purchases/RecordPurchasePage.tsx, tests/integration/createOnceSafety.test.ts',
+    description:
+      'Submitting the app\'s own payload twice at the same instant (real JWT, judged on the database) returned ZERO purchases and the reason was not the double submit: create_purchase wrote purchase_items.line_total from payload.items[i].lineTotal, a field RecordPurchasePage never sends — it sends qty and costPrice. line_total is NOT NULL, so EVERY purchase raised `null value in column "line_total"` and the whole transaction rolled back: no purchase row, no stock received, no supplier payable. The screen\'s success path was unreachable, so a shop could not receive a delivery at all. The same NULL propagated into the total (`v_total := v_total + NULL` is NULL), so had the item row been accepted the purchase would have carried no amount and the supplier\'s payable would have been written as NULL. Two further gaps in the same function: no idempotency (employees are protected by users.phone UNIQUE, but a delivery has no natural key, so two taps received stock twice and raised the payable twice — this is the create_sale/0134, record_supplier_payment/0138, adjust_stock/0139 family, and a purchase moves both money and inventory), and recorded_by was never written, so the 0124 display-name trigger had nothing to stamp and purchases.recorded_by_name stayed permanently blank. FIX: the line total is derived where it is authoritative (qty * unit cost, honouring an explicit lineTotal if a caller sends one), the total accumulates that value, the purchase row is inserted FIRST carrying a client key so the partial unique index rejects a duplicate before any stock or payable moves, and the actor is stamped from the session. RULE: a database column the RPC requires must not depend on the client sending it — derive it, or the screen\'s success path may be unreachable while every unit test stays green.',
+    evidence: {
+      observedBefore: '[create_purchase errors] null value in column "line_total" of relation "purchase_items" violates not-null constraint — 0 purchases recorded',
+      afterFix: 'createOnceSafety 2/2: two simultaneous confirms with one key → 1 purchase, variant stock 0→3, total_purchases 300, outstanding_payable 300, no error',
+      falsification: 'removing the key from the payload restores 2 purchases (expected 2 to be 1) — the database claim is what de-duplicates, not the ref',
+      regression: 'tests/integration/createOnceSafety.test.ts'
+    },
+  },
+  {
+    category: 'failure_pattern',
+    title: 'A SQL error reported in-band looks exactly like data: the fixture that was never written',
+    component: 'tests/e2e/helpers.ts (execSql), tests/setup/qa-client.ts (runSqlHttp)',
+    description:
+      'run_sql reports SQL errors IN BAND as {error}. Both test helpers parsed the response and returned that object as if it were a ROW, so a FAILED fixture write was indistinguishable from "the row is not there": a spec then asserted against an empty table and blamed the product. This is not hypothetical — it happened in this session. A verification spec inserted an employee\'s historical sale with payment_type = \'cash\'; payment_type is the enum (full, partial, credit) and cash is a payment_method, so the INSERT failed, execSql returned {error}, the spec read zero rows and reported "the employee\'s past sale must survive deactivation" against a product that was behaving correctly. The same trap makes a green suite meaningless: any fixture that silently failed has been proving nothing. RULE: a SQL helper must THROW on an in-band error; only a genuine result set may be returned as rows. Both helpers now do, and the QA SQL runner in .freebuff/tmp carries the same comment so the next script does not repeat it.',
+    evidence: {
+      reproduced: 'INSERT INTO sales … payment_type \'cash\' → INSERT THREW: invalid input value for enum payment_type: "cash"; through the helper the same call returned a row-shaped {error} and no exception',
+      impact: 'the first run of employeeStatusSafety failed on a product assertion that was actually a failed fixture write',
+      afterFix: 'enum values read from the database (payment_type: full|partial|credit, payment_method: cash|bank_transfer|mobile); the spec passes and the helper names the SQL error when a fixture fails'
+    },
+  },
 ];
 
 const client = await pool.connect();

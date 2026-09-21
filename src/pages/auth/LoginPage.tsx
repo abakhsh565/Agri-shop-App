@@ -32,7 +32,7 @@ export default function LoginPage() {
     const cleanPhone = phone.replace(/\s/g, "");
 
     if (!validatePhone(cleanPhone)) {
-      setPhoneError("Enter a valid phone number (e.g. 03001234567 or 923001234567)");
+      setPhoneError(t("auth.errPhoneFormat"));
       return;
     }
 
@@ -43,7 +43,7 @@ export default function LoginPage() {
       setIsNewDevice(true);
       const result = await sendOTP(cleanPhone);
       if (!result.success) {
-        setPhoneError(result.error || "Could not send the code. Check the number and try again.");
+        setPhoneError(result.error || t("auth.errSendCode"));
         return;
       }
       navigate("/login/otp");

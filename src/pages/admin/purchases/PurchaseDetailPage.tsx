@@ -64,7 +64,7 @@ export default function PurchaseDetailPage() {
         <StatusBar />
         <NavHeader title={t("purchases.detailTitle")} />
         <div className="flex-1 flex items-center justify-center">
-          <p className="text-sm" style={{ color: "var(--text-secondary)" }}>Loading…</p>
+          <p className="text-sm" style={{ color: "var(--text-secondary)" }}>{t("common.loading")}</p>
         </div>
       </div>
     );
@@ -97,8 +97,8 @@ export default function PurchaseDetailPage() {
             <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>{purchase.purchaseNumber}</p>
             <p className="text-xs" style={{ color: "var(--text-secondary)" }}>{formatDateTime(purchase.createdAt)}</p>
           </div>
-          <p className="text-xs" style={{ color: "var(--text-secondary)" }}>Supplier: <span className="font-medium" style={{ color: "var(--text-primary)" }}>{purchase.companyName}</span></p>
-          {purchase.note && <p className="text-xs mt-1" style={{ color: "var(--text-secondary)" }}>Note: {purchase.note}</p>}
+          <p className="text-xs" style={{ color: "var(--text-secondary)" }}>{t("common.supplier")}: <span className="font-medium" style={{ color: "var(--text-primary)" }}>{purchase.companyName}</span></p>
+          {purchase.note && <p className="text-xs mt-1" style={{ color: "var(--text-secondary)" }}>{t("admin.note")}: {purchase.note}</p>}
         </div>
 
         {/* Items */}
@@ -133,7 +133,7 @@ export default function PurchaseDetailPage() {
               <span className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>{formatCurrency(purchase.totalAmount)}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-sm" style={{ color: "var(--text-secondary)" }}>Paid</span>
+              <span className="text-sm" style={{ color: "var(--text-secondary)" }}>{t("common.paid")}</span>
               <span className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>{formatCurrency(purchase.amountPaid)}</span>
             </div>
             {purchase.outstandingPayable > 0 && (

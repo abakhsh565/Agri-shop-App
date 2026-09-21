@@ -263,12 +263,21 @@ async function runSqlHttp(sql: string): Promise<any[]> {
   const { data, error } = await qaServiceClient.rpc('run_sql', { sql_query: sql });
   if (error) throw new Error(`run_sql: ${error.message}`);
   if (!data || data === 'ok') return [];
-  try {
-    const parsed = JSON.parse(data);
-    return Array.isArray(parsed) ? parsed : [parsed];
-  } catch {
-    return [{ result: data }];
+  let parsed: unknown = data;
+  if (typeof data === 'string') {
+    try {
+      parsed = JSON.parse(data);
+    } catch {
+      return [{ result: data }];
+    }
   }
+  // run_sql reports SQL errors IN BAND, as {error}. Returning that as a "row" made a
+  // failed fixture write look like data — an assertion on it could then pass for the
+  // wrong reason, or fail while blaming the product instead of the fixture.
+  if (parsed && typeof parsed === 'object' && !Array.isArray(parsed) && 'error' in parsed) {
+    throw new Error(`run_sql: ${String((parsed as { error: unknown }).error)}`);
+  }
+  return Array.isArray(parsed) ? parsed : [parsed];
 }
 
 /**

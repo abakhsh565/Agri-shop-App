@@ -152,7 +152,7 @@ export default function GroupReminderSheet({ groupName: initGroupName, config: i
                   className="w-full h-12 rounded-full text-[14px] font-bold"
                   style={{ background: "var(--brand)", color: "#0a0a0a" }}
                 >
-                  {isUrdu ? `آگے بڑھیں (${selectedIds.size} گاہک)` : `Next (${selectedIds.size} customers)`}
+                  {t("common.nextWithCount", { count: selectedIds.size })}
                 </button>
               )}
             </>

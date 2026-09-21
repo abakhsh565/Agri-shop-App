@@ -42,8 +42,11 @@ export default function RecordSupplierPaymentPage() {
   async function handleConfirm() {
     if (submittingRef.current) return;
     setError("");
-    if (paid <= 0) { setError("Enter an amount greater than zero."); return; }
-    if (paid > company!.outstandingPayable) { setError("Amount exceeds the outstanding payable."); return; }
+    if (paid <= 0) { setError(t("copy.enterAmount")); return; }
+    if (paid > company!.outstandingPayable) {
+      setError(t("copy.amountOverPayable", { owed: formatCurrency(company!.outstandingPayable) }));
+      return;
+    }
 
     submittingRef.current = true;
     if (!submissionKeyRef.current) submissionKeyRef.current = crypto.randomUUID();
@@ -60,12 +63,12 @@ export default function RecordSupplierPaymentPage() {
       // Done: this attempt's key retires, so a later payment is a new payment.
       submissionKeyRef.current = null;
 
-      addToast(`${formatCurrency(paid)} paid to ${company!.name}`, "success");
+      addToast(t("copy.paidToSupplier", { amount: formatCurrency(paid), name: company!.name }), "success");
       navigate("/admin/payments", { replace: true });
     } catch (e) {
       // The key is KEPT on failure: the attempt may have reached the database and
       // only the answer was lost, so the retry must not be treated as a new payment.
-      setError(e instanceof Error ? e.message : "Could not record payment. Please try again.");
+      setError(e instanceof Error ? e.message : t("errors.recordPaymentFailed"));
     } finally {
       submittingRef.current = false;
       setLoading(false);

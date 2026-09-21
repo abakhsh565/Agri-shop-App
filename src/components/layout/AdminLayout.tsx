@@ -1,6 +1,6 @@
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
 import { LayoutDashboard, ShoppingBag, Package, ScanLine, MoreHorizontal } from "lucide-react";
-import { useT } from "@/lib/i18n";
+import { useT, tNow } from "@/lib/i18n";
 import ToastContainer from "@/components/ui/Toast";
 import NavTracker from "@/components/ui/NavTracker";
 import { useBootstrapData } from "@/stores/useBootstrapData";
@@ -43,12 +43,12 @@ export default function AdminLayout() {
   useEffect(() => {
     const handleOnline = () => {
       setOnline(true);
-      addToast("Back online — syncing data", "success");
+      addToast(tNow("copy.backOnline"), "success");
       syncQueue();
     };
     const handleOffline = () => {
       setOnline(false);
-      addToast("You are offline. Changes will sync when reconnected.", "warning");
+      addToast(tNow("copy.wentOffline"), "warning");
     };
     window.addEventListener("online", handleOnline);
     window.addEventListener("offline", handleOffline);
@@ -94,8 +94,7 @@ export default function AdminLayout() {
       setPinError(true);
       setPinShake(true);
       setTimeout(() => setPinShake(false), 500);
-      setPin("");
-      addToast("Incorrect PIN. Try again.", "error");
+      setPin("");        addToast(tNow("copy.pinWrong"), "error");
     }
   }
 
@@ -136,7 +135,7 @@ export default function AdminLayout() {
           // Go to Variant Selection → Cart → Checkout (same as employee)
           navigate(`/admin/sale/products/${product.id}`);
         } else {
-          addToast(`No product found for "${result.barcode}"`, "error");
+          addToast(tNow("copy.noProductForCode", { code: result.barcode }), "error");
         }
       } else {
         setShowManualScan(true);
@@ -155,7 +154,7 @@ export default function AdminLayout() {
         // Go to Variant Selection → Cart → Checkout (same as employee)
         navigate(`/admin/sale/products/${product.id}`);
       } else {
-        addToast(`No product found for "${manualBarcode}"`, "error");
+        addToast(tNow("copy.noProductForCode", { code: manualBarcode }), "error");
       }
       setManualBarcode("");
       setShowManualScan(false);

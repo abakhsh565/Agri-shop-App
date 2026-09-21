@@ -83,7 +83,7 @@ export default function AdminSettingsPage() {
       setEditing(false);
     } catch (err) {
       console.error("Profile save failed:", err);
-      alert("Failed to save profile. Please try again.");
+      alert(t("copy.profileSaveFailed"));
     } finally {
       setSaving(false);
     }
@@ -201,7 +201,7 @@ export default function AdminSettingsPage() {
                 </div>
               </div>
               <div>
-                <p className="text-[11px] font-bold uppercase mb-1.5 tracking-wider" style={{ color: "var(--text-secondary)" }}>Name</p>
+                <p className="text-[11px] font-bold uppercase mb-1.5 tracking-wider" style={{ color: "var(--text-secondary)" }}>{t("common.name")}</p>
                 <input
                   value={editName}
                   onChange={(e) => setEditName(e.target.value)}

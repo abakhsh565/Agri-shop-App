@@ -164,12 +164,12 @@ export default function AdminReturnSelectItemsPage() {
                     <>
                       {alreadyReturned > 0 && (
                         <p className="text-[11px] mb-2" style={{ color: "#d97706" }}>
-                          {alreadyReturned} previously returned · {maxQty} remaining
+                          {t("common.previouslyReturned", { returned: alreadyReturned, remaining: maxQty })}
                         </p>
                       )}
                       <div className="flex items-center gap-3">
                         <span className="text-xs" style={{ color: "var(--text-secondary)" }}>
-                          {isUrdu ? "واپسی تعداد:" : "Qty to return:"}
+                          {t("common.qtyToReturn")}
                         </span>
                         <QuantityCounter
                           qty={returnQtys[item.id] || 0}

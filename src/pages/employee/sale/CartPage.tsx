@@ -225,17 +225,17 @@ export default function CartPage() {
             onScan={(code) => {
               const product = useProductsStore.getState().findByBarcode(code);
               if (!product) {
-                addToast(`No product found for "${code}"`, "error");
+                addToast(t("sale.noProductForBarcode", { code }), "error");
                 return;
               }
               if (product.stockQty <= 0) {
-                addToast(`${product.name} is out of stock`, "warning");
+                addToast(t("sale.productOutOfStock", { name: product.name }), "warning");
                 return;
               }
               // A variant is sellable when ITS OWN stock of record is positive.
               const inStock = product.variants.filter((v) => v.stockQty > 0);
               if (inStock.length === 0) {
-                addToast(`${product.name} is out of stock`, "warning");
+                addToast(t("sale.productOutOfStock", { name: product.name }), "warning");
                 return;
               }
               if (inStock.length === 1) {

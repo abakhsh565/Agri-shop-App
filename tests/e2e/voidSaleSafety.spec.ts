@@ -55,7 +55,10 @@ test.describe('Void sale safety', () => {
     await page.goto(`${BASE_URL}/admin/sales/${SALE_ID}`);
     await page.waitForLoadState('networkidle');
 
-    await page.getByRole('button', { name: /void sale/i }).first().click();
+    // The shipped label is t("admin.voidSale") = "Cancel Sale" — "void" is database
+    // vocabulary, and an owner says cancel. This looked for "Void sale" and had been
+    // finding nothing, so the test was passing on a screen that never opened it.
+    await page.getByRole('button', { name: /cancel sale/i }).first().click();
 
     // The dialog must identify WHICH sale, and say what will happen to stock, the
     // balance and the history — not ask a generic "are you sure?".
@@ -66,7 +69,7 @@ test.describe('Void sale safety', () => {
     await expect(page.getByText(/are you sure/i)).toHaveCount(0);
 
     // A reason is required before voiding is allowed.
-    const confirmBtn = page.getByRole('button', { name: /^void sale$/i }).last();
+    const confirmBtn = page.getByRole('button', { name: /^cancel sale$/i }).last();
     await expect(confirmBtn).toBeDisabled();
     await page.locator('input[type="text"], input:not([type])').last().fill('QA void safety');
 
@@ -74,7 +77,7 @@ test.describe('Void sale safety', () => {
     // failure after the first one succeeded.
     await page.evaluate(() => {
       const btns = Array.from(document.querySelectorAll('button')).filter((b) =>
-        /^void sale$/i.test((b.textContent || '').trim())
+        /^cancel sale$/i.test((b.textContent || '').trim())
       ) as HTMLButtonElement[];
       const btn = btns[btns.length - 1];
       if (!btn) throw new Error('void confirm button not found');
@@ -94,7 +97,10 @@ test.describe('Void sale safety', () => {
         const el = document.querySelector('div.fixed[style*="--tabbar-height"]');
         return el ? (el as HTMLElement).innerText : '';
       }).catch(() => '');
-      if (text.includes('Sale voided successfully')) sawSuccess = true;
+      // The shipped success toast is t("copy.saleCancelled"). It used to be the literal
+      // "Sale voided successfully", which this control looked for — so once the wording
+      // moved into the dictionary, the control silently stopped seeing the toast.
+      if (text.includes('Sale cancelled')) sawSuccess = true;
       // friendly() maps an unrecognised refusal ("Sale is already voided") to this
       // sentence; seeing it right after a successful void is the misinformation.
       if (/did not work/i.test(text)) sawFailureWord = true;

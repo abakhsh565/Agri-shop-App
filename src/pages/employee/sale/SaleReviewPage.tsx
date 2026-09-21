@@ -75,7 +75,7 @@ export default function SaleReviewPage() {
     } catch (e) {
       // Keep the key: if the failure was the response going missing rather than the
       // sale, retrying with the same key returns that sale instead of duplicating it.
-      setError(e instanceof Error ? e.message : "Could not complete the sale. Please try again.");
+      setError(e instanceof Error ? e.message : t("errors.completeSaleFailed"));
     } finally {
       submittingRef.current = false;
       setLoading(false);

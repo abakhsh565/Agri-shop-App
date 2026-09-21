@@ -116,7 +116,7 @@ export default function AdminDashboardPage() {
     hour < 12 ? "dashboard.greeting.morning"
     : hour < 17 ? "dashboard.greeting.afternoon"
     : "dashboard.greeting.evening";
-  const displayName = user?.name ?? "Owner";
+  const displayName = user?.name ?? t("common.owner");
   const initials = user?.name?.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase() ?? "OW";
   const todayLabel = today.toLocaleDateString(isUrdu ? "ur-PK" : "en-PK", {
     weekday: "long", day: "numeric", month: "long",

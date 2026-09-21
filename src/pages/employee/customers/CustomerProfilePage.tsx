@@ -611,7 +611,7 @@ export default function CustomerProfilePage() {
       <ConfirmDialog
         open={showDelete}
         title={t("customerProfile.deleteCustomer")}
-        message={t("common.archiveCustomerConfirm")}
+        message={t("common.archiveCustomerConfirm", { name: customer.name })}
         confirmLabel={deleting ? t("common.saving") : t("customerProfile.deleteCustomer")}
         onConfirm={handleDelete}
         onCancel={() => setShowDelete(false)}
@@ -685,11 +685,11 @@ function RecommendedSection({ customerId }: { customerId: string | undefined }) 
                 const firstName = customer.name.split(' ')[0];
                 let msg = '';
                 if (rec.reasonTag === 'missing_from_basket') {
-                  msg = `Hi ${firstName}, the ${rec.product.name} is needed for your ${rec.cropName} season but we haven't seen an order yet. Would you like me to set one aside for you?`;
+                  msg = t('whatsapp.orderReminder', { name: firstName, product: rec.product.name, crop: rec.cropName });
                 } else if (rec.reasonTag === 'due_again') {
-                  msg = `Hi ${firstName}, it's been a while since your last ${rec.product.name} order for ${rec.cropName}. Time to restock?`;
+                  msg = t('whatsapp.restockReminder', { name: firstName, product: rec.product.name, crop: rec.cropName });
                 } else {
-                  msg = `Hi ${firstName}, ${rec.product.name} is in season for your ${rec.cropName} — thought you might need it.`;
+                  msg = t('whatsapp.inSeasonReminder', { name: firstName, product: rec.product.name, crop: rec.cropName });
                 }
                 window.open('https://wa.me/' + waPhone + '?text=' + encodeURIComponent(msg), '_blank');
               }}

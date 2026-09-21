@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
 import { useRolesStore } from "@/stores/rolesStore";
@@ -6,6 +6,7 @@ import { usePermissionsStore } from "@/stores/permissionsStore";
 import { useUIStore } from "@/stores/uiStore";
 import { useThemeStore } from "@/stores/themeStore";
 import { useT } from "@/lib/i18n";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { usePermissionLabels } from "@/lib/permissionLabels";
 import { Plus, Edit3, Trash2, Users, Shield, Check } from "lucide-react";
 import type { Role } from "@/types";
@@ -33,6 +34,11 @@ export default function RolesAccessPage() {
   const [selectedPerms, setSelectedPerms] = useState<Set<string>>(new Set());
   const [saving, setSaving] = useState(false);
   const [memberCounts, setMemberCounts] = useState<Record<string, number>>({});
+  const [deleteTarget, setDeleteTarget] = useState<Role | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  // A ref for the same reason as the employee screen: React batches, so two clicks in
+  // one task would both read the pre-render value of `deleting` and both fire.
+  const deletingRef = useRef(false);
   const [roleAreas, setRoleAreas] = useState<Record<string, string[]>>({});
   const [nameError, setNameError] = useState("");
 
@@ -121,16 +127,31 @@ export default function RolesAccessPage() {
     }
   }
 
-  async function handleDelete(role: Role) {
+  /**
+   * A role that employees are still using cannot be deleted, and saying so is a
+   * business explanation rather than a raw failure. Otherwise the owner confirms in
+   * the app's own dialog, so the wording and the button order follow the language.
+   */
+  function handleDelete(role: Role) {
     if (role.isSystem) return;
     const count = memberCounts[role.id] ?? 0;
     if (count > 0) { addToast(t("roles.deleteBlocked", { count }), "error"); return; }
-    if (!confirm(t("roles.deleteConfirm"))) return;
+    setDeleteTarget(role);
+  }
+
+  async function confirmDelete() {
+    if (deletingRef.current || !deleteTarget) return;
+    deletingRef.current = true;
+    setDeleting(true);
     try {
-      await rolesStore.deleteRole(role.id);
+      await rolesStore.deleteRole(deleteTarget.id);
       addToast(t("roles.deleted"), "success");
+      setDeleteTarget(null);
     } catch (e) {
       addToast(e instanceof Error ? e.message : t("common.error"), "error");
+    } finally {
+      deletingRef.current = false;
+      setDeleting(false);
     }
   }
 
@@ -250,6 +271,18 @@ export default function RolesAccessPage() {
           })}
         </div>
       </div>
+
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        title={t("roles.deleteConfirm")}
+        message={t("roles.deleteHint", { name: deleteTarget?.name ?? "" })}
+        confirmLabel={t("roles.deleteAction")}
+        cancelLabel={t("common.cancel")}
+        destructive
+        loading={deleting}
+        onConfirm={confirmDelete}
+        onCancel={() => !deleting && setDeleteTarget(null)}
+      />
     </div>
   );
 }

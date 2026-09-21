@@ -56,7 +56,7 @@ export default function AdminReturnConfirmPage() {
   async function handleConfirm() {
     if (submittingRef.current) return;
     if (!reason.trim()) {
-      addToast("Please enter a return reason", "error");
+      addToast(t("copy.enterReturnReason"), "error");
       return;
     }
     submittingRef.current = true;
@@ -85,7 +85,7 @@ export default function AdminReturnConfirmPage() {
       const rpcResult = await rpcProcessReturn({
         saleId,
         customerId: sale?.customerId ?? undefined,
-        customerName: sale?.customerName ?? "Customer",
+        customerName: sale?.customerName ?? t("common.customer"),
         resolution,
         reason: reason.trim(),
         idempotencyKey,
@@ -99,21 +99,21 @@ export default function AdminReturnConfirmPage() {
         returnNumber: rpcResult.returnNumber,
         resolution,
         reason: reason.trim(),
-        customerName: sale?.customerName ?? "Customer",
+        customerName: sale?.customerName ?? t("common.customer"),
         saleId: saleId ?? "",
         saleNumber: sale?.saleNumber ?? "",
         itemsReturned: items.reduce((s, i) => s + (i.qtyToReturn ?? 0), 0),
         processedAt: new Date().toISOString(),
         processedBy: currentUser?.name ?? "—",
       };
-      notifyReturnProcessed(sale?.customerName ?? "Customer", rpcResult.totalRefund, saleId ?? "");
+      notifyReturnProcessed(sale?.customerName ?? t("common.customer"), rpcResult.totalRefund, saleId ?? "");
       // Done: this attempt's key retires, so the next return is a new return.
       submissionKeyRef.current = null;
       navigate(`/admin/sales/${saleId}/return/success`, { state: { result }, replace: true });
     } catch (e) {
       // The key is KEPT on failure: the return may have been recorded and only the
       // answer lost, so the retry must return that one, not process a second.
-      addToast(e instanceof Error ? e.message : "Could not process return.", "error");
+      addToast(e instanceof Error ? e.message : t("errors.returnFailed"), "error");
     } finally {
       submittingRef.current = false;
       setLoading(false);
@@ -161,7 +161,7 @@ export default function AdminReturnConfirmPage() {
                     {item.productName} {item.variantName} × {item.qtyToReturn}
                   </p>
                   <div className="flex items-center gap-2 mt-2">
-                    <span className="text-xs" style={{ color: "var(--text-secondary)" }}>Price/unit:</span>
+                    <span className="text-xs" style={{ color: "var(--text-secondary)" }}>{t("common.pricePerUnit")}</span>
                     <input
                       type="number" min="0" step="1"
                       value={item.editedUnitPrice}
@@ -204,7 +204,9 @@ export default function AdminReturnConfirmPage() {
               <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
                 {formatCurrency(liveTotal)} will be{" "}
                 {resolution === "refund_cash" ? t("return.returnedDirectly") : t("return.addedAsCreditNote")}{" "}
-                {sale ? `${sale.customerName}. Original invoice ${sale.saleNumber} remains preserved.` : "to the customer."}
+                {sale
+                  ? t("common.originalInvoiceKept", { customer: sale.customerName, invoice: sale.saleNumber })
+                  : t("common.toTheCustomer")}
               </p>
             </div>
           </div>

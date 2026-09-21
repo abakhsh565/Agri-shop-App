@@ -60,10 +60,11 @@ const ATTR_NODE = /\b(?:label|title|subtitle|placeholder|alt|emptyLabel|hint|ari
 const TERN_LABEL = /\?\s*"([^"<>]{3,})"\s*:\s*"([^"<>]{3,})"/g;
 const SIGNAL_KEY = /detailKey:\s*"([^"]+)"/g;
 
-// Frozen 2026-09-20. These 148 render correct Urdu (they are not English leaks),
-// but they duplicate strings the dictionaries already hold. The count may only go
-// down: new strings go through t() with EN + UR keys.
-const INLINE_TRANSLATION_BASELINE = 148;
+// Frozen 2026-09-20, tightened 2026-09-21 after the admin microcopy pass (148 → 146).
+// These render correct Urdu (they are not English leaks), but they duplicate strings
+// the dictionaries already hold. The count may only go down: new strings go through
+// t() with EN + UR keys.
+const INLINE_TRANSLATION_BASELINE = 146;
 
 // Rendered-but-untranslated English found by parsing the JSX (text nodes plus string
 // literals rendered inside {…}). Measured 2026-09-20. The previous regex checks could
@@ -72,7 +73,12 @@ const INLINE_TRANSLATION_BASELINE = 148;
 // (`cond ? "All products are well-stocked"`) — all of which shipped English into Urdu.
 // Keyboard tokens (Enter/Escape/…) and the English arm of an inline bilingual ternary
 // are excluded. May only decrease.
-const JSX_LITERAL_BASELINE = 97;
+// Rendered-but-untranslated English found by parsing the JSX (text nodes plus string
+// literals rendered inside {…}). Frozen 2026-09-20 at 97 — the regex checks could not
+// see text with embedded expressions, parenthesised labels, or a one-sided ternary arm.
+// Tightened to 65 on 2026-09-21 by the admin microcopy pass (sign-in → /admin): 32
+// literals that shipped English into Urdu are now keys. May only decrease.
+const JSX_LITERAL_BASELINE = 65;
 
 const isBrand = (s: string) => BRANDS.includes(s.trim());
 const rel = (f: string) => path.relative(ROOT, f).split(path.sep).join("/");
@@ -252,6 +258,83 @@ describe("i18n coverage", () => {
       `Untranslated JSX literals (${found.length}, baseline ${JSX_LITERAL_BASELINE}) — ` +
         `route new strings through t() with EN + UR keys:\n${found.join("\n")}`,
     ).toBeLessThanOrEqual(JSX_LITERAL_BASELINE);
+  });
+
+  it("has no hardcoded prose inside a template literal", () => {
+    // WHY THIS CASE EXISTS. Product delete confirmed with
+    //   message={`${product.name} will be removed. If it has past sales, it's archived…`}
+    // The text is a TemplateExpression, not a plain string and not a JSX text node, so
+    // none of the checks above could see it: an owner reading Urdu was asked to confirm
+    // a deletion in English. Concatenation of LITERAL parts only — the interpolated
+    // values are data, so `${a} · ${b}` and `stage_${i}` are not copy.
+    const offenders: string[] = [];
+
+    // Only what the JSX renders. A template inside lib/ is a log line, a QR payload
+    // or a generated document, and dropping those in here would bury the real leaks.
+    const insideJsx = (node: ts.Node) => {
+      for (let n: ts.Node | undefined = node.parent; n; n = n.parent) {
+        if (ts.isJsxAttribute(n) || ts.isJsxExpression(n)) return true;
+        if (ts.isJsxElement(n) || ts.isJsxSelfClosingElement(n)) return false;
+      }
+      return false;
+    };
+    // A class list is not copy, and it is recognisable: several hyphenated tokens and
+    // no sentence punctuation. Listing the utility prefixes instead matched prose such
+    // as "…it's archived…" (the `it`s-` token), which hid a real leak — so the shape is
+    // tested, not a guessed vocabulary.
+    const UTILITY = /(^|\s)(px|py|ps|pe|pt|pb|pl|pr|mt|mb|ms|me|mx|my|w|h|min|max|gap|space|inset|top|bottom|start|end|left|right|z|opacity|text|font|leading|tracking|rounded|border|bg|p|m|size|basis|order|col|row)-?[a-z0-9\[]/g;
+    const LAYOUT = /(^|\s)(flex|grid|block|inline|hidden|relative|absolute|fixed|sticky|truncate|uppercase|lowercase|italic|underline)(\s|$)/;
+    // A full stop after a LETTER is prose ("…removed."). A dot inside a utility value
+    // (`py-3.5`) is not, so requiring the letter is what keeps class lists out.
+    const SENTENCE_PUNCT = /[a-zA-Z][.?!]|[?!]/;
+
+    for (const file of shipped.filter((f) => f.endsWith(".tsx") || f.endsWith(".ts"))) {
+      const text = fs.readFileSync(file, "utf8");
+      const sf = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+
+      const visit = (node: ts.Node) => {
+        // `t("key", `English fallback`)` is a defensive fallback beside a real key,
+        // and the coverage check above proves that key exists in both languages.
+        const isTFallback = (n: ts.Node) => {
+          const p = n.parent;
+          if (!p || !ts.isCallExpression(p)) return false;
+          const e = p.expression;
+          const name = ts.isIdentifier(e) ? e.text : ts.isPropertyAccessExpression(e) ? e.name.text : "";
+          return name === "t" || name === "tNow";
+        };
+
+        if (ts.isTemplateExpression(node) && insideJsx(node) && !isTFallback(node)) {
+          const parts = [node.head.text, ...node.templateSpans.map((s) => s.literal.text)];
+          const prose = parts.join(" ");
+          const flat = prose.replace(/\s+/g, " ").trim();
+          const words = flat.split(/\s+/).filter((w) => /[A-Za-z]{2}/.test(w));
+          const letters = (prose.match(/[A-Za-z]/g) ?? []).length;
+          // A sentence has at least two words and enough letters to say something.
+          const sentenceish = words.length >= 2 && letters >= 10 && /[a-z]{3}/.test(prose);
+          // A route, a file name or a URL is data, not copy. Tested on the parts joined
+          // with no separator, which is how the value is actually assembled
+          // (`barcode-${id}.svg`), so the spaces added for reading do not hide it.
+          const assembled = parts.join("").replace(/\s+/g, "");
+          const DATA =
+            /^\/|^https?:|^[a-z0-9._-]+\.(svg|png|jpe?g|json|csv|pdf)$/i.test(assembled) ||
+            /^\//.test(flat);
+          const classList =
+            !SENTENCE_PUNCT.test(flat) &&
+            ((flat.match(UTILITY) ?? []).length >= 2 || LAYOUT.test(flat));
+          if (sentenceish && !classList && !DATA) {
+            const line = sf.getLineAndCharacterOfPosition(node.getStart(sf)).line + 1;
+            offenders.push(`${rel(file)}:${line} \`${flat.slice(0, 60)}\``);
+          }
+        }
+        ts.forEachChild(node, visit);
+      };
+      visit(sf);
+    }
+
+    expect(
+      offenders,
+      `prose inside a template literal, so it stays English in Urdu — use t("key", { … }):\n${offenders.join("\n")}`,
+    ).toEqual([]);
   });
 
   it("inline isUrdu translations have not increased", () => {

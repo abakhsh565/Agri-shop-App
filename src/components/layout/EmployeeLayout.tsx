@@ -168,7 +168,9 @@ export default function EmployeeLayout() {
           <div className="flex items-center gap-2">
             <WifiOff size={14} />
             <span className="text-[12px] font-semibold">
-              Offline mode — {pendingOpsCount > 0 ? `${pendingOpsCount} change(s) queued` : "working locally"}
+              {t("common.offline")} — {pendingOpsCount > 0
+                ? t("common.offlineQueued", { count: pendingOpsCount })
+                : t("common.offlineWorkingLocally")}
             </span>
           </div>
           <span className="text-[10px] opacity-60 uppercase tracking-wide">{t("common.autoSyncOnReconnect")}</span>

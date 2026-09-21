@@ -88,7 +88,7 @@ export default function StockMovementHistoryPage() {
 
       {loading ? (
         <div className="flex-1 flex items-center justify-center py-16">
-          <p className="text-sm" style={{ color: "var(--text-secondary)" }}>Loading movements…</p>
+          <p className="text-sm" style={{ color: "var(--text-secondary)" }}>{t("common.loadingMovements")}</p>
         </div>
       ) : movements.length === 0 ? (
         <div className="flex-1 flex flex-col items-center justify-center py-16 gap-2">

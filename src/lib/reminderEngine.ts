@@ -1,5 +1,6 @@
 import type { Customer, Sale, ReminderConfig, ReminderGroup, BusinessSettings, CropConfig, GeneratedReminder, PaymentStatus } from "@/types";
 import type { TranslateFn } from "@/lib/i18n";
+import { tNow } from "@/lib/i18n";
 import { supabase } from "@/lib/supabase";
 import { pkDate, pkDateFromISO } from "@/lib/pkDate";
 
@@ -45,7 +46,7 @@ export async function loadReminderConfigs(customerId: string): Promise<ReminderC
       escalation: (() => {
         const raw = typeof row.escalation === "string" ? JSON.parse(row.escalation) : (row.escalation ?? []);
         return Array.isArray(raw) ? raw.map((s: any) => ({
-          label: s.label || s.tone || "Stage",
+          label: s.label || s.tone || tNow("common.stage"),
           tone: s.tone || "nudge",
           day: s.day ?? 1,
         })) : [];
@@ -121,7 +122,7 @@ export async function loadReminderGroups(): Promise<ReminderGroup[]> {
       const gId = row.group_id;
       if (!groupMap.has(gId)) {
         groupMap.set(gId, {
-          name: row.group_name || "Unnamed Group",
+          name: row.group_name || tNow("common.unnamedGroup"),
           customerIds: new Set(),
           config: {
             triggerType: row.anchor || "before_due",
@@ -146,7 +147,7 @@ export async function loadReminderGroups(): Promise<ReminderGroup[]> {
         const c = custMap.get(cId);
         return {
           id: cId,
-          name: c?.name || "Unknown",
+          name: c?.name || tNow("common.unknown"),
           outstandingBalance: c?.outstanding_balance || 0,
           dueDate: c?.due_date || null,
         };

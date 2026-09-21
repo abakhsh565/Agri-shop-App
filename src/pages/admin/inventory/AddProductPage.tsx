@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
@@ -79,6 +79,7 @@ export default function AddProductPage() {
   );
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const savingRef = useRef(false);
 
   function setVariant(i: number, patch: Partial<VariantDraft>) {
     setVariants((vs) => vs.map((v, idx) => (idx === i ? { ...v, ...patch } : v)));
@@ -88,17 +89,22 @@ export default function AddProductPage() {
 
   async function handleSave() {
     setError("");
-    if (!name.trim()) { setError("Enter the product name."); return; }
-    if (!company.trim()) { setError("Select a supplier / company."); return; }
+    if (!name.trim()) { setError(t("copy.enterProductName")); return; }
+    if (!company.trim()) { setError(t("copy.selectSupplier")); return; }
     const clean = variants.filter((v) => v.name.trim() !== "");
-    if (clean.length === 0) { setError("Add at least one unit / variant with a name."); return; }
+    if (clean.length === 0) { setError(t("copy.addOneUnit")); return; }
     for (const v of clean) {
-      if (Number(v.sellingPrice) <= 0) { setError(`Enter a selling price for "${v.name}".`); return; }
+      if (Number(v.sellingPrice) <= 0) { setError(t("copy.sellingPriceFor", { name: v.name })); return; }
     }
 
     // Auto-generate barcode if empty
     const finalBarcode = barcode.trim() || generateProductBarcode(name.trim());
 
+    // A ref, not `loading`: React batches, so two taps in one task both read the
+    // pre-render `false` and the same product is created twice, opening its stock
+    // twice with it.
+    if (savingRef.current) return;
+    savingRef.current = true;
     setLoading(true);
     try {
       if (isEdit && productId) {
@@ -122,7 +128,7 @@ export default function AddProductPage() {
           })),
         });
         await useProductsStore.getState().load();
-        addToast(`${name.trim()} updated`, "success");
+        addToast(t("copy.updated", { name: name.trim() }), "success");
       } else {
         await rpcCreateProduct({
           name: name.trim(),
@@ -133,6 +139,12 @@ export default function AddProductPage() {
           imageUrl: imageUrl ?? undefined,
           barcode: finalBarcode,
           variants: clean.map((v) => ({
+            // The variant is the stock of record (0128) and this is where the
+            // database reads opening stock from, but the form collects ONE figure.
+            // With a single unit row that figure is unambiguously its stock; the
+            // form cannot express per-unit opening stock for several units, which
+            // is recorded as an open decision rather than guessed at.
+            ...(clean.length === 1 ? { stockQty: Number(stockQty) || 0 } : {}),
             name: v.name.trim(),
             sellingPrice: Number(v.sellingPrice) || 0,
             costPrice: Number(v.costPrice) || 0,
@@ -141,13 +153,14 @@ export default function AddProductPage() {
             lowStockThreshold: Math.max(0, Number(v.lowStockThreshold) || 5),
           })),
         });
-        addToast(`${name.trim()} added to inventory`, "success");
+        addToast(t("copy.addedToInventory", { name: name.trim() }), "success");
       }
       clearNav();
       navigate("/admin/products", { replace: true });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not save product.");
+      setError(err instanceof Error ? err.message : t("errors.saveProductFailed"));
     } finally {
+      savingRef.current = false;
       setLoading(false);
     }
   }
@@ -200,7 +213,7 @@ export default function AddProductPage() {
                     const result = await scanFromCamera();
                     if (result) {
                       setBarcode(result.barcode.toUpperCase());
-                      addToast(`Scanned: ${result.barcode}`, "success");
+                      addToast(t("copy.barcodeRead", { code: result.barcode }), "success");
                     }
                   } catch {
                     addToast(t('products.cameraUnavailable'), "error");
@@ -225,7 +238,7 @@ export default function AddProductPage() {
                 }
                 const generated = generateProductBarcode(name.trim());
                 setBarcode(generated);
-                addToast(`Barcode generated: ${generated}`, "success");
+                addToast(t("copy.barcodeMade", { code: generated }), "success");
               }}
               className="text-xs font-semibold mt-1.5 underline underline-offset-2"
               style={{ color: "var(--brand-dark)" }}
@@ -339,7 +352,7 @@ export default function AddProductPage() {
           className="w-full h-12 rounded-full font-bold text-sm transition-all active:scale-[0.98] disabled:opacity-50"
           style={{ background: "var(--brand)", color: "#0a0a0a" }}
         >
-          {loading ? "Saving…" : isEdit ? t("products.saveChanges") : t("products.addButton")}
+          {loading ? t("common.saving") : isEdit ? t("products.saveChanges") : t("products.addButton")}
         </button>
       </div>
     </div>

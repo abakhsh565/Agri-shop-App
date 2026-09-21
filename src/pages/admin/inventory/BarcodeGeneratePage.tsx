@@ -35,7 +35,7 @@ export default function BarcodeGeneratePage() {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else if (next.size < maxEligible) next.add(id);
-      else addToast(`Max ${maxEligible} barcodes can be generated (products without existing barcodes)`, "warning");
+      else addToast(t("copy.barcodeLimit", { max: String(maxEligible) }), "warning");
       return next;
     });
   }
@@ -67,9 +67,9 @@ export default function BarcodeGeneratePage() {
   async function copyBarcode(barcode: string) {
     try {
       await navigator.clipboard.writeText(barcode);
-      addToast(`Copied ${barcode}`, "success");
+      addToast(t("copy.barcodeCopied", { code: barcode }), "success");
     } catch {
-      addToast("Copy failed", "error");
+      addToast(t("copy.copyFailed"), "error");
     }
   }
 
@@ -82,12 +82,12 @@ export default function BarcodeGeneratePage() {
     a.download = `barcode-${productName.replace(/\s+/g, "-")}-${barcode}.svg`;
     a.click();
     URL.revokeObjectURL(url);
-    addToast(`Downloaded barcode for ${productName}`, "success");
+    addToast(t("copy.barcodeSaved", { name: productName }), "success");
   }
 
   async function shareBarcode(barcode: string, productName: string) {
     if (!navigator.share) {
-      addToast("Sharing not supported on this device", "warning");
+      addToast(t("copy.shareUnavailable"), "warning");
       return;
     }
     const svg = barcodeToSvg(barcode, { height: 60, showText: true });
@@ -101,7 +101,7 @@ export default function BarcodeGeneratePage() {
   function printLabels() {
     if (!printRef.current) return;
     const win = window.open("", "_blank");
-    if (!win) { addToast("Pop-up blocked", "error"); return; }
+    if (!win) { addToast(t("copy.allowPopups"), "error"); return; }
     win.document.write(`<html><head><title>Print Barcodes</title>
       <style>body{font-family:monospace;margin:20px}.label{border:1px solid #ccc;padding:12px;margin:8px;display:inline-block;text-align:center;width:200px}.label svg{max-width:100%;height:auto}.name{font-size:11px;margin-top:4px}.price{font-size:10px;color:#666}@media print{.label{break-inside:avoid}}</style></head><body>`);
     for (const { product, barcode, copies } of labels) {
@@ -113,7 +113,7 @@ export default function BarcodeGeneratePage() {
     win.document.write("</body></html>");
     win.document.close();
     setTimeout(() => win.print(), 500);
-    addToast("Opening print dialog…", "info");
+    addToast(t("copy.openingPrint"), "info");
   }
 
   // ── Step 1: Select Products ──

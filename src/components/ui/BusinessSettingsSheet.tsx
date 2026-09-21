@@ -185,7 +185,7 @@ export default function BusinessSettingsSheet({ onClose, onSave }: Props) {
                         </div>
                       </div>
                       <div className="w-[80px] relative">
-                        <p className="text-[10px] font-medium mb-1" style={{ color: "var(--text-secondary)" }}>Day</p>
+                        <p className="text-[10px] font-medium mb-1" style={{ color: "var(--text-secondary)" }}>{t("common.day")}</p>
                         <select
                           value={crop.harvestDay}
                           onChange={(e) => updateHarvestDay(crop.name, parseInt(e.target.value))}

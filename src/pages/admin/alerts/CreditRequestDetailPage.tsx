@@ -201,7 +201,9 @@ export default function CreditRequestDetailPage() {
           <div className="rounded-[12px] px-4 py-3 flex items-center gap-2" style={{ background: isApproved ? "rgba(22, 163, 74, 0.06)" : "rgba(220, 38, 38, 0.06)" }}>
             {isApproved ? <CheckCircle2 size={16} style={{ color: "#16a34a" }} /> : <XCircle size={16} style={{ color: "#dc2626" }} />}
             <p className="text-[13px] font-medium" style={{ color: isApproved ? "#166534" : "#991b1b" }}>
-              {isApproved ? (isUrdu ? `منظور شدہ — ${request.reviewedBy}` : `Approved by ${request.reviewedBy}`) : (isUrdu ? `مسترد شدہ — ${request.reviewedBy}` : `Rejected by ${request.reviewedBy}`)}
+              {isApproved
+                ? t("common.approvedBy", { name: request.reviewedBy ?? "" })
+                : t("common.rejectedBy", { name: request.reviewedBy ?? "" })}
             </p>
           </div>
         )}
