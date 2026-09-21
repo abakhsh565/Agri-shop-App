@@ -164,8 +164,7 @@ BEGIN
 
   IF v_company_id IS NOT NULL THEN
     UPDATE companies SET total_purchases = total_purchases + v_total,
-      o
-utstanding_payable = outstanding_payable + v_payable WHERE id = v_company_id;
+      outstanding_payable = outstanding_payable + v_payable WHERE id = v_company_id;
   END IF;
 
   INSERT INTO audit_events(user_id, action, entity_type, entity_id, details)

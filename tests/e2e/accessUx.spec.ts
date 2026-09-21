@@ -17,6 +17,7 @@
  */
 import { test, expect, type Page } from '@playwright/test';
 import { execSql } from './helpers';
+import { waitForSignedIn } from './signInDiagnostics';
 
 const BASE = 'http://localhost:5173';
 const OTP = '123456';
@@ -54,7 +55,9 @@ async function login(page: Page, phone: string) {
     await expect(boxes.nth(i), `OTP digit ${i + 1} is not the one that was typed`).toHaveValue(OTP[i]);
   }
 
-  await page.waitForURL(/pin-set|\/login\/pin|\/admin\/dashboard|\/employee\/dashboard/, { timeout: 30000 });
+  await waitForSignedIn(page, phone, 'the dashboard or the PIN screen', () =>
+    page.waitForURL(/pin-set|\/login\/pin|\/admin\/dashboard|\/employee\/dashboard/, { timeout: 30000 }),
+  );
 
   if (page.url().includes('pin-set')) {
     // First sign-in on this device: set the PIN, then confirm it.
@@ -64,7 +67,9 @@ async function login(page: Page, phone: string) {
   } else if (page.url().includes('/login/pin')) {
     for (const d of PIN) await page.getByRole('button', { name: d, exact: true }).first().click();
   }
-  await page.waitForURL(/\/(admin|employee)\/dashboard/, { timeout: 30000 });
+  await waitForSignedIn(page, phone, 'the dashboard', () =>
+    page.waitForURL(/\/(admin|employee)\/dashboard/, { timeout: 30000 }),
+  );
   await page.waitForTimeout(1200); // let the stores hydrate
 }
 

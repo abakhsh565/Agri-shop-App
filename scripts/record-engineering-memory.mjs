@@ -667,6 +667,34 @@ const MEMORIES = [
       afterFix: 'enum values read from the database (payment_type: full|partial|credit, payment_method: cash|bank_transfer|mobile); the spec passes and the helper names the SQL error when a fixture fails'
     },
   },
+  {
+    category: 'failure_pattern',
+    title: 'A migration that cannot be replayed from scratch kept the release pipeline red for weeks, and the running app never noticed',
+    component: 'supabase/migrations/0012_update_existing_rpcs.sql, tests/unit/migrationReplayability.test.ts',
+    description:
+      'The Supabase Preview check failed on every commit with `ERROR: syntax error at or near "utstanding_payable" (SQLSTATE 42601)`, and it had been failing since the first commit of the repository: line 167 of migration 0012 ends with a bare `o` and the next line continues with `utstanding_payable`, so Postgres reads one identifier as `o utstanding_payable` and an `UPDATE companies SET total_purchases = ..., o utstanding_payable = ...` is not valid SQL. Migration 0012 redefines create_purchase, so applying the file to a FRESH database stops there. Nothing in the running product was ever affected: 0015 and 0027 redefine the same function, and the live QA and production databases had been provisioned by other means. That is exactly why it survived for weeks — the only thing that ever replays the migrations from scratch is a NEW environment, which is precisely what the Supabase preview branch does, and nobody read that check. It was found by asking why the release pipeline was red instead of assuming the pipeline was flaky. RULE: a migration that no test has ever replayed is not known to be replayable, and its failure appears only for the NEXT environment, never for the current one.',
+    evidence: {
+      symptom: 'Supabase Preview check on every commit: syntax error at or near "utstanding_payable" (SQLSTATE 42601), reported against CREATE OR REPLACE FUNCTION create_purchase',
+      reproduced: 'the file replayed in an in-process Postgres (@electric-sql/pglite, already a devDependency): the corrupt text fails with `syntax error at or near "utstanding_payable"`, byte-identical to CI; after joining the line back the same file replays without error',
+      falsification: 'reintroducing the split line makes tests/unit/migrationReplayability.test.ts fail, naming 0012_update_existing_rpcs.sql:167',
+      guard: 'tests/unit/migrationReplayability.test.ts — detected 1 real defect and 0 false positives across every migration in the repo',
+      regression: 'vitest 400/400 across 36 files, tsc clean',
+      fixedIn: '0012_update_existing_rpcs.sql (one line joined)'
+    },
+  },
+  {
+    category: 'failure_pattern',
+    title: 'A reload on the code screen restarted sign-in, because the in-progress phone was never kept',
+    component: 'src/stores/authStore.ts, src/pages/auth/OTPVerifyPage.tsx, src/pages/register/*, tests/e2e/otpResume.spec.ts',
+    description:
+      'pendingPhone is the only state that says "a sign-in/registration is in progress for this number". It lived in the zustand store, and the store persisted ONLY user (partialize: (s) => ({ user: s.user })), so it was memory-only. Every code screen guards on that value at mount (OTPVerifyPage and RegisterOTPPage both navigate to the start when it is empty), so ANY reload of the code screen silently reset the whole flow: the owner was returned to "enter your phone number" and had to begin again. On a slow rural connection an in-flow reload is ordinary — this is the reported "login takes ages" friction, and it was reproducible in one step: reach /login/otp, reload, land on /login. It is also the mechanism behind an intermittent E2E failure where the code was typed provably correctly (all six digits asserted) and the page was still at /login. The same defect affected registration (register/otp, shop details, status) and forgot-PIN, since all of them read pendingPhone. Fix: keep the number in sessionStorage — this tab, this session — read it when the store is created, clear it on successful sign-in and on logout. NOT localStorage: the half-finished flow must not outlive the tab and must not leak into a new one. It is not a credential; the code is still verified server-side.',
+    evidence: {
+      reproduced: 'PROBE reached: /login/otp → PROBE after reload: /login (5.0s), with localStorage holding only {"state":{"user":null}}',
+      falsification: 'with the store reading its initial value as "" instead of sessionStorage, tests/e2e/otpResume.spec.ts fails: "the code screen must still be the code screen" at otpResume.spec.ts:39',
+      afterFix: '2/2: a reload keeps /login/otp with all six boxes intact, and a second tab still starts clean at /login',
+      scope: 'one file (authStore.ts), 35 lines; no authorization, RPC or business rule touched',
+    },
+  },
 ];
 
 const client = await pool.connect();

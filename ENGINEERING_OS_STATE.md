@@ -905,22 +905,44 @@ through Playwright, or a real JWT through PostgREST into the RPC, judged on the 
 | 5 | **Opening stock typed on Add Product was discarded.** `create_product` reads stock from each variant; the form collects one figure and sent it at product level, so every product was created with 0 stock while the field's own hint promises sellable units come out of it | Page now sends it where the database reads it (single unit row) | `productOpeningStock` E2E |
 | 6 | A SQL error reported in-band looked like data: `execSql`/`runSqlHttp` returned `{error}` as a row, so a failed fixture write read as "the row isn't there" and the spec blamed the product | Both helpers throw | the first run of `employeeStatusSafety` failed on a product assertion that was really a bad fixture enum value |
 | 7 | `"Saving…"` hardcoded on Add Product — English in Urdu mode; the existing guards do not see a literal inside a JSX ternary | `t("common.saving")` | source |
+| 8 | **Migration 0012 cannot be replayed from scratch**, so the `Supabase Preview` check has failed on every commit since the first one: a bare `o` plus a newline split `outstanding_payable`, and a fresh database stops at `syntax error at or near "utstanding_payable"`. The live databases never hit it because 0015 and 0027 redefine the same function | the line joined back into one statement | replayed in an in-process Postgres: corrupt text → CI's byte-identical error; joined text → clean; `migrationReplayability` guard fails naming `0012:167` |
+| 9 | **A reload on the code screen restarted sign-in.** `pendingPhone` — the only state saying "a sign-in is in progress" — was memory-only (`partialize` kept just `user`), and every code screen guards on it at mount, so an in-flow reload silently threw the owner back to "enter your phone number". On a slow rural connection that is ordinary, and it is the reported "login takes ages" friction | kept in `sessionStorage` (this tab, this session), cleared on sign-in and logout | reached `/login/otp`, reloaded → landed on `/login`; with the fix `/login/otp` survives with all six boxes, a second tab still starts clean, and reverting it fails `otpResume` at line 39 |
 
 Durable prevention: `tests/unit/reentrancyGuard.test.ts` fails on any
 `if (<boolean useState>) return;` in `src/`, on any listed consequential submit that lost
 its ref, and on any submit that stopped claiming its idempotency key.
 
+### Release pipeline — what running it actually showed
+
+The release commit is `c15d85a` (pushed; `HEAD == origin/main`). Running the sanctioned
+workflow exposed two further things: one real defect in this repository, and one
+account-level blocker no change in this repository can fix.
+
+**Fixed — migration 0012 could not be replayed from scratch.** The `Supabase Preview`
+check fails on every commit with
+`ERROR: syntax error at or near "utstanding_payable" (SQLSTATE 42601)`, and has failed
+that way since the first commit: line 167 of `0012_update_existing_rpcs.sql` ends with a
+bare `o` and the next line continues `utstanding_payable`, so Postgres reads one
+identifier as `o utstanding_payable`. Applying the file to a **fresh** database stops
+there. Reproduced in an in-process Postgres: the corrupt text fails with CI's
+byte-identical message, the joined line replays without error, and reintroducing the split
+makes `tests/unit/migrationReplayability.test.ts` fail naming `0012…:167`.
+
+**Blocked, needs the account owner — no workflow job can start.** Every run of
+`build-apk.yml` and `backup-database.yml` fails with the job never reaching a runner:
+`runner_name=""`, `steps=0`, whole job 3 seconds (`2026-09-21T15:37:19Z` →
+`15:37:22Z` for run 35620183865, job 106400986311). The repo is private and its Actions
+settings are healthy (`enabled:true`, `allowed_actions:"all"`), so this is an
+account-level restriction (Actions minutes/spending limit, or a failed payment) rather
+than a workflow defect — the same workflow produced `apk-build-262` with an APK asset on
+2026-09-14, and nothing under `.github/workflows/` changed after `d348c0c`. No APK can be
+generated through the sanctioned path until that is cleared, and it is deliberately not
+worked around: a locally built APK is not the release artifact.
+
 ### PRODUCTION READY: NO — remaining blockers
 
-1. **The full Playwright suite result is one spec short of clean.** The clean run
-   (nothing else touching the QA database) was **77 passed / 1 failed**, and the single
-   failure is `voidSaleSafety` at **0 ms** with `execSql: TypeError: fetch failed` inside
-   `setupFixtures` — a network blip reaching the QA endpoint during fixture setup, not a
-   product or logic failure. Re-running the affected lanes together
-   (`voidSaleSafety`, `employeeStatusSafety`, `roleDeleteSafety`, `productOpeningStock`)
-   gave **5 passed / 1 failed**, where the failure was the new opening-stock spec, which
-   then passed on its own and was falsified (reverting the fix → `Received: 0`).
-   Everything green must be re-established in ONE run before this can be called done.
+1. **The release pipeline cannot start a job (account-level, above).** Blocks both the APK
+   and CI's run of the full suite; needs the repository owner to clear it.
 2. **Opening stock with more than one unit row is an open product decision.** The form has
    one stock field and the product may have several units; the fix applies it to the single
    unit row. For two or more units the form cannot express per-unit opening stock — needs
@@ -932,5 +954,9 @@ its ref, and on any submit that stopped claiming its idempotency key.
    idempotency, so a lost-answer retry could duplicate.
 5. Employee-side screens still hold English literals (the earlier microcopy pass was
    scoped to the admin side).
-6. Nothing from this stage or the previous microcopy stage is committed — the work is all
-   in the working tree and must be reviewed as one diff before any commit.
+6. The full local Playwright suite has not been re-established in ONE clean pass since the
+   test-helper change (it was 77 passed / 1 infrastructure failure before it); the affected
+   run is green at **22/22** for the seven specs this stage touches, and CI would otherwise
+   supply the full run if item 1 did not block it.
+7. The migration fix still needs the `Supabase Preview` check itself to go green on the
+   next push; the local replay proves the file parses, only the check proves it lands.
