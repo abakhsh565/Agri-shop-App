@@ -942,6 +942,22 @@ Content preservation is asserted byte-for-byte when the merge is written, and
 `migrationReplayability` now fails on any shared version (falsified: duplicating a file
 made it name `0015: 0015_flexible_units.sql, 0015_zz_temp_duplicate.sql`).
 
+**Why the preview check cannot be made green by editing migration files.** Two failures
+later the shape repeated: `42P13 cannot change name of input parameter "payload"` at 0015,
+and after that `42809 "idx_customers_phone_unique" is a partial index — Cannot create a
+primary key or unique constraint using such an index`. The 0015 one is decisive, because
+`adjust_stock` is defined **nowhere earlier in this repository** — it is 0015 that creates
+it first. A function that does not exist yet cannot collide with anything, so the database
+being pushed into must already contain it. That is what a Supabase preview branch is: a
+FORK of the project's current schema, whose `schema_migrations` inherits only what the
+parent project has recorded — **QA has just 0009, 0010 and 0011** — so every version from
+0012 up is considered unapplied and the entire history replays on top of a schema that
+already has all of its objects. Each old file therefore rewrites current objects back to
+older definitions until a later file rewrites them forward again; convergence is only
+accidental. Nothing in the migration directory fixes that. It needs a decision: record the
+applied versions on the parent project, or replace the pre-0140 history with a baseline
+that a fresh environment starts from.
+
 **Blocked, needs the account owner — no workflow job can start.** Every run of
 `build-apk.yml` and `backup-database.yml` fails with the job never reaching a runner:
 `runner_name=""`, `steps=0`, whole job 3 seconds (`2026-09-21T15:37:19Z` →
@@ -972,9 +988,14 @@ worked around: a locally built APK is not the release artifact.
    test-helper change (it was 77 passed / 1 infrastructure failure before it); the affected
    run is green at **22/22** for the seven specs this stage touches, and CI would otherwise
    supply the full run if item 1 did not block it.
-7. The migration fixes (0012 joined, ten collisions merged) still need the `Supabase
-   Preview` check to reach a green conclusion on the next push. The 0012 fix is already
-   proven to have moved the check forward — it went from failing in seconds at
-   `utstanding_payable` to failing later at 0014 — but nothing here has yet proven that a
-   fresh database replays the whole directory, and these files have never been replayed
-   from scratch by anything.
+7. **The migration history cannot be replayed onto the project's own schema, and that is a
+   decision, not a fix.** The `Supabase Preview` check moved forward three times in this
+   session (0012 syntax → 0014 duplicate version → 0015 parameter rename → a partial-index
+   constraint), and each push bought exactly one more failure. The rest of the chain will
+   be the same shape, so grinding it file-by-file is not a plan. It needs the project owner
+   to choose: record the applied versions in the parent project's
+   `supabase_migrations.schema_migrations` (so the fork inherits them and nothing replays),
+   or replace the pre-0140 history with a baseline that a fresh environment can start from.
+   The fixes already made are correct regardless and are kept: 0012 was unappliable even to
+   an empty database, ten versions were duplicated, and the renamed-parameter
+   redefinitions could not apply onto an existing schema either.

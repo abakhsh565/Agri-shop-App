@@ -710,6 +710,20 @@ const MEMORIES = [
       regression: 'vitest 401/401 across 36 files, tsc clean, production build clean, accessUx + otpResume 9/9'
     },
   },
+  {
+    category: 'technical_decision',
+    title: 'The migration history replays onto the project\'s own schema, so a Supabase preview branch can never go green from the migration directory',
+    component: 'supabase/migrations, Supabase Preview check, supabase_migrations.schema_migrations',
+    description:
+      'Fixing migration 0012 and the ten duplicate versions moved the Supabase Preview check forward three times — 0012 syntax, then 0014 duplicate key, then 0015 `42P13 cannot change name of input parameter "payload"`, then `42809 "idx_customers_phone_unique" is a partial index`. The 0015 failure is the one that explains everything: adjust_stock is defined NOWHERE earlier in the repository — 0015 creates it first — so there is nothing in the history for it to collide with. The only way a function that does not exist yet can already exist is that the DATABASE already has it. A Supabase preview branch is a fork of the project\'s current schema, and its schema_migrations inherits only what the parent project recorded — QA has exactly 0009, 0010 and 0011 — so every version from 0012 onward is treated as unapplied and the whole history replays on top of a schema that already contains all of its objects. Each old file therefore rewrites current objects back to older definitions until a later file rewrites them forward again; the final state converges only by luck of ordering. No edit to the migration directory can resolve this, which is why the check has been red since the first commit: it is not an accumulation of typos, it is a history being applied to the wrong starting point. Decision required: either record the applied versions in the parent project so the fork inherits them, or replace the pre-0140 history with a baseline that a fresh environment starts from. RULE: before debugging a migration replay failure one file at a time, establish whether the target database is EMPTY or a fork of the current schema — the second case makes "fix the file" the wrong unit of work.',
+    evidence: {
+      signal: 'adjust_stock first appears in 0015, yet its replay fails with an existing parameter named payload',
+      parentVersionsRecorded: 'QA supabase_migrations.schema_migrations holds 3 rows: 0009, 0010, 0011',
+      advancePerPush: '0012 syntax (weeks/commit) -> 0014 duplicate version -> 0015 create_sale/process_return/create_purchase renamed params -> 0015 adjust_stock -> 42809 partial index',
+      keptFixes: '0012 line joined, ten versions merged to one file each, drop-before-redefine for the three renamed functions — each correct independently of this finding',
+      notAttempted: 'recording versions on the parent project or squashing to a baseline — both are decisions for the project owner, and the second rewrites migration history'
+    },
+  },
 ];
 
 const client = await pool.connect();
