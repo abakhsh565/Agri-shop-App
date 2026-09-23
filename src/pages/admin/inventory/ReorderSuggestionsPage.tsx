@@ -8,6 +8,7 @@ import { useCompaniesStore } from "@/stores/companiesStore";
 import { getStockStatus, getStockStatusColor, formatCurrency } from "@/lib/formatters";
 import { Package, AlertTriangle, ArrowRight, ShoppingCart } from "lucide-react";
 import { useT } from "@/lib/i18n";
+import { SkeletonList } from "@/components/ui/Skeleton";
 
 export default function ReorderSuggestionsPage() {
   const t = useT();
@@ -16,6 +17,11 @@ export default function ReorderSuggestionsPage() {
   const navigate = useNavigate();
   const products = useProductsStore((s) => s.products);
   const companies = useCompaniesStore((s) => s.companies);
+  // Read both stores unconditionally: short-circuiting a hook call is what
+  // crashed this screen, since React must see the same hooks every render.
+  const productsReady = useProductsStore((s) => s.ready);
+  const companiesReady = useCompaniesStore((s) => s.ready);
+  const ready = productsReady && companiesReady;
 
   const suggestions = useMemo(() => {
     const rows: {
@@ -78,7 +84,9 @@ export default function ReorderSuggestionsPage() {
         </div>
       </div>
 
-      {suggestions.length === 0 ? (
+      {!ready ? (
+        <SkeletonList rows={4} tile />
+      ) : suggestions.length === 0 ? (
         <div className="flex-1 flex flex-col items-center justify-center py-16 gap-2">
           <Package size={32} style={{ color: "var(--text-secondary)" }} />
           <p className="text-sm" style={{ color: "var(--text-secondary)" }}>{t("admin.noRestockingNeeded")}</p>

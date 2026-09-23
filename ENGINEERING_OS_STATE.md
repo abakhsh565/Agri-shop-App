@@ -1174,3 +1174,55 @@ for each of the eight root causes below.
   variant's cost basis, so COGS uses the cost the owner set on the product screen. Both
   readings of “the actual inventory cost” are defensible; changing it moves COGS and profit,
   so it was not decided silently.
+
+## Stage: waiting-state coverage — no list jumps from nothing to content (2026-09-23)
+
+The screens had a loading story, but only on the screens someone had already fixed. Everywhere
+else a list read from a store that had not loaded yet, and the first thing it printed was its
+verdict: “No sales recorded”, “No products found”, “No companies yet.” — a false statement
+about data still in flight — then it jumped when the rows landed. Three detail screens rendered
+nothing at all, and one history screen showed a lone spinner where its own shape belonged.
+
+### What was actually broken
+
+1. **Fabricated reminder history.** `ReminderHistoryPage` wrote two invented reminder entries
+   (`mock-1`, `mock-2`) into `localStorage` whenever a customer had none, then displayed them
+   as if they had been sent. A shop owner reading a customer's reminder history saw messages
+   that never existed. The seed is deleted; an empty history now stays empty.
+2. **A hook-order crash, introduced and caught in this pass.** Writing the readiness gate as
+   `useA(...) && useB(...)` short-circuits, so the second hook is not called while the first
+   store is loading — React then sees a different hook order and `/admin/activity` died with
+   `Cannot read properties of undefined (reading 'length')`. All nine sites now make each
+   store read its own unconditional call and combine only the booleans.
+3. **Empty verdicts before data.** 23 screens/components gated and given a shaped placeholder;
+   three detail screens (product, customer profile, variant picker) stopped rendering a blank
+   page while their store was still loading, and payment history's spinner became the card
+   skeleton.
+
+### Verified
+
+- New lane `tests/e2e/skeletonCoverage.spec.ts`: 11 routes opened with **every** `/rest/v1`
+  read held, each **cold-started with its cache cleared**, asserting a `.ds-skeleton` is on
+  screen, that the shape sits inside the grouped card at the real 46–64pt row band and
+  shimmers, and that the screen does **not** print its empty-state sentence during that
+  window; then the hold is released and the placeholders must settle into real rows. 2/2,
+  including the customer picker inside the group-reminder sheet.
+- New unit guard `tests/unit/skeletonCoverageGuard.test.ts` (36 assertions): every fetching
+  list must still carry both halves — its own gate and a placeholder — with the fabricated-
+  reminder seed asserted absent. Proved non-vacuous by deleting one gate and watching it fail.
+- Full Playwright **112/112 in one clean pass (26.6m)**; after the final picker change, the
+  sheet/overlay/RTL/design/microcopy lanes re-run **43/43**.
+- `vitest` **495/495 across 44 files**, `tsc` clean, production build clean.
+- QA counted independently through `run_sql` (table list taken from the database, not
+  hardcoded): **0 shop business rows**, 4 fixture accounts, 4 memberships.
+
+### Still open (named, not carried silently)
+
+- `RemindersOverviewPage`'s reminder feed derives from three stores plus local reminder logs,
+  so its empty-state decision needs its own shape rather than a copy of a list gate.
+- `SearchPage` is query-driven — nothing fetches at mount, so there is no empty screen to
+  shape (checked, deliberately unchanged).
+- `SuperAdminDashboard` (shop requests) is not gated; it is not on the shop owner's path.
+- `index.html` declares header-only security directives (`X-Frame-Options`,
+  `X-Content-Type-Options`) as `<meta>`, so the browser ignores them and logs a warning on
+  every load. Named in the lane rather than swallowed.

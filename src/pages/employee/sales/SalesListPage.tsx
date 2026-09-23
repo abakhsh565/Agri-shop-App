@@ -16,6 +16,7 @@ import type { Sale } from "@/types";
 import { Calendar, SlidersHorizontal, Check, ClipboardList } from "lucide-react";
 import SearchBar from "@/components/ui/SearchBar";
 import { groupSalesByDateSections } from "@/lib/salesGrouping";
+import { SkeletonList } from "@/components/ui/Skeleton";
 
 type Tab = "all" | "credit" | "paid";
 type DateFilter = "today" | "yesterday" | "this_week" | "this_month" | "custom";
@@ -53,6 +54,7 @@ export default function SalesListPage() {
 
   const { user } = useAuthStore();
   const customers = useCustomersStore((s) => s.customers);
+  const ready = useSalesStore((s) => s.ready);
   const allSales: Sale[] = useSalesStore((s) => s.sales).filter((s) => s.employeeId === user?.id || s.employeeName === user?.name);
 
   function getCustomerImg(customerId: string) {
@@ -339,7 +341,9 @@ export default function SalesListPage() {
       )}
 
       {/* Sales list with date sections */}
-      {filtered.length === 0 ? (
+      {!ready ? (
+        <SkeletonList rows={5} tile />
+      ) : filtered.length === 0 ? (
         <div className="flex flex-col items-center py-16 gap-2">
           <ClipboardList size={28} className="mx-auto block" style={{ color: "var(--text-tertiary)" }} />
           <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>{t("sales.noSales")}</p>

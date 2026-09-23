@@ -112,21 +112,24 @@ export default function AdminSettingsPage() {
 
   return (
     <div
-      className="flex flex-col w-full min-h-full justify-between"
+      className="settings-compact flex flex-col w-full min-h-full justify-between"
       style={{ background: "var(--background)", color: "var(--text-primary)", direction: isUrdu ? "rtl" : "ltr" }}
     >
       <div>
         <StatusBar />
         <NavHeader title={t("settings.title") ?? "Profile & Settings"} />
 
-        {/* Profile card */}
+        {/* Profile card — the same card as the ones below it: `--radius-card` (not the
+            row-tile radius), the grouped-list tone, and no drawn edge. The radius was 11px,
+            the fill `--surface-2` and a 1px `--border-light` edge on top, which made the one
+            card at the top of the page the only shape that did not match the cards under it. */}
         <div
-          className="mx-4 mt-3 rounded-[var(--radius-tile)] p-4 flex items-center gap-4 animate-fade-in-up"
-          style={{ border: "1px solid var(--border-light)", background: "var(--surface-2)" }}
+          className="mx-4 mt-3 rounded-[var(--radius-card)] p-4 flex items-center gap-4 animate-fade-in-up"
+          style={{ background: "var(--tone-card)" }}
         >
           <div className="relative shrink-0">
             <div
-              className="w-14 h-14 rounded-full overflow-hidden flex items-center justify-center text-lg font-bold"
+              className="w-12 h-12 rounded-full overflow-hidden flex items-center justify-center text-base font-bold"
               style={{ background: "var(--brand)", color: "#0a0a0a" }}
             >
               {avatarUrl
@@ -137,29 +140,22 @@ export default function AdminSettingsPage() {
           </div>
 
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2">
-              <p className="text-base font-bold truncate" style={{ color: "var(--text-primary)" }}>
-                {user?.name}
-              </p>
-              <span
-                className="text-10 font-bold px-2 py-0.5 rounded-full shrink-0"
-                style={{ background: "var(--brand)", color: "#0a0a0a" }}
-              >
-                {t("settings.owner") || "Owner"}
-              </span>
-            </div>
-            <p className="text-xs mt-0.5" style={{ color: "var(--text-secondary)" }}>
-              {user?.jobTitle ?? (t("settings.storeOwner") || "Store Owner")}
+            {/* Name only. This card previously printed "Shop Owner" as the name, then
+                "Shop owner" again underneath as the role, with an "Owner" chip beside the
+                name — three statements of the same fact on a card whose job is to say who
+                this account belongs to. The phone is the only line that adds anything. */}
+            <p className="text-base font-bold truncate" style={{ color: "var(--text-primary)" }}>
+              {user?.name}
             </p>
-            <p className="text-xs" style={{ color: "var(--text-secondary)" }}>{user?.phone}</p>
+            <p className="text-10" style={{ color: "var(--text-secondary)" }}>{user?.phone}</p>
           </div>
 
           <button
             onClick={startEdit}
-            className="flex items-center gap-1 h-6 px-2 rounded-full text-10 font-bold shrink-0"
+            className="flex items-center h-6.5 px-2.5 rounded-full text-12 font-bold shrink-0"
             style={{ background: "var(--surface)", color: "var(--text-secondary)", border: "1px solid var(--divider)" }}
           >
-            <Pencil size={10} /> {t("common.edit")}
+            {t("common.edit")}
           </button>
         </div>
 
@@ -303,7 +299,7 @@ export default function AdminSettingsPage() {
                   trailing={
                     <div className="flex items-center gap-1 shrink-0">
                       {"right" in s && s.right && (
-                        <span className="text-sm" style={{ color: "var(--text-secondary)" }}>{s.right as string}</span>
+                        <span className="text-10" style={{ color: "var(--text-secondary)" }}>{s.right as string}</span>
                       )}
                       {s.action && <ChevronRight size={14} style={{ color: "var(--text-secondary)" }} />}
                     </div>
@@ -326,7 +322,7 @@ export default function AdminSettingsPage() {
               title={t("common.cropConfiguration")}
               trailing={
                 <div className="flex items-center gap-1 shrink-0">
-                  <span className="text-sm" style={{ color: "var(--text-secondary)" }}>{t("common.configureReminder")}</span>
+                  <span className="text-10" style={{ color: "var(--text-secondary)" }}>{t("common.configureReminder")}</span>
                   <ChevronRight size={14} style={{ color: "var(--text-secondary)" }} />
                 </div>
               }

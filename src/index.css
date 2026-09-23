@@ -653,6 +653,16 @@ svg.ds-glyph-sm {
   flex: 0 0 auto;
 }
 
+/* Settings row glyphs: 18pt at the thin 1.5 stroke, which is what the owner asked for
+   on this screen. Both values come from tokens (--icon-sm / --icon-stroke), so it stays
+   one line to change again. Scoped to the two Settings screens on purpose — the app's
+   own row glyph keeps --icon at 24pt. */
+.settings-compact svg.ds-glyph {
+  width: var(--icon-sm);
+  height: var(--icon-sm);
+  stroke-width: var(--icon-stroke);
+}
+
 .ds-icon {
   display: flex;
   align-items: center;
@@ -1012,9 +1022,11 @@ svg.lucide {
   .ds-body          { font-size: var(--text-body); font-weight: var(--weight-body); color: var(--text-primary); }
   .ds-meta          { font-size: var(--text-meta); font-weight: var(--weight-body); color: var(--text-secondary); }
 
-  /* -- Grouped list card: tone surface, inset hairline separators --
+  /* -- Grouped list card: tone surface, full-width hairline separators --
      No border, no shadow on a resting surface. Rows are separated by a hairline
-     that starts after the leading slot (--row-inset), never edge to edge. */
+     that spans the card edge to edge: the line belongs to the CARD's surface, not
+     to a row's leading slot, so a card mixing tile, icon and text rows still draws
+     one straight line instead of three that start at different places. */
   .ds-listcard {
     background: var(--tone-card);
     border-radius: var(--radius-card);
@@ -1023,17 +1035,16 @@ svg.lucide {
   .ds-listcard > * + * {
     position: relative;
   }
-  /* The separator inset has exactly ONE owner: the row. ListRow measures its own
-     leading slot and publishes `--row-inset` on itself, and ::before inherits a
-     custom property from its originating element, so the rule lines up with that
-     row's content. The 16px fallback is only for a row that publishes nothing
-     (a text-only row), and must never be re-derived per card — a card-level value
-     cannot describe a card whose rows have different leading slots. */
+  /* The separator geometry has exactly ONE owner: this rule. It is deliberately
+     full-bleed (0 → 0), and no screen or row may re-derive it. Earlier the line
+     started after each row's leading slot, which left the first 16–72px of the
+     card's width without a line and made rows of different kinds disagree about
+     where the line begins. */
   .ds-listcard > * + *::before {
     content: "";
     position: absolute;
     inset-block-start: 0;
-    inset-inline-start: var(--row-inset, 16px);
+    inset-inline-start: 0;
     inset-inline-end: 0;
     height: 1px;
     background: var(--hairline);
@@ -1053,8 +1064,40 @@ svg.lucide {
     text-align: start;
     background: transparent;
   }
+  /* A stacked row breathes like a single-line one: at 8pt the first line sat 5px
+     higher than the name in a one-line row, which read as misaligned across a
+     checklist of mixed rows. */
   .ds-row-top {
     align-items: flex-start;
+    padding-block: var(--space-3);
+  }
+  /* …and its second line sits clear of the name. At 0 the two lines read as a
+     single crowded block. This is the primitive's own decision, so screens do not
+     restate it with utility classes. */
+  .ds-row-meta,
+  .ds-row-desc {
+    margin-block-start: 4px;
+  }
+
+  /* -- Settings rows read denser than the rest of the app --
+     The owner asked for every Settings label ("Dark Mode", "Language", "Change PIN") at
+     14px/400: a step below the app's row label (17px) and at body weight, so a row label
+     reads as a label and not as a heading, and so no single row on this screen carries a
+     size of its own. Scoped deliberately to the two Settings screens — the app's own row
+     label stays --text-row/--weight-body, and this class is the only place that departs. */
+  .settings-compact .ds-row-label,
+  .settings-compact .ds-row-strong {
+    font-size: var(--fs-14);
+    font-weight: 400;
+  }
+
+  /* The setup block's in-row action ("Add supplier", "Add product") is a `value`, and
+     the primitive sizes that from --text-row (17px) for list pickers. On Settings every
+     label is 14px, so an unmodified value rendered larger than the row's own name and
+     read as a button bolted onto the card. Sized to the row label it sits beside. */
+  .settings-compact .ds-row-value {
+    font-size: var(--fs-14);
+    font-weight: 400;
   }
   /* Pressed/disabled feedback lives here rather than in utility classes on the
      element, so every row behaves the same wherever it is used. */

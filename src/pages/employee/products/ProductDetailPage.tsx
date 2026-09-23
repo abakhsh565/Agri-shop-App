@@ -20,6 +20,7 @@ import { barcodeToSvg } from "@/lib/barcode";
 import { uploadImage } from "@/lib/storage";
 import { supabase } from "@/lib/supabase";
 import { useT } from "@/lib/i18n";
+import { SkeletonList } from "@/components/ui/Skeleton";
 
 const CATEGORY_LABEL_KEY: Record<string, string> = {
   spray: "category.spray", seed: "category.seed", fertilizer: "category.fertilizer", other: "category.other",
@@ -51,6 +52,7 @@ export default function ProductDetailPage() {
     return map[unit] ?? unit;
   };
   const products = useProductsStore((s) => s.products);
+  const productsReady = useProductsStore((s) => s.ready);
   const product = products.find((p) => p.id === productId);
   const { addToast } = useUIStore();
 
@@ -124,7 +126,7 @@ export default function ProductDetailPage() {
     }
   }
 
-  if (!product) return null;
+  if (!product) return productsReady ? null : <SkeletonList rows={4} />;
   const bg = initBgColor(product.name);
 
   // Compute stock status

@@ -10,6 +10,7 @@ import { useAuthStore } from "@/stores/authStore";
 import { fetchCustomerPayments } from "@/lib/db";
 import type { Sale, Customer, CustomerPayment } from "@/types";
 import { formatDateTime, formatCurrency } from "@/lib/formatters";
+import { SkeletonList } from "@/components/ui/Skeleton";
 import {
   ShoppingCart, CreditCard, RotateCcw, UserPlus,
   TrendingUp, AlertTriangle, CheckCircle2,
@@ -105,6 +106,11 @@ export default function ActivityLogPage() {
   const allSales = useSalesStore((s) => s.sales);
   const sales = isAdmin ? allSales : allSales.filter((s) => s.employeeId === user?.id || s.employeeName === user?.name);
   const customers = useCustomersStore((s) => s.customers);
+  // Read both stores unconditionally: short-circuiting a hook call is what
+  // crashed this screen, since React must see the same hooks every render.
+  const salesReady = useSalesStore((s) => s.ready);
+  const customersReady = useCustomersStore((s) => s.ready);
+  const ready = salesReady && customersReady;
   const [payments, setPayments] = useState<CustomerPayment[]>([]);
 
   useEffect(() => {
@@ -177,13 +183,14 @@ export default function ActivityLogPage() {
 
       {/* Feed */}
       <div className="flex flex-col px-4 pb-4 gap-3">
-        {shown.length === 0 && (
+        {!ready && <SkeletonList rows={4} />}
+        {ready && shown.length === 0 && (
           <div className="flex flex-col items-center py-16 gap-3">
             <TrendingUp size={40} style={{ color: "var(--text-secondary)", opacity: 0.3 }} />
             <p className="text-sm" style={{ color: "var(--text-secondary)" }}>{t("admin.noActivityYet")}</p>
           </div>
         )}
-        {shown.map((activity, i) => {
+        {ready && shown.map((activity, i) => {
           const Icon = KIND_ICON[activity.kind];
           const colors = KIND_COLOR[activity.kind];
           return (

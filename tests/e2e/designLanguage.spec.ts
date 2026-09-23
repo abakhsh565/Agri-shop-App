@@ -42,7 +42,12 @@ interface Measurements {
   cardBg: string | null;
   pageBg: string | null;
   rowHeights: number[];
-  insets: string[];
+  /** How far the hairline sits from the card's own edges, per separator: "0/0" is full-bleed. */
+  separatorInset: string[];
+  /** Distance from a stacked row's name to its second line, in px. */
+  labelToMeta: number[];
+  /** Distance from a row's top to its name, so stacked and plain rows can be compared. */
+  labelTopGap: number[];
   rawRowButtons: number;
   overflow: number;
   scrolled: number;
@@ -61,13 +66,33 @@ async function measure(page: Page): Promise<Measurements> {
       cardBg: cs?.backgroundColor ?? null,
       pageBg: getComputedStyle(document.body).backgroundColor,
       rowHeights: rows.map((r) => Math.round(r.getBoundingClientRect().height)),
-      insets: Array.from(
+      // The hairline belongs to the card, so it is measured against the card's own
+      // box: every separator must span it exactly (0px from each edge).
+      separatorInset: Array.from(
         new Set(
           rows
-            .map((r) => getComputedStyle(r, '::before').insetInlineStart)
-            .filter((v) => v && v !== 'auto')
+            .filter((r) => getComputedStyle(r, '::before').content !== 'none')
+            .map((r) => {
+              const sep = getComputedStyle(r, '::before');
+              const start = sep.insetInlineStart || sep.left;
+              const end = sep.insetInlineEnd || sep.right;
+              return `${start}/${end}`;
+            })
         )
       ),
+      labelToMeta: rows
+        .map((r) => {
+          const label = r.querySelector('.ds-row-label, .ds-row-strong') as HTMLElement | null;
+          const meta = r.querySelector('.ds-row-meta') as HTMLElement | null;
+          if (!label || !meta) return null;
+          return Math.round(meta.getBoundingClientRect().top - label.getBoundingClientRect().bottom);
+        })
+        .filter((v): v is number => v !== null),
+      labelTopGap: rows.map((r) => {
+        const label = r.querySelector('.ds-row-label, .ds-row-strong') as HTMLElement | null;
+        if (!label) return -1;
+        return Math.round(label.getBoundingClientRect().top - r.getBoundingClientRect().top);
+      }),
       // A direct child of the card that is a bare button is a hand-rolled row that
       // slipped past the guard — the primitive renders .ds-row instead.
       rawRowButtons: Array.from(card?.children ?? []).filter(
@@ -145,7 +170,8 @@ test.describe('grouped-list design language', () => {
       const m = await measure(page);
       evidence.push(
         `${screen.name}: cards=${m.cards} radius=${m.radius} border=${m.borderWidth} ` +
-          `rowHeights=[${m.rowHeights.join(',')}] insets=[${m.insets.join(',')}] ` +
+          `rowHeights=[${m.rowHeights.join(',')}] separators=[${m.separatorInset.join(',')}] ` +
+          `labelTopGap=[${m.labelTopGap.join(',')}] labelToMeta=[${m.labelToMeta.join(',')}] ` +
           `rawRowButtons=${m.rawRowButtons} overflow=${m.overflow}`
       );
 
@@ -165,12 +191,25 @@ test.describe('grouped-list design language', () => {
         expect(h, `${screen.name}: row height ${h}px outside 46–96`).toBeLessThanOrEqual(96);
       }
 
-      // The hairline starts after the row's own leading slot — never edge to edge.
-      for (const inset of m.insets) {
+      // The hairline spans the card edge to edge. Anything else leaves the left of
+      // the card bare and makes rows of different kinds disagree about where the
+      // line begins (measured: 72px on tile rows, 52px on icon rows, 16px on text).
+      for (const inset of m.separatorInset) {
+        expect(inset, `${screen.name}: hairline does not span the card`).toBe('0px/0px');
+      }
+
+      // A stacked row breathes like a plain one: the name starts at the row's own
+      // block padding rather than sitting 5px higher than a single-line row's, and
+      // its second line is clear of the name instead of touching it.
+      const stackedTops = m.labelTopGap.filter((v) => v >= 0);
+      if (stackedTops.length) {
         expect(
-          ['16px', '52px', '72px'],
-          `${screen.name}: unexpected hairline inset ${inset}`
-        ).toContain(inset);
+          Math.min(...stackedTops),
+          `${screen.name}: a row's name starts above the row's own padding`
+        ).toBeGreaterThanOrEqual(8);
+      }
+      for (const gap of m.labelToMeta) {
+        expect(gap, `${screen.name}: the second line touches the name`).toBeGreaterThanOrEqual(2);
       }
 
       expect(m.overflow, `${screen.name}: horizontal overflow`).toBeLessThanOrEqual(1);

@@ -16,6 +16,7 @@ import { useT } from "@/lib/i18n";
 import { getStockStatus, productLowStockThreshold } from "@/lib/formatters";
 import { ChevronRight, Package } from "lucide-react";
 import ScanButton from "@/components/ui/ScanButton";
+import { SkeletonList } from "@/components/ui/Skeleton";
 import type { ProductCategory } from "@/types";
 
 const FILTERS: { key: "all" | ProductCategory; labelKey: string }[] = [
@@ -48,6 +49,7 @@ export default function BrowseProductsPage() {
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState<"all" | ProductCategory>("all");
   const products = useProductsStore((s) => s.products);
+  const ready = useProductsStore((s) => s.ready);
   const findByBarcode = useProductsStore((s) => s.findByBarcode);
 
   // The sale is blocked on stock. `returnTo` is this exact step, so creating a product
@@ -155,7 +157,9 @@ export default function BrowseProductsPage() {
       </div>
 
       {/* Product list */}
-      {filtered.length === 0 ? (
+      {!ready ? (
+        <SkeletonList rows={5} tile />
+      ) : filtered.length === 0 ? (
         search ? (
           // A search that found nothing is not a missing dependency: the products
           // exist, so there is nothing to create and no action belongs here.

@@ -20,6 +20,7 @@ import { AlertTriangle, TrendingUp, ChevronRight, TrendingDown, ShoppingCart, Se
 import StatusBar from "@/components/ui/StatusBar";
 import ListCard from "@/components/ui/ListCard";
 import ListRow from "@/components/ui/ListRow";
+import { SkeletonList } from "@/components/ui/Skeleton";
 
 function initBgColor(name: string | null | undefined) {
   const safeName = String(name ?? '');
@@ -72,12 +73,17 @@ export default function AdminDashboardPage() {
   const isUrdu = language === "ur";
   const [dateFilter, setDateFilter] = useState<DateFilter>("all");
   const [showNotifs, setShowNotifs] = useState(false);
-  const { items: notifications, unread, load, subscribe, markAllRead, markOneRead } = useNotificationStore();
+  const { items: notifications, unread, load, subscribe, markAllRead, markOneRead, ready: notificationsReady } = useNotificationStore();
   const mockSales = useSalesStore((s) => s.sales);
   const mockProducts = useProductsStore((s) => s.products);
   const mockCompanies = useCompaniesStore((s) => s.companies);
   const mockEmployees = useEmployeesStore((s) => s.employees);
   const customers = useCustomersStore((s) => s.customers);
+  // Read both stores unconditionally: short-circuiting a hook call is what
+  // crashed this screen, since React must see the same hooks every render.
+  const salesReady = useSalesStore((s) => s.ready);
+  const customersReady = useCustomersStore((s) => s.ready);
+  const listsReady = salesReady && customersReady;
   const [allReturns, setAllReturns] = useState<{ amount: number; createdAt: string }[]>([]);
   const [allPayments, setAllPayments] = useState<{ amount: number; createdAt: string }[]>([]);
 
@@ -355,7 +361,7 @@ export default function AdminDashboardPage() {
 
             {/* Scrollable list */}
             <div className="overflow-y-auto flex-1" style={{ maxHeight: "310px" }}>
-              {notifications.filter(n => !n.read).length === 0 ? (
+              {notificationsReady && notifications.filter(n => !n.read).length === 0 ? (
                 <div className="px-4 py-8 text-center">
                   <p className="text-13" style={{ color: "var(--text-secondary)" }}>{t("dashboard.noNotifications") || "No notifications yet"}</p>
                 </div>
@@ -666,7 +672,12 @@ export default function AdminDashboardPage() {
       )}
 
       {/* ── Recent Sales ── */}
-      {recentSales.length > 0 && (
+      {!listsReady && (
+        <div className="px-4 pt-5">
+          <SkeletonList rows={3} tile />
+        </div>
+      )}
+      {listsReady && recentSales.length > 0 && (
         <div className="px-4 pt-5 pb-6">
           <div className="flex items-center justify-between mb-3">
             <p className="text-11 font-bold uppercase tracking-widest" style={{ color: "var(--text-secondary)" }}>

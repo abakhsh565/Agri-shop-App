@@ -40,9 +40,9 @@ export interface ListRowProps {
  *                  meta
  *                  description
  *
- * Row height, padding, type and the hairline inset all come from the design
- * language tokens, so a screen adopts the look by using this component rather
- * than restating spacing by hand.
+ * Row height, padding, type and the gap between the name and its second line all
+ * come from the design language tokens, so a screen adopts the look by using this
+ * component rather than restating spacing by hand.
  */
 export default function ListRow({
   icon: Icon,
@@ -61,8 +61,8 @@ export default function ListRow({
   className = "",
   style: extraStyle,
 }: ListRowProps) {
-  // The separator starts after the leading slot: 16 gutter + tile + 12 gap.
-  const rowInset = tile ? 72 : Icon ? 52 : 16;
+  // A stacked row is taller and top-aligned; the separator is full-bleed and owned by
+  // the card, so the row no longer measures its leading slot to place a line.
   const stacked = Boolean(description || meta || children);
 
   const inner = (
@@ -85,7 +85,7 @@ export default function ListRow({
             {qualifier && <span className="ds-row-qualifier shrink-0 ms-1">{qualifier}</span>}
           </div>
           {meta && <p className="ds-row-meta truncate">{meta}</p>}
-          {description && <p className="ds-row-desc mt-1">{description}</p>}
+          {description && <p className="ds-row-desc">{description}</p>}
         </div>
       )}
       {value && <span className="ds-row-value shrink-0">{value}</span>}
@@ -94,11 +94,10 @@ export default function ListRow({
   );
 
   const cls = `ds-row ${stacked ? "ds-row-top" : ""} ${className}`;
-  const style = { ...extraStyle, ["--row-inset" as string]: `${rowInset}px` } as React.CSSProperties;
 
   if (!onClick) {
     return (
-      <div className={cls} style={style}>
+      <div className={cls} style={extraStyle}>
         {inner}
       </div>
     );
@@ -111,7 +110,7 @@ export default function ListRow({
       disabled={disabled}
       aria-selected={selected || undefined}
       className={cls}
-      style={style}
+      style={extraStyle}
     >
       {inner}
     </button>

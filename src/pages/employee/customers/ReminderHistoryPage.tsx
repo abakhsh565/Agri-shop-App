@@ -8,6 +8,7 @@ import { useCustomersStore } from "@/stores/customersStore";
 import { useThemeStore } from "@/stores/themeStore";
 import { useShellBase } from "@/lib/useShellBase";
 import { Bell, Clock, AlertTriangle, CheckCircle } from "lucide-react";
+import { SkeletonList } from "@/components/ui/Skeleton";
 import { useT } from "@/lib/i18n";
 
 interface ReminderLogEntry {
@@ -50,38 +51,17 @@ export default function ReminderHistoryPage() {
   const { language } = useThemeStore();
   const isUrdu = language === "ur";
   const customer = useCustomersStore((s) => s.customers.find((c) => c.id === customerId));
+  const customersReady = useCustomersStore((s) => s.ready);
 
   const [logs, setLogs] = useState<ReminderLogEntry[]>([]);
 
   useEffect(() => {
     if (!customerId) return;
-    let logs = getReminderLogs(customerId);
-    // Seed mock data if empty (for testing)
-    if (logs.length === 0) {
-      const now = Date.now();
-      const mockLogs: ReminderLogEntry[] = [
-        {
-          id: "mock-1",
-          customerId,
-          type: "gentle",
-          message: "Friendly reminder: You have an outstanding balance. Please arrange payment at your convenience.",
-          sentAt: new Date(now - 3 * 24 * 60 * 60 * 1000).toISOString(),
-        },
-        {
-          id: "mock-2",
-          customerId,
-          type: "firmer",
-          message: "Follow-up: Your payment is now overdue. Please clear the outstanding amount.",
-          sentAt: new Date(now - 1 * 24 * 60 * 60 * 1000).toISOString(),
-        },
-      ];
-      localStorage.setItem("reminder_logs_" + customerId, JSON.stringify(mockLogs));
-      logs = mockLogs;
-    }
-    setLogs(logs);
+    // Only what was really sent is shown: an empty history stays empty.
+    setLogs(getReminderLogs(customerId));
   }, [customerId]);
 
-  if (!customer) return null;
+  if (!customer) return customersReady ? null : <SkeletonList rows={4} />;
 
   return (
     <div

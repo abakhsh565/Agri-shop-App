@@ -7,6 +7,7 @@ import { useThemeStore } from "@/stores/themeStore";
 import { formatCurrency, productLowStockThreshold } from "@/lib/formatters";
 import { AlertTriangle, Package, Truck, ChevronRight } from "lucide-react";
 import { useT } from "@/lib/i18n";
+import { SkeletonList } from "@/components/ui/Skeleton";
 
 export default function InventoryAlertsPage() {
   const t = useT();
@@ -15,6 +16,11 @@ export default function InventoryAlertsPage() {
   const isUrdu = language === "ur";
   const products = useProductsStore((s) => s.products);
   const companies = useCompaniesStore((s) => s.companies);
+  // Read both stores unconditionally: short-circuiting a hook call is what
+  // crashed this screen, since React must see the same hooks every render.
+  const productsReady = useProductsStore((s) => s.ready);
+  const companiesReady = useCompaniesStore((s) => s.ready);
+  const ready = productsReady && companiesReady;
 
   // Categorize products with the shared inventory rule (see
   // productLowStockThreshold): the product total is its variants' total, measured
@@ -41,6 +47,9 @@ export default function InventoryAlertsPage() {
       <StatusBar />
       <NavHeader title={t("alerts.inventoryTitle")} />
 
+      {!ready ? (
+        <SkeletonList rows={4} tile />
+      ) : (
       <div className="flex flex-col gap-3 px-4 pt-4 pb-8">
         {/* Summary cards */}
         <div className="flex gap-2.5">
@@ -169,6 +178,7 @@ export default function InventoryAlertsPage() {
           </div>
         )}
       </div>
+      )}
     </div>
   );
 }

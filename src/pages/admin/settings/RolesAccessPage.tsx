@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
+import { SkeletonList } from "@/components/ui/Skeleton";
 import { useRolesStore } from "@/stores/rolesStore";
 import { usePermissionsStore } from "@/stores/permissionsStore";
 import { useUIStore } from "@/stores/uiStore";
@@ -226,13 +227,14 @@ export default function RolesAccessPage() {
       <NavHeader title={t("settings.rolesAccess")} />
       <div className="flex-1 p-4">
         <div className="flex items-center justify-between mb-4">
-          <p className="text-xs" style={{ color: "var(--text-secondary)" }}>{t("roles.count", { count: rolesStore.roles.length })}</p>
+          <p className="text-xs" style={{ color: "var(--text-secondary)" }}>{rolesStore.ready && t("roles.count", { count: rolesStore.roles.length })}</p>
           <button onClick={startCreate} className="flex items-center gap-1.5 h-8 px-3 rounded-full text-xs font-semibold" style={{ background: "var(--brand)", color: "#0a0a0a" }}>
             <Plus size={14} /> {t("roles.new")}
           </button>
         </div>
         <div className="space-y-3">
-          {rolesStore.roles.map((role) => {
+          {!rolesStore.ready && <SkeletonList rows={3} />}
+          {rolesStore.ready && rolesStore.roles.map((role) => {
             const count = memberCounts[role.id] ?? 0;
             const areas = roleAreas[role.id] ?? [];
             return (

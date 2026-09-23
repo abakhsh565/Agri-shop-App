@@ -19,6 +19,7 @@ import { History, Wallet, Bell, Pencil, Trash2, Receipt, Plus, Package } from "l
 import { getRecommendationsForCustomer, KNOWN_CROPS } from "@/lib/recommendationEngine";
 import { loadReminderConfigs, saveReminderConfig as saveReminderConfigToDb, loadCustomerCrops, saveCustomerCrops as saveCustomerCropsToDb, loadBusinessSettings, calculatePaymentStatus, getPaymentStatusLabel, getPaymentStatusColor, isDuplicateReminder } from "@/lib/reminderEngine";
 import { useProductsStore } from "@/stores/productsStore";
+import { SkeletonList } from "@/components/ui/Skeleton";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import ReminderConfigSheet from "@/components/ui/ReminderConfigSheet";
 import type { ReminderConfig, BusinessSettings, CropConfig } from "@/types";
@@ -66,6 +67,7 @@ export default function CustomerProfilePage() {
   const [showDelete, setShowDelete] = useState(false);
   const [payments, setPayments] = useState<CustomerPayment[]>([]);
   const sales = useSalesStore((s) => s.sales);
+  const customersReady = useCustomersStore((s) => s.ready);
   const [deleting, setDeleting] = useState(false);
   const [showReminderConfig, setShowReminderConfig] = useState(false);
   const [editingConfig, setEditingConfig] = useState<ReminderConfig | null>(null);
@@ -228,7 +230,7 @@ export default function CustomerProfilePage() {
     return () => { active = false; };
   }, [customerId]);
 
-  if (!customer) return null;
+  if (!customer) return customersReady ? null : <SkeletonList rows={4} />;
 
   const initBg = initBgColor(customer.name);
   const usagePct = customer.creditLimit > 0

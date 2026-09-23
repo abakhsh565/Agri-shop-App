@@ -9,6 +9,7 @@ import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
 import { Plus, ChevronRight, Building2 } from "lucide-react";
 import SearchBar from "@/components/ui/SearchBar";
+import { SkeletonList } from "@/components/ui/Skeleton";
 
 // Simple hash color from company name
 function hashColor(name: string) {
@@ -55,6 +56,7 @@ export default function CompaniesListPage() {
         />
       </div>
 
+      {!ready && <SkeletonList rows={4} tile />}
       {ready && filtered.length === 0 && (
         <div className="flex flex-col items-center py-20 gap-2">
           <Building2 size={28} className="mx-auto block" style={{ color: "var(--text-tertiary)" }} />

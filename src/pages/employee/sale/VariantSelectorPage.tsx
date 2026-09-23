@@ -10,6 +10,7 @@ import { formatCurrency } from "@/lib/formatters";
 import { useUIStore } from "@/stores/uiStore";
 import { useShellBase } from "@/lib/useShellBase";
 import { useT } from "@/lib/i18n";
+import { SkeletonList } from "@/components/ui/Skeleton";
 
 /**
  * Available units of a variant = its own stock of record (the level sales deduct
@@ -35,11 +36,12 @@ export default function VariantSelectorPage() {
   const { addToast } = useUIStore();
 
   const products = useProductsStore((s) => s.products);
+  const productsReady = useProductsStore((s) => s.ready);
   const product = products.find((p) => p.id === productId);
   const [selectedVariantId, setSelectedVariantId] = useState(product?.variants[0]?.id ?? "");
   const [qty, setQty] = useState(product?.variants[0]?.qtyStep ?? 1);
 
-  if (!product) return null;
+  if (!product) return productsReady ? null : <SkeletonList rows={4} />;
 
   const selectedVariant = product.variants.find((v) => v.id === selectedVariantId);
   const maxUnits = selectedVariant ? availableUnits(selectedVariant) : 0;

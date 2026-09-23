@@ -12,6 +12,7 @@ import { ChevronRight, Plus, Package } from "lucide-react";
 import SearchBar from "@/components/ui/SearchBar";
 import ListCard from "@/components/ui/ListCard";
 import ListRow from "@/components/ui/ListRow";
+import { SkeletonList } from "@/components/ui/Skeleton";
 import type { ProductCategory } from "@/types";
 
 const CATEGORY_KEYS: Record<string, "products.all" | "products.spray" | "products.seed" | "products.fertilizer"> = {
@@ -33,6 +34,7 @@ export default function ProductsListPage() {
   const isUrdu = language === "ur";
 
   const products = useProductsStore((s) => s.products);
+  const ready = useProductsStore((s) => s.ready);
   const [search, setSearch] = useState("");
   const [cat, setCat] = useState<"all" | ProductCategory>("all");
 
@@ -100,7 +102,9 @@ export default function ProductsListPage() {
       </div>
 
       {/* Product list */}
-      {filtered.length === 0 ? (
+      {!ready ? (
+        <SkeletonList rows={5} tile />
+      ) : filtered.length === 0 ? (
         <div className="flex flex-col items-center py-16 gap-2">
           <Package size={28} className="mx-auto block" style={{ color: "var(--text-tertiary)" }} />
           <p className="text-sm" style={{ color: "var(--text-secondary)" }}>{t("admin.noProducts")}</p>

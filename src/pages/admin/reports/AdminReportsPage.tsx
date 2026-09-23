@@ -12,6 +12,7 @@ import { pkToday } from "@/lib/pkDate";
 import { useT } from "@/lib/i18n";
 import ListCard from "@/components/ui/ListCard";
 import ListRow from "@/components/ui/ListRow";
+import { SkeletonList } from "@/components/ui/Skeleton";
 
 type Period = "today" | "week" | "month" | "all" | "custom";
 
@@ -57,6 +58,15 @@ export default function AdminReportsPage() {
   const mockProducts = useProductsStore((s) => s.products);
   const mockCustomers = useCustomersStore((s) => s.customers);
   const mockCompanies = useCompaniesStore((s) => s.companies);
+  // Every figure below is derived from these four stores, so the report body
+  // waits for all of them rather than settling from empty arrays.
+  // Every read is its own hook call — combining them inside one expression would
+  // short-circuit and change the hook order while data is loading.
+  const salesReady = useSalesStore((s) => s.ready);
+  const productsReady = useProductsStore((s) => s.ready);
+  const customersReady = useCustomersStore((s) => s.ready);
+  const companiesReady = useCompaniesStore((s) => s.ready);
+  const ready = salesReady && productsReady && customersReady && companiesReady;
 
   const variantCost = useMemo(() => {
     const map: Record<string, number> = {};
@@ -157,6 +167,12 @@ export default function AdminReportsPage() {
         </div>
       )}
 
+      {!ready ? (
+        <div className="px-4 pt-3">
+          <SkeletonList rows={4} />
+        </div>
+      ) : (
+        <>
       {/* Gross profit hero */}
       <div className="px-4 pt-3">
         <div className="rounded-[var(--radius-card)] p-5" style={{ background: "var(--brand)" }}>
@@ -246,6 +262,9 @@ export default function AdminReportsPage() {
           <BarChart3 size={28} className="mx-auto block" style={{ color: "var(--text-tertiary)" }} />
           <p className="text-sm" style={{ color: "var(--text-secondary)" }}>{t("reports.noSalesInPeriod")}</p>
         </div>
+      )}
+
+        </>
       )}
 
       {/* Custom date modal */}

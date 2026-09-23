@@ -6,11 +6,13 @@ import path from "node:path";
  * One list implementation, enforced.
  *
  * ListCard/ListRow own the grouped-list grammar: tone surface, no border, row
- * height, padding and — critically — the separator inset, which the ROW decides
- * (ListRow publishes `--row-inset` from its own leading slot). A screen that
- * restates a bordered row by hand silently re-introduces a second implementation,
- * and one that sets a CARD-level inset cannot describe a card whose rows have
- * different leading slots. Both drift modes are caught here.
+ * height, padding, the spacing between a name and its second line, and — critically
+ * — the separator geometry, which the CARD decides and which is full-bleed (0 → 0).
+ * A screen that restates a bordered row by hand silently re-introduces a second
+ * implementation. Separators used to start after each row's leading slot, so a card
+ * mixing tile, icon and text rows drew lines beginning at 72px, 52px and 16px and
+ * the left of every card went bare; that per-row inset (`--row-inset`) is deleted
+ * and may not come back.
  *
  * PENDING is the honest, explicit backlog: files still on the old path. It may
  * only shrink — converting a file without removing it from PENDING FAILS, so the
@@ -58,20 +60,35 @@ describe("grouped lists have exactly one implementation", () => {
     expect(offenders, "new file bypasses ListCard — use the primitive").toEqual(PENDING_DSCARD);
   });
 
-  it("no card-level separator inset exists (the row owns it)", () => {
+  it("the separator is full-bleed, and there is exactly one rule that draws it", () => {
     const styling = read("src/index.css");
     expect(styling).not.toContain("ds-listcard-flush");
     expect(styling).not.toContain("ds-listcard-icon");
-    // The only inset the card layer may express is the fallback for a row that
-    // publishes nothing; anything else means the decision leaked back into the card.
-    const insetRules = styling.match(/inset-inline-start:\s*var\(--row-inset[^)]*\)[^;]*;/g) ?? [];
-    expect(insetRules).toEqual(["inset-inline-start: var(--row-inset, 16px);"]);
+    const sepRules = styling.match(/\.ds-listcard > \* \+ \*::before \{[^}]*\}/g) ?? [];
+    expect(sepRules.length, "the separator is drawn in more than one place").toBe(1);
+    expect(sepRules[0], "the hairline does not start at the card's edge").toContain(
+      "inset-inline-start: 0;",
+    );
+    expect(sepRules[0], "the hairline does not reach the card's edge").toContain(
+      "inset-inline-end: 0;",
+    );
   });
 
-  it("ListRow publishes the inset, so the row is the single owner", () => {
-    const row = read("src/components/ui/ListRow.tsx");
-    expect(row).toContain('["--row-inset" as string]');
-    expect(row).toMatch(/const rowInset = tile \? 72 : Icon \? 52 : 16;/);
+  it("no row or screen places the hairline itself", () => {
+    // The per-row inset is deleted, not merely unused: a property nothing reads is
+    // how the old geometry would creep back in.
+    const offenders = FILES.filter((f) => read(f).includes("--row-inset")).sort();
+    expect(offenders, "a file is deciding the separator geometry again").toEqual([]);
+  });
+
+  it("a stacked row is spaced like a plain one, and its second line is clear of the name", () => {
+    const styling = read("src/index.css");
+    expect(styling, "a stacked row's block padding is not the row scale").toMatch(
+      /\.ds-row-top \{[^}]*padding-block: var\(--space-3\);/,
+    );
+    expect(styling, "the second line has no gap under the name").toMatch(
+      /\.ds-row-meta,\s*\.ds-row-desc \{[^}]*margin-block-start: 4px;/,
+    );
   });
 
   it("no screen hand-rolls a bordered row separator", () => {

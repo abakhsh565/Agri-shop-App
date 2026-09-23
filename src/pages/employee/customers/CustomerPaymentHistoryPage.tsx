@@ -13,6 +13,7 @@ import { useT } from "@/lib/i18n";
 import { useThemeStore } from "@/stores/themeStore";
 import { getCreditRequestsDB, type LocalCreditRequest } from "@/lib/localGroupRegistry";
 import { CheckCircle2, XCircle, ArrowUpRight, CreditCard } from "lucide-react";
+import { SkeletonList } from "@/components/ui/Skeleton";
 
 export default function CustomerPaymentHistoryPage() {
   const { customerId } = useParams();
@@ -20,6 +21,7 @@ export default function CustomerPaymentHistoryPage() {
   const { language } = useThemeStore();
   const isUrdu = language === "ur";
   const customer = useCustomersStore((s) => s.customers.find((c) => c.id === customerId));
+  const customersReady = useCustomersStore((s) => s.ready);
   const [payments, setPayments] = useState<CustomerPayment[]>([]);
   const [loading, setLoading] = useState(true);
   const [creditRequests, setCreditRequests] = useState<LocalCreditRequest[]>([]);
@@ -39,7 +41,7 @@ export default function CustomerPaymentHistoryPage() {
     getCreditRequestsDB().then(reqs => setCreditRequests(reqs.filter(r => r.customerId === customerId)));
   }, [customerId]);
 
-  if (!customer) return null;
+  if (!customer) return customersReady ? null : <SkeletonList rows={4} />;
 
   const health = getCreditHealth(customer.outstandingBalance, customer.creditLimit);
 
@@ -111,9 +113,7 @@ export default function CustomerPaymentHistoryPage() {
       {/* Tab content */}
       {activeTab === "payments" ? (
         loading ? (
-          <div className="flex flex-col items-center py-12 gap-2">
-            <div className="size-8 border-2 rounded-full animate-spin" style={{ borderColor: "var(--divider)", borderTopColor: "var(--brand)" }} />
-          </div>
+          <SkeletonList rows={4} tile />
         ) : payments.length === 0 ? (
           <div className="flex flex-col items-center py-12 gap-2">
             <CreditCard size={28} className="mx-auto block" style={{ color: "var(--text-tertiary)" }} />

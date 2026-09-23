@@ -5,6 +5,7 @@ import NavHeader from "@/components/ui/NavHeader";
 import EmptyState from "@/components/ui/EmptyState";
 import ListCard from "@/components/ui/ListCard";
 import ListRow from "@/components/ui/ListRow";
+import { SkeletonList } from "@/components/ui/Skeleton";
 import { useCustomersStore } from "@/stores/customersStore";
 import { useCompaniesStore } from "@/stores/companiesStore";
 import { formatCurrency } from "@/lib/formatters";
@@ -23,6 +24,11 @@ export default function AdminPaymentsPage() {
 
   const customers = useCustomersStore((s) => s.customers);
   const companies = useCompaniesStore((s) => s.companies);
+  // Read both stores unconditionally: short-circuiting a hook call is what
+  // crashed this screen, since React must see the same hooks every render.
+  const customersReady = useCustomersStore((s) => s.ready);
+  const companiesReady = useCompaniesStore((s) => s.ready);
+  const ready = customersReady && companiesReady;
 
   const owedByCustomers = customers
     .filter((c) => c.outstandingBalance > 0)
@@ -80,7 +86,9 @@ export default function AdminPaymentsPage() {
       </div>
 
       {/* List */}
-      {tab === "customers" ? (
+      {!ready ? (
+        <SkeletonList rows={4} tile />
+      ) : tab === "customers" ? (
         owedByCustomers.length === 0 ? (
           <EmptyState icon={CheckCircle2} title={t("payments.noOutstanding")} subtitle={t("payments.allPaidUp")} />
         ) : (

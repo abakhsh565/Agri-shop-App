@@ -7,6 +7,7 @@ import { useThemeStore } from "@/stores/themeStore";
 import { useT } from "@/lib/i18n";
 import { formatCurrency, calculateCreditHealth } from "@/lib/formatters";
 import { AlertTriangle, ChevronRight } from "lucide-react";
+import { SkeletonList } from "@/components/ui/Skeleton";
 
 export default function CreditOverridesPage() {
   const navigate = useNavigate();
@@ -15,6 +16,11 @@ export default function CreditOverridesPage() {
   const isUrdu = language === "ur";
   const customers = useCustomersStore((s) => s.customers);
   const sales = useSalesStore((s) => s.sales);
+  // Read both stores unconditionally: short-circuiting a hook call is what
+  // crashed this screen, since React must see the same hooks every render.
+  const customersReady = useCustomersStore((s) => s.ready);
+  const salesReady = useSalesStore((s) => s.ready);
+  const ready = customersReady && salesReady;
 
   // Find customers with high utilization or poor credit health
   const overrides = customers
@@ -61,7 +67,9 @@ export default function CreditOverridesPage() {
         </div>
 
         {/* Customer list */}
-        {overrides.length === 0 ? (
+        {!ready ? (
+          <SkeletonList rows={4} tile />
+        ) : overrides.length === 0 ? (
           <div
             className="rounded-[var(--radius-card)] p-8 flex flex-col items-center gap-3"
             style={{ border: "1px solid var(--divider)" }}

@@ -13,6 +13,7 @@ import { Calendar, SlidersHorizontal, Check, ClipboardList, X } from "lucide-rea
 import SearchBar from "@/components/ui/SearchBar";
 import ListCard from "@/components/ui/ListCard";
 import ListRow from "@/components/ui/ListRow";
+import { SkeletonList } from "@/components/ui/Skeleton";
 import { groupSalesByDateSections } from "@/lib/salesGrouping";
 import { pkDate, pkDateFromISO, pkToday, pkYesterday, pkWeekStart, pkMonthStart } from "@/lib/pkDate";
 
@@ -53,6 +54,7 @@ export default function AdminSalesListPage() {
 
   // Live sales from Supabase (real-time) — loaded + subscribed globally by the layout.
   const allSales: Sale[] = useSalesStore((s) => s.sales);
+  const ready = useSalesStore((s) => s.ready);
   const customers = useCustomersStore((s) => s.customers);
   const mockEmployees = useEmployeesStore((s) => s.employees);
 
@@ -379,7 +381,9 @@ export default function AdminSalesListPage() {
       )}
 
       {/* Sales list with date sections */}
-      {filtered.length === 0 ? (
+      {!ready ? (
+        <SkeletonList rows={5} tile />
+      ) : filtered.length === 0 ? (
         <div className="flex flex-col items-center py-16 gap-3">
           <ClipboardList size={28} className="mx-auto block" style={{ color: "var(--text-tertiary)" }} />
           <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>{t("sales.noSales")}</p>

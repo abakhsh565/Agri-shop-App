@@ -120,11 +120,14 @@ async function readChecklist(page: Page) {
   return page.evaluate(() => {
     const section = document.querySelector('[data-testid="setup-checklist"]') as HTMLElement | null;
     if (!section) return null;
-    const rows = [...section.querySelectorAll('.ds-row')].map((r) => ({
-      text: (r.textContent ?? '').replace(/\s+/g, ' ').trim(),
-      inset: (r as HTMLElement).style.getPropertyValue('--row-inset'),
-      clickable: r.tagName.toLowerCase() === 'button',
-    }));
+    const rows = [...section.querySelectorAll('.ds-row')].map((r) => {
+      const sep = getComputedStyle(r, '::before');
+      return {
+        text: (r.textContent ?? '').replace(/\s+/g, ' ').trim(),
+        separator: sep.content === 'none' ? 'none' : `${sep.insetInlineStart}/${sep.insetInlineEnd}`,
+        clickable: r.tagName.toLowerCase() === 'button',
+      };
+    });
     const card = section.querySelector('.ds-listcard') as HTMLElement | null;
     return {
       heading: section.querySelector('p')?.textContent?.trim() ?? '',
@@ -167,9 +170,12 @@ test.describe('Business setup status is derived and self-retiring', () => {
     // A missing step must be actionable — that is the whole point of showing it.
     expect(state!.rows.filter((r) => r.clickable).length, 'missing steps are not tappable').toBe(3);
 
-    // The card is the shared tone surface: rounded, and the row owns the separator inset.
+    // The card is the shared tone surface: rounded, and its separators are full-bleed.
     expect(state!.radius).not.toBe('');
-    expect(state!.rows.every((r) => r.inset !== ''), 'row did not publish --row-inset').toBe(true);
+    expect(
+      state!.rows.map((r) => r.separator).slice(1),
+      'the card does not draw its separators edge to edge'
+    ).toEqual(['0px/0px', '0px/0px']);
     expect(state!.overflow, 'the block overflows at phone width').toBe(false);
   });
 
@@ -276,22 +282,25 @@ test.describe('Business setup status is derived and self-retiring', () => {
     expect(styles.radius, 'card radius differs from the rest of the page')
       .toBe(styles.refRadius);
 
-    // Rows must match the other cards' rows too: a leading glyph, and the separator inset
-    // that glyph implies. Rows without an icon start at the card gutter instead, which is
-    // what made the block read as foreign.
+    // Rows must match the other cards' rows too: a leading glyph, and the card's own
+    // hairline. The separator is full-bleed now, so it is measured against the card's
+    // box rather than as a per-row inset — the line used to start after each row's
+    // leading slot, which left the left of the card bare.
     const rows = await page.evaluate(() => {
       const section = document.querySelector('[data-testid="setup-checklist"]') as HTMLElement;
-      const mine = [...section.querySelectorAll('.ds-row')].map((r) => ({
-        hasIcon: !!r.querySelector('svg'),
-        inset: (r as HTMLElement).style.getPropertyValue('--row-inset'),
-      }));
-      const existingRow = document.querySelector(
-        '[data-testid="setup-checklist"] ~ div .ds-row, .ds-listcard .ds-row'
-      ) as HTMLElement | null;
-      return {
-        mine,
-        referenceInset: existingRow?.style.getPropertyValue('--row-inset') ?? '',
-      };
+      const card = section.querySelector('.ds-listcard') as HTMLElement;
+      const cardRect = card.getBoundingClientRect();
+      const mine = [...section.querySelectorAll('.ds-row')].map((r) => {
+        const sep = getComputedStyle(r, '::before');
+        return {
+          hasIcon: !!r.querySelector('svg'),
+          separator: sep.content === 'none' ? 'none' : `${sep.insetInlineStart}/${sep.insetInlineEnd}`,
+          spansCard:
+            Math.round(r.getBoundingClientRect().left) === Math.round(cardRect.left) &&
+            Math.round(r.getBoundingClientRect().right) === Math.round(cardRect.right),
+        };
+      });
+      return { mine, cardWidth: Math.round(cardRect.width) };
     });
 
     expect(rows.mine.length).toBe(3);
@@ -299,10 +308,12 @@ test.describe('Business setup status is derived and self-retiring', () => {
       rows.mine.every((r) => r.hasIcon),
       'a setup row has no leading icon, so its left edge differs from the page\'s other rows'
     ).toBe(true);
-    // 52px is the inset ListRow publishes for an icon (no tile) — the same as any other
-    // icon row in these cards.
-    expect(rows.mine.every((r) => r.inset === '52px'), `unexpected row inset: ${JSON.stringify(rows.mine)}`)
-      .toBe(true);
+    // Every separator that exists spans the card edge to edge; the first row has none.
+    expect(
+      rows.mine.map((r) => r.separator).slice(1),
+      `hairline does not span the card: ${JSON.stringify(rows.mine)}`
+    ).toEqual(['0px/0px', '0px/0px']);
+    expect(rows.mine.every((r) => r.spansCard), 'a row does not span its card').toBe(true);
   });
 
   test('6. Home gives a new shop ONE next step, not the checklist', async ({ page }) => {
@@ -336,7 +347,13 @@ test.describe('Business setup status is derived and self-retiring', () => {
         rowCount: rows.length,
         // A chevron is the only trailing glyph the row should carry.
         chevrons: [...el.querySelectorAll('svg')].length,
-        rowInset: rows[0] ? getComputedStyle(rows[0]).getPropertyValue('--row-inset').trim() : '',
+        // The second line is spaced from the name rather than touching it.
+        labelToMeta: (() => {
+          const label = el.querySelector('.ds-row-label, .ds-row-strong') as HTMLElement | null;
+          const meta = el.querySelector('.ds-row-meta') as HTMLElement | null;
+          if (!label || !meta) return null;
+          return Math.round(meta.getBoundingClientRect().top - label.getBoundingClientRect().bottom);
+        })(),
       };
     });
     expect(card.buttons.length, 'the first-run row is the only control Home should carry').toBe(1);
@@ -349,7 +366,10 @@ test.describe('Business setup status is derived and self-retiring', () => {
     // One row on the shared list primitive — not a bespoke card that can drift from the
     // grammar the rest of the app (and Settings' own checklist) is built on.
     expect(card.rowCount, 'Home is not using the shared list row').toBe(1);
-    expect(card.rowInset, 'the row did not publish the icon inset').toBe('52px');
+    expect(
+      card.labelToMeta,
+      'Home\'s next step crowds its reason against the action name'
+    ).toBeGreaterThanOrEqual(2);
     expect(card.buttons, 'the full checklist leaked onto Home').not.toContain('Add product');
     expect(card.text, 'Home is carrying a second call to action').not.toMatch(/see all steps/i);
 

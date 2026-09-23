@@ -14,6 +14,7 @@ import { useThemeStore } from "@/stores/themeStore";
 import { useAuthStore } from "@/stores/authStore";
 import { useShellBase } from "@/lib/useShellBase";
 import { ReceiptText } from "lucide-react";
+import { SkeletonList } from "@/components/ui/Skeleton";
 
 function initBgColor(name: string | null | undefined) {
   const colors = ["#84cc16","#3b82f6","#8b5cf6","#f59e0b","#06b6d4","#ec4899"];
@@ -35,12 +36,17 @@ export default function CustomerPurchaseHistoryPage() {
   const isUrdu = language === "ur";
   const customer = useCustomersStore((s) => s.customers.find((c) => c.id === customerId));
   const allSales = useSalesStore((s) => s.sales);
+  // Read both stores unconditionally: short-circuiting a hook call is what
+  // crashed this screen, since React must see the same hooks every render.
+  const salesReady = useSalesStore((s) => s.ready);
+  const customersReady = useCustomersStore((s) => s.ready);
+  const ready = salesReady && customersReady;
   const [filter, setFilter] = useState<Filter>("all");
   const [showDateModal, setShowDateModal] = useState(false);
   const [customFrom, setCustomFrom] = useState("");
   const [customTo, setCustomTo] = useState("");
 
-  if (!customer) return null;
+  if (!customer) return ready ? null : <SkeletonList rows={4} />;
 
   const sales  = allSales.filter((s) => s.customerId === customerId && !s.isVoided);
   const health = getCreditHealth(customer.outstandingBalance, customer.creditLimit);
@@ -177,7 +183,9 @@ export default function CustomerPurchaseHistoryPage() {
         </div>
       )}
 
-      {filtered.length === 0 ? (
+      {!ready ? (
+        <SkeletonList rows={4} tile />
+      ) : filtered.length === 0 ? (
         <div className="flex flex-col items-center py-12 gap-2">
           <ReceiptText size={28} className="mx-auto block" style={{ color: "var(--text-tertiary)" }} />
           <p className="text-sm" style={{ color: "var(--text-secondary)" }}>

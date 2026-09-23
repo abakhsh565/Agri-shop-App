@@ -11,7 +11,7 @@ import { useT } from "@/lib/i18n";
 import { uploadImage } from "@/lib/storage";
 import { supabase } from "@/lib/supabase";
 import { useUIStore } from "@/stores/uiStore";
-import { Lock, Bell, Globe, Info, ChevronRight, Moon, Sun, ClipboardList, Smartphone, Camera, Loader2, User, Save } from "lucide-react";
+import { Lock, Bell, Globe, Info, ChevronRight, Moon, Sun, ClipboardList, Smartphone, Camera, Loader2, Save } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useNotificationStore } from "@/stores/notificationStore";
 
@@ -91,17 +91,19 @@ export default function SettingsPage() {
 
   return (
     <div
-      className="flex flex-col w-full min-h-full justify-between"
+      className="settings-compact flex flex-col w-full min-h-full justify-between"
       style={{ background: "var(--background)", color: "var(--text-primary)" }}
     >
       <div>
         <StatusBar />
         <NavHeader title={t("settings.title")} />
 
-        {/* Profile card */}
+        {/* Profile card — the same card as the ones below it: `--radius-card`, the
+            grouped-list tone, and no drawn edge (see the admin twin, which carries the
+            same fix). */}
         <div
-          className="mx-4 mt-3 rounded-[var(--radius-tile)] p-4 flex items-center gap-4 animate-fade-in-up"
-          style={{ border: "1px solid var(--border-light)", background: "var(--surface-2)" }}
+          className="mx-4 mt-3 rounded-[var(--radius-card)] p-4 flex items-center gap-4 animate-fade-in-up"
+          style={{ background: "var(--tone-card)" }}
         >
           {/* Avatar */}
           <div className="relative shrink-0">
@@ -113,7 +115,7 @@ export default function SettingsPage() {
               onChange={handleAvatarChange}
             />
             <div
-              className="w-14 h-14 rounded-full overflow-hidden flex items-center justify-center text-lg font-bold"
+              className="w-12 h-12 rounded-full overflow-hidden flex items-center justify-center text-base font-bold"
               style={{ background: "var(--brand)", color: "#0a0a0a" }}
             >
               {uploading ? (
@@ -133,17 +135,17 @@ export default function SettingsPage() {
               </p>
               <button
                 onClick={() => setEditingName(true)}
-                className="flex items-center gap-1 h-6 px-2 rounded-full text-10 font-bold shrink-0"
+                className="flex items-center h-6.5 px-2.5 rounded-full text-12 font-bold shrink-0"
                 style={{ background: "var(--surface)", color: "var(--text-secondary)", border: "1px solid var(--divider)" }}
               >
-                <User size={10} /> Edit
+                {t("common.edit")}
               </button>
             </div>
-            <p className="text-xs mt-0.5" style={{ color: "var(--text-secondary)" }}>
+            <p className="text-10 mt-0.5" style={{ color: "var(--text-secondary)" }}>
               {user?.membershipRole === "owner" ? t("settings.owner") : t("search.employee")}
               {user?.employeeNumber ? ` · ${t("empDetail.number")} ${user.employeeNumber}` : ""}
             </p>
-            <p className="text-xs" style={{ color: "var(--text-secondary)" }}>{user?.phone}</p>
+            <p className="text-10" style={{ color: "var(--text-secondary)" }}>{user?.phone}</p>
           </div>
         </div>
 
@@ -245,7 +247,7 @@ export default function SettingsPage() {
                           {s.badge}
                         </span>
                       ) : s.right ? (
-                        <span className="text-sm" style={{ color: "var(--text-secondary)" }}>{s.right}</span>
+                        <span className="text-10" style={{ color: "var(--text-secondary)" }}>{s.right}</span>
                       ) : null}
                       {s.action && <ChevronRight size={14} style={{ color: "var(--text-secondary)" }} />}
                     </div>

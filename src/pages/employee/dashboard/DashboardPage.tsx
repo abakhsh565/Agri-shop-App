@@ -15,6 +15,7 @@ import { pkToday, pkDateFromISO } from "@/lib/pkDate";
 import StatusBar from "@/components/ui/StatusBar";
 import ListCard from "@/components/ui/ListCard";
 import ListRow from "@/components/ui/ListRow";
+import { SkeletonList } from "@/components/ui/Skeleton";
 
 function initBgColor(name: string | null | undefined) {
   const colors = ["#84cc16","#3b82f6","#8b5cf6","#f59e0b","#06b6d4","#ec4899"];
@@ -50,13 +51,18 @@ function formatRs(n: number) {
 
 export default function DashboardPage() {
   const { user } = useAuthStore();
-  const { items: notifications, unread, load, subscribe, markAllRead, markOneRead } = useNotificationStore();
+  const { items: notifications, unread, load, subscribe, markAllRead, markOneRead, ready: notificationsReady } = useNotificationStore();
   const { language } = useThemeStore();
   const navigate = useNavigate();
   const t = useT();
   const [showNotifs, setShowNotifs] = useState(false);
   const allSales = useSalesStore((s) => s.sales);
   const customers = useCustomersStore((s) => s.customers);
+  // Read both stores unconditionally: short-circuiting a hook call is what
+  // crashed this screen, since React must see the same hooks every render.
+  const salesReady = useSalesStore((s) => s.ready);
+  const customersReady = useCustomersStore((s) => s.ready);
+  const ready = salesReady && customersReady;
 
   function getCustomerImg(customerId: string) {
     return customers.find((c) => c.id === customerId)?.imageUrl;
@@ -145,7 +151,7 @@ export default function DashboardPage() {
             </button>
             {/* Scrollable unread list */}
             <div className="overflow-y-auto flex-1" style={{ maxHeight: "310px" }}>
-              {notifications.filter(n => !n.read).length === 0 ? (
+              {notificationsReady && notifications.filter(n => !n.read).length === 0 ? (
                 <div className="px-4 py-6 text-center">
                   <p className="text-13" style={{ color: "var(--text-secondary)" }}>{t("dashboard.noNotifications") || "No new notifications"}</p>
                 </div>
@@ -336,7 +342,9 @@ export default function DashboardPage() {
           {t("dashboard.recentSales")}
         </p>
         <ListCard>
-          {recentSales.length === 0 ? (
+          {!ready ? (
+            <SkeletonList rows={3} tile bare />
+          ) : recentSales.length === 0 ? (
             <div className="px-4 py-8 text-center">
               <ClipboardList size={24} className="mx-auto block mb-1" style={{ color: "var(--text-tertiary)" }} />
               <p className="text-13" style={{ color: "var(--text-secondary)" }}>{t("admin.noSalesYetToday")}</p>

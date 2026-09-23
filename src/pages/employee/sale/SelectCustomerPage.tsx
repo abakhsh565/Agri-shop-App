@@ -11,6 +11,7 @@ import { useT } from "@/lib/i18n";
 import { withReturn } from "@/lib/dependencyGraph";
 import type { Customer } from "@/types";
 import { Plus } from "lucide-react"
+import { SkeletonList } from "@/components/ui/Skeleton";
 
 export default function SelectCustomerPage() {
   const navigate = useNavigate();
@@ -18,6 +19,7 @@ export default function SelectCustomerPage() {
   const t = useT();
   const { setCustomer } = useCartStore();
   const customers = useCustomersStore((s) => s.customers);
+  const ready = useCustomersStore((s) => s.ready);
   const [search, setSearch] = useState("");
   const [searchParams] = useSearchParams();
 
@@ -72,7 +74,8 @@ export default function SelectCustomerPage() {
       </div>
 
       <div className="flex flex-col">
-        {filtered.map((c, i) => (
+        {!ready && <SkeletonList rows={6} />}
+        {ready && filtered.map((c, i) => (
           <button
             key={c.id}
             onClick={() => select(c)}

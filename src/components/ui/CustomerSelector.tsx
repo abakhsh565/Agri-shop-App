@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { useCustomersStore } from "@/stores/customersStore";
+import { SkeletonList } from "@/components/ui/Skeleton";
 import { useThemeStore } from "@/stores/themeStore";
 import { formatCurrency } from "@/lib/formatters";
 import { useT } from "@/lib/i18n";
@@ -35,6 +36,9 @@ function getRiskTag(score: number, t: (key: string) => string): { label: string;
 }
 export default function CustomerSelector({ selectedIds, onChange, filterFn, maxSelections = 100 }: CustomerSelectorProps) {
   const customers = useCustomersStore((s) => s.customers);
+  // The picker is a list that fetches: before the customers arrive it must not
+  // answer "No customers found" about data that has simply not loaded.
+  const customersReady = useCustomersStore((s) => s.ready);
   const { language } = useThemeStore();
   const isUrdu = language === "ur";
   const t = useT();
@@ -75,7 +79,9 @@ export default function CustomerSelector({ selectedIds, onChange, filterFn, maxS
         </div>
       </div>
       <div className="flex flex-col gap-1 max-h-[300px] overflow-y-auto">
-        {filteredCustomers.length === 0 ? (
+        {!customersReady ? (
+          <SkeletonList rows={4} bare />
+        ) : filteredCustomers.length === 0 ? (
           <p className="text-13 text-center py-4" style={{ color: "var(--text-secondary)" }}>
             {t("inline.no_customers_found")}
           </p>
