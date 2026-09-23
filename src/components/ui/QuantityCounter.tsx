@@ -86,7 +86,7 @@ export default function QuantityCounter({
           ${btnSize} rounded-full flex items-center justify-center shrink-0 transition-colors
           ${qty <= minQty && deleteOnOne
             ? "bg-[#ef4444] text-white"
-            : "bg-[#f5f5f5] text-black"
+            : "bg-muted text-foreground"
           }
         `}
       >
@@ -114,13 +114,13 @@ export default function QuantityCounter({
           max={max}
           step={step}
           autoFocus
-          className={`${inputWidth} text-center font-bold text-black bg-white border border-gray-300 rounded-[var(--radius-tile)] outline-none focus:border-[var(--brand)] ${isSmall ? "text-base" : "text-lg"}`}
+          className={`${inputWidth} text-center font-bold text-foreground bg-card border border-border-control rounded-[var(--radius-tile)] outline-none focus:border-[var(--brand)] ${isSmall ? "text-base" : "text-lg"}`}
         />
       ) : (
         <button
           type="button"
           onClick={() => { setIsFocused(true); setInputValue(""); }}
-          className={`${inputWidth} text-center font-bold text-black bg-transparent border border-transparent rounded-[var(--radius-tile)] hover:border-gray-200 ${isSmall ? "text-base min-w-[2.5rem]" : "text-lg min-w-[3rem]"}`}
+          className={`${inputWidth} text-center font-bold text-foreground bg-transparent border border-transparent rounded-[var(--radius-tile)] hover:border-gray-200 ${isSmall ? "text-base min-w-[2.5rem]" : "text-lg min-w-[3rem]"}`}
         >
           {displayQty}
         </button>
@@ -132,7 +132,7 @@ export default function QuantityCounter({
         disabled={!!max && qty >= max}
         aria-label={tNow("common.increase")}
         className={`
-          ${btnSize} rounded-full bg-black text-white flex items-center justify-center shrink-0
+          ${btnSize} rounded-full bg-ink text-ink-fg flex items-center justify-center shrink-0
           disabled:opacity-30
         `}
       >

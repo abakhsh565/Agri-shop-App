@@ -62,10 +62,10 @@ export default function PINSetPage() {
       <NavHeader title={step === "set" ? t("auth.setPinBtn") : t("auth.confirmPinBtn")} noBack />
       <div className="flex flex-col flex-1 items-center gap-8 p-6 pt-12">
         <div className="flex flex-col items-center gap-2 text-center">
-          <p className="text-xl font-bold text-black">
+          <p className="text-xl font-bold text-foreground">
             {step === "set" ? t("auth.setPinHelp") : t("auth.confirmPin")}
           </p>
-          <p className="text-sm text-[#888]">
+          <p className="text-sm text-caption">
             {step === "set"
               ? t("auth.pinSetHintQuick")
               : t("auth.pinReenterHint")}

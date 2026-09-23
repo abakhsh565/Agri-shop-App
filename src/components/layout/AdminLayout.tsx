@@ -263,7 +263,7 @@ export default function AdminLayout() {
       {/* ── Bottom tab bar (5 tabs) — only on top-level navigation screens ── */}
       {showTabBar && (
       <div
-        className="fixed bottom-0 left-0 right-0 max-w-[480px] mx-auto flex items-start pt-2 border-t"
+        className="fixed bottom-0 start-0 end-0 max-w-[480px] mx-auto flex items-start pt-2 border-t"
         style={{
           background: "var(--surface)",
           borderColor: "var(--divider)",

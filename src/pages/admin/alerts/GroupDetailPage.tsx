@@ -103,7 +103,7 @@ export default function GroupDetailPage() {
             {showMenu && (
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setShowMenu(false)} />
-                <div className="absolute right-0 top-full mt-1 z-50 w-[160px] rounded-[var(--radius-tile)] overflow-hidden" style={{ background: "var(--surface)", border: "1px solid var(--divider)", boxShadow: "0 4px 12px rgba(0,0,0,0.15)" }}>
+                <div className="absolute end-0 top-full mt-1 z-50 w-[160px] rounded-[var(--radius-tile)] overflow-hidden" style={{ background: "var(--surface)", border: "1px solid var(--divider)", boxShadow: "0 4px 12px rgba(0,0,0,0.15)" }}>
                   <button onClick={() => { setShowMenu(false); setEditing(true); }} className="w-full flex items-center gap-2.5 px-4 py-3 text-13 font-medium" style={{ color: "var(--text-primary)" }}>
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
                     {t("customerProfile.edit")}

@@ -8,9 +8,9 @@ The app supports English/LTR and Urdu/RTL via a single language toggle. The syst
 
 1. **Language state** — stored in `useThemeStore` (persisted to localStorage)
 2. **Document direction** — `document.documentElement.dir` is set to `rtl` or `ltr` by `applyDirection()`
-3. **CSS auto-flip** — `index.css` has rules that flip Lucide icons, text alignment, and absolute positioning automatically when `dir="rtl"` is set
-4. **Tailwind v4 logical properties** — all spacing/alignment uses logical classes (`text-start`, `ms-`, `me-`, `ps-`, `pe-`) instead of physical classes
-5. **Dir context** — `<Dir>` provider wraps the app, giving all components access to `useDir()` for RTL state
+3. **CSS auto-flip** — `index.css` flips directional Lucide icons (`chevron-*`, `arrow-*`, `send`, …) and declares `direction: rtl`. That is ALL it does for direction. The old block that flipped physical utilities (`[dir="rtl"] .absolute.left-4`, `[dir="rtl"] .pl-10`) has been deleted; position is decided in one place now — the screen, logically.
+4. **Tailwind v4 logical properties** — every spacing, alignment and position in the app uses logical classes (`text-start`, `ms-`, `me-`, `ps-`, `pe-`, `start-`, `end-`) or the inline-style equivalents (`insetInlineStart` / `insetInlineEnd`) instead of physical ones.
+5. **Dir context** — `<Dir>` provider wraps the app, giving components `useDir()` for the few things that genuinely need to know the direction (mirroring a rotating chevron, choosing a mirror-image icon)
 6. **i18n translations** — `useT()` hook provides translated strings for all UI text
 
 ---
@@ -37,6 +37,8 @@ The app supports English/LTR and Urdu/RTL via a single language toggle. The syst
 | `right-4` | `end-4` | Logical positioning |
 
 **Exception:** `flex-row` children are automatically reversed by the browser in RTL, so no override needed.
+
+**This rule is enforced, not just documented.** `tests/unit/importantShimGuard.test.ts` fails the build on a physical direction utility anywhere in `src/`, on a JavaScript `isRtl ? "left" : "right"` style toggle, and on any new `!important` compatibility shim appearing in `index.css`. `tests/e2e/logicalDirection.spec.ts` then measures the live DOM in both languages, because a class Tailwind never generated is invisible to a source scan.
 
 ### Rule 2: Translate All User-Visible Text
 
@@ -80,47 +82,39 @@ Lucide directional icons (`ChevronRight`, `ArrowRight`, `ArrowLeft`, etc.) are *
 
 **Exception:** If an icon has **meaning** (not just direction), don't flip it. Use the `.no-flip` class to prevent auto-flip.
 
-### Rule 4: Use the `<Dir>` Context for Directional Logic
+### Rule 4: Only ask for the direction when you must branch on it
 
-When you need to know the current direction in code (e.g., for conditional rendering or inline styles):
+`useDir()` returns `{ isRtl, dir }` and nothing else. `start`/`end`/`psClass` and the
+`rtlStyle()` helper were removed: they flipped positions and paddings in JavaScript, which is
+the same mistake as the deleted `!important` layer — direction decided by whoever remembered
+to ask, in a second place, on top of the logical property already doing the job.
 
 ```tsx
-import { useDir, useRtlStyle } from "@/lib/dirContext";
+import { useDir } from "@/lib/dirContext";
 
 function MyComponent() {
-  const { isRtl, start, end } = useDir();
-  const rtlStyle = useRtlStyle();
-
-  // Option A: className-based
-  return <div className={isRtl ? "me-2" : "ms-2"}>...</div>;
-
-  // Option B: style-based (for inline styles)
-  return <div style={rtlStyle({ paddingLeft: 16 })}>...</div>;
+  const { isRtl } = useDir();
+  // A rotation is not a position, so it genuinely needs the flag:
+  return <ChevronRight style={{ transform: isRtl ? "rotate(180deg)" : undefined }} />;
 }
 ```
 
-### Rule 5: Use Reusable Components
+Position, spacing, padding and text alignment never call it: write `ms-2`, `ps-4`,
+`start-3`, `text-start`, or the inline-style equivalent `insetInlineStart`.
 
-Use the pre-built components from `src/components/ui/RTL.tsx` for common patterns:
+### Rule 5: Use the shared primitives
+
+Directional behaviour should come from the components, not from a per-screen decision:
 
 ```tsx
-import { ActionRow, Chip, StatCard, SectionLabel, EmptyState } from "@/components/ui/RTL";
-
-// Action row (menu items) — icon on start side, text in middle
-<ActionRow icon={<Pencil />} label="Edit Customer" onClick={...} />
-
-// Toggle chip — brand-colored when selected
-<Chip selected={isCropSelected} onClick={toggle}>Cotton</Chip>
-
-// Stat card — label top, value bottom
-<StatCard label="OUTSTANDING" value="Rs. 3,330" />
-
-// Section label — uppercase, start-aligned
-<SectionLabel text="CREDIT LIMIT" />
-
-// Empty state — centered icon + text
-<EmptyState icon={<Bell />} title="No reminders" subtitle="Configure schedules..." />
+<NavHeader title="…" />                       // back control pinned to the inline start
+<ListCard><ListRow icon={Package} title="…" /></ListCard>   // inset hairline, row height, press state
+<Sheet title="…" onClose={…}>…</Sheet>        // grabber, close at the inline start, action at the end
+<SearchBar … />                                // search glyph and clear button, both logical
 ```
+
+The older `src/components/ui/RTL.tsx` helpers were deleted along with the layer; those
+patterns now live in the design-system primitives above.
 
 ### Rule 6: Bottom Sheets and Modals
 
@@ -158,7 +152,7 @@ const label = getPaymentStatusLabel(status, isUrdu);
 ## How to Add a New Component
 
 1. **Check if `RTL.tsx` has a reusable component** for your pattern
-2. **Use `useDir()`** if you need direction info in code
+2. **Use `useDir()`** only to branch on direction (an icon, a rotation) — never for position
 3. **Use logical CSS classes** throughout
 4. **Never use `text-left`, `ml-*`, `pl-*`, `border-l`** — always logical equivalents
 

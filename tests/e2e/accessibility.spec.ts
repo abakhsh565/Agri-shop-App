@@ -33,10 +33,20 @@ const ROUTES = [
  * browser — accounted for ~192 unlabelled buttons, all 24 unlabelled inputs and 228
  * undersized targets on its own, on top of showing a "v3.0.2" badge to real users.
  *
- * Current measurement: 4 / 0 / 87. These may only go DOWN.
+ * Current measurement: 0 / 0 / 72–87. These may only go DOWN.
+ *
+ * `buttonNoName` and `inputNoLabel` are structural, so they are pinned at zero: any unnamed
+ * control is a regression, with no data-dependent excuse.
+ *
+ * `smallTarget` follows the DATA, not the code — the count is dominated by filter chips and
+ * category labels, so a shop with more categories has more sub-44px chips. 87 is the highest
+ * figure observed across full-suite runs and is kept as the ceiling; it was 72 on the run
+ * that deleted the compatibility layer, and tightening to that would make the lane fail on a
+ * shop that simply sells more kinds of things. The chips themselves are a deliberate compact
+ * control, not a defect: they sit in a scrollable row that a thumb can hit.
  */
 const BASELINE = {
-  buttonNoName: 4,
+  buttonNoName: 0,
   inputNoLabel: 0,
   smallTarget: 87,
 };

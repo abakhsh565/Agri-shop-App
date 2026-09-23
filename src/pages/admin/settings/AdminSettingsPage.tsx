@@ -198,7 +198,8 @@ export default function AdminSettingsPage() {
                   </div>
                   <button
                     onClick={() => fileInputRef.current?.click()}
-                    className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full flex items-center justify-center shadow"
+                    data-testid="account-badge"
+                    className="absolute -bottom-1 -end-1 w-6 h-6 rounded-full flex items-center justify-center shadow"
                     style={{ background: "var(--brand)", color: "#0a0a0a" }}
                   >
                     <Pencil size={10} strokeWidth={2.5} />
@@ -247,8 +248,11 @@ export default function AdminSettingsPage() {
                 >
                   <div
                     className="absolute top-1 w-4 h-4 rounded-full transition-all duration-300"
+                    data-testid="theme-knob"
+                    /* Logical inset: the knob travels from the inline start (off) to the
+                       inline end (on), so the switch reads the same in Urdu as in English. */
                     style={{
-                      left: theme === "dark" ? "calc(100% - 20px)" : "4px",
+                      insetInlineStart: theme === "dark" ? "calc(100% - 20px)" : "4px",
                       background: theme === "dark" ? "#0a0a0a" : "var(--text-secondary)",
                     }}
                   />

@@ -121,7 +121,7 @@ export default function DashboardPage() {
       {showNotifs && (
         <div className="fixed inset-0" style={{ zIndex: 60 }} onClick={() => setShowNotifs(false)}>
           <div
-            className="fixed top-[88px] right-4 w-[280px] rounded-[var(--radius-card)] shadow-2xl overflow-hidden animate-scale-in flex flex-col"
+            className="fixed top-[88px] end-4 w-[280px] rounded-[var(--radius-card)] shadow-2xl overflow-hidden animate-scale-in flex flex-col"
             style={{ zIndex: 61, background: "var(--surface)", border: "1px solid var(--divider)", maxHeight: "360px" }}
             onClick={(e) => e.stopPropagation()}
           >
@@ -213,7 +213,7 @@ export default function DashboardPage() {
           >
             <Bell size={15} style={{ color: "var(--text-primary)" }} />
             {badgeCount > 0 && (
-              <span className="absolute top-1 right-1 bg-red-500 text-white text-8 font-bold rounded-full min-w-[13px] h-[13px] flex items-center justify-center px-[2px]">
+              <span className="absolute top-1 end-1 bg-red-500 text-white text-8 font-bold rounded-full min-w-[13px] h-[13px] flex items-center justify-center px-[2px]">
                 {badgeCount}
               </span>
             )}

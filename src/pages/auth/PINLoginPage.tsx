@@ -102,10 +102,10 @@ export default function PINLoginPage() {
               {user.name.charAt(0).toUpperCase()}
             </div>
           )}
-          <p className="text-lg sm:text-xl font-bold text-black">
+          <p className="text-lg sm:text-xl font-bold text-foreground">
             Welcome, {user.name.split(" ")[0]}
           </p>
-          <p className="text-xs sm:text-sm text-[#888]">{t("auth.pinPrompt")}</p>
+          <p className="text-xs sm:text-sm text-caption">{t("auth.pinPrompt")}</p>
           {error && (
             <p className="text-xs sm:text-sm text-[#ef4444]">{error}</p>
           )}
@@ -115,12 +115,12 @@ export default function PINLoginPage() {
 
         {verifying && (
           <div className="flex items-center gap-2">
-            <div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin" />
-            <p className="text-xs sm:text-sm text-[#888]">{t("auth.verifying")}</p>
+            <div className="w-4 h-4 border-2 border-border-control border-t-transparent rounded-full animate-spin" />
+            <p className="text-xs sm:text-sm text-caption">{t("auth.verifying")}</p>
           </div>
         )}
 
-        <button onClick={handleForgotPIN} className="text-xs sm:text-sm font-medium text-[#888] underline underline-offset-2">
+        <button onClick={handleForgotPIN} className="text-xs sm:text-sm font-medium text-caption underline underline-offset-2">
           {t("auth.forgotPin")}
         </button>
       </div>

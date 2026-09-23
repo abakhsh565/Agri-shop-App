@@ -16,8 +16,8 @@ export default function RejectedPage() {
           <XCircle size={26} style={{ color: "var(--error)" }} />
         </div>
         <div className="flex flex-col gap-2">
-          <p className="text-xl font-bold text-black">{t("auth.rejected")}</p>
-          <p className="text-sm text-[#888]">
+          <p className="text-xl font-bold text-foreground">{t("auth.rejected")}</p>
+          <p className="text-sm text-caption">
             {t("auth.rejectedBody")}
           </p>
         </div>

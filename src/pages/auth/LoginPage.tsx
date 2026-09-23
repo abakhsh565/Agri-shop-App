@@ -98,9 +98,9 @@ export default function LoginPage() {
           >
             {t("auth.sendCode")}
           </Button>
-          <p className="text-xs text-center text-[#888]">
+          <p className="text-xs text-center text-caption" data-testid="auth-caption">
             {t("auth.newShopOwner")}{' '}
-            <button onClick={() => navigate("/register")} className="text-black font-medium underline">
+            <button onClick={() => navigate("/register")} className="text-foreground font-medium underline">
               {t("auth.registerShop")}
             </button>
           </p>

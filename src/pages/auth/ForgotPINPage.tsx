@@ -127,8 +127,8 @@ export default function ForgotPINPage() {
         {step === "phone" && (
           <>
             <div className="flex flex-col items-center gap-2 text-center">
-              <p className="text-xl font-bold text-black">{t("auth.resetPin")}</p>
-              <p className="text-sm text-[#888]">{t("auth.verifyIdentity")}</p>
+              <p className="text-xl font-bold text-foreground">{t("auth.resetPin")}</p>
+              <p className="text-sm text-caption">{t("auth.verifyIdentity")}</p>
             </div>
             <div className="w-full flex flex-col gap-4">
               <Input
@@ -150,15 +150,15 @@ export default function ForgotPINPage() {
         {step === "otp" && (
           <>
             <div className="flex flex-col items-center gap-2 text-center">
-              <p className="text-xl font-bold text-black">{t("auth.verifyNumber")}</p>
-              <p className="text-sm text-[#888]">{t("auth.enterCodeSentTo", { phone })}</p>
+              <p className="text-xl font-bold text-foreground">{t("auth.verifyNumber")}</p>
+              <p className="text-sm text-caption">{t("auth.enterCodeSentTo", { phone })}</p>
             </div>
             <OTPInput value={otp} onChange={(v) => { setOtp(v); setError(""); }} error={!!error} />
             {error && <p className="text-sm text-[#ef4444] text-center">{error}</p>}
             {loading && (
               <div className="flex items-center gap-2">
-                <div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin" />
-                <p className="text-sm text-[#888]">{t("auth.verifying")}</p>
+                <div className="w-4 h-4 border-2 border-border-control border-t-transparent rounded-full animate-spin" />
+                <p className="text-sm text-caption">{t("auth.verifying")}</p>
               </div>
             )}
             <Button fullWidth onClick={handleVerifyOTP} loading={loading} disabled={otp.length < 6}>
@@ -171,10 +171,10 @@ export default function ForgotPINPage() {
         {(step === "pin" || step === "confirm") && (
           <>
             <div className="flex flex-col items-center gap-2 text-center">
-              <p className="text-xl font-bold text-black">
+              <p className="text-xl font-bold text-foreground">
                 {step === "pin" ? t("auth.setNewPin") : t("auth.confirmPin")}
               </p>
-              <p className="text-sm text-[#888]">
+              <p className="text-sm text-caption">
                 {step === "pin"
                   ? t("auth.pinSetHintLogin")
                   : t("auth.pinReenterHint")}

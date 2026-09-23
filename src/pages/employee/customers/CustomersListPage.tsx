@@ -158,7 +158,7 @@ export default function CustomersListPage() {
           {/* Sort dropdown */}
           {showSortMenu && (
             <div
-              className="absolute right-0 top-12 w-52 rounded-[var(--radius-card)] shadow-xl overflow-hidden z-50 animate-scale-in"
+              className="absolute end-0 top-12 w-52 rounded-[var(--radius-card)] shadow-xl overflow-hidden z-50 animate-scale-in"
               style={{ background: "var(--surface)", border: "1px solid var(--divider)" }}
             >
               {SORT_OPTIONS.map((opt) => (
@@ -318,7 +318,7 @@ export default function CustomersListPage() {
 
       {/* Floating Add Customer */}
       <div
-        className="fixed left-0 right-0 max-w-[480px] mx-auto pointer-events-none z-40"
+        className="fixed start-0 end-0 max-w-[480px] mx-auto pointer-events-none z-40"
         style={{ bottom: "calc(var(--tabbar-height) + 16px)" }}
       >
         <div className={`flex px-4 ${isUrdu ? "justify-start" : "justify-end"}`}>

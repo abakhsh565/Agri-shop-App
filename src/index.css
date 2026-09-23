@@ -21,6 +21,10 @@
   --color-accent-foreground: var(--accent-foreground);
   --color-border: var(--border);
   --color-border-light: var(--border-light);
+  --color-border-control: var(--border-control);
+  --color-ink: var(--ink);
+  --color-ink-fg: var(--ink-fg);
+  --color-caption: var(--caption);
   --color-ring: var(--ring);
   --color-brand: var(--brand);
   --radius-sm: calc(var(--radius) - 4px);
@@ -88,6 +92,15 @@
      phone, still lighter than the placeholder so it does not read as a filled box. */
   --border-control: #d7d5cc;
   --ring: rgba(0, 0, 0, 0.15);
+  /* Solid high-emphasis controls — the primary button, a selected payment chip, a filled
+     PIN dot. Light fills them black; dark fills them brand. One token pair replaces the
+     old `.dark .bg-black { background: var(--brand) }` / `.dark .text-white` shim, which
+     also applied to text that was never on a black surface. */
+  --ink: #000000;
+  --ink-fg: #ffffff;
+  /* Caption/hint text. Light and dark greys were never aligned: light read
+     `--text-secondary`, dark `--muted-foreground`. Same token, same relationship. */
+  --caption: var(--text-secondary);
 
   /* ── Text: measured warm neutrals. The board's greys are #7a7a78 / #a3a3a1;
      lifted so body and secondary text clear 4.5:1 on the warm page tone. */
@@ -223,6 +236,9 @@
   /* Same job as in light, tuned for the dark ramp: #171716 field tone → #3a3a34
      is ~35/255, so a field still has an edge without becoming a bright outline. */
   --border-control: #3a3a34;
+  --ink: var(--brand);
+  --ink-fg: #0a0a0a;
+  --caption: var(--text-tertiary);
   --error-bg: rgba(239,68,68,0.15);
   --error-border: rgba(239,68,68,0.3);
   --warning-bg: rgba(245,158,11,0.12);
@@ -884,38 +900,6 @@ svg.ds-glyph-sm {
   height: 0;
 }
 
-/* ── Dark mode class-based overrides ──
-   Covers hardcoded Tailwind utilities in legacy pages that haven't been
-   migrated to CSS variables yet.                                        */
-
-/* Backgrounds — map hardcoded colors to design tokens */
-.bg-white            { background-color: var(--surface) !important; }
-.bg-\[\#f5f5f5\]     { background-color: var(--surface-2) !important; }
-.dark .bg-white            { background-color: var(--background)  !important; }
-.dark .bg-\[\#f5f5f5\]     { background-color: var(--surface-2)   !important; }
-
-/* Active/selected state: bg-black → brand */
-.dark .bg-black            { background-color: var(--brand)       !important; }
-
-/* Text — map hardcoded colors to design tokens */
-.text-black          { color: var(--text-primary) !important; }
-.text-\[\#888\]      { color: var(--text-secondary) !important; }
-.dark .text-black          { color: var(--foreground)             !important; }
-.dark .text-\[\#888\]      { color: var(--muted-foreground)       !important; }
-.dark .text-white          { color: #0a0a0a                       !important; } /* paired with bg-black → brand */
-
-/* Borders — map hardcoded colors to design tokens */
-.border-\[\#e5e5e5\] { border-color: var(--divider) !important; }
-/* `border-black` is a VISIBLE-EDGE intent, so it must resolve to the control outline, not the
-   in-card hairline. It used to shim to `--border`, which is #f0f0ee — 2/255 from a field's own
-   tone — so every field written with `border-black` (the OTP digit boxes among them) had no
-   discernible edge in EITHER theme, and the dark rule below made it worse by naming `--divider`.
-   Both now come from the one token that exists for this job. */
-.border-black        { border-color: var(--border-control) !important; }
-.dark .border-\[\#e5e5e5\] { border-color: var(--divider)         !important; }
-.dark .border-black        { border-color: var(--border-control) !important; }
-.dark .border-b-2.border-black { border-color: var(--brand)       !important; }
-
 /* Inputs & textareas */
 .dark input,
 .dark textarea,
@@ -942,12 +926,6 @@ svg.ds-glyph-sm {
   background-color: transparent !important;
 }
 
-/* Tab underlines: border-black on active tabs → brand */
-
-/* Lucide icons that use className="text-black" */
-.dark svg.text-black   { color: var(--foreground)       !important; }
-.dark svg.text-\[\#888\] { color: var(--muted-foreground) !important; }
-
 /* ══════════════════════════════════════════════════════════════
    RTL SUPPORT — AUTOMATIC LTR/RTL BEHAVIOUR
    ══════════════════════════════════════════════════════════════
@@ -962,16 +940,15 @@ svg.ds-glyph-sm {
    - border-s / border-e (replaces border-l / border-r)
    - rounded-s / rounded-e (replaces rounded-l / rounded-r)
 
-   These CSS rules handle the remaining edge cases:
-   1. Lucide directional icons (auto-flip)
-   2. Absolute positioning (auto-flip)
-   3. Text alignment (auto-flip for legacy classes)
-   4. Scrollbar direction
-   5. Input clear buttons
-   6. Badge/dot positioning
+   What remains is the direction declaration and the directional-icon flip; every
+   positional utility in the app is written logically (start/end, ps/pe), so no
+   per-class flip is needed.
    ══════════════════════════════════════════════════════════════ */
 
-/* ── 1. Lucide Directional Icons — Auto-flip ── */
+/* ── 1. Lucide Directional Icons — Auto-flip ──
+   The one place a direction is applied for the user rather than by the author: a chevron
+   points along the reading direction, so it mirrors. Every *positional* utility in the app
+   is written logically (start/end, ps/pe, m-s/e) and needs no rule here. */
 [dir="rtl"] svg.lucide-chevron-right,
 [dir="rtl"] svg.lucide-arrow-right,
 [dir="rtl"] svg.lucide-arrow-up-right,
@@ -994,60 +971,10 @@ svg.ds-glyph-sm {
   transform: scaleX(-1);
 }
 
-/* ── 2. Absolute Positioning — Auto-flip ── */
-/* Flip physical left/right absolute positioning classes in RTL */
-html[dir="rtl"] .absolute.left-0   { left: auto !important; right: 0 !important; }
-html[dir="rtl"] .absolute.left-1   { left: auto !important; right: 0.25rem !important; }
-html[dir="rtl"] .absolute.left-2   { left: auto !important; right: 0.5rem !important; }
-html[dir="rtl"] .absolute.left-3   { left: auto !important; right: 0.75rem !important; }
-html[dir="rtl"] .absolute.left-4   { left: auto !important; right: 1rem !important; }
-html[dir="rtl"] .absolute.left-5   { left: auto !important; right: 1.25rem !important; }
-html[dir="rtl"] .absolute.right-0  { right: auto !important; left: 0 !important; }
-html[dir="rtl"] .absolute.right-1  { right: auto !important; left: 0.25rem !important; }
-html[dir="rtl"] .absolute.right-2  { right: auto !important; left: 0.5rem !important; }
-html[dir="rtl"] .absolute.right-3  { right: auto !important; left: 0.75rem !important; }
-html[dir="rtl"] .absolute.right-4  { right: auto !important; left: 1rem !important; }
-html[dir="rtl"] .absolute.right-5  { right: auto !important; left: 1.25rem !important; }
-html[dir="rtl"] .absolute.-right-1 { right: auto !important; left: -0.25rem !important; }
-html[dir="rtl"] .absolute.-right-2 { right: auto !important; left: -0.5rem !important; }
-html[dir="rtl"] .absolute.-left-1  { left: auto !important; right: -0.25rem !important; }
-html[dir="rtl"] .absolute.-left-2  { left: auto !important; right: -0.5rem !important; }
-
-/* Also handle inline style absolute positioning */
-[dir="rtl"] [style*="right:"][style*="position: absolute"],
-[dir="rtl"] [style*="left:"][style*="position: absolute"] {
-  /* handled by individual components using logical properties or CSS above */
-}
-
-/* ── 3. Legacy Text Alignment — Auto-flip ── */
-
-/* ── 3b. Padding Auto-flip (physical → logical) ── */
-[dir="rtl"] .pl-10 { padding-left: 0 !important; padding-right: 2.5rem !important; }
-[dir="rtl"] .pr-10 { padding-right: 0 !important; padding-left: 2.5rem !important; }
-
-/* ── 4. Scrollbar Direction ── */
+/* ── 2. Document direction ── */
 [dir="rtl"] {
   direction: rtl;
 }
-
-/* ── 5. Input Clear Buttons — handled by absolute right-3 override above ── */
-
-/* ── 6. Badge/Dot Positioning (absolute top-right) ── */
-[dir="rtl"] .absolute.-right-1,
-[dir="rtl"] .absolute.right-0 {
-  right: auto !important;
-  left: 0 !important;
-}
-
-/* ── 7. Flex Direction Auto-flip ── */
-/* When a flex-row has children that imply direction (icon + text),
-   the order should flip in RTL. We handle this via CSS logical order. */
-[dir="rtl"] .flex-row > .icon-first { order: 1; }
-[dir="rtl"] .flex-row > .text-first { order: 0; }
-
-/* ── 8. Utility Classes ── */
-.rtl-flip   { transform: scaleX(-1); }
-.rtl-flip-x { transform: scaleX(-1); }
 
 /* ── Scroll Lock: prevent background scroll when any bottom sheet / modal is open ── */
 body:has(.fixed.inset-0.z-50) {

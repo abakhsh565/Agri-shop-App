@@ -7,7 +7,7 @@ interface AuthLayoutProps {
 
 export default function AuthLayout({ children }: AuthLayoutProps) {
   return (
-    <div className="flex flex-col bg-white min-h-full w-full">
+    <div className="flex flex-col bg-background min-h-full w-full">
       <StatusBar />
       <div className="flex flex-col flex-1 w-full">
         {children}

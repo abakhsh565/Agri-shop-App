@@ -191,7 +191,7 @@ export default function SalesListPage() {
                   setTimeout(() => document.addEventListener("click", handler, { once: true }), 0);
                 }
               }}
-              className="absolute right-0 top-12 w-52 rounded-[var(--radius-card)] shadow-xl overflow-hidden z-50"
+              className="absolute end-0 top-12 w-52 rounded-[var(--radius-card)] shadow-xl overflow-hidden z-50"
               style={{ background: "var(--surface)", border: "1px solid var(--divider)" }}
             >
               {SORT_OPTIONS.map((opt) => (
@@ -274,7 +274,7 @@ export default function SalesListPage() {
         </div>
         {/* Fade indicator on right edge */}
         <div
-          className="absolute right-0 top-0 bottom-0 w-8 pointer-events-none transition-opacity"
+          className="absolute end-0 top-0 bottom-0 w-8 pointer-events-none transition-opacity"
           style={{
             background: `linear-gradient(to right, transparent, var(--background))`,
             opacity: "var(--show-fade, 1)",

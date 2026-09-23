@@ -113,10 +113,10 @@ export default function RegisterOTPPage() {
       <NavHeader title={t("auth.verifyPhone")} backTo="/register" />
       <div className="flex flex-col gap-8 p-6 flex-1">
         <div className="flex flex-col gap-2">
-          <p className="text-xl font-bold text-black">{t("auth.enterCode")}</p>
-          <p className="text-sm text-[#888]">
+          <p className="text-xl font-bold text-foreground">{t("auth.enterCode")}</p>
+          <p className="text-sm text-caption">
             We sent a 6-digit code to{" "}
-            <span className="font-medium text-black">{pendingPhone}</span>
+            <span className="font-medium text-foreground">{pendingPhone}</span>
           </p>
         </div>
 
@@ -130,8 +130,8 @@ export default function RegisterOTPPage() {
         {error && <p className="text-sm text-[#ef4444] text-center">{error}</p>}
 
         {!expired && (
-          <p className="text-sm text-[#888] text-center">
-            {t("auth.codeExpiresIn")}<span className="font-medium text-black">{formatTime(countdown)}</span>
+          <p className="text-sm text-caption text-center">
+            {t("auth.codeExpiresIn")}<span className="font-medium text-foreground">{formatTime(countdown)}</span>
           </p>
         )}
 
@@ -141,18 +141,18 @@ export default function RegisterOTPPage() {
 
         {loading && (
           <div className="flex items-center justify-center gap-2 py-3">
-            <div className="w-5 h-5 border-2 border-black border-t-transparent rounded-full animate-spin" />
-            <p className="text-sm text-[#888]">{t("auth.verifying")}</p>
+            <div className="w-5 h-5 border-2 border-border-control border-t-transparent rounded-full animate-spin" />
+            <p className="text-sm text-caption">{t("auth.verifying")}</p>
           </div>
         )}
 
         <div className="text-center">
           {resendCountdown > 0 ? (
-            <p className="text-sm text-[#888]">{t("auth.resendIn", { seconds: String(resendCountdown) })}</p>
+            <p className="text-sm text-caption">{t("auth.resendIn", { seconds: String(resendCountdown) })}</p>
           ) : (
             <button
               onClick={handleResend}
-              className="text-sm font-medium text-black underline underline-offset-2"
+              className="text-sm font-medium text-foreground underline underline-offset-2"
             >
               {t("auth.resendOtp")}
             </button>

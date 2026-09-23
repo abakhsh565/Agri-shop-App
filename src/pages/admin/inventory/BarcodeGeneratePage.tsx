@@ -183,7 +183,7 @@ export default function BarcodeGeneratePage() {
 
         {/* Generate button */}
         {selected.size > 0 && (
-          <div className="fixed bottom-20 left-0 right-0 px-4 z-40">
+          <div className="fixed bottom-20 start-0 end-0 px-4 z-40">
             <button onClick={generate}
               className="w-full h-12 rounded-full font-bold text-sm transition-all active:scale-[0.97]"
               style={{ background: "var(--brand)", color: "#0a0a0a" }}>
@@ -214,6 +214,8 @@ export default function BarcodeGeneratePage() {
                 </span>
 
               </div>
+              {/* A barcode needs a genuinely white plate to scan, in either theme, so this
+                  stays Tailwind's literal `bg-white` rather than a tone token. */}
               <div className="flex justify-center bg-white rounded-[var(--radius-tile)] p-3 mb-3">
                 <div dangerouslySetInnerHTML={{ __html: svg }} />
               </div>
@@ -236,7 +238,7 @@ export default function BarcodeGeneratePage() {
         })}
       </div>
 
-      <div className="fixed bottom-20 left-0 right-0 px-4 z-40">
+      <div className="fixed bottom-20 start-0 end-0 px-4 z-40">
         <button onClick={printLabels}
           className="w-full h-12 rounded-full font-bold text-sm transition-all active:scale-[0.97]"
           style={{ background: "var(--brand)", color: "#0a0a0a" }}>

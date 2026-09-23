@@ -134,7 +134,7 @@ export default function CartPage() {
   }
 
   return (
-    <div className="flex flex-col bg-white w-full min-h-full">
+    <div className="flex flex-col bg-background w-full min-h-full">
       <StatusBar />
       <NavHeader title={t("sale.reviewPayment")} />
 
@@ -158,21 +158,21 @@ export default function CartPage() {
         </button>
       ) : (
         <>
-          <div className="mx-4 mt-3 bg-[#f5f5f5] rounded-[var(--radius-tile)] p-4">
+          <div className="mx-4 mt-3 bg-muted rounded-[var(--radius-tile)] p-4">
             <div className="flex items-center justify-between mb-3">
-              <p className="text-sm font-bold text-black">{customer.name}</p>
+              <p className="text-sm font-bold text-foreground">{customer.name}</p>
               <span className="text-xs" style={{ color: getCreditHealthColor(creditHealth) }}>
                 {t("sale.creditHealth")}: {creditHealth === "good" ? t("sale.good") : creditHealth === "warning" ? t("sale.warning") : t("sale.overLimit")}
               </span>
             </div>
             <div className="flex gap-8">
               <div>
-                <p className="text-10 text-[#888] uppercase">{t("sale.outstandingCredit")}</p>
-                <p className="text-sm font-bold text-black">{formatCurrency(customer.outstandingBalance)}</p>
+                <p className="text-10 text-caption uppercase">{t("sale.outstandingCredit")}</p>
+                <p className="text-sm font-bold text-foreground">{formatCurrency(customer.outstandingBalance)}</p>
               </div>
               <div>
-                <p className="text-10 text-[#888] uppercase">{t("customers.creditLimit")}</p>
-                <p className="text-sm font-bold text-black">{formatCurrency(customer.creditLimit)}</p>
+                <p className="text-10 text-caption uppercase">{t("customers.creditLimit")}</p>
+                <p className="text-sm font-bold text-foreground">{formatCurrency(customer.creditLimit)}</p>
               </div>
             </div>
           </div>
@@ -191,16 +191,16 @@ export default function CartPage() {
       <div className="px-4 pt-4">
         <div className="flex flex-col">
             {items.map((item, i) => (
-              <div key={item.variantId} className={`py-4 ${i < items.length - 1 ? "border-b border-[#e5e5e5]" : ""}`}>
+              <div key={item.variantId} className={`py-4 ${i < items.length - 1 ? "border-b border-border" : ""}`}>
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
-                    <p className="text-sm font-bold text-black">{item.productName}</p>
-                    <p className="text-xs text-[#888]">
+                    <p className="text-sm font-bold text-foreground">{item.productName}</p>
+                    <p className="text-xs text-caption">
                       {item.variantName} · {formatCurrency(item.unitPrice)} × {item.qty}
                     </p>
                   </div>
                   <div className="flex items-center gap-3">
-                    <p className="text-sm font-bold text-black">{formatCurrency(item.lineTotal)}</p>
+                    <p className="text-sm font-bold text-foreground">{formatCurrency(item.lineTotal)}</p>
                     <QuantityCounter
                       qty={item.qty}
                       onChange={(q) => updateQty(item.variantId, q)}
@@ -219,7 +219,7 @@ export default function CartPage() {
         <div className="flex gap-2 mt-3">
           <button
             onClick={() => navigate(`${base}/sale/products`)}
-            className="flex-1 h-12 rounded-[var(--radius-tile)] border border-black flex items-center justify-center gap-2 text-sm font-medium text-black"
+            className="flex-1 h-12 rounded-[var(--radius-tile)] border border-border-control flex items-center justify-center gap-2 text-sm font-medium text-foreground"
           >
             <Plus size={16} />
             {t("sale.addMore")}
@@ -271,14 +271,14 @@ export default function CartPage() {
 
       {/* Payment type */}
       <div className="px-4 pt-5">
-        <p className="text-xs font-bold text-black uppercase mb-3">{t("sale.paymentType")}</p>
+        <p className="text-xs font-bold text-foreground uppercase mb-3">{t("sale.paymentType")}</p>
         <div className="flex gap-2">
           {[{ key: "full", labelKey: "sale.fullPayment" }, { key: "partial", labelKey: "sale.partialCredit" }].map((opt) => (
             <button
               key={opt.key}
               onClick={() => setPaymentType(opt.key as "full" | "partial")}
               className={`flex-1 h-11 rounded-full text-sm font-medium transition-colors ${
-                paymentType === opt.key ? "bg-[#22c55e] text-white" : "border border-[#e5e5e5] text-[#888]"
+                paymentType === opt.key ? "bg-[#22c55e] text-white" : "border border-border text-caption"
               }`}
             >
               {t(opt.labelKey as any)}
@@ -289,14 +289,14 @@ export default function CartPage() {
 
       {/* Payment method — moved from SaleReviewPage */}
       <div className="px-4 pt-4">
-        <p className="text-xs font-bold text-black uppercase mb-3">{t("sale.paymentMethod")}</p>
+        <p className="text-xs font-bold text-foreground uppercase mb-3">{t("sale.paymentMethod")}</p>
         <div className="flex gap-2">
           {[{ key: "cash", labelKey: "sale.cash" }, { key: "bank_transfer", labelKey: "sale.bankTransfer" }].map((opt) => (
             <button
               key={opt.key}
               onClick={() => setPaymentMethod(opt.key as "cash" | "bank_transfer")}
               className={`flex-1 h-11 rounded-full text-sm font-medium transition-colors ${
-                paymentMethod === opt.key ? "bg-black text-white" : "border border-[#e5e5e5] text-[#888]"
+                paymentMethod === opt.key ? "bg-ink text-ink-fg" : "border border-border text-caption"
               }`}
             >
               {t(opt.labelKey as any)}
@@ -308,18 +308,18 @@ export default function CartPage() {
       {/* Amount received for partial */}
       {paymentType === "partial" && (
         <div className="px-4 pt-4">
-          <p className="text-xs font-bold text-black uppercase mb-2">{t("sale.amountReceived")}</p>
+          <p className="text-xs font-bold text-foreground uppercase mb-2">{t("sale.amountReceived")}</p>
           <input
             type="number"
             inputMode="numeric"
             value={amountReceived}
             onChange={(e) => setAmountReceived(e.target.value)}
             placeholder={t("sale.enterAmount")}
-            className="w-full h-12 rounded-[var(--radius-input)] border border-[#e5e5e5] px-4 text-sm text-black placeholder:text-[#888] outline-none"
+            className="w-full h-12 rounded-[var(--radius-input)] border border-border px-4 text-sm text-foreground placeholder:text-caption outline-none"
             onFocus={() => setAmountTouched(true)}
           />
-          <p className="text-xs font-bold text-black uppercase mb-2 mt-4">{t("sale.paymentDueDate")}</p>
-          <p className="text-12 text-[#888] mb-2">{hasCreditPortion ? t("sale.dueDateRequired") : t("sale.dueDateOptional")}</p>
+          <p className="text-xs font-bold text-foreground uppercase mb-2 mt-4">{t("sale.paymentDueDate")}</p>
+          <p className="text-12 text-caption mb-2">{hasCreditPortion ? t("sale.dueDateRequired") : t("sale.dueDateOptional")}</p>
           <input
             type="date"
             value={dueDate}
@@ -332,25 +332,25 @@ export default function CartPage() {
 
       {/* Summary box */}
       {items.length > 0 && (
-        <div className="mx-4 mt-5 border border-[#e5e5e5] rounded-[var(--radius-tile)] p-4 bg-[#f9f9f9]">
+        <div className="mx-4 mt-5 border border-border rounded-[var(--radius-tile)] p-4 bg-[#f9f9f9]">
           <div className="flex justify-between py-1">
-            <span className="text-sm text-[#888]">{t("sale.subtotal")}</span>
-            <span className="text-sm font-medium text-black">{formatCurrency(total)}</span>
+            <span className="text-sm text-caption">{t("sale.subtotal")}</span>
+            <span className="text-sm font-medium text-foreground">{formatCurrency(total)}</span>
           </div>
           <div className="flex justify-between py-1">
-            <span className="text-sm text-[#888]">{t("sale.paidLabel")}</span>
-            <span className="text-sm font-medium text-black">{formatCurrency(amountPaid)}</span>
+            <span className="text-sm text-caption">{t("sale.paidLabel")}</span>
+            <span className="text-sm font-medium text-foreground">{formatCurrency(amountPaid)}</span>
           </div>
           {paymentType === "partial" && amountPaid < total && (
             <div className="flex justify-between py-1">
-              <span className="text-sm text-[#888]">{t("sale.outstanding")}</span>
+              <span className="text-sm text-caption">{t("sale.outstanding")}</span>
               <span className="text-sm font-medium text-[#ef4444]">{formatCurrency(total - amountPaid)}</span>
             </div>
           )}
-          <div className="border-t border-[#e5e5e5] my-2" />
+          <div className="border-t border-border my-2" />
           <div className="flex justify-between py-1">
-            <span className="text-sm font-bold text-black">{t("sale.totalLabel")}</span>
-            <span className="text-sm font-bold text-black">{formatCurrency(total)}</span>
+            <span className="text-sm font-bold text-foreground">{t("sale.totalLabel")}</span>
+            <span className="text-sm font-bold text-foreground">{formatCurrency(total)}</span>
           </div>
         </div>
       )}

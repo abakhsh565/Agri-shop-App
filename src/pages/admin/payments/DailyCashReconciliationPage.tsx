@@ -119,7 +119,7 @@ export default function DailyCashReconciliationPage() {
         <div>
           <p className="text-11 font-bold uppercase tracking-wider mb-2" style={{ color: "var(--text-secondary)" }}>{t("admin.countedCash")}</p>
           <div className="relative">
-            <Calculator size={16} className="absolute left-4 top-1/2 -translate-y-1/2" style={{ color: "var(--text-secondary)" }} />
+            <Calculator size={16} className="absolute start-4 top-1/2 -translate-y-1/2" style={{ color: "var(--text-secondary)" }} />
             <input
               type="number"
               inputMode="numeric"

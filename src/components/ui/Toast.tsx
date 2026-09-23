@@ -42,7 +42,7 @@ export default function ToastContainer() {
 
   return (
     <div
-      className="fixed left-1/2 -translate-x-1/2 z-50 flex flex-col gap-2 w-[calc(100%-32px)] max-w-sm"
+      className="fixed start-1/2 -translate-x-1/2 z-50 flex flex-col gap-2 w-[calc(100%-32px)] max-w-sm"
       style={{ bottom: "calc(var(--tabbar-height, 72px) + 16px)" }}
       aria-live="polite"
     >

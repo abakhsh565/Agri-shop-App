@@ -760,7 +760,7 @@ export default function RemindersOverviewPage() {
                   }}>{st.count}</span>
                 )}
                 {subTab === st.key && (
-                  <div className="absolute bottom-0 left-0 right-0 h-[2px] rounded-full" style={{ background: "var(--text-secondary)" }} />
+                  <div className="absolute bottom-0 start-0 end-0 h-[2px] rounded-full" style={{ background: "var(--text-secondary)" }} />
                 )}
               </button>
             ))}

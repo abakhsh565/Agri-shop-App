@@ -56,7 +56,7 @@ export default function SelectCustomerPage() {
   }, [preselectedId, customers]);
 
   return (
-    <div className="flex flex-col bg-white w-full">
+    <div className="flex flex-col bg-background w-full">
       <StatusBar />
       <NavHeader title={t("sale.newSale")} />
       <div className="px-4 pt-2 pb-3">
@@ -68,7 +68,7 @@ export default function SelectCustomerPage() {
       </div>
 
       <div className="px-4">
-        <p className="text-xs font-bold text-black uppercase mb-2">{t("sale.recentCustomers")}</p>
+        <p className="text-xs font-bold text-foreground uppercase mb-2">{t("sale.recentCustomers")}</p>
       </div>
 
       <div className="flex flex-col">
@@ -77,11 +77,11 @@ export default function SelectCustomerPage() {
             key={c.id}
             onClick={() => select(c)}
             className={`flex items-center gap-3 px-4 py-4 text-start ${
-              i < filtered.length - 1 ? "border-b border-[#e5e5e5]" : ""
+              i < filtered.length - 1 ? "border-b border-border" : ""
             }`}
           >
             {/* Customer image or initial placeholder */}
-            <div className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold shrink-0 bg-[#f5f5f5] text-black overflow-hidden">
+            <div className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold shrink-0 bg-muted text-foreground overflow-hidden">
               {c.imageUrl ? (
                 <img src={c.imageUrl} alt={c.name} className="w-full h-full object-cover" />
               ) : (
@@ -89,14 +89,14 @@ export default function SelectCustomerPage() {
               )}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-bold text-black truncate">{c.name}</p>
-              <p className="text-xs text-[#888]">{c.phone}</p>
+              <p className="text-sm font-bold text-foreground truncate">{c.name}</p>
+              <p className="text-xs text-caption">{c.phone}</p>
             </div>
             <div className="text-end">
               {c.outstandingBalance > 0 ? (
-                <p className="text-xs font-medium text-black">{formatCurrency(c.outstandingBalance)} {t("sale.due")}</p>
+                <p className="text-xs font-medium text-foreground">{formatCurrency(c.outstandingBalance)} {t("sale.due")}</p>
               ) : (
-                <p className="text-xs text-[#888]">{t("sale.noOutstandingBalance")}</p>
+                <p className="text-xs text-caption">{t("sale.noOutstandingBalance")}</p>
               )}
             </div>
           </button>
@@ -104,10 +104,10 @@ export default function SelectCustomerPage() {
 
         <button
           onClick={() => navigate(withReturn(`${base}/customers/new`, `${base}/sale`))}
-          className="flex items-center gap-2 px-4 py-4 mx-4 mt-2 bg-[#f5f5f5] rounded-[var(--radius-tile)]"
+          className="flex items-center gap-2 px-4 py-4 mx-4 mt-2 bg-muted rounded-[var(--radius-tile)]"
         >
-          <Plus size={16} className="text-black" />
-          <span className="text-sm font-medium text-black">{t("sale.addNewCustomer")}</span>
+          <Plus size={16} className="text-foreground" />
+          <span className="text-sm font-medium text-foreground">{t("sale.addNewCustomer")}</span>
         </button>
       </div>
     </div>

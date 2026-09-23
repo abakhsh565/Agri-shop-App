@@ -100,7 +100,7 @@ export default function EmployeesListPage() {
 
       {/* Floating Add Employee */}
       <div
-        className="fixed left-0 right-0 max-w-[480px] mx-auto pointer-events-none z-40"
+        className="fixed start-0 end-0 max-w-[480px] mx-auto pointer-events-none z-40"
         style={{ bottom: "calc(var(--tabbar-height) + 16px)" }}
       >
         <div className="flex px-4 justify-end">

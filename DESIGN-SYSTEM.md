@@ -127,7 +127,9 @@ sets `pointer-events: none` via `src/hooks/usePresence.ts`.
    `EmptyState` (with an action when something is genuinely missing).
 2. Use token-backed utilities: `text-13`, `p-4`, `rounded-[var(--radius-card)]`, tone surfaces.
 3. Use logical properties — `ps-*`/`pe-*`, `ms-*`/`me-*`, `start-*`/`end-*`, `text-start`/
-   `text-end` — so RTL needs no special case.
+   `text-end`, and `insetInlineStart`/`insetInlineEnd` for a runtime value — so RTL needs no
+   special case and no stylesheet rule. A physical utility, or a JS `isRtl ? "left" : "right"`
+   ternary, now fails `importantShimGuard`.
 4. Write copy through `t()` (see `LANGUAGE-SYSTEM.md`).
 
 ## 5. How to change the UI globally
@@ -143,19 +145,44 @@ sets `pointer-events: none` via `src/hooks/usePresence.ts`.
 
 One edit, every screen that uses the primitive or token follows.
 
-**Known debt.** A legacy compatibility layer in `index.css` still carries `!important` shims
-that remap old physical utilities (`[dir="rtl"] .pl-*`) and legacy literal colours
-(`.dark .bg-white`) onto tokens. Only shims whose classes are referenced anywhere are kept —
-the 22 unreferenced ones were deleted — and `importantShimGuard` prevents dead ones
-accumulating. Retire a shim by migrating its remaining call sites to logical properties and
-tokens, then deleting the rule.
+**The compatibility layer is deleted.** `index.css` used to carry a block of `!important`
+shims that flipped physical utilities for RTL (`[dir="rtl"] .absolute.left-4`,
+`[dir="rtl"] .pl-10`) and remapped legacy literal colours (`.dark .bg-white`, `.text-black`,
+`text-[#888]`, `border-[#e5e5e5]`) onto tokens. Every call site was migrated — positions to
+`start-*`/`end-*` (including two inline styles that chose `left`/`right` in JavaScript), and
+colours to the token utilities — and the rules are gone.
+
+`importantShimGuard` keeps it that way: the only class-gated `!important` rules allowed to
+exist are the five it lists by name (installed-app chrome, an overlay on its way out, a
+transparent field, the page scroll lock, and the dark field rule), and it fails the build on
+a new one. The same guard fails on a physical direction utility or a remapped literal colour
+reappearing anywhere in `src/`.
+
+Three tokens exist because the deleted shims encoded an intent that no token named:
+
+| Token | Light | Dark | Why it exists |
+|---|---|---|---|
+| `--ink` / `--ink-fg` | `#000000` / `#ffffff` | `var(--brand)` / `#0a0a0a` | a solid high-emphasis control — the primary button, a selected chip, a filled PIN dot. Replaces `.dark .bg-black { background: var(--brand) }` |
+| `--caption` | `var(--text-secondary)` | `var(--text-tertiary)` | hint/caption text. The two greys were never aligned, so one class cannot mean both |
+| `--border-control` | `#d7d5cc` | `#3a3a34` | a field's visible edge, as opposed to the near-invisible in-card hairline |
+
+`bg-white` and `text-white` are now Tailwind's real literals, and may be used where literal
+white *is* the intent (a barcode plate that has to scan, a switch knob, white type on a red
+badge) — the layer no longer silently re-tones them.
 
 ## 6. Verifying compliance
 
 ```bash
-npx vitest run tests/unit/typeScaleGuard.test.ts tests/unit/listPrimitiveGuard.test.ts
-npx playwright test tests/e2e/designLanguage.spec.ts tests/e2e/interactionLayer.spec.ts
+npx vitest run tests/unit/typeScaleGuard.test.ts tests/unit/listPrimitiveGuard.test.ts \
+  tests/unit/importantShimGuard.test.ts
+npx playwright test tests/e2e/designLanguage.spec.ts tests/e2e/interactionLayer.spec.ts \
+  tests/e2e/logicalDirection.spec.ts
 ```
+
+`logicalDirection.spec.ts` measures the live DOM in both languages: a leading control sits 16px
+from the left edge in English and 16px from the right edge in Urdu, the theme switch travel
+runs along the inline axis, and the token colours the deleted shims used to produce are still
+exactly what renders — light and dark, because "migrated" has to mean byte-identical.
 
 Before declaring a UI change done, confirm in the browser at a **phone viewport** (390×844):
 cards measure the reference radius, rest with no border, fill with the tone, rows at the

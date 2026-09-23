@@ -28,9 +28,9 @@ export default function Button({
   const base = "inline-flex items-center justify-center rounded-full font-bold ds-pressable select-none";
 
   const variants = {
-    primary: "bg-black text-white",
-    outline: "bg-white border border-black text-black",
-    ghost: "bg-transparent text-black",
+    primary: "bg-ink text-ink-fg",
+    outline: "bg-card border border-border-control text-foreground",
+    ghost: "bg-transparent text-foreground",
     danger: "bg-[#ef4444] text-white",
   };
 

@@ -60,8 +60,11 @@ export default function NavHeader({ title, backTo, onBack, right, noBack }: NavH
           // Icon-only, and it is on every sub-screen: without a name a screen reader
           // announces nothing at all here.
           aria-label={tNow("common.back")}
+          data-testid="nav-back"
           className="flex items-center text-sm font-medium absolute transition-opacity active:opacity-60"
-          style={{ color: "var(--text-primary)", [isRtl ? "right" : "left"]: 16 }}
+          // A logical inset, not a JS toggle between `left` and `right`: the box's inline
+          // start IS the leading edge in both directions, so there is nothing to decide.
+          style={{ color: "var(--text-primary)", insetInlineStart: 16 }}
         >
           {isRtl ? <ArrowRight size={18} /> : <ArrowLeft size={18} />}
         </button>
@@ -72,7 +75,7 @@ export default function NavHeader({ title, backTo, onBack, right, noBack }: NavH
       >
         {title}
       </p>
-      {right && <div className="absolute" style={{ [isRtl ? "left" : "right"]: 16 }}>{right}</div>}
+      {right && <div className="absolute" style={{ insetInlineEnd: 16 }}>{right}</div>}
     </div>
   );
 }

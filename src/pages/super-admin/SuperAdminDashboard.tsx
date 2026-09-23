@@ -277,7 +277,7 @@ export default function SuperAdminDashboard() {
                   style={{ background: "var(--brand)", color: "#0a0a0a" }}
                 >
                   {actionLoading ? (
-                    <div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin" />
+                    <div className="w-4 h-4 border-2 border-border-control border-t-transparent rounded-full animate-spin" />
                   ) : (
                     <>
                       <CheckCircle size={16} />

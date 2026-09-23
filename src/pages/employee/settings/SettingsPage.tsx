@@ -279,7 +279,7 @@ export default function SettingsPage() {
                 </div>
                 <button
                   onClick={() => { setEditingName(false); fileInputRef.current?.click(); }}
-                  className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full flex items-center justify-center shadow"
+                  className="absolute -bottom-1 -end-1 w-7 h-7 rounded-full flex items-center justify-center shadow"
                   style={{ background: "var(--brand)", color: "#0a0a0a" }}
                 >
                   <Camera size={13} strokeWidth={2.5} />

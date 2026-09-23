@@ -15,11 +15,11 @@ export default function UnderReviewPage() {
           ⏳
         </div>
         <div className="flex flex-col gap-2">
-          <p className="text-xl font-bold text-black">{t("auth.underReview")}</p>
-          <p className="text-sm text-[#888]">
+          <p className="text-xl font-bold text-foreground">{t("auth.underReview")}</p>
+          <p className="text-sm text-caption">
             {t("auth.underReviewBody")}
           </p>
-          <p className="text-sm text-[#888]">
+          <p className="text-sm text-caption">
             {t("auth.underReviewHint")}
           </p>
         </div>

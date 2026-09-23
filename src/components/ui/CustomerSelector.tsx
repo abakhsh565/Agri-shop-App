@@ -53,12 +53,12 @@ export default function CustomerSelector({ selectedIds, onChange, filterFn, maxS
   return (
     <div className="flex flex-col gap-3">
       <div className="relative">
-        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "var(--text-secondary)" }} />
+        <Search size={16} className="absolute start-3 top-1/2 -translate-y-1/2" style={{ color: "var(--text-secondary)" }} />
         <input type="text" value={search} onChange={(e) => setSearch(e.target.value)}
           placeholder={t("inline.search_customers")}
-          className="w-full h-10 rounded-[var(--radius-tile)] pl-10 pr-10 text-13 outline-none"
+          className="w-full h-10 rounded-[var(--radius-tile)] ps-10 pe-10 text-13 outline-none"
           style={{ background: "var(--surface-2)", color: "var(--text-primary)", border: "1px solid var(--border-control)" }} />
-        {search && <button onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2"><X size={14} style={{ color: "var(--text-secondary)" }} /></button>}
+        {search && <button onClick={() => setSearch("")} className="absolute end-3 top-1/2 -translate-y-1/2"><X size={14} style={{ color: "var(--text-secondary)" }} /></button>}
       </div>
       <div className="flex items-center justify-between px-1">
         <p className="text-12" style={{ color: "var(--text-secondary)" }}>

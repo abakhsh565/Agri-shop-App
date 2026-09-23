@@ -25,7 +25,7 @@ export default function PINInput({ value, onChange, error, shake }: PINInputProp
             key={i}
             className={`w-4 h-4 sm:w-[18px] sm:h-[18px] rounded-full border-2 sm:border-[2.5px] transition-all duration-200 ${
               i < value.length
-                ? "bg-black border-black scale-110"
+                ? "bg-ink border-border-control scale-110"
                 : "bg-transparent border-[#bbb]"
             } ${error ? "border-[#ef4444] bg-[#ef4444]/10" : ""}`}
           />

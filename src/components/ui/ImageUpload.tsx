@@ -105,7 +105,7 @@ export default function ImageUpload({
 
         {!busy && (
           <span
-            className="absolute bottom-1 right-1 w-6 h-6 rounded-full flex items-center justify-center shadow"
+            className="absolute bottom-1 end-1 w-6 h-6 rounded-full flex items-center justify-center shadow"
             style={{ background: "var(--brand)", color: "#0a0a0a" }}
           >
             <Camera size={12} strokeWidth={2.5} />

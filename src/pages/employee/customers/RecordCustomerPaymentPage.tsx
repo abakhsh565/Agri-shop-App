@@ -197,9 +197,12 @@ export default function RecordCustomerPaymentPage() {
               className="w-10 h-6 rounded-full relative transition-colors"
               style={{ background: splitMode ? "var(--brand)" : "var(--divider)" }}
             >
+              {/* Knob stays true white in both themes (`bg-white` is Tailwind's literal now
+                  that the compatibility layer is gone); it sits at the inline START when off
+                  and at the END when on, so it slides the right way in Urdu too. */}
               <div
                 className="absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all"
-                style={{ left: splitMode ? "18px" : "2px" }}
+                style={{ insetInlineStart: splitMode ? "18px" : "2px" }}
               />
             </div>
           </div>

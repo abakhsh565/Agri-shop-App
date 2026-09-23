@@ -60,8 +60,8 @@ export default function RegisterPhonePage() {
       <div className="flex flex-col flex-1 justify-between">
         <div className="flex flex-col gap-8 p-6">
           <div className="flex flex-col gap-2">
-            <p className="text-28 font-bold text-black">{t("register.yourShop")}</p>
-            <p className="text-sm text-[#888]">
+            <p className="text-28 font-bold text-foreground">{t("register.yourShop")}</p>
+            <p className="text-sm text-caption">
               {t("register.phoneIntro")}
             </p>
           </div>
@@ -76,7 +76,7 @@ export default function RegisterPhonePage() {
               autoComplete="tel"
               onKeyDown={(e) => e.key === "Enter" && handleSendOTP()}
             />
-            <p className="text-xs text-[#888]">
+            <p className="text-xs text-caption">
               {t("register.phoneHint")}
             </p>
           </div>
@@ -92,9 +92,9 @@ export default function RegisterPhonePage() {
           >
             {t("auth.sendVerificationCode")}
           </Button>
-          <p className="text-xs text-center text-[#888]">
+          <p className="text-xs text-center text-caption">
             Already have an account?{" "}
-            <button onClick={() => navigate("/login")} className="text-black font-medium underline">
+            <button onClick={() => navigate("/login")} className="text-foreground font-medium underline">
               {t("auth.signIn")}
             </button>
           </p>

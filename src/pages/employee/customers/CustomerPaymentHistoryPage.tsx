@@ -101,7 +101,7 @@ export default function CustomerPaymentHistoryPage() {
         >
           {t("inline.credit_approval")}
           {creditRequests.length > 0 && (
-            <span className="absolute -top-1 -right-1 text-9 font-bold w-4 h-4 flex items-center justify-center rounded-full" style={{ background: "#7c3aed", color: "#fff" }}>
+            <span className="absolute -top-1 -end-1 text-9 font-bold w-4 h-4 flex items-center justify-center rounded-full" style={{ background: "#7c3aed", color: "#fff" }}>
               {creditRequests.length}
             </span>
           )}

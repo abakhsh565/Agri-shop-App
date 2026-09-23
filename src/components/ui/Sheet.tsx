@@ -79,6 +79,7 @@ export default function Sheet({
             type="button"
             onClick={onClose}
             aria-label={t("common.close")}
+            data-testid="sheet-close"
             className="ds-iconbtn absolute start-4"
           >
             <X size={18} />

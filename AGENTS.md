@@ -134,7 +134,9 @@ npm run build
 ```
 
 `tests/unit/` guards: `typeScaleGuard` (one type scale, one font), `listPrimitiveGuard` (one
-list implementation), `importantShimGuard` (the `!important` compatibility layer), `i18nCoverage`
+list implementation), `importantShimGuard` (the `!important` compatibility layer is deleted:
+it fails on a new shim, on a physical direction utility, and on a remapped literal colour),
+`i18nCoverage`
 / `i18nParity` / `microcopy` (the language system), `reentrancyGuard` (repeated submission),
 `migrationReplayability`, `qaFixtureKeepList`, plus the locked business rules
 (`overdueCredit`, `reminderEscalation`, `signalEngine`, `signalSuppression`).

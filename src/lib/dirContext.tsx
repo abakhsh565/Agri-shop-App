@@ -1,130 +1,54 @@
 import { createContext, useContext, useMemo } from "react";
 import { useThemeStore } from "@/stores/themeStore";
 
+/**
+ * Direction, as a single boolean.
+ *
+ * This context used to expose `start`/`end`, `psClass`/`peClass`/`msClass`/`meClass` and an
+ * `rtlStyle()` that flipped physical inline styles at runtime — a JavaScript copy of the
+ * `!important` compatibility layer that lived in `index.css`. Both were the same mistake in
+ * two places: direction decided by whoever remembered to ask for it, instead of by the box's
+ * own inline axis.
+ *
+ * They were also dead — nothing imported them. Everything positional in the app is now written
+ * logically (`start-*`/`end-*`, `ps-*`/`pe-*`, `insetInlineStart`), so a component needs to
+ * know the direction for exactly two things: choosing a mirror-image icon, and mirroring a
+ * rotation. That is what this context is for now, and `importantShimGuard` fails the build on
+ * a physical utility or a physical inline style reappearing anywhere in `src/`.
+ */
 interface DirContextValue {
   isRtl: boolean;
   dir: "ltr" | "rtl";
-  /** Logical start: left in LTR, right in RTL */
-  start: "left" | "right";
-  /** Logical end: right in LTR, left in RTL */
-  end: "right" | "left";
-  /** Logical start padding class — use in className strings */
-  psClass: string;
-  /** Logical end padding class — use in className strings */
-  peClass: string;
-  /** Logical start margin class — use in className strings */
-  msClass: string;
-  /** Logical end margin class — use in className strings */
-  meClass: string;
 }
 
-const DirContext = createContext<DirContextValue>({
-  isRtl: false,
-  dir: "ltr",
-  start: "left",
-  end: "right",
-  psClass: "ps-4",
-  peClass: "pe-4",
-  msClass: "ms-4",
-  meClass: "me-4",
-});
+const DirContext = createContext<DirContextValue>({ isRtl: false, dir: "ltr" });
 
 /**
  * <Dir> provider — wraps the app or any subtree.
- * Reads the current language from useThemeStore and provides
- * RTL context to all children via useDir().
- *
- * Usage:
- *   <Dir>
- *     <App />
- *   </Dir>
+ * Reads the current language from useThemeStore and provides direction to its children.
  */
 export function Dir({ children }: { children: React.ReactNode }) {
   const { language } = useThemeStore();
   const isRtl = language === "ur";
 
   const value = useMemo<DirContextValue>(
-    () => ({
-      isRtl,
-      dir: isRtl ? "rtl" : "ltr",
-      start: isRtl ? "right" : "left",
-      end: isRtl ? "left" : "right",
-      psClass: isRtl ? "pe-4" : "ps-4",
-      peClass: isRtl ? "ps-4" : "pe-4",
-      msClass: isRtl ? "me-4" : "ms-4",
-      meClass: isRtl ? "ms-4" : "me-4",
-    }),
-    [isRtl]
+    () => ({ isRtl, dir: isRtl ? "rtl" : "ltr" }),
+    [isRtl],
   );
 
   return <DirContext.Provider value={value}>{children}</DirContext.Provider>;
 }
 
 /**
- * Hook to access RTL context.
- * Returns direction-aware helpers so components don't need
- * to import useThemeStore and check language themselves.
+ * Direction for the rare component that must branch on it.
  *
  * Usage:
- *   const { isRtl, start, end } = useDir();
- *   <div className={isRtl ? "me-2" : "ms-2"}>
+ *   const { isRtl } = useDir();
+ *   <ChevronRight style={{ transform: isRtl ? "rotate(180deg)" : undefined }} />
+ *
+ * Do NOT use it to choose between `left`/`right` or `pl`/`pr` — write the logical property
+ * and let the inline axis do the work.
  */
 export function useDir() {
   return useContext(DirContext);
-}
-
-/**
- * Hook for inline style direction-awareness.
- * Returns a function that takes a physical LTR style object
- * and returns the RTL-flipped version.
- *
- * Usage:
- *   const { rtlStyle } = useDir();
- *   <div style={rtlStyle({ paddingLeft: 16 })}>
- */
-export function useRtlStyle() {
-  const { isRtl } = useDir();
-  return useMemo(
-    () =>
-      (ltrStyle: React.CSSProperties): React.CSSProperties => {
-        if (!isRtl) return ltrStyle;
-        const flipped = { ...ltrStyle };
-        if (ltrStyle.paddingLeft !== undefined) {
-          flipped.paddingRight = ltrStyle.paddingLeft;
-          flipped.paddingLeft = undefined;
-        }
-        if (ltrStyle.paddingRight !== undefined) {
-          flipped.paddingLeft = ltrStyle.paddingRight;
-          flipped.paddingRight = undefined;
-        }
-        if (ltrStyle.marginLeft !== undefined) {
-          flipped.marginRight = ltrStyle.marginLeft;
-          flipped.marginLeft = undefined;
-        }
-        if (ltrStyle.marginRight !== undefined) {
-          flipped.marginLeft = ltrStyle.marginRight;
-          flipped.marginRight = undefined;
-        }
-        if (ltrStyle.left !== undefined) {
-          flipped.right = ltrStyle.left;
-          flipped.left = undefined;
-        }
-        if (ltrStyle.right !== undefined) {
-          flipped.left = ltrStyle.right;
-          flipped.right = undefined;
-        }
-        if (ltrStyle.textAlign === "left") flipped.textAlign = "right";
-        if (ltrStyle.textAlign === "right") flipped.textAlign = "left";
-        if (ltrStyle.borderLeftWidth !== undefined) {
-          flipped.borderRightWidth = ltrStyle.borderLeftWidth;
-          flipped.borderLeftWidth = undefined;
-        }
-        if (ltrStyle.borderRightWidth !== undefined) {
-          flipped.borderLeftWidth = ltrStyle.borderRightWidth;
-          flipped.borderRightWidth = undefined;
-        }
-        return flipped;
-      },
-    [isRtl]
-  );
 }

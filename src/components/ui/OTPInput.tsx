@@ -62,11 +62,11 @@ export default function OTPInput({ value, onChange, length = 6, disabled, error 
           onKeyDown={(e) => handleKey(i, e)}
           onPaste={handlePaste}
           onFocus={(e) => e.target.select()}
-          /* Tokens, not literals. These boxes previously read `bg-white text-black
-             border-black`, and `border-black` on this app resolves to the control-outline
-             token — which is what gives a field a findable edge in light AND dark. A raw
-             literal here would reintroduce the invisible-field bug the moment the legacy
-             shim is retired. */
+          /* Tokens, not literals. These boxes once read the legacy literal classes for
+             white/black, which the old compatibility layer remapped onto `--border` — the
+             in-card hairline — so a box had no discernible edge in either theme. They now
+             name the tokens directly: `--surface` for the fill, `--border-control` for the
+             outline that actually reads as a field edge in light AND dark. */
           className="
             w-12 h-14 text-center text-20 font-semibold rounded-[var(--radius-tile)]
             outline-none focus:ring-2 disabled:opacity-40

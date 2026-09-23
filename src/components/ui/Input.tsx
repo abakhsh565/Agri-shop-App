@@ -26,7 +26,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
           style={{ background: "var(--surface)", color: "var(--text-primary)" }}
         />
         {error && <span className="text-xs text-[#ef4444]">{error}</span>}
-        {hint && !error && <span className="text-xs text-[#888]">{hint}</span>}
+        {hint && !error && <span className="text-xs text-caption">{hint}</span>}
       </div>
     );
   }
