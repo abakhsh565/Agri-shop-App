@@ -90,8 +90,8 @@ export default function MoreMenuPage() {
               title={t(labelKey)}
               trailing={
                 <ChevronRight
-                  size={18}
-                  className="ds-glyph-sm shrink-0"
+                  size={14}
+                  className="ds-row-chevron shrink-0"
                   style={{
                     color: "var(--text-secondary)",
                     transform: isRtl ? "rotate(180deg)" : undefined,

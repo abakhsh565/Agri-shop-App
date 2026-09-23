@@ -129,14 +129,14 @@ export default function AdminReturnConfirmPage() {
         <NavHeader title={t("returns.confirm")} />
 
         <div className="mx-4 mt-3 rounded-[var(--radius-card)] p-4 text-center" style={{ border: "1px solid var(--divider)" }}>
-          <p className="text-10 uppercase" style={{ color: "var(--text-secondary)" }}>{t("returns.estimatedRefund")}</p>
+          <p className="ds-section-label" style={{ color: "var(--text-secondary)" }}>{t("returns.estimatedRefund")}</p>
           <p className="text-28 font-bold mt-1" style={{ color: "var(--text-primary)" }}>{formatCurrency(liveTotal)}</p>
         </div>
 
         <div className="flex flex-col gap-4 p-4 mt-1">
           {/* Mandatory Return Reason */}
           <div>
-            <p className="text-xs font-bold uppercase mb-2" style={{ color: "var(--text-secondary)" }}>
+            <p className="ds-section-label mb-2" style={{ color: "var(--text-secondary)" }}>
               {t("returns.reason")}<span style={{ color: "#ef4444" }}>*</span>
             </p>
             <input
@@ -155,7 +155,7 @@ export default function AdminReturnConfirmPage() {
 
           {/* Items with editable prices */}
           <div>
-            <p className="text-xs font-bold uppercase mb-2" style={{ color: "var(--text-secondary)" }}>{t("admin.returningItems")}</p>
+            <p className="ds-section-label mb-2" style={{ color: "var(--text-secondary)" }}>{t("admin.returningItems")}</p>
             <ListCard>
               {items.map((item, i) => (
                 <ListRow key={item.saleItemId}>
@@ -182,7 +182,7 @@ export default function AdminReturnConfirmPage() {
 
           {/* Resolution method */}
           <div>
-            <p className="text-xs font-bold uppercase mb-2" style={{ color: "var(--text-secondary)" }}>{t("admin.resolutionMethod")}</p>
+            <p className="ds-section-label mb-2" style={{ color: "var(--text-secondary)" }}>{t("admin.resolutionMethod")}</p>
             <div className="flex gap-2">
               {([ { key: "refund_cash" as const, label: t("return.refundCash") }, { key: "credit_note" as const, label: t("return.creditNote") } ]).map((opt) => (
                 <button key={opt.key} onClick={() => setResolution(opt.key)}
@@ -202,7 +202,7 @@ export default function AdminReturnConfirmPage() {
           <div className="rounded-[var(--radius-card)] p-4 flex gap-3" style={{ border: "1px solid var(--divider)" }}>
             <AlertTriangle size={16} className="shrink-0 mt-0.5" style={{ color: "var(--text-secondary)" }} />
             <div>
-              <p className="text-xs font-bold uppercase mb-1" style={{ color: "var(--text-primary)" }}>{t("admin.refundProcessing")}</p>
+              <p className="ds-section-label mb-1" style={{ color: "var(--text-primary)" }}>{t("admin.refundProcessing")}</p>
               <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
                 {formatCurrency(liveTotal)} will be{" "}
                 {resolution === "refund_cash" ? t("return.returnedDirectly") : t("return.addedAsCreditNote")}{" "}

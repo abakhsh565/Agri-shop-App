@@ -110,7 +110,7 @@ export default function CustomerPurchaseHistoryPage() {
         </div>
         <div className="flex gap-6">
           <div>
-            <p className="text-10 uppercase" style={{ color: "var(--text-secondary)" }}>
+            <p className="ds-section-label" style={{ color: "var(--text-secondary)" }}>
               {t("customers.outstanding")}
             </p>
             <p className="text-sm font-bold" style={{ color: customer.outstandingBalance > 0 ? "#d97706" : "var(--text-primary)" }}>
@@ -118,7 +118,7 @@ export default function CustomerPurchaseHistoryPage() {
             </p>
           </div>
           <div>
-            <p className="text-10 uppercase" style={{ color: "var(--text-secondary)" }}>
+            <p className="ds-section-label" style={{ color: "var(--text-secondary)" }}>
               {t("customers.creditLimit")}
             </p>
             <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>
@@ -126,7 +126,7 @@ export default function CustomerPurchaseHistoryPage() {
             </p>
           </div>
           <div>
-            <p className="text-10 uppercase" style={{ color: "var(--text-secondary)" }}>
+            <p className="ds-section-label" style={{ color: "var(--text-secondary)" }}>
               {t("admin.totalSales")}
             </p>
             <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>
@@ -167,11 +167,11 @@ export default function CustomerPurchaseHistoryPage() {
             </div>
             <div className="flex gap-3">
               <div className="flex-1">
-                <label className="text-11 font-semibold uppercase tracking-wider mb-1 block" style={{ color: "var(--text-secondary)" }}>{t("admin.from")}</label>
+                <label className="ds-section-label mb-1 block" style={{ color: "var(--text-secondary)" }}>{t("admin.from")}</label>
                 <input type="date" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} max={todayISO} className="w-full outline-none" />
               </div>
               <div className="flex-1">
-                <label className="text-11 font-semibold uppercase tracking-wider mb-1 block" style={{ color: "var(--text-secondary)" }}>{t("admin.to")}</label>
+                <label className="ds-section-label mb-1 block" style={{ color: "var(--text-secondary)" }}>{t("admin.to")}</label>
                 <input type="date" value={customTo} onChange={(e) => setCustomTo(e.target.value)} max={todayISO} min={customFrom || undefined} className="w-full outline-none" />
               </div>
             </div>

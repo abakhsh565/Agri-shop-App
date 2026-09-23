@@ -176,7 +176,7 @@ export default function AdminReportsPage() {
       {/* Gross profit hero */}
       <div className="px-4 pt-3">
         <div className="rounded-[var(--radius-card)] p-5" style={{ background: "var(--brand)" }}>
-          <p className="text-10 font-bold uppercase tracking-widest" style={{ color: "rgba(0,0,0,0.55)" }}>
+          <p className="ds-section-label" style={{ color: "rgba(0,0,0,0.55)" }}>
             {t("admin.grossProfit")}
           </p>
           <p className="text-34 font-bold leading-tight" style={{ color: "#0a0a0a" }}>
@@ -275,12 +275,12 @@ export default function AdminReportsPage() {
             <p className="text-base font-bold text-center" style={{ color: "var(--text-primary)" }}>{t("admin.selectDateRange")}</p>
             <div className="flex gap-3">
               <div className="flex-1">
-                <p className="text-xs font-bold uppercase mb-1" style={{ color: "var(--text-secondary)" }}>{t("admin.from")}</p>
+                <p className="ds-section-label mb-1" style={{ color: "var(--text-secondary)" }}>{t("admin.from")}</p>
                 <input type="date" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)}
                   className="w-full outline-none" />
               </div>
               <div className="flex-1">
-                <p className="text-xs font-bold uppercase mb-1" style={{ color: "var(--text-secondary)" }}>{t("admin.to")}</p>
+                <p className="ds-section-label mb-1" style={{ color: "var(--text-secondary)" }}>{t("admin.to")}</p>
                 <input type="date" value={customTo} max={todayISO} onChange={(e) => setCustomTo(e.target.value)}
                   className="w-full outline-none" />
               </div>
@@ -301,9 +301,9 @@ export default function AdminReportsPage() {
 function Stat({ icon: Icon, label, value, tone }: { icon: typeof Receipt; label: string; value: string; tone?: "good" | "warn" }) {
   const color = tone === "good" ? "var(--brand-dark)" : tone === "warn" ? "var(--warning)" : "var(--text-primary)";
   return (
-    <div className="rounded-[var(--radius-card)] p-4" style={{ background: "var(--surface-2)", border: "1px solid var(--divider)" }}>
+    <div className="rounded-[var(--radius-card)] p-4" style={{ background: "var(--tone-card)" }}>
       <Icon size={16} style={{ color: "var(--text-secondary)" }} />
-      <p className="text-10 font-bold uppercase tracking-wider mt-2" style={{ color: "var(--text-secondary)" }}>{label}</p>
+      <p className="ds-section-label mt-2" style={{ color: "var(--text-secondary)" }}>{label}</p>
       <p className="text-base font-bold mt-0.5" style={{ color }}>{value}</p>
     </div>
   );
@@ -311,7 +311,7 @@ function Stat({ icon: Icon, label, value, tone }: { icon: typeof Receipt; label:
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
   return (
-    <p className="text-11 font-bold uppercase tracking-widest mb-2" style={{ color: "var(--text-secondary)" }}>{children}</p>
+    <p className="ds-section-label mb-2" style={{ color: "var(--text-secondary)" }}>{children}</p>
   );
 }
 

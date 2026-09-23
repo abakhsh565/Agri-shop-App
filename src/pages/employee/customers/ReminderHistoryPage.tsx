@@ -79,7 +79,7 @@ export default function ReminderHistoryPage() {
           >
             <div
               className="size-12 rounded-full flex items-center justify-center"
-              style={{ background: "var(--surface-2)" }}
+              style={{ background: "var(--tone-card)" }}
             >
               <Bell size={20} style={{ color: "var(--text-secondary)" }} />
             </div>

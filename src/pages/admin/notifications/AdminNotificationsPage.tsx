@@ -144,7 +144,7 @@ export default function AdminNotificationsPage() {
               {/* Group header */}
               <div className="px-4 pt-5 pb-2">
                 <p
-                  className="text-11 font-bold uppercase tracking-widest"
+                  className="ds-section-label"
                   style={{ color: "var(--text-secondary)" }}
                 >
                   {group.label}

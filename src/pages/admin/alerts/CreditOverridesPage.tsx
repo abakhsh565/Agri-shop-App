@@ -94,7 +94,7 @@ export default function CreditOverridesPage() {
                 key={o.customer.id}
                 onClick={() => navigate("/admin/alerts/credit-overrides/" + o.customer.id)}
                 className="flex items-center gap-3 rounded-[var(--radius-card)] p-4 transition-opacity active:opacity-70 text-start w-full"
-                style={{ background: "var(--surface)", border: "1px solid var(--divider)" }}
+                style={{ background: "var(--tone-card)" }}
               >
                 {o.customer.imageUrl ? (<img src={o.customer.imageUrl} alt="" className="size-10 rounded-full object-cover shrink-0" />) : (<div className="size-10 rounded-full flex items-center justify-center text-sm font-bold shrink-0" style={{ background: "#FCEBEB", color: "#A32D2D" }}>{o.customer.name ? o.customer.name.charAt(0) : "?".toUpperCase()}</div>)}
                 <div className="flex-1 min-w-0">

@@ -62,7 +62,11 @@
   --tone-page: #f9faf7;
   --tone-card: #f2f2ef;
   --tone-sunken: #eaeae6;
-  --hairline: #f0f0ee;          /* measured in-card separator */
+  /* The in-card separator. The measured value (#f0f0ee) is 2/255 from the card
+     (#f2f2ef), which is invisible on a light screen — the dark theme's hairline is
+     a real 13/255 step (#242422 on #171716), so light mode now matches that
+     relationship instead of being a formality. */
+  --hairline: #e5e5e0;
 
   --background: var(--tone-page);
   --foreground: #090a08;
@@ -80,8 +84,8 @@
      `--divider` are the legacy names the whole app already draws its card edges
      and separators with, so pointing them at the measured hairline converts every
      outlined box in the product into a tone surface in one move. */
-  --border: #f0f0ee;
-  --border-light: #f0f0ee;
+  --border: #e5e5e0;
+  --border-light: #e5e5e0;
   /* Control outline — a SEPARATE job from the hairline above, and the reason this
      token exists. `--divider` #f0f0ee against a field's `--surface` #f2f2ef is a
      delta of 2/255: a text field was drawn with no discernible edge, so on the
@@ -150,7 +154,10 @@
   /* ── Type scale. Two weights only: regular + semibold. ─────────────────── */
   --text-page-title: 28px;
   --text-sheet-title: 17px;
-  --text-row: 17px;
+  /* A row label. 14px/400 is the size the owner settled on for list rows, so it is the
+     app's row size, not a Settings-only override: every list — More, Employees,
+     Companies, Products — reads at the same size as the screen it was approved on. */
+  --text-row: 14px;
   --text-body: 15px;
   --text-meta: 13px;
   --weight-body: 400;
@@ -159,6 +166,12 @@
   /* ── Icons: thin stroke at 24pt (applied to every lucide icon) ─────────── */
   --icon: 24px;
   --icon-sm: 18px;
+  /* A list row's glyph and its trailing chevron. These two used to be restated per
+     screen — Settings drew 18pt at 1.5 stroke while every other list drew 24pt at 2 —
+     which is why the More menu did not match Settings. One pair of tokens now governs
+     every row in the app, so "make the row icons smaller" is one edit. */
+  --icon-row: 18px;
+  --icon-chevron: 14px;
   --icon-stroke: 1.5;
 
   /* ── Composite sizes ──────────────────────────────────────────────────── */
@@ -189,7 +202,7 @@
   --surface: var(--tone-card);
   --surface-2: var(--tone-sunken);
   --surface-3: var(--tone-sunken);
-  --divider: #f0f0ee;
+  --divider: #e5e5e0;
   --error-bg: rgba(239,68,68,0.08);
   --error-border: rgba(239,68,68,0.2);
   --warning-bg: rgba(245,158,11,0.08);
@@ -653,14 +666,19 @@ svg.ds-glyph-sm {
   flex: 0 0 auto;
 }
 
-/* Settings row glyphs: 18pt at the thin 1.5 stroke, which is what the owner asked for
-   on this screen. Both values come from tokens (--icon-sm / --icon-stroke), so it stays
-   one line to change again. Scoped to the two Settings screens on purpose — the app's
-   own row glyph keeps --icon at 24pt. */
-.settings-compact svg.ds-glyph {
-  width: var(--icon-sm);
-  height: var(--icon-sm);
+/* Every list row's leading glyph, from the tokens above. The primitive puts this class on
+   the svg, so a screen gets the row icon size by using a row — there is no per-screen size
+   to keep in step, and no page-scoped override left to drift. */
+svg.ds-row-glyph {
+  width: var(--icon-row);
+  height: var(--icon-row);
   stroke-width: var(--icon-stroke);
+}
+
+/* The trailing chevron of a row. Same reasoning: one token, one class, every screen. */
+svg.ds-row-chevron {
+  width: var(--icon-chevron);
+  height: var(--icon-chevron);
 }
 
 .ds-icon {
@@ -1068,7 +1086,10 @@ svg.lucide {
      higher than the name in a one-line row, which read as misaligned across a
      checklist of mixed rows. */
   .ds-row-top {
-    align-items: flex-start;
+    /* Centred, not top-aligned: with two lines of text the glyph used to pin itself to
+       the first line, so a row with state read as text stuck to the top of its card.
+       The stacked block and its glyph now share one centre line, as the reference does. */
+    align-items: center;
     padding-block: var(--space-3);
   }
   /* …and its second line sits clear of the name. At 0 the two lines read as a
@@ -1079,26 +1100,20 @@ svg.lucide {
     margin-block-start: 4px;
   }
 
-  /* -- Settings rows read denser than the rest of the app --
-     The owner asked for every Settings label ("Dark Mode", "Language", "Change PIN") at
-     14px/400: a step below the app's row label (17px) and at body weight, so a row label
-     reads as a label and not as a heading, and so no single row on this screen carries a
-     size of its own. Scoped deliberately to the two Settings screens — the app's own row
-     label stays --text-row/--weight-body, and this class is the only place that departs. */
-  .settings-compact .ds-row-label,
-  .settings-compact .ds-row-strong {
-    font-size: var(--fs-14);
-    font-weight: 400;
+  /* Settings used to carry page-scoped overrides here for its row label and its glyph
+     size. They are gone: those values are the app's row values now (--text-row,
+     --icon-row), so Settings and every other list are the same by construction rather
+     than by two rules that have to be kept in step. */
+
+  /* The one destructive row (Sign Out / Log out) is a row like every other, in its own
+     card at the foot of the page — the reference's shape — so it needs one rule to be
+     red, including its glyph, which the primitive otherwise paints secondary. */
+  .ds-row-danger,
+  .ds-row-danger .ds-row-label,
+  .ds-row-danger svg {
+    color: var(--error);
   }
 
-  /* The setup block's in-row action ("Add supplier", "Add product") is a `value`, and
-     the primitive sizes that from --text-row (17px) for list pickers. On Settings every
-     label is 14px, so an unmodified value rendered larger than the row's own name and
-     read as a button bolted onto the card. Sized to the row label it sits beside. */
-  .settings-compact .ds-row-value {
-    font-size: var(--fs-14);
-    font-weight: 400;
-  }
   /* Pressed/disabled feedback lives here rather than in utility classes on the
      element, so every row behaves the same wherever it is used. */
   .ds-row {
@@ -1195,6 +1210,19 @@ svg.lucide {
   .ds-pressable:active {
     transform: scale(0.975);
     opacity: 0.9;
+  }
+
+  /* -- Section label: the ONE owner of every group heading in the app. --
+     Group headings used to restate their own size, weight, tracking and casing at each
+     call site, which is how an app ends up with six versions of the same label. They are
+     all this class now: one sentence-case line in the secondary tone, no uppercase, no
+     letter-spacing. Retune the whole app's headings by editing the four values below. */
+  .ds-section-label {
+    font-size: var(--fs-13);
+    font-weight: 600;
+    letter-spacing: 0;
+    text-transform: none;
+    color: var(--text-secondary);
   }
 
   /* -- Pill (compact action, inverts with the theme) -- */

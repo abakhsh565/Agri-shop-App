@@ -54,14 +54,14 @@ export default function CustomerPaymentHistoryPage() {
       <NavHeader title={t("customerProfile.paymentHistory")} />
 
       {/* Customer strip */}
-      <div className="mx-4 mt-3 rounded-[var(--radius-card)] p-4" style={{ background: "var(--surface-2)" }}>
+      <div className="mx-4 mt-3 rounded-[var(--radius-card)] p-4" style={{ background: "var(--tone-card)" }}>
         <div className="flex items-center justify-between mb-2">
           <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>{customer.name}</p>
           <CreditHealthBadge health={health} />
         </div>
         <div className="flex gap-8">
           <div>
-            <p className="text-10 uppercase" style={{ color: "var(--text-secondary)" }}>
+            <p className="ds-section-label" style={{ color: "var(--text-secondary)" }}>
               {t("customers.outstanding")}
             </p>
             <p className="text-sm font-bold" style={{ color: customer.outstandingBalance > 0 ? "#d97706" : "var(--brand-dark)" }}>
@@ -69,7 +69,7 @@ export default function CustomerPaymentHistoryPage() {
             </p>
           </div>
           <div>
-            <p className="text-10 uppercase" style={{ color: "var(--text-secondary)" }}>
+            <p className="ds-section-label" style={{ color: "var(--text-secondary)" }}>
               {t("customers.creditLimit")}
             </p>
             <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>

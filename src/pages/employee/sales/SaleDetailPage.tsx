@@ -262,7 +262,7 @@ export default function SaleDetailPage() {
 
         {/* Items sold with return badges */}
         <div>
-          <p className="text-xs font-bold uppercase mb-2 tracking-wider" style={{ color: "var(--text-secondary)" }}>
+          <p className="ds-section-label mb-2" style={{ color: "var(--text-secondary)" }}>
             {t("sales.itemsSold")}
           </p>
           <ListCard>
@@ -323,7 +323,7 @@ export default function SaleDetailPage() {
         {/* Return History */}
         {returns.length > 0 && (
           <div>
-            <p className="text-xs font-bold uppercase mb-2 tracking-wider" style={{ color: "var(--text-secondary)" }}>
+            <p className="ds-section-label mb-2" style={{ color: "var(--text-secondary)" }}>
               {t("saleDetail.returnHistory")}
             </p>
             <div className="flex flex-col gap-3">
@@ -408,7 +408,7 @@ export default function SaleDetailPage() {
           {/* Note */}
           <div className="pt-2 mt-1" style={{ borderTop: "1px solid var(--divider)" }}>
             <div className="flex items-center justify-between mb-2">
-              <p className="text-xs font-bold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
+              <p className="ds-section-label" style={{ color: "var(--text-secondary)" }}>
                 {t("saleDetail.note")}
               </p>
               {note !== (sale.note ?? "") && (

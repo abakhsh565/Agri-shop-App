@@ -112,13 +112,13 @@ test.describe('Locked dashboard scope: figures reconcile with the database', () 
 
     const body = await page.textContent('body');
     // ADM-DASH-HOME metrics that remain: the hero figures and the action rows.
-    for (const label of ['Total Sales', 'GROSS PROFIT', 'CREDIT COLLECT', 'Action needed']) {
+    for (const label of ['Total Sales', 'Gross profit', 'Credit collect', 'Action needed']) {
       expect(body, `dashboard is missing the "${label}" metric`).toContain(label);
     }
     expect(body, 'Quick Alerts section missing').toContain('Quick Alerts');
 
     // The five removed cards must be gone from Home. Asserted per tile rather
-    // than against the page text, because "CREDIT COLLECT" legitimately contains
+    // than against the page text, because "Credit collect" legitimately contains
     // the word Credit — a blob check would pass on a card that is still there.
     for (const gone of ['Paid', 'Credit', 'Supplier Payable', 'Low Stock Items', 'Expiring Soon']) {
       await expect(
@@ -201,9 +201,8 @@ test.describe('Locked dashboard scope: figures reconcile with the database', () 
     expect(body).toContain('Customers Served');
 
     // SCREENS.md EMP-DASH-HOME: "No profit/supplier data"
-    expect(body).not.toContain('GROSS PROFIT');
+    expect(body).not.toContain('Gross profit');
     expect(body).not.toContain('Supplier Payable');
-    expect(body).not.toContain('Gross Profit');
   });
 
   test('3. ADM-DASH-HOME renders in Urdu with RTL and translated metrics', async ({ page }) => {

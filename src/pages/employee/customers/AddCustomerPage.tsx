@@ -150,7 +150,7 @@ export default function AddCustomerPage() {
 
           {/* Name */}
           <div>
-            <p className="text-11 font-bold uppercase mb-2 tracking-wider" style={{ color: "var(--text-secondary)" }}>
+            <p className="ds-section-label mb-2" style={{ color: "var(--text-secondary)" }}>
               {t("addCustomer.name")}
             </p>
             <input
@@ -169,7 +169,7 @@ export default function AddCustomerPage() {
 
           {/* Phone */}
           <div>
-            <p className="text-11 font-bold uppercase mb-2 tracking-wider" style={{ color: "var(--text-secondary)" }}>
+            <p className="ds-section-label mb-2" style={{ color: "var(--text-secondary)" }}>
               {t("addCustomer.phone")}
             </p>
             <input
@@ -203,7 +203,7 @@ export default function AddCustomerPage() {
 
           {/* Address */}
           <div>
-            <p className="text-11 font-bold uppercase mb-2 tracking-wider" style={{ color: "var(--text-secondary)" }}>
+            <p className="ds-section-label mb-2" style={{ color: "var(--text-secondary)" }}>
               {t("addCustomer.address")}
             </p>
             <input
@@ -221,7 +221,7 @@ export default function AddCustomerPage() {
 
           {/* Crops */}
           <div>
-            <p className="text-11 font-bold uppercase mb-2 tracking-wider" style={{ color: "var(--text-secondary)" }}>
+            <p className="ds-section-label mb-2" style={{ color: "var(--text-secondary)" }}>
               {t("common.crops")}
             </p>
             <div className="flex flex-wrap gap-2">
@@ -249,7 +249,7 @@ export default function AddCustomerPage() {
           {/* Credit Limit + Reminder Config */}
           <div>
             <div className="flex items-center justify-between mb-2">
-              <p className="text-11 font-bold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
+              <p className="ds-section-label" style={{ color: "var(--text-secondary)" }}>
                 {t("customers.creditLimit")} {t("common.optional")}
               </p>
               <button

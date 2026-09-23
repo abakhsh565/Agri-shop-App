@@ -151,7 +151,7 @@ export default function BarcodeGeneratePage() {
             const isSelected = selected.has(p.id);
             const autoBarcode = generateProductBarcode(p.name);
             return (
-              <div key={p.id} className="flex items-center gap-3 p-3 rounded-[var(--radius-card)]" style={{ background: "var(--surface-2)" }}>
+              <div key={p.id} className="flex items-center gap-3 p-3 rounded-[var(--radius-card)]" style={{ background: "var(--tone-card)" }}>
                 <button onClick={() => toggle(p.id)} className="w-6 h-6 rounded-full flex items-center justify-center shrink-0"
                   style={{ background: isSelected ? "var(--brand)" : "transparent", border: isSelected ? "none" : "2px solid var(--divider)" }}>
                   {isSelected && <Check size={14} color="#0a0a0a" strokeWidth={3} />}
@@ -206,7 +206,7 @@ export default function BarcodeGeneratePage() {
           const catColor = CATEGORY_COLOR[product.category] ?? CATEGORY_COLOR.other;
           const svg = barcodeToSvg(barcode, { height: 60, showText: true });
           return (
-            <div key={product.id + barcode} className="rounded-[var(--radius-card)] p-4" style={{ background: "var(--surface-2)", border: "1px solid var(--divider)" }}>
+            <div key={product.id + barcode} className="rounded-[var(--radius-card)] p-4" style={{ background: "var(--tone-card)" }}>
               <div className="flex items-center gap-2 mb-3">
                 <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>{product.name}</p>
                 <span className="text-10 font-bold px-2 py-0.5 rounded-full" style={{ background: catColor.bg, color: catColor.fg }}>

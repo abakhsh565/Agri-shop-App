@@ -70,7 +70,7 @@ export default function SelectCustomerPage() {
       </div>
 
       <div className="px-4">
-        <p className="text-xs font-bold text-foreground uppercase mb-2">{t("sale.recentCustomers")}</p>
+        <p className="ds-section-label text-foreground mb-2">{t("sale.recentCustomers")}</p>
       </div>
 
       <div className="flex flex-col">

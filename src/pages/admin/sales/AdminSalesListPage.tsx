@@ -159,7 +159,7 @@ export default function AdminSalesListPage() {
         className="mx-4 rounded-[var(--radius-tile)] px-4 py-3 flex items-center justify-between"
         style={{ background: "var(--surface-2)" }}
       >
-        <p className="text-10 uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
+        <p className="ds-section-label" style={{ color: "var(--text-secondary)" }}>
           {summaryLabel}
         </p>
         <p className="text-base font-bold" style={{ color: "var(--text-primary)" }}>
@@ -170,7 +170,7 @@ export default function AdminSalesListPage() {
       {/* ── Paid Sales · Credit Sales · Gross Profit ── */}
       <div className="px-4 pt-3 flex gap-2">
         <div className="flex-1 rounded-[var(--radius-tile)] p-3 flex flex-col gap-1 items-start" style={{ background: "var(--surface)", border: "1px solid var(--border-light)" }}>
-          <p className="text-10 uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
+          <p className="ds-section-label" style={{ color: "var(--text-secondary)" }}>
             {t("inline.paid_sales")}
           </p>
           <p className="text-16 font-bold" style={{ color: "var(--brand-dark)" }}>
@@ -178,7 +178,7 @@ export default function AdminSalesListPage() {
           </p>
         </div>
         <div className="flex-1 rounded-[var(--radius-tile)] p-3 flex flex-col gap-1 items-start" style={{ background: "var(--surface)", border: "1px solid var(--border-light)" }}>
-          <p className="text-10 uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
+          <p className="ds-section-label" style={{ color: "var(--text-secondary)" }}>
             {t("inline.credit_sales")}
           </p>
           <p className="text-16 font-bold" style={{ color: "#ef4444" }}>
@@ -186,7 +186,7 @@ export default function AdminSalesListPage() {
           </p>
         </div>
         <div className="flex-1 rounded-[var(--radius-tile)] p-3 flex flex-col gap-1 items-start" style={{ background: "var(--surface)", border: "1px solid var(--border-light)" }}>
-          <p className="text-10 uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
+          <p className="ds-section-label" style={{ color: "var(--text-secondary)" }}>
             {t("admin.grossProfit")}
           </p>
           <p className="text-16 font-bold" style={{ color: "var(--brand-dark)" }}>
@@ -222,7 +222,7 @@ export default function AdminSalesListPage() {
                 }
               }}
               className="absolute end-0 top-12 w-52 rounded-[var(--radius-card)] shadow-xl overflow-hidden z-50"
-              style={{ background: "var(--surface)", border: "1px solid var(--divider)" }}
+              style={{ background: "var(--tone-card)" }}
             >
               {SORT_OPTIONS.map((opt) => (
                 <button
@@ -339,7 +339,7 @@ export default function AdminSalesListPage() {
             </div>
             <div className="flex gap-3">
               <div className="flex-1">
-                <label className="text-11 font-semibold uppercase tracking-wider mb-1 block" style={{ color: "var(--text-secondary)" }}>{t("admin.from")}</label>
+                <label className="ds-section-label mb-1 block" style={{ color: "var(--text-secondary)" }}>{t("admin.from")}</label>
                 <input
                   type="date"
                   value={customFrom}
@@ -349,7 +349,7 @@ export default function AdminSalesListPage() {
                 />
               </div>
               <div className="flex-1">
-                <label className="text-11 font-semibold uppercase tracking-wider mb-1 block" style={{ color: "var(--text-secondary)" }}>{t("admin.to")}</label>
+                <label className="ds-section-label mb-1 block" style={{ color: "var(--text-secondary)" }}>{t("admin.to")}</label>
                 <input
                   type="date"
                   value={customTo}
@@ -400,7 +400,7 @@ export default function AdminSalesListPage() {
           {groupSalesByDateSections(filtered, now).map((section) => (
             <div key={section.label} className="mt-4">
               <div className="px-4 mb-2">
-                <p className="text-11 font-bold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
+                <p className="ds-section-label" style={{ color: "var(--text-secondary)" }}>
                   {section.label}
                 </p>
               </div>

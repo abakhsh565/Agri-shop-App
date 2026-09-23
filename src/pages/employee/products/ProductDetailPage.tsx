@@ -153,7 +153,7 @@ export default function ProductDetailPage() {
         {/* ── HERO CARD: Image + Name + Category + Stock Badge ── */}
         <div
           className="rounded-[var(--radius-card)] p-4 flex gap-3 items-center"
-          style={{ background: "var(--surface-2)", border: "1px solid var(--divider)" }}
+          style={{ background: "var(--tone-card)" }}
         >
           <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
           <div className="shrink-0">
@@ -189,7 +189,7 @@ export default function ProductDetailPage() {
           style={{ border: "1px solid var(--divider)" }}
         >
           <div className="text-center">
-            <p className="text-10 font-bold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>{t("products.price")}</p>
+            <p className="ds-section-label" style={{ color: "var(--text-secondary)" }}>{t("products.price")}</p>
             <p className="text-sm font-bold mt-0.5" style={{ color: "var(--text-primary)" }}>
               {prices.length > 1
                 ? `${formatCurrency(minPrice)} – ${formatCurrency(maxPrice)}`
@@ -197,13 +197,13 @@ export default function ProductDetailPage() {
             </p>
           </div>
           <div className="text-center" style={{ borderLeft: "1px solid var(--divider)", borderRight: "1px solid var(--divider)" }}>
-            <p className="text-10 font-bold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>{t("products.stock")}</p>
+            <p className="ds-section-label" style={{ color: "var(--text-secondary)" }}>{t("products.stock")}</p>
             <p className="text-sm font-bold mt-0.5" style={{ color: "var(--text-primary)" }}>
               {totalStock} {unitLabel(product.baseUnit)}
             </p>
           </div>
           <div className="text-center">
-            <p className="text-10 font-bold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>{t("products.variantsLabel")}</p>
+            <p className="ds-section-label" style={{ color: "var(--text-secondary)" }}>{t("products.variantsLabel")}</p>
             <p className="text-sm font-bold mt-0.5" style={{ color: "var(--text-primary)" }}>
               {product.variants.length}
             </p>
@@ -214,7 +214,7 @@ export default function ProductDetailPage() {
         {product.barcode && (
           <div
             className="rounded-[var(--radius-card)] p-3 flex items-center gap-3"
-            style={{ background: "var(--surface)", border: "1px solid var(--divider)" }}
+            style={{ background: "var(--tone-card)" }}
           >
             <div dangerouslySetInnerHTML={{ __html: barcodeToSvg(product.barcode, { height: 40, showText: true, width: 160 }) }} className="flex-1" />
             <div className="flex gap-1.5 shrink-0">
@@ -250,7 +250,7 @@ export default function ProductDetailPage() {
 
         {/* ── PACK SIZES: Variant details ── */}
         <div>
-          <p className="text-xs font-bold uppercase mb-2 tracking-wider" style={{ color: "var(--text-secondary)" }}>{t("products.packSizesTitle")}</p>
+          <p className="ds-section-label mb-2" style={{ color: "var(--text-secondary)" }}>{t("products.packSizesTitle")}</p>
           <div
             className="rounded-[var(--radius-card)] overflow-hidden"
             style={{ border: "1px solid var(--divider)" }}
@@ -378,7 +378,7 @@ export default function ProductDetailPage() {
             </div>
             {/* Name input */}
             <div className="mb-5">
-              <label className="text-11 font-semibold uppercase tracking-wider mb-1.5 block" style={{ color: "var(--text-secondary)" }}>{t("common.productName")}</label>
+              <label className="ds-section-label mb-1.5 block" style={{ color: "var(--text-secondary)" }}>{t("common.productName")}</label>
               <input
                 autoFocus
                 value={editName}
@@ -460,8 +460,8 @@ function ProductCustomerRecommendations({ productId }: { productId: string }) {
   }
 
   return (
-    <div className="rounded-[var(--radius-card)] p-4" style={{ background: "var(--surface-2)" }}>
-      <p className="text-10 font-bold uppercase tracking-wider mb-3" style={{ color: "var(--text-secondary)" }}>
+    <div className="rounded-[var(--radius-card)] p-4" style={{ background: "var(--tone-card)" }}>
+      <p className="ds-section-label mb-3" style={{ color: "var(--text-secondary)" }}>
         {t("products.customersLikely")}
       </p>
       <ListCard>

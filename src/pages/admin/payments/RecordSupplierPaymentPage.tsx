@@ -91,7 +91,7 @@ export default function RecordSupplierPaymentPage() {
         <NavHeader title={t("supplier.paySupplier")} />
 
         <div className="mx-4 mt-3 rounded-[var(--radius-card)] p-5 text-center" style={{ background: "var(--brand)" }}>
-          <p className="text-10 font-bold uppercase tracking-widest" style={{ color: "rgba(0,0,0,0.55)" }}>
+          <p className="ds-section-label" style={{ color: "rgba(0,0,0,0.55)" }}>
             {company.name} · Outstanding Payable
           </p>
           <p className="text-32 font-bold mt-1" style={{ color: "#0a0a0a" }}>
@@ -101,7 +101,7 @@ export default function RecordSupplierPaymentPage() {
 
         <div className="flex flex-col gap-5 p-4 mt-2">
           <div>
-            <p className="text-11 font-bold uppercase mb-2 tracking-wider" style={{ color: "var(--text-secondary)" }}>{t("common.amount")}</p>
+            <p className="ds-section-label mb-2" style={{ color: "var(--text-secondary)" }}>{t("common.amount")}</p>
             <input
               type="number"
               inputMode="numeric"
@@ -115,7 +115,7 @@ export default function RecordSupplierPaymentPage() {
           </div>
 
           <div>
-            <p className="text-11 font-bold uppercase mb-2 tracking-wider" style={{ color: "var(--text-secondary)" }}>{t("sale.paymentMethod")}</p>
+            <p className="ds-section-label mb-2" style={{ color: "var(--text-secondary)" }}>{t("sale.paymentMethod")}</p>
             <div className="flex gap-2">
               {([{ key: "cash", label: "Cash" }, { key: "bank_transfer", label: "Bank Transfer" }] as const).map((m) => (
                 <button key={m.key} onClick={() => setMethod(m.key)}

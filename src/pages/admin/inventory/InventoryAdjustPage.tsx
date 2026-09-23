@@ -121,7 +121,7 @@ export default function InventoryAdjustPage() {
     border: "1px solid var(--divider)",
     color: "var(--text-primary)",
   } as const;
-  const labelCls = "text-11 font-bold uppercase mb-2 tracking-wider";
+  const labelCls = "ds-section-label mb-2";
 
   return (
     <div
@@ -216,7 +216,7 @@ export default function InventoryAdjustPage() {
           </div>
 
           {/* Preview */}
-          <div className="rounded-[var(--radius-card)] p-4 flex items-center justify-between" style={{ background: "var(--surface-2)" }}>
+          <div className="rounded-[var(--radius-card)] p-4 flex items-center justify-between" style={{ background: "var(--tone-card)" }}>
             <span className="text-sm" style={{ color: "var(--text-secondary)" }}>{t("admin.newStockLevel")}</span>
             <span className="text-base font-bold" style={{ color: after < 0 ? "var(--error)" : "var(--text-primary)" }}>
               {before} → {after} units

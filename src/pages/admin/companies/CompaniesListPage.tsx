@@ -77,7 +77,7 @@ export default function CompaniesListPage() {
               key={company.id}
               onClick={() => navigate(`/admin/companies/${company.id}`)}
               className="flex items-center gap-3 rounded-[var(--radius-card)] p-4 text-start transition-opacity active:opacity-70"
-              style={{ background: "var(--surface)", border: "1px solid var(--divider)" }}
+              style={{ background: "var(--tone-card)" }}
             >
               {/* Logo circle */}
               {company.logoUrl ? (

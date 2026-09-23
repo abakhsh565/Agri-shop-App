@@ -96,7 +96,7 @@ export default function SaleReviewPage() {
 
         {/* Items */}
         <div className="flex flex-col gap-1">
-          <p className="text-xs font-bold text-caption uppercase">{t("saleReview.items")}</p>
+          <p className="ds-section-label text-caption">{t("saleReview.items")}</p>
           <div className="border border-border rounded-[var(--radius-tile)] overflow-hidden">
             {items.map((item, i) => (
               <div key={item.variantId} className={`flex justify-between p-4 ${i < items.length - 1 ? "border-b border-border" : ""}`}>
@@ -112,7 +112,7 @@ export default function SaleReviewPage() {
 
         {/* Payment method */}
         <div>
-          <p className="text-xs font-bold text-caption uppercase mb-2">{t("saleReview.paymentMethod")}</p>
+          <p className="ds-section-label text-caption mb-2">{t("saleReview.paymentMethod")}</p>
           <div className="flex gap-2">
             {[{ key: "cash", label: "Cash" }, { key: "bank_transfer", label: "Bank Transfer" }].map((m) => (
               <button
@@ -130,7 +130,7 @@ export default function SaleReviewPage() {
 
         {/* Amount paid */}
         <div>
-          <p className="text-xs font-bold text-caption uppercase mb-2">{t("saleReview.amountReceived")}</p>
+          <p className="ds-section-label text-caption mb-2">{t("saleReview.amountReceived")}</p>
           <input
             type="number"
             inputMode="numeric"

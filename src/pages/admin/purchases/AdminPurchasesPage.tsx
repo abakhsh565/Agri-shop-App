@@ -44,10 +44,10 @@ export default function AdminPurchasesPage() {
       <div className="px-4 pt-3">
         <div
           className="rounded-[var(--radius-card)] p-4 flex items-center justify-between"
-          style={{ background: "var(--surface-2)", border: "1px solid var(--divider)" }}
+          style={{ background: "var(--tone-card)" }}
         >
           <div>
-            <p className="text-10 font-bold uppercase tracking-widest" style={{ color: "var(--text-secondary)" }}>
+            <p className="ds-section-label" style={{ color: "var(--text-secondary)" }}>
               {t("purchases.outstandingSupplier")}
             </p>
             <p className="text-xl font-bold mt-0.5" style={{ color: totalPayable > 0 ? "var(--error)" : "var(--brand-dark)" }}>
@@ -56,8 +56,8 @@ export default function AdminPurchasesPage() {
           </div>
           <button
             onClick={() => navigate("/admin/payments")}
-            className="text-xs font-bold px-3 py-1.5 rounded-full"
-            style={{ background: "var(--surface)", border: "1px solid var(--divider)", color: "var(--text-primary)" }}
+            className="text-xs font-bold px-3 py-1.5 rounded-full whitespace-nowrap shrink-0"
+            style={{ background: "var(--tone-sunken)", color: "var(--text-primary)" }}
           >
             {t("purchases.paySuppliers")}
           </button>
@@ -77,7 +77,7 @@ export default function AdminPurchasesPage() {
               <div
                 key={p.id}
                 className="rounded-[var(--radius-card)] p-4"
-                style={{ background: "var(--surface)", border: "1px solid var(--divider)" }}
+                style={{ background: "var(--tone-card)" }}
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3 min-w-0">

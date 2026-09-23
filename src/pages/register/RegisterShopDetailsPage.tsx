@@ -87,7 +87,7 @@ export default function RegisterShopDetailsPage() {
 
         {/* Owner Name */}
         <div>
-          <p className="text-11 font-bold uppercase mb-2 tracking-wider" style={{ color: "var(--text-secondary)" }}>
+          <p className="ds-section-label mb-2" style={{ color: "var(--text-secondary)" }}>
             {t("register.fullName")}
           </p>
           <input
@@ -101,7 +101,7 @@ export default function RegisterShopDetailsPage() {
 
         {/* Shop Name */}
         <div>
-          <p className="text-11 font-bold uppercase mb-2 tracking-wider" style={{ color: "var(--text-secondary)" }}>
+          <p className="ds-section-label mb-2" style={{ color: "var(--text-secondary)" }}>
             {t("register.shopName")}
           </p>
           <input
@@ -115,7 +115,7 @@ export default function RegisterShopDetailsPage() {
 
         {/* Shop Type */}
         <div>
-          <p className="text-11 font-bold uppercase mb-2 tracking-wider" style={{ color: "var(--text-secondary)" }}>
+          <p className="ds-section-label mb-2" style={{ color: "var(--text-secondary)" }}>
             {t("register.businessType")}
           </p>
           <div className="flex flex-col gap-2">
@@ -146,7 +146,7 @@ export default function RegisterShopDetailsPage() {
 
         {/* City */}
         <div>
-          <p className="text-11 font-bold uppercase mb-2 tracking-wider" style={{ color: "var(--text-secondary)" }}>
+          <p className="ds-section-label mb-2" style={{ color: "var(--text-secondary)" }}>
             {t("register.city")}
           </p>
           <input
@@ -160,7 +160,7 @@ export default function RegisterShopDetailsPage() {
 
         {/* Address */}
         <div>
-          <p className="text-11 font-bold uppercase mb-2 tracking-wider" style={{ color: "var(--text-secondary)" }}>
+          <p className="ds-section-label mb-2" style={{ color: "var(--text-secondary)" }}>
             {t("register.shopAddress")}
           </p>
           <input
@@ -174,7 +174,7 @@ export default function RegisterShopDetailsPage() {
 
         {/* Business Registration */}
         <div>
-          <p className="text-11 font-bold uppercase mb-2 tracking-wider" style={{ color: "var(--text-secondary)" }}>
+          <p className="ds-section-label mb-2" style={{ color: "var(--text-secondary)" }}>
             {t("register.businessReg")} <span style={{ opacity: 0.6 }}>{t("common.optional")}</span>
           </p>
           <input

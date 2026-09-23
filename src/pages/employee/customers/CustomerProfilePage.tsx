@@ -314,7 +314,7 @@ export default function CustomerProfilePage() {
             2. QUICK STATS — Purchases | Paid | Outstanding
            ═══════════════════════════════════════════ */}          <div
           className="flex overflow-hidden rounded-[var(--radius-card)]"
-          style={{ background: "var(--surface-2)" }}
+          style={{ background: "var(--tone-card)" }}
         >
           <div className="flex-1 text-center py-3.5" style={{ borderRight: "1px solid var(--divider)" }}>
             <p className="text-10 tracking-[0.5px] font-medium" style={{ color: "var(--text-secondary)" }}>{t("customerProfile.purchases")}</p>
@@ -486,7 +486,7 @@ export default function CustomerProfilePage() {
 
             <div className="flex flex-col gap-3">
               <div>
-                <label className="text-11 font-semibold uppercase tracking-wider block mb-1.5" style={{ color: "var(--text-secondary)" }}>{t("addCustomer.name")}</label>
+                <label className="ds-section-label block mb-1.5" style={{ color: "var(--text-secondary)" }}>{t("addCustomer.name")}</label>
                 <input
                   value={editName}
                   onChange={(e) => setEditName(e.target.value)}
@@ -495,7 +495,7 @@ export default function CustomerProfilePage() {
                 />
               </div>
               <div>
-                <label className="text-11 font-semibold uppercase tracking-wider block mb-1.5" style={{ color: "var(--text-secondary)" }}>{t("addCustomer.phone")}</label>
+                <label className="ds-section-label block mb-1.5" style={{ color: "var(--text-secondary)" }}>{t("addCustomer.phone")}</label>
                 <input
                   value={editPhone}
                   onChange={(e) => setEditPhone(e.target.value)}
@@ -504,7 +504,7 @@ export default function CustomerProfilePage() {
                 />
               </div>
               <div>
-                <label className="text-11 font-semibold uppercase tracking-wider block mb-1.5" style={{ color: "var(--text-secondary)" }}>{t("addCustomer.address")}</label>
+                <label className="ds-section-label block mb-1.5" style={{ color: "var(--text-secondary)" }}>{t("addCustomer.address")}</label>
                 <input
                   value={editAddress}
                   onChange={(e) => setEditAddress(e.target.value)}
@@ -513,7 +513,7 @@ export default function CustomerProfilePage() {
                 />
               </div>
               <div>
-                <label className="text-11 font-semibold uppercase tracking-wider block mb-1.5" style={{ color: "var(--text-secondary)" }}>{t("common.crops")}</label>
+                <label className="ds-section-label block mb-1.5" style={{ color: "var(--text-secondary)" }}>{t("common.crops")}</label>
                 <div className="flex flex-wrap gap-2">
                   {(businessSettings.crops.length > 0 ? businessSettings.crops.map(c => c.name) : KNOWN_CROPS).map(cropName => (
                     <button key={cropName} type="button" onClick={() => setEditCrops(prev => prev.includes(cropName) ? prev.filter(c => c !== cropName) : [...prev, cropName])} className="h-9 px-4 rounded-full text-12 font-medium transition-colors" style={{ background: editCrops.includes(cropName) ? "var(--brand)" : "var(--surface-2)", color: editCrops.includes(cropName) ? "#0a0a0a" : "var(--text-secondary)", border: editCrops.includes(cropName) ? "none" : "1px solid var(--divider)" }}>{cropName}</button>
@@ -521,7 +521,7 @@ export default function CustomerProfilePage() {
                 </div>
               </div>
               <div>
-                <label className="text-11 font-semibold uppercase tracking-wider block mb-1.5" style={{ color: "var(--text-secondary)" }}>{t("common.creditLimitOptional")}</label>
+                <label className="ds-section-label block mb-1.5" style={{ color: "var(--text-secondary)" }}>{t("common.creditLimitOptional")}</label>
                 {isAdmin ? (
                   <input
                     type="number"
@@ -531,7 +531,7 @@ export default function CustomerProfilePage() {
                     style={{ background: "var(--surface-2)", border: "1px solid var(--border-control)", color: "var(--text-primary)", borderRadius: "24px" }}
                   />
                 ) : (
-                  <div className="rounded-[var(--radius-card)] p-3" style={{ background: "var(--surface-2)", border: "1px solid var(--divider)" }}>
+                  <div className="rounded-[var(--radius-card)] p-3" style={{ background: "var(--tone-card)" }}>
                     <p className="text-12" style={{ color: "var(--text-secondary)" }}>Current: {formatCurrency(customer.creditLimit)}</p>
                     <p className="text-11 mt-1" style={{ color: "var(--text-secondary)" }}>{t("customer.actionCenterHint")}</p>
                   </div>
@@ -568,7 +568,7 @@ export default function CustomerProfilePage() {
             <p className="text-16 font-semibold" style={{ color: 'var(--text-primary)' }}>{t('common.paymentDueDate')}</p>
             <p className="text-13" style={{ color: 'var(--text-secondary)' }}>{t('common.dueDateDescription')}</p>
             <div>
-              <label className="text-11 font-semibold uppercase tracking-wider block mb-1.5" style={{ color: 'var(--text-secondary)' }}>{t('common.dueDate')}</label>
+              <label className="ds-section-label block mb-1.5" style={{ color: 'var(--text-secondary)' }}>{t('common.dueDate')}</label>
               <input type="date" value={editDueDate} min={new Date().toISOString().split('T')[0]} onChange={e => setEditDueDate(e.target.value)} className="w-full outline-none" />
             </div>
             <div className="flex gap-3 mt-1">

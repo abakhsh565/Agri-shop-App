@@ -11,7 +11,8 @@ import { useT } from "@/lib/i18n";
 import { uploadImage } from "@/lib/storage";
 import { supabase } from "@/lib/supabase";
 import { useUIStore } from "@/stores/uiStore";
-import { Lock, Bell, Globe, Info, ChevronRight, Moon, Sun, ClipboardList, Smartphone, Camera, Loader2, Save } from "lucide-react";
+import { Lock, Bell, Globe, ChevronRight, Moon, Sun, ClipboardList, Camera, Loader2, Save, LogOut, X } from "lucide-react";
+import { APP_NAME, APP_VERSION } from "@/lib/brand";
 import { useEffect, useRef, useState } from "react";
 import { useNotificationStore } from "@/stores/notificationStore";
 
@@ -71,15 +72,24 @@ export default function SettingsPage() {
     setUploading(true);
     try {
       const url = await uploadImage("employee-photos", file);
-      // Persist to users.photo_url in Supabase
-      const { error } = await supabase.from("users").update({ photo_url: url }).eq("id", user.id);
+      // Persist to users.photo_url, and read the row back: a write that RLS filters is
+      // answered with 204 and no error, so without `.select()` this reported success and
+      // the photo reverted to initials on the next load (same trap as the admin twin).
+      const { data, error } = await supabase
+        .from("users")
+        .update({ photo_url: url })
+        .eq("id", user.id)
+        .select("id");
       if (error) throw error;
-      // Update auth store so dashboard shows the new photo
+      if (!data || data.length === 0) throw new Error("no rows updated");
+      // Update auth store so the dashboard shows the new photo straight away.
       useAuthStore.getState().setUser({ ...user, photoUrl: url });
       setAvatarUrl(url);
-      addToast("Profile photo updated", "success");
     } catch (err) {
-      addToast(err instanceof Error ? err.message : "Upload failed", "error");
+      console.error("Avatar upload failed:", err);
+      // The avatar changing is the success feedback; a failure has to say so, in the
+      // owner's own words rather than the backend's.
+      addToast(t("copy.profileSaveFailed"), "error");
       setAvatarUrl(user.photoUrl ?? null);
     } finally {
       setUploading(false);
@@ -91,18 +101,32 @@ export default function SettingsPage() {
 
   return (
     <div
-      className="settings-compact flex flex-col w-full min-h-full justify-between"
+      className="flex flex-col w-full min-h-full justify-between"
       style={{ background: "var(--background)", color: "var(--text-primary)" }}
     >
       <div>
         <StatusBar />
-        <NavHeader title={t("settings.title")} />
+        {/* Same header grammar as the admin twin: a close cross on the trailing edge. */}
+        <NavHeader
+          title={t("settings.title")}
+          noBack
+          right={
+            <button
+              onClick={() => navigate("/employee/dashboard")}
+              aria-label={t("common.close")}
+              data-testid="settings-close"
+              className="flex items-center justify-center size-8 rounded-full active:opacity-60"
+            >
+              <X size={18} style={{ color: "var(--text-primary)" }} />
+            </button>
+          }
+        />
 
         {/* Profile card — the same card as the ones below it: `--radius-card`, the
             grouped-list tone, and no drawn edge (see the admin twin, which carries the
             same fix). */}
         <div
-          className="mx-4 mt-3 rounded-[var(--radius-card)] p-4 flex items-center gap-4 animate-fade-in-up"
+          className="mx-4 mt-3.5 rounded-[var(--radius-card)] p-4 flex items-center gap-4 animate-fade-in-up"
           style={{ background: "var(--tone-card)" }}
         >
           {/* Avatar */}
@@ -128,33 +152,51 @@ export default function SettingsPage() {
             </div>
           </div>
 
+          {/* One line, the same as the admin twin: name, who the account is, phone. The
+              employee number is not repeated here — it belongs to the employee's own
+              detail page, not to the card that says whose phone this is. */}
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
               <p className="text-base font-bold truncate" style={{ color: "var(--text-primary)" }}>
                 {user?.name}
               </p>
-              <button
-                onClick={() => setEditingName(true)}
-                className="flex items-center h-6.5 px-2.5 rounded-full text-12 font-bold shrink-0"
-                style={{ background: "var(--surface)", color: "var(--text-secondary)", border: "1px solid var(--divider)" }}
+              <span
+                className="text-11 font-bold px-2 py-0.5 rounded-full shrink-0"
+                style={{ background: "var(--tone-sunken)", color: "var(--text-secondary)" }}
               >
-                {t("common.edit")}
-              </button>
+                {user?.membershipRole === "owner" ? t("settings.owner")
+                  : user?.membershipRole === "admin" ? t("emp.admin")
+                  : t("search.employee")}
+              </span>
             </div>
-            <p className="text-10 mt-0.5" style={{ color: "var(--text-secondary)" }}>
-              {user?.membershipRole === "owner" ? t("settings.owner") : t("search.employee")}
-              {user?.employeeNumber ? ` · ${t("empDetail.number")} ${user.employeeNumber}` : ""}
-            </p>
-            <p className="text-10" style={{ color: "var(--text-secondary)" }}>{user?.phone}</p>
+            {/* The number gets its own line, exactly as on the admin twin. */}
+            <p className="text-12 mt-0.5" style={{ color: "var(--text-secondary)" }}>{user?.phone}</p>
           </div>
+
+          <button
+            onClick={() => setEditingName(true)}
+            className="flex items-center h-6.5 px-2.5 rounded-full text-12 font-bold shrink-0"
+            style={{ background: "var(--surface)", color: "var(--text-secondary)", border: "1px solid var(--divider)" }}
+          >
+            {t("common.edit")}
+          </button>
         </div>
 
-        {/* Appearance */}
-        <div className="px-4 pt-5 animate-fade-in-up delay-75">
-          <p className="text-xs font-bold uppercase mb-3 tracking-wider" style={{ color: "var(--text-secondary)" }}>
-            {t("settings.appearance")}
-          </p>
+        {/* Your app — one block with no heading (the admin twin carries the reasoning):
+            Appearance and Account were two headings over one idea, and an employee has no
+            shop-management group, so this screen needs no section label at all. */}
+        <div className="px-4 pt-3.5 animate-fade-in-up delay-75">
           <ListCard>
+            {/* Comfort first, and state under the label — the reference's grammar, the
+                same as the admin twin. An employee has no shop block, so this screen has
+                no headings at all. */}
+            <ListRow
+              onClick={cycleLanguage}
+              icon={Globe}
+              title={t("settings.language")}
+              meta={LANG_LABELS[language]}
+              trailing={<ChevronRight size={14} style={{ color: "var(--text-secondary)" }} className="shrink-0" />}
+            />
             <ListRow
               onClick={toggleTheme}
               icon={theme === "dark" ? Moon : Sun}
@@ -175,20 +217,31 @@ export default function SettingsPage() {
               }
             />
             <ListRow
-              onClick={cycleLanguage}
-              icon={Globe}
-              title={t("settings.language")}
+              onClick={() => navigate("/login/pin-set", { state: { returnTo: "/employee/settings" } })}
+              icon={Lock}
+              title={user && hasPin(user.id) ? (t("settings.changePin") || "Change PIN") : (t("settings.setupPin") || "Setup PIN")}
+              trailing={<ChevronRight size={14} style={{ color: "var(--text-secondary)" }} className="shrink-0" />}
+            />
+            <ListRow
+              onClick={() => navigate("/employee/notifications")}
+              icon={Bell}
+              title={t("settings.notifications")}
               trailing={
                 <div className="flex items-center gap-2 shrink-0">
-                  <span
-                    className="text-xs font-bold px-3 py-1 rounded-full"
-                    style={{ background: "var(--brand)", color: "#0a0a0a" }}
-                  >
-                    {LANG_LABELS[language]}
-                  </span>
+                  {useNotificationStore.getState().unread() > 0 && (
+                    <span className="text-10 font-bold px-1.5 py-0.5 rounded-full" style={{ background: "#ef4444", color: "#fff" }}>
+                      {useNotificationStore.getState().unread()}
+                    </span>
+                  )}
                   <ChevronRight size={14} style={{ color: "var(--text-secondary)" }} />
                 </div>
               }
+            />
+            <ListRow
+              onClick={() => navigate("/employee/activity")}
+              icon={ClipboardList}
+              title={t("settings.activityLog")}
+              trailing={<ChevronRight size={14} style={{ color: "var(--text-secondary)" }} className="shrink-0" />}
             />
           </ListCard>
 
@@ -203,60 +256,6 @@ export default function SettingsPage() {
           )}
         </div>
 
-        {/* Account */}
-        <div className="px-4 pt-5 animate-fade-in-up delay-150">
-          <p className="text-xs font-bold uppercase mb-3 tracking-wider" style={{ color: "var(--text-secondary)" }}>
-            {t("settings.account")}
-          </p>
-          <ListCard>
-            {[
-              {
-                icon: Lock,
-                label: user && hasPin(user.id) ? (t("settings.changePin") || "Change PIN") : (t("settings.setupPin") || "Setup PIN"),
-                right: null, action: () => navigate("/login/pin-set", { state: { returnTo: "/employee/settings" } }),
-              },
-              {
-                icon: Bell, label: t("settings.notifications"),
-                right: null, action: () => navigate("/employee/notifications"),
-                badge: useNotificationStore.getState().unread(),
-              },
-              {
-                icon: ClipboardList, label: t("settings.activityLog"),
-                right: null, action: () => navigate("/employee/activity"),
-              },
-              {
-                icon: Smartphone, label: t("settings.device"),
-                right: t("settings.thisPhone") || "This Phone", action: null,
-              },
-              {
-                icon: Info, label: t("settings.appVersion"),
-                right: "1.0.0", action: null,
-              },
-            ].map((s) => {
-              const Icon = s.icon;
-              return (
-                <ListRow
-                  key={s.label}
-                  onClick={s.action ?? undefined}
-                  icon={Icon}
-                  title={s.label}
-                  trailing={
-                    <div className="flex items-center gap-1 shrink-0">
-                      {'badge' in s && s.badge ? (
-                        <span className="text-10 font-bold px-1.5 py-0.5 rounded-full" style={{ background: "#ef4444", color: "#fff" }}>
-                          {s.badge}
-                        </span>
-                      ) : s.right ? (
-                        <span className="text-10" style={{ color: "var(--text-secondary)" }}>{s.right}</span>
-                      ) : null}
-                      {s.action && <ChevronRight size={14} style={{ color: "var(--text-secondary)" }} />}
-                    </div>
-                  }
-                />
-              );
-            })}
-          </ListCard>
-        </div>
       </div>
 
       {/* Edit Profile Bottom Sheet */}
@@ -290,7 +289,7 @@ export default function SettingsPage() {
             </div>
             {/* Name input */}
             <div className="mb-5">
-              <label className="text-11 font-semibold uppercase tracking-wider mb-1.5 block" style={{ color: "var(--text-secondary)" }}>{t("addCustomer.name")}</label>
+              <label className="ds-section-label mb-1.5 block" style={{ color: "var(--text-secondary)" }}>{t("addCustomer.name")}</label>
               <input
                 autoFocus
                 value={nameValue}
@@ -317,18 +316,23 @@ export default function SettingsPage() {
         </div>
       )}
 
-      <div className="p-4 pb-6 animate-fade-in-up delay-225">
-        <button
-          onClick={handleLogout}
-          className="w-full h-[48px] rounded-full font-bold text-sm transition-colors border"
-          style={{
-            borderColor: "var(--error)",
-            color: "var(--error)",
-            background: "transparent",
-          }}
-        >
-          {t("settings.signOut")}
-        </button>
+      {/* One destructive row, alone, at the foot — the reference's shape. */}
+      <div className="px-4 pt-3.5 pb-6 animate-fade-in-up delay-225">
+        <ListCard>
+          <ListRow
+            danger
+            onClick={handleLogout}
+            icon={LogOut}
+            title={t("settings.signOut")}
+          />
+        </ListCard>
+
+        {/* Version under the copyright, in the smallest type on the page — the same footer
+            the admin twin carries. "Device / App Version" is gone: an employee does not
+            need the app to name their own phone back to them. */}
+        <p className="text-11 mt-5 text-center" style={{ color: "var(--text-tertiary)" }}>
+          © 2026 {APP_NAME} · v{APP_VERSION}
+        </p>
       </div>
     </div>
   );

@@ -116,7 +116,7 @@ export default function CustomersListPage() {
           style={{ background: "var(--surface-2)" }}
         >
           <div>
-            <p className="text-10 font-bold uppercase tracking-widest" style={{ color: "var(--text-secondary)" }}>
+            <p className="ds-section-label" style={{ color: "var(--text-secondary)" }}>
               {t("common.outstanding")}
             </p>
             <p className="text-20 font-bold mt-0.5" style={{ color: "#d97706" }}>
@@ -124,7 +124,7 @@ export default function CustomersListPage() {
             </p>
           </div>
           <div className="text-end">
-            <p className="text-10 font-bold uppercase tracking-widest" style={{ color: "var(--text-secondary)" }}>
+            <p className="ds-section-label" style={{ color: "var(--text-secondary)" }}>
               {t("sale.onCredit")}
             </p>
             <p className="text-20 font-bold mt-0.5" style={{ color: "var(--text-primary)" }}>
@@ -159,7 +159,7 @@ export default function CustomersListPage() {
           {showSortMenu && (
             <div
               className="absolute end-0 top-12 w-52 rounded-[var(--radius-card)] shadow-xl overflow-hidden z-50 animate-scale-in"
-              style={{ background: "var(--surface)", border: "1px solid var(--divider)" }}
+              style={{ background: "var(--tone-card)" }}
             >
               {SORT_OPTIONS.map((opt) => (
                 <button

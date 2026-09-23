@@ -146,7 +146,7 @@ export default function ActivityLogPage() {
           style={{ background: "var(--surface-3)" }}
         >
           <div>
-            <p className="text-11 font-semibold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
+            <p className="ds-section-label" style={{ color: "var(--text-secondary)" }}>
               {t("activity.totalActivity")}
             </p>
             <p className="text-xl font-bold mt-1" style={{ color: "var(--text-primary)" }}>
@@ -154,7 +154,7 @@ export default function ActivityLogPage() {
             </p>
           </div>
           <div className="text-end">
-            <p className="text-11 font-semibold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
+            <p className="ds-section-label" style={{ color: "var(--text-secondary)" }}>
               {t("activity.salesVolume")}
             </p>
             <p className="text-base font-bold mt-1" style={{ color: "var(--brand-dark)" }}>

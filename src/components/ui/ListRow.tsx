@@ -26,6 +26,8 @@ export interface ListRowProps {
   trailing?: ReactNode;
   /** The reference sets the name semibold in picking rows. */
   emphasis?: boolean;
+  /** The one destructive row in a list (sign out): the label and its glyph go red. */
+  danger?: boolean;
   selected?: boolean;
   disabled?: boolean;
   onClick?: () => void;
@@ -55,6 +57,7 @@ export default function ListRow({
   value,
   trailing,
   emphasis = false,
+  danger = false,
   selected = false,
   disabled = false,
   onClick,
@@ -68,10 +71,15 @@ export default function ListRow({
   const inner = (
     <>
       {tile}
-      {/* Sized from `--icon` via `ds-glyph`, so the whole app's row glyphs follow one token
-          rather than a `size` prop restated in every primitive. */}
+      {/* Sized from `--icon-row` via `ds-row-glyph`, so every row glyph in the app follows
+          one token rather than a `size` prop restated in every primitive — and so a row on
+          More and a row on Settings are the same size by construction. */}
       {!tile && Icon && (
-        <Icon size={24} style={{ color: "var(--text-secondary)" }} className="ds-glyph shrink-0" />
+        <Icon
+          size={18}
+          style={{ color: danger ? "var(--error)" : "var(--text-secondary)" }}
+          className="ds-row-glyph shrink-0"
+        />
       )}
       {children ? (
         <div className="min-w-0 flex-1">{children}</div>
@@ -93,7 +101,7 @@ export default function ListRow({
     </>
   );
 
-  const cls = `ds-row ${stacked ? "ds-row-top" : ""} ${className}`;
+  const cls = `ds-row ${stacked ? "ds-row-top" : ""} ${danger ? "ds-row-danger" : ""} ${className}`;
 
   if (!onClick) {
     return (

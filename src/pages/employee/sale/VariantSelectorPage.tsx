@@ -98,7 +98,7 @@ export default function VariantSelectorPage() {
 
       {/* Variant selector */}
       <div className="px-4 pt-4">
-        <p className="text-11 font-bold uppercase mb-3 tracking-wider" style={{ color: "var(--text-secondary)" }}>{t("common.selectSellableUnit")}</p>
+        <p className="text-13 font-semibold mb-2" style={{ color: "var(--text-secondary)" }}>{t("common.selectSellableUnit")}</p>
         <div className="flex flex-col gap-2">
           {product.variants.map((v) => {
             const units = availableUnits(v);
@@ -140,8 +140,8 @@ export default function VariantSelectorPage() {
       </div>
 
       {/* Quantity */}
-      <div className="px-4 pt-5">
-        <p className="text-11 font-bold uppercase mb-3 tracking-wider" style={{ color: "var(--text-secondary)" }}>{t("admin.quantity")}</p>
+      <div className="px-4 pt-3.5">
+        <p className="text-13 font-semibold mb-2" style={{ color: "var(--text-secondary)" }}>{t("admin.quantity")}</p>
         <div className="flex items-center justify-between rounded-[var(--radius-tile)] h-[52px] px-4" style={{ border: "1px solid var(--divider)" }}>
           <QuantityCounter
             qty={qty}

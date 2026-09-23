@@ -116,9 +116,9 @@ export default function CreditOverrideDetailPage() {
         {/* Why flagged */}
         <div
           className="rounded-[var(--radius-card)] p-4"
-          style={{ background: "var(--surface-2)" }}
+          style={{ background: "var(--tone-card)" }}
         >
-          <p className="text-10 font-bold uppercase tracking-wider mb-2" style={{ color: "var(--text-secondary)" }}>
+          <p className="ds-section-label mb-2" style={{ color: "var(--text-secondary)" }}>
             {t("creditOverride.whyFlagged")}
           </p>
           <p className="text-14 leading-relaxed" style={{ color: "var(--text-primary)" }}>
@@ -132,7 +132,7 @@ export default function CreditOverrideDetailPage() {
         <button
           onClick={() => navigate(isUrdu ? `/employees/customers/${customer.id}` : `/admin/customers/${customer.id}`)}
           className="flex items-center justify-between px-4 py-3.5 rounded-[var(--radius-card)]"
-          style={{ background: "var(--surface)", border: "1px solid var(--divider)" }}
+          style={{ background: "var(--tone-card)" }}
         >
           <span className="text-14 font-medium" style={{ color: "var(--text-primary)" }}>
             {t("creditOverride.viewProfile")}

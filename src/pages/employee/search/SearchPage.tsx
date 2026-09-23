@@ -256,7 +256,7 @@ export default function SearchPage() {
       {/* Quick access — when no query */}
       {!q && (
         <div className="px-4 pt-2">
-          <p className="text-xs font-bold uppercase mb-3 tracking-wider" style={{ color: "var(--text-secondary)" }}>
+          <p className="text-13 font-semibold mb-2" style={{ color: "var(--text-secondary)" }}>
             {t("search.quickAccess")}
           </p>
           <div className="flex flex-wrap gap-2">
@@ -278,12 +278,12 @@ export default function SearchPage() {
       {/* Results — grouped by category */}
       {q && results.length > 0 && (
         <div className="px-4 pt-2 pb-24">
-          <p className="text-xs font-bold uppercase mb-3 tracking-wider" style={{ color: "var(--text-secondary)" }}>
+          <p className="text-13 font-semibold mb-2" style={{ color: "var(--text-secondary)" }}>
             {t("search.resultsFor", "{count} results for \"{query}\"").replace("{count}", String(results.length)).replace("{query}", query)}
           </p>
           {Array.from(grouped.entries()).map(([type, items]) => (
             <div key={type} className="mb-4">
-              <p className="text-11 font-bold uppercase mb-2 tracking-wider flex items-center gap-2" style={{ color: "var(--brand-dark)" }}>
+              <p className="ds-section-label mb-2 flex items-center gap-2" style={{ color: "var(--brand-dark)" }}>
                 {SECTION_LABELS[type]}
                 <span className="text-10 font-normal" style={{ color: "var(--text-secondary)" }}>
                   ({items.length})

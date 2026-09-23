@@ -123,7 +123,7 @@ export default function ReturnSelectItemsPage() {
         <NavHeader title={t("returns.title")} />
 
         {/* Sale info */}
-        <div className="mx-4 mt-3 rounded-[var(--radius-card)] p-4" style={{ background: "var(--surface-2)" }}>
+        <div className="mx-4 mt-3 rounded-[var(--radius-card)] p-4" style={{ background: "var(--tone-card)" }}>
           <div className="flex justify-between">
             <div>
               <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>
@@ -136,7 +136,7 @@ export default function ReturnSelectItemsPage() {
         </div>
 
         <div className="px-4 pt-4">
-          <p className="text-xs font-bold uppercase mb-3 tracking-wider" style={{ color: "var(--text-secondary)" }}>
+          <p className="text-13 font-semibold mb-2" style={{ color: "var(--text-secondary)" }}>
             {t("inline.select_items_quantity_to_return_x")}
           </p>
 

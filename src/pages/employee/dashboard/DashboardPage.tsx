@@ -137,7 +137,7 @@ export default function DashboardPage() {
               className="px-4 py-3 flex items-center justify-between shrink-0 w-full active:opacity-70 transition-opacity"
               style={{ borderBottom: "1px solid var(--divider)" }}
             >
-              <p className="text-12 font-bold uppercase tracking-wider" style={{ color: "var(--text-primary)" }}>
+              <p className="ds-section-label" style={{ color: "var(--text-primary)" }}>
                 {t("dashboard.notifications")}
               </p>
               <div className="flex items-center gap-2">
@@ -235,7 +235,7 @@ export default function DashboardPage() {
           onClick={() => navigate("/employee/sales", { state: { tab: "all" } })}
         >
           {/* Label */}
-          <p className="text-11 font-bold uppercase tracking-widest mb-1" style={{ color: "rgba(0,0,0,0.55)" }}>
+          <p className="ds-section-label mb-1" style={{ color: "rgba(0,0,0,0.55)" }}>
             {t("dashboard.todaySales")} — {firstName}
           </p>
 
@@ -252,7 +252,7 @@ export default function DashboardPage() {
               className="flex items-center gap-3 group"
             >
               <div>
-                <p className="text-10 font-semibold uppercase tracking-wider" style={{ color: "rgba(0,0,0,0.5)" }}>
+                <p className="ds-section-label" style={{ color: "rgba(0,0,0,0.5)" }}>
                   {t("dashboard.paid")}
                 </p>
                 <p className="text-18 font-bold" style={{ color: "#0a0a0a" }}>
@@ -276,7 +276,7 @@ export default function DashboardPage() {
               className="flex items-center gap-3 group"
             >
               <div>
-                <p className="text-10 font-semibold uppercase tracking-wider" style={{ color: "rgba(0,0,0,0.5)" }}>
+                <p className="ds-section-label" style={{ color: "rgba(0,0,0,0.5)" }}>
                   {t("dashboard.credit")}
                 </p>
                 <p className="text-18 font-bold" style={{ color: "#0a0a0a" }}>
@@ -298,13 +298,13 @@ export default function DashboardPage() {
       {/* ── Today's activity: Transactions · Customers served ── */}
       <div className="px-4 pt-3 flex gap-2.5 animate-fade-in-up delay-75">
         <div className="flex-1 rounded-[var(--radius-tile)] px-4 py-3" style={{ background: "var(--surface-2)" }}>
-          <p className="text-10 font-semibold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
+          <p className="ds-section-label" style={{ color: "var(--text-secondary)" }}>
             {t("admin.transactions")}
           </p>
           <p className="text-18 font-bold mt-0.5" style={{ color: "var(--text-primary)" }}>{txCount}</p>
         </div>
         <div className="flex-1 rounded-[var(--radius-tile)] px-4 py-3" style={{ background: "var(--surface-2)" }}>
-          <p className="text-10 font-semibold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
+          <p className="ds-section-label" style={{ color: "var(--text-secondary)" }}>
             {t("admin.customersServed")}
           </p>
           <p className="text-18 font-bold mt-0.5" style={{ color: "var(--text-primary)" }}>{customersServed}</p>
@@ -313,7 +313,7 @@ export default function DashboardPage() {
 
       {/* ── Quick Actions ── */}
       <div className="px-4 pt-4 animate-fade-in-up delay-75">
-        <p className="text-11 font-bold uppercase tracking-widest mb-3" style={{ color: "var(--text-secondary)" }}>
+        <p className="ds-section-label mb-3" style={{ color: "var(--text-secondary)" }}>
           {t("dashboard.quickActions")}
         </p>
         <div className="flex gap-3">
@@ -338,7 +338,7 @@ export default function DashboardPage() {
 
       {/* ── Recent Sales ── */}
       <div className="px-4 pt-5 pb-4 animate-fade-in-up delay-150">
-        <p className="text-11 font-bold uppercase tracking-widest mb-3" style={{ color: "var(--text-secondary)" }}>
+        <p className="ds-section-label mb-3" style={{ color: "var(--text-secondary)" }}>
           {t("dashboard.recentSales")}
         </p>
         <ListCard>

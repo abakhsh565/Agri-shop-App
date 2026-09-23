@@ -102,7 +102,7 @@ export default function ReminderConfigSheet({ config, onSave, onClose }: Props) 
     borderRadius: "24px",
   };
 
-  const labelCls = "text-11 font-semibold uppercase tracking-wider mb-2 block";
+  const labelCls = "ds-section-label mb-2 block";
 
   return (
     <div

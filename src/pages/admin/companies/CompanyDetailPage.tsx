@@ -193,7 +193,7 @@ export default function CompanyDetailPage() {
 
       {/* Financial summary — clean white card */}
       <div className="px-5 pt-4">
-        <div className="rounded-[var(--radius-card)] p-6 text-center" style={{ background: "var(--surface)", border: "1px solid var(--divider)" }}>
+        <div className="rounded-[var(--radius-card)] p-6 text-center" style={{ background: "var(--tone-card)" }}>
           <p className="text-11 font-semibold tracking-wide" style={{ color: "var(--text-secondary)" }}>
             {t("company.currentPayable")}
           </p>
@@ -224,11 +224,11 @@ export default function CompanyDetailPage() {
       {/* Totals — clean side-by-side cards */}
       <div className="px-5 pt-4 flex gap-3">
         <div className="ds-card flex-1">
-          <p className="text-10 font-semibold uppercase tracking-wide" style={{ color: "var(--text-secondary)" }}>{t("company.totalPurchased")}</p>
+          <p className="ds-section-label" style={{ color: "var(--text-secondary)" }}>{t("company.totalPurchased")}</p>
           <p className="text-15 font-bold mt-1" style={{ color: "var(--text-primary)" }}>{formatCurrency(company.totalPurchases)}</p>
         </div>
         <div className="ds-card flex-1">
-          <p className="text-10 font-semibold uppercase tracking-wide" style={{ color: "var(--text-secondary)" }}>{t("company.totalPaid")}</p>
+          <p className="ds-section-label" style={{ color: "var(--text-secondary)" }}>{t("company.totalPaid")}</p>
           <p className="text-15 font-bold mt-1" style={{ color: "var(--brand-dark, #16a34a)" }}>{formatCurrency(totalPaid)}</p>
         </div>
       </div>
@@ -369,7 +369,7 @@ function EditSupplierSheet({
     border: "1px solid var(--divider)",
     color: "var(--text-primary)",
   } as const;
-  const labelCls = "text-11 font-bold uppercase mb-2 tracking-wider";
+  const labelCls = "ds-section-label mb-2";
 
   return (
     <div

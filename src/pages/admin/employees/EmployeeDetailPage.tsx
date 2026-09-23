@@ -310,7 +310,7 @@ export default function EmployeeDetailPage() {
 
       {/* Contact */}
       <div className="px-4 pt-4 animate-fade-in-up delay-75">
-        <p className="text-11 font-bold uppercase tracking-widest mb-3" style={{ color: "var(--text-secondary)" }}>
+        <p className="ds-section-label mb-3" style={{ color: "var(--text-secondary)" }}>
           {t("empDetail.contact")}
         </p>
         <ListCard>
@@ -332,7 +332,7 @@ export default function EmployeeDetailPage() {
       {/* Job & access — what the employee does, where, and with what access */}
       <div className="px-4 pt-5 animate-fade-in-up delay-100">
         <div className="flex items-center justify-between mb-3">
-          <p className="text-11 font-bold uppercase tracking-widest" style={{ color: "var(--text-secondary)" }}>
+          <p className="ds-section-label" style={{ color: "var(--text-secondary)" }}>
             {t("empDetail.accessTitle")}
           </p>
           {canEditAccess && (
@@ -518,7 +518,7 @@ export default function EmployeeDetailPage() {
       {/* Performance — only once the person has actually completed onboarding */}
       {!isInvited && (
       <div className="px-4 pt-5 animate-fade-in-up delay-[125ms]">
-        <p className="text-11 font-bold uppercase tracking-widest mb-3" style={{ color: "var(--text-secondary)" }}>
+        <p className="ds-section-label mb-3" style={{ color: "var(--text-secondary)" }}>
           {t("empDetail.performance")}
         </p>
         <div className="grid grid-cols-2 gap-3">
@@ -551,7 +551,7 @@ export default function EmployeeDetailPage() {
       {!isInvited && (
       <div className="px-4 pt-5 animate-fade-in-up delay-[150ms]">
         <div className="flex items-center justify-between mb-3">
-          <p className="text-11 font-bold uppercase tracking-widest" style={{ color: "var(--text-secondary)" }}>
+          <p className="ds-section-label" style={{ color: "var(--text-secondary)" }}>
             {t("empDetail.recentSales")}
           </p>
           {empSales.length > 5 && (

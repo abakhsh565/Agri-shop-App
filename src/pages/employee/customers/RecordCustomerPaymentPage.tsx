@@ -158,7 +158,7 @@ export default function RecordCustomerPaymentPage() {
           className="mx-4 mt-3 rounded-[var(--radius-card)] p-5 text-center animate-fade-in-up"
           style={{ background: "var(--brand)" }}
         >
-          <p className="text-10 font-bold uppercase tracking-widest" style={{ color: "rgba(0,0,0,0.55)" }}>
+          <p className="ds-section-label" style={{ color: "rgba(0,0,0,0.55)" }}>
             {customer.name} · {t("recordPayment.outstanding")}
           </p>
           <p className="text-32 font-bold mt-1" style={{ color: "#0a0a0a" }}>
@@ -212,7 +212,7 @@ export default function RecordCustomerPaymentPage() {
             <>
               {/* Amount input */}
               <div>
-                <p className="text-11 font-bold uppercase mb-2 tracking-wider" style={{ color: "var(--text-secondary)" }}>
+                <p className="ds-section-label mb-2" style={{ color: "var(--text-secondary)" }}>
                   {t("recordPayment.amountLabel")}
                 </p>
                 <div className="flex items-center gap-2">
@@ -248,7 +248,7 @@ export default function RecordCustomerPaymentPage() {
 
               {/* Payment method */}
               <div>
-                <p className="text-11 font-bold uppercase mb-2 tracking-wider" style={{ color: "var(--text-secondary)" }}>
+                <p className="ds-section-label mb-2" style={{ color: "var(--text-secondary)" }}>
                   {t("recordPayment.method")}
                 </p>
                 <div className="flex gap-2">
@@ -275,7 +275,7 @@ export default function RecordCustomerPaymentPage() {
           {splitMode && (
             <div className="flex flex-col gap-3">
               <div className="flex items-center justify-between">
-                <p className="text-11 font-bold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
+                <p className="ds-section-label" style={{ color: "var(--text-secondary)" }}>
                   {t("recordPayment.paymentSplits") || "Payment Splits"}
                 </p>
                 <button
@@ -290,7 +290,7 @@ export default function RecordCustomerPaymentPage() {
               {splits.map((split, i) => (
                 <div key={i} className="flex flex-col gap-2 p-3 rounded-[var(--radius-tile)]" style={{ background: "var(--surface-2)", border: "1px solid var(--divider)" }}>
                   <div className="flex items-center justify-between">
-                    <span className="text-10 font-bold uppercase" style={{ color: "var(--text-secondary)" }}>
+                    <span className="ds-section-label" style={{ color: "var(--text-secondary)" }}>
                       Split {i + 1}
                     </span>
                     {splits.length > 2 && (
@@ -354,7 +354,7 @@ export default function RecordCustomerPaymentPage() {
 
           {/* Notes */}
           <div>
-            <p className="text-11 font-bold uppercase mb-2 tracking-wider" style={{ color: "var(--text-secondary)" }}>
+            <p className="ds-section-label mb-2" style={{ color: "var(--text-secondary)" }}>
               {t("recordPayment.notes")}
             </p>
             <textarea

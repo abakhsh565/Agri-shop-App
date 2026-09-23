@@ -55,7 +55,7 @@ export default function AdminPaymentsPage() {
           className="ds-card p-4 text-start"
           style={{ background: "var(--surface-2)", border: `1.5px solid ${tab === "customers" ? "var(--brand)" : "var(--divider)"}` }}
         >
-          <p className="text-10 font-bold uppercase tracking-widest" style={{ color: "var(--text-secondary)" }}>{t("admin.customersOweUs")}</p>
+          <p className="ds-section-label" style={{ color: "var(--text-secondary)" }}>{t("admin.customersOweUs")}</p>
           <p className="text-lg font-bold mt-1" style={{ color: "var(--brand-dark)" }}>{formatCurrency(totalReceivable)}</p>
         </button>
         <button
@@ -63,7 +63,7 @@ export default function AdminPaymentsPage() {
           className="ds-card p-4 text-start"
           style={{ background: "var(--surface-2)", border: `1.5px solid ${tab === "suppliers" ? "var(--brand)" : "var(--divider)"}` }}
         >
-          <p className="text-10 font-bold uppercase tracking-widest" style={{ color: "var(--text-secondary)" }}>{t("payments.weOweSuppliers")}</p>
+          <p className="ds-section-label" style={{ color: "var(--text-secondary)" }}>{t("payments.weOweSuppliers")}</p>
           <p className="text-lg font-bold mt-1" style={{ color: totalPayable > 0 ? "var(--error)" : "var(--brand-dark)" }}>{formatCurrency(totalPayable)}</p>
         </button>
       </div>

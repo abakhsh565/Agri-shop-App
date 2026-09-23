@@ -167,11 +167,11 @@ export default function CartPage() {
             </div>
             <div className="flex gap-8">
               <div>
-                <p className="text-10 text-caption uppercase">{t("sale.outstandingCredit")}</p>
+                <p className="ds-section-label text-caption">{t("sale.outstandingCredit")}</p>
                 <p className="text-sm font-bold text-foreground">{formatCurrency(customer.outstandingBalance)}</p>
               </div>
               <div>
-                <p className="text-10 text-caption uppercase">{t("customers.creditLimit")}</p>
+                <p className="ds-section-label text-caption">{t("customers.creditLimit")}</p>
                 <p className="text-sm font-bold text-foreground">{formatCurrency(customer.creditLimit)}</p>
               </div>
             </div>
@@ -271,7 +271,7 @@ export default function CartPage() {
 
       {/* Payment type */}
       <div className="px-4 pt-5">
-        <p className="text-xs font-bold text-foreground uppercase mb-3">{t("sale.paymentType")}</p>
+        <p className="ds-section-label text-foreground mb-3">{t("sale.paymentType")}</p>
         <div className="flex gap-2">
           {[{ key: "full", labelKey: "sale.fullPayment" }, { key: "partial", labelKey: "sale.partialCredit" }].map((opt) => (
             <button
@@ -289,7 +289,7 @@ export default function CartPage() {
 
       {/* Payment method — moved from SaleReviewPage */}
       <div className="px-4 pt-4">
-        <p className="text-xs font-bold text-foreground uppercase mb-3">{t("sale.paymentMethod")}</p>
+        <p className="ds-section-label text-foreground mb-3">{t("sale.paymentMethod")}</p>
         <div className="flex gap-2">
           {[{ key: "cash", labelKey: "sale.cash" }, { key: "bank_transfer", labelKey: "sale.bankTransfer" }].map((opt) => (
             <button
@@ -308,7 +308,7 @@ export default function CartPage() {
       {/* Amount received for partial */}
       {paymentType === "partial" && (
         <div className="px-4 pt-4">
-          <p className="text-xs font-bold text-foreground uppercase mb-2">{t("sale.amountReceived")}</p>
+          <p className="ds-section-label text-foreground mb-2">{t("sale.amountReceived")}</p>
           <input
             type="number"
             inputMode="numeric"
@@ -318,7 +318,7 @@ export default function CartPage() {
             className="w-full h-12 rounded-[var(--radius-input)] border border-border px-4 text-sm text-foreground placeholder:text-caption outline-none"
             onFocus={() => setAmountTouched(true)}
           />
-          <p className="text-xs font-bold text-foreground uppercase mb-2 mt-4">{t("sale.paymentDueDate")}</p>
+          <p className="ds-section-label text-foreground mb-2 mt-4">{t("sale.paymentDueDate")}</p>
           <p className="text-12 text-caption mb-2">{hasCreditPortion ? t("sale.dueDateRequired") : t("sale.dueDateOptional")}</p>
           <input
             type="date"

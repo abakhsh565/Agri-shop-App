@@ -57,21 +57,21 @@ export default function InventoryAlertsPage() {
             className="flex-1 rounded-[var(--radius-card)] p-3.5"
             style={{ background: outOfStock.length > 0 ? "#FEE2E2" : "var(--surface-2)" }}
           >
-            <p className="text-10 font-bold uppercase tracking-wider" style={{ color: outOfStock.length > 0 ? "#DC2626" : "var(--text-secondary)" }}>{t("admin.outOfStock")}</p>
+            <p className="ds-section-label" style={{ color: outOfStock.length > 0 ? "#DC2626" : "var(--text-secondary)" }}>{t("admin.outOfStock")}</p>
             <p className="text-20 font-bold mt-0.5" style={{ color: outOfStock.length > 0 ? "#991B1B" : "var(--text-primary)" }}>{outOfStock.length}</p>
           </div>
           <div
             className="flex-1 rounded-[var(--radius-card)] p-3.5"
             style={{ background: lowStock.length > 0 ? "#FEF3C7" : "var(--surface-2)" }}
           >
-            <p className="text-10 font-bold uppercase tracking-wider" style={{ color: lowStock.length > 0 ? "#D97706" : "var(--text-secondary)" }}>{t("admin.lowStock")}</p>
+            <p className="ds-section-label" style={{ color: lowStock.length > 0 ? "#D97706" : "var(--text-secondary)" }}>{t("admin.lowStock")}</p>
             <p className="text-20 font-bold mt-0.5" style={{ color: lowStock.length > 0 ? "#92400E" : "var(--text-primary)" }}>{lowStock.length}</p>
           </div>
           <div
             className="flex-1 rounded-[var(--radius-card)] p-3.5"
-            style={{ background: "var(--surface-2)" }}
+            style={{ background: "var(--tone-card)" }}
           >
-            <p className="text-10 font-bold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>{t("admin.reorder")}</p>
+            <p className="ds-section-label" style={{ color: "var(--text-secondary)" }}>{t("admin.reorder")}</p>
             <p className="text-20 font-bold mt-0.5" style={{ color: "var(--text-primary)" }}>{reorderNeeded.length}</p>
           </div>
         </div>
@@ -95,7 +95,7 @@ export default function InventoryAlertsPage() {
         {/* Out of stock */}
         {outOfStock.length > 0 && (
           <div>
-            <p className="text-11 font-bold uppercase tracking-widest mb-2" style={{ color: "#DC2626" }}>
+            <p className="ds-section-label mb-2" style={{ color: "#DC2626" }}>
               {t("products.outOfStock")}
             </p>
             <div className="flex flex-col gap-2">
@@ -126,7 +126,7 @@ export default function InventoryAlertsPage() {
         {/* Low stock */}
         {lowStock.length > 0 && (
           <div>
-            <p className="text-11 font-bold uppercase tracking-widest mb-2" style={{ color: "#D97706" }}>
+            <p className="ds-section-label mb-2" style={{ color: "#D97706" }}>
               {t("products.lowStock")}
             </p>
             <div className="flex flex-col gap-2">

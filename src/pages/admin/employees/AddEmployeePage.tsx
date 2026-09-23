@@ -251,14 +251,14 @@ export default function AddEmployeePage() {
           <div className="rounded-[var(--radius-tile)] p-3 mx-1" style={{ background: "var(--surface-2)", border: "1px solid var(--divider)" }}>
           {customizing ? (
             <>
-              <p className="text-11 font-bold uppercase tracking-wider mb-2" style={{ color: "var(--text-secondary)" }}>
+              <p className="ds-section-label mb-2" style={{ color: "var(--text-secondary)" }}>
                 {t("addEmployee.effectiveAccess", { name: firstName })}
               </p>
               <EmployeeAccessEditor roleDefaults={roleDefaultSet} value={accessValue} onChange={setAccessValue} />
             </>
           ) : (
             <>
-              <p className="text-11 font-bold uppercase tracking-wider mb-2" style={{ color: "var(--text-secondary)" }}>
+              <p className="ds-section-label mb-2" style={{ color: "var(--text-secondary)" }}>
                 {t("addEmployee.roleAccess")}
               </p>
               {accessByArea().length === 0 ? (
@@ -396,7 +396,7 @@ export default function AddEmployeePage() {
         {step === "who" && (
           <>
             <div>
-              <p className="text-11 font-bold uppercase mb-2 tracking-wider" style={{ color: "var(--text-secondary)" }}>
+              <p className="ds-section-label mb-2" style={{ color: "var(--text-secondary)" }}>
                 {t("addEmployee.name")} *
               </p>
               <input
@@ -409,7 +409,7 @@ export default function AddEmployeePage() {
               />
             </div>
             <div>
-              <p className="text-11 font-bold uppercase mb-2 tracking-wider" style={{ color: "var(--text-secondary)" }}>
+              <p className="ds-section-label mb-2" style={{ color: "var(--text-secondary)" }}>
                 {t("addEmployee.phone")} *
               </p>
               <input
@@ -426,7 +426,7 @@ export default function AddEmployeePage() {
               </p>
             </div>
             <div className="pt-1">
-              <p className="text-11 font-bold uppercase mb-2 tracking-wider" style={{ color: "var(--text-secondary)" }}>
+              <p className="ds-section-label mb-2" style={{ color: "var(--text-secondary)" }}>
                 {t("addEmployee.photoOptional")}
               </p>
               <div className="flex justify-center">

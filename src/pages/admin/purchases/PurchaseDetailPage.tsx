@@ -8,6 +8,7 @@ import { formatCurrency, formatDateTime } from "@/lib/formatters";
 import ListCard from "@/components/ui/ListCard";
 import ListRow from "@/components/ui/ListRow";
 import { supabase } from "@/lib/supabase";
+
 import type { Purchase } from "@/types";
 import { useT } from "@/lib/i18n";
 
@@ -106,7 +107,7 @@ export default function PurchaseDetailPage() {
 
         {/* Items */}
         <div>
-          <p className="text-11 font-bold uppercase tracking-wider mb-2" style={{ color: "var(--text-secondary)" }}>{t("purchase.itemsPurchased")}</p>
+          <p className="ds-section-label mb-2" style={{ color: "var(--text-secondary)" }}>{t("purchase.itemsPurchased")}</p>
           <ListCard>
             {purchase.items.map((item) => (
               <ListRow
@@ -126,7 +127,7 @@ export default function PurchaseDetailPage() {
 
         {/* Payment summary */}
         <div className="ds-card">
-          <p className="text-11 font-bold uppercase tracking-wider mb-3" style={{ color: "var(--text-secondary)" }}>{t("purchase.paymentSummary")}</p>
+          <p className="ds-section-label mb-3" style={{ color: "var(--text-secondary)" }}>{t("purchase.paymentSummary")}</p>
           <div className="flex flex-col gap-2">
             <div className="flex justify-between">
               <span className="text-sm" style={{ color: "var(--text-secondary)" }}>{t("saleReview.totalAmount")}</span>

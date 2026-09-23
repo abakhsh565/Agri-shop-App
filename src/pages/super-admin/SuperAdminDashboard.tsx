@@ -172,7 +172,7 @@ export default function SuperAdminDashboard() {
                 key={req.id}
                 onClick={() => setSelectedRequest(req)}
                 className="flex items-center gap-3 p-3 rounded-[var(--radius-card)] text-start transition-all active:scale-[0.98]"
-                style={{ background: "var(--surface)" }}
+                style={{ background: "var(--tone-card)" }}
               >
                 {/* Shop Logo/Initials */}
                 <div
@@ -300,7 +300,7 @@ export default function SuperAdminDashboard() {
         >
           <div
             className="w-full max-w-[360px] rounded-[var(--radius-card)] p-6 flex flex-col gap-4"
-            style={{ background: "var(--surface)" }}
+            style={{ background: "var(--tone-card)" }}
             onClick={(e) => e.stopPropagation()}
           >
             <p className="text-base font-bold" style={{ color: "var(--text-primary)" }}>
@@ -355,7 +355,7 @@ function InfoRow({ icon: Icon, label, value }: { icon: any; label: string; value
         <Icon size={14} style={{ color: "var(--text-secondary)" }} />
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-10 uppercase" style={{ color: "var(--text-secondary)" }}>{label}</p>
+        <p className="ds-section-label" style={{ color: "var(--text-secondary)" }}>{label}</p>
         <p className="text-sm font-medium truncate" style={{ color: "var(--text-primary)" }}>{value}</p>
       </div>
     </div>

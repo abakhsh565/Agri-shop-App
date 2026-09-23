@@ -61,7 +61,7 @@ export default function SplashPage() {
         </div>
       </div>
       <div className="flex flex-col items-center p-6">
-        <p className="text-11 text-caption uppercase tracking-wide">{t("auth.employeeApp")}</p>
+        <p className="ds-section-label text-caption">{t("auth.employeeApp")}</p>
       </div>
     </div>
   );

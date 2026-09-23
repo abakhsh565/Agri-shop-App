@@ -189,7 +189,7 @@ export default function CreditRequestDetailPage() {
         {/* Why flagged — real business context */}
         {request.reason && (
           <div className="rounded-[var(--radius-tile)] p-4" style={{ background: "var(--surface-2)" }}>
-            <p className="text-11 font-bold uppercase tracking-wider mb-2" style={{ color: "var(--text-secondary)" }}>
+            <p className="ds-section-label mb-2" style={{ color: "var(--text-secondary)" }}>
               {t("inline.why_flagged")}
             </p>
             <p className="text-13 leading-relaxed" style={{ color: "var(--text-primary)" }}>{request.reason}</p>

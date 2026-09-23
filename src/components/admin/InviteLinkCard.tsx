@@ -51,7 +51,7 @@ export default function InviteLinkCard({ name, phone }: { name: string; phone: s
       style={{ background: "var(--surface)", border: "1px solid var(--divider)", direction: isUrdu ? "rtl" : "ltr" }}
     >
       <div className="px-4 pt-4 pb-3">
-        <p className="text-11 font-bold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
+        <p className="ds-section-label" style={{ color: "var(--text-secondary)" }}>
           {t("invite.linkLabel")}
         </p>
 

@@ -1,5 +1,8 @@
 import { useNavigate } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
+import ListCard from "@/components/ui/ListCard";
+import ListRow from "@/components/ui/ListRow";
+import { useDir } from "@/lib/dirContext";
 import { useAuthStore } from "@/stores/authStore";
 import { useT } from "@/lib/i18n";
 import { useThemeStore } from "@/stores/themeStore";
@@ -19,13 +22,14 @@ export default function MorePage() {
   const t = useT();
   const { language } = useThemeStore();
   const isUrdu = language === "ur";
+  const { isRtl } = useDir();
 
   const bg = initBgColor(user?.name ?? "U");
   const initials = user?.name?.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase() ?? "U";
 
   const MENU_ITEMS = [
     { key: "nav.customers", icon: Users, path: "/employee/customers" },
-    { key: "Notifications", icon: Bell, path: "/employee/notifications" },
+    { key: "common.notifications", icon: Bell, path: "/employee/notifications" },
     { key: "settings.title", icon: Settings, path: "/employee/settings" },
   ];
 
@@ -42,38 +46,58 @@ export default function MorePage() {
 
       {/* Profile card */}
       <div className="px-4 pb-4">
-        <div className="rounded-[var(--radius-card)] p-4 flex items-center gap-3" style={{ background: "var(--surface-2)" }}>
+        <div className="rounded-[var(--radius-card)] p-4 flex items-center gap-3" style={{ background: "var(--tone-card)" }}>
           <div
             className="w-12 h-12 rounded-full flex items-center justify-center text-lg font-bold shrink-0"
             style={{ background: bg, color: "#fff" }}
           >
             {initials}
           </div>
+          {/* Two lines, as on Settings: who the account is, then the number under it — and
+              the role as a quiet chip beside the name rather than a second line that
+              repeats the chip it already shows. */}
           <div className="flex-1 min-w-0">
-            <p className="text-15 font-bold truncate" style={{ color: "var(--text-primary)" }}>{user?.name}</p>
-            <p className="text-12 capitalize" style={{ color: "var(--text-secondary)" }}>{user?.role?.replace("_", " ")}</p>
+            <div className="flex items-center gap-2 min-w-0">
+              <p className="text-base font-bold truncate" style={{ color: "var(--text-primary)" }}>{user?.name}</p>
+              {user?.role && (
+                <span
+                  className="text-11 font-bold px-2 py-0.5 rounded-full shrink-0 capitalize"
+                  style={{ background: "var(--tone-sunken)", color: "var(--text-secondary)" }}
+                >
+                  {user.role.replace("_", " ")}
+                </span>
+              )}
+            </div>
+            <p className="text-12 mt-0.5" style={{ color: "var(--text-secondary)" }}>{user?.phone}</p>
           </div>
         </div>
       </div>
 
-      {/* Menu items */}
-      <div className="flex flex-col px-4 gap-2">
-        {MENU_ITEMS.map(({ key, icon: Icon, path }) => (
-          <button
-            key={path}
-            onClick={() => navigate(path)}
-            className="flex items-center gap-3 p-3 rounded-[var(--radius-card)] transition-all active:scale-[0.98]"
-            style={{ background: "var(--surface-2)" }}
-          >
-            <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0" style={{ background: "var(--divider)" }}>
-              <Icon size={16} style={{ color: "var(--text-primary)" }} />
-            </div>
-            <p className="flex-1 text-start text-14 font-semibold" style={{ color: "var(--text-primary)" }}>
-              {key.startsWith("nav.") || key.startsWith("settings.") ? t(key as any) : key}
-            </p>
-            <ChevronRight size={16} style={{ color: "var(--text-secondary)" }} />
-          </button>
-        ))}
+      {/* Menu — one grouped card with hairlines, on the shared row primitive, exactly as
+          Settings renders its rows: same glyph size, same label size, same row height. Each
+          item used to be its own card with a 16pt glyph in a grey circle, which is why this
+          page read as a different app from the screen it opens into. */}
+      <div className="px-4">
+        <ListCard>
+          {MENU_ITEMS.map(({ key, icon, path }) => (
+            <ListRow
+              key={path}
+              onClick={() => navigate(path)}
+              icon={icon}
+              title={t(key as any)}
+              trailing={
+                <ChevronRight
+                  size={14}
+                  className="ds-row-chevron shrink-0"
+                  style={{
+                    color: "var(--text-secondary)",
+                    transform: isRtl ? "rotate(180deg)" : undefined,
+                  }}
+                />
+              }
+            />
+          ))}
+        </ListCard>
       </div>
     </div>
   );

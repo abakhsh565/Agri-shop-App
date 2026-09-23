@@ -141,7 +141,7 @@ export default function ReturnConfirmPage() {
           className="mx-4 mt-3 rounded-[var(--radius-card)] p-4 text-center"
           style={{ border: "1px solid var(--divider)" }}
         >
-          <p className="text-10 uppercase" style={{ color: "var(--text-secondary)" }}>
+          <p className="ds-section-label" style={{ color: "var(--text-secondary)" }}>
             {t("returns.estimatedRefund")}
           </p>
           <p
@@ -156,7 +156,7 @@ export default function ReturnConfirmPage() {
           {/* Mandatory Return Reason */}
           <div>
             <p
-              className="text-xs font-bold uppercase mb-2"
+              className="ds-section-label mb-2"
               style={{ color: "var(--text-secondary)" }}
             >
               {t("returns.reason")}<span style={{ color: "#ef4444" }}>*</span>
@@ -182,7 +182,7 @@ export default function ReturnConfirmPage() {
           {/* Items with editable prices */}
           <div>
             <p
-              className="text-xs font-bold uppercase mb-2"
+              className="ds-section-label mb-2"
               style={{ color: "var(--text-secondary)" }}
             >
               {t("admin.returningItems")}
@@ -241,7 +241,7 @@ export default function ReturnConfirmPage() {
           {/* Resolution method */}
           <div>
             <p
-              className="text-xs font-bold uppercase mb-2"
+              className="ds-section-label mb-2"
               style={{ color: "var(--text-secondary)" }}
             >
               {t("admin.resolutionMethod")}
@@ -290,7 +290,7 @@ export default function ReturnConfirmPage() {
             />
             <div>
               <p
-                className="text-xs font-bold uppercase mb-1"
+                className="ds-section-label mb-1"
                 style={{ color: "var(--text-primary)" }}
               >
                 {t("admin.refundProcessing")}

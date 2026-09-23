@@ -76,7 +76,7 @@ export default function DailyCashReconciliationPage() {
       <div className="flex flex-col gap-4 p-4">
         {/* Date selector */}
         <div>
-          <p className="text-11 font-bold uppercase tracking-wider mb-2" style={{ color: "var(--text-secondary)" }}>{t("admin.selectDate")}</p>
+          <p className="ds-section-label mb-2" style={{ color: "var(--text-secondary)" }}>{t("admin.selectDate")}</p>
           <input
             type="date"
             value={selectedDate}
@@ -87,8 +87,8 @@ export default function DailyCashReconciliationPage() {
         </div>
 
         {/* Expected cash summary */}
-        <div className="rounded-[var(--radius-card)] p-4" style={{ background: "var(--surface)", border: "1px solid var(--divider)" }}>
-          <p className="text-11 font-bold uppercase tracking-wider mb-3" style={{ color: "var(--text-secondary)" }}>{t("admin.expectedCash")}</p>
+        <div className="rounded-[var(--radius-card)] p-4" style={{ background: "var(--tone-card)" }}>
+          <p className="ds-section-label mb-3" style={{ color: "var(--text-secondary)" }}>{t("admin.expectedCash")}</p>
 
           {!reconciliation.hasData ? (
             <p className="text-sm" style={{ color: "var(--text-secondary)" }}>{t("admin.noSalesForDate")}</p>
@@ -117,7 +117,7 @@ export default function DailyCashReconciliationPage() {
 
         {/* Counted cash input */}
         <div>
-          <p className="text-11 font-bold uppercase tracking-wider mb-2" style={{ color: "var(--text-secondary)" }}>{t("admin.countedCash")}</p>
+          <p className="ds-section-label mb-2" style={{ color: "var(--text-secondary)" }}>{t("admin.countedCash")}</p>
           <div className="relative">
             <Calculator size={16} className="absolute start-4 top-1/2 -translate-y-1/2" style={{ color: "var(--text-secondary)" }} />
             <input
@@ -134,8 +134,8 @@ export default function DailyCashReconciliationPage() {
 
         {/* Variance display */}
         {countedCash && Number(countedCash) > 0 && (
-          <div className="rounded-[var(--radius-card)] p-4" style={{ background: "var(--surface)", border: "1px solid var(--divider)" }}>
-            <p className="text-11 font-bold uppercase tracking-wider mb-2" style={{ color: "var(--text-secondary)" }}>{t("admin.variance")}</p>
+          <div className="rounded-[var(--radius-card)] p-4" style={{ background: "var(--tone-card)" }}>
+            <p className="ds-section-label mb-2" style={{ color: "var(--text-secondary)" }}>{t("admin.variance")}</p>
             <div className="flex items-center gap-3">
               {reconciliation.variance === 0 ? (
                 <CheckCircle size={20} style={{ color: "#22c55e" }} />

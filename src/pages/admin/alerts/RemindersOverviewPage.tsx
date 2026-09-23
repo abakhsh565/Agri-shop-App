@@ -216,7 +216,7 @@ function ReminderCard({
 
       {expanded && (
         <div className="px-4 pb-4 flex flex-col gap-3" style={{ borderTop: "1px solid var(--divider)" }}>
-          <p className="text-10 font-bold uppercase tracking-wider pt-3" style={{ color: "var(--text-secondary)" }}>{t("common.message")}</p>
+          <p className="ds-section-label pt-3" style={{ color: "var(--text-secondary)" }}>{t("common.message")}</p>
           <div className="rounded-[var(--radius-tile)] px-3 py-2.5" style={{ background: "var(--surface-2)" }}>
             <p className="text-13 leading-relaxed" style={{ color: "var(--text-primary)" }}>{generateReminderMessage(reminder)}</p>
           </div>
@@ -625,7 +625,7 @@ export default function RemindersOverviewPage() {
               }
               return groups.map(g => (
                 <div key={g.heading}>
-                  <p className="px-4 pt-3 pb-1 text-10 font-bold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>{g.heading}</p>
+                  <p className="ds-section-label px-4 pt-3 pb-1" style={{ color: "var(--text-secondary)" }}>{g.heading}</p>
                   <ListCard className="mx-4">
                   {g.items.map((log, i) => (
                     <ActivityItem key={log.id || i} log={log} />
@@ -805,7 +805,7 @@ export default function RemindersOverviewPage() {
                 <span className="text-11" style={{ color: "var(--text-secondary)" }}>{editingReminder.triggerDetail}</span>
               </div>
               <div>
-                <label className="text-11 font-semibold uppercase tracking-wider block mb-2" style={{ color: "var(--text-secondary)" }}>{t("common.message")}</label>
+                <label className="ds-section-label block mb-2" style={{ color: "var(--text-secondary)" }}>{t("common.message")}</label>
                 <textarea value={editMessage} onChange={(e) => setEditMessage(e.target.value)} rows={5} className="w-full rounded-[var(--radius-card)] px-4 py-3 text-13 outline-none resize-none" style={{ background: "var(--surface-2)", color: "var(--text-primary)", border: "1px solid var(--border-control)" }} />
               </div>
               <div className="flex gap-3">

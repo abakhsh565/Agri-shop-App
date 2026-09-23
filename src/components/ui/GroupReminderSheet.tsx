@@ -98,7 +98,7 @@ export default function GroupReminderSheet({ groupName: initGroupName, config: i
     border: "1px solid var(--divider)",
     borderRadius: "24px",
   };
-  const labelCls = "text-11 font-semibold uppercase tracking-wider mb-2 block";
+  const labelCls = "ds-section-label mb-2 block";
 
   return (
     <div
@@ -326,7 +326,7 @@ export default function GroupReminderSheet({ groupName: initGroupName, config: i
               </div>
 
               {/* Group summary */}
-              <div className="rounded-[var(--radius-card)] p-3 text-12" style={{ background: "var(--surface-2)", border: "1px solid var(--divider)" }}>
+              <div className="rounded-[var(--radius-card)] p-3 text-12" style={{ background: "var(--tone-card)" }}>
                 <p style={{ color: "var(--text-secondary)" }}>
                   {t("groupReminderSheet.groupLabel", { name: groupName })}
                 </p>

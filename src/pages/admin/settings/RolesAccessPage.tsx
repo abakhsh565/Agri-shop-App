@@ -166,15 +166,15 @@ export default function RolesAccessPage() {
         <NavHeader title={editingRole ? t("roles.edit") : t("roles.new")} />
         <div className="flex-1 flex flex-col p-4 gap-4">
           <div>
-            <p className="text-11 font-bold uppercase mb-2 tracking-wider" style={{ color: "var(--text-secondary)" }}>{t("roles.name")} *</p>
+            <p className="ds-section-label mb-2" style={{ color: "var(--text-secondary)" }}>{t("roles.name")} *</p>
             <input value={roleName} onChange={(e) => setRoleName(e.target.value)} placeholder={t("roles.nameHint")} className="w-full h-12 rounded-[var(--radius-input)] px-4 text-sm outline-none" style={fieldStyle} autoFocus />
           </div>
           <div>
-            <p className="text-11 font-bold uppercase mb-2 tracking-wider" style={{ color: "var(--text-secondary)" }}>{t("roles.description")}</p>
+            <p className="ds-section-label mb-2" style={{ color: "var(--text-secondary)" }}>{t("roles.description")}</p>
             <input value={roleDesc} onChange={(e) => setRoleDesc(e.target.value)} placeholder={t("roles.descriptionHint")} className="w-full h-12 rounded-[var(--radius-input)] px-4 text-sm outline-none" style={fieldStyle} />
           </div>
           <div>
-            <p className="text-11 font-bold uppercase mb-3 tracking-wider" style={{ color: "var(--text-secondary)" }}>{t("roles.access")}</p>
+            <p className="text-13 font-semibold mb-2" style={{ color: "var(--text-secondary)" }}>{t("roles.access")}</p>
             <div className="space-y-3">
               {[...new Set(allPerms.map((p) => p.module))].map((mod) => {
                 const areaPerms = allPerms.filter((p) => p.module === mod);

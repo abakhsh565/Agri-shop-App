@@ -9,14 +9,14 @@ import { useProductsStore } from "@/stores/productsStore";
 import { useEmployeesStore } from "@/stores/employeesStore";
 import { useCompaniesStore } from "@/stores/companiesStore";
 import PullToRefresh from "@/components/ui/PullToRefresh";
-import NextStepCard from "@/components/ui/NextStepCard";
+import SetupChecklist from "@/components/ui/SetupChecklist";
 import { useCustomersStore } from "@/stores/customersStore";
 import { supabase } from "@/lib/supabase";
 import { formatCurrency, formatSmartDateTime } from "@/lib/formatters";
 import { generateReminders, calculatePaymentStatus, loadBusinessSettings } from "@/lib/reminderEngine";
 import { computeOverdueCreditTotal } from "@/lib/signalEngine";
 import { useT } from "@/lib/i18n";
-import { AlertTriangle, TrendingUp, ChevronRight, TrendingDown, ShoppingCart, Search, Bell, Wallet, CheckCircle2 } from "lucide-react";
+import { AlertTriangle, TrendingUp, ChevronRight, TrendingDown, ShoppingCart, Search, Bell, Wallet, CheckCircle2, HandCoins, PackagePlus } from "lucide-react";
 import StatusBar from "@/components/ui/StatusBar";
 import ListCard from "@/components/ui/ListCard";
 import ListRow from "@/components/ui/ListRow";
@@ -346,7 +346,7 @@ export default function AdminDashboardPage() {
               className="px-4 py-3 flex items-center justify-between shrink-0 w-full active:opacity-70 transition-opacity"
               style={{ borderBottom: "1px solid var(--divider)" }}
             >
-              <p className="text-12 font-bold uppercase tracking-wider" style={{ color: "var(--text-primary)" }}>
+              <p className="ds-section-label" style={{ color: "var(--text-primary)" }}>
                 {t("dashboard.notifications")}
               </p>
               <div className="flex items-center gap-2">
@@ -395,7 +395,7 @@ export default function AdminDashboardPage() {
 
                   return limited.map((group) => (
                     <div key={group.heading}>
-                      <p className="px-4 pt-3 pb-1 text-10 font-bold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
+                      <p className="ds-section-label px-4 pt-3 pb-1" style={{ color: "var(--text-secondary)" }}>
                         {group.heading}
                       </p>
                       {group.items.map((n) => {
@@ -445,20 +445,17 @@ export default function AdminDashboardPage() {
         ))}
       </div>
 
-      {/* ── First-run guidance: ONE next step, not a checklist. Settings owns completion
-          status (all three steps plus a percentage); Home gives a new owner the single
-          action that unblocks them, in the graph's own dependency order. It renders
-          nothing once the shop can trade, so Home is never nagged by it. ── */}
-      <NextStepCard className="px-4 pt-4 animate-fade-in-up" />
-
-      {/* ── Total Sales card (lime hero): Total Sales · Transactions · Gross Profit ── */}
-      <div className="px-4 animate-fade-in-up">
+      {/* ── Total Sales card (lime hero): Total Sales · Transactions · Gross Profit ──
+          Figures first, then the actions, then the setup checklist: the order a shop owner
+          who is already trading wants. The checklist sits with the actions because both are
+          things to *do*, and it stays out of the way until then. ── */}
+      <div className="px-4 pt-3 animate-fade-in-up">
         <button
           className="w-full rounded-[var(--radius-card)] p-5 text-start transition-transform active:scale-[0.98]"
           style={{ background: "var(--brand)" }}
           onClick={() => navigate("/admin/sales")}
         >
-          <p className="text-11 font-bold uppercase tracking-widest mb-1" style={{ color: "rgba(0,0,0,0.55)" }}>
+          <p className="ds-section-label mb-1" style={{ color: "rgba(0,0,0,0.55)" }}>
             {t("admin.totalSales")}
           </p>
           <p className="text-28 font-semibold leading-none" style={{ color: "#0a0a0a" }}>
@@ -467,14 +464,14 @@ export default function AdminDashboardPage() {
 
           <div className="flex items-end justify-between mt-4">
             <div>
-              <p className="text-10 font-semibold uppercase tracking-wider" style={{ color: "rgba(0,0,0,0.5)" }}>
+              <p className="ds-section-label" style={{ color: "rgba(0,0,0,0.5)" }}>
                 {t("inline.gross_profit")}
               </p>
               <p className="text-16 font-semibold" style={{ color: "#0a0a0a" }}>{formatRs(grossProfit)}</p>
             </div>
             <div className="w-px self-stretch mx-3" style={{ background: "rgba(0,0,0,0.15)" }} />
             <div>
-              <p className="text-10 font-semibold uppercase tracking-wider" style={{ color: "rgba(0,0,0,0.5)" }}>
+              <p className="ds-section-label" style={{ color: "rgba(0,0,0,0.5)" }}>
                 {t("inline.credit_collect")}
               </p>
               <div className="flex items-center gap-2">
@@ -490,46 +487,53 @@ export default function AdminDashboardPage() {
 
       {/* ── Summary: Action needed · Follow-ups · Out of stock ── */}
       <div className="px-4 pt-4 flex gap-2 animate-fade-in-up">
-        <button onClick={() => navigate('/admin/alerts/reminders', { state: { tab: 'action', subTab: 'critical' } })} className="flex-1 flex items-center gap-2.5 py-2.5 px-3 rounded-[var(--radius-tile)] active:opacity-70 transition-opacity" style={{ background: "var(--surface-2)" }}>
+        <button onClick={() => navigate('/admin/alerts/reminders', { state: { tab: 'action', subTab: 'critical' } })} className="flex-1 flex items-center gap-2.5 py-2.5 px-3 rounded-[var(--radius-tile)] active:opacity-70 transition-opacity" style={{ background: "var(--tone-card)" }}>
           <p className="text-16 font-bold" style={{ color: (highRiskCount + creditLimitReached) > 0 ? "var(--error)" : "var(--text-secondary)" }}>{highRiskCount + creditLimitReached}</p>
           <p className="text-10 font-medium leading-tight" style={{ color: "var(--text-secondary)" }}>{t("admin.actionNeeded")}</p>
         </button>
-        <button onClick={() => navigate('/admin/alerts/reminders', { state: { tab: 'followups', subTab: 'ready' } })} className="flex-1 flex items-center gap-2.5 py-2.5 px-3 rounded-[var(--radius-tile)] active:opacity-70 transition-opacity" style={{ background: "var(--surface-2)" }}>
+        <button onClick={() => navigate('/admin/alerts/reminders', { state: { tab: 'followups', subTab: 'ready' } })} className="flex-1 flex items-center gap-2.5 py-2.5 px-3 rounded-[var(--radius-tile)] active:opacity-70 transition-opacity" style={{ background: "var(--tone-card)" }}>
           <p className="text-16 font-bold" style={{ color: (delayedCount + dueReminderCount) > 0 ? "var(--warning)" : "var(--text-secondary)" }}>{delayedCount + dueReminderCount}</p>
           <p className="text-10 font-medium leading-tight" style={{ color: "var(--text-secondary)" }}>{t("inline.follow_ups_x")}</p>
         </button>
-        <button onClick={() => navigate('/admin/alerts/inventory')} className="flex-1 flex items-center gap-2.5 py-2.5 px-3 rounded-[var(--radius-tile)] active:opacity-70 transition-opacity" style={{ background: "var(--surface-2)" }}>
+        <button onClick={() => navigate('/admin/alerts/inventory')} className="flex-1 flex items-center gap-2.5 py-2.5 px-3 rounded-[var(--radius-tile)] active:opacity-70 transition-opacity" style={{ background: "var(--tone-card)" }}>
           <p className="text-16 font-bold" style={{ color: outOfStockCount > 0 ? "var(--error)" : "var(--text-secondary)" }}>{outOfStockCount}</p>
           <p className="text-10 font-medium leading-tight" style={{ color: "var(--text-secondary)" }}>{t("signal.detailOutOfStock")}</p>
         </button>
       </div>
 
-      {/* ── Quick Actions ── */}
-      <div className="px-4 pt-5">
+      {/* ── Quick Actions ──
+          One glyph, one word, one surface. The three actions used to be flat outlined boxes
+          shorter than a list row, which read as fields rather than things to press; the
+          primary one is brand-filled and the other two are tone surfaces, the same grammar
+          every other card on this screen uses (no outlined boxes anywhere). ── */}
+      <div className="px-4 pt-4">
         <div className="grid grid-cols-3 gap-2.5">
-          <button
-            onClick={() => navigate("/admin/sale")}
-            className="h-10 rounded-[var(--radius-tile)] font-semibold text-12 flex items-center justify-center transition-transform active:scale-[0.97]"
-            style={{ background: "var(--brand)", color: "#0a0a0a" }}
-          >
-            {t("dashboard.newSale")}
-          </button>
-          <button
-            onClick={() => navigate("/admin/customers")}
-            className="h-10 rounded-[var(--radius-tile)] font-semibold text-12 flex items-center justify-center transition-transform active:scale-[0.97]"
-            style={{ border: "1.5px solid var(--divider)", color: "var(--text-primary)", background: "transparent" }}
-          >
-            {t("dashboard.recordPayment")}
-          </button>
-          <button
-            onClick={() => navigate("/admin/purchases/new")}
-            className="h-10 rounded-[var(--radius-tile)] font-semibold text-12 flex items-center justify-center transition-transform active:scale-[0.97]"
-            style={{ border: "1.5px solid var(--divider)", color: "var(--text-primary)", background: "transparent" }}
-          >
-            {t("admin.purchases") ?? "Purchase"}
-          </button>
+          {([
+            { icon: ShoppingCart, label: t("dashboard.newSale"), to: "/admin/sale", primary: true },
+            { icon: HandCoins,    label: t("dashboard.recordPayment"), to: "/admin/customers", primary: false },
+            // The purchase glyph, not a delivery truck: this button records stock coming in,
+            // and it is the same mark the Purchases screens and that FAB already use.
+            { icon: PackagePlus,  label: t("admin.purchases") ?? "Purchase", to: "/admin/purchases/new", primary: false },
+          ] as const).map(({ icon: Icon, label, to, primary }) => (
+            <button
+              key={to}
+              onClick={() => navigate(to)}
+              className="h-14 rounded-[var(--radius-tile)] flex flex-col items-center justify-center gap-1 ds-pressable"
+              style={primary
+                ? { background: "var(--brand)", color: "#0a0a0a" }
+                : { background: "var(--tone-card)", color: "var(--text-primary)" }}
+            >
+              <Icon size={18} strokeWidth={1.8} />
+              <span className="text-11 font-semibold text-center leading-tight px-1">{label}</span>
+            </button>
+          ))}
         </div>
       </div>
+
+      {/* ── First-run guidance. One checklist, the same component Settings renders, so a new
+          owner sees the identical three steps in both places. It renders nothing once the
+          shop can trade, so Home is never nagged by it. ── */}
+      <SetupChecklist testId="setup-next-step" className="px-4 pt-4 animate-fade-in-up" />
 
       {/* ── Quick Alerts: 3 summary rows with premium card design ── */}
       {(() => {
@@ -599,38 +603,44 @@ export default function AdminDashboardPage() {
         }
         if (items.length === 0) return null;
         return (
-          <div className="px-4 pt-4">
-            <div className="rounded-[var(--radius-card)] p-4 flex flex-col gap-2.5" style={{ background: "var(--surface-2)" }}>
-              <p className="text-11 font-bold uppercase tracking-widest px-1" style={{ color: "var(--text-secondary)" }}>
-                {t("admin.quickAlerts")}
-              </p>
+          <div className="px-4 pt-5">
+            {/* A label above one card of rows — the same shape as Recent Sales and every
+                other list in the app. It used to be a card wrapping a column of three more
+                cards, which is the double surface the rest of the app no longer uses. */}
+            <p className="ds-section-label mb-2 px-1" style={{ color: "var(--text-secondary)" }}>
+              {t("admin.quickAlerts")}
+            </p>
+            <ListCard>
               {items.map((item) => (
-                <button
+                <ListRow
                   key={item.key}
                   onClick={item.onClick}
-                  className="flex items-start gap-3 p-3.5 rounded-[var(--radius-tile)] w-full text-start active:opacity-70 transition-opacity"
-                  style={{ background: item.cardBg }}
-                >
-                  <div className="shrink-0 w-9 h-9 rounded-full flex items-center justify-center mt-0.5"
-                    style={{
-                      background: item.key === "critical" ? "var(--error-bg)" : item.key === "followups" ? "var(--warning-bg)" : "var(--surface-2)",
-                      color: item.key === "critical" ? "var(--error)" : item.key === "followups" ? "var(--warning)" : "var(--text-secondary)",
-                    }}
-                  >
-                    {item.icon}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-14 font-bold" style={{ color: "var(--text-primary)" }}>{item.title}</p>
-                    {item.subtitle && <p className="text-12 mt-0.5" style={{ color: "var(--text-secondary)" }}>{item.subtitle}</p>}
-                  </div>
-                  {item.action && (
-                    <span className="text-12 font-semibold shrink-0 mt-1" style={{ color: item.actionColor }}>
-                      {item.action}
-                    </span>
-                  )}
-                </button>
+                  tile={
+                    <div
+                      className="size-9 rounded-full flex items-center justify-center shrink-0"
+                      style={{
+                        background: item.key === "critical" ? "var(--error-bg)" : item.key === "followups" ? "var(--warning-bg)" : "var(--surface-2)",
+                        color: item.key === "critical" ? "var(--error)" : item.key === "followups" ? "var(--warning)" : "var(--text-secondary)",
+                      }}
+                    >
+                      {item.icon}
+                    </div>
+                  }
+                  title={item.title}
+                  meta={item.subtitle || undefined}
+                  trailing={
+                    item.action ? (
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="text-12 font-semibold" style={{ color: item.actionColor }}>
+                          {item.action}
+                        </span>
+                        <ChevronRight size={14} style={{ color: "var(--text-secondary)" }} />
+                      </div>
+                    ) : undefined
+                  }
+                />
               ))}
-            </div>
+            </ListCard>
           </div>
         );
       })()}
@@ -638,7 +648,7 @@ export default function AdminDashboardPage() {
       {/* ── Employee Performance ── */}
       {empStats.length > 0 && (
         <div className="px-4 pt-5">
-          <p className="text-11 font-bold uppercase tracking-widest mb-3" style={{ color: "var(--text-secondary)" }}>
+          <p className="ds-section-label mb-3" style={{ color: "var(--text-secondary)" }}>
             {t("admin.employeePerformance")}
           </p>
           <ListCard>
@@ -680,7 +690,7 @@ export default function AdminDashboardPage() {
       {listsReady && recentSales.length > 0 && (
         <div className="px-4 pt-5 pb-6">
           <div className="flex items-center justify-between mb-3">
-            <p className="text-11 font-bold uppercase tracking-widest" style={{ color: "var(--text-secondary)" }}>
+            <p className="ds-section-label" style={{ color: "var(--text-secondary)" }}>
               {t("dashboard.recentSales") ?? "Recent Sales"}
             </p>
             <button

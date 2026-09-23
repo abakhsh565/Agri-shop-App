@@ -104,7 +104,7 @@ export default function RegisterStatusPage() {
         {myRequest && (
           <div
             className="w-full p-4 rounded-[var(--radius-card)]"
-            style={{ background: "var(--surface)" }}
+            style={{ background: "var(--tone-card)" }}
           >
             <p className="text-xs font-bold mb-3" style={{ color: "var(--text-secondary)" }}>
               {t("register.details")}

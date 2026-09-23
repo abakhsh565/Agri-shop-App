@@ -143,7 +143,7 @@ export default function RecordPurchasePage() {
     color: "var(--text-primary)",
   } as const;
 
-  const labelCls = "text-11 font-bold uppercase mb-2 tracking-wider";
+  const labelCls = "ds-section-label mb-2";
 
   return (
     <div
@@ -289,7 +289,7 @@ export default function RecordPurchasePage() {
               </div>
 
               {/* Summary */}
-              <div className="rounded-[var(--radius-card)] p-4" style={{ background: "var(--surface-2)" }}>
+              <div className="rounded-[var(--radius-card)] p-4" style={{ background: "var(--tone-card)" }}>
                 <Row label={t("purchases.purchaseTotal")} value={formatCurrency(total)} />
                 <Row label={t("purchases.paidNow")} value={formatCurrency(paidNum)} />
                 <div className="h-px my-2" style={{ background: "var(--divider)" }} />

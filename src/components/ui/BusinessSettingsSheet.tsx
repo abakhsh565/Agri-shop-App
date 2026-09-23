@@ -68,7 +68,7 @@ export default function BusinessSettingsSheet({ onClose, onSave }: Props) {
     border: "1px solid var(--divider)",
   };
 
-  const labelCls = "text-11 font-semibold uppercase tracking-wider mb-2 block";
+  const labelCls = "ds-section-label mb-2 block";
 
   return (
     <div
@@ -156,7 +156,7 @@ export default function BusinessSettingsSheet({ onClose, onSave }: Props) {
                   <div
                     key={crop.name}
                     className="rounded-[var(--radius-card)] p-4"
-                    style={{ background: "var(--surface)", border: "1px solid var(--divider)" }}
+                    style={{ background: "var(--tone-card)" }}
                   >
                     {/* Crop name + delete */}
                     <div className="flex items-center justify-between mb-3">

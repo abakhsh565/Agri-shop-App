@@ -203,7 +203,7 @@ export default function AddProductPage() {
     border: "1px solid var(--divider)",
     color: "var(--text-primary)",
   } as const;
-  const labelCls = "text-11 font-bold uppercase mb-2 tracking-wider";
+  const labelCls = "ds-section-label mb-2";
 
   return (
     <div
@@ -371,7 +371,7 @@ export default function AddProductPage() {
 
             <div className="flex flex-col gap-3">
               {variants.map((v, i) => (
-                <div key={i} className="rounded-[var(--radius-card)] p-3.5" style={{ background: "var(--surface)", border: "1px solid var(--divider)" }}>
+                <div key={i} className="rounded-[var(--radius-card)] p-3.5" style={{ background: "var(--tone-card)" }}>
                   <div className="flex items-center gap-2 mb-2">
                     <input value={v.name} onChange={(e) => setVariant(i, { name: e.target.value })} placeholder={t("addProduct.unitNamePlaceholder")}
                       className="flex-1 h-10 rounded-[var(--radius-card)] px-3 text-sm outline-none" style={fieldStyle} />

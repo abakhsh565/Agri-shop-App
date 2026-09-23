@@ -73,7 +73,7 @@ export default function AddCompanyPage() {
     border: "1px solid var(--divider)",
     color: "var(--text-primary)",
   } as const;
-  const labelCls = "text-11 font-bold uppercase mb-2 tracking-wider";
+  const labelCls = "ds-section-label mb-2";
 
   return (
     <div

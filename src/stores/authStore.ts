@@ -3,7 +3,25 @@ import { persist } from "zustand/middleware";
 import type { User } from "@/types";
 import { signOut } from "@/lib/auth";
 import { adoptCacheOwner } from "@/lib/localCache";
-import { supabase } from "@/lib/supabase";
+import { supabase, supabaseUrl } from "@/lib/supabase";
+
+/**
+ * The `iss` claim of a JWT, without verifying it — we only need to know which Supabase
+ * project minted the session we are holding.
+ */
+function issuerOf(token: string | undefined): string | null {
+  if (!token) return null;
+  try {
+    const payload = token.split(".")[1];
+    if (!payload) return null;
+    const json = JSON.parse(
+      atob(payload.replace(/-/g, "+").replace(/_/g, "/"))
+    );
+    return typeof json.iss === "string" ? json.iss.replace(/\/$/, "") : null;
+  } catch {
+    return null; // unreadable token: leave the decision to the session check above
+  }
+}
 
 // The phone number a sign-in/registration is in progress for, kept for THIS TAB
 // only. Without it a reload on the code screen bounced the owner right back to
@@ -85,7 +103,22 @@ export const useAuthStore = create<AuthState>()(
         if (!get().user) return;
         try {
           const { data } = await supabase.auth.getSession();
-          if (!data.session) get().logout();
+          if (!data.session) { get().logout(); return; }
+
+          // A session issued by a *different* Supabase project can never authenticate
+          // against this one: PostgREST refuses the JWT, and because refreshing fails
+          // too, supabase-js keeps holding it. Every write made with it then affects zero
+          // rows and answers 200, so the app reported success while the database never
+          // changed — which is exactly how a saved profile photo reverted to initials on
+          // the next launch. Drop the stale session and make the device sign in again.
+          const issuer = issuerOf(data.session.access_token);
+          if (issuer && issuer !== `${supabaseUrl}/auth/v1`) {
+            console.warn("Stored session is from another project; signing out to re-authenticate.");
+            get().logout();
+            return;
+          }
+
+
         } catch {
           // A throw here means the auth client could not be reached at all, which
           // is indistinguishable from a flaky connection. Keep the user signed in

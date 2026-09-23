@@ -288,7 +288,7 @@ export default function AdminSaleDetailPage() {
 
         {/* Items sold with return badges */}
         <div>
-          <p className="text-xs font-bold uppercase mb-2 tracking-wider" style={{ color: "var(--text-secondary)" }}>
+          <p className="ds-section-label mb-2" style={{ color: "var(--text-secondary)" }}>
             {t("sales.itemsSold")}
           </p>
           <ListCard>
@@ -358,7 +358,7 @@ export default function AdminSaleDetailPage() {
         {/* Return History */}
         {returns.length > 0 && (
           <div>
-            <p className="text-xs font-bold uppercase mb-2 tracking-wider" style={{ color: "var(--text-secondary)" }}>
+            <p className="ds-section-label mb-2" style={{ color: "var(--text-secondary)" }}>
               {t("saleDetail.returnHistory")}
             </p>
             <div className="flex flex-col gap-3">
@@ -439,7 +439,7 @@ export default function AdminSaleDetailPage() {
           {/* Note */}
           <div className="pt-2 mt-1" style={{ borderTop: "1px solid var(--divider)" }}>
             <div className="flex items-center justify-between mb-2">
-              <p className="text-xs font-bold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>{t("saleDetail.note")}</p>
+              <p className="ds-section-label" style={{ color: "var(--text-secondary)" }}>{t("saleDetail.note")}</p>
               {note !== (sale.note ?? "") && (
                 <button onClick={handleSaveNote} disabled={savingNote} className="text-xs font-bold px-3 py-1 rounded-full" style={{ background: "var(--brand)", color: "#0a0a0a" }}>
                   {savingNote ? t("saleDetail.saving") : t("saleDetail.save")}
@@ -504,7 +504,7 @@ export default function AdminSaleDetailPage() {
               {t("admin.voidConfirm", { number: sale?.saleNumber ?? "" })}
             </p>
             <div>
-              <p className="text-xs font-bold uppercase tracking-wider mb-2" style={{ color: "var(--text-secondary)" }}>{t("admin.voidReason")}</p>
+              <p className="ds-section-label mb-2" style={{ color: "var(--text-secondary)" }}>{t("admin.voidReason")}</p>
               <input value={voidReason} onChange={(e) => setVoidReason(e.target.value)} placeholder={t("sale.voidReasonPlaceholder")}
                 className="w-full h-11 rounded-full px-4 text-sm outline-none"
                 style={{ background: "var(--surface-2)", border: "1px solid var(--border-control)", color: "var(--text-primary)" }} />

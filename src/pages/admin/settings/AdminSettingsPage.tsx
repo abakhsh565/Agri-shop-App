@@ -5,7 +5,7 @@ import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
 import ListCard from "@/components/ui/ListCard";
 import ListRow from "@/components/ui/ListRow";
-import SetupChecklist from "@/components/ui/SetupChecklist";
+import SetupProgress from "@/components/ui/SetupProgress";
 import { useAuthStore } from "@/stores/authStore";
 import { useThemeStore, applyTheme } from "@/stores/themeStore";
 import { useUIStore } from "@/stores/uiStore";
@@ -13,13 +13,13 @@ import { clearDeviceSession } from "@/lib/deviceSession";
 import { hasPin } from "@/lib/pinLock";
 import { useT } from "@/lib/i18n";
 import {
-  Lock, Bell, Globe, Info, ChevronRight, Moon, Sun,
-  ClipboardList, Smartphone, Users, Package,
-  Building2, ShieldCheck, Pencil, Loader2, Save, Wheat,
+  Lock, Bell, Globe, ChevronRight, Moon, Sun,
+  ClipboardList, Users, Package,
+  Building2, ShieldCheck, Pencil, Loader2, Save, Wheat, LogOut, X,
 } from "lucide-react";
 import { uploadImage } from "@/lib/storage";
+import { APP_NAME, APP_VERSION } from "@/lib/brand";
 import { supabase } from "@/lib/supabase";
-import { projectId, publicAnonKey } from "@/../utils/supabase/info";
 
 const LANG_LABELS: Record<string, string> = { en: "English", ur: "اردو" };
 
@@ -51,6 +51,12 @@ export default function AdminSettingsPage() {
     setLanguage(language === "en" ? "ur" : "en");
   }
 
+  // The membership roles the data actually has: owner / admin / employee.
+  const roleLabel =
+    user?.membershipRole === "owner" ? t("settings.owner")
+    : user?.membershipRole === "admin" ? t("emp.admin")
+    : user ? t("search.employee") : "";
+
   function startEdit() {
     setEditName(user?.name ?? "");
     setEditImageUrl(user?.photoUrl ?? null);
@@ -61,30 +67,30 @@ export default function AdminSettingsPage() {
     if (!editName.trim()) return;
     setSaving(true);
     try {
-      // Use raw fetch to bypass expired Supabase session
-      // This sends ONLY the anon key (no expired JWT)
-      const response = await fetch(
-        `https://${projectId}.supabase.co/rest/v1/users?id=eq.${user!.id}`,
-        {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-            "apikey": publicAnonKey,
-            "Authorization": `Bearer ${publicAnonKey}`,
-            "Prefer": "return=minimal",
-          },
-          body: JSON.stringify({ name: editName.trim(), photo_url: editImageUrl }),
-        }
-      );
-      
-      if (!response.ok) {
-        const errBody = await response.text();
-        console.error("Profile save HTTP error:", response.status, errBody);
-        throw new Error(`HTTP ${response.status}: ${errBody}`);
+      // Saved with the signed-in session, and `.select()` is not decoration: RLS on
+      // `users` filters the row, and PostgREST answers a filtered UPDATE with 204 — no
+      // error. The previous anon-key PATCH therefore reported success, updated the local
+      // store and closed the sheet while the database never changed, which is why a new
+      // photo came back as the initials after a reload. Asking for the updated row back
+      // turns that silent no-op into zero rows, which is a failure we can show.
+      const { data, error } = await supabase
+        .from("users")
+        .update({ name: editName.trim(), photo_url: editImageUrl })
+        .eq("id", user!.id)
+        .select("id, name, photo_url");
+
+      if (error) throw error;
+      if (!data || data.length === 0) {
+        throw new Error("Profile update matched no rows (not saved)");
       }
-      
-      useAuthStore.getState().setUser({ ...user!, name: editName.trim(), photoUrl: editImageUrl ?? undefined });
-      setAvatarUrl(editImageUrl);
+
+      const saved = data[0];
+      useAuthStore.getState().setUser({
+        ...user!,
+        name: saved.name ?? editName.trim(),
+        photoUrl: saved.photo_url ?? undefined,
+      });
+      setAvatarUrl(saved.photo_url ?? null);
       setEditing(false);
     } catch (err) {
       console.error("Profile save failed:", err);
@@ -101,8 +107,10 @@ export default function AdminSettingsPage() {
     try {
       const url = await uploadImage("employee-photos", file);
       setEditImageUrl(url);
-    } catch {
-      // silent
+    } catch (err) {
+      // Was silent, so a failed upload looked like nothing happened at all.
+      console.error("Avatar upload failed:", err);
+      addToast(t("copy.profileSaveFailed"), "error");
     } finally {
       setUploading(false);
     }
@@ -112,19 +120,35 @@ export default function AdminSettingsPage() {
 
   return (
     <div
-      className="settings-compact flex flex-col w-full min-h-full justify-between"
+      className="flex flex-col w-full min-h-full justify-between"
       style={{ background: "var(--background)", color: "var(--text-primary)", direction: isUrdu ? "rtl" : "ltr" }}
     >
       <div>
         <StatusBar />
-        <NavHeader title={t("settings.title") ?? "Profile & Settings"} />
+        {/* Dismiss, not back: Settings is a destination you leave, so it carries a close
+            cross on the trailing edge (the reference's own pattern) instead of a back arrow
+            on the leading one. The hardware back button still works — nothing is trapped. */}
+        <NavHeader
+          title={t("settings.title") ?? "Profile & Settings"}
+          noBack
+          right={
+            <button
+              onClick={() => navigate("/admin/dashboard")}
+              aria-label={t("common.close")}
+              data-testid="settings-close"
+              className="flex items-center justify-center size-8 rounded-full active:opacity-60"
+            >
+              <X size={18} style={{ color: "var(--text-primary)" }} />
+            </button>
+          }
+        />
 
         {/* Profile card — the same card as the ones below it: `--radius-card` (not the
             row-tile radius), the grouped-list tone, and no drawn edge. The radius was 11px,
             the fill `--surface-2` and a 1px `--border-light` edge on top, which made the one
             card at the top of the page the only shape that did not match the cards under it. */}
         <div
-          className="mx-4 mt-3 rounded-[var(--radius-card)] p-4 flex items-center gap-4 animate-fade-in-up"
+          className="mx-4 mt-3.5 rounded-[var(--radius-card)] p-4 flex items-center gap-4 animate-fade-in-up"
           style={{ background: "var(--tone-card)" }}
         >
           <div className="relative shrink-0">
@@ -144,10 +168,24 @@ export default function AdminSettingsPage() {
                 "Shop owner" again underneath as the role, with an "Owner" chip beside the
                 name — three statements of the same fact on a card whose job is to say who
                 this account belongs to. The phone is the only line that adds anything. */}
-            <p className="text-base font-bold truncate" style={{ color: "var(--text-primary)" }}>
-              {user?.name}
-            </p>
-            <p className="text-10" style={{ color: "var(--text-secondary)" }}>{user?.phone}</p>
+            {/* Back to two lines: who the account is on the first, the number under it.
+                Forcing both onto one line truncated the name to "Shop Own…" to make room for
+                digits, which is the wrong way round — the name is what identifies the
+                account, and the number has its own line to sit on. */}
+            <div className="flex items-center gap-2 min-w-0">
+              <p className="text-base font-bold truncate" style={{ color: "var(--text-primary)" }}>
+                {user?.name}
+              </p>
+              {roleLabel && (
+                <span
+                  className="text-11 font-bold px-2 py-0.5 rounded-full shrink-0"
+                  style={{ background: "var(--tone-sunken)", color: "var(--text-secondary)" }}
+                >
+                  {roleLabel}
+                </span>
+              )}
+            </div>
+            <p className="text-12 mt-0.5" style={{ color: "var(--text-secondary)" }}>{user?.phone}</p>
           </div>
 
           <button
@@ -203,7 +241,7 @@ export default function AdminSettingsPage() {
                 </div>
               </div>
               <div>
-                <p className="text-11 font-bold uppercase mb-1.5 tracking-wider" style={{ color: "var(--text-secondary)" }}>{t("common.name")}</p>
+                <p className="ds-section-label mb-1.5" style={{ color: "var(--text-secondary)" }}>{t("common.name")}</p>
                 <input
                   value={editName}
                   onChange={(e) => setEditName(e.target.value)}
@@ -225,14 +263,22 @@ export default function AdminSettingsPage() {
         {/* Business setup status. Persistent, not a one-time wizard: it shows what is done
             and what is missing, and disappears by itself once nothing is missing. It carries
             this page's own section markup, so it reads as one of the existing sections. */}
-        <SetupChecklist className="animate-fade-in-up delay-75" />
+        <SetupProgress className="px-4 pt-3.5 animate-fade-in-up delay-75" />
 
-        {/* Appearance */}
-        <div className="px-4 pt-5 animate-fade-in-up delay-75">
-          <p className="text-xs font-bold uppercase mb-3 tracking-wider" style={{ color: "var(--text-secondary)" }}>
-            {t("settings.appearance")}
-          </p>
+        {/* Comfort first — no heading anywhere on this page.
+            A heading earns its place only when a row could otherwise be misread; "Language"
+            and "Dark Mode" cannot be, so they are simply the first block, above the work.
+            The reference splits groups by whitespace alone, and state is carried as a quiet
+            line under the label rather than a value pushed to the far right. */}
+        <div className="px-4 pt-3.5 animate-fade-in-up delay-75">
           <ListCard>
+            <ListRow
+              onClick={cycleLanguage}
+              icon={Globe}
+              title={t("settings.language")}
+              meta={LANG_LABELS[language]}
+              trailing={<ChevronRight size={14} style={{ color: "var(--text-secondary)" }} className="shrink-0" />}
+            />
             <ListRow
               onClick={toggleTheme}
               icon={theme === "dark" ? Moon : Sun}
@@ -255,39 +301,10 @@ export default function AdminSettingsPage() {
                 </div>
               }
             />
-            <ListRow
-              onClick={cycleLanguage}
-              icon={Globe}
-              title={t("settings.language")}
-              trailing={
-                <div className="flex items-center gap-2 shrink-0">
-                  <span
-                    className="text-xs font-bold px-3 py-1 rounded-full"
-                    style={{ background: "var(--brand)", color: "#0a0a0a" }}
-                  >
-                    {LANG_LABELS[language]}
-                  </span>
-                  <ChevronRight size={14} style={{ color: "var(--text-secondary)" }} />
-                </div>
-              }
-            />
-          </ListCard>
-
-
-        </div>
-
-        {/* Account + Management — unified section */}
-        <div className="px-4 pt-5 animate-fade-in-up delay-100">
-          <p className="text-xs font-bold uppercase mb-3 tracking-wider" style={{ color: "var(--text-secondary)" }}>
-            {t("settings.account")}
-          </p>
-          <ListCard>
             {[
               { icon: Lock,         label: user && hasPin(user.id) ? (t("settings.changePin") || "Change PIN") : (t("settings.setupPin") || "Setup PIN"),   action: () => navigate("/login/pin-set", { state: { returnTo: "/admin/settings" } }) },
               { icon: Bell,         label: t("settings.notifications"), action: () => navigate("/admin/notifications") },
               { icon: ClipboardList, label: t("settings.activityLog"), action: () => navigate("/admin/activity") },
-              { icon: Smartphone,   label: t("settings.device"),       action: null,       right: t("settings.thisPhone") || "This Phone" },
-              { icon: Info,         label: t("settings.appVersion"),    action: null,       right: "1.0.0" },
             ].map((s) => {
               const Icon = s.icon;
               return (
@@ -296,14 +313,9 @@ export default function AdminSettingsPage() {
                   onClick={s.action ?? undefined}
                   icon={Icon}
                   title={s.label}
-                  trailing={
-                    <div className="flex items-center gap-1 shrink-0">
-                      {"right" in s && s.right && (
-                        <span className="text-10" style={{ color: "var(--text-secondary)" }}>{s.right as string}</span>
-                      )}
-                      {s.action && <ChevronRight size={14} style={{ color: "var(--text-secondary)" }} />}
-                    </div>
-                  }
+                  // The primitive owns the trailing value and the chevron; a screen that
+                  // wraps them in its own flex box restates the row's own geometry.
+                  trailing={<ChevronRight size={14} style={{ color: "var(--text-secondary)" }} className="shrink-0" />}
                 />
               );
             })}
@@ -312,29 +324,10 @@ export default function AdminSettingsPage() {
 
         {showBusinessSettings && <BusinessSettingsSheet onClose={() => setShowBusinessSettings(false)} onSave={() => {}} />}
 
-        {/* Business Settings */}
-        <div className="px-4 pt-5 animate-fade-in-up delay-125">
-          <p className="text-xs font-bold uppercase mb-3 tracking-wider" style={{ color: "var(--text-secondary)" }}>{t("common.businessSettings")}</p>
-          <ListCard>
-            <ListRow
-              onClick={() => setShowBusinessSettings(true)}
-              icon={Wheat}
-              title={t("common.cropConfiguration")}
-              trailing={
-                <div className="flex items-center gap-1 shrink-0">
-                  <span className="text-10" style={{ color: "var(--text-secondary)" }}>{t("common.configureReminder")}</span>
-                  <ChevronRight size={14} style={{ color: "var(--text-secondary)" }} />
-                </div>
-              }
-            />
-          </ListCard>
-        </div>
-
-      {/* Management shortcuts */}
-        <div className="px-4 pt-5 animate-fade-in-up delay-150">
-          <p className="text-xs font-bold uppercase mb-3 tracking-wider" style={{ color: "var(--text-secondary)" }}>
-            {t("settings.management") || "Management"}
-          </p>
+        {/* The work — placed second because an owner opens Settings to run the shop, but
+            under comfort because language and dark mode are changed far more often. No
+            heading: the rows are self-evident, and the reference names nothing. */}
+        <div className="px-4 pt-3.5 animate-fade-in-up delay-100">
           <ListCard>
             {[
               { icon: Users,       label: t("admin.employees") ?? "Employees",  action: () => navigate("/admin/employees") },
@@ -353,18 +346,37 @@ export default function AdminSettingsPage() {
                 />
               );
             })}
+            {/* Crop configuration closes the work block: it is setup, not a daily task. */}
+            <ListRow
+              onClick={() => setShowBusinessSettings(true)}
+              icon={Wheat}
+              title={t("common.cropConfiguration")}
+              meta={t("common.configureReminder")}
+              trailing={<ChevronRight size={14} style={{ color: "var(--text-secondary)" }} className="shrink-0" />}
+            />
           </ListCard>
         </div>
+
       </div>
 
-      <div className="p-4 pb-6 animate-fade-in-up delay-225">
-        <button
-          onClick={handleLogout}
-          className="w-full h-[48px] rounded-full font-bold text-sm transition-colors border"
-          style={{ borderColor: "var(--error)", color: "var(--error)", background: "transparent" }}
-        >
-          {t("settings.signOut")}
-        </button>
+      {/* One destructive row, alone, at the foot — the reference's shape. */}
+      <div className="px-4 pt-3.5 pb-6 animate-fade-in-up delay-225">
+        <ListCard>
+          <ListRow
+            danger
+            onClick={handleLogout}
+            icon={LogOut}
+            title={t("settings.signOut")}
+          />
+        </ListCard>
+
+        {/* What this build is. "Device / App Version" was a card of two rows that did
+            nothing — an inventory app has no reason to tell a shop owner which handset
+            they are on — so it is gone, and the version survives as the smallest text on
+            the page, under the copyright, where every phone app puts it. */}
+        <p className="text-11 mt-5 text-center" style={{ color: "var(--text-tertiary)" }}>
+          © 2026 {APP_NAME} · v{APP_VERSION}
+        </p>
       </div>
     </div>
   );
