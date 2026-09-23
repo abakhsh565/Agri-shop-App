@@ -620,6 +620,23 @@ input[type="time"]:disabled {
 }
 
 /* ── Icon container ── */
+/* Glyph sizing, driven by the icon tokens.
+   lucide takes a numeric `size` prop, which a token cannot reach, so the shared primitives
+   also put one of these classes on the svg and let CSS win. That makes "make the icons
+   smaller" a single token edit instead of sweeping every size={N} in the app — which is
+   exactly the test `systemDrive.spec.ts` runs before claiming the system is system-driven. */
+svg.ds-glyph {
+  width: var(--icon);
+  height: var(--icon);
+  flex: 0 0 auto;
+}
+
+svg.ds-glyph-sm {
+  width: var(--icon-sm);
+  height: var(--icon-sm);
+  flex: 0 0 auto;
+}
+
 .ds-icon {
   display: flex;
   align-items: center;
@@ -882,9 +899,14 @@ input[type="time"]:disabled {
 
 /* Borders — map hardcoded colors to design tokens */
 .border-\[\#e5e5e5\] { border-color: var(--divider) !important; }
-.border-black        { border-color: var(--border) !important; }
+/* `border-black` is a VISIBLE-EDGE intent, so it must resolve to the control outline, not the
+   in-card hairline. It used to shim to `--border`, which is #f0f0ee — 2/255 from a field's own
+   tone — so every field written with `border-black` (the OTP digit boxes among them) had no
+   discernible edge in EITHER theme, and the dark rule below made it worse by naming `--divider`.
+   Both now come from the one token that exists for this job. */
+.border-black        { border-color: var(--border-control) !important; }
 .dark .border-\[\#e5e5e5\] { border-color: var(--divider)         !important; }
-.dark .border-black        { border-color: var(--divider)         !important; }
+.dark .border-black        { border-color: var(--border-control) !important; }
 .dark .border-b-2.border-black { border-color: var(--brand)       !important; }
 
 /* Inputs & textareas */

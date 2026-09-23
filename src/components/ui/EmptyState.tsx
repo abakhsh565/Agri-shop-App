@@ -13,9 +13,9 @@ export default function EmptyState({ icon: Icon, title, subtitle, action }: Empt
   return (
     <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
       <Icon
+        className="ds-glyph mb-3"
         size={28}
         style={{ color: "var(--text-tertiary)" }}
-        className="mb-3"
       />
       <p className="ds-body" style={{ fontWeight: "var(--weight-strong)" }}>{title}</p>
       {subtitle && <p className="ds-meta mt-1">{subtitle}</p>}

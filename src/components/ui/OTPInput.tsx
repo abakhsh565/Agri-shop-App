@@ -62,12 +62,24 @@ export default function OTPInput({ value, onChange, length = 6, disabled, error 
           onKeyDown={(e) => handleKey(i, e)}
           onPaste={handlePaste}
           onFocus={(e) => e.target.select()}
-          className={`
-            w-12 h-14 text-center text-xl font-bold rounded-[var(--radius-tile)] border bg-white text-black
-            outline-none focus:ring-2 focus:ring-black/20
-            ${error ? "border-[#ef4444]" : "border-black"}
-            disabled:opacity-40
-          `}
+          /* Tokens, not literals. These boxes previously read `bg-white text-black
+             border-black`, and `border-black` on this app resolves to the control-outline
+             token — which is what gives a field a findable edge in light AND dark. A raw
+             literal here would reintroduce the invisible-field bug the moment the legacy
+             shim is retired. */
+          className="
+            w-12 h-14 text-center text-20 font-semibold rounded-[var(--radius-tile)]
+            outline-none focus:ring-2 disabled:opacity-40
+          "
+          style={{
+            background: "var(--surface)",
+            color: "var(--text-primary)",
+            border: `1px solid ${error ? "var(--error)" : "var(--border-control)"}`,
+            // The focus ring follows the theme's own ring token instead of a fixed black,
+            // which is invisible on a dark field.
+            boxShadow: "none",
+            outlineColor: "var(--ring)",
+          }}
         />
       ))}
       {/* Off-screen target for OTP auto-detection (Web OTP API / SMS autofill).

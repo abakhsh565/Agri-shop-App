@@ -260,6 +260,46 @@ test.describe('Business setup status is derived and self-retiring', () => {
       .toBe(true);
   });
 
+  test('6. first-run guidance shows on the dashboard for a new shop only', async ({ page }) => {
+    await clearSetupEntities();
+    await signIn(page);
+
+    // A brand-new shop: the dashboard guides the owner instead of showing zeroed figures
+    // with no next step.
+    await page.goto('/admin/dashboard');
+    await expect(page.locator('[data-testid="setup-checklist"]')).toBeVisible({ timeout: 20000 });
+    await waitForSetupReady(page);
+    const onDashboard = await readChecklist(page);
+    expect(onDashboard!.rows.length).toBe(3);
+    expect(onDashboard!.percent).toContain('0');
+
+    // Configured shop: the guidance retires itself and Home gains nothing.
+    await execSql(
+      `INSERT INTO companies (id, name, outstanding_payable, total_purchases, shop_id)
+       VALUES ('${QA_IDS.companyA}', 'Setup Supplier', 0, 0, '${QA_IDS.shop}')
+       ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name`
+    );
+    await execSql(
+      `INSERT INTO products (id, name, company_id, category, stock_qty, shop_id)
+       VALUES ('${QA_IDS.productA}', 'Setup Product', '${QA_IDS.companyA}', 'seed', 10, '${QA_IDS.shop}')
+       ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name`
+    );
+    await execSql(
+      `INSERT INTO customers (id, name, phone, credit_limit, outstanding_balance, total_purchases, total_paid, shop_id, created_by)
+       VALUES ('${QA_IDS.customerA}', 'Setup Customer', '923000000901', 10000, 0, 0, 0, '${QA_IDS.shop}', 'QA')
+       ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name`
+    );
+
+    await page.goto('/admin/dashboard');
+    await page.reload();
+    // "Gone" is asserted, not assumed: the block must not be in the DOM once setup is done.
+    await waitForSetupGone(page);
+    expect(
+      await readChecklist(page),
+      'a configured shop still sees the first-run guidance on Home',
+    ).toBeNull();
+  });
+
   test('5. Urdu / RTL renders the same block in Urdu', async ({ page }) => {
     await clearSetupEntities();
     await signIn(page);

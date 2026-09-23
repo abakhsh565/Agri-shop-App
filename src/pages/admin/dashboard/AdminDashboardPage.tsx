@@ -9,6 +9,7 @@ import { useProductsStore } from "@/stores/productsStore";
 import { useEmployeesStore } from "@/stores/employeesStore";
 import { useCompaniesStore } from "@/stores/companiesStore";
 import PullToRefresh from "@/components/ui/PullToRefresh";
+import SetupChecklist from "@/components/ui/SetupChecklist";
 import { useCustomersStore } from "@/stores/customersStore";
 import { supabase } from "@/lib/supabase";
 import { formatCurrency, formatSmartDateTime } from "@/lib/formatters";
@@ -435,6 +436,13 @@ export default function AdminDashboardPage() {
           </button>
         ))}
       </div>
+
+      {/* ── First-run guidance. Rendered only while the shop's required setup is
+          incomplete: SetupChecklist returns null once nothing is missing, so a shop
+          that is already running sees nothing here at all. It is the same block as the
+          one on Settings rather than a second definition of "setup", so the two can
+          never disagree about what is done. ── */}
+      <SetupChecklist className="animate-fade-in-up" />
 
       {/* ── Total Sales card (lime hero): Total Sales · Transactions · Gross Profit ── */}
       <div className="px-4 animate-fade-in-up">

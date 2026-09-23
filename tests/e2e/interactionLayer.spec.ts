@@ -384,6 +384,65 @@ test.describe('Interaction layer: motion, feedback, skeletons, toasts, date chro
     }
   });
 
+  test('5c. the OTP boxes show where to type, in both themes', async ({ page }) => {
+    // Reported directly: during OTP entry the digit boxes had no visible border.
+    // The cause was not the boxes' own styling alone — they were written with the legacy
+    // `border-black` literal, and that class shimmed to `--border` (#f0f0ee) in light and
+    // `--divider` (#242422) in dark: the in-card hairline in BOTH themes, so no edge was
+    // ever drawn. This measures the boxes where the complaint was raised.
+    await page.goto(`${BASE_URL}/login`);
+    await page.getByPlaceholder('e.g. 03001234567').fill('923001234567');
+    await page.getByRole('button', { name: 'Send Code' }).click();
+    await page.waitForURL(/\/login\/otp/, { timeout: 20000 });
+
+    for (const theme of ['light', 'dark'] as const) {
+      await setTheme(page, theme);
+      await page.waitForTimeout(600);
+
+      const measured = await page.evaluate(() => {
+        const boxes = [...document.querySelectorAll('[data-testid^="otp-digit-"]')] as HTMLElement[];
+        if (!boxes.length) return null;
+        const cs = getComputedStyle(boxes[0]);
+        const root = getComputedStyle(document.documentElement);
+        const toRgb = (c: string): [number, number, number] => {
+          const s = c.trim();
+          if (s.startsWith('#')) {
+            const h = s.slice(1);
+            const full = h.length === 3 ? h.split('').map((x) => x + x).join('') : h;
+            return [0, 2, 4].map((i) => parseInt(full.slice(i, i + 2), 16) || 0) as [number, number, number];
+          }
+          const nums = s.match(/[\d.]+/g) ?? [];
+          return [Number(nums[0]) || 0, Number(nums[1]) || 0, Number(nums[2]) || 0];
+        };
+        const dist = (a: string, b: string) => {
+          const [x, y, z] = toRgb(a);
+          const [p, q, r] = toRgb(b);
+          return Math.abs(x - p) + Math.abs(y - q) + Math.abs(z - r);
+        };
+        return {
+          count: boxes.length,
+          border: cs.borderTopWidth,
+          borderColor: cs.borderTopColor,
+          controlToken: root.getPropertyValue('--border-control'),
+          // The box is drawn on the page, so separation is measured against the page tone.
+          separation: dist(cs.borderTopColor, root.getPropertyValue('--tone-page')),
+        };
+      });
+
+      expect(measured, `${theme}: no OTP digit boxes found`).not.toBeNull();
+      expect(measured!.count, 'the OTP row should have one box per digit').toBe(6);
+      console.log(
+        `[otp box ${theme}] border=${measured!.border} colour=${measured!.borderColor} ` +
+          `token=${measured!.controlToken.trim()} separationFromPage=${measured!.separation}/765`,
+      );
+      expect(measured!.border, `${theme}: the OTP box draws no outline`).toBe('1px');
+      expect(
+        measured!.separation,
+        `${theme}: the OTP box outline is only ${measured!.separation}/765 from the page — a user cannot see where to type the code`,
+      ).toBeGreaterThan(100);
+    }
+  });
+
   test('6. nothing overflows and the console stays clean on a converted screen', async ({ page }) => {
     const errors: string[] = [];
     const failed: string[] = [];

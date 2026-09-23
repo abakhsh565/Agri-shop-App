@@ -26,7 +26,7 @@ export default function SearchBar({ containerClass = "", onClear, ...props }: Se
 
   return (
     <div className={`ds-field ${containerClass}`}>
-      <Search size={18} className="shrink-0" style={{ color: "var(--text-secondary)" }} />
+      <Search size={18} className="ds-glyph-sm shrink-0" style={{ color: "var(--text-secondary)" }} />
       <input
         type="text"
         {...props}
@@ -40,7 +40,7 @@ export default function SearchBar({ containerClass = "", onClear, ...props }: Se
           aria-label={t("common.clear")}
           className="flex shrink-0 items-center"
         >
-          <X size={16} style={{ color: "var(--text-secondary)" }} />
+          <X size={16} className="ds-glyph-sm" style={{ color: "var(--text-secondary)" }} />
         </button>
       ) : null}
     </div>

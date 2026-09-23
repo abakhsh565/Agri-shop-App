@@ -68,7 +68,11 @@ export default function ListRow({
   const inner = (
     <>
       {tile}
-      {!tile && Icon && <Icon size={24} style={{ color: "var(--text-secondary)" }} className="shrink-0" />}
+      {/* Sized from `--icon` via `ds-glyph`, so the whole app's row glyphs follow one token
+          rather than a `size` prop restated in every primitive. */}
+      {!tile && Icon && (
+        <Icon size={24} style={{ color: "var(--text-secondary)" }} className="ds-glyph shrink-0" />
+      )}
       {children ? (
         <div className="min-w-0 flex-1">{children}</div>
       ) : (
