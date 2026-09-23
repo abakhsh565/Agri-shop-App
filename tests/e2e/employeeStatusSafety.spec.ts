@@ -160,23 +160,28 @@ test.describe('Employee status safety', () => {
     await page.goto(`${BASE_URL}/admin/employees/${EMP}`);
     await page.waitForLoadState('networkidle');
 
-    await page.getByRole('button', { name: /^deactivate employee$/i }).first().click();
+    // The copy pass renamed this action to the shop owner's own words; the label the
+    // button carries is the requirement, so the locator follows it.
+    await page.getByRole('button', { name: /^turn off this employee's account$/i }).first().click();
 
     // The dialog has to name the employee and state the consequence — not ask a
     // generic "are you sure?" that tells the owner nothing.
-    await expect(page.getByText(`Deactivate ${EMP_NAME}?`)).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText(`Turn off ${EMP_NAME}'s account?`)).toBeVisible({ timeout: 10000 });
     await expect(page.getByText(/no longer be able to sign in/i)).toBeVisible();
     await expect(page.getByText(/stay on record/i)).toBeVisible();
     await expect(page.getByText(/are you sure/i)).toHaveCount(0);
 
-    await doubleTap(page, 'Deactivate employee');
+    await doubleTap(page, "Turn off this employee's account");
 
     const toasts = await collectToasts(page);
 
+    // The confirmation the owner reads, in the words the copy pass gave it: "{name}'s
+    // account is off — past sales are safe". Asserting the old machine word ("deactivated")
+    // would pass on copy the user has explicitly moved away from.
     expect(toasts, 'control: the success toast must be observed, or this check proves nothing')
-      .toContain('deactivated');
+      .toMatch(/account is off/i);
     expect(
-      /did not work|already deactivated/i.test(toasts),
+      /did not work|already (deactivated|off)/i.test(toasts),
       'the second tap must not report a failure after the deactivation already succeeded'
     ).toBe(false);
 
@@ -197,7 +202,7 @@ test.describe('Employee status safety', () => {
     // ...and it survives a reload, because it was the database that changed.
     await page.reload();
     await page.waitForLoadState('networkidle');
-    await expect(page.getByRole('button', { name: /^reactivate employee$/i }).first())
+    await expect(page.getByRole('button', { name: /^turn the account back on$/i }).first())
       .toBeVisible({ timeout: 15000 });
   });
 
@@ -223,18 +228,19 @@ test.describe('Employee status safety', () => {
     await page.goto(`${BASE_URL}/admin/employees/${EMP}`);
     await page.waitForLoadState('networkidle');
 
-    await page.getByRole('button', { name: /^reactivate employee$/i }).first().click();
+    await page.getByRole('button', { name: /^turn the account back on$/i }).first().click();
 
     await expect(page.getByText(`Turn access back on for ${EMP_NAME}?`)).toBeVisible({ timeout: 10000 });
     await expect(page.getByText(/current role and access/i)).toBeVisible();
 
-    await doubleTap(page, 'Reactivate employee');
+    await doubleTap(page, 'Turn the account back on');
 
     const toasts = await collectToasts(page);
 
-    expect(toasts, 'control: the success toast must be observed').toContain('reactivated');
+    // "{name} can sign in again" — the owner-facing wording, not the old machine word.
+    expect(toasts, 'control: the success toast must be observed').toMatch(/can sign in again/i);
     expect(
-      /did not work|already active/i.test(toasts),
+      /did not work|already (active|on)/i.test(toasts),
       'the second tap must not report a failure after the reactivation already succeeded'
     ).toBe(false);
 
@@ -268,12 +274,12 @@ test.describe('Employee status safety', () => {
     await page.goto(`${BASE_URL}/admin/employees/${EMP}`);
     await page.waitForLoadState('networkidle');
 
-    await page.getByRole('button', { name: /^deactivate employee$/i }).first().click();
-    await expect(page.getByText(`Deactivate ${EMP_NAME}?`)).toBeVisible({ timeout: 10000 });
+    await page.getByRole('button', { name: /^turn off this employee's account$/i }).first().click();
+    await expect(page.getByText(`Turn off ${EMP_NAME}'s account?`)).toBeVisible({ timeout: 10000 });
 
     await page.getByRole('button', { name: /^cancel$/i }).last().click();
 
-    await expect(page.getByText(`Deactivate ${EMP_NAME}?`)).toHaveCount(0);
+    await expect(page.getByText(`Turn off ${EMP_NAME}'s account?`)).toHaveCount(0);
     await page.waitForTimeout(1500);
 
     expect(deactivations.length, 'cancelling must not call the backend').toBe(0);

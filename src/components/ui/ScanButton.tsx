@@ -96,7 +96,7 @@ export default function ScanButton({ onScan, label, size = "md" }: ScanButtonPro
           >
             <div className="flex items-center justify-between">
               <p className="text-base font-bold" style={{ color: "var(--text-primary)" }}>{t("common.enterBarcode")}</p>
-              <button onClick={dismiss}>
+              <button onClick={dismiss} aria-label={t("common.close")}>
                 <X size={18} style={{ color: "var(--text-secondary)" }} />
               </button>
             </div>

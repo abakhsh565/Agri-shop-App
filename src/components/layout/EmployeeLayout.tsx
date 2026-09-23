@@ -286,6 +286,9 @@ export default function EmployeeLayout() {
           background: "var(--surface)",
           borderColor: "var(--divider)",
           height: "var(--tabbar-height)",
+          // Below overlays (z-50), above ordinary page content — same contract as the
+          // admin shell, so a sheet can never be hidden behind the nav in either shell.
+          zIndex: 30,
           paddingBottom: "var(--safe-bottom)",
           paddingLeft: "16px",
           paddingRight: "16px",

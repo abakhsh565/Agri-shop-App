@@ -398,7 +398,10 @@ test.describe('Employee job & access — simple for the owner, exact underneath'
     expect(overflowStep3, 'horizontal overflow on the Urdu confirmation step').toBe(false);
 
     // Customizing access in Urdu: the label, the states and the "as it is" default.
-    await page.getByRole('button', { name: 'واپس' }).click();
+    // Addressed by its visible text, not by accessible name: the header's back control is
+    // icon-only and now carries the same "واپس" label (for screen readers), so a name-based
+    // lookup matches two buttons. `:has-text` reads text content, which only this one has.
+    await page.locator('button:has-text("واپس")').first().click();
     await page.waitForTimeout(700);
     const step2b = await bodyText(page);
     expect(step2b).toContain('رسائی میں تبدیلی');

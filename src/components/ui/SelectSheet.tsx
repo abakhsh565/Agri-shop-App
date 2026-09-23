@@ -74,7 +74,7 @@ export default function SelectSheet({
       >
         <div className="flex items-center justify-between px-5 pt-4 pb-3">
           <p className="text-15 font-bold" style={{ color: "var(--text-primary)" }}>{title}</p>
-          <button onClick={onClose} className="size-8 rounded-full flex items-center justify-center"
+          <button onClick={onClose} aria-label={t("common.close")} className="size-8 rounded-full flex items-center justify-center"
             style={{ background: "var(--surface-2)", color: "var(--text-secondary)" }}>
             <X size={16} />
           </button>

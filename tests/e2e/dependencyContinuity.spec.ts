@@ -229,7 +229,7 @@ test.describe('Missing dependencies never dead-end a workflow', () => {
     await execSql(`DELETE FROM products WHERE id = '30000000-0000-0000-0000-0000000000aa'`).catch(() => undefined);
   });
 
-  test('the same states in Urdu/RTL and in dark, and Home is untouched', async ({ page }) => {
+  test('the same states in Urdu/RTL and in dark, with no empty-state clutter on Home', async ({ page }) => {
     await login(page);
 
     // Urdu + RTL, dark: the least-tested combination, and the one the shop owner uses.
@@ -292,13 +292,19 @@ test.describe('Missing dependencies never dead-end a workflow', () => {
 
     await page.screenshot({ path: '.freebuff/interaction-shots/06-dep-empty-ur-rtl-dark.png' });
 
-    // Home must not have grown a setup card or banner for this feature: the whole
-    // mechanism lives in the workflows that hit the dependency, by design.
+    // Home is allowed exactly one thing: the single first-run next step (its own row,
+    // asserted in setupCompletion). What it must never grow is the in-flow empty-state
+    // copy or a second prompt — those belong to the screen that met the dependency, and a
+    // wall of them on the dashboard is the clutter this design exists to avoid.
     await page.goto(`${BASE_URL}/admin/dashboard`);
     await page.waitForTimeout(1800);
     const home = await page.evaluate(() => document.body.innerText);
-    for (const leak of ['No products yet', 'No suppliers yet', 'ابھی کوئی سامان نہیں', 'سپلائر لگائیں']) {
-      expect(home.includes(leak), `the dependency layer added Home clutter: "${leak}" appeared on the dashboard`).toBe(
+    expect(
+      await page.locator('[data-testid="setup-next-step"]').count(),
+      'Home is carrying more than one dependency prompt',
+    ).toBeLessThanOrEqual(1);
+    for (const leak of ['No products yet', 'No suppliers yet', 'ابھی کوئی سامان نہیں', 'ابھی کوئی سپلائر نہیں']) {
+      expect(home.includes(leak), `the empty-state copy leaked onto Home: "${leak}" appeared on the dashboard`).toBe(
         false,
       );
     }

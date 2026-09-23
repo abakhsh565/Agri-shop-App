@@ -3,7 +3,7 @@ import { router } from "@/router";
 import { useEffect } from "react";
 import { useThemeStore, applyTheme, applyDirection } from "@/stores/themeStore";
 import { Dir } from "@/lib/dirContext";
-import { Agentation } from "agentation";
+
 import ErrorBoundary from "@/components/ui/ErrorBoundary";
 import { Capacitor } from "@capacitor/core";
 import { logEnvironmentInfo } from "@/lib/envGuard";
@@ -40,7 +40,17 @@ export default function App() {
       >
         <ErrorBoundary><Dir><RouterProvider router={router} /></Dir></ErrorBoundary>
       </div>
-      {!isNative && <Agentation />}
+      {/*
+        NOTE: an agent-annotation overlay (`agentation`) used to mount here, guarded only by
+        `!isNative`. That guard hid it on the phone but not in a browser, so real users saw a
+        "v3.0.2" badge, a floating control cluster and its own unlabelled inputs on every
+        screen — and because the import was static it was bundled into the production build
+        and the APK assets as well.
+
+        It is developer tooling, not a product feature, so it is out of the app's runtime
+        graph entirely. The package is still installed as a devDependency: to use it while
+        working, import it from a local scratch file or re-add a DEV-guarded mount here.
+      */}
     </div>
   );
 }

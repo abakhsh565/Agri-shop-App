@@ -205,6 +205,7 @@ export default function AdminSalesListPage() {
         <div className="relative">
           <button
             onClick={() => setShowSortMenu(!showSortMenu)}
+            aria-label={t("common.sort")}
             className="w-10 h-10 rounded-full flex items-center justify-center shrink-0"
             style={{ background: "var(--surface-2)", border: "1px solid var(--divider)" }}
           >

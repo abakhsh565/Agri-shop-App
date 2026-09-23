@@ -177,9 +177,12 @@ test.describe('Admin microcopy — English and Urdu', () => {
     for (const path of routes) {
       await page.goto(`${BASE_URL}${path}`);
       await page.waitForLoadState('networkidle');
+      // setLanguage reloads the page, so this same route is already re-entered with the
+      // Urdu dictionary stored. A second `goto` on top of that reload is what produced
+      // the net::ERR_ABORTED flake in a full-suite run: two navigations racing for one
+      // page. Dropping the redundant navigation removes the race instead of retrying
+      // around it.
       await setLanguage(page, 'ur');
-      await page.goto(`${BASE_URL}${path}`);
-      await page.waitForLoadState('networkidle');
 
       const screen = await page.evaluate(() => ({
         text: document.body.innerText,

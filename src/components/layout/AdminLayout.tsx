@@ -268,6 +268,9 @@ export default function AdminLayout() {
           background: "var(--surface)",
           borderColor: "var(--divider)",
           height: "var(--tabbar-height)",
+          // Explicit layering, so this can never drift into the overlay band again:
+          // below sheets/dialogs/toasts (z-50) and above ordinary page content.
+          zIndex: 30,
           paddingBottom: "0px",
           paddingLeft: "16px",
           paddingRight: "16px",

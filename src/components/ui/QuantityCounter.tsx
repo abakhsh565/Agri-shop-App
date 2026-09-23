@@ -1,5 +1,6 @@
 import { Trash2 } from "lucide-react";
 import { useState, useCallback } from "react";
+import { tNow } from "@/lib/i18n";
 
 interface QuantityCounterProps {
   qty: number;
@@ -76,6 +77,11 @@ export default function QuantityCounter({
       <button
         type="button"
         onClick={decrement}
+        // Icon-only (a minus, or a bin at the minimum): with no name a screen reader
+        // announces an unlabelled button.
+        aria-label={
+          qty <= minQty && deleteOnOne ? tNow("common.remove") : tNow("common.decrease")
+        }
         className={`
           ${btnSize} rounded-full flex items-center justify-center shrink-0 transition-colors
           ${qty <= minQty && deleteOnOne
@@ -124,6 +130,7 @@ export default function QuantityCounter({
         type="button"
         onClick={increment}
         disabled={!!max && qty >= max}
+        aria-label={tNow("common.increase")}
         className={`
           ${btnSize} rounded-full bg-black text-white flex items-center justify-center shrink-0
           disabled:opacity-30

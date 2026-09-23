@@ -20,6 +20,10 @@ On Windows PowerShell:
 $env:PORT='5173'; npx vite --mode qa --host 0.0.0.0 --port 5173
 ```
 
+**Do NOT use `npm run dev` for the preview.** The `dev` script is `vite --host 0.0.0.0` —
+it omits `--mode qa` (confirmed from package.json), so it starts without `.env.qa` and is
+not the server the E2E suite reuses. Always pass `--mode qa` explicitly, as above.
+
 `--mode qa` is required, not optional. It is what makes Vite load `.env.qa` and
 therefore the QA Supabase project (`bpybjrjenwccowvtrevu`). Without it the server falls
 back to `.env.local` or the scaffold default in `utils/supabase/info.tsx`, which is how a
@@ -34,11 +38,19 @@ For background (detached) mode on Windows, the reliable form uses `node.exe` dir
 ```powershell
 $log = '<log>'
 $logErr = "$log.err"
-$pid = (Start-Process -FilePath 'node.exe' -ArgumentList 'node_modules\vite\bin\vite.js','--mode','qa','--host','0.0.0.0','--port','<port>' -WorkingDirectory '<project-root>' -RedirectStandardOutput $log -RedirectStandardError $logErr -WindowStyle Hidden -PassThru).Id
+$p = (Start-Process -FilePath 'node.exe' -ArgumentList 'node_modules\vite\bin\vite.js','--mode','qa','--host','0.0.0.0','--port','<port>' -WorkingDirectory '<project-root>' -RedirectStandardOutput $log -RedirectStandardError $logErr -WindowStyle Hidden -PassThru).Id
+# NOTE: do NOT name this variable $pid — $pid is a read-only PowerShell automatic
+# variable and the assignment fails. Use $p (or any other name).
+Write-Output "PID=$p"
 ```
 
-Pick a free port. 5173/5174/5175 may already be in use; 5173 is currently used by this
-thread's preview. Do not kill a running server with a process filter matching `vite` from
+`Start-Process` returns immediately, but redirecting output keeps the parent shell attached until
+it exits — run this from a shell with a generous timeout, or poll `netstat` for the port instead
+of waiting on the command. `--host 0.0.0.0` is fine; the app is reachable at `http://127.0.0.1:<port>/`.
+
+Pick a free port. 5173/5174/5175 may already be in use — check with
+`netstat -ano | grep ":5173"` before starting (5173 is the port this run doc assumes for
+the preview). Do not kill a running server with a process filter matching `vite` from
 the same shell — the filter also matches the shell running the command and kills it (and
 the `Start-Process` in the same command line) before it starts. Match the pid instead.
 

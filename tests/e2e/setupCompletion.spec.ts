@@ -35,13 +35,58 @@ const signIn = (page: Page) => loginViaUi(page, OWNER_PHONE);
  * fails on `products_company_id_fkey` — the database correctly refused to let a supplier
  * be deleted while stock still pointed at it.
  */
+/**
+ * Empty the shop down to nothing, so the status can be observed from zero.
+ *
+ * The order below is read off the QA schema's real foreign keys
+ * (`information_schema.constraint_column_usage`), not guessed: products are referenced by
+ * product_variants, inventory_movements, purchase_items, return_items, sale_items and
+ * stock_adjustments; customers by credit_limit_requests, customer_crops, customer_payments,
+ * payments, reminder_configs, reminder_occurrences, returns and sales; and returns/voids/
+ * sale_submissions/sale_items hang off sales. Deleting a parent before its children aborts
+ * the clear half-way with a foreign-key error — which is exactly how this spec failed in a
+ * full-suite run, once an earlier spec had left a credit_limit_request against the QA
+ * customer. A half-cleared shop then makes every later assertion about the shop look wrong.
+ */
 async function clearSetupEntities() {
-  await execSql(
-    `DELETE FROM product_variants WHERE product_id IN (SELECT id FROM products WHERE shop_id = '${QA_IDS.shop}')`
-  );
-  await execSql(`DELETE FROM products WHERE shop_id = '${QA_IDS.shop}'`);
-  await execSql(`DELETE FROM customers WHERE shop_id = '${QA_IDS.shop}'`);
-  await execSql(`DELETE FROM companies WHERE shop_id = '${QA_IDS.shop}'`);
+  const shop = QA_IDS.shop;
+  const child = {
+    product: `product_id IN (SELECT id FROM products WHERE shop_id = '${shop}')`,
+    customer: `customer_id IN (SELECT id FROM customers WHERE shop_id = '${shop}')`,
+    company: `company_id IN (SELECT id FROM companies WHERE shop_id = '${shop}')`,
+    sale: `sale_id IN (SELECT id FROM sales WHERE customer_id IN (SELECT id FROM customers WHERE shop_id = '${shop}'))`,
+    config: `config_id IN (SELECT id FROM reminder_configs WHERE customer_id IN (SELECT id FROM customers WHERE shop_id = '${shop}'))`,
+  };
+
+  // Children first, parents last, one statement per edge.
+  for (const sql of [
+    `DELETE FROM reminder_logs WHERE ${child.config}`,
+    `DELETE FROM credit_limit_requests WHERE ${child.customer}`,
+    `DELETE FROM customer_crops WHERE ${child.customer}`,
+    `DELETE FROM customer_payments WHERE ${child.customer}`,
+    `DELETE FROM payments WHERE ${child.customer}`,
+    `DELETE FROM return_items WHERE return_id IN (SELECT id FROM returns WHERE ${child.customer})`,
+    `DELETE FROM return_items WHERE ${child.product}`,
+    `DELETE FROM voids WHERE ${child.sale}`,
+    `DELETE FROM sale_submissions WHERE ${child.sale}`,
+    `DELETE FROM sale_items WHERE ${child.sale}`,
+    `DELETE FROM sale_items WHERE ${child.product}`,
+    `DELETE FROM returns WHERE ${child.customer}`,
+    `DELETE FROM reminder_occurrences WHERE ${child.customer}`,
+    `DELETE FROM reminder_configs WHERE ${child.customer}`,
+    `DELETE FROM inventory_movements WHERE ${child.product}`,
+    `DELETE FROM purchase_items WHERE ${child.product}`,
+    `DELETE FROM product_variants WHERE ${child.product}`,
+    `DELETE FROM stock_adjustments WHERE ${child.product}`,
+    `DELETE FROM supplier_payments WHERE ${child.company}`,
+    `DELETE FROM purchases WHERE ${child.company}`,
+    `DELETE FROM sales WHERE ${child.customer}`,
+    `DELETE FROM products WHERE shop_id = '${shop}'`,
+    `DELETE FROM customers WHERE shop_id = '${shop}'`,
+    `DELETE FROM companies WHERE shop_id = '${shop}'`,
+  ]) {
+    await execSql(sql);
+  }
 }
 
 /** The checklist block, read from the live DOM rather than from source. */
@@ -260,18 +305,60 @@ test.describe('Business setup status is derived and self-retiring', () => {
       .toBe(true);
   });
 
-  test('6. first-run guidance shows on the dashboard for a new shop only', async ({ page }) => {
+  test('6. Home gives a new shop ONE next step, not the checklist', async ({ page }) => {
     await clearSetupEntities();
     await signIn(page);
 
-    // A brand-new shop: the dashboard guides the owner instead of showing zeroed figures
-    // with no next step.
+    // A brand-new shop: Home shows the single action that unblocks them.
     await page.goto('/admin/dashboard');
-    await expect(page.locator('[data-testid="setup-checklist"]')).toBeVisible({ timeout: 20000 });
-    await waitForSetupReady(page);
-    const onDashboard = await readChecklist(page);
-    expect(onDashboard!.rows.length).toBe(3);
-    expect(onDashboard!.percent).toContain('0');
+    const nextStep = page.locator('[data-testid="setup-next-step"]');
+    await expect(nextStep).toBeVisible({ timeout: 20000 });
+    await expect
+      .poll(async () => (await page.locator('[data-testid="setup-next-step"]').count()) > 0, {
+        timeout: 20000,
+      })
+      .toBe(true);
+
+    // Home must NOT carry the Settings checklist: no percentage, no three-row audit.
+    expect(
+      await page.locator('[data-testid="setup-checklist"]').count(),
+      'Home is showing the Settings checklist instead of one next step',
+    ).toBe(0);
+
+    // Dependency order: a supplier comes first, because a product needs one.
+    const card = await page.evaluate(() => {
+      const el = document.querySelector('[data-testid="setup-next-step"]') as HTMLElement;
+      const rows = [...el.querySelectorAll('.ds-row')] as HTMLElement[];
+      return {
+        text: (el.textContent ?? '').replace(/\s+/g, ' ').trim(),
+        buttons: [...el.querySelectorAll('button')].map((b) => (b.textContent ?? '').trim()),
+        hasIcon: !!el.querySelector('svg'),
+        rowCount: rows.length,
+        // A chevron is the only trailing glyph the row should carry.
+        chevrons: [...el.querySelectorAll('svg')].length,
+        rowInset: rows[0] ? getComputedStyle(rows[0]).getPropertyValue('--row-inset').trim() : '',
+      };
+    });
+    expect(card.buttons.length, 'the first-run row is the only control Home should carry').toBe(1);
+    expect(card.buttons[0], 'the next step offers no action').toContain('Add supplier');
+    expect(card.text, 'Home does not name the supplier step first').toMatch(/supplier/i);
+    expect(card.hasIcon, 'the next step has no icon').toBe(true);
+    // The reason travels with the action on the same row, so the prompt is one line of
+    // intent rather than a card of buttons.
+    expect(card.text, 'the row does not explain why the step comes first').toMatch(/needs a supplier/i);
+    // One row on the shared list primitive — not a bespoke card that can drift from the
+    // grammar the rest of the app (and Settings' own checklist) is built on.
+    expect(card.rowCount, 'Home is not using the shared list row').toBe(1);
+    expect(card.rowInset, 'the row did not publish the icon inset').toBe('52px');
+    expect(card.buttons, 'the full checklist leaked onto Home').not.toContain('Add product');
+    expect(card.text, 'Home is carrying a second call to action').not.toMatch(/see all steps/i);
+
+    // The first action must lead into the real create route, and come back afterwards.
+    await nextStep.getByRole('button').first().click();
+    await expect(page).toHaveURL(/\/admin\/companies\/new/, { timeout: 15000 });
+    await expect(page).toHaveURL(/returnTo=/, { timeout: 5000 });
+    await page.goto('/admin/dashboard');
+    await expect(nextStep).toBeVisible({ timeout: 20000 });
 
     // Configured shop: the guidance retires itself and Home gains nothing.
     await execSql(

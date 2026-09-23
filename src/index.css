@@ -817,7 +817,14 @@ svg.ds-glyph-sm {
 .ds-anim-backdrop-out { animation: backdropOut var(--dur-2) ease-out both; }
 .ds-anim-toast-in   { animation: toastIn     var(--dur-2) var(--ease-out) both; }
 .ds-anim-toast-out  { animation: toastOut    var(--dur-2) var(--ease-out) both; }
-.ds-anim-screen     { animation: screenIn    var(--dur-2) var(--ease-out) both; }
+/* NOT `both`. A filling animation on `opacity` stays "in effect" after it finishes, which
+   makes this wrapper a PERMANENT stacking context at `z-index: auto`. The bottom tab bar is
+   a `fixed` later sibling with `z-index: auto` too, so both landed in the same painting
+   layer and DOM order put the nav on top — of everything inside the page, including a
+   `fixed inset-0 z-50` sheet. That is why a bottom sheet's lower edge disappeared behind
+   the nav. Without the fill, the wrapper is an ordinary static element once the entry
+   completes, so an overlay's `z-50` wins on its own. */
+.ds-anim-screen     { animation: screenIn    var(--dur-2) var(--ease-out); }
 
 /* An overlay on its way out must not swallow a tap: nothing fades out on a
    touch the user did not aim at it, and the next screen is live underneath. */

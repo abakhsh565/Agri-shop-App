@@ -9,7 +9,7 @@ import { useProductsStore } from "@/stores/productsStore";
 import { useEmployeesStore } from "@/stores/employeesStore";
 import { useCompaniesStore } from "@/stores/companiesStore";
 import PullToRefresh from "@/components/ui/PullToRefresh";
-import SetupChecklist from "@/components/ui/SetupChecklist";
+import NextStepCard from "@/components/ui/NextStepCard";
 import { useCustomersStore } from "@/stores/customersStore";
 import { supabase } from "@/lib/supabase";
 import { formatCurrency, formatSmartDateTime } from "@/lib/formatters";
@@ -304,6 +304,7 @@ export default function AdminDashboardPage() {
         <div className="flex items-center gap-1.5 shrink-0">
           <button
             onClick={() => navigate("/admin/search")}
+            aria-label={t("common.search")}
             className="flex items-center justify-center rounded-full size-9 transition-colors active:opacity-60"
             style={{ background: "var(--surface-2)" }}
           >
@@ -311,6 +312,7 @@ export default function AdminDashboardPage() {
           </button>
           <button
             onClick={() => setShowNotifs((v) => !v)}
+            aria-label={t("common.notifications")}
             className="flex items-center justify-center rounded-full size-9 relative transition-colors active:opacity-60"
             style={{ background: "var(--surface-2)" }}
           >
@@ -437,12 +439,11 @@ export default function AdminDashboardPage() {
         ))}
       </div>
 
-      {/* ── First-run guidance. Rendered only while the shop's required setup is
-          incomplete: SetupChecklist returns null once nothing is missing, so a shop
-          that is already running sees nothing here at all. It is the same block as the
-          one on Settings rather than a second definition of "setup", so the two can
-          never disagree about what is done. ── */}
-      <SetupChecklist className="animate-fade-in-up" />
+      {/* ── First-run guidance: ONE next step, not a checklist. Settings owns completion
+          status (all three steps plus a percentage); Home gives a new owner the single
+          action that unblocks them, in the graph's own dependency order. It renders
+          nothing once the shop can trade, so Home is never nagged by it. ── */}
+      <NextStepCard className="px-4 pt-4 animate-fade-in-up" />
 
       {/* ── Total Sales card (lime hero): Total Sales · Transactions · Gross Profit ── */}
       <div className="px-4 animate-fade-in-up">

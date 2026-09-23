@@ -805,6 +805,13 @@ export const translations = {
     // meets it — in the flow that needed it, and here.
     "setup.title":               "Get your shop ready",
     "setup.percent":             "{x}% ready",
+    // Accessible names for icon-only controls. A screen reader announces nothing for a
+    // button whose whole content is a glyph, so these are read-only helpers, never
+    // visible strings.
+    "common.increase":            "Increase",
+    "common.decrease":            "Decrease",
+    "common.notifications":       "Notifications",
+    "common.sort":                "Sort and filter",
     "sale.noCustomersMatch":     "No customers match your search",
     "sale.noCustomersYet":       "No customers yet",
     "sale.recentlyAdded":        "Recently Added",
@@ -2343,6 +2350,10 @@ export const translations = {
     "dep.customer.cannot": "مالک سے کہیں گاہک لگا دیں۔",
     "setup.title": "اپنی دکان تیار کریں",
     "setup.percent": "{x}% تیار",
+    "common.increase": "زیادہ کریں",
+    "common.decrease": "کم کریں",
+    "common.notifications": "اطلاعات",
+    "common.sort": "ترتیب اور چھانٹی",
     "sale.noCustomersMatch": "کوئی گاہک نہیں ملا",
     "sale.noCustomersYet": "ابھی تک کوئی گاہک نہیں",
     "sale.recentlyAdded": "حالیہ شامل شدہ",

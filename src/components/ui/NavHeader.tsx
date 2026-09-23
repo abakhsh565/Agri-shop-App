@@ -5,6 +5,7 @@ import { type ReactNode } from "react";
 import { popNav, setSkipNext, isDashboardPath } from "@/lib/navContext";
 import { useLocation } from "react-router-dom";
 import { isTopLevel } from "@/lib/navDepth";
+import { tNow } from "@/lib/i18n";
 
 interface NavHeaderProps {
   title: string;
@@ -56,6 +57,9 @@ export default function NavHeader({ title, backTo, onBack, right, noBack }: NavH
       {!noBack && (
         <button
           onClick={handleBack}
+          // Icon-only, and it is on every sub-screen: without a name a screen reader
+          // announces nothing at all here.
+          aria-label={tNow("common.back")}
           className="flex items-center text-sm font-medium absolute transition-opacity active:opacity-60"
           style={{ color: "var(--text-primary)", [isRtl ? "right" : "left"]: 16 }}
         >
