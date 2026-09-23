@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
+import ListCard from "@/components/ui/ListCard";
+import ListRow from "@/components/ui/ListRow";
 import PullToRefresh from "@/components/ui/PullToRefresh";
 import { formatCurrency, formatSmartDateTime } from "@/lib/formatters";
 import { pkToday, pkYesterday, pkDateFromISO, pkWeekStart, pkMonthStart } from "@/lib/pkDate";
@@ -11,7 +13,8 @@ import { useAuthStore } from "@/stores/authStore";
 import { useCustomersStore } from "@/stores/customersStore";
 import { useCurrentTime } from "@/lib/useCurrentTime";
 import type { Sale } from "@/types";
-import { Search, Calendar, SlidersHorizontal, Check } from "lucide-react";
+import { Calendar, SlidersHorizontal, Check, ClipboardList } from "lucide-react";
+import SearchBar from "@/components/ui/SearchBar";
 import { groupSalesByDateSections } from "@/lib/salesGrouping";
 
 type Tab = "all" | "credit" | "paid";
@@ -152,10 +155,10 @@ export default function SalesListPage() {
 
       {/* Summary strip */}
       <div
-        className="mx-4 rounded-xl px-4 py-3 flex items-center justify-between"
+        className="mx-4 rounded-[var(--radius-tile)] px-4 py-3 flex items-center justify-between"
         style={{ background: "var(--surface-2)" }}
       >
-        <p className="text-[10px] uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
+        <p className="text-10 uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
           {summaryLabel}
         </p>
         <p className="text-base font-bold" style={{ color: "var(--text-primary)" }}>
@@ -165,22 +168,13 @@ export default function SalesListPage() {
 
       {/* Search + Sort */}
       <div className="px-4 pt-3 flex gap-2 items-center">
-        <div
-          className="flex-1 flex items-center gap-2 h-10 rounded-full px-3"
-          style={{ background: "var(--surface-2)", border: "1px solid var(--divider)" }}
-        >
-          <Search size={14} style={{ color: "var(--text-secondary)" }} />
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder={t("sale.searchPlaceholder")}
-            className="flex-1 bg-transparent text-[13px] outline-none"
-            style={{ color: "var(--text-primary)" }}
-          />
-          {query && (
-            <button onClick={() => setQuery("")} style={{ color: "var(--text-secondary)" }}>×</button>
-          )}
-        </div>
+        <SearchBar
+          containerClass="flex-1 min-w-0"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onClear={() => setQuery("")}
+          placeholder={t("sale.searchPlaceholder")}
+        />
         <div className="relative">
           <button
             onClick={() => setShowSortMenu(!showSortMenu)}
@@ -197,7 +191,7 @@ export default function SalesListPage() {
                   setTimeout(() => document.addEventListener("click", handler, { once: true }), 0);
                 }
               }}
-              className="absolute right-0 top-12 w-52 rounded-[14px] shadow-xl overflow-hidden z-50"
+              className="absolute right-0 top-12 w-52 rounded-[var(--radius-card)] shadow-xl overflow-hidden z-50"
               style={{ background: "var(--surface)", border: "1px solid var(--divider)" }}
             >
               {SORT_OPTIONS.map((opt) => (
@@ -207,7 +201,7 @@ export default function SalesListPage() {
                   className="flex items-center justify-between w-full px-4 py-3.5 text-start transition-colors active:bg-black/5"
                   style={{ borderBottom: "1px solid var(--divider)" }}
                 >
-                  <span className="text-[13px] font-medium" style={{ color: sort === opt.key ? "var(--brand-dark)" : "var(--text-primary)" }}>
+                  <span className="text-13 font-medium" style={{ color: sort === opt.key ? "var(--brand-dark)" : "var(--text-primary)" }}>
                     {t(opt.labelKey as any)}
                   </span>
                   {sort === opt.key && <Check size={16} style={{ color: "var(--brand)" }} />}
@@ -273,7 +267,7 @@ export default function SalesListPage() {
               {key === "custom" && <Calendar size={12} />}
               {label}
               {key === "custom" && customFrom && (
-                <span className="text-[9px] opacity-70">({customFrom} → {customTo || "..."})</span>
+                <span className="text-9 opacity-70">({customFrom} → {customTo || "..."})</span>
               )}
             </button>
           ))}
@@ -298,45 +292,43 @@ export default function SalesListPage() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-4">
-              <p className="text-[15px] font-bold" style={{ color: "var(--text-primary)" }}>{t("admin.selectDateRange")}</p>
+              <p className="text-15 font-bold" style={{ color: "var(--text-primary)" }}>{t("admin.selectDateRange")}</p>
               <button onClick={() => setShowDateModal(false)} className="text-xl" style={{ color: "var(--text-secondary)" }}>×</button>
             </div>
             <div className="flex gap-3">
               <div className="flex-1">
-                <label className="text-[11px] font-semibold uppercase tracking-wider mb-1 block" style={{ color: "var(--text-secondary)" }}>{t("admin.from")}</label>
+                <label className="text-11 font-semibold uppercase tracking-wider mb-1 block" style={{ color: "var(--text-secondary)" }}>{t("admin.from")}</label>
                 <input
                   type="date"
                   value={customFrom}
                   onChange={(e) => setCustomFrom(e.target.value)}
                   max={todayISO}
-                  className="w-full h-10 px-3 rounded-xl text-[13px] outline-none"
-                  style={{ background: "var(--surface-2)", color: "var(--text-primary)", border: "1px solid var(--divider)" }}
+                  className="w-full outline-none"
                 />
               </div>
               <div className="flex-1">
-                <label className="text-[11px] font-semibold uppercase tracking-wider mb-1 block" style={{ color: "var(--text-secondary)" }}>{t("admin.to")}</label>
+                <label className="text-11 font-semibold uppercase tracking-wider mb-1 block" style={{ color: "var(--text-secondary)" }}>{t("admin.to")}</label>
                 <input
                   type="date"
                   value={customTo}
                   onChange={(e) => setCustomTo(e.target.value)}
                   max={todayISO}
                   min={customFrom || undefined}
-                  className="w-full h-10 px-3 rounded-xl text-[13px] outline-none"
-                  style={{ background: "var(--surface-2)", color: "var(--text-primary)", border: "1px solid var(--divider)" }}
+                  className="w-full outline-none"
                 />
               </div>
             </div>
             <div className="flex gap-2 mt-4">
               <button
                 onClick={() => { setCustomFrom(""); setCustomTo(""); setDateFilter("custom"); setShowDateModal(false); }}
-                className="flex-1 h-10 rounded-xl text-[13px] font-semibold"
+                className="flex-1 h-10 rounded-[var(--radius-tile)] text-13 font-semibold"
                 style={{ background: "var(--surface-2)", color: "var(--text-secondary)" }}
               >
                 {t("common.cancel")}
               </button>
               <button
                 onClick={applyCustomDates}
-                className="flex-1 h-10 rounded-xl text-[13px] font-bold"
+                className="flex-1 h-10 rounded-[var(--radius-tile)] text-13 font-bold"
                 style={{ background: "var(--brand)", color: "#0a0a0a" }}
               >
                 {t("common.confirm")}
@@ -349,7 +341,7 @@ export default function SalesListPage() {
       {/* Sales list with date sections */}
       {filtered.length === 0 ? (
         <div className="flex flex-col items-center py-16 gap-2">
-          <p className="text-3xl">📋</p>
+          <ClipboardList size={28} className="mx-auto block" style={{ color: "var(--text-tertiary)" }} />
           <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>{t("sales.noSales")}</p>
         </div>
       ) : (
@@ -357,52 +349,50 @@ export default function SalesListPage() {
           {groupSalesByDateSections(filtered, now).map((section) => (
             <div key={section.label} className="mt-4">
               <div className="px-4 mb-2">
-                <p className="text-[11px] font-bold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
+                <p className="text-11 font-bold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
                   {section.label}
                 </p>
               </div>
-              <div className="mx-4 rounded-[14px] overflow-hidden" style={{ border: "1px solid var(--divider)" }}>
-                {section.sales.map((sale, i) => {
+              <ListCard className="mx-4">
+                {section.sales.map((sale) => {
                   const cImg = getCustomerImg(sale.customerId);
                   const cBg = initBgColor(sale.customerName);
                   return (
-                  <button
+                  <ListRow
                     key={sale.id}
                     onClick={() => navigate(`/employee/sales/${sale.id}`)}
-                    className="flex items-center justify-between px-4 py-3.5 w-full text-start transition-opacity active:opacity-70"
-                    style={{ borderBottom: i < section.sales.length - 1 ? "1px solid var(--divider)" : "none" }}
-                  >
-                    <div className="flex items-center gap-3 flex-1 min-w-0">
-                      {cImg ? (
-                        <img src={cImg} alt={sale.customerName} className="size-10 rounded-full object-cover shrink-0" />
-                      ) : (
-                        <div className="size-10 rounded-full shrink-0 flex items-center justify-center text-sm font-bold" style={{ background: cBg, color: "#fff" }}>
-                          {sale.customerName.charAt(0).toUpperCase()}
-                        </div>
-                      )}
-                      <div className="min-w-0">
-                        <p className="text-[13px] font-bold truncate" style={{ color: "var(--text-primary)" }}>{sale.customerName}</p>
-                        <p className="text-[10px] mt-0.5" style={{ color: "var(--text-secondary)" }}>{formatSmartDateTime(sale.createdAt, now, t)}</p>
+                    tile={cImg ? (
+                      <img src={cImg} alt={sale.customerName} className="size-10 rounded-full object-cover shrink-0" />
+                    ) : (
+                      <div className="size-10 rounded-full shrink-0 flex items-center justify-center text-sm font-bold" style={{ background: cBg, color: "#fff" }}>
+                        {sale.customerName.charAt(0).toUpperCase()}
                       </div>
-                    </div>
-                    <div className="flex flex-col items-end gap-2 shrink-0">
-                      <span className="text-[14px] font-bold" style={{ color: "var(--text-primary)" }}>
-                        {formatCurrency(sale.totalAmount)}
-                      </span>
-                      {sale.paymentType !== "full" ? (
-                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ background: "rgba(239,68,68,0.1)", color: "#ef4444" }}>
-                          {t("common.creditTag")}
+                    )}
+                    trailing={
+                      <div className="flex flex-col items-end gap-2 shrink-0">
+                        <span className="text-14 font-bold" style={{ color: "var(--text-primary)" }}>
+                          {formatCurrency(sale.totalAmount)}
                         </span>
-                      ) : (
-                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ background: "rgba(132,204,22,0.15)", color: "var(--brand-dark)" }}>
-                          {t("common.paidTag")}
-                        </span>
-                      )}
+                        {sale.paymentType !== "full" ? (
+                          <span className="text-10 font-semibold px-2 py-0.5 rounded-full" style={{ background: "rgba(239,68,68,0.1)", color: "#ef4444" }}>
+                            {t("common.creditTag")}
+                          </span>
+                        ) : (
+                          <span className="text-10 font-semibold px-2 py-0.5 rounded-full" style={{ background: "rgba(132,204,22,0.15)", color: "var(--brand-dark)" }}>
+                            {t("common.paidTag")}
+                          </span>
+                        )}
+                      </div>
+                    }
+                  >
+                    <div className="min-w-0">
+                      <p className="text-13 font-bold truncate" style={{ color: "var(--text-primary)" }}>{sale.customerName}</p>
+                      <p className="text-10 mt-0.5" style={{ color: "var(--text-secondary)" }}>{formatSmartDateTime(sale.createdAt, now, t)}</p>
                     </div>
-                  </button>
+                  </ListRow>
                   );
                 })}
-              </div>
+              </ListCard>
             </div>
           ))}
         </div>

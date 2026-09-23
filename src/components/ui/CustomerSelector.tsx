@@ -27,10 +27,10 @@ function getPriorityScore(c: any): number {
   if (c.dueDate) { const d = Math.floor((Date.now() - new Date(c.dueDate).getTime()) / 86400000); if (d > 0) r += Math.min(d, 40); }
   return r;
 }
-function getRiskTag(score: number, isUrdu: boolean): { label: string; color: string; bg: string } | null {
-  if (score >= 100) return { label: isUrdu ? "\u0632\u06cc\u0627\u062f\u06c1 \u062e\u0637\u0631\u06c1" : "High Risk", color: "#dc2626", bg: "#fee2e2" };
-  if (score >= 60) return { label: isUrdu ? "\u062a\u0627\u062e\u06cc\u0631" : "Delayed", color: "#d97706", bg: "#fef3c7" };
-  if (score >= 30) return { label: isUrdu ? "\u0637\u0627\u0626\u0645 \u067e\u0631" : "On Time", color: "#16a34a", bg: "#d9f99d" };
+function getRiskTag(score: number, t: (key: string) => string): { label: string; color: string; bg: string } | null {
+  if (score >= 100) return { label: t("inline.high_risk"), color: "#dc2626", bg: "#fee2e2" };
+  if (score >= 60) return { label: t("inline.delayed"), color: "#d97706", bg: "#fef3c7" };
+  if (score >= 30) return { label: t("inline.on_time"), color: "#16a34a", bg: "#d9f99d" };
   return null;
 }
 export default function CustomerSelector({ selectedIds, onChange, filterFn, maxSelections = 100 }: CustomerSelectorProps) {
@@ -55,48 +55,48 @@ export default function CustomerSelector({ selectedIds, onChange, filterFn, maxS
       <div className="relative">
         <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "var(--text-secondary)" }} />
         <input type="text" value={search} onChange={(e) => setSearch(e.target.value)}
-          placeholder={isUrdu ? "\u06af\u0627\u06c1\u06a9 \u062a\u0644\u0627\u0634 \u06a9\u0631\u06cc\u06ba..." : "Search customers..."}
-          className="w-full h-10 rounded-[12px] pl-10 pr-10 text-[13px] outline-none"
-          style={{ background: "var(--surface-2)", color: "var(--text-primary)", border: "1px solid var(--divider)" }} />
+          placeholder={t("inline.search_customers")}
+          className="w-full h-10 rounded-[var(--radius-tile)] pl-10 pr-10 text-13 outline-none"
+          style={{ background: "var(--surface-2)", color: "var(--text-primary)", border: "1px solid var(--border-control)" }} />
         {search && <button onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2"><X size={14} style={{ color: "var(--text-secondary)" }} /></button>}
       </div>
       <div className="flex items-center justify-between px-1">
-        <p className="text-[12px]" style={{ color: "var(--text-secondary)" }}>
-          {selectedIds.size} {isUrdu ? "\u0645\u0646\u062a\u062e\u0628" : "selected"}{filteredCustomers.length > 0 ? ` / ${filteredCustomers.length}` : ""}
+        <p className="text-12" style={{ color: "var(--text-secondary)" }}>
+          {selectedIds.size} {t("inline.selected")}{filteredCustomers.length > 0 ? ` / ${filteredCustomers.length}` : ""}
         </p>
         <div className="flex items-center gap-2">
-          <button onClick={() => setSortByPriority(v => !v)} className="flex items-center gap-1 text-[11px] font-semibold"
+          <button onClick={() => setSortByPriority(v => !v)} className="flex items-center gap-1 text-11 font-semibold"
             style={{ color: sortByPriority ? "var(--brand-dark, #65a30d)" : "var(--text-secondary)" }}>
-            <ArrowUpDown size={12} /> {isUrdu ? "\u062a\u0631\u062c\u06cc\u06c1" : "Priority"}
+            <ArrowUpDown size={12} /> {t("inline.priority")}
           </button>
-          <button onClick={selectAll} className="text-[11px] font-semibold" style={{ color: "var(--brand-dark, #65a30d)" }}>
-            {isUrdu ? "\u0633\u0628 \u0645\u0646\u062a\u062e\u0628" : "Select all"}
+          <button onClick={selectAll} className="text-11 font-semibold" style={{ color: "var(--brand-dark, #65a30d)" }}>
+            {t("inline.select_all")}
           </button>
         </div>
       </div>
       <div className="flex flex-col gap-1 max-h-[300px] overflow-y-auto">
         {filteredCustomers.length === 0 ? (
-          <p className="text-[13px] text-center py-4" style={{ color: "var(--text-secondary)" }}>
-            {isUrdu ? "\u06a9\u0648\u0626\u06cc \u06af\u0627\u06c1\u06a9 \u0646\u06c1\u06cc\u06ba \u0645\u0644\u0627" : "No customers found"}
+          <p className="text-13 text-center py-4" style={{ color: "var(--text-secondary)" }}>
+            {t("inline.no_customers_found")}
           </p>
         ) : (
           filteredCustomers.map(c => {
             const isSelected = selectedIds.has(c.id);
             const score = getPriorityScore(c);
-            const riskTag = getRiskTag(score, isUrdu);
+            const riskTag = getRiskTag(score, t);
             return (
               <button key={c.id} onClick={() => toggle(c.id)}
-                className="flex items-center gap-3 p-3 rounded-[12px] text-start transition-colors"
+                className="flex items-center gap-3 p-3 rounded-[var(--radius-tile)] text-start transition-colors"
                 style={{ background: isSelected ? "var(--brand-light, #d9f99d)" : "transparent", border: isSelected ? "1px solid var(--brand-dark, #65a30d)" : "1px solid transparent" }}>
-                {c.imageUrl ? (<img src={c.imageUrl} alt="" className="w-9 h-9 rounded-full object-cover shrink-0" />) : (<div className="w-9 h-9 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0" style={{ background: getAvatarColor(c.name), color: "#fff" }}>{getInitials(c.name)}</div>)}
+                {c.imageUrl ? (<img src={c.imageUrl} alt="" className="w-9 h-9 rounded-full object-cover shrink-0" />) : (<div className="w-9 h-9 rounded-full flex items-center justify-center text-11 font-bold shrink-0" style={{ background: getAvatarColor(c.name), color: "#fff" }}>{getInitials(c.name)}</div>)}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <p className="text-[13px] font-semibold truncate" style={{ color: "var(--text-primary)" }}>{c.name}</p>
-                    {riskTag && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full shrink-0" style={{ background: riskTag.bg, color: riskTag.color }}>{riskTag.label}</span>}
+                    <p className="text-13 font-semibold truncate" style={{ color: "var(--text-primary)" }}>{c.name}</p>
+                    {riskTag && <span className="text-9 font-bold px-1.5 py-0.5 rounded-full shrink-0" style={{ background: riskTag.bg, color: riskTag.color }}>{riskTag.label}</span>}
                   </div>
-                  <div className="flex items-center gap-2 text-[11px]" style={{ color: "var(--text-secondary)" }}>
+                  <div className="flex items-center gap-2 text-11" style={{ color: "var(--text-secondary)" }}>
                     {c.outstandingBalance > 0 && <span style={{ color: "#ef4444" }}>{formatCurrency(c.outstandingBalance)}</span>}
-                    {c.dueDate && <span>{isUrdu ? "\u0622\u062e\u0631\u06cc \u062a\u0627\u0631\u06cc\u062e" : "Due"}: {c.dueDate}</span>}
+                    {c.dueDate && <span>{t("inline.due")}: {c.dueDate}</span>}
                     {score >= 60 && <AlertTriangle size={10} style={{ color: "#d97706" }} />}
                   </div>
                 </div>

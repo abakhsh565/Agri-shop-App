@@ -7,7 +7,8 @@ import { useProductsStore } from "@/stores/productsStore";
 import { formatCurrency } from "@/lib/formatters";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
-import { Search, Plus, ChevronRight } from "lucide-react";
+import { Plus, ChevronRight, Building2 } from "lucide-react";
+import SearchBar from "@/components/ui/SearchBar";
 
 // Simple hash color from company name
 function hashColor(name: string) {
@@ -46,27 +47,17 @@ export default function CompaniesListPage() {
 
       {/* Search */}
       <div className="px-4 pb-3">
-        <div
-          className="flex items-center gap-2 h-10 rounded-full px-3"
-          style={{ background: "var(--surface-2)", border: "1px solid var(--divider)" }}
-        >
-          <Search size={14} style={{ color: "var(--text-secondary)" }} />
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder={t("common.search")}
-            className="flex-1 bg-transparent text-[13px] outline-none"
-            style={{ color: "var(--text-primary)" }}
-          />
-          {search && (
-            <button onClick={() => setSearch("")} style={{ color: "var(--text-secondary)" }}>×</button>
-          )}
-        </div>
+        <SearchBar
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          onClear={() => setSearch("")}
+          placeholder={t("common.search")}
+        />
       </div>
 
       {ready && filtered.length === 0 && (
         <div className="flex flex-col items-center py-20 gap-2">
-          <p className="text-3xl">🏢</p>
+          <Building2 size={28} className="mx-auto block" style={{ color: "var(--text-tertiary)" }} />
           <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
             {search ? t("companies.noMatch") : t("companies.empty")}
           </p>
@@ -83,7 +74,7 @@ export default function CompaniesListPage() {
             <button
               key={company.id}
               onClick={() => navigate(`/admin/companies/${company.id}`)}
-              className="flex items-center gap-3 rounded-[14px] p-4 text-start transition-opacity active:opacity-70"
+              className="flex items-center gap-3 rounded-[var(--radius-card)] p-4 text-start transition-opacity active:opacity-70"
               style={{ background: "var(--surface)", border: "1px solid var(--divider)" }}
             >
               {/* Logo circle */}
@@ -95,7 +86,7 @@ export default function CompaniesListPage() {
                 />
               ) : (
                 <div
-                  className="size-11 rounded-full flex items-center justify-center font-bold text-[16px] shrink-0"
+                  className="size-11 rounded-full flex items-center justify-center font-bold text-16 shrink-0"
                   style={{ background: color + "22", color }}
                 >
                   {company.name ? company.name.charAt(0) : "?"}

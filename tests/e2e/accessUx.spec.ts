@@ -254,8 +254,14 @@ test.describe('Employee job & access — simple for the owner, exact underneath'
     // owner who comes back because the person never signed in.
     await page.getByTestId('invite-open-employee').click();
     await page.waitForURL(/\/admin\/employees\/[0-9a-f-]{36}$/, { timeout: 30000 });
-    await page.waitForTimeout(2500);
-    expect(await bodyText(page), 'the invited employee page is not shown after inviting').toContain('Invitation sent');
+    // Auto-wait rather than sleeping a fixed 2500ms and sampling the body: right
+    // after inviting, the new row may not be visible through the pooler yet, so a
+    // fixed sleep can capture the "Employee not found" state and fail the run.
+    // Same requirement, but it waits for the screen instead of for the clock.
+    await expect(
+      page.getByText('Invitation sent').first(),
+      'the invited employee page is not shown after inviting'
+    ).toBeVisible({ timeout: 30000 });
     expect(
       (await page.getByTestId('invite-link').first().innerText()).trim(),
       'the invited employee\u2019s page does not offer the invitation the owner needs to re-send'
@@ -282,7 +288,7 @@ test.describe('Employee job & access — simple for the owner, exact underneath'
     // Reload: the list must show the new employee, labelled as an invitation —
     // not as an active employee, which is what the owner would otherwise believe.
     await page.goto(`${BASE}/admin/employees`);
-    await page.waitForTimeout(1800);
+    await expect(page.getByText(NEW_NAME).first()).toBeVisible({ timeout: 30000 });
     const list = await bodyText(page);
     expect(list).toContain(NEW_NAME);
     expect(list, 'the invite is presented as an active employee').toContain('Invited');
@@ -290,7 +296,7 @@ test.describe('Employee job & access — simple for the owner, exact underneath'
     // The detail screen must not present operational numbers for somebody who has
     // never worked: zeros (or worse, a colleague's sales) would read as a result.
     await page.goto(`${BASE}/admin/employees/${created.id}`);
-    await page.waitForTimeout(1800);
+    await expect(page.getByText('Invitation sent').first()).toBeVisible({ timeout: 30000 });
     const detail = await bodyText(page);
     expect(detail).toContain('Invitation sent');
     expect(detail, 'performance is shown for an invited employee').not.toContain('Recent sales');
@@ -300,12 +306,20 @@ test.describe('Employee job & access — simple for the owner, exact underneath'
     // denial must not be reported as an access configuration: the owner would see
     // "this role has no access" and "changed for <name>" for an employee whose
     // role carries 12 defaults and who has no exceptions at all.
-    const invitedAreas = (await page
-      .getByText('Access', { exact: true })
-      .first()
-      .locator('xpath=..')
-      .innerText()).toLowerCase();
-    for (const area of await dbAreasForRole('Sales Manager')) {
+    // Auto-wait for the section to finish hydrating before reading it. Read the
+    // instant the heading renders and it can still be showing its loading state
+    // ("this role has no access yet.") for a role that carries 12 defaults, which
+    // made this assertion fail on timing rather than on behaviour.
+    const accessSection = page.getByText('Access', { exact: true }).first().locator('xpath=..');
+    const roleAreas = await dbAreasForRole('Sales Manager');
+    if (roleAreas.length) {
+      await expect(
+        accessSection,
+        'the invited employee never showed the role defaults'
+      ).toContainText(new RegExp(roleAreas[0], 'i'), { timeout: 30000 });
+    }
+    const invitedAreas = (await accessSection.innerText()).toLowerCase();
+    for (const area of roleAreas) {
       expect(invitedAreas, `the invited employee does not show the role's area "${area}"`).toContain(area);
     }
     expect(detail, 'a pending membership is reported as a change the owner made').not.toContain('changed for');
@@ -342,7 +356,7 @@ test.describe('Employee job & access — simple for the owner, exact underneath'
 
     expect(await page.evaluate(() => document.documentElement.dir)).toBe('rtl');
     const step1 = await bodyText(page);
-    expect(step1).toContain('ملازم شامل کریں');
+    expect(step1).toContain('نیا ملازم');
     expect(step1).toContain('پورا نام');
     expect(step1).toContain('فون نمبر');
     expect(step1).toContain('آگے');
@@ -432,7 +446,10 @@ test.describe('Employee job & access — simple for the owner, exact underneath'
     await page.waitForTimeout(900);
 
     // Suppliers is not part of this employee's role, so turning it on is a real override.
-    const suppliersRow = page.locator('button').filter({ hasText: /^🏭\s*Suppliers/ }).first();
+    // Located by its business label: the area mark is an icon now, not an emoji
+    // prefix, so matching on the glyph was asserting on decoration rather than
+    // on the row the owner actually reads.
+    const suppliersRow = page.locator('button').filter({ hasText: /^\s*Suppliers/ }).first();
     await expect(suppliersRow).toBeVisible();
     await suppliersRow.click();
     await page.getByRole('button', { name: 'Save', exact: true }).click();
@@ -482,7 +499,7 @@ test.describe('Employee job & access — simple for the owner, exact underneath'
     await page.waitForTimeout(600);
     // Suppliers is outside a Sales Employee's role, so granting it is a real
     // exception and must be visible as one.
-    await page.locator('button').filter({ hasText: /^🏭\s*Suppliers/ }).first().click();
+    await page.locator('button').filter({ hasText: /^\s*Suppliers/ }).first().click();
     await page.waitForTimeout(500);
     expect(await bodyText(page), 'a customization is not reported to the owner').toContain('changes from Sales Employee');
     // The editor replaces the read-only list instead of listing the same areas twice.

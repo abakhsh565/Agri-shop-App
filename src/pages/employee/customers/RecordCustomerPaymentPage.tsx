@@ -155,13 +155,13 @@ export default function RecordCustomerPaymentPage() {
 
         {/* Outstanding card */}
         <div
-          className="mx-4 mt-3 rounded-[14px] p-5 text-center animate-fade-in-up"
+          className="mx-4 mt-3 rounded-[var(--radius-card)] p-5 text-center animate-fade-in-up"
           style={{ background: "var(--brand)" }}
         >
-          <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "rgba(0,0,0,0.55)" }}>
+          <p className="text-10 font-bold uppercase tracking-widest" style={{ color: "rgba(0,0,0,0.55)" }}>
             {customer.name} · {t("recordPayment.outstanding")}
           </p>
-          <p className="text-[32px] font-bold mt-1" style={{ color: "#0a0a0a" }}>
+          <p className="text-32 font-bold mt-1" style={{ color: "#0a0a0a" }}>
             {formatCurrency(customer.outstandingBalance)}
           </p>
         </div>
@@ -169,7 +169,7 @@ export default function RecordCustomerPaymentPage() {
         <div className="flex flex-col gap-5 p-4 mt-2">
           {/* Split payment toggle */}
           <div
-            className="flex items-center justify-between px-4 py-3 rounded-[12px] cursor-pointer select-none"
+            className="flex items-center justify-between px-4 py-3 rounded-[var(--radius-tile)] cursor-pointer select-none"
             style={{ background: "var(--surface-2)", border: "1px solid var(--divider)" }}
             onClick={() => {
               setSplitMode(!splitMode);
@@ -209,7 +209,7 @@ export default function RecordCustomerPaymentPage() {
             <>
               {/* Amount input */}
               <div>
-                <p className="text-[11px] font-bold uppercase mb-2 tracking-wider" style={{ color: "var(--text-secondary)" }}>
+                <p className="text-11 font-bold uppercase mb-2 tracking-wider" style={{ color: "var(--text-secondary)" }}>
                   {t("recordPayment.amountLabel")}
                 </p>
                 <div className="flex items-center gap-2">
@@ -226,7 +226,7 @@ export default function RecordCustomerPaymentPage() {
                     value={amount}
                     onChange={(e) => setAmount(e.target.value)}
                     placeholder={t("recordPayment.amountHint")}
-                    className="flex-1 h-12 rounded-[24px] px-4 text-sm font-bold text-center outline-none"
+                    className="flex-1 h-12 rounded-[var(--radius-input)] px-4 text-sm font-bold text-center outline-none"
                     style={{
                       background: "var(--surface-2)",
                       border: `1px solid ${error ? "var(--error)" : "var(--divider)"}`,
@@ -245,7 +245,7 @@ export default function RecordCustomerPaymentPage() {
 
               {/* Payment method */}
               <div>
-                <p className="text-[11px] font-bold uppercase mb-2 tracking-wider" style={{ color: "var(--text-secondary)" }}>
+                <p className="text-11 font-bold uppercase mb-2 tracking-wider" style={{ color: "var(--text-secondary)" }}>
                   {t("recordPayment.method")}
                 </p>
                 <div className="flex gap-2">
@@ -272,12 +272,12 @@ export default function RecordCustomerPaymentPage() {
           {splitMode && (
             <div className="flex flex-col gap-3">
               <div className="flex items-center justify-between">
-                <p className="text-[11px] font-bold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
+                <p className="text-11 font-bold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
                   {t("recordPayment.paymentSplits") || "Payment Splits"}
                 </p>
                 <button
                   onClick={autoFillRemaining}
-                  className="text-[10px] font-bold px-3 py-1 rounded-full"
+                  className="text-10 font-bold px-3 py-1 rounded-full"
                   style={{ background: "var(--brand)", color: "#0a0a0a" }}
                 >
                   {t("recordPayment.autoFill") || "Auto-fill remaining"}
@@ -285,15 +285,15 @@ export default function RecordCustomerPaymentPage() {
               </div>
 
               {splits.map((split, i) => (
-                <div key={i} className="flex flex-col gap-2 p-3 rounded-xl" style={{ background: "var(--surface-2)", border: "1px solid var(--divider)" }}>
+                <div key={i} className="flex flex-col gap-2 p-3 rounded-[var(--radius-tile)]" style={{ background: "var(--surface-2)", border: "1px solid var(--divider)" }}>
                   <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-bold uppercase" style={{ color: "var(--text-secondary)" }}>
+                    <span className="text-10 font-bold uppercase" style={{ color: "var(--text-secondary)" }}>
                       Split {i + 1}
                     </span>
                     {splits.length > 2 && (
                       <button
                         onClick={() => removeSplit(i)}
-                        className="text-[10px] font-bold px-2 py-0.5 rounded"
+                        className="text-10 font-bold px-2 py-0.5 rounded"
                         style={{ color: "var(--error)" }}
                       >
                         {t("common.remove")}
@@ -306,7 +306,7 @@ export default function RecordCustomerPaymentPage() {
                     value={split.amount}
                     onChange={(e) => updateSplit(i, "amount", e.target.value)}
                     placeholder={t("common.amount")}
-                    className="w-full h-10 rounded-xl px-3 text-sm font-bold outline-none"
+                    className="w-full h-10 rounded-[var(--radius-tile)] px-3 text-sm font-bold outline-none"
                     style={{ background: "var(--background)", border: "1px solid var(--divider)", color: "var(--text-primary)" }}
                   />
                   <div className="flex gap-2">
@@ -338,7 +338,7 @@ export default function RecordCustomerPaymentPage() {
               </button>
 
               {/* Split total */}
-              <div className="flex justify-between items-center px-4 py-2 rounded-[10px]" style={{ background: "var(--surface-2)" }}>
+              <div className="flex justify-between items-center px-4 py-2 rounded-[var(--radius-tile)]" style={{ background: "var(--surface-2)" }}>
                 <span className="text-xs" style={{ color: "var(--text-secondary)" }}>{t("sale.total")}</span>
                 <span className="text-sm font-bold" style={{ color: totalPaid > customer.outstandingBalance ? "var(--error)" : "var(--text-primary)" }}>
                   {formatCurrency(totalPaid)} / {formatCurrency(customer.outstandingBalance)}
@@ -351,7 +351,7 @@ export default function RecordCustomerPaymentPage() {
 
           {/* Notes */}
           <div>
-            <p className="text-[11px] font-bold uppercase mb-2 tracking-wider" style={{ color: "var(--text-secondary)" }}>
+            <p className="text-11 font-bold uppercase mb-2 tracking-wider" style={{ color: "var(--text-secondary)" }}>
               {t("recordPayment.notes")}
             </p>
             <textarea
@@ -359,7 +359,7 @@ export default function RecordCustomerPaymentPage() {
               onChange={(e) => setNotes(e.target.value)}
               placeholder={t("recordPayment.notesHint")}
               rows={3}
-              className="w-full rounded-xl p-3 text-sm outline-none resize-none"
+              className="w-full rounded-[var(--radius-tile)] p-3 text-sm outline-none resize-none"
               style={{
                 background: "var(--surface-2)",
                 border: "1px solid var(--divider)",
@@ -371,7 +371,7 @@ export default function RecordCustomerPaymentPage() {
           {/* New balance preview */}
           {totalPaid > 0 && (
             <div
-              className="flex justify-between items-center px-4 py-3 rounded-[12px] animate-fade-in-up"
+              className="flex justify-between items-center px-4 py-3 rounded-[var(--radius-tile)] animate-fade-in-up"
               style={{ background: "var(--surface-2)" }}
             >
               <span className="text-sm" style={{ color: "var(--text-secondary)" }}>

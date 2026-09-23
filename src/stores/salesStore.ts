@@ -3,7 +3,7 @@ import { supabase } from "@/lib/supabase";
 import { rpcCreateSale } from "@/lib/db";
 import { createNotification } from "@/lib/notifications";
 import { enqueueOperation } from "@/lib/offlineQueue";
-import { getCachedData as getLocalCache, setCachedData as setLocalCache, isCacheStale as isLocalStale } from "@/lib/localCache";
+import { getCachedData as getLocalCache, setCachedData as setLocalCache } from "@/lib/localCache";
 import type { Sale, SaleItem } from "@/types";
 
 const CACHE_KEY = "sales";
@@ -155,17 +155,11 @@ export const useSalesStore = create<SalesState>((set, get) => ({
   load: async () => {
     set({ loading: true, error: null });
 
-    // Stale-while-revalidate
+    // Stale-while-revalidate: render the cache immediately, then ALWAYS revalidate.
+    // Skipping the fetch while the cache was still "fresh" meant a sale recorded
+    // seconds ago did not appear, and cross-screen totals kept the old figure.
     const cached = getLocalCache<Sale[]>(CACHE_KEY);
-    const stale = isLocalStale(CACHE_KEY);
-    const storeEmpty = get().sales.length === 0;
-
-    if (cached && !stale && !storeEmpty) {
-      set({ sales: cached, loading: false, ready: true });
-      return;
-    }
-
-    if (cached && stale) {
+    if (cached) {
       set({ sales: cached, loading: false, ready: true });
     }
 

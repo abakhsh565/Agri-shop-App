@@ -92,7 +92,7 @@ export default function RegisterStatusPage() {
         {/* Rejection Reason */}
         {status === "rejected" && myRequest?.rejectionReason && (
           <div
-            className="w-full p-4 rounded-[14px]"
+            className="w-full p-4 rounded-[var(--radius-card)]"
             style={{ background: "rgba(239,68,68,0.05)", border: "1px solid rgba(239,68,68,0.2)" }}
           >
             <p className="text-xs font-bold mb-1" style={{ color: "#ef4444" }}>{t("admin.reason")}:</p>
@@ -103,7 +103,7 @@ export default function RegisterStatusPage() {
         {/* Shop Info */}
         {myRequest && (
           <div
-            className="w-full p-4 rounded-[14px]"
+            className="w-full p-4 rounded-[var(--radius-card)]"
             style={{ background: "var(--surface)" }}
           >
             <p className="text-xs font-bold mb-3" style={{ color: "var(--text-secondary)" }}>

@@ -47,23 +47,23 @@ export default function AdminReturnSuccessPage() {
             <RotateCcw size={32} color="white" strokeWidth={2.5} />
           </div>
           <div className="flex flex-col gap-[8px] items-center text-center w-full animate-fade-in-up delay-150">
-            <p className="font-bold text-[28px]" style={{ color: "var(--text-primary)" }}>{t("returns.success")}</p>
-            <p className="font-normal text-[14px]" style={{ color: "var(--text-secondary)" }}>
+            <p className="font-bold text-28" style={{ color: "var(--text-primary)" }}>{t("returns.success")}</p>
+            <p className="font-normal text-14" style={{ color: "var(--text-secondary)" }}>
               {isCash ? `${formatCurrency(result.refundAmount)} ${t("return.refundedCash")}` : `${formatCurrency(result.refundAmount)} ${t("return.creditedToAccount")}`}
             </p>
           </div>
           <div className="flex items-center gap-2 px-4 py-2 rounded-full animate-scale-in delay-225"
             style={{ background: isCash ? "rgba(132,204,22,0.12)" : "rgba(59,130,246,0.12)", border: `1px solid ${isCash ? "rgba(132,204,22,0.4)" : "rgba(59,130,246,0.4)"}` }}>
-            <span className="font-semibold text-[13px]" style={{ color: isCash ? "var(--brand-dark)" : "#2563eb" }}>
+            <span className="font-semibold text-13" style={{ color: isCash ? "var(--brand-dark)" : "#2563eb" }}>
               {isCash ? t("return.cashRefundIssued") : t("return.creditNoteIssued")}
             </span>
           </div>
-          <div className="flex flex-col gap-[16px] items-start p-[20px] rounded-[16px] w-full animate-fade-in-up delay-300" style={{ border: "1px solid var(--border-light)" }}>
+          <div className="flex flex-col gap-[16px] items-start p-[20px] rounded-[var(--radius-card)] w-full animate-fade-in-up delay-300" style={{ border: "1px solid var(--border-light)" }}>
             {ROWS.map((row, i) =>
               "divider" in row ? (
                 <div key={i} className="w-full h-px" style={{ background: "var(--divider)" }} />
               ) : (
-                <div key={i} className="flex items-start justify-between w-full text-[14px]">
+                <div key={i} className="flex items-start justify-between w-full text-14">
                   <span style={{ color: "var(--text-secondary)" }}>{row.label}</span>
                   <span className="font-bold" style={{ color: "highlight" in row && row.highlight ? (isCash ? "var(--brand-dark)" : "#2563eb") : "var(--text-primary)", textAlign: "right" }}>
                     {row.value}
@@ -76,12 +76,12 @@ export default function AdminReturnSuccessPage() {
       </div>
       <div className="flex flex-col gap-[12px] items-center px-[24px] pb-[32px] pt-[8px] w-full animate-fade-in-up delay-375">
         <button onClick={() => navigate("/admin/dashboard", { replace: true })}
-          className="flex h-[48px] items-center justify-center gap-2 rounded-[24px] w-full font-bold text-[14px] transition-transform active:scale-[0.97]"
+          className="flex h-[48px] items-center justify-center gap-2 rounded-[var(--radius-input)] w-full font-bold text-14 transition-transform active:scale-[0.97]"
           style={{ background: "var(--brand)", color: "#0a0a0a" }}>
           <Home size={16} strokeWidth={2.5} /> {t("returns.backDashboard")}
         </button>
         <button onClick={() => navigate(`/admin/sales/${result.saleId}`)}
-          className="flex h-[48px] items-center justify-center gap-2 rounded-[24px] w-full font-bold text-[14px] transition-transform active:scale-[0.97]"
+          className="flex h-[48px] items-center justify-center gap-2 rounded-[var(--radius-input)] w-full font-bold text-14 transition-transform active:scale-[0.97]"
           style={{ border: "1px solid var(--border-light)", color: "var(--text-primary)" }}>
           <Receipt size={16} strokeWidth={2} /> {t("returns.viewSale")}
         </button>

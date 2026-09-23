@@ -2,6 +2,8 @@ import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
+import ListCard from "@/components/ui/ListCard";
+import ListRow from "@/components/ui/ListRow";
 import ImageUpload from "@/components/ui/ImageUpload";
 import { useEmployeesStore } from "@/stores/employeesStore";
 import { useUIStore } from "@/stores/uiStore";
@@ -222,7 +224,7 @@ export default function AddEmployeePage() {
               setAccessValue(applyOverrides(perms, {}));
             });
           }}
-          className="flex items-start gap-3 p-4 rounded-[14px] text-start transition-colors"
+          className="flex items-start gap-3 p-4 rounded-[var(--radius-card)] text-start transition-colors"
           style={{
             background: "var(--surface)",
             border: `1.5px solid ${selected ? "var(--brand)" : "var(--divider)"}`,
@@ -246,17 +248,17 @@ export default function AddEmployeePage() {
             While the owner is customizing, the editor replaces this read-only view
             rather than listing the same areas twice. */}
         {selected && (
-          <div className="rounded-xl p-3 mx-1" style={{ background: "var(--surface-2)", border: "1px solid var(--divider)" }}>
+          <div className="rounded-[var(--radius-tile)] p-3 mx-1" style={{ background: "var(--surface-2)", border: "1px solid var(--divider)" }}>
           {customizing ? (
             <>
-              <p className="text-[11px] font-bold uppercase tracking-wider mb-2" style={{ color: "var(--text-secondary)" }}>
+              <p className="text-11 font-bold uppercase tracking-wider mb-2" style={{ color: "var(--text-secondary)" }}>
                 {t("addEmployee.effectiveAccess", { name: firstName })}
               </p>
               <EmployeeAccessEditor roleDefaults={roleDefaultSet} value={accessValue} onChange={setAccessValue} />
             </>
           ) : (
             <>
-              <p className="text-[11px] font-bold uppercase tracking-wider mb-2" style={{ color: "var(--text-secondary)" }}>
+              <p className="text-11 font-bold uppercase tracking-wider mb-2" style={{ color: "var(--text-secondary)" }}>
                 {t("addEmployee.roleAccess")}
               </p>
               {accessByArea().length === 0 ? (
@@ -275,7 +277,7 @@ export default function AddEmployeePage() {
           {/* Access is customizable here and now: sending an invitation must not
               require leaving the flow to open the employee's page. */}
           <div className="flex items-center justify-between gap-3 mt-3 pt-3" style={{ borderTop: "1px solid var(--divider)" }}>
-            <span className="text-[10px]" style={{ color: "var(--text-secondary)" }}>
+            <span className="text-10" style={{ color: "var(--text-secondary)" }}>
               {changeCount > 0
                 ? t("addEmployee.customized", { count: changeCount, role: r.name })
                 : t("addEmployee.roleAccessDefault")}
@@ -286,7 +288,7 @@ export default function AddEmployeePage() {
                   setAccessValue(applyOverrides(selectedRolePermissions, {}));
                   setCustomizing(false);
                 }}
-                className="text-[10px] font-bold shrink-0"
+                className="text-10 font-bold shrink-0"
                 style={{ color: "var(--brand)" }}
               >
                 {t("empDetail.roleOnly")}
@@ -294,7 +296,7 @@ export default function AddEmployeePage() {
             ) : (
               <button
                 onClick={() => setCustomizing(true)}
-                className="text-[10px] font-bold shrink-0"
+                className="text-10 font-bold shrink-0"
                 style={{ color: "var(--brand)" }}
               >
                 {t("addEmployee.customizeAccess", { name: firstName })}
@@ -366,7 +368,7 @@ export default function AddEmployeePage() {
           <div key={s.key} className="flex items-start gap-1">
             <div className="flex flex-col items-center gap-1" style={{ width: 64 }}>
               <div
-                className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold"
+                className="w-7 h-7 rounded-full flex items-center justify-center text-10 font-bold"
                 style={{
                   background: i <= currentStepIdx ? "var(--brand)" : "var(--surface-2)",
                   color: i <= currentStepIdx ? "#0a0a0a" : "var(--text-secondary)",
@@ -376,7 +378,7 @@ export default function AddEmployeePage() {
                 {i < currentStepIdx ? <Check size={12} /> : i + 1}
               </div>
               <span
-                className="text-[9px] text-center leading-tight truncate w-full"
+                className="text-9 text-center leading-tight truncate w-full"
                 style={{ color: i === currentStepIdx ? "var(--text-primary)" : "var(--text-secondary)" }}
               >
                 {s.label}
@@ -394,20 +396,20 @@ export default function AddEmployeePage() {
         {step === "who" && (
           <>
             <div>
-              <p className="text-[11px] font-bold uppercase mb-2 tracking-wider" style={{ color: "var(--text-secondary)" }}>
+              <p className="text-11 font-bold uppercase mb-2 tracking-wider" style={{ color: "var(--text-secondary)" }}>
                 {t("addEmployee.name")} *
               </p>
               <input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder={t("addEmployee.nameHint")}
-                className="w-full h-12 rounded-[24px] px-4 text-sm outline-none"
+                className="w-full h-12 rounded-[var(--radius-input)] px-4 text-sm outline-none"
                 style={fieldStyle}
                 autoFocus
               />
             </div>
             <div>
-              <p className="text-[11px] font-bold uppercase mb-2 tracking-wider" style={{ color: "var(--text-secondary)" }}>
+              <p className="text-11 font-bold uppercase mb-2 tracking-wider" style={{ color: "var(--text-secondary)" }}>
                 {t("addEmployee.phone")} *
               </p>
               <input
@@ -416,15 +418,15 @@ export default function AddEmployeePage() {
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
                 placeholder="03001234567"
-                className="w-full h-12 rounded-[24px] px-4 text-sm outline-none"
+                className="w-full h-12 rounded-[var(--radius-input)] px-4 text-sm outline-none"
                 style={fieldStyle}
               />
-              <p className="text-[11px] mt-1" style={{ color: "var(--text-secondary)" }}>
+              <p className="text-11 mt-1" style={{ color: "var(--text-secondary)" }}>
                 {t("addEmployee.phoneHint")}
               </p>
             </div>
             <div className="pt-1">
-              <p className="text-[11px] font-bold uppercase mb-2 tracking-wider" style={{ color: "var(--text-secondary)" }}>
+              <p className="text-11 font-bold uppercase mb-2 tracking-wider" style={{ color: "var(--text-secondary)" }}>
                 {t("addEmployee.photoOptional")}
               </p>
               <div className="flex justify-center">
@@ -444,7 +446,7 @@ export default function AddEmployeePage() {
               {rolesStore.roles.map(roleCard)}
             </div>
             {!roleId && (
-              <p className="text-[11px]" style={{ color: "var(--text-secondary)" }}>
+              <p className="text-11" style={{ color: "var(--text-secondary)" }}>
                 {t("addEmployee.roleRequired")}
               </p>
             )}
@@ -462,7 +464,7 @@ export default function AddEmployeePage() {
                 <div className="flex flex-col gap-2">
                   <button
                     onClick={() => setBranchScope(null)}
-                    className="flex items-center gap-3 p-4 rounded-[14px] text-start"
+                    className="flex items-center gap-3 p-4 rounded-[var(--radius-card)] text-start"
                     style={{
                       background: "var(--surface)",
                       border: `1.5px solid ${branchScope === null ? "var(--brand)" : "var(--divider)"}`,
@@ -486,7 +488,7 @@ export default function AddEmployeePage() {
                           return [...prev, b.id];
                         });
                       }}
-                      className="flex items-center gap-3 p-4 rounded-[14px] text-start"
+                      className="flex items-center gap-3 p-4 rounded-[var(--radius-card)] text-start"
                       style={{
                         background: "var(--surface)",
                         border: `1.5px solid ${branchScope?.includes(b.id) ? "var(--brand)" : "var(--divider)"}`,
@@ -500,7 +502,7 @@ export default function AddEmployeePage() {
                       </div>
                       <div>
                         <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>{b.name}</p>
-                        {b.is_default && <p className="text-[10px]" style={{ color: "var(--brand)" }}>{t("addEmployee.mainBranch")}</p>}
+                        {b.is_default && <p className="text-10" style={{ color: "var(--brand)" }}>{t("addEmployee.mainBranch")}</p>}
                       </div>
                     </button>
                   ))}
@@ -508,43 +510,41 @@ export default function AddEmployeePage() {
               </>
             )}
             {branches.length === 1 && (
-              <div className="rounded-xl p-3" style={{ background: "var(--surface)", border: "1px solid var(--divider)" }}>
+              <div className="rounded-[var(--radius-tile)] p-3" style={{ background: "var(--surface)", border: "1px solid var(--divider)" }}>
                 <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
                   {t("addEmployee.worksAt", { branch: branches[0].name })}
                 </p>
               </div>
             )}
             {branches.length === 0 && (
-              <div className="rounded-xl p-3" style={{ background: "var(--surface)", border: "1px solid var(--divider)" }}>
+              <div className="rounded-[var(--radius-tile)] p-3" style={{ background: "var(--surface)", border: "1px solid var(--divider)" }}>
                 <p className="text-xs" style={{ color: "var(--text-secondary)" }}>{t("addEmployee.noBranches")}</p>
               </div>
             )}
 
             <p className="text-sm font-bold pt-1" style={{ color: "var(--text-primary)" }}>{t("addEmployee.reviewTitle")}</p>
-            <div className="rounded-xl overflow-hidden" style={{ border: "1px solid var(--border-light)" }}>
+            <ListCard>
               {[
                 { label: t("addEmployee.labelName"), value: name },
                 { label: t("addEmployee.labelPhone"), value: phone },
                 { label: t("addEmployee.labelRole"), value: roleObj?.name ?? "—" },
                 { label: t("addEmployee.labelBranch"), value: branchNames },
                 { label: t("addEmployee.labelAccess"), value: accessSummary || t("addEmployee.noRoleAccess") },
-              ].map(({ label, value }, i, arr) => (
-                <div
+              ].map(({ label, value }) => (
+                <ListRow
                   key={label}
-                  className="flex items-center justify-between px-4 py-3"
-                  style={{ borderBottom: i < arr.length - 1 ? "1px solid var(--divider)" : "none" }}
+                  trailing={<span className="text-sm font-semibold text-end max-w-[60%] break-words" style={{ color: "var(--text-primary)" }}>{value}</span>}
                 >
                   <span className="text-sm" style={{ color: "var(--text-secondary)" }}>{label}</span>
-                  <span className="text-sm font-semibold text-end max-w-[60%] break-words" style={{ color: "var(--text-primary)" }}>{value}</span>
-                </div>
+                </ListRow>
               ))}
-            </div>
+            </ListCard>
             {changeCount > 0 && (
-              <p className="text-[11px] font-semibold" style={{ color: "var(--brand)" }}>
+              <p className="text-11 font-semibold" style={{ color: "var(--brand)" }}>
                 {t("addEmployee.customized", { count: changeCount, role: roleObj?.name ?? "" })}
               </p>
             )}
-            <p className="text-[11px]" style={{ color: "var(--text-secondary)" }}>
+            <p className="text-11" style={{ color: "var(--text-secondary)" }}>
               {t("addEmployee.inviteHint", { name: firstName })}
             </p>
           </>

@@ -316,9 +316,18 @@ the UI keys, an inline-bilingual ratchet, and the AST ratchet described in 1.9.
 348/348 tests, `tsc` clean, production build clean.
 
 **Deliberately not translated:** the `AgriShop` brand, `Rs.` currency prefix from
-`formatCurrency`, `src/imports/**` (unreferenced Figma mock-ups), the Observation Bot's
-generated diagnostic report body (an engineer-facing dump, not product copy), role names
-and descriptions (tenant data in the DB), and crop names (data).
+`formatCurrency`, the Observation Bot's generated diagnostic report body (an
+engineer-facing dump, not product copy), role names and descriptions (tenant data in
+the DB), crop names (data), and the language names in the picker (`English` / `اردو`,
+each written in its own script by convention).
+
+**Dead code removed (verified by reference check, not assumed):** `src/imports/**`
+(163 unreferenced Figma mock-ups) and `src/components/ui/RTL.tsx` (zero importers; five
+of its six exports had zero references). Both were deleted after a repo-wide search for
+static imports, dynamic `import()`, `import.meta.glob`, `require.context`, tsconfig /
+vite / tailwind / index.html references, and the build entry graph. The two guard
+exception lists that named them (`i18nCoverage`, `listPrimitiveGuard`) are now empty on
+purpose, so neither can hide behind a file that no longer exists.
 
 ### 1.9 Three blind spots the browser found — the AST guard that closes them (2026-09-20)
 
@@ -802,6 +811,68 @@ was not re-run for this change) · QA baseline clean (4 users, 0 sales/payments/
 adjustments, 0 users without a membership) · Engineering Memory `active=39, superseded=1` ·
 production untouched.
 
+### 1.19 Home's "overdue" was the whole customer debt, and it was a second copy of the rule (2026-09-22)
+
+The owner asked what the overdue figure on Home meant, and the honest answer was nothing. The card
+rendered `customers.reduce((s, c) => s + c.outstandingBalance, 0)` — every rupee any customer owed
+— and labelled it **overdue**, so a shop with no late payments still showed overdue money, and
+"outstanding" and "overdue" could never be told apart. The authoritative answer already existed:
+`signalEngine`'s S1 signal is `outstanding > 0 AND due_date past` (Pakistan time), and the Action
+Center has been listing exactly those customers all along. So the defect was not a wrong formula
+but a **second implementation** of one — the S1 predicate sat inline inside
+`computeOverdueCreditSignals`, leaving Home no way to reuse it except to copy it.
+
+The predicate is now exported once (`isCreditOverdue`) and both the card
+(`computeOverdueCreditTotal`) and the signals read it, so the two screens cannot disagree.
+Verified against the QA database with money created through the real RPCs: total outstanding
+Rs. 1,700 vs genuinely overdue Rs. 1,100, Home reads **Rs. 1,100 overdue**; a Rs. 100 payment made
+after the credit was already overdue moved both the database and the screen to Rs. 1,000; after
+cleanup Home reads Rs. 0. Urdu/RTL: `Rs. 1,000 واجب الادا`, `dir=rtl`, no overflow, no English left
+in the metric.
+
+**On seeding overdue state at all:** migration 0034 added
+`CHECK (due_date IS NULL OR due_date >= CURRENT_DATE)`, so a past due date cannot be written —
+overdue arises only from time passing. The fixture writes it under a session timezone in which
+that date is still today, which satisfies the constraint while storing a date genuinely before
+Pakistan's today. Nothing was disabled or dropped.
+
+**Regression:** `tests/unit/overdueCredit.test.ts` 12/12 (falsified: the old formula gives 12,000
+where the correct figure is 9,000) · `dashboardScope` 6/6, its overdue assertion now recomputed
+from the database and paired with a guard that fails if total outstanding is shown again
+(falsified by reverting the card, which failed at `tests/e2e/dashboardScope.spec.ts:167`) ·
+`actionCenter` + `crossScreenSync` 25/25 · vitest **415/415 across 37 files** · `tsc` clean ·
+production build clean · QA baseline clean (0 fixture rows across customers, products, companies,
+sales, customer_payments) · production untouched.
+
+### 1.20 The escalating reminder sequence was unreachable — and no reminder could be saved at all (2026-09-22)
+
+The escalating sequence in the reminder mockup (Gentle 15 / Firmer 30 / Final notice 45) was missing
+from creation for two independent reasons.
+
+1. **The group sheet shipped an empty sequence.** `GroupReminderSheet` had
+   `escalation: []`, so choosing *Escalating sequence* rendered an empty block — no steps, and no way
+   to add any. The engine maps a stage's **position** to its tone and falls back to a **single** stage
+   when the list is empty, so the reminder silently did not escalate. The sequence now comes from one
+   exported definition (`DEFAULT_ESCALATION`), both screens seed it when the option is chosen, and an
+   out-of-order sequence (equal or descending days) shows *"Each step must come later than the one
+   before it."* and blocks Save — the engine sends the final notice by position, so the order is not
+   cosmetic. Both engine branches now share `escalationStages(config)`.
+2. **Every save failed anyway.** `reminder_configs` still carries its original `name` and `type`
+   columns as NOT NULL, while migration 0122 moved the contract to the columns every writer actually
+   sends. The insert returned `23502 null value in column "name" … violates not-null constraint`; the
+   browser logged *Failed to save reminder configs* on a 400 and the table held **zero rows**. So
+   reminder creation — group **and** single — had been failing at the write. 0141 drops NOT NULL on
+   the two legacy columns; `escalation` stays `text` and the array is stored as the JSON string the
+   loader already parses (both write shapes were checked, so nothing had to change in the app).
+
+**Proof:** the three steps render at 15/30/45 in the real browser and Save wrote a row with
+`repeat_type = escalate` and the full sequence; the ordering rule was shown blocking Save and then
+clearing. **Regression:** vitest **428/428 across 38 files** · `tsc` clean · production build clean ·
+migration guard 6/6 — it caught this migration colliding with existing `0135`/`0140` versions before
+release. Reminder creation already sits behind `PermissionGuard requires="alerts.view"`, so the
+escalating part inherits that role gate; no new permission was invented. QA cleaned (0 leftover
+fixture customers, 0 reminder configs); production untouched.
+
 ---
 
 ## 2. Explicitly Not Built
@@ -1053,3 +1124,53 @@ worked around: a locally built APK is not the release artifact.
    The fixes already made are correct regardless and are kept: 0012 was unappliable even to
    an empty database, ten versions were duplicated, and the renamed-parameter
    redefinitions could not apply onto an existing schema either.
+
+## Stage: company / customer / reminder / stock-integrity pass (2026-09-22)
+
+Reported symptoms, all reproduced first and fixed at the layer that owned the defect.
+Migrations 0142–0145 are applied to QA. Engineering Memory holds a `failure_pattern` entry
+for each of the eight root causes below.
+
+### What was actually broken
+
+1. **Every live update in the app was dead code.** `supabase_realtime` held no tables, so
+   none of the seven subscribed tables (`products`, `product_variants`, `customers`,
+   `sales`, `companies`, `notifications`, `users`) could ever emit a change. 0144 publishes
+   exactly those. Proven with a Node probe before and after, independent of the UI.
+2. **A “fresh” cache outranked the database.** `products`/`customers`/`sales` stores
+   returned cache AND skipped the network for five minutes, so the app could not see its own
+   writes: a purchase left stock at 50 on screen while the database held 150, pull-to-refresh
+   did nothing, and a saved customer photo reverted to an initial. The cache is now a render
+   hint that always revalidates.
+3. **Unpaid purchases read “PAID”.** `fetchPurchases` mapped `outstanding_payable` and
+   `cost_price`; the real columns are `amount_due` and `unit_price`. `Number(undefined)` is
+   NaN, and NaN is not `> 0`, so every delivery looked settled and the payable header read
+   Rs. 0 against Rs. 140,000 owed.
+4. **Editing a product saved nothing.** `update_product` had no variant handling at all —
+   the selling and cost prices the Edit Product screen collects were silently discarded, so a
+   price could not be changed. 0145 writes variants by id (never `stock_qty`, never a
+   delete).
+5. **A customer reminder configuration was collected and dropped.** `AddCustomerPage`
+   persisted the photo and the crops but never the reminder config.
+6. **The same reminder schedule could exist twice**, reminding a customer twice every two
+   days. 0143 makes one rule per customer structural (`dedupe_key` + unique index) and
+   repaired the duplicates that existed (3 configs / 63 occurrences → 2 / 33).
+7. **A customer photo rendered as an initial** in the follow-up list because
+   `GeneratedReminder` did not carry the image.
+8. **Company Details had no Add Product, Edit or Remove.** Added; Remove is a gated soft
+   archive (0142) that refuses while the supplier is still owed money.
+
+### Verified
+
+- Purchase → Inventory → Sale → COGS → Profit driven through the real RPCs as the real
+  owner: **21/21 assertions**, including that purchase 1 keeps cost 700 after purchase 2 at
+  900, that stock goes 100 → 150 → 140, that the sale uses the current selling price
+  (1200) with COGS from the actual cost (9,000) and profit 3,000, and that later price
+  changes rewrite neither past purchases nor past sales.
+- UI + database + fresh read for every fix above; EN/LTR and UR/RTL.
+- `vitest` **432/432 across 38 files**, `tsc` clean, production build clean.
+- QA baseline clean: every business table 0, four fixture accounts kept.
+- **Decision left with the owner:** a purchase records its own cost but does NOT update the
+  variant's cost basis, so COGS uses the cost the owner set on the product screen. Both
+  readings of “the actual inventory cost” are defensible; changing it moves COGS and profit,
+  so it was not decided silently.

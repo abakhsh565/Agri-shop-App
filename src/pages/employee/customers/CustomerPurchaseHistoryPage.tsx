@@ -3,6 +3,8 @@ import { useNavigate, useParams } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
 import { PaymentBadge, CreditHealthBadge } from "@/components/ui/Badge";
+import ListCard from "@/components/ui/ListCard";
+import ListRow from "@/components/ui/ListRow";
 import { useCustomersStore } from "@/stores/customersStore";
 import { useSalesStore } from "@/stores/salesStore";
 import { formatCurrency, formatDate, getCreditHealth } from "@/lib/formatters";
@@ -11,6 +13,7 @@ import { useT } from "@/lib/i18n";
 import { useThemeStore } from "@/stores/themeStore";
 import { useAuthStore } from "@/stores/authStore";
 import { useShellBase } from "@/lib/useShellBase";
+import { ReceiptText } from "lucide-react";
 
 function initBgColor(name: string | null | undefined) {
   const colors = ["#84cc16","#3b82f6","#8b5cf6","#f59e0b","#06b6d4","#ec4899"];
@@ -43,9 +46,9 @@ export default function CustomerPurchaseHistoryPage() {
   const health = getCreditHealth(customer.outstandingBalance, customer.creditLimit);
 
   const FILTERS: { key: Filter; label: string }[] = [
-    { key: "all",     label: isUrdu ? "تمام خریداری"     : "All" },
-    { key: "month",   label: isUrdu ? "اس مہینے"         : "This Month" },
-    { key: "3months", label: isUrdu ? "پچھلے 3 مہینے"   : "3 Months" },
+    { key: "all",     label: t("sales.all") },
+    { key: "month",   label: t("sales.thisMonth") },
+    { key: "3months", label: t("inline.3_months") },
     { key: "custom",  label: "Custom" },
   ];
 
@@ -82,7 +85,7 @@ export default function CustomerPurchaseHistoryPage() {
       />
 
       {/* Hero Card — customer image + name */}
-      <div className="mx-4 mt-3 rounded-[14px] p-4" style={{ border: "1px solid var(--divider)", background: "var(--surface-2)" }}>
+      <div className="mx-4 mt-3 rounded-[var(--radius-card)] p-4" style={{ border: "1px solid var(--divider)", background: "var(--surface-2)" }}>
         <div className="flex items-center gap-3 mb-3">
           {customer.imageUrl ? (
             <img src={customer.imageUrl} alt={customer.name} className="w-12 h-12 rounded-full object-cover shrink-0" />
@@ -101,7 +104,7 @@ export default function CustomerPurchaseHistoryPage() {
         </div>
         <div className="flex gap-6">
           <div>
-            <p className="text-[10px] uppercase" style={{ color: "var(--text-secondary)" }}>
+            <p className="text-10 uppercase" style={{ color: "var(--text-secondary)" }}>
               {t("customers.outstanding")}
             </p>
             <p className="text-sm font-bold" style={{ color: customer.outstandingBalance > 0 ? "#d97706" : "var(--text-primary)" }}>
@@ -109,7 +112,7 @@ export default function CustomerPurchaseHistoryPage() {
             </p>
           </div>
           <div>
-            <p className="text-[10px] uppercase" style={{ color: "var(--text-secondary)" }}>
+            <p className="text-10 uppercase" style={{ color: "var(--text-secondary)" }}>
               {t("customers.creditLimit")}
             </p>
             <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>
@@ -117,7 +120,7 @@ export default function CustomerPurchaseHistoryPage() {
             </p>
           </div>
           <div>
-            <p className="text-[10px] uppercase" style={{ color: "var(--text-secondary)" }}>
+            <p className="text-10 uppercase" style={{ color: "var(--text-secondary)" }}>
               {t("admin.totalSales")}
             </p>
             <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>
@@ -141,7 +144,7 @@ export default function CustomerPurchaseHistoryPage() {
           >
             {label}
             {key === "custom" && customFrom && (
-              <span className="text-[9px] opacity-70"> ({customFrom}→{customTo || "..."})</span>
+              <span className="text-9 opacity-70"> ({customFrom}→{customTo || "..."})</span>
             )}
           </button>
         ))}
@@ -153,22 +156,22 @@ export default function CustomerPurchaseHistoryPage() {
           <div className="absolute inset-0 bg-black/40" />
           <div className="relative w-full max-w-md rounded-t-2xl p-5 pb-8 animate-slide-up" style={{ background: "var(--surface)" }} onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
-              <p className="text-[15px] font-bold" style={{ color: "var(--text-primary)" }}>{t("admin.selectDateRange")}</p>
+              <p className="text-15 font-bold" style={{ color: "var(--text-primary)" }}>{t("admin.selectDateRange")}</p>
               <button onClick={() => setShowDateModal(false)} className="text-xl" style={{ color: "var(--text-secondary)" }}>×</button>
             </div>
             <div className="flex gap-3">
               <div className="flex-1">
-                <label className="text-[11px] font-semibold uppercase tracking-wider mb-1 block" style={{ color: "var(--text-secondary)" }}>From</label>
-                <input type="date" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} max={todayISO} className="w-full h-10 px-3 rounded-xl text-[13px] outline-none" style={{ background: "var(--surface-2)", color: "var(--text-primary)", border: "1px solid var(--divider)" }} />
+                <label className="text-11 font-semibold uppercase tracking-wider mb-1 block" style={{ color: "var(--text-secondary)" }}>{t("admin.from")}</label>
+                <input type="date" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} max={todayISO} className="w-full outline-none" />
               </div>
               <div className="flex-1">
-                <label className="text-[11px] font-semibold uppercase tracking-wider mb-1 block" style={{ color: "var(--text-secondary)" }}>To</label>
-                <input type="date" value={customTo} onChange={(e) => setCustomTo(e.target.value)} max={todayISO} min={customFrom || undefined} className="w-full h-10 px-3 rounded-xl text-[13px] outline-none" style={{ background: "var(--surface-2)", color: "var(--text-primary)", border: "1px solid var(--divider)" }} />
+                <label className="text-11 font-semibold uppercase tracking-wider mb-1 block" style={{ color: "var(--text-secondary)" }}>{t("admin.to")}</label>
+                <input type="date" value={customTo} onChange={(e) => setCustomTo(e.target.value)} max={todayISO} min={customFrom || undefined} className="w-full outline-none" />
               </div>
             </div>
             <div className="flex gap-2 mt-4">
-              <button onClick={() => { setCustomFrom(""); setCustomTo(""); setFilter("custom"); setShowDateModal(false); }} className="flex-1 h-10 rounded-xl text-[13px] font-semibold" style={{ background: "var(--surface-2)", color: "var(--text-secondary)" }}>{t("reports.clear")}</button>
-              <button onClick={() => { setShowDateModal(false); setFilter("custom"); }} className="flex-1 h-10 rounded-xl text-[13px] font-bold" style={{ background: "var(--brand)", color: "#0a0a0a" }}>{t("reports.apply")}</button>
+              <button onClick={() => { setCustomFrom(""); setCustomTo(""); setFilter("custom"); setShowDateModal(false); }} className="flex-1 h-10 rounded-[var(--radius-tile)] text-13 font-semibold" style={{ background: "var(--surface-2)", color: "var(--text-secondary)" }}>{t("reports.clear")}</button>
+              <button onClick={() => { setShowDateModal(false); setFilter("custom"); }} className="flex-1 h-10 rounded-[var(--radius-tile)] text-13 font-bold" style={{ background: "var(--brand)", color: "#0a0a0a" }}>{t("reports.apply")}</button>
             </div>
           </div>
         </div>
@@ -176,19 +179,17 @@ export default function CustomerPurchaseHistoryPage() {
 
       {filtered.length === 0 ? (
         <div className="flex flex-col items-center py-12 gap-2">
-          <p className="text-3xl">🧾</p>
+          <ReceiptText size={28} className="mx-auto block" style={{ color: "var(--text-tertiary)" }} />
           <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
-            {isUrdu ? "اس مدت میں کوئی خریداری نہیں" : "No purchases in this period"}
+            {t("inline.no_purchases_in_this_period")}
           </p>
         </div>
       ) : (
-        <div className="flex flex-col mx-4">
-          {filtered.map((sale, i) => (
-            <button
+        <ListCard className="mx-4">
+          {filtered.map((sale) => (
+            <ListRow
               key={sale.id}
               onClick={() => navigate(`${base}/sales/${sale.id}`)}
-              className="py-4 text-start transition-opacity active:opacity-70"
-              style={{ borderBottom: i < filtered.length - 1 ? "1px solid var(--divider)" : "none" }}
             >
               <div className="flex justify-between items-start">
                 <div className="flex-1 min-w-0">
@@ -206,9 +207,9 @@ export default function CustomerPurchaseHistoryPage() {
                   <PaymentBadge type={sale.paymentType} outstandingBalance={sale.outstandingBalance} />
                 </div>
               </div>
-            </button>
+            </ListRow>
           ))}
-        </div>
+        </ListCard>
       )}
     </div>
   );

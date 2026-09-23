@@ -1,5 +1,5 @@
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
-import { LayoutDashboard, ShoppingBag, Package, ScanLine, MoreHorizontal } from "lucide-react";
+import { LayoutDashboard, ShoppingBag, Package, ScanLine, MoreHorizontal, X } from "lucide-react";
 import { useT, tNow } from "@/lib/i18n";
 import ToastContainer from "@/components/ui/Toast";
 import NavTracker from "@/components/ui/NavTracker";
@@ -128,7 +128,10 @@ export default function AdminLayout() {
     setScanning(true);
     try {
       const { scanFromCamera } = await import("@/lib/barcode");
-      const result = await scanFromCamera();
+      const result = await scanFromCamera({
+        hint: t("scan.pointAtBarcode"),
+        cancel: t("common.cancel"),
+      });
       if (result) {
         const product = findByBarcode(result.barcode);
         if (product) {
@@ -214,7 +217,7 @@ export default function AdminLayout() {
           >
             <div className="flex items-center justify-between">
               <p className="text-base font-bold" style={{ color: "var(--text-primary)" }}>{t("common.scanBarcode")}</p>
-              <button onClick={() => setShowManualScan(false)} className="text-sm" style={{ color: "var(--text-secondary)" }}>✕</button>
+              <button onClick={() => setShowManualScan(false)} aria-label={t("common.close")} style={{ color: "var(--text-secondary)" }}><X size={16} /></button>
             </div>
             <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
               {t("scan.cameraUnavailable")}
@@ -245,7 +248,16 @@ export default function AdminLayout() {
         className="flex flex-col flex-1 overflow-y-auto"
         style={{ paddingBottom: showTabBar ? "var(--tabbar-height)" : "0px" }}
       >
-        <Suspense fallback={<div className="flex items-center justify-center flex-1" style={{ color: "var(--text-secondary)" }}><div className="w-6 h-6 border-2 border-current border-t-transparent rounded-full animate-spin" /></div>}><Outlet /></Suspense>
+        <Suspense fallback={<div className="flex items-center justify-center flex-1" style={{ color: "var(--text-secondary)" }}><div className="w-6 h-6 border-2 border-current border-t-transparent rounded-full animate-spin" /></div>}>
+          {/* Screens cross-fade on navigation. Keyed on the path so the animation
+              restarts per route, and opacity/transform only, so a route change
+              never forces a layout pass mid-transition. */}
+          {/* `flex-1` reproduces what a page root as a direct flex child did: at least
+              as tall as its content, and filling the viewport when it is shorter. */}
+          <div key={location.pathname} className="ds-anim-screen flex flex-col w-full flex-1">
+            <Outlet />
+          </div>
+        </Suspense>
       </div>
 
       {/* ── Bottom tab bar (5 tabs) — only on top-level navigation screens ── */}
@@ -268,7 +280,7 @@ export default function AdminLayout() {
                 key="scan"
                 onClick={handleNavScan}
                 disabled={scanning}
-                className="flex flex-col items-center justify-center flex-1 gap-1 cursor-pointer transition-all"
+                className="ds-pressable flex flex-col items-center justify-center flex-1 gap-1 cursor-pointer"
               >
                 <div
                   className="flex items-center justify-center rounded-full -mt-3"
@@ -276,7 +288,7 @@ export default function AdminLayout() {
                 >
                   <ScanLine size={22} strokeWidth={2.5} color="#0a0a0a" />
                 </div>
-                <span className="text-[10px] font-bold" style={{ color: "var(--brand)" }}>
+                <span className="text-10 font-bold" style={{ color: "var(--brand)" }}>
                   {scanning ? "..." : t(key)}
                 </span>
               </button>
@@ -287,7 +299,7 @@ export default function AdminLayout() {
             <button
               key={path}
               onClick={() => { clearNav(); navigate(path); }}
-              className="flex flex-col items-center justify-center flex-1 gap-1 cursor-pointer transition-all"
+              className="ds-pressable flex flex-col items-center justify-center flex-1 gap-1 cursor-pointer"
             >
               <Icon
                 size={22}
@@ -295,7 +307,7 @@ export default function AdminLayout() {
                 style={{ color: isActive ? "var(--brand)" : "var(--text-secondary)" }}
               />
               <span
-                className="text-[10px] transition-colors"
+                className="text-10 transition-colors"
                 style={{
                   fontWeight: isActive ? 700 : 500,
                   color: isActive ? "var(--brand)" : "var(--text-secondary)",

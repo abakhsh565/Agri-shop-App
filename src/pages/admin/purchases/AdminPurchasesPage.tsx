@@ -3,12 +3,13 @@ import { useNavigate } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
 import EmptyState from "@/components/ui/EmptyState";
+import { SkeletonList } from "@/components/ui/Skeleton";
 import { fetchPurchases } from "@/lib/db";
 import type { Purchase } from "@/types";
 import { formatCurrency, formatDate } from "@/lib/formatters";
 import { useThemeStore } from "@/stores/themeStore";
 import { useT } from "@/lib/i18n";
-import { PackagePlus } from "lucide-react";
+import { PackagePlus, Package } from "lucide-react";
 
 export default function AdminPurchasesPage() {
   const navigate = useNavigate();
@@ -42,11 +43,11 @@ export default function AdminPurchasesPage() {
       {/* Payable summary */}
       <div className="px-4 pt-3">
         <div
-          className="rounded-[14px] p-4 flex items-center justify-between"
+          className="rounded-[var(--radius-card)] p-4 flex items-center justify-between"
           style={{ background: "var(--surface-2)", border: "1px solid var(--divider)" }}
         >
           <div>
-            <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "var(--text-secondary)" }}>
+            <p className="text-10 font-bold uppercase tracking-widest" style={{ color: "var(--text-secondary)" }}>
               {t("purchases.outstandingSupplier")}
             </p>
             <p className="text-xl font-bold mt-0.5" style={{ color: totalPayable > 0 ? "var(--error)" : "var(--brand-dark)" }}>
@@ -64,11 +65,9 @@ export default function AdminPurchasesPage() {
       </div>
 
       {loading ? (
-        <div className="flex flex-col items-center py-20 gap-2">
-          <p className="text-sm" style={{ color: "var(--text-secondary)" }}>{t("common.loading")}</p>
-        </div>
+        <SkeletonList rows={4} tile />
       ) : purchases.length === 0 ? (
-        <EmptyState icon="📦" title={t("purchases.noStockIns")} subtitle={t("purchases.noStockInsDesc")} />
+        <EmptyState icon={Package} title={t("purchases.noStockIns")} subtitle={t("purchases.noStockInsDesc")} />
       ) : (
         <div className="flex flex-col px-4 gap-3 pt-4 pb-24">
           {purchases.map((p) => {
@@ -77,13 +76,13 @@ export default function AdminPurchasesPage() {
             return (
               <div
                 key={p.id}
-                className="rounded-[14px] p-4"
+                className="rounded-[var(--radius-card)] p-4"
                 style={{ background: "var(--surface)", border: "1px solid var(--divider)" }}
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3 min-w-0">
                     <div
-                      className="size-9 rounded-[10px] flex items-center justify-center shrink-0"
+                      className="size-9 rounded-[var(--radius-tile)] flex items-center justify-center shrink-0"
                       style={{ background: "rgba(132,204,22,0.15)", color: "var(--brand-dark)" }}
                     >
                       <PackagePlus size={17} />
@@ -96,7 +95,7 @@ export default function AdminPurchasesPage() {
                     </div>
                   </div>
                   <span
-                    className="text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0"
+                    className="text-10 font-bold px-2 py-0.5 rounded-full shrink-0"
                     style={unpaid
                       ? { background: "rgba(245,158,11,0.15)", color: "var(--warning)" }
                       : { background: "rgba(132,204,22,0.15)", color: "var(--brand-dark)" }}
@@ -112,7 +111,7 @@ export default function AdminPurchasesPage() {
                   <div className="text-end">
                     <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>{formatCurrency(p.totalAmount)}</p>
                     {unpaid && (
-                      <p className="text-[11px]" style={{ color: "var(--error)" }}>
+                      <p className="text-11" style={{ color: "var(--error)" }}>
                         {formatCurrency(p.outstandingPayable)} {t("common.payable")}
                       </p>
                     )}

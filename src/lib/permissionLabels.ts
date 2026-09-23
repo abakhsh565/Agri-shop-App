@@ -1,3 +1,8 @@
+import type { LucideIcon } from "lucide-react";
+import {
+  ShoppingCart, Users, Package, BarChart3, Store, Banknote, Factory,
+  Undo2, User, TrendingUp, Settings, ClipboardList, Bell, AlertOctagon, Circle,
+} from "lucide-react";
 import { useT } from "@/lib/i18n";
 
 /**
@@ -9,22 +14,26 @@ import { useT } from "@/lib/i18n";
  * Employee Detail, Roles & Access) says the same thing in both languages.
  *
  * The areas match `permissions.module` values in the database.
+ *
+ * Icons are lucide components rather than glyphs: the design language draws
+ * icons as thin monochrome strokes, and an emoji renders in the OS's own
+ * colourful style, which cannot follow the theme or the stroke weight.
  */
-export const BUSINESS_AREAS: { code: string; icon: string }[] = [
-  { code: "sales", icon: "🛒" },
-  { code: "customers", icon: "👥" },
-  { code: "products", icon: "📦" },
-  { code: "inventory", icon: "📊" },
-  { code: "purchases", icon: "🏪" },
-  { code: "payments", icon: "💰" },
-  { code: "companies", icon: "🏭" },
-  { code: "returns", icon: "↩️" },
-  { code: "employees", icon: "👤" },
-  { code: "reports", icon: "📈" },
-  { code: "settings", icon: "⚙️" },
-  { code: "activity", icon: "📋" },
-  { code: "notifications", icon: "🔔" },
-  { code: "alerts", icon: "🚨" },
+export const BUSINESS_AREAS: { code: string; Icon: LucideIcon }[] = [
+  { code: "sales", Icon: ShoppingCart },
+  { code: "customers", Icon: Users },
+  { code: "products", Icon: Package },
+  { code: "inventory", Icon: BarChart3 },
+  { code: "purchases", Icon: Store },
+  { code: "payments", Icon: Banknote },
+  { code: "companies", Icon: Factory },
+  { code: "returns", Icon: Undo2 },
+  { code: "employees", Icon: User },
+  { code: "reports", Icon: TrendingUp },
+  { code: "settings", Icon: Settings },
+  { code: "activity", Icon: ClipboardList },
+  { code: "notifications", Icon: Bell },
+  { code: "alerts", Icon: AlertOctagon },
 ];
 
 const AREA_CODES = new Set(BUSINESS_AREAS.map((a) => a.code));
@@ -36,6 +45,8 @@ export function usePermissionLabels() {
   return {
     areaLabel: (module: string) => (AREA_CODES.has(module) ? t(`area.${module}`) : module),
     actionLabel: (action: string) => (ACTION_CODES.has(action) ? t(`action.${action}`) : action),
-    areaIcon: (module: string) => BUSINESS_AREAS.find((a) => a.code === module)?.icon ?? "",
+    /** Neutral mark rather than a broken glyph when a module is unknown. */
+    areaIcon: (module: string): LucideIcon =>
+      BUSINESS_AREAS.find((a) => a.code === module)?.Icon ?? Circle,
   };
 }

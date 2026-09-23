@@ -67,23 +67,43 @@ export async function teardown() {
     const c = new pg.Client({ connectionString: databaseUrl, ssl: { rejectUnauthorized: false } });
     await c.connect();
     
+    // ORDER IS LOAD-BEARING — child tables first, and this list is the one that
+    // used to be wrong. It deleted `sales` BEFORE `voids`/`returns`, which raises a
+    // foreign-key error (voids.sale_id -> sales.id), and it omitted purchases,
+    // supplier_payments, payments and drafts entirely. Every error was swallowed by
+    // `catch {}` and the teardown then printed "Database cleaned after test run"
+    // unconditionally — so a run finished "clean" while 11 customers and 7 sales
+    // were still in QA, which is the data users kept seeing in a fresh install.
+    // Keep this in the same order as scripts/clean-test-data.mjs.
     const tables = [
-      'sale_items', 'return_items', 'sale_returns',
-      'returns', 'sales', 'voids',
-      'customer_payments', 'credit_limit_requests',
+      'return_items', 'returns', 'sale_returns', 'voids',
+      'sale_items', 'sales',
+      'purchase_items', 'supplier_payments', 'purchases',
+      'customer_payments', 'payments', 'credit_limit_requests', 'customer_crops',
       'inventory_movements', 'stock_adjustments',
       'product_variants', 'products',
       'companies', 'customers',
       'shop_requests',
+      'cash_reconciliations', 'daily_cash_reconciliations',
       'activity_log', 'audit_events',
       'notifications',
       'reminder_logs', 'reminder_occurrences', 'reminder_configs',
+      'price_history',
       'agent_tasks', 'agent_attempts',
       'incident_reports',
+      'drafts',
     ];
     
+    const failures: string[] = [];
     for (const table of tables) {
-      try { await c.query(`DELETE FROM ${table}`); } catch {}
+      try {
+        await c.query(`DELETE FROM ${table}`);
+      } catch (e: unknown) {
+        // 42P01 = table does not exist. Anything else is a real gap (usually a
+        // missing table holding a blocking FK) and must never be swallowed.
+        const code = (e as { code?: string }).code;
+        if (code !== '42P01') failures.push(`${table}: ${(e as Error).message}`);
+      }
     }
     
     // Remove test users (keep seed accounts)
@@ -103,9 +123,36 @@ export async function teardown() {
       }
     } catch {}
     
+    // Verify instead of assuming: report the true post-run state, and be loud when
+    // business rows survived. A silent "cleaned" here is worse than a failing run,
+    // because it hides real fixtures from the next person who looks at the app.
+    const verifyTables = [
+      'customers', 'products', 'companies', 'sales', 'sale_items',
+      'purchases', 'purchase_items', 'supplier_payments',
+      'customer_payments', 'inventory_movements', 'stock_adjustments', 'voids',
+    ];
+    const leftover: string[] = [];
+    for (const t of verifyTables) {
+      try {
+        const r = await c.query(`SELECT count(*) AS n FROM ${t}`);
+        const n = Number(r.rows[0].n);
+        if (n > 0) leftover.push(`${t}=${n}`);
+      } catch { /* missing table: nothing to verify */ }
+    }
+
     await c.end();
-    console.log('[QA Cleanup] Database cleaned after test run');
+
+    if (failures.length) {
+      console.error(`[QA Cleanup] ${failures.length} delete failure(s): ${failures.join('; ')}`);
+    }
+    if (leftover.length) {
+      throw new Error(`[QA Cleanup] QA is NOT clean after the run: ${leftover.join(', ')}`);
+    }
+    console.log('[QA Cleanup] Database cleaned after test run (verified: 0 business rows)');
   } catch (e) {
-    console.error('[QA Cleanup] Error:', e.message);
+    // Rethrow: pretending the database is clean is what caused the phantom-data
+    // reports in the first place.
+    console.error('[QA Cleanup] Error:', (e as Error).message);
+    throw e;
   }
 }

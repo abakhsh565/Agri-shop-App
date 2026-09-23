@@ -241,9 +241,27 @@ describe('Destructive Safety — Company/Supplier', () => {
     rec('No delete_company RPC', '0', String(r.rows.length), r.rows.length === 0 ? 'PASS' : 'FAIL');
   });
 
-  it('should verify no archive_company RPC exists', async () => {
-    const r = await admin(`SELECT proname FROM pg_proc WHERE proname = 'archive_company'`);
-    rec('No archive_company RPC', '0', String(r.rows.length), r.rows.length === 0 ? 'PASS' : 'FAIL');
+  // `archive_company` now exists (Company Details → Remove Supplier). The property
+  // this guard actually protects is unchanged and is what is asserted here: removing a
+  // supplier must never delete or rewrite the company row or its purchase history.
+  it('archive_company must be a soft archive, never a delete', async () => {
+    const r = await admin(`SELECT pg_get_functiondef(oid) AS def FROM pg_proc WHERE proname = 'archive_company'`);
+    const def = r.rows[0]?.def ?? '';
+    rec('archive_company exists', '1', String(r.rows.length), r.rows.length === 1 ? 'PASS' : 'FAIL');
+    rec('archive_company deletes nothing', 'no DELETE', /DELETE\s+FROM/i.test(def) ? 'has DELETE' : 'no DELETE', /DELETE\s+FROM/i.test(def) ? 'FAIL' : 'PASS');
+    rec('archive_company only flips the flag', 'is_active = false', /is_active\s*=\s*false/i.test(def) ? 'is_active = false' : 'missing', /is_active\s*=\s*false/i.test(def) ? 'PASS' : 'FAIL');
+  });
+
+  it('removing a supplier cannot strip a purchase of its supplier reference', async () => {
+    // The invariant that matters, and it holds with or without fixture purchases: a
+    // recorded purchase always still names the supplier it was bought from, whatever
+    // happens to the supplier afterwards. `archive_company` only flips a flag, so no
+    // purchase can lose its company_id or its company_name snapshot.
+    const orphans = await admin(`SELECT count(*)::int n FROM purchases WHERE company_id IS NOT NULL AND (company_name IS NULL OR company_name = '')`);
+    rec('no purchase lost its supplier snapshot', '0', String(orphans.rows[0].n), orphans.rows[0].n === 0 ? 'PASS' : 'FAIL');
+
+    const stillThere = await admin(`SELECT name FROM companies WHERE id = '${T.companyA}'`);
+    rec('supplier row is still on record', 'Destruct Test Supplier', stillThere.rows[0]?.name ?? '(deleted)', stillThere.rows[0] ? 'PASS' : 'FAIL');
   });
 
   it('should verify company record exists and is intact', async () => {

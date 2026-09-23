@@ -2,6 +2,9 @@ import { useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
+import ListCard from "@/components/ui/ListCard";
+import ListRow from "@/components/ui/ListRow";
+import { SkeletonList } from "@/components/ui/Skeleton";
 import { useNotificationStore, type AppNotification } from "@/stores/notificationStore";
 import { useCurrentTime } from "@/lib/useCurrentTime";
 import { useT } from "@/lib/i18n";
@@ -111,9 +114,7 @@ export default function EmployeeNotificationsPage() {
       />
 
       {loading && !ready ? (
-        <div className="flex flex-col items-center py-20 gap-2">
-          <p className="text-sm" style={{ color: "var(--text-secondary)" }}>Loading…</p>
-        </div>
+        <SkeletonList rows={4} tile />
       ) : items.length === 0 ? (
         <div className="flex flex-col items-center py-20 gap-3 px-8 text-center">
           <div
@@ -135,38 +136,36 @@ export default function EmployeeNotificationsPage() {
             <div key={group.key}>
               <div className="px-4 pt-5 pb-2">
                 <p
-                  className="text-[11px] font-bold uppercase tracking-widest"
+                  className="text-11 font-bold uppercase tracking-widest"
                   style={{ color: "var(--text-secondary)" }}
                 >
                   {t(group.labelKey)}
                 </p>
               </div>
 
-              <div className="flex flex-col mx-4">
-                {group.items.map((n, i) => {
+              <ListCard className="mx-4">
+                {group.items.map((n) => {
                   const Icon = KIND_ICON[n.kind] ?? Info;
                   const tr = translateNotification(n.kind, n.title, n.body, t);
                   return (
-                    <button
+                    <ListRow
                       key={n.id}
                       onClick={() => {
                         const route = notificationRoute(n);
                         if (route) navigate(route);
                         markAllRead();
                       }}
-                      className="flex items-start gap-3 py-4 w-full text-start active:scale-[0.98] transition-transform"
-                      style={{
-                        borderBottom: i < group.items.length - 1 ? "1px solid var(--divider)" : "none",
-                        opacity: n.read ? 0.6 : 1,
-                      }}
+                      style={{ opacity: n.read ? 0.6 : 1 }}
+                      tile={
+                        <div
+                          className="w-9 h-9 rounded-full flex items-center justify-center shrink-0"
+                          style={{ background: "var(--surface-2)" }}
+                        >
+                          <Icon size={16} style={{ color: "var(--brand)" }} />
+                        </div>
+                      }
                     >
-                      <div
-                        className="w-9 h-9 rounded-full flex items-center justify-center shrink-0"
-                        style={{ background: "var(--surface-2)" }}
-                      >
-                        <Icon size={16} style={{ color: "var(--brand)" }} />
-                      </div>
-                      <div className="flex-1 min-w-0">
+                      <div className="min-w-0">
                         <div className="flex items-center gap-2">
                           <p className="text-sm font-bold truncate" style={{ color: "var(--text-primary)" }}>
                             {tr.title}
@@ -178,14 +177,14 @@ export default function EmployeeNotificationsPage() {
                         {tr.body && (
                           <p className="text-xs mt-0.5" style={{ color: "var(--text-secondary)" }}>{tr.body}</p>
                         )}
-                        <p className="text-[11px] mt-1" style={{ color: "var(--text-secondary)" }}>
+                        <p className="text-11 mt-1" style={{ color: "var(--text-secondary)" }}>
                           {formatSmartDateTime(n.created_at, now, t)}
                         </p>
                       </div>
-                    </button>
+                    </ListRow>
                   );
                 })}
-              </div>
+              </ListCard>
             </div>
           ))}
         </div>

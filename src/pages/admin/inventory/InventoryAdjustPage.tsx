@@ -10,6 +10,7 @@ import { useUIStore } from "@/stores/uiStore";
 import { useThemeStore } from "@/stores/themeStore";
 import type { AdjustmentType } from "@/types";
 import { useT } from "@/lib/i18n";
+import { Search } from "lucide-react";
 
 const TYPES: { key: AdjustmentType; label: string; hint: string }[] = [
   { key: "add", label: "Add", hint: "Received / found extra stock" },
@@ -54,7 +55,7 @@ export default function InventoryAdjustPage() {
       <StatusBar />
       <NavHeader title={t("admin.adjustStock")} />
       <div className="flex flex-col items-center py-20 gap-2">
-        <p className="text-3xl">🔍</p>
+        <Search size={28} className="mx-auto block" style={{ color: "var(--text-tertiary)" }} />
         <p className="text-sm" style={{ color: "var(--text-secondary)" }}>{t("admin.productNotFound")}</p>
       </div>
     </div>
@@ -120,7 +121,7 @@ export default function InventoryAdjustPage() {
     border: "1px solid var(--divider)",
     color: "var(--text-primary)",
   } as const;
-  const labelCls = "text-[11px] font-bold uppercase mb-2 tracking-wider";
+  const labelCls = "text-11 font-bold uppercase mb-2 tracking-wider";
 
   return (
     <div
@@ -147,7 +148,7 @@ export default function InventoryAdjustPage() {
                   <button
                     key={v.id}
                     onClick={() => { setVariantId(v.id); force((n) => n + 1); }}
-                    className="flex items-center justify-between p-3.5 rounded-[14px] text-start transition-colors"
+                    className="flex items-center justify-between p-3.5 rounded-[var(--radius-card)] text-start transition-colors"
                     style={{ background: "var(--surface)", border: `1.5px solid ${selected ? "var(--brand)" : "var(--divider)"}` }}
                   >
                     <div>
@@ -180,7 +181,7 @@ export default function InventoryAdjustPage() {
                 </button>
               ))}
             </div>
-            <p className="text-[11px] mt-1.5" style={{ color: "var(--text-secondary)" }}>
+            <p className="text-11 mt-1.5" style={{ color: "var(--text-secondary)" }}>
               {TYPES.find((t) => t.key === type)?.hint}
             </p>
           </div>
@@ -191,7 +192,7 @@ export default function InventoryAdjustPage() {
               {type === "set" ? t("admin.countedQuantity") : t("admin.quantity")}
             </p>
             <input type="number" inputMode="numeric" value={amount} onChange={(e) => setAmount(e.target.value)}
-              placeholder="0" className="w-full h-12 rounded-[24px] px-4 text-sm outline-none" style={fieldStyle} />
+              placeholder="0" className="w-full h-12 rounded-[var(--radius-input)] px-4 text-sm outline-none" style={fieldStyle} />
           </div>
 
           {/* Reason */}
@@ -211,11 +212,11 @@ export default function InventoryAdjustPage() {
               ))}
             </div>
             <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder={t("inventory.adjustNotePlaceholder")}
-              className="w-full h-11 rounded-[24px] px-4 text-sm outline-none" style={fieldStyle} />
+              className="w-full h-11 rounded-[var(--radius-input)] px-4 text-sm outline-none" style={fieldStyle} />
           </div>
 
           {/* Preview */}
-          <div className="rounded-[14px] p-4 flex items-center justify-between" style={{ background: "var(--surface-2)" }}>
+          <div className="rounded-[var(--radius-card)] p-4 flex items-center justify-between" style={{ background: "var(--surface-2)" }}>
             <span className="text-sm" style={{ color: "var(--text-secondary)" }}>{t("admin.newStockLevel")}</span>
             <span className="text-base font-bold" style={{ color: after < 0 ? "var(--error)" : "var(--text-primary)" }}>
               {before} → {after} units

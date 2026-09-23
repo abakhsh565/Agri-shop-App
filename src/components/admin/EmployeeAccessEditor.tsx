@@ -2,6 +2,7 @@ import { useT } from "@/lib/i18n";
 import { usePermissionLabels } from "@/lib/permissionLabels";
 import { usePermissionsStore } from "@/stores/permissionsStore";
 import { Check } from "lucide-react";
+import { Skeleton, SkeletonList } from "@/components/ui/Skeleton";
 
 /**
  * The access editor, shared by Add Employee (where the owner can customize an
@@ -66,35 +67,41 @@ export default function EmployeeAccessEditor({ roleDefaults, value, onChange }: 
     <div>
       <div className="space-y-2 max-h-[400px] overflow-y-auto">
         {permissions.length === 0 && (
-          <p className="text-xs" style={{ color: "var(--text-secondary)" }}>{t("common.loading")}</p>
+          <div className="flex flex-col gap-2" aria-busy="true" role="status">
+            <span className="sr-only">{t("common.loading")}</span>
+            <Skeleton h="44px" radius="var(--radius-tile)" />
+            <Skeleton h="44px" radius="var(--radius-tile)" />
+            <Skeleton h="44px" radius="var(--radius-tile)" />
+          </div>
         )}
         {[...new Set(permissions.map((p) => p.module))].map((mod) => {
           const areaPerms = getByModule(mod);
           if (areaPerms.length === 0) return null;
           const selectedCount = areaPerms.filter((p) => value.has(p.code)).length;
           const allSelected = selectedCount === areaPerms.length;
+          const AreaIcon = areaIcon(mod);
           return (
             <div key={mod}>
               <button
                 onClick={() => toggleArea(mod)}
-                className="flex items-center justify-between w-full py-2 px-3 rounded-lg"
+                className="flex items-center justify-between w-full py-2 px-3 rounded-[var(--radius-tile)]"
                 style={{
                   background: allSelected ? "rgba(132,204,22,0.1)" : "var(--surface)",
                   border: `1px solid ${selectedCount > 0 ? "var(--brand)" : "var(--divider)"}`,
                 }}
               >
                 <div className="flex items-center gap-2">
-                  <span className="text-base">{areaIcon(mod)}</span>
+                  <AreaIcon size={16} className="shrink-0" style={{ color: "var(--text-secondary)" }} />
                   <span className="text-xs font-semibold" style={{ color: "var(--text-primary)" }}>{areaLabel(mod)}</span>
                 </div>
                 <div className="flex items-center gap-2">
                   {allSelected ? (
                     <>
-                      <span className="text-[10px]" style={{ color: "var(--text-secondary)" }}>{t("empDetail.areaFull")}</span>
+                      <span className="text-10" style={{ color: "var(--text-secondary)" }}>{t("empDetail.areaFull")}</span>
                       <Check size={12} style={{ color: "var(--brand)" }} />
                     </>
                   ) : selectedCount === 0 ? (
-                    <span className="text-[10px]" style={{ color: "var(--text-secondary)" }}>{t("empDetail.areaNone")}</span>
+                    <span className="text-10" style={{ color: "var(--text-secondary)" }}>{t("empDetail.areaNone")}</span>
                   ) : null}
                 </div>
               </button>
@@ -109,7 +116,7 @@ export default function EmployeeAccessEditor({ roleDefaults, value, onChange }: 
                       <button
                         key={p.code}
                         onClick={() => togglePerm(p.code)}
-                        className="text-[10px] px-2 py-0.5 rounded-full font-semibold"
+                        className="text-10 px-2 py-0.5 rounded-full font-semibold"
                         style={{
                           background: s.bg,
                           color: s.fg,
@@ -129,7 +136,7 @@ export default function EmployeeAccessEditor({ roleDefaults, value, onChange }: 
       </div>
       <div className="flex flex-wrap items-center gap-3 mt-3">
         {(["fromRole", "onlyThis", "offForThis"] as const).map((k) => (
-          <span key={k} className="flex items-center gap-1 text-[10px]" style={{ color: "var(--text-secondary)" }}>
+          <span key={k} className="flex items-center gap-1 text-10" style={{ color: "var(--text-secondary)" }}>
             <span
               className="inline-block w-2.5 h-2.5 rounded-full"
               style={{ background: STATE_STYLE[k].bg, border: `1px solid ${STATE_STYLE[k].fg}` }}

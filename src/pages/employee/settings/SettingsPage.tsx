@@ -1,6 +1,8 @@
 import { useNavigate } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
+import ListCard from "@/components/ui/ListCard";
+import ListRow from "@/components/ui/ListRow";
 import { useAuthStore } from "@/stores/authStore";
 import { useThemeStore, applyTheme } from "@/stores/themeStore";
 import { clearDeviceSession } from "@/lib/deviceSession";
@@ -98,7 +100,7 @@ export default function SettingsPage() {
 
         {/* Profile card */}
         <div
-          className="mx-4 mt-3 rounded-xl p-4 flex items-center gap-4 animate-fade-in-up"
+          className="mx-4 mt-3 rounded-[var(--radius-tile)] p-4 flex items-center gap-4 animate-fade-in-up"
           style={{ border: "1px solid var(--border-light)", background: "var(--surface-2)" }}
         >
           {/* Avatar */}
@@ -131,7 +133,7 @@ export default function SettingsPage() {
               </p>
               <button
                 onClick={() => setEditingName(true)}
-                className="flex items-center gap-1 h-6 px-2 rounded-full text-[10px] font-bold shrink-0"
+                className="flex items-center gap-1 h-6 px-2 rounded-full text-10 font-bold shrink-0"
                 style={{ background: "var(--surface)", color: "var(--text-secondary)", border: "1px solid var(--divider)" }}
               >
                 <User size={10} /> Edit
@@ -150,65 +152,48 @@ export default function SettingsPage() {
           <p className="text-xs font-bold uppercase mb-3 tracking-wider" style={{ color: "var(--text-secondary)" }}>
             {t("settings.appearance")}
           </p>
-          <div
-            className="rounded-xl overflow-hidden"
-            style={{ border: "1px solid var(--border-light)" }}
-          >
-            {/* Theme toggle */}
-            <button
+          <ListCard>
+            <ListRow
               onClick={toggleTheme}
-              className="flex items-center justify-between w-full px-4 py-4 border-b"
-              style={{ borderColor: "var(--border-light)" }}
-            >
-              <div className="flex items-center gap-3">
-                {theme === "dark"
-                  ? <Moon size={18} style={{ color: "var(--brand)" }} />
-                  : <Sun size={18} style={{ color: "var(--brand)" }} />
-                }
-                <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
-                  {theme === "dark" ? t("settings.darkMode") : t("settings.lightMode")}
-                </span>
-              </div>
-              {/* Toggle pill */}
-              <div
-                className="relative w-12 h-6 rounded-full transition-all duration-300"
-                style={{ background: theme === "dark" ? "var(--brand)" : "var(--muted)" }}
-              >
+              icon={theme === "dark" ? Moon : Sun}
+              title={theme === "dark" ? t("settings.darkMode") : t("settings.lightMode")}
+              trailing={
                 <div
-                  className="absolute top-1 w-4 h-4 rounded-full transition-all duration-300"
-                  style={{
-                    left: theme === "dark" ? "calc(100% - 20px)" : "4px",
-                    background: theme === "dark" ? "#0a0a0a" : "var(--text-secondary)",
-                  }}
-                />
-              </div>
-            </button>
-
-            {/* Language toggle */}
-            <button
-              onClick={cycleLanguage}
-              className="flex items-center justify-between w-full px-4 py-4"
-            >
-              <div className="flex items-center gap-3">
-                <Globe size={18} style={{ color: "var(--brand)" }} />
-                <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>{t("settings.language")}</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span
-                  className="text-xs font-bold px-3 py-1 rounded-full"
-                  style={{ background: "var(--brand)", color: "#0a0a0a" }}
+                  className="relative w-12 h-6 rounded-full transition-all duration-300 shrink-0"
+                  style={{ background: theme === "dark" ? "var(--brand)" : "var(--muted)" }}
                 >
-                  {LANG_LABELS[language]}
-                </span>
-                <ChevronRight size={14} style={{ color: "var(--text-secondary)" }} />
-              </div>
-            </button>
-          </div>
+                  <div
+                    className="absolute top-1 w-4 h-4 rounded-full transition-all duration-300"
+                    style={{
+                      left: theme === "dark" ? "calc(100% - 20px)" : "4px",
+                      background: theme === "dark" ? "#0a0a0a" : "var(--text-secondary)",
+                    }}
+                  />
+                </div>
+              }
+            />
+            <ListRow
+              onClick={cycleLanguage}
+              icon={Globe}
+              title={t("settings.language")}
+              trailing={
+                <div className="flex items-center gap-2 shrink-0">
+                  <span
+                    className="text-xs font-bold px-3 py-1 rounded-full"
+                    style={{ background: "var(--brand)", color: "#0a0a0a" }}
+                  >
+                    {LANG_LABELS[language]}
+                  </span>
+                  <ChevronRight size={14} style={{ color: "var(--text-secondary)" }} />
+                </div>
+              }
+            />
+          </ListCard>
 
           {/* Urdu notice */}
           {language === "ur" && (
             <div
-              className="mt-2 px-4 py-3 rounded-xl text-end text-sm animate-fade-in-up"
+              className="mt-2 px-4 py-3 rounded-[var(--radius-tile)] text-end text-sm animate-fade-in-up"
               style={{ background: "rgba(132,204,22,0.1)", color: "var(--brand-dark)", direction: "rtl" }}
             >
               اردو زبان فعال ہے۔ یہ ایپ دو زبانوں میں کام کرتی ہے۔
@@ -221,10 +206,7 @@ export default function SettingsPage() {
           <p className="text-xs font-bold uppercase mb-3 tracking-wider" style={{ color: "var(--text-secondary)" }}>
             {t("settings.account")}
           </p>
-          <div
-            className="rounded-xl overflow-hidden"
-            style={{ border: "1px solid var(--border-light)" }}
-          >
+          <ListCard>
             {[
               {
                 icon: Lock,
@@ -248,36 +230,30 @@ export default function SettingsPage() {
                 icon: Info, label: t("settings.appVersion"),
                 right: "1.0.0", action: null,
               },
-            ].map((s, i, arr) => {
+            ].map((s) => {
               const Icon = s.icon;
               return (
-                <button
+                <ListRow
                   key={s.label}
                   onClick={s.action ?? undefined}
-                  disabled={!s.action}
-                  className={`flex items-center justify-between w-full px-4 py-4 text-start transition-colors ${
-                    i < arr.length - 1 ? "border-b" : ""
-                  } ${s.action ? "active:opacity-70" : "opacity-70"}`}
-                  style={{ borderColor: "var(--border-light)" }}
-                >
-                  <div className="flex items-center gap-3">
-                    <Icon size={18} style={{ color: "var(--brand)" }} />
-                    <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>{s.label}</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    {'badge' in s && s.badge ? (
-                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full" style={{ background: "#ef4444", color: "#fff" }}>
-                        {s.badge}
-                      </span>
-                    ) : s.right ? (
-                      <span className="text-sm" style={{ color: "var(--text-secondary)" }}>{s.right}</span>
-                    ) : null}
-                    {s.action && <ChevronRight size={14} style={{ color: "var(--text-secondary)" }} />}
-                  </div>
-                </button>
+                  icon={Icon}
+                  title={s.label}
+                  trailing={
+                    <div className="flex items-center gap-1 shrink-0">
+                      {'badge' in s && s.badge ? (
+                        <span className="text-10 font-bold px-1.5 py-0.5 rounded-full" style={{ background: "#ef4444", color: "#fff" }}>
+                          {s.badge}
+                        </span>
+                      ) : s.right ? (
+                        <span className="text-sm" style={{ color: "var(--text-secondary)" }}>{s.right}</span>
+                      ) : null}
+                      {s.action && <ChevronRight size={14} style={{ color: "var(--text-secondary)" }} />}
+                    </div>
+                  }
+                />
               );
             })}
-          </div>
+          </ListCard>
         </div>
       </div>
 
@@ -312,7 +288,7 @@ export default function SettingsPage() {
             </div>
             {/* Name input */}
             <div className="mb-5">
-              <label className="text-[11px] font-semibold uppercase tracking-wider mb-1.5 block" style={{ color: "var(--text-secondary)" }}>{t("addCustomer.name")}</label>
+              <label className="text-11 font-semibold uppercase tracking-wider mb-1.5 block" style={{ color: "var(--text-secondary)" }}>{t("addCustomer.name")}</label>
               <input
                 autoFocus
                 value={nameValue}

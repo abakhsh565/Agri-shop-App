@@ -3,15 +3,19 @@ import { useNavigate } from "react-router-dom";
 import { useEffect, useRef, useState } from "react";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
+import ListCard from "@/components/ui/ListCard";
+import ListRow from "@/components/ui/ListRow";
+import SetupChecklist from "@/components/ui/SetupChecklist";
 import { useAuthStore } from "@/stores/authStore";
 import { useThemeStore, applyTheme } from "@/stores/themeStore";
+import { useUIStore } from "@/stores/uiStore";
 import { clearDeviceSession } from "@/lib/deviceSession";
 import { hasPin } from "@/lib/pinLock";
 import { useT } from "@/lib/i18n";
 import {
   Lock, Bell, Globe, Info, ChevronRight, Moon, Sun,
   ClipboardList, Smartphone, Users, Package,
-  Building2, ShieldCheck, Pencil, Loader2, Save,
+  Building2, ShieldCheck, Pencil, Loader2, Save, Wheat,
 } from "lucide-react";
 import { uploadImage } from "@/lib/storage";
 import { supabase } from "@/lib/supabase";
@@ -22,6 +26,7 @@ const LANG_LABELS: Record<string, string> = { en: "English", ur: "اردو" };
 export default function AdminSettingsPage() {
   const navigate = useNavigate();
   const t = useT();
+  const { addToast } = useUIStore();
   const { user, logout } = useAuthStore();
   const { theme, toggleTheme, language, setLanguage } = useThemeStore();
   const [avatarUrl, setAvatarUrl] = useState<string | null>(user?.photoUrl ?? null);
@@ -83,7 +88,7 @@ export default function AdminSettingsPage() {
       setEditing(false);
     } catch (err) {
       console.error("Profile save failed:", err);
-      alert(t("copy.profileSaveFailed"));
+      addToast(t("copy.profileSaveFailed"), "error");
     } finally {
       setSaving(false);
     }
@@ -116,7 +121,7 @@ export default function AdminSettingsPage() {
 
         {/* Profile card */}
         <div
-          className="mx-4 mt-3 rounded-xl p-4 flex items-center gap-4 animate-fade-in-up"
+          className="mx-4 mt-3 rounded-[var(--radius-tile)] p-4 flex items-center gap-4 animate-fade-in-up"
           style={{ border: "1px solid var(--border-light)", background: "var(--surface-2)" }}
         >
           <div className="relative shrink-0">
@@ -137,7 +142,7 @@ export default function AdminSettingsPage() {
                 {user?.name}
               </p>
               <span
-                className="text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0"
+                className="text-10 font-bold px-2 py-0.5 rounded-full shrink-0"
                 style={{ background: "var(--brand)", color: "#0a0a0a" }}
               >
                 {t("settings.owner") || "Owner"}
@@ -151,7 +156,7 @@ export default function AdminSettingsPage() {
 
           <button
             onClick={startEdit}
-            className="flex items-center gap-1 h-6 px-2 rounded-full text-[10px] font-bold shrink-0"
+            className="flex items-center gap-1 h-6 px-2 rounded-full text-10 font-bold shrink-0"
             style={{ background: "var(--surface)", color: "var(--text-secondary)", border: "1px solid var(--divider)" }}
           >
             <Pencil size={10} /> {t("common.edit")}
@@ -201,12 +206,12 @@ export default function AdminSettingsPage() {
                 </div>
               </div>
               <div>
-                <p className="text-[11px] font-bold uppercase mb-1.5 tracking-wider" style={{ color: "var(--text-secondary)" }}>{t("common.name")}</p>
+                <p className="text-11 font-bold uppercase mb-1.5 tracking-wider" style={{ color: "var(--text-secondary)" }}>{t("common.name")}</p>
                 <input
                   value={editName}
                   onChange={(e) => setEditName(e.target.value)}
-                  className="w-full h-12 rounded-[24px] px-4 text-sm outline-none"
-                  style={{ background: "var(--surface-2)", border: "1px solid var(--divider)", color: "var(--text-primary)", borderRadius: "24px" }}
+                  className="w-full h-12 rounded-[var(--radius-input)] px-4 text-sm outline-none"
+                  style={{ background: "var(--surface-2)", border: "1px solid var(--border-control)", color: "var(--text-primary)", borderRadius: "24px" }}
                 />
               </div>
               <div className="flex gap-3">
@@ -220,61 +225,53 @@ export default function AdminSettingsPage() {
           </div>
         )}
 
+        {/* Business setup status. Persistent, not a one-time wizard: it shows what is done
+            and what is missing, and disappears by itself once nothing is missing. It carries
+            this page's own section markup, so it reads as one of the existing sections. */}
+        <SetupChecklist className="animate-fade-in-up delay-75" />
+
         {/* Appearance */}
         <div className="px-4 pt-5 animate-fade-in-up delay-75">
           <p className="text-xs font-bold uppercase mb-3 tracking-wider" style={{ color: "var(--text-secondary)" }}>
             {t("settings.appearance")}
           </p>
-          <div className="rounded-xl overflow-hidden" style={{ border: "1px solid var(--border-light)" }}>
-            {/* Theme */}
-            <button
+          <ListCard>
+            <ListRow
               onClick={toggleTheme}
-              className="flex items-center justify-between w-full px-4 py-4 border-b"
-              style={{ borderColor: "var(--border-light)" }}
-            >
-              <div className="flex items-center gap-3">
-                {theme === "dark"
-                  ? <Moon size={18} style={{ color: "var(--brand)" }} />
-                  : <Sun size={18} style={{ color: "var(--brand)" }} />
-                }
-                <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
-                  {theme === "dark" ? t("settings.darkMode") : t("settings.lightMode")}
-                </span>
-              </div>
-              <div
-                className="relative w-12 h-6 rounded-full transition-all duration-300"
-                style={{ background: theme === "dark" ? "var(--brand)" : "var(--muted)" }}
-              >
+              icon={theme === "dark" ? Moon : Sun}
+              title={theme === "dark" ? t("settings.darkMode") : t("settings.lightMode")}
+              trailing={
                 <div
-                  className="absolute top-1 w-4 h-4 rounded-full transition-all duration-300"
-                  style={{
-                    left: theme === "dark" ? "calc(100% - 20px)" : "4px",
-                    background: theme === "dark" ? "#0a0a0a" : "var(--text-secondary)",
-                  }}
-                />
-              </div>
-            </button>
-
-            {/* Language */}
-            <button
-              onClick={cycleLanguage}
-              className="flex items-center justify-between w-full px-4 py-4"
-            >
-              <div className="flex items-center gap-3">
-                <Globe size={18} style={{ color: "var(--brand)" }} />
-                <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>{t("settings.language")}</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span
-                  className="text-xs font-bold px-3 py-1 rounded-full"
-                  style={{ background: "var(--brand)", color: "#0a0a0a" }}
+                  className="relative w-12 h-6 rounded-full transition-all duration-300 shrink-0"
+                  style={{ background: theme === "dark" ? "var(--brand)" : "var(--muted)" }}
                 >
-                  {LANG_LABELS[language]}
-                </span>
-                <ChevronRight size={14} style={{ color: "var(--text-secondary)" }} />
-              </div>
-            </button>
-          </div>
+                  <div
+                    className="absolute top-1 w-4 h-4 rounded-full transition-all duration-300"
+                    style={{
+                      left: theme === "dark" ? "calc(100% - 20px)" : "4px",
+                      background: theme === "dark" ? "#0a0a0a" : "var(--text-secondary)",
+                    }}
+                  />
+                </div>
+              }
+            />
+            <ListRow
+              onClick={cycleLanguage}
+              icon={Globe}
+              title={t("settings.language")}
+              trailing={
+                <div className="flex items-center gap-2 shrink-0">
+                  <span
+                    className="text-xs font-bold px-3 py-1 rounded-full"
+                    style={{ background: "var(--brand)", color: "#0a0a0a" }}
+                  >
+                    {LANG_LABELS[language]}
+                  </span>
+                  <ChevronRight size={14} style={{ color: "var(--text-secondary)" }} />
+                </div>
+              }
+            />
+          </ListCard>
 
 
         </div>
@@ -284,37 +281,33 @@ export default function AdminSettingsPage() {
           <p className="text-xs font-bold uppercase mb-3 tracking-wider" style={{ color: "var(--text-secondary)" }}>
             {t("settings.account")}
           </p>
-          <div className="rounded-xl overflow-hidden" style={{ border: "1px solid var(--border-light)" }}>
+          <ListCard>
             {[
               { icon: Lock,         label: user && hasPin(user.id) ? (t("settings.changePin") || "Change PIN") : (t("settings.setupPin") || "Setup PIN"),   action: () => navigate("/login/pin-set", { state: { returnTo: "/admin/settings" } }) },
               { icon: Bell,         label: t("settings.notifications"), action: () => navigate("/admin/notifications") },
               { icon: ClipboardList, label: t("settings.activityLog"), action: () => navigate("/admin/activity") },
               { icon: Smartphone,   label: t("settings.device"),       action: null,       right: t("settings.thisPhone") || "This Phone" },
               { icon: Info,         label: t("settings.appVersion"),    action: null,       right: "1.0.0" },
-            ].map((s, i, arr) => {
+            ].map((s) => {
               const Icon = s.icon;
               return (
-                <button
+                <ListRow
                   key={s.label}
                   onClick={s.action ?? undefined}
-                  disabled={!s.action}
-                  className={`flex items-center justify-between w-full px-4 py-4 text-start transition-colors ${i < arr.length - 1 ? "border-b" : ""} ${s.action ? "active:opacity-70" : "opacity-70"}`}
-                  style={{ borderColor: "var(--border-light)" }}
-                >
-                  <div className="flex items-center gap-3">
-                    <Icon size={18} style={{ color: "var(--brand)" }} />
-                    <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>{s.label}</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    {"right" in s && s.right && (
-                      <span className="text-sm" style={{ color: "var(--text-secondary)" }}>{s.right as string}</span>
-                    )}
-                    {s.action && <ChevronRight size={14} style={{ color: "var(--text-secondary)" }} />}
-                  </div>
-                </button>
+                  icon={Icon}
+                  title={s.label}
+                  trailing={
+                    <div className="flex items-center gap-1 shrink-0">
+                      {"right" in s && s.right && (
+                        <span className="text-sm" style={{ color: "var(--text-secondary)" }}>{s.right as string}</span>
+                      )}
+                      {s.action && <ChevronRight size={14} style={{ color: "var(--text-secondary)" }} />}
+                    </div>
+                  }
+                />
               );
             })}
-          </div>
+          </ListCard>
         </div>
 
         {showBusinessSettings && <BusinessSettingsSheet onClose={() => setShowBusinessSettings(false)} onSave={() => {}} />}
@@ -322,18 +315,19 @@ export default function AdminSettingsPage() {
         {/* Business Settings */}
         <div className="px-4 pt-5 animate-fade-in-up delay-125">
           <p className="text-xs font-bold uppercase mb-3 tracking-wider" style={{ color: "var(--text-secondary)" }}>{t("common.businessSettings")}</p>
-          <div className="rounded-xl overflow-hidden" style={{ border: "1px solid var(--border-light)" }}>
-            <button onClick={() => setShowBusinessSettings(true)} className="flex items-center justify-between w-full px-4 py-4 active:opacity-70">
-              <div className="flex items-center gap-3">
-                <span style={{ fontSize: 18 }}>{"🌾"}</span>
-                <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>{t("common.cropConfiguration")}</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <span className="text-sm" style={{ color: "var(--text-secondary)" }}>{t("common.configureReminder")}</span>
-                <ChevronRight size={14} style={{ color: "var(--text-secondary)" }} />
-              </div>
-            </button>
-          </div>
+          <ListCard>
+            <ListRow
+              onClick={() => setShowBusinessSettings(true)}
+              icon={Wheat}
+              title={t("common.cropConfiguration")}
+              trailing={
+                <div className="flex items-center gap-1 shrink-0">
+                  <span className="text-sm" style={{ color: "var(--text-secondary)" }}>{t("common.configureReminder")}</span>
+                  <ChevronRight size={14} style={{ color: "var(--text-secondary)" }} />
+                </div>
+              }
+            />
+          </ListCard>
         </div>
 
       {/* Management shortcuts */}
@@ -341,30 +335,25 @@ export default function AdminSettingsPage() {
           <p className="text-xs font-bold uppercase mb-3 tracking-wider" style={{ color: "var(--text-secondary)" }}>
             {t("settings.management") || "Management"}
           </p>
-          <div className="rounded-xl overflow-hidden" style={{ border: "1px solid var(--border-light)" }}>
+          <ListCard>
             {[
               { icon: Users,       label: t("admin.employees") ?? "Employees",  action: () => navigate("/admin/employees") },
               { icon: ShieldCheck, label: t("settings.rolesAccess"),          action: () => navigate("/admin/settings/roles") },
               { icon: Building2,   label: t("admin.companies")  ?? "Companies", action: () => navigate("/admin/companies") },
               { icon: Package,     label: t("admin.inventory")  ?? "Inventory", action: () => navigate("/admin/products") },
-            ].map((row, i, arr) => {
+            ].map((row) => {
               const Icon = row.icon;
               return (
-                <button
+                <ListRow
                   key={row.label}
                   onClick={row.action}
-                  className={`flex items-center justify-between w-full px-4 py-4 text-start active:opacity-70 ${i < arr.length - 1 ? "border-b" : ""}`}
-                  style={{ borderColor: "var(--border-light)" }}
-                >
-                  <div className="flex items-center gap-3">
-                    <Icon size={18} style={{ color: "var(--brand)" }} />
-                    <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>{row.label}</span>
-                  </div>
-                  <ChevronRight size={14} style={{ color: "var(--text-secondary)" }} />
-                </button>
+                  icon={Icon}
+                  title={row.label}
+                  trailing={<ChevronRight size={14} style={{ color: "var(--text-secondary)" }} className="shrink-0" />}
+                />
               );
             })}
-          </div>
+          </ListCard>
         </div>
       </div>
 

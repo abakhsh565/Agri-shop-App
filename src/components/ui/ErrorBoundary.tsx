@@ -1,5 +1,6 @@
 import { Component, type ReactNode } from "react";
 import { useT } from "@/lib/i18n";
+import { AlertTriangle } from "lucide-react";
 
 function ErrorFallback({ message, onRetry }: { message?: string; onRetry: () => void }) {
   const t = useT();
@@ -9,10 +10,10 @@ function ErrorFallback({ message, onRetry }: { message?: string; onRetry: () => 
       style={{ background: "var(--background)", color: "var(--text-primary)" }}
     >
       <div
-        className="w-16 h-16 rounded-full flex items-center justify-center mb-4 text-2xl"
+        className="w-16 h-16 rounded-full flex items-center justify-center mb-4"
         style={{ background: "rgba(239,68,68,0.1)", color: "var(--error)" }}
       >
-        ⚠️
+        <AlertTriangle size={26} />
       </div>
       <p className="text-lg font-bold mb-2">{t("common.somethingWentWrong")}</p>
       <p className="text-sm mb-6" style={{ color: "var(--text-secondary)" }}>

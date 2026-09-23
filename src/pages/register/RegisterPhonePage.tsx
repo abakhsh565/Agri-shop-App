@@ -60,7 +60,7 @@ export default function RegisterPhonePage() {
       <div className="flex flex-col flex-1 justify-between">
         <div className="flex flex-col gap-8 p-6">
           <div className="flex flex-col gap-2">
-            <p className="text-[28px] font-bold text-black">{t("register.yourShop")}</p>
+            <p className="text-28 font-bold text-black">{t("register.yourShop")}</p>
             <p className="text-sm text-[#888]">
               {t("register.phoneIntro")}
             </p>

@@ -46,15 +46,15 @@ export default function CreditOverridesPage() {
       <div className="flex flex-col gap-3 px-4 pt-4 pb-8">
         {/* Summary banner */}
         <div
-          className="rounded-[14px] p-4 flex items-start gap-3"
+          className="rounded-[var(--radius-card)] p-4 flex items-start gap-3"
           style={{ background: "#FCEBEB" }}
         >
           <AlertTriangle size={20} color="#A32D2D" className="mt-0.5 shrink-0" />
           <div>
-            <p className="text-[14px] font-medium" style={{ color: "#791F1F" }}>
+            <p className="text-14 font-medium" style={{ color: "#791F1F" }}>
               {overrides.length === 1 ? t("creditOverrides.flaggedOne") : t("creditOverrides.flagged", { count: String(overrides.length) })}
             </p>
-            <p className="text-[12px] mt-1" style={{ color: "#A32D2D", lineHeight: 1.5 }}>
+            <p className="text-12 mt-1" style={{ color: "#A32D2D", lineHeight: 1.5 }}>
               {t("creditOverrides.body")}
             </p>
           </div>
@@ -63,7 +63,7 @@ export default function CreditOverridesPage() {
         {/* Customer list */}
         {overrides.length === 0 ? (
           <div
-            className="rounded-[14px] p-8 flex flex-col items-center gap-3"
+            className="rounded-[var(--radius-card)] p-8 flex flex-col items-center gap-3"
             style={{ border: "1px solid var(--divider)" }}
           >
             <div
@@ -85,21 +85,21 @@ export default function CreditOverridesPage() {
               <button
                 key={o.customer.id}
                 onClick={() => navigate("/admin/alerts/credit-overrides/" + o.customer.id)}
-                className="flex items-center gap-3 rounded-[14px] p-4 transition-opacity active:opacity-70 text-start w-full"
+                className="flex items-center gap-3 rounded-[var(--radius-card)] p-4 transition-opacity active:opacity-70 text-start w-full"
                 style={{ background: "var(--surface)", border: "1px solid var(--divider)" }}
               >
                 {o.customer.imageUrl ? (<img src={o.customer.imageUrl} alt="" className="size-10 rounded-full object-cover shrink-0" />) : (<div className="size-10 rounded-full flex items-center justify-center text-sm font-bold shrink-0" style={{ background: "#FCEBEB", color: "#A32D2D" }}>{o.customer.name ? o.customer.name.charAt(0) : "?".toUpperCase()}</div>)}
                 <div className="flex-1 min-w-0">
-                  <p className="text-[14px] font-medium truncate" style={{ color: "var(--text-primary)" }}>
+                  <p className="text-14 font-medium truncate" style={{ color: "var(--text-primary)" }}>
                     {o.customer.name}
                   </p>
-                  <p className="text-[12px] mt-0.5" style={{ color: "var(--text-secondary)" }}>
+                  <p className="text-12 mt-0.5" style={{ color: "var(--text-secondary)" }}>
                     {t("creditOverrides.limitUsed", { outstanding: formatCurrency(o.customer.outstandingBalance), pct: String(o.usagePct) })}
                   </p>
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">
                   <span
-                    className="text-[11px] font-bold px-2 py-0.5 rounded-full"
+                    className="text-11 font-bold px-2 py-0.5 rounded-full"
                     style={{ background: "#FEE2E2", color: "#DC2626" }}
                   >
                     {o.health.headline}

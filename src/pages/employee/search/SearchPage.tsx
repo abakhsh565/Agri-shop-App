@@ -11,7 +11,10 @@ import { useThemeStore } from "@/stores/themeStore";
 import { useShellBase } from "@/lib/useShellBase";
 import { useT } from "@/lib/i18n";
 import { formatCurrency } from "@/lib/formatters";
-import { Search, X, Package, Users, ShoppingCart, Building2, UserCog, ChevronLeft } from "lucide-react";
+import { Search, Package, Users, ShoppingCart, Building2, UserCog, ChevronLeft } from "lucide-react";
+import SearchBar from "@/components/ui/SearchBar";
+import ListCard from "@/components/ui/ListCard";
+import ListRow from "@/components/ui/ListRow";
 
 type FilterType = "all" | "product" | "customer" | "sale" | "employee" | "company";
 
@@ -221,25 +224,14 @@ export default function SearchPage() {
         >
           <ChevronLeft size={18} style={{ color: "var(--text-primary)" }} />
         </button>
-        <div
-          className="flex-1 flex items-center gap-2 h-11 rounded-full px-4"
-          style={{ background: "var(--surface-2)", border: "1px solid var(--divider)" }}
-        >
-          <Search size={14} style={{ color: "var(--text-secondary)" }} />
-          <input
-            autoFocus
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder={isAdmin ? t("search.placeholderAdmin") : t("search.placeholderEmployee")}
-            className="flex-1 bg-transparent text-sm outline-none"
-            style={{ color: "var(--text-primary)" }}
-          />
-          {query && (
-            <button onClick={() => setQuery("")}>
-              <X size={14} style={{ color: "var(--text-secondary)" }} />
-            </button>
-          )}
-        </div>
+        <SearchBar
+          containerClass="flex-1 min-w-0"
+          autoFocus
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onClear={() => setQuery("")}
+          placeholder={isAdmin ? t("search.placeholderAdmin") : t("search.placeholderEmployee")}
+        />
       </div>
 
       {/* Filter pills — only show when searching */}
@@ -291,34 +283,28 @@ export default function SearchPage() {
           </p>
           {Array.from(grouped.entries()).map(([type, items]) => (
             <div key={type} className="mb-4">
-              <p className="text-[11px] font-bold uppercase mb-2 tracking-wider flex items-center gap-2" style={{ color: "var(--brand-dark)" }}>
+              <p className="text-11 font-bold uppercase mb-2 tracking-wider flex items-center gap-2" style={{ color: "var(--brand-dark)" }}>
                 {SECTION_LABELS[type]}
-                <span className="text-[10px] font-normal" style={{ color: "var(--text-secondary)" }}>
+                <span className="text-10 font-normal" style={{ color: "var(--text-secondary)" }}>
                   ({items.length})
                 </span>
               </p>
-              <div className="rounded-[14px] overflow-hidden" style={{ border: "1px solid var(--divider)" }}>
-                {items.map((r, i) => (
-                  <button
+              <ListCard>
+                {items.map((r) => (
+                  <ListRow
                     key={r.id + r.type}
                     onClick={() => navigate(r.path)}
-                    className="flex items-center justify-between px-4 py-3.5 w-full text-start transition-opacity active:opacity-70"
-                    style={{
-                      borderBottom: i < items.length - 1 ? "1px solid var(--divider)" : "none",
-                      background: "var(--background)",
-                    }}
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      {r.type === "product" ? (
+                    tile={
+                      r.type === "product" ? (
                         <div
-                          className="size-9 rounded-[10px] shrink-0 flex items-center justify-center text-[11px] font-bold"
+                          className="size-9 rounded-[var(--radius-tile)] shrink-0 flex items-center justify-center text-11 font-bold"
                           style={{ background: "var(--surface-2)", color: "var(--text-secondary)" }}
                         >
                           <Package size={15} />
                         </div>
                       ) : r.type === "customer" ? (
                         <div
-                          className="size-9 rounded-full shrink-0 flex items-center justify-center text-[11px] font-bold"
+                          className="size-9 rounded-full shrink-0 flex items-center justify-center text-11 font-bold"
                           style={{ background: initBgColor(r.title), color: "#fff" }}
                         >
                           {r.title.charAt(0).toUpperCase()}
@@ -332,35 +318,35 @@ export default function SearchPage() {
                         </div>
                       ) : r.type === "employee" ? (
                         <div
-                          className="size-9 rounded-full shrink-0 flex items-center justify-center text-[11px] font-bold"
+                          className="size-9 rounded-full shrink-0 flex items-center justify-center text-11 font-bold"
                           style={{ background: initBgColor(r.title), color: "#fff" }}
                         >
                           {r.title.charAt(0).toUpperCase()}
                         </div>
                       ) : (
                         <div
-                          className="size-9 rounded-[10px] shrink-0 flex items-center justify-center"
+                          className="size-9 rounded-[var(--radius-tile)] shrink-0 flex items-center justify-center"
                           style={{ background: "var(--surface-2)" }}
                         >
                           <Building2 size={14} style={{ color: "var(--text-secondary)" }} />
                         </div>
                       )}
-                      <div className="min-w-0">
-                        <p className="text-sm font-bold truncate" style={{ color: "var(--text-primary)" }}>{r.title}</p>
-                        <p className="text-xs truncate" style={{ color: "var(--text-secondary)" }}>{r.subtitle}</p>
-                      </div>
-                    </div>
-                    {r.badge && (
+                    trailing={r.badge ? (
                       <span
-                        className="text-[11px] font-semibold px-2 py-0.5 rounded-full shrink-0 ms-2"
+                        className="text-11 font-semibold px-2 py-0.5 rounded-full shrink-0"
                         style={{ background: "var(--surface-2)", color: "var(--text-secondary)" }}
                       >
                         {r.badge}
                       </span>
-                    )}
-                  </button>
+                    ) : undefined}
+                  >
+                    <div className="min-w-0">
+                      <p className="text-sm font-bold truncate" style={{ color: "var(--text-primary)" }}>{r.title}</p>
+                      <p className="text-xs truncate" style={{ color: "var(--text-secondary)" }}>{r.subtitle}</p>
+                    </div>
+                  </ListRow>
                 ))}
-              </div>
+              </ListCard>
             </div>
           ))}
         </div>

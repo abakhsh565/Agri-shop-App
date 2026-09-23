@@ -2,6 +2,8 @@ import { useState, useMemo, useRef } from "react";
 import { useNavigate, useLocation, useParams } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
+import ListCard from "@/components/ui/ListCard";
+import ListRow from "@/components/ui/ListRow";
 import Button from "@/components/ui/Button";
 import { formatCurrency } from "@/lib/formatters";
 import type { ReturnItem, Sale } from "@/types";
@@ -126,9 +128,9 @@ export default function AdminReturnConfirmPage() {
         <StatusBar />
         <NavHeader title={t("returns.confirm")} />
 
-        <div className="mx-4 mt-3 rounded-[14px] p-4 text-center" style={{ border: "1px solid var(--divider)" }}>
-          <p className="text-[10px] uppercase" style={{ color: "var(--text-secondary)" }}>{t("returns.estimatedRefund")}</p>
-          <p className="text-[28px] font-bold mt-1" style={{ color: "var(--text-primary)" }}>{formatCurrency(liveTotal)}</p>
+        <div className="mx-4 mt-3 rounded-[var(--radius-card)] p-4 text-center" style={{ border: "1px solid var(--divider)" }}>
+          <p className="text-10 uppercase" style={{ color: "var(--text-secondary)" }}>{t("returns.estimatedRefund")}</p>
+          <p className="text-28 font-bold mt-1" style={{ color: "var(--text-primary)" }}>{formatCurrency(liveTotal)}</p>
         </div>
 
         <div className="flex flex-col gap-4 p-4 mt-1">
@@ -142,10 +144,10 @@ export default function AdminReturnConfirmPage() {
               onChange={(e) => setReason(e.target.value)}
               placeholder={t("returns.reasonPlaceholder")}
               className="w-full h-11 rounded-full px-4 text-sm outline-none"
-              style={{ background: "var(--surface-2)", border: "1px solid var(--divider)", color: "var(--text-primary)" }}
+              style={{ background: "var(--surface-2)", border: "1px solid var(--border-control)", color: "var(--text-primary)" }}
             />
             {!reason.trim() && (
-              <p className="text-[11px] mt-1 ms-4" style={{ color: "var(--text-secondary)" }}>
+              <p className="text-11 mt-1 ms-4" style={{ color: "var(--text-secondary)" }}>
                 {t("returns.reasonRequired")}
               </p>
             )}
@@ -154,9 +156,9 @@ export default function AdminReturnConfirmPage() {
           {/* Items with editable prices */}
           <div>
             <p className="text-xs font-bold uppercase mb-2" style={{ color: "var(--text-secondary)" }}>{t("admin.returningItems")}</p>
-            <div className="rounded-[14px] overflow-hidden" style={{ border: "1px solid var(--divider)" }}>
+            <ListCard>
               {items.map((item, i) => (
-                <div key={item.saleItemId} className="p-4" style={{ borderBottom: i < items.length - 1 ? "1px solid var(--divider)" : "none" }}>
+                <ListRow key={item.saleItemId}>
                   <p className="text-sm font-bold mb-1" style={{ color: "var(--text-primary)" }}>
                     {item.productName} {item.variantName} × {item.qtyToReturn}
                   </p>
@@ -166,16 +168,16 @@ export default function AdminReturnConfirmPage() {
                       type="number" min="0" step="1"
                       value={item.editedUnitPrice}
                       onChange={(e) => updatePrice(i, e.target.value)}
-                      className="w-24 h-8 rounded-lg px-3 text-xs font-bold outline-none text-center"
-                      style={{ background: "var(--surface-2)", border: "1px solid var(--divider)", color: "var(--text-primary)" }}
+                      className="w-24 h-8 rounded-[var(--radius-tile)] px-3 text-xs font-bold outline-none text-center"
+                      style={{ background: "var(--surface-2)", border: "1px solid var(--border-control)", color: "var(--text-primary)" }}
                     />
                     <span className="text-xs font-bold" style={{ color: "var(--text-primary)" }}>
                       = {formatCurrency(item.editedUnitPrice * (item.qtyToReturn ?? 0))}
                     </span>
                   </div>
-                </div>
+                </ListRow>
               ))}
-            </div>
+            </ListCard>
           </div>
 
           {/* Resolution method */}
@@ -197,7 +199,7 @@ export default function AdminReturnConfirmPage() {
           </div>
 
           {/* Info banner */}
-          <div className="rounded-[14px] p-4 flex gap-3" style={{ border: "1px solid var(--divider)" }}>
+          <div className="rounded-[var(--radius-card)] p-4 flex gap-3" style={{ border: "1px solid var(--divider)" }}>
             <AlertTriangle size={16} className="shrink-0 mt-0.5" style={{ color: "var(--text-secondary)" }} />
             <div>
               <p className="text-xs font-bold uppercase mb-1" style={{ color: "var(--text-primary)" }}>{t("admin.refundProcessing")}</p>

@@ -342,7 +342,18 @@ export async function cleanupFixtures() {
     await execSql(`DELETE FROM product_variants WHERE product_id IN ('${QA_IDS.productA}', '${QA_IDS.productB}')`);
     await execSql(`DELETE FROM products WHERE id IN ('${QA_IDS.productA}', '${QA_IDS.productB}')`);
     await execSql(`DELETE FROM companies WHERE id IN ('${QA_IDS.companyA}')`);
-    await execSql(`DELETE FROM users WHERE id IN ('${QA_IDS.admin}', '${QA_IDS.employee}')`);
+    // The two accounts are NOT test data — they are baseline infrastructure, and
+    // their Supabase Auth credential lives in auth.users. Deleting the users row
+    // deletes that credential, and the app cannot recreate it on its own (signUp
+    // yields no session until the email is confirmed), so every later lane that
+    // tries to sign in as QA Admin/QA Employee fails with "could not start a
+    // secure session" — or silently misreports, which is worse. This line used to
+    // DELETE them, which is why the 4-account baseline kept collapsing to 2.
+    // Cleanup here means undoing destructive STATE, not removing the accounts.
+    await execSql(
+      `UPDATE users SET is_active = true, deactivated_at = NULL, deactivated_by = NULL
+       WHERE id IN ('${QA_IDS.admin}', '${QA_IDS.employee}')`,
+    );
   } catch { /* skip */ }
 }
 

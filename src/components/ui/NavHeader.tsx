@@ -63,7 +63,7 @@ export default function NavHeader({ title, backTo, onBack, right, noBack }: NavH
         </button>
       )}
       <p
-        className="text-[15px] font-bold w-full text-center"
+        className="text-15 font-bold w-full text-center"
         style={{ color: "var(--text-primary)" }}
       >
         {title}

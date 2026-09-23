@@ -6,6 +6,7 @@ import SelectSheet from "@/components/ui/SelectSheet";
 import { useCompaniesStore } from "@/stores/companiesStore";
 import { useProductsStore } from "@/stores/productsStore";
 import { rpcCreatePurchase } from "@/lib/db";
+import { dependencyHint } from "@/lib/dependencyGraph";
 import { formatCurrency } from "@/lib/formatters";
 import { useUIStore } from "@/stores/uiStore";
 import { useThemeStore } from "@/stores/themeStore";
@@ -25,6 +26,11 @@ export default function RecordPurchasePage() {
 
   const [searchParams] = useSearchParams();
   const presetCompanyId = searchParams.get("companyId") || "";
+  // Creating the missing supplier from this form must come back to this form.
+  const supplierHint = dependencyHint("supplier", t, {
+    base: "/admin",
+    returnTo: "/admin/purchases/new",
+  });
   const [companyId, setCompanyId] = useState("");
   const [productId, setProductId] = useState("");
   const [variantId, setVariantId] = useState("");
@@ -111,6 +117,10 @@ export default function RecordPurchasePage() {
           variantName: variant.name,
           qty: qtyNum,
           costPrice: costNum,
+          // Sends the current selling price on, so a delivery can also re-price the
+          // product. Omitted when left blank or zero: the database then keeps the
+          // existing price instead of overwriting it with 0.
+          ...(Number(sellingPrice) > 0 ? { sellingPrice: Number(sellingPrice) } : {}),
         }],
       });
 
@@ -133,7 +143,7 @@ export default function RecordPurchasePage() {
     color: "var(--text-primary)",
   } as const;
 
-  const labelCls = "text-[11px] font-bold uppercase mb-2 tracking-wider";
+  const labelCls = "text-11 font-bold uppercase mb-2 tracking-wider";
 
   return (
     <div
@@ -149,14 +159,14 @@ export default function RecordPurchasePage() {
           <div>
             <p className={labelCls} style={{ color: "var(--text-secondary)" }}>{t("supplier.selectLabel")}</p>
             {presetCompanyId ? (
-              <div className="w-full h-12 rounded-[24px] px-4 text-sm flex items-center" style={{ ...fieldStyle, opacity: 0.8 }}>
+              <div className="w-full h-12 rounded-[var(--radius-input)] px-4 text-sm flex items-center" style={{ ...fieldStyle, opacity: 0.8 }}>
                 <span style={{ color: "var(--text-primary)" }}>{company?.name || t("common.loading")}</span>
               </div>
             ) : (
               <button
                 type="button"
                 onClick={() => setSheet("company")}
-                className="w-full h-12 rounded-[24px] px-4 text-sm outline-none flex items-center justify-between"
+                className="w-full h-12 rounded-[var(--radius-input)] px-4 text-sm outline-none flex items-center justify-between"
                 style={fieldStyle}
               >
                 <span style={{ color: company ? "var(--text-primary)" : "var(--text-secondary)" }}>
@@ -169,7 +179,7 @@ export default function RecordPurchasePage() {
 
           {/* Low-stock alert for this supplier */}
           {company && companyProducts.some(p => p.stockQty <= (p.variants[0]?.lowStockThreshold ?? 5)) && (
-            <div className="flex items-center gap-2 rounded-[14px] p-3" style={{ background: "rgba(217,119,6,0.08)", border: "1px solid rgba(217,119,6,0.2)" }}>
+            <div className="flex items-center gap-2 rounded-[var(--radius-card)] p-3" style={{ background: "rgba(217,119,6,0.08)", border: "1px solid rgba(217,119,6,0.2)" }}>
               <AlertTriangle size={16} style={{ color: "#d97706" }} />
               <p className="text-xs" style={{ color: "#92400e" }}>
                 {companyProducts.filter(p => p.stockQty <= (p.variants[0]?.lowStockThreshold ?? 5)).length} product(s) from this supplier need restocking
@@ -189,7 +199,7 @@ export default function RecordPurchasePage() {
                 <button
                   type="button"
                   onClick={() => setSheet("product")}
-                  className="w-full h-12 rounded-[24px] px-4 text-sm outline-none flex items-center justify-between"
+                  className="w-full h-12 rounded-[var(--radius-input)] px-4 text-sm outline-none flex items-center justify-between"
                   style={fieldStyle}
                 >
                   <span style={{ color: product ? "var(--text-primary)" : "var(--text-secondary)" }}>
@@ -212,12 +222,12 @@ export default function RecordPurchasePage() {
                     <button
                       key={v.id}
                       onClick={() => pickVariant(v.id)}
-                      className="flex items-center justify-between p-3.5 rounded-[14px] text-start transition-colors"
+                      className="flex items-center justify-between p-3.5 rounded-[var(--radius-card)] text-start transition-colors"
                       style={{ background: "var(--surface)", border: `1.5px solid ${selected ? "var(--brand)" : "var(--divider)"}` }}
                     >
                       <div>
                         <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>{v.name}</p>
-                        <p className="text-xs" style={{ color: "var(--text-secondary)" }}>{product.stockQty} {product.baseUnit} in stock</p>
+                        <p className="text-xs" style={{ color: "var(--text-secondary)" }}>{v.stockQty} {product.baseUnit} in stock</p>
                       </div>
                       <div
                         className="w-5 h-5 rounded-full border-2 flex items-center justify-center"
@@ -239,26 +249,26 @@ export default function RecordPurchasePage() {
                 <div className="flex-1">
                   <p className={labelCls} style={{ color: "var(--text-secondary)" }}>{t("admin.quantity")}</p>
                   <input type="number" inputMode="numeric" value={qty} onChange={(e) => setQty(e.target.value)}
-                    placeholder="0" className="w-full h-12 rounded-[24px] px-4 text-sm outline-none" style={fieldStyle} />
+                    placeholder="0" className="w-full h-12 rounded-[var(--radius-input)] px-4 text-sm outline-none" style={fieldStyle} />
                 </div>
                 <div className="flex-1">
                   <p className={labelCls} style={{ color: "var(--text-secondary)" }}>{t("admin.baseCostUnit")}</p>
                   <input type="number" inputMode="numeric" value={costPrice} onChange={(e) => setCostPrice(e.target.value)}
-                    placeholder="0" className="w-full h-12 rounded-[24px] px-4 text-sm outline-none" style={fieldStyle} />
+                    placeholder="0" className="w-full h-12 rounded-[var(--radius-input)] px-4 text-sm outline-none" style={fieldStyle} />
                 </div>
               </div>
 
               <div>
                 <p className={labelCls} style={{ color: "var(--text-secondary)" }}>{t("admin.sellingPriceUnit")} <span style={{ opacity: 0.6 }}>{t("common.current")}</span></p>
                 <input type="number" inputMode="numeric" value={sellingPrice} onChange={(e) => setSellingPrice(e.target.value)}
-                  placeholder="0" className="w-full h-12 rounded-[24px] px-4 text-sm outline-none" style={fieldStyle} />
+                  placeholder="0" className="w-full h-12 rounded-[var(--radius-input)] px-4 text-sm outline-none" style={fieldStyle} />
               </div>
 
               {/* Payment */}
               <div>
                 <p className={labelCls} style={{ color: "var(--text-secondary)" }}>{t("purchase.amountPaidNow")}</p>
                 <input type="number" inputMode="numeric" value={amountPaid} onChange={(e) => setAmountPaid(e.target.value)}
-                  placeholder={formatCurrency(total)} className="w-full h-12 rounded-[24px] px-4 text-sm outline-none" style={fieldStyle} />
+                  placeholder={formatCurrency(total)} className="w-full h-12 rounded-[var(--radius-input)] px-4 text-sm outline-none" style={fieldStyle} />
               </div>
 
               <div>
@@ -279,7 +289,7 @@ export default function RecordPurchasePage() {
               </div>
 
               {/* Summary */}
-              <div className="rounded-[14px] p-4" style={{ background: "var(--surface-2)" }}>
+              <div className="rounded-[var(--radius-card)] p-4" style={{ background: "var(--surface-2)" }}>
                 <Row label={t("purchases.purchaseTotal")} value={formatCurrency(total)} />
                 <Row label={t("purchases.paidNow")} value={formatCurrency(paidNum)} />
                 <div className="h-px my-2" style={{ background: "var(--divider)" }} />
@@ -315,7 +325,15 @@ export default function RecordPurchasePage() {
             : undefined,
         }))}
         selected={companyId}
-        emptyLabel={t("purchases.noCompanies")}
+        emptyLabel={supplierHint.title}
+        /* A purchase cannot be recorded without a supplier, so the empty picker gave
+           the user nowhere to go. Tertiary, because the purchase form is the main
+           task here; on return the new supplier is preselected from the URL. */
+        emptyAction={
+          supplierHint.action
+            ? { label: supplierHint.action.label, onClick: () => navigate(supplierHint.action!.to) }
+            : undefined
+        }
         onSelect={(id) => { setCompanyId(id); setProductId(""); setVariantId(""); }}
         onClose={() => setSheet(null)}
       />

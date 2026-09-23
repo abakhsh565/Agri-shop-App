@@ -15,6 +15,8 @@ import { generateReminders, generateReminderMessage, calculatePaymentStatus, mar
 import type { GeneratedReminder } from "@/types";
 import { MessageCircle, Smartphone, X, ChevronDown, ChevronUp, Bell, CheckCircle2, Clock, AlertTriangle, AlertOctagon, Info, Plus, Users, Trash2, Eye, Send, XCircle } from "lucide-react";
 import GroupReminderSheet from "@/components/ui/GroupReminderSheet";
+import ListCard from "@/components/ui/ListCard";
+import ListRow from "@/components/ui/ListRow";
 import {
   saveLocalGroup,
   loadLocalGroups,
@@ -136,17 +138,17 @@ function AlertCard({
   return (
     <button
       onClick={onClick}
-      className="w-full rounded-[14px] p-4 flex items-start gap-3 text-start transition-opacity active:opacity-70"
+      className="w-full rounded-[var(--radius-card)] p-4 flex items-start gap-3 text-start transition-opacity active:opacity-70"
       style={{ background: cardBg }}
     >
       <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 mt-0.5" style={{ background: iconBg, color: iconColor }}>
         {icon}
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-[14px] font-bold" style={{ color: "var(--text-primary)" }}>{title}</p>
-        <p className="text-[12px] mt-1 leading-relaxed" style={{ color: "var(--text-secondary)" }}>{subtitle}</p>
+        <p className="text-14 font-bold" style={{ color: "var(--text-primary)" }}>{title}</p>
+        <p className="text-12 mt-1 leading-relaxed" style={{ color: "var(--text-secondary)" }}>{subtitle}</p>
       </div>
-      <span className="text-[12px] font-bold shrink-0 mt-1" style={{ color: "var(--brand-dark, #65a30d)" }}>
+      <span className="text-12 font-bold shrink-0 mt-1" style={{ color: "var(--brand-dark, #65a30d)" }}>
         {actionLabel}
       </span>
     </button>
@@ -172,53 +174,61 @@ function ReminderCard({
   const tc = TONE_CONFIG[reminder.tone] || TONE_CONFIG.gentle;
 
   return (
-    <div className="overflow-hidden transition-all" style={{ borderBottom: "1px solid var(--divider)" }}>
-      <button className="w-full flex items-center gap-3 p-4 text-start" onClick={() => setExpanded(!expanded)}>
-        <div className="w-11 h-11 rounded-full flex items-center justify-center text-[13px] font-bold shrink-0" style={{ background: getAvatarColor(reminder.customerName), color: "#fff" }}>
-          {getInitials(reminder.customerName)}
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-[15px] font-semibold truncate" style={{ color: "var(--text-primary)" }}>{reminder.customerName}</p>
-          <p className="text-[13px] mt-0.5" style={{ color: "var(--text-secondary)" }}>
+    <div className="overflow-hidden transition-all">
+      <ListRow
+        onClick={() => setExpanded(!expanded)}
+        tile={reminder.customerImage ? (
+          <img src={reminder.customerImage} alt="" className="w-11 h-11 rounded-full object-cover shrink-0" />
+        ) : (
+          <div className="w-11 h-11 rounded-full flex items-center justify-center text-13 font-bold shrink-0" style={{ background: getAvatarColor(reminder.customerName), color: "#fff" }}>
+            {getInitials(reminder.customerName)}
+          </div>
+        )}
+        trailing={
+          <div className="shrink-0 ms-1">
+            {expanded ? <ChevronUp size={18} style={{ color: "var(--text-secondary)" }} /> : <ChevronDown size={18} style={{ color: "var(--text-secondary)" }} />}
+          </div>
+        }
+      >
+        <div className="min-w-0">
+          <p className="text-15 font-semibold truncate" style={{ color: "var(--text-primary)" }}>{reminder.customerName}</p>
+          <p className="text-13 mt-0.5" style={{ color: "var(--text-secondary)" }}>
             {formatCurrency(reminder.outstanding)} {t("reminders.outstanding")}
           </p>
         </div>
-        <div className="shrink-0 ms-1">
-          {expanded ? <ChevronUp size={18} style={{ color: "var(--text-secondary)" }} /> : <ChevronDown size={18} style={{ color: "var(--text-secondary)" }} />}
-        </div>
-      </button>
+      </ListRow>
 
       <div className="px-4 pb-3 pt-0 flex items-center gap-2 flex-wrap">
-        <span className="text-[11px] font-bold px-2.5 py-1 rounded-full" style={{ background: tc.bg, color: tc.color }}>
+        <span className="text-11 font-bold px-2.5 py-1 rounded-full" style={{ background: tc.bg, color: tc.color }}>
           {t(tc.labelKey as any)}
         </span>
         {isSent ? (
-          <span className="text-[11px] font-bold px-2.5 py-1 rounded-full" style={{ background: "var(--brand-light, #d9f99d)", color: "var(--brand-dark, #65a30d)" }}>
+          <span className="text-11 font-bold px-2.5 py-1 rounded-full" style={{ background: "var(--brand-light, #d9f99d)", color: "var(--brand-dark, #65a30d)" }}>
             {t("reminders.sent")}
           </span>
         ) : (
-          <span className="text-[11px] font-bold px-2.5 py-1 rounded-full" style={{ background: "var(--surface-2)", color: "var(--text-secondary)" }}>
+          <span className="text-11 font-bold px-2.5 py-1 rounded-full" style={{ background: "var(--surface-2)", color: "var(--text-secondary)" }}>
             {t(statusKey || "reminders.readyToSend")}
           </span>
         )}
-        <span className="text-[11px]" style={{ color: "var(--text-secondary)" }}>{reminder.triggerDetail}</span>
+        <span className="text-11" style={{ color: "var(--text-secondary)" }}>{reminder.triggerDetail}</span>
       </div>
 
       {expanded && (
         <div className="px-4 pb-4 flex flex-col gap-3" style={{ borderTop: "1px solid var(--divider)" }}>
-          <p className="text-[10px] font-bold uppercase tracking-wider pt-3" style={{ color: "var(--text-secondary)" }}>{t("common.message")}</p>
-          <div className="rounded-[10px] px-3 py-2.5" style={{ background: "var(--surface-2)" }}>
-            <p className="text-[13px] leading-relaxed" style={{ color: "var(--text-primary)" }}>{generateReminderMessage(reminder)}</p>
+          <p className="text-10 font-bold uppercase tracking-wider pt-3" style={{ color: "var(--text-secondary)" }}>{t("common.message")}</p>
+          <div className="rounded-[var(--radius-tile)] px-3 py-2.5" style={{ background: "var(--surface-2)" }}>
+            <p className="text-13 leading-relaxed" style={{ color: "var(--text-primary)" }}>{generateReminderMessage(reminder)}</p>
           </div>
           <div className="flex gap-3">
-            <button onClick={(e) => { e.stopPropagation(); onSend(reminder); }} className="flex-1 h-12 rounded-full text-[14px] font-bold flex items-center justify-center gap-2" style={{ background: "#25D366", color: "#fff" }}>
+            <button onClick={(e) => { e.stopPropagation(); onSend(reminder); }} className="flex-1 h-12 rounded-full text-14 font-bold flex items-center justify-center gap-2" style={{ background: "#25D366", color: "#fff" }}>
               <MessageCircle size={18} /> WhatsApp
             </button>
-            <button onClick={(e) => { e.stopPropagation(); onSend(reminder); }} className="flex-1 h-12 rounded-full text-[14px] font-bold flex items-center justify-center gap-2" style={{ background: "var(--text-primary)", color: "var(--background)" }}>
+            <button onClick={(e) => { e.stopPropagation(); onSend(reminder); }} className="flex-1 h-12 rounded-full text-14 font-bold flex items-center justify-center gap-2" style={{ background: "var(--text-primary)", color: "var(--background)" }}>
               <Smartphone size={18} /> SMS
             </button>
           </div>
-          <button onClick={(e) => { e.stopPropagation(); onNavigate(reminder.customerId); }} className="w-full h-10 rounded-full text-[13px] font-semibold flex items-center justify-center gap-2" style={{ background: "var(--surface-2)", color: "var(--text-secondary)" }}>
+          <button onClick={(e) => { e.stopPropagation(); onNavigate(reminder.customerId); }} className="w-full h-10 rounded-full text-13 font-semibold flex items-center justify-center gap-2" style={{ background: "var(--surface-2)", color: "var(--text-secondary)" }}>
             {t("reminders.viewCustomer")}
           </button>
         </div>
@@ -234,14 +244,15 @@ function ActivityItem({ log }: { log: ReminderLogEntry }) {
   const channel = (log.channel || "sent").toUpperCase();
   const name = log.customerName || t("common.customer");
   return (
-    <div className="flex items-center gap-3 px-4 py-3" style={{ borderBottom: "1px solid var(--divider)" }}>
-      {log.customerImageUrl ? (<img src={log.customerImageUrl} alt="" className="w-9 h-9 rounded-full object-cover shrink-0" />) : (<div className="w-9 h-9 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0" style={{ background: getAvatarColor(name), color: "#fff" }}>{getInitials(name)}</div>)}
-      <div className="flex-1 min-w-0">
-        <p className="text-[14px] font-medium" style={{ color: "var(--text-primary)" }}>{name}</p>
-        <p className="text-[12px]" style={{ color: "var(--text-secondary)" }}>{t(tc.labelKey as any)} · {channel} · {timeAgo(log.sentAt)}</p>
+    <ListRow
+      tile={log.customerImageUrl ? (<img src={log.customerImageUrl} alt="" className="w-9 h-9 rounded-full object-cover shrink-0" />) : (<div className="w-9 h-9 rounded-full flex items-center justify-center text-11 font-bold shrink-0" style={{ background: getAvatarColor(name), color: "#fff" }}>{getInitials(name)}</div>)}
+      trailing={<span className="text-11 font-bold px-2.5 py-1 rounded-full shrink-0" style={{ background: "var(--brand-light, #d9f99d)", color: "var(--brand-dark, #65a30d)" }}>{t("common.sent")}</span>}
+    >
+      <div className="min-w-0">
+        <p className="text-14 font-medium" style={{ color: "var(--text-primary)" }}>{name}</p>
+        <p className="text-12" style={{ color: "var(--text-secondary)" }}>{t(tc.labelKey as any)} · {channel} · {timeAgo(log.sentAt)}</p>
       </div>
-      <span className="text-[11px] font-bold px-2.5 py-1 rounded-full shrink-0" style={{ background: "var(--brand-light, #d9f99d)", color: "var(--brand-dark, #65a30d)" }}>{t("common.sent")}</span>
-    </div>
+    </ListRow>
   );
 }
 
@@ -250,8 +261,8 @@ function EmptyState({ icon, title, subtitle }: { icon: React.ReactNode; title: s
   return (
     <div className="py-10 flex flex-col items-center gap-2">
       <div className="mb-1" style={{ color: "var(--text-secondary)", opacity: 0.5 }}>{icon}</div>
-      <p className="text-[13px] font-medium" style={{ color: "var(--text-primary)" }}>{title}</p>
-      <p className="text-[12px] text-center px-6" style={{ color: "var(--text-secondary)" }}>{subtitle}</p>
+      <p className="text-13 font-medium" style={{ color: "var(--text-primary)" }}>{title}</p>
+      <p className="text-12 text-center px-6" style={{ color: "var(--text-secondary)" }}>{subtitle}</p>
     </div>
   );
 }
@@ -416,15 +427,15 @@ export default function RemindersOverviewPage() {
 
   /* ── Sub-tabs using live signals ── */
   const actionSubTabs = [
-    { key: "critical", label: isUrdu ? "انتہائی فوری" : "Critical", count: criticalSignals.length, color: "#dc2626" },
-    { key: "warning", label: isUrdu ? "انتباہ" : "Warning", count: warningSignals.length, color: "#d97706" },
-    { key: "info", label: isUrdu ? "معلومات" : "Info", count: infoSignals.length, color: "#2563eb" },
+    { key: "critical", label: t("inline.critical"), count: criticalSignals.length, color: "#dc2626" },
+    { key: "warning", label: t("sale.warning"), count: warningSignals.length, color: "#d97706" },
+    { key: "info", label: t("inline.info"), count: infoSignals.length, color: "#2563eb" },
   ];
 
   const followupSubTabs = [
-    { key: "ready", label: isUrdu ? "تیار" : "Ready", count: readyReminders.length, color: "var(--brand-dark, #65a30d)" },
-    { key: "upcoming", label: isUrdu ? "آنے والے" : "Upcoming", count: upcomingReminders.length, color: "#2563eb" },
-    { key: "recently_sent", label: isUrdu ? "حالیہ" : "Recently Sent", count: sentLogs.length, color: "var(--text-secondary)" },
+    { key: "ready", label: t("inline.ready"), count: readyReminders.length, color: "var(--brand-dark, #65a30d)" },
+    { key: "upcoming", label: t("inline.upcoming"), count: upcomingReminders.length, color: "#2563eb" },
+    { key: "recently_sent", label: t("common.recentlySent"), count: sentLogs.length, color: "var(--text-secondary)" },
   ];
 
   const currentSubTabs = mainTab === "action" ? actionSubTabs : mainTab === "followups" ? followupSubTabs : [];
@@ -518,7 +529,7 @@ export default function RemindersOverviewPage() {
         icon={config.icon}
         title={signal.title}
         subtitle={t(signal.detailKey, signal.detailParams)}
-        actionLabel={isUrdu ? "جائزہ" : "Review"}
+        actionLabel={t("admin.review")}
         cardBg={config.cardBg}
         iconBg={config.iconBg}
         iconColor={config.iconColor}
@@ -536,7 +547,7 @@ export default function RemindersOverviewPage() {
     switch (subTab) {
       case "critical":
         return criticalSignals.length === 0 ? (
-          <EmptyState icon={<AlertOctagon size={24} style={{ color: "var(--text-secondary)" }} />} title={isUrdu ? "کوئی فوری کارروئی نہیں" : "No critical actions"} subtitle={isUrdu ? "کوئی فوری مسائل نہیں۔" : "No critical business signals right now."} />
+          <EmptyState icon={<AlertOctagon size={24} style={{ color: "var(--text-secondary)" }} />} title={t("inline.no_critical_actions")} subtitle={t("inline.no_critical_business_signals_right_now")} />
         ) : (
           <div className="flex flex-col gap-2.5">
             {criticalSignals.map(s => renderSignalCard(s))}
@@ -544,7 +555,7 @@ export default function RemindersOverviewPage() {
         );
       case "warning":
         return warningSignals.length === 0 ? (
-          <EmptyState icon={<AlertTriangle size={24} style={{ color: "var(--text-secondary)" }} />} title={isUrdu ? "کوئی انتباہ نہیں" : "No warnings"} subtitle={isUrdu ? "سب کچھ ٹھیک چل رہا ہے۔" : "Everything looks fine."} />
+          <EmptyState icon={<AlertTriangle size={24} style={{ color: "var(--text-secondary)" }} />} title={t("inline.no_warnings")} subtitle={t("inline.everything_looks_fine")} />
         ) : (
           <div className="flex flex-col gap-2.5">
             {warningSignals.map(s => renderSignalCard(s))}
@@ -552,7 +563,7 @@ export default function RemindersOverviewPage() {
         );
       case "info":
         return infoSignals.length === 0 ? (
-          <EmptyState icon={<Info size={24} style={{ color: "var(--text-secondary)" }} />} title={isUrdu ? "کوئی معلوماتی اعلان نہیں" : "No info signals"} subtitle={isUrdu ? "سب کچھ مکمل ہے۔" : "All information is complete."} />
+          <EmptyState icon={<Info size={24} style={{ color: "var(--text-secondary)" }} />} title={t("inline.no_info_signals")} subtitle={t("inline.all_information_is_complete")} />
         ) : (
           <div className="flex flex-col gap-2.5">
             {infoSignals.map(s => renderSignalCard(s))}
@@ -568,27 +579,27 @@ export default function RemindersOverviewPage() {
     switch (subTab) {
       case "ready":
         return readyReminders.length === 0 ? (
-          <EmptyState icon={<CheckCircle2 size={24} style={{ color: "var(--text-secondary)" }} />} title={isUrdu ? "سب ہو گیا" : "All caught up"} subtitle={isUrdu ? "کوئی یاد دہانی فی الحال ضروری نہیں۔" : "No reminders are due right now."} />
+          <EmptyState icon={<CheckCircle2 size={24} style={{ color: "var(--text-secondary)" }} />} title={t("reminders.allCaughtUp")} subtitle={t("inline.no_reminders_are_due_right_now")} />
         ) : (
-          <div className="flex flex-col">
+          <ListCard className="mx-4">
             {readyReminders.map((r, i) => (
               <ReminderCard key={i} reminder={r} onSend={openSendSheet} onNavigate={navigateToCustomer} isSent={false} statusKey="reminders.readyToSend" />
             ))}
-          </div>
+          </ListCard>
         );
       case "upcoming":
         return upcomingReminders.length === 0 ? (
-          <EmptyState icon={<Clock size={24} style={{ color: "var(--text-secondary)" }} />} title={isUrdu ? "کوئی آنے والی یاد دہانی نہیں" : "No upcoming reminders"} subtitle={isUrdu ? "گاہک پروفائلز پر یاد دہانی کی ترتیب دیں۔" : "Configure reminder schedules on customer profiles."} />
+          <EmptyState icon={<Clock size={24} style={{ color: "var(--text-secondary)" }} />} title={t("inline.no_upcoming_reminders")} subtitle={t("inline.configure_reminder_schedules_on_customer_pro")} />
         ) : (
-          <div className="flex flex-col">
+          <ListCard className="mx-4">
             {upcomingReminders.map((r, i) => (
               <ReminderCard key={i} reminder={r} onSend={openSendSheet} onNavigate={navigateToCustomer} isSent={false} statusKey="reminders.futureReady" />
             ))}
-          </div>
+          </ListCard>
         );
       case "recently_sent":
         return sentLogs.length === 0 ? (
-          <EmptyState icon={<CheckCircle2 size={24} style={{ color: "var(--text-secondary)" }} />} title={isUrdu ? "ابھی تک کچھ نہیں بھیجا" : "Nothing sent yet"} subtitle={isUrdu ? "پہلی یاد دہانی بھیجنے کے بعد یہاں نظر آئے گی۔" : "Sent reminders will appear here after you send them."} />
+          <EmptyState icon={<CheckCircle2 size={24} style={{ color: "var(--text-secondary)" }} />} title={t("inline.nothing_sent_yet")} subtitle={t("inline.sent_reminders_will_appear_here_after_you_se")} />
         ) : (
           <div>
             {(() => {
@@ -608,16 +619,18 @@ export default function RemindersOverviewPage() {
               }
               for (const [date, items] of byDate) {
                 let heading = date;
-                if (date === todayStr) heading = isUrdu ? "آج" : "Today";
-                else if (date === yesterdayStr) heading = isUrdu ? "کل" : "Yesterday";
+                if (date === todayStr) heading = t("emp.today");
+                else if (date === yesterdayStr) heading = t("sales.yesterday");
                 groups.push({ heading, items });
               }
               return groups.map(g => (
                 <div key={g.heading}>
-                  <p className="px-4 pt-3 pb-1 text-[10px] font-bold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>{g.heading}</p>
+                  <p className="px-4 pt-3 pb-1 text-10 font-bold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>{g.heading}</p>
+                  <ListCard className="mx-4">
                   {g.items.map((log, i) => (
                     <ActivityItem key={log.id || i} log={log} />
                   ))}
+                  </ListCard>
                 </div>
               ));
             })()}
@@ -636,49 +649,49 @@ export default function RemindersOverviewPage() {
           <div className="flex flex-col items-center gap-3">
             <EmptyState
               icon={<Users size={24} style={{ color: "var(--text-secondary)" }} />}
-              title={isUrdu ? "کوئی گروپ نہیں" : "No groups yet"}
-              subtitle={isUrdu ? "گروپ یاد دہانی بنائیں تاکہ متعدد گاہکوں کو ایک ساتھ شامل کیا جا سکے۔" : "Create a group reminder to manage multiple customers together."}
+              title={t("inline.no_groups_yet")}
+              subtitle={t("inline.create_a_group_reminder_to_manage_multiple_c")}
             />
             <button
               onClick={() => setShowGroupSheet(true)}
-              className="flex items-center justify-center gap-2 h-11 rounded-full text-[13px] font-bold transition-transform active:scale-[0.97]"
+              className="flex items-center justify-center gap-2 h-11 rounded-full text-13 font-bold transition-transform active:scale-[0.97]"
               style={{ background: "var(--brand)", color: "#0a0a0a" }}
             >
-              <Plus size={15} /> {isUrdu ? "گروپ یاد دہانی بنائیں" : "Create Group Reminder"}
+              <Plus size={15} /> {t("inline.create_group_reminder_x")}
             </button>
           </div>
         ) : (
-          <div>
+          <ListCard className="mx-4">
             {reminderGroups.map((group) => (
-              <button
+              <ListRow
                 key={group.id}
                 onClick={() => navigate(`/admin/alerts/groups/${group.id}`)}
-                className="w-full px-4 py-3.5 flex items-center gap-3 text-start transition-opacity active:opacity-70"
-                style={{ borderBottom: "1px solid var(--divider)" }}
+                tile={
+                  <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0" style={{ background: "#ede9fe", color: "#7c3aed" }}>
+                    <Users size={18} />
+                  </div>
+                }
+                trailing={<ChevronDown size={16} style={{ color: "var(--text-secondary)", transform: "rotate(-90deg)" }} className="shrink-0" />}
               >
-                <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0" style={{ background: "#ede9fe", color: "#7c3aed" }}>
-                  <Users size={18} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-[14px] font-semibold truncate" style={{ color: "var(--text-primary)" }}>{group.name}</p>
-                  <p className="text-[12px] mt-0.5" style={{ color: "var(--text-secondary)" }}>
-                    {group.customerCount} {isUrdu ? "گاہک" : "customers"} · {group.config?.anchor === "before_due" ? `${group.config.startDays}d ${isUrdu ? "قبل از وقف" : "before due"}` : group.config?.anchor === "before_harvest" ? `${group.config.startDays}d ${isUrdu ? "قبل از کٹائی" : "before harvest"}` : "—"}
+                <div className="min-w-0">
+                  <p className="text-14 font-semibold truncate" style={{ color: "var(--text-primary)" }}>{group.name}</p>
+                  <p className="text-12 mt-0.5" style={{ color: "var(--text-secondary)" }}>
+                    {group.customerCount} {t("emp.customers")} · {group.config?.anchor === "before_due" ? `${group.config.startDays}d ${t("inline.before_due")}` : group.config?.anchor === "before_harvest" ? `${group.config.startDays}d ${t("reminder.beforeHarvest")}` : "—"}
                   </p>
                 </div>
-                <ChevronDown size={16} style={{ color: "var(--text-secondary)", transform: "rotate(-90deg)" }} />
-              </button>
+              </ListRow>
             ))}
             {/* Create button below groups list */}
             <div className="px-4 pt-4">
               <button
                 onClick={() => setShowGroupSheet(true)}
-                className="flex items-center justify-center gap-2 h-11 w-full rounded-full text-[13px] font-bold transition-transform active:scale-[0.97]"
+                className="flex items-center justify-center gap-2 h-11 w-full rounded-full text-13 font-bold transition-transform active:scale-[0.97]"
                 style={{ background: "var(--brand)", color: "#0a0a0a" }}
               >
-                <Plus size={15} /> {isUrdu ? "نیا گروپ بنائیں" : "Create New Group"}
+                <Plus size={15} /> {t("inline.create_new_group")}
               </button>
             </div>
-          </div>
+          </ListCard>
         )}
       </div>
     );
@@ -697,20 +710,20 @@ export default function RemindersOverviewPage() {
   return (
     <div className="flex flex-col w-full min-h-full" style={{ background: "var(--background)", direction: isUrdu ? "rtl" : "ltr" }}>
       <StatusBar />
-      <NavHeader title={isUrdu ? "ایکشن سینٹر" : "Action Center"} />
+      <NavHeader title={t("inline.action_center")} />
 
       <div className="flex flex-col px-4 pt-4 pb-8 gap-4" style={{ overflowY: "auto", flex: 1 }}>
         {/* Main tabs — premium segmented control */}
-        <div className="flex items-center gap-1 p-1 rounded-[12px]" style={{ background: "var(--surface-2)" }}>
+        <div className="flex items-center gap-1 p-1 rounded-[var(--radius-tile)]" style={{ background: "var(--surface-2)" }}>
           {([
-            { key: "action" as const, label: isUrdu ? "عمل درکار" : "Actions" },
-            { key: "followups" as const, label: isUrdu ? "فالو اپس" : "Follow Ups" },
-            { key: "groups" as const, label: isUrdu ? "گروپ ریمائنڈر" : "Group Reminder" },
+            { key: "action" as const, label: t("actions") },
+            { key: "followups" as const, label: t("inline.follow_ups") },
+            { key: "groups" as const, label: t("inline.group_reminder") },
           ] as const).map(tab => (
             <button
               key={tab.key}
               onClick={() => { setMainTab(tab.key); setSubTab(tab.key === "action" ? "critical" : tab.key === "followups" ? "ready" : ""); }}
-              className="flex-1 text-center py-2 rounded-[10px] text-[13px] font-semibold transition-all flex items-center justify-center gap-1.5"
+              className="flex-1 text-center py-2 rounded-[var(--radius-tile)] text-13 font-semibold transition-all flex items-center justify-center gap-1.5"
               style={{
                 color: mainTab === tab.key ? "var(--text-primary)" : "var(--text-secondary)",
                 background: mainTab === tab.key ? "var(--background)" : "transparent",
@@ -719,7 +732,7 @@ export default function RemindersOverviewPage() {
             >
               {tab.label}
               {"count" in tab && (tab as any).count > 0 && (
-                <span className="text-[10px] font-bold w-5 h-5 flex items-center justify-center rounded-full" style={{ background: mainTab === tab.key ? "var(--brand-dark, #65a30d)" : "var(--surface-2)", color: mainTab === tab.key ? "#fff" : "var(--text-secondary)", fontSize: '10px' }}>
+                <span className="text-10 font-bold w-5 h-5 flex items-center justify-center rounded-full" style={{ background: mainTab === tab.key ? "var(--brand-dark, #65a30d)" : "var(--surface-2)", color: mainTab === tab.key ? "#fff" : "var(--text-secondary)", fontSize: '10px' }}>
                   {(tab as any).count}
                 </span>
               )}
@@ -734,14 +747,14 @@ export default function RemindersOverviewPage() {
               <button
                 key={st.key}
                 onClick={() => setSubTab(st.key)}
-                className="flex items-center gap-1.5 pb-2 text-[12px] font-medium whitespace-nowrap transition-all relative"
+                className="flex items-center gap-1.5 pb-2 text-12 font-medium whitespace-nowrap transition-all relative"
                 style={{
                   color: subTab === st.key ? "var(--text-primary)" : "var(--text-secondary)",
                 }}
               >
                 {st.label}
                 {st.count > 0 && (
-                  <span className="text-[10px] font-bold w-5 h-5 flex items-center justify-center rounded-full" style={{
+                  <span className="text-10 font-bold w-5 h-5 flex items-center justify-center rounded-full" style={{
                     background: subTab === st.key ? "var(--text-secondary)" : "var(--surface-2)",
                     color: subTab === st.key ? "#fff" : "var(--text-secondary)",
                   }}>{st.count}</span>
@@ -766,36 +779,40 @@ export default function RemindersOverviewPage() {
               <div className="w-10 h-1 rounded-full" style={{ background: "var(--divider)" }} />
             </div>
             <div className="px-5 pb-4 flex items-center justify-between">
-              <p className="text-[16px] font-semibold" style={{ color: "var(--text-primary)" }}>{isUrdu ? "یاد دہانی بھیجیں" : "Send Reminder"}</p>
+              <p className="text-16 font-semibold" style={{ color: "var(--text-primary)" }}>{t("inline.send_reminder")}</p>
               <button onClick={() => setEditingReminder(null)} className="size-8 rounded-full flex items-center justify-center" style={{ background: "var(--surface-2)" }}>
                 <X size={16} style={{ color: "var(--text-secondary)" }} />
               </button>
             </div>
             <div className="px-5 pb-6 flex flex-col gap-4 overflow-y-auto" style={{ flex: 1 }}>
               <div className="flex items-center gap-3">
-                <div className="w-11 h-11 rounded-full flex items-center justify-center text-[13px] font-bold shrink-0" style={{ background: getAvatarColor(editingReminder.customerName), color: "#fff" }}>
-                  {getInitials(editingReminder.customerName)}
-                </div>
+                {editingReminder.customerImage ? (
+                  <img src={editingReminder.customerImage} alt="" className="w-11 h-11 rounded-full object-cover shrink-0" />
+                ) : (
+                  <div className="w-11 h-11 rounded-full flex items-center justify-center text-13 font-bold shrink-0" style={{ background: getAvatarColor(editingReminder.customerName), color: "#fff" }}>
+                    {getInitials(editingReminder.customerName)}
+                  </div>
+                )}
                 <div>
-                  <p className="text-[14px] font-medium" style={{ color: "var(--text-primary)" }}>{editingReminder.customerName}</p>
-                  <p className="text-[12px]" style={{ color: "var(--text-secondary)" }}>{editingReminder.customerPhone}</p>
+                  <p className="text-14 font-medium" style={{ color: "var(--text-primary)" }}>{editingReminder.customerName}</p>
+                  <p className="text-12" style={{ color: "var(--text-secondary)" }}>{editingReminder.customerPhone}</p>
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-[11px] font-bold px-2.5 py-1 rounded-full" style={{ background: TONE_CONFIG[editingReminder.tone].bg, color: TONE_CONFIG[editingReminder.tone].color }}>
+                <span className="text-11 font-bold px-2.5 py-1 rounded-full" style={{ background: TONE_CONFIG[editingReminder.tone].bg, color: TONE_CONFIG[editingReminder.tone].color }}>
                   {t(TONE_CONFIG[editingReminder.tone].labelKey as any)}
                 </span>
-                <span className="text-[11px]" style={{ color: "var(--text-secondary)" }}>{editingReminder.triggerDetail}</span>
+                <span className="text-11" style={{ color: "var(--text-secondary)" }}>{editingReminder.triggerDetail}</span>
               </div>
               <div>
-                <label className="text-[11px] font-semibold uppercase tracking-wider block mb-2" style={{ color: "var(--text-secondary)" }}>{t("common.message")}</label>
-                <textarea value={editMessage} onChange={(e) => setEditMessage(e.target.value)} rows={5} className="w-full rounded-[14px] px-4 py-3 text-[13px] outline-none resize-none" style={{ background: "var(--surface-2)", color: "var(--text-primary)", border: "1px solid var(--divider)" }} />
+                <label className="text-11 font-semibold uppercase tracking-wider block mb-2" style={{ color: "var(--text-secondary)" }}>{t("common.message")}</label>
+                <textarea value={editMessage} onChange={(e) => setEditMessage(e.target.value)} rows={5} className="w-full rounded-[var(--radius-card)] px-4 py-3 text-13 outline-none resize-none" style={{ background: "var(--surface-2)", color: "var(--text-primary)", border: "1px solid var(--border-control)" }} />
               </div>
               <div className="flex gap-3">
-                <button onClick={() => handleSend("whatsapp")} className="flex-1 h-12 rounded-full text-[14px] font-bold flex items-center justify-center gap-2" style={{ background: "#25D366", color: "#fff" }}>
+                <button onClick={() => handleSend("whatsapp")} className="flex-1 h-12 rounded-full text-14 font-bold flex items-center justify-center gap-2" style={{ background: "#25D366", color: "#fff" }}>
                   <MessageCircle size={18} /> WhatsApp
                 </button>
-                <button onClick={() => handleSend("sms")} className="flex-1 h-12 rounded-full text-[14px] font-bold flex items-center justify-center gap-2" style={{ background: "var(--text-primary)", color: "var(--background)" }}>
+                <button onClick={() => handleSend("sms")} className="flex-1 h-12 rounded-full text-14 font-bold flex items-center justify-center gap-2" style={{ background: "var(--text-primary)", color: "var(--background)" }}>
                   <Smartphone size={18} /> SMS
                 </button>
               </div>
@@ -828,16 +845,16 @@ export default function RemindersOverviewPage() {
             <div className="flex justify-center pb-1">
               <div className="w-10 h-1 rounded-full" style={{ background: "var(--divider)" }} />
             </div>
-            <p className="text-[16px] font-semibold" style={{ color: "var(--text-primary)" }}>
-              {creditAction.action === "approve" ? (isUrdu ? "درخواست منظور کریں" : "Approve Request") : (isUrdu ? "درخواست رد کریں" : "Reject Request")}
+            <p className="text-16 font-semibold" style={{ color: "var(--text-primary)" }}>
+              {creditAction.action === "approve" ? (t("inline.approve_request")) : (t("superAdmin.rejectRequest"))}
             </p>
-            <div className="rounded-[12px] p-3 text-[13px]" style={{ background: "var(--surface-2)" }}>
+            <div className="rounded-[var(--radius-tile)] p-3 text-13" style={{ background: "var(--surface-2)" }}>
               <p style={{ color: "var(--text-primary)" }} className="font-semibold">{creditAction.request.customerName}</p>
               <p className="mt-1" style={{ color: "var(--text-secondary)" }}>
-                {isUrdu ? "موجودہ حد" : "Current"}: {formatCurrency(creditAction.request.currentLimit)} → {isUrdu ? "نئی حد" : "New"}: {formatCurrency(creditAction.request.requestedLimit)}
+                {t("inline.current")}: {formatCurrency(creditAction.request.currentLimit)} → {t("inline.new")}: {formatCurrency(creditAction.request.requestedLimit)}
               </p>
               <p style={{ color: "var(--text-secondary)" }}>
-                {isUrdu ? "درخواست" : "By"}: {creditAction.request.requestedBy}
+                {t("inline.by")}: {creditAction.request.requestedBy}
               </p>
               {creditAction.request.reason && (
                 <p className="mt-1" style={{ color: "var(--text-secondary)" }}>
@@ -847,15 +864,15 @@ export default function RemindersOverviewPage() {
             </div>
             <div className="flex gap-3">
               {creditAction.action === "reject" && (
-                <button onClick={handleCreditAction} className="flex-1 h-12 rounded-full text-[14px] font-bold" style={{ background: "#dc2626", color: "#fff" }}>
-                  {isUrdu ? "رد کریں" : "Reject"}
+                <button onClick={handleCreditAction} className="flex-1 h-12 rounded-full text-14 font-bold" style={{ background: "#dc2626", color: "#fff" }}>
+                  {t("superAdmin.reject")}
                 </button>
               )}
-              <button onClick={handleCreditAction} className="flex-1 h-12 rounded-full text-[14px] font-bold" style={{ background: creditAction.action === "approve" ? "var(--brand)" : "var(--surface-2)", color: creditAction.action === "approve" ? "#0a0a0a" : "var(--text-primary)" }}>
-                {creditAction.action === "approve" ? (isUrdu ? "منظور کریں" : "Approve") : (isUrdu ? "رد کریں" : "Reject")}
+              <button onClick={handleCreditAction} className="flex-1 h-12 rounded-full text-14 font-bold" style={{ background: creditAction.action === "approve" ? "var(--brand)" : "var(--surface-2)", color: creditAction.action === "approve" ? "#0a0a0a" : "var(--text-primary)" }}>
+                {creditAction.action === "approve" ? (t("superAdmin.approve")) : (t("superAdmin.reject"))}
               </button>
-              <button onClick={() => setCreditAction(null)} className="flex-1 h-12 rounded-full text-[14px] font-bold" style={{ background: "var(--surface-2)", color: "var(--text-secondary)" }}>
-                {isUrdu ? "منسوخ" : "Cancel"}
+              <button onClick={() => setCreditAction(null)} className="flex-1 h-12 rounded-full text-14 font-bold" style={{ background: "var(--surface-2)", color: "var(--text-secondary)" }}>
+                {t("common.cancel")}
               </button>
             </div>
           </div>

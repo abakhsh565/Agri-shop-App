@@ -81,7 +81,7 @@ export default function CreditRequestDetailPage() {
     return (
       <div className="flex flex-col w-full min-h-full" style={{ background: "var(--background)" }}>
         <StatusBar />
-        <NavHeader title={isUrdu ? "کریڈٹ درخواست" : "Credit Request"} />
+        <NavHeader title={t("inline.credit_request")} />
         <div className="flex-1 flex items-center justify-center">
           <div className="size-8 border-2 rounded-full animate-spin" style={{ borderColor: "var(--divider)", borderTopColor: "var(--brand)" }} />
         </div>
@@ -93,9 +93,9 @@ export default function CreditRequestDetailPage() {
     return (
       <div className="flex flex-col w-full min-h-full" style={{ background: "var(--background)" }}>
         <StatusBar />
-        <NavHeader title={isUrdu ? "کریڈٹ درخواست" : "Credit Request"} />
+        <NavHeader title={t("inline.credit_request_x")} />
         <div className="flex-1 flex items-center justify-center px-4">
-          <p className="text-[14px]" style={{ color: "var(--text-secondary)" }}>{isUrdu ? "درخواست نہیں ملی" : "Request not found"}</p>
+          <p className="text-14" style={{ color: "var(--text-secondary)" }}>{t("inline.request_not_found")}</p>
         </div>
       </div>
     );
@@ -113,18 +113,18 @@ export default function CreditRequestDetailPage() {
         <button onClick={() => navigate(-1)} className="size-9 rounded-full flex items-center justify-center" style={{ background: "var(--surface-2)" }}>
           <ArrowLeft size={18} style={{ color: "var(--text-primary)", transform: isUrdu ? "rotate(180deg)" : "none" }} />
         </button>
-        <p className="text-[16px] font-semibold flex-1" style={{ color: "var(--text-primary)" }}>
-          {isUrdu ? "کریڈٹ حد کی درخواست" : "Credit Override"}
+        <p className="text-16 font-semibold flex-1" style={{ color: "var(--text-primary)" }}>
+          {t("inline.credit_override")}
         </p>
       </div>
 
       <div className="flex flex-col gap-4 px-4 pb-8">
         {/* Warning banner — only for approved with high risk */}
         {isApproved && customer && customer.outstandingBalance > 0 && (
-          <div className="rounded-[12px] px-4 py-3 flex items-center gap-2.5" style={{ background: "rgba(220, 38, 38, 0.06)", border: "1px solid rgba(220, 38, 38, 0.15)" }}>
+          <div className="rounded-[var(--radius-tile)] px-4 py-3 flex items-center gap-2.5" style={{ background: "rgba(220, 38, 38, 0.06)", border: "1px solid rgba(220, 38, 38, 0.15)" }}>
             <AlertTriangle size={16} style={{ color: "#dc2626" }} />
-            <p className="text-[13px] font-medium" style={{ color: "#991b1b" }}>
-              {isUrdu ? "کریڈٹ منظور شدہ — گاہک پر خطرہ" : "Credit approved — customer flagged for attention"}
+            <p className="text-13 font-medium" style={{ color: "#991b1b" }}>
+              {t("inline.credit_approved_customer_flagged_for_attenti")}
             </p>
           </div>
         )}
@@ -133,14 +133,14 @@ export default function CreditRequestDetailPage() {
         {customer && (
           <button
             onClick={() => navigate(`/admin/customers/${request.customerId}`)}
-            className="rounded-[12px] p-4 flex items-center gap-3 text-start transition-opacity active:opacity-70"
+            className="rounded-[var(--radius-tile)] p-4 flex items-center gap-3 text-start transition-opacity active:opacity-70"
             style={{ background: "var(--surface-2)" }}
           >
-            {customer.imageUrl ? (<img src={customer.imageUrl} alt="" className="w-11 h-11 rounded-full object-cover shrink-0" />) : (<div className="w-11 h-11 rounded-full flex items-center justify-center text-[14px] font-bold shrink-0" style={{ background: customer.outstandingBalance > 0 ? "#fee2e2" : "#d9f99d", color: customer.outstandingBalance > 0 ? "#dc2626" : "#166534" }}>{customer.name ? customer.name.charAt(0) : "?".toUpperCase()}</div>)}
+            {customer.imageUrl ? (<img src={customer.imageUrl} alt="" className="w-11 h-11 rounded-full object-cover shrink-0" />) : (<div className="w-11 h-11 rounded-full flex items-center justify-center text-14 font-bold shrink-0" style={{ background: customer.outstandingBalance > 0 ? "#fee2e2" : "#d9f99d", color: customer.outstandingBalance > 0 ? "#dc2626" : "#166534" }}>{customer.name ? customer.name.charAt(0) : "?".toUpperCase()}</div>)}
             <div className="flex-1 min-w-0">
-              <p className="text-[15px] font-semibold" style={{ color: "var(--text-primary)" }}>{customer.name}</p>
-              <p className="text-[12px] mt-0.5" style={{ color: customer.outstandingBalance > 0 ? "#dc2626" : "var(--text-secondary)" }}>
-                {formatCurrency(customer.outstandingBalance)} {isUrdu ? "واجب الادا" : "outstanding"}
+              <p className="text-15 font-semibold" style={{ color: "var(--text-primary)" }}>{customer.name}</p>
+              <p className="text-12 mt-0.5" style={{ color: customer.outstandingBalance > 0 ? "#dc2626" : "var(--text-secondary)" }}>
+                {formatCurrency(customer.outstandingBalance)} {t("customers.outstanding")}
               </p>
             </div>
             <ChevronRight size={16} style={{ color: "var(--text-secondary)", transform: isUrdu ? "rotate(180deg)" : "none" }} />
@@ -148,24 +148,24 @@ export default function CreditRequestDetailPage() {
         )}
 
         {/* Request details — key-value card */}
-        <div className="rounded-[12px] overflow-hidden" style={{ background: "var(--surface-2)" }}>
+        <div className="rounded-[var(--radius-tile)] overflow-hidden" style={{ background: "var(--surface-2)" }}>
           {/* Approved by */}
           <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: "1px solid var(--divider)" }}>
-            <span className="text-[13px]" style={{ color: "var(--text-secondary)" }}>{isUrdu ? "منظور شدہ" : "Approved by"}</span>
-            <span className="text-[14px] font-semibold" style={{ color: "var(--text-primary)" }}>{request.reviewedBy || "—"}</span>
+            <span className="text-13" style={{ color: "var(--text-secondary)" }}>{t("inline.approved_by")}</span>
+            <span className="text-14 font-semibold" style={{ color: "var(--text-primary)" }}>{request.reviewedBy || "—"}</span>
           </div>
           {/* Customer */}
           <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: "1px solid var(--divider)" }}>
-            <span className="text-[13px]" style={{ color: "var(--text-secondary)" }}>{isUrdu ? "گاہک" : "Customer"}</span>
+            <span className="text-13" style={{ color: "var(--text-secondary)" }}>{t("receipt.customer")}</span>
             <div className="flex items-center gap-2">
-              <span className="text-[14px] font-semibold" style={{ color: "var(--text-primary)" }}>{request.customerName}</span>
+              <span className="text-14 font-semibold" style={{ color: "var(--text-primary)" }}>{request.customerName}</span>
               {customer && (() => {
                 const status = calculatePaymentStatus(customer, new Date());
                 if (status === "paid") return null;
                 const sc = getPaymentStatusColor(status);
                 return (
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: sc.bg, color: sc.color }}>
-                    {getPaymentStatusLabel(status, isUrdu)}
+                  <span className="text-10 font-bold px-2 py-0.5 rounded-full" style={{ background: sc.bg, color: sc.color }}>
+                    {getPaymentStatusLabel(status, t)}
                   </span>
                 );
               })()}
@@ -173,13 +173,13 @@ export default function CreditRequestDetailPage() {
           </div>
           {/* Amount */}
           <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: "1px solid var(--divider)" }}>
-            <span className="text-[13px]" style={{ color: "var(--text-secondary)" }}>{isUrdu ? "رقم" : "Amount"}</span>
-            <span className="text-[14px] font-semibold" style={{ color: "var(--text-primary)" }}>{formatCurrency(request.requestedLimit)}</span>
+            <span className="text-13" style={{ color: "var(--text-secondary)" }}>{t("common.amount")}</span>
+            <span className="text-14 font-semibold" style={{ color: "var(--text-primary)" }}>{formatCurrency(request.requestedLimit)}</span>
           </div>
           {/* When */}
           <div className="flex items-center justify-between px-4 py-3">
-            <span className="text-[13px]" style={{ color: "var(--text-secondary)" }}>{isUrdu ? "وقت" : "When"}</span>
-            <span className="text-[14px] font-semibold" style={{ color: "var(--text-primary)" }}>
+            <span className="text-13" style={{ color: "var(--text-secondary)" }}>{t("common.when")}</span>
+            <span className="text-14 font-semibold" style={{ color: "var(--text-primary)" }}>
               {new Date(request.createdAt).toLocaleDateString()}{" "}
               {new Date(request.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
             </span>
@@ -188,19 +188,19 @@ export default function CreditRequestDetailPage() {
 
         {/* Why flagged — real business context */}
         {request.reason && (
-          <div className="rounded-[12px] p-4" style={{ background: "var(--surface-2)" }}>
-            <p className="text-[11px] font-bold uppercase tracking-wider mb-2" style={{ color: "var(--text-secondary)" }}>
-              {isUrdu ? "وجہ" : "WHY FLAGGED"}
+          <div className="rounded-[var(--radius-tile)] p-4" style={{ background: "var(--surface-2)" }}>
+            <p className="text-11 font-bold uppercase tracking-wider mb-2" style={{ color: "var(--text-secondary)" }}>
+              {t("inline.why_flagged")}
             </p>
-            <p className="text-[13px] leading-relaxed" style={{ color: "var(--text-primary)" }}>{request.reason}</p>
+            <p className="text-13 leading-relaxed" style={{ color: "var(--text-primary)" }}>{request.reason}</p>
           </div>
         )}
 
         {/* Status for processed requests */}
         {!isPending && request.reviewedAt && (
-          <div className="rounded-[12px] px-4 py-3 flex items-center gap-2" style={{ background: isApproved ? "rgba(22, 163, 74, 0.06)" : "rgba(220, 38, 38, 0.06)" }}>
+          <div className="rounded-[var(--radius-tile)] px-4 py-3 flex items-center gap-2" style={{ background: isApproved ? "rgba(22, 163, 74, 0.06)" : "rgba(220, 38, 38, 0.06)" }}>
             {isApproved ? <CheckCircle2 size={16} style={{ color: "#16a34a" }} /> : <XCircle size={16} style={{ color: "#dc2626" }} />}
-            <p className="text-[13px] font-medium" style={{ color: isApproved ? "#166534" : "#991b1b" }}>
+            <p className="text-13 font-medium" style={{ color: isApproved ? "#166534" : "#991b1b" }}>
               {isApproved
                 ? t("common.approvedBy", { name: request.reviewedBy ?? "" })
                 : t("common.rejectedBy", { name: request.reviewedBy ?? "" })}
@@ -214,18 +214,18 @@ export default function CreditRequestDetailPage() {
             <button
               onClick={handleReject}
               disabled={processing}
-              className="h-11 px-5 rounded-full text-[13px] font-bold flex items-center justify-center gap-2 transition-transform active:scale-[0.97]"
+              className="h-11 px-5 rounded-full text-13 font-bold flex items-center justify-center gap-2 transition-transform active:scale-[0.97]"
               style={{ background: "var(--surface-2)", color: "var(--text-secondary)", border: "1px solid var(--divider)", opacity: processing ? 0.6 : 1 }}
             >
-              <XCircle size={16} /> {isUrdu ? "رد" : "Reject"}
+              <XCircle size={16} /> {t("superAdmin.reject")}
             </button>
             <button
               onClick={handleApprove}
               disabled={processing}
-              className="h-11 px-5 rounded-full text-[13px] font-bold flex items-center justify-center gap-2 transition-transform active:scale-[0.97]"
+              className="h-11 px-5 rounded-full text-13 font-bold flex items-center justify-center gap-2 transition-transform active:scale-[0.97]"
               style={{ background: "var(--brand)", color: "#0a0a0a", opacity: processing ? 0.6 : 1 }}
             >
-              <CheckCircle2 size={16} /> {isUrdu ? "منظور" : "Approve"}
+              <CheckCircle2 size={16} /> {t("superAdmin.approve")}
             </button>
           </div>
         )}
@@ -234,10 +234,10 @@ export default function CreditRequestDetailPage() {
         {!isPending && (
           <button
             onClick={() => navigate(-1)}
-            className="w-full h-11 rounded-full text-[13px] font-semibold flex items-center justify-center"
+            className="w-full h-11 rounded-full text-13 font-semibold flex items-center justify-center"
             style={{ color: "var(--brand-dark, #65a30d)" }}
           >
-            {isUrdu ? "واپس جائیں" : "Mark as reviewed"}
+            {t("inline.mark_as_reviewed")}
           </button>
         )}
       </div>

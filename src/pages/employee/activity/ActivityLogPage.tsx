@@ -136,11 +136,11 @@ export default function ActivityLogPage() {
       {/* Summary strip */}
       <div className="px-4 pt-2 animate-fade-in-up">
         <div
-          className="rounded-xl p-4 flex items-center justify-between"
+          className="rounded-[var(--radius-tile)] p-4 flex items-center justify-between"
           style={{ background: "var(--surface-3)" }}
         >
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
+            <p className="text-11 font-semibold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
               {t("activity.totalActivity")}
             </p>
             <p className="text-xl font-bold mt-1" style={{ color: "var(--text-primary)" }}>
@@ -148,7 +148,7 @@ export default function ActivityLogPage() {
             </p>
           </div>
           <div className="text-end">
-            <p className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
+            <p className="text-11 font-semibold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
               {t("activity.salesVolume")}
             </p>
             <p className="text-base font-bold mt-1" style={{ color: "var(--brand-dark)" }}>
@@ -164,7 +164,7 @@ export default function ActivityLogPage() {
           <button
             key={f.key}
             onClick={() => setFilter(f.key)}
-            className="shrink-0 h-8 px-3 rounded-full text-[12px] font-semibold transition-all"
+            className="shrink-0 h-8 px-3 rounded-full text-12 font-semibold transition-all"
             style={{
               background: filter === f.key ? "var(--brand)" : "var(--muted)",
               color: filter === f.key ? "#0a0a0a" : "var(--text-secondary)",
@@ -190,7 +190,7 @@ export default function ActivityLogPage() {
             <button
               key={activity.id}
               onClick={() => activity.linkPath && navigate(activity.linkPath)}
-              className="flex items-start gap-3 p-3 rounded-xl text-start transition-all active:scale-[0.98] animate-fade-in-up"
+              className="flex items-start gap-3 p-3 rounded-[var(--radius-tile)] text-start transition-all active:scale-[0.98] animate-fade-in-up"
               style={{
                 background: "var(--surface-2)",
                 animationDelay: `${i * 40}ms`,
@@ -199,7 +199,7 @@ export default function ActivityLogPage() {
             >
               {/* Kind icon */}
               <div
-                className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
+                className="w-10 h-10 rounded-[var(--radius-tile)] flex items-center justify-center shrink-0"
                 style={{ background: colors.bg }}
               >
                 <Icon size={18} style={{ color: colors.icon }} strokeWidth={2} />
@@ -207,18 +207,18 @@ export default function ActivityLogPage() {
 
               {/* Content */}
               <div className="flex-1 min-w-0">
-                <p className="text-[13px] font-semibold truncate" style={{ color: "var(--text-primary)" }}>
+                <p className="text-13 font-semibold truncate" style={{ color: "var(--text-primary)" }}>
                   {activity.title}
                 </p>
-                <p className="text-[11px] mt-0.5 truncate" style={{ color: "var(--text-secondary)" }}>
+                <p className="text-11 mt-0.5 truncate" style={{ color: "var(--text-secondary)" }}>
                   {activity.subtitle}
                 </p>
                 <div className="flex items-center gap-2 mt-1">
-                  <span className="text-[10px]" style={{ color: "var(--text-secondary)" }}>
+                  <span className="text-10" style={{ color: "var(--text-secondary)" }}>
                     {activity.actor}
                   </span>
-                  <span className="text-[10px]" style={{ color: "var(--divider)" }}>·</span>
-                  <span className="text-[10px]" style={{ color: "var(--text-secondary)" }}>
+                  <span className="text-10" style={{ color: "var(--divider)" }}>·</span>
+                  <span className="text-10" style={{ color: "var(--text-secondary)" }}>
                     {formatDateTime(activity.at)}
                   </span>
                 </div>
@@ -227,7 +227,7 @@ export default function ActivityLogPage() {
               {/* Amount */}
               {activity.amount != null && (
                 <div className="text-end shrink-0">
-                  <p className="text-[13px] font-bold" style={{ color: "var(--text-primary)" }}>
+                  <p className="text-13 font-bold" style={{ color: "var(--text-primary)" }}>
                     {formatCurrency(activity.amount)}
                   </p>
                   {activity.status === "success" && (

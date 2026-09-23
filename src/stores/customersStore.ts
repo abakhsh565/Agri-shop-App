@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/stores/authStore";
-import { getCachedData, setCachedData, isCacheStale, clearCachedData } from "@/lib/localCache";
+import { getCachedData, setCachedData, clearCachedData } from "@/lib/localCache";
 import { enqueueOperation } from "@/lib/offlineQueue";
 import type { Customer } from "@/types";
 
@@ -107,18 +107,13 @@ export const useCustomersStore = create<CustomersState>((set, get) => ({
   load: async () => {
     set({ loading: true, error: null });
 
-    // Stale-while-revalidate: show cached data immediately
+    // Stale-while-revalidate: render the cache immediately, then ALWAYS revalidate.
+    // Skipping the fetch while the cache was still "fresh" meant a newly uploaded
+    // customer photo (saved after the row was cached) reverted to initials on the next
+    // load, and a customer created/editied anywhere stayed invisible for up to 5
+    // minutes. The cache is a render hint, never the authority.
     const cached = getCachedData<Customer[]>(CACHE_KEY);
-    const stale = isCacheStale(CACHE_KEY);
-    const storeEmpty = get().customers.length === 0;
-
-    // If cache is fresh AND store already has data, skip fetch
-    if (cached && !stale && !storeEmpty) {
-      set({ customers: cached, loading: false, ready: true });
-      return;
-    }
-
-    if (cached && stale) {
+    if (cached) {
       set({ customers: cached, loading: false, ready: true });
     }
 
@@ -227,11 +222,14 @@ export const useCustomersStore = create<CustomersState>((set, get) => ({
       p_image_url: imageUrl,
     });
     if (error) throw new Error(error.message);
-    set({
-      customers: get().customers.map((c) =>
-        c.id === id ? { ...c, imageUrl: imageUrl ?? undefined } : c
-      ),
-    });
+    const updated = get().customers.map((c) =>
+      c.id === id ? { ...c, imageUrl: imageUrl ?? undefined } : c
+    );
+    set({ customers: updated });
+    // Keep the cache in step with the write. Without this the photo just saved was
+    // not in the cached list, so the next render served the imageless row and the
+    // avatar fell back to an initial.
+    setCachedData(CACHE_KEY, updated);
   },
 
   archiveCustomer: async (id) => {

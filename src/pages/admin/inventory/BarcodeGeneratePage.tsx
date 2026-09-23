@@ -124,7 +124,7 @@ export default function BarcodeGeneratePage() {
         <NavHeader title={t("admin.generateBarcodes")} />
 
         {/* Info banner */}
-        <div className="mx-4 mt-2 rounded-xl p-3" style={{ background: "rgba(59,130,246,0.08)", border: "1px solid rgba(59,130,246,0.2)" }}>
+        <div className="mx-4 mt-2 rounded-[var(--radius-tile)] p-3" style={{ background: "rgba(59,130,246,0.08)", border: "1px solid rgba(59,130,246,0.2)" }}>
           <p className="text-xs font-semibold" style={{ color: "#3b82f6" }}>
             {t("admin.productsWithoutBarcodes", { count: eligibleProducts.length })}
           </p>
@@ -151,7 +151,7 @@ export default function BarcodeGeneratePage() {
             const isSelected = selected.has(p.id);
             const autoBarcode = generateProductBarcode(p.name);
             return (
-              <div key={p.id} className="flex items-center gap-3 p-3 rounded-[14px]" style={{ background: "var(--surface-2)" }}>
+              <div key={p.id} className="flex items-center gap-3 p-3 rounded-[var(--radius-card)]" style={{ background: "var(--surface-2)" }}>
                 <button onClick={() => toggle(p.id)} className="w-6 h-6 rounded-full flex items-center justify-center shrink-0"
                   style={{ background: isSelected ? "var(--brand)" : "transparent", border: isSelected ? "none" : "2px solid var(--divider)" }}>
                   {isSelected && <Check size={14} color="#0a0a0a" strokeWidth={3} />}
@@ -159,11 +159,11 @@ export default function BarcodeGeneratePage() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <p className="text-sm font-bold truncate" style={{ color: "var(--text-primary)" }}>{p.name}</p>
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: catColor.bg, color: catColor.fg }}>
+                    <span className="text-10 font-bold px-2 py-0.5 rounded-full" style={{ background: catColor.bg, color: catColor.fg }}>
                       {p.category}
                     </span>
                   </div>
-                  <p className="text-[11px] font-mono" style={{ color: "var(--brand-dark)" }}>
+                  <p className="text-11 font-mono" style={{ color: "var(--brand-dark)" }}>
                     → {autoBarcode}
                   </p>
                 </div>
@@ -206,15 +206,15 @@ export default function BarcodeGeneratePage() {
           const catColor = CATEGORY_COLOR[product.category] ?? CATEGORY_COLOR.other;
           const svg = barcodeToSvg(barcode, { height: 60, showText: true });
           return (
-            <div key={product.id + barcode} className="rounded-[14px] p-4" style={{ background: "var(--surface-2)", border: "1px solid var(--divider)" }}>
+            <div key={product.id + barcode} className="rounded-[var(--radius-card)] p-4" style={{ background: "var(--surface-2)", border: "1px solid var(--divider)" }}>
               <div className="flex items-center gap-2 mb-3">
                 <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>{product.name}</p>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: catColor.bg, color: catColor.fg }}>
+                <span className="text-10 font-bold px-2 py-0.5 rounded-full" style={{ background: catColor.bg, color: catColor.fg }}>
                   {product.category}
                 </span>
 
               </div>
-              <div className="flex justify-center bg-white rounded-lg p-3 mb-3">
+              <div className="flex justify-center bg-white rounded-[var(--radius-tile)] p-3 mb-3">
                 <div dangerouslySetInnerHTML={{ __html: svg }} />
               </div>
               <div className="flex items-center justify-between">

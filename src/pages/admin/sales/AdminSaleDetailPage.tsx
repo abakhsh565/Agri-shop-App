@@ -3,15 +3,20 @@ import { useNavigate, useParams } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
 import { PaymentBadge } from "@/components/ui/Badge";
+import { SkeletonList } from "@/components/ui/Skeleton";
 import { formatCurrency, formatDateTime } from "@/lib/formatters";
 import { useT } from "@/lib/i18n";
 import { useThemeStore } from "@/stores/themeStore";
 import { useSalesStore } from "@/stores/salesStore";
 import { useCustomersStore } from "@/stores/customersStore";
+import { useProductsStore } from "@/stores/productsStore";
 import { useUIStore } from "@/stores/uiStore";
 import { supabase } from "@/lib/supabase";
 import { ChevronRight, Trash2, Share2, Download, RotateCcw, Clock } from "lucide-react";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
+import ListCard from "@/components/ui/ListCard";
+import ListRow from "@/components/ui/ListRow";
+import type { SaleItem as SaleLine } from "@/types";
 
 interface ReturnRecord {
   id: string;
@@ -53,14 +58,20 @@ export default function AdminSaleDetailPage() {
   const updateNote = useSalesStore((s) => s.updateNote);
   const { addToast } = useUIStore();
   const customers = useCustomersStore((s) => s.customers);
+  const products = useProductsStore((s) => s.products);
+  // Fallback cost for lines recorded before COGS snapshots existed.
+  const variantCost = new Map<string, number>();
+  products.forEach((p) => p.variants.forEach((v) => variantCost.set(v.id, v.costPrice)));
   const sale = liveSales.find((s) => s.id === saleId);
   const customer = sale ? customers.find((c) => c.id === sale.customerId) : null;
+  // `ready` is what makes it honest to say a sale does not exist: before the store
+  // has loaded, a missing sale means "not here yet", not "not found".
+  const salesReady = useSalesStore((s) => s.ready);
   const [note, setNote] = useState("");
   const [savingNote, setSavingNote] = useState(false);
 
   // Return history
   const [returns, setReturns] = useState<ReturnRecord[]>([]);
-  const [loadingReturns, setLoadingReturns] = useState(true);
 
   useEffect(() => { if (sale) setNote(sale.note ?? ""); }, [sale?.id]);
 
@@ -77,7 +88,6 @@ export default function AdminSaleDetailPage() {
 
         if (!returnRows || returnRows.length === 0) {
           setReturns([]);
-          setLoadingReturns(false);
           return;
         }
 
@@ -111,9 +121,7 @@ export default function AdminSaleDetailPage() {
             })),
           }))
         );
-      } catch {} finally {
-        setLoadingReturns(false);
-      }
+      } catch {}
     }
     fetchReturnHistory();
   }, [saleId]);
@@ -134,14 +142,31 @@ export default function AdminSaleDetailPage() {
 
   const totalReturned = returns.reduce((s, r) => s + r.totalRefund, 0);
 
-  if (!sale) return (
-    <div className="flex flex-col w-full min-h-full items-center justify-center" style={{ background: "var(--background)" }}>
-      <p style={{ color: "var(--text-secondary)" }}>{t("saleDetail.saleNotFound")}</p>
-    </div>
-  );
+  if (!sale) {
+    // A reload straight onto this URL has no sale in the store yet. Claiming "not
+    // found" at that moment is a false statement about data that has not arrived,
+    // so wait in the shape the page will take and only then report it as missing.
+    if (!salesReady) {
+      return (
+        <div className="flex flex-col w-full min-h-full pt-4" style={{ background: "var(--background)" }}>
+          <SkeletonList rows={4} />
+        </div>
+      );
+    }
+    return (
+      <div className="flex flex-col w-full min-h-full items-center justify-center" style={{ background: "var(--background)" }}>
+        <p style={{ color: "var(--text-secondary)" }}>{t("saleDetail.saleNotFound")}</p>
+      </div>
+    );
+  }
 
-  const COST_RATIO = 0.7;
-  const baseCost = sale.items.reduce((s, item) => s + item.lineTotal * COST_RATIO, 0);
+  // COGS per line is the snapshot taken when the sale was made (unit cost × qty),
+  // never a guess from today's prices — otherwise editing a product would silently
+  // rewrite the profit of every sale ever made. The current variant cost is only a
+  // fallback for lines written before snapshots existed, matching Home and Reports.
+  const cogsOf = (item: SaleLine) =>
+    item.cogsAmount ?? (variantCost.get(item.variantId) ?? 0) * item.qty;
+  const baseCost = sale.items.reduce((s, item) => s + cogsOf(item), 0);
   const netProfit = sale.totalAmount - baseCost;
 
   async function handleSaveNote() {
@@ -234,7 +259,7 @@ export default function AdminSaleDetailPage() {
       <NavHeader title={t("sales.saleDetails")} />
 
       {isVoided && (
-        <div className="mx-4 mt-2 rounded-xl p-3 text-center" style={{ background: "#fee2e2", border: "1px solid #fca5a5" }}>
+        <div className="mx-4 mt-2 rounded-[var(--radius-tile)] p-3 text-center" style={{ background: "#fee2e2", border: "1px solid #fca5a5" }}>
           <p className="text-sm font-bold" style={{ color: "#dc2626" }}>{t("admin.saleVoided")}</p>
           {voidReason && <p className="text-xs mt-0.5" style={{ color: "#ef4444" }}>{t("admin.reason")}: {voidReason}</p>}
         </div>
@@ -242,84 +267,92 @@ export default function AdminSaleDetailPage() {
 
       <div className="flex flex-col gap-4 p-4">
         {/* Customer card */}
-        <button
-          onClick={() => navigate(`/admin/customers/${sale.customerId}`)}
-          className="flex items-center justify-between rounded-[14px] p-4 text-start w-full transition-opacity active:opacity-70"
-          style={{ border: "1px solid var(--divider)", background: "var(--surface-2)" }}
-        >
-          <div className="flex items-center gap-3">
-            {customer?.imageUrl ? (
-              <img src={customer.imageUrl} alt={sale.customerName} className="size-11 rounded-full object-cover shrink-0" />
-            ) : (
-              <div className="size-11 rounded-full shrink-0 flex items-center justify-center text-sm font-bold" style={{ background: initBgColor(sale.customerName), color: "#fff" }}>
-                {(sale.customerName || '?').charAt(0).toUpperCase()}
-              </div>
-            )}
-            <div>
-              <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>{sale.customerName}</p>
-              <p className="text-xs" style={{ color: "var(--text-secondary)" }}>{formatDateTime(sale.createdAt)}</p>
-            </div>
-          </div>
-          <ChevronRight size={18} style={{ color: "var(--text-secondary)" }} className="shrink-0" />
-        </button>
+        <ListCard>
+          <ListRow
+            onClick={() => navigate(`/admin/customers/${sale.customerId}`)}
+            emphasis
+            tile={
+              customer?.imageUrl ? (
+                <img src={customer.imageUrl} alt={sale.customerName} className="size-11 shrink-0 rounded-full object-cover" />
+              ) : (
+                <div className="size-11 shrink-0 rounded-full flex items-center justify-center text-sm font-bold" style={{ background: initBgColor(sale.customerName), color: "#fff" }}>
+                  {(sale.customerName || '?').charAt(0).toUpperCase()}
+                </div>
+              )
+            }
+            title={sale.customerName}
+            meta={formatDateTime(sale.createdAt)}
+            trailing={<ChevronRight size={18} className="shrink-0" style={{ color: "var(--text-secondary)" }} />}
+          />
+        </ListCard>
 
         {/* Items sold with return badges */}
         <div>
           <p className="text-xs font-bold uppercase mb-2 tracking-wider" style={{ color: "var(--text-secondary)" }}>
             {t("sales.itemsSold")}
           </p>
-          <div className="rounded-[14px] overflow-hidden" style={{ border: "1px solid var(--divider)" }}>
-            {sale.items.map((item, i) => {
-              const itemCost = item.lineTotal * COST_RATIO;
-              const itemProfit = item.lineTotal - itemCost;
+          <ListCard>
+            {sale.items.map((item) => {
+              const itemCogs = cogsOf(item);
+              const itemCost = item.qty > 0 ? itemCogs / item.qty : 0;
+              const itemProfit = item.lineTotal - itemCogs;
               const key = `${item.productName}-${item.variantName}`;
               const returned = returnedQtyMap[key] ?? 0;
               const isFullyReturned = returned >= item.qty;
               const isPartialReturned = returned > 0 && returned < item.qty;
 
               return (
-                <div
+                <ListRow
                   key={item.id}
-                  className="flex justify-between p-4"
-                  style={{ borderBottom: i < sale.items.length - 1 ? "1px solid var(--divider)" : "none" }}
+                  trailing={
+                    <p className="text-sm font-bold shrink-0" style={{ color: "var(--text-primary)" }}>
+                      {formatCurrency(item.lineTotal)}
+                    </p>
+                  }
                 >
                   <div>
                     <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>
                       {item.productName} {item.variantName}
                     </p>
+                    {/* The prices this sale was actually made at — for full traceability
+                        after the product's prices later change. */}
                     <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
                       {formatCurrency(item.unitPrice)} × {item.qty}
                     </p>
+                    <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
+                      {t("saleDetail.costUsed")} {formatCurrency(Math.round(itemCost))}{t("saleDetail.perUnit")}
+                      {" · "}{t("saleDetail.cogs")} {formatCurrency(Math.round(itemCogs))}
+                    </p>
                     <p className="text-xs" style={{ color: "var(--brand-dark)" }}>
-                      Profit: {formatCurrency(Math.round(itemProfit))}
+                      {t("saleDetail.profit")} {formatCurrency(Math.round(itemProfit))}
                     </p>
                     {isFullyReturned && (
-                      <span className="inline-block text-[10px] font-semibold px-2 py-0.5 rounded-full mt-1" style={{ background: "rgba(239,68,68,0.1)", color: "#ef4444" }}>
+                      <span className="inline-block text-10 font-semibold px-2 py-0.5 rounded-full mt-1" style={{ background: "rgba(239,68,68,0.1)", color: "#ef4444" }}>
                         {t("saleDetail.returned")}
                       </span>
                     )}
                     {isPartialReturned && (
-                      <span className="inline-block text-[10px] font-semibold px-2 py-0.5 rounded-full mt-1" style={{ background: "rgba(245,158,11,0.1)", color: "#d97706" }}>
-                        Partial return ({returned}/{item.qty})
+                      <span className="inline-block text-10 font-semibold px-2 py-0.5 rounded-full mt-1" style={{ background: "rgba(245,158,11,0.1)", color: "#d97706" }}>
+                        {t("saleDetail.partialReturn", { count: String(returned), total: String(item.qty) })}
                       </span>
                     )}
                   </div>
-                  <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>
-                    {formatCurrency(item.lineTotal)}
-                  </p>
-                </div>
+                </ListRow>
               );
             })}
             {/* Sold by */}
-            <div className="flex items-center gap-2 px-4 py-3" style={{ borderTop: "1px solid var(--divider)", background: "var(--surface-2)" }}>
-              <div className="size-6 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0" style={{ background: initBgColor(sale.employeeName), color: "#fff" }}>
-                {(sale.employeeName || '?').charAt(0).toUpperCase()}
-              </div>
+            <ListRow
+              tile={
+                <div className="size-6 rounded-full flex items-center justify-center text-10 font-bold shrink-0" style={{ background: initBgColor(sale.employeeName), color: "#fff" }}>
+                  {(sale.employeeName || '?').charAt(0).toUpperCase()}
+                </div>
+              }
+            >
               <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
                 {t("saleDetail.soldBy")} <span className="font-semibold" style={{ color: "var(--text-primary)" }}>{sale.employeeName}</span>
               </p>
-            </div>
-          </div>
+            </ListRow>
+          </ListCard>
         </div>
 
         {/* Return History */}
@@ -330,11 +363,11 @@ export default function AdminSaleDetailPage() {
             </p>
             <div className="flex flex-col gap-3">
               {returns.map((ret) => (
-                <div key={ret.id} className="rounded-[14px] p-4" style={{ border: "1px solid var(--divider)", background: "var(--surface-2)" }}>
+                <div key={ret.id} className="rounded-[var(--radius-card)] p-4" style={{ border: "1px solid var(--divider)", background: "var(--surface-2)" }}>
                   <div className="flex justify-between items-start mb-2">
                     <div>
                       <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>{ret.returnNumber}</p>
-                      <p className="text-[11px]" style={{ color: "var(--text-secondary)" }}>{formatDateTime(ret.createdAt)}</p>
+                      <p className="text-11" style={{ color: "var(--text-secondary)" }}>{formatDateTime(ret.createdAt)}</p>
                     </div>
                     <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{
                       background: ret.resolution === "refund_cash" ? "rgba(132,204,22,0.12)" : "rgba(59,130,246,0.12)",
@@ -369,7 +402,7 @@ export default function AdminSaleDetailPage() {
         )}
 
         {/* Payment summary + note */}
-        <div className="rounded-[14px] p-4 flex flex-col gap-2" style={{ border: "1px solid var(--divider)" }}>
+        <div className="rounded-[var(--radius-card)] p-4 flex flex-col gap-2" style={{ border: "1px solid var(--divider)" }}>
           <div className="flex justify-between">
             <span className="text-sm" style={{ color: "var(--text-secondary)" }}>{t("sale.subtotal")}</span>
             <span className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>{formatCurrency(sale.subtotal)}</span>
@@ -414,8 +447,8 @@ export default function AdminSaleDetailPage() {
               )}
             </div>
             <textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder={t("saleDetail.addNote")} rows={3}
-              className="w-full rounded-[12px] px-4 py-3 text-sm resize-none outline-none"
-              style={{ background: "var(--surface)", border: "1px solid var(--divider)", color: "var(--text-primary)" }}
+              className="w-full rounded-[var(--radius-tile)] px-4 py-3 text-sm resize-none outline-none"
+              style={{ background: "var(--surface)", border: "1px solid var(--border-control)", color: "var(--text-primary)" }}
             />
           </div>
         </div>
@@ -474,7 +507,7 @@ export default function AdminSaleDetailPage() {
               <p className="text-xs font-bold uppercase tracking-wider mb-2" style={{ color: "var(--text-secondary)" }}>{t("admin.voidReason")}</p>
               <input value={voidReason} onChange={(e) => setVoidReason(e.target.value)} placeholder={t("sale.voidReasonPlaceholder")}
                 className="w-full h-11 rounded-full px-4 text-sm outline-none"
-                style={{ background: "var(--surface-2)", border: "1px solid var(--divider)", color: "var(--text-primary)" }} />
+                style={{ background: "var(--surface-2)", border: "1px solid var(--border-control)", color: "var(--text-primary)" }} />
             </div>
             <div className="flex gap-3">
               <button onClick={() => setShowVoidDialog(false)} disabled={voiding} className="flex-1 h-12 rounded-full text-sm font-bold disabled:opacity-50"

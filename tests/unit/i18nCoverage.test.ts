@@ -30,8 +30,11 @@ const SRC = path.join(ROOT, "src");
 // Proper nouns and formats that are intentionally identical in both languages.
 const BRANDS = ["AgriShop", "WhatsApp", "SMS", "NTN", "Rs."];
 
-// Unreferenced design mock-ups, not shipped UI (verified: nothing imports these).
-const DEAD_FILES = ["src/components/ui/RTL.tsx"];
+// Unreferenced design mock-ups, not shipped UI. Empty on purpose: both entries this
+// list ever held have been deleted — `src/components/ui/RTL.tsx` (zero importers) and
+// all 163 files of `src/imports` (zero importers, repo-wide). A dead-file allow-list
+// that names files which no longer exist hides the next real one.
+const DEAD_FILES: string[] = [];
 
 function parseDict(block: string): Set<string> {
   const keys = new Set<string>();
@@ -42,8 +45,7 @@ function parseDict(block: string): Set<string> {
 function sourceFiles(dir: string): string[] {
   const out: string[] = [];
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-    // src/imports holds unreferenced design mock-ups, not shipped UI.
-    if (entry.name === "imports" || entry.name === "node_modules") continue;
+    if (entry.name === "node_modules") continue;
     const full = path.join(dir, entry.name);
     if (entry.isDirectory()) out.push(...sourceFiles(full));
     else if (/\.tsx?$/.test(full)) out.push(full);

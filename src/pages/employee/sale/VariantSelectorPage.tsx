@@ -70,9 +70,9 @@ export default function VariantSelectorPage() {
       <NavHeader title={t("sale.productDetails")} />
 
       {/* Product header card */}
-      <div className="mx-4 mt-3 rounded-xl p-4 flex items-center gap-3 justify-between" style={{ background: "var(--surface-2)" }}>
+      <div className="mx-4 mt-3 rounded-[var(--radius-tile)] p-4 flex items-center gap-3 justify-between" style={{ background: "var(--surface-2)" }}>
         {product.imageUrl && (
-          <img src={product.imageUrl} alt={product.name} className="w-12 h-12 rounded-xl object-cover shrink-0" />
+          <img src={product.imageUrl} alt={product.name} className="w-12 h-12 rounded-[var(--radius-tile)] object-cover shrink-0" />
         )}
         <div className="flex-1 min-w-0">
           <p className="text-lg font-bold truncate" style={{ color: "var(--text-primary)" }}>{product.name}</p>
@@ -88,15 +88,15 @@ export default function VariantSelectorPage() {
       </div>
 
       {/* Stock summary */}
-      <div className="mx-4 mt-2 px-3 py-2 rounded-lg" style={{ background: "var(--surface)" }}>
-        <p className="text-[11px]" style={{ color: "var(--text-secondary)" }}>
+      <div className="mx-4 mt-2 px-3 py-2 rounded-[var(--radius-tile)]" style={{ background: "var(--surface)" }}>
+        <p className="text-11" style={{ color: "var(--text-secondary)" }}>
           Total stock: <span className="font-bold" style={{ color: "var(--text-primary)" }}>{product.stockQty} {product.baseUnit}</span>
         </p>
       </div>
 
       {/* Variant selector */}
       <div className="px-4 pt-4">
-        <p className="text-[11px] font-bold uppercase mb-3 tracking-wider" style={{ color: "var(--text-secondary)" }}>{t("common.selectSellableUnit")}</p>
+        <p className="text-11 font-bold uppercase mb-3 tracking-wider" style={{ color: "var(--text-secondary)" }}>{t("common.selectSellableUnit")}</p>
         <div className="flex flex-col gap-2">
           {product.variants.map((v) => {
             const units = availableUnits(v);
@@ -112,7 +112,7 @@ export default function VariantSelectorPage() {
                   }
                 }}
                 disabled={oos}
-                className="flex items-center justify-between p-4 rounded-xl transition-colors"
+                className="flex items-center justify-between p-4 rounded-[var(--radius-tile)] transition-colors"
                 style={{
                   border: `1px solid ${isSelected ? "var(--text-primary)" : "var(--divider)"}`,
                   opacity: oos ? 0.4 : 1,
@@ -139,8 +139,8 @@ export default function VariantSelectorPage() {
 
       {/* Quantity */}
       <div className="px-4 pt-5">
-        <p className="text-[11px] font-bold uppercase mb-3 tracking-wider" style={{ color: "var(--text-secondary)" }}>{t("admin.quantity")}</p>
-        <div className="flex items-center justify-between rounded-xl h-[52px] px-4" style={{ border: "1px solid var(--divider)" }}>
+        <p className="text-11 font-bold uppercase mb-3 tracking-wider" style={{ color: "var(--text-secondary)" }}>{t("admin.quantity")}</p>
+        <div className="flex items-center justify-between rounded-[var(--radius-tile)] h-[52px] px-4" style={{ border: "1px solid var(--divider)" }}>
           <QuantityCounter
             qty={qty}
             onChange={setQty}

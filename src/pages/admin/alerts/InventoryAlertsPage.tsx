@@ -45,25 +45,25 @@ export default function InventoryAlertsPage() {
         {/* Summary cards */}
         <div className="flex gap-2.5">
           <div
-            className="flex-1 rounded-[14px] p-3.5"
+            className="flex-1 rounded-[var(--radius-card)] p-3.5"
             style={{ background: outOfStock.length > 0 ? "#FEE2E2" : "var(--surface-2)" }}
           >
-            <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: outOfStock.length > 0 ? "#DC2626" : "var(--text-secondary)" }}>{t("admin.outOfStock")}</p>
-            <p className="text-[20px] font-bold mt-0.5" style={{ color: outOfStock.length > 0 ? "#991B1B" : "var(--text-primary)" }}>{outOfStock.length}</p>
+            <p className="text-10 font-bold uppercase tracking-wider" style={{ color: outOfStock.length > 0 ? "#DC2626" : "var(--text-secondary)" }}>{t("admin.outOfStock")}</p>
+            <p className="text-20 font-bold mt-0.5" style={{ color: outOfStock.length > 0 ? "#991B1B" : "var(--text-primary)" }}>{outOfStock.length}</p>
           </div>
           <div
-            className="flex-1 rounded-[14px] p-3.5"
+            className="flex-1 rounded-[var(--radius-card)] p-3.5"
             style={{ background: lowStock.length > 0 ? "#FEF3C7" : "var(--surface-2)" }}
           >
-            <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: lowStock.length > 0 ? "#D97706" : "var(--text-secondary)" }}>{t("admin.lowStock")}</p>
-            <p className="text-[20px] font-bold mt-0.5" style={{ color: lowStock.length > 0 ? "#92400E" : "var(--text-primary)" }}>{lowStock.length}</p>
+            <p className="text-10 font-bold uppercase tracking-wider" style={{ color: lowStock.length > 0 ? "#D97706" : "var(--text-secondary)" }}>{t("admin.lowStock")}</p>
+            <p className="text-20 font-bold mt-0.5" style={{ color: lowStock.length > 0 ? "#92400E" : "var(--text-primary)" }}>{lowStock.length}</p>
           </div>
           <div
-            className="flex-1 rounded-[14px] p-3.5"
+            className="flex-1 rounded-[var(--radius-card)] p-3.5"
             style={{ background: "var(--surface-2)" }}
           >
-            <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>{t("admin.reorder")}</p>
-            <p className="text-[20px] font-bold mt-0.5" style={{ color: "var(--text-primary)" }}>{reorderNeeded.length}</p>
+            <p className="text-10 font-bold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>{t("admin.reorder")}</p>
+            <p className="text-20 font-bold mt-0.5" style={{ color: "var(--text-primary)" }}>{reorderNeeded.length}</p>
           </div>
         </div>
 
@@ -71,13 +71,13 @@ export default function InventoryAlertsPage() {
         {totalPayable > 0 && (
           <button
             onClick={() => navigate("/admin/companies")}
-            className="flex items-center gap-3 rounded-[14px] p-4 transition-opacity active:opacity-70 text-start w-full"
+            className="flex items-center gap-3 rounded-[var(--radius-card)] p-4 transition-opacity active:opacity-70 text-start w-full"
             style={{ background: "#FCEBEB" }}
           >
             <Truck size={18} color="#A32D2D" className="shrink-0" />
             <div className="flex-1 min-w-0">
-              <p className="text-[13px] font-medium" style={{ color: "#791F1F" }}>{t("admin.supplierPayableDue")}</p>
-              <p className="text-[12px] mt-0.5" style={{ color: "#A32D2D" }}>{t("common.totalDue", { amount: formatCurrency(totalPayable) })}</p>
+              <p className="text-13 font-medium" style={{ color: "#791F1F" }}>{t("admin.supplierPayableDue")}</p>
+              <p className="text-12 mt-0.5" style={{ color: "#A32D2D" }}>{t("common.totalDue", { amount: formatCurrency(totalPayable) })}</p>
             </div>
             <ChevronRight size={14} color="#A32D2D" />
           </button>
@@ -86,7 +86,7 @@ export default function InventoryAlertsPage() {
         {/* Out of stock */}
         {outOfStock.length > 0 && (
           <div>
-            <p className="text-[11px] font-bold uppercase tracking-widest mb-2" style={{ color: "#DC2626" }}>
+            <p className="text-11 font-bold uppercase tracking-widest mb-2" style={{ color: "#DC2626" }}>
               {t("products.outOfStock")}
             </p>
             <div className="flex flex-col gap-2">
@@ -94,7 +94,7 @@ export default function InventoryAlertsPage() {
                 <button
                   key={p.id}
                   onClick={() => navigate("/admin/inventory/" + p.id + "/adjust")}
-                  className="flex items-center gap-3 rounded-[14px] p-3.5 transition-opacity active:opacity-70 text-start w-full"
+                  className="flex items-center gap-3 rounded-[var(--radius-card)] p-3.5 transition-opacity active:opacity-70 text-start w-full"
                   style={{ background: "#FEF2F2", border: "1px solid #FECACA" }}
                 >
                   <div
@@ -104,8 +104,8 @@ export default function InventoryAlertsPage() {
                     <Package size={16} color="#DC2626" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-[13px] font-medium truncate" style={{ color: "var(--text-primary)" }}>{p.name}</p>
-                    <p className="text-[11px]" style={{ color: "#DC2626" }}>{t("common.unitsInStock", { count: p.stockQty })}</p>
+                    <p className="text-13 font-medium truncate" style={{ color: "var(--text-primary)" }}>{p.name}</p>
+                    <p className="text-11" style={{ color: "#DC2626" }}>{t("common.unitsInStock", { count: p.stockQty })}</p>
                   </div>
                   <ChevronRight size={14} style={{ color: "var(--text-secondary)" }} />
                 </button>
@@ -117,7 +117,7 @@ export default function InventoryAlertsPage() {
         {/* Low stock */}
         {lowStock.length > 0 && (
           <div>
-            <p className="text-[11px] font-bold uppercase tracking-widest mb-2" style={{ color: "#D97706" }}>
+            <p className="text-11 font-bold uppercase tracking-widest mb-2" style={{ color: "#D97706" }}>
               {t("products.lowStock")}
             </p>
             <div className="flex flex-col gap-2">
@@ -127,7 +127,7 @@ export default function InventoryAlertsPage() {
                   <button
                     key={p.id}
                     onClick={() => navigate("/admin/inventory/" + p.id + "/adjust")}
-                    className="flex items-center gap-3 rounded-[14px] p-3.5 transition-opacity active:opacity-70 text-start w-full"
+                    className="flex items-center gap-3 rounded-[var(--radius-card)] p-3.5 transition-opacity active:opacity-70 text-start w-full"
                     style={{ background: "#FFFBEB", border: "1px solid #FDE68A" }}
                   >
                     <div
@@ -137,8 +137,8 @@ export default function InventoryAlertsPage() {
                       <AlertTriangle size={16} color="#D97706" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-[13px] font-medium truncate" style={{ color: "var(--text-primary)" }}>{p.name}</p>
-                      <p className="text-[11px]" style={{ color: "#D97706" }}>{t("common.unitsThreshold", { count: p.stockQty, threshold })}</p>
+                      <p className="text-13 font-medium truncate" style={{ color: "var(--text-primary)" }}>{p.name}</p>
+                      <p className="text-11" style={{ color: "#D97706" }}>{t("common.unitsThreshold", { count: p.stockQty, threshold })}</p>
                     </div>
                     <ChevronRight size={14} style={{ color: "var(--text-secondary)" }} />
                   </button>
@@ -151,7 +151,7 @@ export default function InventoryAlertsPage() {
         {/* All clear */}
         {outOfStock.length === 0 && lowStock.length === 0 && totalPayable === 0 && (
           <div
-            className="rounded-[14px] p-8 flex flex-col items-center gap-3"
+            className="rounded-[var(--radius-card)] p-8 flex flex-col items-center gap-3"
             style={{ border: "1px solid var(--divider)" }}
           >
             <div

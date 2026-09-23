@@ -76,20 +76,19 @@ export default function DailyCashReconciliationPage() {
       <div className="flex flex-col gap-4 p-4">
         {/* Date selector */}
         <div>
-          <p className="text-[11px] font-bold uppercase tracking-wider mb-2" style={{ color: "var(--text-secondary)" }}>{t("admin.selectDate")}</p>
+          <p className="text-11 font-bold uppercase tracking-wider mb-2" style={{ color: "var(--text-secondary)" }}>{t("admin.selectDate")}</p>
           <input
             type="date"
             value={selectedDate}
             max={new Date().toISOString().slice(0, 10)}
             onChange={(e) => { setSelectedDate(e.target.value); setSaved(false); setCountedCash(""); }}
-            className="w-full h-12 rounded-[24px] px-4 text-sm outline-none"
-            style={{ background: "var(--surface-2)", border: "1px solid var(--divider)", color: "var(--text-primary)" }}
+            className="w-full outline-none"
           />
         </div>
 
         {/* Expected cash summary */}
-        <div className="rounded-[14px] p-4" style={{ background: "var(--surface)", border: "1px solid var(--divider)" }}>
-          <p className="text-[11px] font-bold uppercase tracking-wider mb-3" style={{ color: "var(--text-secondary)" }}>{t("admin.expectedCash")}</p>
+        <div className="rounded-[var(--radius-card)] p-4" style={{ background: "var(--surface)", border: "1px solid var(--divider)" }}>
+          <p className="text-11 font-bold uppercase tracking-wider mb-3" style={{ color: "var(--text-secondary)" }}>{t("admin.expectedCash")}</p>
 
           {!reconciliation.hasData ? (
             <p className="text-sm" style={{ color: "var(--text-secondary)" }}>{t("admin.noSalesForDate")}</p>
@@ -100,11 +99,11 @@ export default function DailyCashReconciliationPage() {
                 <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>{reconciliation.totalSales}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-sm" style={{ color: "var(--text-secondary)" }}>Full Payment (Cash)</span>
+                <span className="text-sm" style={{ color: "var(--text-secondary)" }}>{t("reconciliation.fullCash")}</span>
                 <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>{reconciliation.paidCashCount}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-sm" style={{ color: "var(--text-secondary)" }}>Partial Payment (Cash)</span>
+                <span className="text-sm" style={{ color: "var(--text-secondary)" }}>{t("reconciliation.partialCash")}</span>
                 <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>{reconciliation.partialCashCount}</span>
               </div>
               <div className="border-t my-1" style={{ borderColor: "var(--divider)" }} />
@@ -118,7 +117,7 @@ export default function DailyCashReconciliationPage() {
 
         {/* Counted cash input */}
         <div>
-          <p className="text-[11px] font-bold uppercase tracking-wider mb-2" style={{ color: "var(--text-secondary)" }}>{t("admin.countedCash")}</p>
+          <p className="text-11 font-bold uppercase tracking-wider mb-2" style={{ color: "var(--text-secondary)" }}>{t("admin.countedCash")}</p>
           <div className="relative">
             <Calculator size={16} className="absolute left-4 top-1/2 -translate-y-1/2" style={{ color: "var(--text-secondary)" }} />
             <input
@@ -127,7 +126,7 @@ export default function DailyCashReconciliationPage() {
               value={countedCash}
               onChange={(e) => { setCountedCash(e.target.value); setSaved(false); }}
               placeholder={t("payments.cashCountedPlaceholder")}
-              className="w-full h-12 rounded-[24px] ps-10 pe-4 text-sm outline-none"
+              className="w-full h-12 rounded-[var(--radius-input)] ps-10 pe-4 text-sm outline-none"
               style={{ background: "var(--surface-2)", border: "1px solid var(--divider)", color: "var(--text-primary)" }}
             />
           </div>
@@ -135,8 +134,8 @@ export default function DailyCashReconciliationPage() {
 
         {/* Variance display */}
         {countedCash && Number(countedCash) > 0 && (
-          <div className="rounded-[14px] p-4" style={{ background: "var(--surface)", border: "1px solid var(--divider)" }}>
-            <p className="text-[11px] font-bold uppercase tracking-wider mb-2" style={{ color: "var(--text-secondary)" }}>{t("admin.variance")}</p>
+          <div className="rounded-[var(--radius-card)] p-4" style={{ background: "var(--surface)", border: "1px solid var(--divider)" }}>
+            <p className="text-11 font-bold uppercase tracking-wider mb-2" style={{ color: "var(--text-secondary)" }}>{t("admin.variance")}</p>
             <div className="flex items-center gap-3">
               {reconciliation.variance === 0 ? (
                 <CheckCircle size={20} style={{ color: "#22c55e" }} />

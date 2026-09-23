@@ -165,37 +165,38 @@ export default function RolesAccessPage() {
         <NavHeader title={editingRole ? t("roles.edit") : t("roles.new")} />
         <div className="flex-1 flex flex-col p-4 gap-4">
           <div>
-            <p className="text-[11px] font-bold uppercase mb-2 tracking-wider" style={{ color: "var(--text-secondary)" }}>{t("roles.name")} *</p>
-            <input value={roleName} onChange={(e) => setRoleName(e.target.value)} placeholder={t("roles.nameHint")} className="w-full h-12 rounded-[24px] px-4 text-sm outline-none" style={fieldStyle} autoFocus />
+            <p className="text-11 font-bold uppercase mb-2 tracking-wider" style={{ color: "var(--text-secondary)" }}>{t("roles.name")} *</p>
+            <input value={roleName} onChange={(e) => setRoleName(e.target.value)} placeholder={t("roles.nameHint")} className="w-full h-12 rounded-[var(--radius-input)] px-4 text-sm outline-none" style={fieldStyle} autoFocus />
           </div>
           <div>
-            <p className="text-[11px] font-bold uppercase mb-2 tracking-wider" style={{ color: "var(--text-secondary)" }}>{t("roles.description")}</p>
-            <input value={roleDesc} onChange={(e) => setRoleDesc(e.target.value)} placeholder={t("roles.descriptionHint")} className="w-full h-12 rounded-[24px] px-4 text-sm outline-none" style={fieldStyle} />
+            <p className="text-11 font-bold uppercase mb-2 tracking-wider" style={{ color: "var(--text-secondary)" }}>{t("roles.description")}</p>
+            <input value={roleDesc} onChange={(e) => setRoleDesc(e.target.value)} placeholder={t("roles.descriptionHint")} className="w-full h-12 rounded-[var(--radius-input)] px-4 text-sm outline-none" style={fieldStyle} />
           </div>
           <div>
-            <p className="text-[11px] font-bold uppercase mb-3 tracking-wider" style={{ color: "var(--text-secondary)" }}>{t("roles.access")}</p>
+            <p className="text-11 font-bold uppercase mb-3 tracking-wider" style={{ color: "var(--text-secondary)" }}>{t("roles.access")}</p>
             <div className="space-y-3">
               {[...new Set(allPerms.map((p) => p.module))].map((mod) => {
                 const areaPerms = allPerms.filter((p) => p.module === mod);
                 const selectedCount = areaPerms.filter((p) => selectedPerms.has(p.code)).length;
                 const allSelected = selectedCount === areaPerms.length && selectedCount > 0;
                 const someSelected = selectedCount > 0;
+                const AreaIcon = areaIcon(mod);
                 return (
                   <div key={mod}>
-                    <button onClick={() => toggleArea(mod)} className="flex items-center justify-between w-full py-2.5 px-3 rounded-xl" style={{ background: allSelected ? "rgba(132,204,22,0.1)" : "var(--surface)", border: `1px solid ${someSelected ? "var(--brand)" : "var(--divider)"}` }}>
+                    <button onClick={() => toggleArea(mod)} className="flex items-center justify-between w-full py-2.5 px-3 rounded-[var(--radius-tile)]" style={{ background: allSelected ? "rgba(132,204,22,0.1)" : "var(--surface)", border: `1px solid ${someSelected ? "var(--brand)" : "var(--divider)"}` }}>
                       <div className="flex items-center gap-2">
-                        <span className="text-base">{areaIcon(mod)}</span>
+                        <AreaIcon size={17} className="shrink-0" style={{ color: "var(--text-secondary)" }} />
                         <span className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>{areaLabel(mod)}</span>
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className="text-[10px]" style={{ color: "var(--text-secondary)" }}>{selectedCount}/{areaPerms.length}</span>
+                        <span className="text-10" style={{ color: "var(--text-secondary)" }}>{selectedCount}/{areaPerms.length}</span>
                         {allSelected && <Check size={14} style={{ color: "var(--brand)" }} />}
                       </div>
                     </button>
                     {someSelected && !allSelected && (
                       <div className="flex flex-wrap gap-1.5 mt-1.5 ps-6">
                         {areaPerms.map((p) => (
-                          <button key={p.code} onClick={() => togglePerm(p.code)} className="text-[11px] px-2.5 py-1 rounded-full font-medium" style={{ background: selectedPerms.has(p.code) ? "var(--brand)" : "var(--surface)", color: selectedPerms.has(p.code) ? "#0a0a0a" : "var(--text-secondary)", border: "1px solid var(--divider)" }}>
+                          <button key={p.code} onClick={() => togglePerm(p.code)} className="text-11 px-2.5 py-1 rounded-full font-medium" style={{ background: selectedPerms.has(p.code) ? "var(--brand)" : "var(--surface)", color: selectedPerms.has(p.code) ? "#0a0a0a" : "var(--text-secondary)", border: "1px solid var(--divider)" }}>
                             {actionLabel(p.action)}
                           </button>
                         ))}
@@ -235,13 +236,13 @@ export default function RolesAccessPage() {
             const count = memberCounts[role.id] ?? 0;
             const areas = roleAreas[role.id] ?? [];
             return (
-              <div key={role.id} className="rounded-xl p-4" style={{ background: "var(--surface)", border: "1px solid var(--divider)" }}>
+              <div key={role.id} className="rounded-[var(--radius-tile)] p-4" style={{ background: "var(--surface)", border: "1px solid var(--divider)" }}>
                 <div className="flex items-start justify-between">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <Shield size={16} style={{ color: "var(--brand)" }} />
                       <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>{role.name}</p>
-                      {role.isSystem && <span className="text-[9px] px-1.5 py-0.5 rounded-full" style={{ background: "var(--surface-2)", color: "var(--text-secondary)" }}>{t("roles.builtIn")}</span>}
+                      {role.isSystem && <span className="text-9 px-1.5 py-0.5 rounded-full" style={{ background: "var(--surface-2)", color: "var(--text-secondary)" }}>{t("roles.builtIn")}</span>}
                     </div>
                     {role.description && <p className="text-xs mt-1" style={{ color: "var(--text-secondary)" }}>{role.description}</p>}
                     {areas.length > 0 && (
@@ -250,17 +251,17 @@ export default function RolesAccessPage() {
                       </p>
                     )}
                     <div className="flex items-center gap-3 mt-2">
-                      <span className="text-[10px] flex items-center gap-1" style={{ color: "var(--text-secondary)" }}>
+                      <span className="text-10 flex items-center gap-1" style={{ color: "var(--text-secondary)" }}>
                         <Users size={10} /> {t("roles.employees", { count })}
                       </span>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <button onClick={() => startEdit(role)} className="p-2 rounded-lg" style={{ background: "var(--surface-2)" }}>
+                    <button onClick={() => startEdit(role)} className="p-2 rounded-[var(--radius-tile)]" style={{ background: "var(--surface-2)" }}>
                       <Edit3 size={14} style={{ color: "var(--text-secondary)" }} />
                     </button>
                     {!role.isSystem && (
-                      <button onClick={() => handleDelete(role)} className="p-2 rounded-lg" style={{ background: "var(--surface-2)" }}>
+                      <button onClick={() => handleDelete(role)} className="p-2 rounded-[var(--radius-tile)]" style={{ background: "var(--surface-2)" }}>
                         <Trash2 size={14} style={{ color: "var(--error)" }} />
                       </button>
                     )}

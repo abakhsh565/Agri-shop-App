@@ -13,7 +13,6 @@ import NotRegisteredPage from "@/pages/auth/NotRegisteredPage";
 import DeactivatedPage from "@/pages/auth/DeactivatedPage";
 import UnderReviewPage from "@/pages/auth/UnderReviewPage";
 import RejectedPage from "@/pages/auth/RejectedPage";
-import SetupDemoPage from "@/pages/auth/SetupDemoPage";
 import PermissionGuard from "@/components/auth/PermissionGuard";
 
 // Registration
@@ -104,7 +103,6 @@ export const router = createBrowserRouter([
   { path: "/login/deactivated", element: <DeactivatedPage /> },
   { path: "/login/under-review", element: <UnderReviewPage /> },
   { path: "/login/rejected", element: <RejectedPage /> },
-  { path: "/setup-demo", element: <SetupDemoPage /> },
 
   // Registration flow
   { path: "/register", element: <RegisterPhonePage /> },

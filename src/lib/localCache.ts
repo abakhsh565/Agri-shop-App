@@ -14,6 +14,7 @@
  */
 
 const CACHE_PREFIX = "agrishop_cache_";
+const OWNER_KEY = CACHE_PREFIX + "owner";
 const STALE_MS = 5 * 60 * 1000; // 5 minutes
 
 interface CacheEntry<T> {
@@ -58,6 +59,38 @@ export function setCachedData<T>(key: string, data: T): void {
 /** Remove cached data for a key. */
 export function clearCachedData(key: string): void {
   localStorage.removeItem(CACHE_PREFIX + key);
+}
+
+/** Drop every cached payload, and the ownership marker with it. */
+export function clearAllCachedData(): void {
+  try {
+    const doomed: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith(CACHE_PREFIX)) doomed.push(key);
+    }
+    doomed.forEach((key) => localStorage.removeItem(key));
+  } catch {
+    // localStorage unavailable — nothing to clear
+  }
+}
+
+/**
+ * Bind the cache to the identity allowed to read it.
+ *
+ * Cached rows paint instantly on the next launch, so a device used by more than
+ * one shop or user must never show one account's rows to another. Anything
+ * cached under a different identity is dropped before it can be rendered.
+ */
+export function adoptCacheOwner(ownerId: string): void {
+  try {
+    if (localStorage.getItem(OWNER_KEY) !== ownerId) {
+      clearAllCachedData();
+      localStorage.setItem(OWNER_KEY, ownerId);
+    }
+  } catch {
+    // localStorage unavailable — the cache is inert anyway
+  }
 }
 
 /**

@@ -124,7 +124,20 @@ export interface ScanResult {
  * barcode scanning. Works on Android WebView, Chrome, Safari, and PWA.
  * Returns the first detected barcode, or null if the user cancels.
  */
-export async function scanFromCamera(): Promise<ScanResult | null> {
+interface ScannerLabels {
+  /** Shown under the viewfinder while the camera is live. */
+  hint: string;
+  /** The cancel control's label. */
+  cancel: string;
+}
+
+/**
+ * The camera overlay is built as raw DOM, so it cannot call `useT()` itself. The two
+ * strings it draws are therefore passed in by the caller, which is a component and
+ * does have the translator — otherwise the scanner was the one surface left in
+ * English no matter what language the shop was using.
+ */
+export async function scanFromCamera(labels: ScannerLabels): Promise<ScanResult | null> {
   // Try Capacitor MLKit first (only works on native Android/iOS with plugin registered)
   try {
     const { BarcodeScanner, BarcodeFormat } = await import("@capacitor-mlkit/barcode-scanning");
@@ -172,8 +185,8 @@ export async function scanFromCamera(): Promise<ScanResult | null> {
         </div>
       </div>
       <div style="padding:20px;text-align:center;background:#000;">
-        <p style="color:#fff;font-size:14px;margin:0 0 12px;">Point camera at a barcode</p>
-        <button id="barcode-cancel-btn" style="background:#333;color:#fff;border:none;padding:12px 32px;border-radius:24px;font-size:14px;font-weight:600;">Cancel</button>
+        <p style="color:#fff;font-size:14px;margin:0 0 12px;">${labels.hint}</p>
+        <button id="barcode-cancel-btn" style="background:#333;color:#fff;border:none;padding:12px 32px;border-radius:24px;font-size:14px;font-weight:600;">${labels.cancel}</button>
       </div>
       <style>@keyframes scanLine{0%,100%{transform:translateY(-60px)}50%{transform:translateY(60px)}}</style>
     `;

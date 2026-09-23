@@ -10,9 +10,11 @@ import { useT } from "@/lib/i18n";
 import { generateReminders } from "@/lib/reminderEngine";
 import { useThemeStore } from "@/stores/themeStore";
 import { useCurrentTime } from "@/lib/useCurrentTime";
-import { ShoppingCart, CreditCard, ChevronRight, Bell, Search, ArrowRight } from "lucide-react";
+import { ShoppingCart, CreditCard, ChevronRight, Bell, Search, ArrowRight, ClipboardList } from "lucide-react";
 import { pkToday, pkDateFromISO } from "@/lib/pkDate";
 import StatusBar from "@/components/ui/StatusBar";
+import ListCard from "@/components/ui/ListCard";
+import ListRow from "@/components/ui/ListRow";
 
 function initBgColor(name: string | null | undefined) {
   const colors = ["#84cc16","#3b82f6","#8b5cf6","#f59e0b","#06b6d4","#ec4899"];
@@ -119,7 +121,7 @@ export default function DashboardPage() {
       {showNotifs && (
         <div className="fixed inset-0" style={{ zIndex: 60 }} onClick={() => setShowNotifs(false)}>
           <div
-            className="fixed top-[88px] right-4 w-[280px] rounded-[16px] shadow-2xl overflow-hidden animate-scale-in flex flex-col"
+            className="fixed top-[88px] right-4 w-[280px] rounded-[var(--radius-card)] shadow-2xl overflow-hidden animate-scale-in flex flex-col"
             style={{ zIndex: 61, background: "var(--surface)", border: "1px solid var(--divider)", maxHeight: "360px" }}
             onClick={(e) => e.stopPropagation()}
           >
@@ -129,23 +131,23 @@ export default function DashboardPage() {
               className="px-4 py-3 flex items-center justify-between shrink-0 w-full active:opacity-70 transition-opacity"
               style={{ borderBottom: "1px solid var(--divider)" }}
             >
-              <p className="text-[12px] font-bold uppercase tracking-wider" style={{ color: "var(--text-primary)" }}>
+              <p className="text-12 font-bold uppercase tracking-wider" style={{ color: "var(--text-primary)" }}>
                 {t("dashboard.notifications")}
               </p>
               <div className="flex items-center gap-2">
                 {unread() > 0 && (
-                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full" style={{ background: "var(--brand)", color: "#0a0a0a" }}>
+                  <span className="text-10 font-bold px-1.5 py-0.5 rounded-full" style={{ background: "var(--brand)", color: "#0a0a0a" }}>
                     {unread()}
                   </span>
                 )}
-                <span className="text-[10px]" style={{ color: "var(--text-secondary)" }}>{t("common.viewAll")}</span>
+                <span className="text-10" style={{ color: "var(--text-secondary)" }}>{t("common.viewAll")}</span>
               </div>
             </button>
             {/* Scrollable unread list */}
             <div className="overflow-y-auto flex-1" style={{ maxHeight: "310px" }}>
               {notifications.filter(n => !n.read).length === 0 ? (
                 <div className="px-4 py-6 text-center">
-                  <p className="text-[13px]" style={{ color: "var(--text-secondary)" }}>{t("dashboard.noNotifications") || "No new notifications"}</p>
+                  <p className="text-13" style={{ color: "var(--text-secondary)" }}>{t("dashboard.noNotifications") || "No new notifications"}</p>
                 </div>
               ) : (
                 notifications.filter(n => !n.read).slice(0, 5).map((n) => {
@@ -160,8 +162,8 @@ export default function DashboardPage() {
                       <div className="flex items-start gap-2">
                         <div className="w-2 h-2 rounded-full mt-1.5 shrink-0" style={{ background: "var(--brand)" }} />
                         <div className="flex-1 min-w-0">
-                          <p className="text-[13px] font-semibold" style={{ color: "var(--text-primary)" }}>{tr.title}</p>
-                          {tr.body && <p className="text-[12px] mt-0.5" style={{ color: "var(--text-secondary)" }}>{tr.body}</p>}
+                          <p className="text-13 font-semibold" style={{ color: "var(--text-primary)" }}>{tr.title}</p>
+                          {tr.body && <p className="text-12 mt-0.5" style={{ color: "var(--text-secondary)" }}>{tr.body}</p>}
                         </div>
                       </div>
                     </button>
@@ -179,7 +181,7 @@ export default function DashboardPage() {
       <div className="flex items-center justify-between px-4 py-3 gap-3">
         <button
           onClick={() => navigate("/employee/settings")}
-          className="flex items-center justify-center rounded-full shrink-0 size-[44px] font-bold text-[15px] transition-transform active:scale-95 overflow-hidden"
+          className="flex items-center justify-center rounded-full shrink-0 size-[44px] font-bold text-15 transition-transform active:scale-95 overflow-hidden"
           style={{ background: "var(--brand)", color: "#0a0a0a" }}
         >
           {user?.photoUrl ? (
@@ -190,10 +192,10 @@ export default function DashboardPage() {
         </button>
 
         <div className="flex flex-col flex-1 min-w-0">
-          <p className="font-bold text-[17px] truncate" style={{ color: "var(--text-primary)" }}>
+          <p className="font-bold text-17 truncate" style={{ color: "var(--text-primary)" }}>
             {t(greetingKey)}, {firstName}
           </p>
-          <p className="text-[12px]" style={{ color: "var(--text-secondary)" }}>{dateStr}</p>
+          <p className="text-12" style={{ color: "var(--text-secondary)" }}>{dateStr}</p>
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
@@ -211,7 +213,7 @@ export default function DashboardPage() {
           >
             <Bell size={15} style={{ color: "var(--text-primary)" }} />
             {badgeCount > 0 && (
-              <span className="absolute top-1 right-1 bg-red-500 text-white text-[8px] font-bold rounded-full min-w-[13px] h-[13px] flex items-center justify-center px-[2px]">
+              <span className="absolute top-1 right-1 bg-red-500 text-white text-8 font-bold rounded-full min-w-[13px] h-[13px] flex items-center justify-center px-[2px]">
                 {badgeCount}
               </span>
             )}
@@ -222,17 +224,17 @@ export default function DashboardPage() {
       {/* ── Metric card — brand lime ── */}
       <div className="px-4 animate-fade-in-up">
         <div
-          className="rounded-[16px] p-5 cursor-pointer transition-transform active:scale-[0.98]"
+          className="rounded-[var(--radius-card)] p-5 cursor-pointer transition-transform active:scale-[0.98]"
           style={{ background: "var(--brand)" }}
           onClick={() => navigate("/employee/sales", { state: { tab: "all" } })}
         >
           {/* Label */}
-          <p className="text-[11px] font-bold uppercase tracking-widest mb-1" style={{ color: "rgba(0,0,0,0.55)" }}>
+          <p className="text-11 font-bold uppercase tracking-widest mb-1" style={{ color: "rgba(0,0,0,0.55)" }}>
             {t("dashboard.todaySales")} — {firstName}
           </p>
 
           {/* Total */}
-          <p className="text-[34px] font-bold leading-none mb-4" style={{ color: "#0a0a0a" }}>
+          <p className="text-34 font-bold leading-none mb-4" style={{ color: "#0a0a0a" }}>
             {formatRs(totalAmount)}
           </p>
 
@@ -244,10 +246,10 @@ export default function DashboardPage() {
               className="flex items-center gap-3 group"
             >
               <div>
-                <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "rgba(0,0,0,0.5)" }}>
+                <p className="text-10 font-semibold uppercase tracking-wider" style={{ color: "rgba(0,0,0,0.5)" }}>
                   {t("dashboard.paid")}
                 </p>
-                <p className="text-[18px] font-bold" style={{ color: "#0a0a0a" }}>
+                <p className="text-18 font-bold" style={{ color: "#0a0a0a" }}>
                   {paidAmount.toLocaleString("en-PK")}
                 </p>
               </div>
@@ -268,10 +270,10 @@ export default function DashboardPage() {
               className="flex items-center gap-3 group"
             >
               <div>
-                <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "rgba(0,0,0,0.5)" }}>
+                <p className="text-10 font-semibold uppercase tracking-wider" style={{ color: "rgba(0,0,0,0.5)" }}>
                   {t("dashboard.credit")}
                 </p>
-                <p className="text-[18px] font-bold" style={{ color: "#0a0a0a" }}>
+                <p className="text-18 font-bold" style={{ color: "#0a0a0a" }}>
                   {formatRs(creditAmount)}
                 </p>
               </div>
@@ -289,29 +291,29 @@ export default function DashboardPage() {
 
       {/* ── Today's activity: Transactions · Customers served ── */}
       <div className="px-4 pt-3 flex gap-2.5 animate-fade-in-up delay-75">
-        <div className="flex-1 rounded-[12px] px-4 py-3" style={{ background: "var(--surface-2)" }}>
-          <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
+        <div className="flex-1 rounded-[var(--radius-tile)] px-4 py-3" style={{ background: "var(--surface-2)" }}>
+          <p className="text-10 font-semibold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
             {t("admin.transactions")}
           </p>
-          <p className="text-[18px] font-bold mt-0.5" style={{ color: "var(--text-primary)" }}>{txCount}</p>
+          <p className="text-18 font-bold mt-0.5" style={{ color: "var(--text-primary)" }}>{txCount}</p>
         </div>
-        <div className="flex-1 rounded-[12px] px-4 py-3" style={{ background: "var(--surface-2)" }}>
-          <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
+        <div className="flex-1 rounded-[var(--radius-tile)] px-4 py-3" style={{ background: "var(--surface-2)" }}>
+          <p className="text-10 font-semibold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
             {t("admin.customersServed")}
           </p>
-          <p className="text-[18px] font-bold mt-0.5" style={{ color: "var(--text-primary)" }}>{customersServed}</p>
+          <p className="text-18 font-bold mt-0.5" style={{ color: "var(--text-primary)" }}>{customersServed}</p>
         </div>
       </div>
 
       {/* ── Quick Actions ── */}
       <div className="px-4 pt-4 animate-fade-in-up delay-75">
-        <p className="text-[11px] font-bold uppercase tracking-widest mb-3" style={{ color: "var(--text-secondary)" }}>
+        <p className="text-11 font-bold uppercase tracking-widest mb-3" style={{ color: "var(--text-secondary)" }}>
           {t("dashboard.quickActions")}
         </p>
         <div className="flex gap-3">
           <button
             onClick={() => navigate("/employee/sale")}
-            className="flex-1 h-12 rounded-full font-bold text-[14px] flex items-center justify-center gap-2 transition-transform active:scale-[0.97]"
+            className="flex-1 h-12 rounded-full font-bold text-14 flex items-center justify-center gap-2 transition-transform active:scale-[0.97]"
             style={{ background: "var(--brand)", color: "#0a0a0a" }}
           >
             <ShoppingCart size={15} strokeWidth={2.5} />
@@ -319,7 +321,7 @@ export default function DashboardPage() {
           </button>
           <button
             onClick={() => navigate("/employee/customers")}
-            className="flex-1 h-12 rounded-full font-bold text-[14px] flex items-center justify-center gap-2 transition-transform active:scale-[0.97]"
+            className="flex-1 h-12 rounded-full font-bold text-14 flex items-center justify-center gap-2 transition-transform active:scale-[0.97]"
             style={{ border: "1.5px solid var(--divider)", color: "var(--text-primary)", background: "transparent" }}
           >
             <CreditCard size={15} strokeWidth={2} />
@@ -330,59 +332,54 @@ export default function DashboardPage() {
 
       {/* ── Recent Sales ── */}
       <div className="px-4 pt-5 pb-4 animate-fade-in-up delay-150">
-        <p className="text-[11px] font-bold uppercase tracking-widest mb-3" style={{ color: "var(--text-secondary)" }}>
+        <p className="text-11 font-bold uppercase tracking-widest mb-3" style={{ color: "var(--text-secondary)" }}>
           {t("dashboard.recentSales")}
         </p>
-        <div className="rounded-[14px] overflow-hidden" style={{ border: "1px solid var(--divider)" }}>
+        <ListCard>
           {recentSales.length === 0 ? (
             <div className="px-4 py-8 text-center">
-              <p className="text-2xl mb-1">📋</p>
-              <p className="text-[13px]" style={{ color: "var(--text-secondary)" }}>{t("admin.noSalesYetToday")}</p>
+              <ClipboardList size={24} className="mx-auto block mb-1" style={{ color: "var(--text-tertiary)" }} />
+              <p className="text-13" style={{ color: "var(--text-secondary)" }}>{t("admin.noSalesYetToday")}</p>
             </div>
-          ) : recentSales.map((sale, i) => {
+          ) : recentSales.map((sale) => {
             const cImg = getCustomerImg(sale.customerId);
             const cBg = initBgColor(sale.customerName);
             return (
-            <button
+            <ListRow
               key={sale.id}
               onClick={() => navigate(`/employee/sales/${sale.id}`)}
-              className="flex items-center justify-between px-4 py-3.5 w-full text-start transition-colors active:opacity-70"
-              style={{
-                borderBottom: i < recentSales.length - 1 ? "1px solid var(--divider)" : "none",
-                background: "var(--background)",
-              }}
-            >
-              <div className="flex items-center gap-3 flex-1 min-w-0">
-                {cImg ? (
-                  <img src={cImg} alt={sale.customerName} className="size-9 rounded-full object-cover shrink-0" />
-                ) : (
-                  <div className="size-9 rounded-full shrink-0 flex items-center justify-center text-[11px] font-bold" style={{ background: cBg, color: "#fff" }}>
-                    {sale.customerName.charAt(0).toUpperCase()}
-                  </div>
-                )}
-                <div className="min-w-0">
-                  <p className="text-[13px] font-bold" style={{ color: "var(--text-primary)" }}>{sale.customerName}</p>
-                  <p className="text-[10px] mt-0.5" style={{ color: "var(--text-secondary)" }}>{formatSmartDateTime(sale.createdAt, now, t)}</p>
+              tile={cImg ? (
+                <img src={cImg} alt={sale.customerName} className="size-9 rounded-full object-cover shrink-0" />
+              ) : (
+                <div className="size-9 rounded-full shrink-0 flex items-center justify-center text-11 font-bold" style={{ background: cBg, color: "#fff" }}>
+                  {sale.customerName.charAt(0).toUpperCase()}
                 </div>
-              </div>
-              <div className="flex flex-col items-end gap-1 shrink-0">
-                <span className="text-[13px] font-bold" style={{ color: "var(--text-primary)" }}>
-                  {formatRs(sale.totalAmount)}
-                </span>
-                {sale.paymentType !== "full" ? (
-                  <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full" style={{ background: "rgba(239,68,68,0.1)", color: "#ef4444" }}>
-                    {t("common.creditTag")}
+              )}
+              trailing={
+                <div className="flex flex-col items-end gap-1 shrink-0">
+                  <span className="text-13 font-bold" style={{ color: "var(--text-primary)" }}>
+                    {formatRs(sale.totalAmount)}
                   </span>
-                ) : (
-                  <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full" style={{ background: "rgba(132,204,22,0.15)", color: "var(--brand-dark)" }}>
-                    {t("common.paidTag")}
-                  </span>
-                )}
+                  {sale.paymentType !== "full" ? (
+                    <span className="text-10 font-semibold px-1.5 py-0.5 rounded-full" style={{ background: "rgba(239,68,68,0.1)", color: "#ef4444" }}>
+                      {t("common.creditTag")}
+                    </span>
+                  ) : (
+                    <span className="text-10 font-semibold px-1.5 py-0.5 rounded-full" style={{ background: "rgba(132,204,22,0.15)", color: "var(--brand-dark)" }}>
+                      {t("common.paidTag")}
+                    </span>
+                  )}
+                </div>
+              }
+            >
+              <div className="min-w-0">
+                <p className="text-13 font-bold" style={{ color: "var(--text-primary)" }}>{sale.customerName}</p>
+                <p className="text-10 mt-0.5" style={{ color: "var(--text-secondary)" }}>{formatSmartDateTime(sale.createdAt, now, t)}</p>
               </div>
-            </button>
+            </ListRow>
             );
           })}
-        </div>
+        </ListCard>
       </div>
     </div>
     </PullToRefresh>

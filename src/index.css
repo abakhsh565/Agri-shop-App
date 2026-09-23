@@ -1,5 +1,8 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap');
+/* One font, deliberately. A second family was imported here and never rendered:
+   nothing in src/ ever applied it, so an installed app was downloading a whole extra
+   webfont on first launch for no glyph. Inter is the product's single typeface, and
+   every stray font class is remapped to it below so a design export cannot add one. */
 
 @import 'tailwindcss';
 
@@ -25,39 +28,155 @@
   --radius-lg: calc(var(--radius) + 4px);
   --radius-pill: var(--radius-pill);
   --radius-input: var(--radius-input);
+  /* Font sizes are generated from the ramp in :root — a screen writes text-13,
+     never text-[13px], so no screen owns a size. */
+  --text-8: var(--fs-8);
+  --text-9: var(--fs-9);
+  --text-10: var(--fs-10);
+  --text-11: var(--fs-11);
+  --text-12: var(--fs-12);
+  --text-13: var(--fs-13);
+  --text-14: var(--fs-14);
+  --text-15: var(--fs-15);
+  --text-16: var(--fs-16);
+  --text-17: var(--fs-17);
+  --text-18: var(--fs-18);
+  --text-20: var(--fs-20);
+  --text-22: var(--fs-22);
+  --text-26: var(--fs-26);
+  --text-28: var(--fs-28);
+  --text-32: var(--fs-32);
+  --text-34: var(--fs-34);
 }
 
 :root {
-  --background: #ffffff;
-  --foreground: #000000;
-  --card: #f5f5f5;
-  --card-foreground: #000000;
-  --primary: #000000;
+  /* ── Surface tone ramp ─────────────────────────────────────────────────────
+     Measured off the Claude reference board (1pt = 3px): page #f9faf7 →
+     card #f4f4f2 → separator #f0f0ee. Separation is by TONE — no borders, no
+     shadows on resting surfaces. Card and sunken are lifted one step from the
+     measured values so chips and fields stay legible in daylight. */
+  --tone-page: #f9faf7;
+  --tone-card: #f2f2ef;
+  --tone-sunken: #eaeae6;
+  --hairline: #f0f0ee;          /* measured in-card separator */
+
+  --background: var(--tone-page);
+  --foreground: #090a08;
+  --card: var(--tone-card);
+  --card-foreground: #090a08;
+  --primary: #090a08;
   --primary-foreground: #ffffff;
-  --secondary: #f5f5f5;
-  --secondary-foreground: #000000;
-  --muted: #f5f5f5;
-  --muted-foreground: #888888;
-  --accent: #000000;
+  --secondary: var(--tone-card);
+  --secondary-foreground: #090a08;
+  --muted: var(--tone-sunken);
+  --muted-foreground: #949491;
+  --accent: #090a08;
   --accent-foreground: #ffffff;
-  --border: #d4d4d4;
-  --border-light: #f0f0f0;
+  /* The reference separates surfaces by TONE, not by outline. `--border` and
+     `--divider` are the legacy names the whole app already draws its card edges
+     and separators with, so pointing them at the measured hairline converts every
+     outlined box in the product into a tone surface in one move. */
+  --border: #f0f0ee;
+  --border-light: #f0f0ee;
+  /* Control outline — a SEPARATE job from the hairline above, and the reason this
+     token exists. `--divider` #f0f0ee against a field's `--surface` #f2f2ef is a
+     delta of 2/255: a text field was drawn with no discernible edge, so on the
+     sign-in screen (and every other form) there was nothing telling the user where
+     to type. An in-card separator SHOULD be near-invisible; an input outline on the
+     page must not be, so they can never share one value. Measured against the field
+     tone: #d7d5cc is ~27/255 away from #f2f2ef — visible in daylight on a cheap
+     phone, still lighter than the placeholder so it does not read as a filled box. */
+  --border-control: #d7d5cc;
   --ring: rgba(0, 0, 0, 0.15);
-  --radius: 14px;
+
+  /* ── Text: measured warm neutrals. The board's greys are #7a7a78 / #a3a3a1;
+     lifted so body and secondary text clear 4.5:1 on the warm page tone. */
+  --text-primary: #090a08;
+  --text-secondary: #6e6e6b;
+  --text-tertiary: #949491;
+
+  /* ── Radii (measured) ───────────────────────────────────────────────────── */
+  --radius-sheet: 40px;         /* sheet top corners (measured ~40pt) */
+  --radius-card: 18px;          /* grouped cards (measured 16–20) */
+  --radius-tile: 11px;          /* logo tiles (measured 10–12) */
+  --radius-field: 999px;        /* fields are fully rounded */
+  --radius: 14px;               /* legacy family */
   --radius-pill: 100px;
   --radius-input: 24px;
+
+  /* ── Spacing: 8pt scale + the measured 16pt screen gutter ───────────────── */
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --gutter: 16px;
+
+/* ── Type ramp: the single source of truth for every font size ────────────
+     One token per size the product renders. Screens never write a raw px value;
+     they use the generated utilities (text-13, text-17 …) which resolve here.
+     To shift the whole app's type scale, change the numbers in this block only. */
+  --fs-8: 8px;
+  --fs-9: 9px;
+  --fs-10: 10px;
+  --fs-11: 11px;
+  --fs-12: 12px;
+  --fs-13: 13px;
+  --fs-14: 14px;
+  --fs-15: 15px;
+  --fs-16: 16px;
+  --fs-17: 17px;
+  --fs-18: 18px;
+  --fs-20: 20px;
+  --fs-22: 22px;
+  --fs-26: 26px;
+  --fs-28: 28px;
+  --fs-32: 32px;
+  --fs-34: 34px;
+
+  /* ── Type scale. Two weights only: regular + semibold. ─────────────────── */
+  --text-page-title: 28px;
+  --text-sheet-title: 17px;
+  --text-row: 17px;
+  --text-body: 15px;
+  --text-meta: 13px;
+  --weight-body: 400;
+  --weight-strong: 600;
+
+  /* ── Icons: thin stroke at 24pt (applied to every lucide icon) ─────────── */
+  --icon: 24px;
+  --icon-sm: 18px;
+  --icon-stroke: 1.5;
+
+  /* ── Composite sizes ──────────────────────────────────────────────────── */
+  --field-h: 48px;              /* matches the field height already shipped app-wide */
+  --row-h: 52px;                /* measured 46–64pt on the reference's list cards */
+
+  /* ── Motion ──────────────────────────────────────────────────────────────
+     Short and ease-out, transform/opacity only, so every one of these stays on
+     the compositor and does not repaint a long list on a cheap Android WebView.
+     There is no motion token longer than 280ms: at this size anything slower
+     reads as lag, not as polish. */
+  --dur-1: 120ms;               /* press feedback, colour changes */
+  --dur-2: 200ms;               /* toasts, dialogs */
+  --dur-3: 280ms;               /* sheets and backdrops */
+  --ease-out: cubic-bezier(0.32, 0.72, 0, 1);
+
+  /* The native date/time picker follows our theme instead of the OS default
+     (without this, a dark app opens a white calendar). */
+  color-scheme: light;
+  --date-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23949491' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='4' width='18' height='18' rx='2'/%3E%3Cpath d='M8 2v4M16 2v4M3 10h18'/%3E%3C/svg%3E");
+
   --success: #84cc16;
   --warning: #f59e0b;
   --error: #DC2626;
   --brand: #84cc16;
   --brand-dark: #3f6212;
   --brand-light: #d9f99d;
-  --surface: #ffffff;
-  --surface-2: #f5f5f5;
-  --surface-3: #eeeeee;
-  --text-primary: #000000;
-  --text-secondary: #6B7280;
-  --divider: #e5e5e5;
+  --surface: var(--tone-card);
+  --surface-2: var(--tone-sunken);
+  --surface-3: var(--tone-sunken);
+  --divider: #f0f0ee;
   --error-bg: rgba(239,68,68,0.08);
   --error-border: rgba(239,68,68,0.2);
   --warning-bg: rgba(245,158,11,0.08);
@@ -65,31 +184,45 @@
 }
 
 .dark {
-  --background: #0a0a0a;
-  --foreground: #f5f5f5;
-  --card: #1a1a1a;
-  --card-foreground: #f5f5f5;
-  --primary: #f5f5f5;
-  --primary-foreground: #0a0a0a;
-  --secondary: #1a1a1a;
-  --secondary-foreground: #f5f5f5;
-  --muted: #262626;
-  --muted-foreground: #a3a3a3;
+  /* Same tonal relationships, inverted. On light, a step forward gets DARKER
+     (page → card → separator); on dark it must get LIGHTER, otherwise the
+     ramp collapses. Warm hue family kept so it is one palette, not two. */
+  --tone-page: #0d0d0c;
+  --tone-card: #171716;
+  --tone-sunken: #1e1e1c;
+  --hairline: #242422;
+
+  --background: var(--tone-page);
+  --foreground: #f6f6f4;
+  --card: var(--tone-card);
+  --card-foreground: #f6f6f4;
+  --primary: #f6f6f4;
+  --primary-foreground: #0d0d0c;
+  --secondary: var(--tone-card);
+  --secondary-foreground: #f6f6f4;
+  --muted: var(--tone-sunken);
+  --muted-foreground: #7c7c78;
   --accent: #84cc16;
-  --accent-foreground: #0a0a0a;
-  --border: #f5f5f5;
-  --border-light: #2a2a2a;
+  --accent-foreground: #0d0d0c;
+  --border: #242422;
+  --border-light: #242422;
   --ring: rgba(132, 204, 22, 0.4);
+  --text-primary: #f6f6f4;
+  --text-secondary: #a8a8a4;
+  --text-tertiary: #7c7c78;
+  color-scheme: dark;
+  --date-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23a8a8a4' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='4' width='18' height='18' rx='2'/%3E%3Cpath d='M8 2v4M16 2v4M3 10h18'/%3E%3C/svg%3E");
   --success: #84cc16;
   --warning: #f59e0b;
   --error: #DC2626;
   --brand: #84cc16;
-  --surface: #0a0a0a;
-  --surface-2: #1a1a1a;
-  --surface-3: #262626;
-  --text-primary: #f5f5f5;
-  --text-secondary: #a3a3a3;
-  --divider: #2a2a2a;
+  --surface: var(--tone-card);
+  --surface-2: var(--tone-sunken);
+  --surface-3: var(--tone-sunken);
+  --divider: #242422;
+  /* Same job as in light, tuned for the dark ramp: #171716 field tone → #3a3a34
+     is ~35/255, so a field still has an edge without becoming a bright outline. */
+  --border-control: #3a3a34;
   --error-bg: rgba(239,68,68,0.15);
   --error-border: rgba(239,68,68,0.3);
   --warning-bg: rgba(245,158,11,0.12);
@@ -135,23 +268,37 @@ textarea,
 }
 
 /* Global input polish — Claude-inspired clean style */
-input[type="text"],
-input[type="number"],
-input[type="tel"],
-input[type="email"],
-input[type="password"],
-input[type="date"],
-input[type="time"],
-input:not([type]) {
-  border-radius: 14px !important;
-  height: 46px !important;
-  font-size: 13px !important;
-  transition: border-color 0.15s, box-shadow 0.15s;
-}
-select {
-  border-radius: 14px !important;
-  height: 46px !important;
-  font-size: 13px !important;
+/* Standalone field defaults.
+   Inside `base` so Tailwind's `utilities` layer can still size a specific field:
+   an unlayered rule outranks every utility no matter how low its specificity, and
+   that is what used to force 46px-tall inputs into 40px search shells and paint a
+   second box inside the pill. */
+@layer base {
+  :where(
+    input[type="text"],
+    input[type="number"],
+    input[type="tel"],
+    input[type="email"],
+    input[type="password"],
+    input[type="date"],
+    input[type="time"],
+    input:not([type])
+  ) {
+    border-radius: 14px;
+    height: 46px;
+    font-size: var(--fs-13);
+    /* Every standalone field gets a visible edge by default, from the control
+       token. In a `@layer base`, so a screen can still override it deliberately
+       (and `.ds-field input` above already opts the in-shell case out). */
+    border: 1px solid var(--border-control);
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  :where(select) {
+    border-radius: 14px;
+    height: 46px;
+    font-size: var(--fs-13);
+    border: 1px solid var(--border-control);
+  }
 }
 
 /* Global button polish — cleaner transitions */
@@ -159,38 +306,105 @@ button {
   transition: opacity 0.15s, transform 0.1s, background-color 0.15s;
 }
 
-/* Cleaner scrollbar */
-::-webkit-scrollbar {
-  width: 4px;
-}
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-::-webkit-scrollbar-thumb {
-  background: var(--divider);
-  border-radius: 4px;
-}
-
 /* ═══════════════════════════════════════════════════════════════
    DESIGN SYSTEM — Claude-inspired premium UI foundation
    ═══════════════════════════════════════════════════════════════ */
 
-/* ── Card: the fundamental content container ── */
+/* ═══════════════════════════════════════════════════════════════
+   DATE / TIME FIELDS — our field, not the browser's
+   ═══════════════════════════════════════════════════════════════
+   Unlayered on purpose: these must beat the `h-10 rounded-[…]` utilities and
+   the inline border/background that screens used to hand a date input, which is
+   what left browser chrome sitting inside our own fields.
+
+   Behaviour is untouched: the native picker indicator is stretched to cover the
+   whole field and made transparent, so tapping anywhere opens the same native
+   calendar; only its glyph and chrome are replaced, by our own thin-stroke icon
+   taken from a token so it follows light/dark. */
+input[type="date"],
+input[type="time"] {
+  appearance: none;
+  -webkit-appearance: none;
+  position: relative;
+  height: var(--field-h);
+  min-height: var(--field-h);
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-field);
+  background-color: var(--tone-card);
+  background-image: var(--date-icon);
+  background-repeat: no-repeat;
+  background-position: right var(--space-4) center;
+  background-size: var(--icon-sm) var(--icon-sm);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: var(--text-body);
+  padding-inline: var(--space-4) calc(var(--space-4) + var(--icon-sm) + var(--space-2));
+  text-align: start;
+}
+[dir="rtl"] input[type="date"],
+[dir="rtl"] input[type="time"] {
+  background-position: left var(--space-4) center;
+}
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="time"]::-webkit-calendar-picker-indicator {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+/* The browser's own mm/dd/yyyy placeholder is the one piece of chrome that
+   cannot be replaced from CSS; dimming it makes an empty field read as empty
+   instead of as text already entered. */
+input[type="date"]::-webkit-datetime-edit,
+input[type="time"]::-webkit-datetime-edit {
+  color: var(--text-secondary);
+  font-family: inherit;
+}
+input[type="date"]:disabled,
+input[type="time"]:disabled {
+  opacity: 0.45;
+}
+
+/* ── Skeleton: the shape of the row that is coming, not a blank screen ──
+   One animated gradient on `background-position` (compositor-friendly, no
+   layout work) with the tone ramp, so it reads as the same surface as the card
+   it becomes. */
+.ds-skeleton {
+  background-color: var(--tone-sunken);
+  background-image: linear-gradient(
+    90deg,
+    var(--tone-sunken) 25%,
+    var(--tone-card) 37%,
+    var(--tone-sunken) 63%
+  );
+  background-size: 400% 100%;
+  border-radius: var(--radius-tile);
+  animation: shimmer 1.4s ease-in-out infinite;
+}
+
+/* ── Card: the fundamental content container ──
+   Radius and surface come from the measured tokens, so one value governs every
+   card in the app instead of each screen restating 12/14/16/18/20px. NOTE: this
+   block is intentionally unlayered — Tailwind v4 puts utilities in @layer
+   utilities and layer order is compared before specificity, so a layered copy of
+   these classes would lose to the plain utilities. */
 .ds-card {
-  background: var(--surface);
+  background: var(--tone-card);
   border: 1px solid var(--divider);
-  border-radius: 16px;
+  border-radius: var(--radius-card);
   padding: 16px;
 }
 .ds-card-lg {
-  background: var(--surface);
+  background: var(--tone-card);
   border: 1px solid var(--divider);
-  border-radius: 18px;
+  border-radius: var(--radius-card);
   padding: 20px;
 }
 .ds-card-flat {
-  background: var(--surface-2);
-  border-radius: 14px;
+  background: var(--tone-card);
+  border-radius: var(--radius-card);
   padding: 16px;
 }
 
@@ -199,7 +413,7 @@ button {
   padding: 0 20px;
 }
 .ds-section-title {
-  font-size: 11px;
+  font-size: var(--fs-11);
   font-weight: 600;
   letter-spacing: 0.05em;
   text-transform: uppercase;
@@ -231,7 +445,7 @@ button {
   height: 46px;
   padding: 0 24px;
   border-radius: 14px;
-  font-size: 13px;
+  font-size: var(--fs-13);
   font-weight: 600;
   background: #1a1a1a;
   color: #fff;
@@ -249,7 +463,7 @@ button {
   height: 46px;
   padding: 0 24px;
   border-radius: 14px;
-  font-size: 13px;
+  font-size: var(--fs-13);
   font-weight: 600;
   background: var(--surface);
   color: var(--text-primary);
@@ -268,7 +482,7 @@ button {
   height: 46px;
   padding: 0 24px;
   border-radius: 14px;
-  font-size: 13px;
+  font-size: var(--fs-13);
   font-weight: 600;
   background: var(--brand);
   color: #0a0a0a;
@@ -286,7 +500,7 @@ button {
   height: 46px;
   padding: 0 24px;
   border-radius: 14px;
-  font-size: 13px;
+  font-size: var(--fs-13);
   font-weight: 600;
   background: var(--error);
   color: #fff;
@@ -304,7 +518,7 @@ button {
   height: 42px;
   padding: 0 20px;
   border-radius: 100px;
-  font-size: 13px;
+  font-size: var(--fs-13);
   font-weight: 600;
   background: #1a1a1a;
   color: #fff;
@@ -322,7 +536,7 @@ button {
   height: 42px;
   padding: 0 20px;
   border-radius: 100px;
-  font-size: 13px;
+  font-size: var(--fs-13);
   font-weight: 600;
   background: transparent;
   color: var(--text-primary);
@@ -340,7 +554,7 @@ button {
   align-items: center;
   padding: 3px 10px;
   border-radius: 100px;
-  font-size: 10px;
+  font-size: var(--fs-10);
   font-weight: 600;
   letter-spacing: 0.02em;
 }
@@ -358,7 +572,7 @@ button {
   align-items: center;
   padding: 6px 14px;
   border-radius: 100px;
-  font-size: 12px;
+  font-size: var(--fs-12);
   font-weight: 500;
   background: var(--surface-2);
   color: var(--text-primary);
@@ -392,14 +606,14 @@ button {
   padding: 14px;
 }
 .ds-stat-label {
-  font-size: 10px;
+  font-size: var(--fs-10);
   font-weight: 600;
   letter-spacing: 0.05em;
   text-transform: uppercase;
   color: var(--text-secondary);
 }
 .ds-stat-value {
-  font-size: 16px;
+  font-size: var(--fs-16);
   font-weight: 700;
   margin-top: 4px;
   color: var(--text-primary);
@@ -448,7 +662,7 @@ button {
   gap: 6px;
 }
 .ds-input-label {
-  font-size: 11px;
+  font-size: var(--fs-11);
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -508,11 +722,9 @@ button {
   }
 }
 
-/* Remap all Figma Geist exports → Inter */
-[class*="font-['Geist"] {
-  font-family: 'Inter', system-ui, sans-serif !important;
-}
-[class*="font-['Rubik"] {
+/* Every exported font class resolves to the one family, so a class name that leaked
+   in from a design export can never introduce a second typeface. */
+[class*="font-['"] {
   font-family: 'Inter', system-ui, sans-serif !important;
 }
 
@@ -563,6 +775,54 @@ button {
 .animate-slide-up     { animation: slideUp    0.28s cubic-bezier(0.32, 0.72, 0, 1) both; }
 .animate-pulse-brand  { animation: pulse-brand 2s infinite; }
 
+/* ── Interaction layer ───────────────────────────────────────────────────────
+   Enter AND exit for every overlay, on transform/opacity only. A panel that
+   only fades in and then vanishes is the thing that reads as cheap; the exit is
+   what makes it feel native. Durations come from the motion tokens, so the whole
+   app moves at one speed. */
+@keyframes sheetOut    { from { transform: translateY(0); }    to { transform: translateY(100%); } }
+@keyframes backdropIn  { from { opacity: 0; }                  to { opacity: 1; } }
+@keyframes backdropOut { from { opacity: 1; }                  to { opacity: 0; } }
+@keyframes dialogIn    { from { opacity: 0; transform: scale(0.96); } to { opacity: 1; transform: scale(1); } }
+@keyframes dialogOut   { from { opacity: 1; transform: scale(1); }    to { opacity: 0; transform: scale(0.96); } }
+@keyframes toastIn     { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes toastOut    { from { opacity: 1; transform: translateY(0); }    to { opacity: 0; transform: translateY(6px); } }
+/* Screens fade only — deliberately no transform. A transformed wrapper becomes the
+   containing block for every `position: fixed` descendant, which would move the
+   tab bar and any open sheet behind it. Opacity has no such effect. */
+@keyframes screenIn    { from { opacity: 0; } to { opacity: 1; } }
+
+.ds-anim-sheet-in   { animation: slideUp     var(--dur-3) var(--ease-out) both; }
+.ds-anim-sheet-out  { animation: sheetOut    var(--dur-3) var(--ease-out) both; }
+.ds-anim-dialog-in  { animation: dialogIn    var(--dur-2) var(--ease-out) both; }
+.ds-anim-dialog-out { animation: dialogOut   var(--dur-2) var(--ease-out) both; }
+.ds-anim-backdrop-in  { animation: backdropIn  var(--dur-2) ease-out both; }
+.ds-anim-backdrop-out { animation: backdropOut var(--dur-2) ease-out both; }
+.ds-anim-toast-in   { animation: toastIn     var(--dur-2) var(--ease-out) both; }
+.ds-anim-toast-out  { animation: toastOut    var(--dur-2) var(--ease-out) both; }
+.ds-anim-screen     { animation: screenIn    var(--dur-2) var(--ease-out) both; }
+
+/* An overlay on its way out must not swallow a tap: nothing fades out on a
+   touch the user did not aim at it, and the next screen is live underneath. */
+.ds-anim-leaving {
+  pointer-events: none !important;
+}
+
+/* ── Reduced motion ─────────────────────────────────────────────────────────
+   One switch for the whole app. Transitions still fire (so state change stays
+   perceivable) but complete instantly, and the JS exit paths read the same
+   preference, so nothing waits on an animation that will never run. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 /* Stagger helpers */
 .delay-75  { animation-delay: 75ms; }
 .delay-150 { animation-delay: 150ms; }
@@ -571,12 +831,33 @@ button {
 .delay-375 { animation-delay: 375ms; }
 .delay-450 { animation-delay: 450ms; }
 
+/* Scrollbars stay hidden app-wide: the swipe rows are dragged, so a visible
+   bar is only noise. Setting `width` alone left the horizontal bar (driven by
+   `height`) painting a line under every filter row on WebView. */
 ::-webkit-scrollbar {
-  width: 0px;
+  display: none;
+  width: 0;
+  height: 0;
+  background: transparent;
+}
+::-webkit-scrollbar-thumb,
+::-webkit-scrollbar-track {
   background: transparent;
 }
 * {
   scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+/* Explicit opt-out for swipe rows, so the intent survives a future global rule. */
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
 }
 
 /* ── Dark mode class-based overrides ──
@@ -588,9 +869,6 @@ button {
 .bg-\[\#f5f5f5\]     { background-color: var(--surface-2) !important; }
 .dark .bg-white            { background-color: var(--background)  !important; }
 .dark .bg-\[\#f5f5f5\]     { background-color: var(--surface-2)   !important; }
-.dark .bg-\[\#eee\]        { background-color: var(--surface-3)   !important; }
-.dark .bg-\[\#f0f0f0\]     { background-color: #1a1a1a            !important; }
-.dark .bg-\[\#eeeeee\]     { background-color: var(--surface-3)   !important; }
 
 /* Active/selected state: bg-black → brand */
 .dark .bg-black            { background-color: var(--brand)       !important; }
@@ -598,20 +876,16 @@ button {
 /* Text — map hardcoded colors to design tokens */
 .text-black          { color: var(--text-primary) !important; }
 .text-\[\#888\]      { color: var(--text-secondary) !important; }
-.text-\[\#888888\]   { color: var(--text-secondary) !important; }
 .dark .text-black          { color: var(--foreground)             !important; }
 .dark .text-\[\#888\]      { color: var(--muted-foreground)       !important; }
-.dark .text-\[\#888888\]   { color: var(--muted-foreground)       !important; }
 .dark .text-white          { color: #0a0a0a                       !important; } /* paired with bg-black → brand */
 
 /* Borders — map hardcoded colors to design tokens */
 .border-\[\#e5e5e5\] { border-color: var(--divider) !important; }
 .border-black        { border-color: var(--border) !important; }
 .dark .border-\[\#e5e5e5\] { border-color: var(--divider)         !important; }
-.dark .border-\[\#f5f5f5\] { border-color: var(--surface-3)       !important; }
 .dark .border-black        { border-color: var(--divider)         !important; }
 .dark .border-b-2.border-black { border-color: var(--brand)       !important; }
-.dark .divide-\[\#e5e5e5\] > * { border-color: var(--divider)     !important; }
 
 /* Inputs & textareas */
 .dark input,
@@ -619,15 +893,27 @@ button {
 .dark select {
   background-color: var(--surface-2) !important;
   color: var(--foreground) !important;
-  border-color: var(--divider) !important;
+  /* The control-outline token, NOT the in-card hairline. This shim carries
+     `!important`, so it outranks the base-layer field rule AND the Input
+     component's own class: pointing it at `--divider` (#242422 in dark, 13/255
+     from the field tone) is what kept every dark-mode field edge invisible even
+     after the token itself was fixed. Measured before: 67/765 from the page;
+     after: 130/765. */
+  border-color: var(--border-control) !important;
 }
 .dark input::placeholder,
 .dark textarea::placeholder {
   color: var(--muted-foreground) !important;
 }
+/* A field that asks to be transparent (a search box sitting inside an already
+   filled pill) must stay transparent — otherwise this shim fills it and the
+   pill shows two overlapping boxes. */
+.dark input.bg-transparent,
+.dark textarea.bg-transparent {
+  background-color: transparent !important;
+}
 
 /* Tab underlines: border-black on active tabs → brand */
-.dark .border-b-2 { border-color: var(--brand) !important; }
 
 /* Lucide icons that use className="text-black" */
 .dark svg.text-black   { color: var(--foreground)       !important; }
@@ -705,23 +991,9 @@ html[dir="rtl"] .absolute.-left-2  { left: auto !important; right: -0.5rem !impo
 }
 
 /* ── 3. Legacy Text Alignment — Auto-flip ── */
-[dir="rtl"] .text-left  { text-align: start !important; }
-[dir="rtl"] .text-right { text-align: end !important; }
 
 /* ── 3b. Padding Auto-flip (physical → logical) ── */
-[dir="rtl"] .pl-2  { padding-left: 0 !important; padding-right: 0.5rem !important; }
-[dir="rtl"] .pl-3  { padding-left: 0 !important; padding-right: 0.75rem !important; }
-[dir="rtl"] .pl-4  { padding-left: 0 !important; padding-right: 1rem !important; }
-[dir="rtl"] .pl-5  { padding-left: 0 !important; padding-right: 1.25rem !important; }
-[dir="rtl"] .pl-6  { padding-left: 0 !important; padding-right: 1.5rem !important; }
-[dir="rtl"] .pl-8  { padding-left: 0 !important; padding-right: 2rem !important; }
 [dir="rtl"] .pl-10 { padding-left: 0 !important; padding-right: 2.5rem !important; }
-[dir="rtl"] .pr-2  { padding-right: 0 !important; padding-left: 0.5rem !important; }
-[dir="rtl"] .pr-3  { padding-right: 0 !important; padding-left: 0.75rem !important; }
-[dir="rtl"] .pr-4  { padding-right: 0 !important; padding-left: 1rem !important; }
-[dir="rtl"] .pr-5  { padding-right: 0 !important; padding-left: 1.25rem !important; }
-[dir="rtl"] .pr-6  { padding-right: 0 !important; padding-left: 1.5rem !important; }
-[dir="rtl"] .pr-8  { padding-right: 0 !important; padding-left: 2rem !important; }
 [dir="rtl"] .pr-10 { padding-right: 0 !important; padding-left: 2.5rem !important; }
 
 /* ── 4. Scrollbar Direction ── */
@@ -753,5 +1025,192 @@ body:has(.fixed.inset-0.z-50) {
   overflow: hidden !important;
   position: fixed;
   width: 100%;
+}
+
+/* ===========================================================================
+   DESIGN LANGUAGE
+   Derived from measurements off the Claude reference board (1pt = 3px):
+     type 28/17/17/15/13, two weights only | spacing 8/12/16/24/32 | gutter 16
+     radii: sheet 40 / card 18 / tile 11 / fields fully rounded
+     tone ramp page -> card -> hairline | three text greys
+   Everything here is opt-in: a screen adopts the language by using these
+   classes and the --tone-* / --radius-* tokens instead of hardcoded hexes.
+   =========================================================================== */
+
+/* Thin-stroke icons: the reference draws icons at ~1.5px strokes, 24pt. */
+svg.lucide {
+  stroke-width: var(--icon-stroke);
+}
+
+@layer components {
+  /* -- Type -- */
+  .ds-title-page    { font-size: var(--text-page-title); font-weight: var(--weight-strong); color: var(--text-primary); line-height: 1.15; }
+  .ds-title-sheet   { font-size: var(--text-sheet-title); font-weight: var(--weight-strong); color: var(--text-primary); }
+  .ds-section       { font-size: var(--text-meta); font-weight: var(--weight-strong); color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.06em; }
+  .ds-row-label     { font-size: var(--text-row); font-weight: var(--weight-body); color: var(--text-primary); }
+  .ds-row-strong    { font-size: var(--text-row); font-weight: var(--weight-strong); color: var(--text-primary); }
+  .ds-row-qualifier { font-size: var(--text-row); font-weight: var(--weight-body); color: var(--text-tertiary); }
+  .ds-row-value     { font-size: var(--text-row); font-weight: var(--weight-body); color: var(--text-secondary); }
+  .ds-row-meta      { font-size: var(--text-meta); font-weight: var(--weight-body); color: var(--text-tertiary); }
+  .ds-row-desc      { font-size: var(--text-body); font-weight: var(--weight-body); color: var(--text-secondary); line-height: 1.4; }
+  .ds-body          { font-size: var(--text-body); font-weight: var(--weight-body); color: var(--text-primary); }
+  .ds-meta          { font-size: var(--text-meta); font-weight: var(--weight-body); color: var(--text-secondary); }
+
+  /* -- Grouped list card: tone surface, inset hairline separators --
+     No border, no shadow on a resting surface. Rows are separated by a hairline
+     that starts after the leading slot (--row-inset), never edge to edge. */
+  .ds-listcard {
+    background: var(--tone-card);
+    border-radius: var(--radius-card);
+    overflow: hidden;
+  }
+  .ds-listcard > * + * {
+    position: relative;
+  }
+  /* The separator inset has exactly ONE owner: the row. ListRow measures its own
+     leading slot and publishes `--row-inset` on itself, and ::before inherits a
+     custom property from its originating element, so the rule lines up with that
+     row's content. The 16px fallback is only for a row that publishes nothing
+     (a text-only row), and must never be re-derived per card — a card-level value
+     cannot describe a card whose rows have different leading slots. */
+  .ds-listcard > * + *::before {
+    content: "";
+    position: absolute;
+    inset-block-start: 0;
+    inset-inline-start: var(--row-inset, 16px);
+    inset-inline-end: 0;
+    height: 1px;
+    background: var(--hairline);
+  }
+
+  /* -- Rows -- */
+  .ds-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    width: 100%;
+    min-height: var(--row-h);
+    padding-inline: var(--space-4);
+    /* 8pt block padding, so a 44pt tile row measures 60 and a text-only row 52 —
+       both inside the 46–64pt band measured on the reference's list cards. */
+    padding-block: var(--space-2);
+    text-align: start;
+    background: transparent;
+  }
+  .ds-row-top {
+    align-items: flex-start;
+  }
+  /* Pressed/disabled feedback lives here rather than in utility classes on the
+     element, so every row behaves the same wherever it is used. */
+  .ds-row {
+    transition: opacity 120ms ease;
+  }
+  button.ds-row:active {
+    opacity: 0.7;
+  }
+  button.ds-row:disabled {
+    opacity: 0.4;
+  }
+
+  /* -- Logo tile -- */
+  .ds-tile {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    overflow: hidden;
+    border-radius: var(--radius-tile);
+    background: var(--tone-sunken);
+    color: var(--text-secondary);
+    font-weight: var(--weight-strong);
+    box-shadow: inset 0 0 0 1px var(--hairline);
+  }
+
+  /* -- Field: fully rounded, tone filled, no border -- */
+  .ds-field {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    width: 100%;
+    min-height: var(--field-h);
+    padding-inline: var(--space-4);
+    border-radius: var(--radius-field);
+    background: var(--tone-card);
+    /* The field's edge, from the control-outline token — not the in-card hairline,
+       which is 2/255 away from this background and therefore invisible. */
+    border: 1px solid var(--border-control);
+    color: var(--text-primary);
+    text-align: start;
+  }
+
+  /* An input INSIDE a field shell defers to the shell: it must never draw a second
+     box inside the pill. Stated once here so any input placed in a `.ds-field`
+     inherits the rule instead of each component remembering to opt out. */
+  .ds-field input {
+    border: 0;
+    background: transparent;
+  }
+
+  /* -- Modal sheet -- */
+  .ds-sheet {
+    background: var(--tone-page);
+    border-start-start-radius: var(--radius-sheet);
+    border-start-end-radius: var(--radius-sheet);
+  }
+  .ds-grabber {
+    width: 36px;
+    height: 5px;
+    margin: var(--space-2) auto 0;
+    border-radius: 999px;
+    background: var(--border);
+  }
+  .ds-backdrop {
+    background: rgba(0, 0, 0, 0.32);
+  }
+
+  /* -- Circular icon button -- */
+  .ds-iconbtn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    flex-shrink: 0;
+    border-radius: 999px;
+    background: var(--tone-card);
+    color: var(--text-secondary);
+  }
+  .ds-iconbtn {
+    transition: transform var(--dur-1) var(--ease-out), opacity var(--dur-1) var(--ease-out);
+  }
+  .ds-iconbtn:active {
+    opacity: 0.7;
+    transform: scale(0.92);
+  }
+
+  /* Tap feedback for anything tappable that is not already a row. Opt-in, so a
+     screen adopts it deliberately rather than the whole app scaling at once. */
+  .ds-pressable {
+    transition: transform var(--dur-1) var(--ease-out), opacity var(--dur-1) var(--ease-out);
+  }
+  .ds-pressable:active {
+    transform: scale(0.975);
+    opacity: 0.9;
+  }
+
+  /* -- Pill (compact action, inverts with the theme) -- */
+  .ds-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
+    height: 36px;
+    padding-inline: var(--space-4);
+    border-radius: 999px;
+    font-size: var(--text-meta);
+    font-weight: var(--weight-strong);
+    background: var(--text-primary);
+    color: var(--tone-page);
+  }
 }
 

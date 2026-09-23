@@ -7,6 +7,7 @@ import { applyOverrides, diffOverrides, overrideCount, overridesToStore } from "
 import EmployeeAccessEditor from "@/components/admin/EmployeeAccessEditor";
 import InviteLinkCard from "@/components/admin/InviteLinkCard";
 import { useEmployeesStore } from "@/stores/employeesStore";
+import { SkeletonList } from "@/components/ui/Skeleton";
 import { usePermissionsStore } from "@/stores/permissionsStore";
 import { useRolesStore } from "@/stores/rolesStore";
 import { useSalesStore } from "@/stores/salesStore";
@@ -17,13 +18,15 @@ import { supabase } from "@/lib/supabase";
 import StatusBar from "@/components/ui/StatusBar";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import NavHeader from "@/components/ui/NavHeader";
+import ListCard from "@/components/ui/ListCard";
+import ListRow from "@/components/ui/ListRow";
 import { formatCurrency, formatSmartDateTime } from "@/lib/formatters";
 import { pkToday, pkDateFromISO } from "@/lib/pkDate";
 import { useCurrentTime } from "@/lib/useCurrentTime";
 import {
   Phone, Hash, ShieldCheck, UserX, UserCheck, Clock,
   TrendingUp, ShoppingCart, Users, Calendar, ChevronRight,
-  Eye,
+  Eye, Search,
 } from "lucide-react";
 import type { Sale, MembershipRole } from "@/types";
 
@@ -55,6 +58,9 @@ export default function EmployeeDetailPage() {
   const now = useCurrentTime();
 
   const emp = employees.find((e) => e.id === employeeId);
+  // Until the store has loaded, a missing employee means "not here yet" — rendering
+  // "not found" then is a false claim about data that has not arrived.
+  const employeesReady = useEmployeesStore((s) => s.ready);
 
   // Access editing state
   const [showPermEditor, setShowPermEditor] = useState(false);
@@ -119,10 +125,14 @@ export default function EmployeeDetailPage() {
     <div style={{ background: "var(--background)", color: "var(--text-primary)" }} className="flex flex-col min-h-full">
       <StatusBar />
       <NavHeader title={t("admin.employees")} />
-      <div className="flex flex-col items-center py-20 gap-2">
-        <p className="text-3xl">🔍</p>
-        <p className="text-sm" style={{ color: "var(--text-secondary)" }}>{t("empDetail.notFound")}</p>
-      </div>
+      {employeesReady ? (
+        <div className="flex flex-col items-center py-20 gap-2">
+          <Search size={28} className="mx-auto block" style={{ color: "var(--text-tertiary)" }} />
+          <p className="text-sm" style={{ color: "var(--text-secondary)" }}>{t("empDetail.notFound")}</p>
+        </div>
+      ) : (
+        <SkeletonList rows={4} />
+      )}
     </div>
   );
 
@@ -260,7 +270,7 @@ export default function EmployeeDetailPage() {
       {/* Avatar + name card */}
       <div className="px-4 pt-3 animate-fade-in-up">
         <div
-          className="rounded-2xl p-5 flex items-center gap-4"
+          className="rounded-[var(--radius-card)] p-5 flex items-center gap-4"
           style={{ background: "var(--surface-2)", border: "1px solid var(--border-light)" }}
         >
           {emp.photoUrl ? (
@@ -300,33 +310,29 @@ export default function EmployeeDetailPage() {
 
       {/* Contact */}
       <div className="px-4 pt-4 animate-fade-in-up delay-75">
-        <p className="text-[11px] font-bold uppercase tracking-widest mb-3" style={{ color: "var(--text-secondary)" }}>
+        <p className="text-11 font-bold uppercase tracking-widest mb-3" style={{ color: "var(--text-secondary)" }}>
           {t("empDetail.contact")}
         </p>
-        <div className="rounded-xl overflow-hidden" style={{ border: "1px solid var(--border-light)" }}>
+        <ListCard>
           {[
             { icon: Phone, label: t("empDetail.phone"), value: emp.phone },
             { icon: Hash, label: t("empDetail.number"), value: emp.employeeNumber ?? "—" },
-          ].map(({ icon: Icon, label, value }, i, arr) => (
-            <div
+          ].map(({ icon: Icon, label, value }) => (
+            <ListRow
               key={label}
-              className="flex items-center justify-between px-4 py-3.5"
-              style={{ borderBottom: i < arr.length - 1 ? "1px solid var(--divider)" : "none" }}
+              icon={Icon}
+              trailing={<span className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>{value}</span>}
             >
-              <div className="flex items-center gap-3">
-                <Icon size={16} style={{ color: "var(--brand)" }} />
-                <span className="text-sm" style={{ color: "var(--text-secondary)" }}>{label}</span>
-              </div>
-              <span className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>{value}</span>
-            </div>
+              <span className="text-sm" style={{ color: "var(--text-secondary)" }}>{label}</span>
+            </ListRow>
           ))}
-        </div>
+        </ListCard>
       </div>
 
       {/* Job & access — what the employee does, where, and with what access */}
       <div className="px-4 pt-5 animate-fade-in-up delay-100">
         <div className="flex items-center justify-between mb-3">
-          <p className="text-[11px] font-bold uppercase tracking-widest" style={{ color: "var(--text-secondary)" }}>
+          <p className="text-11 font-bold uppercase tracking-widest" style={{ color: "var(--text-secondary)" }}>
             {t("empDetail.accessTitle")}
           </p>
           {canEditAccess && (
@@ -341,7 +347,7 @@ export default function EmployeeDetailPage() {
         </div>
 
         {showPermEditor && canEditAccess ? (
-          <div className="rounded-xl overflow-hidden" style={{ border: "1px solid var(--border-light)" }}>
+          <div className="rounded-[var(--radius-tile)] overflow-hidden" style={{ border: "1px solid var(--border-light)" }}>
             {/* Role */}
             <div className="px-4 py-3" style={{ background: "var(--surface-2)" }}>
               <p className="text-xs font-bold mb-2" style={{ color: "var(--text-secondary)" }}>
@@ -363,7 +369,7 @@ export default function EmployeeDetailPage() {
                           setEditPerms(applyOverrides(perms, storedOverrides));
                         });
                       }}
-                      className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-start"
+                      className="flex items-center gap-3 px-3 py-2.5 rounded-[var(--radius-tile)] text-start"
                       style={{
                         background: selected ? "var(--brand)" : "var(--surface)",
                         color: selected ? "#0a0a0a" : "var(--text-primary)",
@@ -376,7 +382,7 @@ export default function EmployeeDetailPage() {
                   );
                 })}
               </div>
-              <p className="text-[10px] mt-2" style={{ color: "var(--text-secondary)" }}>{t("empDetail.roleHint")}</p>
+              <p className="text-10 mt-2" style={{ color: "var(--text-secondary)" }}>{t("empDetail.roleHint")}</p>
             </div>
 
             {/* Where they can work */}
@@ -388,7 +394,7 @@ export default function EmployeeDetailPage() {
                 <div className="flex gap-2 flex-wrap">
                   <button
                     onClick={() => setEditBranchScope(null)}
-                    className="px-3 py-1.5 rounded-lg text-xs font-semibold"
+                    className="px-3 py-1.5 rounded-[var(--radius-tile)] text-xs font-semibold"
                     style={{
                       background: editBranchScope === null ? "var(--brand)" : "var(--surface)",
                       color: editBranchScope === null ? "#0a0a0a" : "var(--text-secondary)",
@@ -407,7 +413,7 @@ export default function EmployeeDetailPage() {
                           return [...prev, b.id];
                         });
                       }}
-                      className="px-3 py-1.5 rounded-lg text-xs font-semibold"
+                      className="px-3 py-1.5 rounded-[var(--radius-tile)] text-xs font-semibold"
                       style={{
                         background: editBranchScope?.includes(b.id) ? "var(--brand)" : "var(--surface)",
                         color: editBranchScope?.includes(b.id) ? "#0a0a0a" : "var(--text-secondary)",
@@ -427,7 +433,7 @@ export default function EmployeeDetailPage() {
                 {t("empDetail.access")}
               </p>
               <EmployeeAccessEditor roleDefaults={roleDefaults} value={editPerms} onChange={setEditPerms} />
-              <p className="text-[10px] mt-2" style={{ color: "var(--text-secondary)" }}>
+              <p className="text-10 mt-2" style={{ color: "var(--text-secondary)" }}>
                 {roleTemplateName}
                 {changeCount > 0 ? ` · ${t("empDetail.changedFor", { name: emp.name })}` : ""}
               </p>
@@ -438,7 +444,7 @@ export default function EmployeeDetailPage() {
               <button
                 onClick={resetToRoleDefaults}
                 disabled={saving || !hasOverridesToClear}
-                className="flex-1 h-10 rounded-xl font-bold text-xs"
+                className="flex-1 h-10 rounded-[var(--radius-tile)] font-bold text-xs"
                 style={{
                   background: "var(--surface-2)",
                   border: "1px solid var(--divider)",
@@ -451,7 +457,7 @@ export default function EmployeeDetailPage() {
               <button
                 onClick={saveAccessChanges}
                 disabled={saving}
-                className="flex-1 h-10 rounded-xl font-bold text-sm"
+                className="flex-1 h-10 rounded-[var(--radius-tile)] font-bold text-sm"
                 style={{ background: "var(--brand)", color: "#0a0a0a", opacity: saving ? 0.6 : 1 }}
               >
                 {saving ? t("common.saving") : t("common.save")}
@@ -459,7 +465,7 @@ export default function EmployeeDetailPage() {
             </div>
           </div>
         ) : (
-          <div className="rounded-xl overflow-hidden" style={{ border: "1px solid var(--border-light)" }}>
+          <div className="rounded-[var(--radius-tile)] overflow-hidden" style={{ border: "1px solid var(--border-light)" }}>
             <div className="px-4 py-3 flex items-center justify-between">
               <span className="text-sm" style={{ color: "var(--text-secondary)" }}>{t("empDetail.role")}</span>
               <span className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>
@@ -482,7 +488,7 @@ export default function EmployeeDetailPage() {
             </div>
             {changeCount > 0 && (
               <div className="px-4 py-3" style={{ borderTop: "1px solid var(--divider)" }}>
-                <p className="text-[11px]" style={{ color: "var(--text-secondary)" }}>
+                <p className="text-11" style={{ color: "var(--text-secondary)" }}>
                   {t("empDetail.changedFor", { name: emp.name })}
                 </p>
               </div>
@@ -495,7 +501,7 @@ export default function EmployeeDetailPage() {
           showing zeros as "performance" would read as a real result. */}
       {isInvited && (
         <div className="px-4 pt-5 flex flex-col gap-3 animate-fade-in-up delay-[125ms]">
-          <div className="rounded-xl p-4 flex items-start gap-3" style={{ background: "var(--surface-2)", border: "1px solid var(--border-light)" }}>
+          <div className="rounded-[var(--radius-tile)] p-4 flex items-start gap-3" style={{ background: "var(--surface-2)", border: "1px solid var(--border-light)" }}>
             <Clock size={16} className="shrink-0 mt-0.5" style={{ color: "#f59e0b" }} />
             <div>
               <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>{t("empDetail.invitedTitle")}</p>
@@ -512,7 +518,7 @@ export default function EmployeeDetailPage() {
       {/* Performance — only once the person has actually completed onboarding */}
       {!isInvited && (
       <div className="px-4 pt-5 animate-fade-in-up delay-[125ms]">
-        <p className="text-[11px] font-bold uppercase tracking-widest mb-3" style={{ color: "var(--text-secondary)" }}>
+        <p className="text-11 font-bold uppercase tracking-widest mb-3" style={{ color: "var(--text-secondary)" }}>
           {t("empDetail.performance")}
         </p>
         <div className="grid grid-cols-2 gap-3">
@@ -525,14 +531,14 @@ export default function EmployeeDetailPage() {
           ].map(({ icon: Icon, label, value, color }) => (
             <div
               key={label}
-              className="rounded-xl p-3.5"
+              className="rounded-[var(--radius-tile)] p-3.5"
               style={{ background: "var(--surface-2)", border: "1px solid var(--border-light)" }}
             >
               <div className="flex items-center gap-2 mb-1.5">
                 <div className="w-6 h-6 rounded-full flex items-center justify-center" style={{ background: `${color}20` }}>
                   <Icon size={12} style={{ color }} />
                 </div>
-                <span className="text-[10px] font-medium" style={{ color: "var(--text-secondary)" }}>{label}</span>
+                <span className="text-10 font-medium" style={{ color: "var(--text-secondary)" }}>{label}</span>
               </div>
               <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>{value}</p>
             </div>
@@ -545,7 +551,7 @@ export default function EmployeeDetailPage() {
       {!isInvited && (
       <div className="px-4 pt-5 animate-fade-in-up delay-[150ms]">
         <div className="flex items-center justify-between mb-3">
-          <p className="text-[11px] font-bold uppercase tracking-widest" style={{ color: "var(--text-secondary)" }}>
+          <p className="text-11 font-bold uppercase tracking-widest" style={{ color: "var(--text-secondary)" }}>
             {t("empDetail.recentSales")}
           </p>
           {empSales.length > 5 && (
@@ -559,36 +565,36 @@ export default function EmployeeDetailPage() {
           )}
         </div>
         {recentSales.length === 0 ? (
-          <div className="rounded-xl p-6 text-center" style={{ background: "var(--surface-2)", border: "1px solid var(--border-light)" }}>
+          <div className="rounded-[var(--radius-tile)] p-6 text-center" style={{ background: "var(--surface-2)", border: "1px solid var(--border-light)" }}>
             <ShoppingCart size={20} className="mx-auto mb-2" style={{ color: "var(--text-secondary)" }} />
             <p className="text-sm" style={{ color: "var(--text-secondary)" }}>{t("sales.noSales")}</p>
           </div>
         ) : (
-          <div className="rounded-xl overflow-hidden" style={{ border: "1px solid var(--border-light)" }}>
-            {recentSales.map((sale, i) => (
-              <button
+          <ListCard>
+            {recentSales.map((sale) => (
+              <ListRow
                 key={sale.id}
                 onClick={() => navigate(`/admin/sales/${sale.id}`)}
-                className="flex items-center justify-between px-4 py-3 w-full text-start transition-opacity active:opacity-70"
-                style={{ borderBottom: i < recentSales.length - 1 ? "1px solid var(--divider)" : "none" }}
+                trailing={
+                  <span className="text-13 font-bold shrink-0" style={{ color: "var(--text-primary)" }}>
+                    {formatCurrency(sale.totalAmount)}
+                  </span>
+                }
               >
-                <div className="flex-1 min-w-0">
+                <div className="min-w-0">
                   <div className="flex items-center gap-2">
-                    <p className="text-[13px] font-bold truncate" style={{ color: "var(--text-primary)" }}>{sale.customerName}</p>
-                    <span className="text-[10px] shrink-0" style={{ color: "var(--text-secondary)" }}>
+                    <p className="text-13 font-bold truncate" style={{ color: "var(--text-primary)" }}>{sale.customerName}</p>
+                    <span className="text-10 shrink-0" style={{ color: "var(--text-secondary)" }}>
                       {formatSmartDateTime(sale.createdAt, now, t)}
                     </span>
                   </div>
-                  <p className="text-[10px] mt-0.5" style={{ color: "var(--text-secondary)", opacity: 0.7 }}>
+                  <p className="text-10 mt-0.5" style={{ color: "var(--text-secondary)", opacity: 0.7 }}>
                     {sale.items.length} · {sale.paymentType === "full" ? t("sales.paid") : t("sales.credit")}
                   </p>
                 </div>
-                <span className="text-[13px] font-bold shrink-0 ms-2" style={{ color: "var(--text-primary)" }}>
-                  {formatCurrency(sale.totalAmount)}
-                </span>
-              </button>
+              </ListRow>
             ))}
-          </div>
+          </ListCard>
         )}
       </div>
       )}
@@ -598,7 +604,7 @@ export default function EmployeeDetailPage() {
         <div className="grid grid-cols-2 gap-3">
           <button
             onClick={() => navigate("/admin/sales", { state: { employeeId: emp.id } })}
-            className="h-11 rounded-xl font-semibold text-sm flex items-center justify-center gap-2"
+            className="h-11 rounded-[var(--radius-tile)] font-semibold text-sm flex items-center justify-center gap-2"
             style={{ background: "var(--surface-2)", border: "1px solid var(--divider)", color: "var(--text-primary)" }}
           >
             <Eye size={14} />
@@ -606,7 +612,7 @@ export default function EmployeeDetailPage() {
           </button>
           <button
             onClick={() => window.open(`tel:${emp.phone}`, "_self")}
-            className="h-11 rounded-xl font-semibold text-sm flex items-center justify-center gap-2"
+            className="h-11 rounded-[var(--radius-tile)] font-semibold text-sm flex items-center justify-center gap-2"
             style={{ background: "var(--surface-2)", border: "1px solid var(--divider)", color: "var(--text-primary)" }}
           >
             <Phone size={14} />

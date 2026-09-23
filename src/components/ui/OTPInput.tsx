@@ -63,7 +63,7 @@ export default function OTPInput({ value, onChange, length = 6, disabled, error 
           onPaste={handlePaste}
           onFocus={(e) => e.target.select()}
           className={`
-            w-12 h-14 text-center text-xl font-bold rounded-xl border bg-white text-black
+            w-12 h-14 text-center text-xl font-bold rounded-[var(--radius-tile)] border bg-white text-black
             outline-none focus:ring-2 focus:ring-black/20
             ${error ? "border-[#ef4444]" : "border-black"}
             disabled:opacity-40

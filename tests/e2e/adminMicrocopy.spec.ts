@@ -79,7 +79,7 @@ test.describe('Admin microcopy — English and Urdu', () => {
     // In Urdu the button label is Urdu too, so it is addressed by that label — an
     // English-name lookup matches nothing and the "missing validation" would look
     // like a translation bug instead of a test mistake.
-    await page.locator('button', { hasText: /کمپنی شامل کریں/ }).last().click();
+    await page.locator('button', { hasText: /نئی کمپنی/ }).last().click();
 
     const urduValidation = page.getByText('کمپنی کا نام لکھیں۔').first();
     await expect(urduValidation).toBeVisible({ timeout: 10000 });
@@ -98,7 +98,7 @@ test.describe('Admin microcopy — English and Urdu', () => {
     // ── A real save, in Urdu: the success message must be Urdu too ──────────
     const name = `QA Microcopy Supplier ${Date.now().toString(36)}`;
     await page.getByRole('textbox').first().fill(name);
-    await page.locator('button', { hasText: /کمپنی شامل کریں/ }).last().click();
+    await page.locator('button', { hasText: /نئی کمپنی/ }).last().click();
     await expect(page.getByText(new RegExp(name)).first()).toBeVisible({ timeout: 15000 });
 
     const toastText = await page.evaluate(() => document.body.innerText);
@@ -122,7 +122,7 @@ test.describe('Admin microcopy — English and Urdu', () => {
     await page.goto(`${BASE_URL}/login`);
     await page.waitForLoadState('networkidle');
     await expect(page.getByText('خوش آمدید').first()).toBeVisible({ timeout: 15000 });
-    await expect(page.getByText('سائن ان کرنے کے لیے اپنا فون نمبر درج کریں').first()).toBeVisible();
+    await expect(page.getByText('سائن ان کرنے کے لیے اپنا فون نمبر لکھیں').first()).toBeVisible();
     await expect(page.getByText('Welcome back').first()).toHaveCount(0);
 
     const loginScreen = await page.evaluate(() => ({

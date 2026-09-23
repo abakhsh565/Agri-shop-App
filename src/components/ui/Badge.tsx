@@ -15,7 +15,7 @@ export function PaymentBadge({ type, outstandingBalance }: PaymentBadgeProps) {
   if (type === "full") {
     return (
       <span
-        className="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold uppercase whitespace-nowrap"
+        className="inline-flex items-center px-2.5 py-1 rounded-full text-10 font-bold uppercase whitespace-nowrap"
         style={{
           background: "rgba(132,204,22,0.15)",
           color: "#3f6212",
@@ -28,7 +28,7 @@ export function PaymentBadge({ type, outstandingBalance }: PaymentBadgeProps) {
   }
   return (
     <span
-      className="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold uppercase whitespace-nowrap"
+      className="inline-flex items-center px-2.5 py-1 rounded-full text-10 font-bold uppercase whitespace-nowrap"
       style={{
         background: "rgba(245,158,11,0.12)",
         color: "#d97706",
@@ -53,7 +53,7 @@ export function StockBadge({ status, outline, t }: StockBadgeProps) {
   if (outline) {
     return (
       <span
-        className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-medium whitespace-nowrap border"
+        className="inline-flex items-center px-2.5 py-0.5 rounded-full text-10 font-medium whitespace-nowrap border"
         style={{ color, borderColor: color + "66", background: color + "18" }}
       >
         {label}
@@ -70,7 +70,7 @@ export function StockBadge({ status, outline, t }: StockBadgeProps) {
 export function CategoryChip({ label }: { label: string }) {
   return (
     <span
-      className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase whitespace-nowrap"
+      className="inline-flex items-center px-2 py-0.5 rounded-full text-10 font-bold uppercase whitespace-nowrap"
       style={{ background: "var(--text-primary)", color: "var(--background)" }}
     >
       {label}
@@ -86,7 +86,7 @@ export function CreditHealthBadge({ health }: { health: "good" | "warning" | "ov
   }[health];
   return (
     <span
-      className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold whitespace-nowrap"
+      className="inline-flex items-center px-2 py-0.5 rounded-full text-10 font-bold whitespace-nowrap"
       style={{ background: cfg.bg, color: cfg.color, border: `1px solid ${cfg.bd}` }}
     >
       {cfg.label}

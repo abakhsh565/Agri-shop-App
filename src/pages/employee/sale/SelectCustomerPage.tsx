@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
 import SearchBar from "@/components/ui/SearchBar";
@@ -8,6 +8,7 @@ import { useCustomersStore } from "@/stores/customersStore";
 import { formatCurrency } from "@/lib/formatters";
 import { useShellBase } from "@/lib/useShellBase";
 import { useT } from "@/lib/i18n";
+import { withReturn } from "@/lib/dependencyGraph";
 import type { Customer } from "@/types";
 import { Plus } from "lucide-react"
 
@@ -18,6 +19,7 @@ export default function SelectCustomerPage() {
   const { setCustomer } = useCartStore();
   const customers = useCustomersStore((s) => s.customers);
   const [search, setSearch] = useState("");
+  const [searchParams] = useSearchParams();
 
   const filtered = customers.filter(
     (c) =>
@@ -36,6 +38,22 @@ export default function SelectCustomerPage() {
       navigate(`${base}/sale/products`);
     }
   }
+
+  // Coming back from creating a customer mid-sale: the new record is already chosen,
+  // so the flow continues to the products step instead of asking for the same
+  // decision the user just made. Guarded by an effect-free read + a ref so a re-render
+  // cannot select twice.
+  const preselectedId = searchParams.get("customerId");
+  const pickedRef = useRef(false);
+  useEffect(() => {
+    if (!preselectedId || pickedRef.current) return;
+    const c = customers.find((x) => x.id === preselectedId);
+    if (!c) return;
+    pickedRef.current = true;
+    select(c);
+    // `select` is stable for this purpose: it only reads the cart setter and history.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [preselectedId, customers]);
 
   return (
     <div className="flex flex-col bg-white w-full">
@@ -85,8 +103,8 @@ export default function SelectCustomerPage() {
         ))}
 
         <button
-          onClick={() => navigate(`${base}/customers/new`)}
-          className="flex items-center gap-2 px-4 py-4 mx-4 mt-2 bg-[#f5f5f5] rounded-xl"
+          onClick={() => navigate(withReturn(`${base}/customers/new`, `${base}/sale`))}
+          className="flex items-center gap-2 px-4 py-4 mx-4 mt-2 bg-[#f5f5f5] rounded-[var(--radius-tile)]"
         >
           <Plus size={16} className="text-black" />
           <span className="text-sm font-medium text-black">{t("sale.addNewCustomer")}</span>

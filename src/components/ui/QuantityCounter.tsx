@@ -108,13 +108,13 @@ export default function QuantityCounter({
           max={max}
           step={step}
           autoFocus
-          className={`${inputWidth} text-center font-bold text-black bg-white border border-gray-300 rounded-lg outline-none focus:border-[var(--brand)] ${isSmall ? "text-base" : "text-lg"}`}
+          className={`${inputWidth} text-center font-bold text-black bg-white border border-gray-300 rounded-[var(--radius-tile)] outline-none focus:border-[var(--brand)] ${isSmall ? "text-base" : "text-lg"}`}
         />
       ) : (
         <button
           type="button"
           onClick={() => { setIsFocused(true); setInputValue(""); }}
-          className={`${inputWidth} text-center font-bold text-black bg-transparent border border-transparent rounded-lg hover:border-gray-200 ${isSmall ? "text-base min-w-[2.5rem]" : "text-lg min-w-[3rem]"}`}
+          className={`${inputWidth} text-center font-bold text-black bg-transparent border border-transparent rounded-[var(--radius-tile)] hover:border-gray-200 ${isSmall ? "text-base min-w-[2.5rem]" : "text-lg min-w-[3rem]"}`}
         >
           {displayQty}
         </button>

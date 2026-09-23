@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
+import ListCard from "@/components/ui/ListCard";
+import ListRow from "@/components/ui/ListRow";
 import NavHeader from "@/components/ui/NavHeader";
 import ImageUpload from "@/components/ui/ImageUpload";
 import { useCustomersStore } from "@/stores/customersStore";
@@ -246,7 +248,7 @@ export default function CustomerProfilePage() {
   const riskDot = getPaymentStatusColor(paymentStatus).color;
   const riskBg = getPaymentStatusColor(paymentStatus).bg;
   const riskTextColor = getPaymentStatusColor(paymentStatus).color;
-  const riskLabel = getPaymentStatusLabel(paymentStatus, isUrdu);
+  const riskLabel = getPaymentStatusLabel(paymentStatus, t);
 
   // Credit bar color
   const utilColor = usagePct >= 80 ? "#ef4444" : usagePct >= 50 ? "#f59e0b" : "#639922";
@@ -267,15 +269,14 @@ export default function CustomerProfilePage() {
             1. HERO CARD — Avatar, Name, Phone, Risk pill
            ═══════════════════════════════════════════ */}
         <div
-          className="rounded-[16px] p-4 flex gap-3 items-start"
-          style={{ background: "var(--surface-2)" }}
+          className="ds-card flex gap-3 items-start"
         >
           <div className="shrink-0">
             {customer.imageUrl ? (
               <img src={customer.imageUrl} alt={customer.name} className="size-[52px] rounded-full object-cover" />
             ) : (
               <div
-                className="size-[52px] rounded-full flex items-center justify-center text-[20px] font-medium"
+                className="size-[52px] rounded-full flex items-center justify-center text-20 font-medium"
                 style={{ background: initBg, color: "#fff" }}
               >
                 {customer.name.charAt(0).toUpperCase()}
@@ -283,8 +284,8 @@ export default function CustomerProfilePage() {
             )}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-[17px] font-medium truncate" style={{ color: "var(--text-primary)" }}>{customer.name}</p>
-            <p className="text-[13px] mt-0.5" style={{ color: "var(--text-secondary)" }}>
+            <p className="text-17 font-medium truncate" style={{ color: "var(--text-primary)" }}>{customer.name}</p>
+            <p className="text-13 mt-0.5" style={{ color: "var(--text-secondary)" }}>
               {customer.phone}{customer.address ? " \u00a0\u00b7\u00a0 " + customer.address : ""}
             </p>
             <div
@@ -292,7 +293,7 @@ export default function CustomerProfilePage() {
               style={{ background: riskBg }}
             >
               <div className="size-1.5 rounded-full" style={{ background: riskDot }} />
-              <span className="text-[12px] font-medium" style={{ color: riskTextColor }}>
+              <span className="text-12 font-medium" style={{ color: riskTextColor }}>
                 {riskLabel}
               </span>
             </div>
@@ -300,7 +301,7 @@ export default function CustomerProfilePage() {
             {customerCrops.length > 0 && (
               <div className="flex flex-wrap gap-1.5 mt-2">
                 {customerCrops.map((crop: string) => (
-                  <span key={crop} className="text-[10px] font-medium px-2 py-0.5 rounded-full" style={{ background: "rgba(99,153,34,0.12)", color: "#3B6D11" }}>{crop}</span>
+                  <span key={crop} className="text-10 font-medium px-2 py-0.5 rounded-full" style={{ background: "rgba(99,153,34,0.12)", color: "#3B6D11" }}>{crop}</span>
                 ))}
               </div>
             )}
@@ -310,23 +311,23 @@ export default function CustomerProfilePage() {
         {/* ═══════════════════════════════════════════
             2. QUICK STATS — Purchases | Paid | Outstanding
            ═══════════════════════════════════════════ */}          <div
-          className="flex rounded-[16px] overflow-hidden"
+          className="flex overflow-hidden rounded-[var(--radius-card)]"
           style={{ background: "var(--surface-2)" }}
         >
           <div className="flex-1 text-center py-3.5" style={{ borderRight: "1px solid var(--divider)" }}>
-            <p className="text-[10px] tracking-[0.5px] font-medium" style={{ color: "var(--text-secondary)" }}>{t("customerProfile.purchases")}</p>
-            <p className="text-[15px] font-bold mt-1" style={{ color: "var(--text-primary)" }}>
+            <p className="text-10 tracking-[0.5px] font-medium" style={{ color: "var(--text-secondary)" }}>{t("customerProfile.purchases")}</p>
+            <p className="text-15 font-bold mt-1" style={{ color: "var(--text-primary)" }}>
               {formatCurrency(customer.totalPurchases || customerSales.reduce((a, s) => a + s.totalAmount, 0))}
             </p>
           </div>
           <div className="flex-1 text-center py-3.5" style={{ borderRight: "1px solid var(--divider)" }}>
-            <p className="text-[10px] tracking-[0.5px] font-medium" style={{ color: "var(--text-secondary)" }}>{t("customerProfile.paid")}</p>              <p className="text-[15px] font-bold mt-1" style={{ color: "var(--text-primary)" }}>
+            <p className="text-10 tracking-[0.5px] font-medium" style={{ color: "var(--text-secondary)" }}>{t("customerProfile.paid")}</p>              <p className="text-15 font-bold mt-1" style={{ color: "var(--text-primary)" }}>
               {formatCurrency(customer.totalPaid || 0)}
             </p>
           </div>
           <div className="flex-1 text-center py-3.5">
-            <p className="text-[10px] tracking-[0.5px] font-medium" style={{ color: "var(--text-secondary)" }}>{t("customerProfile.outstanding")}</p>
-            <p className="text-[15px] font-bold mt-1" style={{ color: "#D97706" }}>
+            <p className="text-10 tracking-[0.5px] font-medium" style={{ color: "var(--text-secondary)" }}>{t("customerProfile.outstanding")}</p>
+            <p className="text-15 font-bold mt-1" style={{ color: "#D97706" }}>
               {formatCurrency(customer.outstandingBalance)}
             </p>
           </div>
@@ -335,14 +336,11 @@ export default function CustomerProfilePage() {
         {/* ═══════════════════════════════════════════
             3. CREDIT CARD — Limit, bar, utilization
            ═══════════════════════════════════════════ */}
-        <div
-          className="rounded-[16px] p-4"
-          style={{ background: "var(--surface-2)" }}
-        >
+        <div className="ds-card">
           {/* Credit Limit — horizontal alignment */}
           <div className="flex items-center justify-between">
-            <span className="text-[12px] font-medium tracking-[0.5px]" style={{ color: "#5A5A55" }}>{t("customerProfile.creditLimit")}</span>
-            <span className="text-[15px] font-bold" style={{ color: "var(--text-primary)" }}>
+            <span className="text-12 font-medium tracking-[0.5px]" style={{ color: "#5A5A55" }}>{t("customerProfile.creditLimit")}</span>
+            <span className="text-15 font-bold" style={{ color: "var(--text-primary)" }}>
               {customer.creditLimit > 0 ? formatCurrency(customer.creditLimit) : "\u2014"}
             </span>
           </div>
@@ -357,45 +355,45 @@ export default function CustomerProfilePage() {
                 />
               </div>
               <div className="flex justify-between mt-1.5">
-                <span className="text-[11px]" style={{ color: "var(--text-secondary)" }}>
+                <span className="text-11" style={{ color: "var(--text-secondary)" }}>
                   {formatCurrency(customer.outstandingBalance)} {t("customerProfile.of")} {formatCurrency(customer.creditLimit)} {t("customerProfile.used")}
                 </span>
-                <span className="text-[11px] font-bold" style={{ color: "#3B6D11" }}>{usagePct}%</span>
+                <span className="text-11 font-bold" style={{ color: "#3B6D11" }}>{usagePct}%</span>
               </div>
             </>
           )}
 
           {/* Due Date */}
-          <div className="mt-3 pt-3" style={{ borderTop: "0.5px solid var(--divider)" }}>
+          <div className="mt-3 pt-3" style={{ borderTop: "1px solid var(--hairline)" }}>
             <div className="flex justify-between items-center">
               <div>
-                <p className="text-[11px] font-medium tracking-wider" style={{ color: "var(--text-secondary)" }}>{t("customerProfile.dueDate")}</p>
-                <p className="text-[14px] font-bold mt-0.5" style={{ color: customer.dueDate ? "var(--text-primary)" : "var(--text-secondary)" }}>
+                <p className="text-11 font-medium tracking-wider" style={{ color: "var(--text-secondary)" }}>{t("customerProfile.dueDate")}</p>
+                <p className="text-14 font-bold mt-0.5" style={{ color: customer.dueDate ? "var(--text-primary)" : "var(--text-secondary)" }}>
                   {customer.dueDate ? new Date(customer.dueDate).toLocaleDateString(isUrdu ? "ur-PK" : "en-PK", { day: "numeric", month: "short", year: "numeric" }) : t("common.notSet")}
                 </p>
               </div>
-              <button onClick={() => { setEditDueDate(customer.dueDate || ""); setShowEditDueDate(true); }} className="text-[12px] font-semibold px-3 py-1.5 rounded-full" style={{ background: "var(--surface-2)", color: "#5A5A55" }}>
+              <button onClick={() => { setEditDueDate(customer.dueDate || ""); setShowEditDueDate(true); }} className="text-12 font-semibold px-3 py-1.5 rounded-full" style={{ background: "var(--surface-2)", color: "#5A5A55" }}>
                 {customer.dueDate ? t("customerProfile.edit") : t("common.save")}
               </button>
             </div>
           </div>
           {/* Reminder schedules */}
-          <div className="mt-3 pt-3" style={{ borderTop: "0.5px solid var(--divider)" }}>
+          <div className="mt-3 pt-3" style={{ borderTop: "1px solid var(--hairline)" }}>
             <div className="flex justify-between items-center mb-2">
-              <p className="text-[11px] font-medium tracking-wider" style={{ color: "var(--text-secondary)" }}>{t("customerProfile.reminders")}</p>
-              <button onClick={() => { setEditingConfig(null); setShowReminderConfig(true); }} className="text-[12px] font-semibold px-3 py-1.5 rounded-full" style={{ background: "var(--surface-2)", color: "#5A5A55" }}>{t("customerProfile.add")}</button>
+              <p className="text-11 font-medium tracking-wider" style={{ color: "var(--text-secondary)" }}>{t("customerProfile.reminders")}</p>
+              <button onClick={() => { setEditingConfig(null); setShowReminderConfig(true); }} className="text-12 font-semibold px-3 py-1.5 rounded-full" style={{ background: "var(--surface-2)", color: "#5A5A55" }}>{t("customerProfile.add")}</button>
             </div>
             {reminderConfigs.length === 0 ? (
-              <p className="text-[12px] py-1" style={{ color: "var(--text-secondary)" }}>{t("common.noRemindersConfigured")}</p>
+              <p className="text-12 py-1" style={{ color: "var(--text-secondary)" }}>{t("common.noRemindersConfigured")}</p>
             ) : (
               <div className="flex flex-col gap-1.5">
                 {reminderConfigs.map((cfg: ReminderConfig) => (
-                  <div key={cfg.id} className="flex items-center justify-between py-2 px-2 rounded-lg" style={{ background: "rgba(99,153,34,0.05)" }}>
+                  <div key={cfg.id} className="flex items-center justify-between py-2 px-2 rounded-[var(--radius-tile)]" style={{ background: "rgba(99,153,34,0.05)" }}>
                     <div className="flex-1 min-w-0">
-                      <p className="text-[12px] font-medium" style={{ color: "var(--text-primary)" }}>
+                      <p className="text-12 font-medium" style={{ color: "var(--text-primary)" }}>
                         {cfg.startDays}d {cfg.anchor === "after_credit" ? t("reminder.afterCredit") : cfg.anchor === "after_due" ? t("reminder.afterDueDate") : cfg.anchor === "before_due" ? t("reminder.beforeDueDate") : t("reminder.beforeHarvest")}
                       </p>
-                      <p className="text-[11px]" style={{ color: "var(--text-secondary)" }}>
+                      <p className="text-11" style={{ color: "var(--text-secondary)" }}>
                         {cfg.repeat === "once" ? t("reminder.oneTime") : cfg.repeat === "interval" ? t("reminder.every") + " " + cfg.intervalN + " " + t("reminder.days") : t("reminder.escalating")}
                       </p>
                     </div>
@@ -414,69 +412,41 @@ export default function CustomerProfilePage() {
             4. RECOMMENDED PRODUCTS
            ═══════════════════════════════════════════ */}
         <RecommendedSection customerId={customerId} />
-        <div
-          className="rounded-[16px] overflow-hidden"
-          style={{ border: "1px solid var(--border-light)" }}
-        >
-          {/* Purchase History */}
-          <button
+        <ListCard>
+          <ListRow
             onClick={() => navigate(base + "/customers/" + customerId + "/purchases")}
-            className="w-full flex items-center gap-3 px-4 py-3.5"
-            style={{ borderBottom: "0.5px solid var(--divider)" }}
-          >
-            <History size={18} color="#639922" />
-            <span className="flex-1 text-start text-[14px]" style={{ color: "var(--text-primary)" }}>{t("customerProfile.purchaseHistory")}</span>
-          </button>
-
-          {/* Payment History */}
-          <button
+            icon={History}
+            title={t("customerProfile.purchaseHistory")}
+          />
+          <ListRow
             onClick={() => navigate(base + "/customers/" + customerId + "/payments")}
-            className="w-full flex items-center gap-3 px-4 py-3.5"
-            style={{ borderBottom: "0.5px solid var(--divider)" }}
-          >
-            <Wallet size={18} color="#639922" />
-            <span className="flex-1 text-start text-[14px]" style={{ color: "var(--text-primary)" }}>{t("customerProfile.paymentHistory")}</span>
-          </button>
-
-          {/* Reminder History */}
-          <button
+            icon={Wallet}
+            title={t("customerProfile.paymentHistory")}
+          />
+          <ListRow
             onClick={() => navigate(base + "/customers/" + customerId + "/reminders")}
-            className="w-full flex items-center gap-3 px-4 py-3.5"
-            style={{ borderBottom: "0.5px solid var(--divider)" }}
-          >
-            <Bell size={18} color="#639922" />
-            <span className="flex-1 text-start text-[14px]" style={{ color: "var(--text-primary)" }}>{t("customerProfile.reminderHistory")}</span>
-          </button>
-
-          {/* Record Payment — green highlight */}
-          <button
+            icon={Bell}
+            title={t("customerProfile.reminderHistory")}
+          />
+          <ListRow
             onClick={() => navigate(base + "/customers/" + customerId + "/record-payment")}
-            className="w-full flex items-center gap-3 px-4 py-3.5"
-            style={{ borderBottom: "0.5px solid var(--divider)", background: "#F2F8EC" }}
+            icon={Receipt}
+            style={{ background: "#F2F8EC" }}
           >
-            <Receipt size={18} color="#3B6D11" />
-            <span className="flex-1 text-start text-[14px] font-medium" style={{ color: "#3B6D11" }}>{t("customerProfile.recordPayment")}</span>
-          </button>
-
-          {/* Edit Customer */}
-          <button
+            <span className="text-sm font-medium" style={{ color: "#3B6D11" }}>{t("customerProfile.recordPayment")}</span>
+          </ListRow>
+          <ListRow
             onClick={startEdit}
-            className="w-full flex items-center gap-3 px-4 py-3.5"
-            style={{ borderBottom: "0.5px solid var(--divider)" }}
-          >
-            <Pencil size={18} color="#639922" />
-            <span className="flex-1 text-start text-[14px]" style={{ color: "var(--text-primary)" }}>{t("customerProfile.editCustomer")}</span>
-          </button>
-
-          {/* Delete Customer */}
-          <button
+            icon={Pencil}
+            title={t("customerProfile.editCustomer")}
+          />
+          <ListRow
             onClick={() => setShowDelete(true)}
-            className="w-full flex items-center gap-3 px-4 py-3.5"
+            icon={Trash2}
           >
-            <Trash2 size={18} color="#D64545" />
-            <span className="flex-1 text-start text-[14px]" style={{ color: "#D64545" }}>{t("customerProfile.deleteCustomer")}</span>
-          </button>
-        </div>
+            <span className="text-sm" style={{ color: "#D64545" }}>{t("customerProfile.deleteCustomer")}</span>
+          </ListRow>
+        </ListCard>
 
       </div>
 
@@ -501,7 +471,7 @@ export default function CustomerProfilePage() {
           onClick={() => setEditing(false)}
         >
           <div
-            className="w-full max-w-[400px] rounded-t-2xl sm:rounded-2xl p-5 flex flex-col gap-4"
+            className="w-full max-w-[400px] rounded-t-2xl sm:rounded-[var(--radius-card)] p-5 flex flex-col gap-4"
             style={{ background: "var(--surface)", maxHeight: "90vh" }}
             onClick={(e) => e.stopPropagation()}
           >
@@ -514,54 +484,54 @@ export default function CustomerProfilePage() {
 
             <div className="flex flex-col gap-3">
               <div>
-                <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1.5" style={{ color: "var(--text-secondary)" }}>{t("addCustomer.name")}</label>
+                <label className="text-11 font-semibold uppercase tracking-wider block mb-1.5" style={{ color: "var(--text-secondary)" }}>{t("addCustomer.name")}</label>
                 <input
                   value={editName}
                   onChange={(e) => setEditName(e.target.value)}
-                  className="w-full h-12 rounded-[24px] px-4 text-sm outline-none"
-                  style={{ background: "var(--surface-2)", border: "1px solid var(--divider)", color: "var(--text-primary)", borderRadius: "24px" }}
+                  className="w-full h-12 rounded-[var(--radius-input)] px-4 text-sm outline-none"
+                  style={{ background: "var(--surface-2)", border: "1px solid var(--border-control)", color: "var(--text-primary)", borderRadius: "24px" }}
                 />
               </div>
               <div>
-                <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1.5" style={{ color: "var(--text-secondary)" }}>{t("addCustomer.phone")}</label>
+                <label className="text-11 font-semibold uppercase tracking-wider block mb-1.5" style={{ color: "var(--text-secondary)" }}>{t("addCustomer.phone")}</label>
                 <input
                   value={editPhone}
                   onChange={(e) => setEditPhone(e.target.value)}
-                  className="w-full h-12 rounded-[24px] px-4 text-sm outline-none"
-                  style={{ background: "var(--surface-2)", border: "1px solid var(--divider)", color: "var(--text-primary)", borderRadius: "24px" }}
+                  className="w-full h-12 rounded-[var(--radius-input)] px-4 text-sm outline-none"
+                  style={{ background: "var(--surface-2)", border: "1px solid var(--border-control)", color: "var(--text-primary)", borderRadius: "24px" }}
                 />
               </div>
               <div>
-                <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1.5" style={{ color: "var(--text-secondary)" }}>{t("addCustomer.address")}</label>
+                <label className="text-11 font-semibold uppercase tracking-wider block mb-1.5" style={{ color: "var(--text-secondary)" }}>{t("addCustomer.address")}</label>
                 <input
                   value={editAddress}
                   onChange={(e) => setEditAddress(e.target.value)}
-                  className="w-full h-12 rounded-[24px] px-4 text-sm outline-none"
-                  style={{ background: "var(--surface-2)", border: "1px solid var(--divider)", color: "var(--text-primary)", borderRadius: "24px" }}
+                  className="w-full h-12 rounded-[var(--radius-input)] px-4 text-sm outline-none"
+                  style={{ background: "var(--surface-2)", border: "1px solid var(--border-control)", color: "var(--text-primary)", borderRadius: "24px" }}
                 />
               </div>
               <div>
-                <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1.5" style={{ color: "var(--text-secondary)" }}>{t("common.crops")}</label>
+                <label className="text-11 font-semibold uppercase tracking-wider block mb-1.5" style={{ color: "var(--text-secondary)" }}>{t("common.crops")}</label>
                 <div className="flex flex-wrap gap-2">
                   {(businessSettings.crops.length > 0 ? businessSettings.crops.map(c => c.name) : KNOWN_CROPS).map(cropName => (
-                    <button key={cropName} type="button" onClick={() => setEditCrops(prev => prev.includes(cropName) ? prev.filter(c => c !== cropName) : [...prev, cropName])} className="h-9 px-4 rounded-full text-[12px] font-medium transition-colors" style={{ background: editCrops.includes(cropName) ? "var(--brand)" : "var(--surface-2)", color: editCrops.includes(cropName) ? "#0a0a0a" : "var(--text-secondary)", border: editCrops.includes(cropName) ? "none" : "1px solid var(--divider)" }}>{cropName}</button>
+                    <button key={cropName} type="button" onClick={() => setEditCrops(prev => prev.includes(cropName) ? prev.filter(c => c !== cropName) : [...prev, cropName])} className="h-9 px-4 rounded-full text-12 font-medium transition-colors" style={{ background: editCrops.includes(cropName) ? "var(--brand)" : "var(--surface-2)", color: editCrops.includes(cropName) ? "#0a0a0a" : "var(--text-secondary)", border: editCrops.includes(cropName) ? "none" : "1px solid var(--divider)" }}>{cropName}</button>
                   ))}
                 </div>
               </div>
               <div>
-                <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1.5" style={{ color: "var(--text-secondary)" }}>{t("common.creditLimitOptional")}</label>
+                <label className="text-11 font-semibold uppercase tracking-wider block mb-1.5" style={{ color: "var(--text-secondary)" }}>{t("common.creditLimitOptional")}</label>
                 {isAdmin ? (
                   <input
                     type="number"
                     value={editCreditLimit}
                     onChange={(e) => setEditCreditLimit(e.target.value)}
-                    className="w-full h-12 rounded-[24px] px-4 text-sm outline-none"
-                    style={{ background: "var(--surface-2)", border: "1px solid var(--divider)", color: "var(--text-primary)", borderRadius: "24px" }}
+                    className="w-full h-12 rounded-[var(--radius-input)] px-4 text-sm outline-none"
+                    style={{ background: "var(--surface-2)", border: "1px solid var(--border-control)", color: "var(--text-primary)", borderRadius: "24px" }}
                   />
                 ) : (
-                  <div className="rounded-[14px] p-3" style={{ background: "var(--surface-2)", border: "1px solid var(--divider)" }}>
-                    <p className="text-[12px]" style={{ color: "var(--text-secondary)" }}>Current: {formatCurrency(customer.creditLimit)}</p>
-                    <p className="text-[11px] mt-1" style={{ color: "var(--text-secondary)" }}>{t("customer.actionCenterHint")}</p>
+                  <div className="rounded-[var(--radius-card)] p-3" style={{ background: "var(--surface-2)", border: "1px solid var(--divider)" }}>
+                    <p className="text-12" style={{ color: "var(--text-secondary)" }}>Current: {formatCurrency(customer.creditLimit)}</p>
+                    <p className="text-11 mt-1" style={{ color: "var(--text-secondary)" }}>{t("customer.actionCenterHint")}</p>
                   </div>
                 )}
               </div>
@@ -593,11 +563,11 @@ export default function CustomerProfilePage() {
         <div className="fixed inset-0 z-50 flex items-end" style={{ background: 'rgba(0,0,0,0.5)' }} onClick={() => setShowEditDueDate(false)}>
           <div className="w-full max-w-[400px] mx-auto rounded-t-2xl p-5 flex flex-col gap-4" style={{ background: 'var(--surface)' }} onClick={e => e.stopPropagation()}>
             <div className="flex justify-center pt-1 pb-0"><div className="w-10 h-1 rounded-full" style={{ background: 'var(--divider)' }} /></div>
-            <p className="text-[16px] font-semibold" style={{ color: 'var(--text-primary)' }}>{t('common.paymentDueDate')}</p>
-            <p className="text-[13px]" style={{ color: 'var(--text-secondary)' }}>{t('common.dueDateDescription')}</p>
+            <p className="text-16 font-semibold" style={{ color: 'var(--text-primary)' }}>{t('common.paymentDueDate')}</p>
+            <p className="text-13" style={{ color: 'var(--text-secondary)' }}>{t('common.dueDateDescription')}</p>
             <div>
-              <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1.5" style={{ color: 'var(--text-secondary)' }}>{t('common.dueDate')}</label>
-              <input type="date" value={editDueDate} min={new Date().toISOString().split('T')[0]} onChange={e => setEditDueDate(e.target.value)} className="w-full h-12 rounded-[24px] px-4 text-sm outline-none" style={{ background: 'var(--surface-2)', border: '1px solid var(--divider)', color: 'var(--text-primary)', borderRadius: '24px' }} />
+              <label className="text-11 font-semibold uppercase tracking-wider block mb-1.5" style={{ color: 'var(--text-secondary)' }}>{t('common.dueDate')}</label>
+              <input type="date" value={editDueDate} min={new Date().toISOString().split('T')[0]} onChange={e => setEditDueDate(e.target.value)} className="w-full outline-none" />
             </div>
             <div className="flex gap-3 mt-1">
               <button onClick={() => setShowEditDueDate(false)} className="flex-1 h-11 rounded-full text-sm font-medium" style={{ background: 'var(--surface-2)', color: 'var(--text-secondary)' }}>{t('common.cancel')}</button>
@@ -650,32 +620,18 @@ function RecommendedSection({ customerId }: { customerId: string | undefined }) 
   if (recs.length === 0) return null;
 
   return (
-    <div className="rounded-[16px] p-4" style={{ background: "var(--surface-2)" }}>
-      <p className="text-[10px] font-bold uppercase tracking-wider mb-3" style={{ color: "#5A5A55" }}>
-        {t("products.recommendedFor", { name: customer.name.split(" ")[0].toUpperCase() })}
-      </p>
-      <div className="flex flex-col">
-        {recs.map((rec, i) => (
-          <div
+    <ListCard section={t("products.recommendedFor", { name: customer.name.split(" ")[0].toUpperCase() })}>
+        {recs.map((rec) => (
+          <ListRow
             key={rec.product.id}
-            className="flex items-center gap-3 py-3"
-            style={{ borderBottom: i < recs.length - 1 ? "0.5px solid var(--divider)" : "none" }}
-          >
-            {rec.product.imageUrl ? (
+            tile={rec.product.imageUrl ? (
               <img src={rec.product.imageUrl} alt={rec.product.name} className="size-10 rounded-full object-cover shrink-0" style={{ background: "#E8F5E0" }} />
             ) : (
               <div className="size-10 rounded-full flex items-center justify-center shrink-0" style={{ background: "#E8F5E0" }}>
                 <Package size={16} style={{ color: "var(--brand-dark)" }} />
               </div>
             )}
-            <div className="flex-1 min-w-0">
-              <p className="text-[14px] font-medium" style={{ color: "var(--text-primary)" }}>
-                {rec.product.name}
-              </p>
-              <p className="text-[12px] mt-0.5" style={{ color: "var(--text-secondary)" }}>
-                {t(rec.reasonKey, rec.reasonParams)}
-              </p>
-            </div>
+            trailing={
             <button
               className="size-8 rounded-full flex items-center justify-center shrink-0"
               style={{ background: "#E8F5E0" }}
@@ -696,9 +652,18 @@ function RecommendedSection({ customerId }: { customerId: string | undefined }) 
             >
               <Bell size={16} color="#3B6D11" />
             </button>
-          </div>
+            }
+          >
+            <div className="min-w-0">
+              <p className="text-14 font-medium" style={{ color: "var(--text-primary)" }}>
+                {rec.product.name}
+              </p>
+              <p className="text-12 mt-0.5" style={{ color: "var(--text-secondary)" }}>
+                {t(rec.reasonKey, rec.reasonParams)}
+              </p>
+            </div>
+          </ListRow>
         ))}
-      </div>
-    </div>
+    </ListCard>
   );
 }

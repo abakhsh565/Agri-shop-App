@@ -41,7 +41,7 @@ export default function PINInput({ value, onChange, error, shake }: PINInputProp
               type="button"
               onClick={() => tap(key)}
               className="
-                w-full aspect-square rounded-full text-2xl sm:text-[26px] font-medium
+                w-full aspect-square rounded-full text-2xl sm:text-26 font-medium
                 flex items-center justify-center
                 transition-all duration-100
                 active:scale-90 active:brightness-90

@@ -19,7 +19,7 @@
  * RLS-protected reads are exercised. QA database only.
  */
 import { test, expect, type Page } from '@playwright/test';
-import { execSql } from './helpers';
+import { execSql, setupFixtures, cleanupFixtures } from './helpers';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -96,7 +96,17 @@ async function setLanguage(page: Page, lang: 'en' | 'ur') {
 }
 
 test.describe('Locked dashboard scope: figures reconcile with the database', () => {
+  test.afterAll(async () => {
+    // The figures are asserted against the DB, so leave the QA base as it was found.
+    await cleanupFixtures().catch(() => {});
+  });
+
   test('1. ADM-DASH-HOME shows every spec metric and its money figures equal the DB', async ({ page }) => {
+    // Quick Alerts only renders when there is something to alert about, so the fixtures
+    // are seeded first: QA Customer B is over its credit limit and QA Product B is out of
+    // stock, which is what makes the section exist. Without this the assertion depended on
+    // whatever a previous spec had left behind.
+    await setupFixtures();
     await login(page, OWNER_PHONE);
     expect(page.url()).toContain('/admin/dashboard');
 
@@ -140,21 +150,45 @@ test.describe('Locked dashboard scope: figures reconcile with the database', () 
     const [cogs] = await execSql(`
       SELECT coalesce(sum(coalesce(si.cogs_amount,0)),0)::text AS v
         FROM sale_items si JOIN sales s ON s.id = si.sale_id WHERE s.is_voided = false`);
-    const [outstanding] = await execSql(`SELECT coalesce(sum(outstanding_balance),0)::text AS v FROM customers`);
+    // Overdue is the system-wide business metric: the REMAINING balance of every
+    // credit whose due date has already passed in Pakistan time — not the shop's
+    // total customer outstanding. Computed here from the database with the same
+    // authoritative definition Home and the overdue-credit signals share.
+    const [pastDue] = await execSql(`
+      SELECT coalesce(sum(outstanding_balance),0)::text AS overdue,
+             count(*)::text AS n
+        FROM customers
+       WHERE is_archived = false
+         AND outstanding_balance > 0
+         AND due_date IS NOT NULL
+         AND due_date < (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Karachi')::date`);
+    const [allOutstanding] = await execSql(
+      `SELECT coalesce(sum(outstanding_balance),0)::text AS v FROM customers WHERE is_archived = false`,
+    );
 
     const total = Number(sales.total), gp = total - Number(cogs.v);
 
     expect(body, 'Total Sales does not match the DB').toContain(rs(total));
     expect(body, 'Gross Profit does not match revenue - COGS').toContain(rs(gp));
-    expect(body, 'overdue figure does not match customers.outstanding_balance').toContain(rs(Number(outstanding.v)));
+
+    // Read the figure the owner actually sees, then hold it to the DB value.
+    const overdueEl = page.locator('p').filter({ hasText: /overdue/ }).first();
+    const shownOverdue = Number((await overdueEl.innerText()).replace(/[^0-9]/g, ''));
+    expect(shownOverdue, 'Home overdue does not match the past-due balance in the DB').toBe(
+      Math.round(Number(pastDue.overdue)),
+    );
+
+    // Falsification guard: whenever the shop has outstanding credit that is NOT yet
+    // due, the overdue figure must differ from total outstanding. This is what fails
+    // if anyone goes back to summing every balance and calling it overdue.
+    const totalOwed = Math.round(Number(allOutstanding.v));
+    if (totalOwed !== Math.round(Number(pastDue.overdue))) {
+      expect(shownOverdue, 'Home is showing total outstanding and calling it overdue').not.toBe(totalOwed);
+    }
 
     // The overdue figure is no longer given a red treatment (presentation only;
-    // the calculation is untouched and still asserted above).
-    const overdueColor = await page
-      .locator('p')
-      .filter({ hasText: /overdue/ })
-      .first()
-      .evaluate((el) => getComputedStyle(el).color);
+    // the calculation is asserted above).
+    const overdueColor = await overdueEl.evaluate((el) => getComputedStyle(el).color);
     expect(overdueColor, 'the overdue figure is red again').not.toMatch(/220,\s*38,\s*38/);
   });
 
@@ -182,11 +216,11 @@ test.describe('Locked dashboard scope: figures reconcile with the database', () 
     const body = await page.textContent('body');
     // The hero figures are translated in Urdu.
     expect(body, 'Total Sales not translated').toContain('کل فروخت');
-    expect(body, 'Gross Profit not translated').toContain('تخمینہ منافع');
-    expect(body, 'Credit collect not translated').toContain('نقد وصولی');
+    expect(body, 'Gross Profit not translated').toContain('مجموعی منافع');
+    expect(body, 'Credit collect not translated').toContain('ادھار کی وصولی');
     // The removed cards are gone in Urdu too, and no English leaks through.
-    expect(body).not.toContain('کم اسٹاک اشیاء');
-    expect(body).not.toContain('سپلائر واجب الادا');
+    expect(body).not.toContain('کم اسٹاک');
+    expect(body).not.toContain('سپلائر کو دینا ہے');
     expect(body).not.toContain('جلد ختم ہونے والا');
     expect(body).not.toContain('Expiring Soon');
     expect(body).not.toContain('Low Stock Items');
@@ -223,7 +257,7 @@ test.describe('Locked dashboard scope: figures reconcile with the database', () 
 
     const body = await page.textContent('body');
     expect(body).toContain('لین دین');
-    expect(body).toContain('خدمت کردہ گاہک');
+    expect(body).toContain('جن کو بیچا');
     expect(body).not.toContain('Customers Served');
   });
 

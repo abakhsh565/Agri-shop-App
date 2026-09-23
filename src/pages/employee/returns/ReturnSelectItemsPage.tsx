@@ -2,6 +2,9 @@ import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
+import { SkeletonList } from "@/components/ui/Skeleton";
+import ListCard from "@/components/ui/ListCard";
+import ListRow from "@/components/ui/ListRow";
 import Button from "@/components/ui/Button";
 import QuantityCounter from "@/components/ui/QuantityCounter";
 import { useSalesStore } from "@/stores/salesStore";
@@ -103,7 +106,9 @@ export default function ReturnSelectItemsPage() {
       <div className="flex flex-col w-full min-h-full items-center justify-center" style={{ background: "var(--background)" }}>
         <StatusBar />
         <NavHeader title={t("returns.title")} />
-        <p className="text-sm" style={{ color: "var(--text-secondary)" }}>{t("common.loading")}</p>
+        <div className="w-full pt-4">
+          <SkeletonList rows={4} tile={false} />
+        </div>
       </div>
     );
   }
@@ -118,11 +123,11 @@ export default function ReturnSelectItemsPage() {
         <NavHeader title={t("returns.title")} />
 
         {/* Sale info */}
-        <div className="mx-4 mt-3 rounded-[14px] p-4" style={{ background: "var(--surface-2)" }}>
+        <div className="mx-4 mt-3 rounded-[var(--radius-card)] p-4" style={{ background: "var(--surface-2)" }}>
           <div className="flex justify-between">
             <div>
               <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>
-                {isUrdu ? "فروخت" : "Sale"} {sale.saleNumber}
+                {t("inline.sale_x")} {sale.saleNumber}
               </p>
               <p className="text-xs" style={{ color: "var(--text-secondary)" }}>{sale.customerName}</p>
             </div>
@@ -132,21 +137,17 @@ export default function ReturnSelectItemsPage() {
 
         <div className="px-4 pt-4">
           <p className="text-xs font-bold uppercase mb-3 tracking-wider" style={{ color: "var(--text-secondary)" }}>
-            {isUrdu ? "واپس کرنے کی اشیاء منتخب کریں" : "Select Items & Quantity to Return"}
+            {t("inline.select_items_quantity_to_return_x")}
           </p>
 
-          <div className="rounded-[14px] overflow-hidden" style={{ border: "1px solid var(--divider)" }}>
-            {sale.items.map((item, i) => {
+          <ListCard>
+            {sale.items.map((item) => {
               const maxQty = getMaxQty(item.id);
               const alreadyReturned = getAlreadyReturned(item.id);
               const isFullyReturned = maxQty === 0;
 
               return (
-                <div
-                  key={item.id}
-                  className="p-4"
-                  style={{ borderBottom: i < sale.items.length - 1 ? "1px solid var(--divider)" : "none" }}
-                >
+                <ListRow key={item.id}>
                   <div className="flex justify-between mb-1">
                     <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>
                       {item.productName} {item.variantName}
@@ -156,7 +157,7 @@ export default function ReturnSelectItemsPage() {
                     </p>
                   </div>
                   <p className="text-xs mb-1" style={{ color: "var(--text-secondary)" }}>
-                    {item.qty} {isUrdu ? "خریدے" : "purchased"} · {formatCurrency(item.unitPrice)} {isUrdu ? "فی اکائی" : "each"}
+                    {item.qty} {t("inline.purchased_x")} · {formatCurrency(item.unitPrice)} {t("inline.each_x")}
                   </p>
 
                   {isFullyReturned ? (
@@ -171,13 +172,13 @@ export default function ReturnSelectItemsPage() {
                   ) : (
                     <>
                       {alreadyReturned > 0 && (
-                        <p className="text-[11px] mb-2" style={{ color: "#d97706" }}>
+                        <p className="text-11 mb-2" style={{ color: "#d97706" }}>
                           {alreadyReturned} previously returned · {maxQty} remaining
                         </p>
                       )}
                       <div className="flex items-center gap-3">
                         <span className="text-xs" style={{ color: "var(--text-secondary)" }}>
-                          {isUrdu ? "واپسی تعداد:" : "Qty to return:"}
+                          {t("inline.qty_to_return")}
                         </span>
                         <QuantityCounter
                           qty={returnQtys[item.id] || 0}
@@ -189,19 +190,19 @@ export default function ReturnSelectItemsPage() {
                       </div>
                     </>
                   )}
-                </div>
+                </ListRow>
               );
             })}
-          </div>
+          </ListCard>
         </div>
 
         {/* Return total */}
         <div
-          className="mx-4 mt-4 rounded-[14px] p-4 flex justify-between"
+          className="mx-4 mt-4 rounded-[var(--radius-card)] p-4 flex justify-between"
           style={{ border: "1px solid var(--divider)" }}
         >
           <span className="text-sm font-medium" style={{ color: "var(--text-secondary)" }}>
-            {isUrdu ? "کل واپسی" : "Return Total"}
+            {t("inline.return_total_x")}
           </span>
           <span className="text-base font-bold" style={{ color: "var(--text-primary)" }}>
             {formatCurrency(returnTotal)}

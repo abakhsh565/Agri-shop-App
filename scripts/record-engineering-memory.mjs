@@ -740,6 +740,179 @@ const MEMORIES = [
       guardDeliberatelyOmitted: 'a from-zero replay assertion — it would fail forever by design, and a permanently red test is indistinguishable from no test'
     },
   },
+  {
+    category: 'failure_pattern',
+    title: 'Home called the shop\'s whole customer debt "overdue", and Home had written its own overdue rule',
+    component: 'src/pages/admin/dashboard/AdminDashboardPage.tsx, src/lib/signalEngine.ts, tests/unit/overdueCredit.test.ts',
+    description:
+      'The owner asked what the overdue figure on Home meant. It meant nothing: `const totalOutstanding = customers.reduce((s, c) => s + c.outstandingBalance, 0)` was rendered as "Rs. X overdue", so every rupee a customer owed counted as overdue whether or not it was due, and a shop with no late payments still read as having overdue money. The system already had the authoritative answer and Home ignored it — signalEngine computes S1 "Overdue Credit" as outstanding > 0 AND due_date past (PK time), and the Action Center has been listing exactly those customers all along, which is why the owner could see Rs. 600 + Rs. 500 of genuinely late credit on one screen and a different number labelled overdue on another. The defect was not the formula, it was a second implementation of it: the S1 predicate was inline inside computeOverdueCreditSignals, so the only way for Home to reuse it was to copy it. It is now exported once (isCreditOverdue) and the card reads computeOverdueCreditTotal(customers), which is the same predicate the signals use — asserted by a test that fails if the two ever disagree. RULE: a money figure on a summary screen must name the business concept it displays. Do not let a card compute its own version of a metric that another screen already owns — share the predicate, not the number.',
+    evidence: {
+      before: 'the card read `customers.reduce((s, c) => s + c.outstandingBalance, 0)` and the E2E asserted exactly that: dashboardScope expected "Rs. 56,000" on the current QA baseline (the sum of every balance) where the genuinely past-due total is Rs. 0; on the purpose-built fixture the two values diverge too — total outstanding Rs. 1,700 vs overdue Rs. 1,100',
+      after: 'fixture case: Home "Rs. 1,100 overdue" and the Action Center listing the same two customers (Rs. 600 + Rs. 500); reading the number out of the browser and comparing it to a database query, not to the card',
+      boundaries: 'past-due remaining included at its remaining amount; not-yet-due excluded; due today excluded (Due Date < Today); fully paid overdue = 0; no due date excluded; archived excluded; aggregated across customers',
+      lifecycle: 'a Rs. 100 payment made AFTER the credit was overdue moved the database 1,100 -> 1,000 and Home to "Rs. 1,000 overdue" with credit collect at Rs. 1,300 — read from the browser, not inferred',
+      zeroCase: 'after cleaning the fixtures Home read "Rs. 0 overdue", matching the database',
+      rtl: 'Urdu Home reads "Rs. 1,000 واجب الادا" with dir=rtl, zero horizontal overflow, no English left in the metric',
+      seedNote: 'money is created through the real RPCs; the past due date is written under a session timezone where that date is still today, because 0034 added CHECK (due_date >= CURRENT_DATE) — overdue can only ever arise from time passing',
+      regression: 'tests/unit/overdueCredit.test.ts 12/12 (falsified: the old formula yields 12,000 where the correct answer is 9,000), dashboardScope 6/6 with the new assertion and a guard that fails if the total is shown again (falsified by reverting the card), actionCenter + crossScreenSync 25/25, vitest 415/415 across 37 files, tsc clean, production build clean',
+      fixedIn: 'signalEngine.ts (isCreditOverdue, computeOverdueCreditTotal) + AdminDashboardPage'
+    },
+  },
+  {
+    category: 'failure_pattern',
+    title: 'Saving a reminder failed every time, so the escalating sequence could never exist',
+    component: 'supabase/migrations/0141_reminder_config_write_contract.sql, src/components/ui/{GroupReminderSheet,ReminderConfigSheet}.tsx, src/lib/reminderEngine.ts',
+    description:
+      'Asked why the escalating sequence (Gentle 15 / Firmer 30 / Final notice 45) shown in the reminder mockup was missing from reminder creation. Two independent causes, and the second is why nobody could ever see the first fixed. (1) The group sheet shipped `escalation: []`, so choosing "Escalating sequence" rendered an EMPTY block — no steps, no way to add any — and the engine, which maps stage position to tone, fell back to a single stage at the start offset: the reminder silently did not escalate. (2) Every save failed anyway. `reminder_configs` still carries its ORIGINAL columns `name` and `type` as NOT NULL, while migration 0122 moved the contract to customer_id/enabled/start_days/anchor/repeat_type/interval_n/interval_unit/escalation/ends/ends_date/ends_count — which is exactly what every writer sends (reminderEngine.saveReminderConfig and localGroupRegistry.saveLocalGroup), and no code path writes name or type. Verified against the QA database: the insert returned `23502 null value in column "name" of relation "reminder_configs" violates not-null constraint`, the browser logged "Failed to save reminder configs"/"Failed to save group" on a 400, and reminder_configs held zero rows — so creating any reminder, group or single, had been failing at the write. RULE: when a table is migrated to a new contract, the old NOT NULL columns that nothing writes are a write-blocking bug, not history — check the INSERT against every NOT NULL column, not just the ones the migration added.',
+    evidence: {
+      browserBefore: 'chose Escalating sequence in Create Group Reminder -> the block between Repeat and Ends was empty (no Gentle/Firmer/Final notice rows); Save produced POST /rest/v1/reminder_configs -> 400',
+      databaseError: '23502 null value in column "name" of relation "reminder_configs" violates not-null constraint',
+      columnsThatBlocked: 'name and type (legacy, pre-0122, never written, never read — the loader maps * and takes only the contract columns); escalation is text, not jsonb',
+      escalationWriteShape: 'checked both shapes: an array is accepted and stored as the JSON text the loader parses, so no app-side change was needed for escalation',
+      browserAfter: 'the three steps render with 15/30/45 and the summary reads "3 days before due date — 15 day, 30 day, 45 day — Until paid in full"; Save wrote one row with repeat_type=escalate and the full sequence in escalation',
+      orderingLock: 'with a group name and a customer selected, Firmer=15 (equal) or 10 (descending) shows "Each step must come later than the one before it." and disables Save; restoring 30 clears the message and re-enables it — proven in the browser, not inferred',
+      engineProof: 'escalationStages(config) is now the single stage rule both engine branches use; a config with no sequence yields ONE stage at the start offset (the defect), the standard sequence yields three in order',
+      rolesUnchanged: 'reminder creation already sits behind PermissionGuard requires="alerts.view", so the escalating part inherits that gate — no new permission was invented',
+      regression: 'vitest 428/428 across 38 files (tests/unit/reminderEscalation.test.ts 13/13, including a guard that fails if a screen hardcodes its own copy of the steps), tsc clean, production build clean, migrationReplayability 6/6 — the guard caught this migration colliding with two existing 0135/0140 versions before it could ship',
+      fixedIn: '0141 + GroupReminderSheet/ReminderConfigSheet/reminderEngine'
+    },
+  },
+  {
+    category: 'failure_pattern',
+    title: 'An escalating sequence anchored in the future ran backwards: the final notice went out first',
+    component: 'src/lib/reminderEngine.ts (escalate branch, escalationDistances), tests/unit/reminderEscalation.test.ts',
+    description:
+      'Generating the escalating sequence end-to-end exposed a real inversion. The steps carry a DISTANCE (Gentle 15 / Firmer 30 / Final notice 45), and for a "before" anchor the engine scheduled each step at `anchor - stage.day` while walking the steps in order. So the furthest number landed on the gentlest stage: the customer with a due date of 23 Sep got the FINAL NOTICE on 8 Aug, the firmer follow-up on 24 Aug and the gentle nudge last on 7 Sep — the escalation ran away from the deadline instead of toward it, which is how you damage a customer relationship while believing you were being careful. For an escalation to mean anything, stage order must equal time order. The distances are now taken descending (escalationDistances) so the FIRST step is the FURTHEST out: gentle 9 Aug, firmer 24 Aug, final notice 8 Sep against that same due date, all three due. Existing occurrences are corrected too: a not-yet-sent occurrence whose computed date moves is rescheduled (and its status re-derived), while anything already sent is history and is never rewritten. RULE: a sequence has a direction — assert that the thing which is supposed to happen first is scheduled first, and derive it from one function rather than from the loop index.',
+    evidence: {
+      before: 'occurrences for a 23 Sep due date: #1 gentle 2026-09-07, #2 firmer 2026-08-23, #3 final_notice 2026-08-08 — reversed',
+      after: 'same config re-run: #1 gentle 2026-08-09, #2 firmer 2026-08-24, #3 final_notice 2026-09-08 — ascending (asserted programmatically)',
+      browser: 'Action Center -> Follow Ups -> Ready 3, listing Gentle, Formal and Final Notice for the customer with Rs. 1,000 outstanding, each "Ready to Send"',
+      regression: 'tests/unit/reminderEscalation.test.ts 16/16 (new cases pin the direction and the kept distances), vitest 431/431 across 38 files, tsc clean, production build clean'
+    },
+  },
+  {
+    category: 'failure_pattern',
+    title: 'A shop that had never set its crops produced an HTTP 406 on every screen load',
+    component: 'src/lib/reminderEngine.ts (loadBusinessSettings, saveBusinessSettings)',
+    description:
+      'Every load of the Action Center logged `GET /rest/v1/business_settings?select=setting_value&setting_key=eq.crops&limit=1 -> 406`. Both reader and writer asked for exactly one row with PostgREST\'s `.single()`, and the table was EMPTY — a shop that has never configured crops simply has no row. `.single()` sends `Accept: application/vnd.pgrst.object+json`, which PostgREST cannot satisfy for zero rows, so it answers 406. The app hid it because the loader catches and returns `{ crops: [] }`, so the market-harvest reminders silently had no crops to work with and the failure read as noise. `.maybeSingle()` treats "no row" as the normal state it is; the row is still created on first save.',
+    evidence: {
+      before: '406 on every Action Center load; business_settings held 0 rows',
+      after: 'the query answers 200 with null and the screen loads without the error',
+      regression: 'vitest 431/431, tsc clean, production build clean'
+    },
+  },
+  {
+    category: 'prevention_rule',
+    title: 'A demo-seeding page shipped in the app, so an install could conjure a shop owner and test users by URL',
+    component: 'src/pages/auth/SetupDemoPage.tsx (removed), src/router/index.tsx, src/lib/i18n.ts',
+    description:
+      'Asked why an installed build showed data. Part of the answer was the QA database holding leftover test rows (53 removed), but the shipped bundle also carried a public route `/setup-demo` with NO guard: it upserted the "Default Shop" and inserted three demo users (Shop Owner 923001234567, Sales Employee 923001122334, QA Admin) straight from the browser. That is both a data-leak path on a fresh install — anyone typing the URL gets demo identities written into the live database — and, because it writes `users` from the client, an unauthenticated privileged write. The page was referenced by nothing but the router, no test used it, and the QA fixture accounts already exist through the fixture path, so it was deleted along with its four translation keys. Test-fixture bootstrapping belongs in the fixture scripts, never in the shipped app. RULE: before packaging, grep the bundle for identities, not just for data — a page that CREATES the demo data is as dangerous as data that ships with it.',
+    evidence: {
+      shipped: 'dist/assets/index-*.js contained "Shop Owner", "923001234567" and "923001122334" from the demo page',
+      afterRemoval: 'those identities are gone from the bundle and "Setup Demo Users"/demo-write code matches 0 times inside the APK; only the phone-format example in the validation message remains',
+      database: 'QA cleaned with the repo script: 53 rows removed (7 sales, 9 products, 9 variants, 5 companies, 12 customers, 6 test users), every business table now 0, 4 fixture accounts kept',
+      apk: 'rebuilt; assets/public/index.html md5-identical to dist, 51 bundled assets'
+    },
+  },
+  {
+    category: 'failure_pattern',
+    title: 'Realtime was never published, so every live update in the app was dead code',
+    component: 'supabase/migrations/0144_enable_realtime_publication.sql, src/stores/useBootstrapData.ts',
+    description:
+      'Reported: stock did not move on screen after a purchase, and cross-screen totals kept old figures. The database was correct every time — driving create_purchase with a real owner JWT moved 1L stock 50 -> 150 while the screen stayed at 50. The first cause was the client cache (next entry), but the deeper one was that `supabase_realtime` held NO tables (`SELECT tablename FROM pg_publication_tables WHERE pubname = ...` returned nothing). Postgres emits logical-replication changes only for tables in a publication, so every `.on("postgres_changes")` callback in the app could never fire: products, product_variants, customers, sales, companies, notifications, users were all subscribed and all silent. Proven independently of the UI with a Node probe: subscribe as the real owner, move a row with SQL, no event arrived; after publishing the tables the same probe received the UPDATE event. FIX: publish exactly the seven subscribed tables. Realtime honours RLS, so subscribers still only receive rows they may read (checked: every published table already had policies).',
+    evidence: {
+      before: 'pg_publication_tables for supabase_realtime: (none); Node probe received 0 events',
+      after: 'published: companies, customers, notifications, product_variants, products, sales, users; probe received the UPDATE event and reported REALTIME: WORKING',
+      regression: 'vitest 432/432 across 38 files, tsc clean, production build clean'
+    },
+  },
+  {
+    category: 'failure_pattern',
+    title: 'A "fresh" cache was trusted over the database, so every write stayed invisible for five minutes',
+    component: 'src/stores/productsStore.ts, src/stores/customersStore.ts, src/stores/salesStore.ts',
+    description:
+      'Three stores implemented stale-while-revalidate but then broke it: they returned cached data AND SKIPPED THE NETWORK entirely while the cache was younger than five minutes and the store was non-empty. Consequence: within a session the app could not see its own writes. A purchase recorded stock 150 in the database and the screen still read 50; pull-to-refresh called the same load() and did nothing; the realtime callback called the same load() and did nothing; a customer photo saved after the row was cached reverted to an initial (image_url was in the database, the cached row predated it); supplier payable read Rs. 0 while the company owed Rs. 140,000. A full browser reload appeared to fix it only because a fresh store is empty, so the early return did not apply. FIX: the cache is a render hint, never the authority — render it immediately, then always revalidate. `updateCustomerImage` now also refreshes the cache it was bypassing.',
+    evidence: {
+      before: 'DB 1L variant = 150, screen and cache = 50, unchanged 3s and 5s after the write; purchases screen payable Rs. 0 while companies.outstanding_payable = 140000',
+      after: 'with no reload the screen moved 450 -> 550 (and the cache with it) when the purchase landed; payable and the unpaid badge are read from amount_due',
+      regression: 'vitest 432/432, tsc clean, production build clean'
+    },
+  },
+  {
+    category: 'failure_pattern',
+    title: 'A purchase line was mapped from columns that do not exist, so unpaid deliveries read "PAID"',
+    component: 'src/lib/db.ts (fetchPurchases), src/pages/admin/purchases/PurchaseDetailPage.tsx',
+    description:
+      'fetchPurchases built each purchase from `r.outstanding_payable` and each line from `it.cost_price`. Neither column exists: `purchases` has `amount_due` and `purchase_items` has `unit_price`. `Number(undefined)` is NaN, and NaN is not > 0, so the screen classified EVERY purchase as settled — two deliveries of Rs. 70,000 each with amount_paid = 0 showed a green PAID badge, and the header total read Rs. 0 while the database owed Rs. 140,000. Purchase Detail showed a NaN unit cost. The same wrong names were used in PurchaseDetailPage. FIX: read the real columns in both places.',
+    evidence: {
+      before: 'purchases screen: badge PAID, header OUTSTANDING SUPPLIER PAYABLE Rs. 0; DB: amount_due 70,000 x 2 = 140,000',
+      after: 'badge PAYABLE with "Rs. 70,000 payable" per row, header Rs. 395,000 which equals SELECT sum(amount_due) FROM purchases; Purchase Detail shows Rs. 700/unit',
+      regression: 'vitest 432/432, tsc clean, production build clean'
+    },
+  },
+  {
+    category: 'failure_pattern',
+    title: 'Editing a product saved nothing: update_product never wrote its variants',
+    component: 'supabase/migrations/0145_update_product_writes_variants.sql',
+    description:
+      'Found while verifying the purchase -> inventory -> sale -> COGS chain. `update_product` updated only the product row (name, company_id, category, image_url) and contained no variant handling at all, while the Edit Product screen collects a selling price, a cost price, unit size, quantity step and low-stock threshold per unit and sends all of them. The API accepted the call, the screen said saved, and every price was discarded — so the selling price could not be changed at all, and "a price change applies to future sales only" was untestable because no change could be made. FIX: variants are updated by id (or inserted when new). Two fields are deliberately NOT written: `stock_qty`, which the catalogue does not own (create_sale / create_purchase / process_return / void_sale / adjust_stock do), and never a delete — a variant omitted from the payload is left alone so historical sale/purchase lines keep their reference.',
+    evidence: {
+      before: 'update_product with sellingPrice 1200 / costPrice 900 left the row at 1000 / 700',
+      after: 'selling price 1000 -> 1200 and cost 700 -> 900 persisted, stock untouched at 150, products.base_unit and barcode now written too; the same edit driven from the Edit Product screen saved 1600/1200 -> 1750/1300',
+      regression: 'vitest 432/432, tsc clean, production build clean'
+    },
+  },
+  {
+    category: 'failure_pattern',
+    title: 'A reminder configuration entered while adding a customer was collected and then dropped',
+    component: 'src/pages/employee/customers/AddCustomerPage.tsx',
+    description:
+      'Reported: configure the customer during creation, land on Customer Details, and the configuration is not shown. AddCustomerPage imported ReminderConfigSheet, stored the result in `reminderConfig`, and then persisted the photo and the crops in handleSave — but never the reminder configuration. The sheet closed, the toast said the customer was added, and no reminder_configs row was ever written, so Customer Details (which reads configurations from the database) correctly showed none. FIX: save the configuration with the customer, at the same point as the photo and crops.',
+    evidence: {
+      before: 'no reminder_configs row after creating a customer with a configured reminder',
+      after: 'created through the real form; database holds anchor=after_credit, start_days=15, repeat_type=escalate, ends=paid, enabled=true and Customer Details renders "15d after credit · Escalating"',
+      regression: 'vitest 432/432, tsc clean, production build clean'
+    },
+  },
+  {
+    category: 'failure_pattern',
+    title: 'The same reminder schedule could exist twice for one customer, delivering every follow-up twice',
+    component: 'supabase/migrations/0143_reminder_config_dedupe.sql, src/lib/reminderEngine.ts',
+    description:
+      'Reported: the Follow-ups list appears to show several follow-ups over time for one configured rule. The generation itself was sound — occurrence_key is `configId_N_stage` with no date in it, so a rule cannot mint a new occurrence per day, and reminder_occurrences.occurrence_key is UNIQUE. The real cause was duplicate CONFIGS: the live QA database held customer "Mudasir" with two byte-identical interval rules (start_days=3, anchor=before_due, repeat_type=interval, interval_n=2), EACH having generated 30 occurrences, so the customer was reminded twice every two days. Nothing enforced one rule per customer: saveReminderConfig inserted unconditionally when the caller passed no id, and saveReminderGroup minted a fresh group id per creation and inserted one row per selected customer, so re-applying a rule to a customer who already had it simply added a second schedule. `isDuplicateReminder` existed but guarded only one screen. FIX: identity is a property of the data — a trigger computes a `dedupe_key` (md5 of customer + every field that decides WHEN the rule fires) and UNIQUE (shop_id, customer_id, dedupe_key) makes a second identical schedule impossible; existing duplicates were repaired keeping the earliest; group save inserts per customer and tolerates 23505 so one already-applied customer no longer fails the whole group. saveReminderConfig also reports insert/update errors instead of discarding them (a rejected save used to read as saved).',
+    evidence: {
+      before: 'Mudasir: 3 configs (2 identical) and 63 occurrences; duplicate insert accepted',
+      after: '2 distinct configs and 33 occurrences; the duplicate collapsed; an identical insert is refused (23505) while a genuinely different rule is still accepted; Follow-ups now lists the rule once (Ready 2 -> the rule pair no longer doubles)',
+      regression: 'vitest 432/432, tsc clean, production build clean'
+    },
+  },
+  {
+    category: 'failure_pattern',
+    title: 'A customer photo in the database rendered as an initial in the follow-up list',
+    component: 'src/types/index.ts (GeneratedReminder), src/lib/reminderEngine.ts, src/pages/admin/alerts/RemindersOverviewPage.tsx',
+    description:
+      'Reported: a customer has a photo but parts of the app show a placeholder initial. The photo was fine — customers.image_url held a URL that answered HTTP 200 — but the follow-up row rendered a coloured circle with initials UNCONDITIONALLY, with no image branch at all. The reason was one layer down: GeneratedReminder did not carry the customer image, so the reminder surface had nothing to render (the Recently Sent list did show photos, because that path looked the image up itself). FIX: the image travels with the reminder (`customerImage`, populated from customer.imageUrl in generateReminders) and both reminder surfaces render it, falling back to initials only when there genuinely is none.',
+    evidence: {
+      before: 'image_url returns HTTP 200, follow-up row renders the initial "M"',
+      after: 'two 44x44 customer photos render on Mudasir\'s follow-up rows',
+      regression: 'vitest 432/432, tsc clean, production build clean'
+    },
+  },
+  {
+    category: 'prevention_rule',
+    title: 'Company Details had no way to add a product, correct the supplier, or retire it',
+    component: 'supabase/migrations/0142_archive_company.sql, src/pages/admin/companies/CompanyDetailPage.tsx, src/pages/admin/inventory/AddProductPage.tsx',
+    description:
+      'Company Details offered only Order Stock and Record Payment, so a supplier could never be edited or removed and its product had to be added by re-picking the supplier from a list. Added, all in the existing pattern: (1) Add Product opens the product form with the supplier fixed — arriving from the company means the owner has already chosen it, so the field is shown, not asked (verified: zero select elements on the form, supplier rendered as a locked value, and the saved product carries that company_id); (2) Edit writes name, contact, phone, address and logo — safe because products reference a supplier by company_id, not by name, and recorded purchases keep their own company_name snapshot; (3) Remove Supplier is a permission-gated soft archive that only flips is_active, writes an audit event, and REFUSES while the supplier is still owed money, because archiving hides the company from the operational lists and would bury a live payable. The three actions live behind a three-dot menu beside the company name. Purchase history rows and product chips are now tappable and open the purchase / product detail.',
+    evidence: {
+      addProduct: 'from Company Details the product saved with company_id matching that supplier; the form showed the supplier as a fixed value and no company picker',
+      edit: 'contact persisted as "Imran Khan" in companies.contact_person',
+      archiveGuard: 'a supplier with outstanding_payable 350,000 stayed active and the refusal is translated, not a raw code',
+      archiveHappyPath: 'a fully paid supplier archived: is_active=false, its purchase (PUR-65023, 7,000 paid in full), stock received and payable all intact, audit event company_archived written',
+      regression: 'destructiveSafety 30/30 (re-pointed from "no archive_company RPC exists" to the property it protected: it deletes nothing, only flips the flag, and no purchase loses its supplier), vitest 432/432, tsc clean, production build clean'
+    },
+  },
 ];
 
 const client = await pool.connect();

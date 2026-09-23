@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
 import ImageUpload from "@/components/ui/ImageUpload";
+import { readReturnTo, withCreatedId } from "@/lib/dependencyGraph";
 import ReminderConfigSheet from "@/components/ui/ReminderConfigSheet";
 import { useCustomersStore } from "@/stores/customersStore";
 import { useUIStore } from "@/stores/uiStore";
@@ -14,7 +15,7 @@ import { clearNav } from "@/lib/navContext";
 import type { ReminderConfig } from "@/types";
 import { Bell } from "lucide-react";
 import { KNOWN_CROPS } from "@/lib/recommendationEngine";
-import { saveCustomerCrops } from "@/lib/reminderEngine";
+import { saveCustomerCrops, saveReminderConfig } from "@/lib/reminderEngine";
 
 function normalizePhone(p: string): string {
   return p.replace(/[\s\-()]/g, "").replace(/^\+?92/, "0");
@@ -28,6 +29,7 @@ function isValidPakistaniPhone(raw: string): boolean {
 export default function AddCustomerPage() {
   const navigate = useNavigate();
   const base = useShellBase();
+  const returnTo = readReturnTo(useSearchParams()[0], `${base}/customers`);
   const t = useT();
   const { language } = useThemeStore();
   const isUrdu = language === "ur";
@@ -53,26 +55,24 @@ export default function AddCustomerPage() {
     setExistingCustomerId(null);
 
     if (!name.trim()) {
-      errs.name = isUrdu ? "نام درج کریں" : "Name is required";
+      errs.name = t("customerProfile.nameRequired");
     }
 
     if (!phone.trim()) {
-      errs.phone = isUrdu ? "فون نمبر درج کریں" : "Phone number is required";
+      errs.phone = t("inline.phone_number_is_required");
     } else {
       const raw = normalizePhone(phone);
       if (!isValidPakistaniPhone(raw)) {
-        errs.phone = isUrdu
-          ? "درست فون نمبر درج کریں"
-          : "Enter a valid phone number (e.g. 03001234567 or 923001234567)";
+        errs.phone = t("inline.enter_a_valid_phone_number_e_g_03001234567_o");
       } else {
         const existing = customers.find((c) => {
           const cp = normalizePhone(c.phone);
           return cp === raw && !c.isArchived;
         });
         if (existing) {
-          errs.phone = isUrdu
-            ? `"${existing.name}" کے ساتھ پہلے سے رجسٹرڈ ہے`
-            : `Already registered with "${existing.name}"`;
+          // The same sentence already exists for this case; a second wording here
+          // would be one message said two ways on two screens.
+          errs.phone = t("customerProfile.phoneAlreadyRegistered", { name: existing.name });
           setExistingCustomerId(existing.id);
         }
       }
@@ -102,9 +102,23 @@ export default function AddCustomerPage() {
       if (selectedCrops.length > 0 && newCustomer.id) {
         await saveCustomerCrops(newCustomer.id, selectedCrops);
       }
-      addToast(`${name} ${isUrdu ? "شامل کر دیا گیا" : "added successfully"}`, "success");
+      // Persist the reminder configuration chosen in this flow. It was collected by
+      // the sheet and then dropped on the floor: the config was never written, so
+      // Customer Details (which reads configs from the database) showed none.
+      if (reminderConfig && newCustomer.id) {
+        await saveReminderConfig(newCustomer.id, reminderConfig);
+      }
+      addToast(`${name} ${t("inline.added_successfully")}`, "success");
       clearNav();
-      navigate(`${base}/customers`, { replace: true });
+      // A sale that needed a customer sent us here with the workflow to come back to;
+      // the new id goes back with it so the sale continues with this customer chosen
+      // instead of re-asking. Opened normally, this still lands on the customer list.
+      navigate(
+        newCustomer.id
+          ? withCreatedId(returnTo, `${base}/customers`, "customerId", newCustomer.id)
+          : `${base}/customers`,
+        { replace: true },
+      );
     } catch (e: any) {
       const msg = e?.message || e?.error?.message || (typeof e === 'string' ? e : String(e));
       setErrors({ phone: msg });
@@ -136,14 +150,14 @@ export default function AddCustomerPage() {
 
           {/* Name */}
           <div>
-            <p className="text-[11px] font-bold uppercase mb-2 tracking-wider" style={{ color: "var(--text-secondary)" }}>
+            <p className="text-11 font-bold uppercase mb-2 tracking-wider" style={{ color: "var(--text-secondary)" }}>
               {t("addCustomer.name")}
             </p>
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder={isUrdu ? "گاہک کا پورا نام" : "Enter customer name"}
-              className="w-full h-12 rounded-[24px] px-4 text-sm outline-none"
+              placeholder={t("inline.enter_customer_name")}
+              className="w-full h-12 rounded-[var(--radius-input)] px-4 text-sm outline-none"
               style={{
                 background: "var(--surface-2)",
                 border: `1px solid ${errors.name ? "var(--error)" : "var(--divider)"}`,
@@ -155,7 +169,7 @@ export default function AddCustomerPage() {
 
           {/* Phone */}
           <div>
-            <p className="text-[11px] font-bold uppercase mb-2 tracking-wider" style={{ color: "var(--text-secondary)" }}>
+            <p className="text-11 font-bold uppercase mb-2 tracking-wider" style={{ color: "var(--text-secondary)" }}>
               {t("addCustomer.phone")}
             </p>
             <input
@@ -164,7 +178,7 @@ export default function AddCustomerPage() {
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
               placeholder="03001234567"
-              className="w-full h-12 rounded-[24px] px-4 text-sm outline-none"
+              className="w-full h-12 rounded-[var(--radius-input)] px-4 text-sm outline-none"
               style={{
                 background: "var(--surface-2)",
                 border: `1px solid ${errors.phone ? "var(--error)" : "var(--divider)"}`,
@@ -180,7 +194,7 @@ export default function AddCustomerPage() {
                     className="text-xs font-bold underline"
                     style={{ color: "var(--brand-dark)" }}
                   >
-                    {isUrdu ? "گاہک دیکھیں" : "View customer →"}
+                    {t("inline.view_customer")}
                   </button>
                 )}
               </div>
@@ -189,14 +203,14 @@ export default function AddCustomerPage() {
 
           {/* Address */}
           <div>
-            <p className="text-[11px] font-bold uppercase mb-2 tracking-wider" style={{ color: "var(--text-secondary)" }}>
+            <p className="text-11 font-bold uppercase mb-2 tracking-wider" style={{ color: "var(--text-secondary)" }}>
               {t("addCustomer.address")}
             </p>
             <input
               value={address}
               onChange={(e) => setAddress(e.target.value)}
-              placeholder={isUrdu ? "گاؤں / شہر / قصبہ" : "Village / town / city"}
-              className="w-full h-12 rounded-[24px] px-4 text-sm outline-none"
+              placeholder={t("inline.village_town_city")}
+              className="w-full h-12 rounded-[var(--radius-input)] px-4 text-sm outline-none"
               style={{
                 background: "var(--surface-2)",
                 border: "1px solid var(--divider)",
@@ -207,7 +221,7 @@ export default function AddCustomerPage() {
 
           {/* Crops */}
           <div>
-            <p className="text-[11px] font-bold uppercase mb-2 tracking-wider" style={{ color: "var(--text-secondary)" }}>
+            <p className="text-11 font-bold uppercase mb-2 tracking-wider" style={{ color: "var(--text-secondary)" }}>
               {t("common.crops")}
             </p>
             <div className="flex flex-wrap gap-2">
@@ -216,7 +230,7 @@ export default function AddCustomerPage() {
                   key={cropName}
                   type="button"
                   onClick={() => setSelectedCrops(prev => prev.includes(cropName) ? prev.filter(c => c !== cropName) : [...prev, cropName])}
-                  className="h-9 px-4 rounded-full text-[12px] font-medium transition-colors"
+                  className="h-9 px-4 rounded-full text-12 font-medium transition-colors"
                   style={{
                     background: selectedCrops.includes(cropName) ? "var(--brand)" : "var(--surface-2)",
                     color: selectedCrops.includes(cropName) ? "#0a0a0a" : "var(--text-secondary)",
@@ -227,7 +241,7 @@ export default function AddCustomerPage() {
                 </button>
               ))}
             </div>
-            <p className="text-[11px] mt-1" style={{ color: "var(--text-secondary)" }}>
+            <p className="text-11 mt-1" style={{ color: "var(--text-secondary)" }}>
               {t("common.whatCrops")}
             </p>
           </div>
@@ -235,13 +249,13 @@ export default function AddCustomerPage() {
           {/* Credit Limit + Reminder Config */}
           <div>
             <div className="flex items-center justify-between mb-2">
-              <p className="text-[11px] font-bold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
+              <p className="text-11 font-bold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
                 {t("customers.creditLimit")} {t("common.optional")}
               </p>
               <button
                 type="button"
                 onClick={() => setShowReminderConfig(true)}
-                className="flex items-center gap-1.5 h-7 px-2.5 rounded-full text-[10px] font-semibold"
+                className="flex items-center gap-1.5 h-7 px-2.5 rounded-full text-10 font-semibold"
                 style={{ background: reminderConfig ? "var(--brand-light, #d9f99d)" : "var(--surface-2)", color: reminderConfig ? "var(--brand-dark, #65a30d)" : "var(--text-secondary)", border: "1px solid var(--divider)" }}
               >
                 <Bell size={12} /> {t("customer.reminder")}
@@ -254,15 +268,15 @@ export default function AddCustomerPage() {
               onChange={(e) => setCreditLimit(e.target.value)}
               placeholder="0"
               min="0"
-              className="w-full h-12 rounded-[24px] px-4 text-sm outline-none"
+              className="w-full h-12 rounded-[var(--radius-input)] px-4 text-sm outline-none"
               style={{
                 background: "var(--surface-2)",
                 border: "1px solid var(--divider)",
                 color: "var(--text-primary)",
               }}
             />
-            <p className="text-[11px] mt-1" style={{ color: "var(--text-secondary)" }}>
-              {isUrdu ? "اس گاہک کو کتنا ادھار دے سکتے ہیں" : "Maximum credit amount for this customer"}
+            <p className="text-11 mt-1" style={{ color: "var(--text-secondary)" }}>
+              {t("inline.maximum_credit_amount_for_this_customer")}
             </p>
           </div>
         </div>

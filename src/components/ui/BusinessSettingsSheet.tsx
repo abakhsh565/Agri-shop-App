@@ -1,5 +1,10 @@
 import { useState, useEffect } from "react";
+import { useDelayedDismiss } from "@/hooks/usePresence";
+
+/** Matches --dur-3, the sheet duration token. */
+const SHEET_MS = 280;
 import { X, Plus, Trash2 } from "lucide-react";
+import SelectorField from "./SelectorField";
 import type { CropConfig, BusinessSettings } from "@/types";
 import { useT } from "@/lib/i18n";
 
@@ -18,6 +23,7 @@ export default function BusinessSettingsSheet({ onClose, onSave }: Props) {
   const t = useT();
   const [settings, setSettings] = useState<BusinessSettings>(loadSettings);
   const [customCrop, setCustomCrop] = useState("");
+  const { closing, dismiss } = useDelayedDismiss(onClose, SHEET_MS);
   const selectedNames = settings.crops.map(c => c.name);
 
   // Lock background scroll
@@ -62,16 +68,19 @@ export default function BusinessSettingsSheet({ onClose, onSave }: Props) {
     border: "1px solid var(--divider)",
   };
 
-  const labelCls = "text-[11px] font-semibold uppercase tracking-wider mb-2 block";
+  const labelCls = "text-11 font-semibold uppercase tracking-wider mb-2 block";
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end"
-      style={{ background: "rgba(0,0,0,0.5)" }}
-      onClick={onClose}
+      className={`fixed inset-0 z-50 flex items-end ds-backdrop ${
+        closing ? "ds-anim-backdrop-out ds-anim-leaving" : "ds-anim-backdrop-in"
+      }`}
+      onClick={closing ? undefined : dismiss}
     >
       <div
-        className="w-full max-w-[390px] mx-auto rounded-t-[24px] flex flex-col"
+        className={`w-full max-w-[390px] mx-auto rounded-t-[24px] flex flex-col ${
+          closing ? "ds-anim-sheet-out" : "ds-anim-sheet-in"
+        }`}
         style={{ background: "var(--surface)", maxHeight: "85vh" }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -82,10 +91,10 @@ export default function BusinessSettingsSheet({ onClose, onSave }: Props) {
 
         {/* Header */}
         <div className="px-5 pb-4 flex items-center justify-between">
-          <p className="text-[16px] font-semibold" style={{ color: "var(--text-primary)" }}>{t("common.businessSettings")}</p>
+          <p className="text-16 font-semibold" style={{ color: "var(--text-primary)" }}>{t("common.businessSettings")}</p>
           <button
-            onClick={onClose}
-            className="size-8 rounded-full flex items-center justify-center"
+            onClick={dismiss}
+            className="size-8 rounded-full flex items-center justify-center ds-pressable"
             style={{ background: "var(--surface-2)" }}
           >
             <X size={16} style={{ color: "var(--text-secondary)" }} />
@@ -105,7 +114,7 @@ export default function BusinessSettingsSheet({ onClose, onSave }: Props) {
                   <button
                     key={crop}
                     onClick={() => toggleCrop(crop)}
-                    className="h-10 px-4 rounded-full text-[13px] font-medium transition-colors"
+                    className="h-10 px-4 rounded-full text-13 font-medium transition-colors"
                     style={{
                       background: active ? "var(--brand)" : "var(--surface-2)",
                       color: active ? "#0a0a0a" : "var(--text-secondary)",
@@ -125,7 +134,7 @@ export default function BusinessSettingsSheet({ onClose, onSave }: Props) {
                 onChange={(e) => setCustomCrop(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter") addCustomCrop(); }}
                 placeholder={t("bizSettings.addCropPlaceholder")}
-                className="flex-1 h-12 px-4 text-[13px] outline-none"
+                className="flex-1 h-12 px-4 text-13 outline-none"
                 style={{ ...fieldStyle, borderRadius: "24px" }}
               />
               <button
@@ -146,12 +155,12 @@ export default function BusinessSettingsSheet({ onClose, onSave }: Props) {
                 {settings.crops.map(crop => (
                   <div
                     key={crop.name}
-                    className="rounded-[14px] p-4"
+                    className="rounded-[var(--radius-card)] p-4"
                     style={{ background: "var(--surface)", border: "1px solid var(--divider)" }}
                   >
                     {/* Crop name + delete */}
                     <div className="flex items-center justify-between mb-3">
-                      <p className="text-[14px] font-semibold" style={{ color: "var(--text-primary)" }}>
+                      <p className="text-14 font-semibold" style={{ color: "var(--text-primary)" }}>
                         {crop.name}
                       </p>
                       <button
@@ -166,39 +175,30 @@ export default function BusinessSettingsSheet({ onClose, onSave }: Props) {
                       </button>
                     </div>
 
-                    {/* Harvest month + day — full width selects matching Add Product */}
+                    {/* Harvest month + day — chosen in our own picker, never the
+                        OS/browser select popup, which cannot follow the theme. */}
                     <div className="flex gap-2">
-                      <div className="flex-1 relative">
-                        <p className="text-[10px] font-medium mb-1" style={{ color: "var(--text-secondary)" }}>{t("settings.month")}</p>
-                        <select
-                          value={crop.harvestMonth}
-                          onChange={(e) => updateHarvestMonth(crop.name, parseInt(e.target.value))}
-                          className="w-full h-12 px-4 pe-10 text-[13px] outline-none appearance-none font-medium"
-                          style={{ ...fieldStyle, borderRadius: "24px" }}
-                        >
-                          {MONTHS.map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
-                        </select>
-                        <div className="absolute right-3 bottom-3 pointer-events-none">
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="m6 9 6 6 6-6"/>
-                          </svg>
-                        </div>
+                      <div className="flex-1">
+                        <p className="text-10 font-medium mb-1" style={{ color: "var(--text-secondary)" }}>{t("settings.month")}</p>
+                        <SelectorField
+                          value={String(crop.harvestMonth)}
+                          options={MONTHS.map((m, i) => ({ value: String(i + 1), label: m }))}
+                          placeholder={t("settings.month")}
+                          title={t("settings.month")}
+                          onChange={(v) => updateHarvestMonth(crop.name, parseInt(v))}
+                          showTile={false}
+                        />
                       </div>
-                      <div className="w-[80px] relative">
-                        <p className="text-[10px] font-medium mb-1" style={{ color: "var(--text-secondary)" }}>{t("common.day")}</p>
-                        <select
-                          value={crop.harvestDay}
-                          onChange={(e) => updateHarvestDay(crop.name, parseInt(e.target.value))}
-                          className="w-full h-12 px-4 pe-10 text-[13px] outline-none appearance-none font-medium"
-                          style={{ ...fieldStyle, borderRadius: "24px" }}
-                        >
-                          {Array.from({length: 31}, (_, i) => i + 1).map(d => <option key={d} value={d}>{d}</option>)}
-                        </select>
-                        <div className="absolute right-3 bottom-3 pointer-events-none">
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="m6 9 6 6 6-6"/>
-                          </svg>
-                        </div>
+                      <div className="w-[96px]">
+                        <p className="text-10 font-medium mb-1" style={{ color: "var(--text-secondary)" }}>{t("common.day")}</p>
+                        <SelectorField
+                          value={String(crop.harvestDay)}
+                          options={Array.from({ length: 31 }, (_, i) => ({ value: String(i + 1), label: String(i + 1) }))}
+                          placeholder={t("common.day")}
+                          title={t("common.day")}
+                          onChange={(v) => updateHarvestDay(crop.name, parseInt(v))}
+                          showTile={false}
+                        />
                       </div>
                     </div>
                   </div>
@@ -210,7 +210,7 @@ export default function BusinessSettingsSheet({ onClose, onSave }: Props) {
           {/* Save button */}
           <button
             onClick={handleSave}
-            className="w-full h-12 rounded-full text-[14px] font-bold transition-opacity active:opacity-80"
+            className="w-full h-12 rounded-full text-14 font-bold transition-opacity active:opacity-80"
             style={{ background: "var(--brand)", color: "#0a0a0a" }}
           >
             {t("settings.saveBusinessSettings")}

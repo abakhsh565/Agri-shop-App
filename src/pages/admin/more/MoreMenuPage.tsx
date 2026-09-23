@@ -1,8 +1,10 @@
 import { useNavigate } from "react-router-dom";
 import { useThemeStore } from "@/stores/themeStore";
 import { useT } from "@/lib/i18n";
-import { Package, Building2, Users, UserCheck, ShoppingCart, BarChart2, Layers, CreditCard, Settings, History, AlertTriangle, Calculator, ScanLine } from "lucide-react";
+import { Package, Building2, Users, UserCheck, ShoppingCart, BarChart2, Layers, CreditCard, Settings, History, AlertTriangle, Calculator, ScanLine, ChevronRight } from "lucide-react";
 import StatusBar from "@/components/ui/StatusBar";
+import ListCard from "@/components/ui/ListCard";
+import ListRow from "@/components/ui/ListRow";
 
 const TILES = [
   { labelKey: "admin.customers" as const, icon: UserCheck,    path: "/admin/customers",  color: "#3b82f6" },
@@ -35,40 +37,40 @@ export default function MoreMenuPage() {
       {/* Top card */}
       <div className="px-4 pt-2">
         <div
-          className="rounded-[16px] p-5"
+          className="rounded-[var(--radius-card)] p-5"
           style={{ background: "var(--brand)" }}
         >
-          <p className="text-[13px] font-bold" style={{ color: "rgba(0,0,0,0.6)" }}>{t("admin.mainShop")}</p>
-          <p className="text-[22px] font-bold" style={{ color: "#0a0a0a" }}>{t("admin.ownerSuite")}</p>
-          <p className="text-[12px] mt-1" style={{ color: "rgba(0,0,0,0.55)" }}>{t("admin.ownerAccess")}</p>
+          <p className="text-13 font-bold" style={{ color: "rgba(0,0,0,0.6)" }}>{t("admin.mainShop")}</p>
+          <p className="text-22 font-bold" style={{ color: "#0a0a0a" }}>{t("admin.ownerSuite")}</p>
+          <p className="text-12 mt-1" style={{ color: "rgba(0,0,0,0.55)" }}>{t("admin.ownerAccess")}</p>
         </div>
       </div>
 
       {/* Clean list */}
       <div className="px-4 pt-3 pb-4">
-        <div className="rounded-[14px] overflow-hidden" style={{ background: "var(--surface)", border: "1px solid var(--border-light)" }}>
-          {TILES.map((tile, idx) => {
+        <ListCard>
+          {TILES.map((tile) => {
             const Icon = tile.icon;
             const displayLabel = "labelKey" in tile ? t(tile.labelKey as any) : (tile as any).label;
             return (
-              <button
+              <ListRow
                 key={tile.path}
                 onClick={() => navigate(tile.path)}
-                className="w-full flex items-center gap-3.5 px-4 py-3.5 transition-opacity active:opacity-70 text-start"
-                style={{ borderBottom: idx < TILES.length - 1 ? "1px solid var(--divider)" : "none" }}
+                tile={
+                  <div
+                    className="size-9 rounded-[var(--radius-tile)] flex items-center justify-center shrink-0"
+                    style={{ background: tile.color + "18" }}
+                  >
+                    <Icon size={18} style={{ color: tile.color }} />
+                  </div>
+                }
+                trailing={<ChevronRight size={16} style={{ color: "var(--text-secondary)" }} className="shrink-0" />}
               >
-                <div
-                  className="size-9 rounded-[10px] flex items-center justify-center shrink-0"
-                  style={{ background: tile.color + "18" }}
-                >
-                  <Icon size={18} style={{ color: tile.color }} />
-                </div>
-                <p className="flex-1 text-[14px] font-semibold" style={{ color: "var(--text-primary)" }}>{displayLabel}</p>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6"/></svg>
-              </button>
+                <p className="text-14 font-semibold" style={{ color: "var(--text-primary)" }}>{displayLabel}</p>
+              </ListRow>
             );
           })}
-        </div>
+        </ListCard>
       </div>
     </div>
   );

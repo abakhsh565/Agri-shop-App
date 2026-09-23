@@ -102,7 +102,7 @@ export default function SuperAdminDashboard() {
       {/* Header */}
       <div className="px-4 pt-2 pb-3 flex items-center justify-between">
         <div>
-          <p className="text-[20px] font-bold" style={{ color: "var(--text-primary)" }}>
+          <p className="text-20 font-bold" style={{ color: "var(--text-primary)" }}>
             {t("superAdmin.shopRequests")}
           </p>
           <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
@@ -134,7 +134,7 @@ export default function SuperAdminDashboard() {
             {t(tab.labelKey)}
             {counts[tab.key] > 0 && (
               <span
-                className="ms-1 w-5 h-5 rounded-full text-[10px] flex items-center justify-center font-bold"
+                className="ms-1 w-5 h-5 rounded-full text-10 flex items-center justify-center font-bold"
                 style={{
                   background: activeTab === tab.key ? "rgba(0,0,0,0.15)" : "var(--divider)",
                 }}
@@ -171,12 +171,12 @@ export default function SuperAdminDashboard() {
               <button
                 key={req.id}
                 onClick={() => setSelectedRequest(req)}
-                className="flex items-center gap-3 p-3 rounded-[14px] text-start transition-all active:scale-[0.98]"
+                className="flex items-center gap-3 p-3 rounded-[var(--radius-card)] text-start transition-all active:scale-[0.98]"
                 style={{ background: "var(--surface)" }}
               >
                 {/* Shop Logo/Initials */}
                 <div
-                  className="w-12 h-12 rounded-[12px] flex items-center justify-center text-lg font-bold shrink-0"
+                  className="w-12 h-12 rounded-[var(--radius-tile)] flex items-center justify-center text-lg font-bold shrink-0"
                   style={{ background: "var(--surface-2)", color: "var(--text-primary)" }}
                 >
                   {req.shopName.charAt(0)}
@@ -190,7 +190,7 @@ export default function SuperAdminDashboard() {
                   <p className="text-xs truncate" style={{ color: "var(--text-secondary)" }}>
                     {req.ownerName} · {req.ownerPhone}
                   </p>
-                  <p className="text-[10px]" style={{ color: "var(--text-secondary)" }}>
+                  <p className="text-10" style={{ color: "var(--text-secondary)" }}>
                     {new Date(req.createdAt).toLocaleDateString()}
                   </p>
                 </div>
@@ -201,7 +201,7 @@ export default function SuperAdminDashboard() {
                   style={{ background: statusColor.bg }}
                 >
                   <StatusIcon size={12} color={statusColor.fg} />
-                  <span className="text-[10px] font-bold capitalize" style={{ color: statusColor.fg }}>
+                  <span className="text-10 font-bold capitalize" style={{ color: statusColor.fg }}>
                     {t("superAdmin.status." + req.status)}
                   </span>
                 </div>
@@ -250,7 +250,7 @@ export default function SuperAdminDashboard() {
             {/* Rejection Reason */}
             {selectedRequest.status === "rejected" && selectedRequest.rejectionReason && (
               <div
-                className="p-3 rounded-[12px]"
+                className="p-3 rounded-[var(--radius-tile)]"
                 style={{ background: "rgba(239,68,68,0.05)", border: "1px solid rgba(239,68,68,0.2)" }}
               >
                 <p className="text-xs font-bold mb-1" style={{ color: "#ef4444" }}>{t("admin.rejectionReason")}</p>
@@ -299,7 +299,7 @@ export default function SuperAdminDashboard() {
           onClick={() => setShowRejectModal(false)}
         >
           <div
-            className="w-full max-w-[360px] rounded-[20px] p-6 flex flex-col gap-4"
+            className="w-full max-w-[360px] rounded-[var(--radius-card)] p-6 flex flex-col gap-4"
             style={{ background: "var(--surface)" }}
             onClick={(e) => e.stopPropagation()}
           >
@@ -314,7 +314,7 @@ export default function SuperAdminDashboard() {
               onChange={(e) => setRejectReason(e.target.value)}
               placeholder={t("superAdmin.rejectReasonPlaceholder")}
               rows={3}
-              className="w-full rounded-[14px] p-3 text-sm outline-none resize-none"
+              className="w-full rounded-[var(--radius-card)] p-3 text-sm outline-none resize-none"
               style={{
                 background: "var(--surface-2)",
                 border: "1px solid var(--divider)",
@@ -355,7 +355,7 @@ function InfoRow({ icon: Icon, label, value }: { icon: any; label: string; value
         <Icon size={14} style={{ color: "var(--text-secondary)" }} />
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-[10px] uppercase" style={{ color: "var(--text-secondary)" }}>{label}</p>
+        <p className="text-10 uppercase" style={{ color: "var(--text-secondary)" }}>{label}</p>
         <p className="text-sm font-medium truncate" style={{ color: "var(--text-primary)" }}>{value}</p>
       </div>
     </div>

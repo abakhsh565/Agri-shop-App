@@ -138,14 +138,14 @@ export default function ReturnConfirmPage() {
 
         {/* Estimated refund */}
         <div
-          className="mx-4 mt-3 rounded-[14px] p-4 text-center"
+          className="mx-4 mt-3 rounded-[var(--radius-card)] p-4 text-center"
           style={{ border: "1px solid var(--divider)" }}
         >
-          <p className="text-[10px] uppercase" style={{ color: "var(--text-secondary)" }}>
+          <p className="text-10 uppercase" style={{ color: "var(--text-secondary)" }}>
             {t("returns.estimatedRefund")}
           </p>
           <p
-            className="text-[28px] font-bold mt-1"
+            className="text-28 font-bold mt-1"
             style={{ color: "var(--text-primary)" }}
           >
             {formatCurrency(liveTotal)}
@@ -173,7 +173,7 @@ export default function ReturnConfirmPage() {
               }}
             />
             {!reason.trim() && (
-              <p className="text-[11px] mt-1 ms-4" style={{ color: "var(--text-secondary)" }}>
+              <p className="text-11 mt-1 ms-4" style={{ color: "var(--text-secondary)" }}>
                 {t("returns.reasonRequired")}
               </p>
             )}
@@ -188,7 +188,7 @@ export default function ReturnConfirmPage() {
               {t("admin.returningItems")}
             </p>
             <div
-              className="rounded-[14px] overflow-hidden"
+              className="rounded-[var(--radius-card)] overflow-hidden"
               style={{ border: "1px solid var(--divider)" }}
             >
               {items.map((item, i) => (
@@ -219,7 +219,7 @@ export default function ReturnConfirmPage() {
                       step="1"
                       value={item.editedUnitPrice}
                       onChange={(e) => updatePrice(i, e.target.value)}
-                      className="w-24 h-8 rounded-lg px-3 text-xs font-bold outline-none text-center"
+                      className="w-24 h-8 rounded-[var(--radius-tile)] px-3 text-xs font-bold outline-none text-center"
                       style={{
                         background: "var(--surface-2)",
                         border: "1px solid var(--divider)",
@@ -280,7 +280,7 @@ export default function ReturnConfirmPage() {
 
           {/* Info banner */}
           <div
-            className="rounded-[14px] p-4 flex gap-3"
+            className="rounded-[var(--radius-card)] p-4 flex gap-3"
             style={{ border: "1px solid var(--divider)" }}
           >
             <AlertTriangle

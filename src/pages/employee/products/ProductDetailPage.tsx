@@ -3,6 +3,8 @@ import { useNavigate, useParams } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
+import ListCard from "@/components/ui/ListCard";
+import ListRow from "@/components/ui/ListRow";
 import { CategoryChip } from "@/components/ui/Badge";
 import { useProductsStore } from "@/stores/productsStore";
 import { useUIStore } from "@/stores/uiStore";
@@ -148,16 +150,16 @@ export default function ProductDetailPage() {
       <div className="flex flex-col gap-4 px-4 pt-4 pb-8">
         {/* ── HERO CARD: Image + Name + Category + Stock Badge ── */}
         <div
-          className="rounded-[16px] p-4 flex gap-3 items-center"
+          className="rounded-[var(--radius-card)] p-4 flex gap-3 items-center"
           style={{ background: "var(--surface-2)", border: "1px solid var(--divider)" }}
         >
           <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
           <div className="shrink-0">
             {product.imageUrl ? (
-              <img src={product.imageUrl} alt={product.name} className="size-14 rounded-xl object-cover" />
+              <img src={product.imageUrl} alt={product.name} className="size-14 rounded-[var(--radius-tile)] object-cover" />
             ) : (
               <div
-                className="size-14 rounded-xl flex items-center justify-center text-xl font-bold"
+                className="size-14 rounded-[var(--radius-tile)] flex items-center justify-center text-xl font-bold"
                 style={{ background: bg + "22", color: bg }}
               >
                 {product.name.charAt(0)}
@@ -170,7 +172,7 @@ export default function ProductDetailPage() {
             <div className="flex items-center gap-2 mt-1 flex-wrap">
               <CategoryChip label={t(CATEGORY_LABEL_KEY[product.category] as any)} />
               <span
-                className="text-[10px] font-bold px-2 py-0.5 rounded-full"
+                className="text-10 font-bold px-2 py-0.5 rounded-full"
                 style={{ color: stockColor, background: stockColor + "22" }}
               >
                 {stockStatusLabel(stockStatus, t)}
@@ -181,11 +183,11 @@ export default function ProductDetailPage() {
 
         {/* ── QUICK INFO: Price + Stock + Variants in a clean row ── */}
         <div
-          className="rounded-[14px] p-4 grid grid-cols-3 gap-3"
+          className="rounded-[var(--radius-card)] p-4 grid grid-cols-3 gap-3"
           style={{ border: "1px solid var(--divider)" }}
         >
           <div className="text-center">
-            <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>{t("products.price")}</p>
+            <p className="text-10 font-bold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>{t("products.price")}</p>
             <p className="text-sm font-bold mt-0.5" style={{ color: "var(--text-primary)" }}>
               {prices.length > 1
                 ? `${formatCurrency(minPrice)} – ${formatCurrency(maxPrice)}`
@@ -193,13 +195,13 @@ export default function ProductDetailPage() {
             </p>
           </div>
           <div className="text-center" style={{ borderLeft: "1px solid var(--divider)", borderRight: "1px solid var(--divider)" }}>
-            <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>{t("products.stock")}</p>
+            <p className="text-10 font-bold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>{t("products.stock")}</p>
             <p className="text-sm font-bold mt-0.5" style={{ color: "var(--text-primary)" }}>
               {totalStock} {unitLabel(product.baseUnit)}
             </p>
           </div>
           <div className="text-center">
-            <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>{t("products.variantsLabel")}</p>
+            <p className="text-10 font-bold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>{t("products.variantsLabel")}</p>
             <p className="text-sm font-bold mt-0.5" style={{ color: "var(--text-primary)" }}>
               {product.variants.length}
             </p>
@@ -209,7 +211,7 @@ export default function ProductDetailPage() {
         {/* ── BARCODE (inside product card if exists) ── */}
         {product.barcode && (
           <div
-            className="rounded-[14px] p-3 flex items-center gap-3"
+            className="rounded-[var(--radius-card)] p-3 flex items-center gap-3"
             style={{ background: "var(--surface)", border: "1px solid var(--divider)" }}
           >
             <div dangerouslySetInnerHTML={{ __html: barcodeToSvg(product.barcode, { height: 40, showText: true, width: 160 }) }} className="flex-1" />
@@ -248,7 +250,7 @@ export default function ProductDetailPage() {
         <div>
           <p className="text-xs font-bold uppercase mb-2 tracking-wider" style={{ color: "var(--text-secondary)" }}>{t("products.packSizesTitle")}</p>
           <div
-            className="rounded-[14px] overflow-hidden"
+            className="rounded-[var(--radius-card)] overflow-hidden"
             style={{ border: "1px solid var(--divider)" }}
           >
 
@@ -265,7 +267,7 @@ export default function ProductDetailPage() {
               >
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-bold truncate" style={{ color: "var(--text-primary)" }}>{v.name}</p>
-                  <p className="text-[11px]" style={{ color: "var(--text-secondary)" }}>
+                  <p className="text-11" style={{ color: "var(--text-secondary)" }}>
                     {v.unitSize} {unitLabel(product.baseUnit)} · {formatCurrency(v.sellingPrice)}
                   </p>
                 </div>
@@ -274,7 +276,7 @@ export default function ProductDetailPage() {
                     {available}
                   </p>
                   <span
-                    className="text-[10px] font-bold px-2 py-0.5 rounded-full"
+                    className="text-10 font-bold px-2 py-0.5 rounded-full"
                     style={{ color: vColor, background: vColor + "22" }}
                   >
                     {stockStatusLabel(vStatus, t)}
@@ -291,13 +293,13 @@ export default function ProductDetailPage() {
 
         {/* ── ALL ACTIONS: Edit + Adjust + Barcode + Delete (unified) ── */}
         <div
-          className="rounded-[14px] overflow-hidden"
+          className="rounded-[var(--radius-card)] overflow-hidden"
           style={{ border: "1px solid var(--divider)" }}
         >
           {isAdmin && (
             <button
               onClick={() => navigate(`/admin/inventory/${product.id}/edit`)}
-              className="flex items-center gap-3 w-full px-4 py-3.5 text-start text-[13px] font-medium active:opacity-70"
+              className="flex items-center gap-3 w-full px-4 py-3.5 text-start text-13 font-medium active:opacity-70"
               style={{ color: "var(--text-primary)" }}
             >
               <Pencil size={16} style={{ color: "var(--brand)" }} />
@@ -307,7 +309,7 @@ export default function ProductDetailPage() {
           {isAdmin && (
             <button
               onClick={() => navigate(`/admin/inventory/${product.id}/adjust`)}
-              className="flex items-center gap-3 w-full px-4 py-3.5 text-start text-[13px] font-medium active:opacity-70"
+              className="flex items-center gap-3 w-full px-4 py-3.5 text-start text-13 font-medium active:opacity-70"
               style={{ color: "var(--text-primary)", borderTop: "1px solid var(--divider)" }}
             >
               <TrendingUp size={16} style={{ color: "var(--brand)" }} />
@@ -317,7 +319,7 @@ export default function ProductDetailPage() {
           {isAdmin && (
             <button
               onClick={() => navigate(`/admin/inventory/barcodes?product=${product.id}`)}
-              className="flex items-center gap-3 w-full px-4 py-3.5 text-start text-[13px] font-medium active:opacity-70"
+              className="flex items-center gap-3 w-full px-4 py-3.5 text-start text-13 font-medium active:opacity-70"
               style={{ color: "var(--text-primary)", borderTop: "1px solid var(--divider)" }}
             >
               <Barcode size={16} style={{ color: "var(--brand)" }} />
@@ -327,7 +329,7 @@ export default function ProductDetailPage() {
           {isAdmin && (
             <button
               onClick={() => setToDelete(true)}
-              className="flex items-center gap-3 w-full px-4 py-3.5 text-start text-[13px] font-medium active:opacity-70"
+              className="flex items-center gap-3 w-full px-4 py-3.5 text-start text-13 font-medium active:opacity-70"
               style={{ color: "var(--error)", borderTop: "1px solid var(--divider)" }}
             >
               <Trash2 size={16} />
@@ -354,7 +356,7 @@ export default function ProductDetailPage() {
             {/* Image in popup */}
             <div className="flex flex-col items-center mb-5">
               <div className="relative">
-                <div className="w-20 h-20 rounded-xl overflow-hidden flex items-center justify-center text-2xl font-bold" style={{ background: initBgColor(editName), color: "#fff" }}>
+                <div className="w-20 h-20 rounded-[var(--radius-tile)] overflow-hidden flex items-center justify-center text-2xl font-bold" style={{ background: initBgColor(editName), color: "#fff" }}>
                   {uploading ? (
                     <Loader2 size={20} className="animate-spin" />
                   ) : editImageUrl ? (
@@ -374,7 +376,7 @@ export default function ProductDetailPage() {
             </div>
             {/* Name input */}
             <div className="mb-5">
-              <label className="text-[11px] font-semibold uppercase tracking-wider mb-1.5 block" style={{ color: "var(--text-secondary)" }}>{t("common.productName")}</label>
+              <label className="text-11 font-semibold uppercase tracking-wider mb-1.5 block" style={{ color: "var(--text-secondary)" }}>{t("common.productName")}</label>
               <input
                 autoFocus
                 value={editName}
@@ -456,35 +458,25 @@ function ProductCustomerRecommendations({ productId }: { productId: string }) {
   }
 
   return (
-    <div className="rounded-[16px] p-4" style={{ background: "var(--surface-2)" }}>
-      <p className="text-[10px] font-bold uppercase tracking-wider mb-3" style={{ color: "var(--text-secondary)" }}>
+    <div className="rounded-[var(--radius-card)] p-4" style={{ background: "var(--surface-2)" }}>
+      <p className="text-10 font-bold uppercase tracking-wider mb-3" style={{ color: "var(--text-secondary)" }}>
         {t("products.customersLikely")}
       </p>
-      <div className="flex flex-col">
-        {recs.map((rec, i) => (
-          <div
+      <ListCard>
+        {recs.map((rec) => (
+          <ListRow
             key={rec.customer.id}
-            className="flex items-center gap-3 py-3"
-            style={{ borderBottom: i < recs.length - 1 ? "1px solid var(--divider)" : "none" }}
-          >
-            {rec.customer.imageUrl ? (
+            tile={rec.customer.imageUrl ? (
               <img src={rec.customer.imageUrl} alt={rec.customer.name} className="w-10 h-10 rounded-full object-cover shrink-0" />
             ) : (
               <div
-                className="w-10 h-10 rounded-full flex items-center justify-center text-[12px] font-bold shrink-0"
+                className="w-10 h-10 rounded-full flex items-center justify-center text-12 font-bold shrink-0"
                 style={{ background: getAvatarColor(rec.customer.name), color: "#fff" }}
               >
                 {getInitials(rec.customer.name)}
               </div>
             )}
-            <div className="flex-1 min-w-0">
-              <p className="text-[14px] font-medium" style={{ color: "var(--text-primary)" }}>
-                {rec.customer.name}
-              </p>
-              <p className="text-[12px] mt-0.5" style={{ color: "var(--text-secondary)" }}>
-                {t(rec.reasonKey, rec.reasonParams)}
-              </p>
-            </div>
+            trailing={
             <button
               className="size-8 rounded-full flex items-center justify-center shrink-0"
               style={{ background: "var(--surface)", border: "1px solid var(--divider)" }}
@@ -508,9 +500,19 @@ function ProductCustomerRecommendations({ productId }: { productId: string }) {
             >
               <Bell size={14} style={{ color: 'var(--text-secondary)' }} />
             </button>
-          </div>
+            }
+          >
+            <div className="min-w-0">
+              <p className="text-14 font-medium" style={{ color: "var(--text-primary)" }}>
+                {rec.customer.name}
+              </p>
+              <p className="text-12 mt-0.5" style={{ color: "var(--text-secondary)" }}>
+                {t(rec.reasonKey, rec.reasonParams)}
+              </p>
+            </div>
+          </ListRow>
         ))}
-      </div>
+      </ListCard>
     </div>
   );
 }

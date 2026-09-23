@@ -1,8 +1,11 @@
-import { useState, useRef } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useEffect, useState, useRef } from "react";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
 import ImageUpload from "@/components/ui/ImageUpload";
+import SelectorField from "@/components/ui/SelectorField";
+import { backToSelf, dependencyHint, readReturnTo } from "@/lib/dependencyGraph";
+import LogoTile from "@/components/ui/LogoTile";
 import { useCompaniesStore } from "@/stores/companiesStore";
 import { useProductsStore } from "@/stores/productsStore";
 import { rpcCreateProduct, rpcUpdateProduct } from "@/lib/db";
@@ -11,7 +14,7 @@ import { useThemeStore } from "@/stores/themeStore";
 import { useT } from "@/lib/i18n";
 import { clearNav } from "@/lib/navContext";
 import type { ProductCategory, BaseUnit } from "@/types";
-import { ChevronDown, Plus, Trash2, Scan } from "lucide-react";
+import { Plus, Trash2, Scan } from "lucide-react";
 import { generateProductBarcode } from "@/lib/barcode";
 
 const CATEGORIES: { key: ProductCategory; i18nKey: string }[] = [
@@ -55,10 +58,37 @@ export default function AddProductPage() {
   const existing = useProductsStore((s) => s.products.find((p) => p.id === productId));
   const isEdit = Boolean(productId);
 
+  // Arriving from Company Details → Add Product, the supplier is already decided by
+  // where the owner tapped. Asking for it again is the repetition this removes; the
+  // field is shown, not asked, and the product is linked to that company.
+  const [searchParams] = useSearchParams();
+  const presetCompanyId = searchParams.get("companyId") || "";
+  const returnTo = readReturnTo(searchParams, "/admin/products");
+  const presetCompany = companies.find((c) => c.id === presetCompanyId);
+  const companyLocked = Boolean(presetCompany) && !isEdit;
+
+  useEffect(() => {
+    if (!presetCompany) return;
+    // New product from a supplier's own page: the supplier is decided, so it is locked.
+    // Edit mode: never locked (the owner must still be able to correct it), but a
+    // supplier that arrived in the URL IS chosen — that is what makes "create the
+    // missing supplier and continue" land with the choice already made.
+    if (companyLocked || isEdit) setCompany(presetCompany.name);
+  }, [companyLocked, presetCompany, isEdit]);
+
   const [imageUrl, setImageUrl] = useState<string | null>(existing?.imageUrl ?? null);
   const [barcode, setBarcode] = useState(existing?.barcode ?? "");
   const [name, setName] = useState(existing?.name ?? "");
   const [company, setCompany] = useState(existing?.company ?? "");
+
+  // The product's blocking dependency. The supplier form is sent back to THIS form,
+  // and this form's own `returnTo` rides along, so a product created for a sale still
+  // lands back in the sale after the supplier detour.
+  const herePath = isEdit ? `/admin/inventory/${productId}/edit` : "/admin/inventory/new";
+  const supplierHint = dependencyHint("supplier", t, {
+    base: "/admin",
+    returnTo: backToSelf(herePath, returnTo, "/admin/products"),
+  });
   const [category, setCategory] = useState<ProductCategory>(existing?.category ?? "spray");
   const [baseUnit, setBaseUnit] = useState<BaseUnit>(existing?.baseUnit ?? "piece");
   const [stockQty, setStockQty] = useState(existing ? String(existing.stockQty) : "");
@@ -156,7 +186,10 @@ export default function AddProductPage() {
         addToast(t("copy.addedToInventory", { name: name.trim() }), "success");
       }
       clearNav();
-      navigate("/admin/products", { replace: true });
+      // A workflow that needed this product sent us here (the sale's product step);
+      // going back to it is what makes "create it and carry on" true rather than
+      // "create it and find your own way back to the sale".
+      navigate(returnTo, { replace: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : t("errors.saveProductFailed"));
     } finally {
@@ -170,7 +203,7 @@ export default function AddProductPage() {
     border: "1px solid var(--divider)",
     color: "var(--text-primary)",
   } as const;
-  const labelCls = "text-[11px] font-bold uppercase mb-2 tracking-wider";
+  const labelCls = "text-11 font-bold uppercase mb-2 tracking-wider";
 
   return (
     <div
@@ -191,7 +224,7 @@ export default function AddProductPage() {
           <div>
             <p className={labelCls} style={{ color: "var(--text-secondary)" }}>{t("common.productName")}</p>
             <input value={name} onChange={(e) => setName(e.target.value)} placeholder={t("addProduct.namePlaceholder")}
-              className="w-full h-12 rounded-[24px] px-4 text-sm outline-none" style={fieldStyle} />
+              className="w-full h-12 rounded-[var(--radius-input)] px-4 text-sm outline-none" style={fieldStyle} />
           </div>
 
           {/* Barcode */}
@@ -202,7 +235,7 @@ export default function AddProductPage() {
                 value={barcode}
                 onChange={(e) => setBarcode(e.target.value.toUpperCase())}
                 placeholder={t("addProduct.skuPlaceholder")}
-                className="flex-1 h-12 rounded-[24px] px-4 text-sm outline-none font-mono"
+                className="flex-1 h-12 rounded-[var(--radius-input)] px-4 text-sm outline-none font-mono"
                 style={fieldStyle}
               />
               <button
@@ -210,7 +243,10 @@ export default function AddProductPage() {
                 onClick={async () => {
                   try {
                     const { scanFromCamera } = await import("@/lib/barcode");
-                    const result = await scanFromCamera();
+                    const result = await scanFromCamera({
+                      hint: t("scan.pointAtBarcode"),
+                      cancel: t("common.cancel"),
+                    });
                     if (result) {
                       setBarcode(result.barcode.toUpperCase());
                       addToast(t("copy.barcodeRead", { code: result.barcode }), "success");
@@ -250,19 +286,37 @@ export default function AddProductPage() {
           {/* Company */}
           <div>
             <p className={labelCls} style={{ color: "var(--text-secondary)" }}>{t("supplier.selectLabel")}</p>
-            <div className="relative">
-              <select value={company} onChange={(e) => setCompany(e.target.value)}
-                className="w-full h-12 rounded-[24px] px-4 pe-10 text-sm outline-none appearance-none" style={fieldStyle}>
-                <option value="">{t('supplier.selectSupplier')}…</option>
-                {companies.map((c) => <option key={c.id} value={c.name}>{c.name}</option>)}
-              </select>
-              <ChevronDown size={16} className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: "var(--text-secondary)" }} />
-            </div>
+            {companyLocked ? (
+              <div className="w-full h-12 rounded-[var(--radius-input)] px-4 text-sm flex items-center gap-3" style={{ ...fieldStyle, opacity: 0.8 }}>
+                <LogoTile name={presetCompany?.name ?? company} src={presetCompany?.logoUrl} size={28} />
+                <span style={{ color: "var(--text-primary)" }}>{presetCompany?.name}</span>
+              </div>
+            ) : (
+              <SelectorField
+                value={company}
+                options={companies.map((c) => ({ value: c.name, label: c.name, logoSrc: c.logoUrl }))}
+                placeholder={t("supplier.selectSupplier")}
+                title={t("supplier.selectLabel")}
+                onChange={setCompany}
+                searchable
+                /* This form refuses to save without a supplier, so an empty picker
+                   used to be a dead end: the user was told nothing was available and
+                   had to leave, create one, and come back to a cleared form. The
+                   action is tertiary because it sits inside the product form, which
+                   is where the main task is — not a second primary button. */
+                emptyLabel={supplierHint.title}
+                emptyAction={
+                  supplierHint.action
+                    ? { label: supplierHint.action.label, onClick: () => navigate(supplierHint.action!.to) }
+                    : undefined
+                }
+              />
+            )}
           </div>
 
           {/* Category */}
           <div>
-            <p className={labelCls} style={{ color: "var(--text-secondary)" }}>{isUrdu ? 'کیٹیگری' : 'Category'}</p>
+            <p className={labelCls} style={{ color: "var(--text-secondary)" }}>{t("inline.category")}</p>
             <div className="flex flex-wrap gap-2">
               {CATEGORIES.map((c) => (
                 <button key={c.key} onClick={() => setCategory(c.key)}
@@ -280,7 +334,7 @@ export default function AddProductPage() {
 
           {/* Base Unit */}
           <div>
-            <p className={labelCls} style={{ color: "var(--text-secondary)" }}>{isUrdu ? 'بنیادی اکائی' : 'Base Unit'}</p>
+            <p className={labelCls} style={{ color: "var(--text-secondary)" }}>{t("inline.base_unit")}</p>
             <div className="flex gap-2">
               {BASE_UNITS.map((u) => (
                 <button key={u.key} onClick={() => setBaseUnit(u.key)}
@@ -300,8 +354,8 @@ export default function AddProductPage() {
           <div>
             <p className={labelCls} style={{ color: "var(--text-secondary)" }}>{t("products.stock")} ({unitLabel})</p>
             <input type="number" inputMode="numeric" value={stockQty} onChange={(e) => setStockQty(e.target.value)}
-              placeholder="0" className="w-full h-12 rounded-[24px] px-4 text-sm outline-none" style={fieldStyle} />
-            <p className="text-[10px] mt-1" style={{ color: "var(--text-secondary)", direction: "ltr" }}>
+              placeholder="0" className="w-full h-12 rounded-[var(--radius-input)] px-4 text-sm outline-none" style={fieldStyle} />
+            <p className="text-10 mt-1" style={{ color: "var(--text-secondary)", direction: "ltr" }}>
               {t("products.actualInventoryHint", { unit: unitLabel })}
             </p>
           </div>
@@ -317,10 +371,10 @@ export default function AddProductPage() {
 
             <div className="flex flex-col gap-3">
               {variants.map((v, i) => (
-                <div key={i} className="rounded-[14px] p-3.5" style={{ background: "var(--surface)", border: "1px solid var(--divider)" }}>
+                <div key={i} className="rounded-[var(--radius-card)] p-3.5" style={{ background: "var(--surface)", border: "1px solid var(--divider)" }}>
                   <div className="flex items-center gap-2 mb-2">
                     <input value={v.name} onChange={(e) => setVariant(i, { name: e.target.value })} placeholder={t("addProduct.unitNamePlaceholder")}
-                      className="flex-1 h-10 rounded-[20px] px-3 text-sm outline-none" style={fieldStyle} />
+                      className="flex-1 h-10 rounded-[var(--radius-card)] px-3 text-sm outline-none" style={fieldStyle} />
                     {variants.length > 1 && (
                       <button onClick={() => removeVariant(i)} className="w-8 h-8 rounded-full flex items-center justify-center shrink-0"
                         style={{ background: "var(--surface-2)", color: "var(--error)" }}>
@@ -364,12 +418,12 @@ function NumField({ label, value, onChange, style, readOnly = false, hint }: {
 }) {
   return (
     <div>
-      <p className="text-[10px] font-medium mb-1" style={{ color: "var(--text-secondary)" }}>{label}</p>
+      <p className="text-10 font-medium mb-1" style={{ color: "var(--text-secondary)" }}>{label}</p>
       <input type="number" inputMode="numeric" value={value} onChange={(e) => onChange(e.target.value)}
         readOnly={readOnly} disabled={readOnly}
-        placeholder="0" className="w-full h-10 rounded-[20px] px-3 text-sm outline-none disabled:opacity-60"
+        placeholder="0" className="w-full h-10 rounded-[var(--radius-card)] px-3 text-sm outline-none disabled:opacity-60"
         style={style} />
-      {hint && <p className="text-[9px] mt-0.5" style={{ color: "var(--text-secondary)", direction: "ltr" }}>{hint}</p>}
+      {hint && <p className="text-9 mt-0.5" style={{ color: "var(--text-secondary)", direction: "ltr" }}>{hint}</p>}
     </div>
   );
 }

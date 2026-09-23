@@ -93,7 +93,7 @@ export default function ImageUpload({
         ) : (
           <div className="flex flex-col items-center gap-1" style={{ color: "var(--text-secondary)" }}>
             <ImagePlus size={22} />
-            <span className="text-[11px] font-medium">{labelText}</span>
+            <span className="text-11 font-medium">{labelText}</span>
           </div>
         )}
 
@@ -117,7 +117,7 @@ export default function ImageUpload({
         <button
           type="button"
           onClick={() => setConfirmRemove(true)}
-          className="flex items-center gap-1 text-[11px] font-medium"
+          className="flex items-center gap-1 text-11 font-medium"
           style={{ color: "var(--text-secondary)" }}
         >
           <X size={12} /> {t("common.remove")}
@@ -125,7 +125,7 @@ export default function ImageUpload({
       )}
 
       {error && (
-        <p className="text-[11px] text-center" style={{ color: "var(--error)" }}>
+        <p className="text-11 text-center" style={{ color: "var(--error)" }}>
           {error}
         </p>
       )}

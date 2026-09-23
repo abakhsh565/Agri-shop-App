@@ -35,14 +35,14 @@ export default function MorePage() {
 
       {/* Header */}
       <div className="flex items-center px-4 pt-1 pb-2">
-        <p className="text-[20px] font-bold" style={{ color: "var(--text-primary)" }}>
+        <p className="text-20 font-bold" style={{ color: "var(--text-primary)" }}>
           {t("admin.more")}
         </p>
       </div>
 
       {/* Profile card */}
       <div className="px-4 pb-4">
-        <div className="rounded-[14px] p-4 flex items-center gap-3" style={{ background: "var(--surface-2)" }}>
+        <div className="rounded-[var(--radius-card)] p-4 flex items-center gap-3" style={{ background: "var(--surface-2)" }}>
           <div
             className="w-12 h-12 rounded-full flex items-center justify-center text-lg font-bold shrink-0"
             style={{ background: bg, color: "#fff" }}
@@ -50,8 +50,8 @@ export default function MorePage() {
             {initials}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-[15px] font-bold truncate" style={{ color: "var(--text-primary)" }}>{user?.name}</p>
-            <p className="text-[12px] capitalize" style={{ color: "var(--text-secondary)" }}>{user?.role?.replace("_", " ")}</p>
+            <p className="text-15 font-bold truncate" style={{ color: "var(--text-primary)" }}>{user?.name}</p>
+            <p className="text-12 capitalize" style={{ color: "var(--text-secondary)" }}>{user?.role?.replace("_", " ")}</p>
           </div>
         </div>
       </div>
@@ -62,13 +62,13 @@ export default function MorePage() {
           <button
             key={path}
             onClick={() => navigate(path)}
-            className="flex items-center gap-3 p-3 rounded-[14px] transition-all active:scale-[0.98]"
+            className="flex items-center gap-3 p-3 rounded-[var(--radius-card)] transition-all active:scale-[0.98]"
             style={{ background: "var(--surface-2)" }}
           >
             <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0" style={{ background: "var(--divider)" }}>
               <Icon size={16} style={{ color: "var(--text-primary)" }} />
             </div>
-            <p className="flex-1 text-start text-[14px] font-semibold" style={{ color: "var(--text-primary)" }}>
+            <p className="flex-1 text-start text-14 font-semibold" style={{ color: "var(--text-primary)" }}>
               {key.startsWith("nav.") || key.startsWith("settings.") ? t(key as any) : key}
             </p>
             <ChevronRight size={16} style={{ color: "var(--text-secondary)" }} />

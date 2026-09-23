@@ -2,12 +2,14 @@ import { useState, useRef, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
 import PullToRefresh from "@/components/ui/PullToRefresh";
+import { SkeletonList } from "@/components/ui/Skeleton";
 import { useCustomersStore } from "@/stores/customersStore";
 import { formatCurrency } from "@/lib/formatters";
 import { useT } from "@/lib/i18n";
 import { useThemeStore } from "@/stores/themeStore";
 import { useShellBase } from "@/lib/useShellBase";
-import { Plus, Search, ChevronRight, SlidersHorizontal, Check } from "lucide-react";
+import { Plus, ChevronRight, SlidersHorizontal, Check, UserRound } from "lucide-react";
+import SearchBar from "@/components/ui/SearchBar";
 import { getCreditHealth, calculateCreditHealth, getCreditHealthStatusColor } from "@/lib/formatters";
 import type { Customer } from "@/types";
 import { useSalesStore } from "@/stores/salesStore";
@@ -102,7 +104,7 @@ export default function CustomersListPage() {
 
       {/* Header */}
       <div className="flex items-center px-4 pt-1 pb-2">
-        <p className="text-[20px] font-bold" style={{ color: "var(--text-primary)" }}>
+        <p className="text-20 font-bold" style={{ color: "var(--text-primary)" }}>
           {t("customers.title")}
         </p>
       </div>
@@ -110,22 +112,22 @@ export default function CustomersListPage() {
       {/* Summary strip */}
       <div className="px-4 pb-3">
         <div
-          className="rounded-[12px] px-4 py-3 flex items-center justify-between"
+          className="rounded-[var(--radius-tile)] px-4 py-3 flex items-center justify-between"
           style={{ background: "var(--surface-2)" }}
         >
           <div>
-            <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "var(--text-secondary)" }}>
+            <p className="text-10 font-bold uppercase tracking-widest" style={{ color: "var(--text-secondary)" }}>
               {t("common.outstanding")}
             </p>
-            <p className="text-[20px] font-bold mt-0.5" style={{ color: "#d97706" }}>
+            <p className="text-20 font-bold mt-0.5" style={{ color: "#d97706" }}>
               {formatCurrency(totalOutstanding)}
             </p>
           </div>
           <div className="text-end">
-            <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "var(--text-secondary)" }}>
+            <p className="text-10 font-bold uppercase tracking-widest" style={{ color: "var(--text-secondary)" }}>
               {t("sale.onCredit")}
             </p>
-            <p className="text-[20px] font-bold mt-0.5" style={{ color: "var(--text-primary)" }}>
+            <p className="text-20 font-bold mt-0.5" style={{ color: "var(--text-primary)" }}>
               {onCredit} / {customers.length}
             </p>
           </div>
@@ -134,22 +136,13 @@ export default function CustomersListPage() {
 
       {/* Search + Sort */}
       <div className="px-4 pb-3 flex gap-2 items-center">
-        <div
-          className="flex-1 flex items-center gap-2 h-10 rounded-full px-3"
-          style={{ background: "var(--surface-2)", border: "1px solid var(--divider)" }}
-        >
-          <Search size={14} style={{ color: "var(--text-secondary)" }} />
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder={t("customers.search")}
-            className="flex-1 bg-transparent text-[13px] outline-none"
-            style={{ color: "var(--text-primary)" }}
-          />
-          {search && (
-            <button onClick={() => setSearch("")} style={{ color: "var(--text-secondary)" }}>×</button>
-          )}
-        </div>
+        <SearchBar
+          containerClass="flex-1 min-w-0"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          onClear={() => setSearch("")}
+          placeholder={t("customers.search")}
+        />
 
         {/* Sort button */}
         <div className="relative" ref={sortMenuRef}>
@@ -164,7 +157,7 @@ export default function CustomersListPage() {
           {/* Sort dropdown */}
           {showSortMenu && (
             <div
-              className="absolute right-0 top-12 w-52 rounded-[14px] shadow-xl overflow-hidden z-50 animate-scale-in"
+              className="absolute right-0 top-12 w-52 rounded-[var(--radius-card)] shadow-xl overflow-hidden z-50 animate-scale-in"
               style={{ background: "var(--surface)", border: "1px solid var(--divider)" }}
             >
               {SORT_OPTIONS.map((opt) => (
@@ -175,7 +168,7 @@ export default function CustomersListPage() {
                   style={{ borderBottom: "1px solid var(--divider)" }}
                 >
                   <span
-                    className="text-[13px] font-medium"
+                    className="text-13 font-medium"
                     style={{ color: sort === opt.key ? "var(--brand-dark)" : "var(--text-primary)" }}
                   >
                     {t(opt.labelKey as any)}
@@ -218,17 +211,15 @@ export default function CustomersListPage() {
 
       {/* Customer list */}
       {!ready ? (
-        <div className="flex flex-col items-center py-16 gap-3">
-          <p className="text-[13px]" style={{ color: "var(--text-secondary)" }}>{t("common.loading")}</p>
-        </div>
+        <SkeletonList rows={5} tile />
       ) : sorted.length === 0 ? (
         <div className="flex flex-col items-center py-16 gap-3">
-          <p className="text-4xl">👤</p>
-          <p className="text-[15px] font-semibold" style={{ color: "var(--text-primary)" }}>
+          <UserRound size={32} className="mx-auto block" style={{ color: "var(--text-tertiary)" }} />
+          <p className="text-15 font-semibold" style={{ color: "var(--text-primary)" }}>
             {search ? t("sale.noCustomersMatch") : t("sale.noCustomersYet")}
           </p>
           {!search && (
-            <p className="text-[13px]" style={{ color: "var(--text-secondary)" }}>
+            <p className="text-13" style={{ color: "var(--text-secondary)" }}>
               {t("customers.addNew")}
             </p>
           )}
@@ -246,7 +237,7 @@ export default function CustomersListPage() {
               <button
                 key={c.id}
                 onClick={() => navigate(`${base}/customers/${c.id}`)}
-                className="flex items-center gap-3 p-3 rounded-[14px] text-start transition-all active:scale-[0.98]"
+                className="flex items-center gap-3 p-3 rounded-[var(--radius-card)] text-start transition-all active:scale-[0.98]"
                 style={{ background: "var(--surface)", border: "1px solid var(--border-light)" }}
               >
                 {/* Avatar */}
@@ -258,7 +249,7 @@ export default function CustomersListPage() {
                   />
                 ) : (
                   <div
-                    className="flex items-center justify-center rounded-full shrink-0 size-[46px] text-[16px] font-bold"
+                    className="flex items-center justify-center rounded-full shrink-0 size-[46px] text-16 font-bold"
                     style={{ background: bg, color: "#fff" }}
                   >
                     {c.name.charAt(0).toUpperCase()}
@@ -267,10 +258,10 @@ export default function CustomersListPage() {
 
                 {/* Info */}
                 <div className="flex-1 min-w-0">
-                  <p className="text-[14px] font-bold truncate" style={{ color: "var(--text-primary)" }}>
+                  <p className="text-14 font-bold truncate" style={{ color: "var(--text-primary)" }}>
                     {c.name}
                   </p>
-                  <p className="text-[12px]" style={{ color: "var(--text-secondary)" }}>{c.phone}</p>
+                  <p className="text-12" style={{ color: "var(--text-secondary)" }}>{c.phone}</p>
                   {/* Credit usage bar + status */}
                   {c.creditLimit > 0 ? (
                     <div className="mt-1.5">
@@ -284,14 +275,14 @@ export default function CustomersListPage() {
                         />
                       </div>
                       <div className="flex items-center justify-between mt-0.5">
-                        <p className="text-[10px]" style={{ color: "var(--text-secondary)" }}>
+                        <p className="text-10" style={{ color: "var(--text-secondary)" }}>
                           {creditUsed}{t("credit.percentUsed")}
                         </p>
-                        {(() => { const sc = useSalesStore.getState().sales.filter((s) => s.customerId === c.id); const scCount = sc.length; const fullTotal = sc.filter((s) => s.paymentType === "full").reduce((a, s) => a + s.totalAmount, 0); const ep = c.totalPaid + fullTotal; const hasCredit = sc.some((s) => s.paymentType !== "full"); const ch = calculateCreditHealth(c, scCount, null, ep, hasCredit); const chColor = getCreditHealthStatusColor(ch.status); const hlKey = ch.status === 'green' ? 'credit.reliable' : ch.status === 'yellow' ? 'credit.caution' : ch.status === 'red' ? 'credit.risk' : ch.status === 'cash_customer' ? 'credit.cashCustomer' : 'credit.notEnoughHistory'; return (<span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full" style={{ color: chColor, background: chColor + "22" }}>{t(hlKey as any)}</span>); })()}
+                        {(() => { const sc = useSalesStore.getState().sales.filter((s) => s.customerId === c.id); const scCount = sc.length; const fullTotal = sc.filter((s) => s.paymentType === "full").reduce((a, s) => a + s.totalAmount, 0); const ep = c.totalPaid + fullTotal; const hasCredit = sc.some((s) => s.paymentType !== "full"); const ch = calculateCreditHealth(c, scCount, null, ep, hasCredit); const chColor = getCreditHealthStatusColor(ch.status); const hlKey = ch.status === 'green' ? 'credit.reliable' : ch.status === 'yellow' ? 'credit.caution' : ch.status === 'red' ? 'credit.risk' : ch.status === 'cash_customer' ? 'credit.cashCustomer' : 'credit.notEnoughHistory'; return (<span className="text-9 font-bold px-1.5 py-0.5 rounded-full" style={{ color: chColor, background: chColor + "22" }}>{t(hlKey as any)}</span>); })()}
                       </div>
                     </div>
                   ) : (
-                    <p className="text-[10px] mt-1" style={{ color: "var(--text-secondary)" }}>
+                    <p className="text-10 mt-1" style={{ color: "var(--text-secondary)" }}>
                       {t("customers.creditLimit")} — {"—"}
                     </p>
                   )}
@@ -301,18 +292,18 @@ export default function CustomersListPage() {
                 <div className="flex flex-col items-end gap-1 shrink-0">
                   {hasDebt ? (
                     <>
-                      <span className="text-[13px] font-bold" style={{ color: "var(--text-primary)" }}>
+                      <span className="text-13 font-bold" style={{ color: "var(--text-primary)" }}>
                         {formatCurrency(c.outstandingBalance)}
                       </span>
                       <span
-                        className="text-[10px] font-semibold"
+                        className="text-10 font-semibold"
                         style={{ color: "#22c55e" }}
                       >
                         {t("customers.outstanding")}
                       </span>
                     </>
                   ) : (
-                    <span className="text-[11px] font-medium" style={{ color: "var(--text-secondary)" }}>
+                    <span className="text-11 font-medium" style={{ color: "var(--text-secondary)" }}>
                       {t("customers.noOutstanding")}
                     </span>
                   )}
@@ -335,7 +326,7 @@ export default function CustomersListPage() {
             className="pointer-events-auto ps-4 pe-5 rounded-full flex items-center gap-2 text-sm font-bold active:scale-95 transition-transform"
             style={{ background: "var(--brand)", color: "#0a0a0a", height: "52px", boxShadow: "0 6px 20px rgba(0,0,0,0.25)" }}
           >
-            <Plus size={20} strokeWidth={2.5} /> {isUrdu ? "گاہک شامل کریں" : "Add Customer"}
+            <Plus size={20} strokeWidth={2.5} /> {t("customers.addNew")}
           </button>
         </div>
       </div>

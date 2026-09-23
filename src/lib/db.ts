@@ -60,7 +60,7 @@ export async function rpcCreatePurchase(payload: {
   note?: string;
   /** Claimed by the database so one confirm cannot receive the same delivery twice (0140). */
   idempotencyKey?: string;
-  items: { productId?: string; productName: string; variantId?: string; variantName: string; qty: number; costPrice: number }[];
+  items: { productId?: string; productName: string; variantId?: string; variantName: string; qty: number; costPrice: number; sellingPrice?: number }[];
 }): Promise<{ id: string; purchaseNumber: string; totalAmount: number; outstandingPayable: number; idempotent?: boolean }> {
   const userId = useAuthStore.getState().user?.id ?? null;
   const { data, error } = await supabase.rpc("create_purchase", { payload: { ...payload, userId } });
@@ -245,14 +245,18 @@ interface PurchaseRow {
   company_name: string;
   total_amount: number;
   amount_paid: number;
-  outstanding_payable: number;
+  // The unpaid balance column is `amount_due`. It was read as `outstanding_payable`,
+  // a name that exists on `companies`, not on `purchases` — so every row mapped to
+  // NaN and the screen called an unpaid delivery "PAID" with Rs. 0 owing.
+  amount_due: number;
   payment_method: PaymentMethod;
   note: string | null;
   created_by: string | null;
   created_at: string;
   purchase_items?: {
     id: string; purchase_id: string; product_id: string | null; product_name: string;
-    variant_id: string | null; variant_name: string; qty: number; cost_price: number; line_total: number;
+    // `unit_price` is the purchase line column; `cost_price` lives on product_variants.
+    variant_id: string | null; variant_name: string; qty: number; unit_price: number; line_total: number;
   }[];
 }
 
@@ -276,12 +280,12 @@ export async function fetchPurchases(): Promise<Purchase[]> {
       variantId: it.variant_id ?? "",
       variantName: it.variant_name,
       qty: it.qty,
-      costPrice: Number(it.cost_price),
+      costPrice: Number(it.unit_price),
       lineTotal: Number(it.line_total),
     })),
     totalAmount: Number(r.total_amount),
     amountPaid: Number(r.amount_paid),
-    outstandingPayable: Number(r.outstanding_payable),
+    outstandingPayable: Number(r.amount_due),
     paymentMethod: r.payment_method,
     note: r.note ?? undefined,
     createdAt: r.created_at,

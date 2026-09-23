@@ -2,15 +2,19 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
+import ListCard from "@/components/ui/ListCard";
+import ListRow from "@/components/ui/ListRow";
 import SearchBar from "@/components/ui/SearchBar";
 import { StockBadge } from "@/components/ui/Badge";
 import { useCartStore } from "@/stores/cartStore";
 import { useProductsStore } from "@/stores/productsStore";
 import { useUIStore } from "@/stores/uiStore";
 import { useShellBase } from "@/lib/useShellBase";
+import EmptyState from "@/components/ui/EmptyState";
+import { dependencyHint } from "@/lib/dependencyGraph";
 import { useT } from "@/lib/i18n";
 import { getStockStatus, productLowStockThreshold } from "@/lib/formatters";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, Package } from "lucide-react";
 import ScanButton from "@/components/ui/ScanButton";
 import type { ProductCategory } from "@/types";
 
@@ -46,21 +50,29 @@ export default function BrowseProductsPage() {
   const products = useProductsStore((s) => s.products);
   const findByBarcode = useProductsStore((s) => s.findByBarcode);
 
+  // The sale is blocked on stock. `returnTo` is this exact step, so creating a product
+  // brings the user back to the product list with the cart and customer intact rather
+  // than dropping them in the inventory section to find their way back.
+  const missingProduct = dependencyHint("product", t, {
+    base,
+    returnTo: `${base}/sale/products`,
+  });
+
   function handleBarcodeScan(code: string) {
     const product = findByBarcode(code);
     if (!product) {
-      addToast(`No product found for "${code}"`, "error");
+      addToast(t("sale.noProductForCode", { code }), "error");
       return;
     }
     if (product.stockQty <= 0) {
-      addToast(`${product.name} is out of stock`, "warning");
+      addToast(t("sale.outOfStock", { name: product.name }), "warning");
       return;
     }
     // A variant is sellable when ITS OWN stock of record is positive; sales deduct
     // from that level, so the product total must not gate an individual variant.
     const inStockVariants = product.variants.filter((v) => v.stockQty > 0);
     if (inStockVariants.length === 0) {
-      addToast(`${product.name} is out of stock`, "warning");
+      addToast(t("sale.outOfStock", { name: product.name }), "warning");
       return;
     }
     if (inStockVariants.length === 1) {
@@ -81,7 +93,7 @@ export default function BrowseProductsPage() {
         unitSize: v.unitSize,
         baseUnit: product.baseUnit,
       });
-      addToast(`${product.name} (${v.name}) added to cart`, "success");
+      addToast(t("sale.addedToCart", { name: product.name, variant: v.name }), "success");
     } else {
       navigate(`${base}/sale/products/${product.id}`);
     }
@@ -144,41 +156,69 @@ export default function BrowseProductsPage() {
 
       {/* Product list */}
       {filtered.length === 0 ? (
-        <div className="flex-1 flex flex-col items-center justify-center py-16 gap-2">
-          <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
-            {search ? t("sale.noProductsMatch") : t("sale.noProductsYet")}
-          </p>
-        </div>
+        search ? (
+          // A search that found nothing is not a missing dependency: the products
+          // exist, so there is nothing to create and no action belongs here.
+          <div className="flex-1 flex flex-col items-center justify-center py-16 gap-2">
+            <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
+              {t("sale.noProductsMatch")}
+            </p>
+          </div>
+        ) : (
+          /* The sale cannot proceed at all here, so this is the one place in the flow
+             where creating the missing record IS the screen's main task — the action
+             is primary. An employee may not create stock, so they get words instead of
+             a link that would 404. */
+          <EmptyState
+            icon={Package}
+            title={missingProduct.title}
+            /* With the action the reason is enough. Without it (an employee may not
+               create stock) the second sentence has to say who can, or the state is
+               honest but useless. */
+            subtitle={
+              missingProduct.action
+                ? missingProduct.why
+                : `${missingProduct.why} ${missingProduct.instead}`
+            }
+            action={
+              missingProduct.action
+                ? {
+                    label: missingProduct.action.label,
+                    onClick: () => navigate(missingProduct.action!.to),
+                  }
+                : undefined
+            }
+          />
+        )
       ) : (
-        <div className="flex flex-col">
-          {filtered.map((p, i) => {
+        <ListCard className="mx-4">
+          {filtered.map((p) => {
             const catColor = CATEGORY_COLOR[p.category] ?? CATEGORY_COLOR.other;
             return (
-              <button
+              <ListRow
                 key={p.id}
                 onClick={() => navigate(`${base}/sale/products/${p.id}`)}
-                className="flex items-center gap-3 px-4 py-4 text-start"
-                style={{ borderBottom: i < filtered.length - 1 ? "1px solid var(--divider)" : "none" }}
+                tile={
+                  <div
+                    className="w-10 h-10 rounded-[var(--radius-tile)] flex items-center justify-center text-sm font-bold shrink-0 overflow-hidden"
+                    style={{ background: p.imageUrl ? "transparent" : initColor(p.name) + "22" }}
+                  >
+                    {p.imageUrl ? (
+                      <img src={p.imageUrl} alt={p.name} className="w-full h-full object-cover" />
+                    ) : (
+                      <span style={{ color: initColor(p.name) }}>{p.name.charAt(0)}</span>
+                    )}
+                  </div>
+                }
+                trailing={<ChevronRight size={18} style={{ color: "var(--text-secondary)" }} className="shrink-0" />}
               >
-                {/* Product image or initial */}
-                <div
-                  className="w-10 h-10 rounded-xl flex items-center justify-center text-sm font-bold shrink-0 overflow-hidden"
-                  style={{ background: p.imageUrl ? "transparent" : initColor(p.name) + "22" }}
-                >
-                  {p.imageUrl ? (
-                    <img src={p.imageUrl} alt={p.name} className="w-full h-full object-cover" />
-                  ) : (
-                    <span style={{ color: initColor(p.name) }}>{p.name.charAt(0)}</span>
-                  )}
-                </div>
-
                 {/* Product info */}
-                <div className="flex-1 min-w-0 flex flex-col gap-1">
+                <div className="min-w-0 flex flex-col gap-1">
                   <p className="text-sm font-bold truncate" style={{ color: "var(--text-primary)" }}>{p.name}</p>
                   <p className="text-xs" style={{ color: "var(--text-secondary)" }}>{p.company}</p>
                   <div className="flex items-center gap-2">
                     <span
-                      className="self-start inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase"
+                      className="self-start inline-flex items-center px-2 py-0.5 rounded-full text-10 font-bold uppercase"
                       style={{ background: catColor.bg, color: catColor.fg }}
                     >
                       {t(CATEGORY_LABEL_KEY[p.category] as any) || p.category}
@@ -187,11 +227,10 @@ export default function BrowseProductsPage() {
                   </div>
 
                 </div>
-
-                <ChevronRight size={18} style={{ color: "var(--text-secondary)" }} className="shrink-0" />
-              </button>
+              </ListRow>
             );
-          })}        </div>
+          })}
+        </ListCard>
       )}
 
       {/* Floating Scan button */}

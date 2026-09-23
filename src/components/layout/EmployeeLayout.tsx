@@ -1,5 +1,5 @@
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
-import { Home, Receipt, ScanLine, Package, Users, Wifi, WifiOff } from "lucide-react";
+import { Home, Receipt, ScanLine, Package, Users, Wifi, WifiOff, X } from "lucide-react";
 import { useAuthStore } from "@/stores/authStore";
 import { useOfflineStore } from "@/stores/offlineStore";
 import { getPendingCount } from "@/lib/offlineQueue";
@@ -119,7 +119,10 @@ export default function EmployeeLayout() {
     setEmpScanning(true);
     try {
       const { scanFromCamera } = await import("@/lib/barcode");
-      const result = await scanFromCamera();
+      const result = await scanFromCamera({
+        hint: t("scan.pointAtBarcode"),
+        cancel: t("common.cancel"),
+      });
       if (result) {
         const product = findByBarcode(result.barcode);
         if (product) {
@@ -167,13 +170,13 @@ export default function EmployeeLayout() {
         >
           <div className="flex items-center gap-2">
             <WifiOff size={14} />
-            <span className="text-[12px] font-semibold">
+            <span className="text-12 font-semibold">
               {t("common.offline")} — {pendingOpsCount > 0
                 ? t("common.offlineQueued", { count: pendingOpsCount })
                 : t("common.offlineWorkingLocally")}
             </span>
           </div>
-          <span className="text-[10px] opacity-60 uppercase tracking-wide">{t("common.autoSyncOnReconnect")}</span>
+          <span className="text-10 opacity-60 uppercase tracking-wide">{t("common.autoSyncOnReconnect")}</span>
         </div>
       )}
 
@@ -184,7 +187,7 @@ export default function EmployeeLayout() {
           style={{ background: "rgba(132,204,22,0.12)", color: "var(--brand-dark)" }}
         >
           <Wifi size={14} className="animate-pulse" />
-          <span className="text-[12px] font-semibold">Syncing {pendingOpsCount} queued change(s)…</span>
+          <span className="text-12 font-semibold">Syncing {pendingOpsCount} queued change(s)…</span>
         </div>
       )}
 
@@ -232,7 +235,7 @@ export default function EmployeeLayout() {
           >
             <div className="flex items-center justify-between">
               <p className="text-base font-bold" style={{ color: "var(--text-primary)" }}>{t("common.scanBarcode")}</p>
-              <button onClick={() => setShowManualScan(false)} className="text-sm" style={{ color: "var(--text-secondary)" }}>✕</button>
+              <button onClick={() => setShowManualScan(false)} aria-label={t("common.close")} style={{ color: "var(--text-secondary)" }}><X size={16} /></button>
             </div>
             <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
               {t("scan.cameraUnavailable")}
@@ -263,7 +266,16 @@ export default function EmployeeLayout() {
         className="flex flex-col flex-1 overflow-y-auto"
         style={{ paddingBottom: showTabBar ? "var(--tabbar-height)" : "0px" }}
       >
-        <Suspense fallback={<div className="flex items-center justify-center flex-1" style={{ color: "var(--text-secondary)" }}><div className="w-6 h-6 border-2 border-current border-t-transparent rounded-full animate-spin" /></div>}><Outlet /></Suspense>
+        <Suspense fallback={<div className="flex items-center justify-center flex-1" style={{ color: "var(--text-secondary)" }}><div className="w-6 h-6 border-2 border-current border-t-transparent rounded-full animate-spin" /></div>}>
+          {/* Screens cross-fade on navigation. Keyed on the path so the animation
+              restarts per route, and opacity/transform only, so a route change
+              never forces a layout pass mid-transition. */}
+          {/* `flex-1` reproduces what a page root as a direct flex child did: at least
+              as tall as its content, and filling the viewport when it is shorter. */}
+          <div key={location.pathname} className="ds-anim-screen flex flex-col w-full flex-1">
+            <Outlet />
+          </div>
+        </Suspense>
       </div>
 
       {/* ── Bottom tab bar (4 tabs) — only on top-level navigation screens ── */}
@@ -286,7 +298,7 @@ export default function EmployeeLayout() {
                 key="scan"
                 onClick={handleEmpNavScan}
                 disabled={empScanning}
-                className="flex flex-col items-center justify-center flex-1 gap-1 cursor-pointer transition-all"
+                className="ds-pressable flex flex-col items-center justify-center flex-1 gap-1 cursor-pointer"
               >
                 <div
                   className="flex items-center justify-center rounded-full -mt-3"
@@ -294,7 +306,7 @@ export default function EmployeeLayout() {
                 >
                   <ScanLine size={22} strokeWidth={2.5} color="#0a0a0a" />
                 </div>
-                <span className="text-[10px] font-bold" style={{ color: "var(--brand)" }}>
+                <span className="text-10 font-bold" style={{ color: "var(--brand)" }}>
                   {empScanning ? "..." : t(key)}
                 </span>
               </button>
@@ -305,7 +317,7 @@ export default function EmployeeLayout() {
             <button
               key={path}
               onClick={() => { clearNav(); navigate(path); }}
-              className="flex flex-col items-center justify-center flex-1 gap-1 cursor-pointer transition-all"
+              className="ds-pressable flex flex-col items-center justify-center flex-1 gap-1 cursor-pointer"
             >
               <Icon
                 size={22}
@@ -313,7 +325,7 @@ export default function EmployeeLayout() {
                 style={{ color: isActive ? "var(--brand)" : "var(--text-secondary)" }}
               />
               <span
-                className="text-[10px] transition-colors"
+                className="text-10 transition-colors"
                 style={{
                   fontWeight: isActive ? 700 : 500,
                   color: isActive ? "var(--brand)" : "var(--text-secondary)",

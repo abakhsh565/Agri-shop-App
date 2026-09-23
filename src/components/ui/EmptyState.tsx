@@ -1,22 +1,26 @@
+import type { LucideIcon } from "lucide-react";
+
 interface EmptyStateProps {
-  icon?: string;
+  /** A lucide icon. The reference marks an empty state with a small monochrome
+   *  glyph, never a colour emoji, so the caller passes the icon itself. */
+  icon: LucideIcon;
   title: string;
   subtitle?: string;
   action?: { label: string; onClick: () => void };
 }
 
-export default function EmptyState({ icon = "📭", title, subtitle, action }: EmptyStateProps) {
+export default function EmptyState({ icon: Icon, title, subtitle, action }: EmptyStateProps) {
   return (
     <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
-      <span className="text-[40px] mb-3">{icon}</span>
-      <p className="text-[15px] font-bold mb-1" style={{ color: "var(--text-primary)" }}>{title}</p>
-      {subtitle && <p className="text-[13px]" style={{ color: "var(--text-secondary)" }}>{subtitle}</p>}
+      <Icon
+        size={28}
+        style={{ color: "var(--text-tertiary)" }}
+        className="mb-3"
+      />
+      <p className="ds-body" style={{ fontWeight: "var(--weight-strong)" }}>{title}</p>
+      {subtitle && <p className="ds-meta mt-1">{subtitle}</p>}
       {action && (
-        <button
-          onClick={action.onClick}
-          className="mt-4 h-[42px] px-6 rounded-[12px] text-[13px] font-semibold"
-          style={{ background: "#1a1a1a", color: "#fff" }}
-        >
+        <button type="button" onClick={action.onClick} className="ds-pill mt-4">
           {action.label}
         </button>
       )}

@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/stores/authStore";
-import { getCachedData, setCachedData, isCacheStale } from "@/lib/localCache";
+import { getCachedData, setCachedData } from "@/lib/localCache";
 import type { Product, ProductVariant, ProductCategory, BaseUnit } from "@/types";
 
 const CACHE_KEY = "products";
@@ -79,19 +79,13 @@ export const useProductsStore = create<ProductsState>((set, get) => ({
   load: async () => {
     set({ loading: true, error: null });
 
-    // Stale-while-revalidate: show cached data immediately if available
+    // Stale-while-revalidate: render the cache immediately, then ALWAYS revalidate.
+    // Skipping the fetch while the cache was still "fresh" made every write invisible
+    // on screen for up to 5 minutes: a purchase did not move stock, a product created
+    // from the Add Product screen did not appear, realtime events were swallowed and
+    // pull-to-refresh did nothing. The cache is a render hint, never the authority.
     const cached = getCachedData<Product[]>(CACHE_KEY);
-    const stale = isCacheStale(CACHE_KEY);
-    const storeEmpty = get().products.length === 0;
-
-    if (cached && !stale && !storeEmpty) {
-      // Cache is fresh AND store has data — use cache, skip network
-      set({ products: cached, loading: false, ready: true });
-      return;
-    }
-
-    if (cached && stale) {
-      // Cache is stale — show it while we refetch in background
+    if (cached) {
       set({ products: cached, loading: false, ready: true });
     }
 

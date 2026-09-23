@@ -7,6 +7,7 @@ import { Agentation } from "agentation";
 import ErrorBoundary from "@/components/ui/ErrorBoundary";
 import { Capacitor } from "@capacitor/core";
 import { logEnvironmentInfo } from "@/lib/envGuard";
+import { useAuthStore } from "@/stores/authStore";
 
 const isNative = Capacitor.isNativePlatform();
 
@@ -20,6 +21,13 @@ export default function App() {
     applyTheme(theme);
     applyDirection(language);
   }, [theme, language]);
+
+  // A stored user is a hint, not a session. If the server no longer accepts this
+  // device's credential, sign out on launch rather than rendering cached rows as
+  // if they were current.
+  useEffect(() => {
+    void useAuthStore.getState().verifySession();
+  }, []);
 
   return (
     <div

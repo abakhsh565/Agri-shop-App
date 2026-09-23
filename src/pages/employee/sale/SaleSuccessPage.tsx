@@ -1,5 +1,5 @@
 import { useNavigate, useLocation, Navigate } from "react-router-dom";
-import { ShoppingCart, Share2, Download, Home } from "lucide-react";
+import { ShoppingCart, Share2, Download, Home, Check } from "lucide-react";
 import { formatCurrency, formatDateTime } from "@/lib/formatters";
 import type { Sale } from "@/types";
 import { useShellBase } from "@/lib/useShellBase";
@@ -113,7 +113,7 @@ export default function SaleSuccessPage() {
               className="w-14 h-14 sm:w-16 sm:h-16 rounded-full flex items-center justify-center"
               style={{ background: "var(--brand)", boxShadow: "0 0 0 10px rgba(132,204,22,0.15)" }}
             >
-              <span className="text-2xl sm:text-3xl">✓</span>
+              <Check size={28} strokeWidth={2.5} style={{ color: "#0a0a0a" }} />
             </div>
           </div>
 
@@ -127,16 +127,16 @@ export default function SaleSuccessPage() {
 
           {/* Receipt card */}
           <div
-            className="w-full rounded-xl sm:rounded-[20px] overflow-hidden animate-fade-in-up delay-225"
+            className="w-full rounded-[var(--radius-tile)] sm:rounded-[var(--radius-card)] overflow-hidden animate-fade-in-up delay-225"
             style={{ border: "1px solid var(--border-light)", background: "var(--surface)" }}
           >
             {/* Gradient header */}
             <div className="px-3 sm:px-5 py-3 sm:py-4 text-white" style={{ background: "linear-gradient(135deg, #a855f7 0%, #ec4899 50%, #f59e0b 100%)" }}>
               <div className="flex items-center justify-between">
                 <p className="text-sm sm:text-lg font-bold">{t("saleSuccess.saleReceipt")}</p>
-                <p className="text-[10px] sm:text-xs font-mono opacity-85">{s.saleNumber}</p>
+                <p className="text-10 sm:text-xs font-mono opacity-85">{s.saleNumber}</p>
               </div>
-              <p className="text-[10px] sm:text-xs opacity-85 mt-0.5">{formatDateLong(s.createdAt)} • {formatTime12(s.createdAt)}</p>
+              <p className="text-10 sm:text-xs opacity-85 mt-0.5">{formatDateLong(s.createdAt)} • {formatTime12(s.createdAt)}</p>
             </div>
 
             {/* Rows */}
@@ -145,7 +145,7 @@ export default function SaleSuccessPage() {
                 "divider" in row && row.divider ? (
                   <div key={i} className="w-full h-px" style={{ background: "var(--divider)" }} />
                 ) : (
-                  <div key={i} className="flex items-start justify-between w-full text-[11px] sm:text-[13px]">
+                  <div key={i} className="flex items-start justify-between w-full text-11 sm:text-13">
                     <span style={{ color: "var(--text-secondary)" }}>{"label" in row ? row.label : ""}</span>
                     <span
                       className={"bold" in row && (row as any).bold ? "font-bold" : "font-medium"}
@@ -191,14 +191,14 @@ export default function SaleSuccessPage() {
         <div className="flex gap-2 mt-1">
           <button
             onClick={() => { clearNav(); navigate(`${base}/sale`, { replace: true }); }}
-            className="flex-1 flex h-9 sm:h-10 items-center justify-center gap-1.5 rounded-full font-bold text-[11px] sm:text-xs transition-transform active:scale-[0.97]"
+            className="flex-1 flex h-9 sm:h-10 items-center justify-center gap-1.5 rounded-full font-bold text-11 sm:text-xs transition-transform active:scale-[0.97]"
             style={{ background: "var(--brand)", color: "#0a0a0a" }}
           >
             <ShoppingCart size={13} strokeWidth={2.5} /> {t("saleSuccess.newSale")}
           </button>
           <button
             onClick={() => { clearNav(); navigate(`${base}/dashboard`, { replace: true }); }}
-            className="flex-1 flex h-9 sm:h-10 items-center justify-center gap-1.5 rounded-full font-bold text-[11px] sm:text-xs transition-transform active:scale-[0.97]"
+            className="flex-1 flex h-9 sm:h-10 items-center justify-center gap-1.5 rounded-full font-bold text-11 sm:text-xs transition-transform active:scale-[0.97]"
             style={{ border: "1px solid var(--border-light)", color: "var(--text-secondary)" }}
           >
             <Home size={13} strokeWidth={2} /> {t("saleSuccess.home")}

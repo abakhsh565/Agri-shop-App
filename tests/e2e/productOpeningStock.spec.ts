@@ -43,7 +43,11 @@ test.describe('Product opening stock', () => {
     await page.waitForLoadState('networkidle');
 
     await page.getByPlaceholder('e.g. Karate Insecticide').fill(PRODUCT_NAME);
-    await page.locator('select').first().selectOption({ label: SUPPLIER });
+    // The supplier picker is the app's own sheet, not a native <select> — the design
+    // revamp removed every browser-default select, so this opens the field and picks
+    // the supplier row. Same requirement (choose a supplier), current UI.
+    await page.getByRole('button', { name: 'Choose supplier' }).click();
+    await page.locator('.ds-row', { hasText: SUPPLIER }).first().click();
     // The single unit row starts with an empty name, and the form refuses to save
     // without one — so this is the one unit the opening figure belongs to.
     await page.getByPlaceholder('Unit name — e.g. 500ml, 50kg').fill('1kg');

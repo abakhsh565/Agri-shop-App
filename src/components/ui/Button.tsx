@@ -23,7 +23,9 @@ export default function Button({
   type = "button",
   className = "",
 }: ButtonProps) {
-  const base = "inline-flex items-center justify-center rounded-[100px] font-bold transition-opacity active:opacity-70 select-none";
+  // `ds-pressable` gives every button in the app the same press: a small scale
+  // and dim on transform/opacity, which stay on the compositor.
+  const base = "inline-flex items-center justify-center rounded-full font-bold ds-pressable select-none";
 
   const variants = {
     primary: "bg-black text-white",

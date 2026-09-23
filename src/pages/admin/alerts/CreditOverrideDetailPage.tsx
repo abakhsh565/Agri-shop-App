@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
+import ListCard from "@/components/ui/ListCard";
+import ListRow from "@/components/ui/ListRow";
 import { useCustomersStore } from "@/stores/customersStore";
 import { useThemeStore } from "@/stores/themeStore";
 import { useT } from "@/lib/i18n";
@@ -66,20 +68,17 @@ export default function CreditOverrideDetailPage() {
       <div className="flex flex-col gap-3 px-4 pt-4 pb-8">
         {/* Warning banner */}
         <div
-          className="flex items-start gap-3 rounded-[16px] p-4"
+          className="flex items-start gap-3 rounded-[var(--radius-card)] p-4"
           style={{ background: "#FCEBEB" }}
         >
           <AlertTriangle size={20} color="#A32D2D" className="mt-0.5 shrink-0" />
-          <p className="text-[14px] font-medium" style={{ color: "#791F1F", lineHeight: 1.5 }}>
+          <p className="text-14 font-medium" style={{ color: "#791F1F", lineHeight: 1.5 }}>
             {t("creditOverride.approvedForRed")}
           </p>
         </div>
 
         {/* Override details */}
-        <div
-          className="rounded-[16px] overflow-hidden"
-          style={{ background: "var(--surface)", border: "1px solid var(--divider)" }}
-        >
+        <ListCard>
           {[
             ...(approvedBy ? [{ label: t("creditOverride.approvedBy"), value: approvedBy }] : []),
             {
@@ -88,7 +87,7 @@ export default function CreditOverrideDetailPage() {
                 <span className="flex items-center gap-2">
                   {customer.name}
                   <span
-                    className="text-[10px] font-bold px-2 py-0.5 rounded-full"
+                    className="text-10 font-bold px-2 py-0.5 rounded-full"
                     style={{ background: "#FEE2E2", color: "#DC2626" }}
                   >
                     {t("creditOverride.red")}
@@ -98,31 +97,31 @@ export default function CreditOverrideDetailPage() {
             },
             { label: t("common.amount"), value: formatCurrency(customer.outstandingBalance) },
             { label: t("common.when"), value: formatSmartDateTime(customer.createdAt, undefined, t) },
-          ].map((row, i, arr) => (
-            <div
+          ].map((row) => (
+            <ListRow
               key={row.label}
-              className="flex items-center justify-between px-4 py-3.5"
-              style={{ borderBottom: i < arr.length - 1 ? "1px solid var(--divider)" : "none" }}
+              trailing={
+                <span className="text-14 font-medium" style={{ color: "var(--text-primary)" }}>
+                  {row.value}
+                </span>
+              }
             >
-              <span className="text-[13px]" style={{ color: "var(--text-secondary)" }}>
+              <span className="text-13" style={{ color: "var(--text-secondary)" }}>
                 {row.label}
               </span>
-              <span className="text-[14px] font-medium" style={{ color: "var(--text-primary)" }}>
-                {row.value}
-              </span>
-            </div>
+            </ListRow>
           ))}
-        </div>
+        </ListCard>
 
         {/* Why flagged */}
         <div
-          className="rounded-[16px] p-4"
+          className="rounded-[var(--radius-card)] p-4"
           style={{ background: "var(--surface-2)" }}
         >
-          <p className="text-[10px] font-bold uppercase tracking-wider mb-2" style={{ color: "var(--text-secondary)" }}>
+          <p className="text-10 font-bold uppercase tracking-wider mb-2" style={{ color: "var(--text-secondary)" }}>
             {t("creditOverride.whyFlagged")}
           </p>
-          <p className="text-[14px] leading-relaxed" style={{ color: "var(--text-primary)" }}>
+          <p className="text-14 leading-relaxed" style={{ color: "var(--text-primary)" }}>
             {utilization >= 100
               ? t("creditOverride.reasonAtLimit", { name: customer.name, limit: formatCurrency(customer.creditLimit), outstanding: formatCurrency(customer.outstandingBalance), pct: String(utilization) })
               : t("creditOverride.reasonApproaching", { name: customer.name, limit: formatCurrency(customer.creditLimit), outstanding: formatCurrency(customer.outstandingBalance), pct: String(utilization) })}
@@ -132,10 +131,10 @@ export default function CreditOverrideDetailPage() {
         {/* View customer profile */}
         <button
           onClick={() => navigate(isUrdu ? `/employees/customers/${customer.id}` : `/admin/customers/${customer.id}`)}
-          className="flex items-center justify-between px-4 py-3.5 rounded-[16px]"
+          className="flex items-center justify-between px-4 py-3.5 rounded-[var(--radius-card)]"
           style={{ background: "var(--surface)", border: "1px solid var(--divider)" }}
         >
-          <span className="text-[14px] font-medium" style={{ color: "var(--text-primary)" }}>
+          <span className="text-14 font-medium" style={{ color: "var(--text-primary)" }}>
             {t("creditOverride.viewProfile")}
           </span>
           <ChevronRight size={16} style={{ color: "var(--text-secondary)" }} />
@@ -145,7 +144,7 @@ export default function CreditOverrideDetailPage() {
         {reviewed ? (
           <div className="flex items-center justify-center gap-2 py-3">
             <CheckCircle2 size={18} style={{ color: "var(--brand-dark, #65a30d)" }} />
-            <span className="text-[14px] font-medium" style={{ color: "var(--brand-dark, #65a30d)" }}>
+            <span className="text-14 font-medium" style={{ color: "var(--brand-dark, #65a30d)" }}>
               {t("creditOverride.reviewed")}
             </span>
           </div>
@@ -154,7 +153,7 @@ export default function CreditOverrideDetailPage() {
             onClick={() => setReviewed(true)}
             className="w-full py-3 text-center"
           >
-            <span className="text-[14px] font-medium" style={{ color: "var(--brand-dark, #65a30d)" }}>
+            <span className="text-14 font-medium" style={{ color: "var(--brand-dark, #65a30d)" }}>
               {t("creditOverride.markReviewed")}
             </span>
           </button>

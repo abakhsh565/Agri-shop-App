@@ -89,7 +89,7 @@ export default function SaleReviewPage() {
 
       <div className="flex flex-col gap-4 p-4">
         {/* Customer */}
-        <div className="border border-[#e5e5e5] rounded-xl p-4">
+        <div className="border border-[#e5e5e5] rounded-[var(--radius-tile)] p-4">
           <p className="text-sm font-bold text-black">{customer.name}</p>
           <p className="text-xs text-[#888]">{t("saleReview.outstanding")} {formatCurrency(customer.outstandingBalance)}</p>
         </div>
@@ -97,7 +97,7 @@ export default function SaleReviewPage() {
         {/* Items */}
         <div className="flex flex-col gap-1">
           <p className="text-xs font-bold text-[#888] uppercase">{t("saleReview.items")}</p>
-          <div className="border border-[#e5e5e5] rounded-xl overflow-hidden">
+          <div className="border border-[#e5e5e5] rounded-[var(--radius-tile)] overflow-hidden">
             {items.map((item, i) => (
               <div key={item.variantId} className={`flex justify-between p-4 ${i < items.length - 1 ? "border-b border-[#e5e5e5]" : ""}`}>
                 <div>
@@ -137,7 +137,7 @@ export default function SaleReviewPage() {
             value={amountPaid}
             onChange={(e) => setAmountPaid(e.target.value)}
             placeholder={formatCurrency(total)}
-            className="w-full h-12 rounded-[24px] border border-black px-4 text-sm text-black placeholder:text-[#888] outline-none"
+            className="w-full h-12 rounded-[var(--radius-input)] border border-black px-4 text-sm text-black placeholder:text-[#888] outline-none"
           />
           {outstanding > 0 && (
             <p className="text-xs text-[#888] mt-1">{t("saleReview.outstandingAfter")} {formatCurrency(outstanding)}</p>
@@ -145,7 +145,7 @@ export default function SaleReviewPage() {
         </div>
 
         {/* Summary card */}
-        <div className="border border-[#e5e5e5] rounded-xl p-4 bg-[#f9f9f9]">
+        <div className="border border-[#e5e5e5] rounded-[var(--radius-tile)] p-4 bg-[#f9f9f9]">
           <div className="flex justify-between py-1">
             <span className="text-sm text-[#888]">{t("sale.subtotal")}</span>
             <span className="text-sm font-medium text-black">{formatCurrency(total)}</span>

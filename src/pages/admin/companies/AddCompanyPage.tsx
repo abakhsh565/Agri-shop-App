@@ -1,5 +1,5 @@
 import { useState, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
 import ImageUpload from "@/components/ui/ImageUpload";
@@ -7,11 +7,16 @@ import { useCompaniesStore } from "@/stores/companiesStore";
 import { useUIStore } from "@/stores/uiStore";
 import { useThemeStore } from "@/stores/themeStore";
 import { clearNav } from "@/lib/navContext";
+import { readReturnTo, withCreatedId } from "@/lib/dependencyGraph";
 import { useT } from "@/lib/i18n";
 
 export default function AddCompanyPage() {
   const t = useT();
   const navigate = useNavigate();
+  // A screen that hit this entity as a missing dependency sent us here with the
+  // workflow to come back to. Without it, creating a supplier mid-task drops the user
+  // in the supplier list and leaves them to find their way back.
+  const returnTo = readReturnTo(useSearchParams()[0], "/admin/companies");
   const { addToast } = useUIStore();
   const { language } = useThemeStore();
   const isUrdu = language === "ur";
@@ -42,7 +47,7 @@ export default function AddCompanyPage() {
     savingRef.current = true;
     setLoading(true);
     try {
-      await createCompany({
+      const created = await createCompany({
         name: name.trim(),
         contactPerson: contactPerson.trim() || undefined,
         phone: phone.trim() || undefined,
@@ -52,7 +57,9 @@ export default function AddCompanyPage() {
 
       addToast(t("copy.added", { name: name.trim() }), "success");
       clearNav();
-      navigate("/admin/companies", { replace: true });
+      // Hand the new supplier's id back to the caller, so the picker that was empty
+      // comes up with it already chosen instead of asking for the same choice again.
+      navigate(withCreatedId(returnTo, "/admin/companies", "companyId", created.id), { replace: true });
     } catch (e) {
       setError(e instanceof Error ? e.message : t("errors.addCompanyFailed"));
     } finally {
@@ -66,7 +73,7 @@ export default function AddCompanyPage() {
     border: "1px solid var(--divider)",
     color: "var(--text-primary)",
   } as const;
-  const labelCls = "text-[11px] font-bold uppercase mb-2 tracking-wider";
+  const labelCls = "text-11 font-bold uppercase mb-2 tracking-wider";
 
   return (
     <div
@@ -85,23 +92,23 @@ export default function AddCompanyPage() {
           <div>
             <p className={labelCls} style={{ color: "var(--text-secondary)" }}>{t("company.name")}</p>
             <input value={name} onChange={(e) => setName(e.target.value)} placeholder={t("company.namePlaceholder")}
-              className="w-full h-12 rounded-[24px] px-4 text-sm outline-none"
+              className="w-full h-12 rounded-[var(--radius-input)] px-4 text-sm outline-none"
               style={{ ...fieldStyle, borderColor: error ? "var(--error)" : "var(--divider)" }} />
           </div>
           <div>
             <p className={labelCls} style={{ color: "var(--text-secondary)" }}>{t("common.contactPerson")} <span style={{ opacity: 0.6 }}>{t("common.optional")}</span></p>
             <input value={contactPerson} onChange={(e) => setContactPerson(e.target.value)} placeholder={t("company.ownerPlaceholder")}
-              className="w-full h-12 rounded-[24px] px-4 text-sm outline-none" style={fieldStyle} />
+              className="w-full h-12 rounded-[var(--radius-input)] px-4 text-sm outline-none" style={fieldStyle} />
           </div>
           <div>
             <p className={labelCls} style={{ color: "var(--text-secondary)" }}>{t("common.phone")} <span style={{ opacity: 0.6 }}>{t("common.optional")}</span></p>
             <input type="tel" inputMode="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="03001234567"
-              className="w-full h-12 rounded-[24px] px-4 text-sm outline-none" style={fieldStyle} />
+              className="w-full h-12 rounded-[var(--radius-input)] px-4 text-sm outline-none" style={fieldStyle} />
           </div>
           <div>
             <p className={labelCls} style={{ color: "var(--text-secondary)" }}>{t("common.address")} <span style={{ opacity: 0.6 }}>{t("common.optional")}</span></p>
             <textarea value={address} onChange={(e) => setAddress(e.target.value)} rows={2} placeholder={t("company.streetCityPlaceholder")}
-              className="w-full rounded-xl p-3 text-sm outline-none resize-none" style={fieldStyle} />
+              className="w-full rounded-[var(--radius-tile)] p-3 text-sm outline-none resize-none" style={fieldStyle} />
           </div>
 
           {error && <p className="text-xs" style={{ color: "var(--error)" }}>{error}</p>}

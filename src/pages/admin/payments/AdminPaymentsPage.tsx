@@ -3,12 +3,14 @@ import { useNavigate } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
 import EmptyState from "@/components/ui/EmptyState";
+import ListCard from "@/components/ui/ListCard";
+import ListRow from "@/components/ui/ListRow";
 import { useCustomersStore } from "@/stores/customersStore";
 import { useCompaniesStore } from "@/stores/companiesStore";
 import { formatCurrency } from "@/lib/formatters";
 import { useThemeStore } from "@/stores/themeStore";
 import { useT } from "@/lib/i18n";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, CheckCircle2 } from "lucide-react";
 
 type Tab = "customers" | "suppliers";
 
@@ -44,18 +46,18 @@ export default function AdminPaymentsPage() {
       <div className="grid grid-cols-2 gap-3 px-4 pt-3">
         <button
           onClick={() => setTab("customers")}
-          className="rounded-[14px] p-4 text-start"
+          className="ds-card p-4 text-start"
           style={{ background: "var(--surface-2)", border: `1.5px solid ${tab === "customers" ? "var(--brand)" : "var(--divider)"}` }}
         >
-          <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "var(--text-secondary)" }}>{t("admin.customersOweUs")}</p>
+          <p className="text-10 font-bold uppercase tracking-widest" style={{ color: "var(--text-secondary)" }}>{t("admin.customersOweUs")}</p>
           <p className="text-lg font-bold mt-1" style={{ color: "var(--brand-dark)" }}>{formatCurrency(totalReceivable)}</p>
         </button>
         <button
           onClick={() => setTab("suppliers")}
-          className="rounded-[14px] p-4 text-start"
+          className="ds-card p-4 text-start"
           style={{ background: "var(--surface-2)", border: `1.5px solid ${tab === "suppliers" ? "var(--brand)" : "var(--divider)"}` }}
         >
-          <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "var(--text-secondary)" }}>{t("payments.weOweSuppliers")}</p>
+          <p className="text-10 font-bold uppercase tracking-widest" style={{ color: "var(--text-secondary)" }}>{t("payments.weOweSuppliers")}</p>
           <p className="text-lg font-bold mt-1" style={{ color: totalPayable > 0 ? "var(--error)" : "var(--brand-dark)" }}>{formatCurrency(totalPayable)}</p>
         </button>
       </div>
@@ -80,55 +82,53 @@ export default function AdminPaymentsPage() {
       {/* List */}
       {tab === "customers" ? (
         owedByCustomers.length === 0 ? (
-          <EmptyState icon="✅" title={t("payments.noOutstanding")} subtitle={t("payments.allPaidUp")} />
+          <EmptyState icon={CheckCircle2} title={t("payments.noOutstanding")} subtitle={t("payments.allPaidUp")} />
         ) : (
-          <div className="flex flex-col px-4 gap-3 pt-4 pb-6">
-            {owedByCustomers.map((c) => (
-              <button
-                key={c.id}
-                onClick={() => navigate(`/admin/customers/${c.id}/record-payment`)}
-                className="flex items-center justify-between rounded-[14px] p-4 text-start transition-opacity active:opacity-70"
-                style={{ background: "var(--surface)", border: "1px solid var(--divider)" }}
-              >
-                <div className="min-w-0">
-                  <p className="text-sm font-bold truncate" style={{ color: "var(--text-primary)" }}>{c.name}</p>
-                  <p className="text-xs" style={{ color: "var(--text-secondary)" }}>{c.phone}</p>
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <div className="text-end">
-                    <p className="text-sm font-bold" style={{ color: "var(--error)" }}>{formatCurrency(c.outstandingBalance)}</p>
-                    <p className="text-[10px]" style={{ color: "var(--text-secondary)" }}>{t("admin.recordPayment")}</p>
-                  </div>
-                  <ChevronRight size={16} style={{ color: "var(--text-secondary)" }} />
-                </div>
-              </button>
-            ))}
+          <div className="px-4 pt-4 pb-6">
+            <ListCard>
+              {owedByCustomers.map((c) => (
+                <ListRow
+                  key={c.id}
+                  title={c.name}
+                  meta={c.phone}
+                  onClick={() => navigate(`/admin/customers/${c.id}/record-payment`)}
+                  trailing={
+                    <div className="flex shrink-0 items-center gap-2">
+                      <div className="text-end">
+                        <p className="ds-row-strong" style={{ color: "var(--error)" }}>{formatCurrency(c.outstandingBalance)}</p>
+                        <p className="text-10" style={{ color: "var(--text-secondary)" }}>{t("admin.recordPayment")}</p>
+                      </div>
+                      <ChevronRight size={18} style={{ color: "var(--text-secondary)" }} />
+                    </div>
+                  }
+                />
+              ))}
+            </ListCard>
           </div>
         )
       ) : owedToSuppliers.length === 0 ? (
-        <EmptyState icon="✅" title={t("payments.noSupplierPayables")} subtitle={t("payments.allSuppliersSettled")} />
+        <EmptyState icon={CheckCircle2} title={t("payments.noSupplierPayables")} subtitle={t("payments.allSuppliersSettled")} />
       ) : (
-        <div className="flex flex-col px-4 gap-3 pt-4 pb-6">
-          {owedToSuppliers.map((c) => (
-            <button
-              key={c.id}
-              onClick={() => navigate(`/admin/payments/supplier/${c.id}`)}
-              className="flex items-center justify-between rounded-[14px] p-4 text-start transition-opacity active:opacity-70"
-              style={{ background: "var(--surface)", border: "1px solid var(--divider)" }}
-            >
-              <div className="min-w-0">
-                <p className="text-sm font-bold truncate" style={{ color: "var(--text-primary)" }}>{c.name}</p>
-                <p className="text-xs" style={{ color: "var(--text-secondary)" }}>{c.contactPerson ?? c.phone ?? t("common.supplier")}</p>
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <div className="text-end">
-                  <p className="text-sm font-bold" style={{ color: "var(--error)" }}>{formatCurrency(c.outstandingPayable)}</p>
-                  <p className="text-[10px]" style={{ color: "var(--text-secondary)" }}>{t("admin.recordPayment")}</p>
-                </div>
-                <ChevronRight size={16} style={{ color: "var(--text-secondary)" }} />
-              </div>
-            </button>
-          ))}
+        <div className="px-4 pt-4 pb-6">
+          <ListCard>
+            {owedToSuppliers.map((c) => (
+              <ListRow
+                key={c.id}
+                title={c.name}
+                meta={c.contactPerson ?? c.phone ?? t("common.supplier")}
+                onClick={() => navigate(`/admin/payments/supplier/${c.id}`)}
+                trailing={
+                  <div className="flex shrink-0 items-center gap-2">
+                    <div className="text-end">
+                      <p className="ds-row-strong" style={{ color: "var(--error)" }}>{formatCurrency(c.outstandingPayable)}</p>
+                      <p className="text-10" style={{ color: "var(--text-secondary)" }}>{t("admin.recordPayment")}</p>
+                    </div>
+                    <ChevronRight size={18} style={{ color: "var(--text-secondary)" }} />
+                  </div>
+                }
+              />
+            ))}
+          </ListCard>
         </div>
       )}
     </div>

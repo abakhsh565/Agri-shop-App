@@ -18,8 +18,8 @@ import { QA_IDS, setupFixtures, cleanupFixtures, injectAdminAuth } from './helpe
 const BASE_URL = 'http://localhost:5173';
 
 /** The supplier selector's button label, from t("supplier.selectSupplier"). */
-const SUPPLIER_TRIGGER_EN = 'Select supplier';
-const SUPPLIER_TRIGGER_UR = 'سپلائر منتخب کریں';
+const SUPPLIER_TRIGGER_EN = 'Choose supplier';
+const SUPPLIER_TRIGGER_UR = 'سپلائر چنیں';
 
 async function setLanguage(page: import('@playwright/test').Page, lang: 'en' | 'ur') {
   await page.evaluate((l) => {
@@ -141,15 +141,15 @@ test.describe('Overlays — dialogs and sheets in EN/LTR and UR/RTL', () => {
 
     const COPY = {
       en: {
-        trigger: /Deactivate employee|Cancel invitation|Reactivate employee/,
-        action: /^(Deactivate employee|Cancel invitation|Reactivate employee)$/,
+        trigger: /Turn off this employee's account|Cancel invitation|Turn the account back on/,
+        action: /^(Turn off this employee's account|Cancel invitation|Turn the account back on)$/,
         cancel: 'Cancel',
         body: /sign in|access/i,
       },
       ur: {
-        trigger: /غیر فعال کریں|منسوخ کریں|دوبارہ فعال کریں/,
-        action: /^(ملازم غیر فعال کریں|دعوت منسوخ کریں|ملازم دوبارہ فعال کریں)$/,
-        cancel: 'منسوخ',
+        trigger: /ملازم کا اکاؤنٹ بند کریں|دعوت واپس لیں|اکاؤنٹ دوبارہ چالو کریں/,
+        action: /^(ملازم کا اکاؤنٹ بند کریں|دعوت واپس لیں|اکاؤنٹ دوبارہ چالو کریں)$/,
+        cancel: 'کینسل کریں',
         body: /[\u0600-\u06FF]/,
       },
     } as const;
@@ -224,8 +224,8 @@ test.describe('Overlays — dialogs and sheets in EN/LTR and UR/RTL', () => {
     await injectAdminAuth(page);
 
     const SHEET = {
-      en: { trigger: SUPPLIER_TRIGGER_EN, search: 'Search…' },
-      ur: { trigger: SUPPLIER_TRIGGER_UR, search: 'تلاش کریں…' },
+      en: { trigger: SUPPLIER_TRIGGER_EN, search: 'Type a name…' },
+      ur: { trigger: SUPPLIER_TRIGGER_UR, search: 'نام لکھیں…' },
     } as const;
 
     /** Opens the supplier sheet and measures its panel through a marker inside it. */

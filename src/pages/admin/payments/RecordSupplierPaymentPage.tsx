@@ -90,32 +90,32 @@ export default function RecordSupplierPaymentPage() {
         <StatusBar />
         <NavHeader title={t("supplier.paySupplier")} />
 
-        <div className="mx-4 mt-3 rounded-[14px] p-5 text-center" style={{ background: "var(--brand)" }}>
-          <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "rgba(0,0,0,0.55)" }}>
+        <div className="mx-4 mt-3 rounded-[var(--radius-card)] p-5 text-center" style={{ background: "var(--brand)" }}>
+          <p className="text-10 font-bold uppercase tracking-widest" style={{ color: "rgba(0,0,0,0.55)" }}>
             {company.name} · Outstanding Payable
           </p>
-          <p className="text-[32px] font-bold mt-1" style={{ color: "#0a0a0a" }}>
+          <p className="text-32 font-bold mt-1" style={{ color: "#0a0a0a" }}>
             {formatCurrency(company.outstandingPayable)}
           </p>
         </div>
 
         <div className="flex flex-col gap-5 p-4 mt-2">
           <div>
-            <p className="text-[11px] font-bold uppercase mb-2 tracking-wider" style={{ color: "var(--text-secondary)" }}>{t("common.amount")}</p>
+            <p className="text-11 font-bold uppercase mb-2 tracking-wider" style={{ color: "var(--text-secondary)" }}>{t("common.amount")}</p>
             <input
               type="number"
               inputMode="numeric"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
               placeholder={t("recordPayment.amountHint")}
-              className="w-full h-12 rounded-[24px] px-4 text-sm outline-none"
+              className="w-full h-12 rounded-[var(--radius-input)] px-4 text-sm outline-none"
               style={{ ...fieldStyle, borderColor: error ? "var(--error)" : "var(--divider)" }}
             />
             {error && <p className="text-xs mt-1" style={{ color: "var(--error)" }}>{error}</p>}
           </div>
 
           <div>
-            <p className="text-[11px] font-bold uppercase mb-2 tracking-wider" style={{ color: "var(--text-secondary)" }}>{t("sale.paymentMethod")}</p>
+            <p className="text-11 font-bold uppercase mb-2 tracking-wider" style={{ color: "var(--text-secondary)" }}>{t("sale.paymentMethod")}</p>
             <div className="flex gap-2">
               {([{ key: "cash", label: "Cash" }, { key: "bank_transfer", label: "Bank Transfer" }] as const).map((m) => (
                 <button key={m.key} onClick={() => setMethod(m.key)}
@@ -132,7 +132,7 @@ export default function RecordSupplierPaymentPage() {
           </div>
 
           {paid > 0 && (
-            <div className="flex justify-between items-center px-4 py-3 rounded-[12px]" style={{ background: "var(--surface-2)" }}>
+            <div className="flex justify-between items-center px-4 py-3 rounded-[var(--radius-tile)]" style={{ background: "var(--surface-2)" }}>
               <span className="text-sm" style={{ color: "var(--text-secondary)" }}>{t("admin.remainingPayable")}</span>
               <span className="text-sm font-bold" style={{ color: newPayable === 0 ? "var(--brand-dark)" : "var(--text-primary)" }}>
                 {formatCurrency(newPayable)}

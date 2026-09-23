@@ -47,17 +47,17 @@ export default function InviteLinkCard({ name, phone }: { name: string; phone: s
 
   return (
     <div
-      className="rounded-xl overflow-hidden"
+      className="rounded-[var(--radius-tile)] overflow-hidden"
       style={{ background: "var(--surface)", border: "1px solid var(--divider)", direction: isUrdu ? "rtl" : "ltr" }}
     >
       <div className="px-4 pt-4 pb-3">
-        <p className="text-[11px] font-bold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
+        <p className="text-11 font-bold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
           {t("invite.linkLabel")}
         </p>
 
         {link ? (
           <p
-            className="text-[13px] font-medium mt-2 break-all select-all"
+            className="text-13 font-medium mt-2 break-all select-all"
             style={{ color: "var(--text-primary)" }}
             data-testid="invite-link"
           >

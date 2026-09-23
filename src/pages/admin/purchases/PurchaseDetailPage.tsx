@@ -2,8 +2,11 @@ import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
+import { SkeletonList } from "@/components/ui/Skeleton";
 import { useThemeStore } from "@/stores/themeStore";
 import { formatCurrency, formatDateTime } from "@/lib/formatters";
+import ListCard from "@/components/ui/ListCard";
+import ListRow from "@/components/ui/ListRow";
 import { supabase } from "@/lib/supabase";
 import type { Purchase } from "@/types";
 import { useT } from "@/lib/i18n";
@@ -40,12 +43,12 @@ export default function PurchaseDetailPage() {
               variantId: it.variant_id,
               variantName: it.variant_name,
               qty: it.qty,
-              costPrice: it.cost_price,
+              costPrice: it.unit_price,
               lineTotal: it.line_total,
             })),
             totalAmount: data.total_amount,
             amountPaid: data.amount_paid,
-            outstandingPayable: data.outstanding_payable,
+            outstandingPayable: data.amount_due,
             paymentMethod: data.payment_method,
             note: data.note,
             createdAt: data.created_at,
@@ -63,8 +66,8 @@ export default function PurchaseDetailPage() {
       <div className="flex flex-col w-full min-h-full" style={{ background: "var(--background)" }}>
         <StatusBar />
         <NavHeader title={t("purchases.detailTitle")} />
-        <div className="flex-1 flex items-center justify-center">
-          <p className="text-sm" style={{ color: "var(--text-secondary)" }}>{t("common.loading")}</p>
+        <div className="flex-1 pt-4">
+          <SkeletonList rows={3} tile={false} />
         </div>
       </div>
     );
@@ -92,7 +95,7 @@ export default function PurchaseDetailPage() {
 
       <div className="flex flex-col gap-4 p-4">
         {/* Header card */}
-        <div className="rounded-[14px] p-4" style={{ background: "var(--surface)", border: "1px solid var(--divider)" }}>
+        <div className="ds-card">
           <div className="flex items-center justify-between mb-2">
             <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>{purchase.purchaseNumber}</p>
             <p className="text-xs" style={{ color: "var(--text-secondary)" }}>{formatDateTime(purchase.createdAt)}</p>
@@ -103,30 +106,27 @@ export default function PurchaseDetailPage() {
 
         {/* Items */}
         <div>
-          <p className="text-[11px] font-bold uppercase tracking-wider mb-2" style={{ color: "var(--text-secondary)" }}>{t("purchase.itemsPurchased")}</p>
-          <div className="rounded-[14px] overflow-hidden" style={{ border: "1px solid var(--divider)" }}>
-            {purchase.items.map((item, i) => (
-              <div
+          <p className="text-11 font-bold uppercase tracking-wider mb-2" style={{ color: "var(--text-secondary)" }}>{t("purchase.itemsPurchased")}</p>
+          <ListCard>
+            {purchase.items.map((item) => (
+              <ListRow
                 key={item.id}
-                className="flex items-center justify-between px-4 py-3"
-                style={{ borderBottom: i < purchase.items.length - 1 ? "1px solid var(--divider)" : "none" }}
-              >
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate" style={{ color: "var(--text-primary)" }}>{item.productName}</p>
-                  <p className="text-xs" style={{ color: "var(--text-secondary)" }}>{item.variantName} × {item.qty}</p>
-                </div>
-                <div className="text-end shrink-0 ms-3">
-                  <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>{formatCurrency(item.lineTotal)}</p>
-                  <p className="text-[10px]" style={{ color: "var(--text-secondary)" }}>{formatCurrency(item.costPrice)}/unit</p>
-                </div>
-              </div>
+                title={item.productName}
+                meta={`${item.variantName} × ${item.qty}`}
+                trailing={
+                  <div className="text-end shrink-0 ms-3">
+                    <p className="ds-row-strong">{formatCurrency(item.lineTotal)}</p>
+                    <p className="text-10" style={{ color: "var(--text-secondary)" }}>{formatCurrency(item.costPrice)}/unit</p>
+                  </div>
+                }
+              />
             ))}
-          </div>
+          </ListCard>
         </div>
 
         {/* Payment summary */}
-        <div className="rounded-[14px] p-4" style={{ background: "var(--surface)", border: "1px solid var(--divider)" }}>
-          <p className="text-[11px] font-bold uppercase tracking-wider mb-3" style={{ color: "var(--text-secondary)" }}>{t("purchase.paymentSummary")}</p>
+        <div className="ds-card">
+          <p className="text-11 font-bold uppercase tracking-wider mb-3" style={{ color: "var(--text-secondary)" }}>{t("purchase.paymentSummary")}</p>
           <div className="flex flex-col gap-2">
             <div className="flex justify-between">
               <span className="text-sm" style={{ color: "var(--text-secondary)" }}>{t("saleReview.totalAmount")}</span>

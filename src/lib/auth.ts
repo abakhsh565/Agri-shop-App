@@ -1,6 +1,7 @@
 import { supabase } from "@/lib/supabase";
 import type { User, UserRole, MembershipRole, MembershipStatus } from "@/types";
 import { DEMO_OTP_CODE, isDemoOtpMode } from "@/lib/authMode";
+import { clearAllCachedData } from "@/lib/localCache";
 
 // ─── Phone normalization ─────────────────────────────────────────────────────
 // The UI collects local Pakistani numbers ("03001234567"); Supabase Auth needs
@@ -316,6 +317,9 @@ export async function signOut(): Promise<void> {
     // Ignore — Supabase session may not exist
   }
   window.localStorage.removeItem("agri_auth");
+  // Business rows are cached per identity — leaving the session must not leave
+  // them behind for the next person to sign in on this device.
+  clearAllCachedData();
 }
 
 // Resolve the app user from an existing Supabase session (used on app load so a

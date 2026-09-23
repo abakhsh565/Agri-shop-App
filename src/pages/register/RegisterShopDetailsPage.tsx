@@ -87,35 +87,35 @@ export default function RegisterShopDetailsPage() {
 
         {/* Owner Name */}
         <div>
-          <p className="text-[11px] font-bold uppercase mb-2 tracking-wider" style={{ color: "var(--text-secondary)" }}>
+          <p className="text-11 font-bold uppercase mb-2 tracking-wider" style={{ color: "var(--text-secondary)" }}>
             {t("register.fullName")}
           </p>
           <input
             value={ownerName}
             onChange={(e) => setOwnerName(e.target.value)}
             placeholder={t("register.ownerNamePlaceholder")}
-            className="w-full h-12 rounded-[24px] px-4 text-sm outline-none"
+            className="w-full h-12 rounded-[var(--radius-input)] px-4 text-sm outline-none"
             style={fieldStyle}
           />
         </div>
 
         {/* Shop Name */}
         <div>
-          <p className="text-[11px] font-bold uppercase mb-2 tracking-wider" style={{ color: "var(--text-secondary)" }}>
+          <p className="text-11 font-bold uppercase mb-2 tracking-wider" style={{ color: "var(--text-secondary)" }}>
             {t("register.shopName")}
           </p>
           <input
             value={shopName}
             onChange={(e) => setShopName(e.target.value)}
             placeholder={t("register.shopNamePlaceholder")}
-            className="w-full h-12 rounded-[24px] px-4 text-sm outline-none"
+            className="w-full h-12 rounded-[var(--radius-input)] px-4 text-sm outline-none"
             style={fieldStyle}
           />
         </div>
 
         {/* Shop Type */}
         <div>
-          <p className="text-[11px] font-bold uppercase mb-2 tracking-wider" style={{ color: "var(--text-secondary)" }}>
+          <p className="text-11 font-bold uppercase mb-2 tracking-wider" style={{ color: "var(--text-secondary)" }}>
             {t("register.businessType")}
           </p>
           <div className="flex flex-col gap-2">
@@ -123,7 +123,7 @@ export default function RegisterShopDetailsPage() {
               <button
                 key={opt.key}
                 onClick={() => setShopType(opt.key)}
-                className="flex items-start gap-3 p-4 rounded-[14px] text-start transition-colors"
+                className="flex items-start gap-3 p-4 rounded-[var(--radius-card)] text-start transition-colors"
                 style={{
                   background: "var(--surface)",
                   border: `1.5px solid ${shopType === opt.key ? "var(--brand)" : "var(--divider)"}`,
@@ -146,42 +146,42 @@ export default function RegisterShopDetailsPage() {
 
         {/* City */}
         <div>
-          <p className="text-[11px] font-bold uppercase mb-2 tracking-wider" style={{ color: "var(--text-secondary)" }}>
+          <p className="text-11 font-bold uppercase mb-2 tracking-wider" style={{ color: "var(--text-secondary)" }}>
             {t("register.city")}
           </p>
           <input
             value={shopCity}
             onChange={(e) => setShopCity(e.target.value)}
             placeholder={t("register.cityPlaceholder")}
-            className="w-full h-12 rounded-[24px] px-4 text-sm outline-none"
+            className="w-full h-12 rounded-[var(--radius-input)] px-4 text-sm outline-none"
             style={fieldStyle}
           />
         </div>
 
         {/* Address */}
         <div>
-          <p className="text-[11px] font-bold uppercase mb-2 tracking-wider" style={{ color: "var(--text-secondary)" }}>
+          <p className="text-11 font-bold uppercase mb-2 tracking-wider" style={{ color: "var(--text-secondary)" }}>
             {t("register.shopAddress")}
           </p>
           <input
             value={shopAddress}
             onChange={(e) => setShopAddress(e.target.value)}
             placeholder={t("register.addressPlaceholder")}
-            className="w-full h-12 rounded-[24px] px-4 text-sm outline-none"
+            className="w-full h-12 rounded-[var(--radius-input)] px-4 text-sm outline-none"
             style={fieldStyle}
           />
         </div>
 
         {/* Business Registration */}
         <div>
-          <p className="text-[11px] font-bold uppercase mb-2 tracking-wider" style={{ color: "var(--text-secondary)" }}>
+          <p className="text-11 font-bold uppercase mb-2 tracking-wider" style={{ color: "var(--text-secondary)" }}>
             {t("register.businessReg")} <span style={{ opacity: 0.6 }}>{t("common.optional")}</span>
           </p>
           <input
             value={businessRegNumber}
             onChange={(e) => setBusinessRegNumber(e.target.value)}
             placeholder={t("register.taxNumberPlaceholder")}
-            className="w-full h-12 rounded-[24px] px-4 text-sm outline-none"
+            className="w-full h-12 rounded-[var(--radius-input)] px-4 text-sm outline-none"
             style={fieldStyle}
           />
         </div>

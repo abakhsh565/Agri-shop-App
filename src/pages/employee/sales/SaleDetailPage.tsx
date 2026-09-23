@@ -3,6 +3,9 @@ import { useNavigate, useParams } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
 import { PaymentBadge } from "@/components/ui/Badge";
+import ListCard from "@/components/ui/ListCard";
+import ListRow from "@/components/ui/ListRow";
+import { SkeletonList } from "@/components/ui/Skeleton";
 import { formatCurrency, formatDateTime } from "@/lib/formatters";
 import { useT } from "@/lib/i18n";
 import { useThemeStore } from "@/stores/themeStore";
@@ -47,13 +50,15 @@ export default function SaleDetailPage() {
   const isUrdu = language === "ur";
   const liveSales = useSalesStore((s) => s.sales);
   const sale = liveSales.find((s) => s.id === saleId);
+  // `ready` is what makes it honest to say a sale does not exist: before the store
+  // has loaded, a missing sale means "not here yet", not "not found".
+  const salesReady = useSalesStore((s) => s.ready);
   const customers = useCustomersStore((s) => s.customers);
   const customer = sale ? customers.find((c) => c.id === sale.customerId) : null;
   const currentUser = useAuthStore((s) => s.user);
 
   // Return history state
   const [returns, setReturns] = useState<ReturnRecord[]>([]);
-  const [loadingReturns, setLoadingReturns] = useState(true);
 
   // Fetch return history for this sale
   useEffect(() => {
@@ -68,7 +73,6 @@ export default function SaleDetailPage() {
 
         if (!returnRows || returnRows.length === 0) {
           setReturns([]);
-          setLoadingReturns(false);
           return;
         }
 
@@ -104,8 +108,6 @@ export default function SaleDetailPage() {
         );
       } catch {
         // Returns table may not exist yet
-      } finally {
-        setLoadingReturns(false);
       }
     }
     fetchReturnHistory();
@@ -139,11 +141,23 @@ export default function SaleDetailPage() {
 
   useEffect(() => { if (sale) setNote(sale.note ?? ""); }, [sale?.id]);
 
-  if (!sale) return (
-    <div className="flex flex-col w-full min-h-full items-center justify-center" style={{ background: "var(--background)" }}>
-      <p style={{ color: "var(--text-secondary)" }}>{t("saleDetail.saleNotFound")}</p>
-    </div>
-  );
+  if (!sale) {
+    // A reload straight onto this URL has no sale in the store yet. Claiming "not
+    // found" at that moment is a false statement about data that has not arrived,
+    // so wait in the shape the page will take and only then report it as missing.
+    if (!salesReady) {
+      return (
+        <div className="flex flex-col w-full min-h-full pt-4" style={{ background: "var(--background)" }}>
+          <SkeletonList rows={4} />
+        </div>
+      );
+    }
+    return (
+      <div className="flex flex-col w-full min-h-full items-center justify-center" style={{ background: "var(--background)" }}>
+        <p style={{ color: "var(--text-secondary)" }}>{t("saleDetail.saleNotFound")}</p>
+      </div>
+    );
+  }
 
   async function handleSaveNote() {
     if (note === (sale?.note ?? "")) return;
@@ -227,7 +241,7 @@ export default function SaleDetailPage() {
         {/* Customer card */}
         <button
           onClick={() => navigate(`${base}/customers/${sale.customerId}`)}
-          className="flex items-center justify-between rounded-[14px] p-4 text-start w-full transition-opacity active:opacity-70"
+          className="flex items-center justify-between rounded-[var(--radius-card)] p-4 text-start w-full transition-opacity active:opacity-70"
           style={{ border: "1px solid var(--divider)", background: "var(--surface-2)" }}
         >
           <div className="flex items-center gap-3">
@@ -251,18 +265,21 @@ export default function SaleDetailPage() {
           <p className="text-xs font-bold uppercase mb-2 tracking-wider" style={{ color: "var(--text-secondary)" }}>
             {t("sales.itemsSold")}
           </p>
-          <div className="rounded-[14px] overflow-hidden" style={{ border: "1px solid var(--divider)" }}>
-            {sale.items.map((item, i) => {
+          <ListCard>
+            {sale.items.map((item) => {
               const key = `${item.productName}-${item.variantName}`;
               const returned = returnedQtyMap[key] ?? 0;
               const isFullyReturned = returned >= item.qty;
               const isPartialReturned = returned > 0 && returned < item.qty;
 
               return (
-                <div
+                <ListRow
                   key={item.id}
-                  className="flex justify-between p-4"
-                  style={{ borderBottom: i < sale.items.length - 1 ? "1px solid var(--divider)" : "none" }}
+                  trailing={
+                    <p className="text-sm font-bold shrink-0" style={{ color: "var(--text-primary)" }}>
+                      {formatCurrency(item.lineTotal)}
+                    </p>
+                  }
                 >
                   <div>
                     <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>
@@ -272,38 +289,35 @@ export default function SaleDetailPage() {
                       {formatCurrency(item.unitPrice)} × {item.qty}
                     </p>
                     {isFullyReturned && (
-                      <span className="inline-block text-[10px] font-semibold px-2 py-0.5 rounded-full mt-1" style={{ background: "rgba(239,68,68,0.1)", color: "#ef4444" }}>
+                      <span className="inline-block text-10 font-semibold px-2 py-0.5 rounded-full mt-1" style={{ background: "rgba(239,68,68,0.1)", color: "#ef4444" }}>
                         {t("saleDetail.returned")}
                       </span>
                     )}
                     {isPartialReturned && (
-                      <span className="inline-block text-[10px] font-semibold px-2 py-0.5 rounded-full mt-1" style={{ background: "rgba(245,158,11,0.1)", color: "#d97706" }}>
+                      <span className="inline-block text-10 font-semibold px-2 py-0.5 rounded-full mt-1" style={{ background: "rgba(245,158,11,0.1)", color: "#d97706" }}>
                         Partial return ({returned}/{item.qty})
                       </span>
                     )}
                   </div>
-                  <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>
-                    {formatCurrency(item.lineTotal)}
-                  </p>
-                </div>
+                </ListRow>
               );
             })}
             {/* Sold by */}
-            <div
-              className="flex items-center gap-2 px-4 py-3"
-              style={{ borderTop: "1px solid var(--divider)", background: "var(--surface-2)" }}
+            <ListRow
+              tile={
+                <div
+                  className="size-6 rounded-full flex items-center justify-center text-10 font-bold shrink-0"
+                  style={{ background: initBgColor(sale.employeeName), color: "#fff" }}
+                >
+                  {sale.employeeName.charAt(0).toUpperCase()}
+                </div>
+              }
             >
-              <div
-                className="size-6 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0"
-                style={{ background: initBgColor(sale.employeeName), color: "#fff" }}
-              >
-                {sale.employeeName.charAt(0).toUpperCase()}
-              </div>
               <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
                 {t("saleDetail.soldBy")} <span className="font-semibold" style={{ color: "var(--text-primary)" }}>{sale.employeeName}</span>
               </p>
-            </div>
-          </div>
+            </ListRow>
+          </ListCard>
         </div>
 
         {/* Return History */}
@@ -316,7 +330,7 @@ export default function SaleDetailPage() {
               {returns.map((ret) => (
                 <div
                   key={ret.id}
-                  className="rounded-[14px] p-4"
+                  className="rounded-[var(--radius-card)] p-4"
                   style={{ border: "1px solid var(--divider)", background: "var(--surface-2)" }}
                 >
                   <div className="flex justify-between items-start mb-2">
@@ -324,7 +338,7 @@ export default function SaleDetailPage() {
                       <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>
                         {ret.returnNumber}
                       </p>
-                      <p className="text-[11px]" style={{ color: "var(--text-secondary)" }}>
+                      <p className="text-11" style={{ color: "var(--text-secondary)" }}>
                         {formatDateTime(ret.createdAt)}
                       </p>
                     </div>
@@ -365,7 +379,7 @@ export default function SaleDetailPage() {
 
         {/* Payment summary */}
         <div
-          className="rounded-[14px] p-4 flex flex-col gap-2"
+          className="rounded-[var(--radius-card)] p-4 flex flex-col gap-2"
           style={{ border: "1px solid var(--divider)" }}
         >
           {summaryRows.map((row) => (
@@ -413,7 +427,7 @@ export default function SaleDetailPage() {
               onChange={(e) => setNote(e.target.value)}
               placeholder={t("saleDetail.addNote")}
               rows={3}
-              className="w-full rounded-[12px] px-4 py-3 text-sm resize-none outline-none"
+              className="w-full rounded-[var(--radius-tile)] px-4 py-3 text-sm resize-none outline-none"
               style={{
                 background: "var(--surface)",
                 border: "1px solid var(--divider)",

@@ -2,6 +2,8 @@ import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
+import ListCard from "@/components/ui/ListCard";
+import ListRow from "@/components/ui/ListRow";
 import { useCustomersStore } from "@/stores/customersStore";
 import { useThemeStore } from "@/stores/themeStore";
 import { useShellBase } from "@/lib/useShellBase";
@@ -92,7 +94,7 @@ export default function ReminderHistoryPage() {
       <div className="flex flex-col gap-3 px-4 pt-4 pb-8">
         {logs.length === 0 ? (
           <div
-            className="rounded-[14px] p-8 flex flex-col items-center gap-3"
+            className="rounded-[var(--radius-card)] p-8 flex flex-col items-center gap-3"
             style={{ border: "1px solid var(--divider)" }}
           >
             <div
@@ -109,42 +111,42 @@ export default function ReminderHistoryPage() {
             </p>
           </div>
         ) : (
-          <div className="rounded-[14px] overflow-hidden" style={{ border: "1px solid var(--divider)" }}>
-            {logs.map((log, i) => {
+          <ListCard>
+            {logs.map((log) => {
               const config = TYPE_CONFIG[log.type];
               const Icon = config.icon;
               return (
-                <div
+                <ListRow
                   key={log.id}
-                  className="flex items-start gap-3 px-4 py-3"
-                  style={{ borderBottom: i < logs.length - 1 ? "1px solid var(--divider)" : "none" }}
+                  tile={
+                    <div
+                      className="size-8 rounded-full flex items-center justify-center shrink-0 mt-0.5"
+                      style={{ background: config.bg }}
+                    >
+                      <Icon size={14} style={{ color: config.color }} />
+                    </div>
+                  }
                 >
-                  <div
-                    className="size-8 rounded-full flex items-center justify-center shrink-0 mt-0.5"
-                    style={{ background: config.bg }}
-                  >
-                    <Icon size={14} style={{ color: config.color }} />
-                  </div>
-                  <div className="flex-1 min-w-0">
+                  <div className="min-w-0">
                     <div className="flex items-center gap-2">
                       <span
-                        className="text-[10px] font-bold px-1.5 py-0.5 rounded-full"
+                        className="text-10 font-bold px-1.5 py-0.5 rounded-full"
                         style={{ color: config.color, background: config.bg }}
                       >
                         {config.label}
                       </span>
                     </div>
-                    <p className="text-[12px] mt-1" style={{ color: "var(--text-primary)" }}>
+                    <p className="text-12 mt-1" style={{ color: "var(--text-primary)" }}>
                       {log.message}
                     </p>
-                    <p className="text-[11px] mt-1" style={{ color: "var(--text-secondary)" }}>
+                    <p className="text-11 mt-1" style={{ color: "var(--text-secondary)" }}>
                       {formatRelativeTime(log.sentAt)}
                     </p>
                   </div>
-                </div>
+                </ListRow>
               );
             })}
-          </div>
+          </ListCard>
         )}
       </div>
     </div>

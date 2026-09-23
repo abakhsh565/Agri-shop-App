@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/stores/authStore";
+import { tNow } from "@/lib/i18n";
 import type { Company } from "@/types";
 
 interface CompanyRow {
@@ -52,6 +53,7 @@ interface CompaniesState {
     address?: string;
     logoUrl?: string;
   }) => Promise<void>;
+  archiveCompany: (id: string) => Promise<void>;
 }
 
 let channel: ReturnType<typeof supabase.channel> | null = null;
@@ -67,6 +69,9 @@ export const useCompaniesStore = create<CompaniesState>((set, get) => ({
     const { data, error } = await supabase
       .from("companies")
       .select("*")
+      // Archived suppliers leave the operational lists (pickers, payable totals). Their
+      // purchase history is untouched — purchases keep their own company snapshot.
+      .eq("is_active", true)
       .order("name");
     if (error) {
       set({ loading: false, ready: true, error: error.message });
@@ -125,7 +130,26 @@ export const useCompaniesStore = create<CompaniesState>((set, get) => ({
     return company;
   },
 
+  archiveCompany: async (id) => {
+    const { error } = await supabase.rpc("archive_company", { p_company_id: id });
+    if (error) {
+      // The database refuses to hide a supplier that is still owed money, so the
+      // payable cannot vanish from Payments while the debt remains. Say why in the
+      // owner's own language instead of showing the raw error code.
+      const name = get().companies.find((c) => c.id === id)?.name ?? "";
+      if (error.message.includes("COMPANY_HAS_PAYABLE")) {
+        throw new Error(tNow("company.cannotArchivePayable", { name }));
+      }
+      throw new Error(error.message);
+    }
+    set({ companies: get().companies.filter((c) => c.id !== id) });
+  },
+
   updateCompany: async (id, input) => {
+    // Safe to rename: `products` references its supplier by `company_id`, not by
+    // name, so a rename cannot orphan a product. Recorded purchases keep their own
+    // company_name snapshot and are never rewritten. Only these display/contact
+    // fields are editable — nothing here feeds a financial total.
     const { error } = await supabase
       .from("companies")
       .update({

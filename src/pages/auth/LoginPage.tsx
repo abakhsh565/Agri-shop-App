@@ -57,17 +57,17 @@ export default function LoginPage() {
       <div className="flex flex-col flex-1 justify-between">
         <div className="flex flex-col gap-8 p-6">
           <div className="flex flex-col gap-2">
-            <p className="text-[26px] font-bold" style={{ color: "var(--text-primary)" }}>{t("auth.welcomeBack")}</p>
-            <p className="text-[14px]" style={{ color: "var(--text-secondary)" }}>{t("auth.enterPhone")}</p>
+            <p className="text-26 font-bold" style={{ color: "var(--text-primary)" }}>{t("auth.welcomeBack")}</p>
+            <p className="text-14" style={{ color: "var(--text-secondary)" }}>{t("auth.enterPhone")}</p>
           </div>
           <div className="flex flex-col gap-4">
             {invitedPhone && (
               <div
-                className="rounded-xl px-3 py-2"
+                className="rounded-[var(--radius-tile)] px-3 py-2"
                 style={{ background: "var(--surface-2)", border: "1px solid var(--divider)" }}
                 data-testid="invited-hint"
               >
-                <p className="text-[12px]" style={{ color: "var(--text-secondary)" }}>
+                <p className="text-12" style={{ color: "var(--text-secondary)" }}>
                   {t("auth.invitedHint")}
                 </p>
               </div>
@@ -82,7 +82,7 @@ export default function LoginPage() {
               autoComplete="tel"
               onKeyDown={(e) => e.key === "Enter" && handleSignIn()}
             />
-            <p className="text-[12px]" style={{ color: "var(--text-secondary)" }}>
+            <p className="text-12" style={{ color: "var(--text-secondary)" }}>
               {isDemoOtpMode ? t("auth.codeHintDemo") : t("auth.codeHint")}
             </p>
           </div>

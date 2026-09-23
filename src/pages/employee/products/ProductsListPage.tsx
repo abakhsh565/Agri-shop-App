@@ -8,7 +8,10 @@ import type { Product } from "@/types";
 import { useT } from "@/lib/i18n";
 import { useThemeStore } from "@/stores/themeStore";
 import { useShellBase } from "@/lib/useShellBase";
-import { ChevronRight, Search, Plus } from "lucide-react";
+import { ChevronRight, Plus, Package } from "lucide-react";
+import SearchBar from "@/components/ui/SearchBar";
+import ListCard from "@/components/ui/ListCard";
+import ListRow from "@/components/ui/ListRow";
 import type { ProductCategory } from "@/types";
 
 const CATEGORY_KEYS: Record<string, "products.all" | "products.spray" | "products.seed" | "products.fertilizer"> = {
@@ -71,22 +74,12 @@ export default function ProductsListPage() {
 
       {/* Search */}
       <div className="px-4 pb-3">
-        <div
-          className="flex items-center gap-2 h-10 rounded-full px-3"
-          style={{ background: "var(--surface-2)", border: "1px solid var(--divider)" }}
-        >
-          <Search size={14} style={{ color: "var(--text-secondary)" }} />
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder={t("products.search")}
-            className="flex-1 bg-transparent text-[13px] outline-none"
-            style={{ color: "var(--text-primary)" }}
-          />
-          {search && (
-            <button onClick={() => setSearch("")} style={{ color: "var(--text-secondary)" }}>×</button>
-          )}
-        </div>
+        <SearchBar
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          onClear={() => setSearch("")}
+          placeholder={t("products.search")}
+        />
       </div>
 
       {/* Category filters */}
@@ -109,65 +102,62 @@ export default function ProductsListPage() {
       {/* Product list */}
       {filtered.length === 0 ? (
         <div className="flex flex-col items-center py-16 gap-2">
-          <p className="text-3xl">📦</p>
+          <Package size={28} className="mx-auto block" style={{ color: "var(--text-tertiary)" }} />
           <p className="text-sm" style={{ color: "var(--text-secondary)" }}>{t("admin.noProducts")}</p>
         </div>
       ) : (
-        <div className="flex flex-col">
-          {filtered.map((p, i) => {
+        <div className="flex flex-col px-4 pb-8">
+          <ListCard>
+          {filtered.map((p) => {
             const status = productStatus(p);
             const totalVariants = p.variants.length;
             const dotColor = CATEGORY_DOT[p.category] ?? "#888";
             return (
-              <button
+              <ListRow
                 key={p.id}
                 onClick={() => navigate(`${base}/products/${p.id}`)}
-                className="flex items-center justify-between px-4 py-4 text-start transition-opacity active:opacity-70"
-                style={{ borderBottom: i < filtered.length - 1 ? "1px solid var(--divider)" : "none" }}
+                tile={p.imageUrl ? (
+                  <img src={p.imageUrl} alt={p.name} className="size-10 rounded-[var(--radius-tile)] object-cover shrink-0" />
+                ) : (
+                  <div
+                    className="size-10 rounded-[var(--radius-tile)] shrink-0 flex items-center justify-center text-11 font-bold"
+                    style={{ background: dotColor + "22", color: dotColor }}
+                  >
+                    {p.name.charAt(0)}
+                  </div>
+                )}
+                trailing={<ChevronRight size={18} style={{ color: "var(--text-secondary)" }} className="shrink-0" />}
               >
-                <div className="flex items-center gap-3">
-                  {/* Product image or category dot */}
-                  {p.imageUrl ? (
-                    <img src={p.imageUrl} alt={p.name} className="size-10 rounded-[10px] object-cover shrink-0" />
-                  ) : (
-                    <div
-                      className="size-10 rounded-[10px] shrink-0 flex items-center justify-center text-white text-[11px] font-bold"
-                      style={{ background: dotColor + "22", color: dotColor }}
-                    >
-                      {p.name.charAt(0)}
-                    </div>
-                  )}
                   <div className="flex flex-col gap-0.5">
                     <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>{p.name}</p>
                     <p className="text-xs" style={{ color: "var(--text-secondary)" }}>{p.company}</p>
                     <div className="flex items-center gap-2 mt-0.5">
                       <span
-                        className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full"
+                        className="text-10 font-semibold px-1.5 py-0.5 rounded-full"
                         style={{ background: dotColor + "20", color: dotColor }}
                       >
                         {t(CATEGORY_KEYS[p.category] ?? "products.all")}
                       </span>
-                      <span className="text-[10px]" style={{ color: "var(--text-secondary)" }}>
+                      <span className="text-10" style={{ color: "var(--text-secondary)" }}>
                         {totalVariants} {totalVariants > 1 ? t("products.variants") : t("products.variant")}
                       </span>
                       <span
-                        className="text-[10px] font-semibold"
+                        className="text-10 font-semibold"
                         style={{ color: getStockStatusColor(status) }}
                       >
                         {getStockStatusLabel(status, t)}
                       </span>
                       {p.barcode && (
-                        <span className="text-[10px] font-mono" style={{ color: "var(--text-secondary)" }}>
+                        <span className="text-10 font-mono" style={{ color: "var(--text-secondary)" }}>
                           {p.barcode}
                         </span>
                       )}
                     </div>
                   </div>
-                </div>
-                <ChevronRight size={18} style={{ color: "var(--text-secondary)" }} className="shrink-0" />
-              </button>
+              </ListRow>
             );
           })}
+          </ListCard>
         </div>
       )}
     </div>

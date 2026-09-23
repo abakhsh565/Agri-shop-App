@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
+import ListCard from "@/components/ui/ListCard";
+import ListRow from "@/components/ui/ListRow";
+import { SkeletonList } from "@/components/ui/Skeleton";
 import { useThemeStore } from "@/stores/themeStore";
 import { useProductsStore } from "@/stores/productsStore";
 import { useSalesStore } from "@/stores/salesStore";
@@ -87,8 +90,8 @@ export default function StockMovementHistoryPage() {
       <NavHeader title={t("admin.stockMovements")} />
 
       {loading ? (
-        <div className="flex-1 flex items-center justify-center py-16">
-          <p className="text-sm" style={{ color: "var(--text-secondary)" }}>{t("common.loadingMovements")}</p>
+        <div className="pt-4">
+          <SkeletonList rows={5} tile />
         </div>
       ) : movements.length === 0 ? (
         <div className="flex-1 flex flex-col items-center justify-center py-16 gap-2">
@@ -97,30 +100,32 @@ export default function StockMovementHistoryPage() {
           <p className="text-xs" style={{ color: "var(--text-secondary)" }}>{t("admin.movementsAppearAfter")}</p>
         </div>
       ) : (
-        <div className="flex flex-col">
-          {movements.map((mov, i) => (
-            <div
+        <div className="flex flex-col px-4 pb-8">
+          <ListCard>
+          {movements.map((mov) => (
+            <ListRow
               key={mov.id}
-              className="flex items-center gap-3 px-4 py-3"
-              style={{ borderBottom: i < movements.length - 1 ? "1px solid var(--divider)" : "none" }}
+              tile={
+                <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0" style={{ background: "var(--surface-2)" }}>
+                  {movementIcon(mov.type)}
+                </div>
+              }
+              trailing={
+                <div className="text-end shrink-0">
+                  <p className="text-sm font-bold" style={{ color: mov.qtyChange > 0 ? "#22c55e" : "var(--error)" }}>
+                    {mov.qtyChange > 0 ? "+" : ""}{mov.qtyChange}
+                  </p>
+                  <p className="text-10" style={{ color: "var(--text-secondary)" }}>{formatSmartDateTime(mov.createdAt, now, t)}</p>
+                </div>
+              }
             >
-              <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0" style={{ background: "var(--surface-2)" }}>
-                {movementIcon(mov.type)}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate" style={{ color: "var(--text-primary)" }}>{mov.productName}</p>
-                <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
-                  {mov.variantName} · {movementLabel(mov.type)} {mov.reference ? `· ${mov.reference}` : ""}
-                </p>
-              </div>
-              <div className="text-end shrink-0">
-                <p className="text-sm font-bold" style={{ color: mov.qtyChange > 0 ? "#22c55e" : "var(--error)" }}>
-                  {mov.qtyChange > 0 ? "+" : ""}{mov.qtyChange}
-                </p>
-                <p className="text-[10px]" style={{ color: "var(--text-secondary)" }}>{formatSmartDateTime(mov.createdAt, now, t)}</p>
-              </div>
-            </div>
+              <p className="text-sm font-medium truncate" style={{ color: "var(--text-primary)" }}>{mov.productName}</p>
+              <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
+                {mov.variantName} · {movementLabel(mov.type)} {mov.reference ? `· ${mov.reference}` : ""}
+              </p>
+            </ListRow>
           ))}
+          </ListCard>
         </div>
       )}
     </div>

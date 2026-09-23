@@ -68,7 +68,7 @@ export default function ReorderSuggestionsPage() {
       <NavHeader title={t("admin.reorderSuggestions")} />
 
       <div className="px-4 pt-3 pb-2">
-        <div className="flex items-center gap-2 rounded-[14px] p-3" style={{ background: "rgba(217,119,6,0.08)", border: "1px solid rgba(217,119,6,0.2)" }}>
+        <div className="flex items-center gap-2 rounded-[var(--radius-card)] p-3" style={{ background: "rgba(217,119,6,0.08)", border: "1px solid rgba(217,119,6,0.2)" }}>
           <AlertTriangle size={16} style={{ color: "#d97706" }} />
           <p className="text-xs" style={{ color: "#92400e" }}>
             {suggestions.length === 0
@@ -91,7 +91,7 @@ export default function ReorderSuggestionsPage() {
             return (
               <div
                 key={`${s.productId}-${s.variantId}`}
-                className="rounded-[14px] overflow-hidden"
+                className="rounded-[var(--radius-card)] overflow-hidden"
                 style={{ border: "1px solid var(--divider)", background: "var(--surface)" }}
               >
                 <div className="flex items-center gap-3 px-4 py-3">
@@ -104,7 +104,7 @@ export default function ReorderSuggestionsPage() {
                   </div>
                   <div className="text-end shrink-0">
                     <p className="text-sm font-bold" style={{ color }}>{s.stockQty} {t("common.left")}</p>
-                    <p className="text-[10px]" style={{ color: "var(--text-secondary)" }}>{t("common.thresholdValue", { value: s.threshold })}</p>
+                    <p className="text-10" style={{ color: "var(--text-secondary)" }}>{t("common.thresholdValue", { value: s.threshold })}</p>
                   </div>
                 </div>
 

@@ -8,7 +8,7 @@ import { useCartStore } from "@/stores/cartStore";
 import { useSalesStore } from "@/stores/salesStore";
 import { useAuthStore } from "@/stores/authStore";
 import { formatCurrency, getCreditHealth, getCreditHealthColor } from "@/lib/formatters";
-import { Plus } from "lucide-react";
+import { Plus, AlertTriangle } from "lucide-react";
 import { useUIStore } from "@/stores/uiStore";
 import { useShellBase } from "@/lib/useShellBase";
 import { useT } from "@/lib/i18n";
@@ -142,7 +142,7 @@ export default function CartPage() {
       {!customer ? (
         <button
           onClick={() => navigate(`${base}/sale`, { state: { fromCart: true } })}
-          className="mx-4 mt-3 rounded-xl p-4 flex items-center justify-between transition-opacity active:opacity-70"
+          className="mx-4 mt-3 rounded-[var(--radius-tile)] p-4 flex items-center justify-between transition-opacity active:opacity-70"
           style={{ background: "var(--surface-2)", border: "1.5px dashed var(--divider)" }}
         >
           <div className="flex items-center gap-3">
@@ -158,7 +158,7 @@ export default function CartPage() {
         </button>
       ) : (
         <>
-          <div className="mx-4 mt-3 bg-[#f5f5f5] rounded-xl p-4">
+          <div className="mx-4 mt-3 bg-[#f5f5f5] rounded-[var(--radius-tile)] p-4">
             <div className="flex items-center justify-between mb-3">
               <p className="text-sm font-bold text-black">{customer.name}</p>
               <span className="text-xs" style={{ color: getCreditHealthColor(creditHealth) }}>
@@ -167,18 +167,21 @@ export default function CartPage() {
             </div>
             <div className="flex gap-8">
               <div>
-                <p className="text-[10px] text-[#888] uppercase">{t("sale.outstandingCredit")}</p>
+                <p className="text-10 text-[#888] uppercase">{t("sale.outstandingCredit")}</p>
                 <p className="text-sm font-bold text-black">{formatCurrency(customer.outstandingBalance)}</p>
               </div>
               <div>
-                <p className="text-[10px] text-[#888] uppercase">{t("customers.creditLimit")}</p>
+                <p className="text-10 text-[#888] uppercase">{t("customers.creditLimit")}</p>
                 <p className="text-sm font-bold text-black">{formatCurrency(customer.creditLimit)}</p>
               </div>
             </div>
           </div>
           {creditOverLimit && (
-            <div className="mx-4 mt-2 bg-[#fef2f2] border border-[#ef4444] rounded-xl p-3">
-              <p className="text-xs text-[#ef4444] font-medium">⚠ {t("sale.willExceedLimit").replace("{name}", customer.name)}</p>
+            <div className="mx-4 mt-2 bg-[#fef2f2] border border-[#ef4444] rounded-[var(--radius-tile)] p-3">
+              <p className="text-xs text-[#ef4444] font-medium">
+                <AlertTriangle size={13} className="inline-block me-1 align-[-2px]" />
+                {t("sale.willExceedLimit").replace("{name}", customer.name)}
+              </p>
             </div>
           )}
         </>
@@ -216,7 +219,7 @@ export default function CartPage() {
         <div className="flex gap-2 mt-3">
           <button
             onClick={() => navigate(`${base}/sale/products`)}
-            className="flex-1 h-12 rounded-xl border border-black flex items-center justify-center gap-2 text-sm font-medium text-black"
+            className="flex-1 h-12 rounded-[var(--radius-tile)] border border-black flex items-center justify-center gap-2 text-sm font-medium text-black"
           >
             <Plus size={16} />
             {t("sale.addMore")}
@@ -312,24 +315,24 @@ export default function CartPage() {
             value={amountReceived}
             onChange={(e) => setAmountReceived(e.target.value)}
             placeholder={t("sale.enterAmount")}
-            className="w-full h-12 rounded-[24px] border border-[#e5e5e5] px-4 text-sm text-black placeholder:text-[#888] outline-none"
+            className="w-full h-12 rounded-[var(--radius-input)] border border-[#e5e5e5] px-4 text-sm text-black placeholder:text-[#888] outline-none"
             onFocus={() => setAmountTouched(true)}
           />
           <p className="text-xs font-bold text-black uppercase mb-2 mt-4">{t("sale.paymentDueDate")}</p>
-          <p className="text-[12px] text-[#888] mb-2">{hasCreditPortion ? t("sale.dueDateRequired") : t("sale.dueDateOptional")}</p>
+          <p className="text-12 text-[#888] mb-2">{hasCreditPortion ? t("sale.dueDateRequired") : t("sale.dueDateOptional")}</p>
           <input
             type="date"
             value={dueDate}
             min={new Date().toISOString().split('T')[0]}
             onChange={(e) => setDueDate(e.target.value)}
-            className="w-full h-12 rounded-[24px] border border-[#e5e5e5] px-4 text-sm text-black outline-none"
+            className="w-full outline-none"
           />
         </div>
       )}
 
       {/* Summary box */}
       {items.length > 0 && (
-        <div className="mx-4 mt-5 border border-[#e5e5e5] rounded-xl p-4 bg-[#f9f9f9]">
+        <div className="mx-4 mt-5 border border-[#e5e5e5] rounded-[var(--radius-tile)] p-4 bg-[#f9f9f9]">
           <div className="flex justify-between py-1">
             <span className="text-sm text-[#888]">{t("sale.subtotal")}</span>
             <span className="text-sm font-medium text-black">{formatCurrency(total)}</span>

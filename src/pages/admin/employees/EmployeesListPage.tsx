@@ -5,7 +5,10 @@ import { useEmployeesStore } from "@/stores/employeesStore";
 import type { User } from "@/types";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
-import { Plus, ChevronRight } from "lucide-react";
+import { Plus, ChevronRight, Users } from "lucide-react";
+import ListCard from "@/components/ui/ListCard";
+import ListRow from "@/components/ui/ListRow";
+import { SkeletonList } from "@/components/ui/Skeleton";
 
 function statusColor(emp: User) {
   if (!emp.isActive) return { bg: "#fee2e2", color: "#dc2626" };
@@ -38,36 +41,39 @@ export default function EmployeesListPage() {
       <NavHeader title={t("admin.employees")} />
 
       <div className="flex flex-col px-4 gap-3 pb-24">
+        {/* The list is fetched once per shell mount, so on a cold load this screen used
+            to sit blank and then fill. It now holds the shape it will become. */}
+        {!ready && <SkeletonList rows={4} tile />}
         {ready && employees.length === 0 && (
           <div className="flex flex-col items-center py-20 gap-2">
-            <p className="text-3xl">👥</p>
+            <Users size={28} className="mx-auto block" style={{ color: "var(--text-tertiary)" }} />
             <p className="text-sm" style={{ color: "var(--text-secondary)" }}>{t("empList.empty")}</p>
           </div>
         )}
+        {employees.length > 0 && (
+        <ListCard>
         {employees.map((emp) => {
           const { bg, color } = statusColor(emp);
           return (
-            <button
+            <ListRow
               key={emp.id}
               onClick={() => navigate(`/admin/employees/${emp.id}`)}
-              className="flex items-center gap-3 rounded-[14px] p-4 text-start transition-opacity active:opacity-70"
-              style={{ background: "var(--surface)", border: "1px solid var(--divider)" }}
-            >
-              {/* Avatar */}
+              tile={
               <div
-                className="size-11 rounded-full flex items-center justify-center font-bold text-[16px] shrink-0"
+                className="size-11 rounded-full flex items-center justify-center font-bold text-16 shrink-0"
                 style={{ background: "var(--brand)", color: "#0a0a0a" }}
               >
                 {emp.name ? emp.name.charAt(0) : "?"}
               </div>
-
-              {/* Info */}
+              }
+              trailing={<ChevronRight size={16} style={{ color: "var(--text-secondary)" }} className="shrink-0" />}
+            >
               <div className="flex flex-col flex-1 min-w-0 gap-0.5">
                 <div className="flex items-center gap-2">
                   <p className="text-sm font-bold truncate" style={{ color: "var(--text-primary)" }}>{emp.name}</p>
                   {emp.isOriginalOwner && (
                     <span
-                      className="shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full"
+                      className="shrink-0 text-10 font-bold px-2 py-0.5 rounded-full"
                       style={{ background: "var(--surface-2)", color: "var(--text-secondary)" }}
                     >
                       {t("settings.owner")}
@@ -77,7 +83,7 @@ export default function EmployeesListPage() {
                 <p className="text-xs" style={{ color: "var(--text-secondary)" }}>{emp.phone}</p>
                 <div className="flex items-center gap-2 mt-1">
                   <span
-                    className="text-[10px] font-bold px-2 py-0.5 rounded-full"
+                    className="text-10 font-bold px-2 py-0.5 rounded-full"
                     style={{ background: bg, color }}
                   >
                     {statusLabel(emp, t)}
@@ -85,10 +91,11 @@ export default function EmployeesListPage() {
                 </div>
               </div>
 
-              <ChevronRight size={16} style={{ color: "var(--text-secondary)" }} className="shrink-0" />
-            </button>
+            </ListRow>
           );
         })}
+        </ListCard>
+        )}
       </div>
 
       {/* Floating Add Employee */}

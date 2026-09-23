@@ -7,9 +7,11 @@ import { useSalesStore } from "@/stores/salesStore";
 import { useProductsStore } from "@/stores/productsStore";
 import { useCustomersStore } from "@/stores/customersStore";
 import { useCompaniesStore } from "@/stores/companiesStore";
-import { TrendingUp, Receipt, Wallet, AlertTriangle, Calendar } from "lucide-react";
+import { TrendingUp, Receipt, Wallet, AlertTriangle, Calendar, BarChart3 } from "lucide-react";
 import { pkToday } from "@/lib/pkDate";
 import { useT } from "@/lib/i18n";
+import ListCard from "@/components/ui/ListCard";
+import ListRow from "@/components/ui/ListRow";
 
 type Period = "today" | "week" | "month" | "all" | "custom";
 
@@ -157,11 +159,11 @@ export default function AdminReportsPage() {
 
       {/* Gross profit hero */}
       <div className="px-4 pt-3">
-        <div className="rounded-[16px] p-5" style={{ background: "var(--brand)" }}>
-          <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "rgba(0,0,0,0.55)" }}>
+        <div className="rounded-[var(--radius-card)] p-5" style={{ background: "var(--brand)" }}>
+          <p className="text-10 font-bold uppercase tracking-widest" style={{ color: "rgba(0,0,0,0.55)" }}>
             {t("admin.grossProfit")}
           </p>
-          <p className="text-[34px] font-bold leading-tight" style={{ color: "#0a0a0a" }}>
+          <p className="text-34 font-bold leading-tight" style={{ color: "#0a0a0a" }}>
             {formatCurrency(report.grossProfit)}
           </p>
           <div className="flex items-center gap-1.5 mt-1" style={{ color: "rgba(0,0,0,0.7)" }}>
@@ -182,25 +184,31 @@ export default function AdminReportsPage() {
       {/* Standing balances */}
       <div className="px-4 pt-5">
         <SectionTitle>{t("reports.standingBalances")}</SectionTitle>
-        <div className="rounded-[14px] overflow-hidden" style={{ border: "1px solid var(--divider)" }}>
-          <BalanceRow label={t("reports.customerCreditOutstanding")} value={formatCurrency(report.outstandingCredit)} tone={report.outstandingCredit > 0 ? "warn" : "good"} />
-          <BalanceRow label={t("reports.supplierPayable")} value={formatCurrency(report.supplierPayable)} tone={report.supplierPayable > 0 ? "bad" : "good"} last />
-        </div>
+        <ListCard>
+          <ListRow
+            title={t("reports.customerCreditOutstanding")}
+            trailing={<span className="ds-row-strong" style={{ color: report.outstandingCredit > 0 ? "var(--warning)" : "var(--brand-dark)" }}>{formatCurrency(report.outstandingCredit)}</span>}
+          />
+          <ListRow
+            title={t("reports.supplierPayable")}
+            trailing={<span className="ds-row-strong" style={{ color: report.supplierPayable > 0 ? "var(--error)" : "var(--brand-dark)" }}>{formatCurrency(report.supplierPayable)}</span>}
+          />
+        </ListCard>
       </div>
 
       {/* Top employees */}
       {report.topEmployees.length > 0 && (
         <div className="px-4 pt-5">
           <SectionTitle>{t("reports.salesByEmployee")}</SectionTitle>
-          <div className="rounded-[14px] overflow-hidden" style={{ border: "1px solid var(--divider)" }}>
-            {report.topEmployees.map((e, i, arr) => (
-              <div key={`${e.name}-${i}`} className="flex items-center justify-between px-4 py-3"
-                style={{ borderBottom: i < arr.length - 1 ? "1px solid var(--divider)" : "none", background: "var(--surface)" }}>
-                <span className="text-sm" style={{ color: "var(--text-primary)" }}>{e.name}</span>
-                <span className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>{formatCurrency(e.total)}</span>
-              </div>
+          <ListCard>
+            {report.topEmployees.map((e, i) => (
+              <ListRow
+                key={`${e.name}-${i}`}
+                title={e.name}
+                trailing={<span className="ds-row-strong">{formatCurrency(e.total)}</span>}
+              />
             ))}
-          </div>
+          </ListCard>
         </div>
       )}
 
@@ -208,25 +216,23 @@ export default function AdminReportsPage() {
       {report.topProducts.length > 0 && (
         <div className="px-4 pt-5 pb-2">
           <SectionTitle>{t("reports.topProducts")}</SectionTitle>
-          <div className="rounded-[14px] overflow-hidden" style={{ border: "1px solid var(--divider)" }}>
-            {report.topProducts.map((p, i, arr) => (
-              <div key={p.name} className="flex items-center justify-between px-4 py-3"
-                style={{ borderBottom: i < arr.length - 1 ? "1px solid var(--divider)" : "none", background: "var(--surface)" }}>
-                <div>
-                  <p className="text-sm" style={{ color: "var(--text-primary)" }}>{p.name}</p>
-                  <p className="text-[11px]" style={{ color: "var(--text-secondary)" }}>{p.qty} units sold</p>
-                </div>
-                <span className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>{formatCurrency(p.total)}</span>
-              </div>
+          <ListCard>
+            {report.topProducts.map((p) => (
+              <ListRow
+                key={p.name}
+                title={p.name}
+                meta={`${p.qty} units sold`}
+                trailing={<span className="ds-row-strong">{formatCurrency(p.total)}</span>}
+              />
             ))}
-          </div>
+          </ListCard>
         </div>
       )}
 
       {/* Inventory alert */}
       {report.lowStock > 0 && (
         <div className="px-4 pt-3 pb-6">
-          <div className="flex items-center gap-3 rounded-[14px] p-4" style={{ background: "rgba(245,158,11,0.12)" }}>
+          <div className="flex items-center gap-3 rounded-[var(--radius-card)] p-4" style={{ background: "rgba(245,158,11,0.12)" }}>
             <AlertTriangle size={18} style={{ color: "var(--warning)" }} />
             <p className="text-sm" style={{ color: "var(--text-primary)" }}>
               <span className="font-bold">{report.lowStock}</span> variant{report.lowStock > 1 ? "s" : ""} low or out of stock — check Inventory.
@@ -237,7 +243,7 @@ export default function AdminReportsPage() {
 
       {report.count === 0 && (
         <div className="flex flex-col items-center py-16 gap-2">
-          <p className="text-3xl">📊</p>
+          <BarChart3 size={28} className="mx-auto block" style={{ color: "var(--text-tertiary)" }} />
           <p className="text-sm" style={{ color: "var(--text-secondary)" }}>{t("reports.noSalesInPeriod")}</p>
         </div>
       )}
@@ -252,12 +258,12 @@ export default function AdminReportsPage() {
               <div className="flex-1">
                 <p className="text-xs font-bold uppercase mb-1" style={{ color: "var(--text-secondary)" }}>{t("admin.from")}</p>
                 <input type="date" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)}
-                  className="w-full h-11 rounded-full px-4 text-sm outline-none" style={{ background: "var(--surface-2)", border: "1px solid var(--divider)", color: "var(--text-primary)" }} />
+                  className="w-full outline-none" />
               </div>
               <div className="flex-1">
                 <p className="text-xs font-bold uppercase mb-1" style={{ color: "var(--text-secondary)" }}>{t("admin.to")}</p>
                 <input type="date" value={customTo} max={todayISO} onChange={(e) => setCustomTo(e.target.value)}
-                  className="w-full h-11 rounded-full px-4 text-sm outline-none" style={{ background: "var(--surface-2)", border: "1px solid var(--divider)", color: "var(--text-primary)" }} />
+                  className="w-full outline-none" />
               </div>
             </div>
             <div className="flex gap-3">
@@ -276,9 +282,9 @@ export default function AdminReportsPage() {
 function Stat({ icon: Icon, label, value, tone }: { icon: typeof Receipt; label: string; value: string; tone?: "good" | "warn" }) {
   const color = tone === "good" ? "var(--brand-dark)" : tone === "warn" ? "var(--warning)" : "var(--text-primary)";
   return (
-    <div className="rounded-[14px] p-4" style={{ background: "var(--surface-2)", border: "1px solid var(--divider)" }}>
+    <div className="rounded-[var(--radius-card)] p-4" style={{ background: "var(--surface-2)", border: "1px solid var(--divider)" }}>
       <Icon size={16} style={{ color: "var(--text-secondary)" }} />
-      <p className="text-[10px] font-bold uppercase tracking-wider mt-2" style={{ color: "var(--text-secondary)" }}>{label}</p>
+      <p className="text-10 font-bold uppercase tracking-wider mt-2" style={{ color: "var(--text-secondary)" }}>{label}</p>
       <p className="text-base font-bold mt-0.5" style={{ color }}>{value}</p>
     </div>
   );
@@ -286,17 +292,7 @@ function Stat({ icon: Icon, label, value, tone }: { icon: typeof Receipt; label:
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
   return (
-    <p className="text-[11px] font-bold uppercase tracking-widest mb-2" style={{ color: "var(--text-secondary)" }}>{children}</p>
+    <p className="text-11 font-bold uppercase tracking-widest mb-2" style={{ color: "var(--text-secondary)" }}>{children}</p>
   );
 }
 
-function BalanceRow({ label, value, tone, last }: { label: string; value: string; tone: "good" | "warn" | "bad"; last?: boolean }) {
-  const color = tone === "good" ? "var(--brand-dark)" : tone === "bad" ? "var(--error)" : "var(--warning)";
-  return (
-    <div className="flex items-center justify-between px-4 py-3.5"
-      style={{ borderBottom: last ? "none" : "1px solid var(--divider)", background: "var(--surface)" }}>
-      <span className="text-sm" style={{ color: "var(--text-secondary)" }}>{label}</span>
-      <span className="text-sm font-bold" style={{ color }}>{value}</span>
-    </div>
-  );
-}

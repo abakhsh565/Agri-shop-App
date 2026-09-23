@@ -1,4 +1,8 @@
 import { useState } from "react";
+import { useDelayedDismiss } from "@/hooks/usePresence";
+
+/** Matches --dur-3, the sheet duration token. */
+const SHEET_MS = 280;
 import { scanFromCamera } from "@/lib/barcode";
 import { useUIStore } from "@/stores/uiStore";
 import { useT, tNow } from "@/lib/i18n";
@@ -23,13 +27,17 @@ export default function ScanButton({ onScan, label, size = "md" }: ScanButtonPro
   const [showManual, setShowManual] = useState(false);
   const [manualCode, setManualCode] = useState("");
   const [scanning, setScanning] = useState(false);
+  const { closing, dismiss } = useDelayedDismiss(() => setShowManual(false), SHEET_MS);
   const { addToast } = useUIStore();
   const t = useT();
 
   async function handleScan() {
     setScanning(true);
     try {
-      const result = await scanFromCamera();
+      const result = await scanFromCamera({
+        hint: t("scan.pointAtBarcode"),
+        cancel: t("common.cancel"),
+      });
       if (result) {
         onScan(result.barcode);
       } else {
@@ -74,18 +82,21 @@ export default function ScanButton({ onScan, label, size = "md" }: ScanButtonPro
       {/* Manual entry modal */}
       {showManual && (
         <div
-          className="fixed inset-0 z-50 flex items-end"
-          style={{ background: "rgba(0,0,0,0.5)" }}
-          onClick={() => setShowManual(false)}
+          className={`fixed inset-0 z-50 flex items-end ds-backdrop ${
+            closing ? "ds-anim-backdrop-out ds-anim-leaving" : "ds-anim-backdrop-in"
+          }`}
+          onClick={closing ? undefined : dismiss}
         >
           <div
-            className="w-full max-w-[390px] mx-auto rounded-t-[24px] p-6 flex flex-col gap-4"
+            className={`w-full max-w-[390px] mx-auto rounded-t-[24px] p-6 flex flex-col gap-4 ${
+              closing ? "ds-anim-sheet-out" : "ds-anim-sheet-in"
+            }`}
             style={{ background: "var(--surface)" }}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between">
               <p className="text-base font-bold" style={{ color: "var(--text-primary)" }}>{t("common.enterBarcode")}</p>
-              <button onClick={() => setShowManual(false)}>
+              <button onClick={dismiss}>
                 <X size={18} style={{ color: "var(--text-secondary)" }} />
               </button>
             </div>

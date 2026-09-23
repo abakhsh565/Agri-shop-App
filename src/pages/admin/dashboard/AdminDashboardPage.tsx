@@ -13,9 +13,12 @@ import { useCustomersStore } from "@/stores/customersStore";
 import { supabase } from "@/lib/supabase";
 import { formatCurrency, formatSmartDateTime } from "@/lib/formatters";
 import { generateReminders, calculatePaymentStatus, loadBusinessSettings } from "@/lib/reminderEngine";
+import { computeOverdueCreditTotal } from "@/lib/signalEngine";
 import { useT } from "@/lib/i18n";
 import { AlertTriangle, TrendingUp, ChevronRight, TrendingDown, ShoppingCart, Search, Bell, Wallet, CheckCircle2 } from "lucide-react";
 import StatusBar from "@/components/ui/StatusBar";
+import ListCard from "@/components/ui/ListCard";
+import ListRow from "@/components/ui/ListRow";
 
 function initBgColor(name: string | null | undefined) {
   const safeName = String(name ?? '');
@@ -198,8 +201,9 @@ export default function AdminDashboardPage() {
   const creditCollected = allPayments
     .filter((p) => dateInRange(p.createdAt))
     .reduce((s, p) => s + p.amount, 0);
-  // Outstanding = customer amounts currently owed (a live balance, not period-scoped).
-  const totalOutstanding = customers.reduce((s, c) => s + c.outstandingBalance, 0);
+  // Overdue = remaining balance of credit whose due date has already passed.
+  // Same authoritative calculation as the S1 overdue-credit signals.
+  const overdueAmount = computeOverdueCreditTotal(customers);
 
   // Recent sales — filtered by selected date range, most recent first
   const recentSales = [...filtered]
@@ -279,7 +283,7 @@ export default function AdminDashboardPage() {
         {/* Owner avatar — taps to profile; uses saved photo when present */}
         <button
           onClick={() => navigate("/admin/settings")}
-          className="size-10 rounded-full flex items-center justify-center font-bold text-[14px] shrink-0 overflow-hidden transition-transform active:scale-90"
+          className="size-10 rounded-full flex items-center justify-center font-bold text-14 shrink-0 overflow-hidden transition-transform active:scale-90"
           style={{ background: "var(--brand)", color: "#0a0a0a" }}
         >
           {user?.photoUrl
@@ -288,10 +292,10 @@ export default function AdminDashboardPage() {
         </button>
 
         <div className="flex flex-col flex-1 min-w-0">
-          <p className="font-bold text-[16px] leading-tight" style={{ color: "var(--text-primary)" }}>
+          <p className="font-bold text-16 leading-tight" style={{ color: "var(--text-primary)" }}>
             {t(greetingKey)}, {displayName}
           </p>
-          <p className="text-[12px] mt-0.5" style={{ color: "var(--text-secondary)" }}>
+          <p className="text-12 mt-0.5" style={{ color: "var(--text-secondary)" }}>
             {todayLabel}
           </p>
         </div>
@@ -311,7 +315,7 @@ export default function AdminDashboardPage() {
           >
             <Bell size={16} style={{ color: "var(--text-primary)" }} />
             {unread() > 0 && (
-              <span className="absolute top-1 right-1 bg-red-500 text-white text-[8px] font-bold rounded-full min-w-[13px] h-[13px] flex items-center justify-center px-[2px]">
+              <span className="absolute top-1 right-1 bg-red-500 text-white text-8 font-bold rounded-full min-w-[13px] h-[13px] flex items-center justify-center px-[2px]">
                 {unread()}
               </span>
             )}
@@ -323,7 +327,7 @@ export default function AdminDashboardPage() {
       {showNotifs && (
         <div className="fixed inset-0" style={{ zIndex: 60 }} onClick={() => setShowNotifs(false)}>
           <div
-            className="fixed top-[88px] right-4 w-[280px] rounded-[16px] shadow-2xl overflow-hidden animate-scale-in flex flex-col"
+            className="fixed top-[88px] right-4 w-[280px] rounded-[var(--radius-card)] shadow-2xl overflow-hidden animate-scale-in flex flex-col"
             style={{ zIndex: 61, background: "var(--surface)", border: "1px solid var(--divider)", maxHeight: "360px" }}
             onClick={(e) => e.stopPropagation()}
           >
@@ -333,16 +337,16 @@ export default function AdminDashboardPage() {
               className="px-4 py-3 flex items-center justify-between shrink-0 w-full active:opacity-70 transition-opacity"
               style={{ borderBottom: "1px solid var(--divider)" }}
             >
-              <p className="text-[12px] font-bold uppercase tracking-wider" style={{ color: "var(--text-primary)" }}>
+              <p className="text-12 font-bold uppercase tracking-wider" style={{ color: "var(--text-primary)" }}>
                 {t("dashboard.notifications")}
               </p>
               <div className="flex items-center gap-2">
                 {unread() > 0 && (
-                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full" style={{ background: "var(--brand)", color: "#0a0a0a" }}>
+                  <span className="text-10 font-bold px-1.5 py-0.5 rounded-full" style={{ background: "var(--brand)", color: "#0a0a0a" }}>
                     {unread()}
                   </span>
                 )}
-                <span className="text-[10px] font-semibold" style={{ color: "var(--brand-dark, #65a30d)" }} onClick={(e) => { e.stopPropagation(); markAllRead(); }}>{t("notifications.markAllRead")}</span>
+                <span className="text-10 font-semibold" style={{ color: "var(--brand-dark, #65a30d)" }} onClick={(e) => { e.stopPropagation(); markAllRead(); }}>{t("notifications.markAllRead")}</span>
               </div>
             </button>
 
@@ -350,7 +354,7 @@ export default function AdminDashboardPage() {
             <div className="overflow-y-auto flex-1" style={{ maxHeight: "310px" }}>
               {notifications.filter(n => !n.read).length === 0 ? (
                 <div className="px-4 py-8 text-center">
-                  <p className="text-[13px]" style={{ color: "var(--text-secondary)" }}>{t("dashboard.noNotifications") || "No notifications yet"}</p>
+                  <p className="text-13" style={{ color: "var(--text-secondary)" }}>{t("dashboard.noNotifications") || "No notifications yet"}</p>
                 </div>
               ) : (
                 (() => {
@@ -382,7 +386,7 @@ export default function AdminDashboardPage() {
 
                   return limited.map((group) => (
                     <div key={group.heading}>
-                      <p className="px-4 pt-3 pb-1 text-[10px] font-bold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
+                      <p className="px-4 pt-3 pb-1 text-10 font-bold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
                         {group.heading}
                       </p>
                       {group.items.map((n) => {
@@ -399,8 +403,8 @@ export default function AdminDashboardPage() {
                                 <div className="w-2 h-2 rounded-full mt-1.5 shrink-0" style={{ background: "var(--brand)" }} />
                               )}
                               <div className="flex-1 min-w-0">
-                                <p className="text-[13px] font-semibold" style={{ color: "var(--text-primary)" }}>{n.title}</p>
-                                {n.body && <p className="text-[12px] mt-0.5" style={{ color: "var(--text-secondary)" }}>{n.body}</p>}
+                                <p className="text-13 font-semibold" style={{ color: "var(--text-primary)" }}>{n.title}</p>
+                                {n.body && <p className="text-12 mt-0.5" style={{ color: "var(--text-secondary)" }}>{n.body}</p>}
                               </div>
                             </div>
                           </button>
@@ -435,33 +439,33 @@ export default function AdminDashboardPage() {
       {/* ── Total Sales card (lime hero): Total Sales · Transactions · Gross Profit ── */}
       <div className="px-4 animate-fade-in-up">
         <button
-          className="w-full rounded-[16px] p-5 text-start transition-transform active:scale-[0.98]"
+          className="w-full rounded-[var(--radius-card)] p-5 text-start transition-transform active:scale-[0.98]"
           style={{ background: "var(--brand)" }}
           onClick={() => navigate("/admin/sales")}
         >
-          <p className="text-[11px] font-bold uppercase tracking-widest mb-1" style={{ color: "rgba(0,0,0,0.55)" }}>
+          <p className="text-11 font-bold uppercase tracking-widest mb-1" style={{ color: "rgba(0,0,0,0.55)" }}>
             {t("admin.totalSales")}
           </p>
-          <p className="text-[28px] font-semibold leading-none" style={{ color: "#0a0a0a" }}>
+          <p className="text-28 font-semibold leading-none" style={{ color: "#0a0a0a" }}>
             {formatRs(totalSales)}
           </p>
 
           <div className="flex items-end justify-between mt-4">
             <div>
-              <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "rgba(0,0,0,0.5)" }}>
-                {isUrdu ? "تخمینہ منافع" : "GROSS PROFIT"}
+              <p className="text-10 font-semibold uppercase tracking-wider" style={{ color: "rgba(0,0,0,0.5)" }}>
+                {t("inline.gross_profit")}
               </p>
-              <p className="text-[16px] font-semibold" style={{ color: "#0a0a0a" }}>{formatRs(grossProfit)}</p>
+              <p className="text-16 font-semibold" style={{ color: "#0a0a0a" }}>{formatRs(grossProfit)}</p>
             </div>
             <div className="w-px self-stretch mx-3" style={{ background: "rgba(0,0,0,0.15)" }} />
             <div>
-              <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "rgba(0,0,0,0.5)" }}>
-                {isUrdu ? "نقد وصولی" : "CREDIT COLLECT"}
+              <p className="text-10 font-semibold uppercase tracking-wider" style={{ color: "rgba(0,0,0,0.5)" }}>
+                {t("inline.credit_collect")}
               </p>
               <div className="flex items-center gap-2">
-                <p className="text-[16px] font-semibold" style={{ color: "#0a0a0a" }}>{formatRs(creditCollected)}</p>
-                <p className="text-[11px] font-semibold" style={{ color: "rgba(0,0,0,0.5)" }}>
-                  {formatRs(totalOutstanding)} {isUrdu ? "واجب الادا" : "overdue"}
+                <p className="text-16 font-semibold" style={{ color: "#0a0a0a" }}>{formatRs(creditCollected)}</p>
+                <p className="text-11 font-semibold" style={{ color: "rgba(0,0,0,0.5)" }}>
+                  {formatRs(overdueAmount)} {t("inline.overdue")}
                 </p>
               </div>
             </div>
@@ -471,17 +475,17 @@ export default function AdminDashboardPage() {
 
       {/* ── Summary: Action needed · Follow-ups · Out of stock ── */}
       <div className="px-4 pt-4 flex gap-2 animate-fade-in-up">
-        <button onClick={() => navigate('/admin/alerts/reminders', { state: { tab: 'action', subTab: 'critical' } })} className="flex-1 flex items-center gap-2.5 py-2.5 px-3 rounded-[10px] active:opacity-70 transition-opacity" style={{ background: "var(--surface-2)" }}>
-          <p className="text-[16px] font-bold" style={{ color: (highRiskCount + creditLimitReached) > 0 ? "var(--error)" : "var(--text-secondary)" }}>{highRiskCount + creditLimitReached}</p>
-          <p className="text-[10px] font-medium leading-tight" style={{ color: "var(--text-secondary)" }}>{isUrdu ? "عمل درکار" : "Action needed"}</p>
+        <button onClick={() => navigate('/admin/alerts/reminders', { state: { tab: 'action', subTab: 'critical' } })} className="flex-1 flex items-center gap-2.5 py-2.5 px-3 rounded-[var(--radius-tile)] active:opacity-70 transition-opacity" style={{ background: "var(--surface-2)" }}>
+          <p className="text-16 font-bold" style={{ color: (highRiskCount + creditLimitReached) > 0 ? "var(--error)" : "var(--text-secondary)" }}>{highRiskCount + creditLimitReached}</p>
+          <p className="text-10 font-medium leading-tight" style={{ color: "var(--text-secondary)" }}>{t("admin.actionNeeded")}</p>
         </button>
-        <button onClick={() => navigate('/admin/alerts/reminders', { state: { tab: 'followups', subTab: 'ready' } })} className="flex-1 flex items-center gap-2.5 py-2.5 px-3 rounded-[10px] active:opacity-70 transition-opacity" style={{ background: "var(--surface-2)" }}>
-          <p className="text-[16px] font-bold" style={{ color: (delayedCount + dueReminderCount) > 0 ? "var(--warning)" : "var(--text-secondary)" }}>{delayedCount + dueReminderCount}</p>
-          <p className="text-[10px] font-medium leading-tight" style={{ color: "var(--text-secondary)" }}>{isUrdu ? "فالو اپ" : "Follow-ups"}</p>
+        <button onClick={() => navigate('/admin/alerts/reminders', { state: { tab: 'followups', subTab: 'ready' } })} className="flex-1 flex items-center gap-2.5 py-2.5 px-3 rounded-[var(--radius-tile)] active:opacity-70 transition-opacity" style={{ background: "var(--surface-2)" }}>
+          <p className="text-16 font-bold" style={{ color: (delayedCount + dueReminderCount) > 0 ? "var(--warning)" : "var(--text-secondary)" }}>{delayedCount + dueReminderCount}</p>
+          <p className="text-10 font-medium leading-tight" style={{ color: "var(--text-secondary)" }}>{t("inline.follow_ups_x")}</p>
         </button>
-        <button onClick={() => navigate('/admin/alerts/inventory')} className="flex-1 flex items-center gap-2.5 py-2.5 px-3 rounded-[10px] active:opacity-70 transition-opacity" style={{ background: "var(--surface-2)" }}>
-          <p className="text-[16px] font-bold" style={{ color: outOfStockCount > 0 ? "var(--error)" : "var(--text-secondary)" }}>{outOfStockCount}</p>
-          <p className="text-[10px] font-medium leading-tight" style={{ color: "var(--text-secondary)" }}>{isUrdu ? "اسٹاک ختم" : "Out of stock"}</p>
+        <button onClick={() => navigate('/admin/alerts/inventory')} className="flex-1 flex items-center gap-2.5 py-2.5 px-3 rounded-[var(--radius-tile)] active:opacity-70 transition-opacity" style={{ background: "var(--surface-2)" }}>
+          <p className="text-16 font-bold" style={{ color: outOfStockCount > 0 ? "var(--error)" : "var(--text-secondary)" }}>{outOfStockCount}</p>
+          <p className="text-10 font-medium leading-tight" style={{ color: "var(--text-secondary)" }}>{t("signal.detailOutOfStock")}</p>
         </button>
       </div>
 
@@ -490,21 +494,21 @@ export default function AdminDashboardPage() {
         <div className="grid grid-cols-3 gap-2.5">
           <button
             onClick={() => navigate("/admin/sale")}
-            className="h-10 rounded-xl font-semibold text-[12px] flex items-center justify-center transition-transform active:scale-[0.97]"
+            className="h-10 rounded-[var(--radius-tile)] font-semibold text-12 flex items-center justify-center transition-transform active:scale-[0.97]"
             style={{ background: "var(--brand)", color: "#0a0a0a" }}
           >
             {t("dashboard.newSale")}
           </button>
           <button
             onClick={() => navigate("/admin/customers")}
-            className="h-10 rounded-xl font-semibold text-[12px] flex items-center justify-center transition-transform active:scale-[0.97]"
+            className="h-10 rounded-[var(--radius-tile)] font-semibold text-12 flex items-center justify-center transition-transform active:scale-[0.97]"
             style={{ border: "1.5px solid var(--divider)", color: "var(--text-primary)", background: "transparent" }}
           >
-            {isUrdu ? "ادائیگی" : "Record Payment"}
+            {t("dashboard.recordPayment")}
           </button>
           <button
             onClick={() => navigate("/admin/purchases/new")}
-            className="h-10 rounded-xl font-semibold text-[12px] flex items-center justify-center transition-transform active:scale-[0.97]"
+            className="h-10 rounded-[var(--radius-tile)] font-semibold text-12 flex items-center justify-center transition-transform active:scale-[0.97]"
             style={{ border: "1.5px solid var(--divider)", color: "var(--text-primary)", background: "transparent" }}
           >
             {t("admin.purchases") ?? "Purchase"}
@@ -532,17 +536,17 @@ export default function AdminDashboardPage() {
         const criticalTotal = highRiskCount + creditLimitReached + criticalCount + pendingCreditRequests;
         if (criticalTotal > 0) {
           const parts: string[] = [];
-          if (highRiskCount > 0) parts.push(highRiskCount + (isUrdu ? " اعلیٰ خطرہ" : " high-risk"));
-          if (creditLimitReached > 0) parts.push(creditLimitReached + (isUrdu ? " کریڈٹ حد" : " credit limit"));
-          if (criticalCount > 0) parts.push(isUrdu ? "سپلائر" : "supplier");
-          if (pendingCreditRequests > 0) parts.push(pendingCreditRequests + (isUrdu ? " درخواست" : " request" + (pendingCreditRequests > 1 ? "s" : "")));
+          if (highRiskCount > 0) parts.push(highRiskCount + (t("inline.high_risk_x")));
+          if (creditLimitReached > 0) parts.push(creditLimitReached + (t("inline.credit_limit")));
+          if (criticalCount > 0) parts.push(t("inline.supplier"));
+          if (pendingCreditRequests > 0) parts.push(pendingCreditRequests + (t("inline.request") + (pendingCreditRequests > 1 ? "s" : "")));
           const urgentTab = highRiskCount > 0 ? "critical" : creditLimitReached > 0 || pendingCreditRequests > 0 ? "warning" : "critical";
           items.push({
             key: "critical",
             icon: <AlertTriangle size={18} />,
-            title: isUrdu ? criticalTotal + " عمل درکار" : criticalTotal + " action" + (criticalTotal !== 1 ? "s" : "") + " needed",
-            subtitle: parts.join(isUrdu ? " · " : ", "),
-            action: isUrdu ? "جائزہ" : "Review",
+            title: t(criticalTotal === 1 ? "dashboard.actionNeeded" : "dashboard.actionsNeeded", { count: criticalTotal }),
+            subtitle: parts.join(t("inline.text")),
+            action: t("admin.review"),
             actionColor: "var(--error)",
             cardBg: "var(--surface)",
             onClick: () => navigate("/admin/alerts/reminders", { state: { tab: "action", subTab: urgentTab } }),
@@ -551,14 +555,14 @@ export default function AdminDashboardPage() {
         }
         if (followupCount > 0) {
           const parts: string[] = [];
-          if (dueReminderCount > 0) parts.push(dueReminderCount + (isUrdu ? " یاد دہانی" : " reminder" + (dueReminderCount !== 1 ? "s" : "")));
-          if (delayedCount > 0) parts.push(delayedCount + (isUrdu ? " تاخیر" : " delayed"));
+          if (dueReminderCount > 0) parts.push(dueReminderCount + (t("inline.reminder") + (dueReminderCount !== 1 ? "s" : "")));
+          if (delayedCount > 0) parts.push(delayedCount + (t("inline.delayed_x")));
           items.push({
             key: "followups",
             icon: <Bell size={18} />,
-            title: isUrdu ? followupCount + " فالو اپ تیار" : followupCount + " follow-up" + (followupCount !== 1 ? "s" : "") + " ready",
-            subtitle: parts.join(isUrdu ? " · " : ", "),
-            action: isUrdu ? "دیکھیں" : "View",
+            title: t(followupCount === 1 ? "dashboard.followupReady" : "dashboard.followupsReady", { count: followupCount }),
+            subtitle: parts.join(t("inline.text_x")),
+            action: t("admin.view"),
             actionColor: "var(--warning)",
             cardBg: "var(--surface)",
             onClick: () => navigate("/admin/alerts/reminders", { state: { tab: "followups", subTab: "ready" } }),
@@ -569,8 +573,8 @@ export default function AdminDashboardPage() {
           items.push({
             key: "harvest",
             icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" ry="2" /><line x1="16" x2="16" y1="2" y2="6" /><line x1="8" x2="8" y1="2" y2="6" /><line x1="3" x2="21" y1="10" y2="10" /></svg>,
-            title: isUrdu ? "فصل کا موسم " + harvestDays + " دن میں شروع" : "Harvest in " + harvestDays + " day" + (harvestDays !== 1 ? "s" : ""),
-            subtitle: harvestCustomerCount > 0 ? harvestCustomerCount + (isUrdu ? " گاہک زیر التوا" : " customers pending") : "",
+            title: t(harvestDays === 1 ? "dashboard.harvestSoon" : "dashboard.harvestSoonPlural", { count: harvestDays }),
+            subtitle: harvestCustomerCount > 0 ? harvestCustomerCount + (t("inline.customers_pending")) : "",
             action: "",
             actionColor: "var(--text-secondary)",
             cardBg: "var(--surface)",
@@ -581,15 +585,15 @@ export default function AdminDashboardPage() {
         if (items.length === 0) return null;
         return (
           <div className="px-4 pt-4">
-            <div className="rounded-[16px] p-4 flex flex-col gap-2.5" style={{ background: "var(--surface-2)" }}>
-              <p className="text-[11px] font-bold uppercase tracking-widest px-1" style={{ color: "var(--text-secondary)" }}>
-                {isUrdu ? "فوری اعلانات" : "Quick Alerts"}
+            <div className="rounded-[var(--radius-card)] p-4 flex flex-col gap-2.5" style={{ background: "var(--surface-2)" }}>
+              <p className="text-11 font-bold uppercase tracking-widest px-1" style={{ color: "var(--text-secondary)" }}>
+                {t("admin.quickAlerts")}
               </p>
               {items.map((item) => (
                 <button
                   key={item.key}
                   onClick={item.onClick}
-                  className="flex items-start gap-3 p-3.5 rounded-[12px] w-full text-start active:opacity-70 transition-opacity"
+                  className="flex items-start gap-3 p-3.5 rounded-[var(--radius-tile)] w-full text-start active:opacity-70 transition-opacity"
                   style={{ background: item.cardBg }}
                 >
                   <div className="shrink-0 w-9 h-9 rounded-full flex items-center justify-center mt-0.5"
@@ -601,11 +605,11 @@ export default function AdminDashboardPage() {
                     {item.icon}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-[14px] font-bold" style={{ color: "var(--text-primary)" }}>{item.title}</p>
-                    {item.subtitle && <p className="text-[12px] mt-0.5" style={{ color: "var(--text-secondary)" }}>{item.subtitle}</p>}
+                    <p className="text-14 font-bold" style={{ color: "var(--text-primary)" }}>{item.title}</p>
+                    {item.subtitle && <p className="text-12 mt-0.5" style={{ color: "var(--text-secondary)" }}>{item.subtitle}</p>}
                   </div>
                   {item.action && (
-                    <span className="text-[12px] font-semibold shrink-0 mt-1" style={{ color: item.actionColor }}>
+                    <span className="text-12 font-semibold shrink-0 mt-1" style={{ color: item.actionColor }}>
                       {item.action}
                     </span>
                   )}
@@ -619,36 +623,36 @@ export default function AdminDashboardPage() {
       {/* ── Employee Performance ── */}
       {empStats.length > 0 && (
         <div className="px-4 pt-5">
-          <p className="text-[11px] font-bold uppercase tracking-widest mb-3" style={{ color: "var(--text-secondary)" }}>
+          <p className="text-11 font-bold uppercase tracking-widest mb-3" style={{ color: "var(--text-secondary)" }}>
             {t("admin.employeePerformance")}
           </p>
-          <div className="rounded-[14px] overflow-hidden" style={{ border: "1px solid var(--border-light)" }}>
-            {empStats.map(({ emp, total, count, items }, i) => (
-              <button
+          <ListCard>
+            {empStats.map(({ emp, total, count, items }) => (
+              <ListRow
                 key={emp.id}
                 onClick={() => navigate("/admin/sales", { state: { employeeId: emp.id, dateFilter } })}
-                className="flex items-center justify-between px-4 py-3 w-full text-start transition-opacity active:opacity-70"
-                style={{ borderBottom: i < empStats.length - 1 ? "1px solid var(--divider)" : "none" }}
-              >
-                <div className="flex items-center gap-3">
+                tile={
                   <div
                     className="size-8 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0"
                     style={{ background: initBgColor(emp.name) }}
                   >
                     {(emp.name ?? '?').charAt(0)}
                   </div>
-                  <div>
-                    <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>{emp.name}</p>
-                    <p className="text-xs" style={{ color: "var(--text-secondary)" }}>{count} {isUrdu ? (count === 1 ? "فروخت" : "فروختیں") : (count === 1 ? "sale" : "sales")} · {items} {isUrdu ? "اشیاء" : "items"}</p>
+                }
+                trailing={
+                  <div className="flex items-center gap-2 shrink-0">
+                    <p className="text-sm font-bold" style={{ color: "var(--brand-dark)" }}>{formatRs(total)}</p>
+                    <ChevronRight size={14} style={{ color: "var(--text-secondary)" }} />
                   </div>
+                }
+              >
+                <div className="min-w-0">
+                  <p className="text-sm font-bold truncate" style={{ color: "var(--text-primary)" }}>{emp.name}</p>
+                  <p className="text-xs truncate" style={{ color: "var(--text-secondary)" }}>{t(count === 1 ? "dashboard.saleCount" : "dashboard.salesCount", { count })} · {items} {t("common.items")}</p>
                 </div>
-                <div className="flex items-center gap-2">
-                  <p className="text-sm font-bold" style={{ color: "var(--brand-dark)" }}>{formatRs(total)}</p>
-                  <ChevronRight size={14} style={{ color: "var(--text-secondary)" }} />
-                </div>
-              </button>
+              </ListRow>
             ))}
-          </div>
+          </ListCard>
         </div>
       )}
 
@@ -656,63 +660,58 @@ export default function AdminDashboardPage() {
       {recentSales.length > 0 && (
         <div className="px-4 pt-5 pb-6">
           <div className="flex items-center justify-between mb-3">
-            <p className="text-[11px] font-bold uppercase tracking-widest" style={{ color: "var(--text-secondary)" }}>
+            <p className="text-11 font-bold uppercase tracking-widest" style={{ color: "var(--text-secondary)" }}>
               {t("dashboard.recentSales") ?? "Recent Sales"}
             </p>
             <button
               onClick={() => navigate("/admin/sales")}
-              className="text-[12px] font-semibold"
+              className="text-12 font-semibold"
               style={{ color: "var(--brand-dark)" }}
             >
               {t("common.viewAll") ?? "View all"}
             </button>
           </div>
-          <div className="rounded-[14px] overflow-hidden" style={{ border: "1px solid var(--divider)" }}>
-            {recentSales.map((sale, i) => {
+          <ListCard>
+            {recentSales.map((sale) => {
               const cImg = getCustomerImg(sale.customerId);
               const cBg = initBgColor(sale.customerName);
               return (
-              <button
+              <ListRow
                 key={sale.id}
                 onClick={() => navigate(`/admin/sales/${sale.id}`)}
-                className="flex items-center justify-between px-4 py-3.5 w-full text-start transition-colors active:opacity-70"
-                style={{
-                  borderBottom: i < recentSales.length - 1 ? "1px solid var(--divider)" : "none",
-                  background: "var(--background)",
-                }}
-              >
-                <div className="flex items-center gap-3 flex-1 min-w-0">
-                  {cImg ? (
-                    <img src={cImg} alt={sale.customerName} className="size-9 rounded-full object-cover shrink-0" />
-                  ) : (
-                    <div className="size-9 rounded-full shrink-0 flex items-center justify-center text-[11px] font-bold" style={{ background: cBg, color: "#fff" }}>
-                      {(sale.customerName ?? '?').charAt(0).toUpperCase()}
-                    </div>
-                  )}
-                  <div className="min-w-0">
-                    <p className="text-[13px] font-bold truncate" style={{ color: "var(--text-primary)" }}>{sale.customerName}</p>
-                    <p className="text-[10px] mt-0.5" style={{ color: "var(--text-secondary)" }}>{formatSmartDateTime(sale.createdAt, now)}</p>
-                    <p className="text-[11px] font-medium mt-0.5" style={{ color: "var(--text-secondary)" }}>{t("common.soldBy")}: {sale.employeeName}</p>
+                tile={cImg ? (
+                  <img src={cImg} alt={sale.customerName} className="size-9 rounded-full object-cover shrink-0" />
+                ) : (
+                  <div className="size-9 rounded-full shrink-0 flex items-center justify-center text-11 font-bold" style={{ background: cBg, color: "#fff" }}>
+                    {(sale.customerName ?? '?').charAt(0).toUpperCase()}
                   </div>
-                </div>
-                <div className="flex flex-col items-end gap-1 shrink-0">
-                  <span className="text-[14px] font-bold" style={{ color: "var(--text-primary)" }}>
-                    {formatRs(sale.totalAmount)}
-                  </span>
-                  {sale.paymentType !== "full" ? (
-                    <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full" style={{ background: "rgba(239,68,68,0.1)", color: "#ef4444" }}>
-                      {t("common.creditTag")}
+                )}
+                trailing={
+                  <div className="flex flex-col items-end gap-1 shrink-0">
+                    <span className="text-14 font-bold" style={{ color: "var(--text-primary)" }}>
+                      {formatRs(sale.totalAmount)}
                     </span>
-                  ) : (
-                    <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full" style={{ background: "rgba(132,204,22,0.15)", color: "var(--brand-dark)" }}>
-                      {t("common.paidTag")}
-                    </span>
-                  )}
+                    {sale.paymentType !== "full" ? (
+                      <span className="text-10 font-semibold px-1.5 py-0.5 rounded-full" style={{ background: "rgba(239,68,68,0.1)", color: "#ef4444" }}>
+                        {t("common.creditTag")}
+                      </span>
+                    ) : (
+                      <span className="text-10 font-semibold px-1.5 py-0.5 rounded-full" style={{ background: "rgba(132,204,22,0.15)", color: "var(--brand-dark)" }}>
+                        {t("common.paidTag")}
+                      </span>
+                    )}
+                  </div>
+                }
+              >
+                <div className="min-w-0">
+                  <p className="text-13 font-bold truncate" style={{ color: "var(--text-primary)" }}>{sale.customerName}</p>
+                  <p className="text-10 mt-0.5" style={{ color: "var(--text-secondary)" }}>{formatSmartDateTime(sale.createdAt, now)}</p>
+                  <p className="text-11 font-medium mt-0.5" style={{ color: "var(--text-secondary)" }}>{t("common.soldBy")}: {sale.employeeName}</p>
                 </div>
-              </button>
+              </ListRow>
               );
             })}
-          </div>
+          </ListCard>
         </div>
       )}
     </div>

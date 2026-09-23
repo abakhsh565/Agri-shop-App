@@ -70,19 +70,39 @@ function getNextHarvestDate(harvestMonth: number, harvestDay: number, todayPk: s
 
 // ─── Signal Computation Functions ─────────────────────────────────────────────
 
+/**
+ * S1 predicate — the authoritative overdue-credit test used across the app:
+ * a non-archived customer with a remaining balance whose due date has passed (PK time).
+ */
+export function isCreditOverdue(customer: Customer, todayPk: string): boolean {
+  return (
+    !customer.isArchived &&
+    customer.outstandingBalance > 0 &&
+    customer.dueDate !== null &&
+    daysBetweenPk(pkDateFromISO(customer.dueDate), todayPk) > 0
+  );
+}
+
+/**
+ * System-wide Overdue Amount — the sum of the REMAINING balance of every credit
+ * whose due date has already passed. Home's overdue figure and the S1 signals both
+ * derive from isCreditOverdue, so a customer's remaining amount is counted once and
+ * the number cannot differ between Customer, Reminders and Home.
+ */
+export function computeOverdueCreditTotal(customers: Customer[], now?: Date): number {
+  const todayPk = pkDate(now ?? new Date());
+  return customers
+    .filter((c) => isCreditOverdue(c, todayPk))
+    .reduce((sum, c) => sum + c.outstandingBalance, 0);
+}
+
 /** S1: Overdue Credit — outstanding > 0, due_date past */
 function computeOverdueCreditSignals(
   customers: Customer[],
   todayPk: string,
 ): LiveSignal[] {
   return customers
-    .filter(
-      (c) =>
-        !c.isArchived &&
-        c.outstandingBalance > 0 &&
-        c.dueDate !== null &&
-        daysBetweenPk(pkDateFromISO(c.dueDate), todayPk) > 0,
-    )
+    .filter((c) => isCreditOverdue(c, todayPk))
     .map((c) => {
       const overdueDays = daysBetweenPk(pkDateFromISO(c.dueDate!), todayPk);
       const amount = Math.round(c.outstandingBalance).toLocaleString("en-PK");

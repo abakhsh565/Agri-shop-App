@@ -98,6 +98,11 @@ export interface GeneratedReminder {
 
   customerPhone: string;
 
+  // The customer's photo, carried on the reminder so every reminder surface can show
+  // it. Without it the follow-up list had nothing to render and fell back to initials
+  // even for customers who had uploaded a photo.
+  customerImage?: string;
+
   outstanding: number;
 
   dueDate: string | null;
