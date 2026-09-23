@@ -1,5 +1,6 @@
 import { useNavigate } from "react-router-dom";
-import { Check, ChevronRight } from "lucide-react";
+import { Building2, Check, ChevronRight, Package, Users, type LucideIcon } from "lucide-react";
+import type { Dependency } from "@/lib/dependencyGraph";
 import ListCard from "@/components/ui/ListCard";
 import ListRow from "@/components/ui/ListRow";
 import Skeleton from "@/components/ui/Skeleton";
@@ -23,6 +24,12 @@ import { useSetupStatus } from "@/lib/setupStatus";
  * When nothing is missing it renders nothing at all: guidance that nags forever is the
  * failure mode this is written against.
  */
+const ICONS: Record<Dependency, LucideIcon> = {
+  supplier: Building2,
+  product: Package,
+  customer: Users,
+};
+
 export default function SetupChecklist({ className = "" }: { className?: string }) {
   const t = useT();
   const navigate = useNavigate();
@@ -56,6 +63,10 @@ export default function SetupChecklist({ className = "" }: { className?: string 
           items.map((item) => (
             <ListRow
               key={item.id}
+              // The same glyphs the rest of the app uses for these entities (More menu,
+              // bottom nav), and a leading icon is what every other row in these Settings
+              // cards has — without one the row's separator inset and left edge differ.
+              icon={ICONS[item.id]}
               title={item.title}
               meta={item.done ? undefined : item.action ? item.why : (item.instead ?? item.why)}
               value={item.done ? undefined : item.action?.label}

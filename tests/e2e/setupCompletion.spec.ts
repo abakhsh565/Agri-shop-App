@@ -230,6 +230,34 @@ test.describe('Business setup status is derived and self-retiring', () => {
       .toBe(styles.refPad);
     expect(styles.radius, 'card radius differs from the rest of the page')
       .toBe(styles.refRadius);
+
+    // Rows must match the other cards' rows too: a leading glyph, and the separator inset
+    // that glyph implies. Rows without an icon start at the card gutter instead, which is
+    // what made the block read as foreign.
+    const rows = await page.evaluate(() => {
+      const section = document.querySelector('[data-testid="setup-checklist"]') as HTMLElement;
+      const mine = [...section.querySelectorAll('.ds-row')].map((r) => ({
+        hasIcon: !!r.querySelector('svg'),
+        inset: (r as HTMLElement).style.getPropertyValue('--row-inset'),
+      }));
+      const existingRow = document.querySelector(
+        '[data-testid="setup-checklist"] ~ div .ds-row, .ds-listcard .ds-row'
+      ) as HTMLElement | null;
+      return {
+        mine,
+        referenceInset: existingRow?.style.getPropertyValue('--row-inset') ?? '',
+      };
+    });
+
+    expect(rows.mine.length).toBe(3);
+    expect(
+      rows.mine.every((r) => r.hasIcon),
+      'a setup row has no leading icon, so its left edge differs from the page\'s other rows'
+    ).toBe(true);
+    // 52px is the inset ListRow publishes for an icon (no tile) — the same as any other
+    // icon row in these cards.
+    expect(rows.mine.every((r) => r.inset === '52px'), `unexpected row inset: ${JSON.stringify(rows.mine)}`)
+      .toBe(true);
   });
 
   test('5. Urdu / RTL renders the same block in Urdu', async ({ page }) => {
