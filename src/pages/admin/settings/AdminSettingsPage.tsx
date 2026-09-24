@@ -6,6 +6,7 @@ import NavHeader from "@/components/ui/NavHeader";
 import ListCard from "@/components/ui/ListCard";
 import ListRow from "@/components/ui/ListRow";
 import SetupProgress from "@/components/ui/SetupProgress";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { useAuthStore } from "@/stores/authStore";
 import { useThemeStore, applyTheme } from "@/stores/themeStore";
 import { useUIStore } from "@/stores/uiStore";
@@ -15,11 +16,12 @@ import { useT } from "@/lib/i18n";
 import {
   Lock, Bell, Globe, ChevronRight, Moon, Sun,
   ClipboardList, Users, Package,
-  Building2, ShieldCheck, Pencil, Loader2, Save, Wheat, LogOut, X,
+  Building2, ShieldCheck, Pencil, Loader2, Save, Wheat, LogOut, X, Trash2,
 } from "lucide-react";
 import { uploadImage } from "@/lib/storage";
 import { APP_NAME, APP_VERSION } from "@/lib/brand";
 import { supabase } from "@/lib/supabase";
+import { deleteAccount } from "@/lib/auth";
 
 const LANG_LABELS: Record<string, string> = { en: "English", ur: "اردو" };
 
@@ -36,6 +38,8 @@ export default function AdminSettingsPage() {
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [showBusinessSettings, setShowBusinessSettings] = useState(false);
+  const [showDeleteAccount, setShowDeleteAccount] = useState(false);
+  const [deletingAccount, setDeletingAccount] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isUrdu = language === "ur";
 
@@ -45,6 +49,30 @@ export default function AdminSettingsPage() {
     if (user) clearDeviceSession(user.phone);
     logout();
     navigate("/login", { replace: true });
+  }
+
+  /**
+   * Delete the account, for good.
+   *
+   * The erasing happens in the database (`delete_my_account`), which is also where it is
+   * decided whether that means the whole shop or just this login. The screen's only jobs are
+   * to warn first, to keep the button busy while it runs, and to leave the person somewhere
+   * that exists afterwards — the account they signed in with does not.
+   */
+  async function handleDeleteAccount() {
+    setDeletingAccount(true);
+    try {
+      if (user) clearDeviceSession(user.phone);
+      await deleteAccount();
+      addToast(t("settings.deleteAccount.done"), "success");
+      logout();
+      navigate("/login", { replace: true });
+    } catch {
+      addToast(t("settings.deleteAccount.failed"), "error");
+      setShowDeleteAccount(false);
+    } finally {
+      setDeletingAccount(false);
+    }
   }
 
   function cycleLanguage() {
@@ -368,6 +396,15 @@ export default function AdminSettingsPage() {
             icon={LogOut}
             title={t("settings.signOut")}
           />
+          {/* Heavier than signing out and just as easy to reach: the row states plainly what
+              it does, and the dialog is where the irreversible part is spelled out. */}
+          <ListRow
+            danger
+            onClick={() => setShowDeleteAccount(true)}
+            icon={Trash2}
+            title={t("settings.deleteAccount")}
+            meta={t("settings.deleteAccount.meta")}
+          />
         </ListCard>
 
         {/* What this build is. "Device / App Version" was a card of two rows that did
@@ -378,6 +415,19 @@ export default function AdminSettingsPage() {
           © 2026 {APP_NAME} · v{APP_VERSION}
         </p>
       </div>
+
+      <ConfirmDialog
+        open={showDeleteAccount}
+        title={t("settings.deleteAccount.title")}
+        message={t("settings.deleteAccount.bodyOwner")}
+        confirmLabel={t("settings.deleteAccount.confirm")}
+        requireTypedText={user?.name ?? ""}
+        typedPrompt={t("settings.deleteAccount.typePrompt")}
+        destructive
+        loading={deletingAccount}
+        onConfirm={handleDeleteAccount}
+        onCancel={() => setShowDeleteAccount(false)}
+      />
     </div>
   );
 }

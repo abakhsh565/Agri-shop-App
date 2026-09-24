@@ -3,6 +3,7 @@ import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
 import ListCard from "@/components/ui/ListCard";
 import ListRow from "@/components/ui/ListRow";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { useAuthStore } from "@/stores/authStore";
 import { useThemeStore, applyTheme } from "@/stores/themeStore";
 import { clearDeviceSession } from "@/lib/deviceSession";
@@ -11,7 +12,8 @@ import { useT } from "@/lib/i18n";
 import { uploadImage } from "@/lib/storage";
 import { supabase } from "@/lib/supabase";
 import { useUIStore } from "@/stores/uiStore";
-import { Lock, Bell, Globe, ChevronRight, Moon, Sun, ClipboardList, Camera, Loader2, Save, LogOut, X } from "lucide-react";
+import { Lock, Bell, Globe, ChevronRight, Moon, Sun, ClipboardList, Camera, Loader2, Save, LogOut, X, Trash2 } from "lucide-react";
+import { deleteAccount } from "@/lib/auth";
 import { APP_NAME, APP_VERSION } from "@/lib/brand";
 import { useEffect, useRef, useState } from "react";
 import { useNotificationStore } from "@/stores/notificationStore";
@@ -30,6 +32,31 @@ export default function SettingsPage() {
   const [savingName, setSavingName] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { addToast } = useUIStore();
+  const [showDeleteAccount, setShowDeleteAccount] = useState(false);
+  const [deletingAccount, setDeletingAccount] = useState(false);
+
+  /**
+   * Delete this account, for good.
+   *
+   * An employee's deletion removes their login and access and leaves the shop's records
+   * alone, because those records are the shop's — the wording below says exactly that, and
+   * the database is what enforces it.
+   */
+  async function handleDeleteAccount() {
+    setDeletingAccount(true);
+    try {
+      if (user) clearDeviceSession(user.phone);
+      await deleteAccount();
+      addToast(t("settings.deleteAccount.done"), "success");
+      logout();
+      navigate("/login", { replace: true });
+    } catch {
+      addToast(t("settings.deleteAccount.failed"), "error");
+      setShowDeleteAccount(false);
+    } finally {
+      setDeletingAccount(false);
+    }
+  }
 
   async function handleSaveName() {
     if (!nameValue.trim() || !user) return;
@@ -325,6 +352,13 @@ export default function SettingsPage() {
             icon={LogOut}
             title={t("settings.signOut")}
           />
+          <ListRow
+            danger
+            onClick={() => setShowDeleteAccount(true)}
+            icon={Trash2}
+            title={t("settings.deleteAccount")}
+            meta={t("settings.deleteAccount.meta")}
+          />
         </ListCard>
 
         {/* Version under the copyright, in the smallest type on the page — the same footer
@@ -334,6 +368,19 @@ export default function SettingsPage() {
           © 2026 {APP_NAME} · v{APP_VERSION}
         </p>
       </div>
+
+      <ConfirmDialog
+        open={showDeleteAccount}
+        title={t("settings.deleteAccount.title")}
+        message={t("settings.deleteAccount.bodyStaff")}
+        confirmLabel={t("settings.deleteAccount.confirm")}
+        requireTypedText={user?.name ?? ""}
+        typedPrompt={t("settings.deleteAccount.typePrompt")}
+        destructive
+        loading={deletingAccount}
+        onConfirm={handleDeleteAccount}
+        onCancel={() => setShowDeleteAccount(false)}
+      />
     </div>
   );
 }

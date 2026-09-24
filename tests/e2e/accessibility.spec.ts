@@ -48,7 +48,10 @@ const ROUTES = [
 const BASELINE = {
   buttonNoName: 0,
   inputNoLabel: 0,
-  smallTarget: 87,
+  // Tightened from 87 to 84: the education pass added a 44px help affordance where a 36px
+  // icon button would have been the instinct, and the measured count went down rather than
+  // up. The rule is that this number may only shrink, so the improvement is recorded here.
+  smallTarget: 84,
 };
 
 interface Audit {

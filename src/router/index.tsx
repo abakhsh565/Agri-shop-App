@@ -6,6 +6,7 @@ import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import SplashPage from "@/pages/auth/SplashPage";
 import LoginPage from "@/pages/auth/LoginPage";
 import OTPVerifyPage from "@/pages/auth/OTPVerifyPage";
+import AccountReadyPage from "@/pages/auth/AccountReadyPage";
 import PINSetPage from "@/pages/auth/PINSetPage";
 import PINLoginPage from "@/pages/auth/PINLoginPage";
 import ForgotPINPage from "@/pages/auth/ForgotPINPage";
@@ -26,6 +27,8 @@ import SuperAdminDashboard from "@/pages/super-admin/SuperAdminDashboard";
 
 // Layout
 import EmployeeLayout from "@/components/layout/EmployeeLayout";
+import AppGuidePage from "@/pages/shared/AppGuidePage";
+import IntroPage from "@/pages/onboarding/IntroPage";
 import AdminLayout from "@/components/layout/AdminLayout";
 
 // Admin pages
@@ -94,8 +97,13 @@ import GroupDetailPage from "@/pages/admin/alerts/GroupDetailPage";
 
 export const router = createBrowserRouter([
   { path: "/", element: <SplashPage /> },
+  // Shown once per device, before sign-in: what the app is for, in three screens.
+  { path: "/welcome", element: <IntroPage /> },
   { path: "/login", element: <LoginPage /> },
   { path: "/login/otp", element: <OTPVerifyPage /> },
+  // A brand-new account lands here instead of on the PIN keypad: signed in, told so, and
+  // offered the PIN as the next small step rather than as the first thing the app says.
+  { path: "/login/account-ready", element: <AccountReadyPage /> },
   { path: "/login/pin-set", element: <PINSetPage /> },
   { path: "/login/pin", element: <PINLoginPage /> },
   { path: "/login/forgot-pin", element: <ForgotPINPage /> },
@@ -122,6 +130,7 @@ export const router = createBrowserRouter([
       { index: true, element: <Navigate to="/admin/dashboard" replace /> },
       { path: "dashboard",  element: <AdminDashboardPage /> },
       { path: "more",       element: <MoreMenuPage /> },
+      { path: "guide",      element: <AppGuidePage /> },
       { path: "search", element: <SearchPage /> },
 
       // ── Customers (requires customers.view) ──────────────────────────────
@@ -268,6 +277,7 @@ export const router = createBrowserRouter([
       { path: "activity", element: <ActivityLogPage /> },
       { path: "notifications", element: <EmployeeNotificationsPage /> },
       { path: "more", element: <EmployeeMorePage /> },
+      { path: "guide", element: <AppGuidePage /> },
     ],
   }],
   },

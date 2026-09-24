@@ -48,15 +48,41 @@ export default function SetupChecklist({
   return (
     <div data-testid={testId} className={className}>
       <ListCard>
-        <div className="px-4 pt-3.5 pb-3 flex items-baseline gap-2">
-          {/* 16, a step above the Settings card's 14: this is the one card on an empty Home,
-              and it carries three rows plus an action, so its heading is a heading. */}
-          <p className="text-16 font-bold flex-1 min-w-0" style={{ color: "var(--text-primary)" }}>
+        {/*
+          * Header: symmetric padding, and the count as a chip rather than loose text.
+          *
+          * What it looked like before: `pt-3.5 pb-3` with the `0/3` sitting on the title's
+          * baseline, so the top of the card read more cramped than its own bottom and the
+          * number floated like a stray glyph. Centre-aligned rows with an even 16/12 rhythm,
+          * and a tonal pill for the count, give the card a left and a right — the shape every
+          * other list in the app has. Nothing moved: same heading, same rows, same actions.
+          */}
+        <div className="px-4 pt-4 pb-3 flex items-center gap-3">
+          {/* Home only, so this heading is sized for Home: 14 — two steps down from the 16 it
+              shipped with, at the owner's request, so the whole widget reads smaller against
+              the cards below it. Settings keeps its own 14 for the same reason. */}
+          <p className="text-14 font-bold flex-1 min-w-0 truncate" style={{ color: "var(--text-primary)" }}>
+            {/* A small congratulations mark beside the title. Decorative only: no text, so
+                nothing to translate, and it is hidden from a screen reader rather than read
+                out as "party popper" between the heading and the count. `me-1` is the logical
+                margin, so it sits on the correct side in Urdu. */}
+            <span aria-hidden="true" className="me-1">🎉</span>
             {t("setup.title")}
           </p>
           {/* Numerals: no translation, and it cannot fall out of step with the check marks
-              because both are counted from the same list. */}
-          <span className="text-12 shrink-0" style={{ color: "var(--text-tertiary)" }} data-testid="setup-progress">
+              because both are counted from the same list. Tabular figures keep the chip the
+              same width as the count changes, so the heading never shifts. */}
+          <span
+            className="text-12 font-bold shrink-0"
+            style={{
+              background: "var(--tone-sunken)",
+              color: "var(--text-secondary)",
+              borderRadius: 999,
+              padding: "3px 9px",
+              fontVariantNumeric: "tabular-nums",
+            }}
+            data-testid="setup-progress"
+          >
             {ready ? `${doneCount}/${total}` : "–"}
           </span>
         </div>
@@ -80,8 +106,20 @@ export default function SetupChecklist({
                 {item.done && <Check size={13} strokeWidth={3} style={{ color: "#0a0a0a" }} />}
               </span>
             }
-            trailing={
-              !item.done && item.action ? (
+          >
+            {/* The action sits beside the step it completes, not pinned to the card's far
+                edge. A trailing button left a gap the width of the title between the two, so
+                the row read as a label and a stray link; and it matches the Settings variant
+                (`SetupProgress`), where the action lives in the same text column as the words
+                it belongs to. */}
+            <div className="flex items-center gap-2 min-w-0">
+              <p
+                className={`text-12 min-w-0 truncate ${item.done ? "" : "font-semibold"}`}
+                style={{ color: item.done ? "var(--text-secondary)" : "var(--text-primary)" }}
+              >
+                {item.title}
+              </p>
+              {!item.done && item.action && (
                 <button
                   onClick={() => navigate(item.action!.to)}
                   className="text-12 font-bold shrink-0 ds-pressable"
@@ -89,15 +127,8 @@ export default function SetupChecklist({
                 >
                   {item.action.label}
                 </button>
-              ) : undefined
-            }
-          >
-            <p
-              className={item.done ? "text-14" : "text-14 font-semibold"}
-              style={{ color: item.done ? "var(--text-secondary)" : "var(--text-primary)" }}
-            >
-              {item.title}
-            </p>
+              )}
+            </div>
             {!item.done && (
               <p className="text-12 mt-1 leading-snug" style={{ color: "var(--text-secondary)" }}>
                 {item.action ? item.why : (item.instead ?? item.why)}

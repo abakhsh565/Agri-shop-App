@@ -206,7 +206,6 @@ export interface User {
   phone: string;
   role: UserRole;
   isOriginalOwner: boolean;
-  pin: string;
   isActive: boolean;
   employeeNumber?: string;
   jobTitle?: string;

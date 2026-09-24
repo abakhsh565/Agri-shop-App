@@ -4,6 +4,375 @@
 
 Production has not been touched. Every claim below names the evidence that supports it.
 
+## 0. Live checkpoint (machine-written — do not hand-edit)
+
+<!-- ENGINEERING-OS-CHECKPOINT:BEGIN -->
+```json
+{
+  "updatedAt": "2026-09-24T10:00:39.624Z",
+  "branch": "main",
+  "head": "7e8eb294ec6ac3e65f8a9c36b1ea7f2ab0a8e398",
+  "nextCommand": null,
+  "note": null,
+  "server": {
+    "port": 5173,
+    "up": true,
+    "mode": "qa"
+  },
+  "verified": {
+    "head": "7e8eb294ec6ac3e65f8a9c36b1ea7f2ab0a8e398",
+    "at": "2026-09-23T20:57:24.182Z",
+    "treeHash": "180304489445a40e32c5"
+  },
+  "lanes": {
+    "accessUx": {
+      "status": "pass",
+      "hash": "0c4e35c4cbea6a3f27a9",
+      "at": "2026-09-23T23:54:28.142Z",
+      "head": "7e8eb294ec6ac3e65f8a9c36b1ea7f2ab0a8e398"
+    },
+    "actionCenter": {
+      "status": "pass",
+      "hash": "69351adb68674b31fc32",
+      "at": "2026-09-23T23:58:01.162Z",
+      "head": "7e8eb294ec6ac3e65f8a9c36b1ea7f2ab0a8e398"
+    },
+    "crossScreenSync": {
+      "status": "pass",
+      "hash": "6cff70491e57ea574c68",
+      "at": "2026-09-24T00:10:58.708Z",
+      "head": "7e8eb294ec6ac3e65f8a9c36b1ea7f2ab0a8e398"
+    },
+    "dashboardScope": {
+      "status": "pass",
+      "hash": "8953eb20153fcf3431b5",
+      "at": "2026-09-24T00:12:21.829Z",
+      "head": "7e8eb294ec6ac3e65f8a9c36b1ea7f2ab0a8e398"
+    },
+    "imageSync": {
+      "status": "pass",
+      "hash": "3a0543b2d56bbe751574",
+      "at": "2026-09-24T09:46:33.555Z",
+      "head": "7e8eb294ec6ac3e65f8a9c36b1ea7f2ab0a8e398"
+    },
+    "rtlLtr": {
+      "status": "pass",
+      "hash": "7e737cfed8d6085ace17",
+      "at": "2026-09-24T09:56:13.841Z",
+      "head": "7e8eb294ec6ac3e65f8a9c36b1ea7f2ab0a8e398"
+    },
+    "splitPayment": {
+      "status": "pass",
+      "hash": "367b2ec9e608320a073f",
+      "at": "2026-09-24T09:59:34.626Z",
+      "head": "7e8eb294ec6ac3e65f8a9c36b1ea7f2ab0a8e398"
+    },
+    "accessibility": {
+      "status": "pass",
+      "hash": "fc093d0d57c62b03a982",
+      "at": "2026-09-23T23:52:48.910Z",
+      "head": "7e8eb294ec6ac3e65f8a9c36b1ea7f2ab0a8e398"
+    },
+    "adminMicrocopy": {
+      "status": "pass",
+      "hash": "cddbb0d1c70fdc974ec1",
+      "at": "2026-09-24T00:06:58.054Z",
+      "head": "7e8eb294ec6ac3e65f8a9c36b1ea7f2ab0a8e398"
+    },
+    "dependencyContinuity": {
+      "status": "pass",
+      "hash": "d2fbd8fb52ac43584ecd",
+      "at": "2026-09-24T00:13:50.812Z",
+      "head": "7e8eb294ec6ac3e65f8a9c36b1ea7f2ab0a8e398"
+    },
+    "designLanguage": {
+      "status": "pass",
+      "hash": "e0c87cd7fc1a1ac23584",
+      "at": "2026-09-24T00:14:22.514Z",
+      "head": "7e8eb294ec6ac3e65f8a9c36b1ea7f2ab0a8e398"
+    },
+    "doubleTapSafety": {
+      "status": "pass",
+      "hash": "7d4db8b22be3eeec23f5",
+      "at": "2026-09-24T00:15:22.718Z",
+      "head": "7e8eb294ec6ac3e65f8a9c36b1ea7f2ab0a8e398"
+    },
+    "education": {
+      "status": "pass",
+      "hash": "f078667f491bc365cad3",
+      "at": "2026-09-24T09:40:52.104Z",
+      "head": "7e8eb294ec6ac3e65f8a9c36b1ea7f2ab0a8e398"
+    },
+    "employeeStatusSafety": {
+      "status": "pass",
+      "hash": "c962f9faf031a34b5aeb",
+      "at": "2026-09-24T09:44:14.561Z",
+      "head": "7e8eb294ec6ac3e65f8a9c36b1ea7f2ab0a8e398"
+    },
+    "interactionLayer": {
+      "status": "pass",
+      "hash": "cebfefbbbf16d2f917c7",
+      "at": "2026-09-24T09:48:11.189Z",
+      "head": "7e8eb294ec6ac3e65f8a9c36b1ea7f2ab0a8e398"
+    },
+    "logicalDirection": {
+      "status": "pass",
+      "hash": "1152c61aa0ffe7b747de",
+      "at": "2026-09-24T09:49:18.659Z",
+      "head": "7e8eb294ec6ac3e65f8a9c36b1ea7f2ab0a8e398"
+    },
+    "otpResume": {
+      "status": "pass",
+      "hash": "7a3ddb2fe421e66e4d4a",
+      "at": "2026-09-24T09:49:31.377Z",
+      "head": "7e8eb294ec6ac3e65f8a9c36b1ea7f2ab0a8e398"
+    },
+    "overlayAboveNav": {
+      "status": "pass",
+      "hash": "e228d9cc0e0f997c8327",
+      "at": "2026-09-24T09:50:20.560Z",
+      "head": "7e8eb294ec6ac3e65f8a9c36b1ea7f2ab0a8e398"
+    },
+    "overlayRtl": {
+      "status": "pass",
+      "hash": "12ec28e67ee45d04a0e1",
+      "at": "2026-09-24T09:51:18.306Z",
+      "head": "7e8eb294ec6ac3e65f8a9c36b1ea7f2ab0a8e398"
+    },
+    "productOpeningStock": {
+      "status": "pass",
+      "hash": "8a0225a966d079dd0c20",
+      "at": "2026-09-24T09:51:53.292Z",
+      "head": "7e8eb294ec6ac3e65f8a9c36b1ea7f2ab0a8e398"
+    },
+    "roleDeleteSafety": {
+      "status": "pass",
+      "hash": "7bd4237eeb046ba8e90c",
+      "at": "2026-09-24T09:52:30.436Z",
+      "head": "7e8eb294ec6ac3e65f8a9c36b1ea7f2ab0a8e398"
+    },
+    "setupCompletion": {
+      "status": "pass",
+      "hash": "729659e6f3de8e0403ac",
+      "at": "2026-09-24T09:57:59.459Z",
+      "head": "7e8eb294ec6ac3e65f8a9c36b1ea7f2ab0a8e398"
+    },
+    "skeletonCoverage": {
+      "status": "pass",
+      "hash": "00bed01b2c7e7507cfa3",
+      "at": "2026-09-24T09:58:50.995Z",
+      "head": "7e8eb294ec6ac3e65f8a9c36b1ea7f2ab0a8e398"
+    },
+    "systemDrive": {
+      "status": "pass",
+      "hash": "55a2db60ebc57fb3fe68",
+      "at": "2026-09-24T10:00:24.004Z",
+      "head": "7e8eb294ec6ac3e65f8a9c36b1ea7f2ab0a8e398"
+    },
+    "adminFullAccess": {
+      "status": "pass",
+      "hash": "4045a8b1c8d931f3a2bc",
+      "at": "2026-09-23T23:59:07.711Z",
+      "head": "7e8eb294ec6ac3e65f8a9c36b1ea7f2ab0a8e398"
+    },
+    "educationHelp": {
+      "status": "pass",
+      "hash": "96c4aec385f2c94c1154",
+      "at": "2026-09-24T09:42:48.476Z",
+      "head": "7e8eb294ec6ac3e65f8a9c36b1ea7f2ab0a8e398"
+    }
+  },
+  "lastVerify": {
+    "at": "2026-09-24T10:00:39.622Z",
+    "tier": 2,
+    "result": "fail",
+    "seconds": 1483,
+    "ran": [
+      "education",
+      "educationHelp",
+      "employeeStatusSafety",
+      "imageSync",
+      "interactionLayer",
+      "logicalDirection",
+      "otpResume",
+      "overlayAboveNav",
+      "overlayRtl",
+      "productOpeningStock",
+      "roleDeleteSafety",
+      "rtlLtr",
+      "setupCompletion",
+      "skeletonCoverage",
+      "splitPayment",
+      "systemDrive"
+    ],
+    "skipped": [
+      "accessibility",
+      "accessUx",
+      "actionCenter",
+      "adminFullAccess",
+      "adminMicrocopy",
+      "crossScreenSync",
+      "dashboardScope",
+      "dependencyContinuity",
+      "designLanguage",
+      "doubleTapSafety"
+    ],
+    "reason": "QA database is not clean: 1 business row(s)"
+  },
+  "metrics": [
+    {
+      "at": "2026-09-23T18:16:01.202Z",
+      "tier": 2,
+      "seconds": 131,
+      "result": "fail",
+      "runs": 24,
+      "skips": 0,
+      "changed": 72
+    },
+    {
+      "at": "2026-09-23T18:40:22.422Z",
+      "tier": 2,
+      "seconds": 1275,
+      "result": "fail",
+      "runs": 24,
+      "skips": 0,
+      "changed": 73
+    },
+    {
+      "at": "2026-09-23T19:06:37.371Z",
+      "tier": 2,
+      "seconds": 422,
+      "result": "fail",
+      "runs": 12,
+      "skips": 12,
+      "changed": 69
+    },
+    {
+      "at": "2026-09-23T19:15:15.911Z",
+      "tier": 2,
+      "seconds": 142,
+      "result": "fail",
+      "runs": 9,
+      "skips": 15,
+      "changed": 70
+    },
+    {
+      "at": "2026-09-23T19:39:32.965Z",
+      "tier": 2,
+      "seconds": 291,
+      "result": "pass",
+      "runs": 2,
+      "skips": 22,
+      "changed": 71
+    },
+    {
+      "at": "2026-09-23T20:41:52.186Z",
+      "tier": 2,
+      "seconds": 2364,
+      "result": "fail",
+      "runs": 23,
+      "skips": 2,
+      "changed": 72
+    },
+    {
+      "at": "2026-09-23T20:48:55.235Z",
+      "tier": 2,
+      "seconds": 157,
+      "result": "pass",
+      "runs": 1,
+      "skips": 24,
+      "changed": 72
+    },
+    {
+      "at": "2026-09-23T20:57:23.933Z",
+      "tier": 2,
+      "seconds": 216,
+      "result": "pass",
+      "runs": 1,
+      "skips": 24,
+      "changed": 72
+    },
+    {
+      "at": "2026-09-23T21:48:35.673Z",
+      "tier": 2,
+      "seconds": 195,
+      "result": "fail",
+      "runs": 24,
+      "skips": 2,
+      "changed": 98
+    },
+    {
+      "at": "2026-09-23T22:31:49.543Z",
+      "tier": 2,
+      "seconds": 2327,
+      "result": "fail",
+      "runs": 24,
+      "skips": 2,
+      "changed": 100
+    },
+    {
+      "at": "2026-09-24T00:21:58.782Z",
+      "tier": 2,
+      "seconds": 1216,
+      "result": "fail",
+      "runs": 22,
+      "skips": 4,
+      "changed": 116
+    },
+    {
+      "at": "2026-09-24T10:00:39.622Z",
+      "tier": 2,
+      "seconds": 1483,
+      "result": "fail",
+      "runs": 16,
+      "skips": 10,
+      "changed": 114
+    }
+  ],
+  "dirty": 68
+}
+```
+<!-- ENGINEERING-OS-CHECKPOINT:END -->
+
+---
+
+## 0b. Speed path — the workflow these scripts implement
+
+**Permanent rule: speed must come from a smarter workflow, never from weaker QA.**
+`NO ACTUAL EVIDENCE = NO PASS = NO ADVANCEMENT` stands unchanged; everything below removes
+re-derivation, repetition and environment mistakes — not verification.
+
+| Command | What it does | Why it exists |
+|---|---|---|
+| `npm run resume` | prints the live checkpoint (branch, HEAD, server mode, lane greens, next command) | a restarted session used to re-derive all of it by reading files |
+| `npm run preflight` | 5s environment gate: git state, dev-server mode, DB reachability, 4 fixture accounts, QA row count | wrong-mode server / unreachable DB / missing fixtures are the failures that cost minutes |
+| `npm run verify:plan` | prints the computed tier, changed files, and which lanes would run or be skipped | makes the gate inspectable before paying for it |
+| `npm run verify` | runs the smallest sufficient gate (below) and records metrics in the checkpoint | the gate is sized by the change, not by habit |
+| `npm run verify:full` | forces Tier 2 with no lane caching | the escape hatch — never a downgrade |
+| `npm run lane:new <name>` | scaffolds a lane with console capture and helper pointers, and registers its coverage | harness mistakes cost a full cycle each |
+| `npm run qa:count` / `qa:clean` / `qa:seed baseline\|e2e` | independent counts, clean-then-recount, named seed scenarios | the cleaner's own output is not evidence |
+| `npm run index:build` | regenerates `SCREEN-INDEX.md` (route → file → covering lanes) | removes repeated discovery from every impact map |
+
+**Tiers** — computed from changed files by `scripts/dev/verify.mjs`, never chosen by feel:
+
+| Tier | Trigger | Gate |
+|---|---|---|
+| 0 | documentation only | `tsc` + build |
+| 1 | UI / component / copy / settings / education | `tsc` + unit guards + affected E2E lanes + build |
+| 2 | money, RBAC/security, migrations, destructive actions, integration tests, release workflow | `tsc` + full vitest + canonical E2E lanes (**forced, never skipped**) + affected lanes + build + independent QA row count |
+
+The tier may only be **raised** (`--tier N`); `verify.mjs` refuses to lower a computed tier, and
+a change that cannot be classified conservatively is treated as Tier 2.
+
+**Lane caching.** A lane is skipped only if it was green AND every file its
+`scripts/dev/lane-map.json` globs cover is byte-identical to that green run. Skips print as
+`SKIPPED — unchanged since green`; unmapped lanes default to `src/**`, so a new lane can never
+be silently skipped.
+
+**APK / release.** No APK during development or QA loops. It is an end-of-session, on-request
+deliverable produced only through the decided GitHub Actions path
+(`.github/workflows/build-apk.yml`) — never another build source.
+
 ---
 
 ## 1. Built + Verified

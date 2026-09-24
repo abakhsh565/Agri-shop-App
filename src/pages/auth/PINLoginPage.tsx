@@ -4,7 +4,7 @@ import AuthLayout from "@/components/layout/AuthLayout";
 import NavHeader from "@/components/ui/NavHeader";
 import PINInput from "@/components/ui/PINInput";
 import Button from "@/components/ui/Button";
-import { verifyPin, verifyPinDetailed, clearPin } from "@/lib/pinLock";
+import { verifyPinDetailed, clearPin } from "@/lib/pinLock";
 import { useAuthStore } from "@/stores/authStore";
 import { getUserFromSession } from "@/lib/auth";
 import type { User } from "@/types";
@@ -13,7 +13,7 @@ import { useT } from "@/lib/i18n";
 /**
  * Single-step PIN login screen.
  * SplashPage passes the user object via navigation state.
- * User enters 4-digit PIN → verified against localStorage hash → dashboard.
+ * User enters 4-digit PIN → verified by the server against its bcrypt hash → dashboard.
  * If PIN wrong or not set → auto-redirect to OTP flow.
  * If "Forgot PIN" → auto-redirect to forgot PIN flow.
  */
@@ -55,14 +55,20 @@ export default function PINLoginPage() {
           ? "/admin/dashboard" : "/employee/dashboard";
         navigate(dest, { replace: true });
       } else if (result.status === "no_pin") {
-        // PIN was never set or storage was cleared → go to OTP flow
+        // No PIN on the server for this user (never set, or cleared). This device's marker is
+        // stale, so drop it — that is what makes the code screen offer to set a PIN — then go
+        // through OTP, which is the documented identity check.
+        clearPin(user.id);
         setPendingPhone(user.phone);
         setPendingFlow("login");
         navigate("/login/otp", { replace: true, state: { user } });
+      } else if (result.status === "locked") {
+        // Too many wrong tries, refused server-side. Nothing is lost — waiting is the way out.
+        setError(t("copy.pinLocked"));
+        setPinValue("");
       } else if (result.status === "error") {
-        // Decryption/storage error — NOT a wrong PIN
-        // Do NOT clear the PIN. Show error and allow retry.
-        setError(t("copy.storageError"));
+        // Could not reach the server — NOT a wrong PIN. Clear nothing, allow retry.
+        setError(t("copy.pinCheckFailed"));
         setPinValue("");
       } else {
         // result.status === "wrong" — genuinely incorrect PIN

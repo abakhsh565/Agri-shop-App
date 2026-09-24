@@ -5,6 +5,7 @@ import { hasPin } from "@/lib/pinLock";
 import { getUserFromSession } from "@/lib/auth";
 import StatusBar from "@/components/ui/StatusBar";
 import { useT } from "@/lib/i18n";
+import { hasSeenIntro } from "@/education/introSeen";
 
 export default function SplashPage() {
   const t = useT();
@@ -33,7 +34,10 @@ export default function SplashPage() {
           navigate("/login/pin-set", { replace: true, state: { returnTo: dest } });
         }
       } else {
-        navigate("/login", { replace: true });
+        // Nobody signed in on this device. A device that has never met the app gets
+        // the three introduction screens once; after that it goes straight to sign-in,
+        // so a shop using the app for months never sees them again.
+        navigate(hasSeenIntro() ? "/login" : "/welcome", { replace: true });
       }
     }, 1500);
     return () => clearTimeout(t);

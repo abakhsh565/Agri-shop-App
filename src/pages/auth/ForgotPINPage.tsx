@@ -100,8 +100,18 @@ export default function ForgotPINPage() {
       // Save new PIN
       const activeUser = routeUser || useAuthStore.getState().user;
       if (activeUser) {
-        await savePin(activeUser.id, val);
-        setUser({ ...activeUser, pin: val });
+        const saved = await savePin(activeUser.id, val);
+        if (!saved) {
+          // Identity is already proven by the code, so retrying costs one tap — and nobody is
+          // told a new PIN was set when the server never received it.
+          setError(t("copy.storageError"));
+          setShake(true);
+          setTimeout(() => { setShake(false); setError(""); }, 600);
+          setStep("pin");
+          setFirstPin("");
+          setConfirmPin("");
+          return;
+        }
       }
       setPendingFlow(null);
       const dest = activeUser?.role === "admin" || activeUser?.role === "co_admin"

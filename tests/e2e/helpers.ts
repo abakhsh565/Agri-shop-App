@@ -230,11 +230,25 @@ export async function loginViaUi(page: Page, phone: string) {
     await expect(boxes.nth(i), `OTP digit ${i + 1} is not the one that was typed`).toHaveValue(OTP[i]);
   }
 
-  await page.waitForURL(/pin-set|\/admin\/dashboard|\/employee\/dashboard/, { timeout: 30000 });
+  // A brand-new account is told it is ready before it is ever asked for a PIN, so the code can
+  // land on three different screens. Follow whichever one actually appeared rather than
+  // assuming the keypad: a wrong assumption here reads as "sign-in never reached the dashboard".
+  await page.waitForURL(/account-ready|pin-set|\/admin\/dashboard|\/employee\/dashboard/, { timeout: 30000 });
+
+  if (page.url().includes('account-ready')) {
+    await page.getByTestId('account-ready-pin').click();
+    await page.waitForURL(/pin-set/, { timeout: 30000 });
+  }
+
   if (page.url().includes('pin-set')) {
     for (const d of PIN) await page.getByRole('button', { name: d, exact: true }).first().click();
     await page.waitForTimeout(400);
     for (const d of PIN) await page.getByRole('button', { name: d, exact: true }).first().click();
+    await page.waitForTimeout(600);
+    // Standing a PIN up for the first time ends on a success screen; a like-for-like swap from
+    // Settings goes straight back. Both are real, so follow whichever one appeared.
+    const open = page.getByTestId('pin-done-open');
+    if (await open.count()) await open.click();
     await page.waitForURL(/\/(admin|employee)\/dashboard/, { timeout: 30000 });
   }
   await page.waitForTimeout(1200); // let stores hydrate from Supabase
@@ -256,7 +270,6 @@ export async function injectAdminAuth(page: Page) {
     membershipRole: 'owner',
     permissions: ['*'],
     isOriginalOwner: true,
-    pin: '1234',
     isActive: true,
     firstLoginAt: new Date().toISOString(),
     lastLoginAt: new Date().toISOString(),

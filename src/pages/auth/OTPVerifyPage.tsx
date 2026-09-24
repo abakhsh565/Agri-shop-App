@@ -105,15 +105,33 @@ export default function OTPVerifyPage() {
 
       // status === "ok"
       setUser(result.user);
-      // Check if user has a PIN set on this device
+      //
+      // Where the code lands depends on who this is, which is the difference the flow was
+      // missing:
+      //
+      //   • **never signed in before** (`firstLoginAt` null) — a brand-new account. They get the
+      //     account-ready screen, which says they are in and offers the PIN as the next small
+      //     step. Dropping them straight onto a keypad made a security prompt the first thing
+      //     the app ever said to them.
+      //   • **known account, new device** (no PIN here yet) — no celebration, because nothing
+      //     was created: straight to setting the PIN this device will use.
+      //   • **known account with a PIN here** — straight in.
+      //
+      // The code itself is identity verification, used once per device: from then on the PIN is
+      // the everyday way back in, which is why opening the app does not ask for another one.
+      const isBrandNewAccount = !result.user.firstLoginAt;
+      const dest =
+        result.user.role === "admin" || result.user.role === "co_admin"
+          ? "/admin/dashboard"
+          : "/employee/dashboard";
       if (!hasPin(result.user.id)) {
-        // First time on this device — prompt to create PIN
-        navigate("/login/pin-set", { replace: true });
+        // `returnTo` is what tells PINSetPage this is a like-for-like swap rather than a first
+        // PIN: without it a returning user on a new phone was congratulated for creating nothing.
+        navigate(isBrandNewAccount ? "/login/account-ready" : "/login/pin-set", {
+          replace: true,
+          state: isBrandNewAccount ? undefined : { returnTo: dest },
+        });
       } else {
-        const dest =
-          result.user.role === "admin" || result.user.role === "co_admin"
-            ? "/admin/dashboard"
-            : "/employee/dashboard";
         navigate(dest, { replace: true });
       }
     } finally {

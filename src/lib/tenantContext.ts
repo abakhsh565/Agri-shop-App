@@ -69,8 +69,10 @@ export function isCurrentUserOwner(): boolean {
 export function getCurrentPermissions(): string[] {
   const user = useAuthStore.getState().user;
   if (!user) return [];
-  // Owner has all permissions implicitly
-  if (user.membershipRole === "owner") return ["*"];
+  // The admin shell's two roles have all permissions implicitly. `admin` is here for the
+  // same reason it is in the database's `get_effective_permissions`: a shop's admin is the
+  // shop, not a narrowed role — narrowing is for employees.
+  if (user.membershipRole === "owner" || user.membershipRole === "admin") return ["*"];
   return user.permissions ?? [];
 }
 

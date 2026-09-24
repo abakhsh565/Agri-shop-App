@@ -10,8 +10,13 @@
  * or `src/components` is edited, and the stylesheet is restored in `afterAll` whether the
  * test passes or throws.
  *
- *   --text-row   17px → 14px   every row label on every list screen (`.ds-row-label`)
- *   --icon       24px → 16px   every shared row glyph (`svg.ds-glyph`)
+ *   --text-row   14px → 16px   every row label on every list screen (`.ds-row-label`)
+ *   --icon-row   18px → 14px   every row's leading glyph (`svg.ds-row-glyph`)
+ *
+ * The two tokens are the ones the app actually reads for a list row today: rows take their
+ * label size from `--text-row` and their glyph size from `--icon-row`, both owned by
+ * `ListRow`/`index.css`. The earlier pair (`--text-row: 17px`, `--icon: 24px`) is what this
+ * spec patched before the row tokens were consolidated, which made the case a no-op.
  *
  * A failure here means a future "make the headings smaller" / "make the icons smaller"
  * request would fall back to a hand sweep, which is the outcome this guards.
@@ -37,19 +42,21 @@ const TYPE_SCREENS = ['/admin/settings', '/admin/reports', '/admin/payments'];
  * `--icon` (24 → 16); the search glyph reads `--icon-sm` (18 → 12). Both are the same
  * single decision — "make the icons smaller" — so both tokens move in one edit.
  */
+// Three screens that reliably render list rows with a leading glyph. (A screen whose rows
+// are thumbnail cards, like Inventory, has no `ds-row-glyph` to measure and would report a
+// zero that says nothing about the token.)
 const ICON_SCREENS: Record<string, { before: number; after: number }> = {
-  '/admin/settings': { before: 24, after: 16 },
-  '/admin/purchases': { before: 24, after: 16 },
-  '/admin/products': { before: 18, after: 12 },
+  '/admin/settings': { before: 18, after: 14 },
+  '/admin/more': { before: 18, after: 14 },
+  '/admin/guide': { before: 18, after: 14 },
 };
 
 const ORIGINAL = fs.readFileSync(CSS_PATH, 'utf8');
 
 function patchTokens(from: string, to: string): void {
   const next = from
-    .replace(/--text-row:\s*17px;/, '--text-row: 14px;')
-    .replace(/^(\s*)--icon:\s*24px;/m, '$1--icon: 16px;')
-    .replace(/^(\s*)--icon-sm:\s*18px;/m, '$1--icon-sm: 12px;');
+    .replace(/--text-row:\s*14px;/, '--text-row: 16px;')
+    .replace(/^(\s*)--icon-row:\s*18px;/m, '$1--icon-row: 14px;');
   if (next === from) throw new Error('token patch changed nothing — the token names moved?');
   fs.writeFileSync(CSS_PATH, next);
 }
@@ -70,9 +77,8 @@ async function measure(page: Page, route: string, needType = true): Promise<Meas
   await page.waitForTimeout(1500);
   return page.evaluate((wantsType: boolean) => {
     const label = document.querySelector('.ds-row-label') as HTMLElement | null;
-    const glyphs = [
-      ...document.querySelectorAll('svg.ds-glyph, svg.ds-glyph-sm'),
-    ] as SVGSVGElement[];
+    // The row's own glyph — the mark every list row leads with, sized by `--icon-row`.
+    const glyphs = [...document.querySelectorAll('svg.ds-row-glyph')] as SVGSVGElement[];
     return {
       rowFontSize: label ? parseFloat(getComputedStyle(label).fontSize) : null,
       glyphWidth: glyphs.length ? parseFloat(getComputedStyle(glyphs[0]).width) : null,
@@ -107,7 +113,7 @@ test.describe('one central token drives many screens', () => {
     console.log('[systemDrive] before ' + JSON.stringify(before));
     for (const route of TYPE_SCREENS) {
       expect(before[route].labels, `${route}: no row labels to measure`).toBeGreaterThan(0);
-      expect(before[route].rowFontSize, `${route}: row label has no font size`).toBe(17);
+      expect(before[route].rowFontSize, `${route}: row label has no font size`).toBe(14);
     }
     for (const [route, expected] of Object.entries(ICON_SCREENS)) {
       expect(before[route].glyphs, `${route}: no token-sized glyph on this screen`).toBeGreaterThan(0);
@@ -131,7 +137,7 @@ test.describe('one central token drives many screens', () => {
         expect(
           after[route].rowFontSize,
           `${route}: --text-row did not reach the row label (was ${before[route].rowFontSize}, now ${after[route].rowFontSize})`,
-        ).toBe(14);
+        ).toBe(16);
       }
       // ICONS — three screens, one token edit, no screen file touched.
       for (const [route, expected] of Object.entries(ICON_SCREENS)) {
@@ -144,9 +150,8 @@ test.describe('one central token drives many screens', () => {
       // Sanity: the change really was central — no screen file is involved.
       const edited = fs.readFileSync(CSS_PATH, 'utf8');
       expect(edited).not.toBe(ORIGINAL);
-      expect(edited).toContain('--text-row: 14px;');
-      expect(edited).toContain('--icon: 16px;');
-      expect(edited).toContain('--icon-sm: 12px;');
+      expect(edited).toContain('--text-row: 16px;');
+      expect(edited).toContain('--icon-row: 14px;');
     } finally {
       restoreTokens();
     }

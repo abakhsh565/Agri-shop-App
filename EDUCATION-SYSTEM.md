@@ -175,6 +175,53 @@ change, listed here so it is a choice rather than a surprise.
 
 ---
 
+## 9b. THE FOUR EXPERIENCES, AS SHIPPED
+
+| Experience | Where | What it owns |
+|---|---|---|
+| Pre-login introduction | `/welcome`, 3 slides | What the app is, shown on **real screens of this app** (captured in both themes), not illustrations. Device-recorded; every exit marks it seen. |
+| First-run welcome | sheet over the shell, first login only | Two lines and two ways out; never redirects. |
+| Guided tour | overlay on the real UI | 10 owner stops / 6 employee stops, `1 of n`, Next/Back/Skip/X, skips a step whose anchor is missing. |
+| App guide | More → App guide | Tour, four workflow walkthroughs, FAQ, features, and *Ask a question*. Permanent, reopenable. |
+
+**Contextual help** sits in the app itself (`ContextHelp.tsx`), mounted once per shell. It reads the
+route and shows the explanation for *that* screen from `SCREEN_HELP`, plus the walkthrough for that
+workflow and a way into the guide. A route with no entry shows no button — never generic filler.
+It hides itself while the tour is running.
+
+## 9c. THE TUTORIAL VIDEOS — HOW THEY ARE MADE, AND WHY THIS WAY
+
+Four walkthroughs ship: **new sale**, **collecting a payment**, **bringing stock in**, **reading the
+reports**. Each is the real app, driven through the real workflow in Urdu, with the narration burned
+into the frame as a caption strip. Playable from More → App guide and from the contextual help of the
+screen each one belongs to.
+
+Two facts about this machine decided the pipeline:
+
+1. **There is no ffmpeg.** Not system-wide, and Playwright's bundled copy cannot be downloaded here,
+   so Playwright's own `video:` recording is unavailable.
+2. **Chrome ships its own encoder** behind `MediaRecorder`, and a canvas is a legal capture source.
+
+So the pipeline is:
+
+```
+npx playwright test --config=playwright.media.config.ts tests/media/capture.spec.ts
+   → drives the REAL app in Urdu, one PNG per teaching step, with the caption burned in
+   → .freebuff/frames/<workflow>/NN.png + timeline.json (the hold for each frame)
+
+node scripts/dev/record-tutorial.mjs
+   → PNG → canvas → MediaRecorder (VP9) → public/tutorials/<workflow>.webm  (+ poster .png)
+```
+
+No external binary, no network, no media platform, no placeholder. The same run captures the
+pre-login intro's screenshots into `public/education/`.
+
+**Narration is written, not spoken** — this machine has no Urdu speech voice, and a synthetic English
+voice reading Urdu would be worse than useless. The recording shows the Urdu line on screen while the
+real UI performs the action. The App guide says so in both languages.
+
+A change to the UI means re-running both commands; the videos are build input, like any other asset.
+
 ## 10. UNRESOLVED DECISIONS (isolated, not blocking)
 
 1. **Welcome surface**: a `Sheet` (recommended — reuses the primitive, unmissable, dismissible) versus a

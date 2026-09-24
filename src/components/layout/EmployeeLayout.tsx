@@ -5,11 +5,13 @@ import { useOfflineStore } from "@/stores/offlineStore";
 import { getPendingCount } from "@/lib/offlineQueue";
 import PINInput from "@/components/ui/PINInput";
 import { Suspense, useState, useEffect, useRef } from "react";
-import { verifyPin } from "@/lib/pinLock";
+import { verifyPinDetailed } from "@/lib/pinLock";
 import { useUIStore } from "@/stores/uiStore";
 import { useProductsStore } from "@/stores/productsStore";
 import ToastContainer from "@/components/ui/Toast";
 import NavTracker from "@/components/ui/NavTracker";
+import FirstRunGate from "@/components/education/FirstRunGate";
+import ContextHelp from "@/components/education/ContextHelp";
 import { useT } from "@/lib/i18n";
 import { useBootstrapData } from "@/stores/useBootstrapData";
 import { isTopLevel } from "@/lib/navDepth";
@@ -82,8 +84,8 @@ export default function EmployeeLayout() {
 
   async function handlePINSubmit(p: string) {
     if (!user) return;
-    const ok = await verifyPin(user.id, p);
-    if (ok) {
+    const result = await verifyPinDetailed(user.id, p);
+    if (result.status === "ok") {
       unlock();
       setPin("");
       setPinError(false);
@@ -92,7 +94,12 @@ export default function EmployeeLayout() {
       setPinShake(true);
       setTimeout(() => setPinShake(false), 500);
       setPin("");
-      addToast("Incorrect PIN. Try again.", "error");
+      addToast(
+        result.status === "locked" ? t("copy.pinLocked")
+          : result.status === "error" ? t("copy.pinCheckFailed")
+          : t("copy.pinWrong"),
+        "error",
+      );
     }
   }
 
@@ -278,6 +285,11 @@ export default function EmployeeLayout() {
         </Suspense>
       </div>
 
+      {/* Education: the employee's own tour and first-run welcome — the same gate as the
+          owner shell, teaching the employee's steps rather than the owner's. */}
+      <FirstRunGate />
+      <ContextHelp />
+
       {/* ── Bottom tab bar (4 tabs) — only on top-level navigation screens ── */}
       {showTabBar && (
       <div
@@ -301,6 +313,7 @@ export default function EmployeeLayout() {
                 key="scan"
                 onClick={handleEmpNavScan}
                 disabled={empScanning}
+                data-tour="tab:scan"
                 className="ds-pressable flex flex-col items-center justify-center flex-1 gap-1 cursor-pointer"
               >
                 <div
@@ -320,6 +333,7 @@ export default function EmployeeLayout() {
             <button
               key={path}
               onClick={() => { clearNav(); navigate(path); }}
+              data-tour={`tab:${key}`}
               className="ds-pressable flex flex-col items-center justify-center flex-1 gap-1 cursor-pointer"
             >
               <Icon

@@ -228,7 +228,9 @@ export default function DashboardPage() {
       </div>
 
       {/* ── Metric card — brand lime ── */}
-      <div className="px-4 animate-fade-in-up">
+      {/* `data-tour` anchors for the employee's own tour: the two blocks it teaches.
+          Additive attributes only. */}
+      <div className="px-4 animate-fade-in-up" data-tour="home:kpis">
         <div
           className="rounded-[var(--radius-card)] p-5 cursor-pointer transition-transform active:scale-[0.98]"
           style={{ background: "var(--brand)" }}
@@ -312,7 +314,7 @@ export default function DashboardPage() {
       </div>
 
       {/* ── Quick Actions ── */}
-      <div className="px-4 pt-4 animate-fade-in-up delay-75">
+      <div className="px-4 pt-4 animate-fade-in-up delay-75" data-tour="home:actions">
         <p className="ds-section-label mb-3" style={{ color: "var(--text-secondary)" }}>
           {t("dashboard.quickActions")}
         </p>

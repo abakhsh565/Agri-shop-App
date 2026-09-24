@@ -1,0 +1,32 @@
+{
+  "_note": "Which source files each E2E lane actually covers. A lane is skipped only when every file matching its globs is byte-identical to the last green run (and it was green). `default` is deliberately the safe superset: an unmapped or newly added spec runs whenever any source changed, so a new lane can never be silently skipped.",
+  "default": ["src/**", "supabase/migrations/**", "index.html", "vite.config.ts"],
+  "lanes": {
+    "accessibility": ["src/index.css", "src/components/ui/**", "src/pages/**", "src/lib/i18n.ts"],
+    "accessUx": ["src/pages/admin/employees/**", "src/pages/admin/settings/**", "src/components/admin/**", "src/lib/accessModel.ts", "src/lib/permissionLabels.ts", "src/lib/i18n.ts"],
+    "actionCenter": ["src/pages/**/dashboard/**", "src/components/**", "src/stores/**", "src/lib/i18n.ts"],
+    "adminFullAccess": ["src/pages/admin/companies/**", "src/pages/admin/settings/**", "src/components/ui/ConfirmDialog.tsx", "src/lib/auth.ts", "src/lib/i18n.ts"],
+    "adminMicrocopy": ["src/lib/i18n.ts", "src/pages/admin/**"],
+    "crossScreenSync": ["src/**"],
+    "dashboardScope": ["src/pages/**/dashboard/**", "src/stores/**", "src/lib/i18n.ts"],
+    "dependencyContinuity": ["src/lib/dependencyGraph.ts", "src/lib/setupStatus.ts", "src/components/ui/SetupChecklist.tsx", "src/components/ui/SetupProgress.tsx", "src/pages/**/dashboard/**", "src/lib/i18n.ts"],
+    "designLanguage": ["src/index.css", "src/components/ui/**", "src/lib/i18n.ts"],
+    "doubleTapSafety": ["src/lib/db.ts", "src/stores/**", "src/pages/**/sale/**", "src/pages/**/payments/**"],
+    "education": ["src/education/**", "src/components/education/**", "src/pages/shared/AppGuidePage.tsx", "src/components/layout/**", "src/pages/**/more/**", "src/pages/onboarding/**", "src/router/index.tsx", "src/lib/i18n.ts", "src/index.css"],
+    "educationHelp": ["src/education/**", "src/components/education/**", "src/pages/shared/AppGuidePage.tsx", "src/components/ui/ListRow.tsx", "src/components/ui/Sheet.tsx", "src/lib/i18n.ts"],
+    "employeeStatusSafety": ["src/pages/admin/employees/**", "src/pages/employee/**", "src/lib/i18n.ts"],
+    "imageSync": ["src/pages/**", "src/stores/**"],
+    "interactionLayer": ["src/index.css", "src/components/ui/**"],
+    "logicalDirection": ["src/index.css", "src/**/*.tsx", "src/lib/i18n.ts"],
+    "otpResume": ["src/pages/auth/**", "src/lib/auth.ts", "src/lib/i18n.ts"],
+    "overlayAboveNav": ["src/components/ui/Sheet.tsx", "src/components/ui/**", "src/index.css", "src/lib/i18n.ts"],
+    "overlayRtl": ["src/components/ui/Sheet.tsx", "src/components/ui/**", "src/index.css", "src/lib/i18n.ts"],
+    "productOpeningStock": ["src/pages/employee/products/**", "src/pages/admin/inventory/**", "src/stores/productsStore.ts", "src/lib/i18n.ts"],
+    "roleDeleteSafety": ["src/pages/admin/settings/**", "src/pages/admin/employees/**", "src/lib/i18n.ts"],
+    "setupCompletion": ["src/components/ui/SetupChecklist.tsx", "src/components/ui/SetupProgress.tsx", "src/lib/setupStatus.ts", "src/lib/dependencyGraph.ts", "src/pages/**/settings/**", "src/pages/**/dashboard/**", "src/lib/i18n.ts"],
+    "skeletonCoverage": ["src/components/ui/Skeleton.tsx", "src/pages/**", "src/index.css"],
+    "splitPayment": ["src/pages/**/sale/**", "src/stores/**", "src/lib/db.ts"],
+    "systemDrive": ["src/index.css", "src/pages/**/settings/**", "src/lib/i18n.ts"],
+    "voidSaleSafety": ["src/lib/db.ts", "src/stores/salesStore.ts", "src/pages/**/sales/**"]
+  }
+}

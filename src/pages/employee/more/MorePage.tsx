@@ -6,7 +6,7 @@ import { useDir } from "@/lib/dirContext";
 import { useAuthStore } from "@/stores/authStore";
 import { useT } from "@/lib/i18n";
 import { useThemeStore } from "@/stores/themeStore";
-import { Settings, Users, Bell, ChevronRight } from "lucide-react";
+import { Settings, Users, Bell, ChevronRight, Compass } from "lucide-react";
 
 function initBgColor(name: string | null | undefined) {
   const colors = ["#84cc16","#3b82f6","#8b5cf6","#f59e0b","#06b6d4","#ec4899"];
@@ -71,6 +71,31 @@ export default function MorePage() {
             <p className="text-12 mt-0.5" style={{ color: "var(--text-secondary)" }}>{user?.phone}</p>
           </div>
         </div>
+      </div>
+
+      {/* App guide — the employee's way back into the tour and the education sections,
+          which are written for what an employee can actually do rather than for an
+          owner's controls. Its own card, above the menu: it is about the app itself. */}
+      <div className="px-4 pb-3">
+        <ListCard>
+          <ListRow
+            anchor="more:guide"
+            onClick={() => navigate("/employee/guide")}
+            icon={Compass}
+            title={t("edu.guide.title")}
+            meta={t("edu.guide.rowSub")}
+            trailing={
+              <ChevronRight
+                size={14}
+                className="ds-row-chevron shrink-0"
+                style={{
+                  color: "var(--text-secondary)",
+                  transform: isRtl ? "rotate(180deg)" : undefined,
+                }}
+              />
+            }
+          />
+        </ListCard>
       </div>
 
       {/* Menu — one grouped card with hairlines, on the shared row primitive, exactly as

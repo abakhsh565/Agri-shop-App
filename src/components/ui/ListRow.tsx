@@ -31,6 +31,19 @@ export interface ListRowProps {
   selected?: boolean;
   disabled?: boolean;
   onClick?: () => void;
+  /**
+   * Stable anchor for the guided tour, rendered as `data-tour`. Additive: it
+   * changes nothing about how the row looks or behaves, and it is the only reason
+   * the education system can point at a real row instead of a coordinate.
+   */
+  anchor?: string;
+  /**
+   * Stable handle for the test lanes, rendered as `data-testid`. The row does not
+   * forward arbitrary props, so a lane that needs to address *this* row needs it named
+   * — the alternative was clicking by translated copy, which breaks the moment the copy
+   * is written better.
+   */
+  testId?: string;
   className?: string;
   /** Extra inline style (e.g. an accent row's tint); the row still owns the inset. */
   style?: React.CSSProperties;
@@ -61,6 +74,8 @@ export default function ListRow({
   selected = false,
   disabled = false,
   onClick,
+  anchor,
+  testId,
   className = "",
   style: extraStyle,
 }: ListRowProps) {
@@ -105,7 +120,7 @@ export default function ListRow({
 
   if (!onClick) {
     return (
-      <div className={cls} style={extraStyle}>
+      <div className={cls} style={extraStyle} data-tour={anchor} data-testid={testId}>
         {inner}
       </div>
     );
@@ -119,6 +134,8 @@ export default function ListRow({
       aria-selected={selected || undefined}
       className={cls}
       style={extraStyle}
+      data-tour={anchor}
+      data-testid={testId}
     >
       {inner}
     </button>

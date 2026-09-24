@@ -33,7 +33,6 @@ function userFromRow(r: UserRow, membershipStatus?: MembershipStatus): User {
     phone: r.phone,
     role: r.role,
     isOriginalOwner: r.is_original_owner,
-    pin: "",
     isActive: r.is_active,
     membershipStatus,
     employeeNumber: r.employee_number ?? undefined,

@@ -286,7 +286,11 @@ export default function AdminDashboardPage() {
       <StatusBar />
 
       {/* ── Greeting header — saved name + current date ── */}
-      <div className="flex items-center gap-2.5 px-4 py-3">
+      {/* gap-3.5 (14px), up from 10: at a 40px avatar the name was sitting almost against the
+          initials, which is what made the row read cramped. The greeting is 15 — the size the
+          app's own header titles use (`NavHeader`, `SelectSheet`) — one step down from 16, so
+          the name and the date below it sit closer together as one block. */}
+      <div className="flex items-center gap-3.5 px-4 py-3">
         {/* Owner avatar — taps to profile; uses saved photo when present */}
         <button
           onClick={() => navigate("/admin/settings")}
@@ -299,7 +303,11 @@ export default function AdminDashboardPage() {
         </button>
 
         <div className="flex flex-col flex-1 min-w-0">
-          <p className="font-bold text-16 leading-tight" style={{ color: "var(--text-primary)" }}>
+          {/* One line, ellipsised. A long shop/owner name used to wrap this to two lines on a
+              small phone and push the whole header taller; a short name never did, so the
+              screen changed shape depending on whose phone it was. `min-w-0` on the parent
+              lets `truncate` do its job instead of overflowing. */}
+          <p className="font-bold text-15 leading-tight truncate" style={{ color: "var(--text-primary)" }}>
             {t(greetingKey)}, {displayName}
           </p>
           <p className="text-12 mt-0.5" style={{ color: "var(--text-secondary)" }}>
@@ -307,7 +315,9 @@ export default function AdminDashboardPage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-1.5 shrink-0">
+        {/* gap-2.5 (10px), up from 6: the two round buttons are 36px each and were sitting
+            almost edge to edge, which read as one wide pill rather than two controls. */}
+        <div className="flex items-center gap-2.5 shrink-0">
           <button
             onClick={() => navigate("/admin/search")}
             aria-label={t("common.search")}
@@ -446,10 +456,11 @@ export default function AdminDashboardPage() {
       </div>
 
       {/* ── Total Sales card (lime hero): Total Sales · Transactions · Gross Profit ──
-          Figures first, then the actions, then the setup checklist: the order a shop owner
-          who is already trading wants. The checklist sits with the actions because both are
-          things to *do*, and it stays out of the way until then. ── */}
-      <div className="px-4 pt-3 animate-fade-in-up">
+          Figures first: this is what a trading owner opens the app for. The setup checklist
+          follows it on a shop that cannot trade yet, and is absent once the shop is set up. ── */}
+      {/* `data-tour` anchors: the guided tour rings these two real blocks. Additive
+          attributes only — nothing here looks or behaves differently because of them. */}
+      <div className="px-4 pt-3 animate-fade-in-up" data-tour="home:kpis">
         <button
           className="w-full rounded-[var(--radius-card)] p-5 text-start transition-transform active:scale-[0.98]"
           style={{ background: "var(--brand)" }}
@@ -485,6 +496,13 @@ export default function AdminDashboardPage() {
         </button>
       </div>
 
+      {/* ── First-run guidance, directly under the sale card.
+          On a shop that cannot trade yet this is what to do next, so it follows the figures
+          the owner has just looked at instead of leading the screen. One checklist, the same
+          component Settings renders, so a new owner sees the identical three steps in both
+          places — and it renders nothing once the shop can trade. ── */}
+      <SetupChecklist testId="setup-next-step" className="px-4 pt-4 animate-fade-in-up" />
+
       {/* ── Summary: Action needed · Follow-ups · Out of stock ── */}
       <div className="px-4 pt-4 flex gap-2 animate-fade-in-up">
         <button onClick={() => navigate('/admin/alerts/reminders', { state: { tab: 'action', subTab: 'critical' } })} className="flex-1 flex items-center gap-2.5 py-2.5 px-3 rounded-[var(--radius-tile)] active:opacity-70 transition-opacity" style={{ background: "var(--tone-card)" }}>
@@ -506,7 +524,7 @@ export default function AdminDashboardPage() {
           shorter than a list row, which read as fields rather than things to press; the
           primary one is brand-filled and the other two are tone surfaces, the same grammar
           every other card on this screen uses (no outlined boxes anywhere). ── */}
-      <div className="px-4 pt-4">
+      <div className="px-4 pt-4" data-tour="home:actions">
         <div className="grid grid-cols-3 gap-2.5">
           {([
             { icon: ShoppingCart, label: t("dashboard.newSale"), to: "/admin/sale", primary: true },
@@ -529,11 +547,6 @@ export default function AdminDashboardPage() {
           ))}
         </div>
       </div>
-
-      {/* ── First-run guidance. One checklist, the same component Settings renders, so a new
-          owner sees the identical three steps in both places. It renders nothing once the
-          shop can trade, so Home is never nagged by it. ── */}
-      <SetupChecklist testId="setup-next-step" className="px-4 pt-4 animate-fade-in-up" />
 
       {/* ── Quick Alerts: 3 summary rows with premium card design ── */}
       {(() => {

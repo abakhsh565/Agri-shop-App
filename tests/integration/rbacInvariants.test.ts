@@ -132,10 +132,12 @@ describe('Invariant D — User → Membership', () => {
 
 describe('Invariant E — protected writes resolve tenant context', () => {
   it('every business write RPC carries an authorization guard', async () => {
-    const rows = await sql<{ proname: string; has_guard: boolean }>(`
+    const rows = await sql<{ proname: string; has_guard: boolean; self_guard: boolean }>(`
       SELECT p.proname,
              pg_get_functiondef(p.oid) ~ 'authorize_business_action|authorize_tenant_membership|has_effective_permission|has_permission|app_is_admin'
-               AS has_guard
+               AS has_guard,
+             pg_get_functiondef(p.oid) ~ 'RAISE EXCEPTION ''NOT_AUTHENTICATED'''
+               AS self_guard
         FROM pg_proc p
         JOIN pg_namespace n ON n.oid = p.pronamespace
        WHERE n.nspname = 'public'
@@ -153,8 +155,16 @@ describe('Invariant E — protected writes resolve tenant context', () => {
       // (and is_trusted_context) in migration 0121, not against a tenant permission.
       'approve_shop_request',
     ];
+    // A self-service write — the caller acting on their OWN account — carries identity,
+    // not tenant permission: `delete_my_account` removes only the shops the caller owns
+    // or administers, so demanding a business permission would be wrong (an employee must
+    // be able to close their own account). The comparable guard is an explicit entry-point
+    // rejection of an absent actor. Deliberately narrow: it cannot exempt a function that
+    // merely mentions the helper, and every other unguarded write RPC still fails.
+    const SELF_SERVICE = /^(delete|update)_my_/;
     const unguarded = rows
       .filter((r) => !r.has_guard)
+      .filter((r) => !(SELF_SERVICE.test(r.proname) && r.self_guard))
       .map((r) => r.proname)
       .filter((f) => !ANON_ALLOWED_WRITES.includes(f) && !INTERNAL_FUNCTIONS.includes(f));
     expect(unguarded).toEqual([]);

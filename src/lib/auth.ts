@@ -54,7 +54,6 @@ function userFromRow(r: UserRow): User {
     phone: r.phone,
     role: r.role,
     isOriginalOwner: r.is_original_owner,
-    pin: "",
     isActive: r.is_active,
     employeeNumber: r.employee_number ?? undefined,
     jobTitle: r.job_title ?? undefined,
@@ -309,6 +308,24 @@ export async function verifyOTPAndResolveUser(
 }
 
 // ─── Session helpers ──────────────────────────────────────────────────────────
+/**
+ * Erase the signed-in account, for good.
+ *
+ * The database decides what that means, not this file: `delete_my_account()` erases the
+ * shop and its data when the account answers for one, and removes just the access and login
+ * when it does not. Doing it server-side is the point — the client is not the thing that
+ * should hold the power to delete a shop, and the last step there is removing the auth row,
+ * so the login cannot outlive the data.
+ *
+ * On success the session is terminated the same way signing out terminates it, because the
+ * account it belonged to no longer exists.
+ */
+export async function deleteAccount(): Promise<void> {
+  const { error } = await supabase.rpc("delete_my_account");
+  if (error) throw new Error(error.message);
+  await signOut();
+}
+
 export async function signOut(): Promise<void> {
   // Terminate Supabase auth session if one exists
   try {

@@ -3,6 +3,8 @@ import { LayoutDashboard, ShoppingBag, Package, ScanLine, MoreHorizontal, X } fr
 import { useT, tNow } from "@/lib/i18n";
 import ToastContainer from "@/components/ui/Toast";
 import NavTracker from "@/components/ui/NavTracker";
+import FirstRunGate from "@/components/education/FirstRunGate";
+import ContextHelp from "@/components/education/ContextHelp";
 import { useBootstrapData } from "@/stores/useBootstrapData";
 import { isTopLevel } from "@/lib/navDepth";
 import { Suspense, useState, useEffect, useRef } from "react";
@@ -15,7 +17,7 @@ import { useOfflineStore } from "@/stores/offlineStore";
 import { getPendingCount } from "@/lib/offlineQueue";
 import { useAuthStore } from "@/stores/authStore";
 import PINInput from "@/components/ui/PINInput";
-import { verifyPin } from "@/lib/pinLock";
+import { verifyPinDetailed } from "@/lib/pinLock";
 
 const LOCK_TIMEOUT_MS = 15 * 60 * 1000;
 
@@ -85,8 +87,8 @@ export default function AdminLayout() {
 
   async function handlePINSubmit(p: string) {
     if (!user) return;
-    const ok = await verifyPin(user.id, p);
-    if (ok) {
+    const result = await verifyPinDetailed(user.id, p);
+    if (result.status === "ok") {
       unlock();
       setPin("");
       setPinError(false);
@@ -94,7 +96,13 @@ export default function AdminLayout() {
       setPinError(true);
       setPinShake(true);
       setTimeout(() => setPinShake(false), 500);
-      setPin("");        addToast(tNow("copy.pinWrong"), "error");
+      setPin("");
+      addToast(
+        result.status === "locked" ? tNow("copy.pinLocked")
+          : result.status === "error" ? tNow("copy.pinCheckFailed")
+          : tNow("copy.pinWrong"),
+        "error",
+      );
     }
   }
 
@@ -260,6 +268,12 @@ export default function AdminLayout() {
         </Suspense>
       </div>
 
+      {/* Education: the first-run welcome and the guided tour. Mounted here, inside the
+          shell, so a tour step can move between the screens it teaches without the
+          overlay ever having to exist outside a signed-in app. */}
+      <FirstRunGate />
+      <ContextHelp />
+
       {/* ── Bottom tab bar (5 tabs) — only on top-level navigation screens ── */}
       {showTabBar && (
       <div
@@ -283,6 +297,7 @@ export default function AdminLayout() {
                 key="scan"
                 onClick={handleNavScan}
                 disabled={scanning}
+                data-tour="tab:scan"
                 className="ds-pressable flex flex-col items-center justify-center flex-1 gap-1 cursor-pointer"
               >
                 <div
@@ -302,6 +317,7 @@ export default function AdminLayout() {
             <button
               key={path}
               onClick={() => { clearNav(); navigate(path); }}
+              data-tour={`tab:${key}`}
               className="ds-pressable flex flex-col items-center justify-center flex-1 gap-1 cursor-pointer"
             >
               <Icon

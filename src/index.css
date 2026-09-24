@@ -439,7 +439,11 @@ input[type="time"]:disabled {
 
 /* ── Section: grouping with header ── */
 .ds-section {
-  padding: 0 20px;
+  /* 16, the card's own inner gutter — not 20. At 20 the label's text sat 4px to the right
+     of the row icons underneath it, so a group title never lined up with the thing it was
+     titling. `ListCard` already carries `px-4`; the two now agree instead of fighting, and
+     the specificity race that produced the 4px is gone. */
+  padding: 0 16px;
 }
 .ds-section-title {
   font-size: var(--fs-11);

@@ -298,15 +298,24 @@ test.describe('Missing dependencies never dead-end a workflow', () => {
     // wall of them on the dashboard is the clutter this design exists to avoid.
     await page.goto(`${BASE_URL}/admin/dashboard`);
     await page.waitForTimeout(1800);
-    const home = await page.evaluate(() => document.body.innerText);
+    // The first-run step list is allowed to use the dependency wording — that wording IS
+    // the instruction it is giving. What must not happen is the same copy arriving from
+    // somewhere else on Home, so the block's own text is subtracted before the scan
+    // rather than the scan being weakened to accommodate it.
+    const home = await page.evaluate(() => {
+      const block = document.querySelector('[data-testid="setup-next-step"]') as HTMLElement | null;
+      return { all: document.body.innerText, fromBlock: block?.innerText ?? '' };
+    });
     expect(
       await page.locator('[data-testid="setup-next-step"]').count(),
       'Home is carrying more than one dependency prompt',
     ).toBeLessThanOrEqual(1);
+    const outsideTheBlock = home.fromBlock ? home.all.split(home.fromBlock).join(' ') : home.all;
     for (const leak of ['No products yet', 'No suppliers yet', 'ابھی کوئی سامان نہیں', 'ابھی کوئی سپلائر نہیں']) {
-      expect(home.includes(leak), `the empty-state copy leaked onto Home: "${leak}" appeared on the dashboard`).toBe(
-        false,
-      );
+      expect(
+        outsideTheBlock.includes(leak),
+        `the empty-state copy leaked onto Home outside the first-run steps: "${leak}" appeared on the dashboard`,
+      ).toBe(false);
     }
   });
 

@@ -159,3 +159,22 @@ If a single worker was faster, say so. That is a successful outcome, not a failu
 
 Do not manufacture process for small work, and do not skip verification for large work. The
 correct shape is the smallest set of lenses that still produces real evidence for the change.
+
+---
+
+## 7. Speed path (tooling that enforces these rules)
+
+```bash
+npm run resume        # checkpoint: branch, HEAD, server mode, lane greens, next command
+npm run preflight     # 5s: git state, --mode qa server, DB reachable, fixtures, QA row count
+npm run verify:plan   # computed tier + which lanes would run or be skipped
+npm run verify        # smallest sufficient gate; Tier 2 is forced, never downgraded
+npm run verify:full   # force Tier 2, no lane caching
+```
+
+Tiers: **0** docs → tsc + build · **1** UI/copy → tsc + unit guards + affected lanes + build ·
+**2** money/RBAC/migrations/destructive → full vitest + canonical lanes (never skipped) +
+affected lanes + build + independent QA row count. A lane is skipped only when it was green and
+every file its `scripts/dev/lane-map.json` globs cover is byte-identical. `--tier` may only
+**raise** a computed tier. No APK during development or QA loops; when requested it is built
+only through the decided GitHub Actions path. Full detail: `ENGINEERING_OS_STATE.md` §0b.

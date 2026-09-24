@@ -18,7 +18,18 @@
     "test:integration": "vitest run tests/integration/",
     "test:e2e": "npx playwright test",
     "test:e2e:lanes": "node scripts/run-e2e-lanes.mjs",
-    "test:all": "vitest run && npx playwright test"
+    "test:all": "vitest run && npx playwright test",
+    "resume": "node scripts/dev/state.mjs resume",
+    "checkpoint": "node scripts/dev/state.mjs checkpoint",
+    "preflight": "node scripts/dev/preflight.mjs",
+    "verify": "node scripts/dev/verify.mjs",
+    "verify:plan": "node scripts/dev/verify.mjs --plan",
+    "verify:full": "node scripts/dev/verify.mjs --tier 2 --no-cache",
+    "lane:new": "node scripts/dev/new-lane.mjs",
+    "qa:count": "node scripts/dev/qa.mjs count",
+    "qa:clean": "node scripts/dev/qa.mjs clean",
+    "qa:seed": "node scripts/dev/qa.mjs seed",
+    "index:build": "node scripts/dev/index.mjs"
   },
   "dependencies": {
     "@capacitor-mlkit/barcode-scanning": "^7.5.0",

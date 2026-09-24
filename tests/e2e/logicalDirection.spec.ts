@@ -88,7 +88,10 @@ test('a leading control sits on the inline start in both directions', async ({ p
   // a JS `isRtl ? right : left` ternary) and the shared Sheet's close control (a `start-4`
   // class, migrated from the deleted `[dir="rtl"] .absolute.left-4` rule).
   await setPrefs(page, 'en', 'light');
-  await page.goto(`${BASE_URL}/admin/settings`);
+  // A screen whose header keeps the leading control. Settings is deliberately not used any
+  // more: its exit is now the close control on the trailing edge (an approved change), so
+  // there is no leading control left there to measure.
+  await page.goto(`${BASE_URL}/admin/inventory/new`);
   await page.waitForLoadState('networkidle');
 
   const ltrBack = await edgeGaps(page, '[data-testid="nav-back"]');
@@ -97,8 +100,6 @@ test('a leading control sits on the inline start in both directions', async ({ p
   expect(ltrBack!.leftGap, 'EN: the leading control sits 16px from the left edge').toBe(16);
   expect(ltrBack!.rightGap, 'EN: it is nowhere near the right edge').toBeGreaterThan(100);
 
-  await page.goto(`${BASE_URL}/admin/inventory/new`);
-  await page.waitForLoadState('networkidle');
   // The trigger label is the dictionary's, in either language, so the locator accepts both
   // and never depends on which language the previous spec left behind.
   await page.getByRole('button', { name: /choose supplier|سپلائر چنیں/i }).first().click();
@@ -113,7 +114,7 @@ test('a leading control sits on the inline start in both directions', async ({ p
   await page.keyboard.press('Escape');
 
   await setPrefs(page, 'ur', 'light');
-  await page.goto(`${BASE_URL}/admin/settings`);
+  await page.goto(`${BASE_URL}/admin/inventory/new`);
   await page.waitForLoadState('networkidle');
 
   const rtlBack = await edgeGaps(page, '[data-testid="nav-back"]');
@@ -121,8 +122,6 @@ test('a leading control sits on the inline start in both directions', async ({ p
   expect(rtlBack!.rightGap, 'UR: the leading control mirrors to 16px from the right edge').toBe(16);
   expect(rtlBack!.leftGap, 'UR: it is nowhere near the left edge').toBeGreaterThan(100);
 
-  await page.goto(`${BASE_URL}/admin/inventory/new`);
-  await page.waitForLoadState('networkidle');
   await page.getByRole('button', { name: /choose supplier|سپلائر چنیں/i }).first().click();
   await expect(page.locator('[data-testid="sheet-close"]')).toBeVisible({ timeout: 10000 });
   const rtlSheet = await edgeGaps(page, '[data-testid="sheet-close"]');

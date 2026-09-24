@@ -99,39 +99,88 @@ async function clearSetupEntities() {
  * the data takes.
  */
 async function waitForSetupReady(page: Page) {
+  // The block's count reads "0/3" — the thing that is actually rendered, and it is
+  // language-neutral. (A percentage was an earlier design of this card.)
+  // The path is part of the condition on purpose: if the session dropped and the app
+  // bounced to sign-in, the block would be absent for the wrong reason and the wait
+  // would either hang (here) or pass vacuously (in waitForSetupGone).
   await expect
-    .poll(async () => (await readChecklist(page))?.percent ?? 'still loading', { timeout: 25000 })
-    .toContain('%');
+    .poll(
+      async () => {
+        const block = await readSettingsBlock(page);
+        return block ? `${block.path} ${block.count}` : 'still loading';
+      },
+      { timeout: 25000 },
+    )
+    .toMatch(/\/admin\/settings \d+\s*\/\s*\d+/);
 }
 
-/** Every required entity exists, so the block must stop rendering entirely. */
+/** Every required entity exists, so neither block may render any more. */
 async function waitForSetupGone(page: Page) {
   await expect
-    .poll(async () => (await readChecklist(page)) === null, { timeout: 25000 })
-    .toBe(true);
+    .poll(
+      async () => {
+        const settings = await readSettingsBlock(page);
+        const home = await readHomeChecklist(page);
+        const path = new URL(page.url()).pathname;
+        // A bounced sign-in would leave both blocks absent for the wrong reason, so a
+        // bounce is reported as a distinct state instead of counting as "gone".
+        if (path.startsWith('/login') || path === '/') return `bounced:${path}`;
+        return `${settings === null ? 'gone' : 'present'}|${home === null ? 'gone' : 'present'}`;
+      },
+      { timeout: 25000 },
+    )
+    .toBe('gone|gone');
 }
 
+
 /**
- * Read the block from the live DOM, addressed by a test id rather than by copy or class
- * names: the label is translated, and the section deliberately reuses the page's existing
- * `text-xs font-bold uppercase` header rather than a distinct heading element.
+ * The Settings block: one line of progress with its own action.
+ *
+ * The two screens deliberately carry different widgets — Home shows the three steps so a
+ * new owner can see the whole job, Settings shows a single quiet line so the block never
+ * outranks the rows someone came to change. Both are read here, by their own test ids,
+ * rather than one reader being bent to describe two different cards.
  */
-async function readChecklist(page: Page) {
+async function readSettingsBlock(page: Page) {
   return page.evaluate(() => {
     const section = document.querySelector('[data-testid="setup-checklist"]') as HTMLElement | null;
     if (!section) return null;
+    const card = section.querySelector('.ds-listcard') as HTMLElement | null;
+    return {
+      path: location.pathname,
+      heading: section.querySelector('p')?.textContent?.trim() ?? '',
+      count: section.querySelector('[data-testid="setup-progress"]')?.textContent?.trim() ?? '',
+      actions: [...section.querySelectorAll('button')].map((b) => (b.textContent ?? '').trim()),
+      rows: section.querySelectorAll('.ds-row').length,
+      cards: section.querySelectorAll('.ds-listcard').length,
+      radius: card ? getComputedStyle(card).borderRadius : '',
+      overflow: document.documentElement.scrollWidth > window.innerWidth + 1,
+      dir: document.documentElement.dir,
+    };
+  });
+}
+
+/** The Home block: the three-step checklist, one row and one action per missing step. */
+async function readHomeChecklist(page: Page) {
+  return page.evaluate(() => {
+    const section = document.querySelector('[data-testid="setup-next-step"]') as HTMLElement | null;
+    if (!section) return null;
+    const card = section.querySelector('.ds-listcard') as HTMLElement | null;
     const rows = [...section.querySelectorAll('.ds-row')].map((r) => {
       const sep = getComputedStyle(r, '::before');
       return {
         text: (r.textContent ?? '').replace(/\s+/g, ' ').trim(),
         separator: sep.content === 'none' ? 'none' : `${sep.insetInlineStart}/${sep.insetInlineEnd}`,
         clickable: r.tagName.toLowerCase() === 'button',
+        // Each missing step carries its action as a button inside the row, so this is
+        // what "actionable" means on this card — the row itself is a label, not a link.
+        hasAction: !!r.querySelector('button'),
       };
     });
-    const card = section.querySelector('.ds-listcard') as HTMLElement | null;
     return {
-      heading: section.querySelector('p')?.textContent?.trim() ?? '',
-      percent: section.querySelector('[data-testid="setup-percent"]')?.textContent?.trim() ?? '',
+      path: location.pathname,
+      count: section.querySelector('[data-testid="setup-progress"]')?.textContent?.trim() ?? '',
       rows,
       cards: section.querySelectorAll('.ds-listcard').length,
       radius: card ? getComputedStyle(card).borderRadius : '',
@@ -151,32 +200,42 @@ test.describe('Business setup status is derived and self-retiring', () => {
     await cleanupFixtures();
   });
 
-  test('1. empty shop: 0% ready, three missing steps, each with its action', async ({ page }) => {
+  test('1. empty shop: nothing done, three missing steps each with its action', async ({ page }) => {
     await clearSetupEntities();
     await signIn(page);
+
+    // Home carries the three steps, because that is the screen a new owner lands on and
+    // the one place the whole job fits. The stored requirement stays hidden on the rows
+    // it would otherwise crowd: Settings gets the one-line progress card instead.
+    await page.goto('/admin/dashboard');
+    await expect(page.locator('[data-testid="setup-next-step"]')).toBeVisible({ timeout: 20000 });
+    await expect.poll(async () => (await readHomeChecklist(page))?.rows.length ?? 0, { timeout: 25000 }).toBe(3);
+
+    const home = await readHomeChecklist(page);
+    expect(home, 'the checklist did not render on Home').not.toBeNull();
+    expect(home!.rows.length, 'one row per required entity in the graph').toBe(3);
+    expect(home!.cards, 'the block uses the one list implementation').toBe(1);
+    expect(home!.count, 'nothing done yet').toBe('0/3');
+
+    for (const label of ['Add supplier', 'Add product', 'Add customer']) {
+      expect(home!.rows.map((r) => r.text).join(' | '), `missing step "${label}"`).toContain(label);
+    }
+    // A missing step must be actionable — that is what the step list is for.
+    expect(home!.rows.filter((r) => r.hasAction).length, 'missing steps offer no action').toBe(3);
+    expect(home!.radius, 'the block is not on the shared card surface').not.toBe('');
+    expect(
+      home!.rows.map((r) => r.separator).slice(1),
+      'the card does not draw its separators edge to edge',
+    ).toEqual(['0px/0px', '0px/0px']);
+    expect(home!.overflow, 'the block overflows at phone width').toBe(false);
+
+    // Settings states the same fact in one line, and is counted from the same derivation.
     await page.goto('/admin/settings');
     await expect(page.locator('[data-testid="setup-checklist"]')).toBeVisible({ timeout: 20000 });
     await waitForSetupReady(page);
-
-    const state = await readChecklist(page);
-    expect(state, 'setup checklist did not render').not.toBeNull();
-    expect(state!.rows.length, 'one row per required entity in the graph').toBe(3);
-    expect(state!.cards, 'the block uses the one list implementation').toBe(1);
-    expect(state!.percent, 'nothing done yet').toContain('0');
-
-    for (const label of ['Add supplier', 'Add product', 'Add customer']) {
-      expect(state!.rows.map((r) => r.text).join(' | '), `missing step "${label}"`).toContain(label);
-    }
-    // A missing step must be actionable — that is the whole point of showing it.
-    expect(state!.rows.filter((r) => r.clickable).length, 'missing steps are not tappable').toBe(3);
-
-    // The card is the shared tone surface: rounded, and its separators are full-bleed.
-    expect(state!.radius).not.toBe('');
-    expect(
-      state!.rows.map((r) => r.separator).slice(1),
-      'the card does not draw its separators edge to edge'
-    ).toEqual(['0px/0px', '0px/0px']);
-    expect(state!.overflow, 'the block overflows at phone width').toBe(false);
+    const settings = await readSettingsBlock(page);
+    expect(settings!.count, 'nothing done yet').toBe('0/3');
+    expect(settings!.rows, 'the Settings variant should be one line, not the step list').toBe(0);
   });
 
   test('2. adding a supplier moves the status, from the real data', async ({ page }) => {
@@ -188,19 +247,24 @@ test.describe('Business setup status is derived and self-retiring', () => {
 
     await signIn(page);
     await page.goto('/admin/settings');
-    await page.reload();
     await waitForSetupReady(page);
 
-    const state = await readChecklist(page);
-    expect(state).not.toBeNull();
-    expect(state!.rows.length).toBe(3);
-    expect(state!.percent, 'one of three done should read 33%').toContain('33');
+    const state = await readSettingsBlock(page);
+    expect(state, 'the Settings block is missing — is this the settings screen?').not.toBeNull();
+    expect(state!.path, 'the app is not on the settings screen').toBe('/admin/settings');
+    expect(state!.count, 'one of three done should read 1/3').toBe('1/3');
 
-    const supplierRow = state!.rows.find((r) => /supplier/i.test(r.text) && /Setup Supplier|supplier/i.test(r.text));
-    expect(supplierRow, 'supplier row not found').toBeTruthy();
-    // The done row no longer offers a create action.
-    expect(supplierRow!.clickable, 'a completed step still offers its create action').toBe(false);
-    expect(supplierRow!.text).not.toContain('Add supplier');
+    // The step list follows the same data. A finished step stays listed — it keeps its check
+    // and its name, so the shape of the job is still visible — but it loses its reason and
+    // its action, which is what "done" means on this card.
+    await page.goto('/admin/dashboard');
+    await expect.poll(async () => (await readHomeChecklist(page))?.rows.length ?? 0, { timeout: 25000 }).toBe(3);
+    const home = await readHomeChecklist(page);
+    const supplierRow = home!.rows.find((r) => /supplier/i.test(r.text));
+    expect(supplierRow, 'the supplier step disappeared instead of being marked done').toBeTruthy();
+    expect(supplierRow!.hasAction, 'a completed step still offers its create action').toBe(false);
+    expect(supplierRow!.text, 'a completed step still asks for the supplier to be added').not.toContain('Add supplier');
+    expect(home!.count, 'the Home count did not follow the data').toBe('1/3');
   });
 
   test('3. complete setup: the guidance disappears by itself', async ({ page }) => {
@@ -217,14 +281,18 @@ test.describe('Business setup status is derived and self-retiring', () => {
 
     await signIn(page);
     await page.goto('/admin/settings');
-    await page.reload();
     await expect(page.locator('[data-testid="setup-checklist"]')).toBeVisible({ timeout: 20000 });
     await waitForSetupGone(page);
 
-    const state = await readChecklist(page);
     expect(
-      state,
-      'setup is complete, so the checklist must not be rendered at all'
+      await readSettingsBlock(page),
+      'setup is complete, so the Settings block must not be rendered at all',
+    ).toBeNull();
+    await page.goto('/admin/dashboard');
+    await page.waitForTimeout(1800);
+    expect(
+      await readHomeChecklist(page),
+      'setup is complete, so Home must not still be showing the steps',
     ).toBeNull();
   });
 
@@ -235,88 +303,56 @@ test.describe('Business setup status is derived and self-retiring', () => {
     await expect(page.locator('[data-testid="setup-checklist"]')).toBeVisible({ timeout: 20000 });
     await waitForSetupReady(page);
 
+    const card = await readSettingsBlock(page);
+    expect(card, 'the Settings block did not render').not.toBeNull();
+    expect(card!.rows, 'the Settings variant is one line, not a list of steps').toBe(0);
+    expect(card!.actions.length, 'the Settings variant carries exactly its one action').toBe(1);
+
+    // One card on the page has to exist to compare against, or "matches the page" is a
+    // comparison with nothing.
+    await expect.poll(async () => page.locator('.ds-listcard').count(), { timeout: 15000 }).toBeGreaterThan(1);
+
     const styles = await page.evaluate(() => {
-      const pick = (el: Element | null) => {
-        if (!el) return null;
-        const s = getComputedStyle(el);
-        return {
-          fontSize: s.fontSize,
-          fontWeight: s.fontWeight,
-          textTransform: s.textTransform,
-          letterSpacing: s.letterSpacing,
-          color: s.color,
-        };
-      };
-      const mine = document.querySelector('[data-testid="setup-checklist"] p');
-      // An existing section on the same page, used as the reference for "matches Settings".
-      const existing = [...document.querySelectorAll('p')].find((p) =>
-        /appearance|ظاہری|رنگ/i.test(p.textContent ?? '')
-      );
-      const wrapper = document.querySelector('[data-testid="setup-checklist"]') as HTMLElement | null;
-      const refWrapper = existing?.closest('div') as HTMLElement | null;
+      const block = document.querySelector('[data-testid="setup-checklist"]') as HTMLElement | null;
+      const mineCard = block?.querySelector('.ds-listcard') as HTMLElement | null;
+      const mineTitle = block?.querySelector('p') as HTMLElement | null;
+      // Any other card on the same screen is the reference: same surface, same gutter,
+      // same font. What is guarded against is a card that invents its own treatment.
+      const otherCard = [...document.querySelectorAll('.ds-listcard')].find(
+        (c) => !c.closest('[data-testid="setup-checklist"]'),
+      ) as HTMLElement | null;
       return {
-        mine: pick(mine),
-        existing: pick(existing ?? null),
-        minePad: wrapper ? getComputedStyle(wrapper).paddingInlineStart : '',
-        refPad: refWrapper ? getComputedStyle(refWrapper).paddingInlineStart : '',
-        radius: (() => {
-          const c = document.querySelector('[data-testid="setup-checklist"] .ds-listcard');
-          return c ? getComputedStyle(c).borderRadius : '';
-        })(),
-        refRadius: (() => {
-          const c = refWrapper?.querySelector('.ds-listcard') ?? null;
-          return c ? getComputedStyle(c).borderRadius : '';
-        })(),
+        hasOther: !!otherCard,
+        mineFont: mineTitle ? getComputedStyle(mineTitle).fontFamily : '',
+        pageFont: getComputedStyle(document.body).fontFamily,
+        mineRadius: mineCard ? getComputedStyle(mineCard).borderRadius : '',
+        otherRadius: otherCard ? getComputedStyle(otherCard).borderRadius : '',
+        minePad: block ? getComputedStyle(block).paddingInlineStart : '',
+        // The page gutter is a token, so the comparison is against the system rather than
+        // against whichever wrapper happens to sit above another card.
+        gutterToken: getComputedStyle(document.documentElement).getPropertyValue('--space-4').trim(),
       };
     });
 
-    expect(styles.mine, 'setup label not found').not.toBeNull();
-    expect(styles.existing, 'reference section label not found').not.toBeNull();
-    // Identical label treatment: same size, weight, transform, spacing and colour as the
-    // page's other sections. A new heading style here is the thing being guarded against.
-    expect(styles.mine, 'the setup label does not match the page\'s existing section labels')
-      .toEqual(styles.existing);
-    // Same gutter and same card radius as every other section on the page.
-    expect(styles.minePad, 'section gutter differs from the rest of the page')
-      .toBe(styles.refPad);
-    expect(styles.radius, 'card radius differs from the rest of the page')
-      .toBe(styles.refRadius);
+    expect(styles.hasOther, 'no other card on the page to compare the block against').toBe(true);
+    // One font, taken from the page rather than chosen by this card.
+    expect(styles.mineFont, 'the setup card uses a font of its own').toBe(styles.pageFont);
+    // The shared card surface and the page's gutter, not values of its own.
+    expect(styles.mineRadius, 'card radius differs from the rest of the page').toBe(styles.otherRadius);
+    expect(styles.minePad, 'the section gutter is not the page gutter token').toBe(styles.gutterToken);
 
-    // Rows must match the other cards' rows too: a leading glyph, and the card's own
-    // hairline. The separator is full-bleed now, so it is measured against the card's
-    // box rather than as a per-row inset — the line used to start after each row's
-    // leading slot, which left the left of the card bare.
-    const rows = await page.evaluate(() => {
+    // The card carries the shared mark: an icon in its own tinted circle, so it reads as a
+    // card header and not as a bare paragraph that happens to sit above the settings rows.
+    const mark = await page.evaluate(() => {
       const section = document.querySelector('[data-testid="setup-checklist"]') as HTMLElement;
-      const card = section.querySelector('.ds-listcard') as HTMLElement;
-      const cardRect = card.getBoundingClientRect();
-      const mine = [...section.querySelectorAll('.ds-row')].map((r) => {
-        const sep = getComputedStyle(r, '::before');
-        return {
-          hasIcon: !!r.querySelector('svg'),
-          separator: sep.content === 'none' ? 'none' : `${sep.insetInlineStart}/${sep.insetInlineEnd}`,
-          spansCard:
-            Math.round(r.getBoundingClientRect().left) === Math.round(cardRect.left) &&
-            Math.round(r.getBoundingClientRect().right) === Math.round(cardRect.right),
-        };
-      });
-      return { mine, cardWidth: Math.round(cardRect.width) };
+      const glyph = section.querySelector('svg') as SVGSVGElement | null;
+      return { hasMark: !!glyph, markSize: glyph ? getComputedStyle(glyph).width : '' };
     });
-
-    expect(rows.mine.length).toBe(3);
-    expect(
-      rows.mine.every((r) => r.hasIcon),
-      'a setup row has no leading icon, so its left edge differs from the page\'s other rows'
-    ).toBe(true);
-    // Every separator that exists spans the card edge to edge; the first row has none.
-    expect(
-      rows.mine.map((r) => r.separator).slice(1),
-      `hairline does not span the card: ${JSON.stringify(rows.mine)}`
-    ).toEqual(['0px/0px', '0px/0px']);
-    expect(rows.mine.every((r) => r.spansCard), 'a row does not span its card').toBe(true);
+    expect(mark.hasMark, 'the setup card lost its mark').toBe(true);
+    expect(parseFloat(mark.markSize), 'the mark is not on the icon token').toBeGreaterThan(0);
   });
 
-  test('6. Home gives a new shop ONE next step, not the checklist', async ({ page }) => {
+  test('6. Home gives a new shop the three steps, in dependency order, and retires them', async ({ page }) => {
     await clearSetupEntities();
     await signIn(page);
 
@@ -343,35 +379,32 @@ test.describe('Business setup status is derived and self-retiring', () => {
       return {
         text: (el.textContent ?? '').replace(/\s+/g, ' ').trim(),
         buttons: [...el.querySelectorAll('button')].map((b) => (b.textContent ?? '').trim()),
-        hasIcon: !!el.querySelector('svg'),
+        // Every step leads with its own mark: an empty ring, or a filled check once done.
+        tiles: [...el.querySelectorAll('.ds-row')].filter((r) => r.firstElementChild).length,
         rowCount: rows.length,
-        // A chevron is the only trailing glyph the row should carry.
-        chevrons: [...el.querySelectorAll('svg')].length,
-        // The second line is spaced from the name rather than touching it.
+        // The reason is spaced from the step's name rather than touching it.
         labelToMeta: (() => {
-          const label = el.querySelector('.ds-row-label, .ds-row-strong') as HTMLElement | null;
-          const meta = el.querySelector('.ds-row-meta') as HTMLElement | null;
-          if (!label || !meta) return null;
-          return Math.round(meta.getBoundingClientRect().top - label.getBoundingClientRect().bottom);
+          const first = el.querySelector('.ds-row') as HTMLElement | null;
+          const lines = first ? [...first.querySelectorAll('p')] : [];
+          if (lines.length < 2) return null;
+          return Math.round(lines[1].getBoundingClientRect().top - lines[0].getBoundingClientRect().bottom);
         })(),
       };
     });
-    expect(card.buttons.length, 'the first-run row is the only control Home should carry').toBe(1);
+    expect(card.rowCount, 'Home is not using the shared list row').toBe(3);
+    expect(card.tiles, 'a step has no mark beside it').toBe(3);
+    expect(card.buttons.length, 'every missing step should carry its own action').toBe(3);
     expect(card.buttons[0], 'the next step offers no action').toContain('Add supplier');
-    expect(card.text, 'Home does not name the supplier step first').toMatch(/supplier/i);
-    expect(card.hasIcon, 'the next step has no icon').toBe(true);
-    // The reason travels with the action on the same row, so the prompt is one line of
-    // intent rather than a card of buttons.
-    expect(card.text, 'the row does not explain why the step comes first').toMatch(/needs a supplier/i);
-    // One row on the shared list primitive — not a bespoke card that can drift from the
-    // grammar the rest of the app (and Settings' own checklist) is built on.
-    expect(card.rowCount, 'Home is not using the shared list row').toBe(1);
+    // Dependency order: the supplier leads, because a product needs one.
+    expect(card.text.indexOf('Add supplier'), 'the supplier step is not first').toBeLessThan(
+      card.text.indexOf('Add product'),
+    );
+    // Each step carries its reason beside its action, so the list is intent, not buttons.
+    expect(card.text, 'the steps do not explain why they come in this order').toMatch(/needs a supplier/i);
     expect(
       card.labelToMeta,
-      'Home\'s next step crowds its reason against the action name'
+      'Home\'s steps crowd their reason against the action name',
     ).toBeGreaterThanOrEqual(2);
-    expect(card.buttons, 'the full checklist leaked onto Home').not.toContain('Add product');
-    expect(card.text, 'Home is carrying a second call to action').not.toMatch(/see all steps/i);
 
     // The first action must lead into the real create route, and come back afterwards.
     await nextStep.getByRole('button').first().click();
@@ -402,7 +435,7 @@ test.describe('Business setup status is derived and self-retiring', () => {
     // "Gone" is asserted, not assumed: the block must not be in the DOM once setup is done.
     await waitForSetupGone(page);
     expect(
-      await readChecklist(page),
+      await readHomeChecklist(page),
       'a configured shop still sees the first-run guidance on Home',
     ).toBeNull();
   });
@@ -423,17 +456,22 @@ test.describe('Business setup status is derived and self-retiring', () => {
     await expect(page.locator('[data-testid="setup-checklist"]')).toBeVisible({ timeout: 20000 });
     await waitForSetupReady(page);
 
-    const state = await readChecklist(page);
-    expect(state, 'setup checklist missing in Urdu').not.toBeNull();
+    const state = await readSettingsBlock(page);
+    expect(state, 'setup block missing in Urdu').not.toBeNull();
     expect(state!.dir, 'the page did not switch to RTL').toBe('rtl');
     expect(state!.heading, 'Urdu heading not rendered').toMatch(/[\u0600-\u06FF]/);
-    expect(state!.percent).toContain('0');
+    expect(state!.count, 'the count is not rendered in Urdu').toBe('0/3');
     expect(state!.overflow, 'RTL layout overflows at phone width').toBe(false);
 
-    // No English leakage in the missing-step copy.
-    const joined = state!.rows.map((r) => r.text).join(' | ');
-    expect(joined, 'English leaked into the Urdu checklist').not.toContain('Add supplier');
+    // No English leakage in the step copy either.
+    await page.goto('/admin/dashboard');
+    await expect.poll(async () => (await readHomeChecklist(page))?.rows.length ?? 0, { timeout: 25000 }).toBe(3);
+    const home = await readHomeChecklist(page);
+    const joined = home!.rows.map((r) => r.text).join(' | ');
+    expect(joined, 'English leaked into the Urdu steps').not.toContain('Add supplier');
     expect(joined).toMatch(/[\u0600-\u06FF]/);
+    expect(home!.dir, 'the dashboard is not RTL').toBe('rtl');
+    expect(home!.overflow, 'RTL steps overflow at phone width').toBe(false);
 
     await page.evaluate(() => localStorage.removeItem('agrishop-theme'));
   });
