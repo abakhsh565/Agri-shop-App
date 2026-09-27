@@ -74,7 +74,7 @@ export default function ConfirmDialog({
     >
       <div
         className={`w-full max-w-[340px] p-5 ${leaving ? "ds-anim-dialog-out" : "ds-anim-dialog-in"}`}
-        style={{ background: "var(--tone-page)", borderRadius: "var(--radius-sheet)" }}
+        style={{ background: "var(--tone-sheet)", borderRadius: "var(--radius-sheet)" }}
         onAnimationEnd={finishExit}
         onClick={(e) => e.stopPropagation()}
       >

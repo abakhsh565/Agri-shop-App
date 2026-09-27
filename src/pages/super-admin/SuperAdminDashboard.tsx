@@ -215,12 +215,12 @@ export default function SuperAdminDashboard() {
       {selectedRequest && (
         <div
           className="fixed inset-0 z-50 flex items-end"
-          style={{ background: "rgba(0,0,0,0.5)" }}
+          style={{ background: "var(--scrim)" }}
           onClick={() => setSelectedRequest(null)}
         >
           <div
             className="w-full max-w-[480px] mx-auto rounded-t-[24px] p-6 flex flex-col gap-4 max-h-[80vh] overflow-y-auto"
-            style={{ background: "var(--surface)" }}
+            style={{ background: "var(--tone-sheet)" }}
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
@@ -295,7 +295,7 @@ export default function SuperAdminDashboard() {
       {showRejectModal && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-6"
-          style={{ background: "rgba(0,0,0,0.5)" }}
+          style={{ background: "var(--scrim)" }}
           onClick={() => setShowRejectModal(false)}
         >
           <div

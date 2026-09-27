@@ -109,7 +109,8 @@ export default function SelectorField({
         <ChevronDown size={18} style={{ color: "var(--text-secondary)" }} className="shrink-0" />
       </button>
 
-      <Sheet open={open} title={title} onClose={() => setOpen(false)}>
+      {/* A field picker resolves in one tap, so it has no close button. */}
+      <Sheet open={open} title={title} onClose={() => setOpen(false)} closeButton={false}>
         {searchable && (
           <div className="px-4 pb-3">
             <div className="ds-field" style={{ minHeight: 48 }}>

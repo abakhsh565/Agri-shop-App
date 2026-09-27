@@ -374,12 +374,12 @@ function EditSupplierSheet({
   return (
     <div
       className="fixed inset-0 z-50 flex items-end"
-      style={{ background: "rgba(0,0,0,0.5)" }}
+      style={{ background: "var(--scrim)" }}
       onClick={() => !saving && onClose()}
     >
       <div
         className="w-full max-h-[90vh] overflow-y-auto rounded-t-[22px] p-5 pb-7"
-        style={{ background: "var(--background)", direction: isUrdu ? "rtl" : "ltr" }}
+        style={{ background: "var(--tone-sheet)", direction: isUrdu ? "rtl" : "ltr" }}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-4">

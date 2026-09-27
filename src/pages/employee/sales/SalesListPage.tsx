@@ -290,7 +290,7 @@ export default function SalesListPage() {
           <div className="absolute inset-0 bg-black/40" />
           <div
             className="relative w-full max-w-md rounded-t-2xl p-5 pb-8 animate-slide-up"
-            style={{ background: "var(--surface)" }}
+            style={{ background: "var(--tone-sheet)" }}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-4">

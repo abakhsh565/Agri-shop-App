@@ -177,7 +177,7 @@ export default function GroupDetailPage() {
 
       {/* Delete confirmation */}
       {showDeleteConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: "rgba(0,0,0,0.5)" }} onClick={() => setShowDeleteConfirm(false)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: "var(--scrim)" }} onClick={() => setShowDeleteConfirm(false)}>
           <div className="w-[300px] rounded-[var(--radius-card)] p-5 flex flex-col gap-4" style={{ background: "var(--tone-card)" }} onClick={(e) => e.stopPropagation()}>
             <p className="text-15 font-semibold" style={{ color: "var(--text-primary)" }}>{t("inline.delete_group")}</p>
             <p className="text-13" style={{ color: "var(--text-secondary)" }}>

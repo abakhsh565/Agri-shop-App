@@ -11,6 +11,14 @@ interface SheetProps {
   open: boolean;
   title: string;
   onClose: () => void;
+  /**
+   * Whether to draw the leading close button. **Default true; turn it off for any sheet that
+   * resolves in one tap** — a picker where tapping a row is the answer does not need a second
+   * way to say the same thing, and the scrim, the Escape key and the Android back button all
+   * still dismiss it. Sheets that collect several values, or hold content with no other exit
+   * (a video, an explanation), keep it: there the cross is the only visible way out.
+   */
+  closeButton?: boolean;
   /** Optional single trailing icon action, as on the reference board. */
   actionIcon?: LucideIcon;
   actionLabel?: string;
@@ -37,6 +45,7 @@ export default function Sheet({
   open,
   title,
   onClose,
+  closeButton = true,
   actionIcon: ActionIcon,
   actionLabel,
   onAction,
@@ -75,15 +84,17 @@ export default function Sheet({
         <div className="ds-grabber" />
 
         <div className="relative flex items-center justify-center px-16 pt-3 pb-2">
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label={t("common.close")}
-            data-testid="sheet-close"
-            className="ds-iconbtn absolute start-4"
-          >
-            <X size={18} />
-          </button>
+          {closeButton && (
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label={t("common.close")}
+              data-testid="sheet-close"
+              className="ds-iconbtn absolute start-4"
+            >
+              <X size={18} />
+            </button>
+          )}
           <p className="ds-title-sheet text-center">{title}</p>
           {ActionIcon && (
             <button

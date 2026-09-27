@@ -244,12 +244,12 @@ export default function EmployeeLayout() {
       {showManualScan && (
         <div
           className="fixed inset-0 z-50 flex items-end"
-          style={{ background: "rgba(0,0,0,0.5)" }}
+          style={{ background: "var(--scrim)" }}
           onClick={() => setShowManualScan(false)}
         >
           <div
             className="w-full max-w-[480px] mx-auto rounded-t-[24px] p-6 flex flex-col gap-4"
-            style={{ background: "var(--surface)" }}
+            style={{ background: "var(--tone-sheet)" }}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between">

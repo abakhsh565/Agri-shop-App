@@ -269,9 +269,9 @@ export default function AdminReportsPage() {
 
       {/* Custom date modal */}
       {showDateModal && (
-        <div className="fixed inset-0 z-50 flex items-end" style={{ background: "rgba(0,0,0,0.5)" }} onClick={() => setShowDateModal(false)}>
+        <div className="fixed inset-0 z-50 flex items-end" style={{ background: "var(--scrim)" }} onClick={() => setShowDateModal(false)}>
           <div className="w-full max-w-[390px] mx-auto rounded-t-[24px] p-6 flex flex-col gap-4"
-            style={{ background: "var(--surface)" }} onClick={(e) => e.stopPropagation()}>
+            style={{ background: "var(--tone-sheet)" }} onClick={(e) => e.stopPropagation()}>
             <p className="text-base font-bold text-center" style={{ color: "var(--text-primary)" }}>{t("admin.selectDateRange")}</p>
             <div className="flex gap-3">
               <div className="flex-1">

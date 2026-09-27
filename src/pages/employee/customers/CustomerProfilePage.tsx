@@ -469,12 +469,12 @@ export default function CustomerProfilePage() {
       {editing && (
         <div
           className="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
-          style={{ background: "rgba(0,0,0,0.5)" }}
+          style={{ background: "var(--scrim)" }}
           onClick={() => setEditing(false)}
         >
           <div
             className="w-full max-w-[400px] rounded-t-2xl sm:rounded-[var(--radius-card)] p-5 flex flex-col gap-4"
-            style={{ background: "var(--surface)", maxHeight: "90vh" }}
+            style={{ background: "var(--tone-sheet)", maxHeight: "90vh" }}
             onClick={(e) => e.stopPropagation()}
           >
             <p className="text-base font-bold" style={{ color: "var(--text-primary)" }}>{t("common.editCustomer")}</p>
@@ -562,7 +562,7 @@ export default function CustomerProfilePage() {
 
       {/* Due Date Edit Bottom Sheet */}
       {showEditDueDate && (
-        <div className="fixed inset-0 z-50 flex items-end" style={{ background: 'rgba(0,0,0,0.5)' }} onClick={() => setShowEditDueDate(false)}>
+        <div className="fixed inset-0 z-50 flex items-end" style={{ background: "var(--scrim)" }} onClick={() => setShowEditDueDate(false)}>
           <div className="w-full max-w-[400px] mx-auto rounded-t-2xl p-5 flex flex-col gap-4" style={{ background: 'var(--surface)' }} onClick={e => e.stopPropagation()}>
             <div className="flex justify-center pt-1 pb-0"><div className="w-10 h-1 rounded-full" style={{ background: 'var(--divider)' }} /></div>
             <p className="text-16 font-semibold" style={{ color: 'var(--text-primary)' }}>{t('common.paymentDueDate')}</p>

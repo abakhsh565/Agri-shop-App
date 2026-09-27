@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Search, Check, X } from "lucide-react";
+import { Search, Check } from "lucide-react";
 import { useT } from "@/lib/i18n";
 import usePresence from "@/hooks/usePresence";
 
@@ -35,6 +35,12 @@ interface SelectSheetProps {
  * In-app bottom-sheet picker used in place of native <select> dialogs so
  * selection UI matches the app's design. Slides up from the bottom, dims the
  * backdrop, and (optionally) filters a long list.
+ *
+ * **No close button, by design.** This sheet has exactly one outcome — the row you tap — and
+ * that tap dismisses it, so a cross would be a second control saying what the list already
+ * says. Tapping the dimmed backdrop, pressing Escape, or the Android back button all dismiss it
+ * unchanged. It keeps the grabber so the sheet still reads as something laid over the screen
+ * rather than a page of its own.
  */
 export default function SelectSheet({
   open, title, options, selected, searchable = false,
@@ -72,12 +78,9 @@ export default function SelectSheet({
         onAnimationEnd={finishExit}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-5 pt-4 pb-3">
+        <div className="ds-grabber" />
+        <div className="flex items-center px-5 pt-3 pb-3">
           <p className="text-15 font-bold" style={{ color: "var(--text-primary)" }}>{title}</p>
-          <button onClick={onClose} aria-label={t("common.close")} className="size-8 rounded-full flex items-center justify-center"
-            style={{ background: "var(--surface-2)", color: "var(--text-secondary)" }}>
-            <X size={16} />
-          </button>
         </div>
 
         {searchable && (

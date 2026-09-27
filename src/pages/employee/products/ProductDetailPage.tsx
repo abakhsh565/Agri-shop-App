@@ -347,7 +347,7 @@ export default function ProductDetailPage() {
           <div className="absolute inset-0 bg-black/40" />
           <div
             className="relative w-full max-w-md rounded-t-[24px] p-6 pb-8 animate-slide-up"
-            style={{ background: "var(--surface-2)", border: "1px solid var(--divider)", borderBottom: "none" }}
+            style={{ background: "var(--tone-sheet)", border: "1px solid var(--divider)", borderBottom: "none" }}
             onClick={(e) => e.stopPropagation()}
           >
             {/* Handle bar */}

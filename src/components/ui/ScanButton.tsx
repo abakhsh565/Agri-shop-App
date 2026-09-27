@@ -91,7 +91,7 @@ export default function ScanButton({ onScan, label, size = "md" }: ScanButtonPro
             className={`w-full max-w-[390px] mx-auto rounded-t-[24px] p-6 flex flex-col gap-4 ${
               closing ? "ds-anim-sheet-out" : "ds-anim-sheet-in"
             }`}
-            style={{ background: "var(--surface)" }}
+            style={{ background: "var(--tone-sheet)" }}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between">

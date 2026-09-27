@@ -494,8 +494,8 @@ export default function AdminSaleDetailPage() {
 
       {/* Void dialog */}
       {showVoidDialog && (
-        <div className="fixed inset-0 z-50 flex items-end" style={{ background: "rgba(0,0,0,0.5)" }} onClick={() => setShowVoidDialog(false)}>
-          <div className="w-full max-w-[390px] mx-auto rounded-t-[24px] p-6 flex flex-col gap-4" style={{ background: "var(--surface)" }} onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 z-50 flex items-end" style={{ background: "var(--scrim)" }} onClick={() => setShowVoidDialog(false)}>
+          <div className="w-full max-w-[390px] mx-auto rounded-t-[24px] p-6 flex flex-col gap-4" style={{ background: "var(--tone-sheet)" }} onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-center"><div className="w-10 h-1 rounded-full" style={{ background: "var(--divider)" }} /></div>
             <p className="text-base font-bold text-center" style={{ color: "var(--text-primary)" }}>
               {t("admin.voidConfirmTitle", { number: sale?.saleNumber ?? "" })}

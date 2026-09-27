@@ -202,6 +202,21 @@
   --surface: var(--tone-card);
   --surface-2: var(--tone-sunken);
   --surface-3: var(--tone-sunken);
+  /*
+   * The modal layer — sheets, dialogs, pickers.
+   *
+   * A sheet is the topmost surface in the app, so it is its own tone rather than the page's:
+   * pointing it at `--tone-page` made it the exact colour of the screen behind it, and the
+   * only thing separating the two was the scrim. On light that still read (a pale sheet under
+   * the dimmed page); on dark it vanished completely (#0d0d0c on #0d0d0c, behind a 32% black
+   * scrim that moved the backdrop 4/255). Tokens are per theme, because the ramp INVERTS:
+   * on light a step forward gets darker, on dark it must get lighter.
+   */
+  --tone-sheet: var(--tone-page);
+  --scrim: rgba(0, 0, 0, 0.32);
+  /* A chip drawn ON a sheet, for close/action icons. Translucent rather than a fixed tone so
+     it reads the same on white, on near-black and over a photo behind a transparent panel. */
+  --sheet-chip: rgba(127, 127, 127, 0.16);
   --divider: #e5e5e0;
   --error-bg: rgba(239,68,68,0.08);
   --error-border: rgba(239,68,68,0.2);
@@ -217,6 +232,10 @@
   --tone-card: #171716;
   --tone-sunken: #1e1e1c;
   --hairline: #242422;
+  /* One step above the card, so a sheet is unmistakably the raised layer on a dark screen. */
+  --tone-sheet: #232322;
+  --scrim: rgba(0, 0, 0, 0.62);
+  --sheet-chip: rgba(127, 127, 127, 0.2);
 
   --background: var(--tone-page);
   --foreground: #f6f6f4;
@@ -1171,7 +1190,7 @@ svg.lucide {
 
   /* -- Modal sheet -- */
   .ds-sheet {
-    background: var(--tone-page);
+    background: var(--tone-sheet);
     border-start-start-radius: var(--radius-sheet);
     border-start-end-radius: var(--radius-sheet);
   }
@@ -1183,7 +1202,15 @@ svg.lucide {
     background: var(--border);
   }
   .ds-backdrop {
-    background: rgba(0, 0, 0, 0.32);
+    background: var(--scrim);
+  }
+
+  /* Icon buttons sitting on the modal layer use the soft chip instead of a fixed surface tone:
+     inside a sheet the surrounding colour is the sheet's, not the page's, and a chip one step
+     off it is invisible. */
+  .ds-backdrop .ds-iconbtn {
+    background: var(--sheet-chip);
+    color: var(--text-primary);
   }
 
   /* -- Circular icon button -- */

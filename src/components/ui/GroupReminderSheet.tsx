@@ -111,7 +111,7 @@ export default function GroupReminderSheet({ groupName: initGroupName, config: i
         className={`w-full max-w-[390px] mx-auto rounded-t-[24px] flex flex-col ${
           closing ? "ds-anim-sheet-out" : "ds-anim-sheet-in"
         }`}
-        style={{ background: "var(--surface)", maxHeight: "92vh" }}
+        style={{ background: "var(--tone-sheet)", maxHeight: "92vh" }}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex justify-center pt-3 pb-1">
@@ -122,7 +122,7 @@ export default function GroupReminderSheet({ groupName: initGroupName, config: i
           <p className="text-16 font-semibold" style={{ color: "var(--text-primary)" }}>
             {t("inline.create_group_reminder")}
           </p>
-          <button onClick={dismiss} className="size-8 rounded-full flex items-center justify-center ds-pressable" style={{ background: "var(--surface-2)" }}>
+          <button onClick={dismiss} className="size-8 rounded-full flex items-center justify-center ds-pressable" style={{ background: "var(--sheet-chip)" }}>
             <X size={16} style={{ color: "var(--text-secondary)" }} />
           </button>
         </div>

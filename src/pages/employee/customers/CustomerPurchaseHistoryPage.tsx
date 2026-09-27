@@ -160,7 +160,7 @@ export default function CustomerPurchaseHistoryPage() {
       {showDateModal && (
         <div className="fixed inset-0 z-50 flex items-end justify-center" onClick={() => setShowDateModal(false)}>
           <div className="absolute inset-0 bg-black/40" />
-          <div className="relative w-full max-w-md rounded-t-2xl p-5 pb-8 animate-slide-up" style={{ background: "var(--surface)" }} onClick={(e) => e.stopPropagation()}>
+          <div className="relative w-full max-w-md rounded-t-2xl p-5 pb-8 animate-slide-up" style={{ background: "var(--tone-sheet)" }} onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <p className="text-15 font-bold" style={{ color: "var(--text-primary)" }}>{t("admin.selectDateRange")}</p>
               <button onClick={() => setShowDateModal(false)} className="text-xl" style={{ color: "var(--text-secondary)" }}>×</button>

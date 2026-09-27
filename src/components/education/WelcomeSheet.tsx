@@ -20,7 +20,8 @@ export default function WelcomeSheet() {
   const { welcomeOpen, dismissWelcome, startTour } = useEducationStore();
 
   return (
-    <Sheet open={welcomeOpen} title={t("edu.welcome.title")} onClose={dismissWelcome}>
+    /* Both answers to this sheet are buttons inside it, so the header carries no third one. */
+    <Sheet open={welcomeOpen} title={t("edu.welcome.title")} onClose={dismissWelcome} closeButton={false}>
       <div className="px-5 pt-1">
         <p className="text-14" style={{ color: "var(--text-secondary)" }} data-testid="welcome-body">
           {t("edu.welcome.body")}

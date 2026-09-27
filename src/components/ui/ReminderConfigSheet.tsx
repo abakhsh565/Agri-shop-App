@@ -115,7 +115,7 @@ export default function ReminderConfigSheet({ config, onSave, onClose }: Props) 
         className={`w-full max-w-[390px] mx-auto rounded-t-[24px] flex flex-col ${
           closing ? "ds-anim-sheet-out" : "ds-anim-sheet-in"
         }`}
-        style={{ background: "var(--surface)", maxHeight: "90vh" }}
+        style={{ background: "var(--tone-sheet)", maxHeight: "90vh" }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Handle */}
@@ -129,7 +129,7 @@ export default function ReminderConfigSheet({ config, onSave, onClose }: Props) 
           <button
             onClick={onClose}
             className="size-8 rounded-full flex items-center justify-center"
-            style={{ background: "var(--surface-2)" }}
+            style={{ background: "var(--sheet-chip)" }}
           >
             <X size={16} style={{ color: "var(--text-secondary)" }} />
           </button>

@@ -107,7 +107,9 @@ export default function ShopSwitcherSheet() {
   }
 
   return (
-    <Sheet open={open} title={t("shop.myShops")} onClose={close}>
+    /* Picking a shop is the whole interaction, so the sheet carries no close button: the row
+       you tap dismisses it, and the scrim and back button still work. */
+    <Sheet open={open} title={t("shop.myShops")} onClose={close} closeButton={false}>
       <div className="px-4 pt-1">
         {loading && shops.length === 0 && (
           <div className="flex items-center justify-center py-8" data-testid="shop-list-loading">
