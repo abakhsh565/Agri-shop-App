@@ -12,8 +12,9 @@ import { formatCurrency, getStockStatusColor } from "@/lib/formatters";
 import { useShellBase } from "@/lib/useShellBase";
 import { rpcDeleteProduct } from "@/lib/db";
 import { Pencil, TrendingUp, Barcode, Trash2, Copy, Download, Package, Camera, Loader2, Bell } from "lucide-react";
-import { getRecommendationsForProduct } from "@/lib/recommendationEngine";
-import { loadCustomerCrops } from "@/lib/reminderEngine";
+import { getRecommendationsForProduct, type CustomerCropRecord } from "@/lib/recommendationEngine";
+import { loadCustomerCropRows } from "@/lib/reminderEngine";
+import WhyRecommended from "@/components/recommendations/WhyRecommended";
 import { useCustomersStore } from "@/stores/customersStore";
 import { useSalesStore } from "@/stores/salesStore";
 import { barcodeToSvg } from "@/lib/barcode";
@@ -420,8 +421,8 @@ export default function ProductDetailPage() {
 }
 
 /* ═══════════════════════════════════════════════════════
-   ProductCustomerRecommendations — shows customers who
-   likely want this product based on crop + basket gaps
+   ProductCustomerRecommendations — the growers whose crop
+   this product fits right now, best-matched first
    ═══════════════════════════════════════════════════════ */
 function ProductCustomerRecommendations({ productId }: { productId: string }) {
   const t = useT();
@@ -429,15 +430,16 @@ function ProductCustomerRecommendations({ productId }: { productId: string }) {
   const products = useProductsStore((s) => s.products);
   const customersReady = useCustomersStore((s) => s.ready);
   const sales = useSalesStore((s) => s.sales);
-  const [cropsMap, setCropsMap] = useState<Record<string, string[]>>({});
+  // The whole crop row per customer, so acreage and the planting date can rank the list
+  // instead of only a name deciding whether the crop matches.
+  const [cropsByCustomer, setCropsByCustomer] = useState<Record<string, CustomerCropRecord[]>>({});
 
-  // Load crops from Supabase for all customers
   useEffect(() => {
     if (!customersReady) useCustomersStore.getState().load();
     // Load crops for all active customers
     customers.filter(c => !c.isArchived).forEach(c => {
-      loadCustomerCrops(c.id).then(crops => {
-        setCropsMap(prev => ({ ...prev, [c.id]: crops }));
+      loadCustomerCropRows(c.id).then(crops => {
+        setCropsByCustomer(prev => ({ ...prev, [c.id]: crops }));
       });
     });
   }, [customersReady, customers.length]);
@@ -445,7 +447,12 @@ function ProductCustomerRecommendations({ productId }: { productId: string }) {
   const product = products.find((p) => p.id === productId);
   if (!product || !customersReady || customers.length === 0) return null;
 
-  const recs = getRecommendationsForProduct(product, { customers, sales, products, customerCropsMap: cropsMap });
+  const recs = getRecommendationsForProduct(product, {
+    customers,
+    sales,
+    products,
+    customerCrops: cropsByCustomer,
+  });
   if (recs.length === 0) return null;
 
   function getInitials(name: string): string {
@@ -467,15 +474,15 @@ function ProductCustomerRecommendations({ productId }: { productId: string }) {
       <ListCard>
         {recs.map((rec) => (
           <ListRow
-            key={rec.customer.id}
-            tile={rec.customer.imageUrl ? (
-              <img src={rec.customer.imageUrl} alt={rec.customer.name} className="w-10 h-10 rounded-full object-cover shrink-0" />
+            key={rec.subject.id}
+            tile={rec.subject.imageUrl ? (
+              <img src={rec.subject.imageUrl} alt={rec.subject.name} className="w-10 h-10 rounded-full object-cover shrink-0" />
             ) : (
               <div
                 className="w-10 h-10 rounded-full flex items-center justify-center text-12 font-bold shrink-0"
-                style={{ background: getAvatarColor(rec.customer.name), color: "#fff" }}
+                style={{ background: getAvatarColor(rec.subject.name), color: "#fff" }}
               >
-                {getInitials(rec.customer.name)}
+                {getInitials(rec.subject.name)}
               </div>
             )}
             trailing={
@@ -483,16 +490,16 @@ function ProductCustomerRecommendations({ productId }: { productId: string }) {
               className="size-8 rounded-full flex items-center justify-center shrink-0"
               style={{ background: "var(--surface)", border: "1px solid var(--divider)" }}
               onClick={() => {
-                const phone = (rec.customer.phone || '').replace(/[^0-9+]/g, '');
+                const phone = (rec.subject.phone || '').replace(/[^0-9+]/g, '');
                 const waPhone = phone.startsWith('+') ? phone.slice(1) : phone.startsWith('0') ? '92' + phone.slice(1) : phone;
-                const firstName = rec.customer.name.split(' ')[0];
+                const firstName = rec.subject.name.split(' ')[0];
                 let msg = '';
                 // The message the owner SENDS a farmer: it must be in the language
                 // the owner is reading, not always English.
-                const waParams = { name: firstName, product: product.name, crop: rec.cropName };
-                if (rec.reasonTag === 'missing_from_basket') {
+                const waParams = { name: firstName, product: product.name, crop: rec.crop };
+                if (rec.tag === 'missing_from_basket') {
                   msg = t('whatsapp.orderReminder', waParams);
-                } else if (rec.reasonTag === 'due_again') {
+                } else if (rec.tag === 'due_again') {
                   msg = t('whatsapp.restockReminder', waParams);
                 } else {
                   msg = t('whatsapp.inSeasonReminder', waParams);
@@ -506,11 +513,9 @@ function ProductCustomerRecommendations({ productId }: { productId: string }) {
           >
             <div className="min-w-0">
               <p className="text-14 font-medium" style={{ color: "var(--text-primary)" }}>
-                {rec.customer.name}
+                {rec.subject.name}
               </p>
-              <p className="text-12 mt-0.5" style={{ color: "var(--text-secondary)" }}>
-                {t(rec.reasonKey, rec.reasonParams)}
-              </p>
+              <WhyRecommended reasons={rec.reasons} />
             </div>
           </ListRow>
         ))}

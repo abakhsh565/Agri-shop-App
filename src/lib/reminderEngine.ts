@@ -1141,3 +1141,30 @@ export function categorizeReminders(
   }
   return { ready, future };
 }
+import type { CustomerCropRecord } from "@/lib/recommendationEngine";
+/**
+ * The same crops, with what else the row holds.
+ *
+ * `acreage` and the planting/harvest dates are the only recorded answer to "how big is the
+ * farm" and "what stage is the crop at" — the customer form fills in the name alone today, so
+ * these are usually null and the recommendation engine treats them as not recorded rather than
+ * as zero.
+ */
+export async function loadCustomerCropRows(customerId: string): Promise<CustomerCropRecord[]> {
+  try {
+    const { data } = await supabase
+      .from("customer_crops")
+      .select("crop_name, acreage, planting_date, expected_harvest")
+      .eq("customer_id", customerId);
+    if (!data) return [];
+    return data.map((r) => ({
+      cropName: r.crop_name as string,
+      acreage: r.acreage === null || r.acreage === undefined ? null : Number(r.acreage),
+      plantingDate: (r.planting_date as string | null) ?? null,
+      expectedHarvest: (r.expected_harvest as string | null) ?? null,
+    }));
+  } catch {
+    return [];
+  }
+}
+

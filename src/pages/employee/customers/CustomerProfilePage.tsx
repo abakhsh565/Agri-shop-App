@@ -16,8 +16,9 @@ import { useThemeStore } from "@/stores/themeStore";
 import { useT } from "@/lib/i18n";
 import { useShellBase } from "@/lib/useShellBase";
 import { History, Wallet, Bell, Pencil, Trash2, Receipt, Plus, Package } from "lucide-react";
-import { getRecommendationsForCustomer, KNOWN_CROPS } from "@/lib/recommendationEngine";
-import { loadReminderConfigs, saveReminderConfig as saveReminderConfigToDb, loadCustomerCrops, saveCustomerCrops as saveCustomerCropsToDb, loadBusinessSettings, calculatePaymentStatus, getPaymentStatusLabel, getPaymentStatusColor, isDuplicateReminder } from "@/lib/reminderEngine";
+import { getRecommendationsForCustomer, KNOWN_CROPS, type CustomerCropRecord, type RecommendationReason } from "@/lib/recommendationEngine";
+import { loadReminderConfigs, saveReminderConfig as saveReminderConfigToDb, loadCustomerCrops, loadCustomerCropRows, saveCustomerCrops as saveCustomerCropsToDb, loadBusinessSettings, calculatePaymentStatus, getPaymentStatusLabel, getPaymentStatusColor, isDuplicateReminder } from "@/lib/reminderEngine";
+import WhyRecommended from "@/components/recommendations/WhyRecommended";
 import { useProductsStore } from "@/stores/productsStore";
 import { SkeletonList } from "@/components/ui/Skeleton";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
@@ -652,8 +653,8 @@ export default function CustomerProfilePage() {
 }
 
 /* ═══════════════════════════════════════════════════════
-   RecommendedSection — suggests products for this customer
-   based on crop + basket gaps + season timing
+   RecommendedSection — products this customer's crop needs now,
+   ranked by how they actually buy
    ═══════════════════════════════════════════════════════ */
 function RecommendedSection({ customerId }: { customerId: string | undefined }) {
   if (!customerId) return null;
@@ -662,29 +663,34 @@ function RecommendedSection({ customerId }: { customerId: string | undefined }) 
   const products = useProductsStore((s) => s.products);
   const productsReady = useProductsStore((s) => s.ready);
   const sales = useSalesStore((s) => s.sales);
-  const [cropsMap, setCropsMap] = useState<Record<string, string[]>>({});
+  // The whole crop row, not just its name: acreage and the planting date are what tell the
+  // engine how big the farm is and what stage the crop is at. They are usually absent — the
+  // crop form only asks for the name — and absent never becomes a guess.
+  const [crops, setCrops] = useState<CustomerCropRecord[]>([]);
 
-  // Load crops from Supabase for all customers
   useEffect(() => {
     if (!productsReady) useProductsStore.getState().load();
-    loadCustomerCrops(customerId).then(crops => {
-      setCropsMap(prev => ({ ...prev, [customerId]: crops }));
-    });
+    loadCustomerCropRows(customerId).then(setCrops);
   }, [productsReady, customerId]);
 
   const customer = customers.find((c) => c.id === customerId);
   if (!customer || !productsReady || products.length === 0) return null;
 
-  const recs = getRecommendationsForCustomer(customer, { customers, sales, products, customerCropsMap: cropsMap });
+  const recs = getRecommendationsForCustomer(customer, {
+    customers,
+    sales,
+    products,
+    customerCrops: { [customerId]: crops },
+  });
   if (recs.length === 0) return null;
 
   return (
     <ListCard section={t("products.recommendedFor", { name: customer.name.split(" ")[0].toUpperCase() })}>
         {recs.map((rec) => (
           <ListRow
-            key={rec.product.id}
-            tile={rec.product.imageUrl ? (
-              <img src={rec.product.imageUrl} alt={rec.product.name} className="size-10 rounded-full object-cover shrink-0" style={{ background: "#E8F5E0" }} />
+            key={rec.subject.id}
+            tile={rec.subject.imageUrl ? (
+              <img src={rec.subject.imageUrl} alt={rec.subject.name} className="size-10 rounded-full object-cover shrink-0" style={{ background: "#E8F5E0" }} />
             ) : (
               <div className="size-10 rounded-full flex items-center justify-center shrink-0" style={{ background: "#E8F5E0" }}>
                 <Package size={16} style={{ color: "var(--brand-dark)" }} />
@@ -699,12 +705,12 @@ function RecommendedSection({ customerId }: { customerId: string | undefined }) 
                 const waPhone = phone.startsWith('+') ? phone.slice(1) : phone.startsWith('0') ? '92' + phone.slice(1) : phone;
                 const firstName = customer.name.split(' ')[0];
                 let msg = '';
-                if (rec.reasonTag === 'missing_from_basket') {
-                  msg = t('whatsapp.orderReminder', { name: firstName, product: rec.product.name, crop: rec.cropName });
-                } else if (rec.reasonTag === 'due_again') {
-                  msg = t('whatsapp.restockReminder', { name: firstName, product: rec.product.name, crop: rec.cropName });
+                if (rec.tag === 'missing_from_basket') {
+                  msg = t('whatsapp.orderReminder', { name: firstName, product: rec.subject.name, crop: rec.crop });
+                } else if (rec.tag === 'due_again') {
+                  msg = t('whatsapp.restockReminder', { name: firstName, product: rec.subject.name, crop: rec.crop });
                 } else {
-                  msg = t('whatsapp.inSeasonReminder', { name: firstName, product: rec.product.name, crop: rec.cropName });
+                  msg = t('whatsapp.inSeasonReminder', { name: firstName, product: rec.subject.name, crop: rec.crop });
                 }
                 window.open('https://wa.me/' + waPhone + '?text=' + encodeURIComponent(msg), '_blank');
               }}
@@ -715,11 +721,9 @@ function RecommendedSection({ customerId }: { customerId: string | undefined }) 
           >
             <div className="min-w-0">
               <p className="text-14 font-medium" style={{ color: "var(--text-primary)" }}>
-                {rec.product.name}
+                {rec.subject.name}
               </p>
-              <p className="text-12 mt-0.5" style={{ color: "var(--text-secondary)" }}>
-                {t(rec.reasonKey, rec.reasonParams)}
-              </p>
+              <WhyRecommended reasons={rec.reasons} />
             </div>
           </ListRow>
         ))}
