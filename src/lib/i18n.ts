@@ -460,7 +460,7 @@ export const translations = {
     // shop-registration screens, so an owner reading Urdu saw English errors.
     "auth.errPhoneFormat":      "Write a correct phone number (like 03001234567)",
     "auth.errSendCode":         "The code could not be sent. Check the number and try again.",
-    "auth.enterCode":           "Type the 6-digit code to continue.",
+    "auth.enterCode":           "Write your 6 numbers",
     "auth.codeSentToNumber":    "We sent a 6-digit code to {phone}.",
     "auth.demoCodeHint":        "For now, your code is {code}.",
     "auth.codeHintDemo":        "Enter your registered number to get a verification code.",
@@ -2281,7 +2281,7 @@ export const translations = {
     "auth.enterPhone":          "سائن ان کرنے کے لیے اپنا فون نمبر لکھیں",
     "auth.errPhoneFormat":      "درست فون نمبر لکھیں (مثلاً 03001234567)",
     "auth.errSendCode":         "کوڈ نہیں بھیجا جا سکا۔ نمبر دیکھ کر دوبارہ کوشش کریں۔",
-    "auth.enterCode":           "جاری رکھنے کے لیے 6 ہندسوں کا کوڈ لکھیں۔",
+    "auth.enterCode":           "اپنے 6 نمبر لکھیں",
     "auth.codeSentToNumber":    "ہم نے {phone} پر 6 ہندسوں کا کوڈ بھیجا ہے۔",
     "auth.demoCodeHint":        "فی الحال آپ کا کوڈ {code} ہے۔",
     "auth.codeHintDemo":        "تصدیقی کوڈ حاصل کرنے کے لیے اپنا رجسٹرڈ نمبر لکھیں۔",
