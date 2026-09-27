@@ -52,9 +52,28 @@ async function cleanup() {
   try { await admin(`UPDATE customers SET is_archived = false, archived_at = NULL, archived_by = NULL WHERE id IN ('${T.customerA}','${T.customerB}')`); } catch {}
   // Un-void any voided sales for this test's IDs before deleting
   try { await admin(`UPDATE sales SET is_voided = false, voided_at = NULL, voided_by = NULL, void_reason = NULL WHERE id = '${T.saleA}'`); } catch {}
-  // Delete in FK-safe order — only our specific test records
-  for (const t of ['inventory_movements', 'voids', 'sale_items', 'sales', 'return_items', 'returns', 'customer_payments']) {
-    try { await admin(`DELETE FROM ${t} WHERE customer_id IN ('${T.customerA}','${T.customerB}') OR product_id = '${T.productA}'`); } catch {}
+
+  // Delete in FK-safe order — only our specific test records.
+  //
+  // Each table has to be keyed on a column it actually has. The previous version ran one
+  // statement per table — `WHERE customer_id IN (...) OR product_id = ...` — inside a bare
+  // `catch {}`. `voids`, `sale_items`, `inventory_movements` and `return_items` have no
+  // `customer_id`, so all four raised `column "customer_id" does not exist`, the catch
+  // swallowed every one of them, and the rows were never deleted.
+  //
+  // The consequence was not cosmetic: the void rows this file creates survived the run,
+  // so the NEXT run's `DELETE FROM sales` (above, in the archive test) failed on
+  // `voids_sale_id_fkey`. The suite could be run once after a fresh fixture and never
+  // again — which is how the second full-suite run of a session reported a red test that
+  // the first run had passed.
+  const testSales = `SELECT id FROM sales WHERE customer_id IN ('${T.customerA}','${T.customerB}')`;
+  const testReturns = `SELECT id FROM returns WHERE customer_id IN ('${T.customerA}','${T.customerB}')`;
+  try { await admin(`DELETE FROM voids WHERE sale_id IN (${testSales})`); } catch {}
+  try { await admin(`DELETE FROM sale_items WHERE sale_id IN (${testSales}) OR product_id = '${T.productA}'`); } catch {}
+  try { await admin(`DELETE FROM return_items WHERE return_id IN (${testReturns}) OR product_id = '${T.productA}'`); } catch {}
+  try { await admin(`DELETE FROM inventory_movements WHERE product_id = '${T.productA}'`); } catch {}
+  for (const t of ['returns', 'customer_payments', 'sales']) {
+    try { await admin(`DELETE FROM ${t} WHERE customer_id IN ('${T.customerA}','${T.customerB}')`); } catch {}
   }
   try { await admin(`DELETE FROM product_variants WHERE id = '${T.variantA}'`); } catch {}
   try { await admin(`DELETE FROM products WHERE id = '${T.productA}'`); } catch {}

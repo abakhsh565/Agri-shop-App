@@ -38,26 +38,42 @@ const ROUTES = [
  * `buttonNoName` and `inputNoLabel` are structural, so they are pinned at zero: any unnamed
  * control is a regression, with no data-dependent excuse.
  *
- * `smallTarget` follows the DATA, not the code — the count is dominated by filter chips and
- * category labels, so a shop with more categories has more sub-44px chips. 87 is the highest
- * figure observed across full-suite runs and is kept as the ceiling; it was 72 on the run
- * that deleted the compatibility layer, and tightening to that would make the lane fail on a
- * shop that simply sells more kinds of things. The chips themselves are a deliberate compact
- * control, not a defect: they sit in a scrollable row that a thumb can hit.
+ * Small controls are therefore measured as TWO populations, because they answer different
+ * questions and only one of them is the app's to fix:
+ *
+ *   `smallTarget`       — controls the app owns: the tab bar, icon buttons, tabs, inline
+ *                         actions. Structural, so it is frozen tight and may only shrink.
+ *   `chipTarget`        — the filter/category chips that sit inside a horizontally
+ *                         scrollable strip. Their number follows the DATA: a shop that sells
+ *                         four categories has one more chip than a shop that sells three, and
+ *                         the same code measured 84 and 85 on two runs twenty minutes apart
+ *                         with no source change between them. On its own that made this lane a
+ *                         coin flip, and a real new undersized button would have been
+ *                         indistinguishable from a shop adding a category.
+ *
+ * The split was measured, not assumed: with the chips separated, the structural count is the
+ * same on a shop with three categories and a shop with four, and it is the chips that move.
+ * A chip is still a sub-44px control, so its ceiling is frozen too — just at a number the
+ * shop's own catalogue can reach rather than at one sampled from a single fixture state.
  */
 const BASELINE = {
   buttonNoName: 0,
   inputNoLabel: 0,
-  // Tightened from 87 to 84: the education pass added a 44px help affordance where a 36px
-  // icon button would have been the instinct, and the measured count went down rather than
-  // up. The rule is that this number may only shrink, so the improvement is recorded here.
-  smallTarget: 84,
+  // 44 is exactly the bottom tab bar — four 90x41 buttons on each of the eleven content
+  // routes. It is the same on every shop, so it is frozen tight: a new undersized icon
+  // button, tab or inline action anywhere trips this immediately.
+  smallTarget: 44,
+  // Measured 41 today. The old combined figure was observed between 72 and 87, and with the
+  // structural half pinned at 44 that band is 28–43 chips, so 43 is the ceiling a shop with
+  // a fuller catalogue can reach. Beyond that is a new compact control, not more data.
+  chipTarget: 43,
 };
 
 interface Audit {
   buttonNoName: string[];
   inputNoLabel: string[];
   smallTarget: string[];
+  chipTarget: string[];
   inputsWithName: number;
   buttonsWithName: number;
 }
@@ -68,8 +84,27 @@ async function audit(page: Page): Promise<Audit> {
       buttonNoName: [],
       inputNoLabel: [],
       smallTarget: [],
+      chipTarget: [],
       inputsWithName: 0,
       buttonsWithName: 0,
+    };
+
+    /**
+     * Whether a control sits inside a horizontally scrollable strip.
+     *
+     * This is what makes a 32px-tall chip usable: the row scrolls, so a thumb reaches one
+     * chip at a time without needing the target itself to be 44px. A control that is small
+     * and NOT in such a strip has no such excuse, which is the distinction the baseline now
+     * makes instead of lumping the two together.
+     */
+    const inScrollStrip = (el: Element) => {
+      let p = el.parentElement;
+      while (p && p !== document.body) {
+        const ox = getComputedStyle(p).overflowX;
+        if (ox === 'auto' || ox === 'scroll') return true;
+        p = p.parentElement;
+      }
+      return false;
     };
 
     const accessibleName = (el: Element) => {
@@ -102,7 +137,8 @@ async function audit(page: Page): Promise<Audit> {
       const r = el.getBoundingClientRect();
       if (r.width === 0 || r.height === 0) continue;
       if (r.height < 44 || r.width < 44) {
-        out.smallTarget.push(`${Math.round(r.width)}x${Math.round(r.height)} ${(el.textContent ?? '').trim().slice(0, 20)}`);
+        const described = `${Math.round(r.width)}x${Math.round(r.height)} ${(el.textContent ?? '').trim().slice(0, 20)}`;
+        (inScrollStrip(el) ? out.chipTarget : out.smallTarget).push(described);
       }
     }
 
@@ -168,30 +204,31 @@ test.describe('accessibility floor', () => {
     );
     expect(named.length, 'no labelled controls found on Settings').toBeGreaterThan(0);
 
-    // The sheet close + search clear are shared primitives; both must be named.
-    await page.goto('/admin/inventory/new');
-    await page.waitForTimeout(1200);
-    const sheetLabels = await page.evaluate(() => {
-      const btn = [...document.querySelectorAll('button')].find((b) =>
-        /choose supplier/i.test(b.textContent ?? ''),
-      );
-      btn?.click();
-      return true;
-    });
-    expect(sheetLabels).toBe(true);
+    // The shared sheet close is an icon-only control, so it must be named.
+    //
+    // The vehicle has to be a sheet that DRAWS a cross. This used to open the supplier
+    // picker on Add Product, until `SelectorField` began passing `closeButton={false}` — a
+    // picker that resolves in one tap needs no second way to say the same thing, and the
+    // scrim, Escape and the Android back button all still dismiss it. That left the
+    // assertion reading a sheet with no close button to name, which is a property of the
+    // vehicle, not a regression in the primitive. The help sheet is reachable in one tap
+    // from every screen and uses the shared `Sheet`, so it is the right one to read.
+    await page.getByRole('button', { name: /help for this screen/i }).click();
     await page.waitForTimeout(700);
     const closeName = await page.evaluate(() => {
-      const dialog = document.querySelector('.fixed.inset-0.z-50');
-      const close = dialog?.querySelector('button[aria-label]');
-      return close?.getAttribute('aria-label') ?? '';
+      // `[data-testid="sheet-close"]` names the primitive's own control. A bare
+      // `button[aria-label]` inside the sheet would also match any OTHER labelled button in
+      // it, so the guard could pass with the close button unnamed.
+      const close = document.querySelector('.fixed.inset-0.z-50 [data-testid="sheet-close"]');
+      return close?.getAttribute('aria-label')?.trim() ?? '';
     });
-    expect(closeName, 'the sheet close button has no accessible name').not.toBe('');
+    expect(closeName, 'the shared sheet close button has no accessible name').not.toBe('');
   });
 
   test('known gaps are frozen and may only shrink', async ({ page }) => {
     await loginViaUi(page, OWNER_PHONE);
 
-    const totals = { buttonNoName: 0, inputNoLabel: 0, smallTarget: 0 };
+    const totals = { buttonNoName: 0, inputNoLabel: 0, smallTarget: 0, chipTarget: 0 };
     const samples: Record<string, string[]> = {};
     let namedControls = 0;
 
@@ -202,6 +239,13 @@ test.describe('accessibility floor', () => {
       totals.buttonNoName += a.buttonNoName.length;
       totals.inputNoLabel += a.inputNoLabel.length;
       totals.smallTarget += a.smallTarget.length;
+      totals.chipTarget += a.chipTarget.length;
+      // Per-route, permanently: when this lane moves, the route is the whole diagnosis, and
+      // the last time it moved that took an instrumented run to find out.
+      console.log(
+        `[a11y] ${route} structural=${a.smallTarget.length} chips=${a.chipTarget.length}` +
+          (a.smallTarget.length ? ` ${JSON.stringify(a.smallTarget)}` : '')
+      );
       if (a.buttonNoName.length) samples.buttonNoName = [...(samples.buttonNoName ?? []), `${route}: ${a.buttonNoName[0]}`].slice(0, 3);
       if (a.inputNoLabel.length) samples.inputNoLabel = [...(samples.inputNoLabel ?? []), `${route}: ${a.inputNoLabel[0]}`].slice(0, 3);
       if (a.smallTarget.length) samples.smallTarget = [...(samples.smallTarget ?? []), `${route}: ${a.smallTarget.slice(0, 3).join(' , ')}`].slice(0, 3);

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useDelayedDismiss } from "@/hooks/usePresence";
 import { X, Check, Loader2 } from "lucide-react";
 import { useT, type I18nKey } from "@/lib/i18n";
@@ -53,6 +53,14 @@ export default function StockAlertsSheet({ onClose, onSaved }: Props) {
   const [saving, setSaving] = useState(false);
   const [applying, setApplying] = useState(false);
 
+  // The re-entry gate has to be synchronous. `disabled={saving}` is applied on the next
+  // render, and React batches, so two taps in one task — which is what a double tap is —
+  // both reach these handlers before it exists. Two saves are harmless (the second writes
+  // the same number), but two applies would run the catalogue sweep twice, so the claim is
+  // taken before the first await and released in `finally`.
+  const savingRef = useRef(false);
+  const applyingRef = useRef(false);
+
   // Lock background scroll — the same contract every sheet in the app keeps.
   useEffect(() => {
     document.body.style.overflow = "hidden";
@@ -87,7 +95,8 @@ export default function StockAlertsSheet({ onClose, onSaved }: Props) {
   ).length;
 
   async function handleSave() {
-    if (saving) return;
+    if (savingRef.current) return;
+    savingRef.current = true;
     setSaving(true);
     try {
       const saved = await saveStockAlertSettings({ threshold, frequency: settings.frequency });
@@ -102,12 +111,14 @@ export default function StockAlertsSheet({ onClose, onSaved }: Props) {
       if (import.meta.env.DEV) console.error("[StockAlerts] save failed:", err);
       addToast(t("stockAlerts.failed"), "error");
     } finally {
+      savingRef.current = false;
       setSaving(false);
     }
   }
 
   async function handleApplyToAll() {
-    if (applying) return;
+    if (applyingRef.current) return;
+    applyingRef.current = true;
     setApplying(true);
     try {
       // Save first: applying a number the shop has not actually adopted would leave the
@@ -121,6 +132,7 @@ export default function StockAlertsSheet({ onClose, onSaved }: Props) {
       if (import.meta.env.DEV) console.error("[StockAlerts] apply failed:", err);
       addToast(t("stockAlerts.failed"), "error");
     } finally {
+      applyingRef.current = false;
       setApplying(false);
     }
   }
