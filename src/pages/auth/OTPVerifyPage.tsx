@@ -4,12 +4,11 @@ import AuthLayout from "@/components/layout/AuthLayout";
 import NavHeader from "@/components/ui/NavHeader";
 import OTPInput from "@/components/ui/OTPInput";
 import { verifyOTPAndResolveUser, sendOTP, SESSION_SETUP_FAILED } from "@/lib/auth";
-import { DEMO_OTP_CODE, isDemoOtpMode } from "@/lib/authMode";
 import { hasPin } from "@/lib/pinLock";
 import { useAuthStore } from "@/stores/authStore";
 import { useT } from "@/lib/i18n";
 
-const OTP_VALIDITY = 5 * 60;
+const OTP_VALIDITY = 2 * 60;
 // There is deliberately NO cap on tries and NO lockout. A shop owner or their
 // new employee who mistypes a number must be able to keep trying — being shut
 // out of their own shop for mistyping is far worse than the risk it guards
@@ -165,22 +164,18 @@ export default function OTPVerifyPage() {
       <div className="flex flex-col gap-8 p-6 flex-1">
         <div className="flex flex-col gap-2">
           <p className="text-xl font-bold text-foreground">{t("auth.enterCode")}</p>
+          {/* The link sits on the same line as the number it changes, so "which number" and
+              "not that one" are read together. */}
           <p className="text-sm text-caption">
-            {t("auth.otpSentToNumber", { phone: pendingPhone ?? "" })}
+            {t("auth.otpSentToNumber", { phone: pendingPhone ?? "" })}{" "}
+            <button
+              type="button"
+              onClick={() => navigate("/login")}
+              className="font-medium text-foreground underline underline-offset-2"
+            >
+              {t("auth.changeNumber")}
+            </button>
           </p>
-          <button
-            type="button"
-            onClick={() => navigate("/login")}
-            className="self-start text-sm font-medium text-foreground underline underline-offset-2"
-          >
-            {t("auth.changeNumber")}
-          </button>
-          {/* This build has no SMS provider, so the code itself has to be somewhere on the
-              screen or nobody can sign in. Kept quiet, under the line that says what is
-              happening. */}
-          {isDemoOtpMode && (
-            <p className="text-12 text-caption">{t("auth.demoCodeHint", { code: DEMO_OTP_CODE })}</p>
-          )}
         </div>
 
         <OTPInput
@@ -191,12 +186,6 @@ export default function OTPVerifyPage() {
         />
 
         {error && <p className="text-sm text-[#ef4444] text-center">{error}</p>}
-
-        {!expired && (
-          <p className="text-sm text-caption text-center">
-            {t("auth.codeExpiresIn")}<span className="font-medium text-foreground">{formatTime(countdown)}</span>
-          </p>
-        )}
 
         {expired && (
           <p className="text-sm text-[#ef4444] text-center">{t("auth.codeExpired")}</p>
@@ -209,17 +198,19 @@ export default function OTPVerifyPage() {
           </div>
         )}
 
-        <div className="text-center">
-          {resendCountdown > 0 ? (
-            <p className="text-sm text-caption">{t("auth.resendIn", { seconds: resendCountdown })}</p>
-          ) : (
-            <button
-              onClick={handleResend}
-              className="text-sm font-medium text-foreground underline underline-offset-2"
-            >
-              {t("auth.resendOtp")}
-            </button>
-          )}
+        {/* The time left and the way to get a new code sit together: one row, no sentence
+            explaining either. Resend is present the whole time and only becomes usable when
+            the 30-second cooldown ends. */}
+        <div className="flex items-center justify-center gap-3">
+          <span className="text-sm font-medium tabular-nums text-foreground">{formatTime(countdown)}</span>
+          <button
+            type="button"
+            onClick={handleResend}
+            disabled={resendCountdown > 0}
+            className="text-sm font-medium text-foreground underline underline-offset-2 disabled:opacity-40 disabled:no-underline"
+          >
+            {t("auth.resendOtp")}
+          </button>
         </div>
       </div>
     </AuthLayout>

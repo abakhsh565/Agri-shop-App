@@ -7,7 +7,6 @@ import Input from "@/components/ui/Input";
 import OTPInput from "@/components/ui/OTPInput";
 import PINInput from "@/components/ui/PINInput";
 import { sendOTP, verifyOTPAndResolveUser, SESSION_SETUP_FAILED } from "@/lib/auth";
-import { DEMO_OTP_CODE, isDemoOtpMode } from "@/lib/authMode";
 import { savePin } from "@/lib/pinLock";
 import { useAuthStore } from "@/stores/authStore";
 import type { User } from "@/types";
@@ -168,13 +167,7 @@ export default function ForgotPINPage() {
           <>
             <div className="flex flex-col items-center gap-2 text-center">
               <p className="text-xl font-bold text-foreground">{t("auth.verifyNumber")}</p>
-              {/* Demo mode has no SMS provider, so "we sent a code" would be false — the same
-                  rule the sign-in code screen follows. */}
-              <p className="text-sm text-caption">
-                {isDemoOtpMode
-                  ? t("auth.demoCodeHint", { code: DEMO_OTP_CODE })
-                  : t("auth.enterCodeSentTo", { phone })}
-              </p>
+              <p className="text-sm text-caption">{t("auth.otpSentToNumber", { phone })}</p>
             </div>
             <OTPInput value={otp} onChange={(v) => { setOtp(v); setError(""); }} error={!!error} />
             {error && <p className="text-sm text-[#ef4444] text-center">{error}</p>}
