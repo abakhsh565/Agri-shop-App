@@ -36,7 +36,10 @@ migration poisons everything built on top of it and cannot be caught later by a 
 | 22 | Sale success screen rebuilt: one screen, no scrolling, content centred, status bar reserved (the tick no longer hides under it), receipt card with band / fields / perforation / amount, design-system `Button`s, **Print** added | **done** | `92ae98a1` | complete a sale on the phone and read the screen without scrolling |
 | 23 | Review & payment: credit limit is a text action above the customer opening its own sheet (amount + Save, same RPC); amount sits under the payment choice, cash/bank after it | **done** | `92ae98a1` | open the cart: order is type → amount → method, and the credit-limit sheet saves and updates everywhere |
 | 24 | QA data is no longer deleted by test runs — cleaning is opt-in (`QA_CLEAN_AFTER_RUN=1`), and every run says whether it deleted anything | **done** | `92ae98a1` | run any test file and confirm the log says QA data left untouched; rows you entered stay |
-| 25 | Full-service verification of everything above | **pending** | — | section C below |
+| 25 | Success screen trimmed to four actions (New Sale primary, Share + Print, quiet Home; Download dropped) at design-system sizes | **done** | `e3b7cc0f` | look at the action area: one primary, one secondary row, one quiet link |
+| 26 | Confirmation feedback on success: confetti burst (no dependency, reduced-motion hides it, clears itself) and a synthesised two-note chime | **done** | `e3b7cc0f` | complete a sale: pieces fall over the card for ~2.5s and the chime plays once |
+| 27 | Code screen fits one page at phone height and with the keyboard open (sign-in and sign-up) | **done** | `e3b7cc0f` | measured 390x780 and 390x430: no scroll, boxes + clock + Request a new code all visible |
+| 28 | Full-service verification of everything above | **pending** | — | section C below |
 
 ## B. Open items
 
