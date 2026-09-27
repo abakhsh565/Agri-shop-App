@@ -7,7 +7,7 @@ import ListRow from "@/components/ui/ListRow";
 import Button from "@/components/ui/Button";
 import Sheet from "@/components/ui/Sheet";
 import { SkeletonList } from "@/components/ui/Skeleton";
-import SaleReceipt from "@/components/sales/SaleReceipt";
+import { PaymentBadge } from "@/components/ui/Badge";
 import { formatCurrency, formatDateTime } from "@/lib/formatters";
 import { useT } from "@/lib/i18n";
 import { useThemeStore } from "@/stores/themeStore";
@@ -23,33 +23,18 @@ import { ChevronRight, Share2, Wallet, RotateCcw, Trash2, Clock } from "lucide-r
 import type { SaleItem as SaleLine } from "@/types";
 
 /**
- * One sale, read top to bottom in the order a person needs it.
+ * One sale, every fact it holds, in the order a person reads them.
  *
- * This screen is the *record* of a sale, and it is the same record whether the shopkeeper or
- * an employee opens it — so it is one screen. It used to be two (an admin page and an
- * employee page, ~1000 lines between them), which is how they came to disagree: one printed
- * a cost and profit line under every item, the other did not; one showed "Status" with
- * nothing after it, both repeated the totals in a second card and again on the receipt, and
- * neither showed the sale number it was describing.
+ * This is a **record**, not a receipt: the customer's copy is generated from the success
+ * screen and the Share button, and printing a copy of it here said nothing the page did not
+ * already have to say. What a sale record has to answer is a different set of questions —
+ * which sale is this, who bought, who sold, what was on it, what was paid and what is still
+ * owed against it, what the shop made, whether anything came back, and what can still be done.
  *
- * What is on it, and why each thing is:
- *
- *   1. **The state of the sale, if it is not simply completed** — voided, with the reason,
- *      because that used to be local state that only knew about voids performed in the same
- *      session, so an already-voided sale still offered Return and Void.
- *   2. **The receipt** — number, when, customer, phone, payment, items, sold by, and the
- *      amount taken last. The same component the success screen draws, so the two agree.
- *   3. **The customer**, tappable, because the next thought is always "what does this person
- *      still owe me".
- *   4. **What was sold**, with returned quantities marked on the line they belong to.
- *   5. **The shop's own numbers** — cost, profit, margin — kept off the receipt and off the
- *      customer's copy entirely: these are the shopkeeper's figures, and only theirs.
- *   6. **Returns**, each with what came back and what it cost.
- *   7. **The note**, on its own, not wedged into the money.
- *
- * The actions are the four things anyone ever does with a past sale: send it, take a payment
- * against it, return it, or void it — with the most likely one (taking money on a sale that
- * still owes) as the only primary.
+ * It is one screen for both shells because it was two that had drifted apart (one printed a
+ * cost and profit line under every item, the other did not; neither showed the sale number,
+ * and an already-voided sale still offered Return and Void because the void was local state).
+ * The shop's own figures appear only for the shopkeeper; everything else is the same record.
  */
 export default function SaleDetailView() {
   const { saleId } = useParams();
@@ -282,6 +267,10 @@ export default function SaleDetailView() {
   const netProfit = sale.totalAmount - baseCost - totalReturned;
   const margin = sale.totalAmount > 0 ? Math.round((netProfit / sale.totalAmount) * 100) : 0;
   const owes = sale.outstandingBalance > 0;
+  // This customer today: the sale's own balance is already inside it, so the useful thing is
+  // the standing it leaves them in — and whether they are past their limit because of it.
+  const customerOverLimit =
+    customer && customer.creditLimit > 0 ? Math.max(0, customer.outstandingBalance - customer.creditLimit) : 0;
 
   return (
     <div
@@ -291,8 +280,8 @@ export default function SaleDetailView() {
       <StatusBar />
       <NavHeader title={t("sales.saleDetails")} />
 
-      <div className="flex flex-col gap-3 p-4 pb-8">
-        {/* 1. The state of the sale, when it is not simply completed. */}
+      <div className="flex flex-col gap-4 p-4 pb-8">
+        {/* The state of the sale, when it is not simply completed. */}
         {sale.isVoided && (
           <div
             className="rounded-[var(--radius-tile)] p-3"
@@ -309,24 +298,45 @@ export default function SaleDetailView() {
           </div>
         )}
 
-        {/* 2. The receipt. */}
-        <SaleReceipt
-          facts={{
-            saleNumber: sale.saleNumber,
-            createdAt: sale.createdAt,
-            customerName: sale.customerName,
-            customerPhone: sale.customerPhone ?? undefined,
-            soldBy: sale.employeeName === user?.name ? t("saleSuccess.you") : sale.employeeName,
-            paymentMethod: sale.paymentMethod,
-            itemCount: sale.items.length,
-            totalAmount: sale.totalAmount,
-            amountPaid: sale.amountPaid,
-            outstandingBalance: sale.outstandingBalance,
-            voided: sale.isVoided ? { reason: sale.voidReason } : null,
-          }}
-        />
+        {/* 1. What this sale is: its number, when, who sold it, how it was paid. */}
+        <div className="ds-card">
+          <div className="flex items-baseline justify-between gap-3">
+            <p className="text-15 font-bold" style={{ color: "var(--text-primary)" }}>
+              {sale.saleNumber}
+            </p>
+            <p className="text-12" style={{ color: "var(--text-secondary)" }}>
+              {formatDateTime(sale.createdAt)}
+            </p>
+          </div>
+          <div className="mt-3 pt-3 flex flex-col gap-2" style={{ borderTop: "1px solid var(--divider)" }}>
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-13" style={{ color: "var(--text-secondary)" }}>
+                {t("sales.soldBy")}
+              </span>
+              <span className="text-13 font-semibold" style={{ color: "var(--text-primary)" }}>
+                {sale.employeeName === user?.name ? t("saleSuccess.you") : sale.employeeName}
+              </span>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-13" style={{ color: "var(--text-secondary)" }}>
+                {t("sale.paymentMethod")}
+              </span>
+              <span className="text-13 font-semibold" style={{ color: "var(--text-primary)" }}>
+                {sale.paymentMethod === "bank_transfer" ? t("sale.bankTransfer") : t("sale.cash")}
+              </span>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-13" style={{ color: "var(--text-secondary)" }}>
+                {t("sales.status")}
+              </span>
+              {/* The badge *is* the status: paid, partial or on credit — saying it twice in
+                  two words would be the same fact in two places. */}
+              <PaymentBadge type={sale.paymentType} outstandingBalance={sale.outstandingBalance} />
+            </div>
+          </div>
+        </div>
 
-        {/* 3. The customer — the next question is always what they still owe. */}
+        {/* 2. The customer, and where this sale left their account. */}
         {customer && (
           <ListCard>
             <ListRow
@@ -345,13 +355,20 @@ export default function SaleDetailView() {
                 )
               }
               title={customer.name}
-              meta={`${customer.outstandingBalance > 0 ? t("sales.outstandingBalance") + " " + formatCurrency(customer.outstandingBalance) : t("saleDetail.settled")}`}
+              meta={customer.phone}
+              description={
+                customerOverLimit > 0
+                  ? t("sale.overLimitBy", { amount: formatCurrency(customerOverLimit) })
+                  : customer.outstandingBalance > 0
+                    ? `${t("sales.outstandingBalance")} ${formatCurrency(customer.outstandingBalance)}`
+                    : t("saleDetail.settled")
+              }
               trailing={<ChevronRight size={18} className="shrink-0" style={{ color: "var(--text-secondary)" }} />}
             />
           </ListCard>
         )}
 
-        {/* 4. What was sold. */}
+        {/* 3. What was sold, at the price it was sold for. */}
         <div>
           <p className="ds-section-label mb-2 px-1" style={{ color: "var(--text-secondary)" }}>
             {t("sales.itemsSold")}
@@ -363,78 +380,108 @@ export default function SaleDetailView() {
               return (
                 <ListRow
                   key={item.id}
+                  title={`${item.productName} ${item.variantName}`}
+                  meta={`${formatCurrency(item.unitPrice)} × ${item.qty}`}
+                  description={
+                    returned > 0
+                      ? fullyReturned
+                        ? t("saleDetail.returned")
+                        : t("saleDetail.partialReturn", { count: String(returned), total: String(item.qty) })
+                      : undefined
+                  }
                   trailing={
                     <p className="text-14 font-bold shrink-0 tabular-nums">{formatCurrency(item.lineTotal)}</p>
                   }
-                >
-                  <div className="min-w-0">
-                    <p className="text-14 font-semibold truncate" style={{ color: "var(--text-primary)" }}>
-                      {item.productName} {item.variantName}
-                    </p>
-                    {/* The price this sale was made at — kept because the product's price
-                        changes later, and this line has to stay true. */}
-                    <p className="text-12 mt-0.5" style={{ color: "var(--text-secondary)" }}>
-                      {formatCurrency(item.unitPrice)} × {item.qty}
-                    </p>
-                    {returned > 0 && (
-                      <span
-                        className="inline-block text-10 font-semibold px-2 py-0.5 rounded-full mt-1"
-                        style={{
-                          background: fullyReturned ? "var(--error-bg)" : "var(--warning-bg)",
-                          color: fullyReturned ? "var(--error)" : "var(--warning)",
-                        }}
-                      >
-                        {fullyReturned
-                          ? t("saleDetail.returned")
-                          : t("saleDetail.partialReturn", { count: String(returned), total: String(item.qty) })}
-                      </span>
-                    )}
-                  </div>
-                </ListRow>
+                />
               );
             })}
           </ListCard>
         </div>
 
-        {/* 5. The shop's own numbers — never on the customer's copy. */}
-        {isManager && (
-          <div className="rounded-[var(--radius-card)] p-4 flex flex-col gap-2" style={{ background: "var(--tone-card)" }}>
-            <p className="ds-section-label" style={{ color: "var(--text-secondary)" }}>
-              {t("saleDetail.margin")}
-            </p>
-            <div className="flex items-center justify-between">
+        {/* 4. What was paid, and what is still owed on this sale. */}
+        <div className="ds-card">
+          <p className="ds-section-label mb-3" style={{ color: "var(--text-secondary)" }}>
+            {t("saleDetail.paymentSummary")}
+          </p>
+          <div className="flex flex-col gap-2">
+            <div className="flex justify-between">
               <span className="text-13" style={{ color: "var(--text-secondary)" }}>
-                {t("admin.baseCost")}
+                {t("sale.subtotal")}
               </span>
-              <span className="text-13 font-semibold tabular-nums" style={{ color: "var(--text-secondary)" }}>
-                {formatCurrency(Math.round(baseCost))}
+              <span className="text-13 font-bold tabular-nums" style={{ color: "var(--text-primary)" }}>
+                {formatCurrency(sale.subtotal)}
               </span>
             </div>
+            <div className="flex justify-between items-center">
+              <span className="text-14 font-bold" style={{ color: "var(--text-primary)" }}>
+                {t("saleSuccess.totalAmount")}
+              </span>
+              <span className="text-17 font-bold tabular-nums" style={{ color: "var(--text-primary)" }}>
+                {formatCurrency(sale.totalAmount)}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-13" style={{ color: "var(--text-secondary)" }}>
+                {t("sales.amountPaid")}
+              </span>
+              <span className="text-13 font-bold tabular-nums" style={{ color: "var(--text-primary)" }}>
+                {formatCurrency(sale.amountPaid)}
+              </span>
+            </div>
+            {owes && (
+              <div className="flex justify-between">
+                <span className="text-13" style={{ color: "var(--text-secondary)" }}>
+                  {t("sales.outstandingBalance")}
+                </span>
+                <span className="text-13 font-bold tabular-nums" style={{ color: "var(--warning)" }}>
+                  {formatCurrency(sale.outstandingBalance)}
+                </span>
+              </div>
+            )}
             {totalReturned > 0 && (
-              <div className="flex items-center justify-between">
+              <div className="flex justify-between">
                 <span className="text-13" style={{ color: "var(--text-secondary)" }}>
                   {t("saleDetail.returns")}
                 </span>
-                <span className="text-13 font-semibold tabular-nums" style={{ color: "var(--error)" }}>
+                <span className="text-13 font-bold tabular-nums" style={{ color: "var(--error)" }}>
                   -{formatCurrency(totalReturned)}
                 </span>
               </div>
             )}
-            <div className="flex items-center justify-between pt-2 mt-1" style={{ borderTop: "1px solid var(--divider)" }}>
-              <span className="text-13 font-bold">
-                {totalReturned > 0 ? t("saleDetail.netProfit") : t("saleDetail.profit")}
-              </span>
-              <span className="text-17 font-bold tabular-nums" style={{ color: "var(--brand-dark)" }}>
-                {formatCurrency(Math.round(netProfit))}
-                <span className="text-12 font-medium ms-2" style={{ color: "var(--text-secondary)" }}>
-                  {margin}%
+          </div>
+        </div>
+
+        {/* 5. The shop's own numbers — never on the customer's copy. */}
+        {isManager && (
+          <div className="ds-card">
+            <p className="ds-section-label mb-3" style={{ color: "var(--text-secondary)" }}>
+              {t("saleDetail.margin")}
+            </p>
+            <div className="flex flex-col gap-2">
+              <div className="flex justify-between">
+                <span className="text-13" style={{ color: "var(--text-secondary)" }}>
+                  {t("admin.baseCost")}
                 </span>
-              </span>
+                <span className="text-13 font-semibold tabular-nums" style={{ color: "var(--text-secondary)" }}>
+                  {formatCurrency(Math.round(baseCost))}
+                </span>
+              </div>
+              <div className="flex justify-between items-center pt-2" style={{ borderTop: "1px solid var(--divider)" }}>
+                <span className="text-13 font-bold">
+                  {totalReturned > 0 ? t("saleDetail.netProfit") : t("saleDetail.profit")}
+                </span>
+                <span className="text-17 font-bold tabular-nums" style={{ color: "var(--brand-dark)" }}>
+                  {formatCurrency(Math.round(netProfit))}
+                  <span className="text-12 font-medium ms-2" style={{ color: "var(--text-secondary)" }}>
+                    {margin}%
+                  </span>
+                </span>
+              </div>
             </div>
           </div>
         )}
 
-        {/* 6. Returns. */}
+        {/* 6. Anything that came back. */}
         {returns.length > 0 && (
           <div>
             <p className="ds-section-label mb-2 px-1" style={{ color: "var(--text-secondary)" }}>
@@ -446,15 +493,13 @@ export default function SaleDetailView() {
                   key={ret.id}
                   title={ret.returnNumber}
                   meta={`${formatDateTime(ret.createdAt)} · ${t("saleDetail.processedBy")} ${ret.processedByName}`}
-                  description={
-                    [
-                      ...ret.items.map(
-                        (rit) =>
-                          `${rit.productName} ${rit.variantName} × ${rit.qty} — ${formatCurrency(rit.unitPrice * rit.qty)}`
-                      ),
-                      ...(ret.reason ? [`${t("saleDetail.reason")} ${ret.reason}`] : []),
-                    ].join(" · ")
-                  }
+                  description={[
+                    ...ret.items.map(
+                      (rit) =>
+                        `${rit.productName} ${rit.variantName} × ${rit.qty} — ${formatCurrency(rit.unitPrice * rit.qty)}`
+                    ),
+                    ...(ret.reason ? [`${t("saleDetail.reason")} ${ret.reason}`] : []),
+                  ].join(" · ")}
                   value={ret.resolution === "refund_cash" ? t("saleDetail.cashRefund") : t("saleDetail.creditNote")}
                   trailing={
                     <span className="text-13 font-bold tabular-nums shrink-0" style={{ color: "var(--error)" }}>
@@ -467,8 +512,8 @@ export default function SaleDetailView() {
           </div>
         )}
 
-        {/* 7. The note, on its own. */}
-        <div className="rounded-[var(--radius-card)] p-4" style={{ background: "var(--tone-card)" }}>
+        {/* 7. The note on this sale. */}
+        <div className="ds-card">
           <div className="flex items-center justify-between mb-2">
             <p className="ds-section-label" style={{ color: "var(--text-secondary)" }}>
               {t("saleDetail.note")}
@@ -494,8 +539,7 @@ export default function SaleDetailView() {
           />
         </div>
 
-        {/* Actions, in the order this record is actually used: take the money that is still
-            owed, send the receipt, return something, or undo the sale. */}
+        {/* 8. What can still be done with it, most likely action first. */}
         <div className="flex flex-col gap-2 pt-1">
           {owes && customer && (
             <Button fullWidth size="lg" onClick={() => navigate(`${base}/customers/${customer.id}/record-payment`)}>
@@ -504,9 +548,6 @@ export default function SaleDetailView() {
               </span>
             </Button>
           )}
-          {/* Full width each, rather than two half-widths: "Process Return" wraps to two
-              lines in half the screen in either language, and a two-line label inside a pill
-              is the one thing that makes a row of buttons look unfinished. */}
           <Button variant="outline" size="md" fullWidth onClick={handleShare}>
             <span className="inline-flex items-center gap-2">
               <Share2 size={15} /> {t("saleDetail.share")}
@@ -525,7 +566,10 @@ export default function SaleDetailView() {
             </Button>
           )}
           {!withinReturnWindow && (
-            <p className="text-11 text-center inline-flex items-center justify-center gap-1.5" style={{ color: "var(--text-secondary)" }}>
+            <p
+              className="text-11 text-center inline-flex items-center justify-center gap-1.5"
+              style={{ color: "var(--text-secondary)" }}
+            >
               <Clock size={12} /> {t("saleDetail.returnWindowExpired")}
             </p>
           )}
