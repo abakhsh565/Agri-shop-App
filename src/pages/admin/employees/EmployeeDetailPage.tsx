@@ -276,43 +276,52 @@ export default function EmployeeDetailPage() {
       <StatusBar />
       <NavHeader title={emp.name} />
 
-      {/* Avatar + name card */}
-      <div className="px-4 pt-3 animate-fade-in-up">
+      {/* Avatar + name card — the SAME card the owner's own profile is drawn with on Settings:
+          `--radius-card`, the grouped-list tone, no drawn edge, a 48px avatar, a `text-base`
+          name and one chip grammar. It was the only card in the app at `p-5` with a 64px
+          avatar, a 1px `--border-light` edge and a `--surface-2` fill, so opening an employee
+          from the list changed the shape of the page's first card. The deactivated chip also
+          carried light-mode literals (`#fee2e2` / `#dc2626`) that stayed pale in the dark
+          theme; it uses the error tokens now, which darken with everything else. */}
+      <div className="px-4 pt-3.5 animate-fade-in-up">
         <div
-          className="rounded-[var(--radius-card)] p-5 flex items-center gap-4"
-          style={{ background: "var(--surface-2)", border: "1px solid var(--border-light)" }}
+          className="rounded-[var(--radius-card)] p-4 flex items-center gap-4"
+          style={{ background: "var(--tone-card)" }}
         >
           {emp.photoUrl ? (
-            <img src={emp.photoUrl} alt={emp.name} className="w-16 h-16 rounded-full object-cover shrink-0" />
+            <img src={emp.photoUrl} alt={emp.name} className="w-12 h-12 rounded-full object-cover shrink-0" />
           ) : (
             <div
-              className="w-16 h-16 rounded-full flex items-center justify-center text-xl font-bold shrink-0"
+              className="w-12 h-12 rounded-full flex items-center justify-center text-base font-bold shrink-0"
               style={{ background: initBgColor(emp.name), color: "#0a0a0a" }}
             >
               {initials}
             </div>
           )}
           <div className="flex-1 min-w-0">
-            <p className="text-lg font-bold truncate" style={{ color: "var(--text-primary)" }}>{emp.name}</p>
-            <div className="flex items-center gap-2 mt-2 flex-wrap">
-              <span
-                className="text-xs font-bold px-2.5 py-0.5 rounded-full"
-                style={isActive
-                  ? { background: "rgba(132,204,22,0.15)", color: "var(--brand-dark)" }
-                  : { background: "#fee2e2", color: "#dc2626" }
-                }
-              >
-                {isInvited && isActive ? t("employees.invited") : isActive ? t("employees.active") : t("employees.deactivated")}
-              </span>
+            {/* Name and the two facts about the account, with the name taking the line —
+                exactly as on the Settings card. The phone is not repeated here: it sits in the
+                Contact card directly below, which the Settings card does not have. */}
+            <div className="flex items-center gap-2 min-w-0">
+              <p className="text-base font-bold truncate" style={{ color: "var(--text-primary)" }}>{emp.name}</p>
               {isOwner && (
                 <span
-                  className="text-xs font-medium px-2.5 py-0.5 rounded-full"
-                  style={{ background: "var(--surface)", border: "1px solid var(--divider)", color: "var(--text-secondary)" }}
+                  className="text-11 font-bold px-2 py-0.5 rounded-full shrink-0"
+                  style={{ background: "var(--tone-sunken)", color: "var(--text-secondary)" }}
                 >
                   {t("settings.owner")}
                 </span>
               )}
             </div>
+            <span
+              className="inline-block text-11 font-bold px-2 py-0.5 rounded-full mt-0.5"
+              style={isActive
+                ? { background: "var(--brand-light)", color: "var(--brand-dark)" }
+                : { background: "var(--error-bg)", color: "var(--error)" }
+              }
+            >
+              {isInvited && isActive ? t("employees.invited") : isActive ? t("employees.active") : t("employees.deactivated")}
+            </span>
           </div>
         </div>
       </div>

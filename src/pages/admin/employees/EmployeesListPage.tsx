@@ -10,11 +10,23 @@ import ListCard from "@/components/ui/ListCard";
 import ListRow from "@/components/ui/ListRow";
 import { SkeletonList } from "@/components/ui/Skeleton";
 
+/**
+ * The chip's tone, in the theme's own tokens.
+ *
+ * These were literals from a light comp — a pale red `#fee2e2` with `#dc2626` on it, and an
+ * amber mixed by hand. In the dark theme both stayed pale on a near-black row, and the chip
+ * disagreed with the same chip on the employee's own page. `--error-bg` / `--warning-bg` are
+ * alpha-based and deepen with the theme, so one definition reads correctly on both.
+ */
 function statusColor(emp: User) {
-  if (!emp.isActive) return { bg: "#fee2e2", color: "#dc2626" };
+  if (!emp.isActive) return { bg: "var(--error-bg)", color: "var(--error)" };
   // An invite is not yet a working employee, so it must not read as "Active".
-  if (emp.membershipStatus === "pending") return { bg: "rgba(245,158,11,0.15)", color: "#b45309" };
-  return { bg: "var(--brand)22", color: "var(--brand-dark)" };
+  if (emp.membershipStatus === "pending") return { bg: "var(--warning-bg)", color: "var(--warning)" };
+  // `var(--brand)22` does not work — a var() cannot have characters appended to it, so the
+  // declaration was dropped and the Active chip rendered as bare green text on no fill at all.
+  // `--brand-light` is the brand tint this theme already defines (pale lime in light, brand at
+  // 18% in dark), and is what Badge and the alerts screens use.
+  return { bg: "var(--brand-light)", color: "var(--brand-dark)" };
 }
 
 // What the owner needs to know about this person right now.
