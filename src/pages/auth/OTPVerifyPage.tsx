@@ -163,7 +163,12 @@ export default function OTPVerifyPage() {
   return (
     <AuthLayout>
       <NavHeader title={t("auth.verifyOtp")} backTo="/login" />
-      <div className="flex flex-col gap-8 p-6 flex-1">
+      {/* Centred in whatever height is left, with no fixed gap bigger than the code boxes:
+          returning here after the session has expired means the number is already filled in and
+          the keyboard is open, so the boxes have to stay in view with ~40% less height than the
+          screen. Everything on this screen is sized by the type scale and the space tokens —
+          nothing needs to scroll at phone sizes. */}
+      <div className="flex flex-col justify-center gap-5 px-6 py-4 flex-1 min-h-0">
         <div className="flex flex-col gap-2">
           <p className="text-xl font-bold text-foreground">{t("auth.enterCode")}</p>
           {/* The link sits on the same line as the number it changes, so "which number" and

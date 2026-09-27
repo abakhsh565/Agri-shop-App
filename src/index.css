@@ -854,6 +854,29 @@ svg.ds-row-chevron {
   from { stroke-dashoffset: 40; }
   to   { stroke-dashoffset: 0; }
 }
+/* ── Confirmation confetti ────────────────────────────────────────────────────
+   Drawn here rather than pulled in as a library: it is a dozen absolutely positioned
+   rectangles on one transform keyframe, so it costs one compositor layer and nothing
+   in the bundle. Only transform and opacity move, and it is removed entirely under
+   reduced-motion (see the media query below). */
+@keyframes confettiFall {
+  0%   { transform: translate3d(0, -10px, 0) rotate(0deg); opacity: 1; }
+  70%  { opacity: 1; }
+  100% { transform: translate3d(var(--confetti-drift, 0px), 78vh, 0) rotate(var(--confetti-spin, 540deg)); opacity: 0; }
+}
+
+.ds-confetti {
+  position: absolute;
+  top: 0;
+  width: 8px;
+  height: 12px;
+  border-radius: 2px;
+  pointer-events: none;
+  animation: confettiFall var(--confetti-dur, 2.4s) cubic-bezier(0.25, 0.6, 0.35, 1) both;
+  animation-delay: var(--confetti-delay, 0s);
+  will-change: transform, opacity;
+}
+
 @keyframes slideUp {
   from { transform: translateY(100%); }
   to   { transform: translateY(0); }
@@ -912,6 +935,9 @@ svg.ds-row-chevron {
    perceivable) but complete instantly, and the JS exit paths read the same
    preference, so nothing waits on an animation that will never run. */
 @media (prefers-reduced-motion: reduce) {
+  /* Confetti is decoration, so it goes entirely rather than moving less. */
+  .ds-confetti { display: none; }
+
   *,
   *::before,
   *::after {

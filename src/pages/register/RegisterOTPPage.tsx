@@ -127,7 +127,10 @@ export default function RegisterOTPPage() {
   return (
     <AuthLayout>
       <NavHeader title={t("auth.verifyPhone")} backTo="/register" />
-      <div className="flex flex-col gap-8 p-6 flex-1">
+      {/* Same rule as the sign-in code screen: centred in the space that is left, nothing larger
+          than the boxes as a gap, so the code, the clock and Resend all stay visible with the
+          keyboard open on a small phone. */}
+      <div className="flex flex-col justify-center gap-5 px-6 py-4 flex-1 min-h-0">
         <div className="flex flex-col gap-2">
           <p className="text-xl font-bold text-foreground">{t("auth.enterCode")}</p>
           {/* The link sits on the same line as the number it changes. */}

@@ -1,5 +1,6 @@
+import { useEffect } from "react";
 import { useNavigate, useLocation, Navigate } from "react-router-dom";
-import { Share2, Download, Home, Check, Printer, ShoppingCart } from "lucide-react";
+import { Share2, Home, Check, Printer, ShoppingCart } from "lucide-react";
 import { formatCurrency } from "@/lib/formatters";
 import type { Sale } from "@/types";
 import { useShellBase } from "@/lib/useShellBase";
@@ -10,6 +11,8 @@ import { renderReceiptBlob } from "@/lib/receiptRenderer";
 import { clearNav } from "@/lib/navContext";
 import StatusBar from "@/components/ui/StatusBar";
 import Button from "@/components/ui/Button";
+import ConfettiBurst from "@/components/ui/ConfettiBurst";
+import { playConfirmation } from "@/lib/feedback";
 
 function formatDateLong(dateStr: string): string {
   const d = new Date(dateStr);
@@ -75,6 +78,12 @@ export default function SaleSuccessPage() {
   const paidInFull = s.outstandingBalance <= 0;
   const isCredit = s.paymentType !== "full" || !paidInFull;
 
+  // Sound, once, when the screen appears. Not on every render: this is the confirmation of a
+  // single event. If the browser has not had a gesture yet it simply stays silent (see
+  // lib/feedback.ts — a missing chime must never affect the confirmations).
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  useEffect(() => { playConfirmation(); }, []);
+
   async function handleShare() {
     const blob = await renderReceiptBlob(s, t);
     if (!blob) { addToast(t("saleSuccess.failedGenerate"), "error"); return; }
@@ -100,15 +109,6 @@ export default function SaleSuccessPage() {
     const a = document.createElement("a"); a.href = url; a.download = fileName; a.click();
     URL.revokeObjectURL(url);
     addToast(t("saleSuccess.receiptSaved"), "success");
-  }
-
-  async function handleDownload() {
-    const blob = await renderReceiptBlob(s, t);
-    if (!blob) { addToast(t("saleSuccess.failedGenerate"), "error"); return; }
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a"); a.href = url; a.download = `receipt-${s.saleNumber}.png`; a.click();
-    URL.revokeObjectURL(url);
-    addToast(t("saleSuccess.receiptDownloaded"), "success");
   }
 
   async function handlePrint() {
@@ -160,8 +160,10 @@ export default function SaleSuccessPage() {
        content height — which is exactly how the card ended up pinned to the top with empty black
        space beneath it on a tall screen. Growing into the space that is there is what makes the
        centring below real. */
-    <div className="flex flex-col w-full flex-1 min-h-0" style={{ background: "var(--background)", color: "var(--text-primary)" }}>
+    <div className="relative flex flex-col w-full flex-1 min-h-0" style={{ background: "var(--background)", color: "var(--text-primary)" }}>
       <StatusBar />
+      {/* Decoration only: hidden under reduced-motion, removed when it lands. */}
+      <ConfettiBurst />
 
       {/* Everything above the actions is centred in the space that is left, so the screen reads
           as one page rather than a page with a gap at the bottom. */}
@@ -252,36 +254,45 @@ export default function SaleSuccessPage() {
         </div>
       </div>
 
-      {/* Actions — the app's own Button, so the shapes and colours match every other screen. */}
+      {/*
+        Four actions, in the order this screen is actually used:
+
+          1. **New Sale** — the reason the person is standing here; a queue does not end with one
+             sale. It is the only primary, and the only large target.
+          2. **Share** — the receipt's usual destination now that it is a picture.
+          3. **Print** — needed at the counter, not needed by everyone, so it is equal to Share
+             and smaller than New Sale.
+          4. **Home** — the quiet way out for someone who is done for the day.
+
+        Download was dropped: `Share` already hands the same image to the system, which offers
+        Save, and a fifth button made the row pretend there were five equally likely next steps.
+      */}
       <div className="shrink-0 px-4 pb-5 pt-3 flex flex-col gap-2 animate-fade-in-up">
         <div className="w-full max-w-[420px] mx-auto flex flex-col gap-2">
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" className="flex-1" onClick={handleShare}>
-              <Share2 size={14} strokeWidth={2.5} className="me-1.5" /> {t("saleSuccess.share")}
-            </Button>
-            <Button variant="outline" size="sm" className="flex-1" onClick={handlePrint}>
-              <Printer size={14} strokeWidth={2} className="me-1.5" /> {t("saleSuccess.print")}
-            </Button>
-            <Button variant="outline" size="sm" className="flex-1" onClick={handleDownload}>
-              <Download size={14} strokeWidth={2} className="me-1.5" /> {t("saleSuccess.download")}
-            </Button>
-          </div>
           <Button
             variant="primary"
             size="lg"
             fullWidth
             onClick={() => { clearNav(); navigate(`${base}/sale`, { replace: true }); }}
           >
-            <ShoppingCart size={15} strokeWidth={2.5} className="me-1.5" /> {t("saleSuccess.newSale")}
+            <ShoppingCart size={16} strokeWidth={2.5} className="me-1.5" /> {t("saleSuccess.newSale")}
           </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            fullWidth
+          <div className="flex gap-2">
+            <Button variant="outline" size="md" className="flex-1" onClick={handleShare}>
+              <Share2 size={15} strokeWidth={2.5} className="me-1.5" /> {t("saleSuccess.share")}
+            </Button>
+            <Button variant="outline" size="md" className="flex-1" onClick={handlePrint}>
+              <Printer size={15} strokeWidth={2} className="me-1.5" /> {t("saleSuccess.print")}
+            </Button>
+          </div>
+          <button
+            type="button"
             onClick={() => { clearNav(); navigate(`${base}/dashboard`, { replace: true }); }}
+            className="ds-pressable mx-auto inline-flex items-center gap-1.5 h-9 px-3 text-13 font-semibold"
+            style={{ color: "var(--text-secondary)" }}
           >
-            <Home size={14} strokeWidth={2} className="me-1.5" /> {t("saleSuccess.home")}
-          </Button>
+            <Home size={14} strokeWidth={2} /> {t("saleSuccess.home")}
+          </button>
         </div>
       </div>
     </div>
