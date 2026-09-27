@@ -432,13 +432,14 @@ export default function CustomerProfilePage() {
             icon={Bell}
             title={t("customerProfile.reminderHistory")}
           />
+          {/* Same row as its neighbours: it was the only one carrying a tinted background and a
+              hardcoded dark green label, which read as a different kind of control and was
+              invisible once the page is dark. */}
           <ListRow
             onClick={() => navigate(base + "/customers/" + customerId + "/record-payment")}
             icon={Receipt}
-            style={{ background: "#F2F8EC" }}
-          >
-            <span className="text-sm font-medium" style={{ color: "#3B6D11" }}>{t("customerProfile.recordPayment")}</span>
-          </ListRow>
+            title={t("customerProfile.recordPayment")}
+          />
           <ListRow
             onClick={startEdit}
             icon={Pencil}
@@ -448,7 +449,7 @@ export default function CustomerProfilePage() {
             onClick={() => setShowDelete(true)}
             icon={Trash2}
           >
-            <span className="text-sm" style={{ color: "#D64545" }}>{t("customerProfile.deleteCustomer")}</span>
+            <span className="text-sm" style={{ color: "var(--error)" }}>{t("customerProfile.deleteCustomer")}</span>
           </ListRow>
         </ListCard>
 

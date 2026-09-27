@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import AuthLayout from "@/components/layout/AuthLayout";
 import NavHeader from "@/components/ui/NavHeader";
@@ -41,6 +41,9 @@ export default function ForgotPINPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [shake, setShake] = useState(false);
+  // Set while a code is being checked, so the same six digits cannot be submitted twice by the
+  // effect below re-running on a re-render.
+  const verifying = useRef(false);
 
   useEffect(() => {
     if (!routeUser && !pendingPhone) {
@@ -87,6 +90,18 @@ export default function ForgotPINPage() {
       setLoading(false);
     }
   }
+
+  // Auto-verify once all six digits are in — the same rule the sign-in code screen follows, so
+  // the sixth digit is the submit here too. The ref stops a re-render from checking the same
+  // code a second time.
+  useEffect(() => {
+    if (step === "otp" && otp.length === 6 && !loading && !verifying.current) {
+      verifying.current = true;
+      void handleVerifyOTP().finally(() => { verifying.current = false; });
+    }
+    // handleVerifyOTP is re-created each render by design; the otp value is the trigger.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [otp, step]);
 
   async function handlePinComplete(val: string) {
     if (val.length < 4) return;
@@ -171,15 +186,15 @@ export default function ForgotPINPage() {
             </div>
             <OTPInput value={otp} onChange={(v) => { setOtp(v); setError(""); }} error={!!error} />
             {error && <p className="text-sm text-[#ef4444] text-center">{error}</p>}
+            {/* No Verify button: the sixth digit is the submit, exactly as on the sign-in code
+                screen. One tap fewer, and no state where a complete code is sitting there
+                waiting for a second confirmation. The spinner is all that is left to show. */}
             {loading && (
               <div className="flex items-center gap-2">
                 <div className="w-4 h-4 border-2 border-border-control border-t-transparent rounded-full animate-spin" />
                 <p className="text-sm text-caption">{t("auth.verifying")}</p>
               </div>
             )}
-            <Button fullWidth onClick={handleVerifyOTP} loading={loading} disabled={otp.length < 6}>
-              {t("auth.verify")}
-            </Button>
           </>
         )}
 
