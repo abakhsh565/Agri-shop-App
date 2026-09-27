@@ -155,7 +155,12 @@ export default function SaleSuccessPage() {
   ];
 
   return (
-    <div className="flex flex-col w-full h-full" style={{ background: "var(--background)", color: "var(--text-primary)" }}>
+    /* `flex-1`, not `h-full` and not `min-h-full`: the shell hands the page a flex-grown column
+       whose own height is auto, so a percentage height resolves against nothing and collapses to
+       content height — which is exactly how the card ended up pinned to the top with empty black
+       space beneath it on a tall screen. Growing into the space that is there is what makes the
+       centring below real. */
+    <div className="flex flex-col w-full flex-1 min-h-0" style={{ background: "var(--background)", color: "var(--text-primary)" }}>
       <StatusBar />
 
       {/* Everything above the actions is centred in the space that is left, so the screen reads
