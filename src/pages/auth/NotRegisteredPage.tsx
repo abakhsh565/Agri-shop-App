@@ -21,12 +21,22 @@ export default function NotRegisteredPage() {
             {t("auth.numberNotRegisteredBody")}
           </p>
           <p className="text-sm text-caption">
+            {t("auth.numberNotRegisteredNext")}
+          </p>
+          <p className="text-sm text-caption">
             {t("auth.employeeContactAdmin")}
           </p>
         </div>
-        <Button fullWidth size="lg" onClick={() => navigate("/login")}>
-          {t("common.goBack")}
-        </Button>
+        {/* Signup is the way forward for a number nobody has registered; going back is
+            only for someone who mistyped. */}
+        <div className="flex flex-col gap-3 w-full">
+          <Button fullWidth size="lg" onClick={() => navigate("/register")}>
+            {t("auth.createAccount")}
+          </Button>
+          <Button fullWidth size="lg" variant="ghost" onClick={() => navigate("/login")}>
+            {t("common.goBack")}
+          </Button>
+        </div>
       </div>
     </AuthLayout>
   );

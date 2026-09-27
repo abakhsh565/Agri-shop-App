@@ -58,8 +58,20 @@ export type PinVerifyResult =
  */
 export async function verifyPinDetailed(userId: string, pin: string): Promise<PinVerifyResult> {
   try {
+    // The PIN is checked by the server, so it can only be answered while this device holds a
+    // live session. With none, the call is refused — and reporting a refusal as a connection
+    // problem sent the person to check an internet connection that was working, and left them
+    // pressing digits at a keypad that could never say yes. No session means the same thing
+    // here as no PIN: prove identity with a code again, then set a new one.
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return { status: "no_pin" };
+
     const { data, error } = await supabase.rpc("verify_user_pin", { p_pin: pin });
-    if (error) return { status: "error" };
+    if (error) {
+      // A session that lapsed between the two calls lands here: same answer, same door.
+      const { data: { session: stillThere } } = await supabase.auth.getSession();
+      return stillThere ? { status: "error" } : { status: "no_pin" };
+    }
     const status = (data as { status?: string } | null)?.status;
     if (status === "ok") return { status: "ok" };
     if (status === "wrong") return { status: "wrong" };

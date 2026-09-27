@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import AuthLayout from "@/components/layout/AuthLayout";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
-import { sendOTP, normalizePhone } from "@/lib/auth";
+import { sendOTP, normalizePhone, checkPhoneRegistration } from "@/lib/auth";
 import { useAuthStore } from "@/stores/authStore";
 import { useShopRequestsStore } from "@/stores/shopRequestsStore";
 import { useT } from "@/lib/i18n";
@@ -18,8 +18,11 @@ export default function RegisterPhonePage() {
   const [loading, setLoading] = useState(false);
   const [phoneError, setPhoneError] = useState("");
 
+  // Same accepted formats as sign-in: a number that can be typed on the login screen
+  // must not be rejected on the signup screen.
   function validatePhone(p: string) {
-    return /^0\d{9,10}$/.test(p.replace(/\s/g, ""));
+    const clean = p.replace(/\s/g, "");
+    return /^0\d{9,10}$/.test(clean) || /^92\d{10,11}$/.test(clean);
   }
 
   async function handleSendOTP() {
@@ -35,7 +38,23 @@ export default function RegisterPhonePage() {
     try {
       const normalized = normalizePhone(cleanPhone);
 
-      // Check if this phone already has a request
+      // Signup is for numbers nobody has yet. A registered number is refused here —
+      // employees in particular get their access from their owner, never by signing
+      // themselves up — and an application already on file goes to its status page
+      // instead of being filed twice.
+      const check = await checkPhoneRegistration(cleanPhone);
+      if (check.status === "error") { setPhoneError(t("auth.checkFailed")); return; }
+      if (check.status === "registered") {
+        setPhoneError(t(check.role === "employee" ? "auth.employeeNumberTaken" : "auth.phoneTaken"));
+        return;
+      }
+      if (check.status === "inactive") { setPhoneError(t("copy.accountDeactivated")); return; }
+      if (check.status === "pending" || check.status === "rejected") {
+        setPendingPhone(cleanPhone);
+        navigate("/register/status", { replace: true });
+        return;
+      }
+
       await loadMyRequest(normalized);
 
       // Send OTP

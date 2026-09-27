@@ -18,6 +18,9 @@ import { getPendingCount } from "@/lib/offlineQueue";
 import { useAuthStore } from "@/stores/authStore";
 import PINInput from "@/components/ui/PINInput";
 import { verifyPinDetailed } from "@/lib/pinLock";
+import { useShopStore } from "@/stores/shopStore";
+import ShopSwitcherSheet from "@/components/shop/ShopSwitcherSheet";
+import ShopAccessNotice, { useNoActiveShop } from "@/components/shop/ShopAccessNotice";
 
 const LOCK_TIMEOUT_MS = 15 * 60 * 1000;
 
@@ -34,6 +37,7 @@ export default function AdminLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   useBootstrapData();
+  const noActiveShop = useNoActiveShop();
   const { user, isLocked, lock, unlock, logout } = useAuthStore();
   const { setOnline, syncQueue } = useOfflineStore();
   const [pin, setPin] = useState("");
@@ -126,6 +130,16 @@ export default function AdminLayout() {
   const showTabBar = isTopLevel(location.pathname);
 
   // Scan button in nav triggers camera scan → lookup product or open Add Product
+  // Which shop this session is working in is asked of the database when the shell mounts —
+  // that is the whole of "restore the right shop after a reload": the answer comes from the
+  // server, not from the shop this device last wrote down. It also re-runs for a different
+  // account signing in on the same device.
+  const loadShops = useShopStore((s) => s.load);
+  const userId = user?.id;
+  useEffect(() => {
+    if (userId) void loadShops();
+  }, [loadShops, userId]);
+
   const findByBarcode = useProductsStore((s) => s.findByBarcode);
   const { addToast } = useUIStore();
   const [scanning, setScanning] = useState(false);
@@ -263,7 +277,9 @@ export default function AdminLayout() {
           {/* `flex-1` reproduces what a page root as a direct flex child did: at least
               as tall as its content, and filling the viewport when it is shorter. */}
           <div key={location.pathname} className="ds-anim-screen flex flex-col w-full flex-1">
-            <Outlet />
+            {/* An account the database accepts nothing from is told so, instead of being shown
+                the owner's screens with nothing in them. */}
+            {noActiveShop ? <ShopAccessNotice /> : <Outlet />}
           </div>
         </Suspense>
       </div>
@@ -273,6 +289,11 @@ export default function AdminLayout() {
           overlay ever having to exist outside a signed-in app. */}
       <FirstRunGate />
       <ContextHelp />
+
+      {/* The shop selector, mounted once for the whole shell. Screens open it through
+          `useShopStore.openSwitcher()` rather than each mounting their own copy — one
+          selector, one mount, one place where switching is decided. */}
+      <ShopSwitcherSheet />
 
       {/* ── Bottom tab bar (5 tabs) — only on top-level navigation screens ── */}
       {showTabBar && (

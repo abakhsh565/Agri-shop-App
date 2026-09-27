@@ -6,7 +6,8 @@ import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 import OTPInput from "@/components/ui/OTPInput";
 import PINInput from "@/components/ui/PINInput";
-import { sendOTP, verifyOTPAndResolveUser } from "@/lib/auth";
+import { sendOTP, verifyOTPAndResolveUser, SESSION_SETUP_FAILED } from "@/lib/auth";
+import { DEMO_OTP_CODE, isDemoOtpMode } from "@/lib/authMode";
 import { savePin } from "@/lib/pinLock";
 import { useAuthStore } from "@/stores/authStore";
 import type { User } from "@/types";
@@ -74,7 +75,12 @@ export default function ForgotPINPage() {
       if (result.status === "deactivated") { setError(t("copy.accountDeactivated")); return; }
       if (result.status === "pending") { setError(t("auth.underReview")); return; }
       if (result.status === "rejected") { setError(t("auth.rejected")); return; }
-      if (result.status === "error") { setError(result.message); return; }
+      // A failed session setup has its own sentence; showing the internal marker instead would
+      // tell someone their account is broken in words they cannot act on.
+      if (result.status === "error") {
+        setError(result.message === SESSION_SETUP_FAILED ? t("auth.sessionFailed") : result.message);
+        return;
+      }
       // OTP correct — set user and go to PIN creation
       setUser(result.user);
       setStep("pin");
@@ -161,7 +167,13 @@ export default function ForgotPINPage() {
           <>
             <div className="flex flex-col items-center gap-2 text-center">
               <p className="text-xl font-bold text-foreground">{t("auth.verifyNumber")}</p>
-              <p className="text-sm text-caption">{t("auth.enterCodeSentTo", { phone })}</p>
+              {/* Demo mode has no SMS provider, so "we sent a code" would be false — the same
+                  rule the sign-in code screen follows. */}
+              <p className="text-sm text-caption">
+                {isDemoOtpMode
+                  ? t("auth.demoCodeHint", { code: DEMO_OTP_CODE })
+                  : t("auth.enterCodeSentTo", { phone })}
+              </p>
             </div>
             <OTPInput value={otp} onChange={(v) => { setOtp(v); setError(""); }} error={!!error} />
             {error && <p className="text-sm text-[#ef4444] text-center">{error}</p>}

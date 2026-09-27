@@ -3,7 +3,8 @@ import { useNavigate } from "react-router-dom";
 import AuthLayout from "@/components/layout/AuthLayout";
 import NavHeader from "@/components/ui/NavHeader";
 import OTPInput from "@/components/ui/OTPInput";
-import { verifyOTPAndResolveUser, sendOTP, normalizePhone } from "@/lib/auth";
+import { verifyOTPAndResolveUser, sendOTP, normalizePhone, SESSION_SETUP_FAILED } from "@/lib/auth";
+import Button from "@/components/ui/Button";
 import { useAuthStore } from "@/stores/authStore";
 import { useShopRequestsStore } from "@/stores/shopRequestsStore";
 import { useT } from "@/lib/i18n";
@@ -14,13 +15,16 @@ const RESEND_DELAY = 30;
 export default function RegisterOTPPage() {
   const t = useT();
   const navigate = useNavigate();
-  const { pendingPhone, setUser } = useAuthStore();
+  const { pendingPhone } = useAuthStore();
   const { myRequest, loadMyRequest } = useShopRequestsStore();
 
   const [otp, setOtp] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [wrongTries, setWrongTries] = useState(0);
+  // Set when the code proves a number that already has an account: signup is refused
+  // (signing them in here would skip the PIN step), and the way in is offered instead.
+  const [takenAs, setTakenAs] = useState<"owner" | "employee" | null>(null);
   const [countdown, setCountdown] = useState(OTP_VALIDITY);
   const [resendCountdown, setResendCountdown] = useState(0);
   const verifying = useRef(false);
@@ -64,10 +68,20 @@ export default function RegisterOTPPage() {
       }
 
       if (result.status === "ok") {
-        // User already exists as admin - go to their dashboard
-        setUser(result.user);
-        const dest = result.user.role === "admin" ? "/admin/dashboard" : "/employee/dashboard";
-        navigate(dest, { replace: true });
+        // A number that already has an account is not a signup. Signing it in from the
+        // registration screen skipped the PIN step, so it is refused and the person is
+        // pointed at sign-in — where the PIN lives.
+        setTakenAs(result.user.role === "employee" ? "employee" : "owner");
+        setOtp("");
+        return;
+      }
+
+      if (result.status === "deactivated") { navigate("/login/deactivated", { replace: true }); return; }
+      if (result.status === "rejected") { navigate("/login/rejected", { replace: true }); return; }
+      if (result.status === "pending") { navigate("/register/status", { replace: true }); return; }
+      if (result.status === "error") {
+        setError(result.message === SESSION_SETUP_FAILED ? t("auth.sessionFailed") : result.message);
+        setOtp("");
         return;
       }
 
@@ -128,6 +142,15 @@ export default function RegisterOTPPage() {
         />
 
         {error && <p className="text-sm text-[#ef4444] text-center">{error}</p>}
+
+        {takenAs && (
+          <div className="flex flex-col gap-3">
+            <p className="text-sm text-[#ef4444] text-center">
+              {t(takenAs === "employee" ? "auth.employeeNumberTaken" : "auth.phoneTaken")}
+            </p>
+            <Button fullWidth onClick={() => navigate("/login")}>{t("auth.signIn")}</Button>
+          </div>
+        )}
 
         {!expired && (
           <p className="text-sm text-caption text-center">

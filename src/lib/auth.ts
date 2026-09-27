@@ -47,7 +47,13 @@ function userFromRow(r: UserRow): User {
   // Resolve tenant context: prefer membership-based, fallback to shop_id
   const tenantId = r.tenant_id || r.shop_id || undefined;
   const membershipRole = (r.membership_role || (r.role === "admin" ? "admin" : "employee")) as MembershipRole;
-  const membershipStatus = (r.membership_status || "active") as MembershipStatus;
+  // A membership row is what makes this account part of a shop. When the lookup returned none
+  // there is nothing active to claim: defaulting to "active" here made an account with no shop
+  // look like a fully privileged owner of an empty one, so every screen it reached rendered as
+  // if the shop were merely new instead of saying the account has no shop at all.
+  const membershipStatus = r.membership_id
+    ? ((r.membership_status || "active") as MembershipStatus)
+    : undefined;
   return {
     id: r.id,
     name: r.name,
@@ -120,6 +126,47 @@ export async function sendOTP(
     return { success: false, error: error.message };
   }
   return { success: true };
+}
+
+/**
+ * Which stage does this phone belong at? Asked BEFORE a code is sent, so an
+ * unregistered number is told to create an account instead of being sent a code
+ * that ends at a session that cannot exist for it.
+ *
+ * Both lookups are anon-callable SECURITY DEFINER RPCs (lookup_user_by_phone,
+ * get_my_shop_request) — the same pair the rest of the auth flow already trusts.
+ * shop_requests itself is unreachable from the client (RLS on, no policy), which is
+ * exactly why an applicant must be read through the RPC rather than the table.
+ */
+export type PhoneCheck =
+  /** The role matters: an employee must never be invited to sign themselves up. */
+  | { status: "registered"; role: UserRole }
+  | { status: "inactive" }
+  | { status: "pending" }
+  | { status: "rejected" }
+  | { status: "unregistered" }
+  | { status: "error"; message: string };
+
+export async function checkPhoneRegistration(phone: string): Promise<PhoneCheck> {
+  const e164 = normalizePhone(phone);
+
+  const { data, error } = await supabase.rpc("lookup_user_by_phone", { p_phone: e164 });
+  if (error) return { status: "error", message: error.message };
+  if (data) {
+    const row = data as UserRow;
+    return row.is_active ? { status: "registered", role: row.role } : { status: "inactive" };
+  }
+
+  // No app profile. An owner whose shop application is still open has a record of
+  // what happens next, so they must not be pushed back into signup as if nothing
+  // had been submitted.
+  const { data: request } = await supabase.rpc("get_my_shop_request", { p_phone: e164 });
+  const parsed = typeof request === "string" ? JSON.parse(request) : request;
+  const status = parsed?.found ? parsed?.request?.status : null;
+  if (status === "pending" || status === "hold") return { status: "pending" };
+  if (status === "rejected") return { status: "rejected" };
+  if (status === "approved") return { status: "pending" };
+  return { status: "unregistered" };
 }
 
 /**
@@ -243,19 +290,6 @@ export async function verifyOTPAndResolveUser(
     if (error) return { status: "wrong_otp" };
   }
 
-  // Establish a Supabase Auth session for PostgREST/RLS.
-  // In demo mode phone-based OTP doesn't work for unregistered test numbers, so
-  // we bridge with email+password auth (deterministic from phone), and a missing
-  // session must be surfaced: otherwise every RLS read returns 401 and the user
-  // lands in an app that looks empty for no visible reason.
-  const session = isDemoOtpMode
-    ? await ensureAuthSession(phone)
-    : { ok: await hasAuthSession() };
-  if (!session.ok) {
-    console.error('Could not establish Supabase Auth session:', session.error);
-    return { status: "error", message: SESSION_SETUP_FAILED };
-  }
-
   // Find the matching app profile row via SECURITY DEFINER RPC.
   // The users table is RLS-protected (anon cannot SELECT), so we use
   // lookup_user_by_phone() which bypasses RLS safely.
@@ -274,7 +308,26 @@ export async function verifyOTPAndResolveUser(
 
   if (existing) {
     const row = existing as UserRow;
+    // Deactivation is decided from the profile alone — no session is minted for a
+    // closed account.
     if (!row.is_active) return { status: "deactivated" };
+
+    // Signing in continues into RLS-protected reads, so THIS is the branch that needs a
+    // real Supabase Auth session. In demo mode phone OTP cannot open one for a test
+    // number, so it is bridged with email+password (deterministic from the phone) — and a
+    // failure must be surfaced, or every read returns 401 and the app looks empty for no
+    // visible reason. The signup branches below deliberately do NOT require a session:
+    // registration ends at the application form, which is an anon RPC. Requiring one
+    // there made every brand-new number fail with a session error instead of reaching
+    // owner setup.
+    const session = isDemoOtpMode
+      ? await ensureAuthSession(phone)
+      : { ok: await hasAuthSession() };
+    if (!session.ok) {
+      console.error('Could not establish Supabase Auth session:', session.error);
+      return { status: "error", message: SESSION_SETUP_FAILED };
+    }
+
     void touchLogin(row.id, !row.first_login_at);
     const user = userFromRow(row);
     // First verified sign-in of an invited employee IS the onboarding step.
@@ -287,18 +340,17 @@ export async function verifyOTPAndResolveUser(
     return { status: "ok", user };
   }
 
-  // No user profile found — check if there's a pending shop registration
-  const { data: shopReq } = await supabase
-    .from("shop_requests")
-    .select("status")
-    .eq("owner_phone", e164)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  // No user profile found — check for an open shop registration. shop_requests is
+  // RLS-protected with no client policy, so this MUST go through the RPC (the direct
+  // table read returned nothing, which is how pending applicants were told they were
+  // not registered at all).
+  const { data: request } = await supabase.rpc("get_my_shop_request", { p_phone: e164 });
+  const parsed = typeof request === "string" ? JSON.parse(request) : request;
+  const requestStatus = parsed?.found ? parsed?.request?.status : null;
 
-  if (shopReq) {
-    if (shopReq.status === "pending" || shopReq.status === "hold") return { status: "pending" };
-    if (shopReq.status === "rejected") return { status: "rejected" };
+  if (requestStatus) {
+    if (requestStatus === "pending" || requestStatus === "hold") return { status: "pending" };
+    if (requestStatus === "rejected") return { status: "rejected" };
     // approved but user not created yet — shouldn't happen, treat as pending
     return { status: "pending" };
   }

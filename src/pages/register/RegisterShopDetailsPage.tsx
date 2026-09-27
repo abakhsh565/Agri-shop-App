@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
@@ -30,6 +30,14 @@ export default function RegisterShopDetailsPage() {
   const [businessRegNumber, setBusinessRegNumber] = useState("");
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [error, setError] = useState("");
+
+  // This form is the step AFTER the code was verified, and the verified phone is the only
+  // thing it has that a stranger cannot supply. Opening the URL directly used to render it
+  // anyway, which let the code step be skipped entirely — the same door the signup OTP screen
+  // already closes on its own (it sends an unverified visitor back to /register).
+  useEffect(() => {
+    if (!pendingPhone) navigate("/register", { replace: true });
+  }, []);
 
   const fieldStyle = {
     background: "var(--surface-2)",

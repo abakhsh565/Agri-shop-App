@@ -14,6 +14,8 @@ import FirstRunGate from "@/components/education/FirstRunGate";
 import ContextHelp from "@/components/education/ContextHelp";
 import { useT } from "@/lib/i18n";
 import { useBootstrapData } from "@/stores/useBootstrapData";
+import { useShopStore } from "@/stores/shopStore";
+import ShopAccessNotice, { useNoActiveShop } from "@/components/shop/ShopAccessNotice";
 import { isTopLevel } from "@/lib/navDepth";
 import { clearNav } from "@/lib/navContext";
 import BackButtonHandler from "@/components/ui/BackButtonHandler";
@@ -36,6 +38,16 @@ export default function EmployeeLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   useBootstrapData();
+  // Which shop this session works in is the server's answer, not this device's — the owner
+  // shell asks the same question for its header. Here there is nothing to switch, but the
+  // answer is still the difference between "this employee can work" and "this account is in
+  // no shop", and the second one has to be said out loud rather than rendered as empty screens.
+  const loadShops = useShopStore((s) => s.load);
+  const userId = user?.id;
+  useEffect(() => {
+    if (userId) void loadShops();
+  }, [loadShops, userId]);
+  const noActiveShop = useNoActiveShop();
   const [pin, setPin] = useState("");
   const [pinError, setPinError] = useState(false);
   const [pinShake, setPinShake] = useState(false);
@@ -280,7 +292,9 @@ export default function EmployeeLayout() {
           {/* `flex-1` reproduces what a page root as a direct flex child did: at least
               as tall as its content, and filling the viewport when it is shorter. */}
           <div key={location.pathname} className="ds-anim-screen flex flex-col w-full flex-1">
-            <Outlet />
+            {/* An account the database accepts nothing from is told so, instead of being shown
+                the employee's screens with nothing in them. */}
+            {noActiveShop ? <ShopAccessNotice /> : <Outlet />}
           </div>
         </Suspense>
       </div>

@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import AuthLayout from "@/components/layout/AuthLayout";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
-import { sendOTP } from "@/lib/auth";
+import { sendOTP, checkPhoneRegistration } from "@/lib/auth";
 import { isDemoOtpMode } from "@/lib/authMode";
 import { useAuthStore } from "@/stores/authStore";
 import { useT } from "@/lib/i18n";
@@ -38,6 +38,24 @@ export default function LoginPage() {
 
     setLoading(true);
     try {
+      // Which stage does this number belong at? The check runs BEFORE a code is sent,
+      // so an unregistered number is never sent one (and a registration applicant is
+      // never mistaken for a stranger).
+      const check = await checkPhoneRegistration(cleanPhone);
+      if (check.status === "error") {
+        // Could not ask the server — say so instead of acting as if the number were unknown.
+        setPhoneError(t("auth.checkFailed"));
+        return;
+      }
+      if (check.status !== "registered") {
+        setPendingPhone(cleanPhone);
+        if (check.status === "unregistered") { navigate("/login/not-registered"); return; }
+        if (check.status === "pending") { navigate("/login/under-review"); return; }
+        if (check.status === "rejected") { navigate("/login/rejected"); return; }
+        navigate("/login/deactivated");
+        return;
+      }
+
       setPendingPhone(cleanPhone);
       setPendingFlow("login");
       setIsNewDevice(true);
