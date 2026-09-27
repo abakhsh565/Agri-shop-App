@@ -30,20 +30,15 @@ const PENDING_DSCARD: string[] = [];
  * decision.
  */
 /**
- * The sale receipt's field block is not a grouped list, and is accepted as such.
+ * Empty again, and deliberately so.
  *
- * `SaleSuccessPage` draws Customer / Phone / Payment / Items / Sold by as label-value
- * rows with a hairline between them, which is why the check below sees it. It is not
- * the list grammar, though: those rows live inside a *document* — a brand band above
- * them, a perforation with notches below, and one large amount figure at the end — and
- * the same element is what gets rasterised for Share and printed for Print, so the
- * rows have to be exactly this tight and exactly this quiet. Converting them to
- * ListRow would set them to the app's 52px grouped-row height and re-typeset the
- * artifact into a settings list. Everything outside the receipt still goes through
- * ListCard/ListRow, and the separator here is full-bleed like the primitive's, so the
- * two agree about geometry even though only one of them is a list.
+ * The one entry this held — `SaleSuccessPage`, for the receipt's field rows — is gone
+ * because the receipt became a single component (`src/components/sales/SaleReceipt.tsx`)
+ * which draws its hairlines as a top border the first row opts out of. That is not the
+ * per-row index arithmetic this check exists to catch, and there is now exactly one copy
+ * of the receipt instead of two screens each drawing their own.
  */
-const EXCEPTIONS_HANDROLLED: string[] = ["src/pages/employee/sale/SaleSuccessPage.tsx"];
+const EXCEPTIONS_HANDROLLED: string[] = [];
 
 const PENDING_HANDROLLED: string[] = [];
 

@@ -34,7 +34,10 @@ import AdminLayout from "@/components/layout/AdminLayout";
 // Admin pages
 const AdminDashboardPage = React.lazy(() => import("@/pages/admin/dashboard/AdminDashboardPage"));
 const AdminSalesListPage = React.lazy(() => import("@/pages/admin/sales/AdminSalesListPage"));
-const AdminSaleDetailPage = React.lazy(() => import("@/pages/admin/sales/AdminSaleDetailPage"));
+// One sale record for both shells. It was two pages that drifted apart (one printed cost and
+// profit under every line, the other did not; neither showed the sale number), so the screen
+// is shared and the numbers it shows follow the signed-in role.
+const SaleDetailView = React.lazy(() => import("@/components/sales/SaleDetailView"));
 
 import MoreMenuPage from "@/pages/admin/more/MoreMenuPage";
 const EmployeesListPage = React.lazy(() => import("@/pages/admin/employees/EmployeesListPage"));
@@ -66,7 +69,6 @@ import VariantSelectorPage from "@/pages/employee/sale/VariantSelectorPage";
 import CartPage from "@/pages/employee/sale/CartPage";
 import SaleSuccessPage from "@/pages/employee/sale/SaleSuccessPage";
 const SalesListPage = React.lazy(() => import("@/pages/employee/sales/SalesListPage"));
-const SaleDetailPage = React.lazy(() => import("@/pages/employee/sales/SaleDetailPage"));
 const CustomersListPage = React.lazy(() => import("@/pages/employee/customers/CustomersListPage"));
 const CustomerProfilePage = React.lazy(() => import("@/pages/employee/customers/CustomerProfilePage"));
 import CustomerPurchaseHistoryPage from "@/pages/employee/customers/CustomerPurchaseHistoryPage";
@@ -167,7 +169,7 @@ export const router = createBrowserRouter([
           { path: "sale/cart",  element: <CartPage /> },
           { path: "sale/success", element: <SaleSuccessPage /> },
           { path: "sales",      element: <AdminSalesListPage /> },
-          { path: "sales/:saleId", element: <AdminSaleDetailPage /> },
+          { path: "sales/:saleId", element: <SaleDetailView /> },
           { path: "sales/:saleId/return", element: <AdminReturnSelectItemsPage /> },
           { path: "sales/:saleId/return/confirm", element: <AdminReturnConfirmPage /> },
           { path: "sales/:saleId/return/success", element: <AdminReturnSuccessPage /> },
@@ -259,7 +261,7 @@ export const router = createBrowserRouter([
 
       { path: "sale/success", element: <SaleSuccessPage /> },
       { path: "sales", element: <SalesListPage /> },
-      { path: "sales/:saleId", element: <SaleDetailPage /> },
+      { path: "sales/:saleId", element: <SaleDetailView /> },
       { path: "sales/:saleId/return", element: <ReturnSelectItemsPage /> },
       { path: "sales/:saleId/return/confirm", element: <ReturnConfirmPage /> },
       { path: "sales/:saleId/return/success", element: <ReturnSuccessPage /> },

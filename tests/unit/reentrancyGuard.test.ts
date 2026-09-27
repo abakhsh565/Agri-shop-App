@@ -38,7 +38,7 @@ const REF_GUARDS: Record<string, string> = {
   'src/pages/admin/employees/AddEmployeePage.tsx': 'creatingRef',
   'src/pages/admin/employees/EmployeeDetailPage.tsx': 'statusBusyRef',
   'src/pages/admin/settings/RolesAccessPage.tsx': 'deletingRef',
-  'src/pages/admin/sales/AdminSaleDetailPage.tsx': 'voidingRef',
+  'src/components/sales/SaleDetailView.tsx': 'voidingRef',
   'src/pages/admin/inventory/AddProductPage.tsx': 'savingRef',
   'src/pages/admin/inventory/InventoryAdjustPage.tsx': 'submittingRef',
   'src/pages/admin/payments/RecordSupplierPaymentPage.tsx': 'submittingRef',

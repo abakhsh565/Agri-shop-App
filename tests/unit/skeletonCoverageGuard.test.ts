@@ -27,7 +27,7 @@ import path from "node:path";
 const GATED: Array<[file: string, gate: RegExp, howItWaits: string]> = [
   // ── Admin ────────────────────────────────────────────────────────────────
   ["src/pages/admin/sales/AdminSalesListPage.tsx", /\{!ready \? \(/, "waits for salesStore.ready"],
-  ["src/pages/admin/sales/AdminSaleDetailPage.tsx", /if \(!salesReady\)/, "separates 'not arrived' from 'not found'"],
+  ["src/components/sales/SaleDetailView.tsx", /if \(!salesReady\)/, "separates 'not arrived' from 'not found'"],
   ["src/pages/admin/payments/AdminPaymentsPage.tsx", /\{!ready \? \(/, "waits for customers + companies"],
   ["src/pages/admin/companies/CompaniesListPage.tsx", /\{!ready && <SkeletonList/, "waits for companiesStore.ready"],
   ["src/pages/admin/companies/CompanyDetailPage.tsx", /companiesReady \? \(/, "waits before claiming 'not found'"],
@@ -46,7 +46,6 @@ const GATED: Array<[file: string, gate: RegExp, howItWaits: string]> = [
 
   // ── Employee ─────────────────────────────────────────────────────────────
   ["src/pages/employee/sales/SalesListPage.tsx", /\{!ready \? \(/, "waits for salesStore.ready"],
-  ["src/pages/employee/sales/SaleDetailPage.tsx", /if \(!salesReady\)/, "separates 'not arrived' from 'not found'"],
   ["src/pages/employee/products/ProductsListPage.tsx", /\{!ready \? \(/, "waits for productsStore.ready"],
   ["src/pages/employee/products/ProductDetailPage.tsx", /productsReady \? null : <SkeletonList/, "waits before claiming 'not found'"],
   ["src/pages/employee/customers/CustomersListPage.tsx", /\{!ready \? \(/, "waits for customersStore.ready"],

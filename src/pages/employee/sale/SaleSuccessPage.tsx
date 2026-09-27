@@ -12,17 +12,8 @@ import { clearNav } from "@/lib/navContext";
 import StatusBar from "@/components/ui/StatusBar";
 import Button from "@/components/ui/Button";
 import ConfettiBurst from "@/components/ui/ConfettiBurst";
+import SaleReceipt from "@/components/sales/SaleReceipt";
 import { playConfirmation } from "@/lib/feedback";
-
-function formatDateLong(dateStr: string): string {
-  const d = new Date(dateStr);
-  return d.toLocaleDateString("en-PK", { day: "numeric", month: "long", year: "numeric" });
-}
-
-function formatTime12(dateStr: string): string {
-  const d = new Date(dateStr);
-  return d.toLocaleTimeString("en-PK", { hour: "2-digit", minute: "2-digit", hour12: true });
-}
 
 /**
  * The end of a sale: one screen, one glance.
@@ -75,8 +66,6 @@ export default function SaleSuccessPage() {
     id: sale.id ?? "",
   };
 
-  const paidInFull = s.outstandingBalance <= 0;
-  const isCredit = s.paymentType !== "full" || !paidInFull;
 
   // Sound, once, when the screen appears. Not on every render: this is the confirmation of a
   // single event. If the browser has not had a gesture yet it simply stays silent (see
@@ -188,74 +177,23 @@ export default function SaleSuccessPage() {
             <p className="text-lg font-bold mt-3">{t("saleSuccess.saleComplete")}</p>
           </div>
 
-          {/* Receipt */}
-          <div
-            className="w-full rounded-[var(--radius-card)] overflow-hidden animate-fade-in-up"
-            style={{ background: "var(--surface)", border: "1px solid var(--divider)" }}
-          >
-            {/* Band: what this is, which sale, and when — the three things read first on paper. */}
-            <div className="px-4 py-3" style={{ background: "var(--brand)", color: "#0a0a0a" }}>
-              <div className="flex items-baseline justify-between gap-3">
-                <p className="text-sm font-bold">{t("saleSuccess.saleReceipt")}</p>
-                <p className="text-11 font-mono opacity-80">{s.saleNumber}</p>
-              </div>
-              <p className="text-11 opacity-80 mt-0.5">
-                {formatDateLong(s.createdAt)} • {formatTime12(s.createdAt)}
-              </p>
-            </div>
-
-            {/* Fields */}
-            <div className="px-4 py-1">
-              {rows.map((row, i) => (
-                <div
-                  key={row.label}
-                  className="flex items-center justify-between gap-4 py-2 text-xs"
-                  style={{ borderBottom: i < rows.length - 1 ? "1px solid var(--divider)" : "none" }}
-                >
-                  <span style={{ color: "var(--text-secondary)" }}>{row.label}</span>
-                  <span
-                    className={row.bold ? "font-bold text-end" : "font-medium text-end"}
-                    style={{ color: "var(--text-primary)" }}
-                  >
-                    {row.value}
-                  </span>
-                </div>
-              ))}
-            </div>
-
-            {/* Perforation: two notches and a dashed rule, the tear-line of a paper receipt. */}
-            <div className="relative h-5 flex items-center">
-              <div className="w-full border-t border-dashed mx-4" style={{ borderColor: "var(--divider)" }} />
-              <div
-                className="absolute w-5 h-5 rounded-full"
-                style={{ insetInlineStart: -10, background: "var(--background)" }}
-              />
-              <div
-                className="absolute w-5 h-5 rounded-full"
-                style={{ insetInlineEnd: -10, background: "var(--background)" }}
-              />
-            </div>
-
-            {/* The amount, on its own. */}
-            <div className="px-4 pb-4 pt-1">
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-xs font-bold" style={{ color: "var(--text-secondary)" }}>
-                  {t("saleSuccess.totalAmount")}
-                </span>
-                <span className="text-2xl font-bold tabular-nums">{formatCurrency(s.totalAmount)}</span>
-              </div>
-              {isCredit && (
-                <div className="flex items-center justify-between gap-3 mt-1.5 text-11">
-                  <span style={{ color: "var(--text-secondary)" }}>
-                    {t("saleSuccess.paid")} {formatCurrency(s.amountPaid)}
-                  </span>
-                  <span className="font-semibold" style={{ color: "var(--warning)" }}>
-                    {t("saleSuccess.outstanding")} {formatCurrency(s.outstandingBalance)}
-                  </span>
-                </div>
-              )}
-            </div>
-          </div>
+          {/* The receipt itself is one component now, shared with a past sale's detail
+              screen: two hand-drawn copies of the same document is how one of them ended up
+              printing something else. */}
+          <SaleReceipt
+            facts={{
+              saleNumber: s.saleNumber,
+              createdAt: s.createdAt,
+              customerName: s.customerName,
+              customerPhone: s.customerPhone || undefined,
+              soldBy: s.employeeName === user?.name ? t("saleSuccess.you") : s.employeeName,
+              paymentMethod: s.paymentMethod,
+              itemCount: s.items.length,
+              totalAmount: s.totalAmount,
+              amountPaid: s.amountPaid,
+              outstandingBalance: s.outstandingBalance,
+            }}
+          />
         </div>
       </div>
 

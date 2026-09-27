@@ -21,6 +21,7 @@ import { loadReminderConfigs, saveReminderConfig as saveReminderConfigToDb, load
 import { useProductsStore } from "@/stores/productsStore";
 import { SkeletonList } from "@/components/ui/Skeleton";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
+import CreditLimitSheet from "@/components/customers/CreditLimitSheet";
 import ReminderConfigSheet from "@/components/ui/ReminderConfigSheet";
 import type { ReminderConfig, BusinessSettings, CropConfig } from "@/types";
 
@@ -76,6 +77,9 @@ export default function CustomerProfilePage() {
   const [editDueDate, setEditDueDate] = useState("");
   const [customerCrops, setCustomerCrops] = useState<string[]>([]);
   const [businessSettings, setBusinessSettings] = useState<BusinessSettings>({ crops: [] });
+  const [showLimitSheet, setShowLimitSheet] = useState(false);
+  const [savingLimit, setSavingLimit] = useState(false);
+  const setCreditLimit = useCustomersStore((s) => s.setCreditLimit);
 
   useEffect(() => {
     if (!customerId) return;
@@ -113,6 +117,23 @@ export default function CustomerProfilePage() {
       setReminderConfigs(configs);
       addToast(t("customerProfile.reminderDeleted"), "success");
     } catch { addToast(t("customerProfile.reminderDeleteFailed"), "error"); }
+  }
+
+  async function handleSetCreditLimit(value: number) {
+    if (!customer || savingLimit) return;
+    setSavingLimit(true);
+    try {
+      // One write path for this column: the permission-checked, audited RPC. The customer
+      // edit form used to write it straight to the table, which is how a limit could move
+      // with nothing in the audit trail and no cache refresh behind it.
+      const applied = await setCreditLimit(customer.id, value);
+      setShowLimitSheet(false);
+      addToast(t("sale.creditLimitSet", { amount: formatCurrency(applied) }), "success");
+    } catch (e) {
+      addToast(e instanceof Error ? e.message : t("sale.creditLimitFailed"), "error");
+    } finally {
+      setSavingLimit(false);
+    }
   }
 
   async function handleSaveDueDate() {
@@ -158,6 +179,8 @@ export default function CustomerProfilePage() {
     try {
       const { supabase } = await import("@/lib/supabase");
       const creditLim = editCreditLimit.trim() ? parseFloat(editCreditLimit.trim()) : 0;
+      // Note what this does NOT do: write the limit. The column has one owner — the
+      // `Set limit` / `Change limit` action on the customer card, through the audited RPC.
       const creditLimitChanged = !isNaN(creditLim) && creditLim !== customer.creditLimit;
       
       // Employee: submit credit limit request instead of direct edit
@@ -179,7 +202,6 @@ export default function CustomerProfilePage() {
           name: editName.trim(),
           phone: editPhone.trim(),
           address: editAddress.trim() || null,
-          credit_limit: creditLimitChanged && !isAdmin ? customer.creditLimit : (isNaN(creditLim) ? 0 : creditLim),
         })
         .eq("id", customerId);
       if (error) throw new Error(error.message);
@@ -240,10 +262,14 @@ export default function CustomerProfilePage() {
   const lastPaymentAt = payments.length > 0 ? payments[0].createdAt : null;
   const customerSales = sales.filter((s) => s.customerId === customerId);
   const salesCount = customerSales.length;
-  const fullPaymentSalesTotal = customerSales.filter((s) => s.paymentType === "full").reduce((a, s) => a + s.totalAmount, 0);
-  const effectivePaid = customer.totalPaid + fullPaymentSalesTotal;
+  // `customer.totalPaid` is the whole of what this person has paid: money taken at the
+  // counter on a sale is part of it since migration 0155, so adding the value of every
+  // "full" sale on top of it — which this did to compensate for the column being short —
+  // would count those sales twice.
   const hasCreditActivity = customerSales.some((s) => s.paymentType !== "full");
-  const creditHealth = calculateCreditHealth(customer, salesCount, lastPaymentAt, effectivePaid, hasCreditActivity);
+  const creditHealth = calculateCreditHealth(customer, salesCount, lastPaymentAt, customer.totalPaid, hasCreditActivity);
+  // How far past their limit this customer sits right now, if at all.
+  const overLimitBy = customer.creditLimit > 0 ? Math.max(0, customer.outstandingBalance - customer.creditLimit) : 0;
 
   // Risk pill
   const paymentStatus = calculatePaymentStatus(customer, new Date());
@@ -341,11 +367,26 @@ export default function CustomerProfilePage() {
            ═══════════════════════════════════════════ */}
         <div className="ds-card">
           {/* Credit Limit — horizontal alignment */}
-          <div className="flex items-center justify-between">
-            <span className="text-12 font-medium tracking-[0.5px]" style={{ color: "#5A5A55" }}>{t("customerProfile.creditLimit")}</span>
-            <span className="text-15 font-bold" style={{ color: "var(--text-primary)" }}>
-              {customer.creditLimit > 0 ? formatCurrency(customer.creditLimit) : "\u2014"}
-            </span>
+          {/* The limit and the way to change it sit together, because they are one thought:
+              the number is on the right, and the action names what it will do to *this*
+              customer — "Set limit" when there is none, "Change limit" when there is. */}
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-12 font-medium tracking-[0.5px]" style={{ color: "var(--text-secondary)" }}>{t("customerProfile.creditLimit")}</span>
+            <div className="flex items-center gap-2">
+              <span className="text-15 font-bold" style={{ color: "var(--text-primary)" }}>
+                {customer.creditLimit > 0 ? formatCurrency(customer.creditLimit) : "\u2014"}
+              </span>
+              {isAdmin && (
+                <button
+                  onClick={() => setShowLimitSheet(true)}
+                  className="text-12 font-semibold px-3 py-1.5 rounded-full"
+                  style={{ background: "var(--surface-2)", color: "var(--text-primary)", border: "1px solid var(--divider)" }}
+                  data-testid="credit-limit-action"
+                >
+                  {customer.creditLimit > 0 ? t("customers.changeLimit") : t("customers.setLimit")}
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Progress bar */}
@@ -361,8 +402,15 @@ export default function CustomerProfilePage() {
                 <span className="text-11" style={{ color: "var(--text-secondary)" }}>
                   {formatCurrency(customer.outstandingBalance)} {t("customerProfile.of")} {formatCurrency(customer.creditLimit)} {t("customerProfile.used")}
                 </span>
-                <span className="text-11 font-bold" style={{ color: "#3B6D11" }}>{usagePct}%</span>
+                <span className="text-11 font-bold" style={{ color: "var(--brand-dark)" }}>{usagePct}%</span>
               </div>
+              {/* A customer can sit past their limit: a limit lowered under an existing debt
+                  is allowed (0154), and that is a state the shop has to be able to see. */}
+              {overLimitBy > 0 && (
+                <p className="text-11 font-semibold mt-1" style={{ color: "var(--error)" }} data-testid="over-limit-line">
+                  {t("sale.overLimitBy", { amount: formatCurrency(overLimitBy) })}
+                </p>
+              )}
             </>
           )}
 
@@ -522,23 +570,19 @@ export default function CustomerProfilePage() {
                   ))}
                 </div>
               </div>
-              <div>
-                <label className="ds-section-label block mb-1.5" style={{ color: "var(--text-secondary)" }}>{t("common.creditLimitOptional")}</label>
-                {isAdmin ? (
-                  <input
-                    type="number"
-                    value={editCreditLimit}
-                    onChange={(e) => setEditCreditLimit(e.target.value)}
-                    className="w-full h-12 rounded-[var(--radius-input)] px-4 text-sm outline-none"
-                    style={{ background: "var(--surface-2)", border: "1px solid var(--border-control)", color: "var(--text-primary)", borderRadius: "24px" }}
-                  />
-                ) : (
+              {/* The limit is no longer a field in this form. It has one home — the
+                  "Set limit" / "Change limit" action beside the amount on this customer's
+                  card — so there is one place to look for it and one audited way to change
+                  it. Employees keep the read-only line that tells them who to ask. */}
+              {!isAdmin && (
+                <div>
+                  <label className="ds-section-label block mb-1.5" style={{ color: "var(--text-secondary)" }}>{t("common.creditLimitOptional")}</label>
                   <div className="rounded-[var(--radius-card)] p-3" style={{ background: "var(--tone-card)" }}>
-                    <p className="text-12" style={{ color: "var(--text-secondary)" }}>Current: {formatCurrency(customer.creditLimit)}</p>
+                    <p className="text-12" style={{ color: "var(--text-secondary)" }}>{formatCurrency(customer.creditLimit)}</p>
                     <p className="text-11 mt-1" style={{ color: "var(--text-secondary)" }}>{t("customer.actionCenterHint")}</p>
                   </div>
-                )}
-              </div>
+                </div>
+              )}
             </div>
 
             <div className="flex gap-3 mt-1">
@@ -580,6 +624,17 @@ export default function CustomerProfilePage() {
           </div>
         </div>
       )}
+
+      {/* The credit limit: one field, one save, and a plain statement when the new limit
+          leaves the customer over it. */}
+      <CreditLimitSheet
+        open={showLimitSheet}
+        currentLimit={customer.creditLimit}
+        outstanding={customer.outstandingBalance}
+        saving={savingLimit}
+        onClose={() => setShowLimitSheet(false)}
+        onSave={handleSetCreditLimit}
+      />
 
       {/* Archive Confirmation */}
       <ConfirmDialog

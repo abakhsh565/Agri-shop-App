@@ -47,7 +47,14 @@ migration poisons everything built on top of it and cannot be caught later by a 
 | 33 | Customer detail hero card follows the reference: 60px avatar, one bold name, one meta line (`phone · town · crops`) instead of a phone line plus a row of crop chips, status pill under it in the row's own green/amber/red | **done** | this commit | open a customer that has crops: one line with two dots, one pill, no chip row |
 | 34 | A red guard turned green: the receipt's hand-rolled, index-based hairline in `SaleSuccessPage` is now a written exception in `listPrimitiveGuard` (the receipt is a document — band, perforation, one large amount — not a grouped list), so the guard stops failing on `main` | **done** | this commit | `npx vitest run tests/unit/listPrimitiveGuard.test.ts` green, other offenders still fail it |
 | 35 | The recommendation engine finally has tests (9 cases: crop required, in-season basket gap, bought-today silence, due-again after 30 days, out-of-season, no stock, cap of five, and both directions) — it is the feature whose output is invisible when it decides nothing, so its rules are now pinned | **done** | this commit | proven non-vacuous by injecting the bought-today case once and watching it fail |
-| 36 | Full-service verification of everything above | **pending** | — | section C below |
+| 36 | Credit limit is one control in one place: `Set limit` / `Change limit` sits beside the amount on the customer card and on the sale screen (it used to be a bare underlined "Credit Limit" floating above the customer, plus a field inside the edit form). The sheet has no close cross — one field, Cancel and the scrim are the exits | **done** | this commit | open a customer: the button names what it will do, and the sheet has one field and no cross |
+| 37 | The edit form no longer writes `credit_limit` at all — the column has one owner, the audited RPC — which closes the write path that moved a limit with no audit row (B4) | **done** | this commit | edit a customer and save: `audit_events` gains nothing, and the limit is unchanged |
+| 38 | Lowering a limit below what is owed is allowed, stated, and enforced at the database: the sheet warns with the exact overage, the profile shows "Rs. 1,600 over the limit", the debt is never recalculated, and `create_sale_unchecked` refuses new credit past the limit (owner/admin may override, and the override is logged) | **done** | this commit + migration `0155` | proved by calling the deployed RPC with an over-limit payload: `CREDIT_LIMIT_EXCEEDED`, and sales/items/stock/balance all unchanged afterwards |
+| 39 | Money taken at the counter now counts as paid: `create_sale_unchecked` incremented purchases and outstanding but never `total_paid`, so a 7,200 sale with 600 down left the customer saying purchases 7,200 / paid 0 / owed 6,600. Migration `0155` fixes the function and backfills `paid = bought - owed` | **done** | this commit + migration `0155` | QA customer now reads 8,400 / 1,800 / 6,600 after a real 1,200 cash sale — the identity adds up exactly |
+| 40 | The sale details screen is one screen again (the admin and employee copies were ~1000 lines and had drifted): sale number, date and state on the receipt, the customer, the lines with returned quantities, one profit block for the manager, returns, note, and four actions — with no per-line cost breakdown, no duplicate totals card, no "Status" label with nothing after it, and no voided sale still offering Return/Void | **done** | this commit | open SALE-62727 as the owner: one receipt, one customer row, one item, one profit block, then Record payment / Share / Process Return / Cancel Sale |
+| 41 | The receipt itself is one component (`src/components/sales/SaleReceipt.tsx`) drawn by the success screen and the detail screen, and it says "1 item", not "1 items" | **done** | this commit | both screens render the same card from the same file |
+| 42 | A dead session no longer accuses the owner of lacking permission: `PGRST301` (expired JWT) and generic `permission denied` were mapped to "You are not allowed to do this. Please ask the shop owner." Session errors are now checked first and say "sign in again" | **done** | this commit | the owner completed a real sale from the running app (SALE-38453) with no permission error |
+| 43 | Full-service verification of everything above | **pending** | — | section C below |
 
 ## B. Open items
 
@@ -105,9 +112,9 @@ session, and 0154's permission check plus audit trail can both be bypassed by no
 already said 5,000 — the profile is rendered from a cache that a write through this path does not
 refresh.
 
-**State:** open · not touched, because the value in the database is the user's data and restoring it
-is their call. Fix is two-part: route the edit save through `set_customer_credit_limit` (or protect
-the column in the trigger) and invalidate the customers cache on that write.
+**State:** **closed** (rows 37/38): the edit form no longer writes the column, so the only way to
+change a limit is the audited RPC. The value the shop has now (5,000) is left exactly as found —
+restoring it to 50,000 is the owner's call, one tap on "Change limit".
 
 ### B3. Earlier workstreams still uncommitted
 Reminder/dashboard/store edits and `tests/e2e/results.json` are in the tree but not ours to commit

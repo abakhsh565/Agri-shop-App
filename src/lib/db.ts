@@ -199,7 +199,16 @@ function friendly(msg: string): string {
   const m = msg ?? "";
   if (/INSUFFICIENT_STOCK/.test(m)) return tNow("errors.noStock");
   if (/NEGATIVE_STOCK|below zero/i.test(m)) return tNow("errors.belowZero");
-  if (/NOT_AUTHORIZED|permission denied|not allowed|PGRST301/i.test(m)) return tNow("errors.notAllowed");
+  // A dead session is NOT a permission problem, and saying so sends an owner to demand
+  // rights they already have: PostgREST answers an expired or unverifiable JWT with
+  // PGRST301, which used to land on "You are not allowed to do this. Please ask the shop
+  // owner." — the one message that cannot be acted on. The honest sentence is "sign in
+  // again", and it has to be tested for first, because "permission denied" also matches
+  // the not-allowed rule below.
+  if (/PGRST301|JWT|token is expired|invalid claim|NOT_AUTHENTICATED|refresh token/i.test(m))
+    return tNow("errors.loginAgain");
+  // A missing permission, as the database phrases it when it refuses an action.
+  if (/NOT_AUTHORIZED|missing permission|permission denied/i.test(m)) return tNow("errors.notAllowed");
   if (/VARIANT_NOT_FOUND|PRODUCT_NOT_FOUND|SALE_ITEM_NOT_FOUND|does not exist|no longer exists/i.test(m))
     return tNow("errors.gone");
   if (/REASON_REQUIRED/.test(m)) return tNow("errors.needReason");

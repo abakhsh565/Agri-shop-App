@@ -17,7 +17,7 @@ import ScanButton from "@/components/ui/ScanButton";
 import { checkAndNotifyLowStock } from "@/lib/notifications";
 import { useCustomersStore } from "@/stores/customersStore";
 import { hasPermission } from "@/lib/tenantContext";
-import Sheet from "@/components/ui/Sheet";
+import CreditLimitSheet from "@/components/customers/CreditLimitSheet";
 
 export default function CartPage() {
   const navigate = useNavigate();
@@ -32,7 +32,6 @@ export default function CartPage() {
   const [paymentType, setPaymentType] = useState<"full" | "partial">("full");
   const [paymentMethod, setPaymentMethod] = useState<"cash" | "bank_transfer">("cash");
   const [amountReceived, setAmountReceived] = useState("");
-  const [limitDraft, setLimitDraft] = useState("");
   const [savingLimit, setSavingLimit] = useState(false);
   const [limitOpen, setLimitOpen] = useState(false);
   const [amountTouched, setAmountTouched] = useState(false);
@@ -76,10 +75,9 @@ export default function CartPage() {
   const showPaymentMethod = amountPaid > 0;
   const canEditCustomers = hasPermission("customers.edit");
 
-  async function handleSetCreditLimit() {
+  async function handleSetCreditLimit(value: number) {
     if (!customer || savingLimit) return;
-    const value = Number(limitDraft);
-    if (!limitDraft.trim() || Number.isNaN(value) || value <= 0) {
+    if (!Number.isFinite(value) || value <= 0) {
       addToast(t("sale.creditLimitFailed"), "warning");
       return;
     }
@@ -89,7 +87,6 @@ export default function CartPage() {
       // The cart holds its own copy of the customer for the sale, so it is updated too —
       // otherwise the credit-health line and the block on Complete still read the old limit.
       setCustomer({ ...customer, creditLimit: applied });
-      setLimitDraft("");
       setLimitOpen(false);
       addToast(t("sale.creditLimitSet", { amount: formatCurrency(applied) }), "success");
     } catch (e) {
@@ -176,19 +173,6 @@ export default function CartPage() {
       {/* The credit limit is asked for above the customer it belongs to, not inside the payment
           section: it is a property of this customer, and it is needed whether the sale in front
           of you is credit or not. */}
-      {customer && canEditCustomers && (
-        <div className="px-4 pt-3 flex justify-end">
-          <button
-            type="button"
-            onClick={() => { setLimitDraft(""); setLimitOpen(true); }}
-            className="text-xs font-semibold underline underline-offset-2"
-            style={{ color: "var(--brand-dark)" }}
-          >
-            {t("customers.creditLimit")}
-          </button>
-        </div>
-      )}
-
       {/* Customer strip — two states */}
       {!customer ? (
         <button
@@ -221,9 +205,27 @@ export default function CartPage() {
                 <p className="ds-section-label text-caption">{t("sale.outstandingCredit")}</p>
                 <p className="text-sm font-bold text-foreground">{formatCurrency(customer.outstandingBalance)}</p>
               </div>
+              {/* The limit and the way to change it are one control: the number, then the
+                  action, named for what it will do — "Set limit" when there is none,
+                  "Change limit" when there is. It used to float above the customer as a bare
+                  underlined "Credit Limit", which read as a heading, not a button. */}
               <div>
                 <p className="ds-section-label text-caption">{t("customers.creditLimit")}</p>
-                <p className="text-sm font-bold text-foreground">{formatCurrency(customer.creditLimit)}</p>
+                <div className="flex items-center gap-2">
+                  <p className="text-sm font-bold text-foreground">
+                    {customer.creditLimit > 0 ? formatCurrency(customer.creditLimit) : "\u2014"}
+                  </p>
+                  {canEditCustomers && (
+                    <button
+                      type="button"
+                      onClick={() => setLimitOpen(true)}
+                      className="text-12 font-semibold px-2.5 py-1 rounded-full"
+                      style={{ background: "var(--surface-2)", color: "var(--text-primary)", border: "1px solid var(--divider)" }}
+                    >
+                      {customer.creditLimit > 0 ? t("customers.changeLimit") : t("customers.setLimit")}
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           </div>
@@ -442,40 +444,14 @@ export default function CartPage() {
       {/* Setting a limit is one small decision, so it gets its own sheet instead of a field
           wedged into the payment column — and the sheet is reachable whether or not this sale
           needs credit. */}
-      <Sheet open={limitOpen} title={t("customers.creditLimit")} onClose={() => setLimitOpen(false)}>
-        <div className="px-5 pb-5 flex flex-col gap-3">
-          <div className="flex items-center justify-between gap-3 text-sm">
-            <span style={{ color: "var(--text-secondary)" }}>{t("customers.creditLimit")}</span>
-            <span className="font-bold">{formatCurrency(customer?.creditLimit ?? 0)}</span>
-          </div>
-          <input
-            type="number"
-            inputMode="decimal"
-            min="0"
-            value={limitDraft}
-            onChange={(e) => setLimitDraft(e.target.value)}
-            placeholder={t("sale.enterAmount")}
-            className="w-full h-12 rounded-[var(--radius-input)] border border-border px-4 text-sm text-foreground placeholder:text-caption outline-none"
-          />
-          <p className="text-11" style={{ color: "var(--text-secondary)" }}>
-            {t("sale.creditLimitHint")}
-          </p>
-          <div className="flex gap-2 pt-1">
-            <Button variant="outline" size="md" className="flex-1" onClick={() => setLimitOpen(false)}>
-              {t("common.cancel")}
-            </Button>
-            <Button
-              variant="primary"
-              size="md"
-              className="flex-1"
-              onClick={handleSetCreditLimit}
-              disabled={savingLimit || !limitDraft.trim()}
-            >
-              {savingLimit ? t("common.loading") : t("common.save")}
-            </Button>
-          </div>
-        </div>
-      </Sheet>
+      <CreditLimitSheet
+        open={limitOpen}
+        currentLimit={customer?.creditLimit ?? 0}
+        outstanding={customer?.outstandingBalance ?? 0}
+        saving={savingLimit}
+        onClose={() => setLimitOpen(false)}
+        onSave={handleSetCreditLimit}
+      />
     </div>
   );
 }
