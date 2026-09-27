@@ -185,16 +185,6 @@ export default function OTPVerifyPage() {
 
         {error && <p className="text-sm text-[#ef4444] text-center">{error}</p>}
 
-        {/* A partly typed code used to do nothing at all: submission waits for six
-            numbers, so a short entry produced no error, no message and no submit —
-            indistinguishable from a frozen screen. Say how many are still needed,
-            in plain words. */}
-        {!error && otp.length > 0 && otp.length < 6 && !expired && (
-          <p className="text-sm text-caption text-center" data-testid="otp-incomplete">
-            {t("auth.enterAllDigits", { count: 6 - otp.length })}
-          </p>
-        )}
-
         {!expired && (
           <p className="text-sm text-caption text-center">
             {t("auth.codeExpiresIn")}<span className="font-medium text-foreground">{formatTime(countdown)}</span>

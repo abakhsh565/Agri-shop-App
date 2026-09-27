@@ -577,17 +577,13 @@ test.describe('Employee job & access — simple for the owner, exact underneath'
     await expect(boxes).toHaveCount(6);
     for (let i = 0; i < 5; i++) await boxes.nth(i).fill('12345'[i]);
 
-    const notice = page.getByTestId('otp-incomplete');
-    await expect(notice, 'a five-digit code is entered in silence').toBeVisible();
-    // It says how many are still missing, in words rather than a count with a
-    // plural that breaks at 1.
-    expect(await notice.innerText(), 'the notice does not say what is missing').toContain('1 more to write');
+    // Five digits is not a code: nothing submits, and the screen waits for the sixth
+    // without a "N more to write" nag under the boxes.
     await page.waitForTimeout(3000);
     expect(page.url(), 'a five-digit code was submitted anyway').toContain('/login/otp');
 
     // No confirm button: the sixth number submits on its own, exactly as before.
     await boxes.nth(5).fill('6');
-    await expect(notice, 'the notice survives a complete code').toBeHidden();
     await page.waitForURL(/pin-set|\/login\/pin|\/admin\/dashboard|\/employee\/dashboard/, { timeout: 30000 });
   });
 });
