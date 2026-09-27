@@ -26,7 +26,12 @@ migration poisons everything built on top of it and cannot be caught later by a 
 | 12 | Bottom-sheet legibility: a dedicated `--tone-sheet` surface (a step above the card on dark, unchanged on light) and a per-theme `--scrim`, so sheets stop merging into the page; chips on a sheet use the translucent `--sheet-chip` | **done** | `bdc39548` | open a sheet in dark theme and see the raised panel against the dimmed page |
 | 13 | Close cross is now per sheet: single-tap pickers (shop switcher, field picker, welcome notice) have none; sheets collecting values, and content with no other exit (tutorial video, help), keep it | **done** | `bdc39548` | open each sheet and check the cross is present only where it earns its place |
 | 14 | Sheet tone/cross applied to the reminder, business-settings and admin-settings sheets too — **left uncommitted**, because those three files carry another workstream's uncommitted edits and pushing them would push that work | **partial** | — | stage those hunks alone once that workstream lands |
-| 15 | Full-service verification of everything above | **pending** | — | section C below |
+| 15 | Dark-theme legibility: `--brand-dark` / `--brand-light` inverted for dark (brand text was 2.7:1), Badge and the alert icons switched to the tokens, payment toggles off white-on-green | **done** | `156cfbc8` | look at a badge, a brand link and a selected toggle in dark |
+| 16 | Review & payment screen: totals panel off the light literal onto surface tokens, over-limit banner onto the error tokens | **done** | `156cfbc8` | open the cart in dark and read subtotal / total |
+| 17 | Payment method (cash/bank) only asked once an amount is actually being received | **done** | `156cfbc8` | on a credit sale with no amount typed, the method row is absent; type one and it appears |
+| 18 | Credit limit can be set from the sale screen when the customer has none, via permission-checked RPC `set_customer_credit_limit` (0154, applied to QA) | **done** | `156cfbc8` | set a limit mid-sale as owner, then see the same value on the customer profile |
+| 19 | Crops in business settings can be renamed (added and deleted already existed) | **done** | `156cfbc8` | rename a crop in the sheet, save, reopen |
+| 20 | Full-service verification of everything above | **pending** | — | section C below |
 
 ## B. Open items
 
