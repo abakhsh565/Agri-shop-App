@@ -1208,7 +1208,6 @@ export const translations = {
     "customerProfile.couldNotDelete": "Couldn't delete",
     // Recommendation reasons. The first three are the headline (what the crop needs now); the
     // rest are the evidence under it, and every one of them is something the shop recorded.
-    "recommendation.why": "Why recommended",
     "recommendation.missingFromBasket": "{crop} · missing from this season's basket",
     "recommendation.dueAgain": "{crop} · due again, last bought {days}",
     "recommendation.seasonWindowOpen": "{crop} · growing season window is open",
@@ -3039,7 +3038,6 @@ export const translations = {
     "customerProfile.couldNotUpdate": "اپ ڈیٹ نہیں ہو سکا",
     "customerProfile.couldNotDelete": "مٹ نہیں سکا",
     // Recommendation reasons
-    "recommendation.why": "سفارش کی وجہ",
     "recommendation.missingFromBasket": "{crop} · اس موسم کی باسکٹ میں موجود نہیں",
     "recommendation.dueAgain": "{crop} · دوبارہ ضرورت ہے، آخری خریداری {days} پہلے",
     "recommendation.seasonWindowOpen": "{crop} · کاشت کا موسم فعال ہے",

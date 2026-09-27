@@ -14,7 +14,7 @@ import { rpcDeleteProduct } from "@/lib/db";
 import { Pencil, TrendingUp, Barcode, Trash2, Copy, Download, Package, Camera, Loader2, Bell } from "lucide-react";
 import { getRecommendationsForProduct, type CustomerCropRecord } from "@/lib/recommendationEngine";
 import { loadCustomerCropRows } from "@/lib/reminderEngine";
-import WhyRecommended from "@/components/recommendations/WhyRecommended";
+import RecommendationReasonLine from "@/components/recommendations/RecommendationReason";
 import { useCustomersStore } from "@/stores/customersStore";
 import { useSalesStore } from "@/stores/salesStore";
 import { barcodeToSvg } from "@/lib/barcode";
@@ -476,7 +476,7 @@ function ProductCustomerRecommendations({ productId }: { productId: string }) {
           <ListRow
             key={rec.subject.id}
             tile={rec.subject.imageUrl ? (
-              <img src={rec.subject.imageUrl} alt={rec.subject.name} className="w-10 h-10 rounded-full object-cover shrink-0" />
+              <img src={rec.subject.imageUrl} alt={rec.subject.name} className="size-10 rounded-[var(--radius-tile)] object-cover shrink-0" style={{ background: "var(--surface-2)" }} />
             ) : (
               <div
                 className="w-10 h-10 rounded-full flex items-center justify-center text-12 font-bold shrink-0"
@@ -515,7 +515,7 @@ function ProductCustomerRecommendations({ productId }: { productId: string }) {
               <p className="text-14 font-medium" style={{ color: "var(--text-primary)" }}>
                 {rec.subject.name}
               </p>
-              <WhyRecommended reasons={rec.reasons} />
+              <RecommendationReasonLine reason={rec.reasons[0]} />
             </div>
           </ListRow>
         ))}

@@ -18,7 +18,7 @@ import { useShellBase } from "@/lib/useShellBase";
 import { History, Wallet, Bell, Pencil, Trash2, Receipt, Plus, Package } from "lucide-react";
 import { getRecommendationsForCustomer, KNOWN_CROPS, type CustomerCropRecord, type RecommendationReason } from "@/lib/recommendationEngine";
 import { loadReminderConfigs, saveReminderConfig as saveReminderConfigToDb, loadCustomerCrops, loadCustomerCropRows, saveCustomerCrops as saveCustomerCropsToDb, loadBusinessSettings, calculatePaymentStatus, getPaymentStatusLabel, getPaymentStatusColor, isDuplicateReminder } from "@/lib/reminderEngine";
-import WhyRecommended from "@/components/recommendations/WhyRecommended";
+import RecommendationReasonLine from "@/components/recommendations/RecommendationReason";
 import { useProductsStore } from "@/stores/productsStore";
 import { SkeletonList } from "@/components/ui/Skeleton";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
@@ -689,10 +689,20 @@ function RecommendedSection({ customerId }: { customerId: string | undefined }) 
         {recs.map((rec) => (
           <ListRow
             key={rec.subject.id}
+            /* The same picture the product carries on its own page and in the product list — the
+               uploaded photo when there is one, and the plain tile only when there is not. */
             tile={rec.subject.imageUrl ? (
-              <img src={rec.subject.imageUrl} alt={rec.subject.name} className="size-10 rounded-full object-cover shrink-0" style={{ background: "#E8F5E0" }} />
+              <img
+                src={rec.subject.imageUrl}
+                alt={rec.subject.name}
+                className="size-10 rounded-[var(--radius-tile)] object-cover shrink-0"
+                style={{ background: "var(--surface-2)" }}
+              />
             ) : (
-              <div className="size-10 rounded-full flex items-center justify-center shrink-0" style={{ background: "#E8F5E0" }}>
+              <div
+                className="size-10 rounded-[var(--radius-tile)] flex items-center justify-center shrink-0"
+                style={{ background: "var(--brand-light)" }}
+              >
                 <Package size={16} style={{ color: "var(--brand-dark)" }} />
               </div>
             )}
@@ -723,7 +733,7 @@ function RecommendedSection({ customerId }: { customerId: string | undefined }) 
               <p className="text-14 font-medium" style={{ color: "var(--text-primary)" }}>
                 {rec.subject.name}
               </p>
-              <WhyRecommended reasons={rec.reasons} />
+              <RecommendationReasonLine reason={rec.reasons[0]} />
             </div>
           </ListRow>
         ))}
