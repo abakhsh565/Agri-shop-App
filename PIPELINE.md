@@ -18,7 +18,8 @@ migration poisons everything built on top of it and cannot be caught later by a 
 | 4 | Login hint rewritten — final copy: *"Enter your registered number to get a verification code."* (EN + UR, demo and live variants) | **done** | `98e639a8` | restored in the copy guard + seen on the live screen |
 | 5 | Phone fields take digits only — sign-in, signup and forgot-PIN ignore anything that is not a number | **done** | `c474e999` | type into each phone field live: letters do nothing, a number goes in |
 | 6 | Code screen: heading rewritten to *"Type the 6-digit code to continue."*, and the running "N more to write" line removed (its e2e expectation updated to match) | **done** | `3b26d575` | see the screen live with a partial code: the sixth digit submits, nothing narrates the count |
-| 7 | Full-service verification of everything above | **pending** | — | section C below |
+| 7 | Code screen hint rewritten to *"Your verification code is 123456."* (the line under the bold heading; the bold heading itself left as it was) | **done** | this commit | see it on the code screen in demo mode |
+| 8 | Full-service verification of everything above | **pending** | — | section C below |
 
 ## B. Open items
 
