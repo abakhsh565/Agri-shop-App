@@ -90,7 +90,9 @@ export default function RegisterPhonePage() {
               type="tel"
               placeholder={t("common.phonePlaceholder")}
               value={phone}
-              onChange={(e) => setPhone(e.target.value)}
+              /* Digits only — same rule as the sign-in field: the number is what is asked for,
+                 so a letter never lands in the field. */
+              onChange={(e) => setPhone(e.target.value.replace(/\D/g, ""))}
               error={phoneError}
               autoComplete="tel"
               onKeyDown={(e) => e.key === "Enter" && handleSendOTP()}

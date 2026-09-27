@@ -152,7 +152,8 @@ export default function ForgotPINPage() {
                 type="tel"
                 placeholder={t("common.phonePlaceholder")}
                 value={phone}
-                onChange={(e) => { setPhone(e.target.value); setError(""); }}
+                // Digits only, like the other phone fields.
+                onChange={(e) => { setPhone(e.target.value.replace(/\D/g, "")); setError(""); }}
                 error={error}
               />
               <Button fullWidth onClick={handleSendOTP} loading={loading} disabled={!phone}>

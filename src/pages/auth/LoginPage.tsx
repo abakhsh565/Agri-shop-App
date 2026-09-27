@@ -95,7 +95,9 @@ export default function LoginPage() {
               type="tel"
               placeholder={t("common.phonePlaceholder")}
               value={phone}
-              onChange={(e) => setPhone(e.target.value)}
+              /* Digits only: a phone field takes a number, so a letter does nothing rather than
+                 filling the field with something the check will reject. */
+              onChange={(e) => setPhone(e.target.value.replace(/\D/g, ""))}
               error={phoneError}
               autoComplete="tel"
               onKeyDown={(e) => e.key === "Enter" && handleSignIn()}
