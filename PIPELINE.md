@@ -23,7 +23,10 @@ migration poisons everything built on top of it and cannot be caught later by a 
 | 9 | Code screen line under the heading rewritten to the instruction form: *"Enter the OTP verification code we just sent to your number {phone}."* with *"Change number?"* inline after the number (EN + UR; no key added or removed) | **done** | `a405c766` | see it on both code screens and the forgot-PIN code step, with the number shown and the link inline |
 | 10 | Code screen action renamed **Resend** → *"Request a new code"* (EN + UR), same 30s disabled cooldown, same row as the timer | **done** | `f273062f` | see the row live: timer then "Request a new code", greyed for 30s then usable |
 | 11 | Back button no longer closes the app on the signed-out screens: the handler + toast host are mounted on sign-in/sign-up/the introduction, leaving the app takes two presses there like the dashboard, and a press inside a signed-out flow steps back instead of exiting | **done** | `806418c1` | press back on `/login`, `/register`, `/welcome` and mid-sign-up on the phone: one press shows "Press back again to close the app.", a second within 2.5s closes it, and the step screens go back a step |
-| 12 | Full-service verification of everything above | **pending** | — | section C below |
+| 12 | Bottom-sheet legibility: a dedicated `--tone-sheet` surface (a step above the card on dark, unchanged on light) and a per-theme `--scrim`, so sheets stop merging into the page; chips on a sheet use the translucent `--sheet-chip` | **done** | `bdc39548` | open a sheet in dark theme and see the raised panel against the dimmed page |
+| 13 | Close cross is now per sheet: single-tap pickers (shop switcher, field picker, welcome notice) have none; sheets collecting values, and content with no other exit (tutorial video, help), keep it | **done** | `bdc39548` | open each sheet and check the cross is present only where it earns its place |
+| 14 | Sheet tone/cross applied to the reminder, business-settings and admin-settings sheets too — **left uncommitted**, because those three files carry another workstream's uncommitted edits and pushing them would push that work | **partial** | — | stage those hunks alone once that workstream lands |
+| 15 | Full-service verification of everything above | **pending** | — | section C below |
 
 ## B. Open items
 
