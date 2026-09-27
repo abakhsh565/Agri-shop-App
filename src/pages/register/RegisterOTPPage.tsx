@@ -127,11 +127,11 @@ export default function RegisterOTPPage() {
   return (
     <AuthLayout>
       <NavHeader title={t("auth.verifyPhone")} backTo="/register" />
-      {/* Same rule as the sign-in code screen: centred in the space that is left, nothing larger
-          than the boxes as a gap, so the code, the clock and Resend all stay visible with the
-          keyboard open on a small phone. */}
+      {/* Same rule as the sign-in code screen: at the top of the space the header leaves, with
+          nothing larger than the boxes as a gap, so the code, the clock and Resend all stay
+          visible with the keyboard open on a small phone. */}
       <div
-        className="ds-auth-screen flex flex-col justify-center px-6 flex-1 min-h-0"
+        className="ds-auth-screen flex flex-col justify-start px-6 flex-1 min-h-0"
         style={{ gap: "var(--auth-rhythm, 20px)", paddingBlock: "var(--auth-pad, 16px)" }}
       >
         <div className="flex flex-col gap-2 text-center">

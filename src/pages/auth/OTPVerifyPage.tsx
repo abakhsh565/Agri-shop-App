@@ -163,13 +163,13 @@ export default function OTPVerifyPage() {
   return (
     <AuthLayout>
       <NavHeader title={t("auth.verifyOtp")} backTo="/login" />
-      {/* Centred in whatever height is left, with no fixed gap bigger than the code boxes:
-          returning here after the session has expired means the number is already filled in and
-          the keyboard is open, so the boxes have to stay in view with ~40% less height than the
-          screen. Everything on this screen is sized by the type scale and the space tokens —
-          nothing needs to scroll at phone sizes. */}
+      {/* Sits directly under the header, at the top of the space that is left — not floated into
+          the middle of it. Returning here after the session has expired means the number is
+          already filled in and the keyboard is open, so the boxes have to stay in view with
+          ~40% less height than the screen. Everything on this screen is sized by the type scale
+          and the space tokens: nothing needs to scroll at phone sizes. */}
       <div
-        className="ds-auth-screen flex flex-col justify-center px-6 flex-1 min-h-0"
+        className="ds-auth-screen flex flex-col justify-start px-6 flex-1 min-h-0"
         style={{ gap: "var(--auth-rhythm, 20px)", paddingBlock: "var(--auth-pad, 16px)" }}
       >
         <div className="flex flex-col gap-2 text-center">
