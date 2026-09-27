@@ -22,7 +22,8 @@ migration poisons everything built on top of it and cannot be caught later by a 
 | 8 | Code screen layout/copy: code lives 2 minutes; "Code expires in" sentence gone (timer + **Resend** on one row); Resend disabled for its 30s cooldown instead of a countdown sentence (and disabled from the moment the screen opens, since a code was just sent); "Change number?" on the same line as the number; the line printing the code removed | **done** | `c31b62e8` | see the row live: timer ticking, Resend greyed then usable at 30s; check the QA code with the QA fixture numbers |
 | 9 | Code screen line under the heading rewritten to the instruction form: *"Enter the OTP verification code we just sent to your number {phone}."* with *"Change number?"* inline after the number (EN + UR; no key added or removed) | **done** | `a405c766` | see it on both code screens and the forgot-PIN code step, with the number shown and the link inline |
 | 10 | Code screen action renamed **Resend** → *"Request a new code"* (EN + UR), same 30s disabled cooldown, same row as the timer | **done** | `f273062f` | see the row live: timer then "Request a new code", greyed for 30s then usable |
-| 11 | Full-service verification of everything above | **pending** | — | section C below |
+| 11 | Back button no longer closes the app on the signed-out screens: the handler + toast host are mounted on sign-in/sign-up/the introduction, leaving the app takes two presses there like the dashboard, and a press inside a signed-out flow steps back instead of exiting | **done** | `806418c1` | press back on `/login`, `/register`, `/welcome` and mid-sign-up on the phone: one press shows "Press back again to close the app.", a second within 2.5s closes it, and the step screens go back a step |
+| 12 | Full-service verification of everything above | **pending** | — | section C below |
 
 ## B. Open items
 
