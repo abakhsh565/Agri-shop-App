@@ -129,7 +129,13 @@ export default function PINSetPage() {
   return (
     <AuthLayout>
       <NavHeader title={step === "set" ? t("auth.setPinBtn") : t("auth.confirmPinBtn")} noBack />
-      <div className="flex flex-col flex-1 items-center gap-8 p-6 pt-12">
+      {/* Same measurement as the other PIN screens (see `.ds-auth-screen`): the keypad scales
+          with the height the screen actually has, so choosing a PIN is one screen on every
+          phone rather than a screen with the last row of keys below the fold. */}
+      <div
+        className="ds-auth-screen flex flex-col flex-1 items-center px-6"
+        style={{ gap: "var(--auth-rhythm, 24px)", paddingBlock: "var(--auth-pad, 24px)" }}
+      >
         <div className="flex flex-col items-center gap-2 text-center">
           <p className="text-xl font-bold text-foreground">
             {step === "set" ? t("auth.setPinHelp") : t("auth.confirmPin")}

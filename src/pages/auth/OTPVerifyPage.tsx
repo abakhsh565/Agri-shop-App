@@ -168,7 +168,10 @@ export default function OTPVerifyPage() {
           the keyboard is open, so the boxes have to stay in view with ~40% less height than the
           screen. Everything on this screen is sized by the type scale and the space tokens —
           nothing needs to scroll at phone sizes. */}
-      <div className="flex flex-col justify-center gap-5 px-6 py-4 flex-1 min-h-0">
+      <div
+        className="ds-auth-screen flex flex-col justify-center px-6 flex-1 min-h-0"
+        style={{ gap: "var(--auth-rhythm, 20px)", paddingBlock: "var(--auth-pad, 16px)" }}
+      >
         <div className="flex flex-col gap-2">
           <p className="text-xl font-bold text-foreground">{t("auth.enterCode")}</p>
           {/* The link sits on the same line as the number it changes, so "which number" and

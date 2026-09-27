@@ -96,13 +96,23 @@ export default function PINLoginPage() {
   return (
     <AuthLayout>
       <NavHeader title={t("auth.signIn")} backTo="/login" />
-      <div className="flex flex-col flex-1 items-center gap-5 sm:gap-8 px-4 py-4 sm:p-6 sm:pt-8">
+      {/* `ds-auth-screen` carries the one measurement this screen is built from: the key
+          size, and the rhythm between the rows. Both read the live viewport height, so the
+          whole column — greeting, dots, keypad, "Forgot PIN" — fits a short phone and a
+          phone with the keyboard up, with no scrolling. */}
+      <div
+        className="ds-auth-screen flex flex-col flex-1 items-center px-4 sm:px-6"
+        style={{ gap: "var(--auth-rhythm, 24px)", paddingBlock: "var(--auth-pad, 24px)" }}
+      >
         <div className="flex flex-col items-center gap-1.5 sm:gap-2 text-center">
+          {/* `ds-auth-avatar` scales with the height the screen was given — larger on a tall
+              phone, smaller on a short one — so the greeting and the keypad share the budget
+              instead of the picture taking a fixed 48px off it either way. */}
           {user.photoUrl ? (
-            <img src={user.photoUrl} alt="" className="w-12 h-12 sm:w-16 sm:h-16 rounded-full object-cover mb-1 sm:mb-2" />
+            <img src={user.photoUrl} alt="" className="ds-auth-avatar rounded-full object-cover mb-1" />
           ) : (
             <div
-              className="w-12 h-12 sm:w-16 sm:h-16 rounded-full flex items-center justify-center text-lg sm:text-xl font-bold mb-1 sm:mb-2"
+              className="ds-auth-avatar rounded-full flex items-center justify-center text-lg sm:text-xl font-bold mb-1"
               style={{ background: "var(--brand)", color: "#0a0a0a" }}
             >
               {user.name.charAt(0).toUpperCase()}
@@ -111,7 +121,9 @@ export default function PINLoginPage() {
           <p className="text-lg sm:text-xl font-bold text-foreground">
             Welcome, {user.name.split(" ")[0]}
           </p>
-          <p className="text-xs sm:text-sm text-caption">{t("auth.pinPrompt")}</p>
+          {/* The one line on this screen that the keypad itself already says — the first to go
+              on a short screen (see the max-height rule in the stylesheet). */}
+          <p className="ds-auth-hint text-xs sm:text-sm text-caption">{t("auth.pinPrompt")}</p>
           {error && (
             <p className="text-xs sm:text-sm text-[#ef4444]">{error}</p>
           )}

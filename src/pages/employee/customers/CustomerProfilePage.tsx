@@ -268,17 +268,23 @@ export default function CustomerProfilePage() {
       <div className="flex flex-col gap-3.5 px-4 pt-3 pb-8">
 
         {/* ═══════════════════════════════════════════
-            1. HERO CARD — Avatar, Name, Phone, Risk pill
+            1. HERO CARD — Avatar, Name, Phone · Town · Crop, Status pill
+
+            Four facts, in the order they are read out loud: who this is, how to reach
+            them, where they farm and what they grow, then how they are paying. The name
+            leads and is the only bold thing here, so the card answers "whose page am I on"
+            before anything else. The crops used to sit under the phone as a row of chips of
+            their own, which made three lines of what is one sentence — a phone, a place and
+            a crop are the same kind of fact about the same person, so they share a line and
+            are separated by the same dot.
            ═══════════════════════════════════════════ */}
-        <div
-          className="ds-card flex gap-3 items-start"
-        >
+        <div className="ds-card flex items-center gap-3.5">
           <div className="shrink-0">
             {customer.imageUrl ? (
-              <img src={customer.imageUrl} alt={customer.name} className="size-[52px] rounded-full object-cover" />
+              <img src={customer.imageUrl} alt={customer.name} className="size-[60px] rounded-full object-cover" />
             ) : (
               <div
-                className="size-[52px] rounded-full flex items-center justify-center text-20 font-medium"
+                className="size-[60px] rounded-full flex items-center justify-center text-22 font-bold"
                 style={{ background: initBg, color: "#fff" }}
               >
                 {customer.name.charAt(0).toUpperCase()}
@@ -286,29 +292,22 @@ export default function CustomerProfilePage() {
             )}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-17 font-medium truncate" style={{ color: "var(--text-primary)" }}>{customer.name}</p>
-            <p className="text-13 mt-0.5" style={{ color: "var(--text-secondary)" }}>
-              {customer.phone}{customer.address ? " \u00a0\u00b7\u00a0 " + customer.address : ""}
+            <p className="text-20 font-bold truncate" style={{ color: "var(--text-primary)" }}>{customer.name}</p>
+            {/* `filter(Boolean)` and then `join` — so a customer with no address yet reads
+                "0300… · Cotton" rather than "0300… ·  · Cotton" with a gap where the missing
+                fact would have been. */}
+            <p className="text-13 mt-1 truncate" style={{ color: "var(--text-secondary)" }}>
+              {[customer.phone, customer.address, customerCrops.join(", ")].filter(Boolean).join(" \u00b7 ")}
             </p>
             <div
-              className="inline-flex items-center gap-1.5 mt-2 px-2.5 py-1 rounded-full"
+              className="inline-flex items-center gap-1.5 mt-2.5 px-3 py-1 rounded-full"
               style={{ background: riskBg }}
             >
               <div className="size-1.5 rounded-full" style={{ background: riskDot }} />
-              <span className="text-12 font-medium" style={{ color: riskTextColor }}>
+              <span className="text-13 font-medium" style={{ color: riskTextColor }}>
                 {riskLabel}
               </span>
             </div>
-
-            {customerCrops.length > 0 && (
-              <div className="flex flex-wrap gap-1.5 mt-2">
-                {/* Crop chips go through the brand tokens: the literals that used to sit here
-                    (#3B6D11 on a near-black tint) were invisible on the dark theme. */}
-                {customerCrops.map((crop: string) => (
-                  <span key={crop} className="text-10 font-medium px-2 py-0.5 rounded-full" style={{ background: "var(--brand-light)", color: "var(--brand-dark)" }}>{crop}</span>
-                ))}
-              </div>
-            )}
           </div>
         </div>
 

@@ -29,7 +29,21 @@ const PENDING_DSCARD: string[] = [];
  * file that no longer exists is worse than no exception, because it reads as a live
  * decision.
  */
-const EXCEPTIONS_HANDROLLED: string[] = [];
+/**
+ * The sale receipt's field block is not a grouped list, and is accepted as such.
+ *
+ * `SaleSuccessPage` draws Customer / Phone / Payment / Items / Sold by as label-value
+ * rows with a hairline between them, which is why the check below sees it. It is not
+ * the list grammar, though: those rows live inside a *document* — a brand band above
+ * them, a perforation with notches below, and one large amount figure at the end — and
+ * the same element is what gets rasterised for Share and printed for Print, so the
+ * rows have to be exactly this tight and exactly this quiet. Converting them to
+ * ListRow would set them to the app's 52px grouped-row height and re-typeset the
+ * artifact into a settings list. Everything outside the receipt still goes through
+ * ListCard/ListRow, and the separator here is full-bleed like the primitive's, so the
+ * two agree about geometry even though only one of them is a list.
+ */
+const EXCEPTIONS_HANDROLLED: string[] = ["src/pages/employee/sale/SaleSuccessPage.tsx"];
 
 const PENDING_HANDROLLED: string[] = [];
 

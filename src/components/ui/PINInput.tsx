@@ -17,7 +17,7 @@ export default function PINInput({ value, onChange, error, shake }: PINInputProp
   }
 
   return (
-    <div className="flex flex-col items-center gap-6 sm:gap-10 w-full">
+    <div className="flex flex-col items-center w-full" style={{ gap: "var(--auth-rhythm, 24px)" }}>
       {/* Dots */}
       <div className={`flex gap-4 sm:gap-5 ${shake ? "animate-[shake_0.4s_ease]" : ""}`}>
         {[0,1,2,3].map((i) => (
@@ -32,31 +32,30 @@ export default function PINInput({ value, onChange, error, shake }: PINInputProp
         ))}
       </div>
 
-      {/* Number pad — big touchable circular buttons */}
-      <div className="grid grid-cols-3 gap-2.5 sm:gap-3 w-full max-w-[300px]">
+      {/* Number pad — big touchable circular buttons.
+
+          The keys are sized by the screen, not by the viewport width alone: `--pin-key`
+          (set on the page by `.ds-auth-screen`) reads the live height too, so the four
+          rows plus the dots above them always fit the space the screen was given instead
+          of pushing the last row under the fold. They never fall below 44px — the
+          smallest thing a thumb is expected to hit. */}
+      <div className="ds-pin-pad">
         {PAD.map((key, i) => (
           key ? (
             <button
               key={i}
               type="button"
               onClick={() => tap(key)}
-              className="
-                w-full aspect-square rounded-full text-2xl sm:text-26 font-medium
-                flex items-center justify-center
-                transition-all duration-100
-                active:scale-90 active:brightness-90
-                min-h-[56px] sm:min-h-[72px]
-              "
+              className="ds-pin-key font-medium transition-all duration-100 active:scale-90 active:brightness-90"
               style={{
                 color: key === "⌫" ? "var(--text-secondary, #888)" : "var(--text-primary, #111)",
                 background: "var(--surface-2, #f5f5f5)",
-                fontSize: key === "⌫" ? "22px" : undefined,
               }}
             >
               {key}
             </button>
           ) : (
-            <div key={i} className="w-full aspect-square min-h-[56px] sm:min-h-[72px]" />
+            <div key={i} />
           )
         ))}
       </div>

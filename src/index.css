@@ -898,6 +898,98 @@ svg.ds-row-chevron {
   will-change: transform, opacity;
 }
 
+/* ── Two screens have to fit whatever height they are given ────────────────────
+   The code screen and the PIN screens are the only screens in the app made entirely
+   of fixed-size touch targets: six code boxes, or four rows of round keys. On a
+   short phone — or the same phone with the keyboard up, which shrinks the *visual*
+   viewport rather than the layout one — they were the only screens that could run out
+   of room, and the last row of the keypad ended up below the fold.
+
+   So the key is the one thing that gives. `--pin-key` is the smallest of a comfortable
+   finger target (44px, the accessibility floor — never smaller), a share of the width,
+   and a share of the live viewport height. The dots, the code boxes and the rhythm
+   between the rows all derive from that one number, so the column scales as a unit
+   instead of row by row, and the screen never needs to scroll. Type does not scale with
+   it: the ramp still owns every size in the product.
+
+   `vh` is the base and `dvh` is the upgrade, so a browser without dynamic viewport
+   units falls back to the old behaviour rather than to a broken value. */
+.ds-auth-screen {
+  --pin-key: clamp(44px, 19vw, 72px);
+  --pin-gap: 8px;
+  --auth-rhythm: clamp(14px, 2.6vh, 32px);
+  /* The page's own top and bottom breathing room is part of the same budget: on a short
+     screen the padding gives before the last row of keys does. */
+  --auth-pad: clamp(12px, 2.4vh, 24px);
+  --auth-avatar: clamp(40px, 8vh, 64px);
+}
+
+@supports (height: 100dvh) {
+  .ds-auth-screen {
+    --pin-key: clamp(44px, min(19vw, 10.5dvh), 72px);
+    --pin-gap: clamp(6px, 1.5dvh, 12px);
+    --auth-rhythm: clamp(12px, 2.6dvh, 32px);
+    --auth-pad: clamp(12px, 2.4dvh, 24px);
+    --auth-avatar: clamp(40px, 8dvh, 64px);
+  }
+}
+
+.ds-auth-avatar {
+  width: var(--auth-avatar, 48px);
+  height: var(--auth-avatar, 48px);
+}
+
+/* Under roughly 560px of usable height the greeting's second line is dropped. It says what
+   the keypad under it already is, and the row it frees is the difference between four rows of
+   keys fitting and the 0 sitting under the fold — on the one screen where a slipped thumb
+   costs a locked account. The name and the dots still say who is signing in and how far in
+   they are. */
+@media (max-height: 560px) {
+  .ds-auth-screen {
+    --auth-rhythm: 10px;
+  }
+
+  .ds-auth-hint {
+    display: none;
+  }
+}
+
+.ds-pin-pad {
+  display: grid;
+  grid-template-columns: repeat(3, var(--pin-key, 60px));
+  gap: var(--pin-gap, 10px);
+  justify-content: center;
+}
+
+.ds-pin-key {
+  width: var(--pin-key, 60px);
+  height: var(--pin-key, 60px);
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* The ramp, read by the system layer itself: a key is a finger target, not a
+     typographic decision, so its size is geometric — but the digit inside stays on
+     the one type scale. */
+  font-size: var(--fs-22, 22px);
+}
+
+/* Six boxes and five gaps have to fit the narrowest phone the shop still uses, and
+   they are tapped by the same thumb the keypad is built for: the box shrinks before
+   the row can leave the screen. */
+.ds-otp-row {
+  --otp-box: clamp(38px, 11.5vw, 48px);
+  display: flex;
+  gap: clamp(6px, 2.2vw, 12px);
+  justify-content: center;
+}
+
+.ds-otp-box {
+  width: var(--otp-box, 44px);
+  height: calc(var(--otp-box, 44px) * 1.16);
+  font-size: var(--fs-20, 20px);
+}
+
 @keyframes slideUp {
   from { transform: translateY(100%); }
   to   { transform: translateY(0); }

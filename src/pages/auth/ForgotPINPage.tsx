@@ -151,7 +151,12 @@ export default function ForgotPINPage() {
   return (
     <AuthLayout>
       <NavHeader title={t("auth.resetPin")} backTo="/login" />
-      <div className="flex flex-col flex-1 items-center gap-8 p-6 pt-8">
+      {/* `.ds-auth-screen` sizes the code row and the keypad from the height the screen has
+          (see the stylesheet), so all four steps of this flow fit one screen. */}
+      <div
+        className="ds-auth-screen flex flex-col flex-1 items-center px-6"
+        style={{ gap: "var(--auth-rhythm, 24px)", paddingBlock: "var(--auth-pad, 24px)" }}
+      >
 
         {/* Step 1: Enter phone (only if no user in state) */}
         {step === "phone" && (

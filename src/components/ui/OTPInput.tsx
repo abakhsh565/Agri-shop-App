@@ -45,7 +45,10 @@ export default function OTPInput({ value, onChange, length = 6, disabled, error 
   }
 
   return (
-    <div className="flex gap-3 justify-center">
+    /* The row is sized by `.ds-otp-row`/`.ds-otp-box` so six boxes and five gaps fit the
+       narrowest phone in one line, and so the whole screen still clears a keyboard that is
+       eating a third of the height. The box shrinks; the type inside stays on the ramp. */
+    <div className="ds-otp-row">
       {Array.from({ length }).map((_, i) => (
         <input
           key={i}
@@ -67,10 +70,7 @@ export default function OTPInput({ value, onChange, length = 6, disabled, error 
              in-card hairline — so a box had no discernible edge in either theme. They now
              name the tokens directly: `--surface` for the fill, `--border-control` for the
              outline that actually reads as a field edge in light AND dark. */
-          className="
-            w-12 h-14 text-center text-20 font-semibold rounded-[var(--radius-tile)]
-            outline-none focus:ring-2 disabled:opacity-40
-          "
+          className="ds-otp-box text-center font-semibold rounded-[var(--radius-tile)] outline-none focus:ring-2 disabled:opacity-40"
           style={{
             background: "var(--surface)",
             color: "var(--text-primary)",

@@ -42,7 +42,12 @@ migration poisons everything built on top of it and cannot be caught later by a 
 | 28 | Success tick halo: two staggered rings breathing out behind the check (reduced-motion hides them) | **done** | `f5c28f7e` | seen live: rings expanding behind the tick |
 | 29 | Removed the repeated "Rs. 11,200 received" line under *Sale Complete!* — the receipt shows the total below it | **done** | `f5c28f7e` | see the screen: heading stands alone |
 | 30 | Chime lengthened to ~3.8s and made to settle: widening gaps, closing A5+E6 chord held 2.9s, 0.15 gain | **done** | `f5c28f7e` | complete a sale and listen |
-| 31 | Full-service verification of everything above | **pending** | — | section C below |
+| 31 | PIN screens are height-responsive: the keypad is measured from the live viewport height (44px minimum target, never smaller), the greeting avatar scales with it, the second greeting line drops under 560px, and the page's own padding gives before the keys do. At 360x640 the keys were ~93px and the screen scrolled; they are 67px and it does not | **done** | this commit | open `/login/pin`, `/login/pin-set` and the forgot-PIN steps at 360x640, 360x568, 320x568 and 390x430: no key below the fold, no scrolling |
+| 32 | Code screen sized the same way: six boxes and their five gaps scale with the width (and the rhythm with the height), so the row fits a 320px phone and still clears a keyboard | **done** | this commit | measured 390x430 and 320x568: six boxes visible, zero page overflow, tab order unchanged |
+| 33 | Customer detail hero card follows the reference: 60px avatar, one bold name, one meta line (`phone · town · crops`) instead of a phone line plus a row of crop chips, status pill under it in the row's own green/amber/red | **done** | this commit | open a customer that has crops: one line with two dots, one pill, no chip row |
+| 34 | A red guard turned green: the receipt's hand-rolled, index-based hairline in `SaleSuccessPage` is now a written exception in `listPrimitiveGuard` (the receipt is a document — band, perforation, one large amount — not a grouped list), so the guard stops failing on `main` | **done** | this commit | `npx vitest run tests/unit/listPrimitiveGuard.test.ts` green, other offenders still fail it |
+| 35 | The recommendation engine finally has tests (9 cases: crop required, in-season basket gap, bought-today silence, due-again after 30 days, out-of-season, no stock, cap of five, and both directions) — it is the feature whose output is invisible when it decides nothing, so its rules are now pinned | **done** | this commit | proven non-vacuous by injecting the bought-today case once and watching it fail |
+| 36 | Full-service verification of everything above | **pending** | — | section C below |
 
 ## B. Open items
 
@@ -84,6 +89,25 @@ then joins the bulk pass.
 ### B2. Stray QA rows
 `companies` "Stngneta" and `customers` "Khadim Hussain" in Default Shop, created outside these
 passes. Decide delete or keep before the next baseline count. **State:** pending decision.
+
+### B4. The credit limit can still be written without an audit row
+
+**Found:** on 2026-09-27 the QA customer `Yaqoob` moved from a limit of 50,000 (set through the
+permission-checked, audited `set_customer_credit_limit` RPC at 14:17:44, audit row present) to
+5,000 at 14:29:55 with **no audit row and no credit-limit request**. The only code path that can do
+that is the customer-profile edit save, which writes `credit_limit` straight to the table
+(`CustomerProfilePage` → `customers.update`). The database guard that exists for this
+(`protect_customer_financials`, migration 0037) covers `outstanding_balance`, `total_purchases` and
+`total_paid` — **not** `credit_limit`, so the column is writable by any client that holds the
+session, and 0154's permission check plus audit trail can both be bypassed by not using the RPC.
+
+**Also seen:** the open customer page showed the old 50,000 from the local cache while the database
+already said 5,000 — the profile is rendered from a cache that a write through this path does not
+refresh.
+
+**State:** open · not touched, because the value in the database is the user's data and restoring it
+is their call. Fix is two-part: route the edit save through `set_customer_credit_limit` (or protect
+the column in the trigger) and invalidate the customers cache on that write.
 
 ### B3. Earlier workstreams still uncommitted
 Reminder/dashboard/store edits and `tests/e2e/results.json` are in the tree but not ours to commit
