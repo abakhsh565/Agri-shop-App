@@ -31,7 +31,9 @@ migration poisons everything built on top of it and cannot be caught later by a 
 | 17 | Payment method (cash/bank) only asked once an amount is actually being received | **done** | `156cfbc8` | on a credit sale with no amount typed, the method row is absent; type one and it appears |
 | 18 | Credit limit can be set from the sale screen when the customer has none, via permission-checked RPC `set_customer_credit_limit` (0154, applied to QA) | **done** | `156cfbc8` | set a limit mid-sale as owner, then see the same value on the customer profile |
 | 19 | Crops in business settings can be renamed (added and deleted already existed) | **done** | `156cfbc8` | rename a crop in the sheet, save, reopen |
-| 20 | Full-service verification of everything above | **pending** | — | section C below |
+| 20 | Reset-PIN code screen: Verify button removed, the sixth digit submits (same rule as sign-in) | **done** | `76feaa53` | enter a code on the forgotten-PIN screen: it checks itself, spinner only |
+| 21 | Customer detail page: Record Payment row is a normal ListRow again (its own tint and hardcoded green are gone); delete row uses the error token | **done** | `76feaa53` | open a customer in dark and compare the rows |
+| 22 | Full-service verification of everything above | **pending** | — | section C below |
 
 ## B. Open items
 
