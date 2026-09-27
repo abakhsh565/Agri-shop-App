@@ -71,10 +71,12 @@ export default function RecordPurchasePage() {
     const th = p.variants[0]?.lowStockThreshold ?? 5;
     const isLow = p.stockQty <= th;
     const vCount = p.variants.length;
-    const vLabel = vCount + (vCount !== 1 ? " variants" : " variant");
-    const stockLabel = vLabel + " \u00b7 " + p.stockQty + " " + p.baseUnit + " in stock" + (isLow ? " \u00b7 Low stock" : "");
+    const vLabel = vCount !== 1 ? t("common.variantsCount", { count: String(vCount) }) : t("common.variantOne", { count: String(vCount) });
+    // A pack is counted in items, not in kilos: twelve five-kilo bags are twelve items on the
+    // shelf, and calling that "12 kg" was the same mislabel this sweep removes.
+    const stockLabel = vLabel + " \u00b7 " + t("common.itemsInStock", { count: String(p.stockQty) }) + (isLow ? " \u00b7 " + t("common.lowStock") : "");
     return { value: p.id, label: p.name + (isLow ? " \u26a0\ufe0f" : ""), sub: stockLabel, imageUrl: p.imageUrl };
-  }), [companyProducts]);
+  }), [companyProducts, t]);
 
   function pickVariant(id: string) {
     setVariantId(id);
@@ -227,7 +229,7 @@ export default function RecordPurchasePage() {
                     >
                       <div>
                         <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>{v.name}</p>
-                        <p className="text-xs" style={{ color: "var(--text-secondary)" }}>{v.stockQty} {product.baseUnit} in stock</p>
+                        <p className="text-xs" style={{ color: "var(--text-secondary)" }}>{t("common.itemsInStock", { count: String(v.stockQty) })}</p>
                       </div>
                       <div
                         className="w-5 h-5 rounded-full border-2 flex items-center justify-center"

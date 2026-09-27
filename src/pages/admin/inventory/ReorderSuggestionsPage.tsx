@@ -74,9 +74,11 @@ export default function ReorderSuggestionsPage() {
       <NavHeader title={t("admin.reorderSuggestions")} />
 
       <div className="px-4 pt-3 pb-2">
-        <div className="flex items-center gap-2 rounded-[var(--radius-card)] p-3" style={{ background: "rgba(217,119,6,0.08)", border: "1px solid rgba(217,119,6,0.2)" }}>
-          <AlertTriangle size={16} style={{ color: "#d97706" }} />
-          <p className="text-xs" style={{ color: "#92400e" }}>
+        {/* Amber, from the tokens rather than by hand: `#92400e` on this page was dark
+            brown text on a dark page, because the tint was mixed for the light theme. */}
+        <div className="flex items-center gap-2 rounded-[var(--radius-card)] p-3" style={{ background: "var(--warning-bg)", border: "1px solid var(--warning-border)" }}>
+          <AlertTriangle size={16} style={{ color: "var(--warning)" }} />
+          <p className="text-xs" style={{ color: "var(--text-primary)" }}>
             {suggestions.length === 0
               ? t("admin.wellStocked")
               : t("admin.needRestocking", { count: suggestions.length })}

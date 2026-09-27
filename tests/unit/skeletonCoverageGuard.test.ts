@@ -62,7 +62,11 @@ const GATED: Array<[file: string, gate: RegExp, howItWaits: string]> = [
 
   // ── Shared primitives ────────────────────────────────────────────────────
   ["src/components/ui/SetupChecklist.tsx", /loading|ready/, "waits for the setup read"],
-  ["src/components/admin/EmployeeAccessEditor.tsx", /permissions\.length === 0 && \(/, "waits for the permission list"],
+  // The waiting gate moved out of this component and into its `state` prop, so the two
+  // callers that own the read can no longer render the list early — and a FAILED read is
+  // now a state of its own rather than a list of unticked boxes. The invariant is unchanged:
+  // nothing is drawn until the access is actually known.
+  ["src/components/admin/EmployeeAccessEditor.tsx", /state !== "ready"/, "waits for the role's access, and says so if the read failed"],
   ["src/components/ui/CustomerSelector.tsx", /\{!customersReady \? \(/, "waits before the picker says 'no customers'"],
 ];
 

@@ -119,13 +119,24 @@ export async function rpcCreateProduct(payload: {
   name: string;
   company: string;
   category: ProductCategory;
+  /**
+   * The unit the shop sells this product in. Required, and stored: before 0158 the server
+   * silently dropped it, so every product added through the app read back as `piece`.
+   */
   baseUnit: string;
-  stockQty: number;
   imageUrl?: string;
+  /**
+   * Optional. When it is absent the database mints one (`AGS-…`) and records it as this
+   * product's primary code, so a product can never exist without one.
+   */
   barcode?: string;
-  /** Opening stock belongs to the VARIANT, which is the stock of record (0128). */
-  variants: { name: string; sellingPrice: number; costPrice: number; unitSize: number; qtyStep: number; lowStockThreshold: number; stockQty?: number }[];
-}): Promise<{ id: string }> {
+  /**
+   * Opening stock belongs to the VARIANT, which is the stock of record (0128). Each pack's
+   * `stockQty` is written as an opening movement carrying its cost, so the shelf has a
+   * beginning rather than a number with no history (0158).
+   */
+  variants: { name: string; sellingPrice: number; costPrice: number; unitSize: number; qtyStep: number; lowStockThreshold: number; stockQty?: number; /** yyyy-mm-dd, or null for a pack with no date. */ expiryDate?: string | null }[];
+}): Promise<{ id: string; name: string; barcode: string }> {
   const actorId = useAuthStore.getState().user?.id;
   const { data, error } = await supabase.rpc("create_product", { payload: { ...payload, actorId, userId: actorId } });
   if (error) throw new Error(friendly(error.message));
@@ -138,15 +149,35 @@ export async function rpcUpdateProduct(payload: {
   company: string;
   category: ProductCategory;
   baseUnit?: string;
-  stockQty?: number;
   imageUrl?: string;
   barcode?: string;
-  variants: { id?: string; name: string; sellingPrice: number; costPrice: number; unitSize?: number; qtyStep?: number; lowStockThreshold: number }[];
+  /**
+   * An existing pack's `stockQty` is deliberately ignored — the catalogue does not own stock
+   * (0145) and the database refuses the write. A pack that is NEW in this call may carry
+   * one, because creating a pack is not the same act as adjusting one.
+   */
+  variants: { id?: string; name: string; sellingPrice: number; costPrice: number; unitSize?: number; qtyStep?: number; lowStockThreshold: number; stockQty?: number; expiryDate?: string | null }[];
 }): Promise<{ id: string }> {
   const actorId = useAuthStore.getState().user?.id;
   const { data, error } = await supabase.rpc("update_product", { payload: { ...payload, actorId } });
   if (error) throw new Error(friendly(error.message));
   return data as any;
+}
+
+/**
+ * What a scanned code belongs to, decided by the database rather than by this device.
+ *
+ * `findByBarcode` in the products store answers the same question from an in-memory list,
+ * which is only right while that list is complete and fresh. This is the answer for a code
+ * nobody has loaded yet — a product added on another phone, or one whose code was printed
+ * from a different label. Returns null when the code is not this shop's.
+ */
+export async function rpcResolveProductBarcode(
+  code: string
+): Promise<{ productId: string; variantId: string | null; code: string } | null> {
+  const { data, error } = await supabase.rpc("resolve_product_barcode", { p_code: code });
+  if (error) throw new Error(friendly(error.message));
+  return (data as any) ?? null;
 }
 
 export async function rpcDeleteProduct(payload: {
@@ -224,6 +255,10 @@ function friendly(msg: string): string {
   // interpret — the sale exists, and the list shows it.
   if (/DUPLICATE_SUBMISSION/.test(m)) return tNow("errors.alreadySaved");
   if (/ACCOUNT_INACTIVE/.test(m)) return tNow("errors.accountOff");
+  // 0158: the code the shop is minting or typing is already in use in this shop, which is
+  // the one thing a barcode must never be, because a scan has to have exactly one answer.
+  if (/BARCODE_TAKEN/.test(m)) return tNow("errors.barcodeTaken");
+  if (/INVALID_UNIT/.test(m)) return tNow("errors.badUnit");
   if (/NOT_AUTHENTICATED|JWT|invalid claim/i.test(m)) return tNow("errors.loginAgain");
   if (/^VALIDATION|VALIDATION:/i.test(m) || /check constraint|invalid input syntax/i.test(m))
     return tNow("errors.checkEntry");

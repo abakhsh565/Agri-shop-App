@@ -403,12 +403,15 @@ export async function getUserFromSession(): Promise<User | null> {
     const savedUser: User | null = parsed?.state?.user ?? null;
     if (!savedUser) return null;
     // Ensure Supabase Auth session exists (may have been lost on reload).
-    // If it cannot be established, do NOT continue with an unauthenticated
-    // client: clear the session so the user signs in again and sees the reason.
+    //
+    // Failing to establish one is NOT the same as the account being invalid, and this used to
+    // treat it as such by erasing `agri_auth`. A phone that launched offline therefore threw
+    // away the identity the app is built around — and with it the only route back to the PIN
+    // keypad. The absence is reported by returning null; whether that means "signed out" is
+    // decided by the caller, which knows whether the PIN or the cache can still serve.
     const session = await ensureAuthSession(savedUser.phone);
     if (!session.ok) {
-      console.warn('Dropping stored session — Supabase Auth session unavailable:', session.error);
-      window.localStorage.removeItem("agri_auth");
+      console.warn('No Supabase Auth session available:', session.error);
       return null;
     }
     // Verify user still exists + get fresh membership context via SECURITY DEFINER RPC
@@ -424,7 +427,14 @@ export async function getUserFromSession(): Promise<User | null> {
       user.permissions = await loadPermissions();
       return user;
     }
-  } catch { /* invalid session */ }
-  window.localStorage.removeItem("agri_auth");
-  return null;
+    // The profile lookup answered and there is no usable profile: the account was removed,
+    // or the phone it belongs to went inactive. That is a definitive server answer, so the
+    // stored identity is dropped — this is the one path where erasing it is correct.
+    window.localStorage.removeItem("agri_auth");
+    return null;
+  } catch {
+    // Unreadable stored user. Nothing to restore, and nothing to erase: the row may simply
+    // be mid-write. Signing out is the job of the explicit sign-out, not of a parse failure.
+    return null;
+  }
 }

@@ -11,6 +11,7 @@ import { useCompaniesStore } from "@/stores/companiesStore";
 import PullToRefresh from "@/components/ui/PullToRefresh";
 import SetupChecklist from "@/components/ui/SetupChecklist";
 import { useCustomersStore } from "@/stores/customersStore";
+import { useShopStore } from "@/stores/shopStore";
 import { supabase } from "@/lib/supabase";
 import { formatCurrency, formatSmartDateTime } from "@/lib/formatters";
 import { generateReminders, calculatePaymentStatus, loadBusinessSettings } from "@/lib/reminderEngine";
@@ -126,6 +127,7 @@ export default function AdminDashboardPage() {
     hour < 12 ? "dashboard.greeting.morning"
     : hour < 17 ? "dashboard.greeting.afternoon"
     : "dashboard.greeting.evening";
+  const activeShopName = useShopStore((s) => s.activeShopName);
   const displayName = user?.name ?? t("common.owner");
   const initials = user?.name?.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase() ?? "OW";
   const todayLabel = today.toLocaleDateString(isUrdu ? "ur-PK" : "en-PK", {
@@ -310,8 +312,11 @@ export default function AdminDashboardPage() {
           <p className="font-bold text-15 leading-tight truncate" style={{ color: "var(--text-primary)" }}>
             {t(greetingKey)}, {displayName}
           </p>
-          <p className="text-12 mt-0.5" style={{ color: "var(--text-secondary)" }}>
-            {todayLabel}
+          {/* The shop these figures belong to, on the line that already says what day it is —
+              one line, both facts, ellipsised as before. The name is the one the server has, so
+              a switch changes it here at the same moment it changes the numbers below. */}
+          <p className="text-12 mt-0.5 truncate" style={{ color: "var(--text-secondary)" }}>
+            {activeShopName ? `${activeShopName} · ${todayLabel}` : todayLabel}
           </p>
         </div>
 

@@ -1,7 +1,22 @@
 // ─── Enums ───────────────────────────────────────────────────────────────────
 
 export type UserRole = "admin" | "co_admin" | "employee";
-export type ProductCategory = "spray" | "seed" | "fertilizer" | "other";
+/**
+ * Mirrors the database's `product_category` enum exactly.
+ *
+ * It listed four of the seven values until the Add Product screen started offering the
+ * whole list, which meant three categories the database accepts were unreachable from the
+ * app and would not compile if they ever arrived from it. The recommendation engine already
+ * knew all seven (`STAGE_CATEGORIES`), so the two now agree.
+ */
+export type ProductCategory =
+  | "seed"
+  | "fertilizer"
+  | "pesticide"
+  | "herbicide"
+  | "spray"
+  | "equipment"
+  | "other";
 export type StockStatus = "in_stock" | "low_stock" | "out_of_stock";
 export type PaymentType = "full" | "partial" | "credit";
 export type PaymentMethod = "cash" | "bank_transfer";

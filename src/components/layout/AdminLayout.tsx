@@ -140,7 +140,7 @@ export default function AdminLayout() {
     if (userId) void loadShops();
   }, [loadShops, userId]);
 
-  const findByBarcode = useProductsStore((s) => s.findByBarcode);
+  const resolveByCode = useProductsStore((s) => s.resolveByCode);
   const { addToast } = useUIStore();
   const [scanning, setScanning] = useState(false);
   const [showManualScan, setShowManualScan] = useState(false);
@@ -155,7 +155,7 @@ export default function AdminLayout() {
         cancel: t("common.cancel"),
       });
       if (result) {
-        const product = findByBarcode(result.barcode);
+        const product = await resolveByCode(result.barcode);
         if (product) {
           // Go to Variant Selection → Cart → Checkout (same as employee)
           navigate(`/admin/sale/products/${product.id}`);
@@ -172,9 +172,9 @@ export default function AdminLayout() {
     }
   }
 
-  function handleManualScanSubmit() {
+  async function handleManualScanSubmit() {
     if (manualBarcode.trim().length >= 3) {
-      const product = findByBarcode(manualBarcode.trim());
+      const product = await resolveByCode(manualBarcode.trim());
       if (product) {
         // Go to Variant Selection → Cart → Checkout (same as employee)
         navigate(`/admin/sale/products/${product.id}`);

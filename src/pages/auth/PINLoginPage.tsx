@@ -15,9 +15,11 @@ import { useT } from "@/lib/i18n";
 /**
  * Single-step PIN login screen.
  * SplashPage passes the user object via navigation state.
- * User enters 4-digit PIN → verified by the server against its bcrypt hash → dashboard.
- * If PIN wrong or not set → auto-redirect to OTP flow.
- * If "Forgot PIN" → auto-redirect to forgot PIN flow.
+ * User enters 4-digit PIN → verified by the server against its bcrypt hash when the server
+ * can be reached, and by this device's own record when it cannot, so the keypad works on a
+ * phone that has been offline for a week.
+ * If the PIN is wrong → stay and retry. If the server says there is no PIN → OTP, which is
+ * the documented identity check. If "Forgot PIN" → the forgot-PIN flow.
  */
 export default function PINLoginPage() {
   const t = useT();
@@ -113,9 +115,13 @@ export default function PINLoginPage() {
       if (result.status === "ok") {
         await enterApp();
       } else if (result.status === "no_pin") {
-        // No PIN on the server for this user (never set, or cleared). This device's marker is
-        // stale, so drop it — that is what makes the code screen offer to set a PIN — then go
-        // through OTP, which is the documented identity check.
+        // The server says this account has no PIN (never set, or cleared elsewhere), and this
+        // device holds no copy that could have answered instead. The marker here is stale, so
+        // drop it — that is what makes the code screen offer to set a PIN — then go through
+        // OTP, which is the documented identity check.
+        //
+        // Note what no longer lands here: a launch with no connection. That used to be filed
+        // as "no PIN" and cost the owner their PIN every time, which is the loop this fixes.
         clearPin(user.id);
         setPendingPhone(user.phone);
         setPendingFlow("login");

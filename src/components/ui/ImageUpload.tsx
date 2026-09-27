@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { Camera, ImagePlus, Loader2, X } from "lucide-react";
+import { ImagePlus, Loader2, X } from "lucide-react";
 import { uploadImage, type ImageBucket } from "@/lib/storage";
 import { useT, tNow } from "@/lib/i18n";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
@@ -13,9 +13,9 @@ interface ImageUploadProps {
   label?: string;
   /**
    * Tile edge in pixels. Defaults to the 112px block this has always drawn, so every
-   * existing call site is unchanged. Small sizes drop the caption (it cannot fit) and
-   * shrink the badge, which is what lets a form put the picture *beside* a field instead
-   * of giving it the whole top of the screen.
+   * existing call site is unchanged. Small sizes drop the caption (it cannot fit), which
+   * is what lets a form put the picture *beside* a field instead of giving it the whole
+   * top of the screen.
    */
   size?: number;
 }
@@ -46,6 +46,10 @@ export default function ImageUpload({
 
   const radius = shape === "circle" ? "9999px" : "16px";
   const tiny = size < 72;
+
+  // There used to be a filled camera badge pinned to the corner of the tile. It said nothing
+  // the dashed tile and its caption did not already say — the whole tile is the button — and
+  // on a small tile it covered part of the picture. The placeholder is the affordance.
 
   async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -112,16 +116,6 @@ export default function ImageUpload({
           </div>
         )}
 
-        {!busy && (
-          <span
-            className={`absolute rounded-full flex items-center justify-center shadow ${
-              tiny ? "bottom-0.5 end-0.5 w-5 h-5" : "bottom-1 end-1 w-6 h-6"
-            }`}
-            style={{ background: "var(--brand)", color: "#0a0a0a" }}
-          >
-            <Camera size={tiny ? 10 : 12} strokeWidth={2.5} />
-          </span>
-        )}
       </button>
 
       {preview && !busy && (

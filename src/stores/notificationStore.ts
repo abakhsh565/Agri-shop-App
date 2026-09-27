@@ -71,6 +71,8 @@ interface NotificationState {
   subscribe: () => () => void;
   markAllRead: () => Promise<void>;
   markOneRead: (id: string) => Promise<void>;
+  /** Drop every row: the app is about to read a different shop. */
+  reset: () => void;
 }
 
 /**
@@ -84,6 +86,9 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
   loading: false,
   ready: false,
   error: null,
+
+  // The active shop changed: another shop's events are not this shop's.
+  reset: () => set({ items: [], loading: false, ready: false, error: null }),
 
   unread: () => get().items.filter((n) => !n.read).length,
 

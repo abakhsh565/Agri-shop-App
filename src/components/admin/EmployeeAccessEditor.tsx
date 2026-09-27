@@ -1,18 +1,28 @@
 import { useT } from "@/lib/i18n";
-import { usePermissionLabels } from "@/lib/permissionLabels";
-import { usePermissionsStore } from "@/stores/permissionsStore";
-import { Check } from "lucide-react";
-import { Skeleton, SkeletonList } from "@/components/ui/Skeleton";
+import PermissionChecklist from "@/components/admin/PermissionChecklist";
+import { SkeletonList } from "@/components/ui/Skeleton";
 
 /**
  * The access editor, shared by Add Employee (where the owner can customize an
  * employee before inviting them) and Employee Detail (where they change it
  * later). One component so the same model is presented identically in both
- * places: business areas with the actions this employee will actually have, and
- * a legend that says where each one came from.
+ * places.
  *
- * Controlled: the caller owns `value`, which is the employee's effective access
- * being edited — role defaults with their exceptions applied.
+ * Two decisions this screen has to communicate at once, and it now says both with the same
+ * control:
+ *
+ *   • **what this employee can do** — a ticked box, one per action, grouped by the part of
+ *     the shop it belongs to. Before, the actions inside a group only appeared once the group
+ *     was *partly* granted, so a fresh employee offered fourteen group buttons and no actions
+ *     at all, and a full group showed none either: the more you granted, the less you saw.
+ *   • **how that differs from their role** — carried by a marker on the rows that differ
+ *     ("added" / "removed"). A row that simply agrees with the role stays unmarked, so in a
+ *     list of forty boxes the two exceptions are the only things shouting, which is exactly
+ *     what an override is for.
+ *
+ * Controlled: the caller owns `value`, which is the employee's effective access being edited
+ * — role defaults with their exceptions applied. `roleDefaults` is what the chosen role
+ * grants, and is used only for the difference markers.
  */
 export interface EmployeeAccessEditorProps {
   /** The selected role's defaults, for telling "from the role" from "for this employee". */
@@ -20,128 +30,67 @@ export interface EmployeeAccessEditorProps {
   /** The access being edited (effective: role defaults + this employee's exceptions). */
   value: Set<string>;
   onChange: (next: Set<string>) => void;
+  /**
+   * Whether the access this editor is showing has actually been read.
+   *
+   * Required on purpose. An optional default would let the next screen open on an empty box
+   * list while its read was still in flight, which is the exact defect this state exists to
+   * make impossible — forty unticked boxes are a claim about a person's access.
+   */
+  state: "loading" | "ready" | "error";
 }
 
-export default function EmployeeAccessEditor({ roleDefaults, value, onChange }: EmployeeAccessEditorProps) {
+export default function EmployeeAccessEditor({ roleDefaults, value, onChange, state }: EmployeeAccessEditorProps) {
   const t = useT();
-  const { areaLabel, actionLabel, areaIcon } = usePermissionLabels();
-  const permissions = usePermissionsStore((s) => s.permissions);
-  const getByModule = usePermissionsStore((s) => s.getByModule);
 
-  /** How a single action relates to the role — the owner-facing state of a chip. */
-  function permState(code: string): "fromRole" | "onlyThis" | "offForThis" | "none" {
-    const inherited = roleDefaults.has(code);
-    const effective = value.has(code);
-    if (inherited && effective) return "fromRole";
-    if (!inherited && effective) return "onlyThis";
-    if (inherited && !effective) return "offForThis";
-    return "none";
+  // Waiting and failed are drawn here, once, for every screen that edits an employee's access.
+  // Before, each screen owned its own copy of this — and two of the three drew neither, so an
+  // unfetched role and a role that grants nothing looked identical.
+  if (state !== "ready") {
+    return state === "error" ? (
+      <p className="text-xs" style={{ color: "var(--error)" }} data-testid="emp-access-error">
+        {t("access.roleUnavailable")}
+      </p>
+    ) : (
+      <div role="status" aria-busy="true">
+        <span className="sr-only">{t("access.loadingRole")}</span>
+        <SkeletonList rows={3} bare />
+      </div>
+    );
   }
 
-  const STATE_STYLE: Record<string, { bg: string; fg: string }> = {
-    fromRole: { bg: "var(--brand)", fg: "#0a0a0a" },
-    onlyThis: { bg: "#3b82f6", fg: "#ffffff" },
-    offForThis: { bg: "rgba(239,68,68,0.18)", fg: "#ef4444" },
-    none: { bg: "var(--surface)", fg: "var(--text-secondary)" },
-  };
-
-  function togglePerm(code: string) {
-    const next = new Set(value);
-    if (next.has(code)) next.delete(code);
-    else next.add(code);
-    onChange(next);
-  }
-
-  function toggleArea(module: string) {
-    const areaPerms = getByModule(module);
-    const allSelected = areaPerms.every((p) => value.has(p.code));
-    const next = new Set(value);
-    for (const p of areaPerms) {
-      if (allSelected) next.delete(p.code);
-      else next.add(p.code);
-    }
-    onChange(next);
-  }
+  const LEGEND = [
+    { key: "fromRole", dot: "var(--brand)" },
+    { key: "onlyThis", dot: "#3b82f6" },
+    { key: "offForThis", dot: "var(--error)" },
+  ] as const;
 
   return (
     <div>
-      <div className="space-y-2 max-h-[400px] overflow-y-auto">
-        {permissions.length === 0 && (
-          <div className="flex flex-col gap-2" aria-busy="true" role="status">
-            <span className="sr-only">{t("common.loading")}</span>
-            <Skeleton h="44px" radius="var(--radius-tile)" />
-            <Skeleton h="44px" radius="var(--radius-tile)" />
-            <Skeleton h="44px" radius="var(--radius-tile)" />
-          </div>
-        )}
-        {[...new Set(permissions.map((p) => p.module))].map((mod) => {
-          const areaPerms = getByModule(mod);
-          if (areaPerms.length === 0) return null;
-          const selectedCount = areaPerms.filter((p) => value.has(p.code)).length;
-          const allSelected = selectedCount === areaPerms.length;
-          const AreaIcon = areaIcon(mod);
-          return (
-            <div key={mod}>
-              <button
-                onClick={() => toggleArea(mod)}
-                className="flex items-center justify-between w-full py-2 px-3 rounded-[var(--radius-tile)]"
-                style={{
-                  background: allSelected ? "rgba(132,204,22,0.1)" : "var(--surface)",
-                  border: `1px solid ${selectedCount > 0 ? "var(--brand)" : "var(--divider)"}`,
-                }}
-              >
-                <div className="flex items-center gap-2">
-                  <AreaIcon size={16} className="shrink-0" style={{ color: "var(--text-secondary)" }} />
-                  <span className="text-xs font-semibold" style={{ color: "var(--text-primary)" }}>{areaLabel(mod)}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  {allSelected ? (
-                    <>
-                      <span className="text-10" style={{ color: "var(--text-secondary)" }}>{t("empDetail.areaFull")}</span>
-                      <Check size={12} style={{ color: "var(--brand)" }} />
-                    </>
-                  ) : selectedCount === 0 ? (
-                    <span className="text-10" style={{ color: "var(--text-secondary)" }}>{t("empDetail.areaNone")}</span>
-                  ) : null}
-                </div>
-              </button>
-              {/* Individual actions — only when the area is partly granted, so the
-                  owner is not shown 40 checkboxes to make one decision. */}
-              {selectedCount > 0 && selectedCount < areaPerms.length && (
-                <div className="flex flex-wrap gap-1 mt-1 ps-6">
-                  {areaPerms.map((p) => {
-                    const state = permState(p.code);
-                    const s = STATE_STYLE[state];
-                    return (
-                      <button
-                        key={p.code}
-                        onClick={() => togglePerm(p.code)}
-                        className="text-10 px-2 py-0.5 rounded-full font-semibold"
-                        style={{
-                          background: s.bg,
-                          color: s.fg,
-                          border: state === "offForThis" ? "1px solid #ef4444" : "1px solid var(--divider)",
-                        }}
-                      >
-                        {actionLabel(p.action)}
-                        {state === "onlyThis" ? " +" : state === "offForThis" ? " −" : ""}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
+      <PermissionChecklist
+        value={value}
+        onChange={onChange}
+        roleDefaults={roleDefaults}
+        maxHeight="400px"
+        testIdPrefix="emp-perm"
+      />
+
+      {/* The markers only mean something next to their own key, and the middle one is the
+          only state that has no marker on the row — a box that is ticked for nobody else. */}
       <div className="flex flex-wrap items-center gap-3 mt-3">
-        {(["fromRole", "onlyThis", "offForThis"] as const).map((k) => (
-          <span key={k} className="flex items-center gap-1 text-10" style={{ color: "var(--text-secondary)" }}>
+        {LEGEND.map(({ key, dot }) => (
+          <span key={key} className="flex items-center gap-1 text-10" style={{ color: "var(--text-secondary)" }}>
             <span
-              className="inline-block w-2.5 h-2.5 rounded-full"
-              style={{ background: STATE_STYLE[k].bg, border: `1px solid ${STATE_STYLE[k].fg}` }}
+              className="inline-block w-2.5 h-2.5 rounded-full shrink-0"
+              style={{ background: dot }}
             />
-            {t(k === "fromRole" ? "empDetail.fromRole" : k === "onlyThis" ? "empDetail.onlyThis" : "empDetail.offForThis")}
+            {t(
+              key === "fromRole"
+                ? "empDetail.fromRole"
+                : key === "onlyThis"
+                  ? "empDetail.onlyThis"
+                  : "empDetail.offForThis"
+            )}
           </span>
         ))}
       </div>

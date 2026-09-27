@@ -54,6 +54,8 @@ interface CompaniesState {
     logoUrl?: string;
   }) => Promise<void>;
   archiveCompany: (id: string) => Promise<void>;
+  /** Drop every row: the app is about to read a different shop. */
+  reset: () => void;
 }
 
 let channel: ReturnType<typeof supabase.channel> | null = null;
@@ -63,6 +65,9 @@ export const useCompaniesStore = create<CompaniesState>((set, get) => ({
   loading: false,
   ready: false,
   error: null,
+
+  // The active shop changed: suppliers belong to the shop that was being read.
+  reset: () => set({ companies: [], loading: false, ready: false, error: null }),
 
   load: async () => {
     set({ loading: true, error: null });

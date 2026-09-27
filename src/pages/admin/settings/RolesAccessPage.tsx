@@ -1,47 +1,66 @@
 import { useState, useEffect, useRef } from "react";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
+import Sheet from "@/components/ui/Sheet";
+import ListCard from "@/components/ui/ListCard";
+import ListRow from "@/components/ui/ListRow";
 import { SkeletonList } from "@/components/ui/Skeleton";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
+import PermissionChecklist, { useSelectAll } from "@/components/admin/PermissionChecklist";
 import { useRolesStore } from "@/stores/rolesStore";
 import { usePermissionsStore } from "@/stores/permissionsStore";
 import { useUIStore } from "@/stores/uiStore";
 import { useThemeStore } from "@/stores/themeStore";
 import { useT } from "@/lib/i18n";
-import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { usePermissionLabels } from "@/lib/permissionLabels";
-import { Plus, Edit3, Trash2, Users, Shield, Check } from "lucide-react";
+import { Plus, Trash2, ChevronRight } from "lucide-react";
 import type { Role } from "@/types";
 
 /**
- * Roles — reusable access templates.
+ * Roles & Access — the templates the owner hands to employees.
  *
- * The owner picks a role when adding an employee, so each role is described by
- * what the employee does and which business areas it opens. The area/action
- * wording comes from the shared permission labels, never from permission codes.
+ * The list is the app's grouped grammar (one card, rows on the card's own tone), and editing
+ * opens a sheet rather than replacing the screen: the list stays behind it, so changing a
+ * role is a thing you do *to a list you can still see*, not a separate journey with its own
+ * save button at the bottom of a page.
+ *
+ * Inside the sheet, access is a checklist — every actionable thing, one tick box each, grouped
+ * by the part of the shop it belongs to — with a Select all for everything at the top and a
+ * box on each group that grants or clears that group alone. The rule that enforces access has
+ * not changed at all: the same permission codes are written to the same tables, and the
+ * database still decides what any of them allow.
  */
 export default function RolesAccessPage() {
   const { language } = useThemeStore();
   const isUrdu = language === "ur";
   const t = useT();
-  const { areaLabel, actionLabel, areaIcon } = usePermissionLabels();
+  const { areaLabel } = usePermissionLabels();
   const { addToast } = useUIStore();
   const rolesStore = useRolesStore();
   const permissionsStore = usePermissionsStore();
 
+  const [editorOpen, setEditorOpen] = useState(false);
   const [editingRole, setEditingRole] = useState<Role | null>(null);
-  const [isCreating, setIsCreating] = useState(false);
   const [roleName, setRoleName] = useState("");
   const [roleDesc, setRoleDesc] = useState("");
   const [selectedPerms, setSelectedPerms] = useState<Set<string>>(new Set());
+  // A new role starts from a real, empty answer; an existing one has to be read first, and
+  // until that read lands its access is unknown — not empty.
+  const [permsState, setPermsState] = useState<"idle" | "loading" | "ready" | "error">("idle");
   const [saving, setSaving] = useState(false);
+  // A ref, not `saving`: React batches, so two taps in one task both read the pre-render
+  // `false` and both create the role. The state variable is only for the button's label.
+  const savingRef = useRef(false);
   const [memberCounts, setMemberCounts] = useState<Record<string, number>>({});
+  const [roleAreas, setRoleAreas] = useState<Record<string, string[]>>({});
   const [deleteTarget, setDeleteTarget] = useState<Role | null>(null);
   const [deleting, setDeleting] = useState(false);
   // A ref for the same reason as the employee screen: React batches, so two clicks in
   // one task would both read the pre-render value of `deleting` and both fire.
   const deletingRef = useRef(false);
-  const [roleAreas, setRoleAreas] = useState<Record<string, string[]>>({});
   const [nameError, setNameError] = useState("");
+
+  const selectAll = useSelectAll(selectedPerms, setSelectedPerms);
 
   useEffect(() => {
     rolesStore.load();
@@ -62,76 +81,84 @@ export default function RolesAccessPage() {
     });
   }, [rolesStore.roles.length, permissionsStore.permissions.length]);
 
-  const allPerms = permissionsStore.permissions;
-
   function startCreate() {
-    setIsCreating(true);
     setEditingRole(null);
     setRoleName("");
     setRoleDesc("");
     setSelectedPerms(new Set());
     setNameError("");
+    setPermsState("ready");
+    setEditorOpen(true);
   }
 
   function startEdit(role: Role) {
+    // A built-in role cannot be renamed or deleted, but the owner may still adjust what it
+    // opens — and the fields that cannot change say so rather than accepting typing.
     setEditingRole(role);
-    setIsCreating(false);
     setRoleName(role.name);
     setRoleDesc(role.description ?? "");
     setNameError("");
-    rolesStore.getRolePermissions(role.id).then((perms) => {
-      setSelectedPerms(new Set(perms));
-    });
+    setSelectedPerms(new Set());
+    setPermsState("loading");
+    setEditorOpen(true);
+    void loadPerms(role.id);
   }
 
-  function togglePerm(code: string) {
-    setSelectedPerms((prev) => {
-      const next = new Set(prev);
-      if (next.has(code)) next.delete(code);
-      else next.add(code);
-      return next;
-    });
+  async function loadPerms(id: string) {
+    const { codes, error } = await rolesStore.loadRolePermissions(id);
+    if (error) {
+      // Said out loud rather than shown as a role that grants nothing: the sheet opened on
+      // forty empty boxes before, which is a claim about the role, not a loading state.
+      setPermsState("error");
+      return;
+    }
+    setSelectedPerms(new Set(codes));
+    setPermsState("ready");
   }
 
-  function toggleArea(areaCode: string) {
-    const areaPerms = allPerms.filter((p) => p.module === areaCode);
-    const allSelected = areaPerms.every((p) => selectedPerms.has(p.code));
-    setSelectedPerms((prev) => {
-      const next = new Set(prev);
-      for (const p of areaPerms) {
-        if (allSelected) next.delete(p.code);
-        else next.add(p.code);
-      }
-      return next;
-    });
+  function closeEditor() {
+    if (savingRef.current) return;
+    setEditorOpen(false);
+    setEditingRole(null);
   }
 
   async function handleSave() {
     setNameError("");
     if (!roleName.trim()) { setNameError(t("roles.errName")); return; }
+    if (savingRef.current) return;
+    savingRef.current = true;
     setSaving(true);
     try {
       const perms = Array.from(selectedPerms);
       if (editingRole) {
-        await rolesStore.updateRole(editingRole.id, { name: roleName.trim(), description: roleDesc.trim() || undefined, permissions: perms });
+        await rolesStore.updateRole(editingRole.id, {
+          name: roleName.trim(),
+          description: roleDesc.trim() || undefined,
+          permissions: perms,
+        });
         addToast(t("roles.updated"), "success");
       } else {
-        await rolesStore.createRole({ name: roleName.trim(), description: roleDesc.trim() || undefined, permissions: perms });
+        await rolesStore.createRole({
+          name: roleName.trim(),
+          description: roleDesc.trim() || undefined,
+          permissions: perms,
+        });
         addToast(t("roles.created"), "success");
       }
+      setEditorOpen(false);
       setEditingRole(null);
-      setIsCreating(false);
     } catch (e) {
       addToast(e instanceof Error ? e.message : t("roles.errSave"), "error");
     } finally {
+      savingRef.current = false;
       setSaving(false);
     }
   }
 
   /**
-   * A role that employees are still using cannot be deleted, and saying so is a
-   * business explanation rather than a raw failure. Otherwise the owner confirms in
-   * the app's own dialog, so the wording and the button order follow the language.
+   * A role that employees are still using cannot be deleted, and saying so is a business
+   * explanation rather than a raw failure. Otherwise the owner confirms in the app's own
+   * dialog, so the wording and the button order follow the language.
    */
   function handleDelete(role: Role) {
     if (role.isSystem) return;
@@ -147,6 +174,10 @@ export default function RolesAccessPage() {
     try {
       await rolesStore.deleteRole(deleteTarget.id);
       addToast(t("roles.deleted"), "success");
+      if (editingRole?.id === deleteTarget.id) {
+        setEditorOpen(false);
+        setEditingRole(null);
+      }
       setDeleteTarget(null);
     } catch (e) {
       addToast(e instanceof Error ? e.message : t("common.error"), "error");
@@ -156,124 +187,166 @@ export default function RolesAccessPage() {
     }
   }
 
-  const fieldStyle = { background: "var(--surface-2)", border: "1px solid var(--divider)", color: "var(--text-primary)" } as const;
+  const fieldStyle = {
+    background: "var(--surface-2)",
+    border: "1px solid var(--divider)",
+    color: "var(--text-primary)",
+  } as const;
 
-  // Role editor / creator
-  if (isCreating || editingRole) {
-    return (
-      <div className="flex flex-col w-full min-h-full" style={{ background: "var(--background)", direction: isUrdu ? "rtl" : "ltr" }}>
-        <StatusBar />
-        <NavHeader title={editingRole ? t("roles.edit") : t("roles.new")} />
-        <div className="flex-1 flex flex-col p-4 gap-4">
-          <div>
-            <p className="ds-section-label mb-2" style={{ color: "var(--text-secondary)" }}>{t("roles.name")} *</p>
-            <input value={roleName} onChange={(e) => setRoleName(e.target.value)} placeholder={t("roles.nameHint")} className="w-full h-12 rounded-[var(--radius-input)] px-4 text-sm outline-none" style={fieldStyle} autoFocus />
-          </div>
-          <div>
-            <p className="ds-section-label mb-2" style={{ color: "var(--text-secondary)" }}>{t("roles.description")}</p>
-            <input value={roleDesc} onChange={(e) => setRoleDesc(e.target.value)} placeholder={t("roles.descriptionHint")} className="w-full h-12 rounded-[var(--radius-input)] px-4 text-sm outline-none" style={fieldStyle} />
-          </div>
-          <div>
-            <p className="text-13 font-semibold mb-2" style={{ color: "var(--text-secondary)" }}>{t("roles.access")}</p>
-            <div className="space-y-3">
-              {[...new Set(allPerms.map((p) => p.module))].map((mod) => {
-                const areaPerms = allPerms.filter((p) => p.module === mod);
-                const selectedCount = areaPerms.filter((p) => selectedPerms.has(p.code)).length;
-                const allSelected = selectedCount === areaPerms.length && selectedCount > 0;
-                const someSelected = selectedCount > 0;
-                const AreaIcon = areaIcon(mod);
-                return (
-                  <div key={mod}>
-                    <button onClick={() => toggleArea(mod)} className="flex items-center justify-between w-full py-2.5 px-3 rounded-[var(--radius-tile)]" style={{ background: allSelected ? "rgba(132,204,22,0.1)" : "var(--surface)", border: `1px solid ${someSelected ? "var(--brand)" : "var(--divider)"}` }}>
-                      <div className="flex items-center gap-2">
-                        <AreaIcon size={17} className="shrink-0" style={{ color: "var(--text-secondary)" }} />
-                        <span className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>{areaLabel(mod)}</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-10" style={{ color: "var(--text-secondary)" }}>{selectedCount}/{areaPerms.length}</span>
-                        {allSelected && <Check size={14} style={{ color: "var(--brand)" }} />}
-                      </div>
-                    </button>
-                    {someSelected && !allSelected && (
-                      <div className="flex flex-wrap gap-1.5 mt-1.5 ps-6">
-                        {areaPerms.map((p) => (
-                          <button key={p.code} onClick={() => togglePerm(p.code)} className="text-11 px-2.5 py-1 rounded-full font-medium" style={{ background: selectedPerms.has(p.code) ? "var(--brand)" : "var(--surface)", color: selectedPerms.has(p.code) ? "#0a0a0a" : "var(--text-secondary)", border: "1px solid var(--divider)" }}>
-                            {actionLabel(p.action)}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-          {nameError && <p className="text-xs" style={{ color: "var(--error)" }}>{nameError}</p>}
-        </div>
-        <div className="p-4 pb-6 flex gap-3">
-          <button onClick={() => { setEditingRole(null); setIsCreating(false); }} className="h-12 px-6 rounded-full font-bold text-sm" style={{ background: "var(--surface-2)", border: "1px solid var(--divider)", color: "var(--text-primary)" }}>{t("common.cancel")}</button>
-          <button onClick={handleSave} disabled={saving} className="flex-1 h-12 rounded-full font-bold text-sm" style={{ background: "var(--brand)", color: "#0a0a0a", opacity: saving ? 0.6 : 1 }}>
-            {saving ? t("common.saving") : editingRole ? t("common.save") : t("roles.create")}
-          </button>
-        </div>
-      </div>
-    );
-  }
+  const canDelete = Boolean(editingRole && !editingRole.isSystem);
 
-  // Roles list
   return (
     <div className="flex flex-col w-full min-h-full pb-20" style={{ background: "var(--background)", direction: isUrdu ? "rtl" : "ltr" }}>
       <StatusBar />
       <NavHeader title={t("settings.rolesAccess")} />
-      <div className="flex-1 p-4">
-        <div className="flex items-center justify-between mb-4">
-          <p className="text-xs" style={{ color: "var(--text-secondary)" }}>{rolesStore.ready && t("roles.count", { count: rolesStore.roles.length })}</p>
-          <button onClick={startCreate} className="flex items-center gap-1.5 h-8 px-3 rounded-full text-xs font-semibold" style={{ background: "var(--brand)", color: "#0a0a0a" }}>
+
+      <div className="flex-1 px-4 pt-4">
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
+            {rolesStore.ready ? t("roles.count", { count: rolesStore.roles.length }) : ""}
+          </p>
+          <button
+            onClick={startCreate}
+            data-testid="role-new"
+            className="flex items-center gap-1.5 h-8 px-3 rounded-full text-xs font-semibold"
+            style={{ background: "var(--brand)", color: "#0a0a0a" }}
+          >
             <Plus size={14} /> {t("roles.new")}
           </button>
         </div>
-        <div className="space-y-3">
-          {!rolesStore.ready && <SkeletonList rows={3} />}
-          {rolesStore.ready && rolesStore.roles.map((role) => {
-            const count = memberCounts[role.id] ?? 0;
-            const areas = roleAreas[role.id] ?? [];
-            return (
-              <div key={role.id} className="rounded-[var(--radius-tile)] p-4" style={{ background: "var(--surface)", border: "1px solid var(--divider)" }}>
-                <div className="flex items-start justify-between">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <Shield size={16} style={{ color: "var(--brand)" }} />
-                      <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>{role.name}</p>
-                      {role.isSystem && <span className="text-9 px-1.5 py-0.5 rounded-full" style={{ background: "var(--surface-2)", color: "var(--text-secondary)" }}>{t("roles.builtIn")}</span>}
-                    </div>
-                    {role.description && <p className="text-xs mt-1" style={{ color: "var(--text-secondary)" }}>{role.description}</p>}
-                    {areas.length > 0 && (
-                      <p className="text-xs mt-1" style={{ color: "var(--text-secondary)" }}>
-                        {areas.map(areaLabel).join(", ")}
-                      </p>
-                    )}
-                    <div className="flex items-center gap-3 mt-2">
-                      <span className="text-10 flex items-center gap-1" style={{ color: "var(--text-secondary)" }}>
-                        <Users size={10} /> {t("roles.employees", { count })}
+
+        {!rolesStore.ready && <SkeletonList rows={3} />}
+        {rolesStore.ready && (
+          <ListCard>
+            {rolesStore.roles.map((role) => {
+              const count = memberCounts[role.id] ?? 0;
+              const areas = roleAreas[role.id] ?? [];
+              return (
+                <ListRow
+                  key={role.id}
+                  onClick={() => startEdit(role)}
+                  testId={`role-${role.id}`}
+                  title={role.name}
+                  qualifier={role.isSystem ? t("roles.builtIn") : undefined}
+                  /* One fact per line: what the role is for, then what it opens. Three facts
+                     joined by dashes on one line read as a paragraph in a row. */
+                  description={role.description || undefined}
+                  meta={areas.length ? areas.map(areaLabel).join(" · ") : t("roles.employees", { count })}
+                  trailing={
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="text-11" style={{ color: "var(--text-secondary)" }}>
+                        {t("roles.employees", { count })}
                       </span>
+                      <ChevronRight size={16} style={{ color: "var(--text-secondary)" }} />
                     </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button onClick={() => startEdit(role)} className="p-2 rounded-[var(--radius-tile)]" style={{ background: "var(--surface-2)" }}>
-                      <Edit3 size={14} style={{ color: "var(--text-secondary)" }} />
-                    </button>
-                    {!role.isSystem && (
-                      <button onClick={() => handleDelete(role)} className="p-2 rounded-[var(--radius-tile)]" style={{ background: "var(--surface-2)" }}>
-                        <Trash2 size={14} style={{ color: "var(--error)" }} />
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
+                  }
+                />
+              );
+            })}
+          </ListCard>
+        )}
       </div>
+
+      {/* ── The editor ─────────────────────────────────────────────────────────── */}
+      <Sheet
+        open={editorOpen}
+        title={editingRole ? t("roles.edit") : t("roles.new")}
+        onClose={closeEditor}
+        actionIcon={canDelete ? Trash2 : undefined}
+        actionLabel={t("roles.deleteAction")}
+        onAction={canDelete ? () => handleDelete(editingRole!) : undefined}
+        maxHeight="90vh"
+      >
+        <div className="px-4 flex flex-col gap-4">
+          <div>
+            <p className="text-11 font-medium mb-1.5" style={{ color: "var(--text-secondary)" }}>
+              {t("roles.name")}
+            </p>
+            <input
+              value={roleName}
+              onChange={(e) => setRoleName(e.target.value)}
+              placeholder={t("roles.nameHint")}
+              data-testid="role-name"
+              autoFocus={!editingRole}
+              className="w-full h-12 rounded-[var(--radius-input)] px-4 text-sm outline-none"
+              style={fieldStyle}
+            />
+          </div>
+
+          <div>
+            <p className="text-11 font-medium mb-1.5" style={{ color: "var(--text-secondary)" }}>
+              {t("roles.description")}
+            </p>
+            <input
+              value={roleDesc}
+              onChange={(e) => setRoleDesc(e.target.value)}
+              placeholder={t("roles.descriptionHint")}
+              data-testid="role-description"
+              className="w-full h-12 rounded-[var(--radius-input)] px-4 text-sm outline-none"
+              style={fieldStyle}
+            />
+          </div>
+
+          {/* The heading row carries the one control that clears or grants everything, the
+              way the reference does — above the groups, not inside one of them. */}
+          <div className="flex items-center justify-between">
+            <p className="text-11 font-medium" style={{ color: "var(--text-secondary)" }}>
+              {t("roles.access")}
+            </p>
+            <button
+              type="button"
+              onClick={selectAll.toggleAll}
+              data-testid="role-select-all"
+              className="text-12 font-semibold underline underline-offset-2"
+              style={{ color: "var(--brand-dark)" }}
+            >
+              {selectAll.allSelected ? t("roles.clearAll") : t("roles.selectAll")}
+            </button>
+          </div>
+        </div>
+
+        {permsState === "error" ? (
+          <div className="px-4 py-4">
+            <p className="text-xs" style={{ color: "var(--error)" }} data-testid="role-perms-error">
+              {t("access.roleUnavailable")}
+            </p>
+            {editingRole && (
+              <button
+                onClick={() => {
+                  setPermsState("loading");
+                  void loadPerms(editingRole.id);
+                }}
+                className="text-11 font-bold mt-2"
+                style={{ color: "var(--brand)" }}
+              >
+                {t("common.retry")}
+              </button>
+            )}
+          </div>
+        ) : permsState === "ready" ? (
+          <PermissionChecklist value={selectedPerms} onChange={setSelectedPerms} />
+        ) : (
+          <div className="px-4 py-4" role="status" aria-busy="true">
+            <span className="sr-only">{t("access.loadingRole")}</span>
+            <SkeletonList rows={3} bare />
+          </div>
+        )}
+
+        <div className="px-4 pt-4 flex flex-col gap-2">
+          {nameError && (
+            <p className="text-xs" style={{ color: "var(--error)" }} data-testid="role-error">{nameError}</p>
+          )}
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            data-testid="role-save"
+            className="w-full h-12 rounded-full font-bold text-sm transition-all active:scale-[0.98] disabled:opacity-50"
+            style={{ background: "var(--brand)", color: "#0a0a0a" }}
+          >
+            {saving ? t("common.saving") : editingRole ? t("roles.update") : t("roles.create")}
+          </button>
+        </div>
+      </Sheet>
 
       <ConfirmDialog
         open={deleteTarget !== null}

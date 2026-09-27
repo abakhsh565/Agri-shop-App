@@ -9,7 +9,7 @@ Production has not been touched. Every claim below names the evidence that suppo
 <!-- ENGINEERING-OS-CHECKPOINT:BEGIN -->
 ```json
 {
-  "updatedAt": "2026-09-24T10:00:39.624Z",
+  "updatedAt": "2026-09-27T19:26:54.079Z",
   "branch": "main",
   "head": "7e8eb294ec6ac3e65f8a9c36b1ea7f2ab0a8e398",
   "nextCommand": null,
@@ -27,9 +27,9 @@ Production has not been touched. Every claim below names the evidence that suppo
   "lanes": {
     "accessUx": {
       "status": "pass",
-      "hash": "0c4e35c4cbea6a3f27a9",
-      "at": "2026-09-23T23:54:28.142Z",
-      "head": "7e8eb294ec6ac3e65f8a9c36b1ea7f2ab0a8e398"
+      "hash": "a8a59367f3f15d956ec9",
+      "at": "2026-09-27T19:26:53.989Z",
+      "head": "91ae70e6c6fa5021b7643a6d71daf98fff49114d"
     },
     "actionCenter": {
       "status": "pass",
@@ -69,9 +69,9 @@ Production has not been touched. Every claim below names the evidence that suppo
     },
     "accessibility": {
       "status": "pass",
-      "hash": "fc093d0d57c62b03a982",
-      "at": "2026-09-23T23:52:48.910Z",
-      "head": "7e8eb294ec6ac3e65f8a9c36b1ea7f2ab0a8e398"
+      "hash": "bef5487e2f51a76f6004",
+      "at": "2026-09-27T19:24:35.256Z",
+      "head": "91ae70e6c6fa5021b7643a6d71daf98fff49114d"
     },
     "adminMicrocopy": {
       "status": "pass",
@@ -183,41 +183,18 @@ Production has not been touched. Every claim below names the evidence that suppo
     }
   },
   "lastVerify": {
-    "at": "2026-09-24T10:00:39.622Z",
+    "at": "2026-09-27T19:26:54.077Z",
     "tier": 2,
-    "result": "fail",
-    "seconds": 1483,
+    "result": "running",
+    "seconds": 362,
     "ran": [
-      "education",
-      "educationHelp",
-      "employeeStatusSafety",
-      "imageSync",
-      "interactionLayer",
-      "logicalDirection",
-      "otpResume",
-      "overlayAboveNav",
-      "overlayRtl",
-      "productOpeningStock",
-      "roleDeleteSafety",
-      "rtlLtr",
-      "setupCompletion",
-      "skeletonCoverage",
-      "splitPayment",
-      "systemDrive"
+      "tsc --noEmit",
+      "vitest (full)",
+      "E2E accessibility",
+      "E2E accessUx"
     ],
-    "skipped": [
-      "accessibility",
-      "accessUx",
-      "actionCenter",
-      "adminFullAccess",
-      "adminMicrocopy",
-      "crossScreenSync",
-      "dashboardScope",
-      "dependencyContinuity",
-      "designLanguage",
-      "doubleTapSafety"
-    ],
-    "reason": "QA database is not clean: 1 business row(s)"
+    "skipped": [],
+    "reason": null
   },
   "metrics": [
     {
@@ -327,6 +304,33 @@ Production has not been touched. Every claim below names the evidence that suppo
       "runs": 16,
       "skips": 10,
       "changed": 114
+    },
+    {
+      "at": "2026-09-27T18:27:04.727Z",
+      "tier": 2,
+      "seconds": 122,
+      "result": "fail",
+      "runs": 27,
+      "skips": 0,
+      "changed": 190
+    },
+    {
+      "at": "2026-09-27T18:44:45.089Z",
+      "tier": 2,
+      "seconds": 130,
+      "result": "fail",
+      "runs": 27,
+      "skips": 0,
+      "changed": 190
+    },
+    {
+      "at": "2026-09-27T18:58:49.525Z",
+      "tier": 2,
+      "seconds": 239,
+      "result": "fail",
+      "runs": 27,
+      "skips": 0,
+      "changed": 191
     }
   ],
   "dirty": 68

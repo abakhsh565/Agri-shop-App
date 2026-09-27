@@ -103,7 +103,18 @@ export const useAuthStore = create<AuthState>()(
         if (!get().user) return;
         try {
           const { data } = await supabase.auth.getSession();
-          if (!data.session) { get().logout(); return; }
+          if (!data.session) {
+            // No session is NOT a reason to sign out any more. A session can be absent simply
+            // because the phone has not been online since the token lapsed, and signing out
+            // there threw away the stored identity, the cached rows and the PIN's only route
+            // back in — the owner's next launch was a fresh sign-in with a code.
+            //
+            // Re-establishing is attempted by getUserFromSession, which is what the splash
+            // screen already calls; the one answer that still means "this account is gone" —
+            // the server saying the profile is inactive — is handled there, where it can be
+            // told apart from a network failure.
+            return;
+          }
 
           // A session issued by a *different* Supabase project can never authenticate
           // against this one: PostgREST refuses the JWT, and because refreshing fails

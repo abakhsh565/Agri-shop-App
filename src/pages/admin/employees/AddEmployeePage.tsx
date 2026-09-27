@@ -70,7 +70,11 @@ export default function AddEmployeePage() {
   // the owner adds below. Starts equal to the defaults, so "no customization" is
   // a state rather than something the owner has to re-enter.
   const [accessValue, setAccessValue] = useState<Set<string>>(new Set());
-  const [customizing, setCustomizing] = useState(false);
+  // Whether the chosen role's access has actually arrived. Needed as a state of its own:
+  // an unfetched role and a role that grants nothing both render as forty empty boxes, and
+  // the owner has no way to tell those apart. Nothing ticked is a decision; nothing loaded is
+  // not, so they cannot share one rendering.
+  const [roleAccess, setRoleAccess] = useState<"idle" | "loading" | "ready" | "error">("idle");
   const [branchScope, setBranchScope] = useState<string[] | null>(null);
   const [branches, setBranches] = useState<{ id: string; name: string; is_default: boolean }[]>([]);
   const [error, setError] = useState("");
@@ -129,7 +133,7 @@ export default function AddEmployeePage() {
     setRoleId(null);
     setSelectedRolePermissions([]);
     setAccessValue(new Set());
-    setCustomizing(false);
+    setRoleAccess("idle");
     setError("");
   }
 
@@ -207,23 +211,37 @@ export default function AddEmployeePage() {
 
   const accessSummary = accessByArea().map((a) => a.label).join(", ");
 
+  /**
+   * Choose a role and load what it grants. One function so the retry on a failed read is the
+   * same call that failed — not a second, subtly different path.
+   */
+  async function selectRole(id: string) {
+    setError("");
+    setRoleId(id);
+    setRoleAccess("loading");
+    setSelectedRolePermissions([]);
+    setAccessValue(new Set());
+    const { codes, error: readError } = await rolesStore.loadRolePermissions(id);
+    if (readError) {
+      // Leave the fields untouched and say the read failed. Continuing with an empty set here
+      // used to look like a role that grants nothing.
+      setRoleAccess("error");
+      return;
+    }
+    setSelectedRolePermissions(codes);
+    // Choosing a role replaces the defaults; it does not touch the employee, who does not
+    // exist yet.
+    setAccessValue(applyOverrides(codes, {}));
+    setRoleAccess("ready");
+  }
+
   /** One role card, with the access it carries shown directly beneath it. */
   function roleCard(r: (typeof rolesStore.roles)[number]) {
     const selected = roleId === r.id;
     return (
       <div key={r.id} className="flex flex-col gap-2">
         <button
-          onClick={() => {
-            setError("");
-            setRoleId(r.id);
-            setCustomizing(false);
-            rolesStore.getRolePermissions(r.id).then((perms) => {
-              setSelectedRolePermissions(perms);
-              // Choosing a role replaces the defaults; it does not touch the
-              // employee, who does not exist yet.
-              setAccessValue(applyOverrides(perms, {}));
-            });
-          }}
+          onClick={() => void selectRole(r.id)}
           className="flex items-start gap-3 p-4 rounded-[var(--radius-card)] text-start transition-colors"
           style={{
             background: "var(--surface)",
@@ -244,65 +262,47 @@ export default function AddEmployeePage() {
           </div>
         </button>
 
-        {/* What choosing this role means — business areas and actions, no codes.
-            While the owner is customizing, the editor replaces this read-only view
-            rather than listing the same areas twice. */}
+        {/* What choosing this role means — the same checkbox list the Roles screen uses, so
+            the owner sees exactly which boxes the role ticks rather than a sentence about it,
+            and can change one here instead of leaving the flow to do it later. The list is
+            only drawn once the role's access has actually arrived. */}
         {selected && (
           <div className="rounded-[var(--radius-tile)] p-3 mx-1" style={{ background: "var(--surface-2)", border: "1px solid var(--divider)" }}>
-          {customizing ? (
-            <>
-              <p className="ds-section-label mb-2" style={{ color: "var(--text-secondary)" }}>
-                {t("addEmployee.effectiveAccess", { name: firstName })}
-              </p>
-              <EmployeeAccessEditor roleDefaults={roleDefaultSet} value={accessValue} onChange={setAccessValue} />
-            </>
-          ) : (
-            <>
-              <p className="ds-section-label mb-2" style={{ color: "var(--text-secondary)" }}>
-                {t("addEmployee.roleAccess")}
-              </p>
-              {accessByArea().length === 0 ? (
-                <p className="text-xs" style={{ color: "var(--text-secondary)" }}>{t("addEmployee.noRoleAccess")}</p>
-              ) : (
-                accessByArea().map(({ label, actions }) => (
-                  <div key={label} data-testid="access-area-row" className="flex items-start justify-between gap-3 py-1">
-                    <span className="text-xs font-semibold" style={{ color: "var(--text-primary)" }}>{label}</span>
-                    <span className="text-xs text-end" style={{ color: "var(--text-secondary)" }}>{actions.join(", ")}</span>
-                  </div>
-                ))
-              )}
-            </>
+          {roleAccess === "ready" && (
+            <p className="ds-section-label mb-2" style={{ color: "var(--text-secondary)" }}>
+              {t("addEmployee.effectiveAccess", { name: firstName })}
+            </p>
+          )}
+          <EmployeeAccessEditor
+            roleDefaults={roleDefaultSet}
+            value={accessValue}
+            onChange={setAccessValue}
+            state={roleAccess === "ready" ? "ready" : roleAccess === "error" ? "error" : "loading"}
+          />
+          {roleAccess === "error" && (
+            <button
+              onClick={() => void selectRole(r.id)}
+              className="text-11 font-bold mt-2"
+              style={{ color: "var(--brand)" }}
+            >
+              {t("common.retry")}
+            </button>
           )}
 
-          {/* Access is customizable here and now: sending an invitation must not
-              require leaving the flow to open the employee's page. */}
-          <div className="flex items-center justify-between gap-3 mt-3 pt-3" style={{ borderTop: "1px solid var(--divider)" }}>
-            <span className="text-10" style={{ color: "var(--text-secondary)" }}>
-              {changeCount > 0
-                ? t("addEmployee.customized", { count: changeCount, role: r.name })
-                : t("addEmployee.roleAccessDefault")}
-            </span>
-            {customizing ? (
-              <button
-                onClick={() => {
-                  setAccessValue(applyOverrides(selectedRolePermissions, {}));
-                  setCustomizing(false);
-                }}
-                className="text-10 font-bold shrink-0"
-                style={{ color: "var(--brand)" }}
-              >
-                {t("empDetail.roleOnly")}
-              </button>
-            ) : (
-              <button
-                onClick={() => setCustomizing(true)}
-                className="text-10 font-bold shrink-0"
-                style={{ color: "var(--brand)" }}
-              >
-                {t("addEmployee.customizeAccess", { name: firstName })}
-              </button>
-            )}
-          </div>
+          {/* What the boxes above mean relative to the role — the same sentence, whether or
+              not anything was changed. Nothing here needs a mode switch now. */}
+          {roleAccess === "ready" && (
+            <div className="mt-3 pt-3" style={{ borderTop: "1px solid var(--divider)" }}>
+              <span className="text-10" style={{ color: "var(--text-secondary)" }}>
+                {changeCount > 0
+                  ? t(changeCount === 1 ? "addEmployee.customizedOne" : "addEmployee.customized", {
+                      count: changeCount,
+                      role: r.name,
+                    })
+                  : t("addEmployee.roleAccessDefault")}
+              </span>
+            </div>
+          )}
           </div>
         )}
       </div>

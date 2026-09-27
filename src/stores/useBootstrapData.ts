@@ -6,6 +6,7 @@ import { useEmployeesStore } from "@/stores/employeesStore";
 import { useSalesStore } from "@/stores/salesStore";
 import { useNotificationStore } from "@/stores/notificationStore";
 import { useAuthStore } from "@/stores/authStore";
+import { useShopStore } from "@/stores/shopStore";
 
 // Loads every live dataset once when an authenticated shell mounts and wires
 // Realtime so any device sees new sales/stock/customers immediately. Pages then
@@ -15,6 +16,11 @@ import { useAuthStore } from "@/stores/authStore";
 export function useBootstrapData() {
   const role = useAuthStore((s) => s.user?.role);
   const isAdmin = role === "admin" || role === "co_admin";
+  // Which shop the datasets belong to. Every read below is scoped by it, and so is the
+  // realtime subscription — a switch changes the rows AND the feed, so both are rebuilt.
+  // Without this the shell would keep the previous shop's rows loaded after a switch, which
+  // is the one thing a shop selector must never allow.
+  const shopId = useShopStore((s) => s.activeShopId);
 
   useEffect(() => {
     const unsubs: Array<() => void> = [];
@@ -40,6 +46,7 @@ export function useBootstrapData() {
     }
 
     return () => unsubs.forEach((fn) => fn());
-    // Re-run if the role changes (e.g. after login) so admin-only data loads.
-  }, [isAdmin]);
+    // Re-run if the role changes (e.g. after login) so admin-only data loads, and if the
+    // active shop changes so nothing from the shop we left survives into this one.
+  }, [isAdmin, shopId]);
 }

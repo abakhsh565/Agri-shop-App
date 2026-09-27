@@ -7,15 +7,28 @@ import { X, Plus, Trash2 } from "lucide-react";
 import SelectorField from "./SelectorField";
 import type { CropConfig, BusinessSettings } from "@/types";
 import { useT } from "@/lib/i18n";
+import { useAuthStore } from "@/stores/authStore";
 
 const PRESET_CROPS = ["Cotton", "Wheat", "Rice", "Sugarcane", "Maize", "Tobacco"];
 const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 
+/**
+ * Which crops a shop grows is that shop's configuration, so the device-local copy is kept per
+ * shop — the same reason `localCache` is keyed by its owner and the group registry by tenant.
+ * Under one key for the whole device, a second shop opened the crop list the first shop had
+ * configured and would save it back as its own (the database copy is written too, but the sheet
+ * reads this one for display).
+ */
+function settingsKey(): string {
+  const tenant = useAuthStore.getState().user?.tenantId ?? "none";
+  return `business_settings:${tenant}`;
+}
+
 function loadSettings(): BusinessSettings {
-  try { const raw = localStorage.getItem("business_settings"); if (raw) return JSON.parse(raw); } catch {}
+  try { const raw = localStorage.getItem(settingsKey()); if (raw) return JSON.parse(raw); } catch {}
   return { crops: [] };
 }
-function saveSettings(s: BusinessSettings) { localStorage.setItem("business_settings", JSON.stringify(s)); }
+function saveSettings(s: BusinessSettings) { localStorage.setItem(settingsKey(), JSON.stringify(s)); }
 
 interface Props { onClose: () => void; onSave: () => void; }
 

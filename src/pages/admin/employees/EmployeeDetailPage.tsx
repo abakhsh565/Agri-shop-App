@@ -67,6 +67,10 @@ export default function EmployeeDetailPage() {
   const [editRoleId, setEditRoleId] = useState<string | null>(null);
   const [roleDefaults, setRoleDefaults] = useState<Set<string>>(new Set());
   const [editPerms, setEditPerms] = useState<Set<string>>(new Set());
+  // This employee's access is read after the employee itself, so the editor would otherwise
+  // render one frame of unticked boxes — read as "no access" for someone whose role grants
+  // plenty, and saveable. Unknown is drawn as unknown instead.
+  const [accessState, setAccessState] = useState<"loading" | "ready" | "error">("loading");
   const [editBranchScope, setEditBranchScope] = useState<string[] | null>(null);
   // The users list cannot carry the membership role, so the authoritative value
   // comes from the employee's membership via get_employee_access.
@@ -107,17 +111,22 @@ export default function EmployeeDetailPage() {
     setStoredOverrides(access.overrides);
     setEmpPerms([...configured]);
     setEditPerms(new Set(configured));
+    setAccessState("ready");
   }
 
   // Load this employee's current access
   useEffect(() => {
     if (emp && employeeId) {
-      getEmployeeAccess(employeeId).then((access) => {
-        setEmpMembershipRole(access.membershipRole);
-        setEditRoleId(access.roleId);
-        setEditBranchScope(access.branchScope);
-        applyAccess(access);
-      });
+      getEmployeeAccess(employeeId)
+        .then((access) => {
+          setEmpMembershipRole(access.membershipRole);
+          setEditRoleId(access.roleId);
+          setEditBranchScope(access.branchScope);
+          applyAccess(access);
+        })
+        // A failed read must not leave a skeleton spinning forever, and must never fall
+        // through to an empty editor.
+        .catch(() => setAccessState("error"));
     }
   }, [emp?.id]);
 
@@ -359,15 +368,20 @@ export default function EmployeeDetailPage() {
                   return (
                     <button
                       key={r.id}
-                      onClick={() => {
+                      onClick={async () => {
                         setEditRoleId(r.id);
-                        rolesStore.getRolePermissions(r.id).then((perms) => {
-                          setRoleDefaults(new Set(perms));
-                          // A role supplies the defaults; it does not erase what the
-                          // owner set for this person. New defaults + their existing
-                          // exceptions, which is what the database resolves.
-                          setEditPerms(applyOverrides(perms, storedOverrides));
-                        });
+                        setAccessState("loading");
+                        const { codes, error } = await rolesStore.loadRolePermissions(r.id);
+                        if (error) {
+                          setAccessState("error");
+                          return;
+                        }
+                        setRoleDefaults(new Set(codes));
+                        // A role supplies the defaults; it does not erase what the
+                        // owner set for this person. New defaults + their existing
+                        // exceptions, which is what the database resolves.
+                        setEditPerms(applyOverrides(codes, storedOverrides));
+                        setAccessState("ready");
                       }}
                       className="flex items-center gap-3 px-3 py-2.5 rounded-[var(--radius-tile)] text-start"
                       style={{
@@ -432,11 +446,18 @@ export default function EmployeeDetailPage() {
               <p className="text-xs font-bold mb-2" style={{ color: "var(--text-secondary)" }}>
                 {t("empDetail.access")}
               </p>
-              <EmployeeAccessEditor roleDefaults={roleDefaults} value={editPerms} onChange={setEditPerms} />
-              <p className="text-10 mt-2" style={{ color: "var(--text-secondary)" }}>
-                {roleTemplateName}
-                {changeCount > 0 ? ` · ${t("empDetail.changedFor", { name: emp.name })}` : ""}
-              </p>
+              <EmployeeAccessEditor
+                roleDefaults={roleDefaults}
+                value={editPerms}
+                onChange={setEditPerms}
+                state={accessState}
+              />
+              {accessState === "ready" && (
+                <p className="text-10 mt-2" style={{ color: "var(--text-secondary)" }}>
+                  {roleTemplateName}
+                  {changeCount > 0 ? ` · ${t("empDetail.changedFor", { name: emp.name })}` : ""}
+                </p>
+              )}
             </div>
 
             {/* Save */}

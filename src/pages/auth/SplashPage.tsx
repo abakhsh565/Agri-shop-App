@@ -1,8 +1,9 @@
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "@/stores/authStore";
-import { hasPin } from "@/lib/pinLock";
+import { canOpenWithPin } from "@/lib/pinLock";
 import { getUserFromSession } from "@/lib/auth";
+import { hasPin as hasPinMarker } from "@/lib/pinLock";
 import StatusBar from "@/components/ui/StatusBar";
 import { useT } from "@/lib/i18n";
 import { hasSeenIntro } from "@/education/introSeen";
@@ -23,9 +24,15 @@ export default function SplashPage() {
         if (freshUser) {
           useAuthStore.getState().setUser(freshUser);
         }
-        if (hasPin(latestUser.id)) {
-          // PIN exists → PIN login screen
+        // The keypad is only drawn when it can actually answer: either the server can be
+        // asked, or this device holds its own copy of the check. Showing it otherwise is what
+        // used to bounce the owner through "forget the PIN" on every offline launch.
+        if (await canOpenWithPin(latestUser.id)) {
           navigate("/login/pin", { replace: true, state: { user: latestUser } });
+        } else if (hasPinMarker(latestUser.id)) {
+          // A PIN was set on this device, but there is no way to check it here and no server
+          // to ask. Say so on the sign-in screen instead of drawing an unusable keypad.
+          navigate("/login", { replace: true });
         } else {
           // No PIN set → prompt to create one (mandatory for all users)
           const dest = (latestUser.role === "admin" || latestUser.role === "co_admin")

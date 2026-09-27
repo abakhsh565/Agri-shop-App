@@ -12,8 +12,10 @@ import { useThemeStore } from "@/stores/themeStore";
  * It shows the language you would switch **to**, not the one you are in: a button that says
  * "اردو" is an offer, where a button saying "English" reads like a status. Toggling is
  * one tap — there are only two languages, so a picker sheet would be a menu with one choice.
- * `applyDirection` flips the whole document, so the button itself turns around with the rest
- * of the screen and does not need a per-direction rule.
+ * `applyDirection` flips the whole document. This pill is the deliberate exception to that flip:
+ * it is pinned to the physical right on every auth screen (see `AuthLayout`), so it takes its own
+ * direction from the language store rather than inheriting the wrapper's — otherwise Urdu would
+ * order the globe and label as English inside a right-aligned button.
  */
 export default function AuthLanguageSwitch() {
   const t = useT();
@@ -25,6 +27,7 @@ export default function AuthLanguageSwitch() {
   return (
     <button
       type="button"
+      dir={language === "ur" ? "rtl" : "ltr"}
       onClick={() => setLanguage(next)}
       aria-label={t("auth.switchLanguage")}
       data-testid="auth-language"

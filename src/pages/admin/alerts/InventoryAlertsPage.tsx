@@ -1,6 +1,8 @@
 import { useNavigate } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
+import ListCard from "@/components/ui/ListCard";
+import ListRow from "@/components/ui/ListRow";
 import { useProductsStore } from "@/stores/productsStore";
 import { useCompaniesStore } from "@/stores/companiesStore";
 import { useThemeStore } from "@/stores/themeStore";
@@ -9,6 +11,21 @@ import { AlertTriangle, Package, Truck, ChevronRight } from "lucide-react";
 import { useT } from "@/lib/i18n";
 import { SkeletonList } from "@/components/ui/Skeleton";
 
+/**
+ * Inventory alerts, on the app's own tones.
+ *
+ * Every colour on this screen used to be a literal taken from a light-mode comp: pale
+ * `#FEF2F2` and `#FFFBEB` row surfaces, `#FECACA` and `#FDE68A` borders, `#991B1B` text. On
+ * the light theme that reads as intended; on the dark theme the same literals stay pale, so
+ * the alerts shouted out of a near-black page and the untinted third summary card looked
+ * like it belonged to a different screen.
+ *
+ * The tones are now the mode-aware tokens the rest of the app already uses — `--error-bg`,
+ * `--error`, `--warning-bg`, `--warning` — which are alpha-based, so they darken with the
+ * theme instead of fighting it. Severity lives in the leading tile and the section label,
+ * the way the dashboard's own alerts card does it, and the rows are the shared grouped list
+ * rather than one bordered box each.
+ */
 export default function InventoryAlertsPage() {
   const t = useT();
   const navigate = useNavigate();
@@ -38,6 +55,37 @@ export default function InventoryAlertsPage() {
   });
 
   const totalPayable = companies.reduce((s, c) => s + c.outstandingPayable, 0);
+  const allClear = outOfStock.length === 0 && lowStock.length === 0 && totalPayable === 0;
+
+  /**
+   * One summary count. The tint is a function of the count, so a shop with nothing wrong
+   * sees three identical resting cards instead of two pretending to be warnings.
+   */
+  const summary = (label: string, count: number, tone: "error" | "warning" | "plain") => {
+    const lit = count > 0 && tone !== "plain";
+    return (
+      <div
+        className="flex-1 min-w-0 rounded-[var(--radius-card)] p-3.5"
+        style={{
+          background: lit
+            ? tone === "error"
+              ? "var(--error-bg)"
+              : "var(--warning-bg)"
+            : "var(--surface-2)",
+        }}
+      >
+        <p className="ds-section-label truncate" style={{ color: "var(--text-secondary)" }}>
+          {label}
+        </p>
+        <p
+          className="text-20 font-bold mt-0.5"
+          style={{ color: lit ? (tone === "error" ? "var(--error)" : "var(--warning)") : "var(--text-primary)" }}
+        >
+          {count}
+        </p>
+      </div>
+    );
+  };
 
   return (
     <div
@@ -50,134 +98,117 @@ export default function InventoryAlertsPage() {
       {!ready ? (
         <SkeletonList rows={4} tile />
       ) : (
-      <div className="flex flex-col gap-3 px-4 pt-4 pb-8">
-        {/* Summary cards */}
-        <div className="flex gap-2.5">
-          <div
-            className="flex-1 rounded-[var(--radius-card)] p-3.5"
-            style={{ background: outOfStock.length > 0 ? "#FEE2E2" : "var(--surface-2)" }}
-          >
-            <p className="ds-section-label" style={{ color: outOfStock.length > 0 ? "#DC2626" : "var(--text-secondary)" }}>{t("admin.outOfStock")}</p>
-            <p className="text-20 font-bold mt-0.5" style={{ color: outOfStock.length > 0 ? "#991B1B" : "var(--text-primary)" }}>{outOfStock.length}</p>
+        <div className="flex flex-col gap-4 px-4 pt-4 pb-8">
+          {/* Three equal cards. `min-w-0` and a truncating label, because "Reorder" and its
+              Urdu counterpart are both longer than a third of the width. */}
+          <div className="flex gap-2.5">
+            {summary(t("admin.outOfStock"), outOfStock.length, "error")}
+            {summary(t("admin.lowStock"), lowStock.length, "warning")}
+            {summary(t("admin.reorder"), reorderNeeded.length, "plain")}
           </div>
-          <div
-            className="flex-1 rounded-[var(--radius-card)] p-3.5"
-            style={{ background: lowStock.length > 0 ? "#FEF3C7" : "var(--surface-2)" }}
-          >
-            <p className="ds-section-label" style={{ color: lowStock.length > 0 ? "#D97706" : "var(--text-secondary)" }}>{t("admin.lowStock")}</p>
-            <p className="text-20 font-bold mt-0.5" style={{ color: lowStock.length > 0 ? "#92400E" : "var(--text-primary)" }}>{lowStock.length}</p>
-          </div>
-          <div
-            className="flex-1 rounded-[var(--radius-card)] p-3.5"
-            style={{ background: "var(--tone-card)" }}
-          >
-            <p className="ds-section-label" style={{ color: "var(--text-secondary)" }}>{t("admin.reorder")}</p>
-            <p className="text-20 font-bold mt-0.5" style={{ color: "var(--text-primary)" }}>{reorderNeeded.length}</p>
-          </div>
-        </div>
 
-        {/* Supplier payable alert */}
-        {totalPayable > 0 && (
-          <button
-            onClick={() => navigate("/admin/companies")}
-            className="flex items-center gap-3 rounded-[var(--radius-card)] p-4 transition-opacity active:opacity-70 text-start w-full"
-            style={{ background: "#FCEBEB" }}
-          >
-            <Truck size={18} color="#A32D2D" className="shrink-0" />
-            <div className="flex-1 min-w-0">
-              <p className="text-13 font-medium" style={{ color: "#791F1F" }}>{t("admin.supplierPayableDue")}</p>
-              <p className="text-12 mt-0.5" style={{ color: "#A32D2D" }}>{t("common.totalDue", { amount: formatCurrency(totalPayable) })}</p>
-            </div>
-            <ChevronRight size={14} color="#A32D2D" />
-          </button>
-        )}
-
-        {/* Out of stock */}
-        {outOfStock.length > 0 && (
-          <div>
-            <p className="ds-section-label mb-2" style={{ color: "#DC2626" }}>
-              {t("products.outOfStock")}
-            </p>
-            <div className="flex flex-col gap-2">
-              {outOfStock.map((p) => (
-                <button
-                  key={p.id}
-                  onClick={() => navigate("/admin/inventory/" + p.id + "/adjust")}
-                  className="flex items-center gap-3 rounded-[var(--radius-card)] p-3.5 transition-opacity active:opacity-70 text-start w-full"
-                  style={{ background: "#FEF2F2", border: "1px solid #FECACA" }}
-                >
-                  <div
-                    className="size-9 rounded-full flex items-center justify-center shrink-0"
-                    style={{ background: "#FEE2E2" }}
-                  >
-                    <Package size={16} color="#DC2626" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-13 font-medium truncate" style={{ color: "var(--text-primary)" }}>{p.name}</p>
-                    <p className="text-11" style={{ color: "#DC2626" }}>{t("common.unitsInStock", { count: p.stockQty })}</p>
-                  </div>
-                  <ChevronRight size={14} style={{ color: "var(--text-secondary)" }} />
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Low stock */}
-        {lowStock.length > 0 && (
-          <div>
-            <p className="ds-section-label mb-2" style={{ color: "#D97706" }}>
-              {t("products.lowStock")}
-            </p>
-            <div className="flex flex-col gap-2">
-              {lowStock.map((p) => {
-                const threshold = productLowStockThreshold(p.variants);
-                return (
-                  <button
-                    key={p.id}
-                    onClick={() => navigate("/admin/inventory/" + p.id + "/adjust")}
-                    className="flex items-center gap-3 rounded-[var(--radius-card)] p-3.5 transition-opacity active:opacity-70 text-start w-full"
-                    style={{ background: "#FFFBEB", border: "1px solid #FDE68A" }}
-                  >
+          {/* ── Supplier payables ──────────────────────────────────────────────── */}
+          {totalPayable > 0 && (
+            <div>
+              <p className="ds-section-label mb-2" style={{ color: "var(--text-secondary)" }}>
+                {t("admin.supplierPayableDue")}
+              </p>
+              <ListCard>
+                <ListRow
+                  onClick={() => navigate("/admin/companies")}
+                  tile={
                     <div
                       className="size-9 rounded-full flex items-center justify-center shrink-0"
-                      style={{ background: "#FEF3C7" }}
+                      style={{ background: "var(--error-bg)", color: "var(--error)" }}
                     >
-                      <AlertTriangle size={16} color="#D97706" />
+                      <Truck size={16} />
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-13 font-medium truncate" style={{ color: "var(--text-primary)" }}>{p.name}</p>
-                      <p className="text-11" style={{ color: "#D97706" }}>{t("common.unitsThreshold", { count: p.stockQty, threshold })}</p>
-                    </div>
-                    <ChevronRight size={14} style={{ color: "var(--text-secondary)" }} />
-                  </button>
-                );
-              })}
+                  }
+                  title={t("admin.supplierPayableDue")}
+                  meta={t("common.totalDue", { amount: formatCurrency(totalPayable) })}
+                  trailing={<ChevronRight size={14} style={{ color: "var(--text-secondary)" }} />}
+                />
+              </ListCard>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* All clear */}
-        {outOfStock.length === 0 && lowStock.length === 0 && totalPayable === 0 && (
-          <div
-            className="rounded-[var(--radius-card)] p-8 flex flex-col items-center gap-3"
-            style={{ border: "1px solid var(--divider)" }}
-          >
-            <div
-              className="size-12 rounded-full flex items-center justify-center"
-              style={{ background: "#E3F3D9" }}
-            >
-              <Package size={20} color="var(--brand-dark)" />
+          {/* ── Out of stock ───────────────────────────────────────────────────── */}
+          {outOfStock.length > 0 && (
+            <div>
+              <p className="ds-section-label mb-2" style={{ color: "var(--error)" }}>
+                {t("products.outOfStock")}
+              </p>
+              <ListCard>
+                {outOfStock.map((p) => (
+                  <ListRow
+                    key={p.id}
+                    onClick={() => navigate("/admin/inventory/" + p.id + "/adjust")}
+                    tile={
+                      <div
+                        className="size-9 rounded-full flex items-center justify-center shrink-0"
+                        style={{ background: "var(--error-bg)", color: "var(--error)" }}
+                      >
+                        <Package size={16} />
+                      </div>
+                    }
+                    title={p.name}
+                    meta={t("common.unitsInStock", { count: p.stockQty })}
+                    trailing={<ChevronRight size={14} style={{ color: "var(--text-secondary)" }} />}
+                  />
+                ))}
+              </ListCard>
             </div>
-            <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
-              {t("admin.inventoryHealthy")}
-            </p>
-            <p className="text-xs text-center" style={{ color: "var(--text-secondary)" }}>
-              {t("admin.noStockAlerts")}
-            </p>
-          </div>
-        )}
-      </div>
+          )}
+
+          {/* ── Low stock ──────────────────────────────────────────────────────── */}
+          {lowStock.length > 0 && (
+            <div>
+              <p className="ds-section-label mb-2" style={{ color: "var(--warning)" }}>
+                {t("products.lowStock")}
+              </p>
+              <ListCard>
+                {lowStock.map((p) => (
+                  <ListRow
+                    key={p.id}
+                    onClick={() => navigate("/admin/inventory/" + p.id + "/adjust")}
+                    tile={
+                      <div
+                        className="size-9 rounded-full flex items-center justify-center shrink-0"
+                        style={{ background: "var(--warning-bg)", color: "var(--warning)" }}
+                      >
+                        <AlertTriangle size={16} />
+                      </div>
+                    }
+                    title={p.name}
+                    meta={t("common.unitsThreshold", { count: p.stockQty, threshold: thresholdFor(p) })}
+                    trailing={<ChevronRight size={14} style={{ color: "var(--text-secondary)" }} />}
+                  />
+                ))}
+              </ListCard>
+            </div>
+          )}
+
+          {/* ── All clear ──────────────────────────────────────────────────────── */}
+          {allClear && (
+            <div
+              className="rounded-[var(--radius-card)] p-8 flex flex-col items-center gap-3"
+              style={{ background: "var(--tone-card)" }}
+            >
+              <div
+                className="size-12 rounded-full flex items-center justify-center"
+                style={{ background: "var(--brand-light)", color: "var(--brand-dark)" }}
+              >
+                <Package size={20} />
+              </div>
+              <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+                {t("admin.inventoryHealthy")}
+              </p>
+              <p className="text-xs text-center" style={{ color: "var(--text-secondary)" }}>
+                {t("admin.noStockAlerts")}
+              </p>
+            </div>
+          )}
+        </div>
       )}
     </div>
   );

@@ -37,7 +37,8 @@ interface ReminderLogEntry {
   customerName?: string;
   customerImageUrl?: string;
   configId?: string;
-  type: "gentle" | "firmer" | "final";
+  /** Not stored by the live reminder_logs shape; the badge falls back to gentle. */
+  type?: "gentle" | "firmer" | "final";
   message: string;
   channel: string;
   sentAt: string;
@@ -46,21 +47,22 @@ interface ReminderLogEntry {
 async function loadAllReminderLogs(): Promise<ReminderLogEntry[]> {
   try {
     const { supabase } = await import("@/lib/supabase");
+    // Live reminder_logs shape: subject is entity_id (entity_type = 'customer');
+    // the customer's name/image come from the customer row itself.
     const { data } = await supabase.from("reminder_logs").select("*").order("sent_at", { ascending: false }).limit(50);
     if (!data) return [];
-    const customerIds = [...new Set(data.map((r: any) => r.customer_id).filter(Boolean))];
-    let customerMap: Record<string, string> = {};
+    const customerIds = [...new Set(data.map((r: any) => r.entity_id).filter(Boolean))];
+    let customerMap: Record<string, { name?: string; image?: string }> = {};
     if (customerIds.length > 0) {
-      const { data: custs } = await supabase.from("customers").select("id, image_url").in("id", customerIds);
-      (custs || []).forEach((c: any) => { customerMap[c.id] = c.image_url; });
+      const { data: custs } = await supabase.from("customers").select("id, name, image_url").in("id", customerIds);
+      (custs || []).forEach((c: any) => { customerMap[c.id] = { name: c.name, image: c.image_url }; });
     }
     return data.map((r: any) => ({
       id: r.id,
-      customerId: r.customer_id,
-      customerName: r.customer_name,
-      customerImageUrl: customerMap[r.customer_id] || undefined,
-      configId: r.config_id,
-      type: r.tone,
+      customerId: r.entity_id,
+      customerName: customerMap[r.entity_id]?.name,
+      customerImageUrl: customerMap[r.entity_id]?.image || undefined,
+      configId: r.config_id || undefined,
       message: r.message,
       channel: r.channel,
       sentAt: r.sent_at,
@@ -72,10 +74,11 @@ async function logReminderToDb(customerId: string, customerName: string, entry: 
   try {
     const { supabase } = await import("@/lib/supabase");
     await supabase.from("reminder_logs").insert({
-      customer_id: customerId,
-      customer_name: customerName,
       config_id: entry.configId || null,
-      tone: entry.type,
+      entity_type: "customer",
+      entity_id: customerId,
+      action: "reminder_sent",
+      status: "sent",
       message: entry.message,
       channel: entry.channel,
       sent_at: entry.sentAt,
@@ -240,7 +243,7 @@ function ReminderCard({
 /* ── Activity item for Sent ── */
 function ActivityItem({ log }: { log: ReminderLogEntry }) {
   const t = useT();
-  const tc = TONE_CONFIG[log.type] || TONE_CONFIG.gentle;
+  const tc = TONE_CONFIG[log.type ?? "gentle"] || TONE_CONFIG.gentle;
   const channel = (log.channel || "sent").toUpperCase();
   const name = log.customerName || t("common.customer");
   return (
@@ -447,7 +450,9 @@ export default function RemindersOverviewPage() {
 
   const handleSend = useCallback(async (channel: "whatsapp" | "sms") => {
     if (!editingReminder) return;
-    const phone = editingReminder.customerPhone.replace(/[^0-9+]/g, "");
+    // Customers without a phone are common (the alert centre flags them). The state
+    // must still be persisted; only the external jump needs a number.
+    const phone = (editingReminder.customerPhone || "").replace(/[^0-9+]/g, "");
     const encodedMsg = encodeURIComponent(editMessage);
     const occKey = editingReminder._occurrenceKey || editingReminder.configId;
 
@@ -479,11 +484,13 @@ export default function RemindersOverviewPage() {
     }
 
     // Open external messaging window AFTER DB persistence is complete.
-    if (channel === "whatsapp") {
-      const waPhone = phone.startsWith("+") ? phone.slice(1) : phone.startsWith("0") ? "92" + phone.slice(1) : phone;
-      window.open("https://wa.me/" + waPhone + "?text=" + encodedMsg, "_blank");
-    } else {
-      window.open("sms:" + phone + "?body=" + encodedMsg, "_blank");
+    if (phone) {
+      if (channel === "whatsapp") {
+        const waPhone = phone.startsWith("+") ? phone.slice(1) : phone.startsWith("0") ? "92" + phone.slice(1) : phone;
+        window.open("https://wa.me/" + waPhone + "?text=" + encodedMsg, "_blank");
+      } else {
+        window.open("sms:" + phone + "?body=" + encodedMsg, "_blank");
+      }
     }
 
     // Immediate UI update: mark this occurrence key as sent

@@ -17,6 +17,19 @@ import { useAuthStore } from "@/stores/authStore";
 import type { ReminderConfig } from "@/types";
 import { tNow } from "@/lib/i18n";
 
+/**
+ * Both of the registries below hold rows that belong to exactly one shop — a reminder group is
+ * a set of THIS shop's customers, a credit request is THIS shop's customer's limit — and both
+ * used to live under a single key for the whole device. An account that works in more than one
+ * shop then saw one shop's groups and requests while the app was reading the other's customers,
+ * which is the same wrong-tenant render the zustand resets exist to prevent. The tenant is part
+ * of the key for the same reason it is part of the cache owner in `localCache`: a row must not
+ * be reachable from a shop it does not belong to.
+ */
+function shopScopedKey(base: string): string {
+  return `${base}:${useAuthStore.getState().user?.tenantId ?? "none"}`;
+}
+
 // ── Types ──
 
 export interface LocalGroupEntry {
@@ -59,7 +72,7 @@ const GROUP_KEY = "agri_group_registry";
 
 function readGroupRegistry(): LocalGroupEntry[] {
   try {
-    const raw = localStorage.getItem(GROUP_KEY);
+    const raw = localStorage.getItem(shopScopedKey(GROUP_KEY));
     return raw ? JSON.parse(raw) : [];
   } catch {
     return [];
@@ -67,7 +80,7 @@ function readGroupRegistry(): LocalGroupEntry[] {
 }
 
 function writeGroupRegistry(groups: LocalGroupEntry[]): void {
-  localStorage.setItem(GROUP_KEY, JSON.stringify(groups));
+  localStorage.setItem(shopScopedKey(GROUP_KEY), JSON.stringify(groups));
 }
 
 /** Save a group: create individual reminder_configs in Supabase + store group metadata in localStorage */
@@ -274,7 +287,7 @@ const CREDIT_KEY = 'agri_credit_requests';
 
 function readLocalCache(): LocalCreditRequest[] {
   try {
-    const raw = localStorage.getItem(CREDIT_KEY);
+    const raw = localStorage.getItem(shopScopedKey(CREDIT_KEY));
     return raw ? JSON.parse(raw) : [];
   } catch {
     return [];
@@ -282,7 +295,7 @@ function readLocalCache(): LocalCreditRequest[] {
 }
 
 function writeLocalCache(reqs: LocalCreditRequest[]): void {
-  try { localStorage.setItem(CREDIT_KEY, JSON.stringify(reqs)); } catch {}
+  try { localStorage.setItem(shopScopedKey(CREDIT_KEY), JSON.stringify(reqs)); } catch {}
 }
 
 /** Map a DB row to LocalCreditRequest */

@@ -3,6 +3,7 @@ import type { I18nKey, TranslateFn } from "@/lib/i18n";
 import { tNow } from "@/lib/i18n";
 import { supabase } from "@/lib/supabase";
 import { pkDate, pkDateFromISO } from "@/lib/pkDate";
+import type { CustomerCropRecord } from "@/lib/recommendationEngine";
 
 // ─── Pakistan Business Date Helpers ────────────────────────────────────────────
 
@@ -259,6 +260,32 @@ export async function loadCustomerCrops(customerId: string): Promise<string[]> {
   }
 }
 
+/**
+ * The same crops, with what else the row holds.
+ *
+ * `acreage` and the planting/harvest dates are the only recorded answer to "how big is the
+ * farm" and "what stage is the crop at" — the customer form fills in the name alone today, so
+ * these are usually null and the recommendation engine treats them as not recorded rather than
+ * as zero.
+ */
+export async function loadCustomerCropRows(customerId: string): Promise<CustomerCropRecord[]> {
+  try {
+    const { data } = await supabase
+      .from("customer_crops")
+      .select("crop_name, acreage, planting_date, expected_harvest")
+      .eq("customer_id", customerId);
+    if (!data) return [];
+    return data.map((r) => ({
+      cropName: r.crop_name as string,
+      acreage: r.acreage === null || r.acreage === undefined ? null : Number(r.acreage),
+      plantingDate: (r.planting_date as string | null) ?? null,
+      expectedHarvest: (r.expected_harvest as string | null) ?? null,
+    }));
+  } catch {
+    return [];
+  }
+}
+
 export async function saveCustomerCrops(customerId: string, crops: string[]): Promise<void> {
   await supabase.from("customer_crops").delete().eq("customer_id", customerId);
   if (crops.length > 0) {
@@ -302,18 +329,17 @@ export async function saveBusinessSettings(settings: BusinessSettings): Promise<
   }
 }
 
-export async function loadReminderLogs(customerId?: string): Promise<Array<{ id: string; customerId: string; customerName?: string; configId?: string; tone: string; message: string; channel: string; sentAt: string }>> {
+export async function loadReminderLogs(customerId?: string): Promise<Array<{ id: string; customerId: string; customerName?: string; configId?: string; tone?: string; message: string; channel: string; sentAt: string }>> {
   try {
     let query = supabase.from("reminder_logs").select("*").order("sent_at", { ascending: false });
-    if (customerId) query = query.eq("customer_id", customerId);
+    // Live contract: the log's subject is entity_id (entity_type = 'customer').
+    if (customerId) query = query.eq("entity_id", customerId);
     const { data } = await query.limit(200);
     if (!data) return [];
     return data.map(r => ({
       id: r.id,
-      customerId: r.customer_id,
-      customerName: r.customer_name,
-      configId: r.config_id,
-      tone: r.tone,
+      customerId: r.entity_id,
+      configId: r.config_id ?? undefined,
       message: r.message,
       channel: r.channel,
       sentAt: r.sent_at,
@@ -325,12 +351,13 @@ export async function loadReminderLogs(customerId?: string): Promise<Array<{ id:
 
 export async function logReminder(customerId: string, customerName: string, configId: string, tone: string, message: string, channel: string): Promise<void> {
   await supabase.from("reminder_logs").insert({
-    customer_id: customerId,
-    customer_name: customerName,
-    config_id: configId,
-    tone,
-    message,
+    config_id: configId || null,
+    entity_type: "customer",
+    entity_id: customerId,
+    action: "reminder_sent",
+    status: "sent",
     channel,
+    message,
     sent_at: new Date().toISOString(),
   });
 }
@@ -1083,14 +1110,20 @@ export async function markOccurrenceSent(
 
   // Insert exactly one reminder_log per occurrence.
   // Skip if already sent to prevent duplicate logs from double-clicks/retries.
+  // Column contract is the live reminder_logs shape: the log is addressed by
+  // entity_type/entity_id (plus the occurrence), not by a customer_id column.
+  // tone is not part of that shape, so the sent list falls back to the gentle badge.
   if (!wasAlreadySent) {
     await supabase.from("reminder_logs").insert({
-      customer_id: customerId,
-      customer_name: customerName,
-      config_id: configId,
-      tone,
-      message,
+      occurrence_id: occurrenceId,
+      occurrence_id_ref: occurrenceId,
+      config_id: configId || null,
+      entity_type: "customer",
+      entity_id: customerId,
+      action: "reminder_sent",
+      status: "sent",
       channel,
+      message,
       sent_at: now,
     });
   }
@@ -1141,30 +1174,3 @@ export function categorizeReminders(
   }
   return { ready, future };
 }
-import type { CustomerCropRecord } from "@/lib/recommendationEngine";
-/**
- * The same crops, with what else the row holds.
- *
- * `acreage` and the planting/harvest dates are the only recorded answer to "how big is the
- * farm" and "what stage is the crop at" — the customer form fills in the name alone today, so
- * these are usually null and the recommendation engine treats them as not recorded rather than
- * as zero.
- */
-export async function loadCustomerCropRows(customerId: string): Promise<CustomerCropRecord[]> {
-  try {
-    const { data } = await supabase
-      .from("customer_crops")
-      .select("crop_name, acreage, planting_date, expected_harvest")
-      .eq("customer_id", customerId);
-    if (!data) return [];
-    return data.map((r) => ({
-      cropName: r.crop_name as string,
-      acreage: r.acreage === null || r.acreage === undefined ? null : Number(r.acreage),
-      plantingDate: (r.planting_date as string | null) ?? null,
-      expectedHarvest: (r.expected_harvest as string | null) ?? null,
-    }));
-  } catch {
-    return [];
-  }
-}
-

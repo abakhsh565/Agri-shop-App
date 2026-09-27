@@ -132,6 +132,8 @@ interface SalesState {
   subscribe: () => () => void;
   createSale: (input: NewSaleInput) => Promise<Sale>;
   updateNote: (saleId: string, note: string) => Promise<void>;
+  /** Drop every row: the app is about to read a different shop. */
+  reset: () => void;
 }
 
 let channel: ReturnType<typeof supabase.channel> | null = null;
@@ -151,6 +153,10 @@ export const useSalesStore = create<SalesState>((set, get) => ({
   loading: false,
   ready: false,
   error: null,
+
+  // The active shop changed: the previous shop's sales must not be listed for a moment
+  // under the new one.
+  reset: () => set({ sales: [], loading: false, ready: false, error: null }),
 
   load: async () => {
     set({ loading: true, error: null });

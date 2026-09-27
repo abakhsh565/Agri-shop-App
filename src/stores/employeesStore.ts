@@ -77,6 +77,8 @@ interface EmployeesState {
   }) => Promise<void>;
   loadEmployeePermissions: (employeeId: string) => Promise<string[]>;
   getEmployeeAccess: (employeeId: string) => Promise<{ roleId: string | null; membershipRole: MembershipRole; branchScope: string[] | null; defaults: string[]; overrides: Record<string, boolean>; effective: string[] }>;
+  /** Drop every row: the app is about to read a different shop. */
+  reset: () => void;
 }
 
 let channel: ReturnType<typeof supabase.channel> | null = null;
@@ -86,6 +88,9 @@ export const useEmployeesStore = create<EmployeesState>((set, get) => ({
   loading: false,
   ready: false,
   error: null,
+
+  // The active shop changed: the previous shop's staff list must not be shown as this one's.
+  reset: () => set({ employees: [], loading: false, ready: false, error: null }),
 
   load: async () => {
     set({ loading: true, error: null });

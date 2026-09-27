@@ -92,7 +92,7 @@ export default function VariantSelectorPage() {
       {/* Stock summary */}
       <div className="mx-4 mt-2 px-3 py-2 rounded-[var(--radius-tile)]" style={{ background: "var(--surface)" }}>
         <p className="text-11" style={{ color: "var(--text-secondary)" }}>
-          Total stock: <span className="font-bold" style={{ color: "var(--text-primary)" }}>{product.stockQty} {product.baseUnit}</span>
+          {t("common.totalStock")}: <span className="font-bold" style={{ color: "var(--text-primary)" }}>{t("common.itemsCount", { count: String(product.stockQty) })}</span>
         </p>
       </div>
 

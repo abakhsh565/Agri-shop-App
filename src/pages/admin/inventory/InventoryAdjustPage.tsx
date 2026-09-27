@@ -153,7 +153,9 @@ export default function InventoryAdjustPage() {
                   >
                     <div>
                       <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>{v.name}</p>
-                      <p className="text-xs" style={{ color: "var(--text-secondary)" }}>{product.stockQty} {product.baseUnit} {t("common.inStock")}</p>
+                      <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
+                        {t("common.itemsInStock", { count: String(v.stockQty) })}
+                      </p>
                     </div>
                     <div className="w-5 h-5 rounded-full border-2 flex items-center justify-center"
                       style={{ borderColor: selected ? "var(--brand)" : "var(--text-secondary)" }}>

@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/stores/authStore";
 import { getCachedData, setCachedData } from "@/lib/localCache";
+import { rpcResolveProductBarcode } from "@/lib/db";
 import type { Product, ProductVariant, ProductCategory, BaseUnit } from "@/types";
 
 const CACHE_KEY = "products";
@@ -61,6 +62,17 @@ interface ProductsState {
   load: () => Promise<void>;
   subscribe: () => () => void;
   findByBarcode: (barcode: string) => Product | undefined;
+  /**
+   * The same question, answered by the database when this device cannot answer it.
+   *
+   * `findByBarcode` matches against what has been loaded, which is right almost always and
+   * silently wrong when it is not: a product added on another phone, or one created since
+   * this screen last refreshed, simply would not be found and the scan would be reported as
+   * an unknown code. The database holds the code, scoped to the shop (0158), so it decides.
+   */
+  resolveByCode: (code: string) => Promise<Product | undefined>;
+  /** Drop every row: the app is about to read a different shop. */
+  reset: () => void;
 }
 
 let channel: ReturnType<typeof supabase.channel> | null = null;
@@ -71,9 +83,34 @@ export const useProductsStore = create<ProductsState>((set, get) => ({
   ready: false,
   error: null,
 
+  // The active shop changed. Nothing fetched for the previous shop may render for the
+  // next one, not even for the frame before the reload lands.
+  reset: () => set({ products: [], loading: false, ready: false, error: null }),
+
   findByBarcode: (barcode: string) => {
     const normalized = barcode.trim().toUpperCase();
     return get().products.find((p) => p.barcode?.toUpperCase() === normalized);
+  },
+
+  resolveByCode: async (code: string) => {
+    // The loaded list first: it is instant, it works offline, and it is the same answer.
+    const local = get().findByBarcode(code);
+    if (local) return local;
+
+    try {
+      const found = await rpcResolveProductBarcode(code);
+      if (!found) return undefined;
+      const known = get().products.find((p) => p.id === found.productId);
+      if (known) return known;
+      // The code is the shop's but the row is not loaded yet — the product was added on
+      // another device. Refresh once and look again rather than calling it unknown.
+      await get().load();
+      return get().products.find((p) => p.id === found.productId);
+    } catch {
+      // Offline, or the lookup itself failed. The local answer was already tried, so the
+      // honest result is "not found" rather than a thrown error on a scan.
+      return undefined;
+    }
   },
 
   load: async () => {

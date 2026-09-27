@@ -21,13 +21,25 @@ interface RolesState {
   updateRole: (roleId: string, input: { name?: string; description?: string; permissions?: string[] }) => Promise<void>;
   deleteRole: (roleId: string) => Promise<void>;
   getRolePermissions: (roleId: string) => Promise<string[]>;
+  /**
+   * The same read, but a failure is *reported* instead of being returned as "this role grants
+   * nothing". Every editor used to open on `getRolePermissions`, which answers `[]` both for a
+   * role with no access and for a request that never succeeded — so a slow or failed read
+   * painted forty unticked boxes, which is indistinguishable from a deliberate answer.
+   */
+  loadRolePermissions: (roleId: string) => Promise<{ codes: string[]; error: string | null }>;
   getRoleMemberCount: (roleId: string) => Promise<number>;
+  /** Drop every row: the app is about to read a different shop. */
+  reset: () => void;
 }
 
 export const useRolesStore = create<RolesState>((set, get) => ({
   roles: [],
   loading: false,
   ready: false,
+
+  // The active shop changed: role templates belong to one tenant.
+  reset: () => set({ roles: [], loading: false, ready: false }),
 
   load: async () => {
     set({ loading: true });
@@ -94,6 +106,15 @@ export const useRolesStore = create<RolesState>((set, get) => ({
       .eq("role_id", roleId);
     if (!data) return [];
     return data.map((r: any) => r.permissions?.code).filter(Boolean);
+  },
+
+  loadRolePermissions: async (roleId) => {
+    const { data, error } = await supabase
+      .from("role_permissions")
+      .select("permissions(code)")
+      .eq("role_id", roleId);
+    if (error) return { codes: [], error: error.message };
+    return { codes: ((data as any[]) ?? []).map((r) => r.permissions?.code).filter(Boolean), error: null };
   },
 
   getRoleMemberCount: async (roleId) => {

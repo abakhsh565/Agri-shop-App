@@ -12,7 +12,7 @@ import ToastContainer from "@/components/ui/Toast";
 import NavTracker from "@/components/ui/NavTracker";
 import FirstRunGate from "@/components/education/FirstRunGate";
 import ContextHelp from "@/components/education/ContextHelp";
-import { useT } from "@/lib/i18n";
+import { useT, tNow } from "@/lib/i18n";
 import { useBootstrapData } from "@/stores/useBootstrapData";
 import { useShopStore } from "@/stores/shopStore";
 import ShopAccessNotice, { useNoActiveShop } from "@/components/shop/ShopAccessNotice";
@@ -128,7 +128,7 @@ export default function EmployeeLayout() {
   const showTabBar = isTopLevel(location.pathname);
 
   // Scan button handler
-  const findByBarcode = useProductsStore((s) => s.findByBarcode);
+  const resolveByCode = useProductsStore((s) => s.resolveByCode);
   const { addToast: empAddToast } = useUIStore();
   const [empScanning, setEmpScanning] = useState(false);
   const [showManualScan, setShowManualScan] = useState(false);
@@ -143,11 +143,13 @@ export default function EmployeeLayout() {
         cancel: t("common.cancel"),
       });
       if (result) {
-        const product = findByBarcode(result.barcode);
+        const product = await resolveByCode(result.barcode);
         if (product) {
           navigate(`/employee/sale/products/${product.id}`);
         } else {
-          empAddToast(`No product found for "${result.barcode}"`, "error");
+          // Was an English sentence built here by hand, so an employee reading Urdu was
+          // told the code was unknown in a language the shop does not use.
+          empAddToast(tNow("copy.noProductForCode", { code: result.barcode }), "error");
         }
       } else {
         setShowManualScan(true);
@@ -159,9 +161,9 @@ export default function EmployeeLayout() {
     }
   }
 
-  function handleManualScanSubmit() {
+  async function handleManualScanSubmit() {
     if (manualBarcode.trim().length >= 3) {
-      const product = findByBarcode(manualBarcode.trim());
+      const product = await resolveByCode(manualBarcode.trim());
       if (product) {
         navigate(`/employee/sale/products/${product.id}`);
       } else {

@@ -200,7 +200,7 @@ export default function ProductDetailPage() {
           <div className="text-center" style={{ borderLeft: "1px solid var(--divider)", borderRight: "1px solid var(--divider)" }}>
             <p className="ds-section-label" style={{ color: "var(--text-secondary)" }}>{t("products.stock")}</p>
             <p className="text-sm font-bold mt-0.5" style={{ color: "var(--text-primary)" }}>
-              {totalStock} {unitLabel(product.baseUnit)}
+              {t("common.itemsCount", { count: String(totalStock) })}
             </p>
           </div>
           <div className="text-center">
