@@ -1,4 +1,5 @@
 import BusinessSettingsSheet from '@/components/ui/BusinessSettingsSheet';
+import StockAlertsSheet from '@/components/ui/StockAlertsSheet';
 import { useNavigate } from "react-router-dom";
 import { useEffect, useRef, useState } from "react";
 import StatusBar from "@/components/ui/StatusBar";
@@ -14,7 +15,7 @@ import { clearDeviceSession } from "@/lib/deviceSession";
 import { hasPin } from "@/lib/pinLock";
 import { useT } from "@/lib/i18n";
 import {
-  Lock, Globe, ChevronRight, Moon, Sun, SlidersHorizontal,
+  Lock, Globe, ChevronRight, Moon, Sun, SlidersHorizontal, AlertTriangle,
   Pencil, Loader2, Save, LogOut, X, Trash2,
 } from "lucide-react";
 import { uploadImage } from "@/lib/storage";
@@ -43,6 +44,9 @@ export default function AdminSettingsPage() {
   const [deletingAccount, setDeletingAccount] = useState(false);
   // Which rows the owner has moved onto this screen, and the panel that moves them back.
   const [customizing, setCustomizing] = useState(false);
+  // The shop's own low-stock policy. It sits here rather than on the suite because it is a
+  // notification preference, next to the one that decides where notifications go.
+  const [showStockAlerts, setShowStockAlerts] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isUrdu = language === "ur";
   const base = useShellBase();
@@ -364,10 +368,22 @@ export default function AdminSettingsPage() {
                   />
                 );
               })}
+            {/* When the shop is warned about low stock, and how loudly. The number this
+                sets is the one a new product starts at; a product that has been given its
+                own number on the product form keeps it. */}
+            <ListRow
+              onClick={() => setShowStockAlerts(true)}
+              icon={AlertTriangle}
+              title={t("settings.lowStockAlerts")}
+              meta={t("settings.lowStockAlerts.hint")}
+              testId="settings-stock-alerts"
+              trailing={<ChevronRight size={14} style={{ color: "var(--text-secondary)" }} className="shrink-0" />}
+            />
           </ListCard>
         </div>
 
         {showBusinessSettings && <BusinessSettingsSheet onClose={() => setShowBusinessSettings(false)} onSave={() => {}} />}
+        {showStockAlerts && <StockAlertsSheet onClose={() => setShowStockAlerts(false)} />}
 
         {/* The shop's work is not on this screen.
             Employees, Companies, Inventory, Roles and Crop configuration each had a row here

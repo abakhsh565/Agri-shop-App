@@ -8,6 +8,7 @@
 
 import type { Customer, Product, Company } from "@/types";
 import { pkDate, pkDateFromISO } from "@/lib/pkDate";
+import { productLowStockThreshold } from "@/lib/formatters";
 
 // ─── Signal Types ─────────────────────────────────────────────────────────────
 
@@ -360,11 +361,14 @@ function computeLowStockSignals(
   return products
     .filter((p) => {
       if (p.stockQty <= 0.01) return false; // handled by out_of_stock
-      const threshold = p.variants?.[0]?.lowStockThreshold ?? 5;
-      return p.stockQty <= threshold;
+      return p.stockQty <= productLowStockThreshold(p.variants ?? []);
     })
     .map((p) => {
-      const threshold = p.variants?.[0]?.lowStockThreshold ?? 5;
+      // `productLowStockThreshold` — the shared rule in `formatters`, which takes the
+      // most demanding variant. This used to read `variants[0]?.lowStockThreshold ?? 5`,
+      // so a product sold in 500ml and 1L packs was judged by whichever pack happened to
+      // come first, and the two answers disagreed with every other screen in the app.
+      const threshold = productLowStockThreshold(p.variants ?? []);
       // Priority: lower ratio = higher priority within warning
       const ratio = threshold > 0 ? p.stockQty / threshold : 1;
       const priority = Math.round((1 - ratio) * 60) + 20; // 30-50 range

@@ -148,7 +148,16 @@ export default function CartPage() {
         const product = products.find((p) => p.variants.some((v) => v.id === variantId));
         const variant = product?.variants.find((v) => v.id === variantId);
         if (product && variant) {
-          checkAndNotifyLowStock(product.id, product.name, variant.stockQty - soldQty, variant.lowStockThreshold);
+          // The level before this sale is what lets "only when it crosses the line" mean
+          // what it says: selling ten packs in an afternoon crosses once, and the shop is
+          // told once. Without it the rule could only guess at a crossing.
+          checkAndNotifyLowStock(
+            product.id,
+            product.name,
+            variant.stockQty - soldQty,
+            variant.lowStockThreshold,
+            variant.stockQty,
+          );
         }
       }
       // Due date is now persisted atomically inside the create_sale RPC.
