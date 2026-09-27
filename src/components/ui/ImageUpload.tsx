@@ -11,6 +11,13 @@ interface ImageUploadProps {
   /** "circle" for people/logos, "square" for products. */
   shape?: "circle" | "square";
   label?: string;
+  /**
+   * Tile edge in pixels. Defaults to the 112px block this has always drawn, so every
+   * existing call site is unchanged. Small sizes drop the caption (it cannot fit) and
+   * shrink the badge, which is what lets a form put the picture *beside* a field instead
+   * of giving it the whole top of the screen.
+   */
+  size?: number;
 }
 
 /**
@@ -25,6 +32,7 @@ export default function ImageUpload({
   onChange,
   shape = "square",
   label,
+  size = 112,
 }: ImageUploadProps) {
   const t = useT();
   // The default label used to be the English string "Add photo", so any call site
@@ -37,6 +45,7 @@ export default function ImageUpload({
   const [confirmRemove, setConfirmRemove] = useState(false);
 
   const radius = shape === "circle" ? "9999px" : "16px";
+  const tiny = size < 72;
 
   async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -81,8 +90,8 @@ export default function ImageUpload({
         disabled={busy}
         className="relative flex items-center justify-center overflow-hidden transition-transform active:scale-95"
         style={{
-          width: shape === "circle" ? 96 : 112,
-          height: shape === "circle" ? 96 : 112,
+          width: shape === "circle" ? size - 16 : size,
+          height: shape === "circle" ? size - 16 : size,
           borderRadius: radius,
           border: "1.5px dashed var(--divider)",
           background: "var(--surface-2)",
@@ -92,8 +101,8 @@ export default function ImageUpload({
           <img src={preview} alt={labelText} className="w-full h-full object-cover" />
         ) : (
           <div className="flex flex-col items-center gap-1" style={{ color: "var(--text-secondary)" }}>
-            <ImagePlus size={22} />
-            <span className="text-11 font-medium">{labelText}</span>
+            <ImagePlus size={tiny ? 18 : 22} />
+            {!tiny && <span className="text-11 font-medium">{labelText}</span>}
           </div>
         )}
 
@@ -105,10 +114,12 @@ export default function ImageUpload({
 
         {!busy && (
           <span
-            className="absolute bottom-1 end-1 w-6 h-6 rounded-full flex items-center justify-center shadow"
+            className={`absolute rounded-full flex items-center justify-center shadow ${
+              tiny ? "bottom-0.5 end-0.5 w-5 h-5" : "bottom-1 end-1 w-6 h-6"
+            }`}
             style={{ background: "var(--brand)", color: "#0a0a0a" }}
           >
-            <Camera size={12} strokeWidth={2.5} />
+            <Camera size={tiny ? 10 : 12} strokeWidth={2.5} />
           </span>
         )}
       </button>

@@ -1,10 +1,12 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
+import { Fingerprint, Loader2 } from "lucide-react";
 import AuthLayout from "@/components/layout/AuthLayout";
 import NavHeader from "@/components/ui/NavHeader";
 import PINInput from "@/components/ui/PINInput";
 import Button from "@/components/ui/Button";
 import { verifyPinDetailed, clearPin } from "@/lib/pinLock";
+import { biometricPlatformAvailable, hasBiometricEnrolment, unlockWithBiometric } from "@/lib/biometric";
 import { useAuthStore } from "@/stores/authStore";
 import { getUserFromSession } from "@/lib/auth";
 import type { User } from "@/types";
@@ -32,6 +34,11 @@ export default function PINLoginPage() {
   const [error, setError] = useState("");
   const [shake, setShake] = useState(false);
   const [verifying, setVerifying] = useState(false);
+  // "hidden" also covers a phone with no finger reader: the button is only drawn when
+  // there is something behind it.
+  const [bioState, setBioState] = useState<"hidden" | "ready" | "working" | "failed">("hidden");
+  /** The phone is asked once, on arrival. A second automatic prompt is a nag. */
+  const promptedRef = useRef(false);
 
   if (!routeUserOrAuth) {
     // No user at all → go to login
@@ -41,19 +48,70 @@ export default function PINLoginPage() {
 
   const user: User = routeUserOrAuth;
 
+  /**
+   * Enrolling a fingerprint is only worth doing if the app then asks for it.
+   *
+   * So the prompt happens on arrival, unprompted, whenever this account has a finger
+   * enrolled on this phone — which is the entire point of enrolling. Cancelling costs
+   * nothing: the keypad is underneath, unchanged, and the button stays there to retry.
+   */
+  useEffect(() => {
+    const who = routeUser ?? authUser;
+    if (!who || !hasBiometricEnrolment(who.id)) return;
+    let alive = true;
+    biometricPlatformAvailable().then((available) => {
+      if (!alive || !available) return;
+      setBioState("ready");
+      if (!promptedRef.current) {
+        promptedRef.current = true;
+        void runBiometricUnlock();
+      }
+    });
+    return () => { alive = false; };
+  }, [routeUser?.id, authUser?.id]);
+
+  /** The one way into the app, whichever check got us here. */
+  async function enterApp() {
+    // Re-fetch latest user data from DB so profile changes made by an admin (or elsewhere)
+    // are reflected; the PIN and the fingerprint both land here.
+    const freshUser = await getUserFromSession();
+    setUser(freshUser ?? user);
+    const dest = user.role === "admin" || user.role === "co_admin"
+      ? "/admin/dashboard" : "/employee/dashboard";
+    navigate(dest, { replace: true });
+  }
+
+  async function runBiometricUnlock() {
+    if (bioState === "working") return;
+    setError("");
+    setBioState("working");
+    const result = await unlockWithBiometric(user.id);
+    if (result.status === "ok") {
+      await enterApp();
+      return;
+    }
+    if (result.status === "not_enrolled") {
+      // A stale record on the phone. Hide the button rather than offering something that
+      // cannot work; the PIN below is untouched.
+      setBioState("hidden");
+      return;
+    }
+    if (result.status === "cancelled") {
+      // Dismissed on purpose — say nothing about it.
+      setBioState("ready");
+      return;
+    }
+    setBioState("failed");
+    setError(t("fingerprint.failed"));
+  }
+
   async function handlePinComplete(val: string) {
     if (val.length < 4 || verifying) return;
     setVerifying(true);
     try {
       const result = await verifyPinDetailed(user.id, val);
       if (result.status === "ok") {
-        // PIN correct → re-fetch latest user data from DB to ensure
-        // profile changes made by admin (or elsewhere) are reflected
-        const freshUser = await getUserFromSession();
-        setUser(freshUser ?? user);
-        const dest = user.role === "admin" || user.role === "co_admin"
-          ? "/admin/dashboard" : "/employee/dashboard";
-        navigate(dest, { replace: true });
+        await enterApp();
       } else if (result.status === "no_pin") {
         // No PIN on the server for this user (never set, or cleared). This device's marker is
         // stale, so drop it — that is what makes the code screen offer to set a PIN — then go
@@ -130,6 +188,22 @@ export default function PINLoginPage() {
         </div>
 
         <PINInput value={pinValue} onChange={handleChange} error={!!error} shake={shake} />
+
+        {bioState !== "hidden" && (
+          <button
+            type="button"
+            onClick={() => { if (bioState !== "working") void runBiometricUnlock(); }}
+            disabled={bioState === "working"}
+            data-testid="use-fingerprint"
+            className="flex items-center gap-2 h-11 px-5 rounded-full text-13 font-bold ds-pressable disabled:opacity-60"
+            style={{ background: "var(--surface-2)", color: "var(--text-primary)", border: "1px solid var(--divider)" }}
+          >
+            {bioState === "working"
+              ? <Loader2 size={16} className="animate-spin" />
+              : <Fingerprint size={16} style={{ color: "var(--brand-dark)" }} />}
+            {bioState === "working" ? t("fingerprint.checking") : t("fingerprint.use")}
+          </button>
+        )}
 
         {verifying && (
           <div className="flex items-center gap-2">

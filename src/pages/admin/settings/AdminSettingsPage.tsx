@@ -16,7 +16,7 @@ import { hasPin } from "@/lib/pinLock";
 import { useT } from "@/lib/i18n";
 import {
   Lock, Globe, ChevronRight, Moon, Sun, SlidersHorizontal, AlertTriangle,
-  Pencil, Loader2, Save, LogOut, X, Trash2,
+  Fingerprint, Check, Pencil, Loader2, Save, LogOut, X, Trash2,
 } from "lucide-react";
 import { uploadImage } from "@/lib/storage";
 import { APP_NAME, APP_VERSION } from "@/lib/brand";
@@ -24,6 +24,13 @@ import { supabase } from "@/lib/supabase";
 import { deleteAccount } from "@/lib/auth";
 import { OWNER_ROWS, useOwnerRows } from "@/lib/ownerRows";
 import { useShellBase } from "@/lib/useShellBase";
+import {
+  biometricPlatformAvailable,
+  enrolBiometric,
+  hasBiometricEnrolment,
+  removeBiometric,
+  type EnrolResult,
+} from "@/lib/biometric";
 
 const LANG_LABELS: Record<string, string> = { en: "English", ur: "اردو" };
 
@@ -47,12 +54,62 @@ export default function AdminSettingsPage() {
   // The shop's own low-stock policy. It sits here rather than on the suite because it is a
   // notification preference, next to the one that decides where notifications go.
   const [showStockAlerts, setShowStockAlerts] = useState(false);
+  // Fingerprint login. Two-tier state because "off" and "this phone cannot do it" are
+  // different sentences to read, and only one of them is the owner's to change.
+  const [fingerprint, setFingerprint] = useState<"checking" | "on" | "off" | "unavailable">("checking");
+  const [fingerprintBusy, setFingerprintBusy] = useState(false);
+  const [confirmFingerprintOff, setConfirmFingerprintOff] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isUrdu = language === "ur";
   const base = useShellBase();
   const { where, rowsOn, move } = useOwnerRows();
 
   useEffect(() => { applyTheme(theme); }, []);
+
+  // Which of the three states this phone is in. Asked once, when the screen opens, because
+  // the answer decides whether the row is an action or a statement.
+  useEffect(() => {
+    if (!user) return;
+    let alive = true;
+    if (hasBiometricEnrolment(user.id)) {
+      setFingerprint("on");
+      return;
+    }
+    biometricPlatformAvailable().then((available) => {
+      if (alive) setFingerprint(available ? "off" : "unavailable");
+    });
+    return () => { alive = false; };
+  }, [user]);
+
+  /**
+   * Turning it on, from Settings.
+   *
+   * Offered here and at the moment a PIN is first set, which are the two points where the
+   * person has just proved who they are — asking for a fingerprint at any other time would
+   * be asking them to trust a screen they have not yet opened.
+   */
+  async function handleEnrolFingerprint() {
+    if (!user || fingerprintBusy) return;
+    setFingerprintBusy(true);
+    try {
+      const result: EnrolResult = await enrolBiometric(user.id, user.name || user.phone);
+      if (result.status === "ok") {
+        setFingerprint("on");
+        addToast(t("fingerprint.enrolled"), "success");
+      } else if (result.status === "unsupported") {
+        setFingerprint("unavailable");
+        addToast(t("fingerprint.unsupported"), "error");
+      } else if (result.status === "cancelled") {
+        // Dismissing the prompt is a decision, not a failure — say so quietly and leave
+        // the row exactly as it was.
+        addToast(t("fingerprint.cancelled"), "error");
+      } else {
+        addToast(t("fingerprint.unsupported"), "error");
+      }
+    } finally {
+      setFingerprintBusy(false);
+    }
+  }
 
   function handleLogout() {
     if (user) clearDeviceSession(user.phone);
@@ -347,6 +404,34 @@ export default function AdminSettingsPage() {
               title={user && hasPin(user.id) ? t("settings.changePin") : t("settings.setupPin")}
               trailing={<ChevronRight size={14} style={{ color: "var(--text-secondary)" }} className="shrink-0" />}
             />
+            {/* Fingerprint login — the second way into a phone that already belongs to
+                someone. The row has no action when the phone cannot do it: a row that
+                looks tappable and then refuses is worse than one that reads as a fact. */}
+            <ListRow
+              onClick={
+                fingerprint === "on" ? () => setConfirmFingerprintOff(true)
+                : fingerprint === "off" ? handleEnrolFingerprint
+                : undefined
+              }
+              icon={Fingerprint}
+              title={t("settings.fingerprint")}
+              meta={
+                fingerprint === "on" ? t("settings.fingerprint.on")
+                : fingerprint === "off" ? t("settings.fingerprint.off")
+                : fingerprint === "unavailable" ? t("settings.fingerprint.unavailable")
+                : undefined
+              }
+              testId="settings-fingerprint"
+              trailing={
+                fingerprintBusy || fingerprint === "checking" ? (
+                  <Loader2 size={14} className="animate-spin shrink-0" style={{ color: "var(--text-secondary)" }} />
+                ) : fingerprint === "on" ? (
+                  <Check size={16} strokeWidth={2.5} className="shrink-0" style={{ color: "var(--brand-dark)" }} />
+                ) : fingerprint === "off" ? (
+                  <ChevronRight size={14} style={{ color: "var(--text-secondary)" }} className="shrink-0" />
+                ) : undefined
+              }
+            />
             {/* The shop's own records, and only the ones an owner reads without having to do
                 anything: everything that is *work* — people, stock, roles, crops — lives in the
                 owner suite. A row moved here is rendered by the catalogue below, so it is never
@@ -495,6 +580,24 @@ export default function AdminSettingsPage() {
           © 2026 {APP_NAME} · v{APP_VERSION}
         </p>
       </div>
+
+      {/* Turning it off is its own small confirmation, because it is the kind of setting
+          someone taps by accident and then cannot work out how to undo. */}
+      <ConfirmDialog
+        open={confirmFingerprintOff}
+        title={t("fingerprint.removeTitle")}
+        message={t("fingerprint.removeBody")}
+        confirmLabel={t("fingerprint.remove")}
+        cancelLabel={t("common.cancel")}
+        destructive
+        onConfirm={() => {
+          if (user) removeBiometric(user.id);
+          setFingerprint("off");
+          setConfirmFingerprintOff(false);
+          addToast(t("fingerprint.removed"), "success");
+        }}
+        onCancel={() => setConfirmFingerprintOff(false)}
+      />
 
       <ConfirmDialog
         open={showDeleteAccount}
