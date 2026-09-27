@@ -4,6 +4,7 @@ import AuthLayout from "@/components/layout/AuthLayout";
 import NavHeader from "@/components/ui/NavHeader";
 import OTPInput from "@/components/ui/OTPInput";
 import { verifyOTPAndResolveUser, sendOTP, normalizePhone, SESSION_SETUP_FAILED } from "@/lib/auth";
+import { DEMO_OTP_CODE, isDemoOtpMode } from "@/lib/authMode";
 import Button from "@/components/ui/Button";
 import { useAuthStore } from "@/stores/authStore";
 import { useShopRequestsStore } from "@/stores/shopRequestsStore";
@@ -129,9 +130,19 @@ export default function RegisterOTPPage() {
         <div className="flex flex-col gap-2">
           <p className="text-xl font-bold text-foreground">{t("auth.enterCode")}</p>
           <p className="text-sm text-caption">
-            We sent a 6-digit code to{" "}
-            <span className="font-medium text-foreground">{pendingPhone}</span>
+            {t("auth.otpSentToNumber", { phone: pendingPhone ?? "" })}
           </p>
+          <button
+            type="button"
+            onClick={() => navigate("/register")}
+            className="self-start text-sm font-medium text-foreground underline underline-offset-2"
+          >
+            {t("auth.changeNumber")}
+          </button>
+          {/* No SMS provider in this build, so the code stays visible here. */}
+          {isDemoOtpMode && (
+            <p className="text-12 text-caption">{t("auth.demoCodeHint", { code: DEMO_OTP_CODE })}</p>
+          )}
         </div>
 
         <OTPInput

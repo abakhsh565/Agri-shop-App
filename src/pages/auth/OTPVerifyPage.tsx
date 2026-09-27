@@ -166,14 +166,21 @@ export default function OTPVerifyPage() {
         <div className="flex flex-col gap-2">
           <p className="text-xl font-bold text-foreground">{t("auth.enterCode")}</p>
           <p className="text-sm text-caption">
-            {/* Demo mode has no SMS provider, so telling someone "we sent a code"
-                would be false. The truth goes on screen instead. */}
-            {isDemoOtpMode ? (
-              t("auth.demoCodeHint", { code: DEMO_OTP_CODE })
-            ) : (
-              t("auth.codeSentToNumber", { phone: pendingPhone ?? "" })
-            )}
+            {t("auth.otpSentToNumber", { phone: pendingPhone ?? "" })}
           </p>
+          <button
+            type="button"
+            onClick={() => navigate("/login")}
+            className="self-start text-sm font-medium text-foreground underline underline-offset-2"
+          >
+            {t("auth.changeNumber")}
+          </button>
+          {/* This build has no SMS provider, so the code itself has to be somewhere on the
+              screen or nobody can sign in. Kept quiet, under the line that says what is
+              happening. */}
+          {isDemoOtpMode && (
+            <p className="text-12 text-caption">{t("auth.demoCodeHint", { code: DEMO_OTP_CODE })}</p>
+          )}
         </div>
 
         <OTPInput
