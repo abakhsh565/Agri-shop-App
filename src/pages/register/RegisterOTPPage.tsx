@@ -134,7 +134,7 @@ export default function RegisterOTPPage() {
         className="ds-auth-screen flex flex-col justify-center px-6 flex-1 min-h-0"
         style={{ gap: "var(--auth-rhythm, 20px)", paddingBlock: "var(--auth-pad, 16px)" }}
       >
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-2 text-center">
           <p className="text-xl font-bold text-foreground">{t("auth.enterCode")}</p>
           {/* The link sits on the same line as the number it changes. */}
           <p className="text-sm text-caption">

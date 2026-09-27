@@ -172,10 +172,12 @@ export default function OTPVerifyPage() {
         className="ds-auth-screen flex flex-col justify-center px-6 flex-1 min-h-0"
         style={{ gap: "var(--auth-rhythm, 20px)", paddingBlock: "var(--auth-pad, 16px)" }}
       >
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-2 text-center">
           <p className="text-xl font-bold text-foreground">{t("auth.enterCode")}</p>
-          {/* The link sits on the same line as the number it changes, so "which number" and
-              "not that one" are read together. */}
+          {/* The heading, the number and the boxes are one centred column: the boxes are
+              already centred by `.ds-otp-row`, and a left-aligned heading above a centred
+              row read as two separate things. The link sits on the same line as the number
+              it changes, so "which number" and "not that one" are read together. */}
           <p className="text-sm text-caption">
             {t("auth.otpSentToNumber", { phone: pendingPhone ?? "" })}{" "}
             <button
