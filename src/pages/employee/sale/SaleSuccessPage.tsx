@@ -1,6 +1,6 @@
 import { useNavigate, useLocation, Navigate } from "react-router-dom";
-import { ShoppingCart, Share2, Download, Home, Check } from "lucide-react";
-import { formatCurrency, formatDateTime } from "@/lib/formatters";
+import { Share2, Download, Home, Check, Printer, ShoppingCart } from "lucide-react";
+import { formatCurrency } from "@/lib/formatters";
 import type { Sale } from "@/types";
 import { useShellBase } from "@/lib/useShellBase";
 import { useUIStore } from "@/stores/uiStore";
@@ -8,6 +8,8 @@ import { useAuthStore } from "@/stores/authStore";
 import { useT } from "@/lib/i18n";
 import { renderReceiptBlob } from "@/lib/receiptRenderer";
 import { clearNav } from "@/lib/navContext";
+import StatusBar from "@/components/ui/StatusBar";
+import Button from "@/components/ui/Button";
 
 function formatDateLong(dateStr: string): string {
   const d = new Date(dateStr);
@@ -19,6 +21,29 @@ function formatTime12(dateStr: string): string {
   return d.toLocaleTimeString("en-PK", { hour: "2-digit", minute: "2-digit", hour12: true });
 }
 
+/**
+ * The end of a sale: one screen, one glance.
+ *
+ * Shape of the screen, and why:
+ *
+ *   • **Nothing scrolls.** The tick, the receipt and every action sit inside a single
+ *     viewport on a normal phone, because this is the moment someone is holding a queue
+ *     and a customer's change. The content column is vertically centred, so a tall screen
+ *     does not leave the card stranded at the top and a short one does not push the buttons
+ *     off the bottom (`overflow-y-auto` is kept only as a last resort for a very short
+ *     landscape window).
+ *   • **`StatusBar` is rendered here like every other screen.** Without it the tick was drawn
+ *     underneath the OS status bar on the phone — the one element that says the sale worked.
+ *   • **The receipt reads like a receipt:** a band naming what it is and when, the few fields
+ *     that matter, a perforation, then the amount on its own line. That ordering is the whole
+ *     point of the format: the number you say out loud is the last thing on the card.
+ *   • **The band is the app's own brand tone, not a borrowed gradient.** It is the same
+ *     primary colour as the buttons beneath it, with the same near-black label, so the screen
+ *     belongs to this design system rather than to the reference it was drawn from.
+ *   • **Print is a real print**, not a screenshot: the same receipt image the share sheet
+ *     sends is put in a hidden frame and sent to the platform's print dialog, with a fallback
+ *     to opening the image when the WebView has no print support.
+ */
 export default function SaleSuccessPage() {
   const navigate = useNavigate();
   const base = useShellBase();
@@ -46,6 +71,9 @@ export default function SaleSuccessPage() {
     createdAt: sale.createdAt ?? new Date().toISOString(),
     id: sale.id ?? "",
   };
+
+  const paidInFull = s.outstandingBalance <= 0;
+  const isCredit = s.paymentType !== "full" || !paidInFull;
 
   async function handleShare() {
     const blob = await renderReceiptBlob(s, t);
@@ -83,126 +111,172 @@ export default function SaleSuccessPage() {
     addToast(t("saleSuccess.receiptDownloaded"), "success");
   }
 
-  const ROWS = [
+  async function handlePrint() {
+    const blob = await renderReceiptBlob(s, t);
+    if (!blob) { addToast(t("saleSuccess.failedGenerate"), "error"); return; }
+    const url = URL.createObjectURL(blob);
+    const frame = document.createElement("iframe");
+    frame.setAttribute("aria-hidden", "true");
+    frame.style.position = "fixed";
+    frame.style.width = "0";
+    frame.style.height = "0";
+    frame.style.border = "0";
+    document.body.appendChild(frame);
+    const cleanup = () => {
+      frame.remove();
+      URL.revokeObjectURL(url);
+    };
+    const doc = frame.contentDocument;
+    if (!doc || typeof frame.contentWindow?.print !== "function") {
+      // No print dialog in this WebView (Android's, on some devices): hand the image to the
+      // system instead of pretending the receipt was printed.
+      frame.remove();
+      window.open(url, "_blank");
+      addToast(t("copy.openingPrint"), "info");
+      return;
+    }
+    doc.write(
+      `<!doctype html><html><head><meta charset="utf-8"><title>${s.saleNumber}</title>` +
+      `<style>@page{margin:8mm}html,body{margin:0;background:#fff}img{width:100%;max-width:420px;display:block;margin:0 auto}</style>` +
+      `</head><body><img src="${url}" alt="" onload="setTimeout(function(){window.focus();window.print();},50)"></body></html>`
+    );
+    doc.close();
+    addToast(t("copy.openingPrint"), "info");
+    // Long enough for the dialog to have taken the image, then release the frame and the URL.
+    setTimeout(cleanup, 60_000);
+  }
+
+  const rows: Array<{ label: string; value: string; bold?: boolean }> = [
     { label: t("saleSuccess.customer"), value: s.customerName, bold: true },
-    ...(s.customerPhone ? [{ label: t("saleSuccess.phone"), value: s.customerPhone, bold: false }] : []),
-    { divider: true },
-    { label: t("saleSuccess.totalAmount"), value: formatCurrency(s.totalAmount), bold: true },
-    { label: t("saleSuccess.paid"), value: formatCurrency(s.amountPaid), bold: true },
-    ...(s.outstandingBalance > 0
-      ? [{ label: t("saleSuccess.outstanding"), value: formatCurrency(s.outstandingBalance), bold: true, highlight: true }]
-      : []),
-    { divider: true },
-    { label: t("saleSuccess.payment"), value: s.paymentMethod === "cash" ? t("sale.cash") : t("sale.bankTransfer"), bold: true },
-    { label: t("saleSuccess.items"), value: `${s.items.length} ${t("common.items")}`, bold: false },
-    { label: t("saleSuccess.dateTime"), value: formatDateTime(s.createdAt), bold: false },
-    { label: t("saleSuccess.soldBy"), value: s.employeeName === user?.name ? t("saleSuccess.you") : s.employeeName, bold: true },
+    ...(s.customerPhone ? [{ label: t("saleSuccess.phone"), value: s.customerPhone }] : []),
+    { label: t("saleSuccess.payment"), value: s.paymentMethod === "cash" ? t("sale.cash") : t("sale.bankTransfer") },
+    { label: t("saleSuccess.items"), value: `${s.items.length} ${t("common.items")}` },
+    { label: t("saleSuccess.soldBy"), value: s.employeeName === user?.name ? t("saleSuccess.you") : s.employeeName },
   ];
 
   return (
-    <div
-      className="flex flex-col w-full h-full overflow-hidden"
-      style={{ background: "var(--background)", color: "var(--text-primary)" }}
-    >
-      {/* Scrollable body */}
-      <div className="flex-1 overflow-y-auto">
-        <div className="px-3 sm:px-6 pt-3 sm:pt-4 pb-2">
-          {/* Success icon */}
-          <div className="flex justify-center mb-3 sm:mb-4 animate-pop-in">
-            <div
-              className="w-14 h-14 sm:w-16 sm:h-16 rounded-full flex items-center justify-center"
-              style={{ background: "var(--brand)", boxShadow: "0 0 0 10px rgba(132,204,22,0.15)" }}
-            >
-              <Check size={28} strokeWidth={2.5} style={{ color: "#0a0a0a" }} />
-            </div>
-          </div>
+    <div className="flex flex-col w-full h-full" style={{ background: "var(--background)", color: "var(--text-primary)" }}>
+      <StatusBar />
 
-          {/* Title */}
-          <div className="text-center mb-3 sm:mb-4 animate-fade-in-up">
-            <p className="text-lg sm:text-xl font-bold" style={{ color: "var(--text-primary)" }}>{t("saleSuccess.saleComplete")}</p>
-            <p className="text-xs sm:text-sm" style={{ color: "var(--text-secondary)" }}>
-              {formatCurrency(s.totalAmount)} {s.paymentType === "full" ? t("saleSuccess.received") : t("saleSuccess.booked")}
+      {/* Everything above the actions is centred in the space that is left, so the screen reads
+          as one page rather than a page with a gap at the bottom. */}
+      <div className="flex-1 min-h-0 overflow-y-auto flex flex-col justify-center px-4 py-2">
+        <div className="w-full max-w-[420px] mx-auto">
+          {/* Result */}
+          <div className="flex flex-col items-center text-center mb-3 animate-pop-in">
+            <div
+              className="w-12 h-12 rounded-full flex items-center justify-center"
+              style={{ background: "var(--brand)", boxShadow: "0 0 0 8px rgba(132,204,22,0.16)" }}
+            >
+              <Check size={26} strokeWidth={2.5} style={{ color: "#0a0a0a" }} />
+            </div>
+            <p className="text-lg font-bold mt-2.5">{t("saleSuccess.saleComplete")}</p>
+            <p className="text-xs mt-0.5" style={{ color: "var(--text-secondary)" }}>
+              {formatCurrency(s.totalAmount)} {paidInFull ? t("saleSuccess.received") : t("saleSuccess.booked")}
             </p>
           </div>
 
-          {/* Receipt card */}
+          {/* Receipt */}
           <div
-            className="w-full rounded-[var(--radius-tile)] sm:rounded-[var(--radius-card)] overflow-hidden animate-fade-in-up delay-225"
-            style={{ border: "1px solid var(--border-light)", background: "var(--surface)" }}
+            className="w-full rounded-[var(--radius-card)] overflow-hidden animate-fade-in-up"
+            style={{ background: "var(--surface)", border: "1px solid var(--divider)" }}
           >
-            {/* Gradient header */}
-            <div className="px-3 sm:px-5 py-3 sm:py-4 text-white" style={{ background: "linear-gradient(135deg, #a855f7 0%, #ec4899 50%, #f59e0b 100%)" }}>
-              <div className="flex items-center justify-between">
-                <p className="text-sm sm:text-lg font-bold">{t("saleSuccess.saleReceipt")}</p>
-                <p className="text-10 sm:text-xs font-mono opacity-85">{s.saleNumber}</p>
+            {/* Band: what this is, which sale, and when — the three things read first on paper. */}
+            <div className="px-4 py-3" style={{ background: "var(--brand)", color: "#0a0a0a" }}>
+              <div className="flex items-baseline justify-between gap-3">
+                <p className="text-sm font-bold">{t("saleSuccess.saleReceipt")}</p>
+                <p className="text-11 font-mono opacity-80">{s.saleNumber}</p>
               </div>
-              <p className="text-10 sm:text-xs opacity-85 mt-0.5">{formatDateLong(s.createdAt)} • {formatTime12(s.createdAt)}</p>
+              <p className="text-11 opacity-80 mt-0.5">
+                {formatDateLong(s.createdAt)} • {formatTime12(s.createdAt)}
+              </p>
             </div>
 
-            {/* Rows */}
-            <div className="px-3 sm:px-5 py-2.5 sm:py-3 flex flex-col gap-1.5 sm:gap-2.5">
-              {ROWS.map((row, i) =>
-                "divider" in row && row.divider ? (
-                  <div key={i} className="w-full h-px" style={{ background: "var(--divider)" }} />
-                ) : (
-                  <div key={i} className="flex items-start justify-between w-full text-11 sm:text-13">
-                    <span style={{ color: "var(--text-secondary)" }}>{"label" in row ? row.label : ""}</span>
-                    <span
-                      className={"bold" in row && (row as any).bold ? "font-bold" : "font-medium"}
-                      style={{ color: "highlight" in row && (row as any).highlight ? "var(--warning)" : "var(--text-primary)", textAlign: "right" }}
-                    >
-                      {"value" in row ? (row as any).value : ""}
-                    </span>
-                  </div>
-                )
+            {/* Fields */}
+            <div className="px-4 py-1">
+              {rows.map((row, i) => (
+                <div
+                  key={row.label}
+                  className="flex items-center justify-between gap-4 py-2 text-xs"
+                  style={{ borderBottom: i < rows.length - 1 ? "1px solid var(--divider)" : "none" }}
+                >
+                  <span style={{ color: "var(--text-secondary)" }}>{row.label}</span>
+                  <span
+                    className={row.bold ? "font-bold text-end" : "font-medium text-end"}
+                    style={{ color: "var(--text-primary)" }}
+                  >
+                    {row.value}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            {/* Perforation: two notches and a dashed rule, the tear-line of a paper receipt. */}
+            <div className="relative h-5 flex items-center">
+              <div className="w-full border-t border-dashed mx-4" style={{ borderColor: "var(--divider)" }} />
+              <div
+                className="absolute w-5 h-5 rounded-full"
+                style={{ insetInlineStart: -10, background: "var(--background)" }}
+              />
+              <div
+                className="absolute w-5 h-5 rounded-full"
+                style={{ insetInlineEnd: -10, background: "var(--background)" }}
+              />
+            </div>
+
+            {/* The amount, on its own. */}
+            <div className="px-4 pb-4 pt-1">
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-xs font-bold" style={{ color: "var(--text-secondary)" }}>
+                  {t("saleSuccess.totalAmount")}
+                </span>
+                <span className="text-2xl font-bold tabular-nums">{formatCurrency(s.totalAmount)}</span>
+              </div>
+              {isCredit && (
+                <div className="flex items-center justify-between gap-3 mt-1.5 text-11">
+                  <span style={{ color: "var(--text-secondary)" }}>
+                    {t("saleSuccess.paid")} {formatCurrency(s.amountPaid)}
+                  </span>
+                  <span className="font-semibold" style={{ color: "var(--warning)" }}>
+                    {t("saleSuccess.outstanding")} {formatCurrency(s.outstandingBalance)}
+                  </span>
+                </div>
               )}
-            </div>
-
-            {/* Dashed divider */}
-            <div className="flex justify-center px-3 sm:px-5 pb-2">
-              <div className="w-full border-t border-dashed" style={{ borderColor: "var(--divider)" }} />
-            </div>
-
-            {/* Total */}
-            <div className="px-3 sm:px-5 py-2.5 sm:py-3 flex items-center justify-between" style={{ borderTop: "1px solid var(--divider)" }}>
-              <span className="text-xs sm:text-sm font-bold" style={{ color: "var(--text-secondary)" }}>{t("saleSuccess.total")}</span>
-              <span className="text-base sm:text-xl font-bold" style={{ color: "var(--text-primary)" }}>{formatCurrency(s.totalAmount)}</span>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Fixed actions at bottom */}
-      <div className="shrink-0 px-3 sm:px-6 pb-4 sm:pb-6 pt-2 flex flex-col gap-1.5 sm:gap-2 animate-fade-in-up delay-300">
-        <button
-          onClick={handleShare}
-          className="flex h-10 sm:h-11 items-center justify-center gap-2 rounded-full w-full font-bold text-xs sm:text-sm transition-transform active:scale-[0.97]"
-          style={{ background: "var(--brand)", color: "#0a0a0a" }}
-        >
-          <Share2 size={14} strokeWidth={2.5} /> {t("saleSuccess.shareReceipt")}
-        </button>
-        <button
-          onClick={handleDownload}
-          className="flex h-10 sm:h-11 items-center justify-center gap-2 rounded-full w-full font-bold text-xs sm:text-sm transition-transform active:scale-[0.97]"
-          style={{ border: "1px solid var(--border-light)", color: "var(--text-primary)" }}
-        >
-          <Download size={14} strokeWidth={2} /> {t("saleSuccess.downloadReceipt")}
-        </button>
-        <div className="flex gap-2 mt-1">
-          <button
+      {/* Actions — the app's own Button, so the shapes and colours match every other screen. */}
+      <div className="shrink-0 px-4 pb-5 pt-3 flex flex-col gap-2 animate-fade-in-up">
+        <div className="w-full max-w-[420px] mx-auto flex flex-col gap-2">
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" className="flex-1" onClick={handleShare}>
+              <Share2 size={14} strokeWidth={2.5} className="me-1.5" /> {t("saleSuccess.share")}
+            </Button>
+            <Button variant="outline" size="sm" className="flex-1" onClick={handlePrint}>
+              <Printer size={14} strokeWidth={2} className="me-1.5" /> {t("saleSuccess.print")}
+            </Button>
+            <Button variant="outline" size="sm" className="flex-1" onClick={handleDownload}>
+              <Download size={14} strokeWidth={2} className="me-1.5" /> {t("saleSuccess.download")}
+            </Button>
+          </div>
+          <Button
+            variant="primary"
+            size="lg"
+            fullWidth
             onClick={() => { clearNav(); navigate(`${base}/sale`, { replace: true }); }}
-            className="flex-1 flex h-9 sm:h-10 items-center justify-center gap-1.5 rounded-full font-bold text-11 sm:text-xs transition-transform active:scale-[0.97]"
-            style={{ background: "var(--brand)", color: "#0a0a0a" }}
           >
-            <ShoppingCart size={13} strokeWidth={2.5} /> {t("saleSuccess.newSale")}
-          </button>
-          <button
+            <ShoppingCart size={15} strokeWidth={2.5} className="me-1.5" /> {t("saleSuccess.newSale")}
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            fullWidth
             onClick={() => { clearNav(); navigate(`${base}/dashboard`, { replace: true }); }}
-            className="flex-1 flex h-9 sm:h-10 items-center justify-center gap-1.5 rounded-full font-bold text-11 sm:text-xs transition-transform active:scale-[0.97]"
-            style={{ border: "1px solid var(--border-light)", color: "var(--text-secondary)" }}
           >
-            <Home size={13} strokeWidth={2} /> {t("saleSuccess.home")}
-          </button>
+            <Home size={14} strokeWidth={2} className="me-1.5" /> {t("saleSuccess.home")}
+          </Button>
         </div>
       </div>
     </div>

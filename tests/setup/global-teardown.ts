@@ -56,6 +56,28 @@ export async function setup() {
 }
 
 export async function teardown() {
+  // ── Cleaning is OPT-IN, and that is the fix for a real complaint ────────────
+  //
+  // This used to wipe every business row in QA after every vitest run. Hand-built
+  // test data — a shop with customers, a few sales to look at — was gone the next
+  // time anyone ran a test file, so the work had to be entered again and again just
+  // to look at a screen. Nobody asked for that: a test author wants the database
+  // clean, a person poking at the app wants their data kept.
+  //
+  // So the default is now to leave QA exactly as it is found, and cleaning happens
+  // only when it is asked for:
+  //
+  //     QA_CLEAN_AFTER_RUN=1 npx vitest run
+  //     node scripts/clean-test-data.mjs        # or explicitly, on its own
+  //
+  // What is NOT optional is the line printed at the end. Silence was the other half
+  // of this bug: a run must say plainly whether it deleted anything, so nobody has to
+  // guess where their rows went.
+  if (process.env.QA_CLEAN_AFTER_RUN !== '1') {
+    console.log('[QA Cleanup] skipped — QA data left untouched. Set QA_CLEAN_AFTER_RUN=1 to delete test rows after the run.');
+    return;
+  }
+
   // Only clean if QA env is configured
   const databaseUrl = qaDatabaseUrl();
   if (!databaseUrl) {
