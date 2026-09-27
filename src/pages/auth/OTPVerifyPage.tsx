@@ -28,7 +28,9 @@ export default function OTPVerifyPage() {
   const [error, setError] = useState("");
   const [attempts, setAttempts] = useState(0);
   const [countdown, setCountdown] = useState(OTP_VALIDITY);
-  const [resendCountdown, setResendCountdown] = useState(0);
+  // Starts at the cooldown, not at zero: a code was just sent, so Resend arrives disabled and
+  // becomes usable 30 seconds later — the same wait the person gets after pressing it.
+  const [resendCountdown, setResendCountdown] = useState(RESEND_DELAY);
   const verifying = useRef(false);
 
   useEffect(() => {

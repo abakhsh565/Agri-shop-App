@@ -26,7 +26,9 @@ export default function RegisterOTPPage() {
   // (signing them in here would skip the PIN step), and the way in is offered instead.
   const [takenAs, setTakenAs] = useState<"owner" | "employee" | null>(null);
   const [countdown, setCountdown] = useState(OTP_VALIDITY);
-  const [resendCountdown, setResendCountdown] = useState(0);
+  // Starts at the cooldown, not at zero: a code was just sent, so Resend arrives disabled and
+  // becomes usable 30 seconds later.
+  const [resendCountdown, setResendCountdown] = useState(RESEND_DELAY);
   const verifying = useRef(false);
 
   useEffect(() => {
