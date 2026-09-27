@@ -14,14 +14,15 @@ import { clearDeviceSession } from "@/lib/deviceSession";
 import { hasPin } from "@/lib/pinLock";
 import { useT } from "@/lib/i18n";
 import {
-  Lock, Bell, Globe, ChevronRight, Moon, Sun,
-  ClipboardList, Users, Package,
-  Building2, ShieldCheck, Pencil, Loader2, Save, Wheat, LogOut, X, Trash2,
+  Lock, Globe, ChevronRight, Moon, Sun, SlidersHorizontal,
+  Pencil, Loader2, Save, LogOut, X, Trash2,
 } from "lucide-react";
 import { uploadImage } from "@/lib/storage";
 import { APP_NAME, APP_VERSION } from "@/lib/brand";
 import { supabase } from "@/lib/supabase";
 import { deleteAccount } from "@/lib/auth";
+import { OWNER_ROWS, useOwnerRows } from "@/lib/ownerRows";
+import { useShellBase } from "@/lib/useShellBase";
 
 const LANG_LABELS: Record<string, string> = { en: "English", ur: "اردو" };
 
@@ -40,8 +41,12 @@ export default function AdminSettingsPage() {
   const [showBusinessSettings, setShowBusinessSettings] = useState(false);
   const [showDeleteAccount, setShowDeleteAccount] = useState(false);
   const [deletingAccount, setDeletingAccount] = useState(false);
+  // Which rows the owner has moved onto this screen, and the panel that moves them back.
+  const [customizing, setCustomizing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isUrdu = language === "ur";
+  const base = useShellBase();
+  const { where, rowsOn, move } = useOwnerRows();
 
   useEffect(() => { applyTheme(theme); }, []);
 
@@ -229,11 +234,11 @@ export default function AdminSettingsPage() {
         {editing && (
           <div
             className="fixed inset-0 z-50 flex items-end"
-            style={{ background: "rgba(0,0,0,0.5)" }}
+            style={{ background: "var(--scrim)" }}
             onClick={() => setEditing(false)}
           >
             <div            className="w-full max-w-[390px] mx-auto rounded-t-[24px] p-6 flex flex-col gap-4"
-            style={{ background: "var(--surface-2)", border: "1px solid var(--divider)", borderBottom: "none" }}
+            style={{ background: "var(--tone-sheet)", border: "1px solid var(--divider)", borderBottom: "none" }}
             onClick={(e) => e.stopPropagation()}
           >
               {/* Handle bar */}
@@ -300,6 +305,9 @@ export default function AdminSettingsPage() {
             line under the label rather than a value pushed to the far right. */}
         <div className="px-4 pt-3.5 animate-fade-in-up delay-75">
           <ListCard>
+            {/* "My shops" used to open here as well as on the owner suite's own card. Which shop
+                you are working in is a fact about the shop, so it is named once, on the suite.
+                No heading anywhere on this page: the rows are self-evident. */}
             <ListRow
               onClick={cycleLanguage}
               icon={Globe}
@@ -329,59 +337,115 @@ export default function AdminSettingsPage() {
                 </div>
               }
             />
-            {[
-              { icon: Lock,         label: user && hasPin(user.id) ? (t("settings.changePin") || "Change PIN") : (t("settings.setupPin") || "Setup PIN"),   action: () => navigate("/login/pin-set", { state: { returnTo: "/admin/settings" } }) },
-              { icon: Bell,         label: t("settings.notifications"), action: () => navigate("/admin/notifications") },
-              { icon: ClipboardList, label: t("settings.activityLog"), action: () => navigate("/admin/activity") },
-            ].map((s) => {
-              const Icon = s.icon;
-              return (
-                <ListRow
-                  key={s.label}
-                  onClick={s.action ?? undefined}
-                  icon={Icon}
-                  title={s.label}
-                  // The primitive owns the trailing value and the chevron; a screen that
-                  // wraps them in its own flex box restates the row's own geometry.
-                  trailing={<ChevronRight size={14} style={{ color: "var(--text-secondary)" }} className="shrink-0" />}
-                />
-              );
-            })}
+            <ListRow
+              onClick={() => navigate("/login/pin-set", { state: { returnTo: "/admin/settings" } })}
+              icon={Lock}
+              title={user && hasPin(user.id) ? t("settings.changePin") : t("settings.setupPin")}
+              trailing={<ChevronRight size={14} style={{ color: "var(--text-secondary)" }} className="shrink-0" />}
+            />
+            {/* The shop's own records, and only the ones an owner reads without having to do
+                anything: everything that is *work* — people, stock, roles, crops — lives in the
+                owner suite. A row moved here is rendered by the catalogue below, so it is never
+                shown twice. */}
+            {rowsOn("settings")
+              .filter((row) => row.group === "app")
+              .map((row) => {
+                const Icon = row.icon;
+                return (
+                  <ListRow
+                    key={row.id}
+                    anchor={row.anchor}
+                    onClick={() => row.path && navigate(`${base}${row.path}`)}
+                    icon={Icon}
+                    title={t(row.labelKey)}
+                    trailing={
+                      <ChevronRight size={14} style={{ color: "var(--text-secondary)" }} className="shrink-0" />
+                    }
+                  />
+                );
+              })}
           </ListCard>
         </div>
 
         {showBusinessSettings && <BusinessSettingsSheet onClose={() => setShowBusinessSettings(false)} onSave={() => {}} />}
 
-        {/* The work — placed second because an owner opens Settings to run the shop, but
-            under comfort because language and dark mode are changed far more often. No
-            heading: the rows are self-evident, and the reference names nothing. */}
-        <div className="px-4 pt-3.5 animate-fade-in-up delay-100">
+        {/* The shop's work is not on this screen.
+            Employees, Companies, Inventory, Roles and Crop configuration each had a row here
+            *and* a row in the owner suite, so the same destination had two doors and the two
+            copies could disagree. They live in the suite now — which is the shop's own screen —
+            and this block exists only for an owner who moved one back: it renders whatever the
+            catalogue says belongs here, and nothing when nothing does. */}
+        {rowsOn("settings").some((row) => row.group !== "app") && (
+          <div className="px-4 pt-3.5 animate-fade-in-up delay-100">
+            <ListCard>
+              {rowsOn("settings")
+                .filter((row) => row.group !== "app")
+                .map((row) => {
+                  const Icon = row.icon;
+                  return (
+                    <ListRow
+                      key={row.id}
+                      anchor={row.anchor}
+                      onClick={() => (row.path ? navigate(`${base}${row.path}`) : setShowBusinessSettings(true))}
+                      icon={Icon}
+                      title={t(row.labelKey)}
+                      meta={row.metaKey ? t(row.metaKey) : undefined}
+                      trailing={<ChevronRight size={14} style={{ color: "var(--text-secondary)" }} className="shrink-0" />}
+                    />
+                  );
+                })}
+            </ListCard>
+          </div>
+        )}
+
+        {/* Where each row lives.
+            The owner suite is the screen for the shop and this is the screen for the phone and
+            the person, but which one a shopkeeper reaches for is habit — so the arrangement is
+            theirs to change. One tap moves a row across; the choice is remembered per account,
+            in the shop it was made in, on this device only. */}
+        <div className="px-4 pt-3.5 animate-fade-in-up delay-150">
           <ListCard>
-            {[
-              { icon: Users,       label: t("admin.employees") ?? "Employees",  action: () => navigate("/admin/employees") },
-              { icon: ShieldCheck, label: t("settings.rolesAccess"),          action: () => navigate("/admin/settings/roles") },
-              { icon: Building2,   label: t("admin.companies")  ?? "Companies", action: () => navigate("/admin/companies") },
-              { icon: Package,     label: t("admin.inventory")  ?? "Inventory", action: () => navigate("/admin/products") },
-            ].map((row) => {
-              const Icon = row.icon;
-              return (
-                <ListRow
-                  key={row.label}
-                  onClick={row.action}
-                  icon={Icon}
-                  title={row.label}
-                  trailing={<ChevronRight size={14} style={{ color: "var(--text-secondary)" }} className="shrink-0" />}
-                />
-              );
-            })}
-            {/* Crop configuration closes the work block: it is setup, not a daily task. */}
             <ListRow
-              onClick={() => setShowBusinessSettings(true)}
-              icon={Wheat}
-              title={t("common.cropConfiguration")}
-              meta={t("common.configureReminder")}
-              trailing={<ChevronRight size={14} style={{ color: "var(--text-secondary)" }} className="shrink-0" />}
+              onClick={() => setCustomizing((v) => !v)}
+              icon={SlidersHorizontal}
+              title={customizing ? t("settings.done") : t("settings.customize")}
+              meta={customizing ? undefined : t("settings.customizeHint")}
+              testId="settings-customize"
+              trailing={
+                <ChevronRight
+                  size={14}
+                  className="shrink-0 transition-transform"
+                  style={{ color: "var(--text-secondary)", transform: customizing ? "rotate(90deg)" : undefined }}
+                />
+              }
             />
+            {customizing &&
+              OWNER_ROWS.map((row) => {
+                const Icon = row.icon;
+                const here = where(row.id) === "settings";
+                return (
+                  // Deliberately no row action while customizing: the only thing a tap can do
+                  // here is move the row, so the panel cannot close itself out from under the
+                  // next row the owner was about to move.
+                  <ListRow
+                    key={row.id}
+                    icon={Icon}
+                    title={t(row.labelKey)}
+                    description={here ? t("settings.livesHere") : t("settings.livesInSuite")}
+                    trailing={
+                      <button
+                        type="button"
+                        data-testid={`move-${row.id}`}
+                        onClick={() => move(row.id, here ? "suite" : "settings")}
+                        className="shrink-0 rounded-full px-3 h-8 text-12 font-bold"
+                        style={{ background: "var(--surface-2)", color: "var(--text-primary)" }}
+                      >
+                        {here ? t("settings.moveToSuite") : t("settings.moveHere")}
+                      </button>
+                    }
+                  />
+                );
+              })}
           </ListCard>
         </div>
 

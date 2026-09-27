@@ -1,12 +1,9 @@
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  Package,
-  Building2,
-  Users,
   UserCheck,
   ShoppingCart,
   BarChart2,
-  Layers,
   CreditCard,
   Settings,
   History,
@@ -18,11 +15,24 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import StatusBar from "@/components/ui/StatusBar";
+import BusinessSettingsSheet from "@/components/ui/BusinessSettingsSheet";
+import { useOwnerRows, type SuiteGroup } from "@/lib/ownerRows";
 import ListCard from "@/components/ui/ListCard";
 import ListRow from "@/components/ui/ListRow";
 import { useT, type I18nKey } from "@/lib/i18n";
 import { useShellBase } from "@/lib/useShellBase";
 import { useDir } from "@/lib/dirContext";
+import { useShopStore } from "@/stores/shopStore";
+import { useAuthStore } from "@/stores/authStore";
+
+/**
+ * Where a row sits inside its group. An id the group's `order` does not name keeps the row
+ * visible and puts it after the ones that were named, rather than dropping it.
+ */
+function rankIn(group: (typeof GROUPS)[number], id: string): number {
+  const index = group.order.indexOf(id);
+  return index === -1 ? group.order.length : index;
+}
 
 /**
  * The owner suite menu.
@@ -44,6 +54,7 @@ import { useDir } from "@/lib/dirContext";
  * it might be. Additive — it changes nothing about how a row looks or behaves.
  */
 interface MenuRow {
+  id: string;
   labelKey: I18nKey;
   icon: LucideIcon;
   path: string;
@@ -65,40 +76,61 @@ interface MenuRow {
  * Within a group the rows stay in the order they are used most. Nothing else changed: same
  * labels, same icons, same routes, and every row keeps the `data-tour` anchor the guided tour
  * rings it by.
+ *
+ * A group holds two kinds of row: the ones that always live here (`rows`) and the ones that
+ * come from the shared catalogue and can be moved to Settings (`ownerOrder`). `order` names
+ * every id the group can show, in the order it reads in, so a catalogue row takes its place
+ * among the fixed ones — Inventory stays the first row under Stock, which is where it has
+ * always been, whether or not it is still here. An id the group forgot falls to the end rather
+ * than vanishing.
  */
-const GROUPS: Array<{ sectionKey: I18nKey; rows: MenuRow[] }> = [
+const GROUPS: Array<{
+  group: SuiteGroup;
+  sectionKey: I18nKey;
+  rows: MenuRow[];
+  /** Every row id this group can show, in reading order. */
+  order: string[];
+}> = [
   {
+    group: "money",
     sectionKey: "more.groupMoney",
     rows: [
-      { labelKey: "admin.payments", icon: CreditCard, path: "/payments", anchor: "more:payments" },
-      { labelKey: "admin.dailyCash", icon: Calculator, path: "/payments/daily-cash", anchor: "more:dailyCash" },
-      { labelKey: "admin.reports", icon: BarChart2, path: "/reports", anchor: "more:reports" },
+      { id: "payments", labelKey: "admin.payments", icon: CreditCard, path: "/payments", anchor: "more:payments" },
+      { id: "dailyCash", labelKey: "admin.dailyCash", icon: Calculator, path: "/payments/daily-cash", anchor: "more:dailyCash" },
+      { id: "reports", labelKey: "admin.reports", icon: BarChart2, path: "/reports", anchor: "more:reports" },
     ],
+    order: ["payments", "dailyCash", "reports"],
   },
   {
+    group: "stock",
     sectionKey: "more.groupStock",
     rows: [
-      { labelKey: "admin.inventory", icon: Layers, path: "/products", anchor: "more:products" },
-      { labelKey: "admin.purchases", icon: ShoppingCart, path: "/purchases", anchor: "more:purchases" },
-      { labelKey: "admin.stockMovements", icon: History, path: "/inventory/movements", anchor: "more:movements" },
-      { labelKey: "admin.reorderSuggestions", icon: AlertTriangle, path: "/inventory/reorder", anchor: "more:reorder" },
-      { labelKey: "admin.generateBarcodes", icon: ScanLine, path: "/inventory/barcodes", anchor: "more:barcodes" },
+      { id: "purchases", labelKey: "admin.purchases", icon: ShoppingCart, path: "/purchases", anchor: "more:purchases" },
+      { id: "movements", labelKey: "admin.stockMovements", icon: History, path: "/inventory/movements", anchor: "more:movements" },
+      { id: "reorder", labelKey: "admin.reorderSuggestions", icon: AlertTriangle, path: "/inventory/reorder", anchor: "more:reorder" },
+      { id: "barcodes", labelKey: "admin.generateBarcodes", icon: ScanLine, path: "/inventory/barcodes", anchor: "more:barcodes" },
     ],
+    // Inventory leads the group; Crop configuration is setup, so it follows the daily rows.
+    order: ["inventory", "purchases", "movements", "reorder", "barcodes", "crops"],
   },
   {
+    group: "people",
     sectionKey: "more.groupPeople",
+    // Companies and Employees are catalogue rows (they can be moved to Settings), so they are
+    // not repeated here — they arrive through `rowsOn("suite")` with their own group.
     rows: [
-      { labelKey: "admin.customers", icon: UserCheck, path: "/customers", anchor: "more:customers" },
-      { labelKey: "admin.companies", icon: Building2, path: "/companies", anchor: "more:companies" },
-      { labelKey: "admin.employees", icon: Users, path: "/employees", anchor: "more:employees" },
+      { id: "customers", labelKey: "admin.customers", icon: UserCheck, path: "/customers", anchor: "more:customers" },
     ],
+    order: ["customers", "companies", "employees", "roles"],
   },
   {
+    group: "app",
     sectionKey: "more.groupApp",
     rows: [
-      { labelKey: "edu.guide.title", icon: Compass, path: "/guide", anchor: "more:guide" },
-      { labelKey: "admin.settings", icon: Settings, path: "/settings", anchor: "more:settings" },
+      { id: "guide", labelKey: "edu.guide.title", icon: Compass, path: "/guide", anchor: "more:guide" },
+      { id: "settings", labelKey: "admin.settings", icon: Settings, path: "/settings", anchor: "more:settings" },
     ],
+    order: ["guide", "settings"],
   },
 ];
 
@@ -110,59 +142,119 @@ export default function MoreMenuPage() {
   // left. Mirrored by rotation, which is the pattern this app already uses elsewhere
   // (GroupDetailPage) rather than a second convention.
   const { isRtl } = useDir();
+  const activeShopName = useShopStore((s) => s.activeShopName);
+  const openSwitcher = useShopStore((s) => s.openSwitcher);
+  const membershipRole = useAuthStore((s) => s.user?.membershipRole);
+  const { rowsOn } = useOwnerRows();
+  // Crop configuration is a sheet, not a screen, so it opens here exactly as it opens from
+  // Settings — one sheet, whichever screen the row is currently on.
+  const [sheetOpen, setSheetOpen] = useState(false);
+
+  // What this account is in THIS shop — the same three words Settings uses. It used to be a
+  // constant ("Owner access") printed for everyone who opened this screen.
+  const roleLabel =
+    membershipRole === "owner" ? t("settings.owner")
+    : membershipRole === "admin" ? t("emp.admin")
+    : t("search.employee");
 
   return (
     <div className="flex flex-col w-full min-h-full" style={{ background: "var(--background)" }}>
       <StatusBar />
 
-      {/* Top card.
-          Three lines with a real hierarchy instead of two loud ones: 12 overline, 18 title, 12
-          subtitle. The title was 22 with 13 above it, which put two heavy lines back to back
-          and made the card shout over the four group titles below it; 18 keeps it the loudest
-          thing on the screen while leaving room for those. Padding 16 rather than 20 and a
-          hair more gap after the card, so the groups below get the air instead. */}
+      {/* Top card — the shop this account is working in.
+          The overline used to be the constant "Main Shop", a name that belonged to no shop on
+          this device; the loudest line now carries the real name, read from the server. The
+          whole card opens the shop selector, because "which shop am I in" and "switch shop"
+          are one question — and it is the first thing on the screen furthest from accidentally
+          leaving it.
+
+          The three lines keep the hierarchy the card had (12 overline / 18 title / 12 below), so
+          the shop name is the loudest thing on the screen while the four group titles below it
+          still read as headings. */}
       <div className="px-4 pt-3">
-        <div className="rounded-[var(--radius-card)] p-4" style={{ background: "var(--brand)" }}>
-          <p className="text-12 font-bold" style={{ color: "rgba(0,0,0,0.6)" }}>
-            {t("admin.mainShop")}
+        <button
+          type="button"
+          onClick={openSwitcher}
+          data-testid="shop-card"
+          className="w-full text-start rounded-[var(--radius-card)] p-4 ds-pressable"
+          style={{ background: "var(--brand)" }}
+        >
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-12 font-bold" style={{ color: "rgba(0,0,0,0.6)" }}>
+              {t("shop.yourShop")}
+            </p>
+            <p
+              className="flex items-center gap-1 text-11 font-bold shrink-0"
+              style={{ color: "rgba(0,0,0,0.6)" }}
+            >
+              {t("shop.switch")}
+              <ChevronRight
+                size={13}
+                style={{ transform: isRtl ? "rotate(180deg)" : undefined }}
+              />
+            </p>
+          </div>
+          <p className="text-18 font-bold mt-0.5 truncate" style={{ color: "#0a0a0a" }}>
+            {activeShopName ?? t("shop.yourShop")}
           </p>
-          <p className="text-18 font-bold mt-0.5" style={{ color: "#0a0a0a" }}>
-            {t("admin.ownerSuite")}
+          <p className="text-12 mt-1 truncate" style={{ color: "rgba(0,0,0,0.55)" }}>
+            {roleLabel}
           </p>
-          <p className="text-12 mt-1" style={{ color: "rgba(0,0,0,0.55)" }}>
-            {t("admin.ownerAccess")}
-          </p>
-        </div>
+        </button>
       </div>
 
       {/* One titled card per group. The card title is the same section label the rest of the
           app uses above a list, so a group of rows here reads exactly like a group of rows
           anywhere else. */}
-      {GROUPS.map((group) => (
-        <div key={group.sectionKey} className="px-4 pt-4">
-          <ListCard section={t(group.sectionKey)}>
-            {group.rows.map(({ labelKey, icon, path, anchor }) => (
-              <ListRow
-                key={path}
-                anchor={anchor}
-                icon={icon}
-                onClick={() => navigate(`${base}${path}`)}
-                title={t(labelKey)}
-                trailing={
-                  <ChevronRight
-                    size={14}
-                    className="ds-row-chevron shrink-0"
-                    style={{
-                      color: "var(--text-secondary)",
-                      transform: isRtl ? "rotate(180deg)" : undefined,
-                    }}
+      {GROUPS.map((group) => {
+        // One list per group: the rows that always live here, plus the catalogue rows that are
+        // on this screen right now, sorted into the group's own reading order.
+        const entries = [
+          ...group.rows.map((row) => ({ kind: "route" as const, ...row })),
+          ...rowsOn("suite")
+            .filter((row) => row.group === group.group)
+            .map((row) => ({
+              kind: "owner" as const,
+              id: row.id,
+              labelKey: row.labelKey,
+              icon: row.icon,
+              path: row.path,
+              anchor: row.anchor,
+              metaKey: row.metaKey,
+            })),
+        ].sort((a, b) => rankIn(group, a.id) - rankIn(group, b.id));
+
+        return (
+          <div key={group.sectionKey} className="px-4 pt-4">
+            <ListCard section={t(group.sectionKey)}>
+              {entries.map((entry) => {
+                const Icon = entry.icon;
+                return (
+                  <ListRow
+                    key={entry.id}
+                    anchor={entry.anchor}
+                    icon={Icon}
+                    // A catalogue row whose `path` is null opens a sheet rather than a screen —
+                    // the same sheet Settings opens, so there is one of it in the app.
+                    onClick={() => (entry.path ? navigate(`${base}${entry.path}`) : setSheetOpen(true))}
+                    title={t(entry.labelKey)}
+                    meta={entry.kind === "owner" && entry.metaKey ? t(entry.metaKey) : undefined}
+                    trailing={
+                      <ChevronRight
+                        size={14}
+                        className="ds-row-chevron shrink-0"
+                        style={{ color: "var(--text-secondary)", transform: isRtl ? "rotate(180deg)" : undefined }}
+                      />
+                    }
                   />
-                }
-              />
-            ))}
-          </ListCard>
-        </div>
-      ))}
+                );
+              })}
+            </ListCard>
+          </div>
+        );
+      })}
+
+      {sheetOpen && <BusinessSettingsSheet onClose={() => setSheetOpen(false)} onSave={() => {}} />}
 
       <div className="pb-4" />
     </div>
