@@ -8,11 +8,14 @@
  *
  * Deliberate limits:
  *
- *   • **Short and quiet.** ~300ms, peaking at 0.16 gain. This plays at the counter, not
- *     in headphones, and a loud chime every sale is the fastest way to make people mute
- *     the app.
- *   • **Two rising notes (E5 → A5)**, which reads as "done" rather than as an alert —
- *     alerts in this app are toasts and red text, this is a confirmation.
+ *   • **Quiet.** Peaks at 0.15 gain. This plays at the counter, not in headphones, and a
+ *     loud chime every sale is the fastest way to make people mute the app.
+ *   • **Rising, then settling.** Five notes climb, and the gaps between them widen
+ *     (0.20s → 0.24s → 0.31s → 0.40s) so the phrase audibly **slows down** toward a final
+ *     chord that is held and left to fade. Total ~3.8s: long enough to feel like a
+ *     completion, slow enough at the end that it never competes with the next sale.
+ *   • **Rising notes read as "done", not as an alert** — alerts in this app are toasts and
+ *     red text; this is a confirmation.
  *   • **Failure is silent and harmless.** Browsers refuse audio until the page has had a
  *     gesture, WebViews vary, and a missing chime must never break the screen that
  *     confirms a sale. Every step is wrapped.
@@ -57,24 +60,31 @@ export function playConfirmation(): void {
     if (ctx.state === "suspended") void ctx.resume();
 
     const start = ctx.currentTime;
-    const notes: Array<[number, number]> = [
-      [659.25, 0], // E5
-      [880, 0.13], // A5
+
+    // freq, offset, hold — offsets widen on purpose, that is the slowing down.
+    const notes: Array<[number, number, number]> = [
+      [659.25, 0.0, 0.9], // E5
+      [880.0, 0.2, 0.95], // A5
+      [1046.5, 0.44, 1.0], // C6
+      [1318.5, 0.75, 1.1], // E6
+      [880.0, 1.15, 2.9], // A5, held — the settling
+      [1318.5, 1.15, 2.9], // E6, same breath, so the close is a chord not a note
     ];
 
-    for (const [freq, offset] of notes) {
+    for (const [freq, offset, hold] of notes) {
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.type = "triangle";
       osc.frequency.value = freq;
-      // Raised slowly, dropped quickly: no click at either end.
+      // Soft in, and a long exponential tail out: the attack is 30ms so there is no click,
+      // and the release is most of the note so the last chord dies away instead of stopping.
       gain.gain.setValueAtTime(0.0001, start + offset);
-      gain.gain.exponentialRampToValueAtTime(0.16, start + offset + 0.02);
-      gain.gain.exponentialRampToValueAtTime(0.0001, start + offset + 0.3);
+      gain.gain.exponentialRampToValueAtTime(0.15, start + offset + 0.03);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + offset + hold);
       osc.connect(gain);
       gain.connect(ctx.destination);
       osc.start(start + offset);
-      osc.stop(start + offset + 0.34);
+      osc.stop(start + offset + hold + 0.05);
     }
   } catch {
     /* No audio: the sale is still complete. */

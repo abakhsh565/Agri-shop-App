@@ -171,16 +171,21 @@ export default function SaleSuccessPage() {
         <div className="w-full max-w-[420px] mx-auto">
           {/* Result */}
           <div className="flex flex-col items-center text-center mb-3 animate-pop-in">
-            <div
-              className="w-12 h-12 rounded-full flex items-center justify-center"
-              style={{ background: "var(--brand)", boxShadow: "0 0 0 8px rgba(132,204,22,0.16)" }}
-            >
-              <Check size={26} strokeWidth={2.5} style={{ color: "#0a0a0a" }} />
+            {/* The halo: two rings breathing out from behind the tick, so the moment has some
+                life to it before anything is read. Pure decoration — gone under reduced-motion. */}
+            <div className="relative flex items-center justify-center">
+              <span className="ds-ring" style={{ animationDelay: "0s" }} />
+              <span className="ds-ring" style={{ animationDelay: "1.3s" }} />
+              <div
+                className="relative w-12 h-12 rounded-full flex items-center justify-center"
+                style={{ background: "var(--brand)", boxShadow: "0 0 0 8px rgba(132,204,22,0.16)" }}
+              >
+                <Check size={26} strokeWidth={2.5} style={{ color: "#0a0a0a" }} />
+              </div>
             </div>
-            <p className="text-lg font-bold mt-2.5">{t("saleSuccess.saleComplete")}</p>
-            <p className="text-xs mt-0.5" style={{ color: "var(--text-secondary)" }}>
-              {formatCurrency(s.totalAmount)} {paidInFull ? t("saleSuccess.received") : t("saleSuccess.booked")}
-            </p>
+            {/* The amount used to be repeated here as well as on the receipt below — one line
+                said twice, and the second one made the screen feel like it was filling space. */}
+            <p className="text-lg font-bold mt-3">{t("saleSuccess.saleComplete")}</p>
           </div>
 
           {/* Receipt */}

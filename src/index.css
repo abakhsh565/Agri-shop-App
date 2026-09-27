@@ -854,6 +854,27 @@ svg.ds-row-chevron {
   from { stroke-dashoffset: 40; }
   to   { stroke-dashoffset: 0; }
 }
+/* ── Success halo ─────────────────────────────────────────────────────────────
+   Two rings breathing out from behind the tick. Transform and opacity only, so it
+   stays on the compositor; the second ring is delayed by half the cycle so the
+   effect reads as a ripple rather than a blink. Decoration, so reduced-motion
+   removes it entirely (see the media query at the end of this file). */
+@keyframes dsRingPulse {
+  0%   { transform: scale(0.7); opacity: 0.5; }
+  70%  { opacity: 0.12; }
+  100% { transform: scale(2.15); opacity: 0; }
+}
+
+.ds-ring {
+  position: absolute;
+  width: 48px;
+  height: 48px;
+  border-radius: 999px;
+  border: 2px solid var(--brand);
+  pointer-events: none;
+  animation: dsRingPulse 2.6s cubic-bezier(0.22, 0.61, 0.36, 1) infinite;
+}
+
 /* ── Confirmation confetti ────────────────────────────────────────────────────
    Drawn here rather than pulled in as a library: it is a dozen absolutely positioned
    rectangles on one transform keyframe, so it costs one compositor layer and nothing
@@ -935,8 +956,10 @@ svg.ds-row-chevron {
    perceivable) but complete instantly, and the JS exit paths read the same
    preference, so nothing waits on an animation that will never run. */
 @media (prefers-reduced-motion: reduce) {
-  /* Confetti is decoration, so it goes entirely rather than moving less. */
+  /* Confetti and the success halo are decoration, so they go entirely rather than
+     moving less. */
   .ds-confetti { display: none; }
+  .ds-ring { display: none; }
 
   *,
   *::before,
