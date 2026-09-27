@@ -39,7 +39,10 @@ migration poisons everything built on top of it and cannot be caught later by a 
 | 25 | Success screen trimmed to four actions (New Sale primary, Share + Print, quiet Home; Download dropped) at design-system sizes | **done** | `e3b7cc0f` | look at the action area: one primary, one secondary row, one quiet link |
 | 26 | Confirmation feedback on success: confetti burst (no dependency, reduced-motion hides it, clears itself) and a synthesised two-note chime | **done** | `e3b7cc0f` | complete a sale: pieces fall over the card for ~2.5s and the chime plays once |
 | 27 | Code screen fits one page at phone height and with the keyboard open (sign-in and sign-up) | **done** | `e3b7cc0f` | measured 390x780 and 390x430: no scroll, boxes + clock + Request a new code all visible |
-| 28 | Full-service verification of everything above | **pending** | — | section C below |
+| 28 | Success tick halo: two staggered rings breathing out behind the check (reduced-motion hides them) | **done** | `f5c28f7e` | seen live: rings expanding behind the tick |
+| 29 | Removed the repeated "Rs. 11,200 received" line under *Sale Complete!* — the receipt shows the total below it | **done** | `f5c28f7e` | see the screen: heading stands alone |
+| 30 | Chime lengthened to ~3.8s and made to settle: widening gaps, closing A5+E6 chord held 2.9s, 0.15 gain | **done** | `f5c28f7e` | complete a sale and listen |
+| 31 | Full-service verification of everything above | **pending** | — | section C below |
 
 ## B. Open items
 
