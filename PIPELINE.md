@@ -33,7 +33,10 @@ migration poisons everything built on top of it and cannot be caught later by a 
 | 19 | Crops in business settings can be renamed (added and deleted already existed) | **done** | `156cfbc8` | rename a crop in the sheet, save, reopen |
 | 20 | Reset-PIN code screen: Verify button removed, the sixth digit submits (same rule as sign-in) | **done** | `76feaa53` | enter a code on the forgotten-PIN screen: it checks itself, spinner only |
 | 21 | Customer detail page: Record Payment row is a normal ListRow again (its own tint and hardcoded green are gone); delete row uses the error token | **done** | `76feaa53` | open a customer in dark and compare the rows |
-| 22 | Full-service verification of everything above | **pending** | — | section C below |
+| 22 | Sale success screen rebuilt: one screen, no scrolling, content centred, status bar reserved (the tick no longer hides under it), receipt card with band / fields / perforation / amount, design-system `Button`s, **Print** added | **done** | `92ae98a1` | complete a sale on the phone and read the screen without scrolling |
+| 23 | Review & payment: credit limit is a text action above the customer opening its own sheet (amount + Save, same RPC); amount sits under the payment choice, cash/bank after it | **done** | `92ae98a1` | open the cart: order is type → amount → method, and the credit-limit sheet saves and updates everywhere |
+| 24 | QA data is no longer deleted by test runs — cleaning is opt-in (`QA_CLEAN_AFTER_RUN=1`), and every run says whether it deleted anything | **done** | `92ae98a1` | run any test file and confirm the log says QA data left untouched; rows you entered stay |
+| 25 | Full-service verification of everything above | **pending** | — | section C below |
 
 ## B. Open items
 
