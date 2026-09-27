@@ -16,7 +16,8 @@ migration poisons everything built on top of it and cannot be caught later by a 
 | 2 | Record of the pass written down | **done** | `a8b04525` | — (documentation) |
 | 3 | `user_active_shops` policy + `create_shop_internal` guard | **done** | `64b76c65` | `rbacInvariants` must go green (expected 510/510) |
 | 4 | Login hint rewritten — final copy: *"Enter your registered number to get a verification code."* (EN + UR, demo and live variants) | **done** | `98e639a8` | restored in the copy guard + seen on the live screen |
-| 5 | Full-service verification of everything above | **pending** | — | section C below |
+| 5 | Phone fields take digits only — sign-in, signup and forgot-PIN ignore anything that is not a number | **done** | `c474e999` | type into each phone field live: letters do nothing, a number goes in |
+| 6 | Full-service verification of everything above | **pending** | — | section C below |
 
 ## B. Open items
 
