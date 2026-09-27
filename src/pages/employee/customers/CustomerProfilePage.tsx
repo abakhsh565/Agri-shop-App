@@ -302,8 +302,10 @@ export default function CustomerProfilePage() {
 
             {customerCrops.length > 0 && (
               <div className="flex flex-wrap gap-1.5 mt-2">
+                {/* Crop chips go through the brand tokens: the literals that used to sit here
+                    (#3B6D11 on a near-black tint) were invisible on the dark theme. */}
                 {customerCrops.map((crop: string) => (
-                  <span key={crop} className="text-10 font-medium px-2 py-0.5 rounded-full" style={{ background: "rgba(99,153,34,0.12)", color: "#3B6D11" }}>{crop}</span>
+                  <span key={crop} className="text-10 font-medium px-2 py-0.5 rounded-full" style={{ background: "var(--brand-light)", color: "var(--brand-dark)" }}>{crop}</span>
                 ))}
               </div>
             )}

@@ -773,8 +773,8 @@ export default function RemindersOverviewPage() {
 
       {/* Send reminder bottom sheet */}
       {editingReminder && (
-        <div className="fixed inset-0 z-50 flex items-end" style={{ background: "rgba(0,0,0,0.5)" }} onClick={() => setEditingReminder(null)}>
-          <div className="w-full max-w-[390px] mx-auto rounded-t-[24px] flex flex-col" style={{ background: "var(--surface)", maxHeight: "85vh" }} onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 z-50 flex items-end" style={{ background: "var(--scrim)" }} onClick={() => setEditingReminder(null)}>
+          <div className="w-full max-w-[390px] mx-auto rounded-t-[24px] flex flex-col" style={{ background: "var(--tone-sheet)", maxHeight: "85vh" }} onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-center pt-3 pb-1">
               <div className="w-10 h-1 rounded-full" style={{ background: "var(--divider)" }} />
             </div>
@@ -840,8 +840,8 @@ export default function RemindersOverviewPage() {
 
       {/* Credit Request Action Sheet */}
       {creditAction && (
-        <div className="fixed inset-0 z-50 flex items-end" style={{ background: "rgba(0,0,0,0.5)" }} onClick={() => setCreditAction(null)}>
-          <div className="w-full max-w-[390px] mx-auto rounded-t-[24px] flex flex-col p-5 gap-4" style={{ background: "var(--surface)" }} onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 z-50 flex items-end" style={{ background: "var(--scrim)" }} onClick={() => setCreditAction(null)}>
+          <div className="w-full max-w-[390px] mx-auto rounded-t-[24px] flex flex-col p-5 gap-4" style={{ background: "var(--tone-sheet)" }} onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-center pb-1">
               <div className="w-10 h-1 rounded-full" style={{ background: "var(--divider)" }} />
             </div>

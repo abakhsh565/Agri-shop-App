@@ -23,6 +23,8 @@ export default function BusinessSettingsSheet({ onClose, onSave }: Props) {
   const t = useT();
   const [settings, setSettings] = useState<BusinessSettings>(loadSettings);
   const [customCrop, setCustomCrop] = useState("");
+  /** In-flight crop names, keyed by the name they started with. Only used while typing. */
+  const [nameDrafts, setNameDrafts] = useState<Record<string, string>>({});
   const { closing, dismiss } = useDelayedDismiss(onClose, SHEET_MS);
   const selectedNames = settings.crops.map(c => c.name);
 
@@ -62,6 +64,29 @@ export default function BusinessSettingsSheet({ onClose, onSave }: Props) {
     onClose();
   }
 
+  /**
+   * Renaming a crop in place.
+   *
+   * The name is the key every other row in this list is matched by, so two rows may never share
+   * one: a rename that collides with an existing crop, or leaves the field empty, is dropped and
+   * the old name stays. Committed on leaving the field or on Enter rather than per keystroke, so
+   * the list does not re-order itself around what is being typed.
+   */
+  function commitRename(oldName: string, raw: string) {
+    const next = raw.trim();
+    setNameDrafts((prev) => {
+      const copy = { ...prev };
+      delete copy[oldName];
+      return copy;
+    });
+    if (!next || next === oldName) return;
+    if (settings.crops.some((c) => c.name === next)) return;
+    setSettings((prev) => ({
+      ...prev,
+      crops: prev.crops.map((c) => (c.name === oldName ? { ...c, name: next } : c)),
+    }));
+  }
+
   const fieldStyle = {
     background: "var(--surface-2)",
     color: "var(--text-primary)",
@@ -81,7 +106,7 @@ export default function BusinessSettingsSheet({ onClose, onSave }: Props) {
         className={`w-full max-w-[390px] mx-auto rounded-t-[24px] flex flex-col ${
           closing ? "ds-anim-sheet-out" : "ds-anim-sheet-in"
         }`}
-        style={{ background: "var(--surface)", maxHeight: "85vh" }}
+        style={{ background: "var(--tone-sheet)", maxHeight: "85vh" }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Handle */}
@@ -95,7 +120,7 @@ export default function BusinessSettingsSheet({ onClose, onSave }: Props) {
           <button
             onClick={dismiss}
             className="size-8 rounded-full flex items-center justify-center ds-pressable"
-            style={{ background: "var(--surface-2)" }}
+            style={{ background: "var(--sheet-chip)" }}
           >
             <X size={16} style={{ color: "var(--text-secondary)" }} />
           </button>
@@ -158,11 +183,24 @@ export default function BusinessSettingsSheet({ onClose, onSave }: Props) {
                     className="rounded-[var(--radius-card)] p-4"
                     style={{ background: "var(--tone-card)" }}
                   >
-                    {/* Crop name + delete */}
+                    {/* Crop name (editable) + delete */}
                     <div className="flex items-center justify-between mb-3">
-                      <p className="text-14 font-semibold" style={{ color: "var(--text-primary)" }}>
-                        {crop.name}
-                      </p>
+                      <input
+                        value={nameDrafts[crop.name] ?? crop.name}
+                        onChange={(e) =>
+                          setNameDrafts((prev) => ({ ...prev, [crop.name]: e.target.value }))
+                        }
+                        onBlur={(e) => commitRename(crop.name, e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            commitRename(crop.name, (e.target as HTMLInputElement).value);
+                          }
+                        }}
+                        aria-label={t("bizSettings.renameCrop")}
+                        className="flex-1 h-9 px-2.5 text-14 font-semibold outline-none me-2"
+                        style={{ ...fieldStyle, borderRadius: "10px" }}
+                      />
                       <button
                         onClick={() => setSettings(prev => ({
                           ...prev,

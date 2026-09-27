@@ -78,7 +78,7 @@ export default function CreditOverridesPage() {
               className="size-12 rounded-full flex items-center justify-center"
               style={{ background: "#E3F3D9" }}
             >
-              <AlertTriangle size={20} color="#3B6D11" />
+              <AlertTriangle size={20} color="var(--brand-dark)" />
             </div>
             <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
               {t("creditOverrides.empty")}

@@ -167,7 +167,7 @@ export default function InventoryAlertsPage() {
               className="size-12 rounded-full flex items-center justify-center"
               style={{ background: "#E3F3D9" }}
             >
-              <Package size={20} color="#3B6D11" />
+              <Package size={20} color="var(--brand-dark)" />
             </div>
             <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
               {t("admin.inventoryHealthy")}

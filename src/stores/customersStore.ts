@@ -74,6 +74,11 @@ interface CustomersState {
     createdBy?: string | null;
   }) => Promise<Customer>;
   updateCustomerImage: (id: string, imageUrl: string | null) => Promise<void>;
+  /**
+   * Set a customer's credit limit directly, for an actor who holds `customers.edit`.
+   * The permission and the shop scope are enforced in the database (0154): this only asks.
+   */
+  setCreditLimit: (id: string, creditLimit: number) => Promise<number>;
   archiveCustomer: (id: string) => Promise<void>;
   updateDueDate: (id: string, dueDate: string | null) => Promise<void>;
   restoreCustomer: (id: string) => Promise<void>;
@@ -89,6 +94,8 @@ interface CustomersState {
   loadCreditLimitRequests: () => Promise<CreditLimitRequest[]>;
   approveCreditLimitRequest: (requestId: string, reviewedBy: string) => Promise<void>;
   rejectCreditLimitRequest: (requestId: string, reviewedBy: string, reason?: string) => Promise<void>;
+  /** Drop every row: the app is about to read a different shop. */
+  reset: () => void;
 }
 
 let channel: ReturnType<typeof supabase.channel> | null = null;
@@ -103,6 +110,10 @@ export const useCustomersStore = create<CustomersState>((set, get) => ({
   loading: false,
   ready: false,
   error: null,
+
+  // The active shop changed: an empty list now, so no customer of the previous shop can
+  // survive into the new one.
+  reset: () => set({ customers: [], loading: false, ready: false, error: null }),
 
   load: async () => {
     set({ loading: true, error: null });
@@ -274,6 +285,23 @@ export const useCustomersStore = create<CustomersState>((set, get) => ({
         c.id === id ? { ...c, dueDate } : c
       ),
     });
+  },
+
+  setCreditLimit: async (id, creditLimit) => {
+    const { data, error } = await supabase.rpc("set_customer_credit_limit", {
+      p_customer_id: id,
+      p_credit_limit: creditLimit,
+    });
+    if (error) throw new Error(error.message);
+    const applied = Number(data ?? creditLimit);
+    // Keep the list (and the device cache) in step with the database, so the limit is the same
+    // one every other screen shows — the customer profile, the credit list, the next sale.
+    const updated = get().customers.map((c) =>
+      c.id === id ? { ...c, creditLimit: applied } : c
+    );
+    set({ customers: updated });
+    localStorage.removeItem("agrishop_cache_customers");
+    return applied;
   },
 
   getSnapshot: (customerId) => {

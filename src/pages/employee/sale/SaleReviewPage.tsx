@@ -119,7 +119,7 @@ export default function SaleReviewPage() {
                 key={m.key}
                 onClick={() => setPaymentMethod(m.key as "cash" | "bank_transfer")}
                 className={`flex-1 h-11 rounded-full text-sm font-medium transition-colors ${
-                  paymentMethod === m.key ? "bg-[#22c55e] text-white" : "border border-border text-caption"
+                  paymentMethod === m.key ? "bg-ink text-ink-fg" : "border border-border text-foreground"
                 }`}
               >
                 {m.label}
@@ -145,7 +145,10 @@ export default function SaleReviewPage() {
         </div>
 
         {/* Summary card */}
-        <div className="border border-border rounded-[var(--radius-tile)] p-4 bg-[#f9f9f9]">
+        <div
+          className="rounded-[var(--radius-tile)] p-4"
+          style={{ background: "var(--surface-2)", border: "1px solid var(--divider)" }}
+        >
           <div className="flex justify-between py-1">
             <span className="text-sm text-caption">{t("sale.subtotal")}</span>
             <span className="text-sm font-medium text-foreground">{formatCurrency(total)}</span>

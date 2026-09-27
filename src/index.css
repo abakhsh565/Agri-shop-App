@@ -261,6 +261,14 @@
   --warning: #f59e0b;
   --error: #DC2626;
   --brand: #84cc16;
+  /* `brand-dark` is the colour of brand TEXT on a page surface and `brand-light` is the chip
+     BEHIND that text, so on dark they have to swap jobs with the ramp: keeping the light
+     theme's #3f6212 as text on #0d0d0c is 2.7:1 — a link, a "View" label or a paid amount that
+     is effectively invisible. `brand-light` becomes the same tint at low opacity so the light
+     text on it still reads, instead of a pale solid that keeps a light-theme value on a dark
+     screen. */
+  --brand-dark: #a3e635;
+  --brand-light: rgba(132, 204, 22, 0.18);
   --surface: var(--tone-card);
   --surface-2: var(--tone-sunken);
   --surface-3: var(--tone-sunken);

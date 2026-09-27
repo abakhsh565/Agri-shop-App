@@ -15,19 +15,24 @@ import { useT } from "@/lib/i18n";
 import { useProductsStore } from "@/stores/productsStore";
 import ScanButton from "@/components/ui/ScanButton";
 import { checkAndNotifyLowStock } from "@/lib/notifications";
+import { useCustomersStore } from "@/stores/customersStore";
+import { hasPermission } from "@/lib/tenantContext";
 
 export default function CartPage() {
   const navigate = useNavigate();
   const base = useShellBase();
   const t = useT();
-  const { customer, items, updateQty, removeItem, subtotal, clearCart } = useCartStore();
+  const { customer, items, updateQty, removeItem, subtotal, clearCart, setCustomer } = useCartStore();
   const { addToast } = useUIStore();
   const createSale = useSalesStore((s) => s.createSale);
+  const setCreditLimit = useCustomersStore((s) => s.setCreditLimit);
   const { user } = useAuthStore();
 
   const [paymentType, setPaymentType] = useState<"full" | "partial">("full");
   const [paymentMethod, setPaymentMethod] = useState<"cash" | "bank_transfer">("cash");
   const [amountReceived, setAmountReceived] = useState("");
+  const [limitDraft, setLimitDraft] = useState("");
+  const [savingLimit, setSavingLimit] = useState(false);
   const [amountTouched, setAmountTouched] = useState(false);
   const [dueDate, setDueDate] = useState(customer?.dueDate ?? "");
   const [completing, setCompleting] = useState(false);
@@ -63,6 +68,33 @@ export default function CartPage() {
   const creditLimitNotSet = hasCreditPortion && customer && customer.creditLimit <= 0;
   const dueDateNotSet = hasCreditPortion && !dueDate;
   const creditSaleBlocked = hasCreditPortion && (creditLimitNotSet || dueDateNotSet || creditOverLimit);
+  // Cash or bank is only a question once money is actually changing hands. On a credit sale with
+  // nothing entered yet, no payment has happened, so asking "how was it paid" is a question with
+  // no answer — it appears the moment an amount is typed. Full payment always receives money.
+  const showPaymentMethod = amountPaid > 0;
+  const canEditCustomers = hasPermission("customers.edit");
+
+  async function handleSetCreditLimit() {
+    if (!customer || savingLimit) return;
+    const value = Number(limitDraft);
+    if (!limitDraft.trim() || Number.isNaN(value) || value <= 0) {
+      addToast(t("sale.creditLimitFailed"), "warning");
+      return;
+    }
+    setSavingLimit(true);
+    try {
+      const applied = await setCreditLimit(customer.id, value);
+      // The cart holds its own copy of the customer for the sale, so it is updated too —
+      // otherwise the credit-health line and the block on Complete still read the old limit.
+      setCustomer({ ...customer, creditLimit: applied });
+      setLimitDraft("");
+      addToast(t("sale.creditLimitSet", { amount: formatCurrency(applied) }), "success");
+    } catch (e) {
+      addToast(e instanceof Error ? e.message : t("sale.creditLimitFailed"), "error");
+    } finally {
+      setSavingLimit(false);
+    }
+  }
 
   async function handleCompleteSale() {
     if (completingRef.current) return;
@@ -177,8 +209,11 @@ export default function CartPage() {
             </div>
           </div>
           {creditOverLimit && (
-            <div className="mx-4 mt-2 bg-[#fef2f2] border border-[#ef4444] rounded-[var(--radius-tile)] p-3">
-              <p className="text-xs text-[#ef4444] font-medium">
+            <div
+              className="mx-4 mt-2 rounded-[var(--radius-tile)] p-3"
+              style={{ background: "var(--error-bg)", border: "1px solid var(--error-border)" }}
+            >
+              <p className="text-xs font-medium" style={{ color: "var(--error)" }}>
                 <AlertTriangle size={13} className="inline-block me-1 align-[-2px]" />
                 {t("sale.willExceedLimit").replace("{name}", customer.name)}
               </p>
@@ -278,7 +313,7 @@ export default function CartPage() {
               key={opt.key}
               onClick={() => setPaymentType(opt.key as "full" | "partial")}
               className={`flex-1 h-11 rounded-full text-sm font-medium transition-colors ${
-                paymentType === opt.key ? "bg-[#22c55e] text-white" : "border border-border text-caption"
+                paymentType === opt.key ? "bg-ink text-ink-fg" : "border border-border text-foreground"
               }`}
             >
               {t(opt.labelKey as any)}
@@ -287,23 +322,26 @@ export default function CartPage() {
         </div>
       </div>
 
-      {/* Payment method — moved from SaleReviewPage */}
-      <div className="px-4 pt-4">
-        <p className="ds-section-label text-foreground mb-3">{t("sale.paymentMethod")}</p>
-        <div className="flex gap-2">
-          {[{ key: "cash", labelKey: "sale.cash" }, { key: "bank_transfer", labelKey: "sale.bankTransfer" }].map((opt) => (
-            <button
-              key={opt.key}
-              onClick={() => setPaymentMethod(opt.key as "cash" | "bank_transfer")}
-              className={`flex-1 h-11 rounded-full text-sm font-medium transition-colors ${
-                paymentMethod === opt.key ? "bg-ink text-ink-fg" : "border border-border text-caption"
-              }`}
-            >
-              {t(opt.labelKey as any)}
-            </button>
-          ))}
+      {/* Payment method — moved from SaleReviewPage, and now only asked once there is money to
+          account for. */}
+      {showPaymentMethod && (
+        <div className="px-4 pt-4">
+          <p className="ds-section-label text-foreground mb-3">{t("sale.paymentMethod")}</p>
+          <div className="flex gap-2">
+            {[{ key: "cash", labelKey: "sale.cash" }, { key: "bank_transfer", labelKey: "sale.bankTransfer" }].map((opt) => (
+              <button
+                key={opt.key}
+                onClick={() => setPaymentMethod(opt.key as "cash" | "bank_transfer")}
+                className={`flex-1 h-11 rounded-full text-sm font-medium transition-colors ${
+                  paymentMethod === opt.key ? "bg-ink text-ink-fg" : "border border-border text-foreground"
+                }`}
+              >
+                {t(opt.labelKey as any)}
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Amount received for partial */}
       {paymentType === "partial" && (
@@ -327,12 +365,46 @@ export default function CartPage() {
             onChange={(e) => setDueDate(e.target.value)}
             className="w-full outline-none"
           />
+
+          {/* Credit with no limit on the customer used to stop the sale here with a disabled
+              button and no way forward. The limit can be set from this screen by whoever holds
+              customers.edit; the database enforces the same rule, so hiding it is not the guard. */}
+          {creditLimitNotSet && canEditCustomers && (
+            <div className="mt-4">
+              <p className="ds-section-label text-foreground mb-2">{t("sale.setCreditLimit")}</p>
+              <div className="flex gap-2">
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  min="0"
+                  value={limitDraft}
+                  onChange={(e) => setLimitDraft(e.target.value)}
+                  placeholder={t("sale.enterAmount")}
+                  className="flex-1 h-12 rounded-[var(--radius-input)] border border-border px-4 text-sm text-foreground placeholder:text-caption outline-none"
+                />
+                <button
+                  onClick={handleSetCreditLimit}
+                  disabled={savingLimit || !limitDraft.trim()}
+                  className="h-12 px-5 rounded-full text-sm font-bold transition-opacity active:opacity-80 disabled:opacity-40"
+                  style={{ background: "var(--brand)", color: "#0a0a0a" }}
+                >
+                  {savingLimit ? t("common.loading") : t("common.save")}
+                </button>
+              </div>
+              <p className="text-11 mt-1" style={{ color: "var(--text-secondary)" }}>
+                {t("sale.creditLimitHint")}
+              </p>
+            </div>
+          )}
         </div>
       )}
 
       {/* Summary box */}
       {items.length > 0 && (
-        <div className="mx-4 mt-5 border border-border rounded-[var(--radius-tile)] p-4 bg-[#f9f9f9]">
+        <div
+          className="mx-4 mt-5 rounded-[var(--radius-tile)] p-4"
+          style={{ background: "var(--surface-2)", border: "1px solid var(--divider)" }}
+        >
           <div className="flex justify-between py-1">
             <span className="text-sm text-caption">{t("sale.subtotal")}</span>
             <span className="text-sm font-medium text-foreground">{formatCurrency(total)}</span>
@@ -344,7 +416,7 @@ export default function CartPage() {
           {paymentType === "partial" && amountPaid < total && (
             <div className="flex justify-between py-1">
               <span className="text-sm text-caption">{t("sale.outstanding")}</span>
-              <span className="text-sm font-medium text-[#ef4444]">{formatCurrency(total - amountPaid)}</span>
+              <span className="text-sm font-medium" style={{ color: "var(--error)" }}>{formatCurrency(total - amountPaid)}</span>
             </div>
           )}
           <div className="border-t border-border my-2" />

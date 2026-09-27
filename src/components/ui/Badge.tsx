@@ -17,8 +17,10 @@ export function PaymentBadge({ type, outstandingBalance }: PaymentBadgeProps) {
       <span
         className="inline-flex items-center px-2.5 py-1 rounded-full text-10 font-bold uppercase whitespace-nowrap"
         style={{
-          background: "rgba(132,204,22,0.15)",
-          color: "#3f6212",
+          // Tokens, not the light-theme literals that used to sit here: #3f6212 on a 15% green
+          // tint is unreadable the moment the page behind it is dark.
+          background: "var(--brand-light)",
+          color: "var(--brand-dark)",
           border: "1px solid rgba(132,204,22,0.35)",
         }}
       >
@@ -80,7 +82,7 @@ export function CategoryChip({ label }: { label: string }) {
 
 export function CreditHealthBadge({ health }: { health: "good" | "warning" | "over_limit" }) {
   const cfg = {
-    good:       { label: "Good",       bg: "rgba(132,204,22,0.12)", color: "#3f6212", bd: "rgba(132,204,22,0.35)" },
+    good:       { label: "Good",       bg: "var(--brand-light)", color: "var(--brand-dark)", bd: "rgba(132,204,22,0.35)" },
     warning:    { label: "Warning",    bg: "rgba(245,158,11,0.12)", color: "#d97706", bd: "rgba(245,158,11,0.35)" },
     over_limit: { label: "Over Limit", bg: "rgba(239,68,68,0.12)",  color: "#dc2626", bd: "rgba(239,68,68,0.35)" },
   }[health];
