@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
+import BackButtonHandler from "@/components/ui/BackButtonHandler";
+import ToastContainer from "@/components/ui/Toast";
 import { useT } from "@/lib/i18n";
 import { INTRO_SLIDES } from "@/education/model";
 import { markIntroSeen } from "@/education/introSeen";
@@ -106,6 +108,11 @@ export default function IntroPage() {
           {isLast ? t("edu.intro.start") : t("edu.intro.next")}
         </button>
       </div>
+
+      {/* This is the app's first screen on a new install, so the back button here means
+          "leave the app" — two presses, same as the dashboard, never one. */}
+      <BackButtonHandler />
+      <ToastContainer />
     </div>
   );
 }

@@ -8,6 +8,8 @@ import { useShopRequestsStore } from "@/stores/shopRequestsStore";
 import { useUIStore } from "@/stores/uiStore";
 import { normalizePhone } from "@/lib/auth";
 import { useT } from "@/lib/i18n";
+import BackButtonHandler from "@/components/ui/BackButtonHandler";
+import ToastContainer from "@/components/ui/Toast";
 
 const SHOP_TYPES = [
   { key: "retail", labelKey: "register.type.retail", hintKey: "register.type.retailHint" },
@@ -207,6 +209,12 @@ export default function RegisterShopDetailsPage() {
           {loading ? t("common.submitting") : t("register.submit")}
         </button>
       </div>
+
+      {/* This screen is not inside AuthLayout, and it is the one where an accidental back press
+          costs the most: a half-filled shop form with a logo already uploaded. Back steps to
+          the sign-up entry instead of closing the app, and the two-press notice has a host. */}
+      <BackButtonHandler />
+      <ToastContainer />
     </div>
   );
 }
