@@ -12,7 +12,8 @@ import { useT } from "@/lib/i18n";
 import { uploadImage } from "@/lib/storage";
 import { supabase } from "@/lib/supabase";
 import { useUIStore } from "@/stores/uiStore";
-import { Lock, Bell, Globe, ChevronRight, Moon, Sun, ClipboardList, Camera, Loader2, Save, LogOut, X, Trash2 } from "lucide-react";
+import { Lock, Bell, Globe, ChevronRight, Moon, Sun, ClipboardList, Camera, Loader2, Save, LogOut, X, Trash2, Check, Fingerprint } from "lucide-react";
+import { biometricPlatformAvailable, enrolBiometric, hasBiometricEnrolment, removeBiometric } from "@/lib/biometric";
 import { deleteAccount } from "@/lib/auth";
 import { APP_NAME, APP_VERSION } from "@/lib/brand";
 import { useEffect, useRef, useState } from "react";
@@ -25,6 +26,18 @@ export default function SettingsPage() {
   const t = useT();
   const { user, logout } = useAuthStore();
   const { theme, toggleTheme, language, setLanguage } = useThemeStore();
+  /**
+   * Fingerprint login, on the employee's own screen.
+   *
+   * An employee meets the offer while onboarding — the "your PIN is set" screen carries it —
+   * but anyone already working in the shop never passes that screen again, and until now the
+   * only other place it existed was the owner's Settings. A row that lives only on the owner's
+   * phone is a feature the staff never get, so it lives here too, with the same three states:
+   * on, off, and this-phone-cannot (which is a fact, not an action).
+   */
+  const [fingerprint, setFingerprint] = useState<"checking" | "on" | "off" | "unavailable">("checking");
+  const [fingerprintBusy, setFingerprintBusy] = useState(false);
+  const [confirmFingerprintOff, setConfirmFingerprintOff] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(user?.photoUrl ?? null);
   const [uploading, setUploading] = useState(false);
   const [editingName, setEditingName] = useState(false);
@@ -77,6 +90,42 @@ export default function SettingsPage() {
 
   // Apply stored theme on mount
   useEffect(() => { applyTheme(theme); }, []);
+
+  // Which of the three states this phone is in, asked once when the screen opens: the answer
+  // decides whether the row is an action or a statement.
+  useEffect(() => {
+    if (!user) return;
+    let alive = true;
+    if (hasBiometricEnrolment(user.id)) {
+      setFingerprint("on");
+      return;
+    }
+    biometricPlatformAvailable().then((available) => {
+      if (alive) setFingerprint(available ? "off" : "unavailable");
+    });
+    return () => { alive = false; };
+  }, [user]);
+
+  async function handleEnrolFingerprint() {
+    if (!user || fingerprintBusy) return;
+    setFingerprintBusy(true);
+    try {
+      const result = await enrolBiometric(user.id, user.name || user.phone);
+      if (result.status === "ok") {
+        setFingerprint("on");
+        addToast(t("fingerprint.enrolled"), "success");
+      } else if (result.status === "unsupported") {
+        setFingerprint("unavailable");
+        addToast(t("fingerprint.unsupported"), "error");
+      } else if (result.status === "cancelled") {
+        addToast(t("fingerprint.cancelled"), "error");
+      } else {
+        addToast(t("fingerprint.failed"), "error");
+      }
+    } finally {
+      setFingerprintBusy(false);
+    }
+  }
 
   function handleLogout() {
     if (user) clearDeviceSession(user.phone);
@@ -249,6 +298,33 @@ export default function SettingsPage() {
               title={user && hasPin(user.id) ? (t("settings.changePin") || "Change PIN") : (t("settings.setupPin") || "Setup PIN")}
               trailing={<ChevronRight size={14} style={{ color: "var(--text-secondary)" }} className="shrink-0" />}
             />
+            {/* The same row the owner's Settings carries, with the same words — an employee
+                should not meet a differently-named feature depending on who they are. */}
+            <ListRow
+              onClick={
+                fingerprint === "on" ? () => setConfirmFingerprintOff(true)
+                : fingerprint === "off" ? handleEnrolFingerprint
+                : undefined
+              }
+              icon={Fingerprint}
+              title={t("settings.fingerprint")}
+              meta={
+                fingerprint === "on" ? t("settings.fingerprint.on")
+                : fingerprint === "off" ? t("settings.fingerprint.off")
+                : fingerprint === "unavailable" ? t("settings.fingerprint.unavailable")
+                : undefined
+              }
+              testId="settings-fingerprint"
+              trailing={
+                fingerprintBusy || fingerprint === "checking" ? (
+                  <Loader2 size={14} className="animate-spin shrink-0" style={{ color: "var(--text-secondary)" }} />
+                ) : fingerprint === "on" ? (
+                  <Check size={16} strokeWidth={2.5} className="shrink-0" style={{ color: "var(--brand-dark)" }} />
+                ) : fingerprint === "off" ? (
+                  <ChevronRight size={14} style={{ color: "var(--text-secondary)" }} className="shrink-0" />
+                ) : undefined
+              }
+            />
             <ListRow
               onClick={() => navigate("/employee/notifications")}
               icon={Bell}
@@ -368,6 +444,22 @@ export default function SettingsPage() {
           © 2026 {APP_NAME} · v{APP_VERSION}
         </p>
       </div>
+
+      <ConfirmDialog
+        open={confirmFingerprintOff}
+        title={t("fingerprint.removeTitle")}
+        message={t("fingerprint.removeBody")}
+        confirmLabel={t("fingerprint.remove")}
+        cancelLabel={t("common.cancel")}
+        destructive
+        onConfirm={() => {
+          if (user) removeBiometric(user.id);
+          setFingerprint("off");
+          setConfirmFingerprintOff(false);
+          addToast(t("fingerprint.removed"), "success");
+        }}
+        onCancel={() => setConfirmFingerprintOff(false)}
+      />
 
       <ConfirmDialog
         open={showDeleteAccount}

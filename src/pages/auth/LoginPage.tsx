@@ -193,14 +193,28 @@ export default function LoginPage() {
             </p>
           </div>
           <div className="flex flex-col gap-4">
-            {/* One screen, two questions. A segmented control rather than two screens, because
-                the answer changes what the form below asks for while nothing else about signing
-                in does. */}
+            {/* One screen, two questions: the answer changes what the form below asks for,
+                while nothing else about signing in does.
+
+                Two words with a rule under them, sized to the words. Not a filled segmented
+                control (a second boxed container inside a form that already has boxed fields —
+                the strip and the phone field read as the same kind of thing), and not two
+                half-screen tabs either: a tab stretched to half the width puts its underline
+                somewhere other than under its label, so the mark stops pointing at the choice.
+                The underline spans exactly the word it belongs to.
+
+                `start`/`end` rather than left/right, so the pair mirrors in Urdu.
+
+                One size and one weight for both, with colour and the rule carrying the state.
+                A heavier active label is wider than a lighter one, so choosing a tab moved the
+                other tab sideways — a small shake on the whole row every time somebody
+                corrected which of the two they are, on a screen where nothing else is
+                supposed to move at all. Font size and weight are now fixed; only the tone
+                changes. */}
             <div
               role="tablist"
               aria-label={t("auth.tabListLabel")}
-              className="flex p-1 rounded-[var(--radius-tile)]"
-              style={{ background: "var(--surface-2)" }}
+              className="flex gap-7"
               data-testid="auth-role-tabs"
             >
               {(["owner", "employee"] as const).map((r) => (
@@ -210,15 +224,21 @@ export default function LoginPage() {
                   role="tab"
                   aria-selected={role === r}
                   onClick={() => { setRole(r); setPhoneError(""); }}
-                  className="ds-pressable flex-1 h-9 rounded-[var(--radius-tile)] text-13 font-bold"
-                  style={
-                    role === r
-                      ? { background: "var(--surface)", border: "1px solid var(--border-control)", color: "var(--text-primary)" }
-                      : { background: "transparent", border: "1px solid transparent", color: "var(--text-secondary)" }
-                  }
+                  className="ds-pressable relative pt-1 pb-2.5 text-14"
+                  style={{
+                    background: "transparent",
+                    color: role === r ? "var(--text-primary)" : "var(--text-secondary)",
+                  }}
                   data-testid={r === "owner" ? "auth-tab-owner" : "auth-tab-employee"}
                 >
                   {r === "owner" ? t("auth.tabOwner") : t("auth.tabEmployee")}
+                  {role === r && (
+                    <span
+                      aria-hidden="true"
+                      className="absolute start-0 end-0 rounded-full"
+                      style={{ bottom: 0, height: 2, background: "var(--brand)" }}
+                    />
+                  )}
                 </button>
               ))}
             </div>
@@ -244,26 +264,6 @@ export default function LoginPage() {
                 </p>
               </div>
             )}
-            {/* The shop, next to the number it belongs to — on the employee tab only. Filled in
-                from an invitation link, and typeable when the link is gone: the code the owner
-                read out, or the shop id from an older link. The pair is what gets checked
-                before a code is spent. */}
-            {role === "employee" && (
-              <>
-                <Input
-                  label={t("auth.shopCode")}
-                  placeholder={t("auth.shopCodePlaceholder")}
-                  value={shopId}
-                  /* Correcting the code must clear what the old one named, or the line keeps
-                     vouching for a shop that is no longer in the field. */
-                  onChange={(e) => { setShopId(e.target.value.trim()); setCodeShopName(""); setPhoneError(""); }}
-                  data-testid="shop-id-input"
-                />
-                <p className="text-11 -mt-2" style={{ color: "var(--text-secondary)" }}>
-                  {t("auth.shopCodeHint")}
-                </p>
-              </>
-            )}
             {reverify && (
               <div
                 className="rounded-[var(--radius-tile)] px-3 py-2"
@@ -287,6 +287,29 @@ export default function LoginPage() {
               autoComplete="tel"
               onKeyDown={(e) => e.key === "Enter" && handleSignIn()}
             />
+            {/* The shop the number belongs to — on the employee tab only, and BELOW the number.
+
+                The number comes first because it is the one thing both roles are asked for: the
+                field a person is already typing into does not move when they correct which tab
+                they are, which is the jump that made this form feel like it reloaded. It is
+                also the order they were told: your number, then the shop code.
+
+                Filled in from an invitation link, and typeable when the link is gone — the code
+                the owner read out, or the shop id from an older link. The pair is what gets
+                checked before a code is spent. */}
+            {role === "employee" && (
+              <>
+                <Input
+                  label={t("auth.shopCode")}
+                  placeholder={t("auth.shopCodePlaceholder")}
+                  value={shopId}
+                  /* Correcting the code must clear what the old one named, or the line keeps
+                     vouching for a shop that is no longer in the field. */
+                  onChange={(e) => { setShopId(e.target.value.trim()); setCodeShopName(""); setPhoneError(""); }}
+                  data-testid="shop-id-input"
+                />
+              </>
+            )}
             <p className="text-12" style={{ color: "var(--text-secondary)" }}>
               {isDemoOtpMode ? t("auth.codeHintDemo") : t("auth.codeHint")}
             </p>

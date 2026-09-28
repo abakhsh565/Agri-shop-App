@@ -1,10 +1,12 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { Check } from "lucide-react";
+import { Check, ChevronRight, Fingerprint, Loader2 } from "lucide-react";
 import AuthLayout from "@/components/layout/AuthLayout";
 import NavHeader from "@/components/ui/NavHeader";
 import PINInput from "@/components/ui/PINInput";
 import { savePin } from "@/lib/pinLock";
+import { biometricPlatformAvailable, enrolBiometric, hasBiometricEnrolment } from "@/lib/biometric";
+import { useUIStore } from "@/stores/uiStore";
 import { useAuthStore } from "@/stores/authStore";
 import { useEducationStore } from "@/stores/educationStore";
 import { useT } from "@/lib/i18n";
@@ -24,6 +26,60 @@ export default function PINSetPage() {
   const [error, setError] = useState(false);
   const [shake, setShake] = useState(false);
   const [saveError, setSaveError] = useState(false);
+
+  /**
+   * The fingerprint, offered at the one moment it can honestly be asked for.
+   *
+   * The person has just proved who they are — they came through the code step and chose a
+   * PIN — and this is the last screen of onboarding, so nothing they are being asked to trust
+   * is new to them. Asking anywhere else would be asking a stranger.
+   *
+   * This is also the *only* place most people will ever meet it. Leaving it to Settings means
+   * the finger is offered to whoever happens to open Settings, which for an employee is
+   * nobody — and then the lock screen has nothing to offer back, which is how a fingerprint
+   * feature quietly does not exist on the phones it was built for.
+   *
+   * Three states, because "off" and "this phone cannot do it" are different sentences and
+   * only one of them is the person's to change.
+   */
+  const [fingerprint, setFingerprint] = useState<"checking" | "on" | "off" | "unavailable">("checking");
+  const [fingerprintBusy, setFingerprintBusy] = useState(false);
+
+  useEffect(() => {
+    if (!done || !user) return;
+    let alive = true;
+    if (hasBiometricEnrolment(user.id)) {
+      setFingerprint("on");
+      return;
+    }
+    biometricPlatformAvailable().then((available) => {
+      if (alive) setFingerprint(available ? "off" : "unavailable");
+    });
+    return () => { alive = false; };
+  }, [done, user]);
+
+  async function handleEnrolFingerprint() {
+    if (!user || fingerprintBusy) return;
+    setFingerprintBusy(true);
+    try {
+      const result = await enrolBiometric(user.id, user.name || user.phone);
+      if (result.status === "ok") {
+        setFingerprint("on");
+        useUIStore.getState().addToast(t("fingerprint.enrolled"), "success");
+      } else if (result.status === "unsupported") {
+        setFingerprint("unavailable");
+        useUIStore.getState().addToast(t("fingerprint.unsupported"), "error");
+      } else if (result.status === "cancelled") {
+        // Dismissing the prompt is a decision, not a failure. The row stays exactly as it
+        // was, so "not now" costs nothing and can be reconsidered a second later.
+        useUIStore.getState().addToast(t("fingerprint.cancelled"), "error");
+      } else {
+        useUIStore.getState().addToast(t("fingerprint.failed"), "error");
+      }
+    } finally {
+      setFingerprintBusy(false);
+    }
+  }
 
   async function handleSetComplete(pin: string) {
     if (pin.length < 4) return;
@@ -100,6 +156,42 @@ export default function PINSetPage() {
           </div>
 
           <div className="flex flex-col gap-2 p-6">
+            {/* The offer, above the two ways out: it is the only thing on this screen being
+                asked rather than answered, and it is the last chance to set it up without a
+                trip to Settings. Absent when the phone has no finger reader — a row that
+                looks tappable and then refuses is worse than one that is not there. */}
+            {(fingerprint === "off" || fingerprint === "on") && (
+              <button
+                type="button"
+                onClick={handleEnrolFingerprint}
+                disabled={fingerprintBusy || fingerprint === "on"}
+                data-testid="pin-done-fingerprint"
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-[var(--radius-tile)] text-start ds-pressable"
+                style={{
+                  background: "var(--surface-2)",
+                  border: "1px solid var(--border-control)",
+                }}
+              >
+                <Fingerprint
+                  size={22}
+                  strokeWidth={1.6}
+                  style={{ color: fingerprint === "on" ? "var(--brand-dark)" : "var(--text-secondary)" }}
+                />
+                <span className="flex-1 min-w-0">
+                  <span className="block text-14 font-bold" style={{ color: "var(--text-primary)" }}>
+                    {fingerprint === "on" ? t("fingerprint.enrolled") : t("fingerprint.offerTitle")}
+                  </span>
+                  <span className="block text-12 mt-0.5" style={{ color: "var(--text-secondary)" }}>
+                    {fingerprint === "on" ? t("fingerprint.offerDone") : t("fingerprint.offerBody")}
+                  </span>
+                </span>
+                {fingerprintBusy
+                  ? <Loader2 size={18} className="animate-spin" style={{ color: "var(--brand-dark)" }} />
+                  : fingerprint === "on"
+                    ? <Check size={18} strokeWidth={2.5} style={{ color: "var(--brand-dark)" }} />
+                    : <ChevronRight size={18} style={{ color: "var(--text-tertiary)" }} />}
+              </button>
+            )}
             <button
               type="button"
               onClick={() => navigate(dest, { replace: true })}

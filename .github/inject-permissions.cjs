@@ -78,6 +78,25 @@ if (xml.includes('android.permission.CAMERA')) {
   console.log('Camera permission injected');
 }
 
+// ── 1b. Fingerprint ────────────────────────────────────────────────────────────
+//
+// Neither Capacitor's template nor the biometric plugin declares this one, and without it
+// `BiometricManager.canAuthenticate()` answers ERROR_NO_HARDWARE on hardware that has a
+// perfectly good sensor — the plugin then reports "no biometry" and the app hides the
+// fingerprint as if the phone could not do it. USE_BIOMETRIC is a normal permission (not
+// runtime-requested): it is granted at install, and it only says the app may ask the system
+// to check a finger. USE_FINGERPRINT is the pre-API-28 spelling, kept for old devices.
+if (xml.includes('android.permission.USE_BIOMETRIC')) {
+  console.log('Biometric permission already present');
+} else {
+  const bio = [
+    '    <uses-permission android:name="android.permission.USE_BIOMETRIC" />',
+    '    <uses-permission android:name="android.permission.USE_FINGERPRINT" />',
+  ].join('\n');
+  xml = xml.replace(/(<manifest[^>]*>)/, '$1\n' + bio + '\n');
+  console.log('Biometric permission injected');
+}
+
 // ── 2. The app's own scheme ────────────────────────────────────────────────────
 if (xml.includes(`android:scheme="${SCHEME}"`)) {
   console.log(`${SCHEME}:// intent-filter already present`);

@@ -5,6 +5,7 @@ import AuthLayout from "@/components/layout/AuthLayout";
 import NavHeader from "@/components/ui/NavHeader";
 import PINInput from "@/components/ui/PINInput";
 import Button from "@/components/ui/Button";
+import Sheet from "@/components/ui/Sheet";
 import { verifyPinDetailed, clearPin } from "@/lib/pinLock";
 import { biometricPlatformAvailable, hasBiometricEnrolment, unlockWithBiometric } from "@/lib/biometric";
 import { useAuthStore } from "@/stores/authStore";
@@ -37,26 +38,30 @@ export default function PINLoginPage() {
   const [error, setError] = useState("");
   const [shake, setShake] = useState(false);
   const [verifying, setVerifying] = useState(false);
-  // "hidden" also covers a phone with no finger reader: the button is only drawn when
-  // there is something behind it.
+  // "hidden" also covers a phone with no finger reader: the mark is only drawn when there is
+  // something behind it.
   const [bioState, setBioState] = useState<"hidden" | "ready" | "working" | "failed">("hidden");
-  /** The phone is asked once, on arrival. A second automatic prompt is a nag. */
+  /**
+   * The sheet that asks for the finger.
+   *
+   * A screen, not a silent OS prompt, for two reasons. The first is that it can *say* what it
+   * wants and offer the way out beside it — a fingerprint dialog that appears from nowhere is
+   * the thing people dismiss without reading. The second is mechanical: WebAuthn will not open
+   * a prompt without a gesture, so the version of this screen that fired the prompt by itself
+   * on arrival was, in a browser, a prompt that never appeared at all.
+   */
+  const [bioSheet, setBioSheet] = useState(false);
+  /** The phone is asked once, on arrival. A second automatic opening is a nag. */
   const promptedRef = useRef(false);
-
-  if (!routeUserOrAuth) {
-    // No user at all → go to login
-    navigate("/login", { replace: true });
-    return null;
-  }
-
-  const user: User = routeUserOrAuth;
 
   /**
    * Enrolling a fingerprint is only worth doing if the app then asks for it.
    *
-   * So the prompt happens on arrival, unprompted, whenever this account has a finger
-   * enrolled on this phone — which is the entire point of enrolling. Cancelling costs
-   * nothing: the keypad is underneath, unchanged, and the button stays there to retry.
+   * So the question is asked on arrival, unasked, whenever this account has a finger enrolled
+   * on this phone — which is the entire point of enrolling. It opens the sheet, it does not
+   * fire the prompt: the person is told what is about to happen and taps the one thing that
+   * starts it. Cancelling costs nothing — the keypad is underneath, unchanged, and the mark is
+   * still there to try again.
    */
   useEffect(() => {
     const who = routeUser ?? authUser;
@@ -67,11 +72,29 @@ export default function PINLoginPage() {
       setBioState("ready");
       if (!promptedRef.current) {
         promptedRef.current = true;
-        void runBiometricUnlock();
+        setBioSheet(true);
       }
     });
     return () => { alive = false; };
   }, [routeUser?.id, authUser?.id]);
+
+  /**
+   * Every hook is above this line, and the bail-out is below all of them.
+   *
+   * This screen mounts before it has a user — a cold launch resolves the profile a tick later
+   * — and while the early return sat above the effect above, that second render called one
+   * hook more than the first. React refuses that outright ("Rendered more hooks than during
+   * the previous render") and replaces the app with an error screen, which is what happened
+   * the first time this effect was reached on a real launch. A conditional return above a
+   * hook is not a style question; it is a crash waiting for the second render.
+   */
+  if (!routeUserOrAuth) {
+    // No user at all → go to login
+    navigate("/login", { replace: true });
+    return null;
+  }
+
+  const user: User = routeUserOrAuth;
 
   /** The one way into the app, whichever check got us here. */
   async function enterApp() {
@@ -125,18 +148,39 @@ export default function PINLoginPage() {
       return;
     }
     if (result.status === "not_enrolled") {
-      // A stale record on the phone. Hide the button rather than offering something that
-      // cannot work; the PIN below is untouched.
+      // A stale record on the phone. Hide the mark rather than offering something that cannot
+      // work; the PIN below is untouched.
       setBioState("hidden");
+      setBioSheet(false);
+      return;
+    }
+    if (result.status === "unsupported") {
+      // The phone answered that it has no finger reader after all (or the app was built
+      // without the native bridge). Say so once, then stop offering it — a control that
+      // cannot work is worse than no control.
+      setBioState("hidden");
+      setBioSheet(false);
+      setError(t("fingerprint.unsupported"));
       return;
     }
     if (result.status === "cancelled") {
-      // Dismissed on purpose — say nothing about it.
+      // Dismissed on purpose — say nothing about it, and leave the sheet open so the mark is
+      // one tap away rather than needing the screen to be re-entered.
       setBioState("ready");
       return;
     }
     setBioState("failed");
     setError(t("fingerprint.failed"));
+  }
+
+  /**
+   * From the mark on the screen: the tap opens the sheet AND is the gesture the prompt needs,
+   * so the person does not tap twice for one intention. The sheet is already on screen by the
+   * time the system dialog draws over it, so nothing appears from nowhere.
+   */
+  function startBiometric() {
+    setBioSheet(true);
+    if (bioState !== "working") void runBiometricUnlock();
   }
 
   async function handlePinComplete(val: string) {
@@ -236,19 +280,27 @@ export default function PINLoginPage() {
 
         <PINInput value={pinValue} onChange={handleChange} error={!!error} shake={shake} />
 
+        {/* The finger, under the keypad's own dots and centred on the screen.
+
+            Deliberately a glyph and nothing else. The word it used to carry ("Use fingerprint")
+            competed with the keypad for the eye on the one screen that should be all keypad,
+            and it made the alternative look like a third field. A finger mark directly under
+            the dots says the same thing in the space of one line, and it is the shape every
+            phone-lock screen uses for this, so it needs no words. It is still a real button:
+            64px of touch target, and a label for anyone who cannot see it. */}
         {bioState !== "hidden" && (
           <button
             type="button"
-            onClick={() => { if (bioState !== "working") void runBiometricUnlock(); }}
+            onClick={startBiometric}
             disabled={bioState === "working"}
+            aria-label={t("fingerprint.use")}
             data-testid="use-fingerprint"
-            className="flex items-center gap-2 h-11 px-5 rounded-full text-13 font-bold ds-pressable disabled:opacity-60"
-            style={{ background: "var(--surface-2)", color: "var(--text-primary)", border: "1px solid var(--divider)" }}
+            className="ds-pressable flex items-center justify-center rounded-full disabled:opacity-60"
+            style={{ width: 64, height: 64, marginTop: -4 }}
           >
             {bioState === "working"
-              ? <Loader2 size={16} className="animate-spin" />
-              : <Fingerprint size={16} style={{ color: "var(--brand-dark)" }} />}
-            {bioState === "working" ? t("fingerprint.checking") : t("fingerprint.use")}
+              ? <Loader2 size={34} className="animate-spin" style={{ color: "var(--brand-dark)" }} />
+              : <Fingerprint size={38} style={{ color: "var(--brand-dark)" }} strokeWidth={1.5} />}
           </button>
         )}
 
@@ -263,6 +315,57 @@ export default function PINLoginPage() {
           {t("auth.forgotPin")}
         </button>
       </div>
+
+      {/* The ask, as a sheet.
+
+          It says who it is for, it holds the one control that starts the check, and it carries
+          the way out ("Enter PIN instead") in the same breath — the two things a system dialog
+          cannot do. Dismissing it changes nothing: the keypad is exactly as it was. */}
+      <Sheet
+        open={bioSheet}
+        onClose={() => setBioSheet(false)}
+        title={t("fingerprint.sheetTitle")}
+      >
+        <div className="px-4 pb-7 pt-1 flex flex-col items-center text-center" data-testid="fingerprint-sheet">
+          <button
+            type="button"
+            onClick={() => { if (bioState !== "working") void runBiometricUnlock(); }}
+            disabled={bioState === "working"}
+            aria-label={t("fingerprint.use")}
+            data-testid="fingerprint-verify"
+            className="ds-pressable flex items-center justify-center rounded-full"
+            style={{
+              width: 88,
+              height: 88,
+              background: "var(--surface-2)",
+              border: "1px solid var(--border-control)",
+            }}
+          >
+            {bioState === "working"
+              ? <Loader2 size={44} className="animate-spin" style={{ color: "var(--brand-dark)" }} />
+              : <Fingerprint size={46} style={{ color: "var(--brand-dark)" }} strokeWidth={1.4} />}
+          </button>
+
+          {/* One line, and it says what to do — not who it is for and what will happen. The
+              name on it was the app talking about the person standing there holding the phone,
+              and the mark above already says which check this is; the instruction is the part
+              that was missing. */}
+          <p className="text-15 font-bold mt-4" style={{ color: "var(--text-primary)" }}>
+            {bioState === "working" ? t("fingerprint.checking") : t("fingerprint.sheetBody")}
+          </p>
+          {error && <p className="text-13 mt-2 text-[#ef4444]">{error}</p>}
+
+          <Button
+            variant="ghost"
+            fullWidth
+            className="mt-5"
+            onClick={() => setBioSheet(false)}
+            testId="fingerprint-use-pin"
+          >
+            {t("fingerprint.usePin")}
+          </Button>
+        </div>
+      </Sheet>
     </AuthLayout>
   );
 }

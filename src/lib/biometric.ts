@@ -1,3 +1,15 @@
+import { Capacitor } from "@capacitor/core";
+//
+// The plugin's TYPES only, at module scope.
+//
+// Its runtime is imported inside the native branches below, and that is deliberate: the
+// package ships an ESM build whose internal imports carry no file extension, which webpack
+// and Vite resolve and Node does not — so a static import here would break every consumer
+// that is not a bundler (the unit tests, and any script that loads this module), for a file
+// the browser never executes. Loading it where it is used fixes that and keeps ~40KB of
+// native bridge out of the web bundle at the same time.
+import type { BiometryErrorType } from "@aparajita/capacitor-biometric-auth";
+import { tNow } from "@/lib/i18n";
 import { secureGet, secureSet, secureHas, secureRemove } from "@/lib/secureStorage";
 
 /**
@@ -31,12 +43,23 @@ import { secureGet, secureSet, secureHas, secureRemove } from "@/lib/secureStora
  *
  * ── Platform reality ─────────────────────────────────────────────────────────────────
  *
- * Android WebView — what Capacitor renders the APK in — has no `PublicKeyCredential` at
- * all, so this works in a browser and on Android Chrome, and simply reports itself
- * unavailable inside the APK. That is why `biometricSupported()` is a feature test rather
- * than an assumption, and why the whole feature has to stay behind one interface: the
- * native bridge for the APK is a drop-in replacement for this file, not a second code path
- * scattered through the screens.
+ * ── Android WebView has no WebAuthn, so the APK gets the OS instead ───────────────────
+ *
+ * Capacitor renders the APK in an Android WebView, which has no `PublicKeyCredential` at
+ * all. WebAuthn alone therefore means "works in a browser, invisible inside the app" — and
+ * invisible is what the app used to be: the fingerprint button simply never appeared on
+ * the phone it was built for.
+ *
+ * So there are two authenticators behind one interface:
+ *
+ *   browser → WebAuthn platform authenticator (created and verified in this file)
+ *   APK     → the device's own BiometricPrompt, through
+ *             `@aparajita/capacitor-biometric-auth`
+ *
+ * Which one is in play is decided by `isNative()` below, at every entry point, so no screen
+ * has to know. The APK's authenticator is the stronger of the two — it is the platform's
+ * own enrolled fingerprint, checked in secure hardware — and it needs no key material kept
+ * on our side, so enrolment there records only that the person chose to use it.
  */
 
 const RP_NAME = "AgriShop";
@@ -50,7 +73,10 @@ const COSE_P256 = 1;
 const UP_FLAG = 0x01;
 const UV_FLAG = 0x04;
 
+/** A browser enrolment: the key material this app must hold to check an assertion itself. */
 export interface EnrolledBiometric {
+  /** Absent on records written before the APK path existed, which are all WebAuthn. */
+  kind?: "webauthn";
   /** base64url of the credential's raw id. */
   credentialId: string;
   /** The captured public key, as a JWK so it survives JSON storage. */
@@ -59,6 +85,99 @@ export interface EnrolledBiometric {
   /** Last signature counter seen, so a replay cannot reuse an older assertion. */
   signCount: number;
   enrolledAt: string;
+}
+
+/**
+ * What enrolment means on each side, kept apart at the type level.
+ *
+ * The APK has no key material of ours to store — the platform holds the fingerprint and
+ * answers for itself — so its record is the opt-in and nothing else. Writing that shape into
+ * the WebAuthn interface would leave four fields that are always absent, and a reader that
+ * cannot tell "not enrolled" from "enrolled a different way".
+ */
+export type StoredEnrolment = EnrolledBiometric | { kind: "native"; enrolledAt: string };
+
+/**
+ * Is the OS's own biometric prompt the authenticator here?
+ *
+ * True inside the built app, false in every browser — and asked through the plugin itself
+ * rather than assumed from the user agent, so a build that forgot to sync the plugin
+ * reports "no biometrics" instead of failing at the prompt.
+ */
+function isNative(): boolean {
+  try {
+    return Capacitor.isNativePlatform() && Capacitor.isPluginAvailable("BiometricAuth");
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The plugin's error codes, as values rather than as an enum import.
+ *
+ * `` `${BiometryErrorType}` `` is the union of the enum's own values, so these strings are
+ * still checked against the package at compile time — misspell one and it stops building.
+ * What it avoids is needing the package at runtime just to compare two strings.
+ */
+type NativeErrorCode = `${BiometryErrorType}`;
+
+/** Dismissals. A person who closed the prompt has not failed to be recognised. */
+const NATIVE_CANCELLED: ReadonlySet<NativeErrorCode> = new Set([
+  "userCancel",
+  "systemCancel",
+  "appCancel",
+  "userFallback",
+]);
+
+/** The device cannot do this at all — as opposed to the person getting it wrong. */
+const NATIVE_UNAVAILABLE: ReadonlySet<NativeErrorCode> = new Set([
+  "biometryNotAvailable",
+  "biometryNotEnrolled",
+  "passcodeNotSet",
+  "noDeviceCredential",
+  "notInteractive",
+]);
+
+/**
+ * The APK's authenticator, mapped onto the same three answers as the WebAuthn one.
+ *
+ * The distinction that matters is *cancelled* versus *failed*: someone who dismissed the
+ * prompt must not be told their fingerprint was wrong, and someone whose finger did not match
+ * must not be left thinking nothing happened.
+ */
+function classifyNativeFailure(err: unknown): "cancelled" | "unsupported" | "failed" {
+  const raw = (err as { code?: unknown } | null)?.code;
+  const code = typeof raw === "string" ? (raw as NativeErrorCode) : null;
+  if (code && NATIVE_CANCELLED.has(code)) return "cancelled";
+  if (code && NATIVE_UNAVAILABLE.has(code)) return "unsupported";
+  return "failed";
+}
+
+/**
+ * The plugin, loaded only where it is used.
+ *
+ * Returns null when the module cannot be loaded at all — a build that shipped without the
+ * native bridge — so every caller reports "this phone cannot do it" rather than throwing in
+ * the middle of a lock screen.
+ */
+async function nativePlugin(): Promise<typeof import("@aparajita/capacitor-biometric-auth") | null> {
+  if (!isNative()) return null;
+  try {
+    return await import("@aparajita/capacitor-biometric-auth");
+  } catch {
+    return null;
+  }
+}
+
+/** The words the system prompt shows inside the app. Localized, because it is read. */
+function nativePrompt() {
+  return {
+    reason: tNow("fingerprint.reason"),
+    cancelTitle: tNow("common.cancel"),
+    // Biometric only. The device passcode is not this app's fallback — the app's own PIN is,
+    // and offering the phone's passcode here would quietly widen what opens the shop.
+    allowDeviceCredential: false,
+  } as const;
 }
 
 export type EnrolResult =
@@ -208,8 +327,16 @@ function derToRawP256(der: Uint8Array<ArrayBuffer>): Uint8Array<ArrayBuffer> {
 
 // ─── Availability ─────────────────────────────────────────────────────────────────────
 
-/** Is the API even present? False in Android WebView, which is why it is asked. */
+/**
+ * Is there an authenticator to ask at all?
+ *
+ * Inside the app this is true as soon as the plugin is there — whether a finger is actually
+ * enrolled is a separate, asynchronous question ({@link biometricPlatformAvailable}), and
+ * conflating the two is how a device with no fingerprint ends up drawing a fingerprint
+ * button.
+ */
 export function biometricSupported(): boolean {
+  if (isNative()) return true;
   return (
     typeof window !== "undefined" &&
     typeof (window as unknown as { PublicKeyCredential?: unknown }).PublicKeyCredential !== "undefined" &&
@@ -221,6 +348,16 @@ export function biometricSupported(): boolean {
 
 /** Is there a finger or a face on this device to check? */
 export async function biometricPlatformAvailable(): Promise<boolean> {
+  const plugin = await nativePlugin();
+  if (plugin) {
+    try {
+      const result = await plugin.BiometricAuth.checkBiometry();
+      return result.isAvailable === true;
+    } catch {
+      return false;
+    }
+  }
+  if (isNative()) return false;
   if (!biometricSupported()) return false;
   try {
     const available = await (
@@ -238,11 +375,11 @@ export function hasBiometricEnrolment(userId: string): boolean {
   return secureHas(ENROL_KEY(userId));
 }
 
-export async function getBiometricEnrolment(userId: string): Promise<EnrolledBiometric | null> {
+export async function getBiometricEnrolment(userId: string): Promise<StoredEnrolment | null> {
   try {
     const raw = await secureGet(ENROL_KEY(userId));
     if (!raw) return null;
-    return JSON.parse(raw) as EnrolledBiometric;
+    return JSON.parse(raw) as StoredEnrolment;
   } catch {
     // A record that cannot be read is a record that cannot be trusted; the PIN still works.
     return null;
@@ -271,6 +408,26 @@ export async function enrolBiometric(
   displayName: string,
 ): Promise<EnrolResult> {
   if (!(await biometricPlatformAvailable())) return { status: "unsupported" };
+
+  // The app's path: prove the finger works once, then remember only that the choice was
+  // made. There is no key to keep — the OS holds the biometric and the APK holds nothing
+  // that could be replayed from a file.
+  const plugin = await nativePlugin();
+  if (plugin) {
+    try {
+      await plugin.BiometricAuth.authenticate(nativePrompt());
+      await secureSet(
+        ENROL_KEY(userId),
+        JSON.stringify({ kind: "native", enrolledAt: new Date().toISOString() }),
+      );
+      return { status: "ok" };
+    } catch (err) {
+      const kind = classifyNativeFailure(err);
+      if (kind === "cancelled") return { status: "cancelled" };
+      if (kind === "unsupported") return { status: "unsupported" };
+      return { status: "failed", message: err instanceof Error ? err.message : "Enrolment failed" };
+    }
+  }
 
   const rpId = window.location.hostname;
   try {
@@ -337,6 +494,27 @@ export async function unlockWithBiometric(userId: string): Promise<UnlockResult>
   const enrolment = await getBiometricEnrolment(userId);
   if (!enrolment) return { status: "not_enrolled" };
   if (!biometricSupported()) return { status: "unsupported" };
+
+  // Inside the app the OS does the checking, so there is nothing to verify here: a resolved
+  // prompt means the platform matched the enrolled finger, and its answer is not ours to
+  // second-guess. The local record is only the person's own opt-in.
+  const plugin = await nativePlugin();
+  if (plugin) {
+    try {
+      await plugin.BiometricAuth.authenticate(nativePrompt());
+      return { status: "ok" };
+    } catch (err) {
+      const kind = classifyNativeFailure(err);
+      if (kind === "cancelled") return { status: "cancelled" };
+      if (kind === "unsupported") return { status: "unsupported" };
+      return { status: "failed", message: err instanceof Error ? err.message : "Unlock failed" };
+    }
+  }
+
+  // A record written by the APK cannot be checked here: there is no public key in it, by
+  // design. That happens when the same account is opened in a browser on a phone whose app
+  // enrolled first, and the honest answer is "not usable here" rather than a crash.
+  if (!("publicKeyJwk" in enrolment)) return { status: "failed", message: "Enrolment was made in the app" };
 
   const challenge = crypto.getRandomValues(new Uint8Array(CHALLENGE_BYTES));
 
