@@ -350,7 +350,10 @@ export default function PINLoginPage() {
               name on it was the app talking about the person standing there holding the phone,
               and the mark above already says which check this is; the instruction is the part
               that was missing. */}
-          <p className="text-15 font-bold mt-4" style={{ color: "var(--text-primary)" }}>
+          <p
+            className="text-12 mt-4"
+            style={{ color: "var(--text-secondary)", fontWeight: 300 }}
+          >
             {bioState === "working" ? t("fingerprint.checking") : t("fingerprint.sheetBody")}
           </p>
           {error && <p className="text-13 mt-2 text-[#ef4444]">{error}</p>}
