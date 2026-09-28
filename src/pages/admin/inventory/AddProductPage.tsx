@@ -1,25 +1,40 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { useBlocker, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
 import ImageUpload from "@/components/ui/ImageUpload";
 import SelectorField from "@/components/ui/SelectorField";
 import Sheet from "@/components/ui/Sheet";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import ListCard from "@/components/ui/ListCard";
 import ListRow from "@/components/ui/ListRow";
 import LogoTile from "@/components/ui/LogoTile";
 import { backToSelf, dependencyHint, readReturnTo } from "@/lib/dependencyGraph";
 import { useCompaniesStore } from "@/stores/companiesStore";
 import { useProductsStore } from "@/stores/productsStore";
-import { rpcCreateProduct, rpcUpdateProduct } from "@/lib/db";
+import {
+  rpcCreateProduct, rpcUpdateProduct, rpcPreviewProductBarcode, rpcProductBarcodes,
+  type BarcodeHistoryEntry,
+} from "@/lib/db";
 import { useUIStore } from "@/stores/uiStore";
 import { useThemeStore } from "@/stores/themeStore";
 import { useT, type I18nKey } from "@/lib/i18n";
 import { clearNav } from "@/lib/navContext";
 import type { ProductCategory, BaseUnit } from "@/types";
 import { Plus, Trash2, Lock, Check, ChevronDown, RefreshCw } from "lucide-react";
-import { generateProductBarcode } from "@/lib/barcode";
+import ScanButton from "@/components/ui/ScanButton";
+import { formatDate } from "@/lib/formatters";
 import { DEFAULT_STOCK_ALERT_SETTINGS, loadStockAlertSettings, type StockAlertSettings } from "@/lib/stockAlerts";
+import { markupPercent, sellingFromMarkup } from "@/lib/profit";
+import { useShopStore } from "@/stores/shopStore";
+import {
+  deleteProductDraft,
+  draftHasContent,
+  draftNewId,
+  getProductDraft,
+  saveProductDraft,
+  type ProductDraft,
+} from "@/lib/productDraft";
 import {
   packUnitsFor,
   toBaseUnit,
@@ -97,6 +112,12 @@ interface PackDraft {
   stockQty: string;
   sellingPrice: string;
   costPrice: string;
+  /**
+   * The same money as the two prices above, said as a percentage on cost. Derived, never
+   * stored: the database keeps cost and selling price, and this is the third way to type
+   * them — so it cannot drift out of step with what is saved.
+   */
+  markup: string;
   /** The size as typed, in `sizeUnit`. */
   sizeValue: string;
   sizeUnit: PackDisplayUnit;
@@ -111,6 +132,23 @@ interface PackDraft {
 
 /** The one sheet this screen still opens. */
 type SheetTarget = { kind: "unit"; pack: number } | null;
+
+/** A price moved: restate the markup from the prices, which stay the source of truth. */
+function withMarkup(p: PackDraft): PackDraft {
+  return { ...p, markup: markupPercent(Number(p.costPrice), Number(p.sellingPrice)) };
+}
+
+/**
+ * The markup moved: write the selling price from it, against the cost it was measured on.
+ *
+ * With no cost price there is nothing to measure, so the selling price is left exactly as
+ * typed and the hint beside the field says why nothing moved — silently ignoring the field
+ * would look like the app had lost the number.
+ */
+function withSellingFromMarkup(p: PackDraft, markup: string): PackDraft {
+  const next = sellingFromMarkup(Number(p.costPrice), markup);
+  return next.sellingPrice === null ? { ...p, markup } : { ...p, markup, sellingPrice: next.sellingPrice };
+}
 
 export default function AddProductPage() {
   const navigate = useNavigate();
@@ -132,23 +170,134 @@ export default function AddProductPage() {
   const presetCompany = companies.find((c) => c.id === presetCompanyId);
   const companyLocked = Boolean(presetCompany) && !isEdit;
 
+  /**
+   * A draft this screen was opened to finish (`?draft=`), read once at first render.
+   *
+   * Read here rather than in an effect on purpose: an effect that filled the fields would
+   * also be able to overwrite what someone had already typed into them, and "the draft loaded
+   * a moment too late and replaced my typing" is not a bug anyone could see coming.
+   */
+  const activeShopId = useShopStore((s) => s.activeShopId);
+  const draftParam = searchParams.get("draft") || "";
+  const [resumed] = useState(() => (draftParam ? getProductDraft(activeShopId, draftParam) : null));
   const [sheet, setSheet] = useState<SheetTarget>(null);
-  const [imageUrl, setImageUrl] = useState<string | null>(existing?.imageUrl ?? null);
-  const [name, setName] = useState(existing?.name ?? "");
-  const [company, setCompany] = useState(existing?.company ?? "");
-  const [category, setCategory] = useState<ProductCategory>(existing?.category ?? "pesticide");
-  const [baseUnit, setBaseUnit] = useState<BaseUnit>((existing?.baseUnit as BaseUnit) ?? "kg");
+  const [imageUrl, setImageUrl] = useState<string | null>(
+    resumed ? resumed.imageUrl : existing?.imageUrl ?? null
+  );
+  const [name, setName] = useState(resumed?.name ?? existing?.name ?? "");
+  const [company, setCompany] = useState(resumed?.company ?? existing?.company ?? "");
+  // A row still filed under the retired "Spray" name opens as Pesticide, so saving an edit
+  // re-files it under the one name the shop now uses instead of preserving a category the
+  // form no longer offers (0162). Nothing else about the product changes.
+  const [category, setCategory] = useState<ProductCategory>(
+    resumed?.category ??
+      (existing?.category && existing.category !== "spray" ? existing.category : "pesticide")
+  );
+  const [baseUnit, setBaseUnit] = useState<BaseUnit>(
+    resumed?.baseUnit ?? (existing?.baseUnit as BaseUnit) ?? "kg"
+  );
   /**
    * The code the shop scans. It stopped being a field whose typing was thrown away in 0158:
    * `create_product` writes it into `product_barcodes` (unique per shop, one primary per
    * product) and refuses a code already in use, and it mints one when this is left empty.
    */
-  const [barcode, setBarcode] = useState(existing?.barcode ?? "");
-  const [packs, setPacks] = useState<PackDraft[]>([]);
+  const [barcode, setBarcode] = useState(resumed?.barcode ?? existing?.barcode ?? "");
+  /**
+   * Codes this product used to have. Kept apart from the field above on purpose: a replaced or
+   * deleted code is no longer this product's barcode, but it is still a fact about it — and it
+   * is still spent, so the trail is also how an owner sees why a code cannot be reused.
+   */
+  const [barcodeTrail, setBarcodeTrail] = useState<BarcodeHistoryEntry[]>([]);
+  const [barcodeBusy, setBarcodeBusy] = useState(false);
+  // A ref, not `barcodeBusy`: React batches, so two taps in one task both read the pre-render
+  // `false`, and a second generate would race the first.
+  const barcodeBusyRef = useRef(false);
+  const [packs, setPacks] = useState<PackDraft[]>(resumed?.packs ?? []);
   const [shopAlerts, setShopAlerts] = useState<StockAlertSettings>(DEFAULT_STOCK_ALERT_SETTINGS);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const savingRef = useRef(false);
+
+  /**
+   * Leaving with something typed.
+   *
+   * A blocked navigation is the only seam that catches every way out of this screen at once —
+   * the header's back arrow, the Android hardware back, a tab in the bottom bar, a deep link —
+   * and it fires *before* the screen is unmounted, so the work is still in the fields when the
+   * prompt appears. Anything less than this is a race with the router, and the person loses
+   * what they typed whenever they lose it.
+   *
+   * `leavingRef` exists for the one navigation that must not be questioned: the redirect after
+   * a successful save, when the fields still hold text but the product is already in stock.
+   */
+  const [askAboutDraft, setAskAboutDraft] = useState(false);
+  const leavingRef = useRef(false);
+  const typedSomething = draftHasContent({ name, company, barcode, packs });
+  const canHoldDraft = !isEdit && Boolean(activeShopId) && typedSomething;
+  const blocker = useBlocker(
+    ({ currentLocation, nextLocation }) =>
+      canHoldDraft &&
+      !leavingRef.current &&
+      !savingRef.current &&
+      currentLocation.pathname !== nextLocation.pathname
+  );
+
+  useEffect(() => {
+    if (blocker.state === "blocked") setAskAboutDraft(true);
+  }, [blocker.state]);
+
+  /** Carry out the navigation the person was already making. */
+  function leaveNow() {
+    leavingRef.current = true;
+    if (blocker.state === "blocked") blocker.proceed();
+    else navigate(returnTo, { replace: true });
+  }
+
+  /** Keep the work on this device, then go. */
+  function handleSaveDraft() {
+    const draft: ProductDraft = {
+      id: resumed?.id ?? draftNewId(),
+      updatedAt: new Date().toISOString(),
+      shopId: activeShopId ?? "",
+      name,
+      company,
+      category,
+      baseUnit,
+      barcode,
+      imageUrl,
+      packs,
+    };
+    const outcome = saveProductDraft(draft);
+    if (!outcome.ok) {
+      // Storage refused it. Saying "saved" here would be the one lie that costs someone the
+      // half-hour they just spent typing, so the prompt stays open and the toast is an error.
+      addToast(t("draft.saveFailed"), "error");
+      return;
+    }
+    setAskAboutDraft(false);
+    addToast(outcome.droppedImage ? t("draft.savedNoPhoto") : t("draft.saved"), "success");
+    // Land on the inventory list rather than wherever the back button was heading. The list
+    // is the confirmation: the draft is now a row with its own chip, which is both the proof
+    // it was kept and the way back to it. Saving it and landing somewhere it cannot be seen
+    // is how a kept draft becomes a forgotten one.
+    leavingRef.current = true;
+    if (blocker.state === "blocked") blocker.reset();
+    clearNav();
+    navigate("/admin/products", { replace: true });
+  }
+
+  /** Throw the work away and go. The draft, if this screen was finishing one, goes too. */
+  function handleDiscardDraft() {
+    if (resumed) deleteProductDraft(activeShopId, resumed.id);
+    setAskAboutDraft(false);
+    leaveNow();
+  }
+
+  /** Stay, and let the router forget the navigation it was asked to make. */
+  function handleKeepEditing() {
+    setAskAboutDraft(false);
+    if (blocker.state === "blocked") blocker.reset();
+  }
 
   /**
    * A product that predates the two-unit rule keeps the unit it already has.
@@ -168,6 +317,7 @@ export default function AddProductPage() {
       stockQty: "",
       sellingPrice: "",
       costPrice: "",
+      markup: "",
       sizeValue: "",
       sizeUnit: packUnitsFor(baseUnit)[0],
       qtyStep: "1",
@@ -192,6 +342,7 @@ export default function AddProductPage() {
           stockQty: String(v.stockQty),
           sellingPrice: String(v.sellingPrice),
           costPrice: String(v.costPrice),
+          markup: markupPercent(v.costPrice, v.sellingPrice),
           sizeValue: String(shown.value),
           sizeUnit: shown.unit,
           qtyStep: String(v.qtyStep),
@@ -231,14 +382,102 @@ export default function AddProductPage() {
     if (companyLocked || isEdit) setCompany(presetCompany.name);
   }, [companyLocked, presetCompany, isEdit]);
 
+  /**
+   * The codes this product used to have. Read from the database rather than remembered from
+   * this session, so a code replaced from another phone is still accounted for — the whole
+   * point of keeping the history is that no device has to remember it.
+   */
+  useEffect(() => {
+    if (!isEdit || !productId) return;
+    let alive = true;
+    rpcProductBarcodes(productId)
+      .then(({ history }) => {
+        if (alive) setBarcodeTrail(history);
+      })
+      .catch(() => {
+        /* The form still works without the trail; an empty history must not block an edit. */
+      });
+    return () => {
+      alive = false;
+    };
+  }, [isEdit, productId]);
+
+  /**
+   * Make a code for this shop. The database does this, not the phone: only the shop knows
+   * every code it has ever used, and a code made up here could be one this shop already retired.
+   */
+  async function handleGenerateBarcode() {
+    if (barcodeBusyRef.current) return;
+    barcodeBusyRef.current = true;
+    setBarcodeBusy(true);
+    try {
+      setBarcode(await rpcPreviewProductBarcode(name.trim() || t("addProduct.unnamedProduct")));
+    } catch (err) {
+      addToast(err instanceof Error ? err.message : t("errors.barcodeMintFailed"), "error");
+    } finally {
+      barcodeBusyRef.current = false;
+      setBarcodeBusy(false);
+    }
+  }
+
+  /**
+   * Removing a barcode is done by clearing the field and saving, which is the plain reading of
+   * an empty field and needs no second control. `update_product` retires the code it replaces
+   * (0161), so the field is the whole of the delete path.
+   */
+
   const units = packUnitsFor(baseUnit);
   const unitLabelFor = (unit: PackDisplayUnit) => t(packUnitLabelKey(unit));
 
   function setPack(i: number, patch: Partial<PackDraft>) {
     setPacks((ps) => ps.map((p, idx) => (idx === i ? { ...p, ...patch } : p)));
   }
+  /**
+   * The next pack starts as a copy of the last, one size up.
+   *
+   * A shop sells the same thing in 5 KG, 10 KG and 25 KG bags at one cost and one margin, so
+   * retyping every number for each pack was most of the work of adding a product. Only the
+   * size moves (10 → 11), and it keeps moving while that size is already on the screen, so the
+   * new card can never be born refused by the duplicate-size rule above.
+   *
+   * **Stock is deliberately not copied.** It is the one number on the card that describes the
+   * shelf rather than the pack, and the database records it as an opening movement — copying it
+   * would count stock into the shop that nobody put on the shelf.
+   */
   function addPack() {
-    setPacks((ps) => [...ps, blankPack(shopAlerts.threshold)]);
+    setPacks((ps) => {
+      if (ps.length === 0) return [blankPack(shopAlerts.threshold)];
+      const last = ps[ps.length - 1];
+      // A name somebody chose is not copied either: the new pack is a different size, and its
+      // name has to come from that size or the bill would show the same pack twice.
+      return [
+        ...ps,
+        {
+          ...last,
+          id: undefined,
+          named: false,
+          typedName: "",
+          stockQty: "",
+          sizeValue: nextSizeValue(ps, last),
+        },
+      ];
+    });
+  }
+
+  /** `10` → `11`, skipping any size already in the list. A blank size has nothing to count up. */
+  function nextSizeValue(ps: PackDraft[], last: PackDraft): string {
+    const base = Number(last.sizeValue);
+    if (!Number.isFinite(base) || base <= 0) return last.sizeValue;
+    const used = new Set(
+      ps
+        .filter((p) => Number(p.sizeValue) > 0)
+        .map((p) => packSizeSignature(toBaseUnit(p.sizeValue, p.sizeUnit), baseUnit))
+    );
+    let n = Math.ceil(base);
+    while (used.has(packSizeSignature(toBaseUnit(n, last.sizeUnit), baseUnit)) && n < base + 1000) {
+      n += 1;
+    }
+    return String(n);
   }
   function removePack(i: number) {
     setPacks((ps) => ps.filter((_, idx) => idx !== i));
@@ -251,22 +490,33 @@ export default function AddProductPage() {
   );
 
   /**
-   * Two packs of the same size cannot both be called "10 KG", because that name is what
-   * appears on the bill, in the pack picker and on a return. Those — and only those — are
-   * asked to be named.
+   * Two packs of one size are refused — not renamed.
+   *
+   * The size *is* the pack's name: "10 KG" is what the bill, the pack picker and a return all
+   * show, so two packs sharing it make every one of those ambiguous. The form used to answer
+   * that by asking for a pet name on top of a size the shopkeeper had already typed, which is
+   * the wrong repair — the number he can see is the one that is wrong, and changing it or its
+   * unit is the whole fix. A size nobody has typed yet (blank, or not a number) is not a
+   * clash; it is an empty box.
    */
   const clashes = useMemo(() => {
     const counts = new Map<string, number>();
-    for (const size of storedSizes) {
-      const key = packSizeSignature(size, baseUnit);
+    packs.forEach((p, i) => {
+      if (!(Number(p.sizeValue) > 0)) return;
+      const key = packSizeSignature(storedSizes[i], baseUnit);
       counts.set(key, (counts.get(key) ?? 0) + 1);
-    }
-    return storedSizes.map((size) => (counts.get(packSizeSignature(size, baseUnit)) ?? 0) > 1);
-  }, [storedSizes, baseUnit]);
+    });
+    return packs.map(
+      (p, i) =>
+        Number(p.sizeValue) > 0 && (counts.get(packSizeSignature(storedSizes[i], baseUnit)) ?? 0) > 1
+    );
+  }, [packs, storedSizes, baseUnit]);
 
   const derivedName = (i: number) => packSizeLabel(storedSizes[i], baseUnit, t);
+  // A pack somebody deliberately named — a pack already on a receipt — keeps that name;
+  // everything else is called what it is, which is what a bill needs.
   const nameFor = (i: number) =>
-    packs[i].named || clashes[i] ? packs[i].typedName.trim() || derivedName(i) : derivedName(i);
+    packs[i].named ? packs[i].typedName.trim() || derivedName(i) : derivedName(i);
 
   function numeric(raw: string, fallback = 0): number {
     const n = Number(raw);
@@ -295,9 +545,8 @@ export default function AddProductPage() {
       setError(t("copy.sellingPriceFor", { name: name.trim() }));
       return;
     }
-    const names = packs.map((_, i) => nameFor(i));
-    if (clashes.some(Boolean) && new Set(names).size !== names.length) {
-      setError(t("copy.nameThosePacks"));
+    if (clashes.some(Boolean)) {
+      setError(t("addProduct.packSizeDuplicate"));
       return;
     }
 
@@ -332,7 +581,11 @@ export default function AddProductPage() {
           category,
           baseUnit,
           imageUrl: imageUrl ?? undefined,
-          barcode: barcode.trim() || undefined,
+          // Sent even when empty, because on an edit an empty field is a fact about the
+          // product — it has no barcode — and not an omission. The database retires the code
+          // it replaces. On create the same empty value means the opposite (mint one), which
+          // is why this is not shared with the branch below.
+          barcode: barcode.trim(),
           variants,
         });
         await useProductsStore.getState().load();
@@ -350,6 +603,9 @@ export default function AddProductPage() {
         await useProductsStore.getState().load();
         addToast(t("copy.addedToInventory", { name: name.trim() }), "success");
       }
+      // The draft became a real product: it is finished, so it stops waiting on the list.
+      if (resumed) deleteProductDraft(activeShopId, resumed.id);
+      leavingRef.current = true;
       clearNav();
       navigate(returnTo, { replace: true });
     } catch (err) {
@@ -388,10 +644,11 @@ export default function AddProductPage() {
   });
 
   /**
-   * The three chips, plus one more only when this product is already filed elsewhere.
-   *
-   * An old product stored as "spray" must not be re-filed just because someone opened it
-   * and pressed Save, so its own category is shown as a fourth chip rather than hidden.
+   * The three chips, plus one more when this product is already filed somewhere the form does
+   * not offer — herbicide, equipment or other. Re-filing an old product just because someone
+   * opened it and pressed Save would be a silent change, so its own category is shown as a
+   * fourth chip rather than hidden. "Spray" is not one of those cases any more: it is the same
+   * shelf as Pesticide, and the state above has already read it as such.
    */
   const categoryChoices = useMemo(() => {
     const set = new Set<ProductCategory>([...QUICK_CATEGORIES, category]);
@@ -468,7 +725,11 @@ export default function AddProductPage() {
 
             {/* The code the shop scans. Optional, because the database mints one when this
                 is empty — but it is a real field now, not the one whose typing used to be
-                discarded on save. */}
+                discarded on save.
+
+                Three ways in, which is every way a barcode reaches a shop: typing one off a
+                supplier's carton, scanning one off a label, or having the shop make one. All
+                three end in the same field, because they are the same fact. */}
             <div>
               <p className={labelCls} style={{ color: "var(--text-secondary)" }}>{t("addProduct.barcode")}</p>
               <div className="flex gap-2">
@@ -478,20 +739,81 @@ export default function AddProductPage() {
                   placeholder={t("addProduct.barcodePlaceholder")}
                   data-testid="product-barcode"
                   dir="ltr"
+                  aria-label={t("addProduct.barcode")}
                   className="flex-1 min-w-0 h-12 rounded-[var(--radius-input)] px-4 text-sm outline-none font-mono"
                   style={fieldStyle}
                 />
-                <button
-                  type="button"
-                  onClick={() => setBarcode(generateProductBarcode(name.trim() || "PRODUCT", packs.length))}
-                  data-testid="product-barcode-generate"
-                  className="h-12 px-3.5 rounded-[var(--radius-input)] flex items-center gap-1.5 text-12 font-semibold shrink-0"
-                  style={fieldStyle}
-                >
-                  <RefreshCw size={14} style={{ color: "var(--text-secondary)" }} />
-                  {t("addProduct.barcodeGenerate")}
-                </button>
+                <ScanButton
+                  size="lg"
+                  label={t("addProduct.barcodeScan")}
+                  onScan={(code) => setBarcode(code)}
+                />
               </div>
+
+              {/* A text action, not a third control competing with the field: making a code is
+                  the fallback for when there is nothing to type or scan. */}
+              <button
+                type="button"
+                onClick={handleGenerateBarcode}
+                disabled={barcodeBusy}
+                data-testid="product-barcode-generate"
+                className="mt-1.5 text-12 font-semibold underline underline-offset-2 disabled:opacity-50"
+                style={{ color: "var(--brand-dark)" }}
+              >
+                <RefreshCw size={12} className="inline me-1 -mt-0.5" />
+                {t("addProduct.barcodeGenerate")}
+              </button>
+
+              {/* Everything above is enforced by the database, not by this screen: it refuses
+                  a code another product owns and refuses one that was ever retired. Saying so
+                  is the only way an owner can tell a refusal apart from a fault. */}
+              <p className="text-11 mt-1.5" style={{ color: "var(--text-secondary)" }}>
+                {t("addProduct.barcodeRules")}
+              </p>
+
+              {barcodeTrail.length > 0 && (
+                <div className="mt-2 rounded-[var(--radius-tile)] overflow-hidden" style={{ border: "1px solid var(--divider)" }}>
+                  <p
+                    className="px-3 py-2 text-11 font-semibold"
+                    style={{ background: "var(--tone-sunken)", color: "var(--text-secondary)" }}
+                  >
+                    {t("addProduct.barcodeHistory")}
+                  </p>
+                  <div data-testid="product-barcode-history">
+                    {barcodeTrail.map((h, i) => (
+                      <div
+                        key={`${h.code}-${h.changedAt}-${i}`}
+                        className="px-3 py-2 flex items-center justify-between gap-2"
+                        style={{ borderTop: "1px solid var(--divider)" }}
+                      >
+                        <div className="min-w-0">
+                          <p className="text-12 font-mono truncate" style={{ color: "var(--text-secondary)" }} dir="ltr">
+                            {h.code}
+                          </p>
+                          <p className="text-11" style={{ color: "var(--text-secondary)" }}>
+                            {t(
+                              h.action === "deleted" ? "barcode.historyDeleted"
+                              : h.action === "replaced" ? "barcode.historyReplaced"
+                              : "barcode.historyAdded",
+                            )}
+                            {h.previousCode ? ` · ${t("barcode.historyWas", { code: h.previousCode })}` : ""}
+                          </p>
+                        </div>
+                        <div className="text-end shrink-0">
+                          <p className="text-11" style={{ color: "var(--text-secondary)" }}>
+                            {formatDate(h.changedAt)}
+                          </p>
+                          {h.retired && (
+                            <p className="text-11 font-semibold" style={{ color: "var(--warning)" }}>
+                              {t("barcode.historyRetired")}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             <div>
@@ -554,18 +876,22 @@ export default function AddProductPage() {
                 )}
               </div>
 
-              {/* The size and the unit beside it are one answer, so they are one control:
-                  the unit offered is decided by the product's unit above, never free. */}
-              <div>
+              {/* The size and the unit beside it are one answer, so they are one control: the
+                  unit offered is decided by the product's unit above, never free — and the row
+                  has to survive a 320px phone, so the number yields the space (`min-w-0`, which
+                  overrides an input's intrinsic minimum width) and the unit chip takes a fixed
+                  share of the row, ellipsizing its word rather than pushing the field off the
+                  card. */}
+              <div className="min-w-0">
                 <p className={cellLabel} style={{ color: "var(--text-secondary)" }}>{t("addProduct.packSize")}</p>
-                <div className="flex gap-2">
+                <div className="flex gap-2 min-w-0">
                   <input
                     type="number"
                     inputMode="decimal"
                     value={p.sizeValue}
                     onChange={(e) => setPack(i, { sizeValue: e.target.value })}
                     data-testid={`product-pack-size-${i}`}
-                    className="flex-1 h-11 rounded-[var(--radius-card)] px-3 text-sm outline-none"
+                    className="flex-1 min-w-0 h-11 rounded-[var(--radius-card)] px-3 text-sm outline-none"
                     style={fieldStyle}
                   />
                   <button
@@ -573,34 +899,27 @@ export default function AddProductPage() {
                     onClick={() => setSheet({ kind: "unit", pack: i })}
                     disabled={units.length < 2}
                     data-testid={`product-pack-unit-${i}`}
-                    className="h-11 px-3 rounded-[var(--radius-card)] flex items-center gap-1.5 text-13 font-semibold shrink-0 disabled:opacity-100"
+                    className="h-11 px-3 min-w-0 max-w-[45%] rounded-[var(--radius-card)] flex items-center gap-1.5 text-13 font-semibold disabled:opacity-100"
                     style={fieldStyle}
                   >
-                    {unitLabelFor(p.sizeUnit)}
-                    {units.length > 1 && <ChevronDown size={14} style={{ color: "var(--text-secondary)" }} />}
+                    <span className="truncate">{unitLabelFor(p.sizeUnit)}</span>
+                    {units.length > 1 && (
+                      <ChevronDown size={14} className="shrink-0" style={{ color: "var(--text-secondary)" }} />
+                    )}
                   </button>
                 </div>
+                {/* The pack that is wrong is the one that says so, where its size is, rather
+                    than one line at the foot of a form the owner would have to search. */}
+                {clashes[i] && (
+                  <p
+                    className="text-11 mt-1"
+                    style={{ color: "var(--error)" }}
+                    data-testid={`product-pack-size-error-${i}`}
+                  >
+                    {t("addProduct.packSizeDuplicate")}
+                  </p>
+                )}
               </div>
-
-              {/* Asked only when the derived name would be ambiguous on the bill. */}
-              {(p.named || clashes[i]) && (
-                <div>
-                  <p className={cellLabel} style={{ color: "var(--text-secondary)" }}>{t("addProduct.packName")}</p>
-                  <input
-                    value={p.typedName}
-                    onChange={(e) => setPack(i, { typedName: e.target.value })}
-                    placeholder={derivedName(i)}
-                    data-testid={`product-pack-name-${i}`}
-                    className="w-full h-11 rounded-[var(--radius-card)] px-3 text-sm outline-none"
-                    style={fieldStyle}
-                  />
-                  {clashes[i] && (
-                    <p className="text-11 mt-1" style={{ color: "var(--text-secondary)" }}>
-                      {t("addProduct.packNameClash")}
-                    </p>
-                  )}
-                </div>
-              )}
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
@@ -609,11 +928,23 @@ export default function AddProductPage() {
                     type="number"
                     inputMode="decimal"
                     value={p.costPrice}
-                    onChange={(e) => setPack(i, { costPrice: e.target.value })}
+                    onChange={(e) => setPack(i, withMarkup({ ...p, costPrice: e.target.value }))}
                     data-testid={`product-pack-cost-${i}`}
                     className="w-full h-11 rounded-[var(--radius-card)] px-3 text-sm outline-none"
                     style={fieldStyle}
                   />
+                  {/* Left empty, this one field is what turns every profit figure in the app
+                      into the sale price. Said here, once, at the moment it is entered —
+                      not months later on a report nobody can explain. */}
+                  {!(Number(p.costPrice) > 0) && (
+                    <p
+                      className="text-11 mt-1"
+                      style={{ color: "var(--warning)" }}
+                      data-testid={`product-pack-cost-hint-${i}`}
+                    >
+                      {t("addProduct.costMissingHint")}
+                    </p>
+                  )}
                 </div>
                 <div>
                   <p className={cellLabel} style={{ color: "var(--text-secondary)" }}>{t("addProduct.sellFor")}</p>
@@ -621,12 +952,46 @@ export default function AddProductPage() {
                     type="number"
                     inputMode="decimal"
                     value={p.sellingPrice}
-                    onChange={(e) => setPack(i, { sellingPrice: e.target.value })}
+                    onChange={(e) => setPack(i, withMarkup({ ...p, sellingPrice: e.target.value }))}
                     data-testid={`product-pack-sell-${i}`}
                     className="w-full h-11 rounded-[var(--radius-card)] px-3 text-sm outline-none"
                     style={fieldStyle}
                   />
                 </div>
+              </div>
+
+              {/* The same money, said the other way round.
+
+                  A shopkeeper thinks in "25% on cost" as often as in "sell at 500", so both
+                  doors to the number are open. Whichever one is typed re-states the other
+                  two, which is why the cost field, the selling field and this one are never
+                  set independently: markup is derived from the prices (so it can never
+                  disagree with what is saved), and typing a markup writes the selling price
+                  instead. */}
+              <div>
+                <p className={cellLabel} style={{ color: "var(--text-secondary)" }}>{t("addProduct.markup")}</p>
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  value={p.markup}
+                  onChange={(e) => setPack(i, withSellingFromMarkup(p, e.target.value))}
+                  data-testid={`product-pack-markup-${i}`}
+                  placeholder="%"
+                  className="w-full h-11 rounded-[var(--radius-card)] px-3 text-sm outline-none"
+                  style={fieldStyle}
+                />
+                {/* A percentage of nothing is nothing: with no cost price entered the
+                    selling price is left exactly as typed, and this says why it did not
+                    move instead of silently ignoring the field. */}
+                {!(Number(p.costPrice) > 0) && (
+                  <p
+                    className="text-11 mt-1"
+                    style={{ color: "var(--text-secondary)" }}
+                    data-testid={`product-pack-markup-hint-${i}`}
+                  >
+                    {t("addProduct.markupNeedsCost")}
+                  </p>
+                )}
               </div>
 
               {/* How many are on the shelf: the one quantity the database stores per pack.
@@ -744,6 +1109,25 @@ export default function AddProductPage() {
           {loading ? t("common.saving") : isEdit ? t("products.saveChanges") : t("products.addButton")}
         </button>
       </div>
+
+      {/* ── Leaving with unsaved work ──────────────────────────────────────────── */}
+      {/* An alert, not a sheet. A sheet is a container you browse — a supplier list, a pack
+          unit — and this is a decision about the screen you are on, which is what a centered
+          alert is for. Three answers, because there are three: keep it, leave it, stay. Two
+          buttons would silently pick one of them for the person.
+          Dismissing it by backdrop or Escape means keep editing, never discard: the one answer
+          that cannot be undone must not be reachable by a stray tap. */}
+      <ConfirmDialog
+        open={askAboutDraft}
+        title={t("draft.promptTitle")}
+        message={t("draft.promptBody")}
+        confirmLabel={t("draft.saveDraft")}
+        cancelLabel={t("draft.keepEditing")}
+        tertiaryLabel={t("draft.discard")}
+        onConfirm={handleSaveDraft}
+        onCancel={handleKeepEditing}
+        onTertiary={handleDiscardDraft}
+      />
 
       {/* ── The pack-size unit ─────────────────────────────────────────────────── */}
       <Sheet

@@ -9,7 +9,7 @@
 -- SECTION 1: ENUMS
 -- ═══════════════════════════════════════════════════════════════════════════════
 
-DO $$ BEGIN CREATE TYPE user_role AS ENUM ('admin','co_admin','employee'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE TYPE user_role AS ENUM ('admin','employee'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN CREATE TYPE product_category AS ENUM ('spray','seed','fertilizer','other'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN CREATE TYPE payment_type AS ENUM ('full','partial','credit'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN CREATE TYPE payment_method AS ENUM ('cash','bank_transfer'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
@@ -390,7 +390,7 @@ CREATE OR REPLACE FUNCTION public.app_is_admin()
 RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
   SELECT EXISTS (
     SELECT 1 FROM users WHERE id = app_current_user_id()
-    AND role IN ('admin', 'co_admin') AND is_active = true
+    AND role IN ('admin') AND is_active = true
   );
 $$;
 

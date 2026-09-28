@@ -4,7 +4,8 @@
       "C:\\Program Files\\nodejs\\node.exe",
       "C:\\Users\\mg\\Downloads\\Agrishop Inventory management system - New\\node_modules\\@playwright\\test\\cli.js",
       "test",
-      "tests/e2e/crossScreenSync.spec.ts"
+      "tests/e2e/accessUx.spec.ts",
+      "--workers=1"
     ],
     "configFile": "C:\\Users\\mg\\Downloads\\Agrishop Inventory management system - New\\playwright.config.ts",
     "rootDir": "C:/Users/mg/Downloads/Agrishop Inventory management system - New/tests/e2e",
@@ -76,26 +77,35 @@
   },
   "suites": [
     {
-      "title": "crossScreenSync.spec.ts",
-      "file": "crossScreenSync.spec.ts",
+      "title": "accessUx.spec.ts",
+      "file": "accessUx.spec.ts",
       "column": 0,
       "line": 0,
       "specs": [],
       "suites": [
         {
-          "title": "Cross-Screen Synchronization",
-          "file": "crossScreenSync.spec.ts",
-          "line": 29,
+          "title": "Employee job & access — simple for the owner, exact underneath",
+          "file": "accessUx.spec.ts",
+          "line": 132,
           "column": 6,
           "specs": [
             {
-              "title": "Customer: name change propagates from profile to list",
+              "title": "1. Adding an employee asks only who / what job / where, with no RBAC jargon",
               "ok": true,
               "tags": [],
               "tests": [
                 {
                   "timeout": 120000,
-                  "annotations": [],
+                  "annotations": [
+                    {
+                      "type": "serial",
+                      "location": {
+                        "file": "C:\\Users\\mg\\Downloads\\Agrishop Inventory management system - New\\tests\\e2e\\accessUx.spec.ts",
+                        "line": 0,
+                        "column": 0
+                      }
+                    }
+                  ],
                   "expectedStatus": "passed",
                   "projectId": "e2e",
                   "projectName": "e2e",
@@ -104,32 +114,50 @@
                       "workerIndex": 0,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 9939,
+                      "duration": 24387,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-09-14T22:33:54.235Z",
-                      "annotations": [],
+                      "startTime": "2026-09-27T19:24:52.187Z",
+                      "annotations": [
+                        {
+                          "type": "serial",
+                          "location": {
+                            "file": "C:\\Users\\mg\\Downloads\\Agrishop Inventory management system - New\\tests\\e2e\\accessUx.spec.ts",
+                            "line": 0,
+                            "column": 0
+                          }
+                        }
+                      ],
                       "attachments": []
                     }
                   ],
                   "status": "expected"
                 }
               ],
-              "id": "0d294ec4937b76db6d7d-0b67f697940d8b15b2b7",
-              "file": "crossScreenSync.spec.ts",
-              "line": 50,
+              "id": "c14916d0127166104fee-df1bf1959d2a8e746d11",
+              "file": "accessUx.spec.ts",
+              "line": 140,
               "column": 3
             },
             {
-              "title": "Customer: credit limit change propagates",
+              "title": "2. Creating from the simplified screen writes the right membership, then the list shows it",
               "ok": true,
               "tags": [],
               "tests": [
                 {
                   "timeout": 120000,
-                  "annotations": [],
+                  "annotations": [
+                    {
+                      "type": "serial",
+                      "location": {
+                        "file": "C:\\Users\\mg\\Downloads\\Agrishop Inventory management system - New\\tests\\e2e\\accessUx.spec.ts",
+                        "line": 0,
+                        "column": 0
+                      }
+                    }
+                  ],
                   "expectedStatus": "passed",
                   "projectId": "e2e",
                   "projectName": "e2e",
@@ -138,32 +166,50 @@
                       "workerIndex": 0,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 7273,
+                      "duration": 20238,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-09-14T22:34:07.225Z",
-                      "annotations": [],
+                      "startTime": "2026-09-27T19:25:17.488Z",
+                      "annotations": [
+                        {
+                          "type": "serial",
+                          "location": {
+                            "file": "C:\\Users\\mg\\Downloads\\Agrishop Inventory management system - New\\tests\\e2e\\accessUx.spec.ts",
+                            "line": 0,
+                            "column": 0
+                          }
+                        }
+                      ],
                       "attachments": []
                     }
                   ],
                   "status": "expected"
                 }
               ],
-              "id": "0d294ec4937b76db6d7d-300440615edb30eb08c5",
-              "file": "crossScreenSync.spec.ts",
-              "line": 85,
+              "id": "c14916d0127166104fee-1b28fd2db6ee1e4cf8e1",
+              "file": "accessUx.spec.ts",
+              "line": 203,
               "column": 3
             },
             {
-              "title": "Customer: phone change propagates from profile to list",
+              "title": "3. The same flow in Urdu: RTL, translated, no English copy leaking",
               "ok": true,
               "tags": [],
               "tests": [
                 {
                   "timeout": 120000,
-                  "annotations": [],
+                  "annotations": [
+                    {
+                      "type": "serial",
+                      "location": {
+                        "file": "C:\\Users\\mg\\Downloads\\Agrishop Inventory management system - New\\tests\\e2e\\accessUx.spec.ts",
+                        "line": 0,
+                        "column": 0
+                      }
+                    }
+                  ],
                   "expectedStatus": "passed",
                   "projectId": "e2e",
                   "projectName": "e2e",
@@ -172,32 +218,50 @@
                       "workerIndex": 0,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 4842,
+                      "duration": 14974,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-09-14T22:34:14.518Z",
-                      "annotations": [],
+                      "startTime": "2026-09-27T19:25:37.756Z",
+                      "annotations": [
+                        {
+                          "type": "serial",
+                          "location": {
+                            "file": "C:\\Users\\mg\\Downloads\\Agrishop Inventory management system - New\\tests\\e2e\\accessUx.spec.ts",
+                            "line": 0,
+                            "column": 0
+                          }
+                        }
+                      ],
                       "attachments": []
                     }
                   ],
                   "status": "expected"
                 }
               ],
-              "id": "0d294ec4937b76db6d7d-f0eeab6ae1e897a13520",
-              "file": "crossScreenSync.spec.ts",
-              "line": 107,
+              "id": "c14916d0127166104fee-4aa919e54e44cccf4480",
+              "file": "accessUx.spec.ts",
+              "line": 351,
               "column": 3
             },
             {
-              "title": "Customer: image change propagates across screens",
+              "title": "4. Employee detail explains role, place and access without RBAC vocabulary",
               "ok": true,
               "tags": [],
               "tests": [
                 {
                   "timeout": 120000,
-                  "annotations": [],
+                  "annotations": [
+                    {
+                      "type": "serial",
+                      "location": {
+                        "file": "C:\\Users\\mg\\Downloads\\Agrishop Inventory management system - New\\tests\\e2e\\accessUx.spec.ts",
+                        "line": 0,
+                        "column": 0
+                      }
+                    }
+                  ],
                   "expectedStatus": "passed",
                   "projectId": "e2e",
                   "projectName": "e2e",
@@ -206,32 +270,50 @@
                       "workerIndex": 0,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 6143,
+                      "duration": 10333,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-09-14T22:34:19.384Z",
-                      "annotations": [],
+                      "startTime": "2026-09-27T19:25:52.762Z",
+                      "annotations": [
+                        {
+                          "type": "serial",
+                          "location": {
+                            "file": "C:\\Users\\mg\\Downloads\\Agrishop Inventory management system - New\\tests\\e2e\\accessUx.spec.ts",
+                            "line": 0,
+                            "column": 0
+                          }
+                        }
+                      ],
                       "attachments": []
                     }
                   ],
                   "status": "expected"
                 }
               ],
-              "id": "0d294ec4937b76db6d7d-245d60b1c7dd9818e024",
-              "file": "crossScreenSync.spec.ts",
-              "line": 127,
+              "id": "c14916d0127166104fee-5f3076b881e6d1fbc2f7",
+              "file": "accessUx.spec.ts",
+              "line": 419,
               "column": 3
             },
             {
-              "title": "Product: name change propagates from detail to list",
+              "title": "5. Customize access saves an override in the DB, and \"use role access only\" removes it",
               "ok": true,
               "tags": [],
               "tests": [
                 {
                   "timeout": 120000,
-                  "annotations": [],
+                  "annotations": [
+                    {
+                      "type": "serial",
+                      "location": {
+                        "file": "C:\\Users\\mg\\Downloads\\Agrishop Inventory management system - New\\tests\\e2e\\accessUx.spec.ts",
+                        "line": 0,
+                        "column": 0
+                      }
+                    }
+                  ],
                   "expectedStatus": "passed",
                   "projectId": "e2e",
                   "projectName": "e2e",
@@ -240,32 +322,50 @@
                       "workerIndex": 0,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 9316,
+                      "duration": 16969,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-09-14T22:34:25.548Z",
-                      "annotations": [],
+                      "startTime": "2026-09-27T19:26:03.131Z",
+                      "annotations": [
+                        {
+                          "type": "serial",
+                          "location": {
+                            "file": "C:\\Users\\mg\\Downloads\\Agrishop Inventory management system - New\\tests\\e2e\\accessUx.spec.ts",
+                            "line": 0,
+                            "column": 0
+                          }
+                        }
+                      ],
                       "attachments": []
                     }
                   ],
                   "status": "expected"
                 }
               ],
-              "id": "0d294ec4937b76db6d7d-baf54c15fc16a836d9f5",
-              "file": "crossScreenSync.spec.ts",
-              "line": 150,
+              "id": "c14916d0127166104fee-e13cc929d2bafefb1c56",
+              "file": "accessUx.spec.ts",
+              "line": 443,
               "column": 3
             },
             {
-              "title": "Product: price change propagates",
+              "title": "6. Access can be customized while inviting, and a role change keeps those exceptions",
               "ok": true,
               "tags": [],
               "tests": [
                 {
                   "timeout": 120000,
-                  "annotations": [],
+                  "annotations": [
+                    {
+                      "type": "serial",
+                      "location": {
+                        "file": "C:\\Users\\mg\\Downloads\\Agrishop Inventory management system - New\\tests\\e2e\\accessUx.spec.ts",
+                        "line": 0,
+                        "column": 0
+                      }
+                    }
+                  ],
                   "expectedStatus": "passed",
                   "projectId": "e2e",
                   "projectName": "e2e",
@@ -274,32 +374,50 @@
                       "workerIndex": 0,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 6966,
+                      "duration": 22588,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-09-14T22:34:34.891Z",
-                      "annotations": [],
+                      "startTime": "2026-09-27T19:26:20.158Z",
+                      "annotations": [
+                        {
+                          "type": "serial",
+                          "location": {
+                            "file": "C:\\Users\\mg\\Downloads\\Agrishop Inventory management system - New\\tests\\e2e\\accessUx.spec.ts",
+                            "line": 0,
+                            "column": 0
+                          }
+                        }
+                      ],
                       "attachments": []
                     }
                   ],
                   "status": "expected"
                 }
               ],
-              "id": "0d294ec4937b76db6d7d-57d85e152a397c5d15e5",
-              "file": "crossScreenSync.spec.ts",
-              "line": 183,
+              "id": "c14916d0127166104fee-f82216cf1786cc4b8ad5",
+              "file": "accessUx.spec.ts",
+              "line": 482,
               "column": 3
             },
             {
-              "title": "Product: stock change propagates",
+              "title": "7. A partly typed code says so instead of waiting in silence",
               "ok": true,
               "tags": [],
               "tests": [
                 {
                   "timeout": 120000,
-                  "annotations": [],
+                  "annotations": [
+                    {
+                      "type": "serial",
+                      "location": {
+                        "file": "C:\\Users\\mg\\Downloads\\Agrishop Inventory management system - New\\tests\\e2e\\accessUx.spec.ts",
+                        "line": 0,
+                        "column": 0
+                      }
+                    }
+                  ],
                   "expectedStatus": "passed",
                   "projectId": "e2e",
                   "projectName": "e2e",
@@ -308,226 +426,31 @@
                       "workerIndex": 0,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 4553,
+                      "duration": 7813,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-09-14T22:34:41.885Z",
-                      "annotations": [],
+                      "startTime": "2026-09-27T19:26:42.821Z",
+                      "annotations": [
+                        {
+                          "type": "serial",
+                          "location": {
+                            "file": "C:\\Users\\mg\\Downloads\\Agrishop Inventory management system - New\\tests\\e2e\\accessUx.spec.ts",
+                            "line": 0,
+                            "column": 0
+                          }
+                        }
+                      ],
                       "attachments": []
                     }
                   ],
                   "status": "expected"
                 }
               ],
-              "id": "0d294ec4937b76db6d7d-91fbdd7e716a20bb69f6",
-              "file": "crossScreenSync.spec.ts",
-              "line": 205,
-              "column": 3
-            },
-            {
-              "title": "Company: name change propagates from detail to list",
-              "ok": true,
-              "tags": [],
-              "tests": [
-                {
-                  "timeout": 120000,
-                  "annotations": [],
-                  "expectedStatus": "passed",
-                  "projectId": "e2e",
-                  "projectName": "e2e",
-                  "results": [
-                    {
-                      "workerIndex": 0,
-                      "parallelIndex": 0,
-                      "status": "passed",
-                      "duration": 8406,
-                      "errors": [],
-                      "stdout": [],
-                      "stderr": [],
-                      "retry": 0,
-                      "startTime": "2026-09-14T22:34:46.459Z",
-                      "annotations": [],
-                      "attachments": []
-                    }
-                  ],
-                  "status": "expected"
-                }
-              ],
-              "id": "0d294ec4937b76db6d7d-0c9f490dbe13bffae80a",
-              "file": "crossScreenSync.spec.ts",
-              "line": 227,
-              "column": 3
-            },
-            {
-              "title": "Company: payable change propagates",
-              "ok": true,
-              "tags": [],
-              "tests": [
-                {
-                  "timeout": 120000,
-                  "annotations": [],
-                  "expectedStatus": "passed",
-                  "projectId": "e2e",
-                  "projectName": "e2e",
-                  "results": [
-                    {
-                      "workerIndex": 0,
-                      "parallelIndex": 0,
-                      "status": "passed",
-                      "duration": 4753,
-                      "errors": [],
-                      "stdout": [],
-                      "stderr": [],
-                      "retry": 0,
-                      "startTime": "2026-09-14T22:34:54.899Z",
-                      "annotations": [],
-                      "attachments": []
-                    }
-                  ],
-                  "status": "expected"
-                }
-              ],
-              "id": "0d294ec4937b76db6d7d-d24607417e09f9b8c299",
-              "file": "crossScreenSync.spec.ts",
-              "line": 260,
-              "column": 3
-            },
-            {
-              "title": "Employee: name change propagates from detail to list",
-              "ok": true,
-              "tags": [],
-              "tests": [
-                {
-                  "timeout": 120000,
-                  "annotations": [],
-                  "expectedStatus": "passed",
-                  "projectId": "e2e",
-                  "projectName": "e2e",
-                  "results": [
-                    {
-                      "workerIndex": 0,
-                      "parallelIndex": 0,
-                      "status": "passed",
-                      "duration": 11109,
-                      "errors": [],
-                      "stdout": [],
-                      "stderr": [],
-                      "retry": 0,
-                      "startTime": "2026-09-14T22:34:59.676Z",
-                      "annotations": [],
-                      "attachments": []
-                    }
-                  ],
-                  "status": "expected"
-                }
-              ],
-              "id": "0d294ec4937b76db6d7d-5a13d4d8be2392ce39b0",
-              "file": "crossScreenSync.spec.ts",
-              "line": 282,
-              "column": 3
-            },
-            {
-              "title": "Employee: active status change propagates",
-              "ok": true,
-              "tags": [],
-              "tests": [
-                {
-                  "timeout": 120000,
-                  "annotations": [],
-                  "expectedStatus": "passed",
-                  "projectId": "e2e",
-                  "projectName": "e2e",
-                  "results": [
-                    {
-                      "workerIndex": 0,
-                      "parallelIndex": 0,
-                      "status": "passed",
-                      "duration": 5773,
-                      "errors": [],
-                      "stdout": [],
-                      "stderr": [],
-                      "retry": 0,
-                      "startTime": "2026-09-14T22:35:10.811Z",
-                      "annotations": [],
-                      "attachments": []
-                    }
-                  ],
-                  "status": "expected"
-                }
-              ],
-              "id": "0d294ec4937b76db6d7d-5e4c8d879c2c13eb75a0",
-              "file": "crossScreenSync.spec.ts",
-              "line": 315,
-              "column": 3
-            },
-            {
-              "title": "Navigation: each screen mount loads fresh data from store",
-              "ok": true,
-              "tags": [],
-              "tests": [
-                {
-                  "timeout": 120000,
-                  "annotations": [],
-                  "expectedStatus": "passed",
-                  "projectId": "e2e",
-                  "projectName": "e2e",
-                  "results": [
-                    {
-                      "workerIndex": 0,
-                      "parallelIndex": 0,
-                      "status": "passed",
-                      "duration": 12588,
-                      "errors": [],
-                      "stdout": [],
-                      "stderr": [],
-                      "retry": 0,
-                      "startTime": "2026-09-14T22:35:16.614Z",
-                      "annotations": [],
-                      "attachments": []
-                    }
-                  ],
-                  "status": "expected"
-                }
-              ],
-              "id": "0d294ec4937b76db6d7d-93a67cc6ea6ddc2d02fc",
-              "file": "crossScreenSync.spec.ts",
-              "line": 339,
-              "column": 3
-            },
-            {
-              "title": "No stale state: dashboard and list screens show consistent data",
-              "ok": true,
-              "tags": [],
-              "tests": [
-                {
-                  "timeout": 120000,
-                  "annotations": [],
-                  "expectedStatus": "passed",
-                  "projectId": "e2e",
-                  "projectName": "e2e",
-                  "results": [
-                    {
-                      "workerIndex": 0,
-                      "parallelIndex": 0,
-                      "status": "passed",
-                      "duration": 10385,
-                      "errors": [],
-                      "stdout": [],
-                      "stderr": [],
-                      "retry": 0,
-                      "startTime": "2026-09-14T22:35:29.243Z",
-                      "annotations": [],
-                      "attachments": []
-                    }
-                  ],
-                  "status": "expected"
-                }
-              ],
-              "id": "0d294ec4937b76db6d7d-2b810a5263e6f4756984",
-              "file": "crossScreenSync.spec.ts",
-              "line": 372,
+              "id": "c14916d0127166104fee-ece54a0033a88108f304",
+              "file": "accessUx.spec.ts",
+              "line": 566,
               "column": 3
             }
           ]
@@ -537,9 +460,9 @@
   ],
   "errors": [],
   "stats": {
-    "startTime": "2026-09-14T22:33:52.709Z",
-    "duration": 113114.82100000001,
-    "expected": 13,
+    "startTime": "2026-09-27T19:24:41.391Z",
+    "duration": 132443.96399999998,
+    "expected": 7,
     "skipped": 0,
     "unexpected": 0,
     "flaky": 0

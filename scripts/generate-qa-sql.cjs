@@ -3,7 +3,7 @@ const path = require('path');
 
 // Bootstrap: custom types
 const types = `
-DO $$ BEGIN CREATE TYPE user_role AS ENUM ('admin', 'co_admin', 'employee'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE TYPE user_role AS ENUM ('admin', 'employee'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN CREATE TYPE payment_type AS ENUM ('full', 'partial', 'credit'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN CREATE TYPE payment_method AS ENUM ('cash', 'bank_transfer', 'mobile'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN CREATE TYPE sale_status AS ENUM ('completed', 'voided', 'returned'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;

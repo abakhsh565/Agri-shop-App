@@ -401,7 +401,10 @@ describe('Security Audit — RLS & Authorization', () => {
     const src = fn.rows[0].src;
     expect(src).toContain('ROLE_PROTECTED');
     expect(src).toContain('admin');
-    expect(src).toContain('co_admin');
+    // The shop has two account roles; `co_admin` was a second name for `admin` and was
+    // removed in 0167. The trigger must be written against the one role that has this
+    // authority, so a reappearance of the label here is a regression, not a nit.
+    expect(src).not.toContain('co_admin');
   });
 
   // ─── Archive/Restore preserves history ─────────────────────────────────────

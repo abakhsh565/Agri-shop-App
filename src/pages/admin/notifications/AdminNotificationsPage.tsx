@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
@@ -6,6 +6,8 @@ import ListCard from "@/components/ui/ListCard";
 import ListRow from "@/components/ui/ListRow";
 import { SkeletonList } from "@/components/ui/Skeleton";
 import { useNotificationStore, type AppNotification } from "@/stores/notificationStore";
+import { useShopStore } from "@/stores/shopStore";
+import { useAuthStore } from "@/stores/authStore";
 import { useThemeStore } from "@/stores/themeStore";
 import { useCurrentTime } from "@/lib/useCurrentTime";
 import { useT } from "@/lib/i18n";
@@ -84,7 +86,7 @@ function groupByTime(items: AppNotification[], now: Date, t: any): TimeGroup[] {
 
 export default function AdminNotificationsPage() {
   const navigate = useNavigate();
-  const { items, loading, ready, load, subscribe, markAllRead } = useNotificationStore();
+  const { items, loading, ready, load, subscribe, markAllRead, markManyRead } = useNotificationStore();
   const { language } = useThemeStore();
   const isUrdu = language === "ur";
   const t = useT();
@@ -96,7 +98,42 @@ export default function AdminNotificationsPage() {
     return unsub;
   }, []);
 
-  const groups = useMemo(() => groupByTime(items, now, t), [items, now, t]);
+  // ── Which branch am I reading? ────────────────────────────────────────────────
+  // An account that runs more than one branch is told about all of them here, because
+  // this is the screen whose job is "everything that happened". It is also the only place
+  // that can say so: Home is about the branch you are standing in, and its bell counts
+  // that branch alone. With a single branch there is nothing to categorise, so the tabs are
+  // not drawn at all and the screen reads exactly as it always has.
+  const branches = useShopStore((s) => s.branches);
+  const branchesLoaded = useShopStore((s) => s.branchesLoaded);
+  const loadBranches = useShopStore((s) => s.loadBranches);
+  const accountRole = useAuthStore((s) => s.user?.role);
+
+  useEffect(() => {
+    if (!branchesLoaded) void loadBranches();
+  }, [branchesLoaded, loadBranches]);
+
+  /** `"all"` or a branch id. Picked when the multi-branch case is on screen. */
+  const [tab, setTab] = useState<string>("all");
+
+  const showTabs = accountRole === "admin" && branches.length > 1;
+  const activeTab: string = showTabs ? tab : "all";
+
+  const shown = useMemo(
+    () => (activeTab === "all" ? items : items.filter((n) => n.shop_id === activeTab)),
+    [items, activeTab],
+  );
+
+  const groups = useMemo(() => groupByTime(shown, now, t), [shown, now, t]);
+
+  const tabBranch = activeTab === "all" ? null : branches.find((b) => b.id === activeTab) ?? null;
+  const unreadShown = shown.filter((n) => !n.read);
+
+  // A branch that was deleted while this screen was open must not leave the screen on a tab
+  // that no longer exists — the filter would go on returning nothing with no way to see why.
+  useEffect(() => {
+    if (activeTab !== "all" && !branches.some((b) => b.id === activeTab)) setTab("all");
+  }, [branches, activeTab]);
 
   return (
     <div
@@ -108,9 +145,12 @@ export default function AdminNotificationsPage() {
         title={t("notifications.title")}
         
         right={
-          items.some((n) => !n.read) ? (
+          unreadShown.length > 0 ? (
             <button
-              onClick={markAllRead}
+              // Marking read applies to what is ON SCREEN. With a branch selected that is
+              // that branch; on the all-branches tab it is everything, which is what it
+              // always did.
+              onClick={() => (activeTab === "all" ? markAllRead() : markManyRead(unreadShown.map((n) => n.id)))}
               className="text-xs font-semibold"
               style={{ color: "var(--brand-dark)" }}
             >
@@ -120,9 +160,62 @@ export default function AdminNotificationsPage() {
         }
       />
 
+      {/* One tab per branch, main first, with the number still unread in each — the single
+          fact that tells the owner which branch to open. Horizontally scrollable because a
+          second branch should not squash the first, and the strip is the app's own pill
+          shape rather than a new control. */}
+      {showTabs && (
+        <div
+          className="flex gap-2 px-4 pt-1 pb-1 overflow-x-auto"
+          role="tablist"
+          aria-label={t("notifications.tabsLabel")}
+          data-testid="notifications-branch-tabs"
+        >
+          {[{ id: "all", name: t("notifications.allBranches") }, ...branches.map((b) => ({ id: b.id, name: b.name }))]
+            .map((entry) => {
+              const selected = entry.id === activeTab;
+              // Counted from the WHOLE set, not from the tab on screen: the point of the
+              // number is to point at a branch you are not looking at.
+              const unreadHere = items.filter(
+                (n) => !n.read && (entry.id === "all" || n.shop_id === entry.id),
+              ).length;
+              return (
+                <button
+                  key={entry.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={selected}
+                  onClick={() => setTab(entry.id)}
+                  data-testid={`notifications-tab-${entry.id}`}
+                  className="h-8 px-3.5 rounded-full text-12 font-bold shrink-0 flex items-center gap-1.5 ds-pressable"
+                  style={{
+                    background: selected ? "var(--brand)" : "var(--surface-2)",
+                    color: selected ? "#0a0a0a" : "var(--text-secondary)",
+                  }}
+                >
+                  <span className="max-w-[140px] truncate">{entry.name}</span>
+                  {unreadHere > 0 && (
+                    <span
+                      className="text-10 font-bold rounded-full px-1.5"
+                      // On the picked pill both the pill and the badge are brand, so the
+                      // badge is a dimmer cut of the same colour instead of a second accent.
+                      style={{
+                        background: selected ? "rgba(0,0,0,0.18)" : "var(--brand)",
+                        color: "#0a0a0a",
+                      }}
+                    >
+                      {unreadHere}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+        </div>
+      )}
+
       {loading && !ready ? (
         <SkeletonList rows={4} tile />
-      ) : items.length === 0 ? (
+      ) : shown.length === 0 ? (
         <div className="flex flex-col items-center py-20 gap-3 px-8 text-center">
           <div
             className="w-14 h-14 rounded-full flex items-center justify-center"
@@ -133,8 +226,12 @@ export default function AdminNotificationsPage() {
           <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
             {t("dashboard.noNotifications")}
           </p>
+          {/* On a branch tab, "nothing here" is a different sentence from "nothing at all":
+              the other branches may be busy, and this one may simply be new. */}
           <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
-            {t("notifications.realTimeNotice")}
+            {tabBranch
+              ? t("notifications.branchEmpty", { branch: tabBranch.name })
+              : t("notifications.realTimeNotice")}
           </p>
         </div>
       ) : (

@@ -3,27 +3,46 @@ import { useNavigate } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
 import PullToRefresh from "@/components/ui/PullToRefresh";
 import { useProductsStore } from "@/stores/productsStore";
-import { getStockStatus, getStockStatusLabel, getStockStatusColor } from "@/lib/formatters";
+import {
+  formatSmartDateTime,
+  getStockStatus,
+  getStockStatusLabel,
+  getStockStatusColor,
+} from "@/lib/formatters";
 import type { Product } from "@/types";
 import { useT } from "@/lib/i18n";
 import { useThemeStore } from "@/stores/themeStore";
 import { useShellBase } from "@/lib/useShellBase";
-import { ChevronRight, Plus, Package } from "lucide-react";
+import { ChevronRight, Plus, Package, Pencil } from "lucide-react";
 import SearchBar from "@/components/ui/SearchBar";
 import ListCard from "@/components/ui/ListCard";
 import ListRow from "@/components/ui/ListRow";
 import { SkeletonList } from "@/components/ui/Skeleton";
 import type { ProductCategory } from "@/types";
+import { useShopStore } from "@/stores/shopStore";
+import { draftMissingFields, loadProductDrafts, type DraftMissingField } from "@/lib/productDraft";
+import { type I18nKey } from "@/lib/i18n";
 
-const CATEGORY_KEYS: Record<string, "products.all" | "products.spray" | "products.seed" | "products.fertilizer"> = {
+// One row per category a product can actually be filed under. "Spray" is kept as an alias of
+// pesticide so a row stored under the old name still labels and filters correctly (0162).
+const CATEGORY_KEYS: Record<string, string> = {
   all: "products.all",
-  spray: "products.spray",
-  seed: "products.seed",
-  fertilizer: "products.fertilizer",
+  pesticide: "category.pesticide",
+  spray: "category.pesticide",
+  seed: "category.seed",
+  fertilizer: "category.fertilizer",
 };
 
 const CATEGORY_DOT: Record<string, string> = {
-  spray: "#3b82f6", seed: "#84cc16", fertilizer: "#f59e0b", other: "#8b5cf6",
+  pesticide: "#3b82f6", spray: "#3b82f6", seed: "#84cc16", fertilizer: "#f59e0b", other: "#8b5cf6",
+};
+
+/** The four things a draft can be waiting on, said in the shop's own words. */
+const DRAFT_FIELD_KEYS: Record<DraftMissingField, I18nKey> = {
+  name: "draft.field.name",
+  supplier: "draft.field.supplier",
+  size: "draft.field.size",
+  price: "draft.field.price",
 };
 
 export default function ProductsListPage() {
@@ -35,18 +54,27 @@ export default function ProductsListPage() {
 
   const products = useProductsStore((s) => s.products);
   const ready = useProductsStore((s) => s.ready);
+  // Half-finished products, read from this device and only for the branch being looked at —
+  // a draft is not a product, so it cannot arrive from the products store with the rest.
+  const activeShopId = useShopStore((s) => s.activeShopId);
+  const drafts = loadProductDrafts(activeShopId);
   const [search, setSearch] = useState("");
   const [cat, setCat] = useState<"all" | ProductCategory>("all");
 
   const FILTERS: { key: "all" | ProductCategory }[] = [
-    { key: "all" }, { key: "spray" }, { key: "seed" }, { key: "fertilizer" },
+    { key: "all" }, { key: "pesticide" }, { key: "seed" }, { key: "fertilizer" },
   ];
 
   const filtered = products.filter((p) => {
     const matchSearch =
       p.name.toLowerCase().includes(search.toLowerCase()) ||
       p.company.toLowerCase().includes(search.toLowerCase());
-    const matchCat = cat === "all" || p.category === cat;
+    // "Pesticide" also answers rows still filed under the old "spray" name, so the filter
+    // cannot report an empty shelf that is full.
+    const matchCat =
+      cat === "all" ||
+      p.category === cat ||
+      (cat === "pesticide" && p.category === "spray");
     return matchSearch && matchCat;
   });
 
@@ -101,6 +129,57 @@ export default function ProductsListPage() {
         ))}
       </div>
 
+      {/* Drafts: work someone started and has not finished. Above the shelf on purpose —
+          unfinished work is the thing that gets forgotten, and the finished stock is not. */}
+      {drafts.length > 0 && (
+        <div className="px-4 pb-3">
+          <p className="ds-section-label mb-2 px-1">{t("draft.section")}</p>
+          <ListCard>
+            {drafts.map((d) => {
+              const missing = draftMissingFields(d);
+              return (
+                <ListRow
+                  key={d.id}
+                  testId={`draft-row-${d.id}`}
+                  onClick={() => navigate(`${base}/inventory/new?draft=${d.id}`)}
+                  tile={
+                    <div
+                      className="size-10 rounded-[var(--radius-tile)] shrink-0 flex items-center justify-center"
+                      style={{ background: "var(--surface-2)" }}
+                    >
+                      <Pencil size={16} style={{ color: "var(--text-secondary)" }} />
+                    </div>
+                  }
+                  title={d.name.trim() || t("draft.untitled")}
+                  meta={formatSmartDateTime(d.updatedAt, undefined, t)}
+                  /* What is still missing gets its own line rather than riding along after the
+                     time: on one line it was ellipsized to "Still missing: sup…", which is
+                     exactly the part that tells the owner where to pick up. This line wraps. */
+                  description={
+                    missing.length > 0
+                      ? t("draft.missing", {
+                          fields: missing.map((f) => t(DRAFT_FIELD_KEYS[f])).join(", "),
+                        })
+                      : t("draft.ready")
+                  }
+                  trailing={
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span
+                        className="text-10 font-bold px-2 py-0.5 rounded-full whitespace-nowrap"
+                        style={{ background: "var(--warning-bg)", color: "var(--warning)" }}
+                      >
+                        {t("draft.chip")}
+                      </span>
+                      <ChevronRight size={18} style={{ color: "var(--text-secondary)" }} />
+                    </div>
+                  }
+                />
+              );
+            })}
+          </ListCard>
+        </div>
+      )}
+
       {/* Product list */}
       {!ready ? (
         <SkeletonList rows={5} tile />
@@ -132,9 +211,12 @@ export default function ProductsListPage() {
                 )}
                 trailing={<ChevronRight size={18} style={{ color: "var(--text-secondary)" }} className="shrink-0" />}
               >
+                  {/* Four facts and no more: what it is called, what kind of thing it is,
+                      how many packs it comes in, and whether it can be sold. The supplier and
+                      the barcode code were both on every row and neither decides anything from
+                      a list — they are one tap away on the product itself. */}
                   <div className="flex flex-col gap-0.5">
                     <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>{p.name}</p>
-                    <p className="text-xs" style={{ color: "var(--text-secondary)" }}>{p.company}</p>
                     <div className="flex items-center gap-2 mt-0.5">
                       <span
                         className="text-10 font-semibold px-1.5 py-0.5 rounded-full"
@@ -151,11 +233,6 @@ export default function ProductsListPage() {
                       >
                         {getStockStatusLabel(status, t)}
                       </span>
-                      {p.barcode && (
-                        <span className="text-10 font-mono" style={{ color: "var(--text-secondary)" }}>
-                          {p.barcode}
-                        </span>
-                      )}
                     </div>
                   </div>
               </ListRow>

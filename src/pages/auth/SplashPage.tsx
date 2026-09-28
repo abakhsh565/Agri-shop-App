@@ -4,6 +4,7 @@ import { useAuthStore } from "@/stores/authStore";
 import { canOpenWithPin } from "@/lib/pinLock";
 import { getUserFromSession } from "@/lib/auth";
 import { hasPin as hasPinMarker } from "@/lib/pinLock";
+import { lastUsedProfile, pinAllowedOnThisDevice, rememberLastProfile } from "@/lib/loginWindow";
 import StatusBar from "@/components/ui/StatusBar";
 import { useT } from "@/lib/i18n";
 import { hasSeenIntro } from "@/education/introSeen";
@@ -24,6 +25,17 @@ export default function SplashPage() {
         if (freshUser) {
           useAuthStore.getState().setUser(freshUser);
         }
+        // Keep the device's memory of this account in step with what it looks like now: the
+        // keypad greets the person by name, and after an edit (or an admin renaming them) that
+        // name comes from here.
+        await rememberLastProfile(latestUser);
+        // The PIN stands in for the number for a month. Past that the number itself is
+        // confirmed again: a phone left in a drawer is not evidence of who is holding it, and
+        // this is the one moment the app can still tell — before a PIN has been accepted.
+        if (!(await pinAllowedOnThisDevice(latestUser.id))) {
+          navigate("/login", { replace: true, state: { reverify: true } });
+          return;
+        }
         // The keypad is only drawn when it can actually answer: either the server can be
         // asked, or this device holds its own copy of the check. Showing it otherwise is what
         // used to bounce the owner through "forget the PIN" on every offline launch.
@@ -35,15 +47,35 @@ export default function SplashPage() {
           navigate("/login", { replace: true });
         } else {
           // No PIN set → prompt to create one (mandatory for all users)
-          const dest = (latestUser.role === "admin" || latestUser.role === "co_admin")
+          const dest = (latestUser.role === "admin")
             ? "/admin/dashboard"
             : "/employee/dashboard";
           navigate("/login/pin-set", { replace: true, state: { returnTo: dest } });
         }
       } else {
-        // Nobody signed in on this device. A device that has never met the app gets
-        // the three introduction screens once; after that it goes straight to sign-in,
-        // so a shop using the app for months never sees them again.
+        // Nobody is signed in on this device — but it may still know the account it last
+        // served. That is the returning case the rule is about: after signing out, or after
+        // the app was closed, the door is the PIN, not another code.
+        //
+        // It is opened only when the device can actually check that PIN (its own record, or a
+        // session it can ask with) AND the number was confirmed within the month. Otherwise the
+        // sign-in screen is drawn, which is the honest one: nothing here can prove who this is.
+        const last = await lastUsedProfile();
+        if (
+          last &&
+          (await pinAllowedOnThisDevice(last.user.id)) &&
+          (await canOpenWithPin(last.user.id))
+        ) {
+          const remembered = last.user;
+          // Put the remembered profile back in the store first: the PIN screen reads the
+          // greeting from it, and the app is entered as this account, not as "someone".
+          useAuthStore.getState().setUser(remembered);
+          navigate("/login/pin", { replace: true, state: { user: remembered } });
+          return;
+        }
+        // A device that has never met the app gets the three introduction screens once; after
+        // that it goes straight to sign-in, so a shop using the app for months never sees them
+        // again.
         navigate(hasSeenIntro() ? "/login" : "/welcome", { replace: true });
       }
     }, 1500);

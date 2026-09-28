@@ -7,6 +7,8 @@ import { useThemeStore } from "@/stores/themeStore";
 import { useSalesStore } from "@/stores/salesStore";
 import { useCustomersStore } from "@/stores/customersStore";
 import { useEmployeesStore } from "@/stores/employeesStore";
+import { useProductsStore } from "@/stores/productsStore";
+import { summariseSales, profitDisplay } from "@/lib/profit";
 import { useCurrentTime } from "@/lib/useCurrentTime";
 import type { Sale } from "@/types";
 import { Calendar, SlidersHorizontal, Check, ClipboardList, X } from "lucide-react";
@@ -57,6 +59,12 @@ export default function AdminSalesListPage() {
   const ready = useSalesStore((s) => s.ready);
   const customers = useCustomersStore((s) => s.customers);
   const mockEmployees = useEmployeesStore((s) => s.employees);
+  const products = useProductsStore((s) => s.products);
+  // Only a fallback for lines whose cost was never snapshotted; the products store holds
+  // active products only, so it must never be the primary source.
+  const variantCost = new Map<string, number>();
+  products.forEach((p) => p.variants.forEach((v) => variantCost.set(v.id, v.costPrice)));
+  const liveCost = (id?: string | null) => (id ? variantCost.get(id) : undefined);
 
   function getCustomerImg(customerId: string) {
     return customers.find((c) => c.id === customerId)?.imageUrl;
@@ -110,7 +118,12 @@ export default function AdminSalesListPage() {
       return a.totalAmount - b.totalAmount;
     });
   const total     = filtered.reduce((s, x) => s + x.totalAmount, 0);
-  const profit    = Math.round(total * 0.2);
+  // Real cost of goods, from the same calculation Home, the sale record and Reports use.
+  // This read `Math.round(total * 0.2)` — a flat fifth of whatever was sold, which was not
+  // anybody's margin: it disagreed with Home and with every sale opened from this list, and
+  // it was highest on the sales that cost the shop the most.
+  const gross     = summariseSales(filtered, liveCost);
+  const profitDisplayState = profitDisplay(gross);
   const paidSalesAmount = filtered.filter(s => s.paymentType === "full").reduce((s, x) => s + x.totalAmount, 0);
   const creditSalesAmount = filtered.reduce((s, x) => s + Math.max(0, x.totalAmount - x.amountPaid), 0);
 
@@ -189,9 +202,18 @@ export default function AdminSalesListPage() {
           <p className="ds-section-label" style={{ color: "var(--text-secondary)" }}>
             {t("admin.grossProfit")}
           </p>
-          <p className="text-16 font-bold" style={{ color: "var(--brand-dark)" }}>
-            {formatCurrency(profit)}
+          <p className="text-16 font-bold" style={{ color: "var(--brand-dark)" }} data-testid="sales-gross-profit">
+            {profitDisplayState.kind === "unknown"
+              ? "—"
+              : `${profitDisplayState.kind === "atLeast" ? "≥ " : ""}${formatCurrency(Math.round(gross.profit))}`}
           </p>
+          {profitDisplayState.kind !== "exact" && (
+            <p className="text-11" style={{ color: "var(--warning)" }}>
+              {profitDisplayState.kind === "unknown"
+                ? t("profit.addCostToSeeProfit")
+                : t("profit.costMissingOn", { count: String(profitDisplayState.unknownLines) })}
+            </p>
+          )}
         </div>
       </div>
 

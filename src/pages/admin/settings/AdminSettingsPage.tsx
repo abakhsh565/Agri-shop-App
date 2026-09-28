@@ -16,12 +16,17 @@ import { hasPin } from "@/lib/pinLock";
 import { useT } from "@/lib/i18n";
 import {
   Lock, Globe, ChevronRight, Moon, Sun, SlidersHorizontal, AlertTriangle,
-  Fingerprint, Check, Pencil, Loader2, Save, LogOut, X, Trash2,
+  Fingerprint, Check, Pencil, Loader2, Save, LogOut, X, Trash2, Store as StoreIcon,
 } from "lucide-react";
 import { uploadImage } from "@/lib/storage";
 import { APP_NAME, APP_VERSION } from "@/lib/brand";
 import { supabase } from "@/lib/supabase";
+import DeleteTargetSheet, { branchDeleteSubject } from "@/components/shop/DeleteTargetSheet";
+import BranchEditSheet from "@/components/shop/BranchEditSheet";
+import { useShopStore, type BranchSummary } from "@/stores/shopStore";
+import { branchContextLabel } from "@/lib/branchContext";
 import { deleteAccount } from "@/lib/auth";
+import { forgetLastProfile, forgetPhoneVerification } from "@/lib/loginWindow";
 import { OWNER_ROWS, useOwnerRows } from "@/lib/ownerRows";
 import { useShellBase } from "@/lib/useShellBase";
 import {
@@ -47,8 +52,49 @@ export default function AdminSettingsPage() {
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [showBusinessSettings, setShowBusinessSettings] = useState(false);
-  const [showDeleteAccount, setShowDeleteAccount] = useState(false);
-  const [deletingAccount, setDeletingAccount] = useState(false);
+  /**
+   * Deleting the branch this account is working in.
+   *
+   * The row that used to be here deleted the whole ACCOUNT. What an owner actually needs at
+   * the foot of Settings is the branch they are standing in — that is the thing they add
+   * and remove, and it is the thing whose removal is not obvious. The account itself is not
+   * what this screen manages: removing it would take every branch with it.
+   */
+  const [branchToDelete, setBranchToDelete] = useState<BranchSummary | null>(null);
+  const [branchToEdit, setBranchToEdit] = useState<BranchSummary | null>(null);
+  const [accountDeleteOpen, setAccountDeleteOpen] = useState(false);
+  const branches = useShopStore((s) => s.branches);
+  const branchesLoaded = useShopStore((s) => s.branchesLoaded);
+  const loadBranches = useShopStore((s) => s.loadBranches);
+  const activeShopId = useShopStore((s) => s.activeShopId);
+  const activeShopName = useShopStore((s) => s.activeShopName);
+
+  useEffect(() => {
+    if (!branchesLoaded) void loadBranches();
+  }, [branchesLoaded, loadBranches]);
+
+  const activeBranch = branches.find((b) => b.id === activeShopId) ?? null;
+
+  /**
+   * This screen belongs to the branch it is showing.
+   *
+   * On the account's own branch it is the person's settings — their photo, their name,
+   * their number. On a branch the account ADDED it is that branch's settings: a branch
+   * mark, the branch's name, and what is inside it. The rows below stay the same, because
+   * language and dark mode are this device's preferences either way.
+   */
+  const inAddedBranch = branchesLoaded && !!activeBranch && !activeBranch.isMain;
+
+  /**
+   * The destructive row is the one thing that differs.
+   *
+   * On the main branch, and on an account with a single branch, there is no branch to
+   * delete — the database refuses both — so the row offered is the ACCOUNT, which is the
+   * destructive action that really is available there. Inside an added branch it is that
+   * branch. One row, always something that can actually happen: a control that exists only
+   * to be refused teaches the owner the app is broken rather than that the rule exists.
+   */
+  const canDeleteActiveBranch = !!activeBranch && !activeBranch.isMain && branches.length > 1;
   // Which rows the owner has moved onto this screen, and the panel that moves them back.
   const [customizing, setCustomizing] = useState(false);
   // The shop's own low-stock policy. It sits here rather than on the suite because it is a
@@ -118,26 +164,29 @@ export default function AdminSettingsPage() {
   }
 
   /**
-   * Delete the account, for good.
+   * Delete the account, for good — the second half of the flow the sheet runs.
    *
    * The erasing happens in the database (`delete_my_account`), which is also where it is
-   * decided whether that means the whole shop or just this login. The screen's only jobs are
-   * to warn first, to keep the button busy while it runs, and to leave the person somewhere
-   * that exists afterwards — the account they signed in with does not.
+   * decided whether that means every branch this account answers for or just this login. The
+   * screen's only jobs are to leave the person somewhere that exists afterwards — the account
+   * they signed in with does not — and to forget the two things this device remembers about
+   * it: which profile it last served, and when its number was last confirmed. Leaving either
+   * behind would offer a PIN, or a gate, for an account that is gone.
    */
   async function handleDeleteAccount() {
-    setDeletingAccount(true);
     try {
-      if (user) clearDeviceSession(user.phone);
+      if (user) {
+        clearDeviceSession(user.phone);
+        forgetLastProfile();
+        forgetPhoneVerification(user.id);
+      }
       await deleteAccount();
       addToast(t("settings.deleteAccount.done"), "success");
       logout();
       navigate("/login", { replace: true });
     } catch {
       addToast(t("settings.deleteAccount.failed"), "error");
-      setShowDeleteAccount(false);
-    } finally {
-      setDeletingAccount(false);
+      setAccountDeleteOpen(false);
     }
   }
 
@@ -245,45 +294,74 @@ export default function AdminSettingsPage() {
           className="mx-4 mt-3.5 rounded-[var(--radius-card)] p-4 flex items-center gap-4 animate-fade-in-up"
           style={{ background: "var(--tone-card)" }}
         >
+          {/* Whose settings these are, said the same way Home says it: a face on the
+              account's own branch, a branch mark on a branch the account added. A photo
+              there would be the one thing on this screen belonging to somebody else. */}
           <div className="relative shrink-0">
-            <div
-              className="w-12 h-12 rounded-full overflow-hidden flex items-center justify-center text-base font-bold"
-              style={{ background: "var(--brand)", color: "#0a0a0a" }}
-            >
-              {avatarUrl
-                ? <img src={avatarUrl} alt="avatar" className="w-full h-full object-cover" />
-                : initials
-              }
-            </div>
+            {inAddedBranch ? (
+              <div
+                className="w-12 h-12 rounded-full flex items-center justify-center"
+                style={{ background: "var(--tone-sunken)", color: "var(--text-secondary)" }}
+                aria-hidden="true"
+              >
+                <StoreIcon size={22} />
+              </div>
+            ) : (
+              <div
+                className="w-12 h-12 rounded-full overflow-hidden flex items-center justify-center text-base font-bold"
+                style={{ background: "var(--brand)", color: "#0a0a0a" }}
+              >
+                {avatarUrl
+                  ? <img src={avatarUrl} alt="avatar" className="w-full h-full object-cover" />
+                  : initials
+                }
+              </div>
+            )}
           </div>
 
           <div className="flex-1 min-w-0">
-            {/* Name only. This card previously printed "Shop Owner" as the name, then
-                "Shop owner" again underneath as the role, with an "Owner" chip beside the
-                name — three statements of the same fact on a card whose job is to say who
-                this account belongs to. The phone is the only line that adds anything. */}
-            {/* Back to two lines: who the account is on the first, the number under it.
-                Forcing both onto one line truncated the name to "Shop Own…" to make room for
-                digits, which is the wrong way round — the name is what identifies the
-                account, and the number has its own line to sit on. */}
-            <div className="flex items-center gap-2 min-w-0">
-              <p className="text-base font-bold truncate" style={{ color: "var(--text-primary)" }}>
-                {user?.name}
-              </p>
-              {roleLabel && (
-                <span
-                  className="text-11 font-bold px-2 py-0.5 rounded-full shrink-0"
-                  style={{ background: "var(--tone-sunken)", color: "var(--text-secondary)" }}
-                >
-                  {roleLabel}
-                </span>
-              )}
-            </div>
-            <p className="text-12 mt-0.5" style={{ color: "var(--text-secondary)" }}>{user?.phone}</p>
+            {inAddedBranch ? (
+              /* The branch's own card: its name, and what is inside it. No phone line —
+                 the number identifies a person, and this card is not about one. */
+              <>
+                <div className="flex items-center gap-2 min-w-0">
+                  <p className="text-base font-bold truncate" style={{ color: "var(--text-primary)" }}>
+                    {activeBranch!.name}
+                  </p>
+                  <span
+                    className="text-11 font-bold px-2 py-0.5 rounded-full shrink-0"
+                    style={{ background: "var(--tone-sunken)", color: "var(--text-secondary)" }}
+                  >
+                    {roleLabel}
+                  </span>
+                </div>
+                <p className="text-12 mt-0.5 truncate" style={{ color: "var(--text-secondary)" }}>
+                  {branchContextLabel(t, activeBranch!)}
+                </p>
+              </>
+            ) : (
+              <>
+                <div className="flex items-center gap-2 min-w-0">
+                  <p className="text-base font-bold truncate" style={{ color: "var(--text-primary)" }}>
+                    {user?.name}
+                  </p>
+                  {roleLabel && (
+                    <span
+                      className="text-11 font-bold px-2 py-0.5 rounded-full shrink-0"
+                      style={{ background: "var(--tone-sunken)", color: "var(--text-secondary)" }}
+                    >
+                      {roleLabel}
+                    </span>
+                  )}
+                </div>
+                <p className="text-12 mt-0.5" style={{ color: "var(--text-secondary)" }}>{user?.phone}</p>
+              </>
+            )}
           </div>
 
           <button
-            onClick={startEdit}
+            onClick={() => (inAddedBranch && activeBranch ? setBranchToEdit(activeBranch) : startEdit())}
+            data-testid={inAddedBranch ? "settings-edit-branch" : "settings-edit-profile"}
             className="flex items-center h-6.5 px-2.5 rounded-full text-12 font-bold shrink-0"
             style={{ background: "var(--surface)", color: "var(--text-secondary)", border: "1px solid var(--divider)" }}
           >
@@ -561,15 +639,33 @@ export default function AdminSettingsPage() {
             icon={LogOut}
             title={t("settings.signOut")}
           />
-          {/* Heavier than signing out and just as easy to reach: the row states plainly what
-              it does, and the dialog is where the irreversible part is spelled out. */}
-          <ListRow
-            danger
-            onClick={() => setShowDeleteAccount(true)}
-            icon={Trash2}
-            title={t("settings.deleteAccount")}
-            meta={t("settings.deleteAccount.meta")}
-          />
+          {/* Heavier than signing out, and only drawn when it can actually happen: the main
+              branch and an account's only branch cannot be deleted, so the row is absent
+              rather than offering something the database will refuse. The four-step sheet
+              is where the irreversible part is spelled out. */}
+          {canDeleteActiveBranch && activeBranch ? (
+            <ListRow
+              danger
+              testId="settings-delete-branch"
+              onClick={() => setBranchToDelete(activeBranch)}
+              icon={Trash2}
+              title={t("settings.deleteBranch")}
+              meta={t("settings.deleteBranch.meta")}
+            />
+          ) : (
+            /* Inside the main branch — and on an account with a single branch — the branch
+               cannot be deleted, so the destructive row offered here is the ACCOUNT. That is
+               what this screen used to carry, and removing it left the owner with no way to
+               close their own account at all. */
+            <ListRow
+              danger
+              testId="settings-delete-account"
+              onClick={() => setAccountDeleteOpen(true)}
+              icon={Trash2}
+              title={t("settings.deleteAccount")}
+              meta={t("settings.deleteAccount.meta")}
+            />
+          )}
         </ListCard>
 
         {/* What this build is. "Device / App Version" was a card of two rows that did
@@ -599,18 +695,35 @@ export default function AdminSettingsPage() {
         onCancel={() => setConfirmFingerprintOff(false)}
       />
 
-      <ConfirmDialog
-        open={showDeleteAccount}
-        title={t("settings.deleteAccount.title")}
-        message={t("settings.deleteAccount.bodyOwner")}
-        confirmLabel={t("settings.deleteAccount.confirm")}
-        requireTypedText={user?.name ?? ""}
-        typedPrompt={t("settings.deleteAccount.typePrompt")}
-        destructive
-        loading={deletingAccount}
-        onConfirm={handleDeleteAccount}
-        onCancel={() => setShowDeleteAccount(false)}
-      />
+      {/* The same four steps the Branches screen runs — one flow, one set of words, whether
+          the subject is a branch reached from More or from here, or the account itself. */}
+      {branchToDelete && (
+        <DeleteTargetSheet
+          subject={branchDeleteSubject(branchToDelete)}
+          onClose={() => setBranchToDelete(null)}
+          onDeleted={() => setBranchToDelete(null)}
+        />
+      )}
+      {accountDeleteOpen && user && (
+        <DeleteTargetSheet
+          subject={{
+            kind: "account",
+            name: user.name,
+            phone: user.phone,
+            branchCount: branches.length,
+          }}
+          onClose={() => setAccountDeleteOpen(false)}
+          onDeleted={() => void handleDeleteAccount()}
+        />
+      )}
+      {/* Editing the branch this page belongs to, from the card's own Edit button. */}
+      {branchToEdit && (
+        <BranchEditSheet
+          branch={branchToEdit}
+          onClose={() => setBranchToEdit(null)}
+          onRenamed={() => setBranchToEdit(null)}
+        />
+      )}
     </div>
   );
 }

@@ -94,7 +94,8 @@ export default function InventoryAdjustPage() {
       submissionKeyRef.current = null;
 
       addToast(t("copy.stockNow", { product: product.name, variant: variant.name, qty: String(res.qtyAfter) }), "success");
-      // Create notification (client-side fallback for when migration 0015 isn't applied)
+      // Create the branch's stock-change notification. Best-effort by design: a failed
+      // notification must never undo an adjustment that is already committed.
       try {
         const user = useAuthStore.getState().user;
         await supabase.from("notifications").insert({
@@ -103,6 +104,8 @@ export default function InventoryAdjustPage() {
           body: `${product.name} ${type} ${Math.abs(change)} → ${res.qtyAfter} units`,
           entity_id: product.id,
           actor_id: user?.id ?? null,
+          // This branch, not "whichever branch is active later" — see createNotification.
+          shop_id: user?.tenantId ?? null,
         });
       } catch { /* notification is best-effort */ }
       navigate("/admin/products", { replace: true });

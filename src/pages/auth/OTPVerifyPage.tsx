@@ -4,7 +4,9 @@ import AuthLayout from "@/components/layout/AuthLayout";
 import NavHeader from "@/components/ui/NavHeader";
 import OTPInput from "@/components/ui/OTPInput";
 import { verifyOTPAndResolveUser, sendOTP, SESSION_SETUP_FAILED } from "@/lib/auth";
+import { pendingInviteShop } from "@/lib/appInvite";
 import { hasPin } from "@/lib/pinLock";
+import { markPhoneVerified, rememberLastProfile } from "@/lib/loginWindow";
 import { useAuthStore } from "@/stores/authStore";
 import { useT } from "@/lib/i18n";
 
@@ -83,7 +85,22 @@ export default function OTPVerifyPage() {
     setLoading(true);
     setError("");
     try {
-      const result = await verifyOTPAndResolveUser(pendingPhone, otp);
+      // The shop from the invitation link, if this sign-in came from one. `pendingPhone` can
+      // still have been edited since the link was opened, so the (shop, phone) pair is checked
+      // again server-side on the way through — not assumed from what the link said.
+      const result = await verifyOTPAndResolveUser(pendingPhone, otp, pendingInviteShop());
+
+      if (result.status === "wrong_invite") {
+        setError(t("auth.errNotInvited", { shop: result.shopName || "" }));
+        setOtp("");
+        return;
+      }
+
+      if (result.status === "login_not_ready") {
+        setError(t("auth.loginNotReady"));
+        setOtp("");
+        return;
+      }
 
       if (result.status === "wrong_otp") {
         const newAttempts = attempts + 1;
@@ -106,6 +123,12 @@ export default function OTPVerifyPage() {
 
       // status === "ok"
       setUser(result.user);
+      // This is the only event that starts the clock on the PIN: the number itself was just
+      // confirmed. From here the PIN may open this account for a month (see lib/loginWindow),
+      // and the device remembers which profile it just served so a later launch knows whose
+      // keypad to draw.
+      await markPhoneVerified(result.user.id);
+      await rememberLastProfile(result.user);
       //
       // Where the code lands depends on who this is, which is the difference the flow was
       // missing:
@@ -122,7 +145,7 @@ export default function OTPVerifyPage() {
       // the everyday way back in, which is why opening the app does not ask for another one.
       const isBrandNewAccount = !result.user.firstLoginAt;
       const dest =
-        result.user.role === "admin" || result.user.role === "co_admin"
+        result.user.role === "admin"
           ? "/admin/dashboard"
           : "/employee/dashboard";
       if (!hasPin(result.user.id)) {

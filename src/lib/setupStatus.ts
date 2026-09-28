@@ -43,9 +43,23 @@ export interface SetupStatus {
   complete: boolean;
   /** Every store has finished loading, so the counts are trustworthy. */
   ready: boolean;
+  /**
+   * Ask the three stores again. Needed by a caller that stays mounted while the user leaves to
+   * create one of the entities and comes back — the once-per-store effect above will not fire
+   * a second time, and a row the owner has just completed would still read as unfinished.
+   */
+  refresh: () => void;
 }
 
-export function useSetupStatus(): SetupStatus {
+/**
+ * `returnTo` is where a create screen should come back to.
+ *
+ * Default is this screen, which is what the Home and Settings checklists want: create the
+ * missing supplier and land back where the row was. The setup flow passes its own path
+ * instead — the same dependency graph, the same routes and the same permission check, but the
+ * return trip comes back to the flow rather than to whatever screen happened to ask.
+ */
+export function useSetupStatus({ returnTo }: { returnTo?: string } = {}): SetupStatus {
   const t = useT();
   const base = useShellBase();
   const { pathname } = useLocation();
@@ -81,7 +95,7 @@ export function useSetupStatus(): SetupStatus {
   };
 
   const items: SetupItem[] = REQUIRED.map((id) => {
-    const hint = dependencyHint(id, t, { base, returnTo: pathname });
+    const hint = dependencyHint(id, t, { base, returnTo: returnTo ?? pathname });
     return {
       id,
       title: hint.title,
@@ -100,5 +114,10 @@ export function useSetupStatus(): SetupStatus {
     percent: Math.round((doneCount / items.length) * 100),
     complete: doneCount === items.length,
     ready: companiesReady && productsReady && customersReady,
+    refresh: () => {
+      void loadCompanies();
+      void loadProducts();
+      void loadCustomers();
+    },
   };
 }

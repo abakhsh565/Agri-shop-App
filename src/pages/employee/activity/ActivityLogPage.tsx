@@ -102,7 +102,7 @@ export default function ActivityLogPage() {
   const t = useT();
   const [filter, setFilter] = useState<ActivityKind>("all");
   const { user } = useAuthStore();
-  const isAdmin = user?.role === "admin" || user?.role === "co_admin";
+  const isAdmin = user?.role === "admin";
   const allSales = useSalesStore((s) => s.sales);
   const sales = isAdmin ? allSales : allSales.filter((s) => s.employeeId === user?.id || s.employeeName === user?.name);
   const customers = useCustomersStore((s) => s.customers);

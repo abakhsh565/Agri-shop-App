@@ -45,11 +45,21 @@ describe("invitation link", () => {
     );
   });
 
-  it("refuses to produce a link inside the native shell (https://localhost is unreachable by anyone else)", () => {
+  it("falls back to the app's own scheme inside the native shell, where no https address exists", () => {
     stubRuntime({ origin: "https://localhost", hostname: "localhost", capacitor: true });
     expect(isNativeShell()).toBe(true);
+    // https://localhost is unreachable by anyone else, so an https link built from it would
+    // be dead on arrival. Returning null instead left the owner with nothing to hand over,
+    // which is what made the installed app's invite a dead end; the scheme link opens the app.
     expect(appShareUrl()).toBeNull();
-    expect(inviteLink("03001234567")).toBeNull();
+    expect(inviteLink("03001234567")).toBe("agrishop://login?phone=923001234567");
+  });
+
+  it("carries the shop into the scheme link as well", () => {
+    stubRuntime({ origin: "https://localhost", hostname: "localhost", capacitor: true });
+    expect(inviteLink("03001234567", "00000000-0000-0000-0000-000000000001")).toBe(
+      "agrishop://login?phone=923001234567&shop=00000000-0000-0000-0000-000000000001",
+    );
   });
 
   it("detects the Capacitor origin even without the Capacitor global", () => {
@@ -63,6 +73,7 @@ describe("invitation message", () => {
     let text = (
       {
         "invite.msgBody": "Hello {name}, you have been added. Sign in with {phone}.",
+        "invite.msgShopId": "Shop ID: {shopId} — open the app and sign in.",
         "invite.msgDemoCode": "Verification code: {code}",
       } as Record<string, string>
     )[key];
@@ -75,17 +86,43 @@ describe("invitation message", () => {
       name: "Bilal",
       phone: internationalPhone("03001234567"),
       link: "https://app.agrishop.pk/login?phone=923001234567",
+      // A link already carries the shop; naming it again would be noise on every invitation.
+      shopId: "00000000-0000-0000-0000-000000000001",
       t,
     });
     expect(message).toContain("Bilal");
     expect(message).toContain("+923001234567");
     expect(message).toContain("https://app.agrishop.pk/login?phone=923001234567");
     expect(message).toContain("123456");
+    expect(message).not.toContain("Shop ID");
   });
 
   it("omits the link entirely when there is no shareable address", () => {
     const message = buildInviteMessage({ name: "Bilal", phone: "+923001234567", link: null, t });
     expect(message).not.toContain("http");
+  });
+
+  /**
+   * The bundled Android app has no shareable address, so this is the path it uses. An
+   * invitation is checked as a (shop, phone) pair before a code is spent, so a message with a
+   * number and no shop is one the employee cannot complete — which is exactly what the card's
+   * "send the message below instead" used to hand them.
+   */
+  it("carries the Shop ID when there is no link, because the pair is what gets checked", () => {
+    const message = buildInviteMessage({
+      name: "Bilal",
+      phone: "+923001234567",
+      link: null,
+      shopId: "00000000-0000-0000-0000-000000000001",
+      t,
+    });
+    expect(message).not.toContain("http");
+    expect(message).toContain("00000000-0000-0000-0000-000000000001");
+  });
+
+  it("says nothing about a shop it was not given", () => {
+    const message = buildInviteMessage({ name: "Bilal", phone: "+923001234567", link: null, t });
+    expect(message).not.toContain("Shop ID");
   });
 });
 

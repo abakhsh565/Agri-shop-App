@@ -1,6 +1,7 @@
 import { useNavigate } from "react-router-dom";
-import { Check } from "lucide-react";
+import { Check, ChevronRight } from "lucide-react";
 import { useT } from "@/lib/i18n";
+import { useThemeStore } from "@/stores/themeStore";
 import { useSetupStatus } from "@/lib/setupStatus";
 import ListCard from "@/components/ui/ListCard";
 import ListRow from "@/components/ui/ListRow";
@@ -35,13 +36,34 @@ import Skeleton from "@/components/ui/Skeleton";
 export default function SetupChecklist({
   className = "",
   testId = "setup-checklist",
+  returnTo,
+  onAction,
 }: {
   className?: string;
   testId?: string;
+  /**
+   * Where a create screen comes back to. Omitted, it is this screen — the Home and Settings
+   * behaviour, unchanged. The setup flow passes its own path, so adding a supplier from inside
+   * the flow returns to the flow instead of to Home.
+   */
+  returnTo?: string;
+  /**
+   * Take over the tap instead of navigating.
+   *
+   * The setup flow renders this checklist inside a bottom sheet, and a sheet has to be closed
+   * before the create screen can be seen — a decision that belongs to whoever mounted the
+   * card, not to the card. Without this seam the flow would either have to leave the sheet
+   * covering the screen it just opened, or restate the whole checklist to get one hook. The
+   * destination is unchanged: it is still the one the dependency graph computed.
+   */
+  onAction?: (to: string) => void;
 }) {
   const t = useT();
   const navigate = useNavigate();
-  const { items, doneCount, total, complete, ready } = useSetupStatus();
+  // The arrow beside an action has to follow the words, so its direction is decided from the
+  // language rather than by the screen's own pair of utilities.
+  const isUrdu = useThemeStore((s) => s.language) === "ur";
+  const { items, doneCount, total, complete, ready } = useSetupStatus({ returnTo });
 
   if (ready && complete) return null;
 
@@ -57,23 +79,31 @@ export default function SetupChecklist({
           * and a tonal pill for the count, give the card a left and a right — the shape every
           * other list in the app has. Nothing moved: same heading, same rows, same actions.
           */}
-        <div className="px-4 pt-4 pb-3 flex items-center gap-3">
+        <div className="px-4 pt-4 pb-3 flex items-start gap-3">
           {/* Home only, so this heading is sized for Home: 14 — two steps down from the 16 it
               shipped with, at the owner's request, so the whole widget reads smaller against
               the cards below it. Settings keeps its own 14 for the same reason. */}
-          <p className="text-14 font-bold flex-1 min-w-0 truncate" style={{ color: "var(--text-primary)" }}>
-            {/* A small congratulations mark beside the title. Decorative only: no text, so
-                nothing to translate, and it is hidden from a screen reader rather than read
-                out as "party popper" between the heading and the count. `me-1` is the logical
-                margin, so it sits on the correct side in Urdu. */}
-            <span aria-hidden="true" className="me-1">🎉</span>
-            {t("setup.title")}
-          </p>
+          <div className="flex-1 min-w-0">
+            <p className="text-14 font-bold truncate" style={{ color: "var(--text-primary)" }}>
+              {/* A small congratulations mark beside the title. Decorative only: no text, so
+                  nothing to translate, and it is hidden from a screen reader rather than read
+                  out as "party popper" between the heading and the count. `me-1` is the logical
+                  margin, so it sits on the correct side in Urdu. */}
+              <span aria-hidden="true" className="me-1">🎉</span>
+              {t("setup.title")}
+            </p>
+            {/* What the list is for, in the owner's terms. The heading names the goal; this
+                says this card is the way there, so the rows below read as steps rather than
+                as a menu. */}
+            <p className="text-11 mt-0.5 leading-snug" style={{ color: "var(--text-secondary)" }}>
+              {t("setup.subtitle")}
+            </p>
+          </div>
           {/* Numerals: no translation, and it cannot fall out of step with the check marks
               because both are counted from the same list. Tabular figures keep the chip the
               same width as the count changes, so the heading never shifts. */}
           <span
-            className="text-12 font-bold shrink-0"
+            className="text-11 font-bold shrink-0 whitespace-nowrap"
             style={{
               background: "var(--tone-sunken)",
               color: "var(--text-secondary)",
@@ -83,7 +113,7 @@ export default function SetupChecklist({
             }}
             data-testid="setup-progress"
           >
-            {ready ? `${doneCount}/${total}` : "–"}
+            {ready ? t("setup.progress", { done: String(doneCount), total: String(total) }) : "–"}
           </span>
         </div>
 
@@ -91,19 +121,24 @@ export default function SetupChecklist({
           <ListRow
             key={item.id}
             tile={
-              /* The empty ring is a box-shadow, not a border: browsers snap border widths to
-                 whole device pixels, so at DPR 1.25 a 1.5px border renders as 0.8px — a
-                 hairline that disappears on a light card. Shadows are drawn at subpixel
-                 weight, so the ring reads the same on every screen density. */
+              /* A done step is a solid mark, a step still to do is an open one — the same
+                 reading as the reference card, where finished steps carry a filled disc and
+                 the last open one is drawn as a dashed circle. The open ring is a box-shadow
+                 rather than a border: browsers snap border widths to whole device pixels, so
+                 at DPR 1.25 a 1.5px border renders as 0.8px — a hairline that disappears on a
+                 light card. Shadows are drawn at subpixel weight, so the ring reads the same
+                 on every screen density. */
               <span
                 className="size-5 rounded-full flex items-center justify-center shrink-0"
                 style={
                   item.done
-                    ? { background: "var(--brand)" }
-                    : { boxShadow: "inset 0 0 0 1.5px var(--border-control)" }
+                    ? { background: "var(--ink)", color: "var(--ink-fg)" }
+                    : { boxShadow: "inset 0 0 0 1.5px var(--border-control)", border: "1px dashed var(--divider)" }
                 }
+                data-testid={`setup-mark-${item.id}`}
+                aria-hidden="true"
               >
-                {item.done && <Check size={13} strokeWidth={3} style={{ color: "#0a0a0a" }} />}
+                {item.done && <Check size={13} strokeWidth={3} />}
               </span>
             }
           >
@@ -116,16 +151,24 @@ export default function SetupChecklist({
               <p
                 className={`text-12 min-w-0 truncate ${item.done ? "" : "font-semibold"}`}
                 style={{ color: item.done ? "var(--text-secondary)" : "var(--text-primary)" }}
+                data-testid={`setup-step-${item.id}`}
               >
-                {item.title}
+                {/* A finished step is stated as the thing that is now true, not as the
+                    absence it was before: "No suppliers yet" with a tick on it contradicts
+                    itself, which is what the same row read before this. */}
+                {item.done ? t(`setup.done.${item.id}`) : item.title}
               </p>
               {!item.done && item.action && (
                 <button
-                  onClick={() => navigate(item.action!.to)}
-                  className="text-12 font-bold shrink-0 ds-pressable"
+                  onClick={() => (onAction ? onAction(item.action!.to) : navigate(item.action!.to))}
+                  data-testid={`setup-action-${item.id}`}
+                  className="text-12 font-bold shrink-0 ds-pressable inline-flex items-center gap-0.5"
                   style={{ color: "var(--brand)" }}
                 >
                   {item.action.label}
+                  {/* The arrow says the words are a door, not a label. It is turned round in
+                      Urdu, where "onwards" points the other way. */}
+                  <ChevronRight size={13} className={isUrdu ? "rotate-180" : ""} />
                 </button>
               )}
             </div>

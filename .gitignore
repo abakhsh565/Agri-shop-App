@@ -12,6 +12,23 @@ logs/
 .claude-replay.*
 .tmp-*
 
+# Local machine artifacts. Four debug APKs and a directory of preview logs were sitting
+# untracked in the tree; the build output is reproducible and the logs are this machine's,
+# so neither belongs in a commit.
+/.freebuff/
+*.apk
+/test-results/
+/dist-bundle/
+
+
 # Capacitor native projects — generated locally with `npx cap add`
 /android/
 /ios/
+
+# Android signing keys. The release keystore is the app's identity: anyone who has it can
+# publish an APK that Android accepts as an update to the installed app. It lives in GitHub
+# secrets (see .github/inject-signing.cjs) and must never reach a commit.
+*.jks
+*.keystore
+*.p12
+/keystore/

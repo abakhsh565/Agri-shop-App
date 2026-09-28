@@ -10,6 +10,16 @@ interface ButtonProps {
   fullWidth?: boolean;
   type?: "button" | "submit";
   className?: string;
+  /**
+   * Stable handle for the test lanes, rendered as `data-testid`.
+   *
+   * A `data-testid` written directly on `<Button …>` looks like it works and does not: React
+   * only forwards attributes this component actually spreads, and TypeScript permits a
+   * hyphenated attribute on a component without checking it — so the attribute compiles,
+   * renders nothing, and the lane that looks for it fails with "element not found" while the
+   * screen shows the button. Same reason `ListRow` takes `testId`.
+   */
+  testId?: string;
 }
 
 export default function Button({
@@ -22,6 +32,7 @@ export default function Button({
   fullWidth,
   type = "button",
   className = "",
+  testId,
 }: ButtonProps) {
   // `ds-pressable` gives every button in the app the same press: a small scale
   // and dim on transform/opacity, which stay on the compositor.
@@ -44,6 +55,7 @@ export default function Button({
     <button
       type={type}
       onClick={onClick}
+      data-testid={testId}
       disabled={disabled || loading}
       className={`
         ${base} ${variants[variant]} ${sizes[size]}

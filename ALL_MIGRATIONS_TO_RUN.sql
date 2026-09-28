@@ -17,7 +17,7 @@
 
 -- ---- Enums -----------------------------------------------------------------
 do $$ begin
-  create type user_role       as enum ('admin','co_admin','employee');
+  create type user_role       as enum ('admin','employee');
 exception when duplicate_object then null; end $$;
 do $$ begin
   create type product_category as enum ('spray','seed','fertilizer','other');
@@ -82,7 +82,7 @@ create table if not exists product_variants (
   name                text not null,
   sku                 text,
   selling_price       numeric(12,2) not null default 0,
-  cost_price          numeric(12,2) not null default 0,   -- admin/co_admin only (see views)
+  cost_price          numeric(12,2) not null default 0,   -- admin only (see views)
   stock_qty           integer not null default 0 check (stock_qty >= 0),  -- never negative
   low_stock_threshold integer not null default 5,
   expiry_date         date
@@ -277,7 +277,7 @@ do $$ begin
 -- table/column untouched (so no data is lost and column types are preserved).
 
 -- 0.1 Enum TYPES (0004's function signatures + inserts require these to exist).
-do $$ begin create type user_role        as enum ('admin','co_admin','employee'); exception when duplicate_object then null; end $$;
+do $$ begin create type user_role        as enum ('admin','employee'); exception when duplicate_object then null; end $$;
 do $$ begin create type product_category  as enum ('spray','seed','fertilizer','other'); exception when duplicate_object then null; end $$;
 do $$ begin create type payment_type      as enum ('full','partial','credit'); exception when duplicate_object then null; end $$;
 do $$ begin create type payment_method    as enum ('cash','bank_transfer'); exception when duplicate_object then null; end $$;
@@ -441,7 +441,7 @@ exception when others then null; end $$;
 -- deployments were created from an earlier partial schema in which users.role
 -- is a plain `text` column rather than the `user_role` enum (see 0002 header).
 -- Casting to text makes this helper correct for BOTH shapes — text stays text,
--- and an enum value coerces cleanly to text — so the 'admin'/'co_admin'
+-- and an enum value coerces cleanly to text — so the 'admin'
 -- comparison below is a simple, unambiguous text match either way.
 
 create or replace function app_current_role()
@@ -465,7 +465,7 @@ stable
 security definer
 set search_path = public
 as $$
-  select coalesce(app_current_role() in ('admin','co_admin'), false);
+  select coalesce(app_current_role() in ('admin'), false);
 $$;
 
 create or replace function app_current_user_id()
@@ -1382,7 +1382,7 @@ alter table customers add column if not exists image_url text;
 
 -- Helper functions
 CREATE OR REPLACE FUNCTION public.app_current_user_id() RETURNS uuid LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$ SELECT nullif(current_setting('request.jwt.claims', true)::json->>'sub', '')::uuid; $$;
-CREATE OR REPLACE FUNCTION public.app_is_admin() RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$ SELECT EXISTS (SELECT 1 FROM users WHERE id = app_current_user_id() AND role IN ('admin', 'co_admin') AND is_active = true); $$;
+CREATE OR REPLACE FUNCTION public.app_is_admin() RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$ SELECT EXISTS (SELECT 1 FROM users WHERE id = app_current_user_id() AND role IN ('admin') AND is_active = true); $$;
 CREATE OR REPLACE FUNCTION public.current_shop_id() RETURNS uuid LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$ SELECT shop_id FROM users WHERE id = app_current_user_id(); $$;
 
 -- 1. Add shop_id to existing tables

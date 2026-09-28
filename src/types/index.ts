@@ -1,6 +1,6 @@
 // ─── Enums ───────────────────────────────────────────────────────────────────
 
-export type UserRole = "admin" | "co_admin" | "employee";
+export type UserRole = "admin" | "employee";
 /**
  * Mirrors the database's `product_category` enum exactly.
  *

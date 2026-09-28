@@ -180,6 +180,73 @@ export async function rpcResolveProductBarcode(
   return (data as any) ?? null;
 }
 
+/**
+ * A code for this shop that is free — and that stays free, because the database checks the
+ * barcode registry rather than only the codes currently in use.
+ *
+ * The client used to build one itself (`generateProductBarcode`, name + 4 letters + a
+ * sequence) with no way to know what this shop already had, so "Make one" could hand the
+ * owner a code the save then refused as taken. Generating is the shop's bookkeeping, so the
+ * shop decides it.
+ */
+export async function rpcPreviewProductBarcode(name: string): Promise<string> {
+  const { data, error } = await supabase.rpc("preview_product_barcode", { p_name: name });
+  if (error) throw new Error(friendly(error.message));
+  return data as string;
+}
+
+/**
+ * Put a code on a product — typed, scanned or generated. Replacing one retires the code it
+ * replaced, so the old code can never be put on anything again.
+ */
+export async function rpcSetProductBarcode(
+  productId: string,
+  code: string,
+  source: "supplied" | "generated" | "scanned" = "supplied",
+  reason?: string,
+): Promise<{ productId: string; code: string }> {
+  const { data, error } = await supabase.rpc("set_product_barcode", {
+    p_product_id: productId, p_code: code, p_source: source, p_reason: reason ?? null,
+  });
+  if (error) throw new Error(friendly(error.message));
+  return data as any;
+}
+
+/**
+ * Take the barcode off a product. The code is retired rather than forgotten, and no past sale
+ * is touched — a sale references the product and the variant, never the code.
+ */
+export async function rpcDeleteProductBarcode(
+  productId: string,
+  reason?: string,
+): Promise<{ productId: string; deleted: number }> {
+  const { data, error } = await supabase.rpc("delete_product_barcode", {
+    p_product_id: productId, p_reason: reason ?? null,
+  });
+  if (error) throw new Error(friendly(error.message));
+  return data as any;
+}
+
+export interface BarcodeHistoryEntry {
+  code: string;
+  previousCode: string | null;
+  action: "added" | "replaced" | "deleted";
+  source: string | null;
+  changedAt: string;
+  reason: string | null;
+  retired: boolean;
+}
+
+/** A product's codes: the one it has now, and every one it used to have. */
+export async function rpcProductBarcodes(
+  productId: string,
+): Promise<{ current: { code: string; isPrimary: boolean; source: string }[]; history: BarcodeHistoryEntry[] }> {
+  const { data, error } = await supabase.rpc("product_barcodes_for", { p_product_id: productId });
+  if (error) throw new Error(friendly(error.message));
+  const d = (data as any) ?? {};
+  return { current: d.current ?? [], history: d.history ?? [] };
+}
+
 export async function rpcDeleteProduct(payload: {
   id: string;
 }): Promise<{ id: string; deactivated: boolean }> {
@@ -258,6 +325,10 @@ function friendly(msg: string): string {
   // 0158: the code the shop is minting or typing is already in use in this shop, which is
   // the one thing a barcode must never be, because a scan has to have exactly one answer.
   if (/BARCODE_TAKEN/.test(m)) return tNow("errors.barcodeTaken");
+  // 0160: this code has been used before and retired. The one refusal an owner cannot fix by
+  // removing something else — the only way forward is a different code.
+  if (/BARCODE_RETIRED/.test(m)) return tNow("errors.barcodeRetired");
+  if (/BARCODE_NONE/.test(m)) return tNow("errors.barcodeNone");
   if (/INVALID_UNIT/.test(m)) return tNow("errors.badUnit");
   if (/NOT_AUTHENTICATED|JWT|invalid claim/i.test(m)) return tNow("errors.loginAgain");
   if (/^VALIDATION|VALIDATION:/i.test(m) || /check constraint|invalid input syntax/i.test(m))

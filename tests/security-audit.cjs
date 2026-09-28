@@ -233,7 +233,7 @@ async function run() {
       record("All users have roles", hasRoles, allUsers.map(u => u.role).join(", "));
       
       // Check if employee names are visible (this is by design — employees see each other)
-      const adminCount = allUsers.filter(u => u.role === "admin" || u.role === "co_admin").length;
+      const adminCount = allUsers.filter(u => u.role === "admin").length;
       const empCount = allUsers.filter(u => u.role === "employee").length;
       record("User roles visible", true, `Admin: ${adminCount}, Employee: ${empCount}`);
     }

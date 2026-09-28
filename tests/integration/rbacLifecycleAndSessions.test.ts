@@ -122,9 +122,15 @@ describe('Role lifecycle — deletion is safe', () => {
     expect(res.error).toContain('ROLE_IN_USE');
   });
 
-  it('refuses to delete a system role', async () => {
+  it('refuses to delete a built-in role that someone is assigned to', async () => {
+    // What protects a role is ASSIGNMENT, not provenance (0164): a built-in role with nobody
+    // on it can be removed and the screen offers it, while one that somebody works under —
+    // this one — is refused by the same rule as any custom role. The old rule refused every
+    // system role outright, which is why a shop that never used a built-in role could only be
+    // told "this one comes with the app".
+    await sql(`UPDATE memberships SET role_id = '${ROLE_EMPLOYEE}' WHERE user_id = '${EMP}'`);
     const res = await execRpcAsUser(OWNER, 'delete_role', { payload: { roleId: ROLE_EMPLOYEE } });
-    expect(res.error).toContain('SYSTEM_ROLE_READ_ONLY');
+    expect(res.error).toContain('ROLE_IN_USE');
   });
 
   it('deletes the role once it is no longer in use', async () => {

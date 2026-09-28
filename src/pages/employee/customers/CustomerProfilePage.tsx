@@ -56,7 +56,7 @@ export default function CustomerProfilePage() {
   }, []);
   const { addToast } = useUIStore();
   const { user } = useAuthStore();
-  const isAdmin = user?.role === "admin" || user?.role === "co_admin";
+  const isAdmin = user?.role === "admin";
 
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState("");
@@ -345,18 +345,18 @@ export default function CustomerProfilePage() {
           style={{ background: "var(--tone-card)" }}
         >
           <div className="flex-1 text-center py-3.5" style={{ borderRight: "1px solid var(--divider)" }}>
-            <p className="text-10 tracking-[0.5px] font-medium" style={{ color: "var(--text-secondary)" }}>{t("customerProfile.purchases")}</p>
+            <p className="ds-stat-label">{t("customerProfile.purchases")}</p>
             <p className="text-15 font-bold mt-1" style={{ color: "var(--text-primary)" }}>
               {formatCurrency(customer.totalPurchases || customerSales.reduce((a, s) => a + s.totalAmount, 0))}
             </p>
           </div>
           <div className="flex-1 text-center py-3.5" style={{ borderRight: "1px solid var(--divider)" }}>
-            <p className="text-10 tracking-[0.5px] font-medium" style={{ color: "var(--text-secondary)" }}>{t("customerProfile.paid")}</p>              <p className="text-15 font-bold mt-1" style={{ color: "var(--text-primary)" }}>
+            <p className="ds-stat-label">{t("customerProfile.paid")}</p>              <p className="text-15 font-bold mt-1" style={{ color: "var(--text-primary)" }}>
               {formatCurrency(customer.totalPaid || 0)}
             </p>
           </div>
           <div className="flex-1 text-center py-3.5">
-            <p className="text-10 tracking-[0.5px] font-medium" style={{ color: "var(--text-secondary)" }}>{t("customerProfile.outstanding")}</p>
+            <p className="ds-stat-label">{t("customerProfile.outstanding")}</p>
             <p className="text-15 font-bold mt-1" style={{ color: "#D97706" }}>
               {formatCurrency(customer.outstandingBalance)}
             </p>
@@ -372,7 +372,7 @@ export default function CustomerProfilePage() {
               the number is on the right, and the action names what it will do to *this*
               customer — "Set limit" when there is none, "Change limit" when there is. */}
           <div className="flex items-center justify-between gap-3">
-            <span className="text-12 font-medium tracking-[0.5px]" style={{ color: "var(--text-secondary)" }}>{t("customerProfile.creditLimit")}</span>
+            <span className="ds-section-label">{t("customerProfile.creditLimit")}</span>
             <div className="flex items-center gap-2">
               <span className="text-15 font-bold" style={{ color: "var(--text-primary)" }}>
                 {customer.creditLimit > 0 ? formatCurrency(customer.creditLimit) : "\u2014"}
@@ -419,7 +419,7 @@ export default function CustomerProfilePage() {
           <div className="mt-3 pt-3" style={{ borderTop: "1px solid var(--hairline)" }}>
             <div className="flex justify-between items-center">
               <div>
-                <p className="text-11 font-medium tracking-wider" style={{ color: "var(--text-secondary)" }}>{t("customerProfile.dueDate")}</p>
+                <p className="ds-section-label">{t("customerProfile.dueDate")}</p>
                 <p className="text-14 font-bold mt-0.5" style={{ color: customer.dueDate ? "var(--text-primary)" : "var(--text-secondary)" }}>
                   {customer.dueDate ? new Date(customer.dueDate).toLocaleDateString(isUrdu ? "ur-PK" : "en-PK", { day: "numeric", month: "short", year: "numeric" }) : t("common.notSet")}
                 </p>
@@ -432,7 +432,7 @@ export default function CustomerProfilePage() {
           {/* Reminder schedules */}
           <div className="mt-3 pt-3" style={{ borderTop: "1px solid var(--hairline)" }}>
             <div className="flex justify-between items-center mb-2">
-              <p className="text-11 font-medium tracking-wider" style={{ color: "var(--text-secondary)" }}>{t("customerProfile.reminders")}</p>
+              <p className="ds-section-label">{t("customerProfile.reminders")}</p>
               <button onClick={() => { setEditingConfig(null); setShowReminderConfig(true); }} className="text-12 font-semibold px-3 py-1.5 rounded-full" style={{ background: "var(--surface-2)", color: "#5A5A55" }}>{t("customerProfile.add")}</button>
             </div>
             {reminderConfigs.length === 0 ? (
@@ -685,7 +685,7 @@ function RecommendedSection({ customerId }: { customerId: string | undefined }) 
   if (recs.length === 0) return null;
 
   return (
-    <ListCard section={t("products.recommendedFor", { name: customer.name.split(" ")[0].toUpperCase() })}>
+    <ListCard section={t("products.recommendedFor", { name: customer.name.split(" ")[0] })}>
         {recs.map((rec) => (
           <ListRow
             key={rec.subject.id}

@@ -26,6 +26,15 @@ interface CheckboxProps {
  * the whole row is the button and this draws the box. `aria-hidden` here, because the row
  * carries the real `role="checkbox"` and its state — a nested labelled control would be
  * announced twice.
+ *
+ * The empty box is drawn from `--text-secondary`, not from the field-edge token. A checkbox
+ * has to be findable on whatever it happens to sit on, and in Roles & Access that is the
+ * sheet's inset block (`--tone-sunken`) — a tone the field token was never measured against.
+ * `--border-control` there is a delta of ~19/255, which on a 20px square reads as no control
+ * at all, in light and in dark alike. `--text-secondary` is a text tone in both themes, so it
+ * carries real contrast on the page, on a card, and inside the block, and it stays a token:
+ * nothing here hardcodes a colour. The ticked box is unchanged — brand fill, and the same 2px
+ * so toggling a box does not shift its edge.
  */
 export default function Checkbox({ checked, mixed = false, disabled = false, size = 16 }: CheckboxProps) {
   const on = checked || mixed;
@@ -38,7 +47,9 @@ export default function Checkbox({ checked, mixed = false, disabled = false, siz
         height: 20,
         borderRadius: 6,
         background: on ? "var(--brand)" : "transparent",
-        border: `1.5px solid ${on ? "var(--brand)" : "var(--divider)"}`,
+        // 2px, and the text tone while empty: the box is the control, so it has to be the
+        // most findable thing in the row before anything is ticked.
+        border: `2px solid ${on ? "var(--brand)" : "var(--text-secondary)"}`,
         color: "#0a0a0a",
         opacity: disabled ? 0.5 : 1,
       }}

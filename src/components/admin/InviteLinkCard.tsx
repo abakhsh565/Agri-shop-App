@@ -1,10 +1,12 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Copy, MessageCircle, Send } from "lucide-react";
 import { useT } from "@/lib/i18n";
+import { myShopJoinCode } from "@/lib/auth";
 import { useUIStore } from "@/stores/uiStore";
 import { useThemeStore } from "@/stores/themeStore";
 import { buildInviteMessage, internationalPhone, inviteLink, smsShareUrl, whatsappShareUrl } from "@/lib/appInvite";
 import { DEMO_OTP_CODE, isDemoOtpMode } from "@/lib/authMode";
+import { useShopStore } from "@/stores/shopStore";
 
 /**
  * The invitation an owner hands to a new employee.
@@ -18,13 +20,40 @@ export default function InviteLinkCard({ name, phone }: { name: string; phone: s
   const t = useT();
   const { addToast } = useUIStore();
   const { language } = useThemeStore();
+  // The shop goes in the link so the invitation can be checked as a (shop, phone) pair, and so
+  // the invitee is told which shop invited them. Read from the store rather than asked for:
+  // the invitation is always for the shop the owner is working in.
+  const activeShopId = useShopStore((s) => s.activeShopId);
   const isUrdu = language === "ur";
   const [copied, setCopied] = useState(false);
+  //
+  // The shop's own short code, read from the database rather than computed here.
+  //
+  // This is the half of the invitation a person can say out loud. The link above is device-bound
+  // — it lands in one app on one phone — and a raw shop id is a uuid, so neither can be passed on
+  // by voice at the shop counter. The code can, which is exactly how an employee who never
+  // received the message still gets onboarded.
+  //
+  // Re-read when the working shop changes: the code names THAT shop, so a stale one would
+  // send the new employee to the wrong door.
+  const [shopCode, setShopCode] = useState<string | null>(null);
+  useEffect(() => {
+    let alive = true;
+    void myShopJoinCode().then((code) => { if (alive) setShopCode(code); });
+    return () => { alive = false; };
+  }, [activeShopId]);
 
-  const link = inviteLink(phone);
+  const link = inviteLink(phone, activeShopId);
   // The message spells the number out for a human; the share targets and the
   // link use the normalized form (see appInvite.ts).
-  const message = buildInviteMessage({ name, phone: internationalPhone(phone), link, t });
+  const message = buildInviteMessage({
+    name,
+    phone: internationalPhone(phone),
+    link,
+    shopId: activeShopId,
+    shopCode,
+    t,
+  });
 
   async function copy(text: string) {
     try {
@@ -69,6 +98,46 @@ export default function InviteLinkCard({ name, phone }: { name: string; phone: s
           <p className="text-xs mt-2" style={{ color: "var(--text-secondary)" }}>
             {t("invite.linkUnavailable")}
           </p>
+        )}
+
+        {/* The shop code, as its own value rather than a detail buried in the link.
+            An invitation is a claim about a (shop, phone) pair and the sign-in screen asks for
+            both, so the moment the link cannot be used — which is every launch of the bundled
+            Android app, where appShareUrl() returns null — the owner still has to be able to
+            hand the employee something they can act on. The code is that thing: six characters a
+            person can read out, write down or forward. */}
+        {shopCode && (
+          <div className="mt-3 flex items-start gap-3" data-testid="invite-shop-id">
+            <div className="min-w-0 flex-1">
+              <p className="ds-section-label" style={{ color: "var(--text-secondary)" }}>
+                {t("invite.shopIdLabel")}
+              </p>
+              <p
+                className="text-13 font-bold mt-1 tracking-[0.18em] select-all"
+                style={{ color: "var(--text-primary)", direction: "ltr", textAlign: "start" }}
+                data-testid="invite-shop-id-value"
+              >
+                {shopCode}
+              </p>
+              {/* Only while the link cannot be used: with a link this is noise, without one it
+                  is the whole instruction. */}
+              {!link && (
+                <p className="text-xs mt-1 leading-snug" style={{ color: "var(--text-secondary)" }}>
+                  {t("invite.shopIdHint")}
+                </p>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() => copy(shopCode)}
+              className="ds-pressable h-9 px-3 rounded-full text-12 font-bold shrink-0 flex items-center gap-1.5"
+              style={{ background: "var(--surface-2)", border: "1px solid var(--divider)", color: "var(--text-primary)" }}
+              data-testid="invite-copy-shop-id"
+            >
+              <Copy size={13} />
+              {t("invite.copyShopId")}
+            </button>
+          </div>
         )}
 
         {isDemoOtpMode && (

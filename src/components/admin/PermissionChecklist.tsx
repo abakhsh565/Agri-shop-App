@@ -37,6 +37,11 @@ interface PermissionChecklistProps {
  * actions at all, and the actions appeared as chips whose meaning depended on a colour legend
  * underneath. Nothing about that told the owner what a "Salesman" could actually do.
  *
+ * A group's actions now sit inside an inset block under the group's own row, the way a nested
+ * scope list is drawn, so "these belong to Inventory" is a shape on the screen rather than
+ * something assembled from indentation and hope. The block is a region, not a second list: no
+ * interaction lives on it, and each action is still one button with one box.
+ *
  * Semantics are unchanged — this reads and writes exactly the same permission codes the
  * database already stores, so roles and the rules that enforce them are untouched.
  */
@@ -121,8 +126,14 @@ export default function PermissionChecklist({
               </span>
             </button>
 
-            {/* Every action, always listed. One box each. */}
-            <div className="ps-8">
+            {/* Every action, always listed. One box each, inside the group's own inset block so
+                the nesting is drawn rather than implied. The block is a control surface, so its
+                edge is the control token: `--divider` is the hairline between two rows of a
+                card, and used here it drew a boundary the eye could not find. */}
+            <div
+              className="ms-7 mb-1 rounded-[var(--radius-tile)] overflow-hidden"
+              style={{ background: "var(--tone-sunken)", border: "1px solid var(--border-control)" }}
+            >
               {areaPerms.map((p) => {
                 const on = value.has(p.code);
                 const inherited = roleDefaults?.has(p.code) ?? false;
@@ -142,7 +153,7 @@ export default function PermissionChecklist({
                     aria-checked={on}
                     onClick={() => toggleCode(p.code)}
                     data-testid={`${testIdPrefix}-${p.code}`}
-                    className="w-full flex items-center gap-2.5 py-1.5 text-start"
+                    className="w-full flex items-center gap-2.5 px-3 py-2 text-start"
                   >
                     <Checkbox checked={on} size={14} />
                     <span

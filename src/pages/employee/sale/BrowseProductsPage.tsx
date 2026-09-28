@@ -21,19 +21,22 @@ import type { ProductCategory } from "@/types";
 
 const FILTERS: { key: "all" | ProductCategory; labelKey: string }[] = [
   { key: "all", labelKey: "products.all" },
-  { key: "spray", labelKey: "category.spray" },
+  { key: "pesticide", labelKey: "category.pesticide" },
   { key: "seed", labelKey: "category.seed" },
   { key: "fertilizer", labelKey: "category.fertilizer" },
 ];
 
 const CATEGORY_LABEL_KEY: Record<string, string> = {
-  spray: "category.spray",
+  pesticide: "category.pesticide",
+  // The old name for the same shelf, still on older rows (0162).
+  spray: "category.pesticide",
   seed: "category.seed",
   fertilizer: "category.fertilizer",
   other: "category.other",
 };
 
 const CATEGORY_COLOR: Record<string, { bg: string; fg: string }> = {
+  pesticide: { bg: "rgba(59,130,246,0.1)", fg: "#3b82f6" },
   spray: { bg: "rgba(59,130,246,0.1)", fg: "#3b82f6" },
   seed: { bg: "rgba(132,204,22,0.1)", fg: "#65a30d" },
   fertilizer: { bg: "rgba(245,158,11,0.1)", fg: "#d97706" },
@@ -105,7 +108,11 @@ export default function BrowseProductsPage() {
     const matchSearch =
       p.name.toLowerCase().includes(search.toLowerCase()) ||
       p.company.toLowerCase().includes(search.toLowerCase());
-    const matchCat = category === "all" || p.category === category;
+    // Pesticide also answers rows still filed under the old "spray" name (0162).
+    const matchCat =
+      category === "all" ||
+      p.category === category ||
+      (category === "pesticide" && p.category === "spray");
     return matchSearch && matchCat;
   });
 

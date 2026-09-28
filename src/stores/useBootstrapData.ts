@@ -15,7 +15,7 @@ import { useShopStore } from "@/stores/shopStore";
 // avoid a guaranteed empty fetch for employees.
 export function useBootstrapData() {
   const role = useAuthStore((s) => s.user?.role);
-  const isAdmin = role === "admin" || role === "co_admin";
+  const isAdmin = role === "admin";
   // Which shop the datasets belong to. Every read below is scoped by it, and so is the
   // realtime subscription — a switch changes the rows AND the feed, so both are rebuilt.
   // Without this the shell would keep the previous shop's rows loaded after a switch, which

@@ -7,8 +7,12 @@ import ListRow from "@/components/ui/ListRow";
 import Button from "@/components/ui/Button";
 import Sheet from "@/components/ui/Sheet";
 import { SkeletonList } from "@/components/ui/Skeleton";
-import { PaymentBadge } from "@/components/ui/Badge";
 import { formatCurrency, formatDateTime } from "@/lib/formatters";
+import {
+  calculatePaymentStatus,
+  getPaymentStatusColor,
+  getPaymentStatusLabel,
+} from "@/lib/reminderEngine";
 import { useT } from "@/lib/i18n";
 import { useThemeStore } from "@/stores/themeStore";
 import { useSalesStore } from "@/stores/salesStore";
@@ -19,8 +23,8 @@ import { useUIStore } from "@/stores/uiStore";
 import { hasPermission } from "@/lib/tenantContext";
 import { useShellBase } from "@/lib/useShellBase";
 import { supabase } from "@/lib/supabase";
+import { summariseSale, refundedCogs, profitDisplay } from "@/lib/profit";
 import { ChevronRight, Share2, Wallet, RotateCcw, Trash2, Clock } from "lucide-react";
-import type { SaleItem as SaleLine } from "@/types";
 
 /**
  * One sale, every fact it holds, in the order a person reads them.
@@ -55,7 +59,7 @@ export default function SaleDetailView() {
   const user = useAuthStore((s) => s.user);
   const { addToast } = useUIStore();
 
-  const isManager = user?.role === "admin" || user?.role === "co_admin";
+  const isManager = user?.role === "admin";
   const canVoid = isManager && hasPermission("sales.void");
 
   const [note, setNote] = useState("");
@@ -138,10 +142,10 @@ export default function SaleDetailView() {
 
   // Cost is the snapshot taken when the sale was made, never today's price — editing a
   // product must not silently rewrite the profit of every sale already made. The live
-  // variant cost is only a fallback for lines written before snapshots existed.
+  // variant cost is only a fallback for lines the snapshot could not price.
   const variantCost = new Map<string, number>();
   products.forEach((p) => p.variants.forEach((v) => variantCost.set(v.id, v.costPrice)));
-  const cogsOf = (item: SaleLine) => item.cogsAmount ?? (variantCost.get(item.variantId) ?? 0) * item.qty;
+  const liveCost = (id?: string | null) => (id ? variantCost.get(id) : undefined);
 
   async function handleSaveNote() {
     if (!sale || note === (sale.note ?? "")) return;
@@ -262,15 +266,46 @@ export default function SaleDetailView() {
     );
   }
 
-  const baseCost = sale.items.reduce((sum, item) => sum + cogsOf(item), 0);
+  // Every figure here comes from the one shared calculation (src/lib/profit.ts), so this
+  // page cannot disagree with the list it was opened from.
+  const summary = summariseSale(sale, liveCost);
+  const baseCost = summary.cogs;
   // Profit is net of what came back: a sale with a return did not earn what it first did.
-  const netProfit = sale.totalAmount - baseCost - totalReturned;
-  const margin = sale.totalAmount > 0 ? Math.round((netProfit / sale.totalAmount) * 100) : 0;
+  // The refund is the customer's price; the goods themselves came back to the shelf, so
+  // their cost is no longer consumed by this sale and must not be charged to it —
+  // otherwise a return costs the profit twice.
+  const netProfit = summary.profit - totalReturned + refundedCogs(sale, returnedQtyMap, liveCost);
+  const margin = summary.revenue > 0 ? Math.round((netProfit / summary.revenue) * 100) : 0;
+  const profit = profitDisplay(summary);
   const owes = sale.outstandingBalance > 0;
   // This customer today: the sale's own balance is already inside it, so the useful thing is
   // the standing it leaves them in — and whether they are past their limit because of it.
-  const customerOverLimit =
-    customer && customer.creditLimit > 0 ? Math.max(0, customer.outstandingBalance - customer.creditLimit) : 0;
+  // How this customer pays, in the app's one payment-status vocabulary rather than a second
+  // opinion invented for this screen. "Very late" and "Over the limit" are different
+  // questions — whether the money is overdue, and whether there is room for more — and a
+  // customer can honestly be one of each at once, so both are shown rather than merged.
+  const paymentStatus = customer ? calculatePaymentStatus(customer, new Date()) : null;
+  const paymentStatusLabel = paymentStatus ? getPaymentStatusLabel(paymentStatus, t) : "";
+
+  // The credit position: 100% of the limit and over is the ceiling reached, 80% is where the
+  // app treats a customer as getting close (the threshold the customer page's limit bar turns
+  // amber at), below that they are within it. A customer with no limit set has no credit
+  // position to report, so they get no pill and no line rather than a misleading "within".
+  const creditPct =
+    customer && customer.creditLimit > 0
+      ? Math.round((customer.outstandingBalance / customer.creditLimit) * 100)
+      : 0;
+  // The chips borrow the payment-status palette instead of inventing colours: the same green,
+  // amber and red mean the same thing on both pills, in both themes.
+  const creditState =
+    !customer || customer.creditLimit <= 0
+      ? null
+      : creditPct >= 100
+        ? { label: t("saleDetail.creditOver"), color: "var(--error)", chip: getPaymentStatusColor("high_risk") }
+        : creditPct >= 80
+          ? { label: t("saleDetail.creditNear"), color: "var(--warning)", chip: getPaymentStatusColor("delayed") }
+          : { label: t("saleDetail.creditWithin"), color: "var(--brand-dark)", chip: getPaymentStatusColor("on_time") };
+  const paymentStatusChip = paymentStatus ? getPaymentStatusColor(paymentStatus) : null;
 
   return (
     <div
@@ -278,9 +313,22 @@ export default function SaleDetailView() {
       style={{ background: "var(--background)", direction: isUrdu ? "rtl" : "ltr" }}
     >
       <StatusBar />
+      {/* The state of the sale rides in the header, where the reference puts its step — and
+          the sale's identity is the one line under the title, as a document's details are.
+          Both used to be a card of their own that said three facts for 90px of height and
+          pushed the two things this page is about (who bought, what was on it) below it. */}
+      {/* No status chip up here: it said "credit · Rs. 4,050", which is exactly what the
+          Outstanding Balance row now says in the group where it belongs. */}
       <NavHeader title={t("sales.saleDetails")} />
 
       <div className="flex flex-col gap-4 p-4 pb-8">
+        <p
+          className="text-12 text-center -mt-2"
+          style={{ color: "var(--text-tertiary)" }}
+          data-testid="sale-identity"
+        >
+          {sale.saleNumber} · {formatDateTime(sale.createdAt)}
+        </p>
         {/* The state of the sale, when it is not simply completed. */}
         {sale.isVoided && (
           <div
@@ -298,45 +346,12 @@ export default function SaleDetailView() {
           </div>
         )}
 
-        {/* 1. What this sale is: its number, when, who sold it, how it was paid. */}
-        <div className="ds-card">
-          <div className="flex items-baseline justify-between gap-3">
-            <p className="text-15 font-bold" style={{ color: "var(--text-primary)" }}>
-              {sale.saleNumber}
-            </p>
-            <p className="text-12" style={{ color: "var(--text-secondary)" }}>
-              {formatDateTime(sale.createdAt)}
-            </p>
-          </div>
-          <div className="mt-3 pt-3 flex flex-col gap-2" style={{ borderTop: "1px solid var(--divider)" }}>
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-13" style={{ color: "var(--text-secondary)" }}>
-                {t("sales.soldBy")}
-              </span>
-              <span className="text-13 font-semibold" style={{ color: "var(--text-primary)" }}>
-                {sale.employeeName === user?.name ? t("saleSuccess.you") : sale.employeeName}
-              </span>
-            </div>
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-13" style={{ color: "var(--text-secondary)" }}>
-                {t("sale.paymentMethod")}
-              </span>
-              <span className="text-13 font-semibold" style={{ color: "var(--text-primary)" }}>
-                {sale.paymentMethod === "bank_transfer" ? t("sale.bankTransfer") : t("sale.cash")}
-              </span>
-            </div>
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-13" style={{ color: "var(--text-secondary)" }}>
-                {t("sales.status")}
-              </span>
-              {/* The badge *is* the status: paid, partial or on credit — saying it twice in
-                  two words would be the same fact in two places. */}
-              <PaymentBadge type={sale.paymentType} outstandingBalance={sale.outstandingBalance} />
-            </div>
-          </div>
-        </div>
-
-        {/* 2. The customer, and where this sale left their account. */}
+        {/* 1. The customer, and what this sale leaves on his account. No heading — one row
+            and one set of figures do not need announcing. The phone number is gone (a tap
+            away, and already known) and so is the "customer since" line (it changed nothing
+            about this sale). What no other screen at this moment shows is his credit
+            position: the limit he is working against and how much of it this unpaid balance
+            is using — so that leads, next to the name, and is quantified under the figures. */}
         {customer && (
           <ListCard>
             <ListRow
@@ -354,34 +369,87 @@ export default function SaleDetailView() {
                   </div>
                 )
               }
-              title={customer.name}
-              meta={customer.phone}
-              description={
-                customerOverLimit > 0
-                  ? t("sale.overLimitBy", { amount: formatCurrency(customerOverLimit) })
-                  : customer.outstandingBalance > 0
-                    ? `${t("sales.outstandingBalance")} ${formatCurrency(customer.outstandingBalance)}`
-                    : t("saleDetail.settled")
-              }
               trailing={<ChevronRight size={18} className="shrink-0" style={{ color: "var(--text-secondary)" }} />}
-            />
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="ds-row-strong truncate">{customer.name}</span>
+                {creditState && (
+                  <span
+                    className="shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-10 font-bold whitespace-nowrap"
+                    style={{ background: creditState.chip.bg, color: creditState.chip.color }}
+                  >
+                    {creditState.label}
+                  </span>
+                )}
+                {paymentStatusChip && (
+                  <span
+                    className="shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-10 font-bold whitespace-nowrap"
+                    style={{ background: paymentStatusChip.bg, color: paymentStatusChip.color }}
+                  >
+                    {paymentStatusLabel}
+                  </span>
+                )}
+              </div>
+              {/* Where the phone number used to be: what this person still owes the shop
+                  and how much of their credit that uses up. It is one sentence, and it is
+                  the sentence that decides whether the next sale on credit happens, so it
+                  sits under the name and the standing beside it rather than under the
+                  figures — the account balance is the customer's, not this order's. */}
+              {creditState && (
+                <p className="ds-row-meta truncate" style={{ color: creditState.color }}>
+                  {t("creditOverrides.limitUsed", {
+                    outstanding: formatCurrency(customer.outstandingBalance),
+                    pct: String(creditPct),
+                  })}
+                </p>
+              )}
+            </ListRow>
+
+            <div className="px-4 py-4">
+              {/* What this sale was worth and what he put down on it. His account balance
+                  is stated once, on the line under his name, so it is not repeated here. */}
+              <div className="flex items-stretch">
+                {[
+                  { label: t("saleDetail.thisSale"), value: formatCurrency(sale.totalAmount) },
+                  { label: t("saleDetail.customerPaid"), value: formatCurrency(sale.amountPaid) },
+                ].map((stat, index) => (
+                  <div
+                    key={stat.label}
+                    className="flex-1 min-w-0 px-2 text-center"
+                    style={index > 0 ? { borderInlineStart: "1px solid var(--divider)" } : undefined}
+                  >
+                    <p className="ds-stat-label">{stat.label}</p>
+                    <p
+                      className="text-13 font-bold tabular-nums mt-1 truncate"
+                      style={{ color: "var(--text-primary)" }}
+                    >
+                      {stat.value}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
           </ListCard>
         )}
 
-        {/* 3. What was sold, at the price it was sold for. */}
+        {/* 2. What was sold, and what it came to — one card, the way an order reads: the
+            goods, then the money they add up to. The card's own hairline separates the two
+            halves, so the grouping needs no second border around it. */}
         <div>
           <p className="ds-section-label mb-2 px-1" style={{ color: "var(--text-secondary)" }}>
-            {t("sales.itemsSold")}
+            {t("saleDetail.orderSummary")}
           </p>
           <ListCard>
             {sale.items.map((item) => {
               const returned = returnedQtyMap[`${item.productName}-${item.variantName}`] ?? 0;
               const fullyReturned = returned >= item.qty;
+              const product = products.find((p) => p.id === item.productId);
               return (
                 <ListRow
                   key={item.id}
+                  tile={<ProductThumb name={item.productName} imageUrl={product?.imageUrl} />}
                   title={`${item.productName} ${item.variantName}`}
-                  meta={`${formatCurrency(item.unitPrice)} × ${item.qty}`}
+                  meta={`${item.qty} × ${formatCurrency(item.unitPrice)}`}
                   description={
                     returned > 0
                       ? fullyReturned
@@ -395,63 +463,75 @@ export default function SaleDetailView() {
                 />
               );
             })}
+
+            <div className="px-4 py-4">
+              <p className="ds-section-label mb-3" style={{ color: "var(--text-secondary)" }}>
+                {t("saleDetail.priceDetails")}
+              </p>
+              <div className="flex flex-col gap-2">
+                {/* The order's own amount leads, then what is left on it and what has been
+                    paid against it, and the total closes the group: read top to bottom it
+                    is the ledger line a shopkeeper says out loud — "4,750 of goods, 4,050
+                    still on him, he has given 700, 4,750 in all". */}
+                <AmountRow label={t("sale.subtotal")} value={formatCurrency(sale.subtotal)} />
+                {sale.taxAmount > 0 && (
+                  <AmountRow label={t("saleDetail.tax")} value={formatCurrency(sale.taxAmount)} />
+                )}
+                {totalReturned > 0 && (
+                  <AmountRow
+                    label={t("saleDetail.returns")}
+                    value={`-${formatCurrency(totalReturned)}`}
+                    tone="var(--error)"
+                  />
+                )}
+                {owes && (
+                  <AmountRow
+                    label={t("sales.outstandingBalance")}
+                    value={formatCurrency(sale.outstandingBalance)}
+                    tone="var(--warning)"
+                    strong
+                  />
+                )}
+                <AmountRow label={t("sales.amountPaid")} value={formatCurrency(sale.amountPaid)} />
+                <div
+                  className="flex items-baseline justify-between gap-3 pt-3 mt-1"
+                  style={{ borderTop: "1px solid var(--divider)" }}
+                >
+                  <span className="text-14 font-bold" style={{ color: "var(--text-primary)" }}>
+                    {t("saleSuccess.totalAmount")}
+                  </span>
+                  <span className="text-20 font-bold tabular-nums" style={{ color: "var(--text-primary)" }}>
+                    {formatCurrency(sale.totalAmount)}
+                  </span>
+                </div>
+              </div>
+
+              {/* Who sold it and how it was paid: part of this order's own record, so it
+                  stays in this card — but a tone quieter, so it never reads as another
+                  amount in the column above. */}
+              <div className="mt-3 pt-3 flex flex-col gap-1.5" style={{ borderTop: "1px solid var(--divider)" }}>
+                <div className="flex items-baseline justify-between gap-3">
+                  <span className="text-12" style={{ color: "var(--text-tertiary)" }}>
+                    {t("saleDetail.soldBy")}
+                  </span>
+                  <span className="text-12" style={{ color: "var(--text-secondary)" }}>
+                    {sale.employeeName === user?.name ? t("saleSuccess.you") : sale.employeeName}
+                  </span>
+                </div>
+                <div className="flex items-baseline justify-between gap-3">
+                  <span className="text-12" style={{ color: "var(--text-tertiary)" }}>
+                    {t("saleDetail.paidVia")}
+                  </span>
+                  <span className="text-12" style={{ color: "var(--text-secondary)" }}>
+                    {sale.paymentMethod === "bank_transfer" ? t("sale.bankTransfer") : t("sale.cash")}
+                  </span>
+                </div>
+              </div>
+            </div>
           </ListCard>
         </div>
 
-        {/* 4. What was paid, and what is still owed on this sale. */}
-        <div className="ds-card">
-          <p className="ds-section-label mb-3" style={{ color: "var(--text-secondary)" }}>
-            {t("saleDetail.paymentSummary")}
-          </p>
-          <div className="flex flex-col gap-2">
-            <div className="flex justify-between">
-              <span className="text-13" style={{ color: "var(--text-secondary)" }}>
-                {t("sale.subtotal")}
-              </span>
-              <span className="text-13 font-bold tabular-nums" style={{ color: "var(--text-primary)" }}>
-                {formatCurrency(sale.subtotal)}
-              </span>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-14 font-bold" style={{ color: "var(--text-primary)" }}>
-                {t("saleSuccess.totalAmount")}
-              </span>
-              <span className="text-17 font-bold tabular-nums" style={{ color: "var(--text-primary)" }}>
-                {formatCurrency(sale.totalAmount)}
-              </span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-13" style={{ color: "var(--text-secondary)" }}>
-                {t("sales.amountPaid")}
-              </span>
-              <span className="text-13 font-bold tabular-nums" style={{ color: "var(--text-primary)" }}>
-                {formatCurrency(sale.amountPaid)}
-              </span>
-            </div>
-            {owes && (
-              <div className="flex justify-between">
-                <span className="text-13" style={{ color: "var(--text-secondary)" }}>
-                  {t("sales.outstandingBalance")}
-                </span>
-                <span className="text-13 font-bold tabular-nums" style={{ color: "var(--warning)" }}>
-                  {formatCurrency(sale.outstandingBalance)}
-                </span>
-              </div>
-            )}
-            {totalReturned > 0 && (
-              <div className="flex justify-between">
-                <span className="text-13" style={{ color: "var(--text-secondary)" }}>
-                  {t("saleDetail.returns")}
-                </span>
-                <span className="text-13 font-bold tabular-nums" style={{ color: "var(--error)" }}>
-                  -{formatCurrency(totalReturned)}
-                </span>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* 5. The shop's own numbers — never on the customer's copy. */}
+        {/* 3. The shop's own numbers — never on the customer's copy. */}
         {isManager && (
           <div className="ds-card">
             <p className="ds-section-label mb-3" style={{ color: "var(--text-secondary)" }}>
@@ -462,8 +542,12 @@ export default function SaleDetailView() {
                 <span className="text-13" style={{ color: "var(--text-secondary)" }}>
                   {t("admin.baseCost")}
                 </span>
+                {/* "Rs. 0" would be a claim that the goods were free. When the cost was
+                    never recorded the row says so instead of asserting a number. */}
                 <span className="text-13 font-semibold tabular-nums" style={{ color: "var(--text-secondary)" }}>
-                  {formatCurrency(Math.round(baseCost))}
+                  {summary.cogs === 0 && summary.unknownLines > 0
+                    ? t("saleDetail.costNotRecorded")
+                    : formatCurrency(Math.round(baseCost))}
                 </span>
               </div>
               <div className="flex justify-between items-center pt-2" style={{ borderTop: "1px solid var(--divider)" }}>
@@ -471,17 +555,34 @@ export default function SaleDetailView() {
                   {totalReturned > 0 ? t("saleDetail.netProfit") : t("saleDetail.profit")}
                 </span>
                 <span className="text-17 font-bold tabular-nums" style={{ color: "var(--brand-dark)" }}>
-                  {formatCurrency(Math.round(netProfit))}
-                  <span className="text-12 font-medium ms-2" style={{ color: "var(--text-secondary)" }}>
-                    {margin}%
-                  </span>
+                  {profit.kind === "unknown"
+                    ? "—"
+                    : `${profit.kind === "atLeast" ? t("saleDetail.atLeast") + " " : ""}${formatCurrency(Math.round(netProfit))}`}
+                  {profit.kind !== "unknown" && (
+                    <span className="text-12 font-medium ms-2" style={{ color: "var(--text-secondary)" }}>
+                      {margin}%
+                    </span>
+                  )}
                 </span>
               </div>
+              {/* A profit worked out without a cost is not a profit. Say which it is rather
+                  than letting the owner find out by distrusting the number. */}
+              {profit.kind !== "exact" && (
+                <p
+                  className="text-11 mt-1"
+                  style={{ color: "var(--warning)" }}
+                  data-testid="sale-profit-cost-missing"
+                >
+                  {profit.kind === "unknown"
+                    ? t("saleDetail.addCostToSeeProfit")
+                    : t("saleDetail.costMissingOn", { count: String(profit.unknownLines) })}
+                </p>
+              )}
             </div>
           </div>
         )}
 
-        {/* 6. Anything that came back. */}
+        {/* 4. Anything that came back. */}
         {returns.length > 0 && (
           <div>
             <p className="ds-section-label mb-2 px-1" style={{ color: "var(--text-secondary)" }}>
@@ -512,7 +613,7 @@ export default function SaleDetailView() {
           </div>
         )}
 
-        {/* 7. The note on this sale. */}
+        {/* 5. The note on this sale. */}
         <div className="ds-card">
           <div className="flex items-center justify-between mb-2">
             <p className="ds-section-label" style={{ color: "var(--text-secondary)" }}>
@@ -539,32 +640,45 @@ export default function SaleDetailView() {
           />
         </div>
 
-        {/* 8. What can still be done with it, most likely action first. */}
+        {/* 6. What can still be done with it. Four equal stacked buttons is not a
+            hierarchy, it is a list — so: ONE filled action for the thing this sale most
+            likely needs next, the secondary actions side by side beneath it (the reference
+            answers an order with a two-up action bar for the same reason), and the
+            destructive one alone at the bottom under its own hairline, where a thumb
+            cannot reach it on the way to anything else. */}
         <div className="flex flex-col gap-2 pt-1">
           {owes && customer && (
-            <Button fullWidth size="lg" onClick={() => navigate(`${base}/customers/${customer.id}/record-payment`)}>
+            <Button
+              fullWidth
+              size="lg"
+              testId="sale-record-payment"
+              onClick={() => navigate(`${base}/customers/${customer.id}/record-payment`)}
+            >
               <span className="inline-flex items-center gap-2">
                 <Wallet size={16} /> {t("saleDetail.recordPayment")}
               </span>
             </Button>
           )}
-          <Button variant="outline" size="md" fullWidth onClick={handleShare}>
-            <span className="inline-flex items-center gap-2">
-              <Share2 size={15} /> {t("saleDetail.share")}
-            </span>
-          </Button>
-          {canReturn && (
-            <Button
-              variant="outline"
-              size="md"
-              fullWidth
-              onClick={() => navigate(`${base}/sales/${sale.id}/return`)}
-            >
+          <div className="flex gap-2">
+            <Button variant="outline" size="md" className="flex-1 px-3" testId="sale-share" onClick={handleShare}>
               <span className="inline-flex items-center gap-2">
-                <RotateCcw size={15} /> {t("sales.return")}
+                <Share2 size={15} /> {t("saleDetail.share")}
               </span>
             </Button>
-          )}
+            {canReturn && (
+              <Button
+                variant="outline"
+                size="md"
+                className="flex-1 px-3"
+                testId="sale-return"
+                onClick={() => navigate(`${base}/sales/${sale.id}/return`)}
+              >
+                <span className="inline-flex items-center gap-2">
+                  <RotateCcw size={15} /> {t("sales.return")}
+                </span>
+              </Button>
+            )}
+          </div>
           {!withinReturnWindow && (
             <p
               className="text-11 text-center inline-flex items-center justify-center gap-1.5"
@@ -574,13 +688,16 @@ export default function SaleDetailView() {
             </p>
           )}
           {canVoid && !sale.isVoided && (
-            <button
-              onClick={() => setShowVoidDialog(true)}
-              className="flex items-center justify-center gap-2 w-full h-11 rounded-full text-14 font-semibold"
-              style={{ color: "var(--error)" }}
-            >
-              <Trash2 size={15} /> {t("admin.voidSale")}
-            </button>
+            <div className="mt-3 pt-3" style={{ borderTop: "1px solid var(--divider)" }}>
+              <button
+                onClick={() => setShowVoidDialog(true)}
+                data-testid="sale-void"
+                className="flex items-center justify-center gap-2 w-full h-11 rounded-full text-14 font-semibold"
+                style={{ color: "var(--error)" }}
+              >
+                <Trash2 size={15} /> {t("admin.voidSale")}
+              </button>
+            </div>
           )}
         </div>
       </div>
@@ -614,6 +731,59 @@ export default function SaleDetailView() {
           </div>
         </div>
       </Sheet>
+    </div>
+  );
+}
+
+/**
+ * One money line in the order's price details: label on the leading edge, figure on the
+ * trailing one, in tabular figures so a column of amounts lines up digit for digit.
+ */
+function AmountRow({
+  label,
+  value,
+  tone,
+  strong,
+}: {
+  label: string;
+  value: string;
+  tone?: string;
+  strong?: boolean;
+}) {
+  return (
+    <div className="flex items-baseline justify-between gap-3">
+      <span className="text-13" style={{ color: "var(--text-secondary)" }}>
+        {label}
+      </span>
+      <span
+        className={`tabular-nums ${strong ? "text-14 font-bold" : "text-13 font-semibold"}`}
+        style={{ color: tone ?? "var(--text-primary)" }}
+      >
+        {value}
+      </span>
+    </div>
+  );
+}
+
+/**
+ * A line's product image, or its initial when the shop never added one.
+ *
+ * The sale snapshots the product's *name*, not its picture, so this reads the live product
+ * and simply falls back when it has been archived or deleted — a receipt of a sale is not
+ * the place to fail because the catalogue moved on.
+ */
+function ProductThumb({ name, imageUrl }: { name: string; imageUrl?: string }) {
+  if (imageUrl) {
+    return (
+      <img src={imageUrl} alt="" className="size-10 shrink-0 rounded-[10px] object-cover" />
+    );
+  }
+  return (
+    <div
+      className="size-10 shrink-0 rounded-[10px] flex items-center justify-center text-13 font-bold"
+      style={{ background: "var(--surface-2)", color: "var(--text-secondary)" }}
+    >
+      {name.charAt(0).toUpperCase()}
     </div>
   );
 }

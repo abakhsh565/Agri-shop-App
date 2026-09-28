@@ -22,7 +22,7 @@ export default function AccountReadyPage() {
   const navigate = useNavigate();
   const { user } = useAuthStore();
 
-  const dest = user?.role === "admin" || user?.role === "co_admin"
+  const dest = user?.role === "admin"
     ? "/admin/dashboard"
     : "/employee/dashboard";
 

@@ -8,6 +8,7 @@ import { useProductsStore } from "@/stores/productsStore";
 import { rpcCreatePurchase } from "@/lib/db";
 import { dependencyHint } from "@/lib/dependencyGraph";
 import { formatCurrency } from "@/lib/formatters";
+import { markupPercent, sellingFromMarkup } from "@/lib/profit";
 import { useUIStore } from "@/stores/uiStore";
 import { useThemeStore } from "@/stores/themeStore";
 import type { PaymentMethod } from "@/types";
@@ -37,6 +38,12 @@ export default function RecordPurchasePage() {
   const [qty, setQty] = useState("");
   const [costPrice, setCostPrice] = useState("");
   const [sellingPrice, setSellingPrice] = useState("");
+  /**
+   * The third way to say the same price, and the one a shopkeeper actually negotiates in:
+   * "I want 25% on this delivery". Derived from the two prices like everywhere else in the
+   * app (see `src/lib/profit.ts`), so it can never end up disagreeing with what is saved.
+   */
+  const [markup, setMarkup] = useState("");
   const [amountPaid, setAmountPaid] = useState("");
   const [method, setMethod] = useState<PaymentMethod>("cash");
   const [error, setError] = useState("");
@@ -84,7 +91,28 @@ export default function RecordPurchasePage() {
     if (v) {
       setCostPrice(String(v.costPrice));
       setSellingPrice(String(v.sellingPrice));
+      setMarkup(markupPercent(v.costPrice, v.sellingPrice));
     }
+  }
+
+  /** A price was typed: the markup follows the prices, which are the source of truth. */
+  function changePrice(next: { costPrice?: string; sellingPrice?: string }) {
+    const cost = next.costPrice ?? costPrice;
+    const sell = next.sellingPrice ?? sellingPrice;
+    if (next.costPrice !== undefined) setCostPrice(cost);
+    if (next.sellingPrice !== undefined) setSellingPrice(sell);
+    setMarkup(markupPercent(Number(cost), Number(sell)));
+  }
+
+  /**
+   * The percentage was typed: it writes the selling price against the cost of this delivery.
+   * With no cost entered there is nothing to measure it against, so the price is left exactly
+   * as typed and the hint under the field says why nothing moved.
+   */
+  function changeMarkup(value: string) {
+    setMarkup(value);
+    const next = sellingFromMarkup(Number(costPrice), value);
+    if (next.sellingPrice !== null) setSellingPrice(next.sellingPrice);
   }
 
   async function handleSave() {
@@ -255,15 +283,33 @@ export default function RecordPurchasePage() {
                 </div>
                 <div className="flex-1">
                   <p className={labelCls} style={{ color: "var(--text-secondary)" }}>{t("admin.baseCostUnit")}</p>
-                  <input type="number" inputMode="numeric" value={costPrice} onChange={(e) => setCostPrice(e.target.value)}
+                  <input type="number" inputMode="numeric" value={costPrice} onChange={(e) => changePrice({ costPrice: e.target.value })}
+                    data-testid="purchase-cost"
                     placeholder="0" className="w-full h-12 rounded-[var(--radius-input)] px-4 text-sm outline-none" style={fieldStyle} />
                 </div>
               </div>
 
-              <div>
-                <p className={labelCls} style={{ color: "var(--text-secondary)" }}>{t("admin.sellingPriceUnit")} <span style={{ opacity: 0.6 }}>{t("common.current")}</span></p>
-                <input type="number" inputMode="numeric" value={sellingPrice} onChange={(e) => setSellingPrice(e.target.value)}
-                  placeholder="0" className="w-full h-12 rounded-[var(--radius-input)] px-4 text-sm outline-none" style={fieldStyle} />
+              {/* Selling price and the markup that produced it, side by side: they are the same
+                  number said two ways, and whichever one is typed re-states the other. The
+                  markup is derived, never saved — the two prices are what the database keeps. */}
+              <div className="flex gap-3">
+                <div className="flex-1">
+                  <p className={labelCls} style={{ color: "var(--text-secondary)" }}>{t("admin.sellingPriceUnit")} <span style={{ opacity: 0.6 }}>{t("common.current")}</span></p>
+                  <input type="number" inputMode="numeric" value={sellingPrice} onChange={(e) => changePrice({ sellingPrice: e.target.value })}
+                    data-testid="purchase-selling-price"
+                    placeholder="0" className="w-full h-12 rounded-[var(--radius-input)] px-4 text-sm outline-none" style={fieldStyle} />
+                </div>
+                <div className="flex-1">
+                  <p className={labelCls} style={{ color: "var(--text-secondary)" }}>{t("addProduct.markup")}</p>
+                  <input type="number" inputMode="decimal" value={markup} onChange={(e) => changeMarkup(e.target.value)}
+                    data-testid="purchase-markup"
+                    placeholder="%" className="w-full h-12 rounded-[var(--radius-input)] px-4 text-sm outline-none" style={fieldStyle} />
+                  {!(costNum > 0) && (
+                    <p className="text-11 mt-1" style={{ color: "var(--text-secondary)" }} data-testid="purchase-markup-hint">
+                      {t("addProduct.markupNeedsCost")}
+                    </p>
+                  )}
+                </div>
               </div>
 
               {/* Payment */}

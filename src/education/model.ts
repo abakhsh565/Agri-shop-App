@@ -38,7 +38,7 @@ import type { MembershipRole, PermissionCode } from "@/types";
  */
 
 /** Membership roles, as the app actually stores them (`users.role` + membership). */
-export type EduRole = MembershipRole | "co_admin";
+export type EduRole = MembershipRole;
 
 export interface TourStep {
   /** Stable id; also the key the guard reports by. */
@@ -78,7 +78,7 @@ export interface IntroSlide {
   image: { light: string; dark: string };
 }
 
-const OWNER: EduRole[] = ["owner", "admin", "co_admin"];
+const OWNER: EduRole[] = ["owner", "admin"];
 const EMPLOYEE: EduRole[] = ["employee"];
 const EVERYONE: EduRole[] = [...OWNER, ...EMPLOYEE];
 
@@ -260,7 +260,7 @@ export const FAQS: FaqItem[] = [
 
 /** True when this role is taught the owner tour. */
 export function isOwnerRole(role: EduRole | undefined): boolean {
-  return role === "owner" || role === "admin" || role === "co_admin";
+  return role === "owner" || role === "admin";
 }
 
 /**

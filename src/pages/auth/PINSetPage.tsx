@@ -65,7 +65,7 @@ export default function PINSetPage() {
     }
   }
 
-  const dest = (user?.role === "admin" || user?.role === "co_admin") ? "/admin/dashboard" : "/employee/dashboard";
+  const dest = (user?.role === "admin") ? "/admin/dashboard" : "/employee/dashboard";
 
   const pin = step === "set" ? firstPin : confirmPin;
   const setter = step === "set" ? setFirstPin : setConfirmPin;

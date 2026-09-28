@@ -77,6 +77,10 @@ export default function ForgotPINPage() {
       if (result.status === "deactivated") { setError(t("copy.accountDeactivated")); return; }
       if (result.status === "pending") { setError(t("auth.underReview")); return; }
       if (result.status === "rejected") { setError(t("auth.rejected")); return; }
+      // An invited number whose sign-in was never provisioned, and a number that belongs to a
+      // different shop, both need the owner — say which, instead of a code error.
+      if (result.status === "login_not_ready") { setError(t("auth.loginNotReady")); return; }
+      if (result.status === "wrong_invite") { setError(t("auth.errNotInvited", { shop: result.shopName })); return; }
       // A failed session setup has its own sentence; showing the internal marker instead would
       // tell someone their account is broken in words they cannot act on.
       if (result.status === "error") {
@@ -134,7 +138,7 @@ export default function ForgotPINPage() {
         }
       }
       setPendingFlow(null);
-      const dest = activeUser?.role === "admin" || activeUser?.role === "co_admin"
+      const dest = activeUser?.role === "admin"
         ? "/admin/dashboard" : "/employee/dashboard";
       navigate(dest, { replace: true });
     }

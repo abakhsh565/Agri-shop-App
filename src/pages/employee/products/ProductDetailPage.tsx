@@ -10,7 +10,7 @@ import { useProductsStore } from "@/stores/productsStore";
 import { useUIStore } from "@/stores/uiStore";
 import { formatCurrency, getStockStatusColor } from "@/lib/formatters";
 import { useShellBase } from "@/lib/useShellBase";
-import { rpcDeleteProduct } from "@/lib/db";
+import { rpcDeleteProduct, rpcDeleteProductBarcode } from "@/lib/db";
 import { Pencil, TrendingUp, Barcode, Trash2, Copy, Download, Package, Camera, Loader2, Bell } from "lucide-react";
 import { getRecommendationsForProduct, type CustomerCropRecord } from "@/lib/recommendationEngine";
 import { loadCustomerCropRows } from "@/lib/reminderEngine";
@@ -23,8 +23,10 @@ import { supabase } from "@/lib/supabase";
 import { useT } from "@/lib/i18n";
 import { SkeletonList } from "@/components/ui/Skeleton";
 
+// Pesticide and spray are one shelf (0162): a row still stored under the old name reads as
+// the same word a person would say, rather than as undefined.
 const CATEGORY_LABEL_KEY: Record<string, string> = {
-  spray: "category.spray", seed: "category.seed", fertilizer: "category.fertilizer", other: "category.other",
+  pesticide: "category.pesticide", spray: "category.pesticide", seed: "category.seed", fertilizer: "category.fertilizer", other: "category.other",
 };
 
 function initBgColor(name: string | null | undefined) {
@@ -59,6 +61,11 @@ export default function ProductDetailPage() {
 
   const [toDelete, setToDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [barcodeToDelete, setBarcodeToDelete] = useState(false);
+  const [barcodeDeleting, setBarcodeDeleting] = useState(false);
+  // A ref, not the state flag: React batches, so two taps in one task both read the pre-render
+  // `false` and the same code would be retired twice.
+  const barcodeDeletingRef = useRef(false);
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState("");
   const [editImageUrl, setEditImageUrl] = useState<string | null>(null);
@@ -103,6 +110,28 @@ export default function ProductDetailPage() {
       addToast(err instanceof Error ? err.message : t("sale.failedToComplete"), "error");
     } finally {
       setSaving(false);
+    }
+  }
+
+  /**
+   * Taking the code off the product. The database retires it rather than forgetting it — it is
+   * spent, so it can never be handed to another product — and no sale is touched, because a
+   * sale references the product and the variant, never the code.
+   */
+  async function confirmDeleteBarcode() {
+    if (!product?.barcode || barcodeDeletingRef.current) return;
+    barcodeDeletingRef.current = true;
+    setBarcodeDeleting(true);
+    try {
+      await rpcDeleteProductBarcode(product.id, "barcode removed on the product screen");
+      await useProductsStore.getState().load();
+      addToast(t("products.barcodeRemoved"), "success");
+    } catch (err) {
+      addToast(err instanceof Error ? err.message : t("errors.barcodeDeleteFailed"), "error");
+    } finally {
+      barcodeDeletingRef.current = false;
+      setBarcodeDeleting(false);
+      setBarcodeToDelete(false);
     }
   }
 
@@ -217,7 +246,16 @@ export default function ProductDetailPage() {
             className="rounded-[var(--radius-card)] p-3 flex items-center gap-3"
             style={{ background: "var(--tone-card)" }}
           >
-            <div dangerouslySetInnerHTML={{ __html: barcodeToSvg(product.barcode, { height: 40, showText: true, width: 160 }) }} className="flex-1" />
+            {/* A barcode is read by reflected light, and needs white space beside it to be read
+                at all. Drawn straight onto the card it was black bars on a near-black plate: the
+                bars were there, and effectively invisible. Same literal white as the label
+                screen, for the same reason — a barcode is not a themed surface. */}
+            <div
+              className="flex-1 min-w-0 bg-white rounded-[var(--radius-tile)] px-3 py-2 flex justify-center"
+              data-testid="product-barcode-plate"
+            >
+              <div dangerouslySetInnerHTML={{ __html: barcodeToSvg(product.barcode, { height: 40, showText: true, width: 160 }) }} />
+            </div>
             <div className="flex gap-1.5 shrink-0">
               <button
                 onClick={() => { navigator.clipboard.writeText(product.barcode!).then(() => addToast(t("sale.copyBarcode"), "success")).catch(() => {}); }}
@@ -245,6 +283,25 @@ export default function ProductDetailPage() {
               >
                 <Download size={14} style={{ color: "var(--text-secondary)" }} />
               </button>
+              {/* The third of the three things a shop does with a code it can see: nothing else
+                  in the app takes one off a product, so a wrong code had no way out except
+                  clearing the field inside an edit form nobody thinks to open. It sits with
+                  the other two — copy and download — because that is where the code is.
+                  Admin-only, like every other control that changes the catalogue: the database
+                  refuses a caller without `products.edit`, and a button that can only fail is
+                  not a control. */}
+              {isAdmin && (
+                <button
+                  onClick={() => setBarcodeToDelete(true)}
+                  data-testid="product-barcode-delete"
+                  className="size-8 rounded-full flex items-center justify-center active:opacity-70"
+                  style={{ background: "var(--surface-2)" }}
+                  title={t("products.deleteBarcode")}
+                  aria-label={t("products.deleteBarcode")}
+                >
+                  <Trash2 size={14} style={{ color: "var(--error)" }} />
+                </button>
+              )}
             </div>
           </div>
         )}
@@ -416,6 +473,20 @@ export default function ProductDetailPage() {
         onConfirm={confirmDelete}
         onCancel={() => setToDelete(false)}
       />
+
+      <ConfirmDialog
+        open={barcodeToDelete}
+        title={t("products.deleteBarcode")}
+        message={t("products.deleteBarcodeBody", {
+          code: product.barcode ?? "",
+          name: product.name,
+        })}
+        confirmLabel={t("common.delete")}
+        destructive
+        loading={barcodeDeleting}
+        onConfirm={confirmDeleteBarcode}
+        onCancel={() => setBarcodeToDelete(false)}
+      />
     </div>
   );
 }
@@ -433,27 +504,61 @@ function ProductCustomerRecommendations({ productId }: { productId: string }) {
   // The whole crop row per customer, so acreage and the planting date can rank the list
   // instead of only a name deciding whether the crop matches.
   const [cropsByCustomer, setCropsByCustomer] = useState<Record<string, CustomerCropRecord[]>>({});
+  const [cropsLoaded, setCropsLoaded] = useState(false);
 
   useEffect(() => {
-    if (!customersReady) useCustomersStore.getState().load();
-    // Load crops for all active customers
-    customers.filter(c => !c.isArchived).forEach(c => {
-      loadCustomerCropRows(c.id).then(crops => {
-        setCropsByCustomer(prev => ({ ...prev, [c.id]: crops }));
+    if (!customersReady) void useCustomersStore.getState().load();
+    // The buying history is what decides who is *not* asked again inside the month, so it has to
+    // be in memory. Without this the section appeared or vanished depending on whether the owner
+    // had happened to open a screen that loads sales first: one product, two different answers.
+    if (!useSalesStore.getState().ready) void useSalesStore.getState().load();
+  }, [customersReady]);
+
+  /**
+   * Every customer's crops, then the answer — in that order.
+   *
+   * `cropsLoaded` exists so the section says "nothing to suggest" once, when it means it,
+   * instead of flashing that sentence while the questions are still being asked. The crops are
+   * fetched together rather than one promise at a time, so the answer cannot arrive in pieces.
+   */
+  useEffect(() => {
+    if (!customersReady) return;
+    let alive = true;
+    const active = customers.filter((c) => !c.isArchived);
+    if (active.length === 0) {
+      setCropsLoaded(true);
+      return;
+    }
+    Promise.all(active.map(async (c) => [c.id, await loadCustomerCropRows(c.id)] as const))
+      .then((rows) => {
+        if (!alive) return;
+        setCropsByCustomer(Object.fromEntries(rows));
+        setCropsLoaded(true);
+      })
+      .catch(() => {
+        if (alive) setCropsLoaded(true);
       });
-    });
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [customersReady, customers.length]);
 
   const product = products.find((p) => p.id === productId);
-  if (!product || !customersReady || customers.length === 0) return null;
+  if (!product) return null;
 
-  const recs = getRecommendationsForProduct(product, {
-    customers,
-    sales,
-    products,
-    customerCrops: cropsByCustomer,
-  });
-  if (recs.length === 0) return null;
+  // The section is always on the page. It used to return null whenever it had nothing to say,
+  // which is indistinguishable from a feature that was never built — and left the owner no way
+  // to tell "no customer fits this" from "this screen is broken".
+  const recs =
+    customersReady && cropsLoaded
+      ? getRecommendationsForProduct(product, {
+          customers,
+          sales,
+          products,
+          customerCrops: cropsByCustomer,
+        })
+      : [];
 
   function getInitials(name: string): string {
     return name.split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2);
@@ -467,16 +572,29 @@ function ProductCustomerRecommendations({ productId }: { productId: string }) {
   }
 
   return (
-    <div className="rounded-[var(--radius-card)] p-4" style={{ background: "var(--tone-card)" }}>
+    <div
+      className="rounded-[var(--radius-card)] p-4"
+      style={{ background: "var(--tone-card)" }}
+      data-testid="product-recommendations"
+    >
       <p className="ds-section-label mb-3" style={{ color: "var(--text-secondary)" }}>
         {t("products.customersLikely")}
       </p>
+      {!customersReady || !cropsLoaded ? (
+        <SkeletonList rows={2} tile />
+      ) : recs.length === 0 ? (
+        <p className="text-12" style={{ color: "var(--text-secondary)" }} data-testid="product-recommendations-empty">
+          {t("products.noCustomersLikely")}
+        </p>
+      ) : (
       <ListCard>
         {recs.map((rec) => (
           <ListRow
             key={rec.subject.id}
             tile={rec.subject.imageUrl ? (
-              <img src={rec.subject.imageUrl} alt={rec.subject.name} className="size-10 rounded-[var(--radius-tile)] object-cover shrink-0" style={{ background: "var(--surface-2)" }} />
+              /* The same round avatar as the customer's own screens: a photo that appeared
+                 as a rounded tile here and a circle there read as a different person. */
+              <img src={rec.subject.imageUrl} alt={rec.subject.name} className="w-10 h-10 rounded-full object-cover shrink-0" style={{ background: "var(--surface-2)" }} />
             ) : (
               <div
                 className="w-10 h-10 rounded-full flex items-center justify-center text-12 font-bold shrink-0"
@@ -520,6 +638,7 @@ function ProductCustomerRecommendations({ productId }: { productId: string }) {
           </ListRow>
         ))}
       </ListCard>
+      )}
     </div>
   );
 }

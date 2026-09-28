@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
 import { formatCurrency, getStockStatus, productLowStockThreshold } from "@/lib/formatters";
@@ -9,6 +9,8 @@ import { useCustomersStore } from "@/stores/customersStore";
 import { useCompaniesStore } from "@/stores/companiesStore";
 import { TrendingUp, Receipt, Wallet, AlertTriangle, Calendar, BarChart3 } from "lucide-react";
 import { pkToday } from "@/lib/pkDate";
+import { summariseSales, profitDisplay } from "@/lib/profit";
+import { summariseMoneyIn, loadCreditPayments, type CreditPaymentRow } from "@/lib/money";
 import { useT } from "@/lib/i18n";
 import ListCard from "@/components/ui/ListCard";
 import ListRow from "@/components/ui/ListRow";
@@ -66,7 +68,18 @@ export default function AdminReportsPage() {
   const productsReady = useProductsStore((s) => s.ready);
   const customersReady = useCustomersStore((s) => s.ready);
   const companiesReady = useCompaniesStore((s) => s.ready);
-  const ready = salesReady && productsReady && customersReady && companiesReady;
+  // The udhaar half of money in is not in any store: it is its own table, loaded here through
+  // the shared reader. The report waits for it rather than printing a total that is only the
+  // counter half and then correcting itself.
+  const [creditPayments, setCreditPayments] = useState<CreditPaymentRow[]>([]);
+  const [paymentsReady, setPaymentsReady] = useState(false);
+  useEffect(() => {
+    loadCreditPayments()
+      .then(setCreditPayments)
+      .catch(() => {})
+      .finally(() => setPaymentsReady(true));
+  }, []);
+  const ready = salesReady && productsReady && customersReady && companiesReady && paymentsReady;
 
   const variantCost = useMemo(() => {
     const map: Record<string, number> = {};
@@ -81,30 +94,42 @@ export default function AdminReportsPage() {
     const { from, to } = startOf(period, customFrom, customTo);
     const sales = mockSales.filter((s) => !s.isVoided && +new Date(s.createdAt) >= from && +new Date(s.createdAt) <= to);
 
-    let revenue = 0, cogs = 0, collected = 0, credit = 0;
     const byEmployee: Record<string, { name: string; total: number }> = {};
     const byProduct: Record<string, { name: string; total: number; qty: number }> = {};
 
     for (const s of sales) {
-      revenue += s.totalAmount;
-      collected += s.amountPaid;
-      credit += s.outstandingBalance;
       byEmployee[s.employeeId ?? 'unknown'] ??= { name: s.employeeName, total: 0 };
       byEmployee[s.employeeId ?? 'unknown'].total += s.totalAmount;
       for (const it of s.items) {
-        // Recorded line COGS (snapshot taken at sale time). The variant lookup is
-        // only a fallback for lines written before COGS snapshots existed — it must
-        // not be the primary source, because the products store holds ACTIVE
-        // products only, so a deactivated product would silently cost zero.
-        cogs += it.cogsAmount ?? (variantCost[it.variantId ?? ''] ?? 0) * it.qty;
         byProduct[it.productId ?? 'unknown'] ??= { name: it.productName, total: 0, qty: 0 };
         byProduct[it.productId ?? 'unknown'].total += it.lineTotal;
         byProduct[it.productId ?? 'unknown'].qty += it.qty;
       }
     }
 
-    const grossProfit = revenue - cogs;
-    const margin = revenue > 0 ? (grossProfit / revenue) * 100 : 0;
+    // Money in comes from the one shared calculation (`@/lib/money`), so "the money that came
+    // in this period" is the same number here and on Home, and the two halves it is made of
+    // are named for what they are: cash taken at the counter, and old udhaar settled. The
+    // payments are filtered to the period here because, unlike sales, they are not already.
+    const money = summariseMoneyIn({
+      sales,
+      payments: creditPayments,
+      inPeriod: (iso) => {
+        const at = +new Date(iso);
+        return at >= from && at <= to;
+      },
+    });
+
+    // Revenue, cost and profit come from the one shared calculation, so a report for a
+    // period and the Home card for the same period are the same arithmetic and cannot
+    // disagree. Recorded line COGS is preferred; the variant lookup only fills lines the
+    // snapshot could not price, and never as zero.
+    const gross = summariseSales(sales, (id) => (id ? variantCost[id] : undefined));
+    const revenue = gross.revenue;
+    const cogs = gross.cogs;
+    const grossProfit = gross.profit;
+    const margin = gross.margin;
+    const profitState = profitDisplay(gross);
     const topEmployees = Object.values(byEmployee).sort((a, b) => b.total - a.total).slice(0, 4);
     const topProducts = Object.values(byProduct).sort((a, b) => b.total - a.total).slice(0, 5);
 
@@ -120,11 +145,11 @@ export default function AdminReportsPage() {
     }
 
     return {
-      revenue, cogs, grossProfit, margin, collected, credit,
+      revenue, cogs, grossProfit, margin, profitState, money,
       count: sales.length, topEmployees, topProducts,
       outstandingCredit, supplierPayable, lowStock,
     };
-  }, [period, customFrom, customTo, mockSales, mockProducts, mockCustomers, mockCompanies, variantCost]);
+  }, [period, customFrom, customTo, mockSales, mockProducts, mockCustomers, mockCompanies, variantCost, creditPayments]);
 
   return (
     <div
@@ -179,13 +204,24 @@ export default function AdminReportsPage() {
           <p className="ds-section-label" style={{ color: "rgba(0,0,0,0.55)" }}>
             {t("admin.grossProfit")}
           </p>
-          <p className="text-34 font-bold leading-tight" style={{ color: "#0a0a0a" }}>
-            {formatCurrency(report.grossProfit)}
+          <p className="text-34 font-bold leading-tight" style={{ color: "#0a0a0a" }} data-testid="reports-gross-profit">
+            {report.profitState.kind === "unknown"
+              ? "—"
+              : `${report.profitState.kind === "atLeast" ? "≥ " : ""}${formatCurrency(report.grossProfit)}`}
           </p>
           <div className="flex items-center gap-1.5 mt-1" style={{ color: "rgba(0,0,0,0.7)" }}>
             <TrendingUp size={13} />
-            <span className="text-xs font-semibold">{t("reports.marginRevenue", { margin: report.margin.toFixed(1), revenue: formatCurrency(report.revenue) })}</span>
+            {report.profitState.kind === "unknown" ? (
+              <span className="text-xs font-semibold">{t("profit.addCostToSeeProfit")}</span>
+            ) : (
+              <span className="text-xs font-semibold">{t("reports.marginRevenue", { margin: report.margin.toFixed(1), revenue: formatCurrency(report.revenue) })}</span>
+            )}
           </div>
+          {report.profitState.kind === "atLeast" && (
+            <p className="text-xs font-semibold mt-1" style={{ color: "rgba(0,0,0,0.7)" }}>
+              {t("profit.costMissingOn", { count: String(report.profitState.unknownLines) })}
+            </p>
+          )}
         </div>
       </div>
 
@@ -193,8 +229,27 @@ export default function AdminReportsPage() {
       <div className="grid grid-cols-2 gap-3 px-4 pt-3">
         <Stat icon={Receipt} label={t("admin.transactions")} value={String(report.count)} />
         <Stat icon={Wallet} label={t("reports.costOfGoods")} value={formatCurrency(report.cogs)} />
-        <Stat icon={Wallet} label={t("reports.cashCollected")} value={formatCurrency(report.collected)} tone="good" />
-        <Stat icon={Wallet} label={t("reports.onCredit")} value={formatCurrency(report.credit)} tone={report.credit > 0 ? "warn" : undefined} />
+        {/* The headline figure, then the two parts below it — one number with one meaning,
+            and no way to read it as the other half of itself. */}
+        <Stat icon={Wallet} label={t("reports.moneyIn")} value={formatCurrency(report.money.total)} tone="good" testId="reports-money-in" />
+        <Stat icon={Wallet} label={t("reports.onCredit")} value={formatCurrency(report.money.creditGiven)} tone={report.money.creditGiven > 0 ? "warn" : undefined} />
+      </div>
+
+      {/* Money in, where it came from */}
+      <div className="px-4 pt-5">
+        <SectionTitle>{t("reports.moneyInTitle")}</SectionTitle>
+        <ListCard>
+          <ListRow
+            title={t("reports.counterCash")}
+            meta={t("reports.counterCashHint")}
+            trailing={<span className="ds-row-strong">{formatCurrency(report.money.counter)}</span>}
+          />
+          <ListRow
+            title={t("reports.creditCollected")}
+            meta={t("reports.creditCollectedHint")}
+            trailing={<span className="ds-row-strong">{formatCurrency(report.money.udhaar)}</span>}
+          />
+        </ListCard>
       </div>
 
       {/* Standing balances */}
@@ -298,13 +353,13 @@ export default function AdminReportsPage() {
   );
 }
 
-function Stat({ icon: Icon, label, value, tone }: { icon: typeof Receipt; label: string; value: string; tone?: "good" | "warn" }) {
+function Stat({ icon: Icon, label, value, tone, testId }: { icon: typeof Receipt; label: string; value: string; tone?: "good" | "warn"; testId?: string }) {
   const color = tone === "good" ? "var(--brand-dark)" : tone === "warn" ? "var(--warning)" : "var(--text-primary)";
   return (
     <div className="rounded-[var(--radius-card)] p-4" style={{ background: "var(--tone-card)" }}>
       <Icon size={16} style={{ color: "var(--text-secondary)" }} />
       <p className="ds-section-label mt-2" style={{ color: "var(--text-secondary)" }}>{label}</p>
-      <p className="text-base font-bold mt-0.5" style={{ color }}>{value}</p>
+      <p className="text-base font-bold mt-0.5" style={{ color }} data-testid={testId}>{value}</p>
     </div>
   );
 }

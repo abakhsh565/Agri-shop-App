@@ -8,7 +8,8 @@ import Button from "@/components/ui/Button";
 import { verifyPinDetailed, clearPin } from "@/lib/pinLock";
 import { biometricPlatformAvailable, hasBiometricEnrolment, unlockWithBiometric } from "@/lib/biometric";
 import { useAuthStore } from "@/stores/authStore";
-import { getUserFromSession } from "@/lib/auth";
+import { resumeSession } from "@/lib/auth";
+import { pinAllowedOnThisDevice, rememberLastProfile } from "@/lib/loginWindow";
 import type { User } from "@/types";
 import { useT } from "@/lib/i18n";
 
@@ -74,13 +75,44 @@ export default function PINLoginPage() {
 
   /** The one way into the app, whichever check got us here. */
   async function enterApp() {
-    // Re-fetch latest user data from DB so profile changes made by an admin (or elsewhere)
-    // are reflected; the PIN and the fingerprint both land here.
-    const freshUser = await getUserFromSession();
-    setUser(freshUser ?? user);
-    const dest = user.role === "admin" || user.role === "co_admin"
+    // Re-open the session the account's own login identity, and re-read the profile so changes
+    // made by an admin (name, photo, role) are reflected. The PIN and the fingerprint both land
+    // here, and neither of them is a session by itself.
+    void rememberLastProfile(user);
+    const resumed = await resumeSession(user);
+    if (resumed.status === "signed_out") {
+      // The server answered: there is no usable profile for this number any more (the account
+      // was erased, or it was closed). Nothing on this device may keep painting it.
+      useAuthStore.getState().logout();
+      navigate("/login", { replace: true });
+      return;
+    }
+    if (resumed.status === "offline") {
+      // The server could not be asked. The PIN was already accepted — by the server before the
+      // connection dropped, or by this device's own record — so the known profile and its
+      // cached rows are what the shop gets, rather than a wall.
+      setUser(user);
+      navigate(destFor(user), { replace: true });
+      return;
+    }
+    if (resumed.status === "login_not_ready") {
+      // The number has no login identity on the server: the owner re-sends the invitation.
+      setError(t("auth.loginNotReady"));
+      return;
+    }
+    if (resumed.status === "error") {
+      setError(t("auth.sessionFailed"));
+      return;
+    }
+    setUser(resumed.user);
+    void rememberLastProfile(resumed.user);
+    navigate(destFor(resumed.user), { replace: true });
+  }
+
+  /** Where each kind of account lands once it is in. */
+  function destFor(who: User): string {
+    return who.role === "admin"
       ? "/admin/dashboard" : "/employee/dashboard";
-    navigate(dest, { replace: true });
   }
 
   async function runBiometricUnlock() {
@@ -113,6 +145,15 @@ export default function PINLoginPage() {
     try {
       const result = await verifyPinDetailed(user.id, val);
       if (result.status === "ok") {
+        // The PIN is accepted — but is it still allowed to stand in for the number? The same
+        // question the launch asked, asked again at the door, so a keypad left open overnight
+        // cannot be used to walk past the one-month rule.
+        if (!(await pinAllowedOnThisDevice(user.id))) {
+          setPendingPhone(user.phone);
+          setPendingFlow("login");
+          navigate("/login", { replace: true, state: { reverify: true } });
+          return;
+        }
         await enterApp();
       } else if (result.status === "no_pin") {
         // The server says this account has no PIN (never set, or cleared elsewhere), and this

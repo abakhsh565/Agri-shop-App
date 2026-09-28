@@ -129,6 +129,34 @@ export async function sendOTP(
 }
 
 /**
+ * Check a code that CONFIRMS something the signed-in person is about to do, rather than
+ * one that signs them in.
+ *
+ * Kept here beside `sendOTP` because it must accept exactly the same codes that send
+ * delivers: in demo mode the shared constant, live mode the real one. A second
+ * implementation in a screen is how the two drift apart and a confirmation starts
+ * refusing a code sign-in happily accepts.
+ *
+ * It deliberately does not create a session. The person is already signed in, and
+ * re-establishing a session to confirm an action would be a way to change who is acting.
+ * On success it returns only that the code was right; what happens next is the caller's
+ * decision, and the database checks their authority again when they make it.
+ */
+export async function verifyConfirmOTP(phone: string, token: string): Promise<boolean> {
+  const code = token.replace(/\D/g, "");
+  if (code.length !== 6) return false;
+
+  if (isDemoOtpMode) return code === DEMO_OTP_CODE;
+
+  const { error } = await supabase.auth.verifyOtp({
+    phone: normalizePhone(phone),
+    token: code,
+    type: "sms",
+  });
+  return !error;
+}
+
+/**
  * Which stage does this phone belong at? Asked BEFORE a code is sent, so an
  * unregistered number is told to create an account instead of being sent a code
  * that ends at a session that cannot exist for it.
@@ -194,10 +222,50 @@ function phoneToAuthCredentials(phone: string) {
  */
 export const SESSION_SETUP_FAILED = 'SESSION_SETUP_FAILED';
 
+/**
+ * This number has no login identity on the server, and the browser must not invent one.
+ *
+ * The bridge below used to answer exactly this case with `auth.signUp`, which creates an
+ * identity with a FRESH RANDOM id. `app_current_user_id()` reads the JWT `sub`, so that
+ * session resolves to no app user: every authorization path denies it, and
+ * `complete_member_onboarding()` answers ACCOUNT_INACTIVE — the invitee sees "inactive" and a
+ * message that explains nothing. Worse, the stray identity then HOLDS the derived address, so
+ * the authorized provisioner (migration 0135/0163) can no longer create the correct row —
+ * which is exactly the `users_email_partial_key` failure that broke 4 of the last 8 QA invites.
+ *
+ * The fix is the owner's, not the invitee's: the server creates the identity at invitation
+ * time (provision_member_login). The app reports the state honestly instead of seeding another
+ * stray.
+ */
+export const LOGIN_NOT_READY = 'LOGIN_NOT_READY';
+
+/**
+ * The phone could not reach the server at all — which is NOT a verdict about this account.
+ *
+ * Kept apart from LOGIN_NOT_READY because the two need opposite answers: "your login is
+ * missing, ask the owner to re-send the invitation" is wrong (and alarming) advice for a
+ * shop phone with no signal, and it is the kind of wrong answer that sends someone to reset
+ * an account that was never broken. A device that cannot ask keeps its cached rows and its
+ * PIN; only a server that answers no closes the door.
+ */
+export const SESSION_UNREACHABLE = 'SESSION_UNREACHABLE';
+
 /** Is a Supabase Auth session present? (The live SMS path establishes it itself.) */
 async function hasAuthSession(): Promise<boolean> {
   const { data: { session } } = await supabase.auth.getSession();
   return !!session;
+}
+
+/**
+ * Did this failure come from the transport, rather than from the server refusing us?
+ *
+ * supabase-js reports "could not reach the network" without an HTTP status, while a refusal
+ * always carries one (400 for unknown credentials, 422 for a bad body). That absence — not
+ * the wording of the message, which is a library detail — is the signal.
+ */
+function isUnreachable(error: { status?: number } | null | undefined): boolean {
+  const status = error?.status;
+  return status === undefined || status === 0;
 }
 
 async function ensureAuthSession(phone: string): Promise<{ ok: boolean; error?: string }> {
@@ -209,32 +277,41 @@ async function ensureAuthSession(phone: string): Promise<{ ok: boolean; error?: 
   // employee "signed in" on a device where the owner's session was still live,
   // so the owner's identity performed the employee's onboarding call. Whoever the
   // device last served must be signed out first.
-  const { data: { session } } = await supabase.auth.getSession();
+  let session: Awaited<ReturnType<typeof supabase.auth.getSession>>['data']['session'] = null;
+  try {
+    ({ data: { session } } = await supabase.auth.getSession());
+  } catch {
+    return { ok: false, error: SESSION_UNREACHABLE };
+  }
   if (session) {
     if (session.user?.email === email) return { ok: true };
     await supabase.auth.signOut();
   }
 
-  // Try sign-in first (user likely already exists)
-  const signIn = await supabase.auth.signInWithPassword({ email, password });
-  if (!signIn.error) return confirmIdentity(signIn.data.user?.email, email);
-
-  // User doesn't exist yet — create via signUp (auto-confirms in dev)
-  const signUp = await supabase.auth.signUp({ email, password });
-  if (signUp.error) {
-    console.warn('Auth session setup failed:', signIn.error.message, '/', signUp.error.message);
-    return { ok: false, error: `${signIn.error.message}; ${signUp.error.message}` };
+  // Sign in with the identity the server provisioned for this phone. Nothing else is tried.
+  //
+  // There is deliberately NO signUp fallback here any more. It looked like a harmless bridge
+  // and it was the defect: a brand-new random id cannot be the employee's id, so the session
+  // it produced was denied everywhere and, by occupying the derived address, it stopped the
+  // real identity from ever being created (see LOGIN_NOT_READY above). An identity the server
+  // has not created is a state to report, not one for the browser to paper over.
+  let signIn: Awaited<ReturnType<typeof supabase.auth.signInWithPassword>>;
+  try {
+    signIn = await supabase.auth.signInWithPassword({ email, password });
+  } catch {
+    return { ok: false, error: SESSION_UNREACHABLE };
+  }
+  if (signIn.error) {
+    // "No signal" and "no login here" produce the same failed call and need different words.
+    if (isUnreachable(signIn.error)) {
+      console.warn('Could not reach the server to open a session:', signIn.error.message);
+      return { ok: false, error: SESSION_UNREACHABLE };
+    }
+    console.warn('No provisioned login identity for this phone:', signIn.error.message);
+    return { ok: false, error: LOGIN_NOT_READY };
   }
 
-  // SignUp may or may not auto-create session — try sign-in to be sure
-  const retry = await supabase.auth.signInWithPassword({ email, password });
-  if (retry.error) {
-    console.warn('Auth sign-in after signUp failed:', retry.error.message);
-    return { ok: false, error: retry.error.message };
-  }
-
-  console.log('Supabase Auth session established via email+password');
-  return confirmIdentity(retry.data.user?.email, email);
+  return confirmIdentity(signIn.data.user?.email, email);
 }
 
 /** The session we just established must be the one we asked for. */
@@ -272,13 +349,119 @@ export type ResolveResult =
   | { status: "pending" }
   | { status: "rejected" }
   | { status: "wrong_otp" }
+  /** This number is not the one this shop invited — the invited number must be used. */
+  | { status: "wrong_invite"; shopName: string }
+  /** The invitation exists but its login identity is missing; the owner must re-send it. */
+  | { status: "login_not_ready" }
   | { status: "error"; message: string };
+
+/** What the database says about a (shop, phone) invitation pair. */
+export interface InviteContext {
+  found: boolean;
+  shopName?: string;
+  /** Is this phone a member (pending or active) of that shop? */
+  invited?: boolean;
+  status?: string;
+}
+
+/**
+ * Is this phone actually invited to this shop?
+ *
+ * The question the phone alone cannot answer. `lookup_user_by_phone` finds a person by their
+ * number and is right to — but an invitation is a claim about a PAIR ("this owner added this
+ * number"), and with many shops the number on its own does not say which owner made it. The
+ * link carries the shop, and this asks the database whether the pair is real, so an invitation
+ * cannot be completed by a different number.
+ *
+ * Anon-callable on purpose: it runs before any session exists.
+ */
+export async function resolveInvite(shopId: string, phone: string): Promise<InviteContext> {
+  const { data, error } = await supabase.rpc("resolve_invite", {
+    p_shop_id: shopId,
+    p_phone: normalizePhone(phone),
+  });
+  if (error || !data) return { found: false };
+  const d = data as { found?: boolean; shopName?: string; invited?: boolean; status?: string };
+  return { found: !!d.found, shopName: d.shopName, invited: d.invited, status: d.status };
+}
+
+/** What a shop code names, as the sign-in screen needs it. */
+export interface ShopCodeLookup {
+  found: boolean;
+  shopId?: string;
+  shopName?: string;
+}
+
+/**
+ * Turn a shop code into the shop it names.
+ *
+ * The question an employee asks is "which owner added my number?" — and the answer used to be a
+ * uuid, which cannot be read down a phone line. A code can. This resolves one to the shop's id
+ * and name so the sign-in screen can check the (shop, number) pair exactly as an invitation
+ * link does. Anonymous on purpose: it runs before any session exists.
+ *
+ * Returns `found: false` for anything unknown or malformed rather than throwing — an unknown
+ * code is a typo, and the screen says so.
+ */
+export async function resolveShopCode(code: string): Promise<ShopCodeLookup> {
+  const clean = code.trim();
+  if (!clean) return { found: false };
+  const { data, error } = await supabase.rpc("resolve_shop_code", { p_code: clean });
+  if (error || !data) return { found: false };
+  const d = (typeof data === "string" ? JSON.parse(data) : data) as {
+    found?: boolean;
+    shopId?: string;
+    shopName?: string;
+  };
+  return { found: !!d.found, shopId: d.shopId, shopName: d.shopName };
+}
+
+/**
+ * The code for the shop the caller is working in — the value an owner reads out to a new
+ * employee. Any active member may read it; the code identifies a shop and grants nothing.
+ */
+export async function myShopJoinCode(): Promise<string | null> {
+  const { data, error } = await supabase.rpc("my_shop_join_code");
+  if (error) return null;
+  return typeof data === "string" && data.trim() ? data.trim() : null;
+}
+
+/**
+ * A Repair action for an owner: give an already-invited employee the login they are missing.
+ *
+ * Every invited employee should have been provisioned at invitation time (0135). When that
+ * step failed — the address was already held by a stray identity — the employee and their
+ * pending membership exist but they cannot sign in, and re-inviting is not possible because
+ * the phone is already taken. This re-runs the authorized provisioner, which now also claims
+ * the address back (0163). Owner-only: the RPC begins with employees.manage.
+ */
+export async function provisionMemberLogin(userId: string): Promise<{ ok: boolean; repaired: boolean; error?: string }> {
+  const { data, error } = await supabase.rpc("provision_member_login", { p_user_id: userId });
+  if (error) return { ok: false, repaired: false, error: error.message };
+  const d = data as { provisioned?: boolean; repaired?: boolean } | null;
+  return { ok: true, repaired: !!d?.repaired };
+}
 
 export async function verifyOTPAndResolveUser(
   phone: string,
-  token: string
+  token: string,
+  /**
+   * The shop from the invitation link, when there was one. Checked BEFORE the code is spent,
+   * against the pair — the number alone is not enough to say which owner invited it.
+   */
+  inviteShopId?: string | null,
 ): Promise<ResolveResult> {
   const e164 = normalizePhone(phone);
+
+  // The invitation is a (shop, phone) claim. Re-checked here, not only on the sign-in screen:
+  // the number can still be edited before this point, and this is the last stop before an
+  // identity is trusted.
+  if (inviteShopId) {
+    const invite = await resolveInvite(inviteShopId, phone);
+    if (invite.found && !invite.invited) {
+      return { status: "wrong_invite", shopName: invite.shopName ?? "" };
+    }
+  }
 
   if (isDemoOtpMode) {
     // Demo mode: the shared constant stands in for the SMS.
@@ -325,7 +508,12 @@ export async function verifyOTPAndResolveUser(
       : { ok: await hasAuthSession() };
     if (!session.ok) {
       console.error('Could not establish Supabase Auth session:', session.error);
-      return { status: "error", message: SESSION_SETUP_FAILED };
+      // "The server has no login for this number" is a different situation from "the session
+      // could not be opened", and it has a different answer (the owner re-sends the invitation),
+      // so it must not be reported as a generic failure.
+      return session.error === LOGIN_NOT_READY
+        ? { status: "login_not_ready" }
+        : { status: "error", message: SESSION_SETUP_FAILED };
     }
 
     void touchLogin(row.id, !row.first_login_at);
@@ -334,7 +522,15 @@ export async function verifyOTPAndResolveUser(
     // A failure here must be surfaced: continuing would land the user in an app
     // where every read and write is denied, looking inexplicably empty.
     const onboardError = await completeOnboardingIfInvited(user);
-    if (onboardError) return { status: "error", message: onboardError };
+    // ACCOUNT_INACTIVE from onboarding means the session's `sub` has no active app user — i.e.
+    // this is a stray identity, not a closed account (a closed account was already reported as
+    // `deactivated` above, from the profile itself). Showing the database's own code here is
+    // what put "ACCOUNT_INACTIVE" in front of a shop owner.
+    if (onboardError) {
+      return /ACCOUNT_INACTIVE/.test(onboardError)
+        ? { status: "login_not_ready" }
+        : { status: "error", message: onboardError };
+    }
     // Load permissions after the membership is active and the session is established
     user.permissions = await loadPermissions();
     return { status: "ok", user };
@@ -391,50 +587,111 @@ export async function signOut(): Promise<void> {
   clearAllCachedData();
 }
 
+/**
+ * What happened when a device that already knows an account asked for a session again.
+ *
+ * Every outcome is separate because each one has a different, actionable answer:
+ *
+ *   • `ok`           — a live session, with the profile re-read from the server.
+ *   • `login_not_ready` — the server provisioned no login for this number (an invitation whose
+ *                      provisioning failed): the owner re-sends it. Never the browser's job.
+ *   • `offline`      — the server could not be asked. NOT a verdict: the device keeps its
+ *                      cached rows and its PIN, and says nothing alarming.
+ *   • `signed_out`   — the server answered and there is no usable profile (account erased, or
+ *                      the number went inactive). The stored identity is dropped.
+ *   • `error`        — the server answered with a failure of its own.
+ */
+export type ResumeResult =
+  | { status: "ok"; user: User }
+  | { status: "login_not_ready" }
+  | { status: "offline" }
+  | { status: "signed_out" }
+  | { status: "error"; message: string };
+
+/**
+ * Open a session for an account this device already knows, without a phone code.
+ *
+ * This is the second half of the PIN rule: the PIN is checked first (by the server against its
+ * bcrypt hash, or by the device's own record when there is nothing to ask), and this mints the
+ * session that every RLS-protected read then runs under. It is the SAME credential path the
+ * code uses — the login identity the server provisioned for the number — so a signed-out
+ * phone still cannot come back as anyone but itself, and nothing is ever invented here.
+ *
+ * The caller passes the account it believes it is resuming; the server is what confirms it:
+ * a number whose profile was removed or deactivated comes back `signed_out`.
+ */
+export async function resumeSession(known: User): Promise<ResumeResult> {
+  let session: { ok: boolean; error?: string };
+  try {
+    session = await ensureAuthSession(known.phone);
+  } catch {
+    return { status: "offline" };
+  }
+  if (!session.ok) {
+    if (session.error === LOGIN_NOT_READY) return { status: "login_not_ready" };
+    if (session.error === SESSION_UNREACHABLE) return { status: "offline" };
+    return { status: "error", message: SESSION_SETUP_FAILED };
+  }
+
+  // Verify the profile still exists and re-read membership context (SECURITY DEFINER RPC).
+  const { data, error } = await supabase
+    .rpc("lookup_user_by_phone", { p_phone: normalizePhone(known.phone) });
+  // A lookup that could not be answered is not a verdict about the account: the session is
+  // live, so the cached rows are the honest thing to keep showing.
+  if (error) return { status: "offline" };
+  const row = data as UserRow | null;
+  if (!row || !row.is_active) return { status: "signed_out" };
+
+  const user = userFromRow(row);
+  // Best-effort: if the invite was accepted on another device the membership is already
+  // active and this is a no-op, so returning must never be blocked by it.
+  const onboardError = await completeOnboardingIfInvited(user);
+  if (onboardError) {
+    return /ACCOUNT_INACTIVE/.test(onboardError)
+      ? { status: "login_not_ready" }
+      : { status: "error", message: onboardError };
+  }
+  user.permissions = await loadPermissions();
+  return { status: "ok", user };
+}
+
+/** The identity this device last persisted, or null if there is none (or it is unreadable). */
+function readSavedUser(): User | null {
+  const saved = window.localStorage.getItem("agri_auth");
+  if (!saved) return null;
+  try {
+    return (JSON.parse(saved)?.state?.user ?? null) as User | null;
+  } catch {
+    return null;
+  }
+}
+
 // Resolve the app user from an existing Supabase session (used on app load so a
 // logged-in user survives refreshes without re-entering OTP).
 // Membership/tenant context is resolved server-side by lookup_user_by_phone
 // (SECURITY DEFINER) — no additional RLS-dependent query needed.
 export async function getUserFromSession(): Promise<User | null> {
-  const saved = window.localStorage.getItem("agri_auth");
-  if (!saved) return null;
+  const savedUser = readSavedUser();
+  if (!savedUser) return null;
+  let resumed: ResumeResult;
   try {
-    const parsed = JSON.parse(saved);
-    const savedUser: User | null = parsed?.state?.user ?? null;
-    if (!savedUser) return null;
-    // Ensure Supabase Auth session exists (may have been lost on reload).
-    //
-    // Failing to establish one is NOT the same as the account being invalid, and this used to
-    // treat it as such by erasing `agri_auth`. A phone that launched offline therefore threw
-    // away the identity the app is built around — and with it the only route back to the PIN
-    // keypad. The absence is reported by returning null; whether that means "signed out" is
-    // decided by the caller, which knows whether the PIN or the cache can still serve.
-    const session = await ensureAuthSession(savedUser.phone);
-    if (!session.ok) {
-      console.warn('No Supabase Auth session available:', session.error);
-      return null;
-    }
-    // Verify user still exists + get fresh membership context via SECURITY DEFINER RPC
-    const { data } = await supabase
-      .rpc("lookup_user_by_phone", { p_phone: savedUser.phone });
-    if (data && (data as UserRow).is_active) {
-      const user = userFromRow(data as UserRow);
-      // Best-effort on restore: if the invite was accepted on another device the
-      // membership is already active and this is a no-op, so a reload must never
-      // be blocked by it.
-      const onboardError = await completeOnboardingIfInvited(user);
-      if (onboardError) console.warn('Onboarding completion failed on restore:', onboardError);
-      user.permissions = await loadPermissions();
-      return user;
-    }
-    // The profile lookup answered and there is no usable profile: the account was removed,
-    // or the phone it belongs to went inactive. That is a definitive server answer, so the
-    // stored identity is dropped — this is the one path where erasing it is correct.
-    window.localStorage.removeItem("agri_auth");
-    return null;
+    resumed = await resumeSession(savedUser);
   } catch {
     // Unreadable stored user. Nothing to restore, and nothing to erase: the row may simply
     // be mid-write. Signing out is the job of the explicit sign-out, not of a parse failure.
     return null;
   }
+  if (resumed.status === "ok") return resumed.user;
+  // The profile lookup answered and there is no usable profile: the account was removed, or
+  // the phone it belongs to went inactive. That is a definitive server answer, so the stored
+  // identity is dropped — this is the one path where erasing it is correct.
+  if (resumed.status === "signed_out") {
+    window.localStorage.removeItem("agri_auth");
+    return null;
+  }
+  // Everything else is "the server could not be asked" or "this number has no login yet".
+  // Both keep the stored identity: the PIN and the cached rows can still serve, and neither
+  // is a reason to throw away the only route back into the app.
+  console.warn('No Supabase Auth session available:', resumed.status);
+  return null;
 }

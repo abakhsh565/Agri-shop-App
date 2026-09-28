@@ -14,6 +14,7 @@ import { useSalesStore } from "@/stores/salesStore";
 import { useCustomersStore } from "@/stores/customersStore";
 import { useAuthStore } from "@/stores/authStore";
 import { useUIStore } from "@/stores/uiStore";
+import { provisionMemberLogin } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
 import StatusBar from "@/components/ui/StatusBar";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
@@ -165,6 +166,24 @@ export default function EmployeeDetailPage() {
   // An invitation that has not been accepted yet: the person holds a membership
   // but every authorization path denies it until they sign in for the first time.
   const isInvited = emp.membershipStatus === "pending";
+  const [loginFixing, setLoginFixing] = useState(false);
+  const [loginFixed, setLoginFixed] = useState(false);
+
+  /** Re-run the authorized provisioner so an invited employee can actually sign in. */
+  async function handleFixSignIn() {
+    if (loginFixing || loginFixed || !emp) return;
+    setLoginFixing(true);
+    try {
+      const res = await provisionMemberLogin(emp.id);
+      if (!res.ok) throw new Error(res.error ?? "");
+      setLoginFixed(true);
+      addToast(t("empDetail.fixSignInDone", { name: emp.name }), "success");
+    } catch (err) {
+      addToast(err instanceof Error && err.message ? err.message : t("empDetail.fixSignInFailed"), "error");
+    } finally {
+      setLoginFixing(false);
+    }
+  }
   const isOwner = empMembershipRole === "owner";
   const roleTemplateName = editRoleId
     ? rolesStore.roles.find((r) => r.id === editRoleId)?.name ?? t("empDetail.noRole")
@@ -542,6 +561,35 @@ export default function EmployeeDetailPage() {
               and only shares it later — or has to resend it because the person
               never signed in. */}
           <InviteLinkCard name={emp.name} phone={emp.phone} />
+
+          {/* Creating the invitation also creates the employee's login, and that step can fail
+              on its own (it is tolerated so a provisioning problem never loses the employee).
+              When it does, the employee has a valid invitation they cannot use, and re-inviting
+              is impossible because the number is already taken — so the repair is here, on the
+              one screen the owner already opens when the person says it does not work. */}
+          <div
+            className="rounded-[var(--radius-tile)] p-4 flex items-start justify-between gap-3"
+            style={{ background: "var(--surface-2)", border: "1px solid var(--border-light)" }}
+          >
+            <div className="min-w-0">
+              <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>
+                {t("empDetail.fixSignIn")}
+              </p>
+              <p className="text-xs mt-1" style={{ color: "var(--text-secondary)" }}>
+                {loginFixed ? t("empDetail.fixSignInDone", { name: emp.name }) : t("empDetail.fixSignInHint")}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={handleFixSignIn}
+              disabled={loginFixing || loginFixed}
+              data-testid="emp-fix-signin"
+              className="shrink-0 h-10 px-4 rounded-full text-xs font-bold disabled:opacity-50"
+              style={{ background: "var(--brand)", color: "#0a0a0a" }}
+            >
+              {t("empDetail.fixSignInAction")}
+            </button>
+          </div>
         </div>
       )}
 

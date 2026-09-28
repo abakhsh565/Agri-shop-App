@@ -6,6 +6,12 @@ import { isAlertDue, loadStockAlertSettings } from "@/lib/stockAlerts";
 /**
  * Create a notification from the frontend.
  * Used after RPC calls that don't create notifications in the DB.
+ *
+ * `shop_id` is sent explicitly, and it is the ACTIVE branch: a notification is a fact
+ * about one branch, and writing it against whichever branch happened to be active when it
+ * was queued is how one branch's events end up under another's name. It is the caller's
+ * own tenant, taken from the auth store — the same value every read in the app is scoped
+ * by — and the database stamps the row with it if this field is ever missing.
  */
 export async function createNotification(input: {
   kind: string;
@@ -21,6 +27,7 @@ export async function createNotification(input: {
     entity_id: input.entityId ?? null,
     actor_id: user?.id ?? null,
     actor_name: user?.name ?? null,
+    shop_id: user?.tenantId ?? null,
   };
 
   try {

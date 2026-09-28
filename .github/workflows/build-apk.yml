@@ -128,14 +128,72 @@ jobs:
       - name: Sync Capacitor
         run: npx cap sync android
 
-      - name: Inject Camera Permission
+      # `android/` is gitignored and regenerated above, so the manifest cannot be edited in
+      # the repo — everything the app needs in it is injected here.
+      - name: Inject Android manifest entries (camera + invite deep links)
         run: node .github/inject-permissions.cjs
+        env:
+          # Set the repository variable APP_LINK_HOST once the app is served from a real https
+          # domain publishing /.well-known/assetlinks.json. Until then this is empty and only
+          # the app's own scheme is injected — invitation links still open the app.
+          APP_LINK_HOST: ${{ vars.APP_LINK_HOST }}
+
+      # ─── Stable release signing ────────────────────────────────────────────
+      # A debug keystore is generated fresh on every runner, so its fingerprint changes from
+      # one build to the next and no published assetlinks.json could ever match it — Android
+      # would silently keep opening invite links in a browser. A stable key is what makes the
+      # https App Link verifiable, and it is also what lets a later build install OVER an
+      # earlier one; losing it means shipping an update Android refuses to replace.
+      - name: Decode release keystore
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$ANDROID_KEYSTORE_BASE64" ]; then
+            echo "ANDROID_KEYSTORE_BASE64 is not set — cannot release-sign. See .github/inject-signing.cjs for the required secrets."
+            exit 1
+          fi
+          mkdir -p keystore
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 -d > keystore/release.jks
+
+      - name: Inject release signing config
+        run: node .github/inject-signing.cjs
+        env:
+          ANDROID_KEYSTORE_PATH: ${{ github.workspace }}/keystore/release.jks
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
 
       - name: Build APK
         working-directory: android
+        env:
+          # The injected signingConfig reads these at configuration time; no password is
+          # written into build.gradle.
+          ANDROID_KEYSTORE_PATH: ${{ github.workspace }}/keystore/release.jks
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug
+          ./gradlew assembleRelease
+
+      # Reads the fingerprint back out of the signed APK, so the file can never describe a
+      # key that is not the one this release actually carries. Also verifies the signature.
+      - name: Derive App Links assetlinks.json from the signed APK
+        run: node scripts/android-assetlinks.mjs android/app/build/outputs/apk/release/app-release.apk
+        env:
+          APP_LINK_HOST: ${{ vars.APP_LINK_HOST }}
+
+      # Kept out of the release below on purpose. The file exists only when APP_LINK_HOST is
+      # set, and a release `files:` entry that matches nothing is version-dependent — if the
+      # action treats it as an error it fails the step and the APK is never published, which
+      # is a far worse outcome than a missing convenience file.
+      - name: Upload assetlinks.json for the App Links domain owner
+        if: hashFiles('dist/.well-known/assetlinks.json') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: assetlinks
+          path: dist/.well-known/assetlinks.json
+          retention-days: 30
 
       - name: Create GitHub Release with APK
         if: success()
@@ -146,5 +204,6 @@ jobs:
           body: |
             Auto-built APK from commit ${{ github.sha }}
             Branch: ${{ github.ref_name }}
-          files: android/app/build/outputs/apk/debug/app-debug.apk
+          # Only the APK. assetlinks.json is a separate artifact — see the step above.
+          files: android/app/build/outputs/apk/release/app-release.apk
           make_latest: true

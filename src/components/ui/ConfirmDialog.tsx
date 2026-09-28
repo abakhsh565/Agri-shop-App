@@ -15,6 +15,16 @@ interface ConfirmDialogProps {
   destructive?: boolean;
   loading?: boolean;
   /**
+   * An optional third, quietest answer, for the three-answer alerts this platform uses —
+   * save / discard / cancel on unsaved work, where two buttons force one of the three into a
+   * guess. Rendered below the pair in the error tone, because the only third answers worth
+   * offering are the ones that throw something away.
+   *
+   * Deliberately optional: every two-answer dialog in the app is unchanged by its arrival.
+   */
+  tertiaryLabel?: string;
+  onTertiary?: () => void;
+  /**
    * When set, the action stays disabled until the user types this text exactly
    * (trimmed). Used where a single tap is too easy to make by accident — deleting
    * the account, where the name is the one thing the owner certainly knows.
@@ -40,6 +50,7 @@ interface ConfirmDialogProps {
 export default function ConfirmDialog({
   open, title, message, confirmLabel, cancelLabel,
   destructive = false, loading = false,
+  tertiaryLabel, onTertiary,
   requireTypedText, typedPrompt,
   onConfirm, onCancel,
 }: ConfirmDialogProps) {
@@ -142,6 +153,24 @@ export default function ConfirmDialog({
             {loading ? tNow("common.working") : confirmLabel}
           </button>
         </div>
+
+        {tertiaryLabel && onTertiary && (
+          <button
+            type="button"
+            data-testid="confirm-tertiary"
+            onClick={onTertiary}
+            disabled={loading}
+            className="w-full mt-2.5 font-semibold disabled:opacity-50"
+            style={{
+              height: 44,
+              color: "var(--error)",
+              fontSize: "var(--text-meta)",
+              fontWeight: "var(--weight-strong)",
+            }}
+          >
+            {tertiaryLabel}
+          </button>
+        )}
       </div>
     </div>
   );

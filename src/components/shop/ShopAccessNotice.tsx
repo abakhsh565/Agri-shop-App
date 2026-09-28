@@ -45,8 +45,7 @@ export default function ShopAccessNotice() {
   const canCreate =
     user?.membershipRole === "owner" ||
     user?.membershipRole === "admin" ||
-    user?.role === "admin" ||
-    user?.role === "co_admin";
+    user?.role === "admin";
 
   return (
     <div className="flex flex-col flex-1 items-center justify-center gap-6 px-8 text-center" data-testid="no-shop-notice">
@@ -68,7 +67,7 @@ export default function ShopAccessNotice() {
           <>
             {/* The name field and the create call live in one place (the shop switcher), so this
                 opens that sheet rather than mounting a second copy of the form. */}
-            <Button fullWidth size="lg" onClick={openSwitcher}>
+            <Button fullWidth size="lg" onClick={() => openSwitcher()}>
               {t("shop.createCta")}
             </Button>
             <Button

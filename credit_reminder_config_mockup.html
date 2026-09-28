@@ -1,0 +1,112 @@
+<style>.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;}</style>
+<h2 class="sr-only">Reminder alert configuration form, styled like a calendar recurrence picker, with a start offset, a repeat pattern, and an end condition</h2>
+<div style="background: var(--surface-2); border-radius: 12px; border: 0.5px solid var(--border); padding: 1.25rem;">
+
+<div style="margin-bottom: 1rem;">
+<label style="font-size: 13px; color: var(--text-secondary); display:block; margin-bottom:6px;">Start reminders</label>
+<div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+<input type="number" id="start-days" value="15" min="0" style="width:70px;">
+<span style="font-size:14px; color: var(--text-secondary);">days</span>
+<select id="anchor" style="flex:1; min-width:160px;">
+<option value="after credit given">after credit given</option>
+<option value="after due date">after due date</option>
+<option value="before harvest season">before harvest season</option>
+</select>
+</div>
+</div>
+
+<div style="margin-bottom: 1rem;">
+<label style="font-size: 13px; color: var(--text-secondary); display:block; margin-bottom:6px;">Repeat</label>
+<select id="repeat-type" style="width:100%;">
+<option value="once">One-time reminder</option>
+<option value="interval">Every fixed interval</option>
+<option value="escalate" selected>Escalating sequence</option>
+</select>
+</div>
+
+<div id="interval-fields" style="display:none; margin-bottom: 1rem; padding-left: 10px; border-left: 2px solid var(--border);">
+<div style="display:flex; gap:8px; align-items:center;">
+<span style="font-size:14px; color: var(--text-secondary);">Every</span>
+<input type="number" id="interval-n" value="7" min="1" style="width:60px;">
+<select id="interval-unit"><option value="days">days</option><option value="weeks">weeks</option></select>
+</div>
+</div>
+
+<div id="escalate-fields" style="margin-bottom: 1rem; padding-left: 10px; border-left: 2px solid var(--border);">
+<div style="display:flex; gap:8px; align-items:center; margin-bottom:8px;">
+<span style="font-size:13px; width:84px; color: var(--text-secondary);">Gentle</span>
+<span style="font-size:13px; color: var(--text-muted);">day</span>
+<input type="number" class="esc-day" data-tone="gentle nudge" value="15" min="0" style="width:60px;">
+</div>
+<div style="display:flex; gap:8px; align-items:center; margin-bottom:8px;">
+<span style="font-size:13px; width:84px; color: var(--text-secondary);">Firmer</span>
+<span style="font-size:13px; color: var(--text-muted);">day</span>
+<input type="number" class="esc-day" data-tone="firmer follow-up" value="30" min="0" style="width:60px;">
+</div>
+<div style="display:flex; gap:8px; align-items:center;">
+<span style="font-size:13px; width:84px; color: var(--text-secondary);">Final notice</span>
+<span style="font-size:13px; color: var(--text-muted);">day</span>
+<input type="number" class="esc-day" data-tone="final notice" value="45" min="0" style="width:60px;">
+</div>
+</div>
+
+<div style="margin-bottom: 1rem;">
+<label style="font-size: 13px; color: var(--text-secondary); display:block; margin-bottom:6px;">Ends</label>
+<select id="ends-type" style="width:100%;">
+<option value="paid" selected>Until paid in full</option>
+<option value="date">On a specific date</option>
+<option value="count">After a number of reminders</option>
+</select>
+</div>
+
+<div id="ends-date-field" style="display:none; margin-bottom: 1rem;">
+<input type="date" id="ends-date" style="width:100%;">
+</div>
+
+<div id="ends-count-field" style="display:none; margin-bottom: 1rem;">
+<input type="number" id="ends-count" value="5" min="1" style="width:80px;"> <span style="font-size:14px; color: var(--text-secondary);">reminders</span>
+</div>
+
+<div style="background: var(--surface-1); border-radius: var(--radius); padding: 0.75rem 1rem; font-size: 13px; color: var(--text-secondary); line-height:1.6;" id="summary"></div>
+
+</div>
+<script>
+function calcSummary(){
+  var startDays = document.getElementById('start-days').value;
+  var anchorText = document.getElementById('anchor').value;
+  var repeatType = document.getElementById('repeat-type').value;
+  var endsType = document.getElementById('ends-type').value;
+  var endsText = '';
+  if(endsType === 'paid') endsText = 'stops automatically once the balance is paid';
+  else if(endsType === 'date') endsText = 'stops on ' + (document.getElementById('ends-date').value || 'the selected date');
+  else endsText = 'stops after ' + document.getElementById('ends-count').value + ' reminders';
+  var text = '';
+  if(repeatType === 'once'){
+    text = 'Sends one reminder ' + startDays + ' days ' + anchorText + ', then ' + endsText + '.';
+  } else if(repeatType === 'interval'){
+    var n = document.getElementById('interval-n').value;
+    var unit = document.getElementById('interval-unit').value;
+    text = 'Starting ' + startDays + ' days ' + anchorText + ', sends a reminder every ' + n + ' ' + unit + ' \u2014 ' + endsText + '.';
+  } else {
+    var rows = document.querySelectorAll('.esc-day');
+    var parts = [];
+    rows.forEach(function(r){ parts.push(r.getAttribute('data-tone') + ' at day ' + r.value); });
+    text = 'Sends a ' + parts.join(', a ') + ' \u2014 ' + endsText + '.';
+  }
+  document.getElementById('summary').textContent = text;
+}
+function toggleFields(){
+  var repeatType = document.getElementById('repeat-type').value;
+  document.getElementById('interval-fields').style.display = repeatType === 'interval' ? 'block' : 'none';
+  document.getElementById('escalate-fields').style.display = repeatType === 'escalate' ? 'block' : 'none';
+  var endsType = document.getElementById('ends-type').value;
+  document.getElementById('ends-date-field').style.display = endsType === 'date' ? 'block' : 'none';
+  document.getElementById('ends-count-field').style.display = endsType === 'count' ? 'block' : 'none';
+  calcSummary();
+}
+document.querySelectorAll('input,select').forEach(function(el){
+  el.addEventListener('input', calcSummary);
+  el.addEventListener('change', toggleFields);
+});
+toggleFields();
+</script>

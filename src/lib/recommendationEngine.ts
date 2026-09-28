@@ -164,13 +164,28 @@ export const CROP_SEASON_WINDOWS: Record<string, Record<string, [number, number]
 /** List of known crops the owner can assign to customers. */
 export const KNOWN_CROPS: string[] = Object.keys(CROP_SEASON_WINDOWS);
 
+/**
+ * Pesticide and spray are one category, and the season table says so once.
+ *
+ * The database enum holds both values, and the agronomy was written against `spray`. The Add
+ * Product form offers `pesticide`. Read literally, that made every product created in the app
+ * **unmatchable**: `CROP_SEASON_WINDOWS.Cotton.pesticide` is undefined, so no crop ever
+ * qualified and the "customers likely to want this" section came up empty for the shop's own
+ * products while working for the older ones. Nobody buys them for different reasons or at a
+ * different time of year, so one name is canonicalised to the other everywhere a crop is
+ * consulted, and the season table keeps one row for the pair.
+ */
+export function canonicalCategory(category: string): string {
+  return category === "pesticide" ? "spray" : category;
+}
+
 /** The categories this crop has a season for at all — the compatibility half of eligibility. */
 export function isCategoryCompatible(category: string, cropName: string): boolean {
-  return Boolean(CROP_SEASON_WINDOWS[cropName]?.[category]);
+  return Boolean(CROP_SEASON_WINDOWS[cropName]?.[canonicalCategory(category)]);
 }
 
 export function isCategoryInSeason(category: string, cropName: string, now: Date): boolean {
-  const window = CROP_SEASON_WINDOWS[cropName]?.[category];
+  const window = CROP_SEASON_WINDOWS[cropName]?.[canonicalCategory(category)];
   if (!window) return false;
   const month = now.getMonth() + 1; // 1-indexed
   if (window[0] <= window[1]) return month >= window[0] && month <= window[1];
@@ -179,7 +194,7 @@ export function isCategoryInSeason(category: string, cropName: string, now: Date
 }
 
 export function categoryFitsStage(category: string, stage: CropStage): boolean {
-  return STAGE_CATEGORIES[stage].includes(category);
+  return STAGE_CATEGORIES[stage].includes(canonicalCategory(category));
 }
 
 function monthsBetween(from: Date, to: Date): number {
@@ -269,7 +284,9 @@ function buildProfile(sales: Sale[], products: Product[]): BuyerProfile {
       const qty = Math.max(0, item.qty ?? 0);
       lines.push({
         productId: product.id,
-        category: product.category,
+        // The canonical name, so "what else do they buy in the same category" cannot split a
+        // shopkeeper's one shelf into two because one row was filed as spray and one as pesticide.
+        category: canonicalCategory(product.category),
         company: product.company,
         variantName: item.variantName,
         at: sale.createdAt,
@@ -345,7 +362,7 @@ function scoreProduct(
 ): { score: number; reasons: RecommendationReason[]; tag: RecommendationTag; signals: Omit<RecommendationSignals, "crop"> } {
   const { customer, sales: allSales, customers, products, now, needs } = ctx;
   const stage = cropStageOf(crop, now);
-  const category = product.category;
+  const category = canonicalCategory(product.category);
   const bought = profile.byProduct.get(product.id);
   const timesBought = bought?.times ?? 0;
   const daysSinceLastBuy = bought ? getDaysSince(bought.lastAt, now) : null;

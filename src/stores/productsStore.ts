@@ -126,7 +126,7 @@ export const useProductsStore = create<ProductsState>((set, get) => ({
       set({ products: cached, loading: false, ready: true });
     }
 
-    const isAdmin = ["admin", "co_admin"].includes(
+    const isAdmin = ["admin"].includes(
       useAuthStore.getState().user?.role ?? ""
     );
 

@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { supabase } from "@/lib/supabase";
+import { getCurrentTenantId } from "@/lib/tenantContext";
 import type { Role } from "@/types";
 
 interface RoleRow {
@@ -41,11 +42,26 @@ export const useRolesStore = create<RolesState>((set, get) => ({
   // The active shop changed: role templates belong to one tenant.
   reset: () => set({ roles: [], loading: false, ready: false }),
 
+  /**
+   * Read the roles of the shop the caller is WORKING IN.
+   *
+   * The filter is the fix, not decoration. Row level security allows an account to read the
+   * roles of every shop it belongs to, so this screen used to list another shop's roles while
+   * every write — authorized against the ACTIVE shop — refused them: the owner saw four roles,
+   * tapped delete, and got "this role is not yours". The list and the writes now agree because
+   * both are scoped to the same shop, which is what every other store already does.
+   */
   load: async () => {
+    const tenantId = getCurrentTenantId();
     set({ loading: true });
+    if (!tenantId) {
+      set({ roles: [], loading: false, ready: true });
+      return;
+    }
     const { data, error } = await supabase
       .from("roles")
       .select("*")
+      .eq("tenant_id", tenantId)
       .order("name");
     if (error) {
       set({ loading: false, ready: true });

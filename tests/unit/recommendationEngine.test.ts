@@ -390,6 +390,38 @@ describe("the two rules that are easy to break by accident", () => {
     expect(need?.params.need).toBe("Whitefly on cotton");
   });
 
+  it("reads pesticide and spray as the same shelf, at the same time of year", () => {
+    // The form offers "Pesticide"; the season table was written against "spray". Read
+    // literally, every product the shop created itself became unmatchable, and the
+    // "customers likely to want this" section stayed empty for exactly those products.
+    const pesticide: Product = { ...spray("p40", "Karate"), category: "pesticide" };
+    expect(isEligible(pesticide, COTTON_GROWING, IN_SEASON)).toBe(true);
+    expect(isEligible(pesticide, COTTON_GROWING, OUT_OF_SEASON)).toBe(false);
+    expect(categoryFitsStage("pesticide", "growing")).toBe(true);
+    expect(categoryFitsStage("pesticide", "harvest")).toBe(false);
+    // A crop with no window for either name stays closed to both.
+    expect(isEligible(pesticide, { cropName: "Mango" }, IN_SEASON)).toBe(false);
+
+    const twin = spray("p41", "Karate");
+    const crops = { [CUSTOMER.id]: [COTTON_GROWING] };
+    const asSpray = getRecommendationsForProduct(twin, context({ crops, products: [twin] }), IN_SEASON);
+    const asPesticide = getRecommendationsForProduct(pesticide, context({ crops, products: [pesticide] }), IN_SEASON);
+    expect(asPesticide.map((r) => r.subject.id)).toEqual(asSpray.map((r) => r.subject.id));
+    expect(asPesticide.map((r) => keys(r.reasons))).toEqual(asSpray.map((r) => keys(r.reasons)));
+
+    // And one shelf is one category when reading a customer's history, so a pesticide row is
+    // not offered to a spray buyer as something they have never bought.
+    const sales = [saleOf(CUSTOMER, "2026-07-01T09:00:00.000Z", [{ product: LAMBDA }])];
+    const recs = getRecommendationsForCustomer(
+      CUSTOMER,
+      context({ sales, products: [LAMBDA, pesticide] }),
+      IN_SEASON,
+    );
+    expect(keys(recs.find((r) => r.subject.id === pesticide.id)!.reasons)).toContain(
+      "recommendation.related",
+    );
+  });
+
   it("says nothing about profit: cost price is not a signal", () => {
     const cheap = spray("p8", "Cheap", "Suncrop", 500, 100);
     const dear = spray("p30", "Dear", "Suncrop", 500, 1100);

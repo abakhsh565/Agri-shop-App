@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "@/stores/authStore";
 import { useNotificationStore, type AppNotification } from "@/stores/notificationStore";
@@ -16,8 +16,11 @@ import { supabase } from "@/lib/supabase";
 import { formatCurrency, formatSmartDateTime } from "@/lib/formatters";
 import { generateReminders, calculatePaymentStatus, loadBusinessSettings } from "@/lib/reminderEngine";
 import { computeOverdueCreditTotal } from "@/lib/signalEngine";
+import { summariseSales, profitDisplay } from "@/lib/profit";
+import { summariseMoneyIn, loadCreditPayments, type CreditPaymentRow } from "@/lib/money";
 import { useT } from "@/lib/i18n";
-import { AlertTriangle, TrendingUp, ChevronRight, TrendingDown, ShoppingCart, Search, Bell, Wallet, CheckCircle2, HandCoins, PackagePlus } from "lucide-react";
+import { branchContextLabel } from "@/lib/branchContext";
+import { AlertTriangle, TrendingUp, ChevronRight, ChevronDown, TrendingDown, ShoppingCart, Search, Bell, Wallet, CheckCircle2, HandCoins, PackagePlus, Store } from "lucide-react";
 import StatusBar from "@/components/ui/StatusBar";
 import ListCard from "@/components/ui/ListCard";
 import ListRow from "@/components/ui/ListRow";
@@ -74,7 +77,7 @@ export default function AdminDashboardPage() {
   const isUrdu = language === "ur";
   const [dateFilter, setDateFilter] = useState<DateFilter>("all");
   const [showNotifs, setShowNotifs] = useState(false);
-  const { items: notifications, unread, load, subscribe, markAllRead, markOneRead, ready: notificationsReady } = useNotificationStore();
+  const { items: allNotifications, unread, load, subscribe, markAllRead, markOneRead, ready: notificationsReady } = useNotificationStore();
   const mockSales = useSalesStore((s) => s.sales);
   const mockProducts = useProductsStore((s) => s.products);
   const mockCompanies = useCompaniesStore((s) => s.companies);
@@ -86,9 +89,11 @@ export default function AdminDashboardPage() {
   const customersReady = useCustomersStore((s) => s.ready);
   const listsReady = salesReady && customersReady;
   const [allReturns, setAllReturns] = useState<{ amount: number; createdAt: string }[]>([]);
-  const [allPayments, setAllPayments] = useState<{ amount: number; createdAt: string }[]>([]);
+  // The udhaar payments, raw rows, so the date pill can filter them without a second query.
+  // Loaded through `@/lib/money` so Reports reads the same table exactly the same way.
+  const [creditPayments, setCreditPayments] = useState<CreditPaymentRow[]>([]);
 
-  // Fetch returns + credit collected — store raw rows so we can filter by date range
+  // Fetch returns + the payments — store raw rows so we can filter by date range
   useEffect(() => {
     async function fetchReturns() {
       try {
@@ -101,19 +106,8 @@ export default function AdminDashboardPage() {
         }
       } catch {}
     }
-    async function fetchCreditCollected() {
-      try {
-        const { data } = await supabase.from("customer_payments").select("amount, created_at");
-        if (data) {
-          setAllPayments(data.map((p: any) => ({
-            amount: Number(p.amount || 0),
-            createdAt: p.created_at || "",
-          })));
-        }
-      } catch {}
-    }
     fetchReturns();
-    fetchCreditCollected();
+    loadCreditPayments().then(setCreditPayments).catch(() => {});
   }, []);
 
   function getCustomerImg(customerId: string) {
@@ -122,17 +116,54 @@ export default function AdminDashboardPage() {
 
   const now = useCurrentTime();
   const today = now;
-  const hour = today.getHours();
-  const greetingKey =
-    hour < 12 ? "dashboard.greeting.morning"
-    : hour < 17 ? "dashboard.greeting.afternoon"
-    : "dashboard.greeting.evening";
   const activeShopName = useShopStore((s) => s.activeShopName);
+  const activeShopId = useShopStore((s) => s.activeShopId);
+  const openSwitcher = useShopStore((s) => s.openSwitcher);
+  const branches = useShopStore((s) => s.branches);
+  const branchesLoaded = useShopStore((s) => s.branchesLoaded);
+  const loadBranches = useShopStore((s) => s.loadBranches);
   const displayName = user?.name ?? t("common.owner");
   const initials = user?.name?.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase() ?? "OW";
   const todayLabel = today.toLocaleDateString(isUrdu ? "ur-PK" : "en-PK", {
     weekday: "long", day: "numeric", month: "long",
   });
+
+  /**
+   * The header is the branch it is describing.
+   *
+   * The account's OWN branch (the main one it registered with) reads as the person:
+   * their name, their photo, and the branch they are in named quietly below. A branch the
+   * account ADDED reads as that branch: a branch mark instead of a face, the branch's own
+   * name as the loud line, and the fact an owner actually needs about it — how many people
+   * work here and how much is on the shelf.
+   *
+   * Which of the two it is comes from the server (`is_main` on the branch), never from a
+   * guess about names. Until the branches have been read the header stays with the person:
+   * showing branch chrome and then replacing it would make the screen jump on every open.
+   */
+  const activeBranch = branches.find((b) => b.id === activeShopId) ?? null;
+  const inAddedBranch = branchesLoaded && !!activeBranch && !activeBranch.isMain;
+  // The same sentence the Branches screen puts on a row, from the same derivation.
+  const branchContext = activeBranch ? branchContextLabel(t, activeBranch) : null;
+
+  // One read for the whole header, once per session, and only when there is more than one
+  // branch to be in: with a single branch the answer is already on screen.
+  useEffect(() => {
+    if (!branchesLoaded) void loadBranches();
+  }, [branchesLoaded, loadBranches]);
+
+  /**
+   * Home reads ONE branch.
+   *
+   * The store keeps every branch's events (an owner has to be able to open the
+   * Notifications screen and see them all), but this screen is about the branch you are
+   * standing in — its sales, its staff, its bell. Mixing two branches into this list is
+   * how a figure from Branch A ends up explained by an event from Branch B.
+   */
+  const notifications = useMemo(
+    () => allNotifications.filter((n) => !activeShopId || n.shop_id === activeShopId),
+    [allNotifications, activeShopId],
+  );
 
   // Date helpers — use Pakistan local time (Asia/Karachi, UTC+5) for all date comparisons.
   // en-CA locale produces YYYY-MM-DD format.
@@ -175,41 +206,38 @@ export default function AdminDashboardPage() {
   const allActive = mockSales.filter((s) => !s.isVoided);
   const filtered = dateFilter === "all" ? allActive : allActive.filter(inFilter);
 
-  // Fallback cost lookup, used only for lines recorded before COGS snapshots
-  // existed. It is built from the products store, which loads ACTIVE products
-  // only, so it MUST NOT be the primary source: a deactivated product would
-  // silently cost zero and overstate profit.
+  // Fallback cost lookup, used only for lines the sale-time snapshot could not price. It is
+  // built from the products store, which loads ACTIVE products only, so it MUST NOT be the
+  // primary source: a deactivated product would silently cost zero and overstate profit.
   const variantCost = new Map<string, number>();
   mockProducts.forEach((p) => p.variants.forEach((v) => variantCost.set(v.id, v.costPrice)));
 
   const totalSales = filtered.reduce((s, x) => s + x.totalAmount, 0);
   const txCount = filtered.length;
-  // Gross profit = sale revenue - recorded line COGS, on the SAME authoritative
-  // revenue the reports use: the sale's own stored total_amount (stamped by
-  // create_sale). Recomputing the revenue from unit_price * qty looks equivalent
-  // but is not — the database rounds each line separately, so the two drift
-  // apart on fractional quantities, and Home would then disagree with Reports
-  // about the same period. COGS comes from the sale item's own snapshot (taken at
-  // sale time), so an item whose product has since been deactivated cannot
-  // silently cost zero; the current variant cost is only a fallback for lines
-  // written before COGS snapshots existed.
-  const grossProfit = filtered.reduce(
-    (sum, sale) =>
-      sum +
-      (sale.totalAmount -
-        sale.items.reduce(
-          (s, it) => s + (it.cogsAmount ?? (variantCost.get(it.variantId ?? '') ?? 0) * it.qty),
-          0,
-        )),
-    0,
-  );
-  // Returns + credit collected — same date filter as sales
+  // Gross profit = sale revenue - recorded line COGS, on the SAME authoritative revenue the
+  // reports use: the sale's own stored total_amount (stamped by create_sale). Recomputing
+  // the revenue from unit_price * qty looks equivalent but is not — the database rounds each
+  // line separately, so the two drift apart on fractional quantities, and Home would then
+  // disagree with Reports about the same period. COGS comes from the sale item's own
+  // snapshot (taken at sale time), so an item whose product has since been deactivated
+  // cannot silently cost zero.
+  //
+  // The arithmetic itself lives in src/lib/profit.ts so that Home, Sales, the sale record
+  // and Reports cannot drift apart again; this screen only decides how to say the result.
+  const gross = summariseSales(filtered, (id) => (id ? variantCost.get(id) : undefined));
+  const grossProfit = gross.profit;
+  const grossProfitDisplay = profitDisplay(gross);
+  // Money in — the same date filter as sales, and the same calculation Reports shows. Home
+  // prints the udhaar half (the money coming back against old bills); Reports prints the whole
+  // picture, including the cash taken at the counter. Neither screen does its own addition.
   const totalReturns = allReturns
     .filter((r) => dateInRange(r.createdAt))
     .reduce((s, r) => s + r.amount, 0);
-  const creditCollected = allPayments
-    .filter((p) => dateInRange(p.createdAt))
-    .reduce((s, p) => s + p.amount, 0);
+  const money = summariseMoneyIn({
+    sales: allActive,
+    payments: creditPayments,
+    inPeriod: dateInRange,
+  });
   // Overdue = remaining balance of credit whose due date has already passed.
   // Same authoritative calculation as the S1 overdue-credit signals.
   const overdueAmount = computeOverdueCreditTotal(customers);
@@ -287,38 +315,73 @@ export default function AdminDashboardPage() {
     >
       <StatusBar />
 
-      {/* ── Greeting header — saved name + current date ── */}
-      {/* gap-3.5 (14px), up from 10: at a 40px avatar the name was sitting almost against the
-          initials, which is what made the row read cramped. The greeting is 15 — the size the
-          app's own header titles use (`NavHeader`, `SelectSheet`) — one step down from 16, so
-          the name and the date below it sit closer together as one block. */}
+      {/* ── Header — who is working, and which branch ── */}
+      {/* No greeting: the two facts on it are the branch this screen is describing and the
+          person reading it, and a salutation was a third thing competing with both.
+          gap-3.5 (14px) at a 40px mark: the name was sitting almost against the avatar. */}
       <div className="flex items-center gap-3.5 px-4 py-3">
-        {/* Owner avatar — taps to profile; uses saved photo when present */}
-        <button
-          onClick={() => navigate("/admin/settings")}
-          className="size-10 rounded-full flex items-center justify-center font-bold text-14 shrink-0 overflow-hidden transition-transform active:scale-90"
-          style={{ background: "var(--brand)", color: "#0a0a0a" }}
-        >
-          {user?.photoUrl
-            ? <img src={user.photoUrl} alt={displayName} className="w-full h-full object-cover" />
-            : initials}
-        </button>
+        {/* The account's own branch shows the person; an added branch shows a branch mark.
+            Only a face is a control (it opens the profile) — a branch mark is context, so
+            it is not a button, and nothing taps through to a profile that is not there. */}
+        {inAddedBranch ? (
+          /* A branch mark, not a face — and still the way into Settings, exactly as the
+             photo is on the account's own branch: the one control that opens the settings
+             of whatever this header is describing. Leaving it inert meant a branch's
+             settings could only be reached by switching to the main branch first. */
+          <button
+            onClick={() => navigate("/admin/settings")}
+            aria-label={t("settings.title")}
+            data-testid="dashboard-branch-settings"
+            className="size-10 rounded-full flex items-center justify-center shrink-0 transition-transform active:scale-90"
+            style={{ background: "var(--tone-sunken)", color: "var(--text-secondary)" }}
+          >
+            <Store size={19} />
+          </button>
+        ) : (
+          <button
+            onClick={() => navigate("/admin/settings")}
+            className="size-10 rounded-full flex items-center justify-center font-bold text-14 shrink-0 overflow-hidden transition-transform active:scale-90"
+            style={{ background: "var(--brand)", color: "#0a0a0a" }}
+          >
+            {user?.photoUrl
+              ? <img src={user.photoUrl} alt={displayName} className="w-full h-full object-cover" />
+              : initials}
+          </button>
+        )}
 
-        <div className="flex flex-col flex-1 min-w-0">
-          {/* One line, ellipsised. A long shop/owner name used to wrap this to two lines on a
-              small phone and push the whole header taller; a short name never did, so the
-              screen changed shape depending on whose phone it was. `min-w-0` on the parent
-              lets `truncate` do its job instead of overflowing. */}
-          <p className="font-bold text-15 leading-tight truncate" style={{ color: "var(--text-primary)" }}>
-            {t(greetingKey)}, {displayName}
-          </p>
-          {/* The shop these figures belong to, on the line that already says what day it is —
-              one line, both facts, ellipsised as before. The name is the one the server has, so
-              a switch changes it here at the same moment it changes the numbers below. */}
-          <p className="text-12 mt-0.5 truncate" style={{ color: "var(--text-secondary)" }}>
-            {activeShopName ? `${activeShopName} · ${todayLabel}` : todayLabel}
-          </p>
-        </div>
+        {/* Which branch these figures belong to is also how you move to another one, so the
+            whole block opens the branch list: the name is the label AND the control, and the
+            chevron beside it is the sign of that — a bare glyph, no button of its own, which
+            is how the rest of the app marks a row that leads somewhere. It is still one tap,
+            over the name rather than next to it, so nothing about reaching the list changed;
+            a plain text block under a chevron is only discoverable BECAUSE the chevron says
+            so, which is exactly what it is for. */}
+        <button
+          type="button"
+          onClick={() => openSwitcher()}
+          aria-label={t("shop.myShops")}
+          data-testid="dashboard-switch-shop"
+          className="flex flex-col flex-1 min-w-0 text-start ds-pressable"
+        >
+          {/* One line, ellipsised. A long name used to wrap this to two lines on a small
+              phone and push the whole header taller; `min-w-0` on the parent lets
+              `truncate` do its job instead of overflowing. */}
+          <span className="flex items-center gap-1 min-w-0 max-w-full">
+            <span className="font-bold text-15 leading-tight truncate" style={{ color: "var(--text-primary)" }}>
+              {inAddedBranch ? activeShopName : displayName}
+            </span>
+            <ChevronDown size={15} className="shrink-0" style={{ color: "var(--text-secondary)" }} />
+          </span>
+          {/* The second line answers the question the first one raises. The person's name
+              is the first line on their own branch, so this line names the branch and the
+              day. On an added branch the branch is already the first line, so this one
+              says what is IN it — the two lines never repeat each other. */}
+          <span className="text-12 mt-0.5 truncate" style={{ color: "var(--text-secondary)" }}>
+            {inAddedBranch
+              ? branchContext
+              : activeShopName ? `${activeShopName} · ${todayLabel}` : todayLabel}
+          </span>
+        </button>
 
         {/* gap-2.5 (10px), up from 6: the two round buttons are 36px each and were sitting
             almost edge to edge, which read as one wide pill rather than two controls. */}
@@ -338,9 +401,13 @@ export default function AdminDashboardPage() {
             style={{ background: "var(--surface-2)" }}
           >
             <Bell size={16} style={{ color: "var(--text-primary)" }} />
-            {unread() > 0 && (
+            {/* This branch's unread only: the account may run several, and a badge that
+                counted another branch's events would send the owner looking here for
+                something that is not in this list. The Notifications screen is where
+                every branch is counted, and it says so with its own tabs. */}
+            {unread(activeShopId) > 0 && (
               <span className="absolute top-1 end-1 bg-red-500 text-white text-8 font-bold rounded-full min-w-[13px] h-[13px] flex items-center justify-center px-[2px]">
-                {unread()}
+                {unread(activeShopId)}
               </span>
             )}
           </button>
@@ -365,9 +432,9 @@ export default function AdminDashboardPage() {
                 {t("dashboard.notifications")}
               </p>
               <div className="flex items-center gap-2">
-                {unread() > 0 && (
+                {unread(activeShopId) > 0 && (
                   <span className="text-10 font-bold px-1.5 py-0.5 rounded-full" style={{ background: "var(--brand)", color: "#0a0a0a" }}>
-                    {unread()}
+                    {unread(activeShopId)}
                   </span>
                 )}
                 <span className="text-10 font-semibold" style={{ color: "var(--brand-dark, #65a30d)" }} onClick={(e) => { e.stopPropagation(); markAllRead(); }}>{t("notifications.markAllRead")}</span>
@@ -483,7 +550,23 @@ export default function AdminDashboardPage() {
               <p className="ds-section-label" style={{ color: "rgba(0,0,0,0.5)" }}>
                 {t("inline.gross_profit")}
               </p>
-              <p className="text-16 font-semibold" style={{ color: "#0a0a0a" }}>{formatRs(grossProfit)}</p>
+              {/* A profit priced without a cost is not a profit, it is a floor. Say which
+                  one this is, in the smallest way that still cannot be misread: a figure
+                  on its own is exactly what made this number untrustworthy before. */}
+              <p className="text-16 font-semibold" style={{ color: "#0a0a0a" }} data-testid="home-gross-profit">
+                {grossProfitDisplay.kind === "unknown"
+                  ? "—"
+                  : grossProfitDisplay.kind === "atLeast"
+                    ? `≥ ${formatRs(grossProfit)}`
+                    : formatRs(grossProfit)}
+              </p>
+              {grossProfitDisplay.kind !== "exact" && (
+                <p className="text-11 font-medium" style={{ color: "rgba(0,0,0,0.55)" }}>
+                  {grossProfitDisplay.kind === "unknown"
+                    ? t("profit.addCostToSeeProfit")
+                    : t("profit.costMissingOn", { count: String(grossProfitDisplay.unknownLines) })}
+                </p>
+              )}
             </div>
             <div className="w-px self-stretch mx-3" style={{ background: "rgba(0,0,0,0.15)" }} />
             <div>
@@ -491,7 +574,7 @@ export default function AdminDashboardPage() {
                 {t("inline.credit_collect")}
               </p>
               <div className="flex items-center gap-2">
-                <p className="text-16 font-semibold" style={{ color: "#0a0a0a" }}>{formatRs(creditCollected)}</p>
+                <p className="text-16 font-semibold" style={{ color: "#0a0a0a" }}>{formatRs(money.udhaar)}</p>
                 <p className="text-11 font-semibold" style={{ color: "rgba(0,0,0,0.5)" }}>
                   {formatRs(overdueAmount)} {t("inline.overdue")}
                 </p>

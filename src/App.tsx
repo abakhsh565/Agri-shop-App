@@ -6,6 +6,7 @@ import { Dir } from "@/lib/dirContext";
 
 import ErrorBoundary from "@/components/ui/ErrorBoundary";
 import { Capacitor } from "@capacitor/core";
+import { parseInviteLink, inviteSearchParams } from "@/lib/deepLink";
 import { logEnvironmentInfo } from "@/lib/envGuard";
 import { useAuthStore } from "@/stores/authStore";
 
@@ -27,6 +28,49 @@ export default function App() {
   // if they were current.
   useEffect(() => {
     void useAuthStore.getState().verifySession();
+  }, []);
+
+  /**
+   * An invitation arriving as a link.
+   *
+   * Native only: on the web the link IS the app's own URL, so the browser has already routed
+   * it and there is nothing to intercept. Both delivery paths are handled — `appUrlOpen` for
+   * a link tapped while the app is running, and `getLaunchUrl` for one that cold-starts it.
+   * Handling only the first would leave the commoner case (app not open yet) doing nothing at
+   * all: the app would open on the splash, fall through to sign-in, and show an empty form.
+   *
+   * The plugin is imported dynamically so it stays out of the web bundle, where nothing can
+   * ever fire it.
+   *
+   * NOTE: this only fires once the manifest declares the incoming link — the app scheme and,
+   * for https, the App Link filter that requires a verified domain.
+   */
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+    let cancelled = false;
+    let removeListener: (() => void) | undefined;
+
+    const openTarget = (rawUrl: string) => {
+      const target = parseInviteLink(rawUrl);
+      if (!target) return;
+      const query = inviteSearchParams(target);
+      void router.navigate(query ? `${target.path}?${query}` : target.path);
+    };
+
+    void (async () => {
+      const { App } = await import("@capacitor/app");
+      const launch = await App.getLaunchUrl();
+      if (!cancelled && launch?.url) openTarget(launch.url);
+
+      const handle = await App.addListener("appUrlOpen", (event) => openTarget(event.url));
+      if (cancelled) void handle.remove();
+      else removeListener = () => void handle.remove();
+    })();
+
+    return () => {
+      cancelled = true;
+      removeListener?.();
+    };
   }, []);
 
   return (
