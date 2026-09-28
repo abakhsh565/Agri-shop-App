@@ -1176,6 +1176,25 @@ svg.ds-row-chevron {
   direction: rtl;
 }
 
+/* ── 2b. The fields Chrome keeps left-to-right ──
+   The browser gives `tel`, `email`, `url` and `number` their own `direction: ltr`, so the
+   digits stay readable as a number rather than being reversed by the surrounding RTL. That
+   part is right and is kept. What it also does is drag `text-align: start` along with it —
+   and `start` on an LTR element is the LEFT edge, so in Urdu every phone number, every
+   quantity and the placeholder inside it sat against the wrong side of the field, in a form
+   whose labels and headings were all on the right.
+
+   So the alignment is pinned to the reading direction while the digits keep their own: the
+   number still reads left-to-right, it just sits where the person is looking. Only the
+   four types the browser forces are touched — a text field already inherits RTL and keeps
+   its `text-align: start`, which is the start of Urdu. */
+[dir="rtl"] input[type="tel"],
+[dir="rtl"] input[type="email"],
+[dir="rtl"] input[type="url"],
+[dir="rtl"] input[type="number"] {
+  text-align: right;
+}
+
 /* ── Scroll Lock: prevent background scroll when any bottom sheet / modal is open ── */
 body:has(.fixed.inset-0.z-50) {
   overflow: hidden !important;
