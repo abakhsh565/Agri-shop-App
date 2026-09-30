@@ -3,6 +3,9 @@ dist/
 build/
 .cache/
 .env*
+# The template is the one env file that belongs in the repository: it carries the variable NAMES
+# an environment must set, and no values. Without this exception `.env*` silently ignored it.
+!.env.example
 .vite/
 vite.config.*.timestamp-*
 *.tsbuildinfo
@@ -19,6 +22,10 @@ logs/
 *.apk
 /test-results/
 /dist-bundle/
+
+# Logical database dumps from scripts/backup-database.mjs. A dump holds every row of every table:
+# real customers, orders and phone numbers. It is machine output, never source.
+/backups/
 
 
 # Capacitor native projects — generated locally with `npx cap add`

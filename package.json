@@ -29,6 +29,10 @@
     "qa:count": "node scripts/dev/qa.mjs count",
     "qa:clean": "node scripts/dev/qa.mjs clean",
     "qa:seed": "node scripts/dev/qa.mjs seed",
+    "backup": "node scripts/backup-database.mjs",
+    "backup:verify": "node scripts/restore-verify.mjs",
+    "verify:targeting": "node scripts/verify-targeting-refusals.mjs",
+    "verify:workflow": "node scripts/verify-workflow-safety.mjs",
     "index:build": "node scripts/dev/index.mjs"
   },
   "dependencies": {

@@ -1,64 +1,216 @@
-name: Backup Production Database
+name: Backup Database (to the environment it names)
+
+# WHAT THIS WORKFLOW USED TO BE, AND WHY IT IS NOT THAT ANY MORE
+#
+# It was called "Backup Production Database", it ran on a daily schedule, and it passed only
+# `QA_DB_*` to the backup script — which hardcoded those same variables and stamped its output
+# "Environment: QA". The run was green every day. The artefacts were QA dumps. The repository
+# therefore had a production backup process that had never once backed up production, and
+# `docs/RECOVERY.md` described a restore procedure that could not have worked, because it was
+# written against `supabase db dump` and a `SUPABASE_DB_URL` secret that did not exist.
+#
+# So this file no longer asks anyone to trust its own name:
+#   * the target is an explicit input, and there is no default;
+#   * credentials are supplied for both environments, but `scripts/lib/environments.mjs` reads only
+#     the prefix belonging to the selected environment — a production run cannot pick up QA_*;
+#   * the tool refuses, before connecting, if the credentials do not name the selected
+#     environment's project, and again after connecting if the cluster fingerprint disagrees;
+#   * a preflight step fails the run when the selected environment's secrets are absent, so a
+#     scheduled production backup can never be green while backing up nothing;
+#   * every backup is restore-verified in the same job, into a throwaway in-process Postgres, and
+#     the verification report is uploaded beside the artefact.
+#
+# The artefact contains personal data and password hashes. Keep this repository private, keep the
+# retention window short, and never mirror these artefacts somewhere public.
 
 on:
   schedule:
-    # Run daily at 02:00 UTC
+    # Daily at 02:00 UTC. Targets production. If the production secrets are not configured this run
+    # FAILS by design — see the preflight step. A backup that did not happen must not look green.
     - cron: '0 2 * * *'
   workflow_dispatch:
     inputs:
+      environment:
+        description: 'Database to back up. This is the target; there is no default.'
+        type: choice
+        required: true
+        options:
+          - production
+          - staging
       reason:
-        description: 'Reason for manual backup'
+        description: 'Why this backup is being taken (recorded in the run summary)'
         required: false
+      retention_days:
+        description: 'Artifact retention in days (1-90)'
+        required: false
+        default: '30'
+
+concurrency:
+  # Serialised per environment, so two runs can never write interlaced artefacts into one upload.
+  group: backup-${{ github.event.inputs.environment || 'production' }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
 
 jobs:
   backup:
-    name: Create Database Backup
+    name: Backup ${{ github.event.inputs.environment || 'production' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 30
+
     env:
+      # The selected environment, resolved once so every step agrees on it.
+      TARGET: ${{ github.event.inputs.environment || 'production' }}
+      RETENTION_DAYS: ${{ github.event.inputs.retention_days || '30' }}
+      BACKUP_REASON: ${{ github.event.inputs.reason || 'scheduled daily backup' }}
+      # Both credential sets are present, and that is deliberate: the isolation is enforced by
+      # scripts/lib/environments.mjs, which reads only `<ENV>_DB_*` for the environment it was
+      # given. Hiding the other set here would move the guarantee into the workflow file, where it
+      # is invisible to anyone running the tool locally. A missing production secret simply
+      # resolves to the empty string and the preflight step below reports it.
+      PROD_DB_HOST: ${{ secrets.PROD_DB_HOST }}
+      PROD_DB_USER: ${{ secrets.PROD_DB_USER }}
+      PROD_DB_PASS: ${{ secrets.PROD_DB_PASS }}
       QA_DB_HOST: ${{ secrets.QA_DB_HOST }}
       QA_DB_USER: ${{ secrets.QA_DB_USER }}
       QA_DB_PASS: ${{ secrets.QA_DB_PASS }}
+
     steps:
-      - name: Checkout Code
+      - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Setup Node.js
+      - name: Set up Node.js
         uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: 'npm'
 
-      - name: Install Dependencies
+      - name: Install dependencies
         run: npm install --legacy-peer-deps
 
-      - name: Create Backup
-        run: node scripts/backup-database.mjs
+      - name: Confirm the target is a known environment
+        run: |
+          case "$TARGET" in
+            production|staging|development) ;;
+            *) echo "::error::Unknown environment '$TARGET'"; exit 1 ;;
+          esac
+          echo "target=$TARGET"
 
-      - name: Upload Backup Artifact
+      - name: Preflight — the selected environment must have credentials
+        run: |
+          set -euo pipefail
+          # An explicit if, not `[ ... ] && prefix=...`: under `set -e` a failed test at the end of
+          # an && list aborts the step, which would have made every staging run die here.
+          prefix="QA"
+          if [ "$TARGET" = "production" ]; then prefix="PROD"; fi
+          missing=""
+          for key in "${prefix}_DB_HOST" "${prefix}_DB_USER" "${prefix}_DB_PASS"; do
+            if [ -z "${!key:-}" ]; then missing="$missing $key"; fi
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::No credentials for '$TARGET':$missing"
+            echo ""
+            echo "REFUSING TO RUN. This workflow will not fall back to another environment's"
+            echo "credentials, and it will not report success for a backup it could not take."
+            if [ "$TARGET" = "production" ]; then
+              # This is the state of the repository today. It is stated loudly, not worked around.
+              echo ""
+              echo "PRODUCTION HAS NO BACKUP CREDENTIALS CONFIGURED."
+              echo "Add repository secrets PROD_DB_HOST, PROD_DB_USER (postgres.<project-ref>) and"
+              echo "PROD_DB_PASS, then re-run. Until then production has no verified backup path and"
+              echo "no production schema or data change may be made."
+              echo "See docs/RECOVERY.md."
+            else
+              echo "Add repository secrets QA_DB_HOST, QA_DB_USER and QA_DB_PASS."
+            fi
+            exit 1
+          fi
+          echo "credentials present for $TARGET"
+
+      - name: Take the backup
+        run: node scripts/backup-database.mjs --env "$TARGET"
+
+      - name: Verify the backup against the environment it names
+        # The artefact is not accepted because it was written; it is accepted because it replays.
+        # A failure here fails the run, and the artefact is not kept.
+        run: |
+          set -euo pipefail
+          manifest=$(ls -t backups/*.manifest.json | head -1)
+          echo "verifying $manifest"
+          node scripts/restore-verify.mjs --from "$manifest" \
+            --compare-with "$TARGET" \
+            --json "backups/restore-verification-${TARGET}.json"
+
+      - name: Confirm the artefact names the environment it was asked for
+        # Independent of the tool's own checks, in the one place a reviewer will look.
+        run: |
+          set -euo pipefail
+          manifest=$(ls -t backups/*.manifest.json | head -1)
+          node -e '
+            const fs = require("fs");
+            const target = process.env.TARGET;
+            const file = process.argv[1];
+            const manifest = JSON.parse(fs.readFileSync(file, "utf8"));
+            const config = JSON.parse(fs.readFileSync("environments.json", "utf8"));
+            const expected = config.environments[target].projectRef;
+            const problems = [];
+            if (manifest.environment !== target) problems.push(`environment is "${manifest.environment}", expected "${target}"`);
+            if (manifest.projectRef !== expected) problems.push(`project is ${manifest.projectRef}, expected ${expected}`);
+            if (problems.length) {
+              console.error("::error::Artefact does not match the requested target: " + problems.join("; "));
+              process.exit(1);
+            }
+            console.log(`artefact names ${manifest.environment} / ${manifest.projectRef} — as requested`);
+          ' "$manifest"
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "## Database backup — \`$TARGET\`"
+            echo ""
+            echo "- reason: $BACKUP_REASON"
+            echo "- requested by: ${{ github.actor }} (run ${{ github.run_number }})"
+            echo "- target environment: \`$TARGET\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+          manifest=$(ls -t backups/*.manifest.json 2>/dev/null | head -1 || true)
+          if [ -n "$manifest" ]; then
+            node -e '
+              const m = require(process.argv[1]);
+              const rows = [
+                ["project", m.projectRef],
+                ["taken at", m.generatedAt],
+                ["cluster", m.identity?.clusterId ?? "unavailable"],
+                ["credential", m.identity?.configuredUser ?? "unknown"],
+                ["rows", String(m.totalRows)],
+                ["tables", String(m.tablesDumped)],
+                ["sha256", m.sha256.slice(0, 24) + "…"],
+              ];
+              console.log("| field | value |\n|---|---|");
+              for (const [k, v] of rows) console.log(`| ${k} | ${v} |`);
+            ' "$manifest" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload the backup and its verification report
         uses: actions/upload-artifact@v4
         with:
-          name: database-backup-${{ github.run_number }}
-          path: backups/backup-*.sql
-          retention-days: 30
+          name: database-backup-${{ env.TARGET }}-${{ github.run_number }}
+          # The manifest and the verification report travel with the artefact, so an operator has
+          # the scope, the counts and the hash without re-running anything.
+          path: |
+            backups/backup-${{ env.TARGET }}-*.sql
+            backups/backup-${{ env.TARGET }}-*.manifest.json
+            backups/restore-verification-${{ env.TARGET }}.json
+          retention-days: ${{ fromJSON(env.RETENTION_DAYS) }}
+          if-no-files-found: error
 
-      - name: Report Status
-        if: success()
-        run: |
-          echo "═══════════════════════════════════════════════════════════"
-          echo "  ✅ BACKUP COMPLETE"
-          echo "  Run: ${{ github.run_number }}"
-          echo "  Time: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          echo "  Artifact: database-backup-${{ github.run_number }}"
-          echo "  Retention: 30 days"
-          echo "═══════════════════════════════════════════════════════════"
-
-      - name: Report Failure
+      - name: Failure notice
         if: failure()
         run: |
           echo "═══════════════════════════════════════════════════════════"
-          echo "  ❌ BACKUP FAILED"
-          echo "  Run: ${{ github.run_number }}"
-          echo "  Time: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          echo "  Action required: Check workflow logs"
+          echo "  BACKUP DID NOT COMPLETE — no artefact was accepted for $TARGET"
+          echo "  Run: ${{ github.run_number }}   Time: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          echo "  There is no verified backup newer than the last successful run."
           echo "═══════════════════════════════════════════════════════════"
+          exit 1

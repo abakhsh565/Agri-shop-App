@@ -1,0 +1,58 @@
+{
+  "_readme": [
+    "The ONE place that says which Supabase project each environment belongs to.",
+    "",
+    "Why this file exists: the backup workflow was called 'Backup Production Database' and backed",
+    "up QA. Nothing detected that, because 'production' was a word in a filename rather than a",
+    "value anyone checked. Every consumer now reads this file: the app's environment guard",
+    "(src/lib/environmentContract.ts), the build gate (vite.config.ts), the audit script, and the",
+    "backup/restore tooling. Changing a project ref here changes it everywhere, and the checks that",
+    "compare a live connection against these refs will fail closed if the two disagree.",
+    "",
+    "A project ref is NOT a secret: it is already in the repository, in .env.qa, and in every",
+    "Supabase URL the app builds. It is here so that tooling can refuse to operate on the wrong",
+    "project. Credentials are never stored here.",
+    "",
+    "environmentRefs are also the credentials prefix each environment must use, so a production",
+    "backup cannot be run with staging secrets by accident: see scripts/lib/environments.mjs.",
+    "",
+    "clusterId is the Postgres cluster fingerprint (pg_control_system().system_identifier). It is",
+    "needed because Supabase's pooler rewrites current_user to 'postgres', so the server cannot be",
+    "asked which project it is (measured 2026-10-01: current_user = 'postgres', and",
+    "current_setting('supabase.project_ref') = NULL). The fingerprint is recorded here on the first",
+    "verified run and compared on every later one, so a cluster swap is detected rather than assumed",
+    "away.",
+    "",
+    "localEnvFile names the gitignored file a local run may read credentials from. It is null for",
+    "development and production on purpose: there is no development project, and production's",
+    "credentials must come from repository secrets or an explicit export so that none of them can",
+    "end up in the checkout."
+  ],
+
+  "environments": {
+    "development": {
+      "projectRef": null,
+      "status": "not-created",
+      "notes": "No development project exists yet. .env.local points at the staging project. Because there is no ref to verify against, the backup tooling refuses to run for this environment rather than guess.",
+      "envPrefix": "DEV",
+      "localEnvFile": null,
+      "clusterId": null
+    },
+    "staging": {
+      "projectRef": "bpybjrjenwccowvtrevu",
+      "status": "active",
+      "notes": "Named 'Agri-shop-App-QA' in the dashboard and called QA throughout this repository. It is the staging target: the E2E lane, the QA scripts and both local env files use it. It also holds the engineering tooling's own tables (incident_*, impact_*, engineering_memory).",
+      "envPrefix": "QA",
+      "localEnvFile": ".env.qa",
+      "clusterId": "7678069749886157684"
+    },
+    "production": {
+      "projectRef": "gkswcfljxlutkfdvvqng",
+      "status": "active",
+      "notes": "Named 'Agrishop APp'. Confirmed as production on 2026-10-01 and confirmed to hold real business data (1 shop, 4 users, 6 customers, 52 sales). Runs on the Free plan, which provides no managed backups, no downloadable backups and no PITR.",
+      "envPrefix": "PROD",
+      "localEnvFile": null,
+      "clusterId": null
+    }
+  }
+}

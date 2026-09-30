@@ -1,249 +1,283 @@
 # Backup & Recovery Procedures
 
-## Current State
+> **This file previously described a system that did not exist.** It documented a `SUPABASE_DB_URL`
+> secret, an `npx supabase db dump` step and a `pg_restore --if-exists` verification. None of those
+> were ever implemented. The workflow it described was titled "Backup Production Database" and
+> backed up QA. Its claims are corrected below, and the reasons are recorded so they are not
+> rebuilt.
 
-| Item | Status |
-|------|--------|
-| Supabase Plan | Free |
-| Automatic Daily Backups | ❌ NOT available (Free plan) |
-| PITR (Point-in-Time Recovery) | ❌ NOT available (Free plan) |
-| Off-site Logical Backups | ✅ IMPLEMENTED (automated via GitHub Actions) |
-| Recovery Documentation | ✅ THIS FILE |
-| Recovery Test | ⚠️ DEFERRED (requires human-controlled restore) |
+## 1. Status — read this first
 
-## RPO / RTO
+| Item | Status | Evidence |
+|---|---|---|
+| Supabase managed daily backups | ❌ **Not available** | Organisation plan is `free`; Supabase backs up Pro/Team/Enterprise only |
+| Downloadable backups | ❌ **Not available** | Supabase: "Database backups are not available for download for Free Plan projects" |
+| Point-in-time recovery | ❌ **Not available** | PITR is a Pro add-on (~$100/mo for 7 days) |
+| Off-site logical backup tooling | ✅ **Implemented** | `scripts/backup-database.mjs`, `scripts/lib/environments.mjs` |
+| Restore verification tooling | ✅ **Implemented** | `scripts/restore-verify.mjs` |
+| Backup of the **staging** (QA) project | ✅ **Taken and restore-verified** | see `PHASE_2A_BACKUP_RESTORE.md` |
+| Backup of the **production** project | 🚫 **NOT POSSIBLE TODAY** | no `PROD_DB_*` credentials exist anywhere in the repository or its secrets |
+| Production restore | ⛔ **Never performed, and must not be** | a destructive restore is a human-approved operation |
 
-| Metric | Target | Current Capability |
-|--------|--------|-------------------|
-| **RPO** (Recovery Point Objective) | ≤ 24 hours | ~24 hours via daily off-site logical backup |
-| **RTO** (Recovery Time Objective) | ≤ 2 hours | Estimated 30-60 minutes for small database restore |
+**Production currently has no verified recovery path.** That is the plain fact, not a gap in
+documentation. Until the credentials in §7 are configured and the workflow runs green, no change to
+production schema or data is permitted — the rule that made this phase necessary:
 
-## Free Plan Limitations
+> **NO VERIFIED BACKUP + RESTORE = NO PRODUCTION DATABASE CHANGES.**
 
-The production Supabase project runs on the **Free plan** with these limitations:
+## 2. What was actually wrong (so it is not rebuilt)
 
-- **No automatic daily backups** — Supabase does not back up Free plan projects
-- **No PITR** — Cannot restore to a specific point in time
-- **Project pauses after 7 days of inactivity** — Must keep the project active
-- **500 MB database size limit**
-- **Project deletion is permanent** — All data and backups are lost
+1. `.github/workflows/backup-database.yml` was named **"Backup Production Database"**, ran daily,
+   and passed **`QA_DB_*`**. Its artefacts were QA dumps stamped `-- Environment: QA`. Every run was
+   green. Nothing checked that the database reached was the database named.
+2. `scripts/backup-database.mjs` hardcoded `QA_DB_*`, and **silently skipped any table with more
+   than 1000 rows** — precisely the tables most likely to matter.
+3. It never dumped the `auth` schema, so a "restored" database had **no users and no logins at all**.
+4. **No restore script existed anywhere in the repository.** A restore had never been executed, so
+   nothing in the project had ever tested the recovery path it claimed to have.
+5. This document described all of the above as implemented and verified.
 
-**Mitigation:** We implement off-site logical backups via GitHub Actions + `supabase db dump`.
+The motivating lesson: *a workflow's name is not a check, and a backup that has never been restored
+is a hypothesis.*
 
-## Backup Architecture
+## 3. The single source of truth
 
-```
-┌─────────────────┐     supabase db dump      ┌──────────────────┐
-│  Production DB   │ ──────────────────────────▶ │  GitHub Actions   │
-│  (Supabase Free) │                            │  Artifact Storage  │
-└─────────────────┘                            └──────────────────┘
-                                                         │
-                                                   Daily schedule
-                                                   (cron: 0 2 * * *)
-                                                         │
-                                                         ▼
-                                                ┌──────────────────┐
-                                                │  Backup Verify    │
-                                                │  (pg_restore --if-exists) │
-                                                └──────────────────┘
-```
+`environments.json` (repository root) is the one place that maps an environment to a Supabase
+project. The app's build gate, the audit script, the backup tool, and the restore verifier all read
+it. Changing a project ref there changes it everywhere.
 
-**Backup mechanism:** `npx supabase db dump` creates a logical SQL dump of the database.
+| Environment | Project ref | Credentials prefix | Local credential file | Cluster fingerprint |
+|---|---|---|---|---|
+| `development` | *none* (does not exist) | `DEV` | — | — |
+| `staging` (a.k.a. QA) | `bpybjrjenwccowvtrevu` | `QA` | `.env.qa` (gitignored) | `7678069749886157684` |
+| `production` | `gkswcfljxlutkfdvvqng` | `PROD` | **none, by design** | *not enrolled — needs one successful run* |
 
-**Storage:** Backups are stored as GitHub Actions artifacts with 30-day retention.
+A project ref is **not** a secret (it is in every Supabase URL). Credentials are **never** stored in
+this file, and production has no credential file at all: `PROD_DB_HOST/USER/PASS` must come from the
+process environment, which in CI means repository secrets.
 
-**Verification:** Each backup is validated by attempting a dry-run restore with `pg_restore`.
+### Why the fingerprint matters
 
-## Backup Procedure
+Supabase's pooler authenticates the client as `postgres.<project-ref>` and then rewrites the session
+role: a live connection reports `current_user = 'postgres'` with no ref in it, and
+`current_setting('supabase.project_ref')` returns NULL (measured on this project, 2026-10-01). So the
+server cannot be asked which project it is. The project is therefore taken from **the credential we
+authenticated with**, and corroborated by `pg_control_system().system_identifier` — a value the
+pooler cannot rewrite — which is compared against the one enrolled in `environments.json`.
 
-### Automated (Daily)
+## 4. Taking a backup
 
-A GitHub Actions workflow (`backup-database.yml`) runs daily at 02:00 UTC:
-
-1. Connects to the production database using `SUPABASE_DB_URL` secret
-2. Runs `npx supabase db dump` to create a logical SQL dump
-3. Verifies the dump is valid SQL
-4. Stores the dump as a GitHub Actions artifact (30-day retention)
-5. Reports success/failure in the workflow run
-
-**Required GitHub Secrets:**
-
-| Secret | Purpose |
-|--------|---------|
-| `SUPABASE_DB_URL` | PostgreSQL connection string for production database |
-
-### Manual (On-demand)
-
-To create a manual backup:
+The environment must be named. **There is no default**, because a default is how the original bug
+happened.
 
 ```bash
-# Set the database URL (from production Supabase Dashboard → Settings → Database → Connection string)
-export SUPABASE_DB_URL="postgresql://postgres.[project-ref]:[password]@aws-0-[region].pooler.supabase.com:6543/postgres"
+# Staging (credentials come from .env.qa)
+node scripts/backup-database.mjs --env staging
 
-# Create the dump
-npx supabase db dump --db-url "$SUPABASE_DB_URL" > backup-$(date +%Y%m%d-%H%M%S).sql
-
-# Verify the dump is valid
-head -20 backup-*.sql  # Should show SQL header
-wc -l backup-*.sql     # Should have meaningful line count
+# Production (credentials must already be in the process environment)
+export PROD_DB_HOST=... PROD_DB_USER=postgres.<project-ref> PROD_DB_PASS=...
+node scripts/backup-database.mjs --env production
 ```
 
-## Recovery Procedure
+Both write two files to `backups/` (**gitignored** — they contain personal data and password hashes):
 
-### Scenario A: Accidental Destructive Data Change
+| File | Contents |
+|---|---|
+| `backup-<env>-<projectRef>-<timestamp>.sql` | the dump: pre-data, data, post-data |
+| `backup-<env>-<projectRef>-<timestamp>.manifest.json` | environment, project, timestamp, cluster, per-table row counts, structure counts, byte size, sha256, and an explicit list of what the dump does **not** cover |
 
-```
-PREREQUISITE: Human approval required. Never automate production restore.
+| Field the procedure must identify | Where it comes from |
+|---|---|
+| Source environment | `--env`, recorded in the manifest and the file header |
+| Source Supabase project | the ref named by the credentials, verified against `environments.json` |
+| Backup timestamp | `generatedAt` in the manifest, and the filename |
+| Schema/data scope | `structure` + `tableCounts` in the manifest; `public` and `auth` schemas |
+| Backup artefact | the `.sql` file, with its sha256 |
+| Retention | see §6 — GitHub artefacts 30 days by default; local copies are yours to manage |
+| Restore target | §5. Verification restores into in-process Postgres; a real restore is human-approved |
+| Verification method | `scripts/restore-verify.mjs`; run it every time, including in CI |
 
-1. STOP all app usage immediately (inform users of downtime)
-2. Identify the exact time of the destructive change
-3. Determine which backup to restore from:
-   - GitHub Actions → Artifacts → Select backup from before the change
-   - Or: Supabase Dashboard → Database → Backups (if on Pro plan)
-4. Download the backup SQL file
-5. Review the backup contents (ensure it's complete and valid)
-6. Get explicit approval from the project owner
-7. Connect to the production database
-8. Execute the restore:
-   psql "$SUPABASE_DB_URL" < backup-[timestamp].sql
-9. Verify critical data:
-   - SELECT COUNT(*) FROM sales;
-   - SELECT COUNT(*) FROM customers;
-   - SELECT SUM(total_amount) FROM sales WHERE status = 'completed';
-10. Resume app usage
-11. Document the incident and recovery
-```
+## 5. Verifying a backup — mandatory, and automatic in CI
 
-### Scenario B: Failed/Incorrect Database Migration
-
-```
-PREREQUISITE: Human approval required.
-
-1. Identify the failed migration
-2. Check if the migration partially applied:
-   - Query pg_stat_user_tables for recent changes
-   - Check if new columns/tables exist
-3. If migration partially applied:
-   - Manually fix via SQL Editor (Supabase Dashboard)
-   - Or: restore from backup (Scenario A)
-4. If migration created bad objects:
-   - DROP the bad objects manually
-   - Re-run the corrected migration
-5. Verify the schema matches expected state
+```bash
+node scripts/restore-verify.mjs --from backups/<artifact>.manifest.json \
+  --compare-with staging --json backups/restore-report-staging.json
 ```
 
-### Scenario C: Database/Project Failure
+This replays the artefact, statement by statement, into a **throwaway Postgres running inside the
+verification process**, then compares it with the live source:
 
+* **integrity** — the file still hashes to the manifest's sha256 and is not a byte shorter;
+* **replay** — every statement is applied individually; failures are reported with the statement
+  that caused them (a pass marked `functions-pre-tables` is the one documented exception, and is
+  re-applied later in the same file);
+* **counts** — restored rows == rows recorded at backup time, with any change in the source since
+  reported separately, because a backup is a point in time;
+* **structure** — tables, columns, constraints, indexes, policies, triggers, functions, views, RLS
+  flags and enum labels, all compared against the live source;
+* **row digests** — where the source has not changed, a row-level digest proves the **same rows**
+  arrived, not merely the same number of them.
+
+`--target` accepts exactly one value: `pglite`. There is no code path that restores into a Supabase
+project — a restore aimed at production or staging is refused by name, by project ref, and as a
+connection string.
+
+### A real restore (human-approved, never automated)
+
+The artefact is a **logical** dump, so a real recovery is a two-step operation:
+
+1. **Schema** — replay the migrations (`supabase/migrations/`) against the target, which reproduces
+   tables, policies and functions as reviewed and versioned.
+2. **Data** — apply the artefact, which supplies every row plus functions, views and policies.
+
+`scripts/restore-verify.mjs` proves step 2 replays cleanly and faithfully. It does **not** prove a
+destructive restore against a live project, and no such restore has been performed. Any production
+restore requires the approval checklist below and is expected to be performed against a **new**
+project first, then cut over — never by overwriting production in place.
+
+**Approval checklist:** project owner notified · reason documented · artefact identified and hash
+verified · expected data loss calculated · downtime communicated · rollback plan exists · the
+artefact has been restore-verified into a throwaway target immediately beforehand.
+
+## 6. Retention, and why the copy on disk is not the copy that matters
+
+* GitHub Actions artefacts: `retention-days` (default 30, 1–90). The artefact and its verification
+  report are uploaded together.
+* `backups/` on a developer machine is gitignored and is **not** a backup strategy.
+* The Free plan deletes nothing for you: there is no managed copy to fall back on. Keep at least one
+  copy somewhere other than the machine that produced it.
+* Recommended: verify the most recent artefact monthly by running `restore-verify` against it. An
+  unverified artefact is a guess.
+
+## 7. To give production a recovery path (the outstanding work)
+
+### Step 1 — the corrected workflow must be on `main` first
+
+This is the prerequisite that is easiest to miss, because everything else can be done without it and
+nothing will appear to go wrong. The workflow on GitHub today is still the old one:
+
+```bash
+git status --porcelain .github/workflows/backup-database.yml   # must print nothing
+git log --oneline -1 -- .github/workflows/backup-database.yml
+gh workflow list                                               # name must be the corrected one
 ```
-1. Check Supabase status: https://status.supabase.com
-2. If Supabase outage: wait for Supabase to resolve
-3. If project deleted: data is PERMANENTLY LOST
-   - Use off-site backup (Scenario A)
-   - If no off-site backup exists: DATA IS UNRECOVERABLE
-4. If database corruption: restore from backup (Scenario A)
+
+Until the rewrite is committed and pushed, GitHub will keep executing the old file — whose job
+environment passes only `QA_DB_*` — so a run with `environment = production` would fail rather than
+back up the wrong database, and a scheduled run keeps producing nothing. See §11 for what that has
+actually looked like. **Do not add the credentials before this step**: credentials plus the old
+workflow is how a mislabelled artefact gets produced.
+
+### Step 2 — add the credentials
+
+Supply the three secrets with values obtained from the Supabase dashboard for the production project
+(Settings → Database → Connection string / Connection pooling). Host is the pooler host; the user is
+`postgres.<project-ref>`, not a bare `postgres`.
+
+```bash
+gh secret list                    # names and timestamps only; never prints a value
+
+# No --body on purpose: gh prompts, and the value goes straight to the API. It never enters your
+# shell history, a file in the checkout, a log, or a transcript.
+gh secret set PROD_DB_HOST        # aws-0-<region>.pooler.supabase.com
+gh secret set PROD_DB_USER        # postgres.gkswcfljxlutkfdvvqng   (exactly this)
+gh secret set PROD_DB_PASS        # the database password
+
+gh secret list                    # confirm the three names now appear
 ```
 
-### Scenario D: Need to Restore to Previous Point in Time
+**Never** put these values in source, a committed `.env`, a report, a chat message, or an artefact.
+The script reads them from the process environment only, and production has no credential file by
+configuration — `scripts/lib/environments.mjs` will not read one.
 
-```
-Without PITR (current state):
-- Can only restore to the most recent daily backup
-- Data loss = time between backup and desired restore point (up to 24 hours)
+3. Run the **"Backup Database (to the environment it names)"** workflow with `environment =
+   production`, or run the command in §4 locally.
 
-With PITR (future, requires Pro plan + PITR add-on):
-- Can restore to any point within the retention period
-- Data loss = seconds (near-zero)
+   ```bash
+   gh workflow run "Backup Database (to the environment it names)" \
+     -f environment=production -f reason="first verified production backup"
+   gh run list --workflow backup-database.yml --limit 1
+   ```
+4. The run takes the dump, restore-verifies it, and only then uploads it — a failed verification
+   means no artefact is accepted and the run is red.
+5. Enrol the production `clusterId` into `environments.json` from that first manifest, so later runs
+   can detect a cluster swap.
+6. Walk the approval checklist in §5 against the resulting artefact, and record the result.
 
-Current procedure:
-1. Select the closest backup BEFORE the desired restore point
-2. Follow Scenario A restore steps
-3. Accept data loss between backup time and desired point
-```
+Until step 3 has completed successfully, the gate in §1 stands.
 
-## Production Restore Approval
+## 8. Failure behaviour (all four are required, and all four are tested)
 
-**Any production database restore REQUIRES explicit human approval.**
+| Situation | Behaviour |
+|---|---|
+| No `--env` given | exit 2, usage printed. There is no default |
+| `--env development` | exit 2 — no project ref recorded, so the target cannot be verified |
+| Production backup with no `PROD_DB_*` | exit 2, names the missing variables, and does **not** fall back to `QA_*` |
+| QA credentials under the `PROD_` prefix | exit 2 **before any connection is opened**, naming both projects |
+| Production credentials under the `QA_` prefix | exit 2, same check in the other direction |
+| Restore aimed at production/staging | exit 2, refused before the artefact is even read |
+| Credential that names no project | exit 2 — an unverifiable target is not a target |
+| Cluster fingerprint mismatch | exit 1, and no artefact is written |
 
-Approval checklist:
+These are asserted by `tests/unit/backupTargeting.test.ts` (20 tests, each refusal paired with the
+correct configuration that must be accepted, so the refusals cannot pass vacuously).
 
-- [ ] Project owner has been notified
-- [ ] Reason for restore is documented
-- [ ] Which backup will be restored is identified
-- [ ] Expected data loss is calculated
-- [ ] Downtime window is communicated to users
-- [ ] Backup file has been verified (valid SQL, complete)
-- [ ] Rollback plan exists (can re-dump current state before restore)
+## 9. Honest RPO / RTO
 
-**This approval process cannot be automated or bypassed.**
+| Metric | Current |
+|---|---|
+| Production RPO | **Unbounded** — no backup can be taken today |
+| Staging RPO | Time since the last successful run (manual; not scheduled) |
+| RTO (staging, small database) | Minutes to create a target and replay; the restore itself replayed in ~2 seconds in-process |
+| PITR | Not available; with the Pro plan + PITR add-on RPO would be seconds, at roughly $100/month plus compute |
 
-## Future: PITR Activation Path
-
-When the business requires stronger recovery capabilities:
-
-### Step 1: Upgrade to Pro Plan ($25/month)
-
-- Enables automatic daily backups (7-day retention)
-- Enables PITR add-on
-
-### Step 2: Enable PITR Add-on ($100/month for 7-day retention)
-
-- Enables restore to any point within 7 days
-- RPO drops from ~24 hours to seconds
-- Requires at least Small compute add-on ($15/month)
-
-### Step 3: Verify PITR
-
-- Test restore to a temporary project
-- Verify schema and data integrity
-- Document the recovery procedure
-
-### Cost Summary
-
-| Item | Monthly Cost |
-|------|-------------|
-| Pro Plan | $25 |
-| Small Compute | $15 |
-| PITR (7-day) | $100 |
-| **Total** | **$140/month** |
-
-## Responsibilities
+## 10. Responsibilities
 
 | Responsibility | Owner |
-|---------------|-------|
-| Monitor backup workflow success | Developer |
-| Investigate backup failures | Developer |
+|---|---|
+| Configure `PROD_DB_*` secrets and run the first production backup | Project Owner |
+| Investigate red backup runs | Developer |
 | Approve production restores | Project Owner |
-| Perform production restores | Developer (with approval) |
-| Verify backup integrity | Automated (workflow) |
-| Update this document | Developer |
-| Decide when to upgrade to Pro | Project Owner |
+| Perform production restores | Developer, with approval |
+| Re-verify the newest artefact monthly | Developer |
+| Decide on Pro plan / PITR | Project Owner |
+| Keep this document true | Whoever changes the tooling |
 
-## Safety Checks
+## 11. What the live backup job has actually been doing
 
-- [ ] Backup workflow runs daily (check GitHub Actions)
-- [ ] Backup artifacts are stored (check GitHub Artifacts)
-- [ ] Backup files are valid SQL (verified by workflow)
-- [ ] Production credentials are never committed to source
-- [ ] Restore requires explicit human approval
-- [ ] QA and production databases are separate projects
-- [ ] No automated restore can overwrite production
+Recorded 2026-10-01, from GitHub, read-only:
 
-## Monitoring
+| Observation | Value |
+|---|---|
+| Workflow registered on GitHub | `Backup Production Database` (`backup-database.yml`, id 356696657) — the **pre-rewrite** file |
+| Runs in the last 10 days | 10 |
+| Runs that succeeded | **0** — all ten are `failure` |
+| Backup artefacts stored on GitHub | **0** (`total_count: 0`) |
+| Job environment in the live file | `QA_DB_HOST`, `QA_DB_USER`, `QA_DB_PASS` only |
 
-To verify backups are running:
+Two conclusions, and the second is the one people miss. A workflow titled "Backup Production
+Database" passed only QA credentials to a script that hardcoded the same variables — so it could not
+have backed up production even when it succeeded. And it has not succeeded: there is no artefact of
+any kind, from any environment, on GitHub today. Production has no recovery path, and neither has
+staging.
 
-1. Go to GitHub Actions → "Backup Production Database" workflow
-2. Check the most recent run status (should be ✅ green)
-3. Click into the run to verify the artifact was created
-4. Download and inspect a backup file periodically
+### Verifying the tooling without production credentials
 
-To set up alerts:
+```bash
+npm run verify:targeting   # 8 cases at the process boundary: exit codes, pre-connection refusal, no secret in any output
+npm run verify:workflow    # 22 checks: structure, shell syntax, and each invariant proven able to fail
+```
 
-- Configure GitHub Actions notification settings to alert on workflow failure
-- Or: Add a Slack/email notification step to the backup workflow
+Both are also runnable directly (`node scripts/verify-targeting-refusals.mjs`,
+`node scripts/verify-workflow-safety.mjs`). `verify:workflow` executes the workflow's own preflight
+and artefact-confirmation steps under controlled environments, so "never falls back to QA
+credentials" and "never uploads an unverified artefact" are demonstrated by running the deciding
+code rather than by restating the intention.
 
 ## Changelog
 
-| Date | Change | Author |
-|------|--------|--------|
-| 2026-09-12 | Initial recovery documentation | Phase 3 - Backup & Recovery |
+| Date | Change |
+|---|---|
+| 2026-09-12 | Initial recovery documentation (described a system that did not exist) |
+| 2026-10-01 | Rewritten against the real tooling: explicit targeting, restore verification, and the honest statement that production has no backup path yet |
+| 2026-10-01 | Added the commit prerequisite (§7 step 0), the exact credential-provisioning commands, and the recorded state of the live backup job (§11) |
