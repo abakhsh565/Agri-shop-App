@@ -151,10 +151,15 @@ artefact has been restore-verified into a throwaway target immediately beforehan
 
 ## 7. To give production a recovery path (the outstanding work)
 
-### Step 1 — the corrected workflow must be on `main` first
+### Step 1 — the corrected workflow must be on `main` first  ✅ done 2026-10-01
 
-This is the prerequisite that is easiest to miss, because everything else can be done without it and
-nothing will appear to go wrong. The workflow on GitHub today is still the old one:
+**Status: complete.** The corrected workflow is on `main` as commit `de13eb1d`, and the file on
+GitHub is byte-identical to the one in this checkout (verified by blob SHA, not by reading the
+push output). `gh workflow list` shows it as `Backup Database (to the environment it names)`.
+
+The commands below are kept because this is the prerequisite that is easiest to miss: everything
+else can be done without it, and nothing appears to go wrong — the old file just keeps being the one
+that runs. Re-run them after any change to the workflow:
 
 ```bash
 git status --porcelain .github/workflows/backup-database.yml   # must print nothing
@@ -197,6 +202,17 @@ configuration — `scripts/lib/environments.mjs` will not read one.
    gh workflow run "Backup Database (to the environment it names)" \
      -f environment=production -f reason="first verified production backup"
    gh run list --workflow backup-database.yml --limit 1
+   ```
+
+   **Caveat as of 2026-10-01:** GitHub Actions cannot start any job in this repository until the
+   account billing block is cleared (§11). Until then, `gh workflow run` will produce a run that
+   fails in ~2 seconds with zero steps, and the message will be about payments rather than about
+   credentials. The equivalent local command takes the same backup through the same code, so the
+   first verified production backup does not have to wait for billing:
+
+   ```bash
+   node scripts/backup-database.mjs --env production    # needs PROD_DB_* exported
+   npm run backup:verify -- --from backups/<the new manifest> --compare-with production
    ```
 4. The run takes the dump, restore-verifies it, and only then uploads it — a failed verification
    means no artefact is accepted and the run is red.
@@ -249,17 +265,65 @@ Recorded 2026-10-01, from GitHub, read-only:
 
 | Observation | Value |
 |---|---|
-| Workflow registered on GitHub | `Backup Production Database` (`backup-database.yml`, id 356696657) — the **pre-rewrite** file |
 | Runs in the last 10 days | 10 |
 | Runs that succeeded | **0** — all ten are `failure` |
 | Backup artefacts stored on GitHub | **0** (`total_count: 0`) |
-| Job environment in the live file | `QA_DB_HOST`, `QA_DB_USER`, `QA_DB_PASS` only |
+| Job environment in that file | `QA_DB_HOST`, `QA_DB_USER`, `QA_DB_PASS` only |
+| Steps the job actually executed | **0** — it failed before the first one |
+| Why it failed | *"The job was not started because recent account payments have failed or your spending limit needs to be increased."* |
 
-Two conclusions, and the second is the one people miss. A workflow titled "Backup Production
-Database" passed only QA credentials to a script that hardcoded the same variables — so it could not
-have backed up production even when it succeeded. And it has not succeeded: there is no artefact of
-any kind, from any environment, on GitHub today. Production has no recovery path, and neither has
+Three conclusions, and the first two are the ones people miss.
+
+A workflow titled "Backup Production Database" passed only QA credentials to a script that hardcoded
+the same variables — so it could not have backed up production even when it succeeded.
+
+It never ran at all, though. The ten failures were not the script failing; they were GitHub refusing
+to start the job, which is why it failed in three seconds with zero steps. So the honest statement is
+not "the backup was wrong" but "no backup process has ever executed". There is no artefact of any
+kind, from any environment, on GitHub today. Production has no recovery path, and neither has
 staging.
+
+### GitHub Actions cannot start any job in this repository at present
+
+This is an account-level block, not a workflow problem, and it is **independent of the credentials**:
+
+```
+The job was not started because recent account payments have failed or your
+spending limit needs to be increased. Please check the 'Billing & plans' section
+in your settings
+```
+
+Every job on the `main` commit shows it, including `Run Tests` in the APK workflow (0 steps) and a
+dispatch of the corrected backup workflow (0 steps, 2 seconds). `repos/.../actions/permissions`
+reports `enabled: true`, so this is billing alone. **Resolving it requires the account owner.**
+
+Two consequences for recovery:
+
+* The scheduled daily production backup cannot succeed until billing is resolved, no matter what
+  secrets exist. Its runs will keep being red for that reason, not because of anything in this
+  repository.
+* The gate does **not** depend on GitHub Actions. `node scripts/backup-database.mjs --env
+  production` run from a machine holding the credentials produces the same artefact through the same
+  code, and that is how the first verified production backup can be taken while billing is
+  unresolved.
+
+### What is already in place (2026-10-01)
+
+| Item | State |
+|---|---|
+| Corrected workflow on `main` | **Yes** — commit `de13eb1d`, blob-verified identical to this checkout, registered as `Backup Database (to the environment it names)` |
+| `PROD_DB_HOST` secret | **Set** — `aws-0-ap-northeast-1.pooler.supabase.com` (a shared regional address, verified by probe) |
+| `PROD_DB_USER` secret | **Set** — `postgres.gkswcfljxlutkfdvvqng` (a username, already in `environments.json`) |
+| `PROD_DB_PASS` secret | **NOT SET — this is the remaining external input** |
+| GitHub Actions | **Blocked by billing** — no job can start |
+
+`PROD_DB_HOST` was not guessed. The pooler resolves the project ref in the *username*, so a login
+attempt with a deliberately wrong password distinguishes the two failure modes that matter:
+
+| Probe | Result |
+|---|---|
+| `aws-0-…` pooler + `postgres.gkswcfljxlutkfdvvqng` | `password authentication failed for user "postgres"` — the tenant was resolved, so host and username are correct and only the password is absent |
+| `aws-1-…` pooler + the same username | `tenant/user postgres.gkswcfljxlutkfdvvqng not found` — proves the probe discriminates instead of always failing |
 
 ### Verifying the tooling without production credentials
 
@@ -281,3 +345,4 @@ code rather than by restating the intention.
 | 2026-09-12 | Initial recovery documentation (described a system that did not exist) |
 | 2026-10-01 | Rewritten against the real tooling: explicit targeting, restore verification, and the honest statement that production has no backup path yet |
 | 2026-10-01 | Added the commit prerequisite (§7 step 0), the exact credential-provisioning commands, and the recorded state of the live backup job (§11) |
+| 2026-10-01 | Workflow pushed to `main` (`de13eb1d`); `PROD_DB_HOST` and `PROD_DB_USER` provisioned and probe-verified; recorded that GitHub Actions is blocked by account billing, and that the ten historic failures were that block rather than the script |
