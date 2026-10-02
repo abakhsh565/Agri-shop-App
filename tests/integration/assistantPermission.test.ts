@@ -24,12 +24,26 @@ const OWNER_PHONE = "923001234567";
 const EMPLOYEE_PHONE = "923001122334";
 
 function qaEnv() {
-  const file = path.resolve(__dirname, "../../.env.qa");
   const env: Record<string, string> = {};
-  for (const line of fs.readFileSync(file, "utf8").split("\n")) {
-    if (!line.includes("=")) continue;
-    const key = line.split("=")[0].trim();
-    env[key] = line.split("=").slice(1).join("=").trim().replace(/^\[|\]$/g, "");
+  const file = path.resolve(__dirname, "../../.env.qa");
+  // A CI checkout has no .env.qa — its QA credentials arrive as repository secrets, already in
+  // the process environment. Read the file only when it exists, locally, and let the process
+  // environment fill in (and win over) what it provided.
+  if (fs.existsSync(file)) {
+    for (const line of fs.readFileSync(file, "utf8").split("\n")) {
+      if (!line.includes("=")) continue;
+      const key = line.split("=")[0].trim();
+      env[key] = line.split("=").slice(1).join("=").trim().replace(/^\[|\]$/g, "");
+    }
+  }
+  for (const key of [
+    "QA_SUPABASE_URL",
+    "VITE_SUPABASE_URL",
+    "QA_SUPABASE_ANON_KEY",
+    "VITE_SUPABASE_ANON_KEY",
+  ]) {
+    const value = process.env[key];
+    if (value) env[key] = value.replace(/^\[|\]$/g, "");
   }
   return env;
 }
@@ -77,8 +91,8 @@ beforeAll(async () => {
   env = qaEnv();
   const baseUrl = env.QA_SUPABASE_URL || env.VITE_SUPABASE_URL;
   const anonKey = env.QA_SUPABASE_ANON_KEY;
-  expect(baseUrl, "QA_SUPABASE_URL missing from .env.qa").toBeTruthy();
-  expect(anonKey, "QA_SUPABASE_ANON_KEY missing from .env.qa").toBeTruthy();
+  expect(baseUrl, "QA_SUPABASE_URL missing from the environment and .env.qa").toBeTruthy();
+  expect(anonKey, "QA_SUPABASE_ANON_KEY missing from the environment and .env.qa").toBeTruthy();
   owner = await signIn(baseUrl, anonKey, OWNER_PHONE);
   employee = await signIn(baseUrl, anonKey, EMPLOYEE_PHONE);
   employee.ctx = { ...employee.ctx, shell: "employee", role: "employee" };
