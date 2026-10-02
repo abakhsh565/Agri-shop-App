@@ -67,6 +67,8 @@ jobs:
           VITE_SUPABASE_URL: ${{ secrets.QA_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.QA_SUPABASE_ANON_KEY }}
           VITE_SUPABASE_PROJECT_ID: bpybjrjenwccowvtrevu
+          VITE_APP_ENV: staging
+          VITE_OTP_DELIVERY: demo
 
       - name: Upload Playwright Report
         if: failure()
@@ -119,6 +121,15 @@ jobs:
 
       - name: Build Web App
         run: npm run build
+        env:
+          # The APK must carry THIS environment. vite.config.ts refuses to build without an
+          # explicit VITE_APP_ENV, and src/lib/envGuard.ts refuses to start without it, so a
+          # missing block here is not a warning — it is a build that cannot produce an app.
+          VITE_APP_ENV: staging
+          VITE_SUPABASE_URL: ${{ secrets.QA_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.QA_SUPABASE_ANON_KEY }}
+          VITE_SUPABASE_PROJECT_ID: bpybjrjenwccowvtrevu
+          VITE_OTP_DELIVERY: demo
 
       - name: Setup Android Platform
         run: |
