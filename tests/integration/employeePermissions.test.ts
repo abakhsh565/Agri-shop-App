@@ -73,6 +73,17 @@ async function cleanup() {
   for (const t of ['inventory_movements', 'sale_items', 'sales', 'return_items', 'returns', 'customer_payments', 'credit_limit_requests', 'reminder_configs', 'reminder_occurrences']) {
     await q(`DELETE FROM ${t} WHERE customer_id = '${T.customerA}' OR product_id = '${T.productA}'`);
   }
+  // The admin `create_product` RPC (and the employee's attempt, if it ever succeeded) mints its
+  // own product id, so those rows cannot be matched by T.productA. They are matched by the exact
+  // fixture names instead, and removed in FK order: movements → variants → products.
+  //
+  // WHY THIS IS NOT COSMETIC: this suite shares the QA database with the Playwright lane, which
+  // runs next in CI. A leftover product named `Perm Test Product RPC` was on /admin/products when
+  // the Urdu microcopy scan read the screen, and the run failed on the word "RPC" being visible
+  // to a shop owner — correctly, because a test fixture name is not app copy.
+  await q(`DELETE FROM inventory_movements WHERE product_id IN (SELECT id FROM products WHERE name IN ('Perm Test Product RPC', 'Employee Product Attempt'))`);
+  await q(`DELETE FROM product_variants WHERE product_id IN (SELECT id FROM products WHERE name IN ('Perm Test Product RPC', 'Employee Product Attempt'))`);
+  await q(`DELETE FROM products WHERE name IN ('Perm Test Product RPC', 'Employee Product Attempt')`);
   await q(`DELETE FROM product_variants WHERE id = '${T.variantA}'`);
   await q(`DELETE FROM products WHERE id = '${T.productA}'`);
   await q(`DELETE FROM companies WHERE id = '${T.companyA}'`);
