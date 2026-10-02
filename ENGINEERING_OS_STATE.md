@@ -1426,6 +1426,15 @@ Neither was performed. No production database was touched: `.env.qa` and `.env.l
 project `bpybjrjenwccowvtrevu`, production is the separate project `gkswcfljxlutkfdvvqng`, and no credentials
 for it exist in this checkout.
 
+**Decision recorded 2026-10-01 — see [`SCHEMA_STRATEGY.md`](SCHEMA_STRATEGY.md).** Measurements since
+then show neither A nor B alone is sufficient: the directory also fails to apply onto a captured
+baseline (30/169 files onto production, 24/169 onto staging, 26 onto `COMPLETE_DATABASE_SETUP.sql`).
+The strategy is therefore **frozen environment baselines + forward-only files, each verified against
+the target's own baseline before it is applied anywhere**. Staging's ledger is synchronized by
+adoption (169 files, 0009→0177); production's baseline is captured and read-only, and the migration
+runner refuses production by policy. The credential sentence above predates the sanctioned Phase 2A
+credential intake; production is still never contacted by the migration tooling.
+
 ### Permanent protection added
 
 `tests/unit/migrationReplayability.test.ts` now has four checks, each falsified by deliberately breaking it:
@@ -1497,6 +1506,10 @@ worked around: a locally built APK is not the release artifact.
    The fixes already made are correct regardless and are kept: 0012 was unappliable even to
    an empty database, ten versions were duplicated, and the renamed-parameter
    redefinitions could not apply onto an existing schema either.
+   **Decided 2026-10-01:** [`SCHEMA_STRATEGY.md`](SCHEMA_STRATEGY.md) — frozen baselines +
+   forward-only files verified against the target baseline. Not replaying history on any environment
+   is what addresses this whole class; staging's ledger was synchronized by adoption, and production
+   stays read-only.
 
 ## Stage: company / customer / reminder / stock-integrity pass (2026-09-22)
 
@@ -1599,6 +1612,52 @@ nothing at all, and one history screen showed a lone spinner where its own shape
 - `index.html` declares header-only security directives (`X-Frame-Options`,
   `X-Content-Type-Options`) as `<meta>`, so the browser ignores them and logs a warning on
   every load. Named in the lane rather than swallowed.
+
+## Stage: browser lane closure — the reds resolved, one real app regression, every lane run (2026-10-02)
+
+The four red browser tests are closed, the lanes that had never been executed have been executed,
+and one genuine app regression was found by them. Detail and per-run logs: `PHASE_2_BROWSER_SAFETY.md`
+§10–§16. QA only (`bpybjrjenwccowvtrevu`); production untouched.
+
+### What was actually broken
+
+1. **A real app regression: hooks below an early return.** `EmployeeDetailPage` declared
+   `loginFixing`/`loginFixed` after `if (!emp) return (…)`. Any deep link to an employee page
+   crashed with React's "Rendered more hooks than during the previous render" once the store
+   loaded — the page only worked when the employee was already in the store. Hooks moved to the
+   top of the component; `overlayRtl` 2/2 and `employeeStatusSafety` 3/3 went green on the next run.
+2. **The employee door asks two questions.** The sign-in tab refuses a number typed on the other
+   tab, and the employee tab additionally requires the **shop code** (`shop-id-input`, migration
+   0169). That one fact explained 27 batch-6 `waitForURL` timeouts: a code is never sent until the
+   shop is named. `loginViaUi` now takes the side and the shop; employee-side lanes pass.
+3. **Stale test fixtures/selectors, never a weakened assertion.** The invitation hint moved to
+   `auth.invitedToShop`; deletion became a 4-step `DeleteTargetSheet`; the product form became one
+   card per pack (`product-pack-*`); the role editor's delete became its own row; the supplier
+   picker deliberately has no close button; `accessUx` pinned a seeding uuid that no longer exists
+   (now resolved from the phone in `beforeAll`).
+
+### Verified
+
+- `imageSync` + `actionCenter` **22/22** (6.1m) — the two lanes that had never been run.
+- `dashboardScope` **6/6**, `setupCompletion` **5/5**, `dependencyContinuity` **4/4**, `education`
+  **9/9**, `accessUx` **7/7**, `roleDeleteSafety` PASS, batch 10 44 passed / 9 failed **all triaged**.
+- New browser proof for retry-after-timeout: `tests/e2e/retryAfterTimeout.spec.ts` — first
+  `create_sale` answered with a 504, the retry carries the **same** `idempotencyKey`, and the
+  database ends with one sale, one line, one submission row, stock 99, `total_purchases` 80500.
+- Playwright's own webServer spawn verified (manual `vite` killed; `[WebServer]` boot lines seen).
+- Harness defects fixed at the test layer: `dependencyContinuity`'s cleanup deleted parents before
+  children, so its FK error was swallowed and its "empty shop" premise was never true — now
+  children first and the empty catalogue is asserted; `setupCompletion` compares the count's
+  numbers rather than one copy string.
+- `tsc` 0 · `npm run build` clean · `migrate:verify` PASS (169 ↔ 169, hashes match) · `vitest`
+  (`backups/final-vitest.log`) · QA cleaned and re-counted independently after the runs.
+
+### Still open (named, not carried silently)
+
+- The batch-6 `education` console 404 did not reproduce on the clean lane run (9/9, console clean);
+  the assertion now prints the failing URL so the next occurrence is diagnosable.
+- `<meta>`-declared security headers remain ignored by the browser (as above); unchanged here.
+- No APK was built; the release path stays `.github/workflows/build-apk.yml` at the release gate.
 
 ---
 
@@ -1890,7 +1949,14 @@ console 404 still has not reproduced (the lane prints the URL if it returns), an
 pre-existing deployment-layer matter, not a policy. Release has still not been authorized and no
 APK was built; the release path remains `.github/workflows/build-apk.yml` when it is.
 
----
+**Committed:** `a9e2d413` — *fix(security): close audit and settings tenant isolation gaps*
+(7 files, +910). Staged as an isolated patch: the two migrations, `auditIntegrity`,
+`appSettingsIsolation`, `shopScopedPolicyGuard`, the `updateAsUser` QA helper, and this security
+section only. Re-verified immediately before committing: **17/17** (6 + 9 + 2) against QA; QA left
+at 0 business rows after `npm run qa:clean` with an independent re-count. `main` is now 2 commits
+ahead of `origin/main`; nothing was pushed. The 0180 sweep's files (`tenantBoundarySweep`,
+`variantIsolation`, the `fixtureIdCollision` phone guard) and the browser-lane closure stage remain
+uncommitted and untouched.
 
 ---
 
@@ -1955,3 +2021,75 @@ Evidence for this stage: `backups/example-change-lanes.log`, the guard runs abov
 listed. QA left clean after the run: lane data produced 1 `notifications` row, removed by
 `npm run qa:clean`, independent re-count **0 business rows**. Production untouched; no release
 attempted; no APK built.
+
+**Committed:** `c1c893a3` — *feat(engineering-os): add feature registry and change-impact system*
+(8 files, +1252/−4). The commit deliberately carries only this §18 section of this file and only
+the `registry:build` hunk of `package.json`; the earlier uncommitted stages, the pending
+`package.json` script additions and every other thread's changes remain in the working tree.
+`main` is ahead of `origin/main` by this one commit; nothing was pushed.
+
+---
+
+## Stage: staging/QA APK path — source published, three CI blockers cleared, one open (2026-10-02)
+
+Moving from MVP closure to staging. Source published: `4e57d50f..b3fbda09` on `origin/main`
+(three commits: `c1c893a3` §18 registry, `a9e2d413` 0181/0182 security, `b3fbda09` the CI env fix
+below). Production untouched; the workflow references QA secrets only.
+
+### Blockers found, in order
+
+1. **GitHub Actions would not start any job (external).** Runs 36782862355 and 36782310591 (and the
+   scheduled backups) failed with the annotation: *"The job was not started because recent account
+   payments have failed or your spending limit needs to be increased."* Jobs started again once
+   that account state changed; it was never a repository defect.
+2. **The APK build had no environment (repository defect, fixed in `b3fbda09`).** `npm run build`
+   ran with no env while `vite.config.ts` refuses to build without an explicit `VITE_APP_ENV` and
+   `src/lib/envGuard.ts` refuses to start without it. Both app-touching steps now carry: staging,
+   project `bpybjrjenwccowvtrevu`, demo OTP, QA secrets only. Proved locally with the workflow's
+   exact env: `[EnvGuard] building STAGING → bpybjrjenwccowvtrevu (otp: demo, key verified)`,
+   build exit 0.
+3. **`QA_DB_HOST` did not resolve on the runner (CI secret defect, fixed).** Run 37050426260 failed
+   the reachability gate with `ENOTFOUND`. The local `.env.qa` values were proven against QA
+   (pooler host `aws-0-ap-northeast-1.pooler.supabase.com`, user `postgres.<ref>`; A record present;
+   actual `select 1` OK) and the three QA_DB secrets were set from those proven values. Run
+   37051191071 then passed "Verify QA Database Reachability".
+4. **Android signing secrets are absent (external, open).** `gh secret list` contains no
+   `ANDROID_KEYSTORE_BASE64` / `ANDROID_KEYSTORE_PASSWORD` / `ANDROID_KEY_ALIAS` /
+   `ANDROID_KEY_PASSWORD`, and the build job's "Decode release keystore" step exits 1 when the
+   base64 secret is unset. Until those four secrets exist (see `.github/inject-signing.cjs`), no
+   APK can be produced by `build-apk.yml` — an account/secret prerequisite, not code.
+
+### Runs
+
+| Run | Trigger | Result |
+|---|---|---|
+| 37050426260 | push `b3fbda09` | failed at QA reachability (`ENOTFOUND`); the APK job never started |
+| 37051191071 | `workflow_dispatch` | connectivity gate ✓; vitest 63/67 files green in parallel — three files failed on shared-fixture races (below); the APK job never started |
+| 37053824025 | push `f6672a34` | unit parallel + integration serial; outcome pending |
+
+### Test-job races: analysed, not hand-waved (commits `115255c6`, `f6672a34`)
+
+Run 37051191071's vitest step failed 4/67 files. One was a real §18 defect and three were races:
+
+* `tests/unit/featureRegistryGuard.test.ts` — `ENOENT dependency_graph.json`: the guard validated
+  against a generated file that was never committed, so only a clean checkout could expose it.
+  Fixed in `115255c6`: the graph (31 tables / 22 RPCs, regenerated) is now committed like
+  `SCREEN-INDEX.md`, and `npm run registry:build` refreshes the graph, the index and the guard.
+* `splitPayments`, `priceTraceability`, `tenantResolverReplay` — each **passed in isolation**, passed
+  again after a full clean, and the whole integration folder (39 files) passed locally under two
+  workers (`backups/ci-parity-2workers.log`, EXIT:0). The CI log also shows the QA environment was
+  correct (`[EnvGuard] Environment verified: bpybjrjenwccowvtrevu` ×30), so the reds were
+  shared-fixture races on the 2-core runner: concurrent files mutate the shared users' active shop
+  and permission rows, and one file introspects `pg_proc` while others work. Fixed in `f6672a34`:
+  unit tests stay parallel, the integration folder runs one file at a time against the one QA
+  database — the same serialisation the E2E lanes already use for the same reason.
+* Run 37053824025's unit step then failed the registry guard in the clean checkout: it referenced
+  `src/lib/entryDoor.ts`, `src/lib/phoneInput.ts` and thirteen test files, the `assistant` route and
+  `product_barcodes`/`sale_submissions` — all present in the working tree, none committed. A
+  registry that describes one developer's tree is not a source of truth. Fixed in `ca1e0c2b` by
+  removing the uncommitted references (not by relaxing the guard), with the pending assistant
+  console recorded as a risk. Proved by the guard locally (14/14) **and** by a parity check against
+  HEAD (tracked files, committed router, committed graph, committed migrations): clean.
+
+Real-device installation/startup/smoke checks cannot begin until an APK artifact exists; they are
+BLOCKED by blockers 1–4 above, not skipped.

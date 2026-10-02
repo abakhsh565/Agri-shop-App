@@ -9,9 +9,12 @@ import { useCustomersStore } from "@/stores/customersStore";
 import { useUIStore } from "@/stores/uiStore";
 import { useAuthStore } from "@/stores/authStore";
 import { useT } from "@/lib/i18n";
+import { digitsOnlyPhone, phoneFieldProps } from "@/lib/phoneInput";
 import { useThemeStore } from "@/stores/themeStore";
 import { useShellBase } from "@/lib/useShellBase";
 import { clearNav } from "@/lib/navContext";
+import LocationField from "@/components/ui/LocationField";
+import type { PickedPlace } from "@/lib/geo";
 import type { ReminderConfig } from "@/types";
 import { Bell } from "lucide-react";
 import { KNOWN_CROPS } from "@/lib/recommendationEngine";
@@ -41,7 +44,16 @@ export default function AddCustomerPage() {
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
-  const [address, setAddress] = useState("");
+  //
+  // The customer's location, as a place rather than a line of text.
+  //
+  // This replaced a free-text address field. Two problems with the old one, and the second is why
+  // the field is gone rather than sitting next to a map: an address somebody typed cannot be drawn
+  // on a map or routed to, and an address that is typed AND pinned lets the two disagree — the pin
+  // in one town, the words about another. What is stored now is a point the map service produced
+  // plus the address that came with it.
+  //
+  const [place, setPlace] = useState<PickedPlace | null>(null);
   const [creditLimit, setCreditLimit] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
@@ -89,9 +101,10 @@ export default function AddCustomerPage() {
       const newCustomer = await createCustomer({
         name: name.trim(),
         phone: normalizedPhone,
-        address: address.trim() || undefined,
+        address: place?.address ?? undefined,
         creditLimit: creditLimit ? parseFloat(creditLimit) : 0,
         createdBy: user?.id,
+        place,
       });
       // Persist image if uploaded
       if (imageUrl && newCustomer.id) {
@@ -173,10 +186,9 @@ export default function AddCustomerPage() {
               {t("addCustomer.phone")}
             </p>
             <input
-              type="tel"
-              inputMode="tel"
+              {...phoneFieldProps()}
               value={phone}
-              onChange={(e) => setPhone(e.target.value)}
+              onChange={(e) => setPhone(digitsOnlyPhone(e.target.value))}
               placeholder="03001234567"
               className="w-full h-12 rounded-[var(--radius-input)] px-4 text-sm outline-none"
               style={{
@@ -201,23 +213,20 @@ export default function AddCustomerPage() {
             )}
           </div>
 
-          {/* Address */}
-          <div>
-            <p className="ds-section-label mb-2" style={{ color: "var(--text-secondary)" }}>
-              {t("addCustomer.address")}
-            </p>
-            <input
-              value={address}
-              onChange={(e) => setAddress(e.target.value)}
-              placeholder={t("inline.village_town_city")}
-              className="w-full h-12 rounded-[var(--radius-input)] px-4 text-sm outline-none"
-              style={{
-                background: "var(--surface-2)",
-                border: "1px solid var(--divider)",
-                color: "var(--text-primary)",
-              }}
-            />
-          </div>
+          {/*
+            Location — picked, never typed.
+
+            The label above the field is the app's own word for it rather than a second
+            “Address (optional)”: there is exactly one way to say where this customer is, and the
+            old label described the thing that was replaced.
+          */}
+          <LocationField
+            value={place}
+            onChange={setPlace}
+            label={t("addCustomer.address")}
+            hint={t("location.notTyped")}
+            testId="customer-location"
+          />
 
           {/* Crops */}
           <div>

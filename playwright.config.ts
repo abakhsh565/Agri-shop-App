@@ -19,7 +19,11 @@ export default defineConfig({
     screenshot: 'only-on-failure',
     trace: 'on-first-retry',
     actionTimeout: 10000,
-    navigationTimeout: 30000,
+    // A dev server transforms the whole app on the first request; when Playwright starts
+    // Vite itself (no server already on 5173) that first navigation can outrun 30s and
+    // fail the first test for a reason that is not the app. The wait is for the cold
+    // server to serve the app, not a weaker assertion about it.
+    navigationTimeout: 90000,
   },
   projects: [
     {
@@ -37,6 +41,11 @@ export default defineConfig({
       VITE_SUPABASE_URL: 'https://bpybjrjenwccowvtrevu.supabase.co',
       VITE_SUPABASE_ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJweWJqcmplbndjY293dnRyZXZ1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkwMjY1NzIsImV4cCI6MjEwNDYwMjU3Mn0.nHzYWdjmZ_TEp_2mzqeinCNoXeLvVdvOETgvJXxldS0',
       VITE_SUPABASE_PROJECT_ID: 'bpybjrjenwccowvtrevu',
+      // The app now refuses to start in an environment it cannot name, and refuses to accept the
+      // demo code outside development/staging. The lanes sign in through the real login flow
+      // against the staging project, so they say so explicitly rather than relying on defaults.
+      VITE_APP_ENV: 'staging',
+      VITE_OTP_DELIVERY: 'demo',
     },
   },
 });

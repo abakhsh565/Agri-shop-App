@@ -19,7 +19,7 @@
  * RLS-protected reads are exercised. QA database only.
  */
 import { test, expect, type Page } from '@playwright/test';
-import { execSql, setupFixtures, cleanupFixtures } from './helpers';
+import { execSql, setupFixtures, cleanupFixtures, QA_IDS } from './helpers';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -55,6 +55,13 @@ function rs(n: number) {
 /** Sign in through the real flow: phone -> dev OTP -> set & confirm PIN. */
 async function login(page: Page, phone: string) {
   await page.goto(`${BASE}/login`);
+  // One phone, one door: an employee's number has to be entered on the employee tab,
+  // which the page enforces before it sends anything.
+  if (phone === EMPLOYEE_PHONE) {
+    await page.getByTestId('auth-tab-employee').click();
+    // An invited number also has to name the shop it was invited by before a code is spent.
+    await page.getByTestId('shop-id-input').fill(QA_IDS.shop);
+  }
   await page.getByPlaceholder('e.g. 03001234567').fill(phone);
   await page.getByRole('button', { name: 'Send Code' }).click();
   await page.waitForURL(/\/login\/otp/, { timeout: 20000 });

@@ -41,6 +41,15 @@ jobs:
       - name: Verify QA Database Reachability
         run: node scripts/check-qa-connectivity.mjs
 
+      # ─── The migration ledger must agree with the directory ──────────
+      # Read-only. Every file in supabase/migrations/ must be recorded in
+      # supabase_migrations.schema_migrations with the sha256 it had when it was applied, every
+      # recorded version must still have a file, and no file may be numbered before the newest
+      # recorded version. Before this check existed the ledger held 3 rows while the directory
+      # held 167 files, and the only way to notice was to diff them by hand.
+      - name: Verify the migration ledger matches the directory
+        run: node scripts/migrate.mjs verify --env staging
+
       # ─── Unit + Integration Tests (Vitest) ──────────────────────────
       # Unit tests are isolated; they run in parallel. The integration suite shares ONE QA
       # database, and some files mutate the shared fixture users (active shop, permissions) while

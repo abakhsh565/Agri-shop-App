@@ -142,7 +142,17 @@ test.describe('Admin microcopy — English and Urdu', () => {
     await page.waitForURL(/\/login\/otp|pin-set|dashboard/, { timeout: 20000 });
 
     if (page.url().includes('/login/otp')) {
-      await expect(page.getByText('اپنے 6 نمبر لکھیں').first()).toBeVisible({ timeout: 10000 });
+      // The shipped code screen: `auth.verifyOtp` (header) over `auth.enterCode` (subtitle).
+      //
+      // This assertion used to pin an older literal — 'اپنے 6 نمبر لکھیں', "write your 6
+      // digits" — that the plain-language copy pass replaced. It was a stale expectation, not
+      // a missing translation: the screen rendered Urdu the whole time, in different words,
+      // and the trace showed the correct Urdu header, subtitle and "sent to your number" line
+      // with no English anywhere on it. Both halves of the shipped line are asserted so this
+      // cannot pass against a screen that silently reverted to English.
+      await expect(page.getByText('اپنا کوڈ لکھیں').first()).toBeVisible({ timeout: 10000 });
+      await expect(page.getByText('6 ہندسوں کا کوڈ لکھیں').first()).toBeVisible({ timeout: 10000 });
+      await expect(page.getByText('Enter 6-digit code').first()).toHaveCount(0);
     }
   });
 

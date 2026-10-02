@@ -56,7 +56,9 @@ async function login(page: Page) {
     for (const k of Object.keys(localStorage)) if (/^sb-/.test(k)) localStorage.removeItem(k);
   });
   await page.goto(`${BASE_URL}/login`);
-  await page.getByPlaceholder('e.g. 03001234567').fill(OWNER_PHONE);
+  // The field takes the local 03… form; the 92… constant is read as a country-code paste
+  // and becomes a 10-digit number the validator refuses.
+  await page.getByPlaceholder('e.g. 03001234567').fill(`0${OWNER_PHONE.slice(2)}`);
   await page.getByRole('button', { name: 'Send Code' }).click();
   await page.waitForURL(/\/login\/otp/, { timeout: 20000 });
   const boxes = page.locator('[data-testid^="otp-digit-"]');
@@ -391,7 +393,8 @@ test.describe('Interaction layer: motion, feedback, skeletons, toasts, date chro
     // `--divider` (#242422) in dark: the in-card hairline in BOTH themes, so no edge was
     // ever drawn. This measures the boxes where the complaint was raised.
     await page.goto(`${BASE_URL}/login`);
-    await page.getByPlaceholder('e.g. 03001234567').fill('923001234567');
+    // Local form: the 92… constant would be read as a country-code paste by the field.
+    await page.getByPlaceholder('e.g. 03001234567').fill('03001234567');
     await page.getByRole('button', { name: 'Send Code' }).click();
     await page.waitForURL(/\/login\/otp/, { timeout: 20000 });
 

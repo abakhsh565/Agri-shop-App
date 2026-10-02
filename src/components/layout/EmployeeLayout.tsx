@@ -1,5 +1,5 @@
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
-import { Home, Receipt, ScanLine, Package, Users, Wifi, WifiOff, X } from "lucide-react";
+import { Home, Receipt, ScanLine, Package, Sparkles, Users, Wifi, WifiOff, X } from "lucide-react";
 import { useAuthStore } from "@/stores/authStore";
 import { useOfflineStore } from "@/stores/offlineStore";
 import { getPendingCount } from "@/lib/offlineQueue";
@@ -26,6 +26,9 @@ const TAB_DEFS = [
   { key: "scan" as const,        icon: ScanLine,      path: "__scan__"            },
   { key: "nav.products" as const,icon: Package,       path: "/employee/products"  },
   { key: "nav.customers" as const, icon: Users,       path: "/employee/customers"  },
+  // The assistant, on the employee's own session — it can only answer from what this account can
+  // already open, so it is safe to put in front of everyone.
+  { key: "nav.assistant" as const, icon: Sparkles,    path: "/employee/assistant"  },
 ];
 
 const LOCK_TIMEOUT_MS = 15 * 60 * 1000;
@@ -121,6 +124,7 @@ export default function EmployeeLayout() {
     if (path.startsWith("/employee/sales"))     return "/employee/sales";
     if (path.startsWith("/employee/customers")) return "/employee/customers";
     if (path.startsWith("/employee/products"))  return "/employee/products";
+    if (path.startsWith("/employee/assistant")) return "/employee/assistant";
     return "/employee/dashboard";
   }
 
@@ -306,7 +310,7 @@ export default function EmployeeLayout() {
       <FirstRunGate />
       <ContextHelp />
 
-      {/* ── Bottom tab bar (4 tabs) — only on top-level navigation screens ── */}
+      {/* ── Bottom tab bar — only on top-level navigation screens ── */}
       {showTabBar && (
       <div
         className="fixed bottom-0 start-0 end-0 max-w-[480px] mx-auto flex items-start pt-2 border-t"
@@ -322,6 +326,9 @@ export default function EmployeeLayout() {
           paddingRight: "16px",
         }}
       >
+        {/* Every tab carries an explicit 44px floor, the same contract as the admin shell:
+            the icon+label stack is only ~41px tall on its own, and a rendered-box audit
+            counts anything under 44px as an undersized finger target. */}
         {TAB_DEFS.map(({ key, icon: Icon, path }) => {
           if (path === "__scan__") {
             return (
@@ -330,7 +337,7 @@ export default function EmployeeLayout() {
                 onClick={handleEmpNavScan}
                 disabled={empScanning}
                 data-tour="tab:scan"
-                className="ds-pressable flex flex-col items-center justify-center flex-1 gap-1 cursor-pointer"
+                className="ds-pressable flex flex-col items-center justify-center flex-1 gap-1 cursor-pointer min-h-[44px]"
               >
                 <div
                   className="flex items-center justify-center rounded-full -mt-3"
@@ -350,7 +357,7 @@ export default function EmployeeLayout() {
               key={path}
               onClick={() => { clearNav(); navigate(path); }}
               data-tour={`tab:${key}`}
-              className="ds-pressable flex flex-col items-center justify-center flex-1 gap-1 cursor-pointer"
+              className="ds-pressable flex flex-col items-center justify-center flex-1 gap-1 cursor-pointer min-h-[44px]"
             >
               <Icon
                 size={22}

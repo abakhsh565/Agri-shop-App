@@ -99,20 +99,31 @@ async function clearSetupEntities() {
  * the data takes.
  */
 async function waitForSetupReady(page: Page) {
-  // The block's count reads "0/3" — the thing that is actually rendered, and it is
-  // language-neutral. (A percentage was an earlier design of this card.)
-  // The path is part of the condition on purpose: if the session dropped and the app
-  // bounced to sign-in, the block would be absent for the wrong reason and the wait
-  // would either hang (here) or pass vacuously (in waitForSetupGone).
+  // The block's count carries copy around the numbers — Home reads "0 / 3 completed",
+  // Settings reads "0/3" — so the numbers are compared, not the sentence. The path is part of
+  // the condition on purpose: if the session dropped and the app bounced to sign-in, the block
+  // would be absent for the wrong reason and the wait would either hang (here) or pass vacuously
+  // (in waitForSetupGone).
   await expect
     .poll(
       async () => {
         const block = await readSettingsBlock(page);
-        return block ? `${block.path} ${block.count}` : 'still loading';
+        // A missing block says WHERE it is missing: a bounced sign-in and a shop that has
+        // nothing left to set up (the card hides itself) are different facts.
+        return block ? `${block.path} ${block.count}` : `no block @ ${new URL(page.url()).pathname}`;
       },
       { timeout: 25000 },
     )
     .toMatch(/\/admin\/settings \d+\s*\/\s*\d+/);
+}
+
+/**
+ * The count chip renders copy around two numbers. "0 / 3 completed" and "0/3" are the same
+ * fact in two shapes, so the assertion compares the numbers and lets the words change.
+ */
+function countOf(text: string): string {
+  const m = text.match(/(\d+)\s*\/\s*(\d+)/);
+  return m ? `${m[1]}/${m[2]}` : text;
 }
 
 /** Every required entity exists, so neither block may render any more. */
@@ -215,7 +226,7 @@ test.describe('Business setup status is derived and self-retiring', () => {
     expect(home, 'the checklist did not render on Home').not.toBeNull();
     expect(home!.rows.length, 'one row per required entity in the graph').toBe(3);
     expect(home!.cards, 'the block uses the one list implementation').toBe(1);
-    expect(home!.count, 'nothing done yet').toBe('0/3');
+    expect(countOf(home!.count), 'nothing done yet').toBe('0/3');
 
     for (const label of ['Add supplier', 'Add product', 'Add customer']) {
       expect(home!.rows.map((r) => r.text).join(' | '), `missing step "${label}"`).toContain(label);
@@ -234,7 +245,7 @@ test.describe('Business setup status is derived and self-retiring', () => {
     await expect(page.locator('[data-testid="setup-checklist"]')).toBeVisible({ timeout: 20000 });
     await waitForSetupReady(page);
     const settings = await readSettingsBlock(page);
-    expect(settings!.count, 'nothing done yet').toBe('0/3');
+    expect(countOf(settings!.count), 'nothing done yet').toBe('0/3');
     expect(settings!.rows, 'the Settings variant should be one line, not the step list').toBe(0);
   });
 
@@ -252,7 +263,7 @@ test.describe('Business setup status is derived and self-retiring', () => {
     const state = await readSettingsBlock(page);
     expect(state, 'the Settings block is missing — is this the settings screen?').not.toBeNull();
     expect(state!.path, 'the app is not on the settings screen').toBe('/admin/settings');
-    expect(state!.count, 'one of three done should read 1/3').toBe('1/3');
+    expect(countOf(state!.count), 'one of three done should read 1/3').toBe('1/3');
 
     // The step list follows the same data. A finished step stays listed — it keeps its check
     // and its name, so the shape of the job is still visible — but it loses its reason and
@@ -264,7 +275,7 @@ test.describe('Business setup status is derived and self-retiring', () => {
     expect(supplierRow, 'the supplier step disappeared instead of being marked done').toBeTruthy();
     expect(supplierRow!.hasAction, 'a completed step still offers its create action').toBe(false);
     expect(supplierRow!.text, 'a completed step still asks for the supplier to be added').not.toContain('Add supplier');
-    expect(home!.count, 'the Home count did not follow the data').toBe('1/3');
+    expect(countOf(home!.count), 'the Home count did not follow the data').toBe('1/3');
   });
 
   test('3. complete setup: the guidance disappears by itself', async ({ page }) => {
@@ -460,7 +471,7 @@ test.describe('Business setup status is derived and self-retiring', () => {
     expect(state, 'setup block missing in Urdu').not.toBeNull();
     expect(state!.dir, 'the page did not switch to RTL').toBe('rtl');
     expect(state!.heading, 'Urdu heading not rendered').toMatch(/[\u0600-\u06FF]/);
-    expect(state!.count, 'the count is not rendered in Urdu').toBe('0/3');
+    expect(countOf(state!.count), 'the count is not rendered in Urdu').toBe('0/3');
     expect(state!.overflow, 'RTL layout overflows at phone width').toBe(false);
 
     // No English leakage in the step copy either.

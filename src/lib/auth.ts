@@ -1,6 +1,11 @@
 import { supabase } from "@/lib/supabase";
 import type { User, UserRole, MembershipRole, MembershipStatus } from "@/types";
-import { DEMO_OTP_CODE, isDemoOtpMode } from "@/lib/authMode";
+import {
+  DEMO_OTP_CODE,
+  assertDemoOtpAllowed,
+  demoCodeAccepted,
+  isDemoOtpMode,
+} from "@/lib/authMode";
 import { clearAllCachedData } from "@/lib/localCache";
 
 // ─── Phone normalization ─────────────────────────────────────────────────────
@@ -115,7 +120,12 @@ export async function sendOTP(
   // Demo mode: there is no SMS provider, so there is nothing to send and the
   // code is the shared constant. Reporting success is accurate — the person can
   // complete sign-in (the invitation carries the code).
-  if (isDemoOtpMode) return { success: true };
+  if (isDemoOtpMode) {
+    // Never report "code sent" for a code that was not sent, in an environment that must not
+    // accept one. See authMode.ts.
+    assertDemoOtpAllowed();
+    return { success: true };
+  }
 
   // Live mode: Supabase Auth sends the one-time code over SMS.
   const { error } = await supabase.auth.signInWithOtp({ phone: e164 });
@@ -146,7 +156,12 @@ export async function verifyConfirmOTP(phone: string, token: string): Promise<bo
   const code = token.replace(/\D/g, "");
   if (code.length !== 6) return false;
 
-  if (isDemoOtpMode) return code === DEMO_OTP_CODE;
+  if (isDemoOtpMode) {
+    // Second lock: `isDemoOtpMode` is already false in a production build, and this makes it
+    // impossible for a future caller to honour the shared code there by mistake.
+    assertDemoOtpAllowed();
+    return demoCodeAccepted(code);
+  }
 
   const { error } = await supabase.auth.verifyOtp({
     phone: normalizePhone(phone),
@@ -269,6 +284,11 @@ function isUnreachable(error: { status?: number } | null | undefined): boolean {
 }
 
 async function ensureAuthSession(phone: string): Promise<{ ok: boolean; error?: string }> {
+  // This bridge turns a phone number into a password-derivable Supabase identity. It belongs to
+  // demo sign-in only, so it refuses to run where demo sign-in is not allowed — belt and braces
+  // with the `isDemoOtpMode` check at every call site.
+  assertDemoOtpAllowed();
+
   const { email, password } = phoneToAuthCredentials(phone);
 
   // A session that belongs to a DIFFERENT account is not this person's identity.
@@ -464,8 +484,10 @@ export async function verifyOTPAndResolveUser(
   }
 
   if (isDemoOtpMode) {
-    // Demo mode: the shared constant stands in for the SMS.
-    if (token !== DEMO_OTP_CODE) return { status: "wrong_otp" };
+    // Demo mode: the shared constant stands in for the SMS. The decision itself lives in
+    // authMode.ts so this path and the confirmation path cannot drift apart.
+    assertDemoOtpAllowed();
+    if (!demoCodeAccepted(token)) return { status: "wrong_otp" };
   } else {
     // Live mode: Supabase verifies the code it sent, and establishes the
     // session as part of doing so.

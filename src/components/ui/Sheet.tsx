@@ -108,7 +108,14 @@ export default function Sheet({
           )}
         </div>
 
-        <div className="overflow-y-auto pb-6">{children}</div>
+        {/*
+          `min-h-0` belongs with `overflow-y-auto` here: a flex item's default `min-height` is its
+          CONTENT height, so without it this box will not shrink and the sheet's `maxHeight` cannot
+          bind — the scrolling would happen nowhere and a long sheet's last rows would sit past the
+          bottom edge. Sheets in this app carry variable-length content (the location picker's
+          result list is one), so the body is made shrinkable on purpose.
+        */}
+        <div className="overflow-y-auto pb-6 min-h-0">{children}</div>
       </div>
     </div>
   );

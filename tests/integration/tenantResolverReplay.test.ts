@@ -83,15 +83,74 @@ afterAll(async () => {
 });
 
 describe('the active shop has exactly one owner', () => {
-  it('only resolve_active_shop derives the active shop from the first membership', async () => {
+  /**
+   * The property, not a snapshot of the function list.
+   *
+   * This test used to assert the exact list of functions whose body contains
+   * `ORDER BY m.created_at ASC` and expect `['resolve_active_shop']`. That list is not the rule:
+   * the rule is *who owns the decision*. Measured against QA, three functions contain the shape,
+   * and two of them are legitimate:
+   *
+   *   resolve_active_shop      the owner — selection, then oldest membership, then users.shop_id.
+   *   authorize_business_action reads current_shop_id() first (line before the fallback) and only
+   *                            falls back to the oldest membership when there is no usable active
+   *                            shop. The chain still decides; the fallback is the pre-0149
+   *                            behaviour for memberships with no selection.
+   *   resolve_invite           asks a different question entirely — the first membership of an
+   *                            INVITED PHONE in a given shop (`m.tenant_id = p_shop_id` plus a phone
+   *                            match), not the caller's own shop. Its query is not caller-scoped.
+   *
+   * So the assertion is: the shape must still exist and belong to `resolve_active_shop`, and any
+   * CALLER-SCOPED function that contains it must consult the chain *before* it falls back. A
+   * function that derives the caller's shop from the oldest membership without asking the chain
+   * first is the regression this guards (that is what 0165 reintroduced), and it fails here.
+   *
+   * The limit is stated rather than implied: presence and order are checked, semantics are not. A
+   * function that consults the chain and then overrides its answer would still pass.
+   */
+  it('only resolve_active_shop owns the active-shop derivation', async () => {
     const { rows } = await client.query(
-      `SELECT p.proname
+      `SELECT p.proname, pg_get_functiondef(p.oid) AS def
          FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
         WHERE n.nspname = 'public' AND p.prokind = 'f'
-          AND pg_get_functiondef(p.oid) LIKE '%ORDER BY m.created_at ASC%'
-        ORDER BY 1`,
+          -- ILIKE, not LIKE: the first version of this test searched case-sensitively, so a
+          -- function that wrote the clause in lower case was invisible to it. Found by injecting
+          -- exactly that and watching the check stay green.
+          AND pg_get_functiondef(p.oid) ILIKE '%ORDER BY m.created_at ASC%'`,
     );
-    expect(rows.map((r: any) => r.proname)).toEqual(['resolve_active_shop']);
+    const matching = rows.map((r: any) => String(r.proname));
+
+    // Non-vacuity: the shape must still be there, and the owner must be one of the matches.
+    expect(matching, 'no function derives anything from the oldest membership any more')
+      .toContain('resolve_active_shop');
+
+    const chainCall = /(current_shop_id|resolve_active_shop)\s*\(/;
+    // Any identifier on the right of `m.user_id =` — not a list of the three names in use today.
+    // Measured against QA: exactly two functions match this (resolve_active_shop and
+    // authorize_business_action), and resolve_invite's reversed `u.id = m.user_id` join does not.
+    const callerScopedFallback = /m\.user_id\s*=\s*[a-z_][\w.]*[\s\S]{0,400}?ORDER BY m\.created_at ASC/i;
+
+    const problems: string[] = [];
+    for (const row of rows) {
+      const name = String(row.proname);
+      if (name === 'resolve_active_shop') continue; // the owner, by definition
+      const def = String(row.def);
+      const fallback = callerScopedFallback.exec(def);
+      if (!fallback) continue; // not a caller-scoped derivation of the active shop
+      const chain = chainCall.exec(def);
+      if (!chain) {
+        problems.push(`${name}: derives the caller's shop from the oldest membership and never asks the chain`);
+        continue;
+      }
+      if (chain.index > fallback.index) {
+        problems.push(`${name}: asks the chain only AFTER falling back to the oldest membership`);
+      }
+    }
+
+    expect(
+      problems,
+      'these functions let row age decide the active shop instead of the chain — read resolve_active_shop() first',
+    ).toEqual([]);
   });
 
   it('every authority resolver reads the chain', async () => {

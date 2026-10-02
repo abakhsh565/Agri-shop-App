@@ -13,8 +13,18 @@ import { uploadImage } from "@/lib/storage";
 import { supabase } from "@/lib/supabase";
 import { useUIStore } from "@/stores/uiStore";
 import { Lock, Bell, Globe, ChevronRight, Moon, Sun, ClipboardList, Camera, Loader2, Save, LogOut, X, Trash2, Check, Fingerprint } from "lucide-react";
-import { biometricPlatformAvailable, enrolBiometric, hasBiometricEnrolment, removeBiometric } from "@/lib/biometric";
+import {
+  biometricUnavailableReason,
+  BIOMETRIC_REASON_KEY,
+  enrolBiometric,
+  hasBiometricEnrolment,
+  removeBiometric,
+  type BiometricReason,
+} from "@/lib/biometric";
 import { deleteAccount } from "@/lib/auth";
+import { entryDoor } from "@/lib/entryDoor";
+import { forgetLastProfile, forgetPhoneVerification } from "@/lib/loginWindow";
+import { clearPin } from "@/lib/pinLock";
 import { APP_NAME, APP_VERSION } from "@/lib/brand";
 import { useEffect, useRef, useState } from "react";
 import { useNotificationStore } from "@/stores/notificationStore";
@@ -36,6 +46,8 @@ export default function SettingsPage() {
    * on, off, and this-phone-cannot (which is a fact, not an action).
    */
   const [fingerprint, setFingerprint] = useState<"checking" | "on" | "off" | "unavailable">("checking");
+  /** When it reads "unavailable", this is why — the device's own answer, not a guess. */
+  const [fingerprintReason, setFingerprintReason] = useState<BiometricReason | null>(null);
   const [fingerprintBusy, setFingerprintBusy] = useState(false);
   const [confirmFingerprintOff, setConfirmFingerprintOff] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(user?.photoUrl ?? null);
@@ -58,8 +70,21 @@ export default function SettingsPage() {
   async function handleDeleteAccount() {
     setDeletingAccount(true);
     try {
-      if (user) clearDeviceSession(user.phone);
       await deleteAccount();
+      if (user) {
+        // An erased account must leave no route back in — not the remembered profile, not the
+        // window that says its number was confirmed, and not the PIN marker the launch screen
+        // reads. Without this the next launch drew a keypad for an account that no longer exists.
+        //
+        // AFTER the erasure, never before: forgetting the device first meant a deletion the
+        // database refused still left a phone that had forgotten its owner, so the next launch
+        // asked for a number and a code over an account that was still there — and the
+        // registration that followed attached to it. A failure now leaves the device as it was.
+        clearDeviceSession(user.phone);
+        forgetLastProfile();
+        forgetPhoneVerification(user.id);
+        clearPin(user.id);
+      }
       addToast(t("settings.deleteAccount.done"), "success");
       logout();
       navigate("/login", { replace: true });
@@ -100,8 +125,12 @@ export default function SettingsPage() {
       setFingerprint("on");
       return;
     }
-    biometricPlatformAvailable().then((available) => {
-      if (alive) setFingerprint(available ? "off" : "unavailable");
+    // The reason is kept, not just the verdict: "this phone cannot use a fingerprint" told the
+    // employee nothing, and read as a fault in a phone that uses fingerprints elsewhere.
+    biometricUnavailableReason().then((reason) => {
+      if (!alive) return;
+      setFingerprintReason(reason);
+      setFingerprint(reason === null ? "off" : "unavailable");
     });
     return () => { alive = false; };
   }, [user]);
@@ -115,6 +144,7 @@ export default function SettingsPage() {
         setFingerprint("on");
         addToast(t("fingerprint.enrolled"), "success");
       } else if (result.status === "unsupported") {
+        setFingerprintReason(await biometricUnavailableReason());
         setFingerprint("unavailable");
         addToast(t("fingerprint.unsupported"), "error");
       } else if (result.status === "cancelled") {
@@ -127,9 +157,22 @@ export default function SettingsPage() {
     }
   }
 
-  function handleLogout() {
+  /**
+   * Signing out — which is not the same as this phone forgetting its owner.
+   *
+   * The session ends and the cached rows are dropped; then the same decision the launch screen
+   * makes is asked again (`lib/entryDoor.ts`), so a phone that can open with the PIN shows the
+   * keypad rather than the phone field it just walked away from.
+   */
+  async function handleLogout() {
     if (user) clearDeviceSession(user.phone);
     logout();
+    const door = await entryDoor();
+    if (door.door === "pin") {
+      useAuthStore.getState().setUser(door.user);
+      navigate("/login/pin", { replace: true, state: { user: door.user } });
+      return;
+    }
     navigate("/login", { replace: true });
   }
 
@@ -311,8 +354,9 @@ export default function SettingsPage() {
               meta={
                 fingerprint === "on" ? t("settings.fingerprint.on")
                 : fingerprint === "off" ? t("settings.fingerprint.off")
-                : fingerprint === "unavailable" ? t("settings.fingerprint.unavailable")
-                : undefined
+                : fingerprint === "unavailable"
+                  ? t(BIOMETRIC_REASON_KEY[fingerprintReason ?? "unknown"])
+                  : undefined
               }
               testId="settings-fingerprint"
               trailing={

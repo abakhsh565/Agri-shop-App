@@ -85,6 +85,14 @@ export default function EmployeeDetailPage() {
   const [confirmAction, setConfirmAction] = useState<null | "deactivate" | "cancelInvite" | "reactivate">(null);
   const [statusBusy, setStatusBusy] = useState(false);
   const statusBusyRef = useRef(false);
+  // The fix-sign-in action's own state. It lives with the other hooks, ABOVE the
+  // `if (!emp)` early return below, because a hook declared under that return runs only
+  // on the render where the employee has already loaded — React sees a changed hook
+  // count between the two renders and unmounts the page with "Rendered more hooks than
+  // during the previous render". A deep link to an employee (the store not ready on the
+  // first render) hit exactly that.
+  const [loginFixing, setLoginFixing] = useState(false);
+  const [loginFixed, setLoginFixed] = useState(false);
 
   // Load permissions and branches on mount
   useEffect(() => {
@@ -166,8 +174,6 @@ export default function EmployeeDetailPage() {
   // An invitation that has not been accepted yet: the person holds a membership
   // but every authorization path denies it until they sign in for the first time.
   const isInvited = emp.membershipStatus === "pending";
-  const [loginFixing, setLoginFixing] = useState(false);
-  const [loginFixed, setLoginFixed] = useState(false);
 
   /** Re-run the authorized provisioner so an invited employee can actually sign in. */
   async function handleFixSignIn() {
@@ -227,6 +233,13 @@ export default function EmployeeDetailPage() {
 
   async function saveAccessChanges() {
     if (!employeeId) return;
+    // Unticking the last branch leaves a member with nowhere to work — not "all branches", which
+    // is the explicit null above. Their records would be written without a branch and then be
+    // invisible to every branch-limited reader. Refused here in words, and by the database (0171).
+    if (Array.isArray(editBranchScope) && editBranchScope.length === 0) {
+      addToast(t("addEmployee.errNoBranch"), "error");
+      return;
+    }
     setSaving(true);
     try {
       // The employee's exceptions relative to the SELECTED role, plus any stored

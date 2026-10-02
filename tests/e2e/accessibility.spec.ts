@@ -59,10 +59,15 @@ const ROUTES = [
 const BASELINE = {
   buttonNoName: 0,
   inputNoLabel: 0,
-  // 44 is exactly the bottom tab bar — four 90x41 buttons on each of the eleven content
-  // routes. It is the same on every shop, so it is frozen tight: a new undersized icon
-  // button, tab or inline action anywhere trips this immediately.
-  smallTarget: 44,
+  // The bottom tab bar used to be the whole of this number: four 90x41 buttons on each of
+  // the eleven content routes, 44 in total. That is a real undersized-target gap, so the
+  // lane refused every later change that grew it — which is exactly what happened when the
+  // assistant tab shipped and the count went to 55 (five tabs × eleven routes, measured
+  // 2026-10-02). The fix went into the shell rather than into this file: every tab now
+  // carries an explicit `min-h-[44px]` floor, so the app's own chrome measures 0 and is
+  // pinned there. A new undersized icon button, tab or inline action anywhere trips this
+  // immediately, with no data-dependent excuse.
+  smallTarget: 0,
   // Measured 41 today. The old combined figure was observed between 72 and 87, and with the
   // structural half pinned at 44 that band is 28–43 chips, so 43 is the ceiling a shop with
   // a fuller catalogue can reach. Beyond that is a new compact control, not more data.

@@ -4,8 +4,11 @@
       "C:\\Program Files\\nodejs\\node.exe",
       "C:\\Users\\mg\\Downloads\\Agrishop Inventory management system - New\\node_modules\\@playwright\\test\\cli.js",
       "test",
-      "tests/e2e/accessUx.spec.ts",
-      "--workers=1"
+      "tests/e2e/dependencyContinuity.spec.ts",
+      "tests/e2e/setupCompletion.spec.ts",
+      "tests/e2e/crossScreenSync.spec.ts",
+      "tests/e2e/rtlLtr.spec.ts",
+      "tests/e2e/retryAfterTimeout.spec.ts"
     ],
     "configFile": "C:\\Users\\mg\\Downloads\\Agrishop Inventory management system - New\\playwright.config.ts",
     "rootDir": "C:/Users/mg/Downloads/Agrishop Inventory management system - New/tests/e2e",
@@ -71,41 +74,34 @@
       "env": {
         "VITE_SUPABASE_URL": "https://bpybjrjenwccowvtrevu.supabase.co",
         "VITE_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJweWJqcmplbndjY293dnRyZXZ1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkwMjY1NzIsImV4cCI6MjEwNDYwMjU3Mn0.nHzYWdjmZ_TEp_2mzqeinCNoXeLvVdvOETgvJXxldS0",
-        "VITE_SUPABASE_PROJECT_ID": "bpybjrjenwccowvtrevu"
+        "VITE_SUPABASE_PROJECT_ID": "bpybjrjenwccowvtrevu",
+        "VITE_APP_ENV": "staging",
+        "VITE_OTP_DELIVERY": "demo"
       }
     }
   },
   "suites": [
     {
-      "title": "accessUx.spec.ts",
-      "file": "accessUx.spec.ts",
+      "title": "crossScreenSync.spec.ts",
+      "file": "crossScreenSync.spec.ts",
       "column": 0,
       "line": 0,
       "specs": [],
       "suites": [
         {
-          "title": "Employee job & access — simple for the owner, exact underneath",
-          "file": "accessUx.spec.ts",
-          "line": 132,
+          "title": "Cross-Screen Synchronization",
+          "file": "crossScreenSync.spec.ts",
+          "line": 29,
           "column": 6,
           "specs": [
             {
-              "title": "1. Adding an employee asks only who / what job / where, with no RBAC jargon",
+              "title": "Customer: name change propagates from profile to list",
               "ok": true,
               "tags": [],
               "tests": [
                 {
                   "timeout": 120000,
-                  "annotations": [
-                    {
-                      "type": "serial",
-                      "location": {
-                        "file": "C:\\Users\\mg\\Downloads\\Agrishop Inventory management system - New\\tests\\e2e\\accessUx.spec.ts",
-                        "line": 0,
-                        "column": 0
-                      }
-                    }
-                  ],
+                  "annotations": [],
                   "expectedStatus": "passed",
                   "projectId": "e2e",
                   "projectName": "e2e",
@@ -114,50 +110,32 @@
                       "workerIndex": 0,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 24387,
+                      "duration": 24243,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-09-27T19:24:52.187Z",
-                      "annotations": [
-                        {
-                          "type": "serial",
-                          "location": {
-                            "file": "C:\\Users\\mg\\Downloads\\Agrishop Inventory management system - New\\tests\\e2e\\accessUx.spec.ts",
-                            "line": 0,
-                            "column": 0
-                          }
-                        }
-                      ],
+                      "startTime": "2026-10-02T18:14:49.523Z",
+                      "annotations": [],
                       "attachments": []
                     }
                   ],
                   "status": "expected"
                 }
               ],
-              "id": "c14916d0127166104fee-df1bf1959d2a8e746d11",
-              "file": "accessUx.spec.ts",
-              "line": 140,
+              "id": "0d294ec4937b76db6d7d-0b67f697940d8b15b2b7",
+              "file": "crossScreenSync.spec.ts",
+              "line": 50,
               "column": 3
             },
             {
-              "title": "2. Creating from the simplified screen writes the right membership, then the list shows it",
+              "title": "Customer: credit limit change propagates",
               "ok": true,
               "tags": [],
               "tests": [
                 {
                   "timeout": 120000,
-                  "annotations": [
-                    {
-                      "type": "serial",
-                      "location": {
-                        "file": "C:\\Users\\mg\\Downloads\\Agrishop Inventory management system - New\\tests\\e2e\\accessUx.spec.ts",
-                        "line": 0,
-                        "column": 0
-                      }
-                    }
-                  ],
+                  "annotations": [],
                   "expectedStatus": "passed",
                   "projectId": "e2e",
                   "projectName": "e2e",
@@ -166,50 +144,831 @@
                       "workerIndex": 0,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 20238,
+                      "duration": 14715,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-09-27T19:25:17.488Z",
-                      "annotations": [
-                        {
-                          "type": "serial",
-                          "location": {
-                            "file": "C:\\Users\\mg\\Downloads\\Agrishop Inventory management system - New\\tests\\e2e\\accessUx.spec.ts",
-                            "line": 0,
-                            "column": 0
-                          }
-                        }
-                      ],
+                      "startTime": "2026-10-02T18:15:17.397Z",
+                      "annotations": [],
                       "attachments": []
                     }
                   ],
                   "status": "expected"
                 }
               ],
-              "id": "c14916d0127166104fee-1b28fd2db6ee1e4cf8e1",
-              "file": "accessUx.spec.ts",
+              "id": "0d294ec4937b76db6d7d-300440615edb30eb08c5",
+              "file": "crossScreenSync.spec.ts",
+              "line": 85,
+              "column": 3
+            },
+            {
+              "title": "Customer: phone change propagates from profile to list",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "e2e",
+                  "projectName": "e2e",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 12804,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-02T18:15:32.164Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "0d294ec4937b76db6d7d-f0eeab6ae1e897a13520",
+              "file": "crossScreenSync.spec.ts",
+              "line": 107,
+              "column": 3
+            },
+            {
+              "title": "Customer: image change propagates across screens",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "e2e",
+                  "projectName": "e2e",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 12979,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-02T18:15:45.000Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "0d294ec4937b76db6d7d-245d60b1c7dd9818e024",
+              "file": "crossScreenSync.spec.ts",
+              "line": 127,
+              "column": 3
+            },
+            {
+              "title": "Product: name change propagates from detail to list",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "e2e",
+                  "projectName": "e2e",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 16897,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-02T18:15:58.013Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "0d294ec4937b76db6d7d-baf54c15fc16a836d9f5",
+              "file": "crossScreenSync.spec.ts",
+              "line": 150,
+              "column": 3
+            },
+            {
+              "title": "Product: price change propagates",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "e2e",
+                  "projectName": "e2e",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 12792,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-02T18:16:15.004Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "0d294ec4937b76db6d7d-57d85e152a397c5d15e5",
+              "file": "crossScreenSync.spec.ts",
+              "line": 183,
+              "column": 3
+            },
+            {
+              "title": "Product: stock change propagates",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "e2e",
+                  "projectName": "e2e",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 11891,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-02T18:16:27.873Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "0d294ec4937b76db6d7d-91fbdd7e716a20bb69f6",
+              "file": "crossScreenSync.spec.ts",
+              "line": 205,
+              "column": 3
+            },
+            {
+              "title": "Company: name change propagates from detail to list",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "e2e",
+                  "projectName": "e2e",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 18092,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-02T18:16:39.794Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "0d294ec4937b76db6d7d-0c9f490dbe13bffae80a",
+              "file": "crossScreenSync.spec.ts",
+              "line": 227,
+              "column": 3
+            },
+            {
+              "title": "Company: payable change propagates",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "e2e",
+                  "projectName": "e2e",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 11888,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-02T18:16:57.917Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "0d294ec4937b76db6d7d-d24607417e09f9b8c299",
+              "file": "crossScreenSync.spec.ts",
+              "line": 260,
+              "column": 3
+            },
+            {
+              "title": "Employee: name change propagates from detail to list",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "e2e",
+                  "projectName": "e2e",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 20608,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-02T18:17:09.840Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "0d294ec4937b76db6d7d-5a13d4d8be2392ce39b0",
+              "file": "crossScreenSync.spec.ts",
+              "line": 282,
+              "column": 3
+            },
+            {
+              "title": "Employee: active status change propagates",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "e2e",
+                  "projectName": "e2e",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 15462,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-02T18:17:30.507Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "0d294ec4937b76db6d7d-5e4c8d879c2c13eb75a0",
+              "file": "crossScreenSync.spec.ts",
+              "line": 315,
+              "column": 3
+            },
+            {
+              "title": "Navigation: each screen mount loads fresh data from store",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "e2e",
+                  "projectName": "e2e",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 18445,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-02T18:17:46.054Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "0d294ec4937b76db6d7d-93a67cc6ea6ddc2d02fc",
+              "file": "crossScreenSync.spec.ts",
+              "line": 339,
+              "column": 3
+            },
+            {
+              "title": "No stale state: dashboard and list screens show consistent data",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "e2e",
+                  "projectName": "e2e",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 17961,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-02T18:18:04.541Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "0d294ec4937b76db6d7d-2b810a5263e6f4756984",
+              "file": "crossScreenSync.spec.ts",
+              "line": 372,
+              "column": 3
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "dependencyContinuity.spec.ts",
+      "file": "dependencyContinuity.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "Missing dependencies never dead-end a workflow",
+          "file": "dependencyContinuity.spec.ts",
+          "line": 117,
+          "column": 6,
+          "specs": [
+            {
+              "title": "sale with no products → create the supplier and the product in place → sell it",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "e2e",
+                  "projectName": "e2e",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 25149,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-02T18:18:28.584Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "a9b4ac78b541d12420de-84f580671e9782adf957",
+              "file": "dependencyContinuity.spec.ts",
+              "line": 130,
+              "column": 3
+            },
+            {
+              "title": "a search with no matches offers no create action — nothing is missing",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "e2e",
+                  "projectName": "e2e",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 14268,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-02T18:18:54.574Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "a9b4ac78b541d12420de-273828a2aa3239385529",
+              "file": "dependencyContinuity.spec.ts",
+              "line": 229,
+              "column": 3
+            },
+            {
+              "title": "the same states in Urdu/RTL and in dark, with no empty-state clutter on Home",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "e2e",
+                  "projectName": "e2e",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 15131,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-02T18:19:08.869Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "a9b4ac78b541d12420de-e95c12ec116d1b276e0d",
+              "file": "dependencyContinuity.spec.ts",
+              "line": 268,
+              "column": 3
+            },
+            {
+              "title": "an employee cannot create stock, so they are told who can instead of given a dead link",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "e2e",
+                  "projectName": "e2e",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 12980,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-02T18:19:24.031Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "a9b4ac78b541d12420de-ed4ac935b8eca91ba1bf",
+              "file": "dependencyContinuity.spec.ts",
+              "line": 370,
+              "column": 3
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "retryAfterTimeout.spec.ts",
+      "file": "retryAfterTimeout.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "Browser retry after a timed-out write",
+          "file": "retryAfterTimeout.spec.ts",
+          "line": 22,
+          "column": 6,
+          "specs": [
+            {
+              "title": "one sale — the timed-out attempt is reused on retry, never repeated",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "e2e",
+                  "projectName": "e2e",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 16562,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-02T18:19:41.882Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "f6deba2a1fcb9fcbf40d-50d70b0ef1312b3959a6",
+              "file": "retryAfterTimeout.spec.ts",
+              "line": 41,
+              "column": 3
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "rtlLtr.spec.ts",
+      "file": "rtlLtr.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "RTL/LTR + Urdu Support",
+          "file": "rtlLtr.spec.ts",
+          "line": 71,
+          "column": 6,
+          "specs": [
+            {
+              "title": "1. Language switch sets document.dir correctly",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "e2e",
+                  "projectName": "e2e",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 12040,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-02T18:20:05.724Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "9ec77065fd6e7341f424-1ac3e05d8402e0822922",
+              "file": "rtlLtr.spec.ts",
+              "line": 81,
+              "column": 3
+            },
+            {
+              "title": "2. Dashboard LTR: English content, left-aligned elements",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "e2e",
+                  "projectName": "e2e",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 13663,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-02T18:20:18.570Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "9ec77065fd6e7341f424-b68c648e8395c9159f66",
+              "file": "rtlLtr.spec.ts",
+              "line": 125,
+              "column": 3
+            },
+            {
+              "title": "3. Dashboard RTL: Urdu content, right-aligned elements",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "e2e",
+                  "projectName": "e2e",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 16281,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-02T18:20:32.271Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "9ec77065fd6e7341f424-4d138ae384378af727f0",
+              "file": "rtlLtr.spec.ts",
+              "line": 145,
+              "column": 3
+            },
+            {
+              "title": "4. Customer list: LTR and RTL rendering",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "e2e",
+                  "projectName": "e2e",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 13020,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-02T18:20:48.590Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "9ec77065fd6e7341f424-b72e6f8979616a6e83da",
+              "file": "rtlLtr.spec.ts",
+              "line": 165,
+              "column": 3
+            },
+            {
+              "title": "5. NavHeader: renders with correct direction",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "e2e",
+                  "projectName": "e2e",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 11801,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-02T18:21:01.645Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "9ec77065fd6e7341f424-3ac22d2c81abd88f489f",
+              "file": "rtlLtr.spec.ts",
+              "line": 186,
+              "column": 3
+            },
+            {
+              "title": "6. SearchBar: renders in RTL mode",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "e2e",
+                  "projectName": "e2e",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 12687,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-02T18:21:13.488Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "9ec77065fd6e7341f424-27279b983a7d247c96c3",
+              "file": "rtlLtr.spec.ts",
               "line": 203,
               "column": 3
             },
             {
-              "title": "3. The same flow in Urdu: RTL, translated, no English copy leaking",
+              "title": "7. Product list: LTR and RTL rendering",
               "ok": true,
               "tags": [],
               "tests": [
                 {
                   "timeout": 120000,
-                  "annotations": [
-                    {
-                      "type": "serial",
-                      "location": {
-                        "file": "C:\\Users\\mg\\Downloads\\Agrishop Inventory management system - New\\tests\\e2e\\accessUx.spec.ts",
-                        "line": 0,
-                        "column": 0
-                      }
-                    }
-                  ],
+                  "annotations": [],
                   "expectedStatus": "passed",
                   "projectId": "e2e",
                   "projectName": "e2e",
@@ -218,50 +977,32 @@
                       "workerIndex": 0,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 14974,
+                      "duration": 10924,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-09-27T19:25:37.756Z",
-                      "annotations": [
-                        {
-                          "type": "serial",
-                          "location": {
-                            "file": "C:\\Users\\mg\\Downloads\\Agrishop Inventory management system - New\\tests\\e2e\\accessUx.spec.ts",
-                            "line": 0,
-                            "column": 0
-                          }
-                        }
-                      ],
+                      "startTime": "2026-10-02T18:21:26.211Z",
+                      "annotations": [],
                       "attachments": []
                     }
                   ],
                   "status": "expected"
                 }
               ],
-              "id": "c14916d0127166104fee-4aa919e54e44cccf4480",
-              "file": "accessUx.spec.ts",
-              "line": 351,
+              "id": "9ec77065fd6e7341f424-3075a64e7c3ea12d58b9",
+              "file": "rtlLtr.spec.ts",
+              "line": 224,
               "column": 3
             },
             {
-              "title": "4. Employee detail explains role, place and access without RBAC vocabulary",
+              "title": "8. Admin dashboard: LTR and RTL rendering",
               "ok": true,
               "tags": [],
               "tests": [
                 {
                   "timeout": 120000,
-                  "annotations": [
-                    {
-                      "type": "serial",
-                      "location": {
-                        "file": "C:\\Users\\mg\\Downloads\\Agrishop Inventory management system - New\\tests\\e2e\\accessUx.spec.ts",
-                        "line": 0,
-                        "column": 0
-                      }
-                    }
-                  ],
+                  "annotations": [],
                   "expectedStatus": "passed",
                   "projectId": "e2e",
                   "projectName": "e2e",
@@ -270,50 +1011,32 @@
                       "workerIndex": 0,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 10333,
+                      "duration": 12468,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-09-27T19:25:52.762Z",
-                      "annotations": [
-                        {
-                          "type": "serial",
-                          "location": {
-                            "file": "C:\\Users\\mg\\Downloads\\Agrishop Inventory management system - New\\tests\\e2e\\accessUx.spec.ts",
-                            "line": 0,
-                            "column": 0
-                          }
-                        }
-                      ],
+                      "startTime": "2026-10-02T18:21:37.160Z",
+                      "annotations": [],
                       "attachments": []
                     }
                   ],
                   "status": "expected"
                 }
               ],
-              "id": "c14916d0127166104fee-5f3076b881e6d1fbc2f7",
-              "file": "accessUx.spec.ts",
-              "line": 419,
+              "id": "9ec77065fd6e7341f424-58e8617abcbe9c27a6c7",
+              "file": "rtlLtr.spec.ts",
+              "line": 243,
               "column": 3
             },
             {
-              "title": "5. Customize access saves an override in the DB, and \"use role access only\" removes it",
+              "title": "9. Settings page: language toggle works",
               "ok": true,
               "tags": [],
               "tests": [
                 {
                   "timeout": 120000,
-                  "annotations": [
-                    {
-                      "type": "serial",
-                      "location": {
-                        "file": "C:\\Users\\mg\\Downloads\\Agrishop Inventory management system - New\\tests\\e2e\\accessUx.spec.ts",
-                        "line": 0,
-                        "column": 0
-                      }
-                    }
-                  ],
+                  "annotations": [],
                   "expectedStatus": "passed",
                   "projectId": "e2e",
                   "projectName": "e2e",
@@ -322,50 +1045,32 @@
                       "workerIndex": 0,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 16969,
+                      "duration": 11215,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-09-27T19:26:03.131Z",
-                      "annotations": [
-                        {
-                          "type": "serial",
-                          "location": {
-                            "file": "C:\\Users\\mg\\Downloads\\Agrishop Inventory management system - New\\tests\\e2e\\accessUx.spec.ts",
-                            "line": 0,
-                            "column": 0
-                          }
-                        }
-                      ],
+                      "startTime": "2026-10-02T18:21:49.656Z",
+                      "annotations": [],
                       "attachments": []
                     }
                   ],
                   "status": "expected"
                 }
               ],
-              "id": "c14916d0127166104fee-e13cc929d2bafefb1c56",
-              "file": "accessUx.spec.ts",
-              "line": 443,
+              "id": "9ec77065fd6e7341f424-581eb1651509e09e8c96",
+              "file": "rtlLtr.spec.ts",
+              "line": 262,
               "column": 3
             },
             {
-              "title": "6. Access can be customized while inviting, and a role change keeps those exceptions",
+              "title": "10. No horizontal overflow in RTL mode",
               "ok": true,
               "tags": [],
               "tests": [
                 {
                   "timeout": 120000,
-                  "annotations": [
-                    {
-                      "type": "serial",
-                      "location": {
-                        "file": "C:\\Users\\mg\\Downloads\\Agrishop Inventory management system - New\\tests\\e2e\\accessUx.spec.ts",
-                        "line": 0,
-                        "column": 0
-                      }
-                    }
-                  ],
+                  "annotations": [],
                   "expectedStatus": "passed",
                   "projectId": "e2e",
                   "projectName": "e2e",
@@ -374,50 +1079,32 @@
                       "workerIndex": 0,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 22588,
+                      "duration": 20471,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-09-27T19:26:20.158Z",
-                      "annotations": [
-                        {
-                          "type": "serial",
-                          "location": {
-                            "file": "C:\\Users\\mg\\Downloads\\Agrishop Inventory management system - New\\tests\\e2e\\accessUx.spec.ts",
-                            "line": 0,
-                            "column": 0
-                          }
-                        }
-                      ],
+                      "startTime": "2026-10-02T18:22:00.896Z",
+                      "annotations": [],
                       "attachments": []
                     }
                   ],
                   "status": "expected"
                 }
               ],
-              "id": "c14916d0127166104fee-f82216cf1786cc4b8ad5",
-              "file": "accessUx.spec.ts",
-              "line": 482,
+              "id": "9ec77065fd6e7341f424-dc56c23b8deb2c1c330d",
+              "file": "rtlLtr.spec.ts",
+              "line": 283,
               "column": 3
             },
             {
-              "title": "7. A partly typed code says so instead of waiting in silence",
+              "title": "11. CSS: Tailwind logical padding (ps-4/pe-4) works in RTL",
               "ok": true,
               "tags": [],
               "tests": [
                 {
                   "timeout": 120000,
-                  "annotations": [
-                    {
-                      "type": "serial",
-                      "location": {
-                        "file": "C:\\Users\\mg\\Downloads\\Agrishop Inventory management system - New\\tests\\e2e\\accessUx.spec.ts",
-                        "line": 0,
-                        "column": 0
-                      }
-                    }
-                  ],
+                  "annotations": [],
                   "expectedStatus": "passed",
                   "projectId": "e2e",
                   "projectName": "e2e",
@@ -426,31 +1113,413 @@
                       "workerIndex": 0,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 7813,
+                      "duration": 15985,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-09-27T19:26:42.821Z",
-                      "annotations": [
-                        {
-                          "type": "serial",
-                          "location": {
-                            "file": "C:\\Users\\mg\\Downloads\\Agrishop Inventory management system - New\\tests\\e2e\\accessUx.spec.ts",
-                            "line": 0,
-                            "column": 0
-                          }
-                        }
-                      ],
+                      "startTime": "2026-10-02T18:22:21.391Z",
+                      "annotations": [],
                       "attachments": []
                     }
                   ],
                   "status": "expected"
                 }
               ],
-              "id": "c14916d0127166104fee-ece54a0033a88108f304",
-              "file": "accessUx.spec.ts",
-              "line": 566,
+              "id": "9ec77065fd6e7341f424-c40de753a0fbfcb3b778",
+              "file": "rtlLtr.spec.ts",
+              "line": 311,
+              "column": 3
+            },
+            {
+              "title": "12. ConfirmDialog: centered in both LTR and RTL",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "e2e",
+                  "projectName": "e2e",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 11560,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-02T18:22:37.403Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "9ec77065fd6e7341f424-d636e4c3bc26649351da",
+              "file": "rtlLtr.spec.ts",
+              "line": 330,
+              "column": 3
+            },
+            {
+              "title": "13. Text alignment: text-start works in both directions",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "e2e",
+                  "projectName": "e2e",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 11607,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-02T18:22:48.985Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "9ec77065fd6e7341f424-a6aed7b36c8318f24010",
+              "file": "rtlLtr.spec.ts",
+              "line": 349,
+              "column": 3
+            },
+            {
+              "title": "14. Padding: ps-* and pe-* work in RTL",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "e2e",
+                  "projectName": "e2e",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 11939,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-02T18:23:00.617Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "9ec77065fd6e7341f424-7cb5f3d8f156c34059d4",
+              "file": "rtlLtr.spec.ts",
+              "line": 372,
+              "column": 3
+            },
+            {
+              "title": "15. FlexRow: direction attribute flips in RTL",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "e2e",
+                  "projectName": "e2e",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 12624,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-02T18:23:12.583Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "9ec77065fd6e7341f424-19ba6d06a789bbb4c9be",
+              "file": "rtlLtr.spec.ts",
+              "line": 388,
+              "column": 3
+            },
+            {
+              "title": "16. Multiple pages render in RTL",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "e2e",
+                  "projectName": "e2e",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 29896,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-02T18:23:25.244Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "9ec77065fd6e7341f424-9657005ebdd6c8e8857b",
+              "file": "rtlLtr.spec.ts",
+              "line": 413,
+              "column": 3
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "setupCompletion.spec.ts",
+      "file": "setupCompletion.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "Business setup status is derived and self-retiring",
+          "file": "setupCompletion.spec.ts",
+          "line": 204,
+          "column": 6,
+          "specs": [
+            {
+              "title": "1. empty shop: nothing done, three missing steps each with its action",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "e2e",
+                  "projectName": "e2e",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 15855,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-02T18:24:00.643Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "6d9710c5a7d57669feb4-4d867a3f26ea6883c41f",
+              "file": "setupCompletion.spec.ts",
+              "line": 214,
+              "column": 3
+            },
+            {
+              "title": "2. adding a supplier moves the status, from the real data",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "e2e",
+                  "projectName": "e2e",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 10529,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-02T18:24:17.372Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "6d9710c5a7d57669feb4-32cf798bff5cb4f695ea",
+              "file": "setupCompletion.spec.ts",
+              "line": 252,
+              "column": 3
+            },
+            {
+              "title": "3. complete setup: the guidance disappears by itself",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "e2e",
+                  "projectName": "e2e",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 11905,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-02T18:24:27.933Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "6d9710c5a7d57669feb4-bdcef653d5f95d1cb52c",
+              "file": "setupCompletion.spec.ts",
+              "line": 281,
+              "column": 3
+            },
+            {
+              "title": "4. the block carries the Settings page's own section style, not a new one",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "e2e",
+                  "projectName": "e2e",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 14764,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-02T18:24:39.874Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "6d9710c5a7d57669feb4-425eb9064e27e86a57ff",
+              "file": "setupCompletion.spec.ts",
+              "line": 310,
+              "column": 3
+            },
+            {
+              "title": "6. Home gives a new shop the three steps, in dependency order, and retires them",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "e2e",
+                  "projectName": "e2e",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 17757,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-02T18:24:54.669Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "6d9710c5a7d57669feb4-5f753092201a28ef9cd3",
+              "file": "setupCompletion.spec.ts",
+              "line": 366,
+              "column": 3
+            },
+            {
+              "title": "5. Urdu / RTL renders the same block in Urdu",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "e2e",
+                  "projectName": "e2e",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 16177,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-02T18:25:12.493Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "6d9710c5a7d57669feb4-bbac8d76b9f20f48043c",
+              "file": "setupCompletion.spec.ts",
+              "line": 454,
               "column": 3
             }
           ]
@@ -460,9 +1529,9 @@
   ],
   "errors": [],
   "stats": {
-    "startTime": "2026-09-27T19:24:41.391Z",
-    "duration": 132443.96399999998,
-    "expected": 7,
+    "startTime": "2026-10-02T18:14:47.452Z",
+    "duration": 652003.4010000001,
+    "expected": 40,
     "skipped": 0,
     "unexpected": 0,
     "flaky": 0

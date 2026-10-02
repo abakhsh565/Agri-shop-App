@@ -1,7 +1,20 @@
--- MERGED: two files shared migration version 20260903, which makes a
--- fresh `supabase db push` fail with a duplicate key on
--- supabase_migrations.schema_migrations. Both bodies follow, in the order the
--- runner would have applied them:
+-- MERGED + RENUMBERED. Provenance: this file was authored as
+-- `20260903_credit_limit_requests.sql`, with a twin `20260903_reminder_groups.sql`.
+-- The timestamp-style name was never a valid position in this sequence:
+--   1. it sorted AFTER every 0NNN file (so a naive replay applied it last, long
+--      after 0062_deploy_credit_limit_requests.sql re-created the same table);
+--   2. it collided with its twin under `supabase db push`, which keys
+--      supabase_migrations.schema_migrations by version alone.
+-- The twins were merged in 914d0c93; here the merged body moves to version 0060,
+-- the slot it was always meant to occupy. Numbers 0035-0059 were already taken by
+-- later work, 0060 was free, and the first file that needs this table is 0062
+-- (`deploy_credit_limit_requests`) — so 0060 puts the body exactly where a fresh
+-- replay needs it. Nothing between 0035 and 0059 references `credit_limit_requests`
+-- or `reminder_configs.group_id`, which is what makes the move order-neutral.
+-- No database records version 20260903: 0062's own header says the original
+-- migration was never deployed, and both live ledgers stop long before it.
+--
+-- Both original bodies follow, in the order the runner would have applied them:
 --   1. 20260903_credit_limit_requests.sql
 --   2. 20260903_reminder_groups.sql
 

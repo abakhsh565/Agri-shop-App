@@ -11,6 +11,9 @@ import SetupChecklist from "@/components/ui/SetupChecklist";
 import ShopSetupProgress from "@/components/shop/ShopSetupProgress";
 import { useT } from "@/lib/i18n";
 import { useShopStore, type ShopSummary } from "@/stores/shopStore";
+import { supabase } from "@/lib/supabase";
+import LocationField from "@/components/ui/LocationField";
+import type { PickedPlace } from "@/lib/geo";
 import { useAuthStore } from "@/stores/authStore";
 import { useUIStore } from "@/stores/uiStore";
 import { useRolesStore } from "@/stores/rolesStore";
@@ -80,6 +83,15 @@ export default function ShopSwitcherSheet() {
   // ── The flow's own state ─────────────────────────────────────────────────────
   const [step, setStep] = useState<Step>("list");
   const [name, setName] = useState("");
+  /**
+   * Where the new branch is — collected on step 1, next to its name.
+   *
+   * Step 1 is "which branch is this", and where it is belongs to that question: the name says
+   * what it is called, the place says where it is, and both are answered before anything is
+   * created. The place is optional — a branch can be pinned later from its own screen — but the
+   * field is here because this is when the owner knows.
+   */
+  const [place, setPlace] = useState<PickedPlace | null>(null);
   /** Which of this shop's roles the new one starts with. */
   const [selectedRoleIds, setSelectedRoleIds] = useState<Set<string>>(new Set());
   // Whether the flow's closing confirmation is up. The step is left at 3 behind it, so the
@@ -283,6 +295,35 @@ export default function ShopSwitcherSheet() {
       addToast(message, "error");
       return;
     }
+    //
+    // The new branch's location, saved while the flow still has it.
+    //
+    // The shop exists at this point (it has to, for step 3 to write anything into it), so the
+    // location is written onto it now rather than being held in a form that is about to be
+    // replaced by the next step — a value collected here and dropped on the floor is exactly the
+    // bug that made the reminder sheet collect a config nobody stored.
+    //
+    // A failure does NOT stop the flow: the branch is real and usable, and losing the whole setup
+    // over a pin would be worse than the pin. It IS said out loud, because a location that did
+    // not save must never look like one that did.
+    //
+    if (place) {
+      const newShopId = useShopStore.getState().activeShopId;
+      if (newShopId) {
+        const { error: placeError } = await supabase.rpc("set_place", {
+          p_table: "shops",
+          p_id: newShopId,
+          p_latitude: place.lat,
+          p_longitude: place.lng,
+          p_label: place.label,
+          p_address: place.address,
+          p_source: place.source,
+        });
+        if (placeError) addToast(t("branches.locationFailed"), "error");
+      }
+      setPlace(null);
+    }
+
     // No toast here: the popup at the end of the flow is the confirmation, and two of them
     // for one action is noise. The new shop is already the active one (the server says so and
     // the store adopted it), so step 3 is looking at the right shop by the time it draws.
@@ -409,6 +450,18 @@ export default function ShopSwitcherSheet() {
                   style={{ color: "var(--text-primary)" }}
                 />
               </div>
+              {/* The location, on the same step as the name: both answer "which branch is this".
+                  Picked on a map, never typed — see LocationField. */}
+              <div className="mt-4">
+                <LocationField
+                  value={place}
+                  onChange={setPlace}
+                  label={t("branches.locationLabel")}
+                  hint={t("location.notTyped")}
+                  testId="new-branch-location"
+                />
+              </div>
+
               <Button
                 fullWidth
                 className="mt-3"

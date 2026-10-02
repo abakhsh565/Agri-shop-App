@@ -45,15 +45,47 @@ const BASE_URL = envValue('QA_APP_URL') || envValue('VITE_APP_URL') || 'http://l
  * Clean slate for the graph: no products, no suppliers — the state a brand-new shop
  * is in. Each statement carries a WHERE because the SQL helper refuses an unscoped
  * DELETE on purpose; QA holds nothing but fixture accounts between runs.
+ *
+ * CHILDREN FIRST. The catalogue is referenced by movements, adjustments, barcodes and line
+ * items, so deleting `products` before those throws on the first foreign key — and with the
+ * error swallowed this cleanup silently did nothing, leaving the sale screen full while the
+ * assertions below blamed the app's empty state. The errors are no longer swallowed either:
+ * the empty premise is checked at the end rather than assumed.
  */
 async function clearStockAndSuppliers() {
   for (const table of [
-    'return_items', 'returns', 'sale_items', 'sales',
-    'purchase_items', 'purchases',
-    'product_variants', 'products', 'companies',
+    'sale_submissions', 'voids', 'return_items', 'returns',
+    'sale_items', 'stock_adjustments', 'inventory_movements', 'product_barcodes',
+    'purchase_items', 'purchases', 'supplier_payments',
+    'credit_limit_requests', 'customer_crops', 'customer_payments', 'payments',
+    'reminder_logs', 'reminder_occurrences', 'reminder_configs',
+    'sales', 'product_variants', 'products', 'companies', 'customers',
   ]) {
-    await execSql(`DELETE FROM ${table} WHERE true`).catch(() => undefined);
+    await execSql(`DELETE FROM ${table} WHERE true`);
   }
+  const [left] = await execSql(
+    'SELECT (SELECT count(*) FROM products)::text AS products, (SELECT count(*) FROM product_variants)::text AS variants, (SELECT count(*) FROM companies)::text AS companies',
+  );
+  expect(
+    Number(left.products) + Number(left.variants) + Number(left.companies),
+    `the empty catalogue could not be established (products=${left.products} variants=${left.variants} companies=${left.companies})`,
+  ).toBe(0);
+}
+
+/**
+ * Drop the rows the stores rehydrate from.
+ *
+ * A store paints its cached rows before the network answers, so emptying the database a moment
+ * earlier is not enough: the browser still holds the previous case's product and supplier and
+ * the screen keeps showing them. A device that has never run the app has no such cache, so an
+ * empty-state case starts without it.
+ */
+async function clearRowCache(page: Page) {
+  await page.evaluate(() => {
+    for (const k of Object.keys(localStorage)) {
+      if (k.startsWith('agrishop_cache_')) localStorage.removeItem(k);
+    }
+  });
 }
 
 async function login(page: Page) {
@@ -63,7 +95,9 @@ async function login(page: Page) {
     for (const k of Object.keys(localStorage)) if (/^sb-/.test(k)) localStorage.removeItem(k);
   });
   await page.goto(`${BASE_URL}/login`);
-  await page.getByPlaceholder('e.g. 03001234567').fill(OWNER_PHONE);
+  // The field takes the local 03… form; the 92… constant is read as a country-code paste
+  // and becomes a 10-digit number the validator refuses.
+  await page.getByPlaceholder('e.g. 03001234567').fill(`0${OWNER_PHONE.slice(2)}`);
   await page.getByRole('button', { name: 'Send Code' }).click();
   await page.waitForURL(/\/login\/otp/, { timeout: 20000 });
   const boxes = page.locator('[data-testid^="otp-digit-"]');
@@ -159,13 +193,15 @@ test.describe('Missing dependencies never dead-end a workflow', () => {
 
     // ── 5. Create the product and land back in the sale ─────────────────────────
     const productName = `Dep Test Product ${Date.now()}`;
-    await page.getByPlaceholder('e.g. Karate Insecticide').fill(productName);
-    await page.getByPlaceholder('Unit name — e.g. 500ml, 50kg').fill('1kg');
-    // Variant prices: the first number fields on the form are selling then cost.
-    const numbers = page.locator('input[type="number"]');
-    await numbers.nth(0).fill('1000');
-    await numbers.nth(1).fill('700');
-    await page.getByRole('button', { name: 'Add Product' }).last().click();
+    // The form is one card per pack now, and each card's fields are addressed by test id: the
+    // old "Unit name" placeholder belonged to the single-pack shape and is no longer rendered.
+    await page.getByTestId('product-name').fill(productName);
+    await page.getByTestId('product-pack-size-0').fill('1');
+    await page.getByTestId('product-pack-sell-0').fill('1000');
+    await page.getByTestId('product-pack-cost-0').fill('700');
+    // Opening stock: the sale screen lists what is on the shelf, so the pack needs some.
+    await page.getByTestId('product-pack-stock-0').fill('5');
+    await page.getByTestId('product-save').click();
     await page.waitForTimeout(3500);
 
     expect(page.url(), 'saving the product did not return to the sale it was created from').toContain(
@@ -230,7 +266,11 @@ test.describe('Missing dependencies never dead-end a workflow', () => {
   });
 
   test('the same states in Urdu/RTL and in dark, with no empty-state clutter on Home', async ({ page }) => {
+    // The catalogue is emptied for this case by the shared beforeEach; the browser's copy of it
+    // is dropped here too, because a store paints cached rows for a moment before the network
+    // answers and "not arrived yet" must not be read as "the Urdu copy is missing".
     await login(page);
+    await clearRowCache(page);
 
     // Urdu + RTL, dark: the least-tested combination, and the one the shop owner uses.
     //
@@ -264,6 +304,14 @@ test.describe('Missing dependencies never dead-end a workflow', () => {
       took.dir,
       `the language switch did not take, so the copy checks below would be meaningless. dir=${took.dir} lang=${took.lang} stored=${took.stored}`,
     ).toBe('rtl');
+
+    // Wait for the screen to settle on its own answer before reading its words: a revalidating
+    // store shows the previous rows for a moment, and "the empty state has not arrived yet" must
+    // not be read as "the Urdu copy is missing".
+    await expect(
+      page.getByText('ابھی کوئی سامان نہیں', { exact: false }),
+      'the sale screen never showed its empty state after the catalogue was emptied',
+    ).toBeVisible({ timeout: 15000 });
 
     const state = await page.evaluate(() => ({
       dir: document.documentElement.dir,
@@ -320,7 +368,10 @@ test.describe('Missing dependencies never dead-end a workflow', () => {
   });
 
   test('an employee cannot create stock, so they are told who can instead of given a dead link', async ({ page }) => {
+    // Same as the case above: "ask the owner to add products" is the empty catalogue's sentence,
+    // so the empty catalogue (and the browser's cache of a fuller one) is established first.
     await login(page);
+    await clearRowCache(page);
 
     // Impersonate the employee shell for this assertion: the graph decides availability
     // from the shell + permission, and the employee shell has no /inventory/new route.

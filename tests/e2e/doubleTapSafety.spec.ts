@@ -1,5 +1,6 @@
 /**
- * E2E: one confirm = one payment, even when the button is tapped twice.
+ * E2E: one confirm = one business action, even when the button is tapped twice — for payments
+ * AND for the sale confirm screen (`sale/cart`, whose button is "Complete Sale").
  *
  * REPORTED BY THE PRODUCT OWNER: "once I create a sale and double-click confirm,
  * it's created twice in the system but it is only one sale… this kind of issues as
@@ -25,16 +26,21 @@ const INITIAL_PAYABLE = 10000;
 const PAYMENT_AMOUNT = 3000;
 
 /** Click the same element twice in one task, i.e. what a double tap really is. */
-async function doubleTapConfirm(page: import('@playwright/test').Page) {
-  return page.evaluate(() => {
+async function doubleTapButton(page: import('@playwright/test').Page, pattern: string) {
+  return page.evaluate((source) => {
+    const re = new RegExp(source, 'i');
     const btn = Array.from(document.querySelectorAll('button')).find((b) =>
-      /^(confirm|record payment|save adjustment)/i.test((b.textContent || '').trim())
+      re.test((b.textContent || '').trim())
     ) as HTMLButtonElement | undefined;
-    if (!btn) throw new Error('confirm button not found');
+    if (!btn) throw new Error(`confirm button not found: ${source}`);
     if (btn.disabled) throw new Error('confirm button was already disabled before the second tap');
     btn.click();
     btn.click();
-  });
+  }, pattern);
+}
+
+async function doubleTapConfirm(page: import('@playwright/test').Page) {
+  return doubleTapButton(page, '^(confirm|record payment|save adjustment)');
 }
 
 test.describe('Double tap safety', () => {
@@ -77,6 +83,58 @@ test.describe('Double tap safety', () => {
     );
     expect(Number(after[0].outstanding_balance)).toBe(INITIAL_BALANCE - PAYMENT_AMOUNT);
     expect(Number(after[0].total_paid)).toBe(PAYMENT_AMOUNT);
+  });
+
+  test('sale: double-tapping Complete Sale creates one sale and deducts stock once', async ({ page }) => {
+    // Deterministic starting point for THIS test's rows (QA only). The count below is ours alone.
+    await execSql(`UPDATE product_variants SET stock_qty = 100 WHERE id = '${QA_IDS.variantA}'`);
+    await execSql(
+      `UPDATE customers SET outstanding_balance = 30000, total_purchases = 80000, total_paid = 50000 WHERE id = '${QA_IDS.customerA}'`
+    );
+    await execSql(`DELETE FROM sale_items WHERE sale_id IN (SELECT id FROM sales WHERE customer_id = '${QA_IDS.customerA}')`);
+    await execSql(`DELETE FROM sales WHERE customer_id = '${QA_IDS.customerA}'`);
+
+    await page.goto(BASE_URL);
+    await page.waitForLoadState('networkidle');
+    await injectAdminAuth(page);
+
+    // The real flow: customer → product → variant → cart → Complete Sale.
+    await page.goto(`${BASE_URL}/employee/sale`);
+    await page.waitForLoadState('networkidle');
+    await page.getByText('QA Customer A').first().click();
+    await page.waitForURL(/\/sale\/products/, { timeout: 15000 });
+    await page.getByText('QA Product A').first().click();
+    await page.waitForURL(/\/sale\/products\//, { timeout: 15000 });
+    await page.getByText('1kg').first().click();
+    await page.getByRole('button', { name: /add to cart/i }).click();
+    await page.waitForURL(/\/sale\/cart/, { timeout: 15000 });
+    await page.getByRole('button', { name: /complete sale/i }).waitFor({ timeout: 15000 });
+
+    await doubleTapButton(page, '^complete sale');
+    await page.waitForTimeout(6000);
+
+    const sales = await execSql(
+      `SELECT id, sale_number, total_amount FROM sales WHERE customer_id = '${QA_IDS.customerA}'`
+    );
+    expect(sales.length, 'a double tap must create exactly one sale').toBe(1);
+
+    const items = await execSql(`SELECT count(*)::int AS n FROM sale_items WHERE sale_id = '${sales[0].id}'`);
+    expect(Number(items[0].n), 'the sale has its one line').toBe(1);
+
+    const stock = await execSql(`SELECT stock_qty FROM product_variants WHERE id = '${QA_IDS.variantA}'`);
+    expect(Number(stock[0].stock_qty), 'stock deducted exactly once').toBe(99);
+
+    const customer = await execSql(`SELECT total_purchases FROM customers WHERE id = '${QA_IDS.customerA}'`);
+    expect(Number(customer[0].total_purchases), 'purchase total raised exactly once').toBe(80500);
+
+    // Reload: the sale list shows the one sale. The row renders customer, time and amount rather
+    // than the sale number, so the assertion is on that row — one row, one sale (the DB count
+    // above remains the authority).
+    await page.goto(`${BASE_URL}/employee/sales`);
+    await page.waitForLoadState('networkidle');
+    const rows = page.getByRole('button', { name: /QA Customer A/ });
+    await expect(rows).toHaveCount(1, { timeout: 15000 });
+    await expect(rows.first()).toContainText('Rs. 500');
   });
 
   test('supplier payment: double-tapping confirm records one payment', async ({ page }) => {

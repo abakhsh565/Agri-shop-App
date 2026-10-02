@@ -63,6 +63,9 @@ import DailyCashReconciliationPage from "@/pages/admin/payments/DailyCashReconci
 
 // Employee pages
 const DashboardPage = React.lazy(() => import("@/pages/employee/dashboard/DashboardPage"));
+// One screen, both shells: the assistant runs on the session that is already open, so there is
+// nothing about it that belongs to the owner side or the employee side.
+const AssistantPage = React.lazy(() => import("@/pages/assistant/AssistantPage"));
 import SelectCustomerPage from "@/pages/employee/sale/SelectCustomerPage";
 import BrowseProductsPage from "@/pages/employee/sale/BrowseProductsPage";
 import VariantSelectorPage from "@/pages/employee/sale/VariantSelectorPage";
@@ -131,6 +134,7 @@ export const router = createBrowserRouter([
     children: [
       { index: true, element: <Navigate to="/admin/dashboard" replace /> },
       { path: "dashboard",  element: <AdminDashboardPage /> },
+      { path: "assistant",  element: <AssistantPage /> },
       { path: "more",       element: <MoreMenuPage /> },
       { path: "guide",      element: <AppGuidePage /> },
       { path: "search", element: <SearchPage /> },
@@ -254,6 +258,7 @@ export const router = createBrowserRouter([
     children: [
       { index: true, element: <Navigate to="/employee/dashboard" replace /> },
       { path: "dashboard", element: <DashboardPage /> },
+      { path: "assistant", element: <AssistantPage /> },
       { path: "sale", element: <SelectCustomerPage /> },
       { path: "sale/products", element: <BrowseProductsPage /> },
       { path: "sale/products/:productId", element: <VariantSelectorPage /> },

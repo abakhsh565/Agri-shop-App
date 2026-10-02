@@ -55,29 +55,31 @@ test.describe('Void sale safety', () => {
     await page.goto(`${BASE_URL}/admin/sales/${SALE_ID}`);
     await page.waitForLoadState('networkidle');
 
-    // The shipped label is t("admin.voidSale") = "Cancel Sale" — "void" is database
-    // vocabulary, and an owner says cancel. This looked for "Void sale" and had been
-    // finding nothing, so the test was passing on a screen that never opened it.
-    await page.getByRole('button', { name: /cancel sale/i }).first().click();
+    // The shipped label is t("admin.voidSale") = "Delete this sale" — the action is
+    // offered in the owner's own language; the row stays in the history, marked deleted.
+    await page.locator('[data-testid="sale-void"]').click();
 
     // The dialog must identify WHICH sale, and say what will happen to stock, the
     // balance and the history — not ask a generic "are you sure?".
-    const dialogTitle = page.getByText(new RegExp(`Cancel sale ${SALE_NUMBER.replace(/-/g, '\\-')}`, 'i')).first();
-    await expect(dialogTitle).toBeVisible({ timeout: 10000 });
+    const named = page.getByText(new RegExp(`Sale ${SALE_NUMBER.replace(/-/g, '\\-')} will be deleted`, 'i')).first();
+    await expect(named, 'the dialog does not identify which sale is being deleted').toBeVisible({ timeout: 10000 });
     await expect(page.getByText(/back into stock/i).first()).toBeVisible();
     await expect(page.getByText(/history/i).first()).toBeVisible();
     await expect(page.getByText(/are you sure/i)).toHaveCount(0);
 
     // A reason is required before voiding is allowed.
-    const confirmBtn = page.getByRole('button', { name: /^cancel sale$/i }).last();
+    const confirmBtn = page.getByRole('button', { name: /^delete this sale$/i }).last();
     await expect(confirmBtn).toBeDisabled();
     await page.locator('input[type="text"], input:not([type])').last().fill('QA void safety');
 
     // Two clicks in ONE task — a real double tap. The second must not report a
     // failure after the first one succeeded.
     await page.evaluate(() => {
+      // The page's own "Delete this sale" opener also matches the text, so it is
+      // excluded by its hook: only the dialog's confirm button may be double-tapped.
       const btns = Array.from(document.querySelectorAll('button')).filter((b) =>
-        /^cancel sale$/i.test((b.textContent || '').trim())
+        /^delete this sale$/i.test((b.textContent || '').trim()) &&
+        b.getAttribute('data-testid') !== 'sale-void'
       ) as HTMLButtonElement[];
       const btn = btns[btns.length - 1];
       if (!btn) throw new Error('void confirm button not found');
@@ -97,10 +99,11 @@ test.describe('Void sale safety', () => {
         const el = document.querySelector('div.fixed[style*="--tabbar-height"]');
         return el ? (el as HTMLElement).innerText : '';
       }).catch(() => '');
-      // The shipped success toast is t("copy.saleCancelled"). It used to be the literal
-      // "Sale voided successfully", which this control looked for — so once the wording
-      // moved into the dictionary, the control silently stopped seeing the toast.
-      if (text.includes('Sale cancelled')) sawSuccess = true;
+      // The shipped success toast is t("copy.saleCancelled") = "Sale deleted. The item is
+      // back in stock." It used to be the literal "Sale voided successfully", which this
+      // control looked for — so once the wording moved into the dictionary, the control
+      // silently stopped seeing the toast.
+      if (text.includes('Sale deleted')) sawSuccess = true;
       // friendly() maps an unrecognised refusal ("Sale is already voided") to this
       // sentence; seeing it right after a successful void is the misinformation.
       if (/did not work/i.test(text)) sawFailureWord = true;

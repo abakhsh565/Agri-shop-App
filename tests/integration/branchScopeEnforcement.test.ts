@@ -151,6 +151,50 @@ describe('Branch scope — reads are isolated per branch', () => {
   });
 });
 
+describe('Branch scope — a member always has a branch', () => {
+  /**
+   * The third state that must not exist.
+   *
+   * `NULL` is "every branch" and a list is "these branches"; `[]` meant "nowhere". An empty
+   * scope is not harmless: `enforce_branch_scope()` stamps a new record with `v_scope[1]`,
+   * which for an empty array is NULL, so the write SUCCEEDS with no branch on it — invisible to
+   * every branch-limited reader, including the person who wrote it. The employee screen could
+   * produce exactly that by unticking the last branch.
+   *
+   * The rule is held by the database (0171), not by the two screens that used to permit it.
+   */
+  it('refuses to store an empty branch scope', async () => {
+    let failed = false;
+    try {
+      await sql(
+        `UPDATE memberships SET branch_scope = '{}'::uuid[] WHERE user_id = '${EMP_MAIN}' AND tenant_id = '${TENANT_A}'`
+      );
+    } catch {
+      failed = true;
+    }
+    expect(failed).toBe(true);
+
+    // ...and the member's real scope is untouched by the refusal.
+    const row = await sql(
+      `SELECT branch_scope FROM memberships WHERE user_id = '${EMP_MAIN}' AND tenant_id = '${TENANT_A}'`
+    );
+    expect(row.rows[0].branch_scope).toEqual([mainBranch]);
+  });
+
+  it('still permits the two states that mean something', async () => {
+    // "Every branch" is NULL — not an empty list — and a real list of branches is the other.
+    await sql(`UPDATE memberships SET branch_scope = NULL WHERE user_id = '${EMP_BOTH}' AND tenant_id = '${TENANT_A}'`);
+    const every = await sql(`SELECT branch_scope FROM memberships WHERE user_id = '${EMP_BOTH}' AND tenant_id = '${TENANT_A}'`);
+    expect(every.rows[0].branch_scope).toBeNull();
+
+    await sql(
+      `UPDATE memberships SET branch_scope = ARRAY['${mainBranch}','${warehouseBranch}']::uuid[] WHERE user_id = '${EMP_BOTH}' AND tenant_id = '${TENANT_A}'`
+    );
+    const both = await sql(`SELECT branch_scope FROM memberships WHERE user_id = '${EMP_BOTH}' AND tenant_id = '${TENANT_A}'`);
+    expect(both.rows[0].branch_scope).toEqual([mainBranch, warehouseBranch]);
+  });
+});
+
 describe('Branch scope — tenant boundary still holds', () => {
   it('refuses a record addressed to another tenant', async () => {
     const res = await insertAsUser(EMP_BOTH, 'sales', {

@@ -9,6 +9,7 @@ import { useEmployeesStore } from "@/stores/employeesStore";
 import { useUIStore } from "@/stores/uiStore";
 import { useAuthStore } from "@/stores/authStore";
 import { useRolesStore } from "@/stores/rolesStore";
+import { digitsOnlyPhone, phoneFieldProps } from "@/lib/phoneInput";
 import { usePermissionsStore } from "@/stores/permissionsStore";
 import { useT } from "@/lib/i18n";
 import { usePermissionLabels } from "@/lib/permissionLabels";
@@ -16,6 +17,9 @@ import { applyOverrides, diffOverrides, overrideCount } from "@/lib/accessModel"
 import EmployeeAccessEditor from "@/components/admin/EmployeeAccessEditor";
 import InviteLinkCard from "@/components/admin/InviteLinkCard";
 import { useThemeStore } from "@/stores/themeStore";
+import { useShopStore } from "@/stores/shopStore";
+import Sheet from "@/components/ui/Sheet";
+import Button from "@/components/ui/Button";
 import { normalizePhone } from "@/lib/auth";
 import { clearNav } from "@/lib/navContext";
 import { supabase } from "@/lib/supabase";
@@ -75,8 +79,15 @@ export default function AddEmployeePage() {
   // the owner has no way to tell those apart. Nothing ticked is a decision; nothing loaded is
   // not, so they cannot share one rendering.
   const [roleAccess, setRoleAccess] = useState<"idle" | "loading" | "ready" | "error">("idle");
+  // `null` means every branch. Never an empty list: an empty scope is a member with nowhere to
+  // work, and the database now refuses it (0171) rather than letting their records land branchless.
+  // Which role's access sheet is open, if any. Separate from `roleId` (which role is CHOSEN): the
+  // sheet can be open on the chosen role, and closing it must not change the choice.
+  const [modifyRoleId, setModifyRoleId] = useState<string | null>(null);
   const [branchScope, setBranchScope] = useState<string[] | null>(null);
   const [branches, setBranches] = useState<{ id: string; name: string; is_default: boolean }[]>([]);
+  // The branch the owner is working in *right now*.
+  const activeBranchId = useShopStore((s) => s.activeShopId);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const creatingRef = useRef(false);
@@ -87,9 +98,23 @@ export default function AddEmployeePage() {
     supabase.from("branches").select("id, name, is_default").eq("is_active", true).then(({ data }) => {
       const b = (data as any[]) ?? [];
       setBranches(b);
-      // One branch is not a decision — assign it.
-      if (b.length === 1) setBranchScope([b[0].id]);
+      //
+      // WHAT THE DEFAULT SHOULD BE, and why it is not "every branch".
+      //
+      // A shop with one branch has nothing to decide. A shop with several does, and the safe
+      // answer is the branch the owner is standing in: an employee silently given every branch
+      // sees every branch's customers and takings, which is the exact mixing that is supposed to
+      // be impossible. Choosing the current branch by default makes the owner's own working
+      // context the answer unless they deliberately say otherwise — and widening it stays one tap
+      // away, because "All branches" is a choice they can still make.
+      if (b.length === 1) { setBranchScope([b[0].id]); return; }
+      if (b.length > 1 && activeBranchId && b.some((x) => x.id === activeBranchId)) {
+        setBranchScope([activeBranchId]);
+      }
     });
+    // Once, for the branch this screen was opened in — the store's value is what the screen is
+    // being used in, not a dependency of loading the list.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const steps: { key: Step; label: string; icon: typeof User }[] = [
@@ -148,6 +173,14 @@ export default function AddEmployeePage() {
     // pre-render `false` and the owner ends up with TWO employees from one decision.
     // Held until the screen changes; released only when the attempt failed, which
     // keeps the button disabled while the invitation screen renders (as before).
+    // Nobody assigned to no branch: an empty selection is not "all branches" (that is null) but
+    // a member with nowhere to work — their records would be written without a branch and then be
+    // invisible to every branch-limited reader, including them. Caught here as a sentence the
+    // owner can act on, and again by the database (0171) for anything that is not this screen.
+    if (branches.length > 0 && Array.isArray(branchScope) && branchScope.length === 0) {
+      setError(t("addEmployee.errNoBranch"));
+      return;
+    }
     if (creatingRef.current) return;
     creatingRef.current = true;
     setError("");
@@ -235,18 +268,44 @@ export default function AddEmployeePage() {
     setRoleAccess("ready");
   }
 
-  /** One role card, with the access it carries shown directly beneath it. */
+  /**
+   * The access sheet for one role.
+   *
+   * Opened by `Modify`, and it SELECTS the role first when it was not the chosen one: an owner
+   * who opens "Modify" on a role they have not picked is editing this employee's access under that
+   * role, and the flow should then say which role it is talking about.
+   */
+  async function openModify(id: string) {
+    if (roleId !== id) await selectRole(id);
+    setModifyRoleId(id);
+  }
+
+  /**
+   * One role card: choosing it, and — separately — changing what it carries.
+   *
+   * WHY THE TWO ARE SEPARATE ACTIONS. Tapping a role used to expand forty checkboxes inside the
+   * card, so the act of CHOOSING a role was inseparable from the act of EDITING its access: every
+   * owner who simply wanted "Store Manager" was shown a wall of boxes they had not asked for, and
+   * the only thing the tap was supposed to mean got lost in it.
+   *
+   * Now the card chooses, and the small `Modify` in its corner opens the access list. That is also
+   * what makes the choice legible: what you have picked is a name, and what it grants is one tap
+   * away rather than in your face.
+   */
   function roleCard(r: (typeof rolesStore.roles)[number]) {
     const selected = roleId === r.id;
     return (
-      <div key={r.id} className="flex flex-col gap-2">
+      <div
+        key={r.id}
+        className="flex items-center gap-3 p-4 rounded-[var(--radius-card)] transition-colors"
+        style={{
+          background: "var(--surface)",
+          border: `1.5px solid ${selected ? "var(--brand)" : "var(--divider)"}`,
+        }}
+      >
         <button
           onClick={() => void selectRole(r.id)}
-          className="flex items-start gap-3 p-4 rounded-[var(--radius-card)] text-start transition-colors"
-          style={{
-            background: "var(--surface)",
-            border: `1.5px solid ${selected ? "var(--brand)" : "var(--divider)"}`,
-          }}
+          className="flex items-start gap-3 text-start flex-1 min-w-0"
         >
           <div
             className="w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 mt-0.5"
@@ -254,57 +313,33 @@ export default function AddEmployeePage() {
           >
             {selected && <div className="w-2.5 h-2.5 rounded-full" style={{ background: "var(--brand)" }} />}
           </div>
-          <div>
+          <div className="min-w-0">
             <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>{r.name}</p>
             {r.description && (
               <p className="text-xs mt-0.5" style={{ color: "var(--text-secondary)" }}>{r.description}</p>
             )}
+            {/* What the owner changed, said on the card that carries it — so a customized role is
+                recognisable without opening it again. */}
+            {selected && roleAccess === "ready" && changeCount > 0 && (
+              <p className="text-11 mt-1" style={{ color: "var(--brand-dark)" }}>
+                {t(changeCount === 1 ? "addEmployee.customizedOne" : "addEmployee.customized", {
+                  count: changeCount,
+                  role: r.name,
+                })}
+              </p>
+            )}
           </div>
         </button>
 
-        {/* What choosing this role means — the same checkbox list the Roles screen uses, so
-            the owner sees exactly which boxes the role ticks rather than a sentence about it,
-            and can change one here instead of leaving the flow to do it later. The list is
-            only drawn once the role's access has actually arrived. */}
-        {selected && (
-          <div className="rounded-[var(--radius-tile)] p-3 mx-1" style={{ background: "var(--surface-2)", border: "1px solid var(--divider)" }}>
-          {roleAccess === "ready" && (
-            <p className="ds-section-label mb-2" style={{ color: "var(--text-secondary)" }}>
-              {t("addEmployee.effectiveAccess", { name: firstName })}
-            </p>
-          )}
-          <EmployeeAccessEditor
-            roleDefaults={roleDefaultSet}
-            value={accessValue}
-            onChange={setAccessValue}
-            state={roleAccess === "ready" ? "ready" : roleAccess === "error" ? "error" : "loading"}
-          />
-          {roleAccess === "error" && (
-            <button
-              onClick={() => void selectRole(r.id)}
-              className="text-11 font-bold mt-2"
-              style={{ color: "var(--brand)" }}
-            >
-              {t("common.retry")}
-            </button>
-          )}
-
-          {/* What the boxes above mean relative to the role — the same sentence, whether or
-              not anything was changed. Nothing here needs a mode switch now. */}
-          {roleAccess === "ready" && (
-            <div className="mt-3 pt-3" style={{ borderTop: "1px solid var(--divider)" }}>
-              <span className="text-10" style={{ color: "var(--text-secondary)" }}>
-                {changeCount > 0
-                  ? t(changeCount === 1 ? "addEmployee.customizedOne" : "addEmployee.customized", {
-                      count: changeCount,
-                      role: r.name,
-                    })
-                  : t("addEmployee.roleAccessDefault")}
-              </span>
-            </div>
-          )}
-          </div>
-        )}
+        <button
+          type="button"
+          onClick={() => void openModify(r.id)}
+          data-testid={`role-modify-${r.id}`}
+          className="shrink-0 h-8 px-3 rounded-full text-12 font-bold ds-pressable"
+          style={{ background: "var(--surface-2)", border: "1px solid var(--divider)", color: "var(--text-primary)" }}
+        >
+          {t("addEmployee.modifyRole")}
+        </button>
       </div>
     );
   }
@@ -413,10 +448,9 @@ export default function AddEmployeePage() {
                 {t("addEmployee.phone")} *
               </p>
               <input
-                type="tel"
-                inputMode="tel"
+                {...phoneFieldProps()}
                 value={phone}
-                onChange={(e) => setPhone(e.target.value)}
+                onChange={(e) => setPhone(digitsOnlyPhone(e.target.value))}
                 placeholder="03001234567"
                 className="w-full h-12 rounded-[var(--radius-input)] px-4 text-sm outline-none"
                 style={fieldStyle}
@@ -552,6 +586,56 @@ export default function AddEmployeePage() {
 
         {error && <p className="text-xs" style={{ color: "var(--error)" }}>{error}</p>}
       </div>
+
+      {/*
+        The access sheet — the multi-select the owner asked to reach through `Modify`.
+
+        It opens on the role named in its title, and above the checklist sits the line that says
+        what the list is for (`access.subheading`), because “which of these forty boxes should be
+        ticked” is the question this screen exists to answer. Nothing here is written until the
+        employee is invited, so Cancel is a real cancel.
+      */}
+      <Sheet
+        open={modifyRoleId !== null}
+        title={rolesStore.roles.find((r) => r.id === modifyRoleId)?.name ?? t("addEmployee.stepRole")}
+        onClose={() => setModifyRoleId(null)}
+      >
+        <div className="px-4 pb-4">
+          <p className="ds-section-label mb-2" style={{ color: "var(--text-secondary)" }}>
+            {t("addEmployee.effectiveAccess", { name: firstName || t("addEmployee.stepWho") })}
+          </p>
+          <EmployeeAccessEditor
+            roleDefaults={roleDefaultSet}
+            value={accessValue}
+            onChange={setAccessValue}
+            state={roleAccess === "ready" ? "ready" : roleAccess === "error" ? "error" : "loading"}
+          />
+          {roleAccess === "error" && (
+            <button
+              onClick={() => modifyRoleId && void selectRole(modifyRoleId)}
+              className="text-11 font-bold mt-2"
+              style={{ color: "var(--brand)" }}
+            >
+              {t("common.retry")}
+            </button>
+          )}
+          {roleAccess === "ready" && (
+            <div className="mt-3 pt-3" style={{ borderTop: "1px solid var(--divider)" }}>
+              <span className="text-10" style={{ color: "var(--text-secondary)" }}>
+                {changeCount > 0
+                  ? t(changeCount === 1 ? "addEmployee.customizedOne" : "addEmployee.customized", {
+                      count: changeCount,
+                      role: rolesStore.roles.find((r) => r.id === modifyRoleId)?.name ?? "",
+                    })
+                  : t("addEmployee.roleAccessDefault")}
+              </span>
+            </div>
+          )}
+          <Button fullWidth className="mt-3" onClick={() => setModifyRoleId(null)} testId="role-modify-done">
+            {t("common.close")}
+          </Button>
+        </div>
+      </Sheet>
 
       {/* Bottom buttons */}
       <div className="p-4 pb-6 flex gap-3">

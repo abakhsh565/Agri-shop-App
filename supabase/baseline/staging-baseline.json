@@ -1,0 +1,39 @@
+{
+  "record": "The frozen staging/QA schema the forward-migration checks are run against. Captured read-only on 2026-09-30 by scripts/backup-database.mjs. It is a logical dump and DOES contain real rows, so it lives only in gitignored backups/; the verification tool loads its schema and skips every data statement. Staging IS the ledgered migrate target for forward files; this baseline lets a change be checked before the ledger apply.",
+  "environment": "staging",
+  "projectRef": "bpybjrjenwccowvtrevu",
+  "capturedAt": "2026-09-30T20:39:37.025Z",
+  "serverVersion": "17.6",
+  "artifact": "backups/backup-staging-bpybjrjenwccowvtrevu-2026-09-30T20-39-37.sql",
+  "artifactSha256": "13f7c32929aacffa42e7e42484ad20244a103877d0c111a6d3765a37849ccb68",
+  "artifactBytes": 3328685,
+  "manifest": "backups/backup-staging-bpybjrjenwccowvtrevu-2026-09-30T20-39-37.manifest.json",
+  "contentType": "logical-dump",
+  "dataStatements": 1769,
+  "dataHandling": "skipped-on-load",
+  "dataNote": "Measured with the project splitter: 2807 statements total, 1769 of them data (1696 public rows plus 35 auth.users and 38 auth.identities). Contains personal data and password hashes — never commit, never publish. The tool re-measures this count and refuses the record if it does not match.",
+  "ledgerOnServer": {
+    "count": 3,
+    "latest": "0011",
+    "note": "At capture time. On 2026-10-01 the staging ledger was adopted to 169 files (see PHASE_2_MIGRATION_LEDGER.md); the capture predates that bookkeeping, not the schema."
+  },
+  "structure": {
+    "tables": 54,
+    "functions": 160,
+    "views": ["tenants", "users_public"],
+    "indexes": 100,
+    "foreignKeys": 81,
+    "checks": 34,
+    "uniques": 17,
+    "triggers": 37,
+    "policies": 83,
+    "enums": 9
+  },
+  "policy": {
+    "forwardOnly": true,
+    "replayHistory": "never",
+    "migrateTarget": true,
+    "note": "New files are verified here first, then applied forward through scripts/migrate.mjs so the ledger records what actually ran."
+  },
+  "recheck": "npm run verify:baseline -- --baseline staging --since <version>"
+}

@@ -55,6 +55,22 @@ async function signIn(page: Page) {
 }
 
 /**
+ * Open a sheet that carries its close control, and wait until it is on screen.
+ *
+ * The field pickers (supplier, unit) are deliberately close-less now — "a field picker
+ * resolves in one tap, so it has no close button" — so the sheet measured here is the
+ * branch editor, which does draw the shared start-edge control. Waiting for the control
+ * rather than reading geometry straight after the click is deliberate: a measurement taken
+ * before the sheet is painted reports `null` and reads as "the sheet never opened".
+ */
+async function openSheetWithLeadingControl(page: Page) {
+  await page.goto(`${BASE_URL}/admin/more`);
+  await page.waitForLoadState('networkidle');
+  await page.locator('[data-testid^="branch-edit-action-"]').first().click();
+  await expect(page.locator('[data-testid="sheet-close"]')).toBeVisible({ timeout: 10000 });
+}
+
+/**
  * Where an element actually sits, in pixels, measured from the app frame's two edges.
  *
  * Geometry rather than declared style, on purpose: a computed `left`/`right` read can be
@@ -100,14 +116,7 @@ test('a leading control sits on the inline start in both directions', async ({ p
   expect(ltrBack!.leftGap, 'EN: the leading control sits 16px from the left edge').toBe(16);
   expect(ltrBack!.rightGap, 'EN: it is nowhere near the right edge').toBeGreaterThan(100);
 
-  // The trigger label is the dictionary's, in either language, so the locator accepts both
-  // and never depends on which language the previous spec left behind.
-  await page.getByRole('button', { name: /choose supplier|سپلائر چنیں/i }).first().click();
-  // Wait for the sheet to be ON SCREEN before measuring it: reading geometry straight after
-  // the click passed on its own and flaked inside the full suite, where the main thread is
-  // busier — a measurement taken before the branch is painted reports `null` and reads as
-  // "the sheet never opened".
-  await expect(page.locator('[data-testid="sheet-close"]')).toBeVisible({ timeout: 10000 });
+  await openSheetWithLeadingControl(page);
   const ltrSheet = await edgeGaps(page, '[data-testid="sheet-close"]');
   expect(ltrSheet, 'the sheet did not open, so its close button cannot be measured').not.toBeNull();
   expect(ltrSheet!.leftGap, 'EN: the sheet close control is 16px from the left edge').toBe(16);
@@ -122,8 +131,7 @@ test('a leading control sits on the inline start in both directions', async ({ p
   expect(rtlBack!.rightGap, 'UR: the leading control mirrors to 16px from the right edge').toBe(16);
   expect(rtlBack!.leftGap, 'UR: it is nowhere near the left edge').toBeGreaterThan(100);
 
-  await page.getByRole('button', { name: /choose supplier|سپلائر چنیں/i }).first().click();
-  await expect(page.locator('[data-testid="sheet-close"]')).toBeVisible({ timeout: 10000 });
+  await openSheetWithLeadingControl(page);
   const rtlSheet = await edgeGaps(page, '[data-testid="sheet-close"]');
   expect(rtlSheet, 'the sheet did not open in Urdu').not.toBeNull();
   expect(rtlSheet!.rightGap, 'UR: the sheet close control is 16px from the right edge').toBe(16);

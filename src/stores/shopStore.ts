@@ -12,6 +12,7 @@ import { useCartStore } from "@/stores/cartStore";
 import { getPendingCount, syncPendingOperations } from "@/lib/offlineQueue";
 import { clearNav } from "@/lib/navContext";
 import { setShopRolesByShop } from "@/lib/shopRoles";
+import type { PickedPlace } from "@/lib/geo";
 import type { MembershipRole, MembershipStatus } from "@/types";
 
 /**
@@ -66,6 +67,17 @@ export interface BranchSummary {
   customerCount: number;
   salesCount: number;
   salesTotal: number;
+  /**
+   * Where this branch is, as a point on a map — or `null` when it has never been pinned.
+   *
+   * It arrives with the rest of the branch rather than from a second read, and that is a rule and
+   * not an optimisation: `shops` may only be read for the shop the account is currently working
+   * in (its SELECT policy is `id = current_shop_id()`), so any screen that asked `shops` about
+   * another branch would be told the row does not exist and would show "no location" for a branch
+   * that has one. `get_my_branches()` is the read that may see every branch the account is a
+   * member of, so it is the read that carries the place.
+   */
+  place: PickedPlace | null;
 }
 
 /** What the caller can be told about a failed action, so the screen owns the wording. */
@@ -134,6 +146,31 @@ interface BranchRow {
   customer_count: number | null;
   sales_count: number | null;
   sales_total: number | string | null;
+  address: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  location_label: string | null;
+  location_source: string | null;
+}
+
+/**
+ * The stored place of one branch, in the shape the picker speaks.
+ *
+ * The coordinates are the test, not the label: a row with neither has never been located, and a
+ * branch that was never located must not render as one standing somewhere. `label` falls back to
+ * the branch's own name because the short name the map service gave is optional on rows written
+ * before the picker existed.
+ */
+function branchPlaceFrom(row: BranchRow): PickedPlace | null {
+  if (row.latitude == null || row.longitude == null) return null;
+  return {
+    lat: row.latitude,
+    lng: row.longitude,
+    label: row.location_label ?? row.name,
+    address: row.address,
+    source: row.location_source ?? "openstreetmap",
+    countryCode: "pk",
+  };
 }
 
 /**
@@ -195,6 +232,16 @@ interface ShopState {
   loadBranches: () => Promise<void>;
   /** Rename one branch. The name the database accepts is the one returned. */
   renameBranch: (shopId: string, name: string) => Promise<BranchActionResult>;
+  /**
+   * Record the pin this device has just saved — or that it just cleared.
+   *
+   * `set_place` answers about the row it wrote, not the branch object the screen holds, so without
+   * this the list would keep the place it read before the save and reopening the sheet would show
+   * the old pin — the same lie as reading the wrong table, one step later. `null` is the same
+   * sentence in the other direction: the row no longer has a place, and the list must not keep
+   * showing one.
+   */
+  setBranchPlace: (shopId: string, place: PickedPlace | null) => void;
   /**
    * Delete one branch, completely.
    *
@@ -323,6 +370,7 @@ export const useShopStore = create<ShopState>((set, get) => ({
         customerCount: Number(r.customer_count ?? 0),
         salesCount: Number(r.sales_count ?? 0),
         salesTotal: Number(r.sales_total ?? 0),
+        place: branchPlaceFrom(r),
       })),
       branchesLoading: false,
       branchesLoaded: true,
@@ -354,6 +402,12 @@ export const useShopStore = create<ShopState>((set, get) => ({
       shops: get().shops.map((s) => (s.id === shopId ? { ...s, name: clean } : s)),
     });
     return { ok: true };
+  },
+
+  setBranchPlace: (shopId, place) => {
+    set({
+      branches: get().branches.map((b) => (b.id === shopId ? { ...b, place } : b)),
+    });
   },
 
   deleteBranch: async (shopId, reason, feedback) => {

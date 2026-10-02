@@ -2,58 +2,56 @@
  * Split Payment Recording — Behavioral Tests
  *
  * Tests schema, RPC logic, grouping, and balance correctness.
- * Uses direct SQL for RPC calls (bypasses auth caching issues in test infra).
+ *
+ * All RPC calls go through the real authenticated path (execRpcAsUser → Supabase Auth JWT →
+ * PostgREST → the SECURITY DEFINER function), the same way paymentIdempotency.test.ts does.
+ *
+ * This suite used to call record_customer_payment over a raw SQL connection and hand it a
+ * fabricated `actorId` inside the payload. Migration 0112 removed caller-supplied actor trust on
+ * purpose — the actor is derived from the JWT (`auth.uid()` / `app_current_user_id()`) — so on a
+ * raw connection the function correctly answers NOT_AUTHENTICATED and every assertion here failed
+ * with "expected +0 to be 1". The call path was stale, not the contract: production traffic has
+ * always gone through the authenticated RPC, and so should the test.
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { getDbClient, execSqlAsAdmin } from "../setup/qa-client";
-
-let client: any;
+import { execRpcAsUser, execSqlAsAdmin } from "../setup/qa-client";
 
 const TEST = {
   shop: "00000000-0000-0000-0000-000000000001",
   customerA: "aa000000-0000-0000-0000-0000000000a1",
   customerB: "aa000000-0000-0000-0000-0000000000b1",
-  adminUser: "aa000000-0000-0000-0000-0000000000ad",
+  // The QA fixture admin the other authenticated-path suites use (paymentIdempotency).
+  // getAuthClient() self-heals its auth credential from users.phone, so it needs a real phone.
+  adminUser: "10000000-0000-0000-0000-000000000001",
+  adminPhone: "923009999999",
 };
 
-async function q(sql: string) { return client.query(sql); }
+async function q(sql: string) { return execSqlAsAdmin(sql); }
 
 /**
- * Call record_customer_payment directly via SQL.
- * The function requires admin role — we ensure the admin user exists.
+ * Call record_customer_payment as the fixture admin, through the real JWT path.
+ *
+ * `actorId` is still sent for payload compatibility, but the server ignores it: identity comes
+ * from the JWT, which is the whole point of 0112.
  */
 async function recordPayment(payload: Record<string, unknown>) {
-  // Insert actor into users table so the RPC can resolve the role
-  await execSqlAsAdmin(`
-    INSERT INTO users (id, name, phone, role, is_original_owner, is_active, shop_id)
-    VALUES ('${TEST.adminUser}', 'Split Test Admin', '0300SPLIT001', 'admin', true, true, '${TEST.shop}')
-    ON CONFLICT (id) DO UPDATE SET role = 'admin', is_active = true
-  `);
-
-  // Set the actorId in the payload
-  payload.actorId = TEST.adminUser;
-
-  const jsonPayload = JSON.stringify(payload).replace(/'/g, "''");
-  const result = await q(`SELECT record_customer_payment('${jsonPayload}'::jsonb) as result`);
-  const raw = result.rows[0]?.result;
-  if (typeof raw === "string") {
-    const parsed = JSON.parse(raw);
-    if (parsed.error) throw new Error(parsed.error);
-    return parsed;
+  const { data, error } = await execRpcAsUser(TEST.adminUser, "record_customer_payment", {
+    payload: { ...payload, actorId: payload.actorId ?? TEST.adminUser },
+  });
+  if (error) throw new Error(error);
+  if (data && typeof data === "object" && "error" in data && (data as any).error) {
+    throw new Error(String((data as any).error));
   }
-  return raw;
+  return data;
 }
 
 describe("Split Payment Recording", () => {
   beforeAll(async () => {
-    client = getDbClient();
-    await client.connect();
-
-    // Create admin test user
+    // Ensure the fixture admin exists (and keeps its phone, which the auth session is derived from)
     await execSqlAsAdmin(`
       INSERT INTO users (id, name, phone, role, is_original_owner, is_active, shop_id)
-      VALUES ('${TEST.adminUser}', 'Split Test Admin', '0300SPLIT001', 'admin', true, true, '${TEST.shop}')
-      ON CONFLICT (id) DO UPDATE SET role = 'admin', is_active = true
+      VALUES ('${TEST.adminUser}', 'QA Admin', '${TEST.adminPhone}', 'admin', true, true, '${TEST.shop}')
+      ON CONFLICT (id) DO UPDATE SET role = 'admin', is_active = true, phone = '${TEST.adminPhone}'
     `);
 
     // Create test customers
@@ -68,11 +66,8 @@ describe("Split Payment Recording", () => {
   });
 
   afterAll(async () => {
-    if (!client) return;
-    await execSqlAsAdmin(`DELETE FROM customer_payments WHERE customer_id IN ('${TEST.customerA}', '${TEST.customerB}')`);
-    await execSqlAsAdmin(`DELETE FROM customers WHERE id IN ('${TEST.customerA}', '${TEST.customerB}')`);
-    await execSqlAsAdmin(`DELETE FROM users WHERE id = '${TEST.adminUser}'`);
-    await client?.end();
+    await execSqlAsAdmin(`DELETE FROM customer_payments WHERE customer_id IN ('${TEST.customerA}', '${TEST.customerB}')`).catch(() => {});
+    await execSqlAsAdmin(`DELETE FROM customers WHERE id IN ('${TEST.customerA}', '${TEST.customerB}')`).catch(() => {});
   });
 
   describe("Schema", () => {

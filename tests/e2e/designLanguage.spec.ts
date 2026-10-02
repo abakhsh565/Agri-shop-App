@@ -133,9 +133,14 @@ test.describe('grouped-list design language', () => {
   });
 
   test.afterAll(async () => {
+    // Payments and purchases written by OTHER lanes still reference this company by the
+    // shared QA id; deleting the company first fails on that foreign key, and the
+    // failure then reads as a design regression rather than as leftover fixture rows.
     await execSql(`
       DELETE FROM product_variants WHERE id IN ('${VARIANT_A}', '${VARIANT_B}');
       DELETE FROM products WHERE id IN ('${PRODUCT_A}', '${PRODUCT_B}');
+      DELETE FROM supplier_payments WHERE company_id = '${COMPANY}';
+      DELETE FROM purchases WHERE company_id = '${COMPANY}';
       DELETE FROM companies WHERE id = '${COMPANY}';
       DELETE FROM customers WHERE id = '${CUSTOMER_A}';
     `);

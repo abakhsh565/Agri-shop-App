@@ -24,7 +24,11 @@ const OTP = '123456';
 const PIN = '4321';
 
 const OWNER_PHONE = '03001234567';    // Shop Owner  -> 923001234567 (owner membership)
-const QA_EMPLOYEE_ID = '2603007e-696a-4836-84e5-694d7a9173df'; // Sales Employee, template "Sales Employee"
+// The Sales Employee fixture (role template "Sales Employee"). Its id is read from the database
+// in beforeAll rather than pinned to one seeding's uuid: the QA seed recreates this user, and a
+// stale id made every deep link land on the employee page's "not found" state.
+const QA_EMPLOYEE_PHONE = '923001122334';
+let QA_EMPLOYEE_ID = '';
 
 const NEW_NAME = 'UX Check Employee';
 const NEW_PHONE_LOCAL = '03007770011';
@@ -106,17 +110,33 @@ async function dbAreasForRole(roleName: string): Promise<string[]> {
   return rows.map((r) => String(r.module).toLowerCase());
 }
 
-/** Business-area labels the screen lists under "Access from this role". */
-async function shownAreas(page: Page): Promise<string[]> {
-  const panel = page.locator('p').filter({ hasText: 'Access from this role' }).first();
-  await expect(panel).toBeVisible();
-  // Each row is <div data-testid="access-area-row"><span>area</span><span>actions</span></div>.
-  // Addressed by its own hook rather than by position, so adding a row to the
-  // panel cannot silently change what this compares against the database.
-  const labels = await page
-    .locator('[data-testid="access-area-row"] span:first-child')
-    .allInnerTexts();
-  return labels.map((l) => l.trim().toLowerCase()).filter(Boolean);
+/**
+ * Access areas the screen lists, addressed by the permission module the database
+ * stores — the same value `dbAreasForRole` reads — rather than by their translated
+ * label, so this compares the set the screen shows with the set the role grants.
+ */
+async function shownAreaModules(page: Page): Promise<string[]> {
+  const rows = page.locator('[data-testid^="emp-perm-area-"]');
+  await expect(rows.first()).toBeVisible();
+  // The list draws the whole catalogue; the areas THIS role grants are the rows whose
+  // box is not empty. Each row prints "granted/total", so "granted > 0" is the row's
+  // own answer rather than a second opinion from a mapping this test would have to keep.
+  const modules = await rows.evaluateAll((els) =>
+    els
+      .map((el) => {
+        const counts = (el.textContent ?? '').match(/(\d+)\/(\d+)/);
+        const granted = counts ? Number(counts[1]) : 0;
+        return granted > 0 ? (el.getAttribute('data-testid') ?? '').replace('emp-perm-area-', '') : null;
+      })
+      .filter((m): m is string => !!m)
+  );
+  return modules.sort();
+}
+
+/** The role's own id, so the screen's Modify handle can be addressed by it. */
+async function roleIdByName(roleName: string): Promise<string> {
+  const [row] = await execSql(`SELECT id FROM roles WHERE name = '${roleName}'`);
+  return String(row.id);
 }
 
 async function deleteEmployeeByPhone(phone: string) {
@@ -130,6 +150,12 @@ async function deleteEmployeeByPhone(phone: string) {
 test.describe.configure({ mode: 'serial' });
 
 test.describe('Employee job & access — simple for the owner, exact underneath', () => {
+  test.beforeAll(async () => {
+    const [emp] = await execSql(`SELECT id FROM users WHERE phone = '${QA_EMPLOYEE_PHONE}'`);
+    QA_EMPLOYEE_ID = String(emp?.id ?? '');
+    expect(QA_EMPLOYEE_ID, 'the Sales Employee fixture is missing from the QA database').not.toBe('');
+  });
+
   test.afterAll(async () => {
     await deleteEmployeeByPhone(OVR_PHONE_DB);
     await deleteEmployeeByPhone(NEW_PHONE_DB);
@@ -174,15 +200,22 @@ test.describe('Employee job & access — simple for the owner, exact underneath'
     await expect(page.getByRole('button', { name: 'Next' })).toBeDisabled();
     expect(step2, 'a role is preselected again').not.toContain('Access from this role');
 
-    // Choosing a role answers "what access will they get?" in place: the access
-    // panel appears with the selected role, not after every other role card.
+    // Choosing a role answers "what access will they get?" on that role's own Modify
+    // handle — the list opens on the role, and every area it shows is an area the
+    // database grants that role.
     await page.getByRole('button', { name: /Sales Manager/ }).first().click();
     await page.waitForTimeout(800);
-    expect(await bodyText(page)).toContain('Access from this role');
+    expect(await bodyText(page), 'the read-only access panel is back').not.toContain('Access from this role');
     await expect(page.getByRole('button', { name: 'Next' })).toBeEnabled();
-    const [shown, fromDb] = [await shownAreas(page), await dbAreasForRole('Sales Manager')];
+    const salesManagerId = await roleIdByName('Sales Manager');
+    await page.locator(`[data-testid="role-modify-${salesManagerId}"]`).click();
+    await expect(page.locator('[data-testid="emp-access-context"]')).toBeVisible();
+    const [shown, fromDb] = [await shownAreaModules(page), (await dbAreasForRole('Sales Manager')).sort()];
     expect(shown.length, 'no areas rendered for the selected role').toBeGreaterThan(0);
-    expect(shown.sort()).toEqual(fromDb.sort());
+    expect(shown, 'the areas on screen are not the areas the role grants').toEqual(fromDb);
+    expect(await bodyText(page), 'the access list exposes RBAC vocabulary').not.toMatch(JARGON);
+    await page.locator('[data-testid="role-modify-done"]').click();
+    await expect(page.locator('[data-testid="emp-access-context"]')).toBeHidden();
 
     await page.getByRole('button', { name: 'Next' }).click();
     await page.waitForTimeout(800);
@@ -342,10 +375,11 @@ test.describe('Employee job & access — simple for the owner, exact underneath'
       page.getByPlaceholder('e.g. 03001234567'),
       'the invitation link does not fill in the employee\u2019s number'
     ).toHaveValue(NEW_PHONE_DB);
+    // The link carries the shop now, so the line names it: "You were invited to {shop}."
     expect(
       await bodyText(page),
       'the invited person is not told why the number is already filled in'
-    ).toContain('You have been invited');
+    ).toContain('You were invited to');
   });
 
   test('3. The same flow in Urdu: RTL, translated, no English copy leaking', async ({ page }) => {
@@ -384,8 +418,20 @@ test.describe('Employee job & access — simple for the owner, exact underneath'
 
     await page.getByRole('button', { name: /سیلز مینیجر|Sales Manager/ }).first().click();
     await page.waitForTimeout(700);
-    // The role's access is stated in Urdu, in place, as soon as the role is chosen.
-    expect(await bodyText(page)).toContain('اس کردار سے ملنے والی رسائی');
+
+    // The role's access opens from its own Modify handle, in Urdu: the list's own
+    // sentence, the "as it is" default, and no English left in it.
+    const salesManagerId = await roleIdByName('Sales Manager');
+    await page.locator(`[data-testid="role-modify-${salesManagerId}"]`).click();
+    await expect(page.locator('[data-testid="emp-access-context"]')).toBeVisible();
+    const accessEditor = await bodyText(page);
+    expect(accessEditor).toContain('طے کریں کہ یہ شخص سسٹم میں کیا کر سکتا ہے');
+    expect(accessEditor).toContain('کردار کی رسائی ویسے ہی رہے گی');
+    expect(accessEditor, 'English copy leaked into the Urdu access editor').not.toContain('Choose what this person can do');
+    expect(accessEditor, 'English copy leaked into the Urdu access editor').not.toContain('Customize access');
+    const overflowEditor = await page.evaluate(() => document.body.scrollWidth > document.body.clientWidth);
+    expect(overflowEditor, 'horizontal overflow in the Urdu access editor').toBe(false);
+    await page.locator('[data-testid="role-modify-done"]').click();
 
     await page.getByRole('button', { name: 'آگے' }).click();
     await page.waitForTimeout(900);
@@ -396,24 +442,6 @@ test.describe('Employee job & access — simple for the owner, exact underneath'
     expect(step3, 'English copy leaked into the Urdu confirmation step').not.toContain('Send invitation');
     const overflowStep3 = await page.evaluate(() => document.body.scrollWidth > document.body.clientWidth);
     expect(overflowStep3, 'horizontal overflow on the Urdu confirmation step').toBe(false);
-
-    // Customizing access in Urdu: the label, the states and the "as it is" default.
-    // Addressed by its visible text, not by accessible name: the header's back control is
-    // icon-only and now carries the same "واپس" label (for screen readers), so a name-based
-    // lookup matches two buttons. `:has-text` reads text content, which only this one has.
-    await page.locator('button:has-text("واپس")').first().click();
-    await page.waitForTimeout(700);
-    const step2b = await bodyText(page);
-    expect(step2b).toContain('رسائی میں تبدیلی');
-    expect(step2b).toContain('کردار کی رسائی ویسے ہی رہے گی');
-    await page.getByRole('button', { name: 'رسائی میں تبدیلی' }).click();
-    await page.waitForTimeout(700);
-    const editing = await bodyText(page);
-    expect(editing).toContain('کی رسائی');
-    expect(editing).toContain('کردار سے');
-    expect(editing, 'English copy leaked into the Urdu access editor').not.toContain('Customize access');
-    const overflowEditor = await page.evaluate(() => document.body.scrollWidth > document.body.clientWidth);
-    expect(overflowEditor, 'horizontal overflow in the Urdu access editor').toBe(false);
   });
 
   test('4. Employee detail explains role, place and access without RBAC vocabulary', async ({ page }) => {
@@ -493,20 +521,23 @@ test.describe('Employee job & access — simple for the owner, exact underneath'
     await page.getByRole('button', { name: /Sales Employee/ }).first().click();
     await page.waitForTimeout(800);
     const roleStep = await bodyText(page);
+    expect(roleStep, 'the read-only access panel is back').not.toContain('Access from this role');
     // The role's access is a STARTING POINT the owner can change here, not a
-    // conclusion they would have to leave the flow to adjust.
-    expect(roleStep).toContain('Access from this role');
-    expect(roleStep).toContain("Uses the role's access as it is");
+    // conclusion they would have to leave the flow to adjust: it opens from the
+    // role's own Modify handle.
+    const salesEmployeeId = await roleIdByName('Sales Employee');
+    await page.locator(`[data-testid="role-modify-${salesEmployeeId}"]`).click();
+    await expect(page.locator('[data-testid="emp-access-context"]')).toBeVisible();
+    expect(await bodyText(page)).toContain("Uses the role's access as it is");
 
-    await page.getByRole('button', { name: 'Customize access' }).click();
-    await page.waitForTimeout(600);
     // Suppliers is outside a Sales Employee's role, so granting it is a real
     // exception and must be visible as one.
-    await page.locator('button').filter({ hasText: /^\s*Suppliers/ }).first().click();
+    await page.locator('[data-testid="emp-perm-area-companies"]').click();
     await page.waitForTimeout(500);
-    expect(await bodyText(page), 'a customization is not reported to the owner').toContain('changes from Sales Employee');
-    // The editor replaces the read-only list instead of listing the same areas twice.
-    expect(await bodyText(page)).not.toContain('Access from this role');
+    expect(await bodyText(page), 'a customization is not reported to the owner').toMatch(/\d+ changes? from Sales Employee/);
+    await page.locator('[data-testid="role-modify-done"]').click();
+    // The chosen card says what was changed, without opening the list again.
+    expect(await bodyText(page), 'the role card does not report the change').toMatch(/\d+ changes? from Sales Employee/);
 
     await page.getByRole('button', { name: 'Next' }).click();
     await page.waitForTimeout(800);

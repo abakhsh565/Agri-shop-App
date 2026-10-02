@@ -11,6 +11,14 @@ export default defineConfig({
     setupFiles: ['tests/setup/localStorage-mock.cjs'],
     globalSetup: 'tests/setup/global-teardown.ts',
     pool: 'forks',
+    // Declared explicitly instead of inherited from whatever `.env.local` happens to hold on the
+    // machine running the suite. Before this, `src/lib/supabase.ts` fell back to a hardcoded
+    // PRODUCTION project id, so a checkout with no env file ran every test against production
+    // and reported a pass. These two names make the target of the suite part of the suite.
+    env: {
+      VITE_APP_ENV: 'staging',
+      VITE_OTP_DELIVERY: 'demo',
+    },
   },
   resolve: {
     alias: {

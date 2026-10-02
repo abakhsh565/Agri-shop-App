@@ -67,37 +67,58 @@ test.describe('admin full access + the account-deletion gate', () => {
       .toBe(1);
   });
 
-  test('deleting the account needs the exact profile name — and cancelling deletes nothing', async ({ page }) => {
+  test('deleting the account runs the four-step sheet, and no unverified path deletes it', async ({ page }) => {
     await loginViaUi(page, OWNER_PHONE);
     await page.goto('/admin/settings');
     await page.waitForLoadState('networkidle');
 
-    await page.getByText('Delete account', { exact: true }).first().click();
+    const accountIntact = async () => {
+      expect(
+        await count(`SELECT count(*)::int AS n FROM users WHERE phone = '${ADMIN_ID_PHONE}'`),
+        'the account row is gone — a delete happened that should not have',
+      ).toBe(1);
+    };
 
-    const submit = page.locator('[data-testid="confirm-submit"]');
-    const input = page.locator('[data-testid="confirm-typed-input"]');
-    const shown = page.locator('[data-testid="confirm-typed-name"]');
+    await page.locator('[data-testid="settings-delete-account"]').click();
 
-    await expect(shown, 'the dialog does not show whose account is being deleted').toBeVisible();
-    const name = (await shown.innerText()).trim();
-    expect(name.length, 'the profile name shown to type is empty').toBeGreaterThan(1);
+    // Step 1 names the account and what is lost, and will not move until it is acknowledged.
+    await expect(page.locator('[data-testid="account-delete"]')).toBeVisible();
+    await expect(page.getByText('Delete your account?')).toBeVisible();
+    await expect(page.getByText('When you delete your account, you will lose:')).toBeVisible();
+    const shouldContinue = page.locator('[data-testid="delete-continue"]');
+    await expect(shouldContinue, 'the delete was available without acknowledging the loss').toBeDisabled();
+    await page.locator('[data-testid="delete-understand"]').click();
+    await expect(shouldContinue, 'the acknowledgement did not unlock the next step').toBeEnabled();
+    await page.screenshot({ path: '.freebuff/interaction-shots/delete-account-step1-en.png' });
 
-    // Nothing typed → the destructive action is not available.
-    await expect(submit, 'the destructive action was available without typing anything').toBeDisabled();
+    // Backing out at step 1 deletes nothing.
+    await page.locator('[data-testid="delete-back-1"]').click();
+    await expect(page.locator('[data-testid="account-delete"]')).toBeHidden();
+    await accountIntact();
 
-    // Wrong text → still not available.
-    await input.fill(`${name}x`);
-    await expect(submit, 'a wrong name unlocked the delete').toBeDisabled();
+    // Step 2 leads to the code — and a wrong code is refused before it ever reaches
+    // the database, so the account survives it.
+    await page.locator('[data-testid="settings-delete-account"]').click();
+    await page.locator('[data-testid="delete-understand"]').click();
+    await shouldContinue.click();
+    await expect(page.locator('[data-testid="delete-step-2"]')).toBeVisible();
+    await page.locator('[data-testid="delete-confirm"]').click();
+    await expect(page.locator('[data-testid="delete-step-3"]'), 'the code step was never reached').toBeVisible({ timeout: 15000 });
 
-    // Exact text → available.
-    await input.fill(name);
-    await expect(submit, 'the exact name did not unlock the delete').toBeEnabled();
-    await page.screenshot({ path: '.freebuff/interaction-shots/delete-account-en.png' });
+    const boxes = page.locator('[data-testid^="otp-digit-"]');
+    await boxes.first().click();
+    await page.keyboard.type('000000');
+    await page.locator('[data-testid="delete-verify"]').click();
+    await expect(page.locator('[data-testid="delete-error"]'), 'a wrong code was not refused').toContainText('not right');
+    await expect(page.locator('[data-testid="delete-step-3"]')).toBeVisible();
+    await accountIntact();
 
-    // Cancel, and prove the account is untouched.
-    await page.locator('[data-testid="confirm-cancel"]').click();
-    await expect(submit).toBeHidden();
-    expect(await count(`SELECT count(*)::int AS n FROM users WHERE phone = '${ADMIN_ID_PHONE}'`)).toBe(1);
+    // Leaving the sheet without a verified code still changes nothing.
+    await page.locator('[data-testid="delete-back-3"]').click();
+    await page.locator('[data-testid="delete-back-2"]').click();
+    await page.locator('[data-testid="delete-back-1"]').click();
+    await expect(page.locator('[data-testid="account-delete"]')).toBeHidden();
+    await accountIntact();
   });
 
   test('a profile edit is written to the database and survives a reload', async ({ page }) => {
@@ -137,22 +158,25 @@ test.describe('admin full access + the account-deletion gate', () => {
     await page.waitForLoadState('networkidle');
 
     await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
-    await page.getByText('اکاؤنٹ حذف کریں', { exact: true }).first().click();
+    await page.locator('[data-testid="settings-delete-account"]').click();
 
-    const submit = page.locator('[data-testid="confirm-submit"]');
-    const input = page.locator('[data-testid="confirm-typed-input"]');
-
-    await expect(page.getByText('تصدیق کے لیے اپنا نام لکھیں'), 'the Urdu prompt is missing').toBeVisible();
-    await expect(submit).toBeDisabled();
-
-    const name = (await page.locator('[data-testid="confirm-typed-name"]').innerText()).trim();
-    await input.fill(name);
-    await expect(submit, 'the exact name did not unlock the Urdu dialog').toBeEnabled();
-    await page.screenshot({ path: '.freebuff/interaction-shots/delete-account-ur.png' });
+    // The same four steps, in Urdu: the step count, the title, and the gate.
+    await expect(page.getByText('مرحلہ 1 از 4'), 'the Urdu step count is missing').toBeVisible();
+    await expect(page.getByText('اپنا اکاؤنٹ حذف کر دیں؟'), 'the Urdu title is missing').toBeVisible();
+    const shouldContinue = page.locator('[data-testid="delete-continue"]');
+    await expect(shouldContinue, 'the Urdu delete was available without acknowledging the loss').toBeDisabled();
+    await page.locator('[data-testid="delete-understand"]').click();
+    await expect(shouldContinue, 'the Urdu acknowledgement did not unlock the next step').toBeEnabled();
+    await page.screenshot({ path: '.freebuff/interaction-shots/delete-account-step1-ur.png' });
 
     const screen = await page.evaluate(() => document.body.innerText);
-    expect(screen, 'English leaked into the Urdu dialog').not.toContain('Delete for good');
+    expect(screen, 'English leaked into the Urdu sheet').not.toContain('Delete your account?');
+    expect(screen, 'English leaked into the Urdu sheet').not.toContain('Continue to delete account');
 
-    await page.locator('[data-testid="confirm-cancel"]').click();
+    await page.locator('[data-testid="delete-back-1"]').click();
+    expect(
+      await count(`SELECT count(*)::int AS n FROM users WHERE phone = '${ADMIN_ID_PHONE}'`),
+      'the account row is gone — a delete happened that should not have',
+    ).toBe(1);
   });
 });

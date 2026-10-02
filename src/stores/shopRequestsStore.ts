@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { supabase } from "@/lib/supabase";
 import { tNow } from "@/lib/i18n";
+import { isStorablePlace, type PickedPlace } from "@/lib/geo";
 
 export type ShopRequestStatus = "pending" | "approved" | "hold" | "rejected";
 
@@ -88,6 +89,15 @@ interface ShopRequestsState {
     cnicFrontUrl?: string;
     cnicBackUrl?: string;
     businessLicenseUrl?: string;
+    /**
+     * The shop's place, picked on the map while registering.
+     *
+     * A registration is submitted by somebody who is not signed in yet, so it cannot go through
+     * `set_place` — the request RPC carries it, and the table's own Pakistan box is what holds it
+     * (0172). Only a complete point is sent: half a coordinate would be refused, turning a
+     * submitted registration into a failure.
+     */
+    location?: PickedPlace | null;
   }) => Promise<{ success: boolean; error?: string }>;
 
   loadMyRequest: (phone: string) => Promise<void>;
@@ -108,6 +118,9 @@ export const useShopRequestsStore = create<ShopRequestsState>((set, get) => ({
     set({ loading: true, error: null });
     try {
       // Use SECURITY DEFINER RPC to bypass RLS issues on shop_requests
+      // The service's address wins, exactly as on the customer screen: it is the address that
+      // belongs to the point being stored.
+      const place = isStorablePlace(input.location) ? input.location : null;
       const { data, error } = await supabase.rpc("insert_shop_request", {
         p_owner_name: input.ownerName,
         p_owner_phone: input.ownerPhone,
@@ -115,8 +128,12 @@ export const useShopRequestsStore = create<ShopRequestsState>((set, get) => ({
         p_shop_name: input.shopName,
         p_shop_type: input.shopType ?? "retail",
         p_shop_city: input.shopCity ?? null,
-        p_shop_address: input.shopAddress ?? null,
+        p_shop_address: place?.address ?? input.shopAddress ?? null,
         p_business_registration_number: input.businessRegistrationNumber ?? null,
+        p_latitude: place?.lat ?? null,
+        p_longitude: place?.lng ?? null,
+        p_location_label: place?.label ?? null,
+        p_location_source: place?.source ?? null,
       });
 
       if (error) {

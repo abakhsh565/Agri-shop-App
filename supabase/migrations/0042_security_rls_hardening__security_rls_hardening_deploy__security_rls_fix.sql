@@ -1,9 +1,20 @@
--- MERGED: two files shared migration version 0042, which makes a
+-- MERGED: three consecutive files share migration version 0042, which makes a
 -- fresh `supabase db push` fail with a duplicate key on
--- supabase_migrations.schema_migrations. Both bodies follow, in the order the
+-- supabase_migrations.schema_migrations. All bodies follow, in the order the
 -- runner would have applied them:
 --   1. 0042_security_rls_hardening.sql
 --   2. 0042_security_rls_hardening_deploy.sql
+--   3. 0042b_security_rls_fix.sql
+--
+-- Body 3 arrived under the suffixed name `0042b_security_rls_fix.sql`. A version
+-- with a letter suffix is not canonical: it cannot be produced by
+-- `supabase migration new`, it is not a valid timestamp version, and it sorts
+-- between 0042 and 0043 only by accident. Its content is the direct follow-up to
+-- 0042 — it undoes the anon-SELECT block that body 2 introduced — so it is
+-- merged here rather than renumbered, and the suffixed filename is retired.
+-- No database ever recorded version `0042b` (the manual deploys went through
+-- run_sql, and both live ledgers stop long before 0042), so this rename is
+-- invisible to every environment.
 
 -- ============================================================
 -- MIGRATION: 0042_security_rls_hardening.sql
@@ -203,3 +214,73 @@ WHERE id = '00000000-0000-0000-0000-000000000052';
 --   SELECT * FROM pg_policies WHERE tablename IN ('customers','sales','users');
 --   SELECT pin_hash FROM users LIMIT 1;  -- should fail for anon
 -- ============================================================
+
+-- ============================================================
+-- BODY 3: 0042b_security_rls_fix.sql (formerly version 0042b)
+-- ============================================================
+-- The previous migration blocked anon SELECT which the app needs.
+-- This fix allows anon SELECT (for initial data load) but blocks
+-- anon INSERT/UPDATE/DELETE on customers and sales.
+-- ============================================================
+
+-- ─── 1. Drop the too-aggressive policies ───────────────────────
+
+DROP POLICY IF EXISTS "customers_select" ON customers;
+DROP POLICY IF EXISTS "customers_insert" ON customers;
+DROP POLICY IF EXISTS "customers_update" ON customers;
+DROP POLICY IF EXISTS "sales_select" ON sales;
+DROP POLICY IF EXISTS "sales_insert" ON sales;
+DROP POLICY IF EXISTS "sales_update" ON sales;
+DROP POLICY IF EXISTS "users_select" ON users;
+DROP POLICY IF EXISTS "users_insert" ON users;
+DROP POLICY IF EXISTS "users_update" ON users;
+
+-- ─── 2. Create corrected policies ──────────────────────────────
+
+-- ── CUSTOMERS ──
+-- SELECT: allow anon AND authenticated (app needs anon for initial load)
+CREATE POLICY customers_select ON customers
+  FOR SELECT USING (true);
+
+-- INSERT: authenticated only (blocks anon)
+CREATE POLICY customers_insert ON customers
+  FOR INSERT TO authenticated WITH CHECK (true);
+
+-- UPDATE: authenticated only (blocks anon)
+CREATE POLICY customers_update ON customers
+  FOR UPDATE TO authenticated USING (true) WITH CHECK (true);
+
+-- No DELETE policy — blocked by default. Use archive_customer RPC.
+
+-- ── SALES ──
+-- SELECT: allow anon AND authenticated
+CREATE POLICY sales_select ON sales
+  FOR SELECT USING (true);
+
+-- INSERT: authenticated only (blocks anon)
+CREATE POLICY sales_insert ON sales
+  FOR INSERT TO authenticated WITH CHECK (true);
+
+-- UPDATE: authenticated only (blocks anon)
+CREATE POLICY sales_update ON sales
+  FOR UPDATE TO authenticated USING (true) WITH CHECK (true);
+
+-- No DELETE policy — blocked by default. Use void_sale RPC.
+
+-- ── USERS ──
+-- SELECT: authenticated only (pin_hash protection)
+CREATE POLICY users_select ON users
+  FOR SELECT TO authenticated USING (true);
+
+-- INSERT: authenticated only
+CREATE POLICY users_insert ON users
+  FOR INSERT TO authenticated WITH CHECK (true);
+
+-- UPDATE: authenticated only
+CREATE POLICY users_update ON users
+  FOR UPDATE TO authenticated USING (true) WITH CHECK (true);
+
+-- ─── 3. Verify users_public view still works ──────────────────
+-- (Created in 0042 — should still exist)
+
+-- ─── Done ──────────────────────────────────────────────────────

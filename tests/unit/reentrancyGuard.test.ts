@@ -47,6 +47,9 @@ const REF_GUARDS: Record<string, string> = {
   'src/pages/admin/returns/AdminReturnConfirmPage.tsx': 'submittingRef',
   'src/pages/employee/customers/RecordCustomerPaymentPage.tsx': 'submittingRef',
   'src/pages/employee/returns/ReturnConfirmPage.tsx': 'submittingRef',
+  // The LIVE sale confirm screen is CartPage (route `sale/cart`); SaleReviewPage is not routed.
+  // Both are listed: deleting the ref from either is a regression, but only CartPage is reachable.
+  'src/pages/employee/sale/CartPage.tsx': 'completingRef',
   'src/pages/employee/sale/SaleReviewPage.tsx': 'submittingRef',
 };
 

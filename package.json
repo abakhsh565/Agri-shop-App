@@ -28,10 +28,16 @@
     "qa:count": "node scripts/dev/qa.mjs count",
     "qa:clean": "node scripts/dev/qa.mjs clean",
     "qa:seed": "node scripts/dev/qa.mjs seed",
+    "migrate": "node scripts/migrate.mjs",
+    "migrate:status": "node scripts/migrate.mjs status --env staging",
+    "migrate:verify": "node scripts/migrate.mjs verify --env staging",
     "backup": "node scripts/backup-database.mjs",
     "backup:verify": "node scripts/restore-verify.mjs",
+    "creds:production": "node scripts/run-with-production-credentials.mjs",
     "verify:targeting": "node scripts/verify-targeting-refusals.mjs",
+    "verify:credentials": "node scripts/verify-credential-intake.mjs",
     "verify:workflow": "node scripts/verify-workflow-safety.mjs",
+    "verify:baseline": "node scripts/verify-forward-on-baseline.mjs",
     "index:build": "node scripts/dev/index.mjs"
   },
   "dependencies": {

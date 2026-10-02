@@ -1,0 +1,44 @@
+{
+  "record": "The frozen production schema the forward-migration checks are run against. Captured read-only on 2026-10-01 by scripts/backup-database.mjs (the accepted Phase 2A artifact). It is a logical dump and DOES contain real rows, so it lives only in gitignored backups/; the verification tool loads its schema and skips every data statement. Production is never a migrate target: it is checked against, never written.",
+  "environment": "production",
+  "projectRef": "gkswcfljxlutkfdvvqng",
+  "capturedAt": "2026-10-01T11:21:48.712Z",
+  "serverVersion": "17.6",
+  "artifact": "backups/backup-production-gkswcfljxlutkfdvvqng-2026-10-01T11-21-48.sql",
+  "artifactSha256": "59aaca8af324f7d09486830a69878d293ea707a5e7276c4ebee5b099d9ad6cd3",
+  "artifactBytes": 340654,
+  "manifest": "backups/backup-production-gkswcfljxlutkfdvvqng-2026-10-01T11-21-48.manifest.json",
+  "contentType": "logical-dump",
+  "dataStatements": 268,
+  "dataHandling": "skipped-on-load",
+  "dataNote": "Measured with the project splitter: 788 statements total, 268 of them data (264 public rows plus 2 auth.users and 2 auth.identities). Contains personal data and password hashes — never commit, never publish. The tool re-measures this count and refuses the record if it does not match.",
+  "ledgerOnServer": {
+    "count": 8,
+    "latest": "0016",
+    "note": "The server's own supabase_migrations bookkeeping at capture time. It does not match the repository directory (169 files, newest 0177); that divergence is exactly why this baseline exists and why history is never replayed."
+  },
+  "structure": {
+    "tables": 28,
+    "functions": 37,
+    "views": ["product_variants_public", "users_public"],
+    "indexes": 47,
+    "foreignKeys": 56,
+    "checks": 9,
+    "uniques": 9,
+    "triggers": 10,
+    "policies": 104,
+    "enums": 8
+  },
+  "policy": {
+    "forwardOnly": true,
+    "replayHistory": "never",
+    "migrateTarget": false,
+    "note": "No migration file from supabase/migrations may be replayed onto production as history. Measured 2026-10-01: 30 of 169 files fail when replayed onto this schema. Production moves only by individually verified NEW files (0178+), at the release gate, through the sanctioned path."
+  },
+  "recheck": "npm run verify:baseline -- --baseline production --since <version>",
+  "measuredMismatchExamples": [
+    "0177 fails on this schema: neither public.get_my_shop_request(text) nor public.process_reminders() exists here.",
+    "0176 applies cleanly on this schema (verified 2026-10-01).",
+    "The repository lineage and production diverge in both directions (e.g. this schema has no payments table; it has customer_payments)."
+  ]
+}

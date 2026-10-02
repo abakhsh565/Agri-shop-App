@@ -50,11 +50,14 @@ it. Changing a project ref there changes it everywhere.
 |---|---|---|---|---|
 | `development` | *none* (does not exist) | `DEV` | — | — |
 | `staging` (a.k.a. QA) | `bpybjrjenwccowvtrevu` | `QA` | `.env.qa` (gitignored) | `7678069749886157684` |
-| `production` | `gkswcfljxlutkfdvvqng` | `PROD` | **none, by design** | *not enrolled — needs one successful run* |
+| `production` | `gkswcfljxlutkfdvvqng` | `PROD` | `~/.agrishop/production.env` (outside the repo) | `7666007964130682852` |
 
 A project ref is **not** a secret (it is in every Supabase URL). Credentials are **never** stored in
-this file, and production has no credential file at all: `PROD_DB_HOST/USER/PASS` must come from the
-process environment, which in CI means repository secrets.
+this file, and production has no credential file *inside the repository*: `PROD_DB_HOST/USER/PASS`
+come from the process environment — in CI from repository secrets, and locally from
+`~/.agrishop/production.env` (outside the checkout, injected into a single allow-listed child by
+`scripts/run-with-production-credentials.mjs`). The production cluster fingerprint was enrolled on
+2026-10-01, from the manifest of the first verified backup run.
 
 ### Why the fingerprint matters
 
@@ -65,6 +68,41 @@ server cannot be asked which project it is. The project is therefore taken from 
 authenticated with**, and corroborated by `pg_control_system().system_identifier` — a value the
 pooler cannot rewrite — which is compared against the one enrolled in `environments.json`.
 
+### Which migrations are applied here — the ledger
+
+`supabase_migrations.schema_migrations` is the database's own record of what has been applied to
+it, and `scripts/migrate.mjs` is now the only path that writes it:
+
+```bash
+node scripts/migrate.mjs status --env staging          # directory vs ledger, read-only
+node scripts/migrate.mjs verify --env staging          # the same check as an exit code (CI runs this)
+node scripts/migrate.mjs apply  --env staging --apply  # apply pending files; each file is recorded in the same transaction
+```
+
+Every recorded file carries its sha256, so a migration that is edited *after* it was applied is
+reported as `changed after it was applied` instead of being silently trusted. The directory grammar
+is enforced — one canonical `<4 digits>_<name>.sql` per version — and the runner refuses to apply a
+file numbered before the newest recorded version, because that rewrites history.
+
+Nothing in this tool reads or writes production, and history is never replayed anywhere: the decided
+strategy (`SCHEMA_STRATEGY.md`) is a **frozen baseline per environment plus forward-only files**,
+each verified against the target's baseline in PGlite before it is applied anywhere:
+
+```bash
+npm run verify:baseline -- --baseline production --since 0178   # check a file against the frozen schema
+npm run verify:baseline -- --baseline staging    --since 0178
+```
+
+Production's baseline is recorded in `supabase/baseline/production-baseline.json`; its own ledger
+(8 rows, latest `0016`) is left exactly as the server has it, because replaying this directory onto
+production is measured to fail (30/169 files) and rewriting that history would be a fiction. **Staging's ledger today:** 169 files,
+`0009` → `0177` — 167 adopted on 2026-10-01 and two (`0176`, `0177`) applied through the runner
+itself (`PHASE_2_MIGRATION_LEDGER.md`). One of them (`0176`) carries a `reconcile_note`: it was
+edited comment-only after it was applied, and the ledger records that fact rather than hiding it.
+The retired filenames
+`0042b_security_rls_fix.sql` and `20260903_credit_limit_requests__reminder_groups.sql` are gone:
+the first was merged into `0042`, the second renumbered to `0060`.
+
 ## 4. Taking a backup
 
 The environment must be named. **There is no default**, because a default is how the original bug
@@ -74,9 +112,11 @@ happened.
 # Staging (credentials come from .env.qa)
 node scripts/backup-database.mjs --env staging
 
-# Production (credentials must already be in the process environment)
-export PROD_DB_HOST=... PROD_DB_USER=postgres.<project-ref> PROD_DB_PASS=...
-node scripts/backup-database.mjs --env production
+# Production, locally — the credentials live in a file OUTSIDE the repository and are validated and
+# injected into exactly one child process (see §7 step 2). Do NOT `export` them in a shared shell:
+# that puts the value in the shell's history file and in every later process of that shell.
+npm run creds:production -- --check
+npm run creds:production -- -- node scripts/backup-database.mjs --env production
 ```
 
 Both write two files to `backups/` (**gitignored** — they contain personal data and password hashes):
@@ -127,7 +167,9 @@ connection string.
 The artefact is a **logical** dump, so a real recovery is a two-step operation:
 
 1. **Schema** — replay the migrations (`supabase/migrations/`) against the target, which reproduces
-   tables, policies and functions as reviewed and versioned.
+   tables, policies and functions as reviewed and versioned. `node scripts/migrate.mjs status
+   --env <target>` says what that target already has, from its own ledger, before anything is
+   replayed into it.
 2. **Data** — apply the artefact, which supplies every row plus functions, views and policies.
 
 `scripts/restore-verify.mjs` proves step 2 replays cleanly and faithfully. It does **not** prove a
@@ -175,9 +217,31 @@ workflow is how a mislabelled artefact gets produced.
 
 ### Step 2 — add the credentials
 
-Supply the three secrets with values obtained from the Supabase dashboard for the production project
-(Settings → Database → Connection string / Connection pooling). Host is the pooler host; the user is
-`postgres.<project-ref>`, not a bare `postgres`.
+All three values come from the Supabase dashboard for the production project (Settings → Database →
+Connection string / Connection pooling). The host is the pooler host; the user is
+`postgres.<project-ref>`, **not** a bare `postgres`. There are two routes, and only the second needs
+GitHub.
+
+**Route A — local (free, no runner, works today; this is the route Phase 2A needs).** The value is
+written once into a file that must live **outside this repository**, then injected into exactly one
+allow-listed child process:
+
+```bash
+npm run creds:production -- --init      # ~/.agrishop/production.env — HOST and USER prefilled, PASS empty
+#   ← fill in that one line, from the dashboard. Not into chat, not into a tracked file.
+npm run creds:production -- --check     # validates the file; opens no connection
+```
+
+The location rule is enforced before the file is read, so "not committed" is structural rather than
+an ignore rule: a path that resolves inside the repository is refused even if it does not exist. The
+file is deliberately not `.env.production.local`, which Vite loads during a production build. The
+wrapper refuses a QA identity behind a `PROD_` prefix, a bare `postgres` user, a missing or empty
+password, and any command other than `backup-database.mjs` and `restore-verify.mjs`; it never prints
+the value. `npm run verify:credentials` proves all of it (23 checks) with a fresh canary per run.
+
+**Route B — GitHub repository secrets**, for the CI path, through the authenticated `gh` CLI (`gh` is
+logged in with the `repo` and `workflow` scopes). Encrypted at rest by GitHub, write-only from any
+client, masked in logs. Kept working for when Actions can run — see the billing caveat in step 3.
 
 ```bash
 gh secret list                    # names and timestamps only; never prints a value
@@ -192,8 +256,10 @@ gh secret list                    # confirm the three names now appear
 ```
 
 **Never** put these values in source, a committed `.env`, a report, a chat message, or an artefact.
-The script reads them from the process environment only, and production has no credential file by
-configuration — `scripts/lib/environments.mjs` will not read one.
+The backup tooling reads them from the process environment only, and production has no env file by
+configuration — `scripts/lib/environments.mjs` will not read one. Route A is the sanctioned way to
+fill that environment locally without an `export`: the file is outside the checkout, is read by the
+intake wrapper alone, and is refused outright if it resolves inside the repository.
 
 3. Run the **"Backup Database (to the environment it names)"** workflow with `environment =
    production`, or run the command in §4 locally.
@@ -211,8 +277,9 @@ configuration — `scripts/lib/environments.mjs` will not read one.
    first verified production backup does not have to wait for billing:
 
    ```bash
-   node scripts/backup-database.mjs --env production    # needs PROD_DB_* exported
-   npm run backup:verify -- --from backups/<the new manifest> --compare-with production
+   npm run creds:production -- -- node scripts/backup-database.mjs --env production
+   npm run creds:production -- -- node scripts/restore-verify.mjs \
+     --from backups/<the new manifest> --compare-with production
    ```
 4. The run takes the dump, restore-verifies it, and only then uploads it — a failed verification
    means no artefact is accepted and the run is red.
@@ -235,8 +302,15 @@ Until step 3 has completed successfully, the gate in §1 stands.
 | Credential that names no project | exit 2 — an unverifiable target is not a target |
 | Cluster fingerprint mismatch | exit 1, and no artefact is written |
 
+| Credential file that resolves inside the repository | exit 2 **before the file is read**, even when the path does not exist |
+| `PROD_DB_PASS` empty (an unfilled template) | exit 2, names the missing key, points at the dashboard |
+| An intake command that is not `backup-database.mjs` / `restore-verify.mjs` | exit 2 — the intake wrapper is not a general credential launcher |
+
 These are asserted by `tests/unit/backupTargeting.test.ts` (20 tests, each refusal paired with the
-correct configuration that must be accepted, so the refusals cannot pass vacuously).
+correct configuration that must be accepted, so the refusals cannot pass vacuously) and, at the
+process boundary, by `npm run verify:targeting` (8 CLI cases) and `npm run verify:credentials`
+(23 checks, including a mutation injection that deletes the identity check and watches the wrong
+project become acceptable — so the check is known to be load-bearing rather than decorative).
 
 ## 9. Honest RPO / RTO
 
@@ -314,8 +388,9 @@ Two consequences for recovery:
 | Corrected workflow on `main` | **Yes** — commit `de13eb1d`, blob-verified identical to this checkout, registered as `Backup Database (to the environment it names)` |
 | `PROD_DB_HOST` secret | **Set** — `aws-0-ap-northeast-1.pooler.supabase.com` (a shared regional address, verified by probe) |
 | `PROD_DB_USER` secret | **Set** — `postgres.gkswcfljxlutkfdvvqng` (a username, already in `environments.json`) |
-| `PROD_DB_PASS` secret | **NOT SET — this is the remaining external input** |
+| `PROD_DB_PASS` secret | **Not set in GitHub — the local route supplies it** (`~/.agrishop/production.env`, written through the sanctioned intake form on 2026-10-01); CI still needs this secret if the scheduled job is ever unblocked |
 | GitHub Actions | **Blocked by billing** — no job can start |
+| First verified production backup + restore | **Done, 2026-10-01** — artifact `backups/backup-production-gkswcfljxlutkfdvvqng-2026-10-01T11-21-48.sql`; isolated restore PASS (788 statements, 0 failures, 28/28 row digests identical); two mutation proofs on the same artifact |
 
 `PROD_DB_HOST` was not guessed. The pooler resolves the project ref in the *username*, so a login
 attempt with a deliberately wrong password distinguishes the two failure modes that matter:
@@ -329,7 +404,7 @@ attempt with a deliberately wrong password distinguishes the two failure modes t
 
 ```bash
 npm run verify:targeting   # 8 cases at the process boundary: exit codes, pre-connection refusal, no secret in any output
-npm run verify:workflow    # 22 checks: structure, shell syntax, and each invariant proven able to fail
+npm run verify:workflow    # 24 checks: structure, shell syntax, and each invariant proven able to fail
 ```
 
 Both are also runnable directly (`node scripts/verify-targeting-refusals.mjs`,
@@ -346,3 +421,4 @@ code rather than by restating the intention.
 | 2026-10-01 | Rewritten against the real tooling: explicit targeting, restore verification, and the honest statement that production has no backup path yet |
 | 2026-10-01 | Added the commit prerequisite (§7 step 0), the exact credential-provisioning commands, and the recorded state of the live backup job (§11) |
 | 2026-10-01 | Workflow pushed to `main` (`de13eb1d`); `PROD_DB_HOST` and `PROD_DB_USER` provisioned and probe-verified; recorded that GitHub Actions is blocked by account billing, and that the ten historic failures were that block rather than the script |
+| 2026-10-01 | **First verified production backup + isolated restore (PASS).** The original database password was not retrievable, so it was reset in the dashboard after a dependency analysis proved no runtime or job used it; the new value went only to `~/.agrishop/production.env` through the local intake form. Cluster `7666007964130682852` enrolled; artifact-gate checks in `verify:workflow` now present a chosen manifest instead of the newest one (24 checks) |

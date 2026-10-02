@@ -1,7 +1,9 @@
-import { defineConfig, type HtmlTagDescriptor, type Plugin } from 'vite'
+import { defineConfig, loadEnv, type HtmlTagDescriptor, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import path from 'node:path'
+
+import { readEnvironmentInput, resolveEnvironment } from './src/lib/environmentContract'
 
 import siteConfiguration from './.figma/make/site.json'
 
@@ -19,6 +21,7 @@ export default defineConfig(({ mode }) => {
     plugins: [
       react(),
       tailwindcss(),
+      environmentGate(mode),
       figmaSiteConfiguration(siteConfiguration),
       figmaErrorOverlayReplay(),
       figmaReactRefreshBoundaryFallback(),
@@ -41,6 +44,49 @@ export default defineConfig(({ mode }) => {
     },
   }
 })
+
+/**
+ * Refuse to produce a build whose environment is unnamed, unknown, or pointed at the wrong
+ * project.
+ *
+ * The app also asserts this at start-up (src/lib/envGuard.ts), but start-up is too late for the
+ * dangerous cases: a release APK or a Vercel production deploy should never come into existence
+ * in the first place. Failing here means the broken artifact is never created, so nothing can
+ * ship it by accident afterwards.
+ *
+ * Only `apply: 'build'`. The dev server stays usable while developing, and is protected by the
+ * same rules at runtime.
+ */
+function environmentGate(mode: string): Plugin {
+  return {
+    name: 'agrishop-environment-gate',
+    apply: 'build',
+    configResolved() {
+      // `loadEnv` is exactly what the app's own `import.meta.env` is built from, so the build is
+      // judged on the same values the bundle will carry.
+      const env = loadEnv(mode, process.cwd(), 'VITE_')
+      const verdict = resolveEnvironment(readEnvironmentInput(env))
+
+      if (!verdict.ok) {
+        throw new Error(
+          `\n\n[ENVIRONMENT GATE] Refusing to build.\n\n` +
+            `  ${verdict.code}\n  ${verdict.message}\n\n` +
+            `  Build mode: ${mode}\n` +
+            `  VITE_APP_ENV: ${env.VITE_APP_ENV ?? '(unset)'}\n` +
+            `  VITE_OTP_DELIVERY: ${env.VITE_OTP_DELIVERY ?? '(unset)'}\n` +
+            `  VITE_SUPABASE_URL: ${env.VITE_SUPABASE_URL ?? '(unset)'}\n\n` +
+            `  Set the variables for THIS environment (see .env.example). Do not point one\n` +
+            `  environment at another environment's project, and never fall back to production.\n\n`,
+        )
+      }
+
+      console.log(
+        `[EnvGuard] building ${verdict.environment.toUpperCase()} → ${verdict.projectId} ` +
+          `(otp: ${verdict.otpDelivery}${verdict.credentialsCrossChecked ? ', key verified' : ''})`,
+      )
+    },
+  }
+}
 
 type FigmaSiteConfiguration = {
   title?: string

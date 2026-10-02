@@ -346,27 +346,83 @@ export function biometricSupported(): boolean {
   );
 }
 
-/** Is there a finger or a face on this device to check? */
-export async function biometricPlatformAvailable(): Promise<boolean> {
+/**
+ * Why this phone cannot offer a fingerprint — the answer the device gives, not a guess.
+ *
+ * The row used to say one thing for every cause ("This phone cannot use a fingerprint"), so a
+ * phone whose owner uses fingerprints in every other app was told it had none, with nothing to
+ * act on. The three real causes are fixed in three different places:
+ *
+ *   no_plugin      — this build shipped without the native bridge. It is not the phone's fault
+ *                    and no setting will change it: the app has to be updated. That is worth
+ *                    saying out loud, because it is exactly what an older sideloaded APK does.
+ *   no_enrolment   — the sensor is there and the phone is unlocked, but no finger is registered.
+ *                    Fixed in the phone's own settings, in a minute.
+ *   no_screen_lock — biometrics need a device credential behind them; a phone with no PIN or
+ *                    pattern cannot use them at all.
+ *   no_sensor      — the hardware is not there. Nothing to do.
+ */
+export type BiometricReason = "no_plugin" | "no_sensor" | "no_enrolment" | "no_screen_lock" | "unknown";
+
+/**
+ * The sentence that goes under the row for each cause, as dictionary keys.
+ *
+ * A map rather than an interpolated key, so a new reason cannot be added without a screen deciding
+ * what it says — and so `i18nParity` proves both languages carry every one of them.
+ */
+export const BIOMETRIC_REASON_KEY: Record<BiometricReason, string> = {
+  no_plugin: "settings.fingerprint.why.noPlugin",
+  no_sensor: "settings.fingerprint.why.noSensor",
+  no_enrolment: "settings.fingerprint.why.noEnrolment",
+  no_screen_lock: "settings.fingerprint.why.noScreenLock",
+  unknown: "settings.fingerprint.why.unknown",
+};
+
+/**
+ * Whether biometrics can be used here, and — when they cannot — which of the causes above it is.
+ *
+ * `null` means it can be used. Anything else is the reason, read from the plugin's own report
+ * (`isAvailable`, `biometryTypes`, `deviceIsSecure`, `reason`) rather than inferred.
+ */
+export async function biometricUnavailableReason(): Promise<BiometricReason | null> {
+  const native = isNative();
   const plugin = await nativePlugin();
+
+  // Native, but the bridge is missing from the build. Distinguished from "no sensor" on purpose:
+  // this one is fixed by updating the app, and saying "your phone cannot do it" would be a lie.
+  if (native && !plugin) return "no_plugin";
+
   if (plugin) {
     try {
       const result = await plugin.BiometricAuth.checkBiometry();
-      return result.isAvailable === true;
+      if (result.isAvailable === true) return null;
+      const types = result.biometryTypes ?? [];
+      const sensorPresent = types.length > 0 || Number(result.biometryType) > 0;
+      if (!sensorPresent) return "no_sensor";
+      if (result.deviceIsSecure === false) return "no_screen_lock";
+      // A sensor, a screen lock, and still nothing usable: nothing is enrolled.
+      if (result.strongBiometryIsAvailable === false) return "no_enrolment";
+      return "unknown";
     } catch {
-      return false;
+      return "unknown";
     }
   }
-  if (isNative()) return false;
-  if (!biometricSupported()) return false;
+
+  if (native) return "no_plugin";
+  if (!biometricSupported()) return "unknown";
   try {
     const available = await (
       window as unknown as { PublicKeyCredential: { isUserVerifyingPlatformAuthenticatorAvailable(): Promise<boolean> } }
     ).PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
-    return available === true;
+    return available === true ? null : "no_enrolment";
   } catch {
-    return false;
+    return "unknown";
   }
+}
+
+/** Is there a finger or a face on this device to check? */
+export async function biometricPlatformAvailable(): Promise<boolean> {
+  return (await biometricUnavailableReason()) === null;
 }
 
 // ─── Enrolment ────────────────────────────────────────────────────────────────────────

@@ -26,7 +26,13 @@
     "localEnvFile names the gitignored file a local run may read credentials from. It is null for",
     "development and production on purpose: there is no development project, and production's",
     "credentials must come from repository secrets or an explicit export so that none of them can",
-    "end up in the checkout."
+    "end up in the checkout.",
+    "",
+    "A LOCAL production run — one with no CI secret to read — may still supply credentials, but only",
+    "from a file OUTSIDE this repository, through scripts/run-with-production-credentials.mjs. That",
+    "keeps the rule above intact rather than relaxing it: the intake tool refuses any path that",
+    "resolves inside the repository before it reads a byte, so there is nothing for `git add` to",
+    "catch, and the backup tooling itself still reads only the process environment."
   ],
 
   "environments": {
@@ -49,10 +55,10 @@
     "production": {
       "projectRef": "gkswcfljxlutkfdvvqng",
       "status": "active",
-      "notes": "Named 'Agrishop APp'. Confirmed as production on 2026-10-01 and confirmed to hold real business data (1 shop, 4 users, 6 customers, 52 sales). Runs on the Free plan, which provides no managed backups, no downloadable backups and no PITR.",
+      "notes": "Named 'Agrishop APp'. Confirmed as production on 2026-10-01 and confirmed to hold real business data (1 shop, 4 users, 6 customers, 52 sales). Runs on the Free plan, which provides no managed backups, no downloadable backups and no PITR. First verified backup + isolated restore completed 2026-10-01; cluster enrolled from that run's manifest.",
       "envPrefix": "PROD",
       "localEnvFile": null,
-      "clusterId": null
+      "clusterId": "7666007964130682852"
     }
   }
 }

@@ -5,6 +5,9 @@ import Sheet from "@/components/ui/Sheet";
 import Button from "@/components/ui/Button";
 import ListCard from "@/components/ui/ListCard";
 import ListRow from "@/components/ui/ListRow";
+import LocationField from "@/components/ui/LocationField";
+import { supabase } from "@/lib/supabase";
+import type { PickedPlace } from "@/lib/geo";
 import { useT } from "@/lib/i18n";
 import { useShopStore, type BranchSummary } from "@/stores/shopStore";
 import { useRolesStore } from "@/stores/rolesStore";
@@ -30,7 +33,18 @@ import { useShellBase } from "@/lib/useShellBase";
  *
  * The main branch carries one extra sentence: it can be renamed and never deleted, which is
  * the reason it has no Delete row anywhere on the Branches screen.
+ *
+ * The location is read from the branch row the list handed in and written through `set_place`,
+ * which is the only writer that knows a location is a point inside Pakistan. It is deliberately
+ * not read back from `shops`: that table may only be read for the branch the account is working
+ * in, so a query for any other branch comes back empty — not failed — and the picker would state
+ * that a branch which is pinned has never been located.
  */
+
+/** Two pins are the same pin when they are the same point; the label is a name for it, not the it. */
+function placeKeyOf(place: PickedPlace | null): string | null {
+  return place ? `${place.lat},${place.lng}` : null;
+}
 export default function BranchEditSheet({
   branch,
   onClose,
@@ -46,6 +60,7 @@ export default function BranchEditSheet({
   const { addToast } = useUIStore();
 
   const renameBranch = useShopStore((s) => s.renameBranch);
+  const setBranchPlace = useShopStore((s) => s.setBranchPlace);
   const switchTo = useShopStore((s) => s.switchTo);
 
   const roles = useRolesStore((s) => s.roles);
@@ -54,6 +69,20 @@ export default function BranchEditSheet({
   const getRoleMemberCount = useRolesStore((s) => s.getRoleMemberCount);
 
   const [name, setName] = useState(branch.name);
+  /**
+   * Where this branch is, as a point — read from the branch row, then picked on a map.
+   *
+   * Read rather than assumed: the sheet can be opened on a branch that has never had a location,
+   * on one pinned last week, and everything in between, and "nothing here yet" must not look like
+   * "somewhere else". Nothing is written until Save.
+   *
+   * It comes from the branch the screen handed in, NOT from a `shops` query of our own. `shops`
+   * may only be read for the shop the account is working in, so querying it for any other branch
+   * returned an empty result — not an error — and the field said "Choose on the map" about a
+   * branch that was already pinned. `get_my_branches()` is the read allowed to see every branch
+   * the account belongs to, so the place travels with the branch.
+   */
+  const [place, setPlace] = useState<PickedPlace | null>(branch.place);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [counts, setCounts] = useState<Record<string, number>>({});
@@ -87,7 +116,13 @@ export default function BranchEditSheet({
   }, [isActive, roles, getRoleMemberCount]);
 
   const clean = name.trim();
-  const dirty = clean !== branch.name.trim();
+  // A location is saved by the same button as the name, so "nothing to save" has to account for
+  // both: a branch whose name is unchanged but whose pin was just moved is a pending change.
+  // The starting point is what the row already holds, so a sheet opened and closed without
+  // touching anything is not a pending write.
+  const [savedPlaceKey, setSavedPlaceKey] = useState<string | null>(placeKeyOf(branch.place));
+  const placeKey = placeKeyOf(place);
+  const dirty = clean !== branch.name.trim() || placeKey !== savedPlaceKey;
 
   async function handleSave() {
     if (savingRef.current) return;
@@ -109,6 +144,40 @@ export default function BranchEditSheet({
       );
       return;
     }
+
+    // The location, saved by the same button as the name — INCLUDING when it was taken back.
+    //
+    // Through `set_place` rather than a direct UPDATE: that is the one writer that knows a
+    // location must be a point inside Pakistan, and it checks that the branch belongs to a tenant
+    // the caller is a member of. A refusal is reported where the picker is, not swallowed — a pin
+    // that did not save must never look like one that did.
+    //
+    // The condition is "the pin changed", not "there is a pin". Pressing the field's clear
+    // control empties it, and saving that used to write nothing at all: the sheet said the branch
+    // was saved, the row kept the old point, and reopening showed it back. Clearing a location is
+    // a change like any other, so it is written like one.
+    if (placeKey !== savedPlaceKey) {
+      const { error: placeError } = await supabase.rpc("set_place", {
+        p_table: "shops",
+        p_id: branch.id,
+        p_latitude: place?.lat ?? null,
+        p_longitude: place?.lng ?? null,
+        p_label: place?.label ?? null,
+        p_address: place?.address ?? null,
+        p_source: place?.source ?? null,
+      });
+      if (placeError) {
+        setError(t("branches.locationFailed"));
+        savingRef.current = false;
+        setSaving(false);
+        return;
+      }
+      setSavedPlaceKey(placeKey);
+      // The list is what the next open of this sheet reads, so it is told now rather than after a
+      // round trip: a pin that saved must not come back as the old one a moment later.
+      setBranchPlace(branch.id, place);
+    }
+
     addToast(t("branches.saved", { branch: clean }), "success");
     onRenamed(clean);
   }
@@ -179,6 +248,19 @@ export default function BranchEditSheet({
             {error}
           </p>
         )}
+
+        {/* ── Where it is ───────────────────────────────────────────────────────── */}
+        {/* Not a text field: a branch's location is a point on a map, and an address typed
+            beside a pin is how the two end up describing different towns. */}
+        <div className="mt-4">
+          <LocationField
+            value={place}
+            onChange={setPlace}
+            label={t("branches.locationLabel")}
+            hint={t("location.notTyped")}
+            testId={`branch-location-${branch.id}`}
+          />
+        </div>
 
         {/* ── The roles ─────────────────────────────────────────────────────────── */}
         <p className="text-12 font-semibold mt-4" style={{ color: "var(--text-primary)" }}>

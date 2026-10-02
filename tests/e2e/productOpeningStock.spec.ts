@@ -42,23 +42,23 @@ test.describe('Product opening stock', () => {
     await page.goto(`${BASE_URL}/admin/inventory/new`);
     await page.waitForLoadState('networkidle');
 
-    await page.getByPlaceholder('e.g. Karate Insecticide').fill(PRODUCT_NAME);
+    await page.getByTestId('product-name').fill(PRODUCT_NAME);
     // The supplier picker is the app's own sheet, not a native <select> — the design
     // revamp removed every browser-default select, so this opens the field and picks
     // the supplier row. Same requirement (choose a supplier), current UI.
     await page.getByRole('button', { name: 'Choose supplier' }).click();
     await page.locator('.ds-row', { hasText: SUPPLIER }).first().click();
-    // The single unit row starts with an empty name, and the form refuses to save
-    // without one — so this is the one unit the opening figure belongs to.
-    await page.getByPlaceholder('Unit name — e.g. 500ml, 50kg').fill('1kg');
 
-    // The opening-stock field comes before the unit rows, so it is the first number
-    // input on the screen; the unit row's selling price is the next one.
-    const numbers = page.locator('input[type="number"]');
-    await numbers.nth(0).fill(String(OPENING_STOCK));
-    await numbers.nth(1).fill(String(SELLING_PRICE));
+    // The form is one card per pack now, and every field carries its own hook. The pack
+    // that starts empty is where the opening figure belongs: its size, its selling price
+    // and the quantity on the shelf, addressed by pack index rather than by position on
+    // the screen — position is what the old locator got wrong, not the requirement.
+    await page.getByTestId('product-pack-size-0').fill('1');
+    await page.getByTestId('product-pack-cost-0').fill(String(SELLING_PRICE - 100));
+    await page.getByTestId('product-pack-sell-0').fill(String(SELLING_PRICE));
+    await page.getByTestId('product-pack-stock-0').fill(String(OPENING_STOCK));
 
-    await page.getByRole('button', { name: 'Add Product' }).click();
+    await page.getByTestId('product-save').click();
 
     // Wait for the real RPC round-trip, then judge the database, not the screen.
     await page.waitForTimeout(5000);

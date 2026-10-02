@@ -1,5 +1,5 @@
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
-import { LayoutDashboard, ShoppingBag, Package, ScanLine, MoreHorizontal, X } from "lucide-react";
+import { LayoutDashboard, ShoppingBag, Package, ScanLine, MoreHorizontal, Sparkles, X } from "lucide-react";
 import { useT, tNow } from "@/lib/i18n";
 import ToastContainer from "@/components/ui/Toast";
 import NavTracker from "@/components/ui/NavTracker";
@@ -29,6 +29,9 @@ const TAB_DEFS = [
   { key: "admin.sales"     as const, icon: ShoppingBag,     path: "/admin/sales"     },
   { key: "scan"            as const, icon: ScanLine,        path: "__scan__"         },
   { key: "admin.inventory" as const, icon: Package,         path: "/admin/products"    },
+  // The assistant is a tab, not a separate screen with its own sign-in: it opens on the session
+  // that is already signed in and answers within that account's reach.
+  { key: "nav.assistant"   as const, icon: Sparkles,        path: "/admin/assistant"   },
   { key: "admin.more"      as const, icon: MoreHorizontal,  path: "/admin/more"      },
 ];
 
@@ -116,6 +119,7 @@ export default function AdminLayout() {
     if (path.startsWith("/admin/products"))  return "/admin/products";
     if (path.startsWith("/admin/inventory") || path.startsWith("/admin/inventory/movements") || path.startsWith("/admin/inventory/reorder")) return "/admin/products";
     if (path.startsWith("/admin/customers")) return "/admin/customers";
+    if (path.startsWith("/admin/assistant")) return "/admin/assistant";
     if (path.startsWith("/admin/more") ||
         path.startsWith("/admin/employees") ||
         path.startsWith("/admin/companies") ||
@@ -311,6 +315,11 @@ export default function AdminLayout() {
           paddingRight: "16px",
         }}
       >
+        {/* Every tab carries an explicit 44px floor. The icon+label stack is only ~41px tall
+            on its own, and the accessibility lane measures real rendered boxes: with the
+            assistant tab added, five sub-44px targets per route were counted (55 across the
+            admin routes) and the frozen structural baseline − which may only shrink −
+            refused the growth. The floor is the app's to meet, not the baseline's to record. */}
         {TAB_DEFS.map(({ key, icon: Icon, path }) => {
           if (path === "__scan__") {
             return (
@@ -319,7 +328,7 @@ export default function AdminLayout() {
                 onClick={handleNavScan}
                 disabled={scanning}
                 data-tour="tab:scan"
-                className="ds-pressable flex flex-col items-center justify-center flex-1 gap-1 cursor-pointer"
+                className="ds-pressable flex flex-col items-center justify-center flex-1 gap-1 cursor-pointer min-h-[44px]"
               >
                 <div
                   className="flex items-center justify-center rounded-full -mt-3"
@@ -339,7 +348,7 @@ export default function AdminLayout() {
               key={path}
               onClick={() => { clearNav(); navigate(path); }}
               data-tour={`tab:${key}`}
-              className="ds-pressable flex flex-col items-center justify-center flex-1 gap-1 cursor-pointer"
+              className="ds-pressable flex flex-col items-center justify-center flex-1 gap-1 cursor-pointer min-h-[44px]"
             >
               <Icon
                 size={22}

@@ -27,13 +27,16 @@ import { useShopStore, type BranchSummary } from "@/stores/shopStore";
 import { branchContextLabel } from "@/lib/branchContext";
 import { deleteAccount } from "@/lib/auth";
 import { forgetLastProfile, forgetPhoneVerification } from "@/lib/loginWindow";
+import { entryDoor } from "@/lib/entryDoor";
 import { OWNER_ROWS, useOwnerRows } from "@/lib/ownerRows";
 import { useShellBase } from "@/lib/useShellBase";
 import {
-  biometricPlatformAvailable,
+  biometricUnavailableReason,
+  BIOMETRIC_REASON_KEY,
   enrolBiometric,
   hasBiometricEnrolment,
   removeBiometric,
+  type BiometricReason,
   type EnrolResult,
 } from "@/lib/biometric";
 
@@ -103,6 +106,8 @@ export default function AdminSettingsPage() {
   // Fingerprint login. Two-tier state because "off" and "this phone cannot do it" are
   // different sentences to read, and only one of them is the owner's to change.
   const [fingerprint, setFingerprint] = useState<"checking" | "on" | "off" | "unavailable">("checking");
+  /** When it reads "unavailable", this is why — the device's own answer, not a guess. */
+  const [fingerprintReason, setFingerprintReason] = useState<BiometricReason | null>(null);
   const [fingerprintBusy, setFingerprintBusy] = useState(false);
   const [confirmFingerprintOff, setConfirmFingerprintOff] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -121,8 +126,12 @@ export default function AdminSettingsPage() {
       setFingerprint("on");
       return;
     }
-    biometricPlatformAvailable().then((available) => {
-      if (alive) setFingerprint(available ? "off" : "unavailable");
+    // The reason is kept, not just the verdict: "this phone cannot use a fingerprint" told the
+    // owner nothing, and read as a fault in a phone that uses fingerprints for everything else.
+    biometricUnavailableReason().then((reason) => {
+      if (!alive) return;
+      setFingerprintReason(reason);
+      setFingerprint(reason === null ? "off" : "unavailable");
     });
     return () => { alive = false; };
   }, [user]);
@@ -143,6 +152,8 @@ export default function AdminSettingsPage() {
         setFingerprint("on");
         addToast(t("fingerprint.enrolled"), "success");
       } else if (result.status === "unsupported") {
+        // Say which of the causes it is, and read it from the device rather than assuming.
+        setFingerprintReason(await biometricUnavailableReason());
         setFingerprint("unavailable");
         addToast(t("fingerprint.unsupported"), "error");
       } else if (result.status === "cancelled") {
@@ -157,9 +168,24 @@ export default function AdminSettingsPage() {
     }
   }
 
-  function handleLogout() {
+  /**
+   * Signing out — which is not the same as this phone forgetting its owner.
+   *
+   * The session ends, the cached rows are dropped, and then the SAME decision the launch screen
+   * makes is asked again (`lib/entryDoor.ts`): if this device can open with the PIN and the number
+   * was confirmed within the month, the keypad is what appears, not the phone field. Landing on
+   * "enter your number" the moment after signing out is the one screen the whole PIN rule exists
+   * to avoid — and it also invited people to take a code they did not need.
+   */
+  async function handleLogout() {
     if (user) clearDeviceSession(user.phone);
     logout();
+    const door = await entryDoor();
+    if (door.door === "pin") {
+      useAuthStore.getState().setUser(door.user);
+      navigate("/login/pin", { replace: true, state: { user: door.user } });
+      return;
+    }
     navigate("/login", { replace: true });
   }
 
@@ -172,19 +198,29 @@ export default function AdminSettingsPage() {
    * they signed in with does not — and to forget the two things this device remembers about
    * it: which profile it last served, and when its number was last confirmed. Leaving either
    * behind would offer a PIN, or a gate, for an account that is gone.
+   *
+   * ORDER IS THE WHOLE POINT. This used to forget the device FIRST and erase second, so a
+   * deletion the database refused still left a phone that had forgotten its owner: the next
+   * launch asked for a number and a code on top of an account that was still there, and the
+   * registration that followed attached to that surviving account — the data the owner had
+   * just asked to be rid of came back with it. The device is now forgotten only after the
+   * erasure has actually happened; a failure keeps the device as it was and says so.
    */
   async function handleDeleteAccount() {
     try {
+      await deleteAccount();
       if (user) {
         clearDeviceSession(user.phone);
         forgetLastProfile();
         forgetPhoneVerification(user.id);
       }
-      await deleteAccount();
       addToast(t("settings.deleteAccount.done"), "success");
       logout();
       navigate("/login", { replace: true });
     } catch {
+      // Nothing on this device was touched, so the person lands back in the same account and
+      // can try again — the opposite of being stranded on a sign-in screen for an account
+      // that still exists.
       addToast(t("settings.deleteAccount.failed"), "error");
       setAccountDeleteOpen(false);
     }
@@ -496,8 +532,9 @@ export default function AdminSettingsPage() {
               meta={
                 fingerprint === "on" ? t("settings.fingerprint.on")
                 : fingerprint === "off" ? t("settings.fingerprint.off")
-                : fingerprint === "unavailable" ? t("settings.fingerprint.unavailable")
-                : undefined
+                : fingerprint === "unavailable"
+                  ? t(BIOMETRIC_REASON_KEY[fingerprintReason ?? "unknown"])
+                  : undefined
               }
               testId="settings-fingerprint"
               trailing={

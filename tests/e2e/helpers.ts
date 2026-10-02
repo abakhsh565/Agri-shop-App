@@ -190,7 +190,13 @@ export async function ensureAuthSession(phone: string): Promise<void> {
  * empty and RPC-based assertions fail for reasons unrelated to the feature under
  * test. Verified cause of the previously failing E2E specs.
  */
-export async function loginViaUi(page: Page, phone: string) {
+export async function loginViaUi(
+  page: Page,
+  phone: string,
+  side: 'owner' | 'employee' = 'owner',
+  /** Which shop the invited number belongs to; defaults to the QA fixture shop. */
+  shopCode: string = QA_IDS.shop,
+) {
   const OTP = '123456';
   const PIN = '4321';
 
@@ -208,7 +214,17 @@ export async function loginViaUi(page: Page, phone: string) {
   }).catch(() => undefined);
 
   await page.goto(`${BASE_URL}/login`);
-  await page.getByPlaceholder('e.g. 03001234567').fill(phone);
+  // One phone, one door: the login page asks which door this number belongs at and
+  // refuses a number that answers the other one, so the tab is part of the flow.
+  if (side === 'employee') await page.getByTestId('auth-tab-employee').click();
+  // The field takes the local 03… form. A 92… constant is re-read by the field's own
+  // paste rule as a country code and becomes a 10-digit number the validator refuses,
+  // so the caller's constant is normalised here rather than in every spec.
+  await page.getByPlaceholder('e.g. 03001234567').fill(/^92\d{10}$/.test(phone) ? `0${phone.slice(2)}` : phone);
+  // The employee door is TWO answers: a number on its own does not say which shop invited it,
+  // so `Send Code` refuses to spend a code until the shop is named. The fixture shops all have
+  // a stable id, which the field accepts as readily as the six-character code read out loud.
+  if (side === 'employee') await page.getByTestId('shop-id-input').fill(shopCode);
   await page.getByRole('button', { name: 'Send Code' }).click();
   await page.waitForURL(/\/login\/otp/, { timeout: 20000 });
 

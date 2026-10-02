@@ -8,6 +8,7 @@ import { useUIStore } from "@/stores/uiStore";
 import { useThemeStore } from "@/stores/themeStore";
 import { clearNav } from "@/lib/navContext";
 import { readReturnTo, withCreatedId } from "@/lib/dependencyGraph";
+import { digitsOnlyPhone, phoneFieldProps } from "@/lib/phoneInput";
 import { useT } from "@/lib/i18n";
 
 export default function AddCompanyPage() {
@@ -102,7 +103,7 @@ export default function AddCompanyPage() {
           </div>
           <div>
             <p className={labelCls} style={{ color: "var(--text-secondary)" }}>{t("common.phone")} <span style={{ opacity: 0.6 }}>{t("common.optional")}</span></p>
-            <input type="tel" inputMode="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="03001234567"
+            <input {...phoneFieldProps()} value={phone} onChange={(e) => setPhone(digitsOnlyPhone(e.target.value))} placeholder="03001234567"
               className="w-full h-12 rounded-[var(--radius-input)] px-4 text-sm outline-none" style={fieldStyle} />
           </div>
           <div>

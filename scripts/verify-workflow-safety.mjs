@@ -330,14 +330,14 @@ console.log('');
 // ─────────────────────────────────────────────────────────────────────────────────────────────
 
 /** Execute an extracted step body under a controlled environment. */
-function runStep(bodyText, env, { timeout = 30_000 } = {}) {
+function runStep(bodyText, env, { timeout = 30_000, cwd = ROOT } = {}) {
   const scrubbed = { ...process.env };
   for (const key of ['PROD_DB_HOST', 'PROD_DB_USER', 'PROD_DB_PASS', 'QA_DB_HOST', 'QA_DB_USER', 'QA_DB_PASS']) {
     delete scrubbed[key];
   }
   Object.assign(scrubbed, env);
   const result = execFileSync('bash', ['-c', bodyText], {
-    cwd: ROOT,
+    cwd,
     env: scrubbed,
     encoding: 'utf8',
     timeout,
@@ -346,11 +346,11 @@ function runStep(bodyText, env, { timeout = 30_000 } = {}) {
   return { code: 0, output: String(result) };
 }
 
-function expectExit(label, bodyText, env, expectedCode, expectedText) {
+function expectExit(label, bodyText, env, expectedCode, expectedText, options = {}) {
   let code = 0;
   let output = '';
   try {
-    const result = runStep(bodyText, env);
+    const result = runStep(bodyText, env, options);
     output = result.output;
   } catch (error) {
     code = typeof error.status === 'number' ? error.status : -1;
@@ -426,21 +426,60 @@ if (targetStep && preflightStep && confirmArtifactStep) {
     /No credentials for 'production'/,
   );
 
-  // The artefact gate, run against the real staging artefact produced by the verified staging run.
+  // The artefact gate. In CI this step sees exactly one manifest, because the run that produced
+  // it is the run under inspection — so the step body itself picks `ls -t backups/*.manifest.json`.
+  // This harness must present a *chosen* artefact instead of whatever is newest on this machine:
+  // once a production artefact existed alongside the staging one, `ls -t` silently swapped the
+  // subject of these checks and they failed for the wrong reason. Each scratch directory therefore
+  // holds one manifest and a copy of environments.json, and the step body runs unmodified inside it.
   const manifests = fs
     .readdirSync(path.join(ROOT, 'backups'))
     .filter((name) => name.endsWith('.manifest.json'))
     .sort();
-  if (manifests.length) {
-    expectExit('artefact gate accepts the staging artefact for a staging run', confirmArtifactStep, { TARGET: 'staging' }, 0, /as requested/);
-    expectExit(
-      'artefact gate REFUSES the staging artefact for a production run',
-      confirmArtifactStep,
-      { TARGET: 'production' },
-      1,
-      /Artefact does not match the requested target/,
-    );
-  } else {
+  const byEnvironment = new Map();
+  for (const name of manifests) {
+    try {
+      const manifest = JSON.parse(fs.readFileSync(path.join(ROOT, 'backups', name), 'utf8'));
+      if (manifest.environment && !byEnvironment.has(manifest.environment)) {
+        byEnvironment.set(manifest.environment, name);
+      }
+    } catch {
+      // An unparsable manifest is a problem for the tooling that wrote it, not for the gate check.
+    }
+  }
+  const scratchDirs = [];
+  const scratchFor = (manifestName) => {
+    const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'agrishop-artefact-gate-'));
+    scratchDirs.push(scratch);
+    fs.mkdirSync(path.join(scratch, 'backups'));
+    fs.copyFileSync(path.join(ROOT, 'backups', manifestName), path.join(scratch, 'backups', manifestName));
+    fs.copyFileSync(path.join(ROOT, 'environments.json'), path.join(scratch, 'environments.json'));
+    return scratch;
+  };
+  let artefactChecks = 0;
+  try {
+    for (const [artefactEnv, targetEnv] of [
+      ['staging', 'staging'],
+      ['staging', 'production'],
+      ['production', 'production'],
+      ['production', 'staging'],
+    ]) {
+      if (!byEnvironment.has(artefactEnv)) continue;
+      const accepts = artefactEnv === targetEnv;
+      expectExit(
+        `${accepts ? 'artefact gate accepts' : 'artefact gate REFUSES'} the ${artefactEnv} artefact for a ${targetEnv} run`,
+        confirmArtifactStep,
+        { TARGET: targetEnv },
+        accepts ? 0 : 1,
+        accepts ? /as requested/ : /Artefact does not match the requested target/,
+        { cwd: scratchFor(byEnvironment.get(artefactEnv)) },
+      );
+      artefactChecks += 1;
+    }
+  } finally {
+    for (const scratch of scratchDirs) fs.rmSync(scratch, { recursive: true, force: true });
+  }
+  if (artefactChecks === 0) {
     console.log('  SKIP  artefact gate — no artefact in backups/ to present to it');
   }
 }

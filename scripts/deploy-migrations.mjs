@@ -1,47 +1,33 @@
+#!/usr/bin/env node
 /**
- * Apply one or more migration files to the QA database.
+ * RETIRED. This file used to apply migration files to QA and record nothing at all.
  *
- * Credentials come from .env.qa (gitignored) — never hardcoded here.
- * Usage: node scripts/deploy-migrations.mjs supabase/migrations/0NNN_name.sql
+ * That is how `supabase_migrations.schema_migrations` ended up holding three rows while the
+ * directory held 167 files: every deploy through this script was invisible to the database, so no
+ * environment could answer "what has been applied here?" — the audit's B5 finding.
+ *
+ * There is now exactly one path that applies a migration, and it records the file and its sha256 in
+ * the same transaction as the file itself:
+ *
+ *     node scripts/migrate.mjs apply --env staging --apply
+ *
+ * This file remains (instead of being deleted) because an operator or an older runbook may still
+ * call it, and the failure mode of "deleted script" is a confusing ENOENT while the failure mode of
+ * "refusing script" is an instruction. It exits non-zero and applies nothing.
  */
-import pg from 'pg';
-import fs from 'node:fs';
-
-const env = Object.fromEntries(
-  fs.readFileSync('.env.qa', 'utf8')
-    .split('\n')
-    .filter((l) => l.trim() && !l.trim().startsWith('#'))
-    .map((l) => {
-      const i = l.indexOf('=');
-      return [l.slice(0, i).trim(), l.slice(i + 1).trim()];
-    })
+console.error(
+  [
+    '',
+    '[MIGRATE REFUSED] scripts/deploy-migrations.mjs is retired: it applied migrations without',
+    'recording them, which is the defect the ledger fixes. Nothing was applied.',
+    '',
+    'Use the ledgered runner instead:',
+    '  node scripts/migrate.mjs status --env staging      # directory vs ledger, read-only',
+    '  node scripts/migrate.mjs verify --env staging      # the check CI runs',
+    '  node scripts/migrate.mjs apply  --env staging --apply',
+    '',
+    'Production is not a target of any of these, by policy — see the header of scripts/migrate.mjs.',
+    '',
+  ].join('\n'),
 );
-
-if ((env.QA_DB_USER || '').split('.')[1] !== 'bpybjrjenwccowvtrevu') {
-  console.error('Refusing to run: target is not the QA project.');
-  process.exit(1);
-}
-
-const pool = new pg.Pool({
-  host: env.QA_DB_HOST, port: 6543, database: 'postgres',
-  user: env.QA_DB_USER, password: env.QA_DB_PASS,
-  ssl: { rejectUnauthorized: false }, connectionTimeoutMillis: 15000, statement_timeout: 120000,
-});
-
-const files = process.argv.slice(2);
-if (!files.length) {
-  console.error('Usage: node scripts/deploy-migrations.mjs <file...>');
-  process.exit(1);
-}
-
-const client = await pool.connect();
-try {
-  for (const file of files) {
-    console.log(`Deploying ${file}`);
-    await client.query(fs.readFileSync(file, 'utf8'));
-    console.log('  OK');
-  }
-} finally {
-  client.release();
-  await pool.end();
-}
+process.exit(2);

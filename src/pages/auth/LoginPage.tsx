@@ -168,6 +168,26 @@ export default function LoginPage() {
         return;
       }
 
+      //
+      // ONE PHONE, ONE DOOR.
+      //
+      // The tab asks which question you are answering; the account is what decides where you
+      // land (`role === "admin"` opens the owner's app, anything else the employee's). Those two
+      // disagreed: an owner could type their own number on the Employee tab, name their own shop,
+      // pass the invitation check — they ARE a member of it — and be let through into the owner's
+      // app, having answered the employee's questions. The reverse is just as wrong: an employee
+      // typing their number on the Owner tab was sent a code and signed in, never having named
+      // the shop whose branch they work in.
+      //
+      // The server's own answer settles it, here and before a code is spent. Being told which
+      // door your number belongs at is not a scolding — the two tabs exist because the two kinds
+      // of account sign in differently, so pointing at the right one is the fastest way in.
+      const accountSide = check.role === "admin" ? "owner" : "employee";
+      if (accountSide !== role) {
+        setPhoneError(role === "employee" ? t("auth.wrongDoorOwner") : t("auth.wrongDoorEmployee"));
+        return;
+      }
+
       setPendingPhone(cleanPhone);
       setPendingFlow("login");
       setIsNewDevice(true);
