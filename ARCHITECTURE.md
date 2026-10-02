@@ -22,7 +22,12 @@ a new build step. Do not log routine edits here — that is what git is for.
 | Backend | Supabase — Postgres, RLS, SECURITY DEFINER RPCs, PostgREST |
 | Shipping | Capacitor Android (`android/`), APK via `.github/workflows/build-apk.yml` |
 | Unit tests | Vitest (`tests/unit`, `tests/integration`) |
-| Browser tests | Playwright (`tests/e2e`, 23 specs) |
+| Browser tests | Playwright (`tests/e2e`, 28 specs) |
+
+**Feature registry, dependency map and change-impact workflow:** `FEATURE-MAP.md`
+(records in `feature-registry.json`, enforced by `tests/unit/featureRegistryGuard.test.ts`).
+Read it before changing a feature; it points at `SCREEN-INDEX.md`, `dependency_graph.json`,
+`scripts/dev/lane-map.json` and the evidence matrix instead of duplicating them.
 
 ## 2. Route shape
 
@@ -68,7 +73,7 @@ create route, required permission, and the `returnTo` continuation. Both empty-s
 
 ## 4. Data layer
 
-- `supabase/migrations/` — 139 migrations. History is authoritative; do not rewrite it.
+- `supabase/migrations/` — 174 migrations. History is authoritative; do not rewrite it.
 - Business rules that carry money live in **RPCs**, not in the client: sale confirm is
   idempotent at the DB level, stock deducts once, COGS uses the cost recorded at the time of
   sale, overdue credit is computed from `credit − payments applied` against the due date.

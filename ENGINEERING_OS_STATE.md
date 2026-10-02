@@ -1599,3 +1599,67 @@ nothing at all, and one history screen showed a lone spinner where its own shape
 - `index.html` declares header-only security directives (`X-Frame-Options`,
   `X-Content-Type-Options`) as `<meta>`, so the browser ignores them and logs a warning on
   every load. Named in the lane rather than swallowed.
+
+---
+
+## §18 — MVP feature registry, dependency map and change-impact system
+
+**Question this stage had to answer permanently:** what exists, what depends on it, what could be
+affected by a change, and what evidence shows the affected behaviour is still safe?
+
+### Inspection first (what already existed and was reused)
+
+| Existing authority | Role |
+|---|---|
+| `SCREEN-INDEX.md` (generated) | route → component → file → covering lanes |
+| `dependency_graph.json` + `scripts/scan-frontend-deps.cjs` | file → tables / RPCs / stores / layers |
+| `scripts/dev/lane-map.json` + `scripts/dev/verify.mjs` | tier computation, byte-identical lane skipping, canonical lanes |
+| `0077/0078_*impact_intelligence*.sql` + `tests/integration/*Impact*.test.ts` | DB-side impact analysis (`analyze_table_impact`, `analyze_function_impact`, `load_dependency_graph`) |
+| `PHASE_2_BROWSER_SAFETY.md` §17 (+ addendum) | the frozen evidence matrix and the 0181/0182 corrections |
+| `AGENTS.md` §4 impact map, §7 speed path; per-feature checklist | the shorter workflow this stage extends |
+
+Missing: a feature-level registry, a single evidence vocabulary, a permanent 13-step workflow with
+automatic entry, and a guard keeping all of it true. Those were added — nothing above was
+rebuilt.
+
+### Added (smallest permanent version)
+
+- `FEATURE-MAP.md` — registry summary (26 capabilities), dependency chains + reverse dependencies,
+the 13-step change-impact workflow, the six evidence statuses, reuse/invalidation rules, the
+"new or modified feature enters automatically" rule, the 11 source-of-truth pointers, MVP scope
+protection, and the worked example below.
+- `feature-registry.json` — machine-readable records (screens, components, state, libs, tables,
+RPCs, permissions, rules, `dependsOn`/`dependedBy`, tests, evidence, last verified, risks).
+- `tests/unit/featureRegistryGuard.test.ts` — 14 assertions against the real authorities: router
+paths, `requires="…"` keys, files on disk, dependency graph + migrations, symmetric edges,
+evidence vocabulary, and the workflow document itself.
+- `AGENTS.md` §8 (permanent workflow + auto-entry), `ARCHITECTURE.md` pointer and stale counts
+fixed (139 → 174 migrations, 23 → 28 specs), `package.json` `registry:build` repointed off the
+orphaned `changes/registry-sync.mjs`, `src/lib/dependencyGraph.ts` header now points at the map.
+
+### Guard is non-vacuous (proved)
+
+Injected `notifications.vieX` into the registry → guard FAILED with
+`reminders names permission "notifications.vieX" which no route requires` → restored →
+45 unit files / 472 tests green, including the guard's 14.
+
+### Controlled example change (the workflow, not the plan)
+
+Change: pointer comment in `src/lib/dependencyGraph.ts` (comment only — no behaviour, no schema,
+no permission, no user-facing copy). Impact map: feature = entity-creation dependency continuity;
+direct deps `src/lib/setupStatus.ts` + checklist surfaces; reverse deps dashboard/setup flow;
+no DB/RPC/permission change; EN/LTR + UR/RTL not touched. Mechanically affected lanes:
+`dependencyContinuity` and `setupCompletion` (their globs name the file), `crossScreenSync`
+(`src/**`), plus the unmapped `rtlLtr` and `retryAfterTimeout` (default globs) — exactly five.
+Targeted verification run: `npx tsc --noEmit` clean; `npx vitest run tests/unit/` 45 files / 472
+tests green; the five lanes → `backups/example-change-lanes.log`: **40 passed (10.9m), EXIT:0**
+(EnGuard printed `Environment verified: bpybjrjenwccowvtrevu` for every worker).
+Security evidence from §17 remains **VALID** (nothing it covers changed); no full-suite rerun was
+performed for documentation. `npm run verify:plan` currently computes Tier 2 because the working
+tree is 390 files away from HEAD (uncommitted migrations, workflows and other threads' files) —
+that is a pre-existing pending state, not this stage; it is recorded here rather than hidden.
+
+Evidence for this stage: `backups/example-change-lanes.log`, the guard runs above, and the files
+listed. QA left clean after the run: lane data produced 1 `notifications` row, removed by
+`npm run qa:clean`, independent re-count **0 business rows**. Production untouched; no release
+attempted; no APK built.

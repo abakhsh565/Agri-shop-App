@@ -178,3 +178,38 @@ affected lanes + build + independent QA row count. A lane is skipped only when i
 every file its `scripts/dev/lane-map.json` globs cover is byte-identical. `--tier` may only
 **raise** a computed tier. No APK during development or QA loops; when requested it is built
 only through the decided GitHub Actions path. Full detail: `ENGINEERING_OS_STATE.md` §0b.
+
+---
+
+## 8. Feature registry & change-impact (permanent, enforced)
+
+`FEATURE-MAP.md` + `feature-registry.json` answer *what exists, what depends on it, what could a
+change affect, and what evidence proves the affected behaviour is safe*. Start any impact map
+there and in the authorities it points to (`SCREEN-INDEX.md`, `dependency_graph.json`,
+`scripts/dev/lane-map.json`, `PHASE_2_BROWSER_SAFETY.md` §17) instead of re-reading the tree.
+
+Every new feature and every meaningful modification enters the workflow **automatically** —
+nobody has to ask "check what this might break":
+
+```text
+1. Identify the feature being changed.
+2. Identify its direct dependencies.
+3. Identify the features, screens, and business rules that depend on it.
+4. Identify affected database tables, RPCs, and APIs.
+5. Identify affected permissions and security boundaries.
+6. Identify affected EN/LTR and UR/RTL surfaces.
+7. Identify affected tests and evidence.
+8. Determine which existing evidence remains valid.
+9. Invalidate only the evidence genuinely affected by the change.
+10. Implement the change.
+11. Run targeted verification.
+12. Run regression for the affected dependencies.
+13. Update the feature, dependency, and evidence records.
+```
+
+Evidence statuses: **VALID · INVALIDATED · REPLACED · FIXED + REVERIFIED · NOT APPLICABLE ·
+BLOCKED**. Do not rerun a suite merely because a task started (reuse rule: purpose, context,
+risk, implementation and dependencies unchanged). `npm run verify:plan` computes the affected
+lanes; `npm run registry:build` regenerates `SCREEN-INDEX.md` and runs the registry guard.
+`tests/unit/featureRegistryGuard.test.ts` fails when the registry drifts from the router,
+the tests, the dependency graph or the workflow document.

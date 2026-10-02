@@ -9,6 +9,8 @@ import { hasPermission } from "@/lib/tenantContext";
  * Both are the same problem, so both read from here rather than each screen wording
  * its own version of "nothing here yet".
  *
+ * Feature registry and reverse dependencies: see FEATURE-MAP.md / feature-registry.json.
+ *
  * What the code actually enforces (derived by reading the flows, not assumed):
  *
  *   Sale ──▶ Customer   blocking: SelectCustomerPage is step 1 of the flow, and the
