@@ -22,6 +22,16 @@ jobs:
       QA_DB_HOST: ${{ secrets.QA_DB_HOST }}
       QA_DB_USER: ${{ secrets.QA_DB_USER }}
       QA_DB_PASS: ${{ secrets.QA_DB_PASS }}
+      # The vitest steps below run the app's own modules, which resolve their environment from
+      # `import.meta.env` at import time. Without these three names the suite refuses to resolve
+      # an environment at all ([CONFIG] Neither VITE_SUPABASE_URL nor VITE_SUPABASE_PROJECT_ID
+      # is set), which takes `authSafetyGuard` down with it: a refused configuration implies
+      # "sms", so the suite's own "we really are in demo mode" assertion fails. Proven locally by
+      # running the suite with these three names empty (9/9 files red) and with the QA values
+      # (9/9 files, 82 tests green). PROJECT_ID is a project ref, not a secret.
+      VITE_SUPABASE_URL: ${{ secrets.QA_SUPABASE_URL }}
+      VITE_SUPABASE_ANON_KEY: ${{ secrets.QA_SUPABASE_ANON_KEY }}
+      VITE_SUPABASE_PROJECT_ID: bpybjrjenwccowvtrevu
     steps:
       - name: Checkout Code
         uses: actions/checkout@v7
