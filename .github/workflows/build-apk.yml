@@ -42,8 +42,17 @@ jobs:
         run: node scripts/check-qa-connectivity.mjs
 
       # ─── Unit + Integration Tests (Vitest) ──────────────────────────
-      - name: Run Vitest (unit + integration)
-        run: npx vitest run --reporter=verbose
+      # Unit tests are isolated; they run in parallel. The integration suite shares ONE QA
+      # database, and some files mutate the shared fixture users (active shop, permissions) while
+      # others read authorisation state or introspect the schema. On run 37051191071 that race
+      # turned three files red on a 2-core runner although each of them passed in isolation and
+      # the whole folder passed locally under 2 workers. One file at a time removes the race; it
+      # costs minutes, not correctness.
+      - name: Run unit tests
+        run: npx vitest run tests/unit --reporter=verbose
+
+      - name: Run integration tests (one file at a time — they share the QA database)
+        run: npx vitest run tests/integration --fileParallelism=false --reporter=verbose
 
       # ─── Browser E2E Tests (Playwright) ─────────────────────────────
       - name: Install Playwright Browsers
