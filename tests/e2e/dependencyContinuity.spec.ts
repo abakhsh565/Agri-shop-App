@@ -175,7 +175,11 @@ test.describe('Missing dependencies never dead-end a workflow', () => {
     // labels are not programmatically associated, so there is no accessible name.
     await page.getByPlaceholder('e.g. Syngenta').fill(supplierName);
     await page.getByRole('button', { name: 'Add Company', exact: true }).click();
-    await page.waitForTimeout(2500);
+    // Wait for the return navigation itself rather than a fixed sleep: on a 2-core CI runner the
+    // write + redirect can outrun a timeout sized on a developer machine, and the test then fails
+    // for being early rather than for being wrong. The bound still fails the lane if the return
+    // never happens, and the assertion below keeps its own message.
+    await page.waitForURL(/\/admin\/inventory\/new/, { timeout: 30000 }).catch(() => {});
     expect(page.url(), 'creating the supplier did not return to the product form').toContain(
       '/admin/inventory/new',
     );
@@ -202,8 +206,10 @@ test.describe('Missing dependencies never dead-end a workflow', () => {
     // Opening stock: the sale screen lists what is on the shelf, so the pack needs some.
     await page.getByTestId('product-pack-stock-0').fill('5');
     await page.getByTestId('product-save').click();
-    await page.waitForTimeout(3500);
-
+    // Same reason as the supplier step above: this is the save that failed in run 37068142514
+    // after 3.5s on a 2-core runner, although the identical save returned in time in the previous
+    // run. Wait for the navigation, then judge the URL.
+    await page.waitForURL(/\/admin\/sale\/products/, { timeout: 30000 }).catch(() => {});
     expect(page.url(), 'saving the product did not return to the sale it was created from').toContain(
       '/admin/sale/products',
     );
