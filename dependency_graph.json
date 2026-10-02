@@ -1,0 +1,3471 @@
+{
+  "tables": {
+    "users": [
+      {
+        "file": "src/lib/auth.ts",
+        "evidence": "from_call",
+        "layer": "lib"
+      },
+      {
+        "file": "src/stores/employeesStore.ts",
+        "evidence": "from_call",
+        "layer": "store"
+      },
+      {
+        "file": "src/pages/admin/settings/AdminSettingsPage.tsx",
+        "evidence": "from_call",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/employee/settings/SettingsPage.tsx",
+        "evidence": "from_call",
+        "layer": "page"
+      },
+      {
+        "file": "tests/e2e/helpers.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/e2e/imageSync.spec.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/integration/destructiveSafety.test.ts",
+        "evidence": "from_call",
+        "layer": "test"
+      },
+      {
+        "file": "tests/integration/employeePermissions.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/integration/placeLocation.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/integration/rbacEnforcement.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/integration/rbacInvariants.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/integration/securityAudit.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/unit/migrationReplayability.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      }
+    ],
+    "customer_payments": [
+      {
+        "file": "src/lib/db.ts",
+        "evidence": "from_call",
+        "layer": "lib"
+      },
+      {
+        "file": "src/lib/money.ts",
+        "evidence": "from_call",
+        "layer": "lib"
+      },
+      {
+        "file": "tests/e2e/dependencyContinuity.spec.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/e2e/helpers.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/integration/destructiveSafety.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/integration/employeePermissions.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/integration/frontendImpact.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/integration/impactIntelligence.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/integration/rbacInvariants.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/integration/splitPayments.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/unit/moneyInConsistency.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      }
+    ],
+    "companies": [
+      {
+        "file": "src/lib/db.ts",
+        "evidence": "sql_reference",
+        "layer": "lib"
+      },
+      {
+        "file": "src/lib/ownerRows.ts",
+        "evidence": "sql_reference",
+        "layer": "lib"
+      },
+      {
+        "file": "src/lib/permissionLabels.ts",
+        "evidence": "sql_reference",
+        "layer": "lib"
+      },
+      {
+        "file": "src/stores/companiesStore.ts",
+        "evidence": "from_call",
+        "layer": "store"
+      },
+      {
+        "file": "src/stores/productsStore.ts",
+        "evidence": "from_call",
+        "layer": "store"
+      },
+      {
+        "file": "src/stores/useBootstrapData.ts",
+        "evidence": "sql_reference",
+        "layer": "store"
+      },
+      {
+        "file": "src/pages/admin/more/MoreMenuPage.tsx",
+        "evidence": "sql_reference",
+        "layer": "page"
+      },
+      {
+        "file": "tests/e2e/accessUx.spec.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/e2e/dependencyContinuity.spec.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/e2e/imageSync.spec.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/integration/securityAudit.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/unit/ownerRows.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      }
+    ],
+    "returns": [
+      {
+        "file": "src/lib/db.ts",
+        "evidence": "from_call",
+        "layer": "lib"
+      },
+      {
+        "file": "src/lib/permissionLabels.ts",
+        "evidence": "sql_reference",
+        "layer": "lib"
+      },
+      {
+        "file": "src/components/sales/SaleDetailView.tsx",
+        "evidence": "from_call",
+        "layer": "component"
+      },
+      {
+        "file": "src/pages/admin/dashboard/AdminDashboardPage.tsx",
+        "evidence": "from_call",
+        "layer": "page"
+      },
+      {
+        "file": "tests/e2e/dependencyContinuity.spec.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/e2e/helpers.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/integration/agentTelemetry.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/integration/destructiveSafety.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/integration/employeePermissions.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/integration/rbacInvariants.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      }
+    ],
+    "purchases": [
+      {
+        "file": "src/lib/db.ts",
+        "evidence": "from_call",
+        "layer": "lib"
+      },
+      {
+        "file": "src/lib/permissionLabels.ts",
+        "evidence": "sql_reference",
+        "layer": "lib"
+      },
+      {
+        "file": "src/pages/admin/more/MoreMenuPage.tsx",
+        "evidence": "sql_reference",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/purchases/PurchaseDetailPage.tsx",
+        "evidence": "from_call",
+        "layer": "page"
+      },
+      {
+        "file": "tests/e2e/dependencyContinuity.spec.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/e2e/helpers.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/integration/rbacInvariants.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      }
+    ],
+    "stock_adjustments": [
+      {
+        "file": "src/lib/db.ts",
+        "evidence": "from_call",
+        "layer": "lib"
+      },
+      {
+        "file": "tests/e2e/dependencyContinuity.spec.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/e2e/helpers.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/integration/draftIsolation.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/integration/rbacInvariants.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/integration/shopScopedPolicyGuard.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/integration/tenantBoundarySweep.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      }
+    ],
+    "customers": [
+      {
+        "file": "src/lib/i18n.ts",
+        "evidence": "sql_reference",
+        "layer": "lib"
+      },
+      {
+        "file": "src/lib/localGroupRegistry.ts",
+        "evidence": "from_call",
+        "layer": "lib"
+      },
+      {
+        "file": "src/lib/observationBot.ts",
+        "evidence": "sql_reference",
+        "layer": "lib"
+      },
+      {
+        "file": "src/lib/offlineQueue.ts",
+        "evidence": "from_call",
+        "layer": "lib"
+      },
+      {
+        "file": "src/lib/permissionLabels.ts",
+        "evidence": "sql_reference",
+        "layer": "lib"
+      },
+      {
+        "file": "src/lib/reminderEngine.ts",
+        "evidence": "from_call",
+        "layer": "lib"
+      },
+      {
+        "file": "src/stores/customersStore.ts",
+        "evidence": "from_call",
+        "layer": "store"
+      },
+      {
+        "file": "src/components/ui/GroupReminderSheet.tsx",
+        "evidence": "sql_reference",
+        "layer": "component"
+      },
+      {
+        "file": "src/pages/admin/alerts/RemindersOverviewPage.tsx",
+        "evidence": "from_call",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/more/MoreMenuPage.tsx",
+        "evidence": "sql_reference",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/payments/AdminPaymentsPage.tsx",
+        "evidence": "sql_reference",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/employee/customers/CustomerProfilePage.tsx",
+        "evidence": "from_call",
+        "layer": "page"
+      },
+      {
+        "file": "tests/e2e/dependencyContinuity.spec.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/e2e/imageSync.spec.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/integration/agentTelemetry.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/integration/frontendImpact.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/integration/impactIntelligence.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/integration/incidentFoundation.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/integration/placeLocation.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/integration/resolutionMemory.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/integration/securityAudit.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/unit/cacheOwnership.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/unit/migrationReplayability.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      }
+    ],
+    "sales": [
+      {
+        "file": "src/lib/i18n.ts",
+        "evidence": "sql_reference",
+        "layer": "lib"
+      },
+      {
+        "file": "src/lib/observationBot.ts",
+        "evidence": "sql_reference",
+        "layer": "lib"
+      },
+      {
+        "file": "src/lib/offlineQueue.ts",
+        "evidence": "from_call",
+        "layer": "lib"
+      },
+      {
+        "file": "src/lib/permissionLabels.ts",
+        "evidence": "sql_reference",
+        "layer": "lib"
+      },
+      {
+        "file": "src/stores/salesStore.ts",
+        "evidence": "from_call",
+        "layer": "store"
+      },
+      {
+        "file": "tests/e2e/dependencyContinuity.spec.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/e2e/helpers.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/integration/agentTelemetry.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/integration/branchScopeEnforcement.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/integration/destructiveSafety.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/integration/draftIsolation.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/integration/employeePermissions.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/integration/frontendImpact.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/integration/impactIntelligence.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/integration/incidentFoundation.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/integration/rbacInvariants.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/integration/resolutionMemory.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/integration/securityAudit.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/unit/cacheOwnership.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/unit/microcopy.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/unit/migrationReplayability.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/unit/moneyInConsistency.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      }
+    ],
+    "products": [
+      {
+        "file": "src/lib/i18n.ts",
+        "evidence": "sql_reference",
+        "layer": "lib"
+      },
+      {
+        "file": "src/lib/permissionLabels.ts",
+        "evidence": "sql_reference",
+        "layer": "lib"
+      },
+      {
+        "file": "src/stores/companiesStore.ts",
+        "evidence": "sql_reference",
+        "layer": "store"
+      },
+      {
+        "file": "src/stores/productsStore.ts",
+        "evidence": "from_call",
+        "layer": "store"
+      },
+      {
+        "file": "src/pages/employee/products/ProductDetailPage.tsx",
+        "evidence": "from_call",
+        "layer": "page"
+      },
+      {
+        "file": "tests/e2e/dependencyContinuity.spec.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/e2e/imageSync.spec.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/integration/frontendImpact.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/integration/impactIntelligence.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/integration/securityAudit.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/unit/cacheOwnership.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/unit/microcopy.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/unit/migrationReplayability.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/unit/shopSwitchReset.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      }
+    ],
+    "credit_limit_requests": [
+      {
+        "file": "src/lib/localGroupRegistry.ts",
+        "evidence": "from_call",
+        "layer": "lib"
+      },
+      {
+        "file": "src/pages/admin/dashboard/AdminDashboardPage.tsx",
+        "evidence": "from_call",
+        "layer": "page"
+      },
+      {
+        "file": "tests/e2e/dependencyContinuity.spec.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/e2e/helpers.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/integration/employeePermissions.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/integration/frontendImpact.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/integration/securityAudit.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/unit/migrationLedger.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      }
+    ],
+    "reminder_configs": [
+      {
+        "file": "src/lib/localGroupRegistry.ts",
+        "evidence": "from_call",
+        "layer": "lib"
+      },
+      {
+        "file": "src/lib/reminderEngine.ts",
+        "evidence": "from_call",
+        "layer": "lib"
+      },
+      {
+        "file": "tests/e2e/dependencyContinuity.spec.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/e2e/helpers.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/integration/employeePermissions.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/integration/tenantIsolationOps.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      }
+    ],
+    "notifications": [
+      {
+        "file": "src/lib/notifications.ts",
+        "evidence": "from_call",
+        "layer": "lib"
+      },
+      {
+        "file": "src/lib/offlineQueue.ts",
+        "evidence": "from_call",
+        "layer": "lib"
+      },
+      {
+        "file": "src/lib/ownerRows.ts",
+        "evidence": "sql_reference",
+        "layer": "lib"
+      },
+      {
+        "file": "src/lib/permissionLabels.ts",
+        "evidence": "sql_reference",
+        "layer": "lib"
+      },
+      {
+        "file": "src/stores/notificationStore.ts",
+        "evidence": "from_call",
+        "layer": "store"
+      },
+      {
+        "file": "src/pages/admin/inventory/InventoryAdjustPage.tsx",
+        "evidence": "from_call",
+        "layer": "page"
+      },
+      {
+        "file": "tests/e2e/helpers.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/integration/tenantBoundarySweep.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/unit/ownerRows.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      }
+    ],
+    "employees": [
+      {
+        "file": "src/lib/ownerRows.ts",
+        "evidence": "sql_reference",
+        "layer": "lib"
+      },
+      {
+        "file": "src/lib/permissionLabels.ts",
+        "evidence": "sql_reference",
+        "layer": "lib"
+      },
+      {
+        "file": "src/pages/admin/more/MoreMenuPage.tsx",
+        "evidence": "sql_reference",
+        "layer": "page"
+      },
+      {
+        "file": "tests/unit/ownerRows.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      }
+    ],
+    "customer_crops": [
+      {
+        "file": "src/lib/recommendationEngine.ts",
+        "evidence": "sql_reference",
+        "layer": "lib"
+      },
+      {
+        "file": "src/lib/reminderEngine.ts",
+        "evidence": "from_call",
+        "layer": "lib"
+      },
+      {
+        "file": "tests/e2e/dependencyContinuity.spec.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/e2e/helpers.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      }
+    ],
+    "reminder_logs": [
+      {
+        "file": "src/lib/reminderEngine.ts",
+        "evidence": "from_call",
+        "layer": "lib"
+      },
+      {
+        "file": "src/pages/admin/alerts/RemindersOverviewPage.tsx",
+        "evidence": "from_call",
+        "layer": "page"
+      },
+      {
+        "file": "tests/e2e/dependencyContinuity.spec.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/e2e/helpers.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      }
+    ],
+    "reminder_occurrences": [
+      {
+        "file": "src/lib/reminderEngine.ts",
+        "evidence": "from_call",
+        "layer": "lib"
+      },
+      {
+        "file": "tests/e2e/dependencyContinuity.spec.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/e2e/helpers.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/integration/employeePermissions.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/integration/tenantIsolationOps.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      }
+    ],
+    "business_settings": [
+      {
+        "file": "src/lib/reminderEngine.ts",
+        "evidence": "from_call",
+        "layer": "lib"
+      },
+      {
+        "file": "tests/integration/rbacInvariants.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      }
+    ],
+    "product_variants": [
+      {
+        "file": "src/stores/productsStore.ts",
+        "evidence": "from_call",
+        "layer": "store"
+      },
+      {
+        "file": "tests/e2e/dependencyContinuity.spec.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/integration/auditIntegrity.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/integration/shopScopedPolicyGuard.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/integration/tenantBoundarySweep.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/integration/variantIsolation.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      }
+    ],
+    "shop_requests": [
+      {
+        "file": "src/stores/shopRequestsStore.ts",
+        "evidence": "from_call",
+        "layer": "store"
+      },
+      {
+        "file": "tests/integration/accountDeletion.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/integration/rbacInvariants.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      }
+    ],
+    "shops": [
+      {
+        "file": "src/stores/shopStore.ts",
+        "evidence": "sql_reference",
+        "layer": "store"
+      },
+      {
+        "file": "src/components/shop/BranchEditSheet.tsx",
+        "evidence": "sql_reference",
+        "layer": "component"
+      },
+      {
+        "file": "src/components/shop/ShopSwitcherSheet.tsx",
+        "evidence": "sql_reference",
+        "layer": "component"
+      },
+      {
+        "file": "tests/integration/branchPlaceRead.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/integration/placeLocation.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/integration/rbacInvariants.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/integration/tenantIsolationOps.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/unit/locationPicked.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/unit/migrationReplayability.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      }
+    ],
+    "return_items": [
+      {
+        "file": "src/components/sales/SaleDetailView.tsx",
+        "evidence": "from_call",
+        "layer": "component"
+      },
+      {
+        "file": "src/pages/admin/returns/AdminReturnSelectItemsPage.tsx",
+        "evidence": "from_call",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/employee/returns/ReturnSelectItemsPage.tsx",
+        "evidence": "from_call",
+        "layer": "page"
+      },
+      {
+        "file": "tests/e2e/dependencyContinuity.spec.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/e2e/helpers.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/integration/destructiveSafety.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/integration/employeePermissions.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      }
+    ],
+    "sale_items": [
+      {
+        "file": "tests/e2e/dependencyContinuity.spec.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/e2e/helpers.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/integration/destructiveSafety.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/integration/draftIsolation.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/integration/employeePermissions.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      }
+    ],
+    "voids": [
+      {
+        "file": "tests/e2e/dependencyContinuity.spec.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/e2e/helpers.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/integration/destructiveSafety.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/integration/securityAudit.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      }
+    ],
+    "purchase_items": [
+      {
+        "file": "tests/e2e/dependencyContinuity.spec.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/e2e/helpers.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      }
+    ],
+    "inventory_movements": [
+      {
+        "file": "tests/e2e/dependencyContinuity.spec.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/e2e/helpers.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/integration/destructiveSafety.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/integration/draftIsolation.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/integration/employeePermissions.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/integration/impactIntelligence.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/integration/rbacInvariants.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      }
+    ],
+    "supplier_payments": [
+      {
+        "file": "tests/e2e/dependencyContinuity.spec.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/e2e/helpers.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/integration/rbacInvariants.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      }
+    ],
+    "activity_log": [
+      {
+        "file": "tests/e2e/helpers.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/integration/frontendImpact.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/integration/impactIntelligence.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/integration/rbacInvariants.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      }
+    ],
+    "audit_events": [
+      {
+        "file": "tests/e2e/helpers.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/integration/auditIntegrity.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/integration/shopScopedPolicyGuard.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      }
+    ],
+    "app_settings": [
+      {
+        "file": "tests/integration/appSettingsIsolation.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/integration/shopScopedPolicyGuard.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      }
+    ],
+    "daily_cash_reconciliations": [
+      {
+        "file": "tests/integration/rbacInvariants.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      }
+    ],
+    "cash_reconciliations": [
+      {
+        "file": "tests/integration/shopScopedPolicyGuard.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/integration/tenantBoundarySweep.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      }
+    ]
+  },
+  "rpcs": {
+    "archive_customer": [
+      {
+        "file": "src/lib/db.ts",
+        "evidence": "rpc_call",
+        "layer": "lib"
+      },
+      {
+        "file": "src/stores/customersStore.ts",
+        "evidence": "rpc_call",
+        "layer": "store"
+      }
+    ],
+    "restore_customer": [
+      {
+        "file": "src/lib/db.ts",
+        "evidence": "rpc_call",
+        "layer": "lib"
+      },
+      {
+        "file": "src/stores/customersStore.ts",
+        "evidence": "rpc_call",
+        "layer": "store"
+      }
+    ],
+    "create_sale": [
+      {
+        "file": "src/lib/db.ts",
+        "evidence": "rpc_call",
+        "layer": "lib"
+      },
+      {
+        "file": "src/lib/offlineQueue.ts",
+        "evidence": "rpc_call",
+        "layer": "lib"
+      }
+    ],
+    "void_sale": [
+      {
+        "file": "src/lib/db.ts",
+        "evidence": "rpc_call",
+        "layer": "lib"
+      },
+      {
+        "file": "src/lib/offlineQueue.ts",
+        "evidence": "rpc_call",
+        "layer": "lib"
+      }
+    ],
+    "process_return": [
+      {
+        "file": "src/lib/db.ts",
+        "evidence": "rpc_call",
+        "layer": "lib"
+      },
+      {
+        "file": "src/lib/offlineQueue.ts",
+        "evidence": "rpc_call",
+        "layer": "lib"
+      }
+    ],
+    "record_customer_payment": [
+      {
+        "file": "src/lib/db.ts",
+        "evidence": "rpc_call",
+        "layer": "lib"
+      },
+      {
+        "file": "src/lib/offlineQueue.ts",
+        "evidence": "rpc_call",
+        "layer": "lib"
+      },
+      {
+        "file": "tests/e2e/splitPayment.spec.ts",
+        "evidence": "rpc_call",
+        "layer": "test"
+      }
+    ],
+    "delete_product": [
+      {
+        "file": "src/lib/db.ts",
+        "evidence": "rpc_call",
+        "layer": "lib"
+      }
+    ],
+    "adjust_stock": [
+      {
+        "file": "src/lib/db.ts",
+        "evidence": "rpc_call",
+        "layer": "lib"
+      }
+    ],
+    "create_credit_limit_request": [
+      {
+        "file": "src/lib/localGroupRegistry.ts",
+        "evidence": "rpc_call",
+        "layer": "lib"
+      },
+      {
+        "file": "tests/e2e/actionCenter.spec.ts",
+        "evidence": "rpc_call",
+        "layer": "test"
+      }
+    ],
+    "record_incident": [
+      {
+        "file": "src/lib/observationBot.ts",
+        "evidence": "rpc_call",
+        "layer": "lib"
+      },
+      {
+        "file": "tests/integration/incidentFoundation.test.ts",
+        "evidence": "rpc_call",
+        "layer": "test"
+      },
+      {
+        "file": "tests/integration/resolutionMemory.test.ts",
+        "evidence": "rpc_call",
+        "layer": "test"
+      }
+    ],
+    "create_customer": [
+      {
+        "file": "src/stores/customersStore.ts",
+        "evidence": "rpc_call",
+        "layer": "store"
+      }
+    ],
+    "update_customer_image": [
+      {
+        "file": "src/stores/customersStore.ts",
+        "evidence": "rpc_call",
+        "layer": "store"
+      }
+    ],
+    "update_customer_due_date": [
+      {
+        "file": "src/stores/customersStore.ts",
+        "evidence": "rpc_call",
+        "layer": "store"
+      }
+    ],
+    "approve_credit_limit_request": [
+      {
+        "file": "tests/e2e/actionCenter.spec.ts",
+        "evidence": "rpc_call",
+        "layer": "test"
+      }
+    ],
+    "run_sql": [
+      {
+        "file": "tests/e2e/helpers.ts",
+        "evidence": "rpc_call",
+        "layer": "test"
+      },
+      {
+        "file": "tests/integration/agentTelemetry.test.ts",
+        "evidence": "rpc_call",
+        "layer": "test"
+      },
+      {
+        "file": "tests/integration/impactIntelligence.test.ts",
+        "evidence": "rpc_call",
+        "layer": "test"
+      },
+      {
+        "file": "tests/integration/resolutionMemory.test.ts",
+        "evidence": "rpc_call",
+        "layer": "test"
+      }
+    ],
+    "analyze_table_impact": [
+      {
+        "file": "tests/integration/frontendImpact.test.ts",
+        "evidence": "rpc_call",
+        "layer": "test"
+      }
+    ],
+    "analyze_function_impact": [
+      {
+        "file": "tests/integration/frontendImpact.test.ts",
+        "evidence": "rpc_call",
+        "layer": "test"
+      }
+    ],
+    "search_incident_by_fingerprint": [
+      {
+        "file": "tests/integration/incidentFoundation.test.ts",
+        "evidence": "rpc_call",
+        "layer": "test"
+      }
+    ],
+    "record_resolution": [
+      {
+        "file": "tests/integration/resolutionMemory.test.ts",
+        "evidence": "rpc_call",
+        "layer": "test"
+      }
+    ],
+    "search_resolutions": [
+      {
+        "file": "tests/integration/resolutionMemory.test.ts",
+        "evidence": "rpc_call",
+        "layer": "test"
+      }
+    ],
+    "record_memory": [
+      {
+        "file": "tests/integration/resolutionMemory.test.ts",
+        "evidence": "rpc_call",
+        "layer": "test"
+      }
+    ],
+    "search_memory": [
+      {
+        "file": "tests/integration/resolutionMemory.test.ts",
+        "evidence": "rpc_call",
+        "layer": "test"
+      }
+    ]
+  },
+  "stores": {
+    "authStore": [
+      {
+        "file": "src/lib/db.ts",
+        "evidence": "direct_import",
+        "layer": "lib"
+      },
+      {
+        "file": "src/lib/localGroupRegistry.ts",
+        "evidence": "direct_import",
+        "layer": "lib"
+      },
+      {
+        "file": "src/lib/notifications.ts",
+        "evidence": "direct_import",
+        "layer": "lib"
+      },
+      {
+        "file": "src/lib/ownerRows.ts",
+        "evidence": "direct_import",
+        "layer": "lib"
+      },
+      {
+        "file": "src/lib/stockAlerts.ts",
+        "evidence": "direct_import",
+        "layer": "lib"
+      },
+      {
+        "file": "src/lib/tenantContext.ts",
+        "evidence": "direct_import",
+        "layer": "lib"
+      },
+      {
+        "file": "src/stores/companiesStore.ts",
+        "evidence": "direct_import",
+        "layer": "store"
+      },
+      {
+        "file": "src/stores/customersStore.ts",
+        "evidence": "direct_import",
+        "layer": "store"
+      },
+      {
+        "file": "src/stores/notificationStore.ts",
+        "evidence": "direct_import",
+        "layer": "store"
+      },
+      {
+        "file": "src/stores/productsStore.ts",
+        "evidence": "direct_import",
+        "layer": "store"
+      },
+      {
+        "file": "src/stores/shopStore.ts",
+        "evidence": "direct_import",
+        "layer": "store"
+      },
+      {
+        "file": "src/stores/useBootstrapData.ts",
+        "evidence": "direct_import",
+        "layer": "store"
+      },
+      {
+        "file": "src/components/auth/PermissionGuard.tsx",
+        "evidence": "direct_import",
+        "layer": "component"
+      },
+      {
+        "file": "src/components/auth/ProtectedRoute.tsx",
+        "evidence": "direct_import",
+        "layer": "component"
+      },
+      {
+        "file": "src/components/education/FirstRunGate.tsx",
+        "evidence": "direct_import",
+        "layer": "component"
+      },
+      {
+        "file": "src/components/education/TourOverlay.tsx",
+        "evidence": "direct_import",
+        "layer": "component"
+      },
+      {
+        "file": "src/components/layout/AdminLayout.tsx",
+        "evidence": "direct_import",
+        "layer": "component"
+      },
+      {
+        "file": "src/components/layout/EmployeeLayout.tsx",
+        "evidence": "direct_import",
+        "layer": "component"
+      },
+      {
+        "file": "src/components/sales/SaleDetailView.tsx",
+        "evidence": "direct_import",
+        "layer": "component"
+      },
+      {
+        "file": "src/components/shop/DeleteTargetSheet.tsx",
+        "evidence": "direct_import",
+        "layer": "component"
+      },
+      {
+        "file": "src/components/shop/ShopAccessNotice.tsx",
+        "evidence": "direct_import",
+        "layer": "component"
+      },
+      {
+        "file": "src/components/shop/ShopSwitcherSheet.tsx",
+        "evidence": "direct_import",
+        "layer": "component"
+      },
+      {
+        "file": "src/components/ui/BusinessSettingsSheet.tsx",
+        "evidence": "direct_import",
+        "layer": "component"
+      },
+      {
+        "file": "src/pages/admin/alerts/CreditRequestDetailPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/dashboard/AdminDashboardPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/employees/AddEmployeePage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/employees/EmployeeDetailPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/inventory/InventoryAdjustPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/more/MoreMenuPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/notifications/AdminNotificationsPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/returns/AdminReturnConfirmPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/settings/AdminSettingsPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/assistant/AssistantPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/auth/AccountReadyPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/auth/ForgotPINPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/auth/LoginPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/auth/OTPVerifyPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/auth/PINLoginPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/auth/PINSetPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/auth/SplashPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/employee/activity/ActivityLogPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/employee/customers/AddCustomerPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/employee/customers/CustomerProfilePage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/employee/customers/CustomerPurchaseHistoryPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/employee/dashboard/DashboardPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/employee/more/MorePage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/employee/returns/ReturnConfirmPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/employee/sale/CartPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/employee/sale/SaleReviewPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/employee/sale/SaleSuccessPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/employee/sales/SalesListPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/employee/search/SearchPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/employee/settings/SettingsPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/register/RegisterOTPPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/register/RegisterPhonePage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/register/RegisterShopDetailsPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/register/RegisterStatusPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/super-admin/SuperAdminDashboard.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "tests/unit/shopSwitchReset.test.ts",
+        "evidence": "direct_import",
+        "layer": "test"
+      }
+    ],
+    "themeStore": [
+      {
+        "file": "src/lib/dirContext.tsx",
+        "evidence": "direct_import",
+        "layer": "lib"
+      },
+      {
+        "file": "src/lib/i18n.ts",
+        "evidence": "direct_import",
+        "layer": "lib"
+      },
+      {
+        "file": "src/components/admin/InviteLinkCard.tsx",
+        "evidence": "direct_import",
+        "layer": "component"
+      },
+      {
+        "file": "src/components/auth/AuthLanguageSwitch.tsx",
+        "evidence": "direct_import",
+        "layer": "component"
+      },
+      {
+        "file": "src/components/sales/SaleDetailView.tsx",
+        "evidence": "direct_import",
+        "layer": "component"
+      },
+      {
+        "file": "src/components/ui/CustomerSelector.tsx",
+        "evidence": "direct_import",
+        "layer": "component"
+      },
+      {
+        "file": "src/components/ui/LocationField.tsx",
+        "evidence": "direct_import",
+        "layer": "component"
+      },
+      {
+        "file": "src/components/ui/NavHeader.tsx",
+        "evidence": "direct_import",
+        "layer": "component"
+      },
+      {
+        "file": "src/components/ui/SetupChecklist.tsx",
+        "evidence": "direct_import",
+        "layer": "component"
+      },
+      {
+        "file": "src/pages/admin/alerts/CreditOverrideDetailPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/alerts/CreditOverridesPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/alerts/CreditRequestDetailPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/alerts/GroupDetailPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/alerts/InventoryAlertsPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/alerts/RemindersOverviewPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/companies/AddCompanyPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/companies/CompaniesListPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/companies/CompanyDetailPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/dashboard/AdminDashboardPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/employees/AddEmployeePage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/employees/EmployeeDetailPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/employees/EmployeesListPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/inventory/AddProductPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/inventory/InventoryAdjustPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/inventory/ReorderSuggestionsPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/inventory/StockMovementHistoryPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/notifications/AdminNotificationsPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/payments/AdminPaymentsPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/payments/DailyCashReconciliationPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/payments/RecordSupplierPaymentPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/purchases/AdminPurchasesPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/purchases/PurchaseDetailPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/purchases/RecordPurchasePage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/reports/AdminReportsPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/returns/AdminReturnSelectItemsPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/sales/AdminSalesListPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/settings/AdminSettingsPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/settings/RolesAccessPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/employee/customers/AddCustomerPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/employee/customers/CustomerPaymentHistoryPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/employee/customers/CustomerProfilePage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/employee/customers/CustomerPurchaseHistoryPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/employee/customers/CustomersListPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/employee/customers/RecordCustomerPaymentPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/employee/customers/ReminderHistoryPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/employee/dashboard/DashboardPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/employee/more/MorePage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/employee/products/ProductsListPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/employee/returns/ReturnSelectItemsPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/employee/sales/SalesListPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/employee/search/SearchPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/employee/settings/SettingsPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/onboarding/IntroPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      }
+    ],
+    "placementStore": [
+      {
+        "file": "src/lib/ownerRows.ts",
+        "evidence": "direct_import",
+        "layer": "lib"
+      }
+    ],
+    "shopStore": [
+      {
+        "file": "src/lib/ownerRows.ts",
+        "evidence": "direct_import",
+        "layer": "lib"
+      },
+      {
+        "file": "src/stores/useBootstrapData.ts",
+        "evidence": "direct_import",
+        "layer": "store"
+      },
+      {
+        "file": "src/components/admin/InviteLinkCard.tsx",
+        "evidence": "direct_import",
+        "layer": "component"
+      },
+      {
+        "file": "src/components/layout/AdminLayout.tsx",
+        "evidence": "direct_import",
+        "layer": "component"
+      },
+      {
+        "file": "src/components/layout/EmployeeLayout.tsx",
+        "evidence": "direct_import",
+        "layer": "component"
+      },
+      {
+        "file": "src/components/shop/BranchEditSheet.tsx",
+        "evidence": "direct_import",
+        "layer": "component"
+      },
+      {
+        "file": "src/components/shop/DeleteTargetSheet.tsx",
+        "evidence": "direct_import",
+        "layer": "component"
+      },
+      {
+        "file": "src/components/shop/ShopAccessNotice.tsx",
+        "evidence": "direct_import",
+        "layer": "component"
+      },
+      {
+        "file": "src/components/shop/ShopSwitcherSheet.tsx",
+        "evidence": "direct_import",
+        "layer": "component"
+      },
+      {
+        "file": "src/pages/admin/dashboard/AdminDashboardPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/employees/AddEmployeePage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/inventory/AddProductPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/more/MoreMenuPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/notifications/AdminNotificationsPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/settings/AdminSettingsPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/settings/RolesAccessPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/employee/products/ProductsListPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "tests/unit/shopSwitchReset.test.ts",
+        "evidence": "direct_import",
+        "layer": "test"
+      }
+    ],
+    "companiesStore": [
+      {
+        "file": "src/lib/setupStatus.ts",
+        "evidence": "direct_import",
+        "layer": "lib"
+      },
+      {
+        "file": "src/stores/shopStore.ts",
+        "evidence": "direct_import",
+        "layer": "store"
+      },
+      {
+        "file": "src/stores/useBootstrapData.ts",
+        "evidence": "direct_import",
+        "layer": "store"
+      },
+      {
+        "file": "src/pages/admin/alerts/InventoryAlertsPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/alerts/RemindersOverviewPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/companies/AddCompanyPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/companies/CompaniesListPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/companies/CompanyDetailPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/dashboard/AdminDashboardPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/inventory/AddProductPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/inventory/ReorderSuggestionsPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/payments/AdminPaymentsPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/payments/RecordSupplierPaymentPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/purchases/RecordPurchasePage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/reports/AdminReportsPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/employee/search/SearchPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "tests/unit/shopSwitchReset.test.ts",
+        "evidence": "direct_import",
+        "layer": "test"
+      }
+    ],
+    "customersStore": [
+      {
+        "file": "src/lib/setupStatus.ts",
+        "evidence": "direct_import",
+        "layer": "lib"
+      },
+      {
+        "file": "src/stores/shopStore.ts",
+        "evidence": "direct_import",
+        "layer": "store"
+      },
+      {
+        "file": "src/stores/useBootstrapData.ts",
+        "evidence": "direct_import",
+        "layer": "store"
+      },
+      {
+        "file": "src/components/sales/SaleDetailView.tsx",
+        "evidence": "direct_import",
+        "layer": "component"
+      },
+      {
+        "file": "src/components/ui/CustomerSelector.tsx",
+        "evidence": "direct_import",
+        "layer": "component"
+      },
+      {
+        "file": "src/pages/admin/alerts/CreditOverrideDetailPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/alerts/CreditOverridesPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/alerts/CreditRequestDetailPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/alerts/RemindersOverviewPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/dashboard/AdminDashboardPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/employees/EmployeeDetailPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/payments/AdminPaymentsPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/reports/AdminReportsPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/sales/AdminSalesListPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/employee/activity/ActivityLogPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/employee/customers/AddCustomerPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/employee/customers/CustomerPaymentHistoryPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/employee/customers/CustomerProfilePage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/employee/customers/CustomerPurchaseHistoryPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/employee/customers/CustomersListPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/employee/customers/RecordCustomerPaymentPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/employee/customers/ReminderHistoryPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/employee/dashboard/DashboardPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/employee/products/ProductDetailPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/employee/sale/CartPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/employee/sale/SelectCustomerPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/employee/sales/SalesListPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/employee/search/SearchPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "tests/unit/shopSwitchReset.test.ts",
+        "evidence": "direct_import",
+        "layer": "test"
+      }
+    ],
+    "productsStore": [
+      {
+        "file": "src/lib/setupStatus.ts",
+        "evidence": "direct_import",
+        "layer": "lib"
+      },
+      {
+        "file": "src/stores/shopStore.ts",
+        "evidence": "direct_import",
+        "layer": "store"
+      },
+      {
+        "file": "src/stores/useBootstrapData.ts",
+        "evidence": "direct_import",
+        "layer": "store"
+      },
+      {
+        "file": "src/components/layout/AdminLayout.tsx",
+        "evidence": "direct_import",
+        "layer": "component"
+      },
+      {
+        "file": "src/components/layout/EmployeeLayout.tsx",
+        "evidence": "direct_import",
+        "layer": "component"
+      },
+      {
+        "file": "src/components/sales/SaleDetailView.tsx",
+        "evidence": "direct_import",
+        "layer": "component"
+      },
+      {
+        "file": "src/components/ui/StockAlertsSheet.tsx",
+        "evidence": "direct_import",
+        "layer": "component"
+      },
+      {
+        "file": "src/pages/admin/alerts/InventoryAlertsPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/alerts/RemindersOverviewPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/companies/CompaniesListPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/companies/CompanyDetailPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/dashboard/AdminDashboardPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/inventory/AddProductPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/inventory/BarcodeGeneratePage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/inventory/InventoryAdjustPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/inventory/ReorderSuggestionsPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/inventory/StockMovementHistoryPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/purchases/RecordPurchasePage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/reports/AdminReportsPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/sales/AdminSalesListPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/employee/customers/CustomerProfilePage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/employee/products/ProductDetailPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/employee/products/ProductsListPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/employee/sale/BrowseProductsPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/employee/sale/CartPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/employee/sale/VariantSelectorPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/employee/search/SearchPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "tests/unit/shopSwitchReset.test.ts",
+        "evidence": "direct_import",
+        "layer": "test"
+      }
+    ],
+    "cartStore": [
+      {
+        "file": "src/stores/shopStore.ts",
+        "evidence": "direct_import",
+        "layer": "store"
+      },
+      {
+        "file": "src/pages/employee/sale/BrowseProductsPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/employee/sale/CartPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/employee/sale/SaleReviewPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/employee/sale/SelectCustomerPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/employee/sale/VariantSelectorPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "tests/unit/shopSwitchReset.test.ts",
+        "evidence": "direct_import",
+        "layer": "test"
+      }
+    ],
+    "employeesStore": [
+      {
+        "file": "src/stores/shopStore.ts",
+        "evidence": "direct_import",
+        "layer": "store"
+      },
+      {
+        "file": "src/stores/useBootstrapData.ts",
+        "evidence": "direct_import",
+        "layer": "store"
+      },
+      {
+        "file": "src/pages/admin/dashboard/AdminDashboardPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/employees/AddEmployeePage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/employees/EmployeeDetailPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/employees/EmployeesListPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/sales/AdminSalesListPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/employee/search/SearchPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "tests/unit/shopSwitchReset.test.ts",
+        "evidence": "direct_import",
+        "layer": "test"
+      }
+    ],
+    "notificationStore": [
+      {
+        "file": "src/stores/shopStore.ts",
+        "evidence": "direct_import",
+        "layer": "store"
+      },
+      {
+        "file": "src/stores/useBootstrapData.ts",
+        "evidence": "direct_import",
+        "layer": "store"
+      },
+      {
+        "file": "src/pages/admin/dashboard/AdminDashboardPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/notifications/AdminNotificationsPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/employee/dashboard/DashboardPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/employee/notifications/EmployeeNotificationsPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/employee/settings/SettingsPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "tests/unit/notificationScope.test.ts",
+        "evidence": "direct_import",
+        "layer": "test"
+      },
+      {
+        "file": "tests/unit/shopSwitchReset.test.ts",
+        "evidence": "direct_import",
+        "layer": "test"
+      }
+    ],
+    "rolesStore": [
+      {
+        "file": "src/stores/shopStore.ts",
+        "evidence": "direct_import",
+        "layer": "store"
+      },
+      {
+        "file": "src/components/shop/BranchEditSheet.tsx",
+        "evidence": "direct_import",
+        "layer": "component"
+      },
+      {
+        "file": "src/components/shop/ShopSwitcherSheet.tsx",
+        "evidence": "direct_import",
+        "layer": "component"
+      },
+      {
+        "file": "src/pages/admin/employees/AddEmployeePage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/employees/EmployeeDetailPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/settings/RolesAccessPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "tests/unit/accessReadGuard.test.ts",
+        "evidence": "direct_import",
+        "layer": "test"
+      },
+      {
+        "file": "tests/unit/shopSwitchReset.test.ts",
+        "evidence": "direct_import",
+        "layer": "test"
+      }
+    ],
+    "salesStore": [
+      {
+        "file": "src/stores/shopStore.ts",
+        "evidence": "direct_import",
+        "layer": "store"
+      },
+      {
+        "file": "src/stores/useBootstrapData.ts",
+        "evidence": "direct_import",
+        "layer": "store"
+      },
+      {
+        "file": "src/components/sales/SaleDetailView.tsx",
+        "evidence": "direct_import",
+        "layer": "component"
+      },
+      {
+        "file": "src/pages/admin/alerts/CreditOverridesPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/alerts/RemindersOverviewPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/dashboard/AdminDashboardPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/employees/EmployeeDetailPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/inventory/StockMovementHistoryPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/payments/DailyCashReconciliationPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/reports/AdminReportsPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/returns/AdminReturnSelectItemsPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/sales/AdminSalesListPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/employee/activity/ActivityLogPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/employee/customers/CustomerProfilePage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/employee/customers/CustomerPurchaseHistoryPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/employee/customers/CustomersListPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/employee/dashboard/DashboardPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/employee/products/ProductDetailPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/employee/returns/ReturnSelectItemsPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/employee/sale/CartPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/employee/sale/SaleReviewPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/employee/sales/SalesListPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/employee/search/SearchPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "tests/unit/shopSwitchReset.test.ts",
+        "evidence": "direct_import",
+        "layer": "test"
+      }
+    ],
+    "uiStore": [
+      {
+        "file": "src/components/admin/InviteLinkCard.tsx",
+        "evidence": "direct_import",
+        "layer": "component"
+      },
+      {
+        "file": "src/components/layout/AdminLayout.tsx",
+        "evidence": "direct_import",
+        "layer": "component"
+      },
+      {
+        "file": "src/components/layout/EmployeeLayout.tsx",
+        "evidence": "direct_import",
+        "layer": "component"
+      },
+      {
+        "file": "src/components/sales/SaleDetailView.tsx",
+        "evidence": "direct_import",
+        "layer": "component"
+      },
+      {
+        "file": "src/components/shop/BranchEditSheet.tsx",
+        "evidence": "direct_import",
+        "layer": "component"
+      },
+      {
+        "file": "src/components/shop/DeleteTargetSheet.tsx",
+        "evidence": "direct_import",
+        "layer": "component"
+      },
+      {
+        "file": "src/components/shop/ShopSwitcherSheet.tsx",
+        "evidence": "direct_import",
+        "layer": "component"
+      },
+      {
+        "file": "src/components/ui/BackButtonHandler.tsx",
+        "evidence": "direct_import",
+        "layer": "component"
+      },
+      {
+        "file": "src/components/ui/ScanButton.tsx",
+        "evidence": "direct_import",
+        "layer": "component"
+      },
+      {
+        "file": "src/components/ui/StockAlertsSheet.tsx",
+        "evidence": "direct_import",
+        "layer": "component"
+      },
+      {
+        "file": "src/components/ui/Toast.tsx",
+        "evidence": "direct_import",
+        "layer": "component"
+      },
+      {
+        "file": "src/pages/admin/companies/AddCompanyPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/companies/CompanyDetailPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/employees/AddEmployeePage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/employees/EmployeeDetailPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/inventory/AddProductPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/inventory/BarcodeGeneratePage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/inventory/InventoryAdjustPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/payments/DailyCashReconciliationPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/payments/RecordSupplierPaymentPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/purchases/RecordPurchasePage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/returns/AdminReturnConfirmPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/settings/AdminSettingsPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/settings/RolesAccessPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/auth/PINSetPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/employee/customers/AddCustomerPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/employee/customers/CustomerProfilePage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/employee/customers/RecordCustomerPaymentPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/employee/products/ProductDetailPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/employee/returns/ReturnConfirmPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/employee/sale/BrowseProductsPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/employee/sale/CartPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/employee/sale/SaleSuccessPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/employee/sale/VariantSelectorPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/employee/settings/SettingsPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/register/RegisterShopDetailsPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/super-admin/SuperAdminDashboard.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      }
+    ],
+    "permissionsStore": [
+      {
+        "file": "src/components/admin/PermissionChecklist.tsx",
+        "evidence": "direct_import",
+        "layer": "component"
+      },
+      {
+        "file": "src/pages/admin/employees/AddEmployeePage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/employees/EmployeeDetailPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/settings/RolesAccessPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      }
+    ],
+    "educationStore": [
+      {
+        "file": "src/components/education/ContextHelp.tsx",
+        "evidence": "direct_import",
+        "layer": "component"
+      },
+      {
+        "file": "src/components/education/FirstRunGate.tsx",
+        "evidence": "direct_import",
+        "layer": "component"
+      },
+      {
+        "file": "src/components/education/TourOverlay.tsx",
+        "evidence": "direct_import",
+        "layer": "component"
+      },
+      {
+        "file": "src/components/education/WelcomeSheet.tsx",
+        "evidence": "direct_import",
+        "layer": "component"
+      },
+      {
+        "file": "src/pages/auth/PINSetPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/shared/AppGuidePage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      }
+    ],
+    "offlineStore": [
+      {
+        "file": "src/components/layout/AdminLayout.tsx",
+        "evidence": "direct_import",
+        "layer": "component"
+      },
+      {
+        "file": "src/components/layout/EmployeeLayout.tsx",
+        "evidence": "direct_import",
+        "layer": "component"
+      }
+    ],
+    "useBootstrapData": [
+      {
+        "file": "src/components/layout/AdminLayout.tsx",
+        "evidence": "direct_import",
+        "layer": "component"
+      },
+      {
+        "file": "src/components/layout/EmployeeLayout.tsx",
+        "evidence": "direct_import",
+        "layer": "component"
+      }
+    ],
+    "shopRequestsStore": [
+      {
+        "file": "src/pages/register/RegisterOTPPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/register/RegisterPhonePage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/register/RegisterShopDetailsPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/register/RegisterStatusPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/super-admin/SuperAdminDashboard.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      }
+    ]
+  },
+  "routes": {
+    "/employees": [
+      {
+        "file": "src/lib/ownerRows.ts",
+        "evidence": "route_definition",
+        "layer": "lib"
+      }
+    ],
+    "/companies": [
+      {
+        "file": "src/lib/ownerRows.ts",
+        "evidence": "route_definition",
+        "layer": "lib"
+      }
+    ],
+    "/settings/roles": [
+      {
+        "file": "src/lib/ownerRows.ts",
+        "evidence": "route_definition",
+        "layer": "lib"
+      }
+    ],
+    "/products": [
+      {
+        "file": "src/lib/ownerRows.ts",
+        "evidence": "route_definition",
+        "layer": "lib"
+      }
+    ],
+    "/notifications": [
+      {
+        "file": "src/lib/ownerRows.ts",
+        "evidence": "route_definition",
+        "layer": "lib"
+      }
+    ],
+    "/activity": [
+      {
+        "file": "src/lib/ownerRows.ts",
+        "evidence": "route_definition",
+        "layer": "lib"
+      }
+    ],
+    "/admin/dashboard": [
+      {
+        "file": "src/components/layout/AdminLayout.tsx",
+        "evidence": "route_definition",
+        "layer": "component"
+      },
+      {
+        "file": "tests/e2e/skeletonCoverage.spec.ts",
+        "evidence": "route_definition",
+        "layer": "test"
+      }
+    ],
+    "/admin/sales": [
+      {
+        "file": "src/components/layout/AdminLayout.tsx",
+        "evidence": "route_definition",
+        "layer": "component"
+      },
+      {
+        "file": "src/pages/employee/search/SearchPage.tsx",
+        "evidence": "route_definition",
+        "layer": "page"
+      },
+      {
+        "file": "tests/e2e/skeletonCoverage.spec.ts",
+        "evidence": "route_definition",
+        "layer": "test"
+      }
+    ],
+    "/admin/products": [
+      {
+        "file": "src/components/layout/AdminLayout.tsx",
+        "evidence": "route_definition",
+        "layer": "component"
+      },
+      {
+        "file": "src/pages/employee/search/SearchPage.tsx",
+        "evidence": "route_definition",
+        "layer": "page"
+      },
+      {
+        "file": "tests/e2e/designLanguage.spec.ts",
+        "evidence": "route_definition",
+        "layer": "test"
+      },
+      {
+        "file": "tests/e2e/skeletonCoverage.spec.ts",
+        "evidence": "route_definition",
+        "layer": "test"
+      }
+    ],
+    "/admin/assistant": [
+      {
+        "file": "src/components/layout/AdminLayout.tsx",
+        "evidence": "route_definition",
+        "layer": "component"
+      }
+    ],
+    "/admin/more": [
+      {
+        "file": "src/components/layout/AdminLayout.tsx",
+        "evidence": "route_definition",
+        "layer": "component"
+      },
+      {
+        "file": "tests/e2e/designLanguage.spec.ts",
+        "evidence": "route_definition",
+        "layer": "test"
+      }
+    ],
+    "/employee/dashboard": [
+      {
+        "file": "src/components/layout/EmployeeLayout.tsx",
+        "evidence": "route_definition",
+        "layer": "component"
+      }
+    ],
+    "/employee/sales": [
+      {
+        "file": "src/components/layout/EmployeeLayout.tsx",
+        "evidence": "route_definition",
+        "layer": "component"
+      }
+    ],
+    "/employee/products": [
+      {
+        "file": "src/components/layout/EmployeeLayout.tsx",
+        "evidence": "route_definition",
+        "layer": "component"
+      }
+    ],
+    "/employee/customers": [
+      {
+        "file": "src/components/layout/EmployeeLayout.tsx",
+        "evidence": "route_definition",
+        "layer": "component"
+      },
+      {
+        "file": "src/pages/employee/more/MorePage.tsx",
+        "evidence": "route_definition",
+        "layer": "page"
+      }
+    ],
+    "/employee/assistant": [
+      {
+        "file": "src/components/layout/EmployeeLayout.tsx",
+        "evidence": "route_definition",
+        "layer": "component"
+      }
+    ],
+    "/payments": [
+      {
+        "file": "src/pages/admin/more/MoreMenuPage.tsx",
+        "evidence": "route_definition",
+        "layer": "page"
+      }
+    ],
+    "/payments/daily-cash": [
+      {
+        "file": "src/pages/admin/more/MoreMenuPage.tsx",
+        "evidence": "route_definition",
+        "layer": "page"
+      }
+    ],
+    "/reports": [
+      {
+        "file": "src/pages/admin/more/MoreMenuPage.tsx",
+        "evidence": "route_definition",
+        "layer": "page"
+      }
+    ],
+    "/purchases": [
+      {
+        "file": "src/pages/admin/more/MoreMenuPage.tsx",
+        "evidence": "route_definition",
+        "layer": "page"
+      }
+    ],
+    "/inventory/movements": [
+      {
+        "file": "src/pages/admin/more/MoreMenuPage.tsx",
+        "evidence": "route_definition",
+        "layer": "page"
+      }
+    ],
+    "/inventory/reorder": [
+      {
+        "file": "src/pages/admin/more/MoreMenuPage.tsx",
+        "evidence": "route_definition",
+        "layer": "page"
+      }
+    ],
+    "/inventory/barcodes": [
+      {
+        "file": "src/pages/admin/more/MoreMenuPage.tsx",
+        "evidence": "route_definition",
+        "layer": "page"
+      }
+    ],
+    "/customers": [
+      {
+        "file": "src/pages/admin/more/MoreMenuPage.tsx",
+        "evidence": "route_definition",
+        "layer": "page"
+      }
+    ],
+    "/guide": [
+      {
+        "file": "src/pages/admin/more/MoreMenuPage.tsx",
+        "evidence": "route_definition",
+        "layer": "page"
+      }
+    ],
+    "/settings": [
+      {
+        "file": "src/pages/admin/more/MoreMenuPage.tsx",
+        "evidence": "route_definition",
+        "layer": "page"
+      }
+    ],
+    "/employee/notifications": [
+      {
+        "file": "src/pages/employee/more/MorePage.tsx",
+        "evidence": "route_definition",
+        "layer": "page"
+      }
+    ],
+    "/employee/settings": [
+      {
+        "file": "src/pages/employee/more/MorePage.tsx",
+        "evidence": "route_definition",
+        "layer": "page"
+      }
+    ],
+    "/admin/employees/${e.id}": [
+      {
+        "file": "src/pages/employee/search/SearchPage.tsx",
+        "evidence": "route_definition",
+        "layer": "page"
+      }
+    ],
+    "/admin/companies/${c.id}": [
+      {
+        "file": "src/pages/employee/search/SearchPage.tsx",
+        "evidence": "route_definition",
+        "layer": "page"
+      }
+    ],
+    "/admin/customers": [
+      {
+        "file": "src/pages/employee/search/SearchPage.tsx",
+        "evidence": "route_definition",
+        "layer": "page"
+      }
+    ],
+    "/admin/employees": [
+      {
+        "file": "src/pages/employee/search/SearchPage.tsx",
+        "evidence": "route_definition",
+        "layer": "page"
+      },
+      {
+        "file": "tests/e2e/designLanguage.spec.ts",
+        "evidence": "route_definition",
+        "layer": "test"
+      }
+    ],
+    "/admin/companies": [
+      {
+        "file": "src/pages/employee/search/SearchPage.tsx",
+        "evidence": "route_definition",
+        "layer": "page"
+      },
+      {
+        "file": "tests/e2e/skeletonCoverage.spec.ts",
+        "evidence": "route_definition",
+        "layer": "test"
+      }
+    ],
+    "/admin/settings": [
+      {
+        "file": "tests/e2e/designLanguage.spec.ts",
+        "evidence": "route_definition",
+        "layer": "test"
+      }
+    ],
+    "/admin/payments": [
+      {
+        "file": "tests/e2e/skeletonCoverage.spec.ts",
+        "evidence": "route_definition",
+        "layer": "test"
+      }
+    ],
+    "/admin/reports": [
+      {
+        "file": "tests/e2e/skeletonCoverage.spec.ts",
+        "evidence": "route_definition",
+        "layer": "test"
+      }
+    ],
+    "/admin/alerts/inventory": [
+      {
+        "file": "tests/e2e/skeletonCoverage.spec.ts",
+        "evidence": "route_definition",
+        "layer": "test"
+      }
+    ],
+    "/admin/inventory/reorder": [
+      {
+        "file": "tests/e2e/skeletonCoverage.spec.ts",
+        "evidence": "route_definition",
+        "layer": "test"
+      }
+    ],
+    "/admin/settings/roles": [
+      {
+        "file": "tests/e2e/skeletonCoverage.spec.ts",
+        "evidence": "route_definition",
+        "layer": "test"
+      }
+    ],
+    "/admin/products/${QA_IDS.productA}": [
+      {
+        "file": "tests/e2e/skeletonCoverage.spec.ts",
+        "evidence": "route_definition",
+        "layer": "test"
+      }
+    ],
+    "/admin/activity": [
+      {
+        "file": "tests/e2e/skeletonCoverage.spec.ts",
+        "evidence": "route_definition",
+        "layer": "test"
+      }
+    ],
+    "/login": [
+      {
+        "file": "tests/unit/deepLink.test.ts",
+        "evidence": "route_definition",
+        "layer": "test"
+      },
+      {
+        "file": "tests/unit/deepLink.test.ts",
+        "evidence": "route_definition",
+        "layer": "test"
+      },
+      {
+        "file": "tests/unit/deepLink.test.ts",
+        "evidence": "route_definition",
+        "layer": "test"
+      },
+      {
+        "file": "tests/unit/deepLink.test.ts",
+        "evidence": "route_definition",
+        "layer": "test"
+      }
+    ]
+  },
+  "routePages": {
+    "/": "src/pages/auth/SplashPage.tsx",
+    "/welcome": "src/pages/onboarding/IntroPage.tsx",
+    "/login": "src/pages/auth/LoginPage.tsx",
+    "/login/otp": "src/pages/auth/OTPVerifyPage.tsx",
+    "/login/account-ready": "src/pages/auth/AccountReadyPage.tsx",
+    "/login/pin-set": "src/pages/auth/PINSetPage.tsx",
+    "/login/pin": "src/pages/auth/PINLoginPage.tsx",
+    "/login/forgot-pin": "src/pages/auth/ForgotPINPage.tsx",
+    "/login/not-registered": "src/pages/auth/NotRegisteredPage.tsx",
+    "/login/deactivated": "src/pages/auth/DeactivatedPage.tsx",
+    "/login/under-review": "src/pages/auth/UnderReviewPage.tsx",
+    "/login/rejected": "src/pages/auth/RejectedPage.tsx",
+    "/register": "src/pages/register/RegisterPhonePage.tsx",
+    "/register/otp": "src/pages/register/RegisterOTPPage.tsx",
+    "/register/shop-details": "src/pages/register/RegisterShopDetailsPage.tsx",
+    "/register/status": "src/pages/register/RegisterStatusPage.tsx",
+    "/super-admin": "src/pages/super-admin/SuperAdminDashboard.tsx",
+    "/admin/dashboard": "src/pages/admin/dashboard/AdminDashboardPage.tsx",
+    "/admin/assistant": "src/pages/assistant/AssistantPage.tsx",
+    "/admin/more": "src/pages/admin/more/MoreMenuPage.tsx",
+    "/admin/guide": "src/pages/shared/AppGuidePage.tsx",
+    "/admin/search": "src/pages/employee/search/SearchPage.tsx",
+    "/admin/customers": "src/pages/employee/customers/CustomersListPage.tsx",
+    "/admin/customers/new": "src/pages/employee/customers/AddCustomerPage.tsx",
+    "/admin/customers/:customerId": "src/pages/employee/customers/CustomerProfilePage.tsx",
+    "/admin/customers/:customerId/purchases": "src/pages/employee/customers/CustomerPurchaseHistoryPage.tsx",
+    "/admin/customers/:customerId/payments": "src/pages/employee/customers/CustomerPaymentHistoryPage.tsx",
+    "/admin/customers/:customerId/record-payment": "src/pages/employee/customers/RecordCustomerPaymentPage.tsx",
+    "/admin/customers/:customerId/reminders": "src/pages/employee/customers/ReminderHistoryPage.tsx",
+    "/admin/products": "src/pages/employee/products/ProductsListPage.tsx",
+    "/admin/products/:productId": "src/pages/employee/products/ProductDetailPage.tsx",
+    "/admin/inventory/new": "src/pages/admin/inventory/AddProductPage.tsx",
+    "/admin/inventory/:productId/edit": "src/pages/admin/inventory/AddProductPage.tsx",
+    "/admin/inventory/:productId/adjust": "src/pages/admin/inventory/InventoryAdjustPage.tsx",
+    "/admin/inventory/movements": "src/pages/admin/inventory/StockMovementHistoryPage.tsx",
+    "/admin/inventory/reorder": "src/pages/admin/inventory/ReorderSuggestionsPage.tsx",
+    "/admin/inventory/barcodes": "src/pages/admin/inventory/BarcodeGeneratePage.tsx",
+    "/admin/sale": "src/pages/employee/sale/SelectCustomerPage.tsx",
+    "/admin/sale/products": "src/pages/employee/sale/BrowseProductsPage.tsx",
+    "/admin/sale/products/:productId": "src/pages/employee/sale/VariantSelectorPage.tsx",
+    "/admin/sale/cart": "src/pages/employee/sale/CartPage.tsx",
+    "/admin/sale/success": "src/pages/employee/sale/SaleSuccessPage.tsx",
+    "/admin/sales": "src/pages/admin/sales/AdminSalesListPage.tsx",
+    "/admin/sales/:saleId": "src/components/sales/SaleDetailView.tsx",
+    "/admin/sales/:saleId/return": "src/pages/admin/returns/AdminReturnSelectItemsPage.tsx",
+    "/admin/sales/:saleId/return/confirm": "src/pages/admin/returns/AdminReturnConfirmPage.tsx",
+    "/admin/sales/:saleId/return/success": "src/pages/admin/returns/AdminReturnSuccessPage.tsx",
+    "/admin/purchases": "src/pages/admin/purchases/AdminPurchasesPage.tsx",
+    "/admin/purchases/new": "src/pages/admin/purchases/RecordPurchasePage.tsx",
+    "/admin/purchases/:purchaseId": "src/pages/admin/purchases/PurchaseDetailPage.tsx",
+    "/admin/payments": "src/pages/admin/payments/AdminPaymentsPage.tsx",
+    "/admin/payments/supplier/:companyId": "src/pages/admin/payments/RecordSupplierPaymentPage.tsx",
+    "/admin/payments/daily-cash": "src/pages/admin/payments/DailyCashReconciliationPage.tsx",
+    "/admin/companies": "src/pages/admin/companies/CompaniesListPage.tsx",
+    "/admin/companies/new": "src/pages/admin/companies/AddCompanyPage.tsx",
+    "/admin/companies/:companyId": "src/pages/admin/companies/CompanyDetailPage.tsx",
+    "/admin/employees": "src/pages/admin/employees/EmployeesListPage.tsx",
+    "/admin/employees/new": "src/pages/admin/employees/AddEmployeePage.tsx",
+    "/admin/employees/:employeeId": "src/pages/admin/employees/EmployeeDetailPage.tsx",
+    "/admin/reports": "src/pages/admin/reports/AdminReportsPage.tsx",
+    "/admin/settings": "src/pages/admin/settings/AdminSettingsPage.tsx",
+    "/admin/settings/roles": "src/pages/admin/settings/RolesAccessPage.tsx",
+    "/admin/activity": "src/pages/employee/activity/ActivityLogPage.tsx",
+    "/admin/notifications": "src/pages/admin/notifications/AdminNotificationsPage.tsx",
+    "/admin/alerts/credit-overrides": "src/pages/admin/alerts/CreditOverridesPage.tsx",
+    "/admin/alerts/credit-overrides/:customerId": "src/pages/admin/alerts/CreditOverrideDetailPage.tsx",
+    "/admin/alerts/reminders": "src/pages/admin/alerts/RemindersOverviewPage.tsx",
+    "/admin/alerts/inventory": "src/pages/admin/alerts/InventoryAlertsPage.tsx",
+    "/admin/alerts/credit-requests/:requestId": "src/pages/admin/alerts/CreditRequestDetailPage.tsx",
+    "/admin/alerts/groups/:groupId": "src/pages/admin/alerts/GroupDetailPage.tsx",
+    "/employee/dashboard": "src/pages/employee/dashboard/DashboardPage.tsx",
+    "/employee/assistant": "src/pages/assistant/AssistantPage.tsx",
+    "/employee/sale": "src/pages/employee/sale/SelectCustomerPage.tsx",
+    "/employee/sale/products": "src/pages/employee/sale/BrowseProductsPage.tsx",
+    "/employee/sale/products/:productId": "src/pages/employee/sale/VariantSelectorPage.tsx",
+    "/employee/sale/cart": "src/pages/employee/sale/CartPage.tsx",
+    "/employee/sale/success": "src/pages/employee/sale/SaleSuccessPage.tsx",
+    "/employee/sales": "src/pages/employee/sales/SalesListPage.tsx",
+    "/employee/sales/:saleId": "src/components/sales/SaleDetailView.tsx",
+    "/employee/sales/:saleId/return": "src/pages/employee/returns/ReturnSelectItemsPage.tsx",
+    "/employee/sales/:saleId/return/confirm": "src/pages/employee/returns/ReturnConfirmPage.tsx",
+    "/employee/sales/:saleId/return/success": "src/pages/employee/returns/ReturnSuccessPage.tsx",
+    "/employee/customers": "src/pages/employee/customers/CustomersListPage.tsx",
+    "/employee/customers/new": "src/pages/employee/customers/AddCustomerPage.tsx",
+    "/employee/customers/:customerId": "src/pages/employee/customers/CustomerProfilePage.tsx",
+    "/employee/customers/:customerId/purchases": "src/pages/employee/customers/CustomerPurchaseHistoryPage.tsx",
+    "/employee/customers/:customerId/payments": "src/pages/employee/customers/CustomerPaymentHistoryPage.tsx",
+    "/employee/customers/:customerId/record-payment": "src/pages/employee/customers/RecordCustomerPaymentPage.tsx",
+    "/employee/customers/:customerId/reminders": "src/pages/employee/customers/ReminderHistoryPage.tsx",
+    "/employee/products": "src/pages/employee/products/ProductsListPage.tsx",
+    "/employee/products/:productId": "src/pages/employee/products/ProductDetailPage.tsx",
+    "/employee/search": "src/pages/employee/search/SearchPage.tsx",
+    "/employee/settings": "src/pages/employee/settings/SettingsPage.tsx",
+    "/employee/activity": "src/pages/employee/activity/ActivityLogPage.tsx",
+    "/employee/notifications": "src/pages/employee/notifications/EmployeeNotificationsPage.tsx",
+    "/employee/guide": "src/pages/shared/AppGuidePage.tsx"
+  },
+  "scannedAt": "2026-10-02T19:15:17.159Z",
+  "fileCount": 327
+}

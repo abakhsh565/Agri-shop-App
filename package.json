@@ -11,7 +11,7 @@
     "cap:sync": "vite build && cap sync",
     "cap:android": "cap open android",
     "cap:ios": "cap open ios",
-    "registry:build": "node scripts/dev/index.mjs && vitest run tests/unit/featureRegistryGuard.test.ts",
+    "registry:build": "node scripts/scan-frontend-deps.cjs && node scripts/dev/index.mjs && vitest run tests/unit/featureRegistryGuard.test.ts",
     "test": "vitest run",
     "test:unit": "vitest run tests/unit/",
     "test:integration": "vitest run tests/integration/",
