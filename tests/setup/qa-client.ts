@@ -487,6 +487,28 @@ export async function insertAsUser(
   }
 }
 
+/**
+ * UPDATE rows as a specific user through PostgREST, so the UPDATE policies are
+ * exercised for real (an UPDATE that RLS refuses matches zero rows rather than
+ * erroring, which is exactly why the caller must read the row back afterwards).
+ */
+export async function updateAsUser(
+  userId: string,
+  table: string,
+  patch: Record<string, any>,
+  match: Record<string, any>
+): Promise<{ data: any[] | null; error: string | null }> {
+  try {
+    const client = await getAuthClient(userId);
+    let query = client.from(table).update(patch);
+    for (const [key, value] of Object.entries(match)) query = query.eq(key, value);
+    const { data, error } = await query.select('*');
+    return { data: (data as any[]) ?? null, error: error?.message ?? null };
+  } catch (e: any) {
+    return { data: null, error: e.message };
+  }
+}
+
 /** DELETE rows as a specific user through PostgREST (RLS enforced). */
 export async function deleteAsUser(
   userId: string,

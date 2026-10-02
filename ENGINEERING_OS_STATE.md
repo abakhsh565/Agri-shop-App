@@ -1602,6 +1602,298 @@ nothing at all, and one history screen showed a lone spinner where its own shape
 
 ---
 
+## Stage: whole-app completion gate — evidence matrix, one proven cross-tenant leak, two shell fixes (2026-10-02)
+
+The gate was driven by an **evidence matrix** rather than by habit: every already-green area was
+marked REUSED with the log that proves it, and only materially different contexts were run. The
+matrix, the per-lane invalidation and the raw logs live in `PHASE_2_BROWSER_SAFETY.md` §17.
+QA only (`bpybjrjenwccowvtrevu`); production untouched.
+
+### Permanent rule — evidence is reusable
+
+> **Evidence is reusable.** A test is required only when its purpose, context, risk,
+> implementation, dependency, expected behaviour, or covered layer is materially different, or
+> when relevant code, data, configuration, or environment has changed. If the same behaviour has
+> already been tested and proven and nothing relevant has changed, reuse the existing evidence
+> instead of repeating the test. Every future agent must review existing evidence and dependency
+> impact before starting a new verification run.
+
+This is now executable, not prose: `node backups/gap-check.mjs` reads `scripts/dev/lane-map.json`,
+finds each lane's newest green log in `backups/`, and compares it with the newest mtime of every
+file that lane's globs cover. It prints `REUSE` or `RERUN` per lane with the file that invalidated
+it. 22 of 28 lanes came back REUSE on the first pass; the 6 that did not (all invalidated by
+`src/index.css`, which every visual lane maps) were the only browser work started.
+
+### What was actually broken
+
+1. **A real cross-tenant leak on `product_variants` — read, write and cost data.** The table was
+   the only business table with a literal `USING (true)` SELECT policy and has no `shop_id`
+   column, so the tenant boundary was one join away on `products.shop_id` and nothing enforced it.
+   Proven through the real JWT → PostgREST → RLS path with two tenants
+   (`tests/integration/variantIsolation.test.ts`): an admin of shop A read shop B's variant and its
+   `cost_price`; **UPDATEd shop B's `stock_qty` 100 → 1 and `selling_price` 700 → 1**, both
+   committed; and INSERTed a variant onto shop B's product. The UI never showed it because the
+   app filters its own reads — which is exactly why the boundary has to be the policy.
+   Fixed by **0178** (all three policies scoped to the owning shop; `USING` sees the old row and
+   `WITH CHECK` the new, so a row cannot be moved between tenants) and **0179** (see 2).
+2. **`product_variants_public` did not exist in either environment.** `0015_flexible_units.sql`
+   created it ("no cost_price for employees"), the ledger records 0015 as applied, and the table
+   and index it adds are present — only the view is absent (the staging dump has zero occurrences;
+   production carries one). So the non-admin branch of `productsStore` has never read the view it
+   names, and `cost_price` had no redaction at all. **0179** restores the projection without
+   `cost_price`, scoped to the caller's shop (a view runs with its owner's rights, so its `WHERE`
+   is the enforcement — stated in the file), and narrows the base table to the owning shop's
+   admins.
+3. **Two real UI defects, found by the lanes the invalidation flagged.** The admin/employee tab
+   bars rendered 41px tall, so the accessibility lane's frozen structural baseline refused the
+   assistant tab (44 → 55 undersized targets). Fixed in the shell, not the baseline: every tab now
+   carries `min-h-[44px]`, and `smallTarget` is pinned at **0** — the gap is gone, not recorded.
+   And `adminMicrocopy` pinned an Urdu literal (`اپنے 6 نمبر لکھیں`) that the plain-language pass
+   replaced; the code screen rendered correct Urdu throughout. The assertion now reads the shipped
+   `auth.verifyOtp` + `auth.enterCode` pair and asserts English is absent, so it can no longer
+   pass against a screen that reverted to English.
+
+### Verified
+
+- `accessibility` 3/3 · `adminMicrocopy` 4/4 · `overlayRtl` 2/2 · `actionCenter` 12/12 ·
+  `education` 9/9 · `logicalDirection` 3/3 · `crossScreenSync` 13/13 · `retryAfterTimeout` 1/1 ·
+  `rtlLtr` 16/16 — **64 passed, 0 failed** (`backups/gate-gap2.log`), which is the complete set the
+  shell changes invalidated.
+- `variantIsolation` **8/8** (`tests/integration/variantIsolation.test.ts`), the suite written to
+  settle the leak; 5 of its 8 assertions were red before 0178/0179 and none were weakened after.
+- 0178 and 0179 both replay cleanly onto the frozen staging baseline (`npm run verify:baseline`)
+  and were applied to QA through the ledger (`npm run migrate:apply --env staging --apply`),
+  each recorded in the same transaction.
+- Read-only schema probes recorded as evidence: zero tables without RLS, zero `anon` grants on
+  business tables, zero orphan rows across eight parent/child pairs, exactly the four fixture
+  accounts. Four permissive-`true` policies were found in total — the variants one is fixed here;
+  `app_settings_select` and `permissions_select` are reference data, and `audit_events_insert` is
+  the insert half of an append-only log and is the next thing to look at, named rather than
+  silently accepted.
+
+### Still open (named, not carried silently)
+
+- `audit_events_insert` is `WITH CHECK (true)`: any authenticated session may write an audit row
+  with any `user_id`/`shop_id`. It is an append-only table, so the damage is forged history rather
+  than lost data, but it is a real gap and is not covered by 0178/0179.
+- The batch-6 `education` console 404 still has not reproduced (the lane prints the URL if it
+  returns). `<meta>`-declared security headers remain ignored by the browser, unchanged.
+- No APK was built; the release path stays `.github/workflows/build-apk.yml` at the release gate.
+
+### 0180 — the leak was a class, and the sweep found the rest of it
+
+`0178` was found by asking the live catalog one question: *which policies are reachable by an
+authenticated session but never constrain the row to the caller's shop?* After fixing the
+variants table the same question was asked of everything else. Two more tables were in that
+shape, and both are money-adjacent:
+
+| Table | Policies found | Reproduced | Fixed |
+|---|---|---|---|
+| `stock_adjustments` | INSERT `app_is_admin()`; SELECT `app_is_admin()` **OR** branch-scope (which had no shop predicate either, so a caller with no branch scope matched every shop) | tenant A's admin read tenant B's adjustment row — 1 row returned | 0180: shop scope on SELECT and INSERT; the branch policy is replaced, not kept |
+| `cash_reconciliations` | INSERT `app_is_admin()`; SELECT `app_is_admin()` | same cross-tenant read, 1 row returned | 0180 |
+
+Measured and left alone, with the reason recorded: `notifications` scopes through
+`my_shop_ids()`; `app_settings` and `permissions` are reference data with no `shop_id`;
+`sale_submissions` denies clients outright; `user_permissions` INSERT/DELETE are refused by RLS
+in the cross-tenant case. The sweep suite asserts all four states, so a policy that loses its
+boundary later fails a test instead of waiting for an audit. New coverage:
+`tests/integration/tenantBoundarySweep.test.ts` (4 cases) alongside
+`tests/integration/variantIsolation.test.ts` (8 cases).
+
+**A second permanent guard, because the same harness defect happened twice.** Two new suites
+collided with existing fixtures on *phone numbers* (`branchScopeEnforcement` owns
+`923009790001`–`3`), and the symptom was a whole file failing to start with
+`duplicate key value violates unique constraint "users_phone_key"` — which reads like
+infrastructure, not like a fixture collision. `fixtureIdCollision` already checked UUIDs; it now
+checks phone literals too, with the four seeded accounts and the three seeded customers listed
+as shared-on-purpose. Proven non-vacuous: it caught the two collisions that had just cost a run.
+
+### Gate numbers (final, QA only)
+
+- `npx tsc --noEmit` → clean.
+- `npx vitest run` → **80 files / 867 tests, 0 failed** (`backups/final-vitest2.log`), up from
+  78/854 at the start of the gate.
+- Browser lanes: `gate-gap2.log` **64 passed / 0 failed** (the full invalidated set),
+  `gate-lanes.log` **45 passed / 0 failed** (employee product paths after 0179),
+  `gate-lanes2.log` **13 passed / 0 failed** (the screens that read the 0180 tables).
+- `npm run build` → success (`backups/gate-build.log`).
+- `npm run migrate:verify` → **172 files ↔ 172 ledger rows, every hash matches**.
+- `npm run verify:baseline -- --baseline staging --since 0178|0179|0180` → PASS for all three.
+- QA restored and independently re-counted: **0 business rows** in every business table, exactly
+  the four fixture accounts (all active), 4 memberships, 0 `shop_requests`, 0 leftover sales /
+  payments / returns / adjustments / reconciliations / products / variants.
+- Production untouched throughout: no query against it, no migration, no backup write.
+
+### WHOLE APP COMPLETION: PASS
+
+Every requirement area in `PHASE_2_BROWSER_SAFETY.md` §17 is PASS, REUSED with the log that
+proves it, FIXED + VERIFIED, or named as remaining uncertainty. Nothing is UNKNOWN, and no
+UNKNOWN was converted into a pass. The one item carried forward as genuinely unfixed is
+`audit_events_insert` (`WITH CHECK (true)`), documented with its exact condition and impact.
+
+Release has not been authorized and no APK was built; the release path remains
+`.github/workflows/build-apk.yml` when it is.
+
+---
+
+### 0181 — audit rows are written by the system, not by the caller (the carried-forward gap)
+
+The whole-app gate carried one named item: `audit_events_insert` was `WITH CHECK (true)`.
+Its SELECT policy was `app_is_admin()` — a role check with no shop predicate, on a table with
+no `shop_id` column at all. Both were investigated before anything was changed.
+
+**What is true, measured on QA** (`backups/audit-probe3.mjs`, read-only):
+
+- `audit_events` columns are `id, user_id, action, entity_type, entity_id, details,
+  ip_address, created_at`. No `shop_id`; attribution is `user_id → users.shop_id`. No triggers.
+- The forgery was **NOT reachable from a client** at the moment it was found, and that is stated
+  exactly rather than dramatised: `authenticated` and `anon` hold **no INSERT privilege** on the
+  table, so PostgREST refuses the write at the grant layer before RLS is consulted. The policy was
+  the one remaining gate that would still have said yes — a *latent* hole, reopened by a single
+  future `grant insert`. A boundary that depends on a privilege nobody looks at is not a boundary.
+- The SELECT side **was live**: an admin of shop A read shop B's audit row — 1 row returned through
+  the real JWT path.
+- The trusted writers are intact: ~34 SECURITY DEFINER RPCs with `search_path=public`
+  (`void_sale`, `process_return`, `adjust_stock`, `delete_role`, `record_customer_payment`,
+  `create_purchase`, `create_employee`, …) insert their audit row in the same transaction as the
+  business change, with attribution they derive from the session. No app screen reads the table
+  (zero matches in `src/`).
+
+**Fix — `0181_audit_rows_are_written_by_the_system_not_by_the_caller.sql`** (forward-only,
+applied to QA through the ledger): drops the permissive INSERT policy and replaces it with
+`audit_events_no_client_writes` (`WITH CHECK (false)` — both gates must say no), and scopes
+SELECT to `app_is_admin() AND (user_id IS NULL OR actor's shop = current_shop_id())`. The
+NULL-actor carve-out keeps pre-account history (registration / provisioning) visible to a shop's
+admin, and the FK is `ON DELETE NO ACTION`, so a NULL never means "the actor went away".
+Self-proof DO block inside the migration raises if any permissive INSERT or shop-less SELECT
+policy remains.
+
+**Evidence.**
+
+- `supabase/migrations/0181_…`: `verify:baseline --baseline staging --since 0181` → PASS
+  (6 statements, 0 failures); applied via the ledger.
+- `tests/integration/auditIntegrity.test.ts` (6 tests): **4 failed → 6/6 passed**. It asserts the
+  boundary, not one mechanism: the client insert must be refused (by RLS, by privilege, or both)
+  *and* the catalog must contain no permissive INSERT policy, so a later grant cannot reopen it.
+- Regression chain (`backups/gate-chain4.log`): vitest over the 9 affected suites
+  (`auditIntegrity + variantIsolation + tenantBoundarySweep + financialIntegrity +
+  inventoryIntegrity + destructiveSafety + securityAudit + employeeAccessOverrides +
+  rbacEnforcement`) → **9 files / 116 tests, 0 failed** (`gate-vitest3.log`); lanes
+  `voidSaleSafety + adminFullAccess + employeeStatusSafety` → **8 passed** (`gate-lanes3.log`),
+  which exercise the RPC writers through real UI flows; `migrate:verify` → **173 files ↔ 173
+  rows**; `tsc --noEmit` → clean.
+- QA cleaned and independently re-counted → 0 business rows; the four fixture accounts, all
+  active. Production untouched: no query, no migration, no write.
+
+Status upgrade from the gate text above: the audited item is **closed, not carried**. A migration
+change here re-ran only what 0181 can affect (RPC writers via UI, history/tenant suites) — the
+earlier whole-app evidence (64+45+13 lane greens, 867-test vitest, build) was reused, not rerun,
+because none of its files or dependencies changed.
+
+### 0182 — a shop's settings belong to that shop (found by re-probing after 0181)
+
+After 0181, the 0178/0180 question was asked one more time of the live catalog: *which policies
+are reachable by an authenticated session but do not constrain the row to the caller's shop?*
+`app_settings` was the answer.
+
+**Correction to the record.** The §0180 stage above called `app_settings` "reference data with
+no `shop_id`". That was wrong, and it was never measured — the misclassification is exactly why
+the 0180 sweep did not test it. Measured: `app_settings` has a `shop_id` column, a unique
+`(shop_id, setting_key)` constraint and an FK to `shops`; it holds the owner's stock-alert
+threshold and frequency plus `void_window_hours`, `expiry_warning_days` and
+`credit_limit_override_policy`, per shop. This section supersedes that sentence.
+
+**The leak, as found.** `app_settings_select` was `USING (true)`; `app_settings_insert` was
+`WITH CHECK (app_is_admin())` and `app_settings_update` was bare `app_is_admin()` — the 0180
+shape, on a per-shop table. All three were reachable by `authenticated` with RLS enabled, over
+PostgREST.
+
+**Why the client path can be closed without losing anything.** All three functions that touch
+the table are SECURITY DEFINER with `search_path` pinned (measured with `prosrc`/`prosecdef`):
+`get_stock_alert_settings` (reader, authorizes `products.view`), `set_stock_alert_settings`
+(writer, authorizes `products.edit`, derives shop and actor via `resolve_shop_and_actor`), and
+`void_sale_v1` (reads the void window for the sale's own shop). No screen reads the table
+directly — zero `.from('app_settings')` matches in `src/`. Definer rights bypass the narrowed
+policies, so no legitimate read or write is on the closed path.
+
+**Reproduction (red before the fix).** `tests/integration/appSettingsIsolation.test.ts`, real
+JWT → PostgREST → RLS, two tenants (`backups/appsettings-red.log`): **5 failed / 4 passed** —
+
+| Probe as shop A | Result before 0182 |
+|---|---|
+| admin reads shop B's setting | 1 row returned |
+| employee reads shop B's setting | 1 row returned |
+| admin updates shop B's setting | row matched, value '77' → rewritten |
+| admin inserts a row tagged `shop_id = B` | row written |
+| catalog posture | `app_settings_select` still `USING (true)` |
+
+**Fix — `0182_settings_belong_to_their_shop.sql`** (forward-only, applied to QA through the
+ledger): all three policies scoped to `shop_id = current_shop_id()` (writes additionally require
+`app_is_admin()`), with a comment on each, and a self-proof DO block that raises if any policy on
+the table lacks a shop predicate or is again the literal `true`. `permissions` is untouched —
+it is global reference data with no `shop_id`, which is now the only permissive-true policy left
+in the schema and is correct there.
+
+**Evidence.**
+
+- `verify:baseline --baseline staging --since 0181` → PASS (0182: 10 statements, 0 failures).
+- Applied via the ledger → `migrate:verify` **174 files ↔ 174 rows, every hash matches**.
+- Same suite after: **9/9 passed** (`appsettings-green2.log`), including the two tests that prove
+  the legitimate path survived: the DEFINER `set_stock_alert_settings`/`get_stock_alert_settings`
+  pair still writes and reads for both admin and employee, the shop's own people still read the
+  table, and an employee still cannot write it.
+- **Permanent class guard** — `tests/integration/shopScopedPolicyGuard.test.ts`: no policy with a
+  literal-`true` predicate may sit on a table that has a `shop_id` column, and no INSERT policy
+  anywhere may be permissive-`true` (the 0181 shape). 2/2 green, and proven **non-vacuous** by
+  injecting a throwaway table with a `USING (true)` policy and watching the same predicate surface
+  it — probe table dropped immediately.
+- Fixture discipline: the collision guard caught the first draft reusing shop `…d0d0`, which
+  `variantIsolation` already owns; the suite moved to `…a0a0` and the guard is green.
+- Targeted regression: `financialIntegrity` **19/19** (its void path is `void_sale_v1`, which
+  reads `app_settings`) + `fixtureIdCollision` 2/2 + `tsc --noEmit` clean.
+- Final catalog snapshot (`backups/audit-probe5.log`): **0** permissive-true INSERT policies;
+  `audit_events` = `no_client_writes(false)` + shop-scoped SELECT with client write privileges off;
+  the only permissive-true policy left is `permissions_select` (no `shop_id`, correct); zero
+  permissive INSERT policies on any history-sensitive table; all definer audit writers intact.
+
+**Evidence-reuse decision.** No browser lane was re-run for 0182: no file under `src/**` changed,
+lane invalidation is glob-based (`scripts/dev/lane-map.json`), and the settings path the UI uses
+is the RPC pair the new suite exercises directly against the real database. Re-running RTL/copy
+lanes for a policy predicate would have produced green counts, not new evidence.
+
+**QA cleanup.** `npm run qa:clean` removed 45 rows across the suites' leftovers; then an
+independent recount (`backups/final-recount-0182.log`) — **0 rows in every business table
+including `app_settings`**, exactly 1 shop (Default Shop), 4 auth users, the 4 fixture accounts
+all active, 0 stray `QA …` shops or audit rows, 0 `d7-`/`d4000000-`/`d5000000-`/`d6000000-`
+leftovers. Production untouched: no query, no migration, no write.
+
+### WHOLE APP + SECURITY: PASS
+
+Both carried/named security gaps are now closed the same way — reproduce on QA with a real JWT →
+smallest forward-only migration → red-to-green suite → permanent guard → ledger + baseline
+verification → cleanup with an independent recount:
+
+| Gap | Reachability when found | Closed by | Guard |
+|---|---|---|---|
+| `audit_events_insert` `WITH CHECK (true)` | latent (no client INSERT privilege) | 0181 | `auditIntegrity` + INSERT-policy catalog guard |
+| `audit_events_select` shop-blind | **live** — cross-tenant read reproduced | 0181 | same suite |
+| `app_settings` broad read + shop-blind writes | **live** — reads and writes reproduced across tenants | 0182 | `appSettingsIsolation` + `shopScopedPolicyGuard` |
+
+No permissive-true policy remains on any table with a `shop_id`; no INSERT policy anywhere
+accepts whatever the caller sends; the only permissive policy left is on global reference data.
+Every claim above cites a log under `backups/`. Nothing was downgraded from FAIL or converted
+from UNKNOWN.
+
+Remaining named uncertainties (unchanged, unrelated to security gates): the batch-6 `education`
+console 404 still has not reproduced (the lane prints the URL if it returns), and the
+`<meta>`-declared security headers in `index.html` are still ignored by the browser — a
+pre-existing deployment-layer matter, not a policy. Release has still not been authorized and no
+APK was built; the release path remains `.github/workflows/build-apk.yml` when it is.
+
+---
+
+---
+
 ## §18 — MVP feature registry, dependency map and change-impact system
 
 **Question this stage had to answer permanently:** what exists, what depends on it, what could be
