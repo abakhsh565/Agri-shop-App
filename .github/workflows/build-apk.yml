@@ -136,13 +136,32 @@ jobs:
           distribution: 'zulu'
           java-version: '21'
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+      # ─── Android SDK ─────────────────────────────────────────────────────
+      # ubuntu-latest already carries the Android SDK and its cmdline-tools. The
+      # android-actions/setup-android@v3 action was removed because it runs
+      # `sdkmanager tools`, and the `tools` package no longer exists in the SDK
+      # repository — run 37072640900 failed inside the action itself with
+      # "Warning: Failed to find package 'tools'" and exit 1, before any build step
+      # ran. This step only locates the SDK the runner already has.
+      - name: Locate the runner's Android SDK
+        run: |
+          if [ -z "${ANDROID_HOME:-}" ] || [ ! -d "$ANDROID_HOME" ]; then
+            echo "ANDROID_HOME is not set on this runner image — the build has no SDK to use." >&2
+            exit 1
+          fi
+          SDKMANAGER="$(ls -d "$ANDROID_HOME"/cmdline-tools/*/bin/sdkmanager 2>/dev/null | sort -V | tail -1)"
+          if [ -z "$SDKMANAGER" ]; then
+            echo "No sdkmanager found under $ANDROID_HOME/cmdline-tools." >&2
+            exit 1
+          fi
+          echo "SDKMANAGER=$SDKMANAGER" >> "$GITHUB_ENV"
+          [ -n "${ANDROID_SDK_ROOT:-}" ] || echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> "$GITHUB_ENV"
+          echo "Android SDK: $ANDROID_HOME (sdkmanager: $SDKMANAGER)"
 
       - name: Install Android SDK Platform 35
         run: |
-          sdkmanager --install "platforms;android-35" "build-tools;35.0.0"
-          yes | sdkmanager --licenses || true
+          "$SDKMANAGER" --install "platforms;android-35" "build-tools;35.0.0"
+          yes | "$SDKMANAGER" --licenses || true
 
       - name: Install Dependencies
         run: npm install --legacy-peer-deps
