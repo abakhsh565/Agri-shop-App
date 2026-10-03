@@ -2091,5 +2091,85 @@ Run 37051191071's vitest step failed 4/67 files. One was a real §18 defect and 
   console recorded as a risk. Proved by the guard locally (14/14) **and** by a parity check against
   HEAD (tracked files, committed router, committed graph, committed migrations): clean.
 
+### The capture gap, and the snapshot branch (2026-10-02, user-authorised)
+
+Runs 37053824025 and 37055186570 kept failing in CI in files that pass locally. Root cause, proven
+by reading the committed versions: CI builds the **committed** source, which was an older app than
+the verified one — 13 migrations (0170–0180 plus the 0042/0060 renames) untracked, 63 `src/` and
+36 `tests/` files modified. The committed `tenantResolverReplay` still asserts
+equal(['resolve_active_shop']) and the committed `splitPayments` has no fixture-permission setup,
+so both fail against the current QA database no matter how the runner is configured.
+
+Decision (user): snapshot the verified working tree on a dedicated branch rather than bulk-commit
+to `main`. `staging-snapshot` = `2f5912d9` (149 files captured; `.freebuff` logs excluded) and
+`eb2395f4` (`.gitattributes`). `main` keeps only the isolated §18, security and CI commits.
+
+### The ledger mismatch the snapshot exposed
+
+Run 37057360411 failed `migrate verify`: nine applied files (0009–0017) “changed after it was
+applied”. Cause: `core.autocrlf=true` on this Windows checkout produced CRLF bytes, the ledger
+recorded hashes of those CRLF bytes, and a clean Linux checkout has LF. Fixed with the tool's own
+guard, not by loosening the check: `.gitattributes` pins `supabase/migrations/*.sql` to `eol=lf`,
+the working tree was re-materialised as LF, and the nine entries were reconciled with
+`reconcile --apply --reason "line endings normalised to LF; statements unchanged"` — the tool
+compared statements ignoring comments/whitespace, found them identical, and recorded
+`reconciled_at`/`reconcile_note`. Result: **174 files ↔ 174 rows, every hash matches, directory
+and ledger agree exactly**.
+
+### Runs 37058491355 → 37076349097: every test-side blocker reproduced, fixed, re-proven
+
+Each defect below was reproduced locally, fixed at the layer that owned it, and re-run in CI:
+
+- **37058491355** — unit tests: 9 files red. The vitest steps ran without `VITE_SUPABASE_URL`,
+  `VITE_SUPABASE_ANON_KEY` and `VITE_SUPABASE_PROJECT_ID`, so every module that resolves its
+  environment at import time refused (`[CONFIG] Neither VITE_SUPABASE_URL nor …`), and
+  `authSafetyGuard` read a refused configuration as "sms". Reproduced by clearing those three
+  names locally (9/9 files red, same errors); fixed by giving the test job the three names (9/9
+  files, 82 tests green locally).
+- **37060217062** — unit tests: 8 files red with `Invalid supabaseUrl`. `QA_SUPABASE_URL` was set
+  on 2026-09-12 carrying the bracket decoration this repository's older tools stripped
+  (`[https://…]`); `src/lib/supabase.ts` trims but does not strip decorations, so the value never
+  matched `^https?://`. Fixed by re-setting the QA secret from the verified `.env.qa` value
+  (40 chars, `https://bpybjrjenwccowvtrevu.supabase.co`).
+- **37061131859** — integration: exactly one file red, `assistantPermission.test.ts`, with
+  `ENOENT … .env.qa`. A CI checkout has no such file. The test now reads it only when it exists
+  and takes credentials from the environment; `scripts/provision-auth-sessions.mjs` had the same
+  unconditional read and was fixed the same way.
+- **37062366661** — first run with unit and integration green; Playwright ran for the first time:
+  **132/133 passed**. The one failure was real: the Urdu microcopy scan on `/admin/products` found
+  the word “RPC” on screen — a product named `Perm Test Product RPC` created by the integration
+  lane's admin `create_product` call and never cleaned up, because `cleanup()` matched only its own
+  ids. Cleanup now deletes that product (and the employee's attempt) by name, in FK order.
+- **37068142514** — 132/133 again; this time `dependencyContinuity` failed with “saving the product
+  did not return to the sale” after a fixed 3.5s wait, although the same step returned in time in
+  the previous run. The lane was failing for being early on a 2-core runner; both return steps now
+  wait for the navigation with a 30s bound and keep their original assertion messages.
+- **37072640900** — **test job green: unit 45/45 files (472 tests), integration 39/39 files (426
+  tests), Playwright 133/133.** The build job then failed inside `android-actions/setup-android@v3`
+  (“Warning: Failed to find package 'tools'”, exit 1) — a package removed from the SDK repository,
+  so the action could not run at all. Replaced by locating the SDK `ubuntu-latest` already carries.
+- **37076349097 (final)** — **Run Tests: success**: 472 unit tests, 426 integration tests,
+  provisioning (9 already valid, 1 created, 0 failed), 133 E2E tests passed in 33.5m, cleanup step
+  executed. **Build APK: the eight pre-signing steps all succeeded** — SDK located, platform 35 +
+  build-tools 35.0.0 installed, staging web build (EnvGuard accepted), Capacitor platform added and
+  synced, manifest entries injected — then **“Decode release keystore” failed**, exactly as
+  predicted, with `ANDROID_KEYSTORE_BASE64 is not set — cannot release-sign.` No APK artifact
+  exists.
+
+Verdict for this stage: the pipeline up to the signing gate is **PROVEN** — test job green, build
+job green through the manifest step, every step run against the QA project only (the production
+project ref appears 0 times in the run log), and QA cleanup confirmed by an independent recount
+(0 business rows). The signed-APK gate is **BLOCKED** on the owner's keystore secrets: no artifact,
+therefore no install/startup/smoke run — BLOCKED, not skipped, and not replaced by a local build.
+
+### Blocker 4 is now the only prerequisite left
+
+Run 37076349097 confirmed it end to end: `gh secret list` has no `ANDROID_KEYSTORE_BASE64`,
+`ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` or `ANDROID_KEY_PASSWORD`, and the workflow's
+“Decode release keystore” step exits 1 without the base64 secret — so no signed APK can be produced
+until those four repository secrets exist (see `.github/inject-signing.cjs` for the exact names and
+the keystore format). This is account-level owner action: the keystore must be the owner's, because
+losing it breaks install-over-update.
+
 Real-device installation/startup/smoke checks cannot begin until an APK artifact exists; they are
-BLOCKED by blockers 1–4 above, not skipped.
+BLOCKED by the prerequisite above, not skipped.
