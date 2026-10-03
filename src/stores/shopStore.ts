@@ -78,6 +78,18 @@ export interface BranchSummary {
    * member of, so it is the read that carries the place.
    */
   place: PickedPlace | null;
+  /**
+   * Whether this branch offers its listed products to the farmer marketplace.
+   *
+   * It travels with the branch for the same reason the place does: `shops` may only be read
+   * for the branch the account is working in, so reading it anywhere else would come back
+   * empty — not failed — and the sheet would show "not listed" about a branch that is. This is
+   * the branch's own answer to a question the sheet has to show before it can change it.
+   *
+   * There is no distance here on purpose: how far a farmer searches is the farmer's choice, and
+   * the owner's only contribution is the place above.
+   */
+  marketplaceEnabled: boolean;
 }
 
 /** What the caller can be told about a failed action, so the screen owns the wording. */
@@ -98,6 +110,8 @@ export type BranchErrorCode =
   | "name_taken"
   | "name_too_long"
   | "not_found"
+  /** A marketplace listing was asked for on a branch that has no pinned location. */
+  | "no_location"
   | "denied"
   | "main_branch"
   | "last_branch"
@@ -151,6 +165,7 @@ interface BranchRow {
   longitude: number | null;
   location_label: string | null;
   location_source: string | null;
+  marketplace_enabled: boolean | null;
 }
 
 /**
@@ -185,6 +200,7 @@ function branchCodeFrom(message: string, fallback: BranchErrorCode): BranchError
   if (/MAIN_BRANCH/i.test(text)) return "main_branch";
   if (/LAST_BRANCH/i.test(text)) return "last_branch";
   if (/BRANCH_NOT_FOUND/i.test(text)) return "not_found";
+  if (/no location/i.test(text)) return "no_location";
   if (/NOT_AUTHENTICATED/i.test(text)) return "not_authenticated";
   if (/NOT_AUTHORIZED/i.test(text)) return "denied";
   if (/a branch name is required/i.test(text)) return "name_required";
@@ -242,6 +258,16 @@ interface ShopState {
    * showing one.
    */
   setBranchPlace: (shopId: string, place: PickedPlace | null) => void;
+  /**
+   * Turn one branch's farmer-marketplace listing on or off.
+   *
+   * The database decides: it refuses to list a branch that has no pinned location (nothing could
+   * be measured against a farmer's search from a place that was never picked), and it checks that
+   * the caller is an owner or admin of THAT branch rather than of some other one. This forwards
+   * and reads the answer back into the list, so reopening the sheet shows the state that was
+   * actually saved.
+   */
+  setMarketplaceSettings: (shopId: string, enabled: boolean) => Promise<BranchActionResult>;
   /**
    * Delete one branch, completely.
    *
@@ -371,6 +397,7 @@ export const useShopStore = create<ShopState>((set, get) => ({
         salesCount: Number(r.sales_count ?? 0),
         salesTotal: Number(r.sales_total ?? 0),
         place: branchPlaceFrom(r),
+        marketplaceEnabled: r.marketplace_enabled === true,
       })),
       branchesLoading: false,
       branchesLoaded: true,
@@ -408,6 +435,25 @@ export const useShopStore = create<ShopState>((set, get) => ({
     set({
       branches: get().branches.map((b) => (b.id === shopId ? { ...b, place } : b)),
     });
+  },
+
+  setMarketplaceSettings: async (shopId, enabled) => {
+    // Exactly the switch — there is no distance in this call, because there is no distance the
+    // owner decides. `undefined` would be the only other thing to send, and the server's answer
+    // is what the list is updated from either way.
+    const { data, error } = await supabase.rpc("set_marketplace_settings", {
+      p_shop_id: shopId,
+      p_enabled: enabled,
+    });
+    if (error || !data?.success) {
+      return { ok: false, code: branchCodeFrom(error?.message ?? "", "save_failed") };
+    }
+    set({
+      branches: get().branches.map((b) =>
+        b.id === shopId ? { ...b, marketplaceEnabled: data.marketplace_enabled === true } : b,
+      ),
+    });
+    return { ok: true };
   },
 
   deleteBranch: async (shopId, reason, feedback) => {

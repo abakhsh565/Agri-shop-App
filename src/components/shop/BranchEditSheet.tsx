@@ -6,6 +6,7 @@ import Button from "@/components/ui/Button";
 import ListCard from "@/components/ui/ListCard";
 import ListRow from "@/components/ui/ListRow";
 import LocationField from "@/components/ui/LocationField";
+import Checkbox from "@/components/ui/Checkbox";
 import { supabase } from "@/lib/supabase";
 import type { PickedPlace } from "@/lib/geo";
 import { useT } from "@/lib/i18n";
@@ -61,6 +62,7 @@ export default function BranchEditSheet({
 
   const renameBranch = useShopStore((s) => s.renameBranch);
   const setBranchPlace = useShopStore((s) => s.setBranchPlace);
+  const setMarketplaceSettings = useShopStore((s) => s.setMarketplaceSettings);
   const switchTo = useShopStore((s) => s.switchTo);
 
   const roles = useRolesStore((s) => s.roles);
@@ -95,6 +97,21 @@ export default function BranchEditSheet({
    * awaits, which is what actually stops the second one.
    */
   const savingRef = useRef(false);
+  /**
+   * This branch's marketplace decision, as it stands in the sheet — and as it stands saved.
+   *
+   * A pair on purpose: the value above is what the person is choosing, the value below is what
+   * the database last accepted. Comparing them is what makes "nothing changed" mean nothing is
+   * written, and what keeps a refused change on screen instead of quietly reverting to a value
+   * the person did not pick.
+   *
+   * The switch is the whole decision. There is no distance here, because how far a farmer is
+   * willing to search from is the farmer's choice, made in the farmer app — a branch answers
+   * only where it is.
+   */
+  const [marketplaceOn, setMarketplaceOn] = useState(branch.marketplaceEnabled);
+  const [savedMarket, setSavedMarket] = useState({ enabled: branch.marketplaceEnabled });
+  const [marketError, setMarketError] = useState<string | null>(null);
 
   // The branch being edited is the active one: its roles are the ones this app can read,
   // so they are what the sheet can list. Any other branch gets the sentence and the way in.
@@ -122,12 +139,20 @@ export default function BranchEditSheet({
   // touching anything is not a pending write.
   const [savedPlaceKey, setSavedPlaceKey] = useState<string | null>(placeKeyOf(branch.place));
   const placeKey = placeKeyOf(place);
-  const dirty = clean !== branch.name.trim() || placeKey !== savedPlaceKey;
+  // A listing is a pending change when the switch moved — that is the whole decision here.
+  const marketDirty = marketplaceOn !== savedMarket.enabled;
+  // A farmer measures the distance from their own search point, so a branch that was never
+  // pinned can never be found however close the search is; the switch cannot be turned ON
+  // without a location. Turning it OFF is always allowed, whatever state it is in.
+  const hasPin = place !== null;
+  const canList = hasPin || marketplaceOn;
+  const dirty = clean !== branch.name.trim() || placeKey !== savedPlaceKey || marketDirty;
 
   async function handleSave() {
     if (savingRef.current) return;
     savingRef.current = true;
     setError(null);
+    setMarketError(null);
     setSaving(true);
     const result = await renameBranch(branch.id, clean);
     savingRef.current = false;
@@ -176,6 +201,28 @@ export default function BranchEditSheet({
       // The list is what the next open of this sheet reads, so it is told now rather than after a
       // round trip: a pin that saved must not come back as the old one a moment later.
       setBranchPlace(branch.id, place);
+    }
+
+    // ── The marketplace decision ──────────────────────────────────────────────
+    // Saved by the same button as the name and the pin, and deliberately AFTER the pin: the
+    // database refuses to list a branch that has no location, so a pin picked on this very
+    // visit has to be written first — otherwise the listing would be refused for a state the
+    // person can already see is no longer true.
+    if (marketDirty) {
+      if (marketplaceOn && !hasPin) {
+        setMarketError(t("marketplace.branchNoLocation"));
+        return;
+      }
+      const marketResult = await setMarketplaceSettings(branch.id, marketplaceOn);
+      if (!marketResult.ok) {
+        setMarketError(
+          marketResult.code === "no_location" ? t("marketplace.branchNoLocation")
+            : marketResult.code === "denied" ? t("marketplace.branchDenied")
+              : t("marketplace.branchSaveFailed"),
+        );
+        return;
+      }
+      setSavedMarket({ enabled: marketplaceOn });
     }
 
     addToast(t("branches.saved", { branch: clean }), "success");
@@ -260,6 +307,56 @@ export default function BranchEditSheet({
             hint={t("location.notTyped")}
             testId={`branch-location-${branch.id}`}
           />
+        </div>
+
+        {/* ── Where farmers can find this branch ───────────────────────────────── */}
+        {/* The branch's half of the marketplace decision. It sits right under the location
+            because the two are read together: a farmer searches from their own point, so only
+            a branch with one can be found at all. How far that search reaches is the farmer's
+            choice, not this branch's — the database owns the one refusal left (listing
+            without a location), and this reports what came back rather than deciding itself. */}
+        <p className="text-12 font-semibold mt-4" style={{ color: "var(--text-primary)" }}>
+          {t("marketplace.branchTitle")}
+        </p>
+        <div
+          className="rounded-[var(--radius-card)] p-3.5 mt-2"
+          style={{ background: "var(--tone-card)" }}
+        >
+          <div className="flex items-start gap-3">
+            <button
+              type="button"
+              role="checkbox"
+              aria-checked={marketplaceOn}
+              aria-label={t("marketplace.branchToggle")}
+              disabled={!canList}
+              onClick={() => {
+                setMarketError(null);
+                setMarketplaceOn((v) => !v);
+              }}
+              data-testid={`branch-marketplace-toggle-${branch.id}`}
+              className="mt-0.5 flex items-center justify-center shrink-0 disabled:opacity-50"
+            >
+              <Checkbox checked={marketplaceOn} disabled={!canList} />
+            </button>
+            <div className="min-w-0">
+              <p className="text-14 font-bold" style={{ color: "var(--text-primary)" }}>
+                {t("marketplace.branchToggle")}
+              </p>
+              <p className="text-11 mt-1" style={{ color: "var(--text-secondary)" }}>
+                {hasPin ? t("marketplace.branchToggleHint") : t("marketplace.branchNoLocation")}
+              </p>
+            </div>
+          </div>
+
+          {marketError && (
+            <p
+              className="text-11 mt-2"
+              style={{ color: "var(--error)" }}
+              data-testid={`branch-marketplace-error-${branch.id}`}
+            >
+              {marketError}
+            </p>
+          )}
         </div>
 
         {/* ── The roles ─────────────────────────────────────────────────────────── */}

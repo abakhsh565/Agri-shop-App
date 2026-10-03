@@ -286,6 +286,11 @@ export interface Product {
   baseUnit: BaseUnit;
   stockQty: number;
   variants: ProductVariant[];
+  /**
+   * The owner's "List on Farmer Marketplace" switch (0185). Absent on rows loaded before the
+   * column existed, which reads as not listed — the same default the database applies.
+   */
+  marketplaceListed?: boolean;
 }
 
 // ─── Customers ────────────────────────────────────────────────────────────────

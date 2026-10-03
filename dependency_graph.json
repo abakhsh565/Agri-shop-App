@@ -588,12 +588,22 @@
         "layer": "test"
       },
       {
+        "file": "tests/integration/marketplaceContract.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
         "file": "tests/integration/securityAudit.test.ts",
         "evidence": "sql_reference",
         "layer": "test"
       },
       {
         "file": "tests/unit/cacheOwnership.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/unit/marketplaceContractGuard.test.ts",
         "evidence": "sql_reference",
         "layer": "test"
       },
@@ -856,6 +866,11 @@
         "layer": "test"
       },
       {
+        "file": "tests/integration/marketplaceContract.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
         "file": "tests/integration/shopScopedPolicyGuard.test.ts",
         "evidence": "sql_reference",
         "layer": "test"
@@ -867,6 +882,11 @@
       },
       {
         "file": "tests/integration/variantIsolation.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/unit/marketplaceContractGuard.test.ts",
         "evidence": "sql_reference",
         "layer": "test"
       }
@@ -910,6 +930,11 @@
         "layer": "test"
       },
       {
+        "file": "tests/integration/marketplaceContract.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
         "file": "tests/integration/placeLocation.test.ts",
         "evidence": "sql_reference",
         "layer": "test"
@@ -926,6 +951,11 @@
       },
       {
         "file": "tests/unit/locationPicked.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/unit/marketplaceContractGuard.test.ts",
         "evidence": "sql_reference",
         "layer": "test"
       },
@@ -1065,7 +1095,17 @@
         "layer": "test"
       },
       {
+        "file": "tests/integration/marketplaceContract.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
         "file": "tests/integration/rbacInvariants.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/unit/marketplaceContractGuard.test.ts",
         "evidence": "sql_reference",
         "layer": "test"
       }
@@ -3466,6 +3506,6 @@
     "/employee/notifications": "src/pages/employee/notifications/EmployeeNotificationsPage.tsx",
     "/employee/guide": "src/pages/shared/AppGuidePage.tsx"
   },
-  "scannedAt": "2026-10-03T11:49:51.069Z",
-  "fileCount": 329
+  "scannedAt": "2026-10-03T21:48:28.691Z",
+  "fileCount": 332
 }

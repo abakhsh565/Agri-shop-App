@@ -136,7 +136,12 @@ export async function rpcCreateProduct(payload: {
    * beginning rather than a number with no history (0158).
    */
   variants: { name: string; sellingPrice: number; costPrice: number; unitSize: number; qtyStep: number; lowStockThreshold: number; stockQty?: number; /** yyyy-mm-dd, or null for a pack with no date. */ expiryDate?: string | null }[];
-}): Promise<{ id: string; name: string; barcode: string }> {
+  /**
+   * "List on Farmer Marketplace" (0185). Absent means not listed, which is also the database
+   * default — a product is never publicly visible because a client forgot to send the flag.
+   */
+  marketplaceListed?: boolean;
+}): Promise<{ id: string; name: string; barcode: string; marketplace_listed?: boolean }> {
   const actorId = useAuthStore.getState().user?.id;
   const { data, error } = await supabase.rpc("create_product", { payload: { ...payload, actorId, userId: actorId } });
   if (error) throw new Error(friendly(error.message));
@@ -157,6 +162,13 @@ export async function rpcUpdateProduct(payload: {
    * one, because creating a pack is not the same act as adjusting one.
    */
   variants: { id?: string; name: string; sellingPrice: number; costPrice: number; unitSize?: number; qtyStep?: number; lowStockThreshold: number; stockQty?: number; expiryDate?: string | null }[];
+  /**
+   * The listing switch (0185). The database distinguishes "not mentioned" from `false`, exactly
+   * as it does for `barcode` and `expiryDate`: absent leaves the flag alone; `false` is the
+   * marketplace listing state the owner chose. Sent on every save from this screen, so an
+   * unlisting is recorded as a decision rather than inferred from silence.
+   */
+  marketplaceListed?: boolean;
 }): Promise<{ id: string }> {
   const actorId = useAuthStore.getState().user?.id;
   const { data, error } = await supabase.rpc("update_product", { payload: { ...payload, actorId } });

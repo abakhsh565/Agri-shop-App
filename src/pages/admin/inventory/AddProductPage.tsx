@@ -9,6 +9,7 @@ import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import ListCard from "@/components/ui/ListCard";
 import ListRow from "@/components/ui/ListRow";
 import LogoTile from "@/components/ui/LogoTile";
+import Checkbox from "@/components/ui/Checkbox";
 import { backToSelf, dependencyHint, readReturnTo } from "@/lib/dependencyGraph";
 import { useCompaniesStore } from "@/stores/companiesStore";
 import { useProductsStore } from "@/stores/productsStore";
@@ -213,6 +214,27 @@ export default function AddProductPage() {
   // `false`, and a second generate would race the first.
   const barcodeBusyRef = useRef(false);
   const [packs, setPacks] = useState<PackDraft[]>(resumed?.packs ?? []);
+  /**
+   * "List on Farmer Marketplace" (0185).
+   *
+   * Off for a product being created, and read from the row when editing, so opening a listed
+   * product and saving it cannot quietly unlist it. The switch is the owner's decision and the
+   * database stores it as one: `update_product` distinguishes "not mentioned" from `false`, so an
+   * unlisting is recorded rather than inferred.
+   *
+   * A draft carries it too, because a half-written product that was meant to be listed must not
+   * come back unlisted.
+   */
+  const [marketplaceListed, setMarketplaceListed] = useState(
+    resumed?.marketplaceListed ?? existing?.marketplaceListed ?? false
+  );
+  /**
+   * What the switch read when this screen opened. On an edit, only a move away from this is
+   * sent: the RPC treats an absent value as "unchanged", so a save that did not touch the
+   * switch cannot unlist a listed product — not even if the row this device read was stale.
+   */
+  const marketplaceInitial = resumed?.marketplaceListed ?? existing?.marketplaceListed ?? false;
+  const marketplaceChanged = marketplaceListed !== marketplaceInitial;
   const [shopAlerts, setShopAlerts] = useState<StockAlertSettings>(DEFAULT_STOCK_ALERT_SETTINGS);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -266,6 +288,7 @@ export default function AddProductPage() {
       barcode,
       imageUrl,
       packs,
+      marketplaceListed,
     };
     const outcome = saveProductDraft(draft);
     if (!outcome.ok) {
@@ -581,6 +604,11 @@ export default function AddProductPage() {
           category,
           baseUnit,
           imageUrl: imageUrl ?? undefined,
+          // Only sent when the switch moved. `update_product` distinguishes "not mentioned"
+          // from false on purpose, and this is that distinction being used honestly: a save
+          // that never touched the switch leaves the stored decision exactly as it was, while
+          // an actual unlisting still travels as `false` and is recorded as a decision.
+          ...(marketplaceChanged ? { marketplaceListed } : {}),
           // Sent even when empty, because on an edit an empty field is a fact about the
           // product — it has no barcode — and not an omission. The database retires the code
           // it replaces. On create the same empty value means the opposite (mint one), which
@@ -598,6 +626,9 @@ export default function AddProductPage() {
           baseUnit,
           imageUrl: imageUrl ?? undefined,
           barcode: barcode.trim() || undefined,
+          // Sent on create unconditionally, including as false: there is no stored value to
+          // preserve yet, so this screen's switch IS the first decision about the product.
+          marketplaceListed,
           variants,
         });
         await useProductsStore.getState().load();
@@ -1093,6 +1124,41 @@ export default function AddProductPage() {
           >
             <Plus size={15} /> {t("addProduct.addAnotherVariant")}
           </button>
+
+          {/* ── Listing on the farmer marketplace ────────────────────────────────
+              A checkbox row, not a switch: it is the same control the permission and branch
+              lists already use, and it reads as a decision the owner ticks rather than a
+              setting he slides. The subtitle states the two things that decide whether it
+              actually appears — the branch has to be listing too, and the product has to be
+              in stock — because a tick that produces nothing visible is the failure this
+              whole screen has been fixed for before.
+
+              No separate save: the switch travels with the product on the same button, so
+              there is no second write to forget and no half-listed state. */}
+          <div
+            className="rounded-[var(--radius-card)] p-3.5 flex items-start gap-3"
+            style={{ background: "var(--tone-card)" }}
+          >
+            <button
+              type="button"
+              role="checkbox"
+              aria-checked={marketplaceListed}
+              aria-label={t("marketplace.listOn")}
+              onClick={() => setMarketplaceListed((v) => !v)}
+              data-testid="product-marketplace-toggle"
+              className="mt-0.5 flex items-center justify-center shrink-0"
+            >
+              <Checkbox checked={marketplaceListed} />
+            </button>
+            <div className="min-w-0">
+              <p className="text-14 font-bold" style={{ color: "var(--text-primary)" }}>
+                {t("marketplace.listOn")}
+              </p>
+              <p className="text-11 mt-1" style={{ color: "var(--text-secondary)" }}>
+                {t("marketplace.listOnHint")}
+              </p>
+            </div>
+          </div>
 
           {error && <p className="text-xs" style={{ color: "var(--error)" }} data-testid="product-error">{error}</p>}
         </div>

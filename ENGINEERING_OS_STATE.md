@@ -2260,3 +2260,144 @@ BLOCKED, not skipped.
 Stage verdict: RBAC role/permission and role-deletion revocation are PASS with database-level
 evidence; production untouched; **“STAGING APK READY FOR USER REAL-DEVICE ACCEPTANCE” is NOT
 declared** — the signed APK prerequisite is the missing owner keystore secrets.
+
+## Stage: farmer marketplace integration foundation — owner side (2026-10-04)
+
+Approved workstream, implemented in full: a product-level *List on Farmer Marketplace* switch, a
+per-branch *List this branch* switch with a coverage distance, a curated read contract a future
+Farmer App can consume without a login, and the QA evidence for all of it. The Farmer App itself
+is explicitly **not built** (no ordering, chat, credit, payments, field visits). Owner App stays
+the single source of truth; no second product or inventory system exists.
+
+### The decisive finding: the app's branch IS a `shops` row
+
+Measured, not assumed: `get_my_branches()` returns `m.tenant_id` joined to `shops`;
+`shopStore` maps `r.shop_id → Branch.id`; `BranchEditSheet` writes the location with
+`set_place(p_table => 'shops')`. So Lahore / Multan are two existing `shops` rows, each with its
+own pin from 0172. The `branches` table is a finer sub-location (Main / Warehouse) used only to
+stamp inventory movements, and is deliberately not part of this design. Two additive columns on
+the row that already *is* the branch are the whole schema change.
+
+### What was built
+
+- `0184` — `shops.marketplace_enabled` (default false), `shops.marketplace_radius_km` (default 25,
+  CHECK 1–200), and `set_marketplace_settings(...)`: SECURITY DEFINER, owner/admin of **that**
+  branch, refuses to list a branch with no pin, refuses a radius outside 1–200, keeps the chosen
+  distance when the switch goes off, audits `marketplace_settings_changed`, revoked from `anon`.
+- `0185` — `products.marketplace_listed` + `marketplace_listed_at`; recreated `create_product`
+  and `update_product` to carry the switch (absent = unchanged, present false = unlist + clear the
+  moment, present true = list); `marketplace_distance_km` (haversine, no PostGIS); the
+  `marketplace_listings` view — a fixed 20-column allowlist readable anonymously; and
+  `search_marketplace(...)`, which clamps the radius to 1–200 km and the page to 100 rows, refuses
+  a point outside Pakistan and an unknown category, applies `LEAST(searcher radius, branch
+  coverage)`, and orders nearest-first with deterministic tie-breaks. The file refuses to apply
+  if a forbidden column name reaches the view or if `anon` loses SELECT.
+- `0186` — `get_my_branches()` carries `marketplace_enabled` / `marketplace_radius_km` so the
+  branch sheet can show the decision before changing it (revoked from `anon`).
+- UI — the product switch on Add/Edit product (saved by the same button as the product, sent only
+  when it changed on an edit, always on create); the branch switch and distance in the branch
+  sheet, with an honest state for a branch with no pin and the same-save ordering that writes the
+  pin before the listing; EN + UR copy that passes the microcopy ban list.
+- `FARMER_MARKETPLACE_INTEGRATION.md` — the contract: eligibility chain, both radii, nearest
+  priority, the redaction boundary, a worked Lahore/Multan/Sheikhupura example, and what a
+  consumer must and must not do.
+
+### One real defect found while building it, and fixed
+
+The product form writes the whole product, so a form that cannot see the stored listing flag would
+save `false` and **unlist a listed product as a side effect of an unrelated edit**. The write path
+had the flag; the product-list mapper did not. Fixed in `productsStore` (the column is read) and in
+the form (on an edit the flag is only sent when the person moved it, so "absent = unchanged" is
+used honestly). `tests/e2e/marketplaceListing.spec.ts` proves the round trip, and the read-back
+assertion was proven non-vacuous by reintroducing the defect and watching the lane fail.
+
+### Evidence (all against QA `bpybjrjenwccowvtrevu`; production untouched)
+
+- `tests/integration/marketplaceContract.test.ts` — **28/28 PASS**: anon reads the view; anon
+  refused on `products`, `product_variants`, `shops`, `inventory_movements` (42501); anon refused
+  `set_marketplace_settings`; anon refused an insert into the view; column-set **equality** with
+  the allowlist; forbidden keys absent; switch-off removes; per-branch switch-off removes only
+  that branch; archive / zero stock / inactive pack / unpinned branch / zero price all remove; far
+  search sees neither branch; a branch outside its own coverage absent **with stock**; each radius
+  enforced independently in both directions; non-Pakistan point and unknown category refused;
+  nearest-first in both directions with one row per branch; owner sets switch + radius; employee
+  refused; radius 0 and 5000 refused; listing an unpinned branch refused with before/after values
+  compared.
+- `tests/unit/marketplaceContractGuard.test.ts` — **16/16 PASS**, non-vacuous against the real
+  file (injected `v.cost_price`, guard failed with the discloses-margin message, file restored,
+  ledger hash intact).
+- `tests/e2e/marketplaceListing.spec.ts` (new lane `marketplaceListing` in lane-map) — **3/3
+  PASS**: the product tick is stored with its moment, a listed product opens listed, an unrelated
+  save does not unlist it, unticking unlists and clears the moment; the branch switch + distance
+  save together, make the product reachable through `marketplace_listings`, and turning the branch
+  off removes it while keeping the chosen distance; and the same lane switches the app to Urdu,
+  asserting both new controls are announced in Urdu, the distance unit reads in Urdu, and no
+  English copy is left on either card (EN + LTR / UR + RTL both covered by the same lane).
+- Existing affected lanes this stage: `productOpeningStock` + `adminMicrocopy` + `accessUx` —
+  **12/12 PASS**. `imageSync` **10/10 PASS** run alone (a manual 3-specs-4-workers invocation
+  failed in `setupFixtures` because three `beforeAll`s raced to seed the same rows; re-run alone,
+  green — test invocation, not a product defect).
+- Regression: `tsc --noEmit` clean; full vitest **87 files / 954 tests PASS**; `npm run build`
+  clean; `npm run registry:build` guard 14/14; `npm run migrate:verify -- --env staging` —
+  **178 files ↔ 178 rows, VERIFY: PASS**.
+- QA state: `npm run qa:clean` removed 252 rows; the independent re-count reports **0 business
+  rows**, fixtures intact (4 accounts, 4 system roles).
+
+### Gate honesty — what was NOT run
+
+The Urdu/RTL pass over the two new controls was added after the first lane run and is green
+(3/3). What follows is the gate detail.
+
+`npm run verify:plan` computed **Tier 2** (its fingerprint base is stale — it reports 397 changed
+files against a checkpoint from a different head; `git status` shows the true 20-file change set).
+Executed: full vitest, the canonical lanes that cover the changed surface (`accessUx`, `rtlLtr`,
+`imageSync`, `splitPayment` — the latter three each green; `imageSync` re-run alone after the
+invocation race above), the affected lanes `productOpeningStock` + `adminMicrocopy`, and the new
+`marketplaceListing` lane. **Not re-run this stage:** `actionCenter`, `dashboardScope`,
+`crossScreenSync`, and every other lane whose globs name `src/lib/i18n.ts` — the i18n edit
+invalidates them mechanically, and per `FEATURE-MAP.md` §C that is the engine being conservative
+about files rather than a demand for the full suite. They carry no marketplace behaviour. `rtlLtr` and `splitPayment` passed inside the 3-spec
+invocation (18 passed there); the 9 that did not run were `imageSync`'s own remaining tests, and
+that file was then run alone, 10/10 green.
+
+### Not built, on purpose
+
+No Farmer App screens, no ordering, chat, credit, payments, field visits or notifications; no
+anonymous write of any kind; nothing widened beyond the fixed 20-column projection. Production was
+never touched, and no commit or push was made in this stage.
+
+### Correction before commit — the distance belongs to the farmer, not the branch (0187)
+
+The product owner corrected the model before this work was committed: a shop owner must never
+choose how far a farmer's search reaches. The radius is a SEARCH input on the farmer's side
+("show me within 20 km"), and the owner's whole contribution is a location on a branch plus the
+listing switch. `0187_the_distance_belongs_to_the_farmer_not_the_branch.sql` makes the code match
+the corrected model:
+
+- `shops.marketplace_radius_km` and its CHECK are dropped.
+- `set_marketplace_settings(uuid, boolean, numeric)` is replaced by
+  `set_marketplace_settings(uuid, boolean)`; the switch is the whole decision, the audit carries
+  only the before/after switch state, and the no-location refusal stays.
+- `get_my_branches()` is recreated without the radius column.
+- `search_marketplace(...)` keeps its signature and result shape; its eligibility rule is now the
+  single honest bound, `marketplace_distance_km(...) <= v_radius`, with no branch-side term.
+- On the client, the branch sheet's distance field, its state and the four i18n keys are gone;
+  the sheet saves the switch alone (`setMarketplaceSettings(shopId, enabled)`).
+
+Re-verification after the correction (same day, same QA project `bpybjrjenwccowvtrevu`):
+
+- `npx tsc --noEmit` clean; full vitest **87 files / 955 tests PASS**; `npm run build` clean.
+- `tests/integration/marketplaceContract.test.ts` — **28/28 PASS**, rewritten: the farmer's radius
+  is the only distance rule and is checked in both directions; the writer takes exactly the switch;
+  a stale three-argument call fails; `get_my_branches` carries the switch and no distance.
+- `tests/unit/marketplaceContractGuard.test.ts` — **17/17 PASS**; the new check fails if the rule
+  stops being `<= v_radius` or a branch-side distance reappears, proven non-vacuous by injecting
+  `LEAST(v_radius, s.marketplace_radius_km)` back into the search rule and watching it caught.
+- `tests/e2e/marketplaceListing.spec.ts` — **3/3 PASS**; the Urdu test now also asserts the
+  owner-side distance row is absent in every language.
+- `npm run registry:build` guard **14/14**; `npm run migrate:verify -- --env staging` —
+  **179 files ↔ 179 rows, VERIFY: PASS**; `npm run qa:clean` followed by an independent
+  `npm run qa:count` — **0 business rows**.
+- Docs updated to the corrected model: `FARMER_MARKETPLACE_INTEGRATION.md` (§3.3 is now "the
+  farmer's radius is the only one"), `feature-registry.json`, `FEATURE-MAP.md`, `FUTURE_VISION.md`
+  §5, `DECISION_REGISTER.md` D23.

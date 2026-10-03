@@ -33,7 +33,7 @@ name, domain, status, screens, components, state/stores, libs, DB tables, RPC/AP
 permissions, business rules, direct dependencies, dependent features, tests, evidence
 (status + what it proves + where the log lives), last verified date, known risks.
 
-26 registered capabilities (`status` is `LIVE` unless noted):
+27 registered capabilities (`status` is `LIVE` unless noted):
 
 | Feature | Domain | Key screens | Depends on | Evidence |
 |---|---|---|---|---|
@@ -44,6 +44,7 @@ permissions, business rules, direct dependencies, dependent features, tests, evi
 | Shop/branch scope and tenant isolation | Security | — | — | FIXED + REVERIFIED (0181/0182) |
 | Companies directory | Directory | `companies*` | — | VALID |
 | Products, variants, packs and barcodes | Inventory | `products*`, `inventory/*` | companies, branch scope | VALID |
+| Farmer marketplace listing (owner side) | Marketplace | `inventory/*`, `more` | products, branch scope | VALID (0184–0187; browser lane `marketplaceListing`) |
 | Inventory adjustments, movements, reorder | Inventory | `inventory/movements`, `inventory/reorder` | products | VALID |
 | Low-stock thresholds and alert settings | Inventory | `alerts/inventory`, `settings` | products, inventory, notifications, settings | FIXED + REVERIFIED (0182) |
 | Purchases and supplier ordering | Purchasing | `purchases*` | companies, products | VALID |

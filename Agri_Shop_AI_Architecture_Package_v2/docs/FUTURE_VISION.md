@@ -38,8 +38,14 @@ Long-term architectural principle, applies to naming decisions made *today*, at 
 ## 4. Future Web App / Multi-Client
 Same backend/business logic (Supabase RPC functions per `API_CONTRACT.md`) should be reusable by a future web dashboard, not just the mobile app. No mobile-only assumptions baked into business logic — already true since logic lives in Postgres functions, not mobile code. No action needed now.
 
-## 5. Farmer App & Agricultural Marketplace (long-term, not started)
-Potential future direction: a separate farmer-facing app (crop info, recommendations, ordering) connected to the same platform, eventually letting farmers order from nearby onboarded shops using real shop inventory data. Pure vision — no architecture impact on the current MVP beyond what's already covered above (generic core, organization readiness). Do not reference this in any current screen, table, or business rule.
+## 5. Farmer App & Agricultural Marketplace (Farmer App not started; owner-side foundation shipped)
+Potential future direction: a separate farmer-facing app (crop info, recommendations, ordering) connected to the same platform, eventually letting farmers order from nearby onboarded shops using real shop inventory data.
+
+**Updated 2026-10-04 — the owner-side foundation is shipped, by explicit product-owner approval.** The Owner App now carries the two switches and the read contract a future Farmer App will consume: migrations `0184`–`0187` add the per-branch listing switch and the per-product listing switch, a curated anonymous read contract (`marketplace_listings` view and `search_marketplace` function), and the branch read that carries their state. The search radius is the **farmer's**, chosen per search in the Farmer App; the owner sets only a location and a switch (`0187` removed the owner-side radius on the product owner's correction). The contract, the eligibility rules, the single-radius (farmer-chosen) semantics and the redaction boundary live in `FARMER_MARKETPLACE_INTEGRATION.md`; `tests/integration/marketplaceContract.test.ts` (28 tests) and `tests/unit/marketplaceContractGuard.test.ts` (17 tests) are its evidence.
+
+What that changes here: §5 is no longer purely hypothetical — the owner side already holds the “two switches + a read contract” half of an ordering-free marketplace, built entirely from existing core rows (products, packs, branches; no new product or inventory system).
+
+What has **not** changed: the Farmer App itself (screens, ordering, chat, credit, payments, notifications, field visits) is **not built** and must not be started without a new ADR and explicit product-owner go-ahead, exactly as the first page of this file requires. Nothing shipped grants a consumer any write, and no anonymous caller can reach a base table.
 
 ## 6. Multi-Business Future (Iron/Steel, Hardware, etc.)
 Same "one core + vertical modules" principle extended beyond Agriculture. Purely conceptual today — validates why core entities stay generic (see §3), nothing more.
@@ -60,5 +66,5 @@ Any future AI-powered feature (e.g. inventory/reorder forecasting, or eventually
 
 ## Explicitly Not Decided Yet
 - Pricing/monetization model for selling to other shops (deferred by design — see `MONETIZATION.md`; Day 2 problem, not Day 1).
-- Farmer App / Marketplace timeline — no commitment, vision only.
+- Farmer App / Marketplace timeline — no commitment. The owner-side foundation it will consume is shipped (§5); the farmer-facing app and any ordering/credit/payment capability are not scheduled.
 

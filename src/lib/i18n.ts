@@ -350,6 +350,25 @@ export const translations = {
     "errors.barcodeDeleteFailed": "Could not remove the barcode. Please try again.",
     "addProduct.expiryDate":          "Expires",
     "addProduct.addAnotherVariant":   "add more variant",
+    // Listing on the farmer marketplace. Plain words only: "marketplace" is the one the
+    // owner uses, and everything technical (how it is read, by what) is deliberately absent
+    // because it is not a decision he makes. The hint names the two things that actually
+    // decide whether a listed product appears — the branch is listing, and it is in stock —
+    // so a tick that shows nothing on the other side is not a mystery.
+    "marketplace.listOn":     "List on Farmer Marketplace",
+    "marketplace.listOnHint": "Farmers can find this product at your branches that are also listed. It appears while it is in stock and the price is set.",
+    // The branch's half of the same decision. A product and a branch each have to be listed
+    // before anything is findable, so the sheet says which half it is setting and what the
+    // other half is — a switch that does nothing on its own is the failure worth naming.
+    // "List this branch" rather than "list this branch's products": the switch is about the
+    // place farmers travel to, and the location above it is the whole answer the owner gives
+    // — how far a farmer searches from is the farmer's choice, not this screen's.
+    "marketplace.branchTitle":        "Farmer Marketplace",
+    "marketplace.branchToggle":       "List this branch",
+    "marketplace.branchToggleHint":   "Farmers searching near this branch can find the products you listed for it.",
+    "marketplace.branchNoLocation":   "This branch has no location yet, so farmers cannot find it. Add one above to list it.",
+    "marketplace.branchDenied":       "Only this branch's owner or an admin can change its marketplace listing.",
+    "marketplace.branchSaveFailed":   "Could not change the marketplace listing. Try again.",
     "settings.appVersion":  "App Version",
     "settings.signOut":     "Sign Out",
     // Deleting a branch, from owner Settings. The row is the branch this account is WORKING
@@ -2715,6 +2734,14 @@ export const translations = {
     "errors.barcodeDeleteFailed": "بارکوڈ ہٹایا نہیں جا سکا۔ دوبارہ کوشش کریں۔",
     "addProduct.expiryDate":          "تاریخِ اختتام",
     "addProduct.addAnotherVariant":   "مزید ورژن شامل کریں",
+    "marketplace.listOn":     "کسان مارکیٹ میں شامل کریں",
+    "marketplace.listOnHint": "کسان اس سامان کو آپ کی اُن شاخوں میں تلاش کر سکتے ہیں جو مارکیٹ میں شامل ہیں۔ یہ اُس وقت تک نظر آتا ہے جب تک سامان موجود ہو اور قیمت لکھی ہو۔",
+    "marketplace.branchTitle":        "کسان مارکیٹ",
+    "marketplace.branchToggle":       "اس شاخ کو شامل کریں",
+    "marketplace.branchToggleHint":   "آس پاس سے تلاش کرنے والے کسان وہ سامان یہاں پا سکتے ہیں جو آپ نے اس شاخ کے لیے شامل کیا ہو۔",
+    "marketplace.branchNoLocation":   "اس شاخ کی جگہ ابھی درج نہیں، اس لیے کسان اسے ڈھونڈ نہیں سکتے۔ شامل کرنے کے لیے اوپر جگہ ڈالیں۔",
+    "marketplace.branchDenied":       "اس شاخ کی مارکیٹ میں شمولیت صرف اسی شاخ کا مالک یا ایڈمن بدل سکتا ہے۔",
+    "marketplace.branchSaveFailed":   "مارکیٹ میں شمولیت تبدیل نہیں ہو سکی۔ دوبارہ کوشش کریں۔",
     "settings.appVersion":  "ایپ ورژن",
     "settings.signOut":     "سائن آؤٹ",
     "settings.deleteBranch":      "شاخ حذف کریں",

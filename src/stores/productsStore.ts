@@ -22,6 +22,14 @@ interface ProductRow {
   barcode: string | null;
   base_unit: string | null;
   stock_qty: number;
+  /**
+   * The owner's farmer-marketplace decision for this product.
+   *
+   * Read here rather than left out because the edit form is where the switch is shown, and a
+   * form that cannot see the stored value shows every listed product as unlisted — which, on a
+   * screen that saves the whole product, would unlist it the next time anything was edited.
+   */
+  marketplace_listed: boolean | null;
 }
 
 interface VariantRow {
@@ -175,6 +183,9 @@ export const useProductsStore = create<ProductsState>((set, get) => ({
           barcode: p.barcode ?? undefined,
           baseUnit: (p.base_unit as BaseUnit) ?? "piece",
           stockQty: computedStockQty,
+          // Absent from the row means the column is not there at all (an older cached payload),
+          // which must read as "not listed" rather than as "listed".
+          marketplaceListed: p.marketplace_listed === true,
           variants,
         };
       });
