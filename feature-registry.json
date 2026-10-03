@@ -110,14 +110,16 @@
       "rules": [
         "Every screen sits behind a permission key declared in the router; a role without it is redirected, not shown a broken screen.",
         "Permissions are enforced in the database (RLS/RPC), not only in the UI.",
-        "Role deletion must not orphan employees; the last owner cannot be removed."
+        "Role deletion must not orphan employees; the last owner cannot be removed.",
+        "Deleting an assigned role SUCCEEDS and revokes the access it provided (0183): every membership pointing at it is cleared to role_id = NULL in the same transaction, so the employees keep their account, membership and history while losing exactly the role's permissions. The screen names how many employees lose the access before confirming."
       ],
       "dependsOn": ["auth-login", "branch-tenant-scope"],
       "dependedBy": ["sales-split-payment", "super-admin"],
-      "tests": ["tests/integration/rbacEnforcement.test.ts", "tests/integration/rbacFoundation.test.ts", "tests/integration/rbacInvariants.test.ts", "tests/integration/rbacLifecycleAndSessions.test.ts", "tests/integration/employeePermissions.test.ts", "tests/integration/employeeAccessOverrides.test.ts", "tests/integration/employeeInviteLifecycle.test.ts", "tests/unit/accountRolesGuard.test.ts", "tests/e2e/accessUx.spec.ts", "tests/e2e/roleDeleteSafety.spec.ts", "tests/e2e/employeeStatusSafety.spec.ts"],
+      "tests": ["tests/integration/rbacEnforcement.test.ts", "tests/integration/rbacFoundation.test.ts", "tests/integration/rbacInvariants.test.ts", "tests/integration/rbacLifecycleAndSessions.test.ts", "tests/integration/rbacRoleLifecycleTargeted.test.ts", "tests/integration/employeePermissions.test.ts", "tests/integration/employeeAccessOverrides.test.ts", "tests/integration/employeeInviteLifecycle.test.ts", "tests/unit/accountRolesGuard.test.ts", "tests/e2e/accessUx.spec.ts", "tests/e2e/roleDeleteSafety.spec.ts", "tests/e2e/roleInUseDeletion.spec.ts", "tests/e2e/employeeStatusSafety.spec.ts"],
       "evidence": [
         { "status": "VALID", "proves": "RBAC foundation, enforcement, invariants and session lifecycle against QA.", "where": "PHASE_2_BROWSER_SAFETY.md §17, tests/integration/rbac*.test.ts" },
-        { "status": "VALID", "proves": "Access UX, role-delete safety and employee status safety on a real browser.", "where": "tests/e2e/accessUx.spec.ts, roleDeleteSafety.spec.ts, employeeStatusSafety.spec.ts" }
+        { "status": "VALID", "proves": "Access UX, role-delete safety and employee status safety on a real browser.", "where": "tests/e2e/accessUx.spec.ts, roleDeleteSafety.spec.ts, employeeStatusSafety.spec.ts" },
+        { "status": "FIXED + REVERIFIED", "proves": "A granted sensitive permission (sales.void) really works and is revoked on change; deleting an assigned role revokes its access from every assigned employee, with no orphaned reference and no bypass from an existing session or a direct RPC.", "where": "tests/integration/rbacRoleLifecycleTargeted.test.ts (11/11), tests/e2e/roleInUseDeletion.spec.ts (2/2), supabase/migrations/0183_deleting_a_role_revokes_its_access.sql" }
       ],
       "lastVerified": "2026-10-02",
       "risks": ["src/lib/accessModel.ts and permissionLabels.ts are Tier-2 paths: touching them forces the full gate."]

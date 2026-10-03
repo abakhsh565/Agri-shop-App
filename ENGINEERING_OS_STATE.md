@@ -2173,3 +2173,90 @@ losing it breaks install-over-update.
 
 Real-device installation/startup/smoke checks cannot begin until an APK artifact exists; they are
 BLOCKED by the prerequisite above, not skipped.
+
+---
+
+## Stage: final staging gate — targeted RBAC, deleting an assigned role revokes access (0183), APK still blocked (2026-10-03)
+
+Requirement change mid-stage: deleting a role that employees still hold must **succeed and revoke**,
+not refuse as 0164 did. The owner confirmed the five-employee scenario — after deletion every
+role-granted permission is gone, protected actions stay denied until a new role is assigned, and
+history stays intact.
+
+### 0183 — deleting a role revokes, from the database up
+
+`supabase/migrations/0183_deleting_a_role_revokes_its_access.sql` replaces the refusal with
+revocation: `delete_role` authorises `settings.edit`, resolves the role by tenant (404s
+`ROLE_NOT_FOUND_OR_NOT_AUTHORIZED`), sets `memberships.role_id = NULL` for every holder in that
+tenant (GET DIAGNOSTICS into `revokedFrom`), deletes the role, and writes one `role_deleted` audit
+row carrying `{wasSystemRole, revokedFrom}`. The migration asserts the memberships→roles FK exists
+before it can orphan anything. Applied to QA through `scripts/migrate.mjs` (4 statements,
+recorded); `migrate:verify` 175↔175.
+
+Why NULL and not a cascade: `get_effective_permissions` resolves employee access as
+`role_permissions` joined through `memberships.role_id` UNION explicit overrides. A NULL role joins
+nothing, so every role-granted permission disappears on the next RPC call — there is no permission
+cache anywhere to go stale. `membership_in_active_shop` needs only `status='active'`, so identity,
+branch scope and history stay intact.
+
+### UI + language (EN/LTR and UR/RTL in the same change)
+
+`RolesAccessPage` no longer disables the delete row — `deleteConsequence()` states what happens
+instead: in the row, “{count} employees will lose this access.”; in the dialog, the full sentence
+that they keep their account and their history and can be given another role at any time. Both
+sentences exist in Urdu. The old `roles.deleteBlocked` copy is gone.
+
+### Evidence
+
+- `tests/integration/rbacRoleLifecycleTargeted.test.ts` (new, 11 tests): Owner creates a Manager
+  role granting `sales.view/create/void` (row confirmed in `role_permissions`) → assigns it → the
+  employee voids a real seeded sale (is_voided, stock restored, voids row, movement row) → an
+  ungranted action is refused with `NOT_AUTHORIZED … products.delete` and writes nothing →
+  revoking `sales.void` blocks the same call → re-granting through a new role allows it again.
+  Deletion lifecycle: employee cannot delete the role; the owner deletes it (`revokedFrom == 1`); no
+  orphan `role_permissions`/memberships; employee active with `role_id NULL`; voided history
+  intact; revoked void refuses with nothing written; parallel double delete both refuse
+  `ROLE_NOT_FOUND_OR_NOT_AUTHORIZED`; a deleted role cannot be assigned.
+- `tests/e2e/roleInUseDeletion.spec.ts` (new, 2 tests, real browser + real QA database): row and
+  dialog carry the revocation copy; delete succeeds and polls the database for role gone / holders
+  zero / employees active with NULL role; the second test repeats the delete through direct
+  PostgREST with the browser's own JWT — refused, role not recreated.
+- `tests/integration/rbacLifecycleAndSessions.test.ts`: the three 0164 refusal tests replaced by
+  five revocation tests.
+- Regression: tsc clean; full vitest 85 files / 910 tests; sibling RBAC/audit/destructive suites
+  85/85; `accessUx` 7/7; `adminFullAccess` + `adminMicrocopy` + `roleDeleteSafety` 9/9 together;
+  production build clean; feature registry guard green; `SCREEN-INDEX.md` regenerated.
+
+### One failure found during the stage, and what it actually was
+
+A combined Playwright run reported 5 failed / 3 did not run / 1 passed. Re-run individually and
+again as one invocation: 9/9 passed. The earlier output was an **interrupted run** (the working
+session was cut mid-process, so in-flight tests counted as failures and the rest never started),
+not an implementation defect — each lane now passes and is evidenced separately.
+
+### Fixture leak found by this stage's own E2E, fixed at the source
+
+The first `afterAll` restored employee roles with `WHERE role_id = '<the deleted role>'`, which
+matched nothing once deletion had nulled it — leaving the shared QA Employee fixture roleless and
+reddening the app-settings isolation test. Restore now matches `user_id + tenant_id`; the QA
+fixture was repaired by hand and re-verified (employee back on Sales Employee, zero leftovers).
+
+### QA state at hand-off
+
+`npm run qa:clean` removed 142 rows; the independent re-count (never the cleaner's own output)
+reports 0 business rows. Fixture identity rows intact: four accounts (two owners with NULL
+`role_id`, two employees on the Sales Employee template), four system roles, zero throwaway
+roles/users, zero audit rows, zero orphaned memberships.
+
+### APK gate — still the owner's four secrets
+
+Re-checked live: `gh secret list` contains no `ANDROID_KEYSTORE_BASE64`,
+`ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`. Per the standing
+instruction the APK path stops here: no local Gradle, no other workflow; the only permitted path
+`.github/workflows/build-apk.yml` already proved every pre-signing step green (run 37076349097)
+and stops exactly at “Decode release keystore”. No artifact, so installation/startup/device QA are
+BLOCKED, not skipped.
+
+Stage verdict: RBAC role/permission and role-deletion revocation are PASS with database-level
+evidence; production untouched; **“STAGING APK READY FOR USER REAL-DEVICE ACCEPTANCE” is NOT
+declared** — the signed APK prerequisite is the missing owner keystore secrets.

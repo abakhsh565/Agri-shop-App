@@ -5,7 +5,8 @@
  *   1. Effective access is resolved server-side: an access change takes effect at
  *      the next authorization boundary even while the employee's session lives.
  *   2. A deactivated membership loses access immediately.
- *   3. Role deletion is safe: system roles and in-use roles are refused.
+ *   3. Role deletion revokes the access it provided (0183): an in-use role is deleted,
+ *      its memberships are cleared, and the employees keep their account and history.
  *   4. update_admin_profile cannot be pointed at another user or tenant.
  *   5. Access changes are audited with actor attribution.
  *
@@ -30,7 +31,7 @@ async function sql(query: string) {
 }
 
 async function cleanup() {
-  await sql(`DELETE FROM customers WHERE phone IN ('923009795001','923009795002')`).catch(() => undefined);
+  await sql(`DELETE FROM customers WHERE phone IN ('923009795001','923009795002','923009795004','923009795005')`).catch(() => undefined);
   await sql(`DELETE FROM audit_events WHERE user_id IN ('${OWNER}','${EMP}','${VICTIM}')`).catch(() => undefined);
   await sql(`DELETE FROM user_permissions WHERE user_id IN ('${OWNER}','${EMP}','${VICTIM}')`).catch(() => undefined);
   await sql(`DELETE FROM role_permissions WHERE role_id IN (SELECT id FROM roles WHERE name LIKE '${RUN}%')`).catch(() => undefined);
@@ -116,29 +117,67 @@ describe('Role lifecycle — deletion is safe', () => {
     expect(roleId).toBeTruthy();
   });
 
-  it('refuses to delete a role that employees still use', async () => {
+  it('deleting a role that employees use revokes its access instead of refusing (0183)', async () => {
+    // 0164 refused this with ROLE_IN_USE. The acceptance gate requires the owner's
+    // intent to be carried out: deleting the role takes its access away from the people
+    // working under it, in the same transaction.
     await sql(`UPDATE memberships SET role_id = '${roleId}' WHERE user_id = '${EMP}'`);
-    const res = await execRpcAsUser(OWNER, 'delete_role', { payload: { roleId } });
-    expect(res.error).toContain('ROLE_IN_USE');
-  });
 
-  it('refuses to delete a built-in role that someone is assigned to', async () => {
-    // What protects a role is ASSIGNMENT, not provenance (0164): a built-in role with nobody
-    // on it can be removed and the screen offers it, while one that somebody works under —
-    // this one — is refused by the same rule as any custom role. The old rule refused every
-    // system role outright, which is why a shop that never used a built-in role could only be
-    // told "this one comes with the app".
-    await sql(`UPDATE memberships SET role_id = '${ROLE_EMPLOYEE}' WHERE user_id = '${EMP}'`);
-    const res = await execRpcAsUser(OWNER, 'delete_role', { payload: { roleId: ROLE_EMPLOYEE } });
-    expect(res.error).toContain('ROLE_IN_USE');
-  });
+    const before = await execRpcAsUser(EMP, 'get_my_permissions', {});
+    expect(before.data).toContain('customers.create');
 
-  it('deletes the role once it is no longer in use', async () => {
-    await sql(`UPDATE memberships SET role_id = '${ROLE_EMPLOYEE}' WHERE user_id = '${EMP}'`);
     const res = await execRpcAsUser(OWNER, 'delete_role', { payload: { roleId } });
     expect(res.error).toBeNull();
+    expect(res.data.revokedFrom).toBe(1);
+
     const gone = await sql(`SELECT count(*)::int AS c FROM roles WHERE id = '${roleId}'`);
     expect(gone.rows[0].c).toBe(0);
+
+    // The membership and the employee survive; only the role reference is cleared.
+    const membership = await sql(
+      `SELECT role_id, status FROM memberships WHERE user_id = '${EMP}'`
+    );
+    expect(membership.rows[0].role_id).toBeNull();
+    expect(membership.rows[0].status).toBe('active');
+    const still = await sql(`SELECT count(*)::int AS c FROM users WHERE id = '${EMP}'`);
+    expect(still.rows[0].c).toBe(1);
+
+    // And the access the role provided is gone at the next authorization boundary.
+    const after = await execRpcAsUser(EMP, 'get_my_permissions', {});
+    expect(after.data).toEqual([]);
+    const denied = await execRpcAsUser(EMP, 'create_customer', customerCall(4));
+    expect(denied.error).toContain('NOT_AUTHORIZED');
+    const persisted = await sql(`SELECT count(*)::int AS c FROM customers WHERE phone = '923009795004'`);
+    expect(persisted.rows[0].c, 'the refused call must not have written anything').toBe(0);
+  });
+
+  it('no orphaned role or permission reference remains after the deletion', async () => {
+    const orphanPerms = await sql(
+      `SELECT count(*)::int AS c FROM role_permissions WHERE role_id = '${roleId}'`
+    );
+    expect(orphanPerms.rows[0].c).toBe(0);
+    const staleMembers = await sql(
+      `SELECT count(*)::int AS c FROM memberships WHERE role_id = '${roleId}'`
+    );
+    expect(staleMembers.rows[0].c).toBe(0);
+  });
+
+  it('repeated deletion cannot bypass the revocation', async () => {
+    // The first deletion already happened above; the second must be refused as a
+    // not-found role, and must not resurrect or half-apply anything.
+    const again = await execRpcAsUser(OWNER, 'delete_role', { payload: { roleId } });
+    expect(again.error).toContain('ROLE_NOT_FOUND_OR_NOT_AUTHORIZED');
+    const gone = await sql(`SELECT count(*)::int AS c FROM roles WHERE id = '${roleId}'`);
+    expect(gone.rows[0].c).toBe(0);
+  });
+
+  it('access returns only when another valid role is assigned', async () => {
+    const denied = await execRpcAsUser(EMP, 'create_customer', customerCall(5));
+    expect(denied.error).toContain('NOT_AUTHORIZED');
+
+    await sql(`UPDATE memberships SET role_id = '${ROLE_EMPLOYEE}' WHERE user_id = '${EMP}'`);
+    const restored = await execRpcAsUser(EMP, 'create_customer', customerCall(5));
+    expect(restored.error).toBeNull();
   });
 });
 
