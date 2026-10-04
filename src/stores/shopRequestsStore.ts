@@ -71,7 +71,6 @@ function requestFromRow(r: ShopRequestRow): ShopRequest {
 }
 
 interface ShopRequestsState {
-  requests: ShopRequest[];
   myRequest: ShopRequest | null;
   loading: boolean;
   error: string | null;
@@ -101,15 +100,9 @@ interface ShopRequestsState {
   }) => Promise<{ success: boolean; error?: string }>;
 
   loadMyRequest: (phone: string) => Promise<void>;
-
-  // Admin actions
-  loadAllRequests: () => Promise<void>;
-  approveRequest: (requestId: string) => Promise<{ success: boolean; error?: string }>;
-  rejectRequest: (requestId: string, reason?: string) => Promise<{ success: boolean; error?: string }>;
 }
 
-export const useShopRequestsStore = create<ShopRequestsState>((set, get) => ({
-  requests: [],
+export const useShopRequestsStore = create<ShopRequestsState>((set) => ({
   myRequest: null,
   loading: false,
   error: null,
@@ -195,86 +188,6 @@ export const useShopRequestsStore = create<ShopRequestsState>((set, get) => ({
       set({ loading: false, myRequest: requestFromRow(result.request as ShopRequestRow) });
     } catch {
       set({ loading: false, myRequest: null });
-    }
-  },
-
-  loadAllRequests: async () => {
-    set({ loading: true, error: null });
-    try {
-      const { data, error } = await supabase
-        .from("shop_requests")
-        .select("*")
-        .order("created_at", { ascending: false });
-
-      if (error) {
-        set({ loading: false, error: error.message });
-        return;
-      }
-
-      const requests = (data as ShopRequestRow[]).map(requestFromRow);
-      set({ loading: false, requests });
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : "Failed to load requests";
-      set({ loading: false, error: msg });
-    }
-  },
-
-  approveRequest: async (requestId) => {
-    set({ loading: true, error: null });
-    try {
-      // Use the SECURITY DEFINER RPC which creates shop + user
-      const { data, error } = await supabase.rpc("approve_shop_request", {
-        request_id: requestId,
-        admin_id: (await supabase.auth.getUser()).data.user?.id,
-      });
-
-      if (error) {
-        set({ loading: false, error: error.message });
-        return { success: false, error: error.message };
-      }
-
-      const result = typeof data === "string" ? JSON.parse(data) : data;
-      if (!result?.success) {
-        const msg = result?.error || tNow("errors.requestApproveFailed");
-        set({ loading: false, error: msg });
-        return { success: false, error: msg };
-      }
-
-      await get().loadAllRequests();
-      set({ loading: false });
-      return { success: true };
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : "Failed to approve request";
-      set({ loading: false, error: msg });
-      return { success: false, error: msg };
-    }
-  },
-
-  rejectRequest: async (requestId, reason) => {
-    set({ loading: true, error: null });
-    try {
-      const { error } = await supabase
-        .from("shop_requests")
-        .update({
-          status: "rejected",
-          rejection_reason: reason ?? null,
-          reviewed_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", requestId);
-
-      if (error) {
-        set({ loading: false, error: error.message });
-        return { success: false, error: error.message };
-      }
-
-      await get().loadAllRequests();
-      set({ loading: false });
-      return { success: true };
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : "Failed to reject request";
-      set({ loading: false, error: msg });
-      return { success: false, error: msg };
     }
   },
 }));

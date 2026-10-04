@@ -58,16 +58,20 @@ async function signIn(page: Page) {
  * Open a sheet that carries its close control, and wait until it is on screen.
  *
  * The field pickers (supplier, unit) are deliberately close-less now — "a field picker
- * resolves in one tap, so it has no close button" — so the sheet measured here is the
- * branch editor, which does draw the shared start-edge control. Waiting for the control
- * rather than reading geometry straight after the click is deliberate: a measurement taken
- * before the sheet is painted reports `null` and reads as "the sheet never opened".
+ * resolves in one tap, so it has no close button". The branches list now opens a detail page
+ * rather than a sheet, and that page's location field opens the location picker as a PAGE of its
+ * own (`/pick-location`), so the leading control measured here is that page's own header back
+ * button rather than a sheet's close button. The way in is: open the branch, then open its
+ * location field. Waiting for the control rather than reading geometry straight after the click
+ * is deliberate: a measurement taken before the screen is painted reports `null` and reads as
+ * "the picker never opened".
  */
-async function openSheetWithLeadingControl(page: Page) {
+async function openPickerWithLeadingControl(page: Page) {
   await page.goto(`${BASE_URL}/admin/more`);
   await page.waitForLoadState('networkidle');
-  await page.locator('[data-testid^="branch-edit-action-"]').first().click();
-  await expect(page.locator('[data-testid="sheet-close"]')).toBeVisible({ timeout: 10000 });
+  await page.locator('[data-testid^="branch-row-"]').first().click();
+  await page.locator('[data-testid^="branch-location-"][data-testid$="-open"]').first().click();
+  await expect(page.locator('[data-testid="nav-back"]')).toBeVisible({ timeout: 10000 });
 }
 
 /**
@@ -100,9 +104,11 @@ async function edgeGaps(page: Page, selector: string) {
 test('a leading control sits on the inline start in both directions', async ({ page }) => {
   await signIn(page);
 
-  // Two shapes of the same intent: NavHeader's back control (an inline style, migrated from
-  // a JS `isRtl ? right : left` ternary) and the shared Sheet's close control (a `start-4`
-  // class, migrated from the deleted `[dir="rtl"] .absolute.left-4` rule).
+  // Two screens that each carry the shared leading control: the header back control on an
+  // ordinary form screen (an inline logical inset, migrated from a JS `isRtl ? right : left`
+  // ternary) and the same control on the location picker page. The inset is 20px — the row's
+  // own `px-5` gutter — so the arrow lines up with the header it belongs to rather than
+  // reading a few pixels inward of it.
   await setPrefs(page, 'en', 'light');
   // A screen whose header keeps the leading control. Settings is deliberately not used any
   // more: its exit is now the close control on the trailing edge (an approved change), so
@@ -113,14 +119,13 @@ test('a leading control sits on the inline start in both directions', async ({ p
   const ltrBack = await edgeGaps(page, '[data-testid="nav-back"]');
   expect(ltrBack, 'the header back control is not on the page').not.toBeNull();
   expect(ltrBack!.dir).toBe('ltr');
-  expect(ltrBack!.leftGap, 'EN: the leading control sits 16px from the left edge').toBe(16);
+  expect(ltrBack!.leftGap, 'EN: the leading control sits 20px from the left edge').toBe(20);
   expect(ltrBack!.rightGap, 'EN: it is nowhere near the right edge').toBeGreaterThan(100);
 
-  await openSheetWithLeadingControl(page);
-  const ltrSheet = await edgeGaps(page, '[data-testid="sheet-close"]');
-  expect(ltrSheet, 'the sheet did not open, so its close button cannot be measured').not.toBeNull();
-  expect(ltrSheet!.leftGap, 'EN: the sheet close control is 16px from the left edge').toBe(16);
-  await page.keyboard.press('Escape');
+  await openPickerWithLeadingControl(page);
+  const ltrPicker = await edgeGaps(page, '[data-testid="nav-back"]');
+  expect(ltrPicker, 'the picker page did not open, so its back button cannot be measured').not.toBeNull();
+  expect(ltrPicker!.leftGap, 'EN: the picker back control is 20px from the left edge').toBe(20);
 
   await setPrefs(page, 'ur', 'light');
   await page.goto(`${BASE_URL}/admin/inventory/new`);
@@ -128,14 +133,14 @@ test('a leading control sits on the inline start in both directions', async ({ p
 
   const rtlBack = await edgeGaps(page, '[data-testid="nav-back"]');
   expect(rtlBack!.dir, 'the Urdu direction did not apply, so nothing below would mean anything').toBe('rtl');
-  expect(rtlBack!.rightGap, 'UR: the leading control mirrors to 16px from the right edge').toBe(16);
+  expect(rtlBack!.rightGap, 'UR: the leading control mirrors to 20px from the right edge').toBe(20);
   expect(rtlBack!.leftGap, 'UR: it is nowhere near the left edge').toBeGreaterThan(100);
 
-  await openSheetWithLeadingControl(page);
-  const rtlSheet = await edgeGaps(page, '[data-testid="sheet-close"]');
-  expect(rtlSheet, 'the sheet did not open in Urdu').not.toBeNull();
-  expect(rtlSheet!.rightGap, 'UR: the sheet close control is 16px from the right edge').toBe(16);
-  expect(rtlSheet!.leftGap, 'UR: it is nowhere near the left edge').toBeGreaterThan(100);
+  await openPickerWithLeadingControl(page);
+  const rtlPicker = await edgeGaps(page, '[data-testid="nav-back"]');
+  expect(rtlPicker, 'the picker page did not open in Urdu').not.toBeNull();
+  expect(rtlPicker!.rightGap, 'UR: the picker back control is 20px from the right edge').toBe(20);
+  expect(rtlPicker!.leftGap, 'UR: it is nowhere near the left edge').toBeGreaterThan(100);
 });
 
 test('the theme switch knob travels along the inline axis, in both languages', async ({ page }) => {

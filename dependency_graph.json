@@ -891,23 +891,6 @@
         "layer": "test"
       }
     ],
-    "shop_requests": [
-      {
-        "file": "src/stores/shopRequestsStore.ts",
-        "evidence": "from_call",
-        "layer": "store"
-      },
-      {
-        "file": "tests/integration/accountDeletion.test.ts",
-        "evidence": "sql_reference",
-        "layer": "test"
-      },
-      {
-        "file": "tests/integration/rbacInvariants.test.ts",
-        "evidence": "sql_reference",
-        "layer": "test"
-      }
-    ],
     "shops": [
       {
         "file": "src/stores/shopStore.ts",
@@ -915,7 +898,7 @@
         "layer": "store"
       },
       {
-        "file": "src/components/shop/BranchEditSheet.tsx",
+        "file": "src/components/shop/BranchEditor.tsx",
         "evidence": "sql_reference",
         "layer": "component"
       },
@@ -1162,6 +1145,18 @@
       },
       {
         "file": "tests/integration/shopScopedPolicyGuard.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      }
+    ],
+    "shop_requests": [
+      {
+        "file": "tests/integration/accountDeletion.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/integration/rbacInvariants.test.ts",
         "evidence": "sql_reference",
         "layer": "test"
       }
@@ -1707,11 +1702,6 @@
         "layer": "page"
       },
       {
-        "file": "src/pages/super-admin/SuperAdminDashboard.tsx",
-        "evidence": "direct_import",
-        "layer": "page"
-      },
-      {
         "file": "tests/unit/shopSwitchReset.test.ts",
         "evidence": "direct_import",
         "layer": "test"
@@ -1982,6 +1972,11 @@
         "file": "src/pages/onboarding/IntroPage.tsx",
         "evidence": "direct_import",
         "layer": "page"
+      },
+      {
+        "file": "src/pages/shared/LocationPickerPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
       }
     ],
     "placementStore": [
@@ -2018,6 +2013,11 @@
         "layer": "component"
       },
       {
+        "file": "src/components/shop/BranchEditor.tsx",
+        "evidence": "direct_import",
+        "layer": "component"
+      },
+      {
         "file": "src/components/shop/BranchEditSheet.tsx",
         "evidence": "direct_import",
         "layer": "component"
@@ -2049,6 +2049,11 @@
       },
       {
         "file": "src/pages/admin/inventory/AddProductPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/more/BranchDetailPage.tsx",
         "evidence": "direct_import",
         "layer": "page"
       },
@@ -2597,7 +2602,7 @@
         "layer": "store"
       },
       {
-        "file": "src/components/shop/BranchEditSheet.tsx",
+        "file": "src/components/shop/BranchEditor.tsx",
         "evidence": "direct_import",
         "layer": "component"
       },
@@ -2776,7 +2781,7 @@
         "layer": "component"
       },
       {
-        "file": "src/components/shop/BranchEditSheet.tsx",
+        "file": "src/components/shop/BranchEditor.tsx",
         "evidence": "direct_import",
         "layer": "component"
       },
@@ -2934,11 +2939,6 @@
         "file": "src/pages/register/RegisterShopDetailsPage.tsx",
         "evidence": "direct_import",
         "layer": "page"
-      },
-      {
-        "file": "src/pages/super-admin/SuperAdminDashboard.tsx",
-        "evidence": "direct_import",
-        "layer": "page"
       }
     ],
     "permissionsStore": [
@@ -3037,11 +3037,6 @@
       },
       {
         "file": "src/pages/register/RegisterStatusPage.tsx",
-        "evidence": "direct_import",
-        "layer": "page"
-      },
-      {
-        "file": "src/pages/super-admin/SuperAdminDashboard.tsx",
         "evidence": "direct_import",
         "layer": "page"
       }
@@ -3421,14 +3416,15 @@
     "/login/deactivated": "src/pages/auth/DeactivatedPage.tsx",
     "/login/under-review": "src/pages/auth/UnderReviewPage.tsx",
     "/login/rejected": "src/pages/auth/RejectedPage.tsx",
+    "/pick-location": "src/pages/shared/LocationPickerPage.tsx",
     "/register": "src/pages/register/RegisterPhonePage.tsx",
     "/register/otp": "src/pages/register/RegisterOTPPage.tsx",
     "/register/shop-details": "src/pages/register/RegisterShopDetailsPage.tsx",
     "/register/status": "src/pages/register/RegisterStatusPage.tsx",
-    "/super-admin": "src/pages/super-admin/SuperAdminDashboard.tsx",
     "/admin/dashboard": "src/pages/admin/dashboard/AdminDashboardPage.tsx",
     "/admin/assistant": "src/pages/assistant/AssistantPage.tsx",
     "/admin/more": "src/pages/admin/more/MoreMenuPage.tsx",
+    "/admin/more/branches/:branchId": "src/pages/admin/more/BranchDetailPage.tsx",
     "/admin/guide": "src/pages/shared/AppGuidePage.tsx",
     "/admin/search": "src/pages/employee/search/SearchPage.tsx",
     "/admin/customers": "src/pages/employee/customers/CustomersListPage.tsx",
@@ -3506,6 +3502,6 @@
     "/employee/notifications": "src/pages/employee/notifications/EmployeeNotificationsPage.tsx",
     "/employee/guide": "src/pages/shared/AppGuidePage.tsx"
   },
-  "scannedAt": "2026-10-03T21:48:28.691Z",
-  "fileCount": 332
+  "scannedAt": "2026-10-04T01:00:05.541Z",
+  "fileCount": 335
 }

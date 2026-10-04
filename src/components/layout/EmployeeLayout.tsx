@@ -1,5 +1,5 @@
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
-import { Home, Receipt, ScanLine, Package, Sparkles, Users, Wifi, WifiOff, X } from "lucide-react";
+import { Home, Receipt, ScanLine, Package, Users, Wifi, WifiOff, X } from "lucide-react";
 import { useAuthStore } from "@/stores/authStore";
 import { useOfflineStore } from "@/stores/offlineStore";
 import { getPendingCount } from "@/lib/offlineQueue";
@@ -19,6 +19,7 @@ import ShopAccessNotice, { useNoActiveShop } from "@/components/shop/ShopAccessN
 import { isTopLevel } from "@/lib/navDepth";
 import { clearNav } from "@/lib/navContext";
 import BackButtonHandler from "@/components/ui/BackButtonHandler";
+import AssistantFab from "@/components/layout/AssistantFab";
 
 const TAB_DEFS = [
   { key: "nav.home" as const,    icon: Home,          path: "/employee/dashboard" },
@@ -26,9 +27,6 @@ const TAB_DEFS = [
   { key: "scan" as const,        icon: ScanLine,      path: "__scan__"            },
   { key: "nav.products" as const,icon: Package,       path: "/employee/products"  },
   { key: "nav.customers" as const, icon: Users,       path: "/employee/customers"  },
-  // The assistant, on the employee's own session — it can only answer from what this account can
-  // already open, so it is safe to put in front of everyone.
-  { key: "nav.assistant" as const, icon: Sparkles,    path: "/employee/assistant"  },
 ];
 
 const LOCK_TIMEOUT_MS = 15 * 60 * 1000;
@@ -124,8 +122,10 @@ export default function EmployeeLayout() {
     if (path.startsWith("/employee/sales"))     return "/employee/sales";
     if (path.startsWith("/employee/customers")) return "/employee/customers";
     if (path.startsWith("/employee/products"))  return "/employee/products";
-    if (path.startsWith("/employee/assistant")) return "/employee/assistant";
-    return "/employee/dashboard";
+    // `null` rather than a stand-in: the assistant is no longer a tab, so on that screen NO
+    // tab is the current one, and lighting up "Home" would send someone there believing the
+    // assistant lives under it.
+    return null;
   }
 
   const active = activeTab();
@@ -309,6 +309,11 @@ export default function EmployeeLayout() {
           owner shell, teaching the employee's steps rather than the owner's. */}
       <FirstRunGate />
       <ContextHelp />
+
+      {/* The assistant, off the bar and within thumb reach of home. It answers on the employee's
+          own session — from what this account can already open — so it is safe to put in front
+          of everyone; it is simply not a place you go to look. See AssistantFab. */}
+      {location.pathname === "/employee/dashboard" && <AssistantFab path="/employee/assistant" />}
 
       {/* ── Bottom tab bar — only on top-level navigation screens ── */}
       {showTabBar && (

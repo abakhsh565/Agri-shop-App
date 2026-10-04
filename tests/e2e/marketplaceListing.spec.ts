@@ -191,7 +191,7 @@ test.describe('Farmer marketplace listing — the owner switches', () => {
     // ── The branch switch ───────────────────────────────────────────────────
     await page.goto(`${BASE_URL}/admin/more`);
     await page.waitForLoadState('networkidle');
-    await page.getByTestId(`branch-edit-action-${QA_IDS.shop}`).click();
+    await page.getByTestId(`branch-row-${QA_IDS.shop}`).click();
     const branchToggle = page.getByTestId(`branch-marketplace-toggle-${QA_IDS.shop}`);
     await expect(branchToggle, 'the branch switch is announced in Urdu').toHaveAttribute(
       'aria-label',
@@ -234,14 +234,15 @@ test.describe('Farmer marketplace listing — the owner switches', () => {
     await page.goto(`${BASE_URL}/admin/more`);
     await page.waitForLoadState('networkidle');
 
-    await page.getByTestId(`branch-edit-action-${QA_IDS.shop}`).click();
+    await page.getByTestId(`branch-row-${QA_IDS.shop}`).click();
     const toggle = page.getByTestId(`branch-marketplace-toggle-${QA_IDS.shop}`);
     await expect(toggle, 'a pinned branch can be listed').toBeEnabled();
     await expect(toggle).toHaveAttribute('aria-checked', 'false');
 
+    // The switch writes the moment it is moved — the branch screen has no Save button, because
+    // there is nothing on it worth batching (one place, one switch).
     await toggle.click();
     await expect(toggle).toHaveAttribute('aria-checked', 'true');
-    await page.getByTestId('branch-save').click();
     await page.waitForTimeout(6000);
 
     const saved = await execSql(
@@ -256,12 +257,14 @@ test.describe('Farmer marketplace listing — the owner switches', () => {
     );
     expect(Number(reachable[0].n), 'a listed product at a listed branch is on the public contract').toBe(1);
 
-    // Turning the branch off removes it again.
-    await page.getByTestId(`branch-edit-action-${QA_IDS.shop}`).click();
+    // Turning the branch off removes it again. Back to the list first: the toggle left the page
+    // on the branch itself, and the row lives on the list.
+    await page.goto(`${BASE_URL}/admin/more`);
+    await page.waitForLoadState('networkidle');
+    await page.getByTestId(`branch-row-${QA_IDS.shop}`).click();
     const offToggle = page.getByTestId(`branch-marketplace-toggle-${QA_IDS.shop}`);
     await expect(offToggle, 'the saved switch reads back on').toHaveAttribute('aria-checked', 'true');
     await offToggle.click();
-    await page.getByTestId('branch-save').click();
     await page.waitForTimeout(6000);
 
     const after = await execSql(

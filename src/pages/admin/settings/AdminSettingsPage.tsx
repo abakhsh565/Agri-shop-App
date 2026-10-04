@@ -1,7 +1,7 @@
 import BusinessSettingsSheet from '@/components/ui/BusinessSettingsSheet';
 import StockAlertsSheet from '@/components/ui/StockAlertsSheet';
 import { useNavigate } from "react-router-dom";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
 import ListCard from "@/components/ui/ListCard";
@@ -64,13 +64,26 @@ export default function AdminSettingsPage() {
    * what this screen manages: removing it would take every branch with it.
    */
   const [branchToDelete, setBranchToDelete] = useState<BranchSummary | null>(null);
-  const [branchToEdit, setBranchToEdit] = useState<BranchSummary | null>(null);
   const [accountDeleteOpen, setAccountDeleteOpen] = useState(false);
   const branches = useShopStore((s) => s.branches);
   const branchesLoaded = useShopStore((s) => s.branchesLoaded);
   const loadBranches = useShopStore((s) => s.loadBranches);
   const activeShopId = useShopStore((s) => s.activeShopId);
   const activeShopName = useShopStore((s) => s.activeShopName);
+  /**
+   * Which branch the edit sheet is showing, held in the store rather than in this page.
+   *
+   * The sheet's location control opens the picker page, and that page lives outside the shell —
+   * so choosing a place unmounts this page and the sheet with it. An id in the store outlives
+   * the unmount, and the row is looked back up on `branches`, so the sheet reappears carrying
+   * the point that was just chosen instead of quietly disappearing.
+   */
+  const editingBranchId = useShopStore((s) => s.editingBranchId);
+  const setEditingBranch = useShopStore((s) => s.setEditingBranch);
+  const branchToEdit = useMemo(
+    () => branches.find((b) => b.id === editingBranchId) ?? null,
+    [branches, editingBranchId],
+  );
 
   useEffect(() => {
     if (!branchesLoaded) void loadBranches();
@@ -396,7 +409,7 @@ export default function AdminSettingsPage() {
           </div>
 
           <button
-            onClick={() => (inAddedBranch && activeBranch ? setBranchToEdit(activeBranch) : startEdit())}
+            onClick={() => (inAddedBranch && activeBranch ? setEditingBranch(activeBranch.id) : startEdit())}
             data-testid={inAddedBranch ? "settings-edit-branch" : "settings-edit-profile"}
             className="flex items-center h-6.5 px-2.5 rounded-full text-12 font-bold shrink-0"
             style={{ background: "var(--surface)", color: "var(--text-secondary)", border: "1px solid var(--divider)" }}
@@ -757,8 +770,8 @@ export default function AdminSettingsPage() {
       {branchToEdit && (
         <BranchEditSheet
           branch={branchToEdit}
-          onClose={() => setBranchToEdit(null)}
-          onRenamed={() => setBranchToEdit(null)}
+          onClose={() => setEditingBranch(null)}
+          onRenamed={() => setEditingBranch(null)}
         />
       )}
     </div>

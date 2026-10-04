@@ -18,15 +18,16 @@ this file exists so an impact map starts from a lookup instead of fresh reconnai
 | `/login/deactivated` | DeactivatedPage | `src/pages/auth/DeactivatedPage` | accessibility, crossScreenSync, imageSync, otpResume, skeletonCoverage |
 | `/login/under-review` | UnderReviewPage | `src/pages/auth/UnderReviewPage` | accessibility, crossScreenSync, imageSync, otpResume, skeletonCoverage |
 | `/login/rejected` | RejectedPage | `src/pages/auth/RejectedPage` | accessibility, crossScreenSync, imageSync, otpResume, skeletonCoverage |
+| `/pick-location` | LocationPickerPage | `src/pages/shared/LocationPickerPage` | accessibility, crossScreenSync, imageSync, skeletonCoverage |
 | `/register` | RegisterPhonePage | `src/pages/register/RegisterPhonePage` | accessibility, crossScreenSync, imageSync, skeletonCoverage |
 | `/register/otp` | RegisterOTPPage | `src/pages/register/RegisterOTPPage` | accessibility, crossScreenSync, imageSync, skeletonCoverage |
 | `/register/shop-details` | RegisterShopDetailsPage | `src/pages/register/RegisterShopDetailsPage` | accessibility, crossScreenSync, imageSync, skeletonCoverage |
 | `/register/status` | RegisterStatusPage | `src/pages/register/RegisterStatusPage` | accessibility, crossScreenSync, imageSync, skeletonCoverage |
-| `/super-admin` | SuperAdminDashboard | `src/pages/super-admin/SuperAdminDashboard` | accessibility, crossScreenSync, imageSync, skeletonCoverage |
 | `/admin` | AdminLayout | `src/components/layout/AdminLayout` | accessibility, actionCenter, crossScreenSync, education, overlayAboveNav |
 | `dashboard` | AdminDashboardPage | `src/pages/admin/dashboard/AdminDashboardPage` | accessibility, actionCenter, adminMicrocopy, crossScreenSync, dashboardScope, dependencyContinuity, imageSync, setupCompletion, skeletonCoverage |
 | `assistant` | AssistantPage | `src/pages/assistant/AssistantPage` | accessibility, crossScreenSync, imageSync, skeletonCoverage |
 | `more` | MoreMenuPage | `src/pages/admin/more/MoreMenuPage` | accessibility, adminMicrocopy, crossScreenSync, education, imageSync, marketplaceListing, skeletonCoverage |
+| `more/branches/:branchId` | BranchDetailPage | `src/pages/admin/more/BranchDetailPage` | accessibility, adminMicrocopy, crossScreenSync, education, imageSync, marketplaceListing, skeletonCoverage |
 | `guide` | AppGuidePage | `src/pages/shared/AppGuidePage` | accessibility, crossScreenSync, imageSync, skeletonCoverage |
 | `search` | SearchPage | `src/pages/employee/search/SearchPage` | accessibility, crossScreenSync, employeeStatusSafety, imageSync, skeletonCoverage |
 | `customers` | CustomersListPage | `src/pages/employee/customers/CustomersListPage` | accessibility, crossScreenSync, employeeStatusSafety, imageSync, skeletonCoverage |

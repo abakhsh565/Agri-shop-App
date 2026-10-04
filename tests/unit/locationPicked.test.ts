@@ -37,13 +37,22 @@ describe("Locations are picked, not typed", () => {
   it("gives every screen that stores a place the map picker", () => {
     // Adding a customer, registering a shop, editing a branch, creating a branch — the four
     // places the requirement names, each of which used to have a free-text address field.
+    //
+    // `via` is where a screen reaches the picker through a component that owns the form rather
+    // than importing the field itself: `BranchEditSheet` renders `BranchEditor`, and the field
+    // moved into it when the branch form stopped being a sheet of its own. The rule being
+    // enforced is "a place is picked on a map somewhere on the way to the screen", not "this
+    // particular file spells the import" — so the delegation is followed rather than the entry
+    // deleted, which would leave editing a branch unguarded.
     const screens = [
-      "pages/employee/customers/AddCustomerPage.tsx",
-      "pages/register/RegisterShopDetailsPage.tsx",
-      "components/shop/BranchEditSheet.tsx",
-      "components/shop/ShopSwitcherSheet.tsx",
+      { file: "pages/employee/customers/AddCustomerPage.tsx", via: [] as string[] },
+      { file: "pages/register/RegisterShopDetailsPage.tsx", via: [] },
+      { file: "components/shop/BranchEditSheet.tsx", via: ["components/shop/BranchEditor.tsx"] },
+      { file: "components/shop/ShopSwitcherSheet.tsx", via: [] },
     ];
-    const missing = screens.filter((file) => !read(file).includes("LocationField"));
+    const missing = screens
+      .filter(({ file, via }) => ![file, ...via].some((f) => read(f).includes("LocationField")))
+      .map(({ file }) => file);
     expect(missing, "these screens store a place but offer no map to pick it on").toEqual([]);
   });
 

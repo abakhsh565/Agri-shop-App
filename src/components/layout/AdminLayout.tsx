@@ -1,5 +1,5 @@
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
-import { LayoutDashboard, ShoppingBag, Package, ScanLine, MoreHorizontal, Sparkles, X } from "lucide-react";
+import { LayoutDashboard, ShoppingBag, Package, ScanLine, MoreHorizontal, X } from "lucide-react";
 import { useT, tNow } from "@/lib/i18n";
 import ToastContainer from "@/components/ui/Toast";
 import NavTracker from "@/components/ui/NavTracker";
@@ -13,6 +13,7 @@ import { useProductsStore } from "@/stores/productsStore";
 import { useUIStore } from "@/stores/uiStore";
 import { clearNav } from "@/lib/navContext";
 import BackButtonHandler from "@/components/ui/BackButtonHandler";
+import AssistantFab from "@/components/layout/AssistantFab";
 import { useOfflineStore } from "@/stores/offlineStore";
 import { getPendingCount } from "@/lib/offlineQueue";
 import { useAuthStore } from "@/stores/authStore";
@@ -29,9 +30,6 @@ const TAB_DEFS = [
   { key: "admin.sales"     as const, icon: ShoppingBag,     path: "/admin/sales"     },
   { key: "scan"            as const, icon: ScanLine,        path: "__scan__"         },
   { key: "admin.inventory" as const, icon: Package,         path: "/admin/products"    },
-  // The assistant is a tab, not a separate screen with its own sign-in: it opens on the session
-  // that is already signed in and answers within that account's reach.
-  { key: "nav.assistant"   as const, icon: Sparkles,        path: "/admin/assistant"   },
   { key: "admin.more"      as const, icon: MoreHorizontal,  path: "/admin/more"      },
 ];
 
@@ -119,7 +117,6 @@ export default function AdminLayout() {
     if (path.startsWith("/admin/products"))  return "/admin/products";
     if (path.startsWith("/admin/inventory") || path.startsWith("/admin/inventory/movements") || path.startsWith("/admin/inventory/reorder")) return "/admin/products";
     if (path.startsWith("/admin/customers")) return "/admin/customers";
-    if (path.startsWith("/admin/assistant")) return "/admin/assistant";
     if (path.startsWith("/admin/more") ||
         path.startsWith("/admin/employees") ||
         path.startsWith("/admin/companies") ||
@@ -127,7 +124,10 @@ export default function AdminLayout() {
         path.startsWith("/admin/reports") ||
         path.startsWith("/admin/settings") ||
         path.startsWith("/admin/payments"))  return "/admin/more";
-    return "/admin/dashboard";
+    // `null` rather than a stand-in: the assistant is no longer a tab, so on that screen
+    // NO tab is the current one, and lighting up "Dashboard" would send someone there
+    // believing the assistant lives under it.
+    return null;
   }
 
   const active = activeTab();
@@ -299,7 +299,10 @@ export default function AdminLayout() {
           selector, one mount, one place where switching is decided. */}
       <ShopSwitcherSheet />
 
-      {/* ── Bottom tab bar (5 tabs) — only on top-level navigation screens ── */}
+      {/* The assistant, off the bar and within thumb reach of home. See AssistantFab. */}
+      {location.pathname === "/admin/dashboard" && <AssistantFab path="/admin/assistant" />}
+
+      {/* ── Bottom tab bar (4 tabs) — only on top-level navigation screens ── */}
       {showTabBar && (
       <div
         className="fixed bottom-0 start-0 end-0 max-w-[480px] mx-auto flex items-start pt-2 border-t"

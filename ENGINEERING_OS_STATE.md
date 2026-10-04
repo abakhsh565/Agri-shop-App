@@ -2401,3 +2401,22 @@ Re-verification after the correction (same day, same QA project `bpybjrjenwccowv
 - Docs updated to the corrected model: `FARMER_MARKETPLACE_INTEGRATION.md` (§3.3 is now "the
   farmer's radius is the only one"), `feature-registry.json`, `FEATURE-MAP.md`, `FUTURE_VISION.md`
   §5, `DECISION_REGISTER.md` D23.
+
+### Scroll containment — fixed at the frame, sweep queued (2026-10-04)
+
+The reported defect: the Enter-PIN screen could scroll even with all of its content on screen. The
+cause was the app frame itself — `min-height: 100dvh` with `overflow-hidden` let a screen that was
+slightly taller than the viewport grow the page instead of the frame, so the whole app scrolled
+behind a short screen. `src/App.tsx` now pins the frame to `height: 100dvh` with
+`overflow-y: auto; overflow-x: hidden`, so the page can no longer scroll at all and a screen only
+scrolls inside the frame when it genuinely has more content than the window.
+
+Verified in the browser: `/admin/more` → `document.documentElement.scrollHeight ===
+clientHeight` (page cannot scroll) and the frame overflows internally as before; `/login/pin` →
+the frame does **not** overflow (`938 == 938`) and the auth column fits.
+
+**QUEUED — app-wide sweep, not done here.** Walk every screen at short viewports (auth, register,
+super-admin-era leftovers, standalone pages outside Admin/Employee layouts) and confirm: page
+scroll is never possible, and each screen's own scroll area is the frame or its documented inner
+container. This environment has **no sub-agent/background bot runtime**, so this note is the task
+record rather than an assigned worker; run it as its own prompt when picked up.

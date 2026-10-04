@@ -14,7 +14,6 @@ import {
   Compass,
   Plus,
   Store,
-  Check,
   type LucideIcon,
 } from "lucide-react";
 import StatusBar from "@/components/ui/StatusBar";
@@ -24,8 +23,6 @@ import ListCard from "@/components/ui/ListCard";
 import ListRow from "@/components/ui/ListRow";
 import Button from "@/components/ui/Button";
 import { SkeletonList } from "@/components/ui/Skeleton";
-import BranchEditSheet from "@/components/shop/BranchEditSheet";
-import DeleteTargetSheet, { branchDeleteSubject } from "@/components/shop/DeleteTargetSheet";
 import { useT, type I18nKey } from "@/lib/i18n";
 import { branchContextLabel } from "@/lib/branchContext";
 import { useShellBase } from "@/lib/useShellBase";
@@ -166,8 +163,6 @@ export default function MoreMenuPage() {
   const branchesError = useShopStore((s) => s.branchesError);
   const loadBranches = useShopStore((s) => s.loadBranches);
   const activeShopId = useShopStore((s) => s.activeShopId);
-  const [editing, setEditing] = useState<BranchSummary | null>(null);
-  const [deleting, setDeleting] = useState<BranchSummary | null>(null);
 
   /**
    * Read the branches when this screen is opened, not once at sign-in.
@@ -240,11 +235,9 @@ export default function MoreMenuPage() {
 
       {/* ── Branches ──
           The owner's own screen for the branches this account runs: the one it registered
-          with first (renameable, never deletable), then every branch added afterwards, each
-          with the two things management means — edit it, or remove it. A row is not a
-          navigation target: which branch you are WORKING in is the card above, and mixing
-          "open this branch" into the same row as "delete this branch" is how the wrong one
-          gets tapped. */}
+          with first (renameable, never deletable), then every branch added afterwards. Every
+          row opens that branch's own detail page, which is the one place all of it is edited
+          or removed — so the row itself carries no check and no Edit control, just the way in. */}
       <div className="px-4 pt-4" data-testid="branches-section">
         <ListCard section={t("branches.title")}>
           {branchesLoading && branches.length === 0 && (
@@ -295,35 +288,16 @@ export default function MoreMenuPage() {
                 isCurrent ? t("branches.mine") : branch.isMain ? t("branches.main") : undefined
               }
               meta={branchContext(branch)}
+              // The whole row is the way into the branch's detail page. Edit and delete are
+              // not squeezed in beside it: a row that is both a destination and a set of
+              // controls is how the wrong control gets tapped on the way to the page.
+              onClick={() => navigate(`${base}/more/branches/${branch.id}`)}
               trailing={
-                <div className="flex items-center gap-3 shrink-0">
-                  {isCurrent && (
-                    <Check size={16} style={{ color: "var(--brand-dark)" }} />
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => setEditing(branch)}
-                    data-testid={`branch-edit-action-${branch.id}`}
-                    className="text-12 font-bold ds-pressable"
-                    style={{ color: "var(--brand-dark)" }}
-                  >
-                    {t("branches.edit")}
-                  </button>
-                  {/* The main branch has no Delete at all: it is refused by the database,
-                      and a control that exists only to be refused is a lie about what is
-                      possible. Renaming it is how it is managed. */}
-                  {!branch.isMain && (
-                    <button
-                      type="button"
-                      onClick={() => setDeleting(branch)}
-                      data-testid={`branch-delete-action-${branch.id}`}
-                      className="text-12 font-bold ds-pressable"
-                      style={{ color: "var(--error)" }}
-                    >
-                      {t("branches.delete")}
-                    </button>
-                  )}
-                </div>
+                <ChevronRight
+                  size={14}
+                  style={{ color: "var(--text-secondary)", transform: isRtl ? "rotate(180deg)" : undefined }}
+                  className="shrink-0"
+                />
               }
             />
             );
@@ -345,23 +319,6 @@ export default function MoreMenuPage() {
         </ListCard>
 
       </div>
-
-      {/* Editing and deleting are one sheet each, mounted here rather than inside a row, so
-          there is exactly one of each and nothing is left half-open when the list changes. */}
-      {editing && (
-        <BranchEditSheet
-          branch={editing}
-          onClose={() => setEditing(null)}
-          onRenamed={() => setEditing(null)}
-        />
-      )}
-      {deleting && (
-        <DeleteTargetSheet
-          subject={branchDeleteSubject(deleting)}
-          onClose={() => setDeleting(null)}
-          onDeleted={() => setDeleting(null)}
-        />
-      )}
 
       {/* One titled card per group. The card title is the same section label the rest of the
           app uses above a list, so a group of rows here reads exactly like a group of rows

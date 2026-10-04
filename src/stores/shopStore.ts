@@ -240,6 +240,26 @@ interface ShopState {
   openSwitcher: (intent?: "list" | "create") => void;
   closeSwitcher: () => void;
 
+  /**
+   * What the owner has entered on step 1 of the setup flow and not yet turned into a shop.
+   *
+   * In the store, not in the sheet, and that is the whole point: the location picker is a page
+   * OUTSIDE the shell, so opening it unmounts the sheet that asked for it. A draft held in the
+   * sheet's own state dies with it, and the owner comes back from choosing a place to an empty
+   * name field. Here it survives the round trip, which is what makes "pick a location" a step in
+   * the form rather than an exit from it.
+   */
+  setupDraft: { name: string; place: PickedPlace | null };
+  setSetupDraft: (patch: Partial<{ name: string; place: PickedPlace | null }>) => void;
+
+  /**
+   * The branch whose edit sheet is open, by id — the same survival rule as `setupDraft`, for the
+   * Settings screen's own branch sheet. The id is stored rather than the row so the sheet always
+   * shows what the server currently says, and the row itself is read back off `branches`.
+   */
+  editingBranchId: string | null;
+  setEditingBranch: (id: string | null) => void;
+
   /** Every branch on this account, main first, with the counts the screen states. */
   branches: BranchSummary[];
   branchesLoading: boolean;
@@ -353,6 +373,12 @@ export const useShopStore = create<ShopState>((set, get) => ({
 
   openSwitcher: (intent = "list") => set({ switcherOpen: true, switcherIntent: intent }),
   closeSwitcher: () => set({ switcherOpen: false }),
+
+  setupDraft: { name: "", place: null },
+  setSetupDraft: (patch) => set((s) => ({ setupDraft: { ...s.setupDraft, ...patch } })),
+
+  editingBranchId: null,
+  setEditingBranch: (id) => set({ editingBranchId: id }),
 
   branches: [],
   branchesLoading: false,

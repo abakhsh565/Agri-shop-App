@@ -210,8 +210,16 @@ export const translations = {
     "location.outsidePakistan":   "That spot is outside Pakistan, so it cannot be saved. Pick a place inside Pakistan.",
     "location.unreachable":       "The map could not be reached. Check your connection and try again.",
     "location.clear":             "Remove location",
+    "location.notAdded":          "Not added yet",
+    "location.add":               "Add",
+    "location.edit":              "Edit",
+    "location.update":            "Update",
     "branches.locationLabel":     "Branch location",
-    "branches.locationFailed":    "The name was saved, but the location could not be. Open the picker and try again.",
+    "branches.removeLocation":   "Remove location",
+    "branches.removeLocationTitle": "Remove this location?",
+    "branches.removeLocationBody": "This branch will have no location, so it can no longer be found in the marketplace. You can add one again at any time.",
+    "branches.removeLocationYes":  "Yes, remove",
+    "branches.locationFailed":    "The location could not be saved. Open the picker and try again.",
 
     // Products
     "products.title":  "Products",
@@ -1518,6 +1526,11 @@ export const translations = {
     "branches.title":        "Branches",
     "branches.main":         "Main",
     "branches.mine":         "You are in this branch",
+    // The kind of branch, said where it is read: the shop the account started with is the
+    // Main branch and everything added afterwards is a Sub-branch. The owner can rename
+    // either — the kind is not a name, it is what the branch is.
+    "branches.mainBranch":   "Main branch",
+    "branches.subBranch":    "Sub-branch",
     // Counts, in the right number. Every one of these is regularly 1 in a new branch, and
     // "1 employees" is the kind of thing that makes an app feel unfinished.
     "branches.employeeOne":    "{count} employee",
@@ -1888,32 +1901,14 @@ export const translations = {
     "bizSettings.addCropPlaceholder": "Add custom crop...",
     "bizSettings.renameCrop": "Crop name",
 
-    // Platform admin — shop registration approval
-    "superAdmin.shopRequests": "Shop Requests",
-    "superAdmin.subtitle": "Review and manage registrations",
-    "superAdmin.logout": "Logout",
-    "superAdmin.shopRequest": "Shop Request",
-    "superAdmin.shop": "Shop",
-    "superAdmin.owner": "Owner",
-    "superAdmin.city": "City",
-    "superAdmin.tab.all": "All",
+    // Approve / reject wording, shared by the credit-request screens (the shop-request
+    // review dashboard is gone; registrations are handled in Supabase).
     "superAdmin.status.pending": "Pending",
-    "superAdmin.status.hold": "On Hold",
     "superAdmin.status.approved": "Approved",
     "superAdmin.status.rejected": "Rejected",
-    "superAdmin.noRequests": "No requests",
-    "superAdmin.noFilteredRequests": "No {tab} requests",
     "superAdmin.reject": "Reject",
     "superAdmin.approve": "Approve",
     "superAdmin.rejectRequest": "Reject Request",
-    "superAdmin.rejectReasonHint": "Optional: Provide a reason for rejection",
-    "superAdmin.rejectReasonPlaceholder": "e.g. Incomplete documents...",
-    "superAdmin.rejecting": "Rejecting...",
-    "superAdmin.confirmReject": "Confirm Reject",
-    "superAdmin.approvedToast": "{shop} approved!",
-    "superAdmin.rejectedToast": "{shop} rejected",
-    "superAdmin.approveFailed": "Failed to approve",
-    "superAdmin.rejectFailed": "Failed to reject",
 
     // Field placeholders and remaining screen copy
     "common.barcodePlaceholder": "e.g. AGS-HMSK-01",
@@ -2612,8 +2607,16 @@ export const translations = {
     "location.outsidePakistan":   "یہ جگہ پاکستان سے باہر ہے، اِس لیے محفوظ نہیں ہو سکتی۔ پاکستان کے اندر کوئی جگہ چُنیں۔",
     "location.unreachable":       "نقشے تک رسائی نہیں ہو سکی۔ کنکشن دیکھ کر دوبارہ کوشش کریں۔",
     "location.clear":             "جگہ ہٹا دیں",
+    "location.notAdded":          "ابھی شامل نہیں",
+    "location.add":               "شامل کریں",
+    "location.edit":              "تبدیل کریں",
+    "location.update":            "اپ ڈیٹ کریں",
     "branches.locationLabel":     "برانچ کی جگہ",
-    "branches.locationFailed":    "نام محفوظ ہو گیا، مگر جگہ محفوظ نہیں ہو سکی۔ نقشہ کھول کر دوبارہ کوشش کریں۔",
+    "branches.removeLocation":   "مقام ہٹائیں",
+    "branches.removeLocationTitle": "یہ مقام ہٹا دیا جائے؟",
+    "branches.removeLocationBody": "اس برانچ کا مقام نہیں رہے گا، اس لیے یہ مارکیٹ پلیس میں نہیں ملے گی۔ آپ کسی بھی وقت دوبارہ شامل کر سکتے ہیں۔",
+    "branches.removeLocationYes":  "ہاں، ہٹا دیں",
+    "branches.locationFailed":    "جگہ محفوظ نہیں ہو سکی۔ نقشہ کھول کر دوبارہ کوشش کریں۔",
 
     // Products
     "products.title":  "سامان",
@@ -3834,6 +3837,8 @@ export const translations = {
     "branches.title":        "شاخیں",
     "branches.main":         "مرکزی",
     "branches.mine":         "آپ اس شاخ میں ہیں",
+    "branches.mainBranch":   "مرکزی شاخ",
+    "branches.subBranch":    "ذیلی شاخ",
     "branches.employeeOne":    "{count} ملازم",
     "branches.employeeOther":  "{count} ملازمین",
     "branches.productOne":     "{count} شے",
@@ -4189,32 +4194,14 @@ export const translations = {
     "bizSettings.addCropPlaceholder": "نئی فصل لکھیں...",
     "bizSettings.renameCrop": "فصل کا نام",
 
-    // Platform admin — shop registration approval
-    "superAdmin.shopRequests": "دکان کی درخواستیں",
-    "superAdmin.subtitle": "رجسٹریشنز کا جائزہ لیں اور انتظام کریں",
-    "superAdmin.logout": "لاگ آؤٹ",
-    "superAdmin.shopRequest": "دکان کی درخواست",
-    "superAdmin.shop": "دکان",
-    "superAdmin.owner": "مالک",
-    "superAdmin.city": "شہر",
-    "superAdmin.tab.all": "تمام",
+    // Approve / reject wording, shared by the credit-request screens (the shop-request
+    // review dashboard is gone; registrations are handled in Supabase).
     "superAdmin.status.pending": "زیر التوا",
-    "superAdmin.status.hold": "روکے گئے",
     "superAdmin.status.approved": "منظور شدہ",
     "superAdmin.status.rejected": "مسترد شدہ",
-    "superAdmin.noRequests": "کوئی درخواست نہیں",
-    "superAdmin.noFilteredRequests": "{tab} میں کوئی درخواست نہیں",
     "superAdmin.reject": "مسترد کریں",
     "superAdmin.approve": "منظور کریں",
     "superAdmin.rejectRequest": "درخواست مسترد کریں",
-    "superAdmin.rejectReasonHint": "اختیاری: مسترد کرنے کی وجہ بتائیں",
-    "superAdmin.rejectReasonPlaceholder": "مثلاً دستاویزات نامکمل ہیں...",
-    "superAdmin.rejecting": "مسترد کیا جا رہا ہے...",
-    "superAdmin.confirmReject": "مسترد کرنے کی تصدیق",
-    "superAdmin.approvedToast": "{shop} منظور ہو گئی!",
-    "superAdmin.rejectedToast": "{shop} مسترد ہو گئی",
-    "superAdmin.approveFailed": "منظور نہیں ہو سکی",
-    "superAdmin.rejectFailed": "مسترد نہیں ہو سکی",
 
     // Field placeholders and remaining screen copy
     "common.barcodePlaceholder": "مثلاً AGS-HMSK-01",

@@ -15,15 +15,13 @@ import DeactivatedPage from "@/pages/auth/DeactivatedPage";
 import UnderReviewPage from "@/pages/auth/UnderReviewPage";
 import RejectedPage from "@/pages/auth/RejectedPage";
 import PermissionGuard from "@/components/auth/PermissionGuard";
+import LocationPickerPage from "@/pages/shared/LocationPickerPage";
 
 // Registration
 import RegisterPhonePage from "@/pages/register/RegisterPhonePage";
 import RegisterOTPPage from "@/pages/register/RegisterOTPPage";
 import RegisterShopDetailsPage from "@/pages/register/RegisterShopDetailsPage";
 import RegisterStatusPage from "@/pages/register/RegisterStatusPage";
-
-// Super Admin
-import SuperAdminDashboard from "@/pages/super-admin/SuperAdminDashboard";
 
 // Layout
 import EmployeeLayout from "@/components/layout/EmployeeLayout";
@@ -40,6 +38,7 @@ const AdminSalesListPage = React.lazy(() => import("@/pages/admin/sales/AdminSal
 const SaleDetailView = React.lazy(() => import("@/components/sales/SaleDetailView"));
 
 import MoreMenuPage from "@/pages/admin/more/MoreMenuPage";
+import BranchDetailPage from "@/pages/admin/more/BranchDetailPage";
 const EmployeesListPage = React.lazy(() => import("@/pages/admin/employees/EmployeesListPage"));
 const EmployeeDetailPage = React.lazy(() => import("@/pages/admin/employees/EmployeeDetailPage"));
 import CompaniesListPage from "@/pages/admin/companies/CompaniesListPage";
@@ -117,14 +116,15 @@ export const router = createBrowserRouter([
   { path: "/login/under-review", element: <UnderReviewPage /> },
   { path: "/login/rejected", element: <RejectedPage /> },
 
+  // Choosing a location is a process — search, check, retry — so it is a page of its own,
+  // opened by any field that needs a point. It returns the choice through the router state.
+  { path: "/pick-location", element: <LocationPickerPage /> },
+
   // Registration flow
   { path: "/register", element: <RegisterPhonePage /> },
   { path: "/register/otp", element: <RegisterOTPPage /> },
   { path: "/register/shop-details", element: <RegisterShopDetailsPage /> },
   { path: "/register/status", element: <RegisterStatusPage /> },
-
-  // Super Admin
-  { path: "/super-admin", element: <SuperAdminDashboard /> },
 
   {
     element: <ProtectedRoute allowedRoles={["admin"]} />,
@@ -136,6 +136,7 @@ export const router = createBrowserRouter([
       { path: "dashboard",  element: <AdminDashboardPage /> },
       { path: "assistant",  element: <AssistantPage /> },
       { path: "more",       element: <MoreMenuPage /> },
+      { path: "more/branches/:branchId", element: <BranchDetailPage /> },
       { path: "guide",      element: <AppGuidePage /> },
       { path: "search", element: <SearchPage /> },
 

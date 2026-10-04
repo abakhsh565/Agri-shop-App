@@ -82,7 +82,16 @@ export default function ShopSwitcherSheet() {
 
   // ── The flow's own state ─────────────────────────────────────────────────────
   const [step, setStep] = useState<Step>("list");
-  const [name, setName] = useState("");
+  /**
+   * The name and the place are held in the store, not in this component, because the location
+   * picker is a page outside the shell: opening it unmounts this sheet, and a draft kept here
+   * would be gone by the time the owner came back with a place. Read and written through these
+   * two so the rest of the sheet still talks about `name` and `place` in the ordinary way.
+   */
+  const setupDraft = useShopStore((s) => s.setupDraft);
+  const setSetupDraft = useShopStore((s) => s.setSetupDraft);
+  const name = setupDraft.name;
+  const setName = (value: string) => setSetupDraft({ name: value });
   /**
    * Where the new branch is — collected on step 1, next to its name.
    *
@@ -91,7 +100,8 @@ export default function ShopSwitcherSheet() {
    * created. The place is optional — a branch can be pinned later from its own screen — but the
    * field is here because this is when the owner knows.
    */
-  const [place, setPlace] = useState<PickedPlace | null>(null);
+  const place = setupDraft.place;
+  const setPlace = (value: PickedPlace | null) => setSetupDraft({ place: value });
   /** Which of this shop's roles the new one starts with. */
   const [selectedRoleIds, setSelectedRoleIds] = useState<Set<string>>(new Set());
   // Whether the flow's closing confirmation is up. The step is left at 3 behind it, so the
@@ -127,7 +137,7 @@ export default function ShopSwitcherSheet() {
    * not to Home: the sheet is mounted for the whole shell, so any admin screen can host it.
    * Read back by the effect below.
    */
-  function returnPathTo(target: 2 | 3): string {
+  function returnPathTo(target: 1 | 2 | 3): string {
     const params = new URLSearchParams(location.search);
     params.set("setupFlow", String(target));
     return `${location.pathname}?${params.toString()}`;
@@ -152,22 +162,28 @@ export default function ShopSwitcherSheet() {
     flowSeeded.current = false;
     knownRoleIds.current = new Set();
     setName("");
+    setPlace(null);
     setSelectedRoleIds(new Set());
     setSuccessOpen(false);
     setStep(1);
   }, [open, switcherIntent]);
 
   /**
-   * Coming back from a create screen: the address says which step, so reopen the sheet there.
+   * Coming back from a screen the flow handed off to: the address says which step, so reopen the
+   * sheet there.
+   *
+   * Step 1 joins them because choosing a location is a hand-off too. The picker is a page of its
+   * own outside the shell, so it takes the sheet down with it; without the marker the owner would
+   * return to the plain shop list, having lost the name they had already typed.
    *
    * Deliberately does nothing when the parameter is absent — that is the state on the screen
    * the owner just went to, and closing the sheet on the way there was a decision, not an
    * accident to be undone.
    */
   useEffect(() => {
-    if (flowStep !== "2" && flowStep !== "3") return;
+    if (flowStep !== "1" && flowStep !== "2" && flowStep !== "3") return;
     openSheet();
-    setStep(flowStep === "2" ? 2 : 3);
+    setStep(flowStep === "1" ? 1 : flowStep === "2" ? 2 : 3);
   }, [flowStep, openSheet]);
 
   /** Entering step 2: this shop's roles, all of them ticked to begin with. */
@@ -224,12 +240,30 @@ export default function ShopSwitcherSheet() {
     navigate(to, state === undefined ? undefined : { state });
   }
 
+  /**
+   * Walking back to the list while the sheet stays up.
+   *
+   * The marker says "come back to step N", and step 1 now sets it too — it is how a chosen place
+   * gets the owner back to this form. Once the owner has stepped back off the form there is no
+   * step to return to, so the marker goes with them; left behind, it would pop the sheet open at
+   * some later moment they merely happened to arrive on that URL.
+   */
+  function backToList() {
+    setStep("list");
+    const params = new URLSearchParams(location.search);
+    if (!params.has("setupFlow")) return;
+    params.delete("setupFlow");
+    const qs = params.toString();
+    navigate(`${location.pathname}${qs ? `?${qs}` : ""}`, { replace: true });
+  }
+
   /** Leaving the flow for good: forget the step and take the marker out of the address. */
   function endFlow() {
     flowSeeded.current = false;
     knownRoleIds.current = new Set();
     setStep("list");
     setName("");
+    setPlace(null);
     setSelectedRoleIds(new Set());
     setSuccessOpen(false);
     close();
@@ -248,6 +282,7 @@ export default function ShopSwitcherSheet() {
     knownRoleIds.current = new Set();
     setStep("list");
     setName("");
+    setPlace(null);
     setSelectedRoleIds(new Set());
     setPendingShopId(null);
     setSuccessOpen(false);
@@ -414,6 +449,7 @@ export default function ShopSwitcherSheet() {
                     flowSeeded.current = false;
                     knownRoleIds.current = new Set();
                     setName("");
+                    setPlace(null);
                     setSelectedRoleIds(new Set());
                     setStep(1);
                   }}
@@ -451,13 +487,17 @@ export default function ShopSwitcherSheet() {
                 />
               </div>
               {/* The location, on the same step as the name: both answer "which branch is this".
-                  Picked on a map, never typed — see LocationField. */}
+                  Picked on a map, never typed — see LocationField. It opens as a page of its own
+                  here for the same reason it does on the branch screen: the search and its result
+                  list are a process, and the step that sent us here says so in the address, which
+                  is how this sheet is reopened with the name still typed. */}
               <div className="mt-4">
                 <LocationField
+                  pagePicker
+                  returnTo={returnPathTo(1)}
                   value={place}
                   onChange={setPlace}
                   label={t("branches.locationLabel")}
-                  hint={t("location.notTyped")}
                   testId="new-branch-location"
                 />
               </div>
@@ -473,7 +513,7 @@ export default function ShopSwitcherSheet() {
               </Button>
               <button
                 type="button"
-                onClick={() => setStep("list")}
+                onClick={backToList}
                 data-testid="setup-back-1"
                 className="mt-2 w-full h-10 text-12 ds-pressable"
                 style={{ color: "var(--text-secondary)" }}
