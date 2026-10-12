@@ -512,7 +512,10 @@ export async function verifyOTPAndResolveUser(
   if (lookupErr) return { status: "error", message: lookupErr!.message };
 
   if (existing) {
-    const row = existing as UserRow;
+    // `let`, not `const`: 0201 scopes this RPC's answer to the identity the caller has proved, so
+    // the pre-session read below is the door answer only, and the full profile is re-read once the
+    // session exists (see the demo bridge further down).
+    let row = existing as UserRow;
     // Deactivation is decided from the profile alone — no session is minted for a
     // closed account.
     if (!row.is_active) return { status: "deactivated" };
@@ -536,6 +539,21 @@ export async function verifyOTPAndResolveUser(
       return session.error === LOGIN_NOT_READY
         ? { status: "login_not_ready" }
         : { status: "error", message: SESSION_SETUP_FAILED };
+    }
+
+    // 0201 answers an unauthenticated caller with `{is_active, role}` and nobody else with more, so
+    // a profile read taken BEFORE a session existed is the door answer rather than the account. The
+    // door answer carries no `id` (the full row always does — it is the primary key), which makes
+    // that the exact test for "read it again now that the session exists". Demo mode is where this
+    // happens today: it cannot open a session from phone OTP (that is why the bridge above exists),
+    // so its lookup ran before any session did. Live mode reaches here with the session `verifyOtp`
+    // just opened, so its read was already the full profile and this is a no-op. Without it the
+    // demoed sign-in would build its user from the door answer: no id, no tenant, and every screen
+    // behind it empty for no visible reason.
+    if (row.id === undefined) {
+      const { data: fullProfile } = await supabase
+        .rpc("lookup_user_by_phone", { p_phone: e164 });
+      if (fullProfile) row = fullProfile as UserRow;
     }
 
     void touchLogin(row.id, !row.first_login_at);
