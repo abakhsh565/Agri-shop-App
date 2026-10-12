@@ -10,6 +10,7 @@ import { useRolesStore } from "@/stores/rolesStore";
 import { useNotificationStore } from "@/stores/notificationStore";
 import { useCartStore } from "@/stores/cartStore";
 import { getPendingCount, syncPendingOperations } from "@/lib/offlineQueue";
+import { clearAllCachedData } from "@/lib/localCache";
 import { clearNav } from "@/lib/navContext";
 import { setShopRolesByShop } from "@/lib/shopRoles";
 import type { PickedPlace } from "@/lib/geo";
@@ -102,8 +103,8 @@ export type ShopErrorCode =
   | "denied";
 
 /**
- * The ways renaming or deleting a branch can be refused, named so the sheet can say the
- * right sentence. The database decides; these are its answers in the screen's vocabulary.
+ * The ways renaming or removing a branch can be refused, named so the sheet can say the right
+ * sentence. The database decides; these are its answers in the screen's vocabulary.
  */
 export type BranchErrorCode =
   | "name_required"
@@ -115,6 +116,8 @@ export type BranchErrorCode =
   | "denied"
   | "main_branch"
   | "last_branch"
+  /** People still have access to the branch, so closing it would silently rewrite their scope. */
+  | "has_staff"
   | "not_authenticated"
   | "save_failed"
   | "delete_failed";
@@ -124,18 +127,24 @@ export interface ShopActionResult {
   code?: ShopErrorCode;
 }
 
-/** What a branch action returns, including what the database actually erased. */
+/** What a branch action returns, including what the database actually did. */
 export interface BranchActionResult {
   ok: boolean;
   code?: BranchErrorCode;
-  /** Only on a successful delete: what went, and where the account lands afterwards. */
-  deleted?: {
+  /**
+   * Only on a successful archive: which branch closed, and where the account works now.
+   *
+   * This replaced an `erased: { products, customers, sales, salesTotal }` payload that only the
+   * revoked tenant-purge RPC ever returned. Archiving erases nothing — the branch, its rows and
+   * its history all stay, and `archive_operating_branch` answers with `history_preserved: true` —
+   * so a result shape offering counts of erased records would describe something that cannot
+   * happen. `name` is captured before the reload, because after it the archived branch is
+   * correctly absent from the list.
+   */
+  archived?: {
     name: string;
     /** The name of the branch the account is working in now. */
     fallbackName: string;
-    employeesKept: number;
-    employeesRemoved: number;
-    erased: { products: number; customers: number; sales: number; salesTotal: number };
   };
 }
 
@@ -197,6 +206,7 @@ function branchPlaceFrom(row: BranchRow): PickedPlace | null {
  */
 function branchCodeFrom(message: string, fallback: BranchErrorCode): BranchErrorCode {
   const text = message ?? "";
+  if (/BRANCH_HAS_STAFF/i.test(text)) return "has_staff";
   if (/MAIN_BRANCH/i.test(text)) return "main_branch";
   if (/LAST_BRANCH/i.test(text)) return "last_branch";
   if (/BRANCH_NOT_FOUND/i.test(text)) return "not_found";
@@ -296,6 +306,15 @@ interface ShopState {
    * success the account has already been moved to another branch by the server, so the
    * caller only has to reload and adopt the answer.
    */
+  /**
+   * Archive a branch — the only removal path the database offers.
+   *
+   * Owner-only and tenant-scoped, refused without a reason, refusing the main branch, an
+   * account's last branch and a branch whose staff still have access. Nothing is erased: the
+   * branch stops accepting new work and every record it holds stays.
+   */
+  archiveBranch: (branchId: string, reason: string) => Promise<BranchActionResult>;
+  /** Kept as an explicit refusal for legacy consumers. Never call a tenant purge. */
   deleteBranch: (shopId: string, reason?: string, feedback?: string) => Promise<BranchActionResult>;
   /** Confirm the active shop with the server and list the caller's shops. */
   load: () => Promise<void>;
@@ -482,47 +501,45 @@ export const useShopStore = create<ShopState>((set, get) => ({
     return { ok: true };
   },
 
-  deleteBranch: async (shopId, reason, feedback) => {
-    const target = get().branches.find((b) => b.id === shopId);
+  archiveBranch: async (branchId, reason) => {
+    // Nothing else in flight: an archive reloads the branch list and re-points the account, and
+    // racing that against a switch or a pending sync is how a screen ends up reading a branch
+    // that has just closed.
+    if (getPendingCount() > 0 || get().switching) return { ok: false, code: "denied" };
 
-    const { data, error } = await supabase.rpc("delete_branch", {
-      p_shop_id: shopId,
-      p_reason: reason ?? null,
-      p_feedback: feedback ?? null,
+    // Read before the reload: `load` replaces the branch list, and a branch that has just been
+    // archived is correctly absent from it — but the person still has to be told which branch they
+    // just closed, so the name is captured while it is still there.
+    const archivedName = get().branches.find((b) => b.id === branchId)?.name ?? "";
+
+    const { data, error } = await supabase.rpc("archive_operating_branch", {
+      p_branch_id: branchId,
+      p_reason: reason.trim(),
     });
     if (error || !data?.success) {
-      return { ok: false, code: branchCodeFrom(error?.message ?? "", "delete_failed") };
+      return { ok: false, code: branchCodeFrom(error?.message ?? "", "save_failed") };
     }
 
-    const fallbackId: string | null = data.fallback_shop_id ?? null;
-    const fallbackName =
-      get().shops.find((s) => s.id === fallbackId)?.name
-      ?? get().branches.find((b) => b.id === fallbackId)?.name
-      ?? "";
-
-    // The server has already moved this account into another branch, and the shop this
-    // device was reading no longer exists. Reload first, so the app is looking at a shop
-    // that is really there before any screen redraws over the deleted one's rows — and
-    // `load` adopts the answer, which is what drops the removed branch's cached rows.
+    // The server has already moved this account into another branch. Drop the closed branch's
+    // cached rows, reload, and adopt the answer, so no screen redraws over rows that no longer
+    // belong to the branch being worked in.
+    clearAllCachedData();
+    resetShopScopedStores();
     await get().load();
     await get().loadBranches();
 
-    return {
-      ok: true,
-      deleted: {
-        name: target?.name ?? data.name ?? "",
-        fallbackName,
-        employeesKept: Number(data.employees_kept ?? 0),
-        employeesRemoved: Number(data.employees_removed ?? 0),
-        erased: {
-          products: Number(data.erased?.products ?? 0),
-          customers: Number(data.erased?.customers ?? 0),
-          sales: Number(data.erased?.sales ?? 0),
-          salesTotal: Number(data.erased?.sales_total ?? 0),
-        },
-      },
-    };
+    // The RPC answers with `fallback_branch_id` — the branch the account was moved into — not with
+    // a name. Resolved here, from the freshly loaded list, so no screen has to derive it.
+    const fallbackId: string | null = data.fallback_branch_id ?? null;
+    const fallbackName =
+      get().branches.find((b) => b.id === fallbackId)?.name
+      ?? get().shops.find((s) => s.id === fallbackId)?.name
+      ?? "";
+    return { ok: true, archived: { name: archivedName, fallbackName } };
   },
+
+  // Backward-compatible refusal for legacy consumers. Never call a tenant purge.
+  deleteBranch: async () => ({ ok: false, code: "denied" }),
 
   /**
    * Ask the database which shop this account is working in, and take its answer.

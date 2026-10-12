@@ -2420,3 +2420,39 @@ super-admin-era leftovers, standalone pages outside Admin/Employee layouts) and 
 scroll is never possible, and each screen's own scroll area is the frame or its documented inner
 container. This environment has **no sub-agent/background bot runtime**, so this note is the task
 record rather than an assigned worker; run it as its own prompt when picked up.
+
+---
+
+## Commit: the sheet's branch half archives — the last refused call out of the release source (2026-10-13)
+
+**Why this commit exists.** The committed source reached two functions the deployed schema refuses.
+`delete_branch` was reachable from a screen: the four-step confirmation sheet, opened by the Settings
+row "Delete branch". It failed closed (`permission denied`, nothing destroyed), but the release source
+shipped a branch-removal path that could not work and described an erasure that cannot happen.
+
+**What it contains.**
+
+| file | change |
+|---|---|
+| `src/stores/shopStore.ts` | `archiveBranch` calls `archive_operating_branch` and returns `{ ok, archived: { name, fallbackName } }`; `BranchActionResult.deleted` — the payload only the revoked purge returned — is replaced by `archived`; `deleteBranch` is kept as an explicit refusal so a straggler cannot reach a purge. |
+| `src/components/shop/DeleteTargetSheet.tsx` | The branch half archives: it will not leave the reason step without a reason, reads `result.archived`, and answers `main_branch` / `last_branch` / `has_staff` / `not_found` / `denied` / `not_authenticated` each in its own words. |
+| `src/lib/i18n.ts` | All 54 `branches.delete.*` strings in EN and UR rewritten to describe archiving, plus `branches.delete.errNotFound`, `branches.delete.errStaff` and the three `account.delete.*` failure strings the shared sheet reaches through `${P}.…` — dynamic keys `i18nCoverage` cannot see. |
+| `tests/unit/branchArchiveSheetGuard.test.ts` | New permanent guard (6/6), proven non-vacuous by injection: a legacy `deleteBranch` call, an "…will be deleted" string, or a missing refusal key each fail it. |
+| `feature-registry.json` | The archive rule, the guard, and two evidence entries — VALID for the source and copy contract, BLOCKED for the live legs. |
+
+**Evidence, run against this commit's own tree** (a worktree at this base, not the working tree the
+patch was taken from): guard **6/6** · `branchIdentityBoundary` **33/33** (PGlite, real Postgres
+semantics) · `i18nCoverage` **9/9** · `i18nParity` **3/3** · `microcopy` **8/8** ·
+`featureRegistryGuard` **14/14** · `tsc --noEmit` **exit 0** · `npm run build` **exit 0**.
+
+**Deliberately adapted to this base.** The store hunks are the archive action and the result shape,
+not the surrounding branch-removal rework that is still in flight on top of this commit; the sheet
+states its staff refusal in its own namespace rather than depending on copy that is not committed
+yet; and the archive body calls `loadBranches()` as well as `load()`, because at this base that is
+what refreshes the list the archived branch has to disappear from.
+
+**Still BLOCKED.** The live legs (create → rename → archive in a browser, fallback selection,
+archived state after a reload) and the RBAC/branch gate need an authorized QA window.
+`tests/integration/accountDeletion.test.ts` still calls `delete_branch` as a fixture step, so that
+lane is red against the deployed schema for that reason — pre-existing, and not fixable without the
+same window. No APK was built; production was not touched.
