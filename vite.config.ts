@@ -4,11 +4,12 @@ import tailwindcss from '@tailwindcss/vite'
 import path from 'node:path'
 
 import { readEnvironmentInput, resolveEnvironment } from './src/lib/environmentContract'
+import { localStackUnreachableReason } from './src/lib/localStackHealth'
 
 import siteConfiguration from './.figma/make/site.json'
 
 // Vite config — https://vitejs.dev/config/
-export default defineConfig(({ mode }) => {
+export default defineConfig(({ mode, isPreview }) => {
   // .figma/make/deploy-preview passes `--mode development` for cached-preview builds.
   const emitSourcemaps = mode === 'development'
 
@@ -21,7 +22,7 @@ export default defineConfig(({ mode }) => {
     plugins: [
       react(),
       tailwindcss(),
-      environmentGate(mode),
+      environmentGate(mode, isPreview === true),
       figmaSiteConfiguration(siteConfiguration),
       figmaErrorOverlayReplay(),
       figmaReactRefreshBoundaryFallback(),
@@ -54,14 +55,14 @@ export default defineConfig(({ mode }) => {
  * in the first place. Failing here means the broken artifact is never created, so nothing can
  * ship it by accident afterwards.
  *
- * Only `apply: 'build'`. The dev server stays usable while developing, and is protected by the
- * same rules at runtime.
+ * The gate runs for BOTH commands. A build must refuse to produce a mis-targeted artifact, and
+ * the dev server must refuse to start mis-targeted or with the local stack stopped.
  */
-function environmentGate(mode: string): Plugin {
+function environmentGate(mode: string, isPreview: boolean): Plugin {
   return {
     name: 'agrishop-environment-gate',
-    apply: 'build',
-    configResolved() {
+    // No `apply` filter: build AND serve both need the decision below.
+    async configResolved(config) {
       // `loadEnv` is exactly what the app's own `import.meta.env` is built from, so the build is
       // judged on the same values the bundle will carry.
       const env = loadEnv(mode, process.cwd(), 'VITE_')
@@ -69,9 +70,9 @@ function environmentGate(mode: string): Plugin {
 
       if (!verdict.ok) {
         throw new Error(
-          `\n\n[ENVIRONMENT GATE] Refusing to build.\n\n` +
+          `\n\n[ENVIRONMENT GATE] Refusing to ${config.command === 'build' ? 'build' : 'start the server'}.\n\n` +
             `  ${verdict.code}\n  ${verdict.message}\n\n` +
-            `  Build mode: ${mode}\n` +
+            `  ${config.command === 'build' ? 'Build' : 'Dev server'} mode: ${mode}\n` +
             `  VITE_APP_ENV: ${env.VITE_APP_ENV ?? '(unset)'}\n` +
             `  VITE_OTP_DELIVERY: ${env.VITE_OTP_DELIVERY ?? '(unset)'}\n` +
             `  VITE_SUPABASE_URL: ${env.VITE_SUPABASE_URL ?? '(unset)'}\n\n` +
@@ -80,8 +81,39 @@ function environmentGate(mode: string): Plugin {
         )
       }
 
+      // Ordinary development — Vite mode "development", what npm run dev uses — is the stack on
+      // this machine, and nothing else. The contract above already refuses a *development*
+      // configuration pointed at a hosted project; these rules close the two remaining shapes:
+      // a default-mode server explicitly configured as another environment, and a local stack
+      // that is not running.
+      if (config.command === 'serve' && !isPreview && mode === 'development') {
+        if (verdict.environment !== 'development') {
+          throw new Error(
+            `\n\n[ENVIRONMENT GATE] Refusing to start the development server.\n\n` +
+              `  This is Vite's ordinary development mode, but the resolved environment is\n` +
+              `  "${verdict.environment}" (project ${verdict.projectId}). Ordinary development\n` +
+              `  serves only the local Supabase stack on this machine.\n\n` +
+              `  To serve QA on purpose, name it:  npx vite --mode qa\n` +
+              `  Runbook: docs/LOCAL_DEVELOPMENT.md\n\n`,
+          )
+        }
+        const unreachable = await localStackUnreachableReason(env.VITE_SUPABASE_URL ?? '')
+        if (unreachable) {
+          throw new Error(
+            `\n\n[ENVIRONMENT GATE] Refusing to start the development server.\n\n` +
+              `  The local Supabase stack is not answering: ${unreachable}\n` +
+              `  Expected it at ${env.VITE_SUPABASE_URL ?? '(unset)'} (VITE_SUPABASE_URL).\n\n` +
+              `  Start it with:   npm run local:db -- up\n` +
+              `  First run only:  npm run local:db -- init  &&  npm run local:db -- seed\n` +
+              `  Runbook: docs/LOCAL_DEVELOPMENT.md\n\n` +
+              `  Ordinary development reads and writes only the stack on this machine; it will\n` +
+              `  not fall back to staging or production.\n\n`,
+          )
+        }
+      }
+
       console.log(
-        `[EnvGuard] building ${verdict.environment.toUpperCase()} → ${verdict.projectId} ` +
+        `[EnvGuard] ${config.command === 'build' ? 'building' : 'serving'} ${verdict.environment.toUpperCase()} → ${verdict.projectId} ` +
           `(otp: ${verdict.otpDelivery}${verdict.credentialsCrossChecked ? ', key verified' : ''})`,
       )
     },
