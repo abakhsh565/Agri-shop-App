@@ -148,6 +148,27 @@ describe('the destination stays write-only and environment-tagged in the schema'
     expect(sql).toMatch(/FOR\s+INSERT\s+TO\s+anon,\s*authenticated/i);
   });
 
+  test('retention is an authorized function, not a policy a client could use', () => {
+    // 0203 made the table write-only; 0204 must not quietly undo that to get pruning. The two
+    // requirements are met by different mechanisms on purpose.
+    const retention = readFileSync(
+      join(process.cwd(), 'supabase/migrations/0204_error_records_are_pruned_by_an_authorized_function_only.sql'),
+      'utf8',
+    );
+    expect(retention).toMatch(/SECURITY DEFINER/);
+    expect(retention).toMatch(/REVOKE ALL ON FUNCTION public\.prune_client_error_events\(integer\) FROM PUBLIC/i);
+    expect(retention).toMatch(/REVOKE ALL ON FUNCTION public\.prune_client_error_events\(integer\) FROM anon/i);
+    expect(retention).toMatch(/GRANT EXECUTE ON FUNCTION public\.prune_client_error_events\(integer\) TO service_role/i);
+    // Retention must never widen the read surface: no new policy, and no select grant to a client.
+    expect(retention).not.toMatch(/CREATE POLICY/i);
+    expect(retention).not.toMatch(/GRANT\s+SELECT/i);
+    // The delete is bounded. A `DELETE FROM public.client_error_events` with no WHERE would wipe the
+    // table on the first call, so the cutoff has to be in the same statement.
+    const deletes = retention.match(/DELETE FROM public\.client_error_events[^;]*/gi) ?? [];
+    expect(deletes.length).toBeGreaterThan(0);
+    for (const statement of deletes) expect(statement).toMatch(/WHERE occurred_at </);
+  });
+
   test('and the file the app writes to is the one the guards just described', () => {
     expect(sql).toContain('CREATE TABLE IF NOT EXISTS public.client_error_events');
     // A rename would break the module silently at runtime; name it here so it breaks loudly instead.
