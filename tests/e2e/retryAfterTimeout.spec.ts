@@ -15,26 +15,38 @@
  * QA database only.
  */
 import { test, expect } from '@playwright/test';
-import { QA_IDS, execSql, setupFixtures, cleanupFixtures, injectAdminAuth } from './helpers';
+import {
+  QA_IDS,
+  execSql,
+  setupFixtures,
+  cleanupFixtures,
+  claimNew,
+  snapshotIds,
+  injectAdminAuth,
+} from './helpers';
 
-const BASE_URL = 'http://localhost:5173';
+const BASE_URL = process.env.QA_APP_URL || 'http://localhost:5173';
 
 test.describe('Browser retry after a timed-out write', () => {
   test.beforeAll(async () => {
     await setupFixtures();
-    await execSql(`DELETE FROM sale_items WHERE sale_id IN (SELECT id FROM sales WHERE customer_id = '${QA_IDS.customerA}')`);
-    await execSql(`DELETE FROM sales WHERE customer_id = '${QA_IDS.customerA}'`);
-    await execSql(`DELETE FROM sale_submissions WHERE shop_id = '${QA_IDS.shop}'`);
     await execSql(`UPDATE product_variants SET stock_qty = 100 WHERE id = '${QA_IDS.variantA}'`);
     await execSql(
       `UPDATE customers SET outstanding_balance = 30000, total_purchases = 80000, total_paid = 50000 WHERE id = '${QA_IDS.customerA}'`
     );
+
+    // OWNERSHIP: the three deletes that used to run here removed every sale of the shared fixture
+    // customer and every sale submission of the shared shop — other runs' rows. The premise this
+    // lane needs ("this fixture has no sale yet") is asserted instead, so a dirty database makes
+    // the lane fail loudly rather than letting it delete the difference.
+    const [sales] = await execSql(
+      `SELECT count(*)::int AS n FROM sales WHERE customer_id = '${QA_IDS.customerA}'`,
+    );
+    expect(sales.n, 'retryAfterTimeout needs a sale-free fixture customer').toBe(0);
   });
 
   test.afterAll(async () => {
-    await execSql(`DELETE FROM sale_items WHERE sale_id IN (SELECT id FROM sales WHERE customer_id = '${QA_IDS.customerA}')`).catch(() => {});
-    await execSql(`DELETE FROM sales WHERE customer_id = '${QA_IDS.customerA}'`).catch(() => {});
-    await execSql(`DELETE FROM sale_submissions WHERE shop_id = '${QA_IDS.shop}'`).catch(() => {});
+    // The sale this lane creates is claimed by id; its items and submission follow by FK.
     await cleanupFixtures();
   });
 
@@ -75,6 +87,9 @@ test.describe('Browser retry after a timed-out write', () => {
       await route.continue();
     });
 
+    // Snapshot before the FIRST attempt: the timed-out write is the one that creates the row.
+    const salesIdsBefore = await snapshotIds(`SELECT id FROM sales WHERE customer_id = '${QA_IDS.customerA}'`);
+
     await page.getByRole('button', { name: /complete sale/i }).click();
 
     // The write landed even though the page saw a failure.
@@ -103,6 +118,8 @@ test.describe('Browser retry after a timed-out write', () => {
     // The database is the judge: one sale, one line, stock and totals moved once.
     const sales = await execSql(`SELECT id, sale_number, total_amount FROM sales WHERE customer_id = '${QA_IDS.customerA}'`);
     expect(sales.length, 'the retry wrote a second sale').toBe(1);
+
+    await claimNew('sales', `SELECT id FROM sales WHERE customer_id = '${QA_IDS.customerA}'`, salesIdsBefore);
     const items = await execSql(`SELECT count(*)::int AS n FROM sale_items WHERE sale_id = '${sales[0].id}'`);
     expect(Number(items[0].n), 'the sale carries one line').toBe(1);
     const submissions = await execSql(`SELECT count(*)::int AS n FROM sale_submissions WHERE idempotency_key = '${keys[0]}'`);

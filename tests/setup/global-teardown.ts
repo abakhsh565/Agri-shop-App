@@ -51,6 +51,9 @@ function qaDatabaseUrl(): string {
 // again.
 const KEEP_PHONES = ['923001234567', '923001122334', '923009999999', '923008888888'];
 
+/** The only project this teardown may delete from. Must match environments.json / lib.mjs. */
+const QA_PROJECT_REF = 'bpybjrjenwccowvtrevu';
+
 export async function setup() {
   // No-op before tests
 }
@@ -83,6 +86,30 @@ export async function teardown() {
   if (!databaseUrl) {
     console.log('[QA Cleanup] skipped — QA database credentials are not configured');
     return;
+  }
+
+  // REFUSE ANY TARGET THAT IS NOT QA — the same refusal `scripts/clean-test-data.mjs` performs.
+  //
+  // This teardown deletes every row of 34 tables. It read its URL from the environment and checked
+  // nothing about where that URL pointed, so a stray `QA_DATABASE_URL` (or a prod DB_HOST exported
+  // into the shell) was one `QA_CLEAN_AFTER_RUN=1` away from emptying a hosted project. The sibling
+  // script has refused a non-QA target for exactly this reason; a cleaner that cannot name its
+  // target is the bug the targeting work was about.
+  const targetRef = (() => {
+    try {
+      const user = decodeURIComponent(new URL(databaseUrl).username || '');
+      // Supabase pooler users look like `postgres.<project-ref>`.
+      return user.split('.')[1] ?? '';
+    } catch {
+      return '';
+    }
+  })();
+  if (targetRef !== QA_PROJECT_REF) {
+    throw new Error(
+      `[QA Cleanup] refusing to run: the configured database is project "${targetRef || '(none)'}", ` +
+        `not the QA project ${QA_PROJECT_REF}. Point QA_DATABASE_URL at QA, or clean it with ` +
+        '`node scripts/clean-test-data.mjs` (which performs the same refusal).',
+    );
   }
 
   try {
@@ -128,10 +155,13 @@ export async function teardown() {
       }
     }
     
-    // Remove test users (keep seed accounts)
+    // Remove test users (keep seed accounts). Failures are COLLECTED, never swallowed: a user
+    // deletion that silently failed leaves an account behind that the next run then trips over.
     try {
       await c.query(`DELETE FROM users WHERE phone NOT IN ('${KEEP_PHONES.join("','")}')`);
-    } catch {}
+    } catch (e: unknown) {
+      failures.push(`users (non-fixture): ${(e as Error).message}`);
+    }
     
     // Remove orphaned auth.users
     try {
@@ -143,7 +173,9 @@ export async function teardown() {
           await c.query('DELETE FROM auth.users WHERE id = $1', [au.id]);
         }
       }
-    } catch {}
+    } catch (e: unknown) {
+      failures.push(`auth.users (orphans): ${(e as Error).message}`);
+    }
     
     // Verify instead of assuming: report the true post-run state, and be loud when
     // business rows survived. A silent "cleaned" here is worse than a failing run,
@@ -164,11 +196,15 @@ export async function teardown() {
 
     await c.end();
 
-    if (failures.length) {
-      console.error(`[QA Cleanup] ${failures.length} delete failure(s): ${failures.join('; ')}`);
-    }
-    if (leftover.length) {
-      throw new Error(`[QA Cleanup] QA is NOT clean after the run: ${leftover.join(', ')}`);
+    // Both halves fail the run. Printing a delete failure and carrying on was the other half of the
+    // "cleaned" lie this file was fixed for: the rows that survived were exactly the ones whose
+    // delete had failed.
+    if (failures.length || leftover.length) {
+      const parts = [
+        failures.length ? `${failures.length} delete failure(s): ${failures.join('; ')}` : '',
+        leftover.length ? `rows survived: ${leftover.join(', ')}` : '',
+      ].filter(Boolean);
+      throw new Error(`[QA Cleanup] QA is NOT clean after the run — ${parts.join(' | ')}`);
     }
     console.log('[QA Cleanup] Database cleaned after test run (verified: 0 business rows)');
   } catch (e) {

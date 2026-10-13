@@ -22,9 +22,17 @@
  * branch is returned to exactly the state it was found in: no pin, marketplace off.
  */
 import { test, expect } from '@playwright/test';
-import { QA_IDS, execSql, setupFixtures, cleanupFixtures, injectAdminAuth } from './helpers';
+import {
+  QA_IDS,
+  execSql,
+  setupFixtures,
+  cleanupFixtures,
+  ownership,
+  trackOwned,
+  injectAdminAuth,
+} from './helpers';
 
-const BASE_URL = 'http://localhost:5173';
+const BASE_URL = process.env.QA_APP_URL || 'http://localhost:5173';
 const RUN = Date.now().toString(36).toUpperCase();
 const PRODUCT_NAME = `QA Marketplace ${RUN}`;
 
@@ -80,11 +88,13 @@ test.describe('Farmer marketplace listing — the owner switches', () => {
   });
 
   test.afterAll(async () => {
-    await execSql(`DELETE FROM inventory_movements WHERE product_id IN ('${BRANCH_PRODUCT}', (SELECT id FROM products WHERE name = '${PRODUCT_NAME}' LIMIT 1))`).catch(() => undefined);
-    await execSql(`DELETE FROM product_variants WHERE id = '${BRANCH_VARIANT}'`).catch(() => undefined);
-    await execSql(`DELETE FROM product_variants WHERE product_id IN (SELECT id FROM products WHERE name LIKE '${PRODUCT_NAME}%')`).catch(() => undefined);
-    await execSql(`DELETE FROM products WHERE id = '${BRANCH_PRODUCT}'`).catch(() => undefined);
-    await execSql(`DELETE FROM products WHERE name LIKE '${PRODUCT_NAME}%'`).catch(() => undefined);
+    // CLEANUP IS OWNERSHIP-BASED NOW. The five deletes that used to run here were scoped by a NAME
+    // (`WHERE name LIKE 'QA Marketplace …%'`) and by a hand-written join order, with every error
+    // swallowed. The products this lane creates are registered by id the moment they exist — the
+    // form-created one from the id the database returns, the branch fixture from its fixed id — and
+    // the registry removes their variants and stock movements through `product_id` before the
+    // product itself. `restoreShop` stays because it RESTORES state (no pin, switch off) rather
+    // than deleting a record that was never this lane's.
     await restoreShop();
     await cleanupFixtures();
   });
@@ -122,6 +132,10 @@ test.describe('Farmer marketplace listing — the owner switches', () => {
     expect(created[0].marketplace_listed_at, 'listing records when it happened').not.toBeNull();
 
     const productId = created[0].id as string;
+    // OWNED, immediately after creation (and before the rename below, which would make the name
+    // marker useless): the product the form created. Its packs and any opening stock movement
+    // follow `product_id` in the cleanup graph.
+    await trackOwned(ownership(), 'products', productId);
     const editUrl = `${BASE_URL}/admin/inventory/${productId}/edit`;
 
     // Re-open the product: the switch must read the stored decision, not a default.
@@ -189,7 +203,7 @@ test.describe('Farmer marketplace listing — the owner switches', () => {
     ).toHaveCount(0);
 
     // ── The branch switch ───────────────────────────────────────────────────
-    await page.goto(`${BASE_URL}/admin/more`);
+    await page.goto(`${BASE_URL}/admin/settings/profile`);
     await page.waitForLoadState('networkidle');
     await page.getByTestId(`branch-row-${QA_IDS.shop}`).click();
     const branchToggle = page.getByTestId(`branch-marketplace-toggle-${QA_IDS.shop}`);
@@ -229,9 +243,12 @@ test.describe('Farmer marketplace listing — the owner switches', () => {
       VALUES ('${BRANCH_VARIANT}', '${BRANCH_PRODUCT}', '10kg bag', 900, 700, 10, 2, 12, true)
       ON CONFLICT (id) DO UPDATE SET selling_price = 900, stock_qty = 12, is_active = true
     `);
+    // OWNED: the branch fixture product, by its fixed id (this lane's own `d9…` block). Its
+    // variant and its movements are removed through `product_id` by the registry.
+    await trackOwned(ownership(), 'products', BRANCH_PRODUCT);
 
     await injectAdminAuth(page);
-    await page.goto(`${BASE_URL}/admin/more`);
+    await page.goto(`${BASE_URL}/admin/settings/profile`);
     await page.waitForLoadState('networkidle');
 
     await page.getByTestId(`branch-row-${QA_IDS.shop}`).click();
@@ -259,7 +276,7 @@ test.describe('Farmer marketplace listing — the owner switches', () => {
 
     // Turning the branch off removes it again. Back to the list first: the toggle left the page
     // on the branch itself, and the row lives on the list.
-    await page.goto(`${BASE_URL}/admin/more`);
+    await page.goto(`${BASE_URL}/admin/settings/profile`);
     await page.waitForLoadState('networkidle');
     await page.getByTestId(`branch-row-${QA_IDS.shop}`).click();
     const offToggle = page.getByTestId(`branch-marketplace-toggle-${QA_IDS.shop}`);

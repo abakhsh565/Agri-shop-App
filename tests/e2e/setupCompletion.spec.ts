@@ -36,57 +36,35 @@ const signIn = (page: Page) => loginViaUi(page, OWNER_PHONE);
  * be deleted while stock still pointed at it.
  */
 /**
- * Empty the shop down to nothing, so the status can be observed from zero.
+ * The empty-shop premise — asserted, never manufactured.
  *
- * The order below is read off the QA schema's real foreign keys
- * (`information_schema.constraint_column_usage`), not guessed: products are referenced by
- * product_variants, inventory_movements, purchase_items, return_items, sale_items and
- * stock_adjustments; customers by credit_limit_requests, customer_crops, customer_payments,
- * payments, reminder_configs, reminder_occurrences, returns and sales; and returns/voids/
- * sale_submissions/sale_items hang off sales. Deleting a parent before its children aborts
- * the clear half-way with a foreign-key error — which is exactly how this spec failed in a
- * full-suite run, once an earlier spec had left a credit_limit_request against the QA
- * customer. A half-cleared shop then makes every later assertion about the shop look wrong.
+ * OWNERSHIP, AND WHY THIS LANE IS CURRENTLY BLOCKED.
+ *
+ * This function used to delete this shop's entire business content — suppliers, products, variants,
+ * customers, sales, payments, movements, reminders and requests, 24 statements with a hand-derived
+ * FK order — to establish its premise: "the shop is empty, so the checklist reads 0/3". Those rows
+ * belong to whoever created them: other lanes, and hand-entered QA data. No amount of ownership
+ * registration makes them this lane's to delete, so the deletes are gone.
+ *
+ * What survives is the premise, and it is checked LOUDLY: when the shop is not empty the lane fails
+ * right here, naming exactly what is left, instead of deleting the difference. The lane's own rows
+ * (none, in that state) are removed by the ownership registry through `cleanupFixtures()`.
+ *
+ * Making it runnable again means giving the lane its OWN tenant/shop to empty — a spec redesign,
+ * tracked as a blocker in ENGINEERING_OS_STATE.md — not reintroducing the wipe.
  */
 async function clearSetupEntities() {
   const shop = QA_IDS.shop;
-  const child = {
-    product: `product_id IN (SELECT id FROM products WHERE shop_id = '${shop}')`,
-    customer: `customer_id IN (SELECT id FROM customers WHERE shop_id = '${shop}')`,
-    company: `company_id IN (SELECT id FROM companies WHERE shop_id = '${shop}')`,
-    sale: `sale_id IN (SELECT id FROM sales WHERE customer_id IN (SELECT id FROM customers WHERE shop_id = '${shop}'))`,
-    config: `config_id IN (SELECT id FROM reminder_configs WHERE customer_id IN (SELECT id FROM customers WHERE shop_id = '${shop}'))`,
-  };
-
-  // Children first, parents last, one statement per edge.
-  for (const sql of [
-    `DELETE FROM reminder_logs WHERE ${child.config}`,
-    `DELETE FROM credit_limit_requests WHERE ${child.customer}`,
-    `DELETE FROM customer_crops WHERE ${child.customer}`,
-    `DELETE FROM customer_payments WHERE ${child.customer}`,
-    `DELETE FROM payments WHERE ${child.customer}`,
-    `DELETE FROM return_items WHERE return_id IN (SELECT id FROM returns WHERE ${child.customer})`,
-    `DELETE FROM return_items WHERE ${child.product}`,
-    `DELETE FROM voids WHERE ${child.sale}`,
-    `DELETE FROM sale_submissions WHERE ${child.sale}`,
-    `DELETE FROM sale_items WHERE ${child.sale}`,
-    `DELETE FROM sale_items WHERE ${child.product}`,
-    `DELETE FROM returns WHERE ${child.customer}`,
-    `DELETE FROM reminder_occurrences WHERE ${child.customer}`,
-    `DELETE FROM reminder_configs WHERE ${child.customer}`,
-    `DELETE FROM inventory_movements WHERE ${child.product}`,
-    `DELETE FROM purchase_items WHERE ${child.product}`,
-    `DELETE FROM product_variants WHERE ${child.product}`,
-    `DELETE FROM stock_adjustments WHERE ${child.product}`,
-    `DELETE FROM supplier_payments WHERE ${child.company}`,
-    `DELETE FROM purchases WHERE ${child.company}`,
-    `DELETE FROM sales WHERE ${child.customer}`,
-    `DELETE FROM products WHERE shop_id = '${shop}'`,
-    `DELETE FROM customers WHERE shop_id = '${shop}'`,
-    `DELETE FROM companies WHERE shop_id = '${shop}'`,
-  ]) {
-    await execSql(sql);
-  }
+  await cleanupFixtures();
+  const [left] = await execSql(
+    `SELECT (SELECT count(*) FROM companies  WHERE shop_id = '${shop}')::text AS suppliers,
+            (SELECT count(*) FROM products   WHERE shop_id = '${shop}')::text AS products,
+            (SELECT count(*) FROM customers  WHERE shop_id = '${shop}')::text AS customers`,
+  );
+  expect(
+    Number(left.suppliers) + Number(left.products) + Number(left.customers),
+    `the empty-shop premise could not be established (suppliers=${left.suppliers} products=${left.products} customers=${left.customers}): this lane needs a shop it can empty, and must not delete the shared QA shop's rows to get one`,
+  ).toBe(0);
 }
 
 /** The checklist block, read from the live DOM rather than from source. */
@@ -207,7 +185,9 @@ test.describe('Business setup status is derived and self-retiring', () => {
   });
 
   test.afterAll(async () => {
-    await clearSetupEntities();
+    // Only what this run owns is removed. The shared shop is left exactly as found — that is the
+    // point of the ownership work, and re-running the wipe in afterAll is what made the damage
+    // invisible after a FAILED run.
     await cleanupFixtures();
   });
 
@@ -250,11 +230,11 @@ test.describe('Business setup status is derived and self-retiring', () => {
   });
 
   test('2. adding a supplier moves the status, from the real data', async ({ page }) => {
-    await execSql(
-      `INSERT INTO companies (id, name, outstanding_payable, total_purchases, shop_id)
-       VALUES ('${QA_IDS.companyA}', 'Setup Supplier', 0, 0, '${QA_IDS.shop}')
-       ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name`
-    );
+    // The supplier row is the SHARED baseline fixture (setupFixtures writes it). This lane used to
+    // INSERT it as 'Setup Supplier', which renamed a shared fixture other lanes read; it is now
+    // asserted, not written, and never registered as owned.
+    const [supplier] = await execSql(`SELECT id FROM companies WHERE id = '${QA_IDS.companyA}'`);
+    expect(supplier, 'the shared supplier fixture is missing — setupFixtures must run first').toBeTruthy();
 
     await signIn(page);
     await page.goto('/admin/settings');
@@ -279,16 +259,12 @@ test.describe('Business setup status is derived and self-retiring', () => {
   });
 
   test('3. complete setup: the guidance disappears by itself', async ({ page }) => {
-    await execSql(
-      `INSERT INTO products (id, name, company_id, category, stock_qty, shop_id)
-       VALUES ('${QA_IDS.productA}', 'Setup Product', '${QA_IDS.companyA}', 'seed', 10, '${QA_IDS.shop}')
-       ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name`
-    );
-    await execSql(
-      `INSERT INTO customers (id, name, phone, credit_limit, outstanding_balance, total_purchases, total_paid, shop_id, created_by)
-       VALUES ('${QA_IDS.customerA}', 'Setup Customer', '923000000901', 10000, 0, 0, 0, '${QA_IDS.shop}', 'QA')
-       ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name`
-    );
+    // Same as test 2: the product and the customer are the SHARED fixtures. They are asserted
+    // rather than INSERTed-and-renamed, and they are never registered as owned.
+    const [product] = await execSql(`SELECT id FROM products WHERE id = '${QA_IDS.productA}'`);
+    expect(product, 'the shared product fixture is missing — setupFixtures must run first').toBeTruthy();
+    const [customer] = await execSql(`SELECT id FROM customers WHERE id = '${QA_IDS.customerA}'`);
+    expect(customer, 'the shared customer fixture is missing — setupFixtures must run first').toBeTruthy();
 
     await signIn(page);
     await page.goto('/admin/settings');
@@ -425,21 +401,17 @@ test.describe('Business setup status is derived and self-retiring', () => {
     await expect(nextStep).toBeVisible({ timeout: 20000 });
 
     // Configured shop: the guidance retires itself and Home gains nothing.
-    await execSql(
-      `INSERT INTO companies (id, name, outstanding_payable, total_purchases, shop_id)
-       VALUES ('${QA_IDS.companyA}', 'Setup Supplier', 0, 0, '${QA_IDS.shop}')
-       ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name`
-    );
-    await execSql(
-      `INSERT INTO products (id, name, company_id, category, stock_qty, shop_id)
-       VALUES ('${QA_IDS.productA}', 'Setup Product', '${QA_IDS.companyA}', 'seed', 10, '${QA_IDS.shop}')
-       ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name`
-    );
-    await execSql(
-      `INSERT INTO customers (id, name, phone, credit_limit, outstanding_balance, total_purchases, total_paid, shop_id, created_by)
-       VALUES ('${QA_IDS.customerA}', 'Setup Customer', '923000000901', 10000, 0, 0, 0, '${QA_IDS.shop}', 'QA')
-       ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name`
-    );
+    //
+    // The three rows are the SHARED baseline fixtures — this used to INSERT them as 'Setup
+    // Supplier' / 'Setup Product' / 'Setup Customer', renaming rows that four other lanes read.
+    // They are asserted instead of written, and never registered as owned: the fixtures are the
+    // baseline the ownership model exists to protect.
+    const [setupSupplier] = await execSql(`SELECT id FROM companies WHERE id = '${QA_IDS.companyA}'`);
+    expect(setupSupplier, 'the shared supplier fixture is missing — setupFixtures must run first').toBeTruthy();
+    const [setupProduct] = await execSql(`SELECT id FROM products WHERE id = '${QA_IDS.productA}'`);
+    expect(setupProduct, 'the shared product fixture is missing — setupFixtures must run first').toBeTruthy();
+    const [setupCustomer] = await execSql(`SELECT id FROM customers WHERE id = '${QA_IDS.customerA}'`);
+    expect(setupCustomer, 'the shared customer fixture is missing — setupFixtures must run first').toBeTruthy();
 
     await page.goto('/admin/dashboard');
     await page.reload();

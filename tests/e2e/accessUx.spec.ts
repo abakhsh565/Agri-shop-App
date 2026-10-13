@@ -16,10 +16,18 @@
  * QA database only; every record this spec creates is deleted again.
  */
 import { test, expect, type Page } from '@playwright/test';
-import { execSql } from './helpers';
+import {
+  execSql,
+  cleanupFixtures,
+  claimNew,
+  claimOwned,
+  ownership,
+  snapshotIds,
+  trackOwned,
+} from './helpers';
 import { waitForSignedIn } from './signInDiagnostics';
 
-const BASE = 'http://localhost:5173';
+const BASE = process.env.QA_APP_URL || 'http://localhost:5173';
 const OTP = '123456';
 const PIN = '4321';
 
@@ -139,12 +147,20 @@ async function roleIdByName(roleName: string): Promise<string> {
   return String(row.id);
 }
 
-async function deleteEmployeeByPhone(phone: string) {
-  const [user] = await execSql(`SELECT id FROM users WHERE phone = '${phone}'`);
-  if (!user) return;
-  await execSql(`DELETE FROM user_permissions WHERE user_id = '${user.id}'`).catch(() => undefined);
-  await execSql(`DELETE FROM memberships WHERE user_id = '${user.id}'`);
-  await execSql(`DELETE FROM users WHERE id = '${user.id}'`);
+/**
+ * Release an employee THIS LANE created, through the ownership registry.
+ *
+ * The phone numbers this is called with (`923007770011`, `923007770033`) are markers only this
+ * spec uses, so a row found for one of them is residue from an earlier, crashed run of this same
+ * lane. It is ADOPTED into the registry and removed by cleanupFixtures — children first — instead
+ * of being deleted inline, so the deletion is scoped by explicit id like every other cleanup in
+ * this suite, and a failure is raised rather than swallowed.
+ */
+async function releaseEmployeeByPhone(phone: string) {
+  const ids = await snapshotIds(`SELECT id FROM users WHERE phone = '${phone}'`);
+  if (!ids.length) return;
+  trackOwned(ownership(), 'users', ids);
+  await cleanupFixtures();
 }
 
 test.describe.configure({ mode: 'serial' });
@@ -157,10 +173,18 @@ test.describe('Employee job & access — simple for the owner, exact underneath'
   });
 
   test.afterAll(async () => {
-    await deleteEmployeeByPhone(OVR_PHONE_DB);
-    await deleteEmployeeByPhone(NEW_PHONE_DB);
-    // never leave the QA employee with employee-specific access
-    await execSql(`DELETE FROM user_permissions WHERE user_id = '${QA_EMPLOYEE_ID}' AND is_override = true`).catch(() => undefined);
+    await releaseEmployeeByPhone(OVR_PHONE_DB);
+    await releaseEmployeeByPhone(NEW_PHONE_DB);
+    // Never leave the SHARED QA employee with employee-specific access. The rows are adopted and
+    // removed by their own row id (the shared employee itself is on the protected list and can
+    // never be registered or deleted); on a green run the reset in test 5 has already removed
+    // them, so this only fires for residue from a crashed run of this lane.
+    trackOwned(
+      ownership(),
+      'user_permissions',
+      await snapshotIds(`SELECT id FROM user_permissions WHERE user_id = '${QA_EMPLOYEE_ID}' AND is_override = true`),
+    );
+    await cleanupFixtures();
   });
 
   test('1. Adding an employee asks only who / what job / where, with no RBAC jargon', async ({ page }) => {
@@ -234,7 +258,7 @@ test.describe('Employee job & access — simple for the owner, exact underneath'
   });
 
   test('2. Creating from the simplified screen writes the right membership, then the list shows it', async ({ page }) => {
-    await deleteEmployeeByPhone(NEW_PHONE_DB);
+    await releaseEmployeeByPhone(NEW_PHONE_DB);
 
     await login(page, OWNER_PHONE);
     await page.goto(`${BASE}/admin/employees/new`);
@@ -304,6 +328,9 @@ test.describe('Employee job & access — simple for the owner, exact underneath'
     const [created] = await execSql(`SELECT id, name, phone FROM users WHERE phone = '${NEW_PHONE_DB}'`);
     expect(created, 'employee row was not created').toBeTruthy();
     expect(created.name).toBe(NEW_NAME);
+    // OWNED, immediately after creation: the invited employee, by the id the app assigned it
+    // (its membership and any permission rows follow the user key in the cleanup graph).
+    await claimOwned('users', `SELECT id FROM users WHERE phone = '${NEW_PHONE_DB}'`);
 
     const [membership] = await execSql(`
       SELECT m.role, m.status, m.tenant_id, r.name AS template, m.branch_scope
@@ -483,6 +510,13 @@ test.describe('Employee job & access — simple for the owner, exact underneath'
     const suppliersRow = page.locator('button').filter({ hasText: /^\s*Suppliers/ }).first();
     await expect(suppliersRow).toBeVisible();
     await suppliersRow.click();
+
+    // The override rows this save will create for the SHARED QA employee, credited to this run by
+    // a before/after diff — the employee itself stays protected and is never registered.
+    const overridesBefore = await snapshotIds(
+      `SELECT id FROM user_permissions WHERE user_id = '${QA_EMPLOYEE_ID}' AND is_override = true`,
+    );
+
     await page.getByRole('button', { name: 'Save', exact: true }).click();
     await page.waitForTimeout(2000);
 
@@ -492,6 +526,11 @@ test.describe('Employee job & access — simple for the owner, exact underneath'
        WHERE up.user_id = '${QA_EMPLOYEE_ID}' AND up.is_override = true AND p.module = 'companies'`);
     expect(overrides.length, 'no override row was stored for the customized area').toBeGreaterThan(0);
     expect(overrides.every((o) => o.is_granted === true)).toBe(true);
+    await claimNew(
+      'user_permissions',
+      `SELECT id FROM user_permissions WHERE user_id = '${QA_EMPLOYEE_ID}' AND is_override = true`,
+      overridesBefore,
+    );
 
     // The screen must now say the access differs from the role, and reset must clear it.
     await page.waitForTimeout(1000);
@@ -508,7 +547,7 @@ test.describe('Employee job & access — simple for the owner, exact underneath'
   });
 
   test('6. Access can be customized while inviting, and a role change keeps those exceptions', async ({ page }) => {
-    await deleteEmployeeByPhone(OVR_PHONE_DB);
+    await releaseEmployeeByPhone(OVR_PHONE_DB);
 
     await login(page, OWNER_PHONE);
     await page.goto(`${BASE}/admin/employees/new`);
@@ -554,6 +593,8 @@ test.describe('Employee job & access — simple for the owner, exact underneath'
     await page.waitForTimeout(2000);
     const [ovr] = await execSql(`SELECT id FROM users WHERE phone = '${OVR_PHONE_DB}'`);
     expect(ovr, 'the employee was not created').toBeTruthy();
+    // OWNED, immediately after creation — this employee carries the exceptions being asserted below.
+    await claimOwned('users', `SELECT id FROM users WHERE phone = '${OVR_PHONE_DB}'`);
 
     // ── Database is the judge: the exceptions were written with the employee ──
     const stored = await execSql(`

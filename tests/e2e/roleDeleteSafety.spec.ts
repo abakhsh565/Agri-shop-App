@@ -13,9 +13,17 @@
  * QA database only; the throwaway role is deleted again.
  */
 import { test, expect, type Page } from '@playwright/test';
-import { QA_IDS, execSql, setupFixtures, cleanupFixtures, injectAdminAuth } from './helpers';
+import {
+  QA_IDS,
+  execSql,
+  setupFixtures,
+  cleanupFixtures,
+  ownership,
+  trackOwned,
+  injectAdminAuth,
+} from './helpers';
 
-const BASE_URL = 'http://localhost:5173';
+const BASE_URL = process.env.QA_APP_URL || 'http://localhost:5173';
 const ROLE_ID = 'aaaa0000-0000-4000-8000-000000000001';
 const ROLE_NAME = `QA Throwaway Role ${Date.now().toString(36).toUpperCase()}`;
 
@@ -51,11 +59,14 @@ test.describe('Role delete safety', () => {
       VALUES ('${ROLE_ID}', '${QA_IDS.shop}', '${ROLE_NAME}', 'QA throwaway role', false)
       ON CONFLICT (id) DO NOTHING
     `);
+    // OWNED: the throwaway role, by the explicit id this lane created it with.
+    await trackOwned(ownership(), 'roles', ROLE_ID);
   });
 
   test.afterAll(async () => {
-    await execSql(`DELETE FROM role_permissions WHERE role_id = '${ROLE_ID}'`).catch(() => {});
-    await execSql(`DELETE FROM roles WHERE id = '${ROLE_ID}'`).catch(() => {});
+    // The two inline deletes (role_permissions, then roles) are replaced by the registry, which
+    // emits the same pair in FK order and raises a failure instead of swallowing one. In the
+    // passing case the app has already deleted the role, so these statements match nothing.
     await cleanupFixtures();
   });
 

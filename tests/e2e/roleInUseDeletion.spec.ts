@@ -20,9 +20,18 @@
  * QA database only; the throwaway role and its assignment are removed again.
  */
 import { test, expect } from '@playwright/test';
-import { QA_IDS, execSql, setupFixtures, cleanupFixtures, injectAdminAuth } from './helpers';
+import {
+  QA_IDS,
+  execSql,
+  setupFixtures,
+  cleanupFixtures,
+  ownership,
+  snapshotIds,
+  trackOwned,
+  injectAdminAuth,
+} from './helpers';
 
-const BASE_URL = 'http://localhost:5173';
+const BASE_URL = process.env.QA_APP_URL || 'http://localhost:5173';
 const ROLE_ID = 'bbbb0000-0000-4000-8000-000000000001';
 const ROLE_NAME = `QA In Use Role ${Date.now().toString(36).toUpperCase()}`;
 /** The employee the role is assigned to; a second one makes the count worth naming. */
@@ -61,6 +70,9 @@ test.describe('Role deletion — assigned role revokes its access', () => {
       VALUES ('${EMPLOYEE_2}', 'QA Employee Two', '${EMPLOYEE_2_PHONE}', 'employee', false, true, '${QA_IDS.shop}')
       ON CONFLICT (id) DO UPDATE SET is_active = true
     `);
+    // OWNED: the second employee is created by this run, so its row (and the membership and
+    // permission rows that hang off it) is registered by id and removed by cleanupFixtures.
+    await trackOwned(ownership(), 'users', EMPLOYEE_2);
     const second = await execSql(
       `SELECT role_id FROM memberships WHERE user_id = '${EMPLOYEE_2}' AND tenant_id = '${QA_IDS.shop}'`
     );
@@ -72,6 +84,8 @@ test.describe('Role deletion — assigned role revokes its access', () => {
       VALUES ('${ROLE_ID}', '${QA_IDS.shop}', '${ROLE_NAME}', 'QA in-use role', false)
       ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name
     `);
+    // OWNED: the throwaway role, by its explicit id.
+    await trackOwned(ownership(), 'roles', ROLE_ID);
     await execSql(`
       UPDATE memberships SET role_id = '${ROLE_ID}', status = 'active', updated_at = now()
       WHERE user_id IN ('${QA_IDS.employee}', '${EMPLOYEE_2}') AND tenant_id = '${QA_IDS.shop}'
@@ -92,11 +106,18 @@ test.describe('Role deletion — assigned role revokes its access', () => {
       UPDATE memberships SET role_id = ${previousRoleId2 ? `'${previousRoleId2}'` : 'NULL'}, updated_at = now()
       WHERE user_id = '${EMPLOYEE_2}' AND tenant_id = '${QA_IDS.shop}'
     `).catch(() => {});
-    await execSql(`DELETE FROM role_permissions WHERE role_id = '${ROLE_ID}'`).catch(() => {});
-    await execSql(`DELETE FROM roles WHERE id = '${ROLE_ID}'`).catch(() => {});
-    await execSql(`DELETE FROM memberships WHERE user_id = '${EMPLOYEE_2}'`).catch(() => {});
-    await execSql(`DELETE FROM audit_events WHERE entity_id = '${EMPLOYEE_2}'`).catch(() => {});
-    await execSql(`DELETE FROM users WHERE id = '${EMPLOYEE_2}'`).catch(() => {});
+
+    // CLEANUP IS OWNERSHIP-BASED NOW. The five deletes that used to run here (role_permissions,
+    // roles, memberships, audit_events, users — all by the throwaway ids this lane fixed itself)
+    // are replaced by the registry: cleanupFixtures deletes exactly the ids registered above, in
+    // FK order (role_permissions → roles, memberships/user_permissions → users). The audit rows
+    // that point at the employee THIS run created are claimed through that exact foreign key —
+    // never through a time window, which would sweep another lane's history.
+    await trackOwned(
+      ownership(),
+      'audit_events',
+      await snapshotIds(`SELECT id FROM audit_events WHERE entity_id = '${EMPLOYEE_2}'`),
+    );
     await cleanupFixtures();
   });
 

@@ -1,5 +1,15 @@
 import { test, expect, type Page } from '@playwright/test';
-import { cleanupFixtures, ensureAuthSession, execSql, loginViaUi, setupFixtures } from './helpers';
+import {
+  cleanupFixtures,
+  claimOwned,
+  ensureAuthSession,
+  execSql,
+  loginViaUi,
+  ownership,
+  setupFixtures,
+  snapshotIds,
+  trackOwned,
+} from './helpers';
 
 const OWNER_PHONE = '03009999999';       // 923009999999
 const ADMIN_ID_PHONE = '923009999999';   // the stored e164 form
@@ -29,20 +39,21 @@ async function count(sql: string): Promise<number> {
  * account still exists after the dialog is cancelled.
  */
 test.describe('admin full access + the account-deletion gate', () => {
-  let startedAt = '';
-
   test.beforeAll(async () => {
-    startedAt = new Date().toISOString();
     await setupFixtures();
     await ensureAuthSession(OWNER_PHONE);
   });
 
   test.afterAll(async () => {
-    await execSql(`DELETE FROM companies WHERE name = '${COMPANY_NAME}'`);
-    // Creating a company writes an audit event. History is immutable in production, so the
-    // lane removes exactly the rows THIS run added (time-scoped) instead of truncating the
-    // table — the independent row count at the end of a gate must see 0, and it did not.
-    await execSql(`DELETE FROM audit_events WHERE created_at >= '${startedAt}'`);
+    // CLEANUP IS OWNERSHIP-BASED NOW.
+    //
+    // The company row and the audit row that its creation writes are registered by id the moment
+    // they exist (see the test below). What used to run here instead:
+    //   * `DELETE FROM companies WHERE name = '${COMPANY_NAME}'` — a name-scoped delete, which the
+    //     ownership work replaced with the claimed id;
+    //   * `DELETE FROM audit_events WHERE created_at >= '${startedAt}'` — a TIME WINDOW, which is
+    //     the shape the fix exists to remove: another lane's audit row written in the same window
+    //     is not this lane's to delete. History is claimed through the entity that caused it.
     await cleanupFixtures();
   });
 
@@ -65,6 +76,18 @@ test.describe('admin full access + the account-deletion gate', () => {
         { timeout: 15000, message: 'the company row was never written — the write failed' },
       )
       .toBe(1);
+
+    // OWNED, immediately after creation: the company is claimed by the unique name this run
+    // typed, and the audit row the creation wrote is claimed through that exact entity id.
+    const [companyId] = await claimOwned(
+      'companies',
+      `SELECT id FROM companies WHERE name = '${COMPANY_NAME}'`,
+    );
+    await trackOwned(
+      ownership(),
+      'audit_events',
+      await snapshotIds(`SELECT id FROM audit_events WHERE entity_id = '${companyId}'`),
+    );
   });
 
   test('deleting the account runs the four-step sheet, and no unverified path deletes it', async ({ page }) => {
@@ -132,7 +155,12 @@ test.describe('admin full access + the account-deletion gate', () => {
     await page.goto('/admin/settings');
     await page.waitForLoadState('networkidle');
 
-    await page.getByRole('button', { name: /^edit$/i }).first().click();
+    // The profile card is a row on Settings: it carries a chevron and opens the profile screen.
+    // The edit itself is still a sheet — two fields, so a sheet — opened by that screen's own
+    // Edit button next to the name and number.
+    await page.locator('[data-testid="settings-open-profile"]').click();
+    await expect(page).toHaveURL(/\/admin\/settings\/profile$/, { timeout: 8000 });
+    await page.locator('[data-testid="settings-edit-profile"]').click();
     await page.locator('input:not([type="file"])').first().fill(temporary);
     await page.getByRole('button', { name: /^save$/i }).first().click();
 

@@ -14,9 +14,16 @@
  * separate batch, deliberately not touched here.
  */
 import { test, expect } from '@playwright/test';
-import { QA_IDS, execSql, setupFixtures, cleanupFixtures, injectAdminAuth } from './helpers';
+import {
+  QA_IDS,
+  execSql,
+  setupFixtures,
+  cleanupFixtures,
+  claimOwned,
+  injectAdminAuth,
+} from './helpers';
 
-const BASE_URL = 'http://localhost:5173';
+const BASE_URL = process.env.QA_APP_URL || 'http://localhost:5173';
 
 /** Language switch, the same way the RTL/LTR suite does it. */
 async function setLanguage(page: import('@playwright/test').Page, lang: 'en' | 'ur') {
@@ -45,12 +52,13 @@ const FORBIDDEN_ON_SCREEN = [
 
 test.describe('Admin microcopy — English and Urdu', () => {
   test.beforeAll(async () => {
+    // The prefix DELETE that used to run here (and in afterAll) removed every company whose name
+    // started with "QA Microcopy" — a name prefix is not ownership. Nothing needs clearing: this
+    // lane names its supplier uniquely per run, so its own row is claimed by that exact name.
     await setupFixtures();
-    await execSql(`DELETE FROM companies WHERE name LIKE 'QA Microcopy%'`).catch(() => {});
   });
 
   test.afterAll(async () => {
-    await execSql(`DELETE FROM companies WHERE name LIKE 'QA Microcopy%'`).catch(() => {});
     await cleanupFixtures();
   });
 
@@ -100,6 +108,10 @@ test.describe('Admin microcopy — English and Urdu', () => {
     await page.getByRole('textbox').first().fill(name);
     await page.locator('button', { hasText: /نئی کمپنی/ }).last().click();
     await expect(page.getByText(new RegExp(name)).first()).toBeVisible({ timeout: 15000 });
+
+    // OWNED: the company this lane just created through the form, claimed by the unique name it
+    // typed — immediately after creation, so cleanup deletes this row and not a name family.
+    await claimOwned('companies', `SELECT id FROM companies WHERE name = '${name}'`);
 
     const toastText = await page.evaluate(() => document.body.innerText);
     for (const banned of FORBIDDEN_ON_SCREEN) {

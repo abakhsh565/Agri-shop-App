@@ -105,7 +105,7 @@ async function setLanguage(page: Page, lang: 'en' | 'ur') {
 test.describe('Locked dashboard scope: figures reconcile with the database', () => {
   test.afterAll(async () => {
     // The figures are asserted against the DB, so leave the QA base as it was found.
-    await cleanupFixtures().catch(() => {});
+    await cleanupFixtures();
   });
 
   test('1. ADM-DASH-HOME shows every spec metric and its money figures equal the DB', async ({ page }) => {

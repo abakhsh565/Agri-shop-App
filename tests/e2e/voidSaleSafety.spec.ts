@@ -13,9 +13,18 @@
  */
 import { test, expect } from '@playwright/test';
 import { randomUUID } from 'crypto';
-import { QA_IDS, execSql, setupFixtures, cleanupFixtures, injectAdminAuth } from './helpers';
+import {
+  QA_IDS,
+  execSql,
+  setupFixtures,
+  cleanupFixtures,
+  claimOwned,
+  ownership,
+  trackOwned,
+  injectAdminAuth,
+} from './helpers';
 
-const BASE_URL = 'http://localhost:5173';
+const BASE_URL = process.env.QA_APP_URL || 'http://localhost:5173';
 const SALE_ID = randomUUID();
 const SALE_ITEM_ID = randomUUID();
 const SALE_NUMBER = `QA-VOID-${Date.now().toString(36).toUpperCase()}`;
@@ -37,13 +46,17 @@ test.describe('Void sale safety', () => {
       ON CONFLICT (id) DO NOTHING
     `);
     await execSql(`UPDATE product_variants SET stock_qty = stock_qty - ${QTY} WHERE id = '${QA_IDS.variantA}'`);
+
+    // OWNED: the sale this lane creates, by its explicit id. Its line items, its void and its
+    // stock movement are removed through that key rather than by re-stating the joins here.
+    await trackOwned(ownership(), 'sales', SALE_ID);
   });
 
   test.afterAll(async () => {
-    await execSql(`DELETE FROM inventory_movements WHERE reference_id = '${SALE_ID}'`).catch(() => {});
-    await execSql(`DELETE FROM voids WHERE sale_id = '${SALE_ID}'`).catch(() => {});
-    await execSql(`DELETE FROM sale_items WHERE sale_id = '${SALE_ID}'`).catch(() => {});
-    await execSql(`DELETE FROM sales WHERE id = '${SALE_ID}'`).catch(() => {});
+    // Nothing is deleted inline any more: the four deletes that used to run here (movements,
+    // voids, items, then the sale — by this lane's own ids, with every error swallowed) are
+    // replaced by the registry, which deletes the same rows in FK order and FAILS the lane if a
+    // delete does not succeed.
     await cleanupFixtures();
   });
 
@@ -121,5 +134,12 @@ test.describe('Void sale safety', () => {
     // Stock is restored exactly once.
     const stock = await execSql(`SELECT stock_qty FROM product_variants WHERE id = '${QA_IDS.variantA}'`);
     expect(Number(stock[0].stock_qty)).toBe(100);
+
+    // The movement the void wrote points at THIS lane's sale, so it is owned by that exact
+    // foreign key — the one relation the sale id alone cannot express in the cleanup graph.
+    await claimOwned(
+      'inventory_movements',
+      `SELECT id FROM inventory_movements WHERE reference_id = '${SALE_ID}'`,
+    );
   });
 });

@@ -12,13 +12,15 @@ import {
   setupFixtures,
   cleanupFixtures,
   execSql,
+  ownership,
   recordEvidence,
+  trackOwned,
   writeEvidenceReport,
   type TestEvidence,
 } from './helpers';
 import { qaServiceClient } from '../../tests/setup/qa-client';
 
-const BASE_URL = 'http://localhost:5173';
+const BASE_URL = process.env.QA_APP_URL || 'http://localhost:5173';
 const ADMIN_ALERTS = `${BASE_URL}/admin/alerts/reminders`;
 const ADMIN_DASHBOARD = `${BASE_URL}/admin/dashboard`;
 
@@ -402,6 +404,12 @@ test('10. Credit request E2E: create → critical signal → approve → signal 
     writeEvidenceReport(evidence, test.info());
     return;
   }
+
+  // OWNED, immediately after creation: the credit request this RPC just wrote. The lane used to
+  // leave it in QA (it restored the customer's limit and nothing else), so every run added a
+  // pending request that the next run's signal assertions then read. The id the RPC returned is
+  // registered here, and cleanupFixtures removes exactly that row.
+  await trackOwned(ownership(), 'credit_limit_requests', String(createResp.data.id));
 
   const requestId = createResp.data.id;
 

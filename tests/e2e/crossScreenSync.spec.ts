@@ -10,11 +10,19 @@
 import { test, expect } from '@playwright/test';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
-import { injectAdminAuth, setupFixtures, cleanupFixtures, execSql, QA_IDS } from './helpers';
+import {
+  injectAdminAuth,
+  setupFixtures,
+  cleanupFixtures,
+  execSql,
+  ownership,
+  trackOwned,
+  QA_IDS,
+} from './helpers';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const BASE_URL = 'http://localhost:5173';
+const BASE_URL = process.env.QA_APP_URL || 'http://localhost:5173';
 
 import { randomUUID } from 'crypto';
 const RUN = Date.now().toString(36);
@@ -34,14 +42,21 @@ test.describe('Cross-Screen Synchronization', () => {
     await execSql(`INSERT INTO product_variants (id, product_id, name, selling_price, cost_price, unit_size, low_stock_threshold, stock_qty) VALUES ('${VAR_ID}', '${PROD_ID}', '1kg', 500, 300, 1, 10, 100) ON CONFLICT (id) DO NOTHING`);
     await execSql(`INSERT INTO companies (id, name, outstanding_payable, total_purchases, shop_id) VALUES ('${COMP_ID}', 'Sync Supplier', 0, 0, '${QA_IDS.shop}') ON CONFLICT (id) DO NOTHING`);
     await execSql(`INSERT INTO users (id, name, phone, role, is_original_owner, is_active, shop_id) VALUES ('${EMP_ID}', 'Sync Employee', '${EMP_PHONE}', 'employee', false, true, '${QA_IDS.shop}') ON CONFLICT (id) DO NOTHING`);
+
+    // OWNERSHIP: the five rows above are this lane's, with ids it chose. Registering them is what
+    // lets cleanup remove them — and only them — including the children the app writes for them
+    // (variants for the product, access rows for the employee).
+    const own = ownership();
+    trackOwned(own, 'customers', CUST_ID);
+    trackOwned(own, 'products', PROD_ID);
+    trackOwned(own, 'product_variants', VAR_ID);
+    trackOwned(own, 'companies', COMP_ID);
+    trackOwned(own, 'users', EMP_ID);
   });
 
   test.afterAll(async () => {
-    await execSql(`DELETE FROM product_variants WHERE product_id = '${PROD_ID}'`).catch(() => {});
-    await execSql(`DELETE FROM products WHERE id = '${PROD_ID}'`).catch(() => {});
-    await execSql(`DELETE FROM companies WHERE id = '${COMP_ID}'`).catch(() => {});
-    await execSql(`DELETE FROM customers WHERE id = '${CUST_ID}'`).catch(() => {});
-    await execSql(`DELETE FROM users WHERE id = '${EMP_ID}'`).catch(() => {});
+    // Scoped deletes by owned id replaced the hand-written ones: one source of truth, FK-ordered,
+    // and a failure here fails the lane instead of being absorbed by `.catch(() => {})`.
     await cleanupFixtures();
   });
 

@@ -19,7 +19,7 @@
  * QA database only. Everything it creates is removed in afterAll.
  */
 import { test, expect, type Page } from '@playwright/test';
-import { execSql, setupFixtures, cleanupFixtures, QA_IDS } from './helpers';
+import { execSql, setupFixtures, cleanupFixtures, ownership, trackOwned, QA_IDS } from './helpers';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -53,16 +53,20 @@ const BASE_URL = envValue('QA_APP_URL') || envValue('VITE_APP_URL') || 'http://l
  * the empty premise is checked at the end rather than assumed.
  */
 async function clearStockAndSuppliers() {
-  for (const table of [
-    'sale_submissions', 'voids', 'return_items', 'returns',
-    'sale_items', 'stock_adjustments', 'inventory_movements', 'product_barcodes',
-    'purchase_items', 'purchases', 'supplier_payments',
-    'credit_limit_requests', 'customer_crops', 'customer_payments', 'payments',
-    'reminder_logs', 'reminder_occurrences', 'reminder_configs',
-    'sales', 'product_variants', 'products', 'companies', 'customers',
-  ]) {
-    await execSql(`DELETE FROM ${table} WHERE true`);
-  }
+  // OWNERSHIP — and why this lane is currently BLOCKED.
+  //
+  // This used to delete 23 tables in full (`DELETE FROM ${table} WHERE true`) to establish its
+  // premise: "the catalogue is empty, so the sale screen has nothing to sell". That is the
+  // shared-QA wipe that the cleanup work removed everywhere else, and it cannot be replaced by
+  // ownership registration — this lane needs the ABSENCE of rows it did not create, which no amount
+  // of ownership gives it. Running it again would either destroy other runs' data (as it did) or
+  // fail its own premise check.
+  //
+  // So it now removes only what it owns, and keeps the premise check LOUD: when the catalogue is
+  // not empty the lane fails here, by name, instead of quietly deleting the difference. Making it
+  // runnable again means giving it its own tenant/shop to empty (a spec redesign, tracked as a
+  // blocker in ENGINEERING_OS_STATE.md) — not reintroducing the wipe.
+  await cleanupFixtures();
   const [left] = await execSql(
     'SELECT (SELECT count(*) FROM products)::text AS products, (SELECT count(*) FROM product_variants)::text AS variants, (SELECT count(*) FROM companies)::text AS companies',
   );
@@ -120,7 +124,7 @@ test.describe('Missing dependencies never dead-end a workflow', () => {
   });
 
   test.afterAll(async () => {
-    await cleanupFixtures().catch(() => {});
+    await cleanupFixtures();
   });
 
   test.beforeEach(async () => {
@@ -194,6 +198,9 @@ test.describe('Missing dependencies never dead-end a workflow', () => {
     // The supplier really exists and is linked to this shop.
     const company = await execSql(`SELECT id, name FROM companies WHERE name = '${supplierName}'`);
     expect(company.length, 'the supplier was not written to the database').toBe(1);
+    // OWNED, immediately after creation: the supplier this lane just created in the form, by the
+    // id the database assigned it (its purchases and supplier payments follow `company_id`).
+    await trackOwned(ownership(), 'companies', String(company[0].id));
 
     // ── 5. Create the product and land back in the sale ─────────────────────────
     const productName = `Dep Test Product ${Date.now()}`;
@@ -221,6 +228,9 @@ test.describe('Missing dependencies never dead-end a workflow', () => {
     expect(saved[0].company_id, 'the product is not linked to the supplier just created').toBe(
       company[0].id,
     );
+    // OWNED, immediately after creation: the product built inside this flow (its variants and
+    // stock movements follow `product_id`).
+    await trackOwned(ownership(), 'products', String(saved[0].id));
 
     // ── 6. The sale can now actually be made ────────────────────────────────────
     await page.waitForTimeout(1200);
@@ -235,14 +245,13 @@ test.describe('Missing dependencies never dead-end a workflow', () => {
   test('a search with no matches offers no create action — nothing is missing', async ({ page }) => {
     // The product catalogue has to exist for this one, or the empty state would be the
     // dependency case and the assertion would prove nothing.
-    // The company has to exist first: clearStockAndSuppliers removed it, and a product
-    // cannot be written without one (products_company_id_fkey) — which is itself the
-    // dependency this pass is about.
-    await execSql(`
-      INSERT INTO companies (id, name, outstanding_payable, total_purchases, shop_id)
-      VALUES ('${QA_IDS.companyA}', 'Search Fixture Supplier', 0, 0, '${QA_IDS.shop}')
-      ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name;
-    `);
+    //
+    // The company has to exist first — a product cannot be written without one
+    // (products_company_id_fkey). It is the SHARED baseline fixture: this used to be an INSERT
+    // that renamed it 'Search Fixture Supplier', i.e. a test rewriting a row other lanes read.
+    // It is asserted, not written.
+    const [supplierFixture] = await execSql(`SELECT id FROM companies WHERE id = '${QA_IDS.companyA}'`);
+    expect(supplierFixture, 'the shared supplier fixture is missing — setupFixtures must run first').toBeTruthy();
     await execSql(`
       INSERT INTO products (id, name, company_id, category, stock_qty, shop_id)
       VALUES ('30000000-0000-0000-0000-0000000000aa', 'Search Fixture', '${QA_IDS.companyA}', 'seed', 5, '${QA_IDS.shop}')
@@ -253,6 +262,9 @@ test.describe('Missing dependencies never dead-end a workflow', () => {
       VALUES ('40000000-0000-0000-0000-0000000000aa', '30000000-0000-0000-0000-0000000000aa', '1kg', 500, 300, 1, 1, 5)
       ON CONFLICT (id) DO NOTHING;
     `);
+    // OWNED: the two rows this case creates, by their explicit ids. The registry removes the
+    // variant through `product_id` before the product, so no hand-written order is needed here.
+    await trackOwned(ownership(), 'products', '30000000-0000-0000-0000-0000000000aa');
 
     await login(page);
     await page.goto(`${BASE_URL}/admin/sale/products`);
@@ -267,8 +279,9 @@ test.describe('Missing dependencies never dead-end a workflow', () => {
       'a fruitless search offered to create a product even though the catalogue is not empty',
     ).toHaveCount(0);
 
-    await execSql(`DELETE FROM product_variants WHERE id = '40000000-0000-0000-0000-0000000000aa'`).catch(() => undefined);
-    await execSql(`DELETE FROM products WHERE id = '30000000-0000-0000-0000-0000000000aa'`).catch(() => undefined);
+    // The two fixture rows are owned by id and removed through the registry — here, and again in
+    // afterAll if this case fails first.
+    await cleanupFixtures();
   });
 
   test('the same states in Urdu/RTL and in dark, with no empty-state clutter on Home', async ({ page }) => {

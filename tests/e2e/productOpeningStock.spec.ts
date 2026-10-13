@@ -15,9 +15,9 @@
  * QA database only; the product it creates is deleted again.
  */
 import { test, expect } from '@playwright/test';
-import { QA_IDS, execSql, setupFixtures, cleanupFixtures, injectAdminAuth } from './helpers';
+import { QA_IDS, execSql, setupFixtures, cleanupFixtures, claimOwned, injectAdminAuth } from './helpers';
 
-const BASE_URL = 'http://localhost:5173';
+const BASE_URL = process.env.QA_APP_URL || 'http://localhost:5173';
 const PRODUCT_NAME = `QA Opening Stock ${Date.now().toString(36).toUpperCase()}`;
 const OPENING_STOCK = 50;
 const SELLING_PRICE = 600;
@@ -26,14 +26,14 @@ const SUPPLIER = 'QA Supplier A';
 test.describe('Product opening stock', () => {
   test.beforeAll(async () => {
     await setupFixtures();
-    await execSql(`DELETE FROM product_variants WHERE product_id IN (SELECT id FROM products WHERE name = '${PRODUCT_NAME}')`);
-    await execSql(`DELETE FROM products WHERE name = '${PRODUCT_NAME}'`);
   });
 
   test.afterAll(async () => {
-    await execSql(`DELETE FROM inventory_movements WHERE product_id IN (SELECT id FROM products WHERE name = '${PRODUCT_NAME}')`).catch(() => {});
-    await execSql(`DELETE FROM product_variants WHERE product_id IN (SELECT id FROM products WHERE name = '${PRODUCT_NAME}')`).catch(() => {});
-    await execSql(`DELETE FROM products WHERE name = '${PRODUCT_NAME}'`).catch(() => {});
+    // The product this lane creates is registered by claimOwned() the moment its id exists, so
+    // cleanup removes the product, its variant and its movement by id. The old before/after deletes
+    // matched on the product NAME — a prefix is not ownership: a same-shaped name from another run
+    // would have been deleted here, and this lane's own row could have escaped if it had been
+    // renamed.
     await cleanupFixtures();
   });
 
@@ -62,6 +62,10 @@ test.describe('Product opening stock', () => {
 
     // Wait for the real RPC round-trip, then judge the database, not the screen.
     await page.waitForTimeout(5000);
+
+    // OWNERSHIP: the row exists now, so claim it by the exact name this lane generated — and
+    // register the product id cleanup will delete (its variant and movement follow by FK).
+    await claimOwned('products', `SELECT id FROM products WHERE name = '${PRODUCT_NAME}'`);
 
     const rows = await execSql(`
       SELECT v.name, v.stock_qty, v.selling_price

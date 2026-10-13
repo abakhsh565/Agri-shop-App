@@ -116,7 +116,7 @@ test.describe('Interaction layer: motion, feedback, skeletons, toasts, date chro
   });
 
   test.afterAll(async () => {
-    await cleanupFixtures().catch(() => {});
+    await cleanupFixtures();
   });
 
   test('1. a sheet animates IN and OUT, and a dying overlay never swallows a tap', async ({ page }) => {

@@ -18,9 +18,17 @@
  * QA database only.
  */
 import { test, expect } from '@playwright/test';
-import { QA_IDS, execSql, setupFixtures, cleanupFixtures, injectAdminAuth } from './helpers';
+import {
+  QA_IDS,
+  execSql,
+  setupFixtures,
+  cleanupFixtures,
+  claimNew,
+  snapshotIds,
+  injectAdminAuth,
+} from './helpers';
 
-const BASE_URL = 'http://localhost:5173';
+const BASE_URL = process.env.QA_APP_URL || 'http://localhost:5173';
 const INITIAL_BALANCE = 20000;
 const INITIAL_PAYABLE = 10000;
 const PAYMENT_AMOUNT = 3000;
@@ -48,13 +56,30 @@ test.describe('Double tap safety', () => {
     await setupFixtures();
     await execSql(`UPDATE customers SET outstanding_balance = ${INITIAL_BALANCE}, total_paid = 0 WHERE id = '${QA_IDS.customerA}'`);
     await execSql(`UPDATE companies SET outstanding_payable = ${INITIAL_PAYABLE} WHERE id = '${QA_IDS.companyA}'`);
-    await execSql(`DELETE FROM customer_payments WHERE customer_id = '${QA_IDS.customerA}'`);
-    await execSql(`DELETE FROM supplier_payments WHERE company_id = '${QA_IDS.companyA}'`);
+
+    // OWNERSHIP: this used to start by DELETING every payment of the shared fixture customer and
+    // supplier — rows that belong to whoever created them, not to this lane. The premise the lane
+    // actually needs is "this fixture has no payments yet", and that is now asserted instead of
+    // enforced by deletion: if another run left payments behind, this lane fails here, visibly,
+    // and deletes nothing.
+    const [customerPayments] = await execSql(
+      `SELECT count(*)::int AS n FROM customer_payments WHERE customer_id = '${QA_IDS.customerA}'`,
+    );
+    expect(
+      customerPayments.n,
+      'doubleTapSafety needs a payment-free fixture customer; QA holds payments from another run',
+    ).toBe(0);
+    const [supplierPayments] = await execSql(
+      `SELECT count(*)::int AS n FROM supplier_payments WHERE company_id = '${QA_IDS.companyA}'`,
+    );
+    expect(
+      supplierPayments.n,
+      'doubleTapSafety needs a payment-free fixture supplier; QA holds payments from another run',
+    ).toBe(0);
   });
 
   test.afterAll(async () => {
-    await execSql(`DELETE FROM customer_payments WHERE customer_id = '${QA_IDS.customerA}'`).catch(() => {});
-    await execSql(`DELETE FROM supplier_payments WHERE company_id = '${QA_IDS.companyA}'`).catch(() => {});
+    // Only this run's rows, by id — never "every payment of QA Customer A".
     await cleanupFixtures();
   });
 
@@ -68,6 +93,11 @@ test.describe('Double tap safety', () => {
     await page.locator('input[type="number"]').first().waitFor({ timeout: 15000 });
     await page.locator('input[type="number"]').first().fill(String(PAYMENT_AMOUNT));
 
+    // Snapshot before the action, claim the difference after it: the row this tap creates.
+    const paymentsBefore = await snapshotIds(
+      `SELECT id FROM customer_payments WHERE customer_id = '${QA_IDS.customerA}'`,
+    );
+
     await doubleTapConfirm(page);
 
     // Wait for the real RPC round-trip, then judge the database, not the UI.
@@ -77,6 +107,12 @@ test.describe('Double tap safety', () => {
       `SELECT count(*)::int AS n FROM customer_payments WHERE customer_id = '${QA_IDS.customerA}'`
     );
     expect(payments[0].n, 'a double tap must record exactly one payment').toBe(1);
+
+    await claimNew(
+      'customer_payments',
+      `SELECT id FROM customer_payments WHERE customer_id = '${QA_IDS.customerA}'`,
+      paymentsBefore,
+    );
 
     const after = await execSql(
       `SELECT outstanding_balance, total_paid FROM customers WHERE id = '${QA_IDS.customerA}'`
@@ -91,8 +127,12 @@ test.describe('Double tap safety', () => {
     await execSql(
       `UPDATE customers SET outstanding_balance = 30000, total_purchases = 80000, total_paid = 50000 WHERE id = '${QA_IDS.customerA}'`
     );
-    await execSql(`DELETE FROM sale_items WHERE sale_id IN (SELECT id FROM sales WHERE customer_id = '${QA_IDS.customerA}')`);
-    await execSql(`DELETE FROM sales WHERE customer_id = '${QA_IDS.customerA}'`);
+    // Same premise, asserted rather than enforced: the count below must be THIS run's sale alone.
+    const [salesBefore] = await execSql(
+      `SELECT count(*)::int AS n FROM sales WHERE customer_id = '${QA_IDS.customerA}'`,
+    );
+    expect(salesBefore.n, 'doubleTapSafety needs a sale-free fixture customer').toBe(0);
+    const salesIdsBefore = await snapshotIds(`SELECT id FROM sales WHERE customer_id = '${QA_IDS.customerA}'`);
 
     await page.goto(BASE_URL);
     await page.waitForLoadState('networkidle');
@@ -117,6 +157,8 @@ test.describe('Double tap safety', () => {
       `SELECT id, sale_number, total_amount FROM sales WHERE customer_id = '${QA_IDS.customerA}'`
     );
     expect(sales.length, 'a double tap must create exactly one sale').toBe(1);
+
+    await claimNew('sales', `SELECT id FROM sales WHERE customer_id = '${QA_IDS.customerA}'`, salesIdsBefore);
 
     const items = await execSql(`SELECT count(*)::int AS n FROM sale_items WHERE sale_id = '${sales[0].id}'`);
     expect(Number(items[0].n), 'the sale has its one line').toBe(1);

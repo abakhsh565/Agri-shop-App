@@ -3,11 +3,29 @@
  *
  * Provides auth injection, QA DB setup/teardown, and evidence collection
  * for Playwright browser tests.
+ *
+ * CLEANUP IS OWNERSHIP-BASED (2026-10-13). `cleanupFixtures()` used to delete 20 business tables
+ * wholesale and swallow every error; eight lanes believed to be read-only ran it, and the shared QA
+ * baseline lost the seven fixture rows it targets (measured: 3 customers + 2 products + 2 variants)
+ * while the deletes that would have destroyed hundreds of rows failed silently. Cleanup now deletes
+ * ONLY ids this run registered through `trackOwned`, in FK-safe order, and reports every failure.
+ * The decision itself lives in `tests/e2e/cleanupOwnership.ts` (no I/O, fully unit-tested).
  */
 
 import { expect, type Page, type TestInfo } from '@playwright/test';
 import * as fs from 'fs';
 import * as path from 'path';
+import {
+  clearOwnership,
+  createOwnership,
+  deleteSql,
+  ownedCount,
+  planCleanup,
+  trackOwned,
+  trackOwnedObject,
+  type OwnedObject,
+  type Ownership,
+} from './cleanupOwnership';
 
 /**
  * Load .env.qa into process.env if not already loaded.
@@ -61,7 +79,7 @@ const QA_DB_USER = process.env.QA_DB_USER || '';
 const QA_DB_PASS = process.env.QA_DB_PASS || '';
 
 /** The app under test (Playwright's baseURL) */
-const BASE_URL = 'http://localhost:5173';
+const BASE_URL = process.env.QA_APP_URL || 'http://localhost:5173';
 
 /** Local (dialable) form of the QA admin phone used by the real login flow */
 const ADMIN_LOGIN_PHONE = '03009999999'; // 923009999999 -> 03009999999
@@ -311,7 +329,13 @@ export async function injectAdminAuth(page: Page) {
   }, adminUser);
 }
 
-/** Setup QA test fixtures via direct DB */
+/**
+ * Setup QA test fixtures via direct DB.
+ *
+ * These rows are the SHARED baseline (see tests/setup/fixtures.ts: several suites seed and rely on
+ * them between runs), so they are deliberately NOT registered as run-owned: cleanup must not delete
+ * a fixture another lane is still using. What a lane creates on top of them, it registers itself.
+ */
 export async function setupFixtures() {
   await execSql(`
     INSERT INTO users (id, name, phone, role, is_original_owner, is_active, shop_id)
@@ -351,39 +375,189 @@ export async function setupFixtures() {
   `);
 }
 
-/** Cleanup all QA test data */
-export async function cleanupFixtures() {
-  const tables = [
-    'reminder_logs', 'reminder_occurrences', 'reminder_configs',
-    'credit_limit_requests', 'return_items', 'returns',
-    'sale_items', 'sales', 'customer_payments', 'payments',
-    'supplier_payments', 'inventory_movements', 'stock_adjustments',
-    'purchase_items', 'purchases', 'audit_events', 'activity_log',
-    'customer_crops', 'notifications', 'voids',
-  ];
+// ── Run-scoped ownership ─────────────────────────────────────
+/**
+ * What THIS run created. Every lane that writes to QA registers its own ids here
+ * (`trackOwned(ownership(), 'sales', saleId)`); cleanup then deletes exactly those, and nothing else.
+ * Kept in-process: a row that is not registered is a row this run does not own, whether or not it
+ * shares a table with one that is.
+ */
+const runOwnership: Ownership = createOwnership();
+const runObjects: OwnedObject[] = [];
 
-  for (const table of tables) {
-    try { await execSql(`DELETE FROM ${table}`); } catch { /* skip */ }
+export function ownership(): Ownership {
+  return runOwnership;
+}
+
+/** Storage objects this run uploaded (image lanes): removed by name, never by bucket sweep. */
+export function ownedObjects(): OwnedObject[] {
+  return runObjects;
+}
+
+export { trackOwned, trackOwnedObject, ownedCount };
+
+async function removeStorageObject(object: OwnedObject): Promise<void> {
+  const { error } = await _svcClient.storage.from(object.bucket).remove([object.path]);
+  if (error) throw new Error(error.message);
+}
+
+/**
+ * Register the rows THIS lane just created, discovered through the lane's own marker.
+ *
+ * WHY A QUERY IS ALLOWED HERE. Discovery of a row we created moments ago (by the phone number, name
+ * or sale number the lane itself chose) is not the anti-pattern this file was fixed for. The
+ * anti-pattern was DELETING by a prefix or by a shared fixture — "every company whose name starts
+ * with QA Microcopy", "every payment of QA Customer A". Here the marker only finds our own rows
+ * once, immediately after creation; what cleanup later deletes is the explicit id.
+ *
+ * Fails loudly when the claim matched nothing: a lane that cannot name what it created is a lane
+ * whose cleanup would silently do nothing, which is how leftovers accumulate unnoticed.
+ *
+ * @param sql a SELECT returning a column (default `id`) that carries the row ids to own
+ */
+export async function claimOwned(
+  kind: string,
+  sql: string,
+  options: { column?: string; exec?: (statement: string) => Promise<any[]> } = {},
+): Promise<string[]> {
+  const rows = await (options.exec ?? execSql)(sql);
+  const column = options.column ?? 'id';
+  const ids = rows.map((row) => String(row?.[column] ?? '')).filter(Boolean);
+  if (!ids.length) {
+    throw new Error(
+      `[QA CLEANUP] claimOwned('${kind}') matched no rows — this lane cannot prove what it created, ` +
+        `so its cleanup would be a no-op: ${sql}`,
+    );
+  }
+  return trackOwned(runOwnership, kind, ids);
+}
+
+/**
+ * Track a Storage object this lane uploaded, given the URL the app stored for it.
+ *
+ * Only ever call this with a URL that came from a real upload (a preview src or a value read back
+ * after a save). A URL a test writes into the database itself addresses no object, so tracking it
+ * would make cleanup try to delete something that never existed.
+ *
+ * @returns true when the URL named a storage object and was tracked
+ */
+export function trackUploadedObject(url: string | null | undefined): boolean {
+  if (!url || typeof url !== 'string') return false;
+  const match = /\/storage\/v1\/object\/(?:public|sign)\/([^/]+)\/(.+?)(?:\?.*)?$/.exec(url);
+  if (!match) return false;
+  trackOwnedObject(runObjects, match[1], match[2]);
+  return true;
+}
+
+/**
+ * Read the ids a query currently matches, so a lane can diff before/after its own action.
+ * Read-only: it selects, it never registers and never deletes.
+ */
+export async function snapshotIds(
+  sql: string,
+  options: { column?: string; exec?: (statement: string) => Promise<any[]> } = {},
+): Promise<string[]> {
+  const rows = await (options.exec ?? execSql)(sql);
+  const column = options.column ?? 'id';
+  return rows.map((row) => String(row?.[column] ?? '')).filter(Boolean);
+}
+
+/**
+ * Register exactly the ids that appeared since `snapshot` — the rows this lane's own action created.
+ *
+ * WHY NOT A TIMESTAMP. "Created in the last five minutes" would claim another lane's row that
+ * happened to land in the same window; a diff against a snapshot taken immediately before the
+ * action claims only what changed. The shared fixture is never claimed by this: only the new rows
+ * are, so a shared customer can still be sold to without the customer being owned.
+ */
+export async function claimNew(
+  kind: string,
+  sql: string,
+  snapshot: readonly string[],
+  options: { column?: string; exec?: (statement: string) => Promise<any[]> } = {},
+): Promise<string[]> {
+  const seen = new Set(snapshot);
+  const ids = (await snapshotIds(sql, options)).filter((id) => !seen.has(id));
+  if (!ids.length) {
+    throw new Error(
+      `[QA CLEANUP] claimNew('${kind}') found no new row — the action did not create what this lane ` +
+        `believes it created, so its cleanup would be a no-op: ${sql}`,
+    );
+  }
+  return trackOwned(runOwnership, kind, ids);
+}
+
+export interface CleanupOptions {
+  /** Statement runner. Injectable so the ownership behaviour can be tested without touching QA. */
+  exec?: (sql: string) => Promise<unknown>;
+  /** Storage-object remover. Injectable for the same reason. */
+  removeObject?: (object: OwnedObject) => Promise<void>;
+  /** Registry to clean. Defaults to this run's. */
+  ownership?: Ownership;
+  /** Storage objects to remove. Defaults to this run's. */
+  objects?: OwnedObject[];
+}
+
+/**
+ * Delete the records THIS run created, and only those.
+ *
+ * Guarantees:
+ *   * every statement is scoped by an owned id — no table-wide delete can be produced;
+ *   * protected fixtures (the four keep-list accounts, `companyA`) are skipped and reported;
+ *   * an empty registry means an empty plan (the safe direction), and says so;
+ *   * every failure is collected and thrown, naming the table, the column and the operation, so a
+ *     failed cleanup fails the run instead of being absorbed by a `catch`;
+ *   * repeating it is a no-op: the registry is cleared only after a fully successful pass.
+ */
+export async function cleanupFixtures(options: CleanupOptions = {}): Promise<void> {
+  const exec = options.exec ?? execSql;
+  const ownership = options.ownership ?? runOwnership;
+  const objects = options.objects ?? runObjects;
+  const removeObject = options.removeObject ?? removeStorageObject;
+
+  const { steps, protectedSkipped } = planCleanup(ownership);
+
+  if (protectedSkipped.length) {
+    console.log(
+      `[QA CLEANUP] preserved ${protectedSkipped.length} protected id(s) — fixture accounts / companyA: ${protectedSkipped.join(', ')}`,
+    );
+  }
+  if (!steps.length && !objects.length) {
+    console.log(
+      '[QA CLEANUP] nothing owned by this run — no deletes issued. A lane that creates QA rows must register them with trackOwned(...).',
+    );
+    return;
   }
 
-  try {
-    await execSql(`DELETE FROM customers WHERE id IN ('${QA_IDS.customerA}', '${QA_IDS.customerB}', '${QA_IDS.customerC}')`);
-    await execSql(`DELETE FROM product_variants WHERE product_id IN ('${QA_IDS.productA}', '${QA_IDS.productB}')`);
-    await execSql(`DELETE FROM products WHERE id IN ('${QA_IDS.productA}', '${QA_IDS.productB}')`);
-    await execSql(`DELETE FROM companies WHERE id IN ('${QA_IDS.companyA}')`);
-    // The two accounts are NOT test data — they are baseline infrastructure, and
-    // their Supabase Auth credential lives in auth.users. Deleting the users row
-    // deletes that credential, and the app cannot recreate it on its own (signUp
-    // yields no session until the email is confirmed), so every later lane that
-    // tries to sign in as QA Admin/QA Employee fails with "could not start a
-    // secure session" — or silently misreports, which is worse. This line used to
-    // DELETE them, which is why the 4-account baseline kept collapsing to 2.
-    // Cleanup here means undoing destructive STATE, not removing the accounts.
-    await execSql(
-      `UPDATE users SET is_active = true, deactivated_at = NULL, deactivated_by = NULL
-       WHERE id IN ('${QA_IDS.admin}', '${QA_IDS.employee}')`,
+  const failures: string[] = [];
+  for (const step of steps) {
+    try {
+      await exec(deleteSql(step));
+    } catch (error) {
+      failures.push(`${step.table}.${step.column} (${step.ids.length} id(s)): ${errorMessage(error)}`);
+    }
+  }
+
+  for (const object of [...objects]) {
+    try {
+      await removeObject(object);
+      objects.splice(objects.indexOf(object), 1);
+    } catch (error) {
+      failures.push(`storage ${object.bucket}/${object.path}: ${errorMessage(error)}`);
+    }
+  }
+
+  if (failures.length) {
+    throw new Error(
+      `[QA CLEANUP] ${failures.length} operation(s) failed — this run is NOT clean:\n  - ${failures.join('\n  - ')}`,
     );
-  } catch { /* skip */ }
+  }
+  clearOwnership(ownership);
+  console.log(`[QA CLEANUP] removed everything this run owned (${steps.length} statement(s)).`);
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 /** Record a test result for the evidence report */
