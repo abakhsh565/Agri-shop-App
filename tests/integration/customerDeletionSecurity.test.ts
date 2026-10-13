@@ -130,10 +130,14 @@ beforeAll(async () => {
   const stale = await sql(
     `SELECT (SELECT count(*) FROM memberships WHERE user_id IN ('${OWNER_A}','${OWNER_B}','${EMP_EDIT}','${EMP_DELETE}')) AS memberships,
             (SELECT count(*) FROM user_active_shops WHERE user_id IN ('${OWNER_A}','${OWNER_B}','${EMP_EDIT}','${EMP_DELETE}')) AS active_shops,
+            (SELECT count(*) FROM users WHERE id IN ('${OWNER_A}','${OWNER_B}','${EMP_EDIT}','${EMP_DELETE}') OR phone IN (${PHONES.map((p) => `'${p}'`).join(',')})) AS users,
             (SELECT count(*) FROM shops WHERE id IN ('${TENANT_A}','${TENANT_B}')) AS shops`,
   );
   const staleCounts = stale.rows[0] as Record<string, string>;
-  if (cleanupFailures.length || Number(staleCounts.memberships) || Number(staleCounts.active_shops) || Number(staleCounts.shops)) {
+  // `users` is counted as well: when a foreign key blocks the user delete, the membership rows are
+  // already gone and the shop is already gone, so a check that only looked at those would pass while
+  // a user row still points at a tenant this run does not own.
+  if (cleanupFailures.length || ['memberships', 'active_shops', 'users', 'shops'].some((k) => Number(staleCounts[k]))) {
     throw new Error(
       `the ${ROW_PREFIX} namespace is not clean, so this suite cannot make a statement about ` +
         `authorization. Leftover rows: ${JSON.stringify(staleCounts)}. Cleanup failures: ` +
