@@ -53,6 +53,24 @@ if (isNative) {
   })();
 }
 
+// Error visibility. Before this, a crash on an owner's phone left nothing behind anywhere.
+//
+// The handler stays this small on purpose: it does no filtering, decides nothing about the
+// environment, and never retries. `reportClientError` owns those rules — it refuses to record when
+// the environment is not configured instead of looking like coverage, and it allow-lists the
+// payload so a caught error cannot carry a customer's details to the server.
+//
+// It is registered before the first render, because the errors worth having include the ones that
+// happen on the way in — including before sign-in, which is why the table accepts pre-login writes.
+function reportUncaught(error: unknown): void {
+  void import('./lib/monitoring').then(({ reportClientError }) =>
+    reportClientError({ error, screen: window.location.pathname }),
+  );
+}
+
+window.addEventListener('error', (event) => reportUncaught(event.error ?? event.message));
+window.addEventListener('unhandledrejection', (event) => reportUncaught(event.reason));
+
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <App />

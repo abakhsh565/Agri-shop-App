@@ -275,6 +275,11 @@ scope rules exclude. Monitoring is therefore Supabase, which every environment a
 | No secrets or customer data in events | `details` is allow-listed and primitives-only; `tests/unit/monitoringPrivacy.test.ts` (12 tests) proves a payload carrying `phone`, `email`, `amount`, `token` and `notes` reduces to its allowed keys, with a permissive-scrubber control showing the assertion discriminates |
 | Missing configuration is not mistaken for working monitoring | `monitoringStatus()` returns `operational:false` with `NOT operational` for a missing or unrecognised environment and for a missing endpoint; `reportClientError()` then records nothing and says why |
 
+The app-side hook is wired in `src/main.tsx`: `error` and `unhandledrejection` are reported before the
+first render, so the errors that happen on the way in — including before sign-in — are the ones the
+write-only table exists for. The handler decides nothing itself; `reportClientError` owns the
+environment check and the payload allow list.
+
 Known gap, recorded rather than hidden: `service_role` has SELECT but no DELETE grant on the table, so
 pruning (retention) requires SQL. The self-test row used for this proof was removed that way; the
 pruned count is 0 and the table has 0 client SELECT policies.
