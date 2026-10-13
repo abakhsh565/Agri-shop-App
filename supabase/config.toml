@@ -57,15 +57,33 @@ max_client_conn = 100
 # secret_key = "env(SECRET_VALUE)"
 
 [db.migrations]
-# If disabled, migrations will be skipped during a db push or reset.
-enabled = true
+# DISABLED FOR LOCAL DEVELOPMENT, deliberately. `supabase/migrations` is a patch set, not a
+# baseline: replaying it against an EMPTY database fails at 0009 (relation "users" does not exist)
+# and cascades, and it fails onto a captured environment schema too (SCHEMA_STRATEGY.md §1). That
+# is why this repository's decided strategy is a frozen baseline per environment plus forward-only
+# files — and the local stack follows the same strategy: the schema is seeded from the accepted
+# staging baseline artifact (public schema, data statements skipped) and then the forward files
+# 0188-0197 are applied. See docs/LOCAL_DEVELOPMENT.md.
+#
+# Leaving this enabled would make `supabase start` / `db reset` replay the directory onto the
+# seeded database, replacing a known-good schema with a partial, failed one. Nothing about hosted
+# environments depends on this flag: QA and production are migrated through scripts/migrate.mjs,
+# which never reads supabase/config.toml.
+enabled = false
 # Specifies an ordered list of schema files, directories, or glob patterns that describe your database.
 # Supports paths relative to supabase directory: "./schemas/*.sql", "./database".
 schema_paths = []
 
 [db.seed]
-# If enabled, seeds the database after migrations during a db reset.
-enabled = true
+# Disabled for the same reason as [db.migrations] above: there is no automated reset path here.
+# The local seed lives in supabase/seed.sql and is applied by hand, after the baseline schema and
+# the forward files, with:
+#   docker exec -i supabase_db_Agrishop_Inventory_management_system_-_N \
+#     psql -U postgres -d postgres < supabase/seed.sql
+# It contains local-only fixture data and local-only credentials. It is never applied to QA or
+# production: no hosted tooling reads supabase/seed.sql (scripts/migrate.mjs applies
+# supabase/migrations only).
+enabled = false
 # Specifies an ordered list of seed files to load during db reset.
 # Supports glob patterns relative to supabase directory: "./seeds/*.sql"
 sql_paths = ["./seed.sql"]

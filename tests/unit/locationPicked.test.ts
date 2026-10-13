@@ -39,7 +39,7 @@ describe("Locations are picked, not typed", () => {
     // places the requirement names, each of which used to have a free-text address field.
     //
     // `via` is where a screen reaches the picker through a component that owns the form rather
-    // than importing the field itself: `BranchEditSheet` renders `BranchEditor`, and the field
+    // than importing the field itself: the branch screen renders `BranchEditor`, and the field
     // moved into it when the branch form stopped being a sheet of its own. The rule being
     // enforced is "a place is picked on a map somewhere on the way to the screen", not "this
     // particular file spells the import" — so the delegation is followed rather than the entry
@@ -47,7 +47,7 @@ describe("Locations are picked, not typed", () => {
     const screens = [
       { file: "pages/employee/customers/AddCustomerPage.tsx", via: [] as string[] },
       { file: "pages/register/RegisterShopDetailsPage.tsx", via: [] },
-      { file: "components/shop/BranchEditSheet.tsx", via: ["components/shop/BranchEditor.tsx"] },
+      { file: "pages/admin/more/BranchDetailPage.tsx", via: ["components/shop/BranchEditor.tsx"] },
       { file: "components/shop/ShopSwitcherSheet.tsx", via: [] },
     ];
     const missing = screens

@@ -1,18 +1,12 @@
 import pg from 'pg';
+import { qaPoolOptions } from './lib/qa-connection.mjs';
 
 const { Pool } = pg;
 
-// Supabase direct connection (not pooler)
-const pool = new Pool({
-  host: 'aws-0-ap-south-1.pooler.supabase.com',
-  port: 6543,
-  database: 'postgres',
-  user: 'postgres.brcrofzpegqvbynukibr',
-  password: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJyY3JvZnpwZWdxdmJ5bnVraWJyIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1MzM4MDkzOSwiZXhwIjoyMDY4OTU2OTM5fQ.f1bNdxFfW_4jP7SJeFbI2S0SxZq8PnGFRVxVfJQpV2Y',
-  ssl: { rejectUnauthorized: false },
-  connectionTimeoutMillis: 15000,
-  statement_timeout: 30000,
-});
+// Credentials come from the environment, and the target must be the QA project.
+// The literal that used to sit here (a service-role key for an older project) is in git history and
+// must be rotated — see docs/PRODUCTION_DATA_POLICY.md.
+const pool = new Pool(qaPoolOptions({ statementTimeout: 30000 }));
 
 async function run() {
   const client = await pool.connect();

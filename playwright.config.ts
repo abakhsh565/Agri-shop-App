@@ -1,7 +1,18 @@
 import { defineConfig } from '@playwright/test';
 
+// The suite's port is configurable because 5173 is shared with other projects on this machine.
+// Whichever port is used, the identity guard below still proves the server is THIS app's QA server.
+const PORT = Number(process.env.E2E_PORT) || 5173;
+// `QA_APP_URL` is the same variable the specs read for their own navigations, so config, guard and
+// specs can never disagree about which server is under test.
+const ORIGIN = process.env.QA_APP_URL || `http://localhost:${PORT}`;
+
 export default defineConfig({
   testDir: './tests/e2e',
+  // Reusing a running server is safe only when it is THIS app's QA-mode server on the port. The
+  // setup below reads that server's own environment block and fails the run closed otherwise, so a
+  // foreign application can never be driven silently (see tests/e2e/global-setup.ts).
+  globalSetup: './tests/e2e/global-setup.ts',
   fullyParallel: false,
   forbidOnly: true,
   retries: 0,
@@ -14,7 +25,7 @@ export default defineConfig({
   use: {
     // Use system Chrome instead of downloading Chromium
     channel: 'chrome',
-    baseURL: 'http://localhost:5173',
+    baseURL: ORIGIN,
     headless: true,
     screenshot: 'only-on-failure',
     trace: 'on-first-retry',
@@ -33,8 +44,8 @@ export default defineConfig({
   ],
   webServer: {
     // Use --mode qa so Vite loads .env.qa → QA Supabase instead of production
-    command: 'npx vite --mode qa --port 5173',
-    url: 'http://localhost:5173',
+    command: `npx vite --mode qa --port ${PORT}`,
+    url: ORIGIN,
     reuseExistingServer: true,
     timeout: 60000,
     env: {

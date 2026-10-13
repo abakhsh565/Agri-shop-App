@@ -10,6 +10,11 @@ import { defineConfig } from '@playwright/test';
  * Usage:
  *   npx playwright test --config=playwright.media.config.ts
  */
+// Same configurable port as the verification config, for the same reason: 5173 may be held by
+// another project on this machine. The shared identity guard still proves it is this app's server.
+const PORT = Number(process.env.E2E_PORT) || 5173;
+const ORIGIN = process.env.QA_APP_URL || `http://localhost:${PORT}`;
+
 export default defineConfig({
   testDir: './tests/media',
   fullyParallel: false,
@@ -20,7 +25,7 @@ export default defineConfig({
   reporter: [['list']],
   use: {
     channel: 'chrome',
-    baseURL: 'http://localhost:5173',
+    baseURL: ORIGIN,
     headless: true,
     viewport: { width: 390, height: 844 },
     actionTimeout: 20000,
@@ -35,9 +40,12 @@ export default defineConfig({
   },
   projects: [{ name: 'media', testMatch: /capture.spec.ts$/, }],
   webServer: {
-    command: 'npx vite --mode qa --port 5173',
-    url: 'http://localhost:5173',
+    command: `npx vite --mode qa --port ${PORT}`,
+    url: ORIGIN,
     reuseExistingServer: true,
     timeout: 60000,
   },
+  // Same port, same reuse hazard as the verification config: a capture run must not be driven
+  // against whatever else happens to hold 5173 (see tests/e2e/global-setup.ts).
+  globalSetup: './tests/e2e/global-setup.ts',
 });

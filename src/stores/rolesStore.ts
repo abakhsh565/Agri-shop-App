@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { captureDataContext, isDataContextCurrent } from "@/lib/localCache";
 import { supabase } from "@/lib/supabase";
 import { getCurrentTenantId } from "@/lib/tenantContext";
 import type { Role } from "@/types";
@@ -52,6 +53,8 @@ export const useRolesStore = create<RolesState>((set, get) => ({
    * both are scoped to the same shop, which is what every other store already does.
    */
   load: async () => {
+    const context = captureDataContext();
+    if (!isDataContextCurrent(context)) return;
     const tenantId = getCurrentTenantId();
     set({ loading: true });
     if (!tenantId) {
@@ -63,6 +66,7 @@ export const useRolesStore = create<RolesState>((set, get) => ({
       .select("*")
       .eq("tenant_id", tenantId)
       .order("name");
+    if (!isDataContextCurrent(context)) return;
     if (error) {
       set({ loading: false, ready: true });
       return;
@@ -87,6 +91,7 @@ export const useRolesStore = create<RolesState>((set, get) => ({
       role.permissionCount = count ?? 0;
     }
 
+    if (!isDataContextCurrent(context)) return;
     set({ roles, loading: false, ready: true });
   },
 

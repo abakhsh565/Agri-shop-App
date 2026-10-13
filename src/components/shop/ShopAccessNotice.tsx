@@ -25,11 +25,13 @@ export function useNoActiveShop(): boolean {
   const loaded = useShopStore((s) => s.loaded);
   const ownerId = useShopStore((s) => s.ownerId);
   const hasActive = useShopStore((s) => s.shops.some((s) => s.membershipStatus === "active"));
+  const branchesLoaded = useShopStore((s) => s.branchesLoaded);
+  const activeBranchId = useShopStore((s) => s.activeBranchId);
   const userId = useAuthStore((s) => s.user?.id);
   // The answer must belong to the account standing here. `loaded` outlives a sign-out, so
   // without this check the next person to sign in would see the previous account's answer for
   // as long as their own read took.
-  return !!userId && loaded && ownerId === userId && !loading && !hasActive;
+  return !!userId && loaded && ownerId === userId && !loading && (!hasActive || (branchesLoaded && !activeBranchId));
 }
 
 export default function ShopAccessNotice() {
@@ -42,10 +44,8 @@ export default function ShopAccessNotice() {
   // Who can create the shop is decided by the server (create_shop_for_me requires owner/admin);
   // the screen asks the same question so an employee is not offered a button that would be
   // refused.
-  const canCreate =
-    user?.membershipRole === "owner" ||
-    user?.membershipRole === "admin" ||
-    user?.role === "admin";
+  const canCreate = user?.membershipRole === "owner";
+  const hasBusiness = useShopStore((s) => s.shops.some((shop) => shop.membershipStatus === "active"));
 
   return (
     <div className="flex flex-col flex-1 items-center justify-center gap-6 px-8 text-center" data-testid="no-shop-notice">
@@ -56,8 +56,8 @@ export default function ShopAccessNotice() {
         <Store size={26} style={{ color: "var(--text-secondary)" }} />
       </div>
       <div className="flex flex-col gap-2">
-        <p className="text-xl font-bold text-foreground">{t("auth.noShopTitle")}</p>
-        <p className="text-sm text-caption">{t("auth.noShopBody")}</p>
+        <p className="text-xl font-bold text-foreground">{t(hasBusiness ? "branchFlow.noAccessTitle" : "auth.noShopTitle")}</p>
+        <p className="text-sm text-caption">{t(hasBusiness ? "branchFlow.noAccessBody" : "auth.noShopBody")}</p>
         <p className="text-sm text-caption">
           {t(canCreate ? "auth.noShopOwnerNext" : "auth.noShopEmployeeNext")}
         </p>
@@ -68,7 +68,7 @@ export default function ShopAccessNotice() {
             {/* The name field and the create call live in one place (the shop switcher), so this
                 opens that sheet rather than mounting a second copy of the form. */}
             <Button fullWidth size="lg" onClick={() => openSwitcher()}>
-              {t("shop.createCta")}
+              {t("branches.create")}
             </Button>
             <Button
               fullWidth

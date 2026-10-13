@@ -61,7 +61,13 @@ export default function NavHeader({ title, backTo, onBack, right, noBack }: NavH
           // announces nothing at all here.
           aria-label={tNow("common.back")}
           data-testid="nav-back"
-          className="flex items-center text-sm font-medium absolute transition-opacity active:opacity-60"
+          // 44px of TARGET around an 18px arrow. The box was the icon's own size, so the tappable
+          // area was 18×18 — under the touch floor, on every sub-screen in the app, and invisible
+          // to the accessibility lane until the location picker (the first route it audits with
+          // this header) put it in front of a measurement. `justify-start` is the load-bearing
+          // part: the arrow must stay pinned to the 20px inset rather than drifting to the centre
+          // of a wider box, which is exactly what centring it would have done.
+          className="flex items-center justify-start w-11 h-11 text-sm font-medium absolute transition-opacity active:opacity-60"
           // The arrow mirrors with the reading direction — in Urdu the leading edge is the right
           // one, so back belongs there, with the mirrored glyph. A logical inset does the rest:
           // the box's inline start IS the leading edge in both directions, so there is nothing to

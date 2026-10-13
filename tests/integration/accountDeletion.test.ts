@@ -21,10 +21,16 @@
  *    request may hold the local spelling (`0300…`) while the profile holds the E.164 one
  *    (`92300…`) — the same number written two ways.
  *
- * 2. THE BRANCH. `delete_branch` (0168) erases one branch completely, resolves its people
- *    (who keeps a login, who loses one) and refuses the main branch and the caller's only
- *    branch. It is reached from Settings in the app and had NO lane until this file, which
- *    is exactly the kind of RPC that rots silently.
+ * 2. THE BRANCH. This half used to call `delete_branch` (0168) — one transaction that erased a
+ *    branch, resolved its people and refused the main branch. 0191 retired that endpoint for
+ *    clients (`REVOKE ALL … FROM PUBLIC, anon, authenticated`, with the comment "The legacy
+ *    endpoint erases a TENANT and accounts. It is not a branch API.") and replaced what the app
+ *    offers with `archive_operating_branch`. A fixture that keeps calling a revoked RPC measures
+ *    nothing, so this half now proves the surviving contract instead: a branch with people in it
+ *    cannot be archived until they are moved (`BRANCH_HAS_STAFF`), archiving then hides the branch
+ *    and keeps its history, the default branch is still refused, and the other branch — and the
+ *    tenant's own records — are untouched. The erasure half of the owner's report is the account
+ *    deletion below, which still ends with nothing left behind.
  *
  * WHY IT GOES THROUGH THE REAL RPCs. `insert_shop_request` and `approve_shop_request` are
  * the app's own registration path, so this lane proves the user journey — register, be
@@ -41,10 +47,11 @@ import { execRpcAsUser, execSqlAsAdmin } from '../setup/qa-client';
 // suite's cleanup deletes the other's rows mid-run (tests/unit/fixtureIdCollision.test.ts).
 const ACTOR = '9c000000-0000-4000-8000-000000000001';
 const MAIN_SHOP = '9c000000-0000-4000-8000-000000000002';
-const SIDE_SHOP = '9c000000-0000-4000-8000-000000000003';
 const MAIN_CUSTOMER = '9c000000-0000-4000-8000-000000000004';
-const SIDE_CUSTOMER = '9c000000-0000-4000-8000-000000000005';
 const SIDE_EMPLOYEE = '9c000000-0000-4000-8000-000000000006';
+/** The two branches inside the one shop: what 0188 settled, a branch is not its own tenant. */
+const MAIN_BRANCH = '9c000000-0000-4000-8000-000000000007';
+const SIDE_BRANCH = '9c000000-0000-4000-8000-000000000008';
 
 const ACTOR_PHONE = '923009630001';
 const SIDE_EMPLOYEE_PHONE = '923009630002';
@@ -84,8 +91,8 @@ async function cleanup() {
   await sql(`DELETE FROM customers WHERE name LIKE 'QA Delete %' OR name = 'QA Fresh Customer'`).catch(() => undefined);
   await sql(`DELETE FROM customers WHERE phone LIKE '%9630003'`).catch(() => undefined);
   await sql(`DELETE FROM products WHERE name LIKE 'QA Fresh %'`).catch(() => undefined);
-  await sql(`DELETE FROM memberships WHERE tenant_id IN ('${MAIN_SHOP}','${SIDE_SHOP}')`).catch(() => undefined);
-  await sql(`DELETE FROM user_active_shops WHERE shop_id IN ('${MAIN_SHOP}','${SIDE_SHOP}')`).catch(() => undefined);
+  await sql(`DELETE FROM memberships WHERE tenant_id = '${MAIN_SHOP}'`).catch(() => undefined);
+  await sql(`DELETE FROM user_active_shops WHERE shop_id = '${MAIN_SHOP}'`).catch(() => undefined);
   // People BEFORE shops: `users.shop_id` references `shops(id)` with no cascade, so a shop cannot
   // be dropped while a profile still names it — the very FK the product's own deletion has to
   // sequence around, and doing it in the wrong order here left a QA shop behind after every run.
@@ -99,7 +106,7 @@ async function cleanup() {
       `DELETE FROM shop_requests WHERE right(regexp_replace(owner_phone, '\\D', '', 'g'), 10) = '${digits.slice(-10)}'`
     ).catch(() => undefined);
   }
-  await sql(`DELETE FROM shops WHERE id IN ('${MAIN_SHOP}','${SIDE_SHOP}')`).catch(() => undefined);
+  await sql(`DELETE FROM shops WHERE id = '${MAIN_SHOP}'`).catch(() => undefined);
   await sql(
     `DELETE FROM auth.users WHERE email LIKE '%${FRESH_PHONE_E164}%' OR email LIKE '%${ACTOR_PHONE}%' OR email LIKE '%${SIDE_EMPLOYEE_PHONE}%'`
   ).catch(() => undefined);
@@ -108,21 +115,20 @@ async function cleanup() {
 beforeAll(async () => {
   await cleanup();
 
-  // ── The branch that will be deleted, and the one that must survive ────────────
+  // ── One shop with two branches: the one that will be archived, and the one that survives ──
   await sql(`
-    INSERT INTO shops (id, name) VALUES
-      ('${MAIN_SHOP}', 'QA Delete Main'),
-      ('${SIDE_SHOP}', 'QA Delete Side')
+    INSERT INTO shops (id, name) VALUES ('${MAIN_SHOP}', 'QA Delete Main')
     ON CONFLICT (id) DO NOTHING
   `);
   await sql(`
-    INSERT INTO branches (tenant_id, name, is_default, is_active) VALUES
-      ('${MAIN_SHOP}', 'QA Delete Main - Main', true,  true),
-      ('${SIDE_SHOP}', 'QA Delete Side - Main', true,  true)
+    INSERT INTO branches (id, tenant_id, name, is_default, is_active) VALUES
+      ('${MAIN_BRANCH}', '${MAIN_SHOP}', 'QA Delete Main - Main', true,  true),
+      ('${SIDE_BRANCH}', '${MAIN_SHOP}', 'QA Delete Side - Main', false, true)
+    ON CONFLICT (id) DO UPDATE SET is_active = true, is_default = EXCLUDED.is_default
   `);
 
-  // The actor's home is MAIN_SHOP; they are also an admin of SIDE_SHOP. That is what makes
-  // SIDE_SHOP a *branch* they may delete rather than their own account.
+  // The actor owns MAIN_SHOP and is working in the side branch, which is what archive has to
+  // resolve: the row that names the archived branch is the one it reassigns to the fallback.
   await sql(`
     INSERT INTO users (id, name, phone, role, is_original_owner, is_active, shop_id)
     VALUES ('${ACTOR}', 'QA Delete Actor', '${ACTOR_PHONE}', 'admin', true, true, '${MAIN_SHOP}')
@@ -130,28 +136,33 @@ beforeAll(async () => {
   `);
   await sql(`
     INSERT INTO memberships (user_id, tenant_id, role, status) VALUES
-      ('${ACTOR}', '${MAIN_SHOP}', 'owner', 'active'),
-      ('${ACTOR}', '${SIDE_SHOP}', 'admin', 'active')
+      ('${ACTOR}', '${MAIN_SHOP}', 'owner', 'active')
     ON CONFLICT (user_id, tenant_id) DO UPDATE SET role = EXCLUDED.role, status = 'active'
   `);
+  await sql(`
+    INSERT INTO user_active_shops (user_id, shop_id, branch_id, updated_at)
+    VALUES ('${ACTOR}', '${MAIN_SHOP}', '${SIDE_BRANCH}', now())
+    ON CONFLICT (user_id) DO UPDATE SET shop_id = EXCLUDED.shop_id, branch_id = EXCLUDED.branch_id
+  `);
 
-  // Someone who works ONLY in the side branch: their login must not outlive it.
+  // Someone who works ONLY in the side branch. 0191 refuses to archive a branch that still has
+  // people scoped to it (BRANCH_HAS_STAFF) rather than silently losing their login or rewriting
+  // their scope — the case below walks that refusal and then the move that clears it.
   await sql(`
     INSERT INTO users (id, name, phone, role, is_original_owner, is_active, shop_id)
-    VALUES ('${SIDE_EMPLOYEE}', 'QA Delete Side Employee', '${SIDE_EMPLOYEE_PHONE}', 'employee', false, true, '${SIDE_SHOP}')
+    VALUES ('${SIDE_EMPLOYEE}', 'QA Delete Side Employee', '${SIDE_EMPLOYEE_PHONE}', 'employee', false, true, '${MAIN_SHOP}')
     ON CONFLICT (id) DO NOTHING
   `);
   await sql(`
-    INSERT INTO memberships (user_id, tenant_id, role, status)
-    VALUES ('${SIDE_EMPLOYEE}', '${SIDE_SHOP}', 'employee', 'active')
-    ON CONFLICT (user_id, tenant_id) DO UPDATE SET status = 'active'
+    INSERT INTO memberships (user_id, tenant_id, role, status, branch_scope)
+    VALUES ('${SIDE_EMPLOYEE}', '${MAIN_SHOP}', 'employee', 'active', ARRAY['${SIDE_BRANCH}']::uuid[])
+    ON CONFLICT (user_id, tenant_id) DO UPDATE SET status = 'active', branch_scope = EXCLUDED.branch_scope
   `);
 
-  // Records in both branches, so "erased" and "kept" are distinguishable.
+  // A record at the tenant level, which archiving a branch must not touch (0188: products and
+  // customers are tenant-owned, so a branch owns no customer of its own).
   await sql(`
-    INSERT INTO customers (id, name, shop_id) VALUES
-      ('${MAIN_CUSTOMER}', 'QA Delete Main Customer', '${MAIN_SHOP}'),
-      ('${SIDE_CUSTOMER}', 'QA Delete Side Customer', '${SIDE_SHOP}')
+    INSERT INTO customers (id, name, shop_id) VALUES ('${MAIN_CUSTOMER}', 'QA Delete Main Customer', '${MAIN_SHOP}')
     ON CONFLICT (id) DO NOTHING
   `);
 
@@ -164,43 +175,66 @@ afterAll(async () => {
   await cleanup();
 });
 
-describe('Deleting a branch erases that branch and nothing else', () => {
-  it('removes the branch, its records and the logins that only worked there', async () => {
-    // The branch really is populated before the delete, or the assertions below would pass
-    // on an empty database for the wrong reason.
-    expect(await count(`SELECT count(*)::int AS c FROM customers WHERE shop_id = '${SIDE_SHOP}'`)).toBe(1);
+describe('Archiving a branch hides it, keeps its history and never decides a login silently', () => {
+  it('refuses while somebody is still scoped to it, and names why', async () => {
+    // The fixture really is populated, or the refusal below would pass for the wrong reason.
     expect(await count(`SELECT count(*)::int AS c FROM users WHERE id = '${SIDE_EMPLOYEE}'`)).toBe(1);
+    expect(await count(`SELECT count(*)::int AS c FROM branches WHERE id = '${SIDE_BRANCH}' AND is_active`)).toBe(1);
 
-    const result = await execRpcAsUser(ACTOR, 'delete_branch', {
-      p_shop_id: SIDE_SHOP,
+    const refused = await execRpcAsUser(ACTOR, 'archive_operating_branch', {
+      p_branch_id: SIDE_BRANCH,
       p_reason: 'QA lane',
     });
-    expect(result.error).toBeNull();
-    expect(result.data?.success).toBe(true);
-    // What the caller is told, counted inside the deleting transaction.
-    expect(result.data?.erased?.customers).toBe(1);
-    expect(result.data?.employees_removed).toBe(1);
-    expect(result.data?.employees_kept).toBe(0);
+    expect(refused.error).toMatch(/BRANCH_HAS_STAFF/);
+    // Nothing moved while it was refused.
+    expect(await count(`SELECT count(*)::int AS c FROM branches WHERE id = '${SIDE_BRANCH}' AND is_active`)).toBe(1);
+    expect(await count(`SELECT count(*)::int AS c FROM users WHERE id = '${SIDE_EMPLOYEE}'`)).toBe(1);
+  });
 
-    // The branch, its records, its membership and its branch row are gone...
-    expect(await count(`SELECT count(*)::int AS c FROM shops WHERE id = '${SIDE_SHOP}'`)).toBe(0);
-    expect(await count(`SELECT count(*)::int AS c FROM branches WHERE tenant_id = '${SIDE_SHOP}'`)).toBe(0);
-    expect(await count(`SELECT count(*)::int AS c FROM customers WHERE shop_id = '${SIDE_SHOP}'`)).toBe(0);
-    expect(await count(`SELECT count(*)::int AS c FROM memberships WHERE tenant_id = '${SIDE_SHOP}'`)).toBe(0);
-    // ...and so is the login that only ever worked there, credential included.
-    expect(await count(`SELECT count(*)::int AS c FROM users WHERE id = '${SIDE_EMPLOYEE}'`)).toBe(0);
-    expect(await count(`SELECT count(*)::int AS c FROM auth.users WHERE id = '${SIDE_EMPLOYEE}'`)).toBe(0);
+  it('archives it once its people have somewhere to work, leaving the other branch untouched', async () => {
+    // Moving the person is the step 0191 requires instead of rewriting a scope behind their back
+    // ("No silent lost login or scope rewrite. Reassign people explicitly first").
+    await sql(`
+      UPDATE memberships SET branch_scope = ARRAY['${MAIN_BRANCH}']::uuid[]
+      WHERE user_id = '${SIDE_EMPLOYEE}' AND tenant_id = '${MAIN_SHOP}'
+    `);
 
-    // The branch that was NOT deleted is untouched, and the actor still belongs to it.
+    const archived = await execRpcAsUser(ACTOR, 'archive_operating_branch', {
+      p_branch_id: SIDE_BRANCH,
+      p_reason: 'QA lane',
+    });
+    expect(archived.error).toBeNull();
+    expect(archived.data?.success).toBe(true);
+    expect(archived.data?.history_preserved).toBe(true);
+    // The fallback is the surviving branch of the same shop, and the working-context row follows it.
+    expect(archived.data?.fallback_branch_id).toBe(MAIN_BRANCH);
+    expect(await count(`SELECT count(*)::int AS c FROM user_active_shops WHERE user_id = '${ACTOR}' AND branch_id = '${MAIN_BRANCH}'`)).toBe(1);
+
+    // The branch is hidden, and its whole self is still there: archiving preserves the business
+    // (0191 performs no DELETE; it sets `is_active = false` and records `historyPreserved`).
+    expect(await count(`SELECT count(*)::int AS c FROM branches WHERE id = '${SIDE_BRANCH}' AND is_active`)).toBe(0);
+    expect(await count(`SELECT count(*)::int AS c FROM branches WHERE id = '${SIDE_BRANCH}'`)).toBe(1);
+
+    // The person keeps their login — that is the point of the refusal above.
+    expect(await count(`SELECT count(*)::int AS c FROM users WHERE id = '${SIDE_EMPLOYEE}'`)).toBe(1);
+    expect(await count(`SELECT count(*)::int AS c FROM memberships WHERE user_id = '${SIDE_EMPLOYEE}' AND tenant_id = '${MAIN_SHOP}' AND status = 'active'`)).toBe(1);
+
+    // The branch that was NOT archived is untouched, and so is the tenant's own record.
+    expect(await count(`SELECT count(*)::int AS c FROM branches WHERE id = '${MAIN_BRANCH}' AND is_active`)).toBe(1);
     expect(await count(`SELECT count(*)::int AS c FROM shops WHERE id = '${MAIN_SHOP}'`)).toBe(1);
     expect(await count(`SELECT count(*)::int AS c FROM customers WHERE id = '${MAIN_CUSTOMER}'`)).toBe(1);
     expect(await count(`SELECT count(*)::int AS c FROM users WHERE id = '${ACTOR}'`)).toBe(1);
     expect(await count(`SELECT count(*)::int AS c FROM memberships WHERE user_id = '${ACTOR}' AND tenant_id = '${MAIN_SHOP}'`)).toBe(1);
   });
 
-  it('refuses to delete the branch the account itself lives in', async () => {
-    const result = await execRpcAsUser(ACTOR, 'delete_branch', { p_shop_id: MAIN_SHOP });
+  it('refuses to archive the branch the account itself lives in', async () => {
+    const result = await execRpcAsUser(ACTOR, 'archive_operating_branch', {
+      p_branch_id: MAIN_BRANCH,
+      p_reason: 'QA lane',
+    });
+    // The same refusal 0168's delete_branch raised, kept by 0191 (`IF v_branch.is_default THEN RAISE MAIN_BRANCH`).
     expect(result.error).toMatch(/MAIN_BRANCH/);
+    expect(await count(`SELECT count(*)::int AS c FROM branches WHERE id = '${MAIN_BRANCH}' AND is_active`)).toBe(1);
     expect(await count(`SELECT count(*)::int AS c FROM shops WHERE id = '${MAIN_SHOP}'`)).toBe(1);
     expect(await count(`SELECT count(*)::int AS c FROM customers WHERE id = '${MAIN_CUSTOMER}'`)).toBe(1);
   });

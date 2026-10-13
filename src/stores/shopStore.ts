@@ -10,8 +10,8 @@ import { useRolesStore } from "@/stores/rolesStore";
 import { useNotificationStore } from "@/stores/notificationStore";
 import { useCartStore } from "@/stores/cartStore";
 import { getPendingCount, syncPendingOperations } from "@/lib/offlineQueue";
-import { clearAllCachedData } from "@/lib/localCache";
 import { clearNav } from "@/lib/navContext";
+import { clearAllCachedData, suspendCachedData, confirmCacheBranch, hasScopedWriteInFlight } from "@/lib/localCache";
 import { setShopRolesByShop } from "@/lib/shopRoles";
 import type { PickedPlace } from "@/lib/geo";
 import type { MembershipRole, MembershipStatus } from "@/types";
@@ -45,14 +45,13 @@ export interface ShopSummary {
 /**
  * One branch, as the Branches screen needs it.
  *
- * A branch carries the same id as the shop it is — that is not an accident of naming: the
- * tenant IS the branch in this product, and one membership row is both "which shop" and
- * "which branch". This type is the same fact with the counts the screen has to state out
- * loud (how many employees lose access, whether anything has ever been sold here), read in
- * one call so the screen never adds up numbers of its own.
+ * The branch id identifies an operating unit; tenantId identifies its business.
+ * Neither is an alias for the other. Counts come from authorized branch records,
+ * not tenant-wide aggregates relabeled as branch data.
  */
 export interface BranchSummary {
   id: string;
+  tenantId: string;
   name: string;
   membershipRole: MembershipRole;
   membershipStatus: MembershipStatus;
@@ -63,11 +62,11 @@ export interface BranchSummary {
    */
   isMain: boolean;
   createdAt: string | null;
-  employeeCount: number;
-  productCount: number;
-  customerCount: number;
-  salesCount: number;
-  salesTotal: number;
+  employeeCount: number | null;
+  productCount: number | null;
+  customerCount: number | null;
+  salesCount: number | null;
+  salesTotal: number | null;
   /**
    * Where this branch is, as a point on a map — or `null` when it has never been pinned.
    *
@@ -96,6 +95,8 @@ export interface BranchSummary {
 /** What the caller can be told about a failed action, so the screen owns the wording. */
 export type ShopErrorCode =
   | "name_required"
+  | "location_required"
+  | "name_taken"
   | "pending_sync"
   | "switch_failed"
   | "create_failed"
@@ -103,8 +104,8 @@ export type ShopErrorCode =
   | "denied";
 
 /**
- * The ways renaming or removing a branch can be refused, named so the sheet can say the right
- * sentence. The database decides; these are its answers in the screen's vocabulary.
+ * The ways renaming or deleting a branch can be refused, named so the sheet can say the
+ * right sentence. The database decides; these are its answers in the screen's vocabulary.
  */
 export type BranchErrorCode =
   | "name_required"
@@ -116,11 +117,16 @@ export type BranchErrorCode =
   | "denied"
   | "main_branch"
   | "last_branch"
-  /** People still have access to the branch, so closing it would silently rewrite their scope. */
-  | "has_staff"
   | "not_authenticated"
+  /** This branch already has a responsible person; the way to change it is transfer. */
+  | "already_assigned"
+  /** Nobody is responsible right now, so there is nothing to hand over or revoke. */
+  | "no_one_responsible"
+  /** The chosen person is not an active member of this business. */
+  | "not_a_person"
   | "save_failed"
-  | "delete_failed";
+  | "delete_failed"
+  | "has_staff";
 
 export interface ShopActionResult {
   ok: boolean;
@@ -135,8 +141,8 @@ export interface BranchActionResult {
    * Only on a successful archive: which branch closed, and where the account works now.
    *
    * This replaced an `erased: { products, customers, sales, salesTotal }` payload that only the
-   * revoked tenant-purge RPC ever returned. Archiving erases nothing — the branch, its rows and
-   * its history all stay, and `archive_operating_branch` answers with `history_preserved: true` —
+   * revoked tenant-purge RPC ever returned. Nothing is erased by archiving — the branches, rows
+   * and history all stay, and `archive_operating_branch` answers with `history_preserved: true` —
    * so a result shape offering counts of erased records would describe something that cannot
    * happen. `name` is captured before the reload, because after it the archived branch is
    * correctly absent from the list.
@@ -157,7 +163,8 @@ interface ShopRow {
 }
 
 interface BranchRow {
-  shop_id: string;
+  branch_id: string;
+  tenant_id: string;
   name: string;
   membership_role: MembershipRole;
   membership_status: MembershipStatus;
@@ -207,12 +214,16 @@ function branchPlaceFrom(row: BranchRow): PickedPlace | null {
 function branchCodeFrom(message: string, fallback: BranchErrorCode): BranchErrorCode {
   const text = message ?? "";
   if (/BRANCH_HAS_STAFF/i.test(text)) return "has_staff";
+  if (/BRANCH_NAME_TAKEN/i.test(text)) return "name_taken";
   if (/MAIN_BRANCH/i.test(text)) return "main_branch";
   if (/LAST_BRANCH/i.test(text)) return "last_branch";
   if (/BRANCH_NOT_FOUND/i.test(text)) return "not_found";
   if (/no location/i.test(text)) return "no_location";
   if (/NOT_AUTHENTICATED/i.test(text)) return "not_authenticated";
   if (/NOT_AUTHORIZED/i.test(text)) return "denied";
+  if (/BRANCH_ALREADY_ASSIGNED/i.test(text)) return "already_assigned";
+  if (/nobody is currently responsible/i.test(text)) return "no_one_responsible";
+  if (/EMPLOYEE_NOT_FOUND_OR_NOT_AUTHORIZED/i.test(text)) return "not_a_person";
   if (/a branch name is required/i.test(text)) return "name_required";
   if (/120 characters/i.test(text)) return "name_too_long";
   return fallback;
@@ -221,8 +232,34 @@ function branchCodeFrom(message: string, fallback: BranchErrorCode): BranchError
 interface ShopState {
   shops: ShopSummary[];
   /** Which shop every read and write in the app is scoped to. */
+  /** Business identity only; never a value for branch_scope. */
   activeShopId: string | null;
   activeShopName: string | null;
+  activeBranchId: string | null;
+  activeBranchName: string | null;
+  switchBranch: (branchId: string) => Promise<ShopActionResult>;
+  /**
+   * Hand a branch to a responsible person.
+   *
+   * This is operational control of one branch, never ownership of the business: the database
+   * refuses it to anyone but the owner, gives the person the branch and nothing else, and keeps
+   * the owner as the owner. A refusal is therefore a real answer about authority, not a network
+   * problem, and the screen must say which.
+   */
+  assignBranchResponsibility: (
+    branchId: string,
+    userId: string,
+    roleId?: string | null,
+  ) => Promise<BranchActionResult>;
+  /** End a designation. The person keeps their access — see the RPC for why. */
+  revokeBranchResponsibility: (branchId: string, reason: string) => Promise<BranchActionResult>;
+  /** Move responsibility between two people in one transaction, so the branch is never ownerless. */
+  transferBranchResponsibility: (
+    branchId: string,
+    userId: string,
+    roleId?: string | null,
+    reason?: string,
+  ) => Promise<BranchActionResult>;
   loading: boolean;
   /**
    * True once the server has answered which shops this account is in. The shell needs to know
@@ -259,8 +296,8 @@ interface ShopState {
    * name field. Here it survives the round trip, which is what makes "pick a location" a step in
    * the form rather than an exit from it.
    */
-  setupDraft: { name: string; place: PickedPlace | null };
-  setSetupDraft: (patch: Partial<{ name: string; place: PickedPlace | null }>) => void;
+  setupDraft: { name: string; place: PickedPlace | null; requestId: string | null };
+  setSetupDraft: (patch: Partial<{ name: string; place: PickedPlace | null; requestId: string | null }>) => void;
 
   /**
    * The branch whose edit sheet is open, by id — the same survival rule as `setupDraft`, for the
@@ -306,15 +343,6 @@ interface ShopState {
    * success the account has already been moved to another branch by the server, so the
    * caller only has to reload and adopt the answer.
    */
-  /**
-   * Archive a branch — the only removal path the database offers.
-   *
-   * Owner-only and tenant-scoped, refused without a reason, refusing the main branch, an
-   * account's last branch and a branch whose staff still have access. Nothing is erased: the
-   * branch stops accepting new work and every record it holds stays.
-   */
-  archiveBranch: (branchId: string, reason: string) => Promise<BranchActionResult>;
-  /** Kept as an explicit refusal for legacy consumers. Never call a tenant purge. */
   deleteBranch: (shopId: string, reason?: string, feedback?: string) => Promise<BranchActionResult>;
   /** Confirm the active shop with the server and list the caller's shops. */
   load: () => Promise<void>;
@@ -326,7 +354,8 @@ interface ShopState {
    * setup flow collects in its second step. `undefined` keeps the server's default (every
    * system template), which is what any caller that has no such step wants.
    */
-  create: (name: string, roleIds?: string[]) => Promise<ShopActionResult>;
+  create: (name: string, place: PickedPlace, requestId: string) => Promise<ShopActionResult>;
+  archiveBranch: (branchId: string, reason: string) => Promise<BranchActionResult>;
 }
 
 /** The products/customers/sales/… of the shop we are leaving must not survive the switch. */
@@ -381,6 +410,8 @@ export const useShopStore = create<ShopState>((set, get) => ({
   // Seeded from the membership the server returned at sign-in; confirmed by load().
   activeShopId: useAuthStore.getState().user?.tenantId ?? null,
   activeShopName: null,
+  activeBranchId: null,
+  activeBranchName: null,
   loading: false,
   loaded: false,
   ownerId: null,
@@ -393,7 +424,7 @@ export const useShopStore = create<ShopState>((set, get) => ({
   openSwitcher: (intent = "list") => set({ switcherOpen: true, switcherIntent: intent }),
   closeSwitcher: () => set({ switcherOpen: false }),
 
-  setupDraft: { name: "", place: null },
+  setupDraft: { name: "", place: null, requestId: null },
   setSetupDraft: (patch) => set((s) => ({ setupDraft: { ...s.setupDraft, ...patch } })),
 
   editingBranchId: null,
@@ -413,40 +444,84 @@ export const useShopStore = create<ShopState>((set, get) => ({
    * true a moment before the transaction that removes it.
    */
   loadBranches: async () => {
+    const actorId = useAuthStore.getState().user?.id;
+    const tenantId = get().activeShopId;
     set({ branchesLoading: true, branchesError: null });
     const { data, error } = await supabase.rpc("get_my_branches");
+    if (actorId !== useAuthStore.getState().user?.id || tenantId !== get().activeShopId || get().switching) return;
     if (error) {
+      suspendCachedData();
+      resetShopScopedStores();
       set({ branchesLoading: false, branchesError: "load_failed" });
       return;
     }
-    const rows = (data as BranchRow[]) ?? [];
+    const rows = ((data as BranchRow[]) ?? []).filter((row) => row.tenant_id === get().activeShopId);
+    const selected = rows.find((r) => r.is_current);
+    const actor = useAuthStore.getState().user;
+    if (selected && actor) {
+      if (get().activeBranchId !== selected.branch_id) resetShopScopedStores();
+      confirmCacheBranch(selected.tenant_id, actor.id, selected.branch_id);
+    } else {
+      suspendCachedData();
+      resetShopScopedStores();
+    }
     // What this read also settles: which role the account holds where. Notification
     // visibility needs that per branch (an owner of one branch is not an owner of another),
     // and this is the one read that knows it.
-    setShopRolesByShop(Object.fromEntries(rows.map((r) => [r.shop_id, r.membership_role])));
+    setShopRolesByShop(Object.fromEntries(rows.map((r) => [r.tenant_id, r.membership_role])));
     // If no membership is flagged as the account's home, the first row is the main one:
     // the server already orders it there, and the screen must not lose the label.
-    const hasMain = rows.some((r) => r.is_main);
     set({
-      branches: rows.map((r, i) => ({
-        id: r.shop_id,
+      branches: rows.map((r) => ({
+        id: r.branch_id,
+        tenantId: r.tenant_id,
         name: r.name,
         membershipRole: r.membership_role,
         membershipStatus: r.membership_status,
         isCurrent: r.is_current,
-        isMain: r.is_main || (!hasMain && i === 0),
+        isMain: r.is_main,
         createdAt: r.created_at,
-        employeeCount: Number(r.employee_count ?? 0),
-        productCount: Number(r.product_count ?? 0),
-        customerCount: Number(r.customer_count ?? 0),
-        salesCount: Number(r.sales_count ?? 0),
-        salesTotal: Number(r.sales_total ?? 0),
+        employeeCount: r.employee_count != null ? Number(r.employee_count) : null,
+        productCount: r.product_count != null ? Number(r.product_count) : null,
+        customerCount: r.customer_count != null ? Number(r.customer_count) : null,
+        salesCount: r.sales_count != null ? Number(r.sales_count) : null,
+        salesTotal: r.sales_total != null ? Number(r.sales_total) : null,
         place: branchPlaceFrom(r),
         marketplaceEnabled: r.marketplace_enabled === true,
       })),
       branchesLoading: false,
       branchesLoaded: true,
+      activeBranchId: rows.find((r) => r.is_current)?.branch_id ?? null,
+      activeBranchName: rows.find((r) => r.is_current)?.name ?? null,
     });
+  },
+
+  switchBranch: async (branchId) => {
+    if (branchId === get().activeBranchId) return { ok: true };
+    if (get().switching) return { ok: false, code: "switch_failed" };
+    if (hasScopedWriteInFlight()) return { ok: false, code: "pending_sync" };
+    if (getPendingCount() > 0) {
+      await syncPendingOperations(supabase).catch(() => undefined);
+      if (getPendingCount() > 0) return { ok: false, code: "pending_sync" };
+    }
+    set({ switching: true });
+    suspendCachedData();
+    resetShopScopedStores();
+    const { data, error } = await supabase.rpc("set_active_branch", { p_branch_id: branchId });
+    if (error || !data?.success) {
+      set({ switching: false });
+      await get().loadBranches();
+      return { ok: false, code: "switch_failed" };
+    }
+    // Clear before adopting/rendering the next context, including same-tenant
+    // switches. A previous branch's instant-cache paint is never valid here.
+    clearAllCachedData();
+    await adoptShop(data.tenant_id, get().shops.find((s) => s.id === data.tenant_id)?.name ?? "", data.membership_role);
+    const actor = useAuthStore.getState().user;
+    if (actor) confirmCacheBranch(data.tenant_id, actor.id, data.branch_id);
+    set({ activeBranchId: data.branch_id, activeBranchName: data.branch_name, switching: false });
+    await get().loadBranches();
+    return { ok: true };
   },
 
   renameBranch: async (shopId, name) => {
@@ -468,10 +543,9 @@ export const useShopStore = create<ShopState>((set, get) => ({
 
     // The header reads `activeShopName`; a rename of the branch being worked in must land
     // there too, or the screen keeps naming the old one until the next reload.
-    if (get().activeShopId === shopId) set({ activeShopName: clean });
+    if (get().activeBranchId === shopId) set({ activeBranchName: clean });
     set({
       branches: get().branches.map((b) => (b.id === shopId ? { ...b, name: clean } : b)),
-      shops: get().shops.map((s) => (s.id === shopId ? { ...s, name: clean } : s)),
     });
     return { ok: true };
   },
@@ -483,16 +557,22 @@ export const useShopStore = create<ShopState>((set, get) => ({
   },
 
   setMarketplaceSettings: async (shopId, enabled) => {
-    // Exactly the switch — there is no distance in this call, because there is no distance the
-    // owner decides. `undefined` would be the only other thing to send, and the server's answer
-    // is what the list is updated from either way.
+    // The marketplace listing is a tenant-level setting: the database stores one `shops`
+    // row per business, and `set_marketplace_settings` is the one RPC that owns that row.
+    // The UI presents it alongside one branch because that branch is where a farmer would
+    // meet the shop, but it is not per-branch state and must not be stored as if it were.
+    const branch = get().branches.find((b) => b.id === shopId);
     const { data, error } = await supabase.rpc("set_marketplace_settings", {
-      p_shop_id: shopId,
+      p_shop_id: branch?.tenantId ?? shopId,
       p_enabled: enabled,
     });
     if (error || !data?.success) {
       return { ok: false, code: branchCodeFrom(error?.message ?? "", "save_failed") };
     }
+    // The marketplace listing is a tenant-level setting. Only the branch the caller is
+    // editing should reflect the new value here; the other branch summaries for the same
+    // business share the underlying tenant value, but we do not blanket-update them because
+    // that would pretend the switch changed every branch row when it changed one tenant row.
     set({
       branches: get().branches.map((b) =>
         b.id === shopId ? { ...b, marketplaceEnabled: data.marketplace_enabled === true } : b,
@@ -501,35 +581,24 @@ export const useShopStore = create<ShopState>((set, get) => ({
     return { ok: true };
   },
 
-  archiveBranch: async (branchId, reason) => {
-    // Nothing else in flight: an archive reloads the branch list and re-points the account, and
-    // racing that against a switch or a pending sync is how a screen ends up reading a branch
-    // that has just closed.
-    if (getPendingCount() > 0 || get().switching) return { ok: false, code: "denied" };
 
-    // Read before the reload: `load` replaces the branch list, and a branch that has just been
+
+  archiveBranch: async (branchId, reason) => {
+    if (getPendingCount() > 0 || hasScopedWriteInFlight() || get().switching) return { ok: false, code: "denied" };
+    // Read before the reload: `load()` replaces the branch list, and a branch that has just been
     // archived is correctly absent from it — but the person still has to be told which branch they
     // just closed, so the name is captured while it is still there.
     const archivedName = get().branches.find((b) => b.id === branchId)?.name ?? "";
-
     const { data, error } = await supabase.rpc("archive_operating_branch", {
-      p_branch_id: branchId,
-      p_reason: reason.trim(),
+      p_branch_id: branchId, p_reason: reason.trim(),
     });
-    if (error || !data?.success) {
-      return { ok: false, code: branchCodeFrom(error?.message ?? "", "save_failed") };
-    }
-
-    // The server has already moved this account into another branch. Drop the closed branch's
-    // cached rows, reload, and adopt the answer, so no screen redraws over rows that no longer
-    // belong to the branch being worked in.
+    if (error || !data?.success) return { ok: false, code: branchCodeFrom(error?.message ?? "", "save_failed") };
     clearAllCachedData();
     resetShopScopedStores();
     await get().load();
-    await get().loadBranches();
-
     // The RPC answers with `fallback_branch_id` — the branch the account was moved into — not with
-    // a name. Resolved here, from the freshly loaded list, so no screen has to derive it.
+    // a name. Resolved here, from the freshly loaded list, so no screen has to derive it: the
+    // fallback is a sibling branch of the same tenant, so it is in the list or in the shop list.
     const fallbackId: string | null = data.fallback_branch_id ?? null;
     const fallbackName =
       get().branches.find((b) => b.id === fallbackId)?.name
@@ -587,10 +656,12 @@ export const useShopStore = create<ShopState>((set, get) => ({
       activeShopId: current?.id ?? null,
       activeShopName: current?.name ?? null,
     });
+    await get().loadBranches();
   },
 
   switchTo: async (shopId) => {
     if (shopId === get().activeShopId) return { ok: true };
+    if (get().switching || hasScopedWriteInFlight()) return { ok: false, code: "pending_sync" };
 
     // Queued offline writes carry no shop of their own: they are replayed with whatever
     // is active when they are sent. Switching while any are pending would land one shop's
@@ -614,31 +685,74 @@ export const useShopStore = create<ShopState>((set, get) => ({
     return { ok: true };
   },
 
-  create: async (name, roleIds) => {
+  create: async (name, place, requestId) => {
     const clean = name.trim();
     if (!clean) return { ok: false, code: "name_required" };
 
+    if (!place) return { ok: false, code: "location_required" };
+    if (get().creating || get().switching) return { ok: false, code: "create_failed" };
+    if (getPendingCount() > 0 || hasScopedWriteInFlight()) return { ok: false, code: "pending_sync" };
     set({ creating: true, error: null });
-    // Sent explicitly, including as an empty array: `null` would mean "no opinion, copy every
-    // template", which is the opposite of an owner who unticked everything. Omitted entirely
-    // when the caller has no selection to offer, so the server default applies.
-    const { data, error } = await supabase.rpc("create_shop_for_me", {
-      p_name: clean,
-      ...(roleIds ? { p_role_ids: roleIds } : {}),
+    const { data, error } = await supabase.rpc("create_operating_branch", {
+      p_branch_id: requestId, p_name: clean,
+      p_latitude: place.lat, p_longitude: place.lng,
+      p_label: place.label, p_address: place.address, p_source: place.source,
     });
     if (error || !data?.success) {
       // A refusal is not a network problem and must not be reported as one: the role that
       // came back with the membership was stale, and the honest answer is who may create a
       // shop, not "try again".
       const denied = /NOT_AUTHORIZED/i.test(`${error?.message ?? ""}${error?.details ?? ""}`);
-      set({ creating: false, error: denied ? "denied" : "create_failed" });
-      return { ok: false, code: denied ? "denied" : "create_failed" };
+      const code = denied ? "denied" : /BRANCH_NAME_TAKEN/i.test(error?.message ?? "") ? "name_taken" : "create_failed";
+      set({ creating: false, error: code });
+      return { ok: false, code };
     }
 
-    // The server also makes the new shop active; adopt it here so the app agrees at once.
-    await adoptShop(data.shop_id, data.shop_name ?? clean, data.membership_role ?? "owner");
     set({ creating: false });
-    void get().load();
+    await get().loadBranches();
+    // Enter only through the existing context-switch boundary. Roles and people
+    // are not copied: they remain reusable business-owned templates/accounts.
+    return get().switchBranch(data.branch_id);
+  },
+
+  assignBranchResponsibility: async (branchId, userId, roleId = null) => {
+    if (!branchId || !userId) return { ok: false, code: "not_a_person" };
+    const { data, error } = await supabase.rpc("grant_branch_responsibility", {
+      p_branch_id: branchId, p_user_id: userId, p_role_id: roleId,
+    });
+    if (error || !data?.success) {
+      const code = branchCodeFrom(`${error?.message ?? ""}${error?.details ?? ""}`, "denied");
+      set({ error: code });
+      return { ok: false, code };
+    }
+    return { ok: true };
+  },
+
+  revokeBranchResponsibility: async (branchId, reason) => {
+    if (!branchId) return { ok: false, code: "not_found" };
+    if (!reason.trim()) return { ok: false, code: "name_required" };
+    const { data, error } = await supabase.rpc("revoke_branch_responsibility", {
+      p_branch_id: branchId, p_reason: reason.trim(),
+    });
+    if (error || !data?.success) {
+      const code = branchCodeFrom(`${error?.message ?? ""}${error?.details ?? ""}`, "denied");
+      set({ error: code });
+      return { ok: false, code };
+    }
+    return { ok: true };
+  },
+
+  transferBranchResponsibility: async (branchId, userId, roleId = null, reason = "") => {
+    if (!branchId || !userId) return { ok: false, code: "not_a_person" };
+    const { data, error } = await supabase.rpc("transfer_branch_responsibility", {
+      p_branch_id: branchId, p_to_user_id: userId, p_role_id: roleId,
+      p_reason: reason.trim() || null,
+    });
+    if (error || !data?.success) {
+      const code = branchCodeFrom(`${error?.message ?? ""}${error?.details ?? ""}`, "denied");
+      set({ error: code });
+      return { ok: false, code };
+    }
     return { ok: true };
   },
 }));

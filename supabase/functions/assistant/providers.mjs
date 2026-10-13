@@ -368,8 +368,32 @@ export async function askDeterministic(text, ctx) {
 
 const GEMINI_HOST = "https://generativelanguage.googleapis.com/v1beta";
 
-async function callGemini({ apiKey, model, body }) {
-  const res = await fetch(`${GEMINI_HOST}/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`, {
+/**
+ * Where the model calls go.
+ *
+ * Google by default, so a plain build behaves exactly as before. Set `ASSISTANT_MODEL_BASE_URL`
+ * and the same Gemini wire format is sent somewhere else — a gateway that speaks it.
+ *
+ * WHY THIS EXISTS. The function's shape is already gateway-friendly without knowing it: it builds
+ * `{host}/models/{model}:generateContent?key=…`, and OmniRoute (among others) serves exactly
+ * `POST /v1beta/models/{model}:generateContent` and accepts the credential as `?key=`. So routing
+ * this app's assistant through a local gateway is a base URL, not a second provider implementation
+ * — and there is still one call path, one tool gate and one set of rules.
+ *
+ * The key and model id keep their `GEMINI_*` names because they are still the credential and the
+ * model id; only the host they are sent to changes.
+ *
+ * Trailing slashes are trimmed because every caller joins this with `/models/…` — a base URL ending
+ * in `/` would otherwise produce a double slash that gateways can route differently from the
+ * documented path.
+ */
+function modelHost(baseUrl) {
+  const trimmed = String(baseUrl ?? "").trim().replace(/\/+$/, "");
+  return trimmed || GEMINI_HOST;
+}
+
+async function callGemini({ apiKey, model, body, baseUrl }) {
+  const res = await fetch(`${modelHost(baseUrl)}/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
@@ -389,7 +413,7 @@ async function callGemini({ apiKey, model, body }) {
  * converging, and a shopkeeper waiting on a phone is not the place to find out how long that
  * takes.
  */
-export async function askGemini({ apiKey, model, text, ctx, photo, history = [], maxRounds = 4 }) {
+export async function askGemini({ apiKey, model, text, ctx, photo, history = [], maxRounds = 4, baseUrl }) {
   const declarations = toolSpecs(ctx.permissions).map((t) => ({
     name: t.name,
     description: t.description,
@@ -421,6 +445,7 @@ export async function askGemini({ apiKey, model, text, ctx, photo, history = [],
     const json = await callGemini({
       apiKey,
       model,
+      baseUrl,
       body: {
         systemInstruction: { parts: [{ text: `${PROMPT}\nToday is ${new Date().toISOString().slice(0, 10)}.` }] },
         contents,
@@ -622,10 +647,10 @@ export function guardMoneyTopic(answer, ctx) {
  * the wait the service itself named. Anything else fails immediately — waiting cannot fix a key
  * that is wrong or a model that no longer exists.
  */
-async function tryModel({ apiKey, model, text, ctx, photo, history, hasAnother }) {
+async function tryModel({ apiKey, model, text, ctx, photo, history, hasAnother, baseUrl }) {
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      return await askGemini({ apiKey, model, text, ctx, photo, history });
+      return await askGemini({ apiKey, model, text, ctx, photo, history, baseUrl });
     } catch (error) {
       const message = String(error?.message ?? "");
       const wait = attempt === 0 ? retryDelayMs(message) : 0;
@@ -643,7 +668,7 @@ async function tryModel({ apiKey, model, text, ctx, photo, history, hasAnother }
   return null;
 }
 
-export async function ask({ text, ctx, photo, history, apiKey, model, fallbackModel = FALLBACK_MODEL }) {
+export async function ask({ text, ctx, photo, history, apiKey, model, fallbackModel = FALLBACK_MODEL, baseUrl }) {
   if (apiKey) {
     // The configured model first, then the small one. Both run the same tools under the same gate,
     // so which one answers changes the wording and nothing else.
@@ -659,6 +684,7 @@ export async function ask({ text, ctx, photo, history, apiKey, model, fallbackMo
         photo,
         history,
         hasAnother: index < models.length - 1,
+        baseUrl,
       });
       if (out) return guardMoneyTopic({ ...out, model: name, photo: !!photo?.data }, ctx);
     }

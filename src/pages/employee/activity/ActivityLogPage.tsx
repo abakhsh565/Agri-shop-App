@@ -1,254 +1,102 @@
-import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
-import { useShellBase } from "@/lib/useShellBase";
-import { useT } from "@/lib/i18n";
-import { useSalesStore } from "@/stores/salesStore";
-import { useCustomersStore } from "@/stores/customersStore";
-import { useAuthStore } from "@/stores/authStore";
-import { fetchCustomerPayments } from "@/lib/db";
-import type { Sale, Customer, CustomerPayment } from "@/types";
-import { formatDateTime, formatCurrency } from "@/lib/formatters";
+import ListCard from "@/components/ui/ListCard";
+import ListRow from "@/components/ui/ListRow";
+import Button from "@/components/ui/Button";
+import EmptyState from "@/components/ui/EmptyState";
 import { SkeletonList } from "@/components/ui/Skeleton";
-import {
-  ShoppingCart, CreditCard, RotateCcw, UserPlus,
-  TrendingUp, AlertTriangle, CheckCircle2,
-} from "lucide-react";
+import { useT } from "@/lib/i18n";
+import { supabase } from "@/lib/supabase";
+import { useShopStore } from "@/stores/shopStore";
+import { useAuthStore } from "@/stores/authStore";
+import { captureDataContext, isDataContextCurrent } from "@/lib/localCache";
+import { formatDateTime } from "@/lib/formatters";
+import { History } from "lucide-react";
 
-type ActivityKind = "sale" | "payment" | "return" | "customer_added" | "all";
-
-interface Activity {
-  id: string;
-  kind: Exclude<ActivityKind, "all">;
-  title: string;
-  subtitle: string;
-  amount?: number;
-  actor: string;
-  at: string;
-  linkPath?: string;
-  status?: "success" | "warning" | "info";
+interface AuditEvent {
+  id: string; action: string; entity_type: string; entity_id: string;
+  actor_id: string; actor_name: string | null; actor_role: string | null;
+  branch_id: string; branch_name: string | null; details: Record<string, unknown>; created_at: string;
 }
-
-// Build activity feed from mock data. `base` keeps links inside the current
-// shell (admin or employee) so tapping an item never bounces across shells.
-function buildFeed(
-  base: string,
-  mockSales: Sale[],
-  mockCustomerPayments: CustomerPayment[],
-  mockCustomers: Customer[],
-  t: (...args: any[]) => string,
-): Activity[] {
-  const feed: Activity[] = [];
-
-  mockSales.forEach((s) => {
-    feed.push({
-      id: "sale-" + s.id,
-      kind: "sale",
-      title: `Sale to ${s.customerName}`,
-      subtitle: `${s.saleNumber} · ${s.paymentType === "full" ? t("activity.paidInFull") : t("activity.creditPartial")}`,
-      amount: s.totalAmount,
-      actor: s.employeeName,
-      at: s.createdAt,
-      linkPath: `${base}/sales/${s.id}`,
-      status: s.paymentType === "full" ? "success" : "warning",
-    });
-  });
-
-  mockCustomerPayments.forEach((p) => {
-    const cust = mockCustomers.find((c) => c.id === p.customerId);
-    feed.push({
-      id: "pay-" + p.id,
-      kind: "payment",
-      title: `Payment from ${cust?.name ?? "Customer"}`,
-      subtitle: `Via ${p.method === "cash" ? t("activity.cash") : t("activity.bankTransfer")}`,
-      amount: p.amount,
-      actor: p.recordedByName ?? '',
-      at: p.createdAt,
-      linkPath: `${base}/customers/${p.customerId}/payments`,
-      status: "success",
-    });
-  });
-
-  // Sort newest first
-  return feed.sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
-}
-
-const KIND_ICON = {
-  sale: ShoppingCart,
-  payment: CreditCard,
-  return: RotateCcw,
-  customer_added: UserPlus,
+const ACTION_KEYS: Record<string, string> = {
+  sale_created: "audit.saleCreated", sale_voided: "audit.saleVoided", return_processed: "audit.returnProcessed",
+  purchase_recorded: "audit.purchaseRecorded", customer_payment_recorded: "audit.paymentRecorded",
+  supplier_payment_recorded: "audit.paymentRecorded", customer_payments_insert: "audit.paymentRecorded",
+  supplier_payments_insert: "audit.paymentRecorded", stock_adjusted: "audit.stockAdjusted",
+  stock_adjustments_insert: "audit.stockAdjusted", employee_branch_add: "audit.employeeAdded",
+  employee_branch_move: "audit.employeeMoved", employee_access_updated: "audit.accessUpdated",
+  employee_created: "audit.employeeCreated", branch_selected: "audit.branchSelected",
+  branch_created: "audit.branchCreated", branch_renamed: "audit.branchRenamed", branch_archived: "audit.branchArchived",
+  membership_access_changed: "audit.accessUpdated",
+  role_created: "audit.roleUpdated", role_updated: "audit.roleUpdated", role_deleted: "audit.roleUpdated",
+  location_updated: "audit.locationUpdated",
 };
-
-const KIND_COLOR: Record<string, { bg: string; icon: string }> = {
-  sale:           { bg: "rgba(132,204,22,0.12)", icon: "#65a30d" },
-  payment:        { bg: "rgba(59,130,246,0.12)", icon: "#2563eb" },
-  return:         { bg: "rgba(245,158,11,0.12)", icon: "#d97706" },
-  customer_added: { bg: "rgba(139,92,246,0.12)", icon: "#7c3aed" },
-};
-
-const FILTER_LABELS: { key: ActivityKind; labelKey: string }[] = [
-  { key: "all",            labelKey: "activity.allFilter" },
-  { key: "sale",           labelKey: "activity.salesFilter" },
-  { key: "payment",        labelKey: "activity.paymentsFilter" },
-  { key: "return",         labelKey: "activity.returns" },
-  { key: "customer_added", labelKey: "activity.customersFilter" },
-];
 
 export default function ActivityLogPage() {
-  const navigate = useNavigate();
-  const base = useShellBase();
   const t = useT();
-  const [filter, setFilter] = useState<ActivityKind>("all");
-  const { user } = useAuthStore();
-  const isAdmin = user?.role === "admin";
-  const allSales = useSalesStore((s) => s.sales);
-  const sales = isAdmin ? allSales : allSales.filter((s) => s.employeeId === user?.id || s.employeeName === user?.name);
-  const customers = useCustomersStore((s) => s.customers);
-  // Read both stores unconditionally: short-circuiting a hook call is what
-  // crashed this screen, since React must see the same hooks every render.
-  const salesReady = useSalesStore((s) => s.ready);
-  const customersReady = useCustomersStore((s) => s.ready);
-  const ready = salesReady && customersReady;
-  const [payments, setPayments] = useState<CustomerPayment[]>([]);
+  const branchId = useShopStore((s) => s.activeBranchId);
+  const branchName = useShopStore((s) => s.activeBranchName);
+  const switching = useShopStore((s) => s.switching);
+  const userId = useAuthStore((s) => s.user?.id);
+  const [events, setEvents] = useState<AuditEvent[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [failed, setFailed] = useState(false);
+  const [more, setMore] = useState(false);
+  const [retry, setRetry] = useState(0);
+  const busy = useRef(false);
 
   useEffect(() => {
-    fetchCustomerPayments().then((all) => {
-      // Employee: only show payments they recorded
-      if (!isAdmin && user?.id) {
-        setPayments(all.filter((p) => p.recordedBy === user.id));
-      } else {
-        setPayments(all);
-      }
-    }).catch(() => setPayments([]));
-  }, []);
+    let cancelled = false;
+    setEvents([]); setMore(false); setFailed(false);
+    if (!branchId || switching) return;
+    const context = captureDataContext();
+    setLoading(true);
+    Promise.resolve(supabase.rpc("get_branch_activity", { p_limit: 50 })).then(({ data, error }) => {
+      if (cancelled || !isDataContextCurrent(context)) return;
+      if (error) { setFailed(true); return; }
+      const rows = (data ?? []) as AuditEvent[];
+      setEvents(rows); setMore(rows.length === 50);
+    }).catch(() => { if (!cancelled && isDataContextCurrent(context)) setFailed(true); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [branchId, switching, userId, retry]);
 
-  const allActivities = buildFeed(base, sales, payments, customers, t);
-  const shown = filter === "all" ? allActivities : allActivities.filter((a) => a.kind === filter);
+  async function loadMore() {
+    if (busy.current || loading || !events.length) return;
+    busy.current = true; setLoading(true); setFailed(false);
+    const context = captureDataContext();
+    const last = events[events.length - 1];
+    try {
+      const { data, error } = await supabase.rpc("get_branch_activity", { p_before: last.created_at, p_before_id: last.id, p_limit: 50 });
+      if (!isDataContextCurrent(context)) return;
+      if (error) { setFailed(true); return; }
+      const rows = (data ?? []) as AuditEvent[];
+      setEvents((previous) => [...previous, ...rows.filter((row) => !previous.some((item) => item.id === row.id))]);
+      setMore(rows.length === 50);
+    } catch { if (isDataContextCurrent(context)) setFailed(true); }
+    finally { busy.current = false; if (isDataContextCurrent(context)) setLoading(false); }
+  }
 
-  const totalSalesAmount = allActivities
-    .filter((a) => a.kind === "sale")
-    .reduce((s, a) => s + (a.amount ?? 0), 0);
-
-  return (
-    <div
-      className="flex flex-col w-full min-h-full"
-      style={{ background: "var(--background)" }}
-    >
-      <StatusBar />
-      <NavHeader title={t("activity.activityLog")} />
-
-      {/* Summary strip */}
-      <div className="px-4 pt-2 animate-fade-in-up">
-        <div
-          className="rounded-[var(--radius-tile)] p-4 flex items-center justify-between"
-          style={{ background: "var(--surface-3)" }}
-        >
-          <div>
-            <p className="ds-section-label" style={{ color: "var(--text-secondary)" }}>
-              {t("activity.totalActivity")}
-            </p>
-            <p className="text-xl font-bold mt-1" style={{ color: "var(--text-primary)" }}>
-              {t("activity.eventCount", { count: allActivities.length })}
-            </p>
-          </div>
-          <div className="text-end">
-            <p className="ds-section-label" style={{ color: "var(--text-secondary)" }}>
-              {t("activity.salesVolume")}
-            </p>
-            <p className="text-base font-bold mt-1" style={{ color: "var(--brand-dark)" }}>
-              {formatCurrency(totalSalesAmount)}
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* Filter chips */}
-      <div className="flex gap-2 px-4 pt-4 pb-2 overflow-x-auto">
-        {FILTER_LABELS.map((f) => (
-          <button
-            key={f.key}
-            onClick={() => setFilter(f.key)}
-            className="shrink-0 h-8 px-3 rounded-full text-12 font-semibold transition-all"
-            style={{
-              background: filter === f.key ? "var(--brand)" : "var(--muted)",
-              color: filter === f.key ? "#0a0a0a" : "var(--text-secondary)",
-            }}
-          >
-            {t(f.labelKey as any)}
-          </button>
-        ))}
-      </div>
-
-      {/* Feed */}
-      <div className="flex flex-col px-4 pb-4 gap-3">
-        {!ready && <SkeletonList rows={4} />}
-        {ready && shown.length === 0 && (
-          <div className="flex flex-col items-center py-16 gap-3">
-            <TrendingUp size={40} style={{ color: "var(--text-secondary)", opacity: 0.3 }} />
-            <p className="text-sm" style={{ color: "var(--text-secondary)" }}>{t("admin.noActivityYet")}</p>
-          </div>
-        )}
-        {ready && shown.map((activity, i) => {
-          const Icon = KIND_ICON[activity.kind];
-          const colors = KIND_COLOR[activity.kind];
-          return (
-            <button
-              key={activity.id}
-              onClick={() => activity.linkPath && navigate(activity.linkPath)}
-              className="flex items-start gap-3 p-3 rounded-[var(--radius-tile)] text-start transition-all active:scale-[0.98] animate-fade-in-up"
-              style={{
-                background: "var(--surface-2)",
-                animationDelay: `${i * 40}ms`,
-                cursor: activity.linkPath ? "pointer" : "default",
-              }}
-            >
-              {/* Kind icon */}
-              <div
-                className="w-10 h-10 rounded-[var(--radius-tile)] flex items-center justify-center shrink-0"
-                style={{ background: colors.bg }}
-              >
-                <Icon size={18} style={{ color: colors.icon }} strokeWidth={2} />
-              </div>
-
-              {/* Content */}
-              <div className="flex-1 min-w-0">
-                <p className="text-13 font-semibold truncate" style={{ color: "var(--text-primary)" }}>
-                  {activity.title}
-                </p>
-                <p className="text-11 mt-0.5 truncate" style={{ color: "var(--text-secondary)" }}>
-                  {activity.subtitle}
-                </p>
-                <div className="flex items-center gap-2 mt-1">
-                  <span className="text-10" style={{ color: "var(--text-secondary)" }}>
-                    {activity.actor}
-                  </span>
-                  <span className="text-10" style={{ color: "var(--divider)" }}>·</span>
-                  <span className="text-10" style={{ color: "var(--text-secondary)" }}>
-                    {formatDateTime(activity.at)}
-                  </span>
-                </div>
-              </div>
-
-              {/* Amount */}
-              {activity.amount != null && (
-                <div className="text-end shrink-0">
-                  <p className="text-13 font-bold" style={{ color: "var(--text-primary)" }}>
-                    {formatCurrency(activity.amount)}
-                  </p>
-                  {activity.status === "success" && (
-                    <CheckCircle2 size={12} style={{ color: "var(--brand)", marginLeft: "auto", marginTop: 2 }} />
-                  )}
-                  {activity.status === "warning" && (
-                    <AlertTriangle size={12} style={{ color: "var(--warning)", marginLeft: "auto", marginTop: 2 }} />
-                  )}
-                </div>
-              )}
-            </button>
-          );
-        })}
-      </div>
+  const ready = !loading || events.length > 0;
+  return <div className="flex flex-col w-full min-h-full" style={{ background: "var(--background)" }}>
+    <StatusBar /><NavHeader title={t("activity.activityLog")} />
+    <div className="px-4 pt-3 pb-6">
+      <p className="ds-meta mb-3" data-testid="activity-branch-context">{branchName ?? t("audit.noBranch")}</p>
+      {!ready && <SkeletonList rows={4} />}
+      {failed && <div className="mb-3" role="alert"><p className="ds-meta">{t("audit.loadFailed")}</p>
+        <Button variant="outline" onClick={() => setRetry((value) => value + 1)}>{t("common.tryAgain")}</Button></div>}
+      {!loading && !failed && events.length === 0 && <EmptyState icon={History} title={t("admin.noActivityYet")} />}
+      {events.length > 0 && <ListCard>{events.map((event) => <ListRow key={event.id} testId={`audit-event-${event.id}`}
+        title={t(ACTION_KEYS[event.action] ?? "audit.otherAction")}
+        meta={`${event.actor_name ?? t("audit.unknownActor")} · ${event.actor_role ?? t("audit.unknownRole")} · ${event.branch_name ?? t("audit.unknownBranch")}`}
+      ><p className="text-13 font-semibold">{t(ACTION_KEYS[event.action] ?? "audit.otherAction")}</p>
+        <p className="text-12 mt-1" style={{ color: "var(--text-secondary)" }}>{event.actor_name ?? t("audit.unknownActor")} · {event.actor_role ?? t("audit.unknownRole")} · {event.branch_name ?? t("audit.unknownBranch")}</p>
+        <p className="text-11" style={{ color: "var(--text-secondary)" }}>{formatDateTime(event.created_at)}</p>
+        {typeof event.details.reason === "string" && <p className="text-12 mt-1">{t("audit.reason", { reason: event.details.reason })}</p>}
+        <p className="text-11 mt-1" style={{ color: "var(--text-secondary)" }}>{t("audit.succeeded")}</p>
+      </ListRow>)}</ListCard>}
+      {more && <Button fullWidth className="mt-3" loading={loading} onClick={() => void loadMore()}>{t("audit.loadMore")}</Button>}
     </div>
-  );
+  </div>;
 }

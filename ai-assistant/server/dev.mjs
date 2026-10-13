@@ -46,6 +46,10 @@ const env = {
   geminiKey: process.env.GEMINI_API_KEY || "",
   geminiModel: process.env.GEMINI_MODEL || "gemini-2.5-flash",
   geminiFallbackModel: process.env.GEMINI_FALLBACK_MODEL || "",
+  // Where the model calls go: Google by default, or a gateway that serves the same Gemini wire
+  // format when ASSISTANT_MODEL_BASE_URL is set. Read here and passed down, so this file stays the
+  // one place that decides what the runner is configured with.
+  modelBaseUrl: process.env.ASSISTANT_MODEL_BASE_URL || "",
 };
 
 if (!env.supabaseUrl || !env.anonKey) {
@@ -63,6 +67,10 @@ const server = http.createServer(async (req, res) => {
         ok: true,
         model: env.geminiKey ? env.geminiModel : "built-in",
         project: env.supabaseUrl,
+        // Said out loud so a question that fails can be traced to where it was sent.
+        gateway: env.geminiKey
+          ? env.modelBaseUrl || "https://generativelanguage.googleapis.com/v1beta"
+          : null,
         // Said out loud because it is the promise the whole design rests on.
         keeps: "nothing — the transcript lives in the app's memory only",
         routes: ["POST / {action:'tools'}", "POST / {text, photo?, history?}"],
@@ -111,5 +119,10 @@ server.listen(port, () => {
         : "built-in (no GEMINI_API_KEY)"
     }`,
   );
+  if (env.geminiKey) {
+    console.log(
+      `  sends   ${env.modelBaseUrl || "https://generativelanguage.googleapis.com/v1beta"}`,
+    );
+  }
   console.log("  keeps   nothing — the transcript never leaves the app");
 });

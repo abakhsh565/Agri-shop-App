@@ -143,7 +143,12 @@ describe('Employee invite lifecycle — an invitation is not access', () => {
   });
 
   it('never revives a suspended membership', async () => {
-    await execRpcAsUser(OWNER, 'deactivate_employee', {
+    // The real endpoint is `deactivate_employee_v1`; this used to call `deactivate_employee`, which
+    // no migration defines, so the call could only ever fail and the SQL below was doing all the
+    // work. The RPC is still best-effort here *by design* (its own semantics live in their lane) —
+    // what matters is that the failure this test provokes is the membership status, not a missing
+    // function (tests/unit/rpcContractGuard.test.ts now fails on either).
+    await execRpcAsUser(OWNER, 'deactivate_employee_v1', {
       payload: { employeeId: invited },
     }).catch(() => undefined);
     // Deactivation is enforced through the same status field authorization reads.

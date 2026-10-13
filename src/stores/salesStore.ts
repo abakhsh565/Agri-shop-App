@@ -3,7 +3,7 @@ import { supabase } from "@/lib/supabase";
 import { rpcCreateSale } from "@/lib/db";
 import { createNotification } from "@/lib/notifications";
 import { enqueueOperation } from "@/lib/offlineQueue";
-import { getCachedData as getLocalCache, setCachedData as setLocalCache } from "@/lib/localCache";
+import { getCachedData as getLocalCache, setCachedData as setLocalCache, captureDataContext, isDataContextCurrent } from "@/lib/localCache";
 import type { Sale, SaleItem } from "@/types";
 
 const CACHE_KEY = "sales";
@@ -46,7 +46,7 @@ interface SaleRow {
   voided_at: string | null;
   voided_by: string | null;
   void_reason: string | null;
-  note: string | null;
+  notes: string | null;
   created_at: string;
   sale_items?: SaleItemRow[];
 }
@@ -90,7 +90,7 @@ function saleFromRow(r: SaleRow): Sale {
     voidedAt: r.voided_at ?? undefined,
     voidedBy: r.voided_by ?? undefined,
     voidReason: r.void_reason ?? undefined,
-    note: r.note ?? undefined,
+    note: r.notes ?? undefined,
     createdAt: r.created_at,
   };
 }
@@ -159,6 +159,8 @@ export const useSalesStore = create<SalesState>((set, get) => ({
   reset: () => set({ sales: [], loading: false, ready: false, error: null }),
 
   load: async () => {
+    const context = captureDataContext();
+    if (!isDataContextCurrent(context)) return;
     set({ loading: true, error: null });
 
     // Stale-while-revalidate: render the cache immediately, then ALWAYS revalidate.
@@ -175,6 +177,7 @@ export const useSalesStore = create<SalesState>((set, get) => ({
         .select("*, sale_items(*)")
         .order("created_at", { ascending: false })
         .limit(200);
+      if (!isDataContextCurrent(context)) return;
       if (error) {
         if (!cached) {
           set({ loading: false, ready: true, error: error.message });
@@ -185,6 +188,7 @@ export const useSalesStore = create<SalesState>((set, get) => ({
       setLocalCache(CACHE_KEY, sales);
       set({ sales, loading: false, ready: true });
     } catch {
+      if (!isDataContextCurrent(context)) return;
       if (!cached) {
         set({ loading: false, ready: true, error: "Offline" });
       }
@@ -362,11 +366,13 @@ export const useSalesStore = create<SalesState>((set, get) => ({
     });
 
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from("sales")
-        .update({ note })
-        .eq("id", saleId);
+        .update({ notes: note })
+        .eq("id", saleId)
+        .select("id");
       if (error) throw error;
+      if (!data?.length) throw new Error("Sale note was not saved");
     } catch {
       // Queue for later sync if offline
       if (!navigator.onLine) {

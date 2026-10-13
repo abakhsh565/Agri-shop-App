@@ -22,7 +22,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import { setupFixtures, cleanupFixtures, injectAdminAuth } from './helpers';
 
-const BASE_URL = 'http://localhost:5173';
+const BASE_URL = process.env.QA_APP_URL || 'http://localhost:5173';
 
 test.describe.configure({ mode: 'serial' });
 
@@ -67,7 +67,7 @@ async function signIn(page: Page) {
  * "the picker never opened".
  */
 async function openPickerWithLeadingControl(page: Page) {
-  await page.goto(`${BASE_URL}/admin/more`);
+  await page.goto(`${BASE_URL}/admin/settings/profile`);
   await page.waitForLoadState('networkidle');
   await page.locator('[data-testid^="branch-row-"]').first().click();
   await page.locator('[data-testid^="branch-location-"][data-testid$="-open"]').first().click();

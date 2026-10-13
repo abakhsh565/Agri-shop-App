@@ -25,6 +25,7 @@
 
 import { describe, it, beforeAll, afterAll, expect } from 'vitest';
 import { execRpcAsUser, execSqlAsAdmin } from '../setup/qa-client';
+import { deleteFixtureUsers } from '../setup/fixtures';
 
 const OWNER = '9c000000-0000-4000-8000-0000000000a1';
 const OTHER_OWNER = '9c000000-0000-4000-8000-0000000000a2';
@@ -56,7 +57,12 @@ async function cleanup() {
   await sql(`DELETE FROM customers WHERE id IN ('${CUSTOMER}','${OTHER_CUSTOMER}')`).catch(() => undefined);
   await sql(`DELETE FROM branches WHERE tenant_id IN ('${SHOP}','${OTHER_SHOP}')`).catch(() => undefined);
   await sql(`DELETE FROM memberships WHERE tenant_id IN ('${SHOP}','${OTHER_SHOP}')`).catch(() => undefined);
-  await sql(`DELETE FROM users WHERE id IN ('${OWNER}','${OTHER_OWNER}')`).catch(() => undefined);
+  // Not a bare `DELETE FROM users`. `set_place` writes a `location_updated` audit row and
+  // `audit_events.user_id` is NO ACTION, so the two owners were undeletable — and because one
+  // blocked row makes the whole multi-row DELETE fail, BOTH stayed in the shared QA database and
+  // were the entire cause of `rbacInvariants` invariant D's `expected 2 to be +0`. The helper
+  // clears what account deletion clears, then proves the users are gone instead of assuming it.
+  await deleteFixtureUsers([OWNER, OTHER_OWNER]);
   await sql(`DELETE FROM shops WHERE id IN ('${SHOP}','${OTHER_SHOP}')`).catch(() => undefined);
   await sql(`DELETE FROM shop_requests WHERE owner_phone LIKE '%9640001'`).catch(() => undefined);
   // The auth identities these fixtures signed in with. An app user deleted without its auth row

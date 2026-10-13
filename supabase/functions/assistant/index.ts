@@ -35,5 +35,9 @@ serve((req: Request) =>
     geminiModel: Deno.env.get("GEMINI_MODEL") ?? "gemini-2.5-flash",
     // Quota is counted per model per day; the small one is tried when the good one is spent.
     geminiFallbackModel: Deno.env.get("GEMINI_FALLBACK_MODEL") ?? "",
+    // Optional. Empty means Google. Set it to a gateway that serves the Gemini generateContent
+    // wire format (for example a self-hosted OmniRoute at http://localhost:20128/v1beta) and the
+    // same function, tools and permission gate answer from there instead.
+    modelBaseUrl: Deno.env.get("ASSISTANT_MODEL_BASE_URL") ?? "",
   }),
 );

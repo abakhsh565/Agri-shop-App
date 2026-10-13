@@ -1,0 +1,111 @@
+{
+  "_readme": [
+    "The QA baseline, DEFINED — not the number zero.",
+    "",
+    "WHY THIS FILE EXISTS. The tier-2 gate used to require `qa:count` to be 0. That expectation is not",
+    "attainable: 552 of the 687 rows measured on 2026-10-13 are `audit_events`, which migration 0181 has",
+    "the SYSTEM write rather than the caller, and which `tests/e2e/cleanupOwnership.ts` deliberately never",
+    "deletes except by registered id. A gate that can only be satisfied by destroying the database's own",
+    "history is a gate people satisfy destructively — `scripts/clean-test-data.mjs` does table-wide",
+    "`DELETE FROM audit_events` to get there.",
+    "",
+    "So the baseline is now defined by OWNERSHIP + EXPECTED FIXTURES, and it fails in BOTH directions:",
+    "a row that appeared without being declared is drift, and a row that DISAPPEARED is also drift (that",
+    "is the defect this replaces — a lane deleted seven baseline rows and the old gate called it cleaner).",
+    "",
+    "POLICIES, one per table:",
+    "  history — the system writes these rows as a side effect of using the app, no lane can own them, and",
+    "            they are reported rather than bounded. `observed` is for review, not enforcement.",
+    "  exact   — a reviewed inventory: the count must match `expected` in both directions. Every entry",
+    "            carries `why`, naming which rows they are (fixture, tagged suite fixture, hand-entered).",
+    "  zero    — nothing legitimate writes these; any row at all is a lane's leftover.",
+    "",
+    "A table that holds rows and is not declared here FAILS. That direction is deliberate: the file can only",
+    "become more permissive by being edited and reviewed, never by a new table quietly appearing.",
+    "",
+    "Updating it is a reviewed act. `node scripts/dev/qa-baseline.mjs --propose` prints a draft from the",
+    "current database; committing that draft is the review step. No command rewrites this file automatically.",
+    "",
+    "Reviewed 2026-10-13 from `node scripts/dev/qa-attribution.mjs` (687 rows in 15 tables, attributed by",
+    "table, shop/tenant, time and the repository's own test tags). Target: the QA project only."
+  ],
+
+  "reviewedAt": "2026-10-13",
+  "projectRef": "bpybjrjenwccowvtrevu",
+
+  "policies": {
+    "audit_events": {
+      "policy": "history",
+      "observed": 552,
+      "why": "0181 — the system writes these, not the caller (measured: customer_payments_update/insert 106 each, customer_payment_recorded 82, sale_created 28, branch_selected 10). cleanupOwnership.ts deletes them only by registered id, and no lane can own the history its own sign-in produces"
+    },
+
+    "customers": {
+      "policy": "exact",
+      "expected": 15,
+      "why": "4 hand-entered (Mehboob in the Baba jaani shop; Ab star / Ab jabait / Ab in Default Shop), 8 tagged suite fixtures (Perm/Inv/Fin/Destruct), 3 QA-prefixed created 2026-10-13. The seeded ids 20000000-…-001..003 are absent — qa:seed e2e restores those"
+    },
+    "products": {
+      "policy": "exact",
+      "expected": 15,
+      "why": "5 hand-entered (Lambda, Potash, Test, Besto, K plus) plus 1 in the Baba jaani shop (Lambda arc), 9 tagged suite fixtures (3 named QA Marketplace …, Inv/Fin Test Product, QA Dup-safe Product, QA Product A/B)"
+    },
+    "product_variants": {
+      "policy": "exact",
+      "expected": 18,
+      "why": "one variant per product for the rows above, plus the two QA_IDS variants 40000000-…-001..002"
+    },
+    "companies": {
+      "policy": "exact",
+      "expected": 5,
+      "why": "3 protected fixtures (QA Supplier A = companyA, FK-referenced) + 2 hand-entered (Suncrop in Default Shop, Syngenta in Baba jaani) + the tagged suite fixtures Inv/Fin Test Supplier"
+    },
+    "sales": {
+      "policy": "exact",
+      "expected": 14,
+      "why": "12 handed-in SALE-xxxxx from the manual QA sessions (2 of them in the Baba jaani shop) + PERM-SALE-001/002 from the permissions suite"
+    },
+    "sale_items": { "policy": "exact", "expected": 15, "why": "line items of the 14 sales above (one sale has two lines)" },
+    "voids": { "policy": "exact", "expected": 5, "why": "voided sales from the 2026-10-11/12 manual QA sessions" },
+    "customer_payments": { "policy": "exact", "expected": 2, "why": "one hand-entered payment in each of the two shops" },
+    "supplier_payments": { "policy": "exact", "expected": 1, "why": "one hand-entered payment against QA Supplier A on 2026-10-04" },
+    "inventory_movements": { "policy": "exact", "expected": 10, "why": "movements written by the manual sales and opening-stock entries above" },
+    "credit_limit_requests": { "policy": "exact", "expected": 15, "why": "created by the credit-request flow during the 2026-10-11/12 QA sessions" },
+    "customer_crops": { "policy": "exact", "expected": 8, "why": "hand-entered crop records on the customers above" },
+    "notifications": { "policy": "exact", "expected": 11, "why": "generated by the manual sales/payments above. Not classified as history: they are per-event rows a lane can own, so a rise here means a lane left its own behind" },
+    "shop_requests": { "policy": "exact", "expected": 1, "why": "one registration request from 2026-10-06, created through the app's own onboarding flow" },
+
+    "activity_log": { "policy": "zero", "why": "nothing in the app writes here outside the flows the lanes drive, which clean up after themselves" },
+    "returns": { "policy": "zero", "why": "return flows exist in lanes that own their rows" },
+    "return_items": { "policy": "zero", "why": "children of returns" },
+    "purchases": { "policy": "zero", "why": "purchase lanes own their rows" },
+    "purchase_items": { "policy": "zero", "why": "children of purchases" },
+    "payments": { "policy": "zero", "why": "legacy payment table — no flow writes it" },
+    "stock_adjustments": { "policy": "zero", "why": "adjustment screens register their rows" },
+    "cash_reconciliations": { "policy": "zero", "why": "no lane leaves a reconciliation behind" },
+    "daily_cash_reconciliations": { "policy": "zero", "why": "same" },
+    "reminder_logs": { "policy": "zero", "why": "reminders are exercised by their own workstream" },
+    "reminder_occurrences": { "policy": "zero", "why": "same" },
+    "reminder_configs": { "policy": "zero", "why": "same" },
+    "price_history": { "policy": "zero", "why": "written only by price changes the lanes clean up" }
+  },
+
+  "fixtures": {
+    "users": [
+      { "phone": "923001234567", "why": "owner — the account every lane signs in with" },
+      { "phone": "923001122334", "why": "sales employee — the employee lanes sign in with" },
+      { "phone": "923009999999", "why": "QA Admin — used by the integration suites" },
+      { "phone": "923008888888", "why": "QA Employee — used by the permission suites" }
+    ],
+    "requireActiveMembership": true,
+    "companies": [
+      { "id": "50000000-0000-0000-0000-000000000001", "why": "QA Supplier A (companyA) — FK-referenced by supplier_payments and products" }
+    ]
+  },
+
+  "isolatedTenant": {
+    "id": "1e5f7e4b-7ed0-4787-8148-8f289fc1c107",
+    "why": "The dedicated tenant the two write lanes need (`setupCompletion`, `dependencyContinuity`): app-created through the real registration flow on 2026-10-04, with a default branch, its four system roles and ZERO business rows. The gate asserts it is still empty, because that emptiness is the lanes' premise and a hand run could fill it",
+    "mustBeEmpty": ["companies", "products", "customers", "sales"]
+  }
+}

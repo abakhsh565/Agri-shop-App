@@ -22,7 +22,12 @@ const OWNER_PHONE = '923001234567';
 const ROUTES = [
   '/admin/dashboard', '/admin/sales', '/admin/products', '/admin/customers',
   '/admin/companies', '/admin/purchases', '/admin/employees', '/admin/reports',
-  '/admin/payments', '/admin/alerts', '/admin/settings', '/admin/more',
+  '/admin/payments', '/admin/alerts', '/admin/settings', '/admin/settings/profile', '/admin/more',
+  // The location picker, because it is the one screen that puts a MAP on it — and a map library
+  // builds its own DOM (a canvas, a draggable marker, its own controls) rather than the app's.
+  // Unmeasured, the lane would report a clean sheet while saying nothing about the largest
+  // piece of third-party interface in the app.
+  '/pick-location',
 ];
 
 /**

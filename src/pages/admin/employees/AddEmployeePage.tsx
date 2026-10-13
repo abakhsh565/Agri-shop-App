@@ -19,6 +19,7 @@ import InviteLinkCard from "@/components/admin/InviteLinkCard";
 import { useThemeStore } from "@/stores/themeStore";
 import { useShopStore } from "@/stores/shopStore";
 import Sheet from "@/components/ui/Sheet";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import Button from "@/components/ui/Button";
 import { normalizePhone } from "@/lib/auth";
 import { clearNav } from "@/lib/navContext";
@@ -57,6 +58,10 @@ export default function AddEmployeePage() {
   const { areaLabel, actionLabel } = usePermissionLabels();
   const employees = useEmployeesStore((s) => s.employees);
   const createEmployee = useEmployeesStore((s) => s.createEmployee);
+  const assignBranch = useEmployeesStore((s) => s.assignBranch);
+  const [employeeMode, setEmployeeMode] = useState<"new" | "existing">("new");
+  const [existingId, setExistingId] = useState<string | null>(null);
+  const [assignment, setAssignment] = useState<"add" | "move" | null>(null);
   const rolesStore = useRolesStore();
   const permissionsStore = usePermissionsStore();
 
@@ -84,10 +89,10 @@ export default function AddEmployeePage() {
   // Which role's access sheet is open, if any. Separate from `roleId` (which role is CHOSEN): the
   // sheet can be open on the chosen role, and closing it must not change the choice.
   const [modifyRoleId, setModifyRoleId] = useState<string | null>(null);
-  const [branchScope, setBranchScope] = useState<string[] | null>(null);
+  const [branchScope, setBranchScope] = useState<string[] | null>([]);
   const [branches, setBranches] = useState<{ id: string; name: string; is_default: boolean }[]>([]);
   // The branch the owner is working in *right now*.
-  const activeBranchId = useShopStore((s) => s.activeShopId);
+  const activeBranchId = useShopStore((s) => s.activeBranchId);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const creatingRef = useRef(false);
@@ -177,7 +182,7 @@ export default function AddEmployeePage() {
     // a member with nowhere to work — their records would be written without a branch and then be
     // invisible to every branch-limited reader, including them. Caught here as a sentence the
     // owner can act on, and again by the database (0171) for anything that is not this screen.
-    if (branches.length > 0 && Array.isArray(branchScope) && branchScope.length === 0) {
+    if (!Array.isArray(branchScope) || branchScope.length === 0) {
       setError(t("addEmployee.errNoBranch"));
       return;
     }
@@ -344,6 +349,49 @@ export default function AddEmployeePage() {
     );
   }
 
+  async function handleAssign() {
+    if (creatingRef.current || !existingId || !activeBranchId || !assignment) return;
+    creatingRef.current = true;
+    setLoading(true);
+    setError("");
+    try {
+      await assignBranch(existingId, activeBranchId, assignment);
+      addToast(t("employeeBranch.saved"), "success");
+      navigate(`/admin/employees/${existingId}`, { replace: true });
+    } catch {
+      setError(t("employeeBranch.failed"));
+    } finally {
+      setLoading(false);
+      creatingRef.current = false;
+      setAssignment(null);
+    }
+  }
+
+  if (employeeMode === "existing") {
+    return (
+      <div className="flex flex-col w-full min-h-full" style={{ background: "var(--background)", direction: isUrdu ? "rtl" : "ltr" }}>
+        <StatusBar />
+        <NavHeader title={t("addEmployee.title")} />
+        <div className="p-4 flex flex-col gap-4">
+          <Button variant="outline" onClick={() => setEmployeeMode("new")} testId="employee-mode-new">{t("employeeBranch.new")}</Button>
+          <ListCard section={t("employeeBranch.existing")}>
+            {employees.filter((e) => !e.isOriginalOwner && e.role === "employee" && e.isActive).map((e) => (
+              <ListRow key={e.id} title={e.name} meta={e.phone} selected={existingId === e.id}
+                testId={`existing-employee-${e.id}`} onClick={() => setExistingId(e.id)} />
+            ))}
+          </ListCard>
+          <Button disabled={!existingId || !activeBranchId || loading} onClick={() => setAssignment("add")} testId="employee-branch-add">{t("employeeBranch.add")}</Button>
+          <Button variant="outline" disabled={!existingId || !activeBranchId || loading} onClick={() => setAssignment("move")} testId="employee-branch-move">{t("employeeBranch.move")}</Button>
+          {error && <p className="text-12" style={{ color: "var(--error)" }}>{error}</p>}
+        </div>
+        <ConfirmDialog open={assignment !== null} title={t(assignment === "move" ? "employeeBranch.move" : "employeeBranch.add")}
+          message={t(assignment === "move" ? "employeeBranch.moveBody" : "employeeBranch.addBody")}
+          confirmLabel={t("common.confirm")} destructive={assignment === "move"} loading={loading}
+          onConfirm={() => void handleAssign()} onCancel={() => setAssignment(null)} />
+      </div>
+    );
+  }
+
   // Confirmation: the invitation exists now, so what follows is handing it over.
   if (sent) {
     return (
@@ -396,6 +444,10 @@ export default function AddEmployeePage() {
     >
       <StatusBar />
       <NavHeader title={t("addEmployee.title")} />
+
+      <div className="px-4 pt-3">
+        <Button variant="outline" onClick={() => setEmployeeMode("existing")} testId="employee-mode-existing">{t("employeeBranch.existing")}</Button>
+      </div>
 
       {/* Step indicator — named, so the owner can see the whole journey up front */}
       <div className="flex items-start justify-center gap-1 px-4 pt-3">
@@ -497,7 +549,7 @@ export default function AddEmployeePage() {
                 </p>
                 <div className="flex flex-col gap-2">
                   <button
-                    onClick={() => setBranchScope(null)}
+                    onClick={() => setBranchScope(branches.map((b) => b.id))}
                     className="flex items-center gap-3 p-4 rounded-[var(--radius-card)] text-start"
                     style={{
                       background: "var(--surface)",

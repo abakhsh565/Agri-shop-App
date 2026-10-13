@@ -12,9 +12,31 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { getDbClient, asPostgres, disableTriggers, enableTriggers, execSql, execSqlAsAdmin } from '../setup/qa-client';
+import { getDbClient, execSqlAsAdmin } from '../setup/qa-client';
 
 let client: any;
+
+/**
+ * The branch every operational row this fixture writes belongs to.
+ *
+ * `sales`, `returns`, `customer_payments` and `supplier_payments` are branch-owned, and
+ * `enforce_branch_scope()` (0188) refuses a background write — a direct connection with no
+ * authenticated actor — that states no resolvable branch: `INVALID_BRANCH_SCOPE`. The two payment
+ * tables are the sharp case, because they carry no `shop_id` at all, so there is nothing for the
+ * trigger to derive a branch from and the row must name one itself.
+ *
+ * The old fixture worked around those refusals by disabling every trigger in `public` on the
+ * SHARED QA database (`disableTriggers()`), and the refusals happened anyway: `run_sql` runs each
+ * statement, the loop swallowed any error, and no trigger was left disabled — `sales` and
+ * `returns` passed only because their `shop_id` let the trigger resolve a branch, and exactly the
+ * three payment inserts were refused. So the workaround achieved nothing except attempting a
+ * database-wide `ALTER TABLE … DISABLE TRIGGER ALL` on a database every other suite shares.
+ *
+ * The fixture now states its own branch, resolved at run time with `default_branch_id()` — the
+ * same function the trigger itself calls for a background write — so the fixture and the rule
+ * cannot drift apart.
+ */
+let mainBranch = '';
 
 const TEST = {
   shop: '00000000-0000-0000-0000-000000000001',
@@ -34,6 +56,8 @@ const TEST = {
   returnItemA: 'F0000000-0000-0000-0000-000000000080',
   voidA: 'F0000000-0000-0000-0000-000000000090',
   supplierPaymentA: 'F0000000-0000-0000-0000-0000000000A0',
+  // Never written by the fixture: the id a deliberately unowned write is refused for.
+  ghostPayment: 'F0000000-0000-0000-0000-0000000000F1',
   evidence: [] as Array<{test: string; expected: string; actual: string; result: string}>,
 };
 
@@ -45,11 +69,26 @@ function record(test: string, expected: string, actual: string, result: 'PASS' |
 beforeAll(async () => {
   client = getDbClient();
   await client.connect();
-  // Disable protect_* triggers so direct SQL can simulate financial workflows
-  await disableTriggers(client);
 
-  // Clean up any previous test data
-  await cleanupTestData();
+  // The tenant's branch, by the database's own rule. Stamping this is the fixture agreeing with
+  // the rule rather than inventing a second definition of "main branch".
+  const branch = await execSqlAsAdmin(`SELECT public.default_branch_id('${TEST.shop}') AS id`);
+  mainBranch = branch.rows[0]?.id ?? '';
+  // A tenant with no active branch is an environment problem, not a financial one: say so rather
+  // than writing rows whose ownership nothing can resolve.
+  if (!mainBranch) {
+    throw new Error(
+      `financialIntegrity: tenant ${TEST.shop} has no active branch in QA, so nothing can own the ` +
+        `rows this suite writes. Seed the baseline first: npm run qa:seed baseline`,
+    );
+  }
+
+  // Clear anything an earlier run left behind. This has to succeed: residue would corrupt every
+  // number measured below, so a failure is reported here instead of being swallowed.
+  const leftover = await cleanupTestData();
+  if (leftover.length) {
+    throw new Error(`financialIntegrity: pre-run cleanup failed — ${leftover.join('; ')}`);
+  }
 
   // Create test fixtures
   await client.query(`INSERT INTO users (id, name, phone, role, is_original_owner, is_active, shop_id) VALUES ('${TEST.customerA}', 'Fin Test User', '92300FIN0001', 'admin', true, true, '${TEST.shop}') ON CONFLICT (id) DO NOTHING`);
@@ -60,9 +99,17 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await enableTriggers(client).catch(() => {});
-  await cleanupTestData();
+  const failures = await cleanupTestData();
+  const residue = await fixtureResidue();
   await client?.end();
+
+  // Cleanup is part of the result, not a courtesy. The previous version discarded every error
+  // (`catch {}`), so a failed delete kept this fixture's sale and sale_item in the shared QA
+  // database while the suite reported success.
+  record('Fixture cleanup — statements completed', '0 errors', `${failures.length} error(s): ${failures.join('; ') || 'none'}`, failures.length === 0 ? 'PASS' : 'FAIL');
+  record('Fixture cleanup — operator rows removed', '0', String(residue.total) + ` (${residue.detail})`, residue.total === 0 ? 'PASS' : 'FAIL');
+  record('Branch ownership — fixture rows carry the tenant branch', mainBranch || '(none)', String(mainBranch ? 'resolved' : 'MISSING'), mainBranch ? 'PASS' : 'FAIL');
+
   // Print evidence report
   const passed = TEST.evidence.filter(e => e.result === 'PASS').length;
   const failed = TEST.evidence.filter(e => e.result === 'FAIL').length;
@@ -74,24 +121,67 @@ afterAll(async () => {
   expect(TEST.evidence.filter(e => e.result === 'FAIL').map(e => `${e.test}: expected ${e.expected}, got ${e.actual}`)).toEqual([]);
 });
 
-async function cleanupTestData() {
+/**
+ * Remove everything this suite writes — children before parents.
+ *
+ * WHY THE ORDER IS THE POINT. The previous version deleted `sales` before the `voids` and
+ * `returns` rows that reference it, and `sale_items` before the `return_items` that reference
+ * them, and it discarded every error with `catch {}`. Those deletes therefore failed silently: a
+ * sale and a sale_item survived in the shared QA database after every run, while the suite
+ * reported success. Dependency order plus reported errors is what makes cleanup a result rather
+ * than a courtesy.
+ *
+ * @returns the statements that failed, as `statement: message`. Empty means cleanup completed.
+ */
+async function cleanupTestData(): Promise<string[]> {
+  const failures: string[] = [];
   // Use fresh connections for cleanup (pooler may drop idle connections)
-  const q = async (sql: string) => { try { await execSqlAsAdmin(sql); } catch {} };
-  const ids = [TEST.saleA, TEST.saleB, TEST.returnA, TEST.voidA];
-  for (const id of ids) {
-    await q(`DELETE FROM sale_items WHERE sale_id = '${id}'`);
-    await q(`DELETE FROM sales WHERE id = '${id}'`);
-  }
+  const q = async (sql: string) => {
+    try {
+      await execSqlAsAdmin(sql);
+    } catch (e: any) {
+      failures.push(`${sql.split(' WHERE ')[0]}: ${e.message}`);
+    }
+  };
+  // return_items -> sale_items and returns -> sale: the rows that reference them go first.
   await q(`DELETE FROM return_items WHERE return_id = '${TEST.returnA}'`);
+  await q(`DELETE FROM return_items WHERE sale_item_id IN ('${TEST.saleItemA}', '${TEST.saleItemB}')`);
   await q(`DELETE FROM returns WHERE id = '${TEST.returnA}'`);
+  await q(`DELETE FROM voids WHERE id = '${TEST.voidA}'`);
   await q(`DELETE FROM voids WHERE sale_id IN ('${TEST.saleA}', '${TEST.saleB}')`);
   await q(`DELETE FROM customer_payments WHERE id IN ('${TEST.paymentA}', '${TEST.paymentB}')`);
   await q(`DELETE FROM supplier_payments WHERE id = '${TEST.supplierPaymentA}'`);
   await q(`DELETE FROM inventory_movements WHERE product_id = '${TEST.productA}'`);
+  await q(`DELETE FROM sale_items WHERE sale_id IN ('${TEST.saleA}', '${TEST.saleB}')`);
+  await q(`DELETE FROM sales WHERE id IN ('${TEST.saleA}', '${TEST.saleB}')`);
   // Reset customer balances
   await q(`UPDATE customers SET outstanding_balance = 0, total_purchases = 0, total_paid = 0, credit_limit = CASE WHEN id = '${TEST.customerA}' THEN 100000 WHEN id = '${TEST.customerB}' THEN 50000 WHEN id = '${TEST.customerC}' THEN 25000 ELSE credit_limit END WHERE id IN ('${TEST.customerA}', '${TEST.customerB}', '${TEST.customerC}')`);
   // Reset supplier
   await q(`UPDATE companies SET outstanding_payable = 0, total_purchases = 0 WHERE id = '${TEST.companyA}'`);
+  return failures;
+}
+
+/**
+ * How much of this suite's own output is still in the database, counted independently of the
+ * cleanup's own return value: "the delete reported no error" and "the row is gone" are two
+ * different claims, and only the second one is evidence.
+ */
+async function fixtureResidue(): Promise<{ total: number; detail: string }> {
+  const res = await execSqlAsAdmin(`
+    SELECT 'sales' AS t, count(*)::int AS n FROM sales WHERE id IN ('${TEST.saleA}', '${TEST.saleB}')
+    UNION ALL SELECT 'sale_items', count(*)::int FROM sale_items WHERE id IN ('${TEST.saleItemA}', '${TEST.saleItemB}')
+    UNION ALL SELECT 'returns', count(*)::int FROM returns WHERE id = '${TEST.returnA}'
+    UNION ALL SELECT 'return_items', count(*)::int FROM return_items WHERE id = '${TEST.returnItemA}'
+    UNION ALL SELECT 'voids', count(*)::int FROM voids WHERE id = '${TEST.voidA}'
+    UNION ALL SELECT 'inventory_movements', count(*)::int FROM inventory_movements WHERE product_id = '${TEST.productA}'
+    UNION ALL SELECT 'customer_payments', count(*)::int FROM customer_payments WHERE id IN ('${TEST.paymentA}', '${TEST.paymentB}')
+    UNION ALL SELECT 'supplier_payments', count(*)::int FROM supplier_payments WHERE id = '${TEST.supplierPaymentA}'
+  `);
+  const rows = res.rows as Array<{ t: string; n: number }>;
+  return {
+    total: rows.reduce((sum, r) => sum + Number(r.n), 0),
+    detail: rows.filter((r) => Number(r.n)).map((r) => `${r.t}=${r.n}`).join(', ') || 'none',
+  };
 }
 
 // ── Customer Financial Tests ──
@@ -100,7 +190,7 @@ describe('Financial Integrity — Customer Transactions', () => {
   it('should correctly calculate single sale total', async () => {
     // Create a sale for Customer A: 2 units × Rs. 5000 = Rs. 10,000
     const saleTotal = 2 * 5000;
-    await client.query(`INSERT INTO sales (id, sale_number, customer_id, employee_id, total_amount, status, payment_type, payment_method, amount_paid, amount_due, discount, is_voided, shop_id, created_at, updated_at) VALUES ('${TEST.saleA}', 'QA-SALE-001', '${TEST.customerA}', '${TEST.customerA}', ${saleTotal}, 'completed', 'credit', 'cash', 0, ${saleTotal}, 0, false, '${TEST.shop}', NOW(), NOW()) ON CONFLICT (id) DO NOTHING`);
+    await client.query(`INSERT INTO sales (id, sale_number, customer_id, employee_id, total_amount, status, payment_type, payment_method, amount_paid, amount_due, discount, is_voided, shop_id, branch_id, created_at, updated_at) VALUES ('${TEST.saleA}', 'QA-SALE-001', '${TEST.customerA}', '${TEST.customerA}', ${saleTotal}, 'completed', 'credit', 'cash', 0, ${saleTotal}, 0, false, '${TEST.shop}', '${mainBranch}', NOW(), NOW()) ON CONFLICT (id) DO NOTHING`);
     await client.query(`INSERT INTO sale_items (id, sale_id, product_id, product_name, variant_id, variant_name, qty, unit_price, line_total) VALUES ('${TEST.saleItemA}', '${TEST.saleA}', '${TEST.productA}', 'Fin Test Product', '${TEST.variantA}', '10kg', 2, 5000, ${saleTotal}) ON CONFLICT (id) DO NOTHING`);
     // Update customer total_purchases
     await client.query(`UPDATE customers SET total_purchases = total_purchases + ${saleTotal}, outstanding_balance = outstanding_balance + ${saleTotal} WHERE id = '${TEST.customerA}'`);
@@ -118,7 +208,7 @@ describe('Financial Integrity — Customer Transactions', () => {
   it('should correctly calculate partial payment', async () => {
     // Customer A pays Rs. 3,000 of Rs. 10,000 outstanding
     const paymentAmount = 3000;
-    await client.query(`INSERT INTO customer_payments (id, customer_id, amount, method, recorded_by, created_at) VALUES ('${TEST.paymentA}', '${TEST.customerA}', ${paymentAmount}, 'cash', 'QA Admin', NOW()) ON CONFLICT (id) DO NOTHING`);
+    await client.query(`INSERT INTO customer_payments (id, customer_id, amount, method, recorded_by, branch_id, created_at) VALUES ('${TEST.paymentA}', '${TEST.customerA}', ${paymentAmount}, 'cash', 'QA Admin', '${mainBranch}', NOW()) ON CONFLICT (id) DO NOTHING`);
     await client.query(`UPDATE customers SET total_paid = total_paid + ${paymentAmount}, outstanding_balance = outstanding_balance - ${paymentAmount} WHERE id = '${TEST.customerA}'`);
 
     const cust = await client.query(`SELECT total_purchases, outstanding_balance, total_paid FROM customers WHERE id = '${TEST.customerA}'`);
@@ -136,7 +226,7 @@ describe('Financial Integrity — Customer Transactions', () => {
   it('should correctly calculate full payment', async () => {
     // Customer A pays remaining Rs. 7,000
     const paymentAmount = 7000;
-    await client.query(`INSERT INTO customer_payments (id, customer_id, amount, method, recorded_by, created_at) VALUES ('${TEST.paymentB}', '${TEST.customerA}', ${paymentAmount}, 'cash', 'QA Admin', NOW()) ON CONFLICT (id) DO NOTHING`);
+    await client.query(`INSERT INTO customer_payments (id, customer_id, amount, method, recorded_by, branch_id, created_at) VALUES ('${TEST.paymentB}', '${TEST.customerA}', ${paymentAmount}, 'cash', 'QA Admin', '${mainBranch}', NOW()) ON CONFLICT (id) DO NOTHING`);
     await client.query(`UPDATE customers SET total_paid = total_paid + ${paymentAmount}, outstanding_balance = outstanding_balance - ${paymentAmount} WHERE id = '${TEST.customerA}'`);
 
     const cust = await client.query(`SELECT total_purchases, outstanding_balance, total_paid FROM customers WHERE id = '${TEST.customerA}'`);
@@ -156,7 +246,7 @@ describe('Financial Integrity — Customer Transactions', () => {
 
   it('should correctly calculate Customer B — multiple sales', async () => {
     // Customer B: Sale 1 = Rs. 8,000, Sale 2 = Rs. 12,000
-    await client.query(`INSERT INTO sales (id, sale_number, customer_id, employee_id, total_amount, status, payment_type, payment_method, amount_paid, amount_due, discount, is_voided, shop_id, created_at, updated_at) VALUES ('${TEST.saleB}', 'QA-SALE-002', '${TEST.customerB}', '${TEST.customerA}', 12000, 'completed', 'credit', 'cash', 0, 12000, 0, false, '${TEST.shop}', NOW(), NOW()) ON CONFLICT (id) DO NOTHING`);
+    await client.query(`INSERT INTO sales (id, sale_number, customer_id, employee_id, total_amount, status, payment_type, payment_method, amount_paid, amount_due, discount, is_voided, shop_id, branch_id, created_at, updated_at) VALUES ('${TEST.saleB}', 'QA-SALE-002', '${TEST.customerB}', '${TEST.customerA}', 12000, 'completed', 'credit', 'cash', 0, 12000, 0, false, '${TEST.shop}', '${mainBranch}', NOW(), NOW()) ON CONFLICT (id) DO NOTHING`);
     await client.query(`INSERT INTO sale_items (id, sale_id, product_id, product_name, variant_id, variant_name, qty, unit_price, line_total) VALUES ('${TEST.saleItemB}', '${TEST.saleB}', '${TEST.productA}', 'Fin Test Product', '${TEST.variantA}', '10kg', 2, 5000, 10000) ON CONFLICT (id) DO NOTHING`);
     await client.query(`UPDATE customers SET total_purchases = 20000, outstanding_balance = 20000 WHERE id = '${TEST.customerB}'`);
 
@@ -189,7 +279,7 @@ describe('Financial Integrity — Supplier Transactions', () => {
 
   it('should correctly reduce supplier payable on payment', async () => {
     const payAmount = 4000;
-    await client.query(`INSERT INTO supplier_payments (id, company_id, amount, method, recorded_by, created_at) VALUES ('${TEST.supplierPaymentA}', '${TEST.companyA}', ${payAmount}, 'cash', 'QA Admin', NOW()) ON CONFLICT (id) DO NOTHING`);
+    await client.query(`INSERT INTO supplier_payments (id, company_id, amount, method, recorded_by, branch_id, created_at) VALUES ('${TEST.supplierPaymentA}', '${TEST.companyA}', ${payAmount}, 'cash', 'QA Admin', '${mainBranch}', NOW()) ON CONFLICT (id) DO NOTHING`);
     await client.query(`UPDATE companies SET outstanding_payable = outstanding_payable - ${payAmount} WHERE id = '${TEST.companyA}'`);
 
     const supplier = await client.query(`SELECT outstanding_payable FROM companies WHERE id = '${TEST.companyA}'`);
@@ -204,7 +294,7 @@ describe('Financial Integrity — Return Calculations', () => {
   it('should correctly reduce customer outstanding on return', async () => {
     // Customer B returns 1 unit × Rs. 5000
     const returnAmount = 5000;
-    await client.query(`INSERT INTO returns (id, sale_id, customer_id, refund_amount, reason, shop_id, created_at) VALUES ('${TEST.returnA}', '${TEST.saleB}', '${TEST.customerB}', ${returnAmount}, 'QA test return', '${TEST.shop}', NOW()) ON CONFLICT (id) DO NOTHING`);
+    await client.query(`INSERT INTO returns (id, sale_id, customer_id, refund_amount, reason, shop_id, branch_id, created_at) VALUES ('${TEST.returnA}', '${TEST.saleB}', '${TEST.customerB}', ${returnAmount}, 'QA test return', '${TEST.shop}', '${mainBranch}', NOW()) ON CONFLICT (id) DO NOTHING`);
     await client.query(`INSERT INTO return_items (id, return_id, sale_item_id, product_id, product_name, variant_id, variant_name, qty_to_return, unit_price, refund_amount) VALUES ('${TEST.returnItemA}', '${TEST.returnA}', '${TEST.saleItemB}', '${TEST.productA}', 'Fin Test Product', '${TEST.variantA}', '10kg', 1, 5000, ${returnAmount}) ON CONFLICT (id) DO NOTHING`);
     // Return reduces: total_purchases, outstanding_balance
     await client.query(`UPDATE customers SET total_purchases = total_purchases - ${returnAmount}, outstanding_balance = outstanding_balance - ${returnAmount} WHERE id = '${TEST.customerB}'`);
@@ -310,5 +400,80 @@ describe('Financial Integrity — Persistence', () => {
   it('should verify no duplicate payment records', async () => {
     const dupes = await client.query(`SELECT customer_id, amount, created_at, COUNT(*) as cnt FROM customer_payments WHERE customer_id = '${TEST.customerA}' GROUP BY customer_id, amount, created_at HAVING COUNT(*) > 1`);
     record('No duplicate payments for Customer A', '0', String(dupes.rows.length), dupes.rows.length === 0 ? 'PASS' : 'FAIL');
+  });
+});
+
+// ── Branch ownership — the rule this fixture satisfies is still enforced ──
+
+/**
+ * Two things must be true at once, and the old fixture proved neither.
+ *
+ * It "passed" by trying to disable every trigger in `public` so that rows with no branch would be
+ * accepted. That workaround was ineffective — the payment inserts were refused anyway — but its
+ * intent is the reason these tests exist: a fixture that satisfies a rule by removing it proves
+ * nothing about the product. So the fixture's rows must genuinely carry a branch, AND the guard
+ * that refuses unowned rows must still be doing its job.
+ */
+describe('Financial Integrity — branch ownership is enforced, not bypassed', () => {
+  /** A branch that exists nowhere: valid as a uuid, invalid as ownership. */
+  const GHOST_BRANCH = 'F0000000-0000-0000-0000-0000000000FF';
+
+  it('has the branch-scope trigger enabled on every branch-owned table this suite writes', async () => {
+    const res = await execSqlAsAdmin(`
+      SELECT c.relname AS table_name, t.tgenabled
+        FROM pg_trigger t
+        JOIN pg_class c ON c.oid = t.tgrelid
+        JOIN pg_namespace n ON n.oid = c.relnamespace
+       WHERE n.nspname = 'public' AND NOT t.tgisinternal
+         AND t.tgname = 'enforce_branch_scope_trg'
+         AND c.relname IN ('sales', 'returns', 'customer_payments', 'supplier_payments')
+       ORDER BY c.relname
+    `);
+    // 'O' is origin mode — the ordinary enabled state, and the only one that enforces the rule.
+    // 'D' is disabled: exactly what the old workaround tried to leave behind for every other suite
+    // sharing this database.
+    expect(res.rows.map((r: any) => `${r.table_name}:${r.tgenabled}`)).toEqual([
+      'customer_payments:O',
+      'returns:O',
+      'sales:O',
+      'supplier_payments:O',
+    ]);
+    record('Branch-scope trigger enabled on the branch-owned tables', '4 of 4 enabled', `${res.rows.length} rows, all 'O'`, res.rows.length === 4 ? 'PASS' : 'FAIL');
+  });
+
+  it('refuses a payment addressed to a branch that does not exist', async () => {
+    const ghost = await execSqlAsAdmin(`SELECT count(*)::int AS c FROM branches WHERE id = '${GHOST_BRANCH}'`);
+    // Non-vacuity: the refusal below means nothing unless this branch really is absent.
+    expect(ghost.rows[0].c).toBe(0);
+
+    // The row is valid in every other respect — it is the branch that is wrong. With the trigger
+    // disabled (what the old workaround attempted) this insert SUCCEEDS and leaves a payment that
+    // no branch-limited reader, including whoever recorded it, could ever see.
+    let error = '';
+    try {
+      await client.query(`INSERT INTO customer_payments (id, customer_id, amount, method, recorded_by, branch_id, created_at) VALUES ('${TEST.ghostPayment}', '${TEST.customerA}', 1, 'cash', 'QA Branch Guard', '${GHOST_BRANCH}', NOW())`);
+    } catch (e: any) {
+      error = e.message;
+    }
+    record('Unowned payment refused', 'INVALID_BRANCH_SCOPE', error || '(accepted)', error.includes('INVALID_BRANCH_SCOPE') ? 'PASS' : 'FAIL');
+
+    const persisted = await execSqlAsAdmin(`SELECT count(*)::int AS c FROM customer_payments WHERE id = '${TEST.ghostPayment}'`);
+    record('Refused payment persisted nothing', '0', String(persisted.rows[0].c), Number(persisted.rows[0].c) === 0 ? 'PASS' : 'FAIL');
+  });
+
+  it('stamps every operational row this fixture writes with the tenant branch', async () => {
+    const res = await execSqlAsAdmin(`
+      SELECT 'sales' AS t, branch_id::text AS branch_id FROM sales WHERE id IN ('${TEST.saleA}', '${TEST.saleB}')
+      UNION ALL SELECT 'returns', branch_id::text FROM returns WHERE id = '${TEST.returnA}'
+      UNION ALL SELECT 'customer_payments', branch_id::text FROM customer_payments WHERE id IN ('${TEST.paymentA}', '${TEST.paymentB}')
+      UNION ALL SELECT 'supplier_payments', branch_id::text FROM supplier_payments WHERE id = '${TEST.supplierPaymentA}'
+    `);
+    const rows = res.rows as Array<{ t: string; branch_id: string | null }>;
+    // Six operational rows exist by now: two sales, a return, two customer payments and a
+    // supplier payment. A null here is the exact condition the old fixture hid.
+    const unowned = rows.filter((r) => r.branch_id === null).map((r) => r.t);
+    record('Operational rows carrying no branch', '0', unowned.length ? unowned.join(', ') : '0', unowned.length === 0 ? 'PASS' : 'FAIL');
+    record('Operational rows stamped with the tenant branch', `${rows.length} of ${rows.length}`, `${rows.filter((r) => r.branch_id === mainBranch).length} of ${rows.length}`,
+      rows.length > 0 && rows.every((r) => r.branch_id === mainBranch) ? 'PASS' : 'FAIL');
   });
 });

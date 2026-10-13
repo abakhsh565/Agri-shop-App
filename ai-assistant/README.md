@@ -105,6 +105,49 @@ supabase secrets set GEMINI_API_KEY=...
 same tools and refuses the same things; with it, questions can be asked loosely, in Urdu, or with a
 photo of a bill.
 
+## Answering from a gateway instead of Google
+
+The model layer already speaks the Gemini `generateContent` wire format and takes its credential as
+`?key=…`. That is also the format several gateways serve, so the assistant can answer from one
+without a second provider implementation, a second tool gate or a second set of rules.
+
+```bash
+# A self-hosted OmniRoute:
+ASSISTANT_MODEL_BASE_URL=http://localhost:20128/v1beta
+GEMINI_API_KEY=<your OmniRoute API key>   # the gateway's key; the variable name is historical
+GEMINI_MODEL=auto                         # or any model the gateway exposes
+```
+
+| Variable | Meaning |
+|---|---|
+| `ASSISTANT_MODEL_BASE_URL` | Host serving `{base}/models/{model}:generateContent`. Unset → Google. |
+| `GEMINI_API_KEY` | The credential, whichever host is in use. |
+| `GEMINI_MODEL` | The model id, as the host names it. |
+| `GEMINI_FALLBACK_MODEL` | Second model tried when the first is spent or unavailable. |
+
+The same variable works on the deployed function (`supabase secrets set ASSISTANT_MODEL_BASE_URL=…`)
+— but note that an edge function runs in the cloud and cannot reach a gateway on your own machine.
+There it must be a host the function can route to. For a local gateway, run the dev harness, which
+is why it exists.
+
+Health check reports where calls are going, so a failing answer can be traced to its destination:
+
+```bash
+curl -s localhost:64701/health
+# → {"ok":true,"model":"auto","gateway":"http://localhost:20128/v1beta", …}
+```
+
+**What this does not change.** Every number still comes from a tool, the permission wall is still
+checked twice (the caller's list, then the database), nothing is stored, and the built-in layer is
+still the last resort when no model answers at all.
+
+**What to watch.** The gateway must carry **function calling** through to the model — the tool loop
+depends on it, and a model behind the gateway that cannot call tools will fall back to the built-in
+answerer. Gateways also apply their own routing and quota, so a model that works today can be
+rate-limited tomorrow; that is the gateway's layer, not this one.
+
+---
+
 ## Honest limits
 
 - **Voice both ways** uses the Web Speech API, so it works in Chrome and the Android WebView and

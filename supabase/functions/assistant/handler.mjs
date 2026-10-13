@@ -75,6 +75,9 @@ export async function handle(req, env) {
   const geminiKey = env.geminiKey ?? "";
   const geminiModel = env.geminiModel ?? "gemini-2.5-flash";
   const geminiFallbackModel = env.geminiFallbackModel ?? "";
+  // Where the model calls go. Empty means Google. See providers.mjs: this is what lets the same
+  // function be pointed at a gateway without a second call path.
+  const modelBaseUrl = env.modelBaseUrl ?? "";
 
   const token = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "").trim();
   if (!token) return json({ error: "Sign in first — the assistant runs as you." }, 401);
@@ -158,6 +161,7 @@ export async function handle(req, env) {
       apiKey: geminiKey,
       model: geminiModel,
       fallbackModel: geminiFallbackModel || undefined,
+      baseUrl: modelBaseUrl,
     });
     return json({
       answer: result.answer,

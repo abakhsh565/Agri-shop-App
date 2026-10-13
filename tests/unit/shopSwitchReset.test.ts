@@ -22,7 +22,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import type { Company, Customer, Product, Role, Sale, User } from "@/types";
 import type { AppNotification } from "@/stores/notificationStore";
 
-const env = vi.hoisted(() => ({ offline: false }));
+const env = vi.hoisted(() => ({ offline: false, branch: "branch-main" }));
 
 vi.mock("@/lib/supabase", () => {
   const SHOPS = [
@@ -48,6 +48,16 @@ vi.mock("@/lib/supabase", () => {
             error: null,
           };
         }
+        if (name === "get_my_branches") return { data: [
+          { branch_id: "branch-main", tenant_id: "shop-a", name: "Main", membership_role: "owner", membership_status: "active", is_current: env.branch === "branch-main", is_main: true },
+          { branch_id: "branch-warehouse", tenant_id: "shop-a", name: "Warehouse", membership_role: "owner", membership_status: "active", is_current: env.branch === "branch-warehouse", is_main: false },
+        ], error: null };
+        if (name === "set_active_branch") {
+          if (!["branch-main", "branch-warehouse"].includes(String(args?.p_branch_id))) return { data: null, error: { message: "NOT_AUTHORIZED" } };
+          env.branch = String(args?.p_branch_id);
+          return { data: { success: true, tenant_id: "shop-a", branch_id: env.branch,
+            branch_name: env.branch === "branch-main" ? "Main" : "Warehouse", membership_role: "owner" }, error: null };
+        }
         if (name === "get_my_shops") return { data: SHOPS, error: null };
         if (name === "get_my_permissions") return { data: ["products.view", "sales.create"], error: null };
         return { data: null, error: null };
@@ -71,7 +81,7 @@ import { useNotificationStore } from "@/stores/notificationStore";
 import { useCartStore } from "@/stores/cartStore";
 import { enqueueOperation, loadQueue, saveQueue } from "@/lib/offlineQueue";
 import { navDepth, pushNav } from "@/lib/navContext";
-import { getCachedData, setCachedData } from "@/lib/localCache";
+import { getCachedData, setCachedData, confirmCacheBranch, beginScopedWrite } from "@/lib/localCache";
 
 const QA_ADMIN = {
   id: "user-1", name: "QA Admin", phone: "923009999999", role: "admin",
@@ -113,13 +123,16 @@ function readShopScopedState() {
 describe("switching shop", () => {
   beforeEach(() => {
     env.offline = false;
+    env.branch = "branch-main";
     saveQueue([]);
     localStorage.clear();
     useAuthStore.getState().setUser(QA_ADMIN);
     useShopStore.setState({
       shops: [], activeShopId: "shop-a", activeShopName: "QA Shop A",
+      activeBranchId: "branch-main", activeBranchName: "Main",
       loading: false, switching: false, creating: false, error: null,
     });
+    confirmCacheBranch("shop-a", QA_ADMIN.id, "branch-main");
     seedShopScopedState();
     pushNav("/admin/customers", "/admin/more");
   });
@@ -165,6 +178,35 @@ describe("switching shop", () => {
     expect(loadQueue()).toHaveLength(1);
     expect(useShopStore.getState().activeShopId).toBe("shop-a");
     expect(useAuthStore.getState().user?.tenantId).toBe("shop-a");
+  });
+
+  it("same-tenant branch switching clears every store and cache without changing the actor or tenant", async () => {
+    setCachedData("sales", [{ id: "cached-main" }]);
+    const actor = useAuthStore.getState().user?.id;
+    const result = await useShopStore.getState().switchBranch("branch-warehouse");
+    expect(result).toEqual({ ok: true });
+    expect(useShopStore.getState()).toMatchObject({ activeShopId: "shop-a", activeBranchId: "branch-warehouse", activeBranchName: "Warehouse" });
+    expect(useAuthStore.getState().user).toMatchObject({ id: actor, tenantId: "shop-a" });
+    expect(readShopScopedState()).toEqual({ products: 0, customers: 0, sales: 0, companies: 0, employees: 0,
+      roles: 0, notifications: 0, cartItems: 0, cartCustomer: null, navDepth: 0 });
+    expect(getCachedData("sales")).toBeNull();
+    await useShopStore.getState().loadBranches();
+    expect(useShopStore.getState().activeBranchId).toBe("branch-warehouse");
+  });
+
+  it("branch switching refuses a tenant id or a failed server response without changing context", async () => {
+    expect(await useShopStore.getState().switchBranch("shop-a")).toEqual({ ok: false, code: "switch_failed" });
+    expect(useShopStore.getState().activeBranchId).toBe("branch-main");
+    expect(useAuthStore.getState().user?.tenantId).toBe("shop-a");
+  });
+
+  it("refuses branch switching until an in-flight financial operation finishes", async () => {
+    const finish = beginScopedWrite();
+    try {
+      expect(await useShopStore.getState().switchBranch("branch-warehouse")).toEqual({ ok: false, code: "pending_sync" });
+      expect(useShopStore.getState().activeBranchId).toBe("branch-main");
+    } finally { finish(); }
+    expect(await useShopStore.getState().switchBranch("branch-warehouse")).toEqual({ ok: true });
   });
 
   it("takes the server's shop over the one this device remembers", async () => {

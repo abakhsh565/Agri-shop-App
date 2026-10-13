@@ -62,11 +62,22 @@ beforeAll(async () => {
   `);
   // Two audit rows written the way the trusted RPCs write them (service role = the RPCs' owner),
   // one attributed to a shop-B actor and one to the seeded shop-A admin.
+  //
+  // The tenant is part of the row, not decoration. `audit_events_select` is
+  // `has_effective_permission('activity.view') AND tenant_id = current_shop_id() AND (…)`, so a row
+  // inserted WITHOUT `tenant_id` is invisible to the very admin the next assertion is about — and
+  // `NULL = current_shop_id()` is never true. That, not a missing permission, is what made this file
+  // red. The branch is the tenant's real default branch rather than a hardcoded id, and the shop-B
+  // row deliberately has none: it is the negative control, and it must be excluded on `tenant_id`.
   await sql(`
-    INSERT INTO audit_events (user_id, action, entity_type, details)
-    VALUES
-      ('${ACTOR_B_ID}', '${RUN} shop B event', 'product', '{"note":"B"}'::jsonb),
-      ('${ADMIN_A_ID}', '${RUN} shop A event', 'product', '{"note":"A"}'::jsonb)
+    INSERT INTO audit_events (user_id, action, entity_type, details, tenant_id, branch_id)
+    SELECT '${ACTOR_B_ID}'::uuid, '${RUN} shop B event', 'product', '{"note":"B"}'::jsonb, '${SHOP_B}'::uuid, NULL
+    UNION ALL
+    SELECT '${ADMIN_A_ID}'::uuid, '${RUN} shop A event', 'product', '{"note":"A"}'::jsonb, '${SHOP_A}'::uuid,
+           (SELECT b.id FROM branches b
+             WHERE b.tenant_id = '${SHOP_A}' AND b.is_active
+             ORDER BY b.is_default DESC, b.created_at, b.id
+             LIMIT 1)
   `);
 });
 

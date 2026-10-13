@@ -40,7 +40,7 @@ function loadQaEnv() {
 }
 loadQaEnv();
 
-const BASE = 'http://localhost:5173';
+const BASE = process.env.QA_APP_URL || 'http://localhost:5173';
 const OTP = '123456';
 const PIN = '4321';
 

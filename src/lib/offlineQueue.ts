@@ -5,7 +5,17 @@
  *
  * Persists pending write operations to localStorage and replays them to
  * Supabase when connectivity is restored. Each item carries the full
- * payload needed to retry the operation.
+ * payload needed to retry the operation, plus the account and branch context
+ * it was queued from.
+ *
+ * The queue is deliberately ownership-aware:
+ *  - every item records the tenant/userId/branchId it was created under, via
+ *    `getConfirmedDataContext()` at enqueue time;
+ *  - replay refuses to send work whose original context no longer matches the
+ *    confirmed context of the device, so a switch or a different account cannot
+ *    implicitly ship one shop's sale into another's;
+ *  - work that was queued before this ownership contract existed is retained
+ *    rather than guessed, so it does not silently disappear.
  *
  * Operation types:
  *  - create_sale        → rpc create_sale
@@ -15,7 +25,10 @@
  *  - update_note        → update sales.note
  *  - void_sale          → rpc void_sale
  *  - record_supplier_payment → rpc record_supplier_payment
+ *  - process_return     → rpc process_return
  */
+
+import { getConfirmedDataContext, beginScopedWrite } from "@/lib/localCache";
 
 export type QueueOperation =
   | { type: "create_sale"; payload: Record<string, unknown> }
@@ -32,6 +45,7 @@ export interface QueueItem {
   operation: QueueOperation;
   queuedAt: string;
   retries: number;
+  context?: { tenantId: string; userId: string; branchId: string };
   /** Server-assigned ID after successful sync (for sale/customer) */
   syncedId?: string;
   /** Error message from last failed attempt */
@@ -63,11 +77,13 @@ let syncInFlight = false;
 /** Add an operation to the queue. Returns the queue item id. */
 export function enqueueOperation(op: QueueOperation): string {
   const queue = loadQueue();
+  const context = getConfirmedDataContext();
   const item: QueueItem = {
     id: `oq-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
     operation: op,
     queuedAt: new Date().toISOString(),
     retries: 0,
+    context: context ? { tenantId: context.tenantId, userId: context.userId, branchId: context.branchId } : undefined,
   };
   queue.push(item);
   saveQueue(queue);
@@ -110,32 +126,56 @@ export async function syncPendingOperations(
   const errors: string[] = [];
   const remaining: QueueItem[] = [];
 
-  for (const item of queue) {
-    if (item.retries >= MAX_RETRIES) {
-      remaining.push(item);
-      failed++;
-      errors.push(`${item.operation.type}: max retries exceeded (${item.lastError ?? "unknown"})`);
-      continue;
-    }
-
-    try {
-      const result = await executeOperation(supabaseClient, item);
-      synced++;
-      if (result?.id) {
-        item.syncedId = result.id;
+  try {
+    for (const item of queue) {
+      if (item.retries >= MAX_RETRIES) {
+        remaining.push(item);
+        failed++;
+        errors.push(`${item.operation.type}: max retries exceeded (${item.lastError ?? "unknown"})`);
+        continue;
       }
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      item.retries += 1;
-      item.lastError = msg;
-      remaining.push(item);
-      failed++;
-      errors.push(`${item.operation.type}: ${msg}`);
-    }
-  }
 
-  saveQueue(remaining);
-  syncInFlight = false;
+      try {
+        const context = getConfirmedDataContext();
+        if (!item.context || !context || item.context.userId !== context.userId ||
+          item.context.tenantId !== context.tenantId || item.context.branchId !== context.branchId) {
+          throw new Error("Queued work needs its original account and branch before it can be sent");
+        }
+        const finish = beginScopedWrite();
+        try {
+          const result = await executeOperation(supabaseClient, item);
+          synced++;
+          if (result?.id) {
+            item.syncedId = result.id;
+          }
+        } finally {
+          finish();
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        item.retries += 1;
+        item.lastError = msg;
+        remaining.push(item);
+        failed++;
+        errors.push(`${item.operation.type}: ${msg}`);
+      }
+    }
+  } finally {
+    // The lock must never wedge: even a thrown localStorage read, a network
+    // exception inside the executor loop, or an unexpected store error must
+    // reset the gate before anything else runs.
+    syncInFlight = false;
+
+    // Publish the present state of the queue after every attempt above gets a
+    // chance to edit it. New work queued while we were sending is kept, leftover
+    // retries are kept, and successfully synced items are only removed when we
+    // reach here with a queue that actually left them behind.
+    const snapshotIds = new Set(queue.map((item) => item.id));
+    saveQueue([
+      ...remaining,
+      ...loadQueue().filter((item) => !snapshotIds.has(item.id)),
+    ]);
+  }
 
   return { synced, failed, errors };
 }
@@ -147,10 +187,11 @@ async function executeOperation(
   item: QueueItem
 ): Promise<{ id?: string } | null> {
   const { type, payload } = item.operation;
+  const branchPayload = { ...payload, branchId: item.context?.branchId, shopId: item.context?.tenantId };
 
   switch (type) {
     case "create_sale": {
-      const { data, error } = await client.rpc("create_sale", { payload });
+      const { data, error } = await client.rpc("create_sale", { payload: branchPayload });
       if (error) throw new Error(error.message);
       return { id: (data as any)?.id };
     }
@@ -172,23 +213,26 @@ async function executeOperation(
     }
 
     case "record_payment": {
-      const { data, error } = await client.rpc("record_customer_payment", { payload });
+      const { data, error } = await client.rpc("record_customer_payment", { payload: branchPayload });
       if (error) throw new Error(error.message);
       return { id: (data as any)?.id };
     }
 
     case "record_supplier_payment": {
-      const { data, error } = await client.rpc("record_supplier_payment", { payload });
+      const { data, error } = await client.rpc("record_supplier_payment", { payload: branchPayload });
       if (error) throw new Error(error.message);
       return { id: (data as any)?.id };
     }
 
     case "update_note": {
-      const { error } = await client
+      const { data, error } = await client
         .from("sales")
-        .update({ note: payload.note })
-        .eq("id", payload.saleId);
+        .update({ notes: payload.note })
+        .eq("id", payload.saleId)
+        .eq("branch_id", item.context?.branchId)
+        .select("id");
       if (error) throw new Error(error.message);
+      if (!data?.length) throw new Error("The note was not saved in its original branch");
       return null;
     }
 
@@ -202,7 +246,7 @@ async function executeOperation(
     }
 
     case "process_return": {
-      const { data, error } = await client.rpc("process_return", { payload });
+      const { data, error } = await client.rpc("process_return", { payload: branchPayload });
       if (error) throw new Error(error.message);
       return { id: (data as any)?.id };
     }

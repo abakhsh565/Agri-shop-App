@@ -16,7 +16,7 @@
  */
 import { test, expect, type Page } from '@playwright/test';
 
-const BASE = 'http://localhost:5173';
+const BASE = process.env.QA_APP_URL || 'http://localhost:5173';
 const OWNER_PHONE = '03001234567';
 
 async function reachCodeScreen(page: Page) {

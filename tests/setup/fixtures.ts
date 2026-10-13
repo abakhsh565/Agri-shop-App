@@ -157,6 +157,58 @@ export async function cleanupTestData() {
   // removed, so suites stay isolated without destroying the shared baseline.
 }
 
+/**
+ * Remove fixture users the way the product removes people.
+ *
+ * WHY THIS EXISTS. `audit_events.user_id` is a plain NO ACTION foreign key, and migrations 0189/0192
+ * gave the system several new audit writers. A fixture user who has done anything audited therefore
+ * cannot be deleted — and because a multi-row `DELETE … WHERE id IN (…)` is atomic, ONE blocked row
+ * leaves EVERY user in the list behind. The error then vanished into a `.catch(() => undefined)`, so
+ * the shared QA database quietly accumulated undeletable users and `rbacInvariants` invariant D
+ * ("no long-lived user with a shop but no membership") was failing against residue rather than a
+ * schema property. Measured on QA 2026-10-13: two users from exactly that path, with four
+ * `location_updated` audit rows and zero memberships between them.
+ *
+ * The order below is not invented — it is `delete_my_account()`'s own order, which already clears
+ * every referencing column and row before it touches `users`. That is what account deletion does, so
+ * it is what a fixture should leave behind too: no blocking row, and no invented attribution.
+ *
+ * The read-back matters as much as the delete. This helper throws rather than reporting success over
+ * a user that is still there, because that silence is what hid the problem.
+ *
+ * It deliberately does not pretend to cover every NO ACTION reference (`sales.employee_id`,
+ * `voids.voided_by`, `stock_adjustments`, …): a fixture that owns a transaction owns that row's
+ * removal, and the read-back names the survivors when it does not.
+ */
+export async function deleteFixtureUsers(userIds: string[]): Promise<void> {
+  if (!userIds.length) return;
+  const list = userIds.map((id) => `'${id}'`).join(', ');
+  const statements = [
+    `UPDATE returns SET processed_by = NULL WHERE processed_by IN (${list})`,
+    `UPDATE inventory_movements SET created_by = NULL WHERE created_by IN (${list})`,
+    `UPDATE daily_cash_reconciliations SET reconciled_by = NULL WHERE reconciled_by IN (${list})`,
+    `UPDATE user_permissions SET granted_by = NULL WHERE granted_by IN (${list})`,
+    `UPDATE users SET created_by = NULL WHERE created_by IN (${list})`,
+    `DELETE FROM audit_events WHERE user_id IN (${list})`,
+    `DELETE FROM activity_log WHERE user_id IN (${list})`,
+    `DELETE FROM branch_responsibility WHERE user_id IN (${list})`,
+    `DELETE FROM user_permissions WHERE user_id IN (${list})`,
+    `DELETE FROM memberships WHERE user_id IN (${list})`,
+    `DELETE FROM user_active_shops WHERE user_id IN (${list})`,
+    `DELETE FROM users WHERE id IN (${list})`,
+  ];
+  for (const statement of statements) await execSqlAsAdmin(statement);
+
+  const left = await execSqlAsAdmin(`SELECT count(*)::int AS n FROM users WHERE id IN (${list})`);
+  const remaining = Number(left.rows?.[0]?.n ?? 0);
+  if (remaining > 0) {
+    throw new Error(
+      `[QA FIXTURE] ${remaining} fixture user(s) survived deletion: ${userIds.join(', ')}. ` +
+        'A foreign key is blocking them — find it rather than widening this helper.',
+    );
+  }
+}
+
 // ─── Verification Functions ──────────────────────────────────────────────
 
 export async function getTableCount(table: string): Promise<number> {

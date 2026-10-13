@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { captureDataContext, isDataContextCurrent } from "@/lib/localCache";
 import { supabase } from "@/lib/supabase";
 import type { User, UserRole, MembershipRole, MembershipStatus } from "@/types";
 
@@ -67,6 +68,7 @@ interface EmployeesState {
     branchScope?: string[] | null;
     createdBy?: string | null;
   }) => Promise<User>;
+  assignBranch: (employeeId: string, branchId: string, action: "add" | "move") => Promise<void>;
   setActive: (id: string, active: boolean, byUserId?: string | null) => Promise<void>;
   updateAccess: (employeeId: string, input: {
     roleId?: string | null;
@@ -93,11 +95,14 @@ export const useEmployeesStore = create<EmployeesState>((set, get) => ({
   reset: () => set({ employees: [], loading: false, ready: false, error: null }),
 
   load: async () => {
+    const context = captureDataContext();
+    if (!isDataContextCurrent(context)) return;
     set({ loading: true, error: null });
     const { data, error } = await supabase
       .from("users")
       .select("*")
       .order("created_at", { ascending: true });
+    if (!isDataContextCurrent(context)) return;
     if (error) {
       set({ loading: false, ready: true, error: error.message });
       return;
@@ -107,6 +112,7 @@ export const useEmployeesStore = create<EmployeesState>((set, get) => ({
     const { data: memberships } = await supabase
       .from("memberships")
       .select("user_id, status");
+    if (!isDataContextCurrent(context)) return;
     const statusByUser = new Map<string, MembershipStatus>(
       (memberships ?? []).map((m) => [m.user_id as string, m.status as MembershipStatus])
     );
@@ -130,6 +136,14 @@ export const useEmployeesStore = create<EmployeesState>((set, get) => ({
     return () => {
       if (channel) { supabase.removeChannel(channel); channel = null; }
     };
+  },
+
+  assignBranch: async (employeeId, branchId, action) => {
+    const { error } = await supabase.rpc("assign_employee_branch", {
+      p_employee_id: employeeId, p_branch_id: branchId, p_action: action,
+    });
+    if (error) throw new Error(error.message);
+    await get().load();
   },
 
   createEmployee: async (input) => {

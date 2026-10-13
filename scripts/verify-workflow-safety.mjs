@@ -218,7 +218,7 @@ const invariants = [
   },
   {
     id: 'only_targetable_environments_are_offered',
-    why: 'development has no project, so offering it would offer a target that cannot be verified',
+    why: 'development is disposable by design and is not a backup target: offering it would invite recovery artefacts for an environment whose data is meant to be thrown away',
     test: (s) => {
       const input = environmentInput(s);
       return /-\s*production/.test(input) && /-\s*staging/.test(input) && !/-\s*development/.test(input);

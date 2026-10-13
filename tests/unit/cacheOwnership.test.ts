@@ -4,13 +4,14 @@ import {
   clearAllCachedData,
   getCachedData,
   setCachedData,
+  captureDataContext, isDataContextCurrent, suspendCachedData, confirmCacheBranch,
 } from "@/lib/localCache";
 
 // Cached rows paint instantly on the next launch, so they must never outlive the
 // identity that fetched them: a shared device would otherwise show one shop's
 // customers, products and sales to the next person who signs in.
 describe("cache ownership", () => {
-  beforeEach(() => localStorage.clear());
+  beforeEach(() => { localStorage.clear(); confirmCacheBranch("shop-1", "user-1", "main"); });
 
   it("keeps serving rows to the identity that cached them", () => {
     adoptCacheOwner("shop-1:user-1");
@@ -32,6 +33,30 @@ describe("cache ownership", () => {
     expect(getCachedData("products")).toBeNull();
     expect(getCachedData("customers")).toBeNull();
     expect(getCachedData("sales")).toBeNull();
+  });
+
+  it("invalidates late responses even after leaving and returning to the same branch", () => {
+    const mainRequest = captureDataContext();
+    suspendCachedData();
+    expect(isDataContextCurrent(mainRequest)).toBe(false);
+    confirmCacheBranch("shop-1", "user-1", "warehouse");
+    expect(isDataContextCurrent(mainRequest)).toBe(false);
+    const warehouseRequest = captureDataContext();
+    suspendCachedData();
+    confirmCacheBranch("shop-1", "user-1", "main");
+    expect(isDataContextCurrent(mainRequest)).toBe(false);
+    expect(isDataContextCurrent(warehouseRequest)).toBe(false);
+  });
+
+  it("does not serve or write cached payloads before server branch confirmation", () => {
+    setCachedData("sales", [{ id: "main-sale" }]);
+    suspendCachedData();
+    expect(getCachedData("sales")).toBeNull();
+    setCachedData("sales", [{ id: "unconfirmed" }]);
+    confirmCacheBranch("shop-1", "user-1", "warehouse");
+    expect(getCachedData("sales")).toBeNull();
+    setCachedData("sales", [{ id: "warehouse-sale" }]);
+    expect(getCachedData("sales")).toEqual([{ id: "warehouse-sale" }]);
   });
 
   it("leaves nothing behind after signing out", () => {

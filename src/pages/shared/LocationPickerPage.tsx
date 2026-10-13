@@ -1,10 +1,22 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, lazy, Suspense } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { ChevronRight, LocateFixed } from "lucide-react";
+import { ChevronRight, LocateFixed, MapPin } from "lucide-react";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
 import ListCard from "@/components/ui/ListCard";
 import ListRow from "@/components/ui/ListRow";
+import Button from "@/components/ui/Button";
+
+/**
+ * The map is loaded only when this screen is opened.
+ *
+ * MapLibre and its worker weigh about 465 KB gzipped between them, which is a great deal to make
+ * every route of the app pay for the one route that draws a map. Loaded eagerly it landed inside
+ * the main index chunk and was downloaded with the login screen; deferred, it is fetched when
+ * somebody actually picks a place, and no other screen is charged for it. The fallback reserves
+ * the same height so the search box does not jump when the map arrives.
+ */
+const LocationMap = lazy(() => import("@/components/ui/LocationMap"));
 import { useT } from "@/lib/i18n";
 import { useThemeStore } from "@/stores/themeStore";
 import {
@@ -40,6 +52,14 @@ import {
 
 /** Nominatim's usage policy asks for light use; one search per pause is what that means. */
 const SEARCH_DEBOUNCE_MS = 500;
+
+/**
+ * How much of the screen the map takes.
+ *
+ * Big enough to recognise a neighbourhood by — the point of showing a map at all — and small
+ * enough that the search and the results list are still above the fold when the keyboard opens.
+ */
+const MAP_HEIGHT = 300;
 /** The same floor the provider applies, imported rather than restated so the two cannot drift. */
 const MIN_QUERY = MIN_SEARCH_LENGTH;
 
@@ -58,6 +78,14 @@ export default function LocationPickerPage() {
   const [hits, setHits] = useState<PickedPlace[]>([]);
   /** `idle` is "nothing asked yet", which is not the same as a search that found nothing. */
   const [searchState, setSearchState] = useState<"idle" | "searching" | "empty" | "unreachable" | "locating" | "outside">("idle");
+  /**
+   * The place the pin is sitting on right now — from a drag, a tap, or a search row.
+   *
+   * Held separately from `hits` because it is a different kind of answer: a hit is a candidate
+   * somebody might want, this one is a position somebody has actually pointed at, and only this
+   * one is offered back to the form.
+   */
+  const [chosen, setChosen] = useState<PickedPlace | null>(state.value ?? null);
   const searchSeq = useRef(0);
 
   // One search per pause in typing. The sequence number matters: a slow answer to an earlier
@@ -126,10 +154,52 @@ export default function LocationPickerPage() {
     );
   }
 
+  /**
+   * A point dropped on the map. Tapping and dragging both land here, and both go through the
+   * same country check the GPS button uses — the map is the one surface where a pin can be put
+   * anywhere on the canvas, so this is exactly where a point abroad would arrive.
+   *
+   * The search box is deliberately NOT filled in. It holds what the person TYPED, and typing into
+   * it is what runs a search; writing the address the map resolved into it would fire a search
+   * nobody asked for and list a result row for the place already chosen directly above it.
+   */
+  function handleMapOutcome(outcome: { kind: "picked"; place: PickedPlace } | { kind: "outside" } | { kind: "unreachable" }) {
+    if (outcome.kind === "outside") {
+      setSearchState("outside");
+      return;
+    }
+    if (outcome.kind === "unreachable") {
+      setSearchState("unreachable");
+      return;
+    }
+    setSearchState("idle");
+    setChosen(outcome.place);
+  }
+
   return (
     <div className="flex flex-col w-full min-h-full" style={{ background: "var(--background)" }}>
       <StatusBar />
       <NavHeader title={t("location.sheetTitle")} onBack={close} />
+
+      {/* THE MAP COMES FIRST, because it is the answer and the search is a shortcut to it.
+          A list of candidate names with no map beside them asks the person to trust a row; the
+          pin is the thing that can be checked, moved and trusted. `flex-1` lets the map take
+          whatever height the keyboard leaves it. */}
+      <div className="px-4 pt-3">
+        <div className="overflow-hidden rounded-[var(--radius-card)]" style={{ height: MAP_HEIGHT }}>
+          <Suspense
+            fallback={
+              <div
+                className="w-full h-full"
+                style={{ height: MAP_HEIGHT, background: "var(--surface-2)" }}
+                data-testid="location-map-loading"
+              />
+            }
+          >
+            <LocationMap value={chosen} onOutcome={handleMapOutcome} height={MAP_HEIGHT} testId="location-map" />
+          </Suspense>
+        </div>
+      </div>
 
       <div className="flex flex-col gap-3 p-4">
         {/* A search box, not a location box: what is typed here is a QUESTION, and the answer
@@ -146,12 +216,14 @@ export default function LocationPickerPage() {
 
         {/* A small text control under the search, not a full-width button: using the current
             position is the second thing a person might do, not the first, and at button size it
-            competed with the search it belongs to. */}
+            competed with the search it belongs to. It is still a full 44px tall — small in
+            WEIGHT, not in target; at its old 32px it was the one undersized control on a screen
+            the accessibility lane had never actually been pointed at. */}
         <button
           type="button"
           onClick={useCurrentLocation}
           data-testid="location-use-current"
-          className="self-start inline-flex items-center gap-1.5 h-8 text-12 font-bold ds-pressable disabled:opacity-50"
+          className="self-start inline-flex items-center gap-1.5 h-11 text-12 font-bold ds-pressable disabled:opacity-50"
           style={{ color: "var(--brand-dark)" }}
         >
           <LocateFixed size={14} />
@@ -178,6 +250,41 @@ export default function LocationPickerPage() {
           </p>
         )}
 
+        {/*
+          The pin the map came back with, and the one control that commits it.
+
+          A DRAG DOES NOT COMMIT ON ITS OWN, and that is the whole difference between this and the
+          old screen. Dropping a pin is a question ("is this the right place?") and answering it
+          by dropping it again is free; returning to the form the instant a finger lifts would
+          make a mis-drop a trip to fix. So the address is shown, and one button says yes.
+
+          Tapping a search ROW is still a commitment, because a row is a deliberate act — and it
+          moves the map as well, so the two halves cannot disagree about what is chosen.
+        */}
+        {chosen && (
+          <div
+            className="flex flex-col gap-2"
+            data-testid="location-chosen"
+          >
+            <div className="flex items-start gap-2.5">
+              <MapPin size={18} className="shrink-0 mt-0.5" style={{ color: "var(--brand-dark)" }} />
+              <span className="min-w-0 block">
+                <span className="block text-sm font-bold truncate" dir="auto" style={{ color: "var(--text-primary)" }}>
+                  {chosen.label}
+                </span>
+                {chosen.address && (
+                  <span className="block text-11 truncate" dir="auto" style={{ color: "var(--text-secondary)" }}>
+                    {chosen.address}
+                  </span>
+                )}
+              </span>
+            </div>
+            <Button fullWidth onClick={() => pick(chosen)} testId="location-use-picked">
+              {t("location.useThisLocation")}
+            </Button>
+          </div>
+        )}
+
         {hits.length > 0 && (
           <ListCard>
             {hits.map((hit, i) => (
@@ -185,6 +292,7 @@ export default function LocationPickerPage() {
                 key={`${hit.lat},${hit.lng},${hit.label}`}
                 onClick={() => pick(hit)}
                 testId={`location-hit-${i}`}
+
                 /* A chevron, not a tick: a tick on every row says "chosen" about rows that are
                    only being offered, and the one thing this list must not do is suggest a
                    location has been picked when it has not. */
@@ -212,15 +320,11 @@ export default function LocationPickerPage() {
           </ListCard>
         )}
 
-        {/* Required by the service whose data this is, and shown wherever its data appears.
-            `bdi dir="ltr"` and not a bare string: the attribution is a fixed English credit with
-            a © in front of it, and in an RTL interface the neutral © attaches to the right-hand
-            end, so the line rendered as "OpenStreetMap contributors ©" — the credit reordered by
-            the language of the screen it is credited on. The <bdi> isolates the run so it reads
-            the same in both languages, while the paragraph keeps the page's own alignment. */}
-        <p className="text-10" style={{ color: "var(--text-secondary)" }} data-testid="location-attribution">
-          <bdi dir="ltr">{provider.attribution}</bdi>
-        </p>
+        {/* The attribution is NOT repeated here. It used to stand at the foot of this screen,
+            crediting the search service; it now lives inside the map itself, which is where the
+            basemap's own credit belongs, and the two words are the same two services. Printing
+            the identical line twice on one screen reads as a mistake, and the map's copy is the
+            one that sits directly against the data it credits. */}
       </div>
     </div>
   );

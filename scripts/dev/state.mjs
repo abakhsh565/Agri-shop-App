@@ -49,7 +49,7 @@ async function resume() {
   console.log(`branch   : ${branch}${up ? `  (upstream ${up}, ahead ${ahead.out || '?'}, behind ${behind.out || '?'})` : '  (no upstream)'}`);
   console.log(`HEAD     : ${head || '(unknown)'}${stale ? `   ⚠ checkpoint was written at ${String(st.head).slice(0, 8)}` : ''}`);
   console.log(`worktree : ${dirty.length} file(s) changed${dirty.length ? ' — ' + dirty.slice(0, 8).join(', ') + (dirty.length > 8 ? `, +${dirty.length - 8} more` : '') : ''}`);
-  console.log(`server   : ${server.up ? `UP on ${server.port} · mode=${server.mode ?? 'UNKNOWN'}` : `DOWN (start: npx vite --mode qa --host 0.0.0.0 --port ${QA_PORT})`}`);
+  console.log(`server   : ${server.up ? (server.problem ? `UP on ${server.port} but NOT this app's QA server (${server.problem})` : `UP on ${server.port} · QA verified (project ${server.identity?.projectId})`) : `DOWN (start: npx vite --mode qa --host 0.0.0.0 --port ${QA_PORT})`}`);
   console.log(`checkpoint: ${st.updatedAt ? `written ${st.updatedAt}` : '(none yet — run: npm run checkpoint)'}`);
   if (st.verified?.at) {
     console.log(`verified : head ${String(st.verified.head).slice(0, 8)} at ${st.verified.at} · tree ${st.verified.treeHash}`);
@@ -77,7 +77,14 @@ async function checkpoint() {
   const next = updateState({
     branch,
     head,
-    server: { port: server.port, up: server.up, mode: server.mode },
+    server: {
+      port: server.port,
+      up: server.up,
+      mode: server.mode,
+      // `verified` is the part that matters: a listening port can be a foreign application.
+      verified: Boolean(server.up && !server.problem),
+      projectId: server.identity?.projectId ?? null,
+    },
     dirty: dirty.length,
     nextCommand: flag('next') ?? readState().nextCommand,
     note: flag('note') ?? readState().note,

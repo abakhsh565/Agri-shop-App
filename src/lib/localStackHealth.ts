@@ -65,7 +65,11 @@ export async function localStackUnreachableReason(
 ): Promise<string | null> {
   const healthUrl = localStackHealthUrl(baseUrl);
   if (!healthUrl) {
-    return `"${String(baseUrl || '(unset)')}" is not a loopback URL, so it is not the local stack`;
+    // An explicit branch rather than `baseUrl || '(unset)'`: the fallback form is what the microcopy
+    // guard flags, and an unset value deserves its own sentence rather than quotes around a word.
+    const shown = String(baseUrl ?? '').trim();
+    if (!shown) return 'the local stack base URL is not set, so it is not the local stack';
+    return `"${shown}" is not a loopback URL, so it is not the local stack`;
   }
   try {
     const response = await fetchImpl(healthUrl, {

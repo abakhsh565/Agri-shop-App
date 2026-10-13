@@ -86,7 +86,8 @@ function groupByTime(items: AppNotification[], now: Date, t: any): TimeGroup[] {
 
 export default function AdminNotificationsPage() {
   const navigate = useNavigate();
-  const { items, loading, ready, load, subscribe, markAllRead, markManyRead } = useNotificationStore();
+  const { items, loading, ready, load, subscribe, markAllRead, markManyRead, forBranch, unreadInBranch } =
+    useNotificationStore();
   const { language } = useThemeStore();
   const isUrdu = language === "ur";
   const t = useT();
@@ -119,10 +120,17 @@ export default function AdminNotificationsPage() {
   const showTabs = accountRole === "admin" && branches.length > 1;
   const activeTab: string = showTabs ? tab : "all";
 
+  // The branch id, not the business id. These were compared against `shop_id`, which is the
+  // id of the whole business: two different id spaces never meet, so every branch tab was
+  // empty and told the owner the branch was quiet while the rows were on the next tab over.
   const shown = useMemo(
-    () => (activeTab === "all" ? items : items.filter((n) => n.shop_id === activeTab)),
-    [items, activeTab],
+    () => (activeTab === "all" ? items : forBranch(activeTab)),
+    [items, activeTab, forBranch],
   );
+
+  /** The branch a row happened in, named — the all-branches view has to say which one. */
+  const branchName = (n: AppNotification) =>
+    n.branch_id ? branches.find((b) => b.id === n.branch_id)?.name ?? null : null;
 
   const groups = useMemo(() => groupByTime(shown, now, t), [shown, now, t]);
 
@@ -151,6 +159,7 @@ export default function AdminNotificationsPage() {
               // that branch; on the all-branches tab it is everything, which is what it
               // always did.
               onClick={() => (activeTab === "all" ? markAllRead() : markManyRead(unreadShown.map((n) => n.id)))}
+              data-testid="notifications-mark-read"
               className="text-xs font-semibold"
               style={{ color: "var(--brand-dark)" }}
             >
@@ -176,9 +185,9 @@ export default function AdminNotificationsPage() {
               const selected = entry.id === activeTab;
               // Counted from the WHOLE set, not from the tab on screen: the point of the
               // number is to point at a branch you are not looking at.
-              const unreadHere = items.filter(
-                (n) => !n.read && (entry.id === "all" || n.shop_id === entry.id),
-              ).length;
+              const unreadHere = entry.id === "all"
+                ? items.filter((n) => !n.read).length
+                : unreadInBranch(entry.id);
               return (
                 <button
                   key={entry.id}
@@ -256,6 +265,9 @@ export default function AdminNotificationsPage() {
                   return (
                     <ListRow
                       key={n.id}
+                      // The row's own id, so a test can ask which rows a tab is showing without
+                      // depending on the words inside them — which are translated.
+                      testId={`notification-${n.id}`}
                       onClick={() => {
                         const route = notificationRoute(n);
                         if (route) navigate(route);
@@ -284,7 +296,13 @@ export default function AdminNotificationsPage() {
                           <p className="text-xs mt-0.5" style={{ color: "var(--text-secondary)" }}>{tr.body}</p>
                         )}
                         <p className="text-11 mt-1" style={{ color: "var(--text-secondary)" }}>
-                          {formatSmartDateTime(n.created_at, now, t)}
+                          {/* On the all-branches view the branch is the one fact the row is
+                              missing, so it is named here and nowhere else — on a branch tab
+                              every row on screen is already that branch. A row the database
+                              never attributed says nothing rather than a guess. */}
+                          {showTabs && activeTab === "all" && branchName(n)
+                            ? `${branchName(n)} · ${formatSmartDateTime(n.created_at, now, t)}`
+                            : formatSmartDateTime(n.created_at, now, t)}
                         </p>
                       </div>
                     </ListRow>

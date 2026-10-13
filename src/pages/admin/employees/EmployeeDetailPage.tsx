@@ -236,7 +236,7 @@ export default function EmployeeDetailPage() {
     // Unticking the last branch leaves a member with nowhere to work — not "all branches", which
     // is the explicit null above. Their records would be written without a branch and then be
     // invisible to every branch-limited reader. Refused here in words, and by the database (0171).
-    if (Array.isArray(editBranchScope) && editBranchScope.length === 0) {
+    if (!Array.isArray(editBranchScope) || editBranchScope.length === 0) {
       addToast(t("addEmployee.errNoBranch"), "error");
       return;
     }
@@ -448,7 +448,7 @@ export default function EmployeeDetailPage() {
                 </p>
                 <div className="flex gap-2 flex-wrap">
                   <button
-                    onClick={() => setEditBranchScope(null)}
+                    onClick={() => setEditBranchScope(branches.map((b) => b.id))}
                     className="px-3 py-1.5 rounded-[var(--radius-tile)] text-xs font-semibold"
                     style={{
                       background: editBranchScope === null ? "var(--brand)" : "var(--surface)",

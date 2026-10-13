@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { captureDataContext, isDataContextCurrent } from "@/lib/localCache";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/stores/authStore";
@@ -93,8 +94,21 @@ export interface AppNotification {
   kind: string;
   title: string;
   body: string | null;
-  /** Which branch (shop) this happened in. Stamped by the database, not the caller. */
+  /** Which business this happened in. Stamped by the database, not the caller. */
   shop_id: string | null;
+  /**
+   * Which operating branch of that business it happened in (0197).
+   *
+   * A business has many branches and exactly one `shop_id`, so without this a row could not
+   * say where it happened — and the Notifications screen's per-branch tabs had nothing to
+   * filter on. The two id spaces are different and are never interchangeable.
+   *
+   * `null` is not "unknown branch, guess": it is the database saying it did not assert one —
+   * every row written before 0197, and any event that names a party or a product rather than a
+   * branch (a payment against a customer, a low-stock crossing). Such a row is readable by the
+   * whole business, which is what it was before, and it belongs to no branch tab.
+   */
+  branch_id: string | null;
   entity_id: string | null;
   actor_id: string | null;
   actor_name: string | null;
@@ -109,8 +123,21 @@ interface NotificationState {
   error: string | null;
   /** Unread count, optionally for one branch only. */
   unread: (shopId?: string | null) => number;
-  /** The rows of one branch, newest first. `null` means every branch. */
+  /** The rows of one branch's business, newest first. `null` means every business. */
   forShop: (shopId: string | null) => AppNotification[];
+  /**
+   * The rows of one operating branch, newest first.
+   *
+   * The branch tabs' rule, kept here rather than at the call site so the list and its unread
+   * badge cannot disagree. Rows the database never attributed (`branch_id IS NULL`) belong to
+   * no tab: they were written before the branch was recorded, and claiming them for whichever
+   * branch happens to be first would be inventing a fact. They are still shown on the
+   * all-branches view, so nothing disappears from the screen — which is the whole reason this
+   * distinction is made here instead of the column simply defaulting to the main branch.
+   */
+  forBranch: (branchId: string) => AppNotification[];
+  /** Unread in one branch, counted from the whole set so a tab can carry its own badge. */
+  unreadInBranch: (branchId: string) => number;
   load: () => Promise<void>;
   subscribe: () => () => void;
   markAllRead: () => Promise<void>;
@@ -159,7 +186,14 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
   forShop: (shopId) =>
     shopId ? get().items.filter((n) => n.shop_id === shopId) : get().items,
 
+  forBranch: (branchId) => get().items.filter((n) => n.branch_id === branchId),
+
+  unreadInBranch: (branchId) =>
+    get().items.filter((n) => !n.read && n.branch_id === branchId).length,
+
   load: async () => {
+    const context = captureDataContext();
+    if (!isDataContextCurrent(context)) return;
     set({ loading: true, error: null });
     const { data, error } = await supabase
       .from("notifications")
@@ -167,6 +201,7 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
       .order("created_at", { ascending: false })
       .limit(200);
 
+    if (!isDataContextCurrent(context)) return;
     if (error) {
       // Most likely the read was refused, or the table is not there yet — show empty,
       // not broken. The reason is kept so a screen can say something truthful.
@@ -234,14 +269,24 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
   markManyRead: async (ids) => {
     if (ids.length === 0) return;
     const wanted = new Set(ids);
+    // Optimistic UI: mark them read immediately, then confirm or roll back from the server.
     set((s) => ({ items: s.items.map((n) => (wanted.has(n.id) ? { ...n, read: true } : n)) }));
-    await supabase.from("notifications").update({ read: true }).in("id", ids);
+    const { error } = await supabase.from("notifications").update({ read: true }).in("id", ids);
+    if (error) {
+      if (import.meta.env.DEV) console.error("[Notifications] markManyRead failed:", error.message);
+      // Roll the optimistic step back so a failed write does not leave rows marked read.
+      set((s) => ({ items: s.items.map((n) => (wanted.has(n.id) ? { ...n, read: false } : n)) }));
+    }
   },
 
   markOneRead: async (id: string) => {
     const item = get().items.find((n) => n.id === id);
     if (!item || item.read) return;
     set((s) => ({ items: s.items.map((n) => (n.id === id ? { ...n, read: true } : n)) }));
-    await supabase.from("notifications").update({ read: true }).eq("id", id);
+    const { error } = await supabase.from("notifications").update({ read: true }).eq("id", id);
+    if (error) {
+      if (import.meta.env.DEV) console.error("[Notifications] markOneRead failed:", error.message);
+      set((s) => ({ items: s.items.map((n) => (n.id === id ? { ...n, read: false } : n)) }));
+    }
   },
 }));

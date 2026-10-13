@@ -169,8 +169,6 @@ export default function LocationField({ value, onChange, label, hint, disabled, 
     navigate("/pick-location", { state: { from: returnTo ?? `${routeLocation.pathname}${routeLocation.search}`, value } });
   }
 
-  const preview = value ? provider.previewUrl(value, 96) : null;
-
   /*
    * The card is the tap target only in sheet mode.
    *
@@ -182,25 +180,18 @@ export default function LocationField({ value, onChange, label, hint, disabled, 
    */
   const cardBody = (
     <>
-        {/* The tile, when there is one: a picture of the pin is what makes a wrong town obvious
-            at a glance, which no amount of address text does. */}
-        {preview ? (
-          <img
-            src={preview}
-            alt=""
-            width={72}
-            height={72}
-            className="rounded-[var(--radius-tile)] shrink-0 object-cover"
-            style={{ width: 72, height: 72, background: "var(--surface)" }}
-          />
-        ) : (
-          <span
-            className="rounded-[var(--radius-tile)] shrink-0 flex items-center justify-center"
-            style={{ width: 72, height: 72, background: "var(--surface)", border: "1px solid var(--divider)" }}
-          >
-            <MapPin size={22} style={{ color: "var(--text-secondary)" }} />
-          </span>
-        )}
+        {/* A pin, not a picture of one. This tile used to be a 72px snapshot of the map, which
+            was the fastest way to catch a pin in the wrong town at a glance — and the basemap it
+            came from (OpenStreetMap raster) is no longer the one the picker draws on. Keeping it
+            would mean two services and two visual languages behind one decision, so the picture
+            went and the pin stayed: the place's own name leads, in the service's words, and the
+            map is one tap away where the point can actually be checked. */}
+        <span
+          className="rounded-[var(--radius-tile)] shrink-0 flex items-center justify-center"
+          style={{ width: 72, height: 72, background: "var(--surface)", border: "1px solid var(--divider)" }}
+        >
+          <MapPin size={22} style={{ color: value ? "var(--brand-dark)" : "var(--text-secondary)" }} />
+        </span>
 
         <span className="min-w-0 flex-1">
           {/* The picked place's own words, so `dir="auto"` as on the result rows above. The two

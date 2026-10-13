@@ -17,9 +17,11 @@
  *   env vars therefore became production silently — with production's anon key, against real
  *   data, while showing no sign of it. Every rule below closes one of those doors.
  *
- *   The rules are deliberately asymmetrical. Development is only forbidden from talking to
- *   production; staging and production must land on their exact project, because those two are
- *   the ones a wrong build can hurt.
+ *   The rules are deliberately asymmetrical, and every environment is now pinned to its own
+ *   target: staging and production must land on their exact project, and development — the stack in
+ *   Docker on this machine — must resolve to that stack and may not name a hosted project at all.
+ *   Development used to be the loose one ("only not production"), which is precisely how it could
+ *   be a second client of QA's database while calling itself development.
  */
 
 export type AppEnvironment = "development" | "staging" | "production";
@@ -55,6 +57,11 @@ interface EnvironmentEntry {
   projectRef: string | null;
   status?: string;
   envPrefix?: string;
+  /** `"local"` marks the environment as this machine's Supabase CLI stack, not a hosted project. */
+  kind?: string;
+  /** The project id such a build must resolve to (the stack's own id, e.g. `localdev`). */
+  localProjectId?: string;
+  localStack?: { apiUrl?: string };
 }
 
 const ENTRY_BY_NAME: Record<string, EnvironmentEntry> =
@@ -78,12 +85,26 @@ export const PRODUCTION_PROJECT_ID = refOf("production") as string;
 export const STAGING_PROJECT_ID = refOf("staging") as string;
 
 /**
- * There is no development project yet: `.env.local` still points at the staging one, which is
- * exactly the isolation gap recorded in PRODUCTION_READINESS_AUDIT.md for Phase 2. Until a real
- * development project exists there is no ref to demand, so the rule for development is only
- * "never production". Record it in environments.json and the "staging" rule applies to it too.
+ * Development is the local Docker stack, so it has no hosted project ref — and that is the point.
+ *
+ * This used to read "there is no development project yet, so the rule for development is only
+ * 'never production'". That was true while `.env.local` pointed at the staging project, and it made
+ * **development** an accepted name for a build connected to QA's database: two environments sharing
+ * one project, which is the isolation gap this phase closes. Development now runs on the stack in
+ * Docker on this machine (docs/LOCAL_DEVELOPMENT.md), recorded in environments.json as `kind:
+ * "local"` with its own `localProjectId`. The rules for it are therefore strict rather than
+ * absent: a development build may not name a hosted URL at all, and must resolve to the local
+ * stack's own id (see `resolveEnvironment`).
  */
 export const DEVELOPMENT_PROJECT_ID: string | null = refOf("development");
+
+/** The project id the local stack answers to — what a development build must resolve to. */
+export const DEVELOPMENT_LOCAL_PROJECT_ID: string | null =
+  ENTRY_BY_NAME.development?.localProjectId ?? null;
+
+/** Where the local stack lives, quoted in refusals so the fix is in the message. */
+export const LOCAL_STACK_API_URL: string | null =
+  ENTRY_BY_NAME.development?.localStack?.apiUrl ?? null;
 
 /** The project each environment must land on, when we know it. `null` = no ref to enforce yet. */
 export function expectedProjectFor(environment: AppEnvironment): string | null {
@@ -120,6 +141,8 @@ export type EnvironmentFailureCode =
   | "PRODUCTION_PROJECT_OUTSIDE_PRODUCTION"
   | "PRODUCTION_ENV_WRONG_PROJECT"
   | "STAGING_ENV_WRONG_PROJECT"
+  | "DEVELOPMENT_ENV_HOSTED_URL"
+  | "DEVELOPMENT_ENV_WRONG_TARGET"
   | "DEMO_OTP_IN_PRODUCTION";
 
 export interface EnvironmentOk {
@@ -312,6 +335,40 @@ export function resolveEnvironment(input: EnvironmentInput): EnvironmentVerdict 
       `Refusing to start: this is a "staging" build but it points at "${urlProjectId}", ` +
         `not the staging project (${STAGING_PROJECT_ID}).`,
     );
+  }
+
+  // Development is the stack on THIS machine. Two ways of leaving it are refused here:
+  //
+  //   1. a hosted `*.supabase.co` URL — the shape that reached staging before this rule existed,
+  //      when `.env.local` carried QA's URL and key and the app called itself development;
+  //   2. any other resolved project id — a bare ref, or a `VITE_SUPABASE_PROJECT_ID` naming a
+  //      hosted project while the URL is silent.
+  //
+  // Both are refusals rather than warnings, because "development" must not be a second client of
+  // another environment's database. Staging and production keep their own exact-project rules
+  // above, and each rule names the environment it protects.
+  if (environment === "development") {
+    const hostedRef = extractProjectId(providedUrl);
+    if (hostedRef) {
+      return fail(
+        "DEVELOPMENT_ENV_HOSTED_URL",
+        `Refusing to start: this is a "development" build but VITE_SUPABASE_URL is a hosted ` +
+          `Supabase project ("${hostedRef}"). Development reads and writes only to the Supabase ` +
+          `stack running on this machine${LOCAL_STACK_API_URL ? ` (${LOCAL_STACK_API_URL})` : ""} — ` +
+          `see docs/LOCAL_DEVELOPMENT.md. Point it at the local stack, or name the build for the ` +
+          `environment whose project it is.`,
+      );
+    }
+
+    if (DEVELOPMENT_LOCAL_PROJECT_ID && urlProjectId !== DEVELOPMENT_LOCAL_PROJECT_ID) {
+      return fail(
+        "DEVELOPMENT_ENV_WRONG_TARGET",
+        `Refusing to start: this is a "development" build but it resolves to "${urlProjectId}", ` +
+          `not the local stack ("${DEVELOPMENT_LOCAL_PROJECT_ID}"). A development build shares ` +
+          `nothing with staging or production: local data is disposable, and QA's data is not. ` +
+          `See docs/LOCAL_DEVELOPMENT.md.`,
+      );
+    }
   }
 
   // Production authenticates with real codes. A shared constant is a login bypass, not a

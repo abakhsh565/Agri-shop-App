@@ -452,7 +452,7 @@ Nothing here has been done. Each is reversible or additive unless noted.
 | Production DB | Supabase managed daily backups + PITR if the plan allows | Supabase | per plan | **no** |
 | Pre-migration snapshot | `node scripts/backup-database.mjs` before any approved destructive step | local, gitignored | until the change is verified | yes, spot-check |
 | Auth users | Supabase Auth is separate from the SQL dump — `auth.users` must be backed up by Supabase's own backup, not by hand | Supabase | per plan | n/a |
-| Android keystore | already in GitHub secrets | GitHub | permanent | validated by the signing job |
+| Android keystore | **release signing is BLOCKED — the four signing secrets are absent from the repository (measured 2026-10-02, re-measured 2026-10-13), and no release keystore was found in the inspected locations on this machine (project tree, `~/.agrishop/`, `~/Downloads`, home depth-3). The original keystore and its matching credentials must be recovered and configured as `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD` before any signed APK can exist. The Android **debug** keystore is not a substitute — `.github/inject-signing.cjs` refuses it, because a debug-signed APK cannot own the App Links domain.** | GitHub secrets — **absent** | permanent | **no — every `build-apk.yml` run fails at "Decode release keystore" until the secrets exist (most recent: run 37076349097)** |
 
 Your requirement — *"a backup that cannot be restored is not a backup"* — is currently unmet.
 The restore drill is the deliverable that closes it.

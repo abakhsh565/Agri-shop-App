@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase";
+import { beginScopedWrite } from "@/lib/localCache";
 import { tNow } from "@/lib/i18n";
 import { useAuthStore } from "@/stores/authStore";
 import type {
@@ -17,6 +18,15 @@ import type {
 // atomically or (b) are read-only history lists. The atomic writes go through
 // SECURITY DEFINER RPCs (see migration 0004) so stock can't go negative, price
 // is read from the DB, and money/stock updates are transactional.
+
+// Switching working context while a financial request is in flight would
+// leave its server result under a different branch header. Keep one counter
+// at the existing atomic data-access boundary, not in each screen.
+async function scopedRpc(name: string, args: Record<string, unknown>) {
+  const finish = beginScopedWrite();
+  try { return await supabase.rpc(name, args); }
+  finally { finish(); }
+}
 
 // ─── Atomic write RPCs ───────────────────────────────────────────────────────
 
@@ -47,7 +57,7 @@ export async function rpcCreateSale(payload: {
   items: SaleLineInput[];
 }): Promise<{ id: string; saleNumber: string; totalAmount: number; amountPaid: number; outstandingBalance: number }> {
   const userId = useAuthStore.getState().user?.id ?? null;
-  const { data, error } = await supabase.rpc("create_sale", { payload: { ...payload, userId } });
+  const { data, error } = await scopedRpc("create_sale", { payload: { ...payload, userId } });
   if (error) throw new Error(friendly(error.message));
   return data as any;
 }
@@ -63,7 +73,7 @@ export async function rpcCreatePurchase(payload: {
   items: { productId?: string; productName: string; variantId?: string; variantName: string; qty: number; costPrice: number; sellingPrice?: number }[];
 }): Promise<{ id: string; purchaseNumber: string; totalAmount: number; outstandingPayable: number; idempotent?: boolean }> {
   const userId = useAuthStore.getState().user?.id ?? null;
-  const { data, error } = await supabase.rpc("create_purchase", { payload: { ...payload, userId } });
+  const { data, error } = await scopedRpc("create_purchase", { payload: { ...payload, userId } });
   if (error) throw new Error(friendly(error.message));
   return data as any;
 }
@@ -78,7 +88,7 @@ export async function rpcRecordCustomerPayment(payload: {
 }): Promise<{ id: string; balanceAfter: number; splitCount?: number; totalAmount?: number }> {
   const actorId = useAuthStore.getState().user?.id;
   const idempotency_key = payload.idempotencyKey ?? crypto.randomUUID();
-  const { data, error } = await supabase.rpc("record_customer_payment", { payload: { ...payload, actorId, idempotency_key } });
+  const { data, error } = await scopedRpc("record_customer_payment", { payload: { ...payload, actorId, idempotency_key } });
   if (error) throw new Error(friendly(error.message));
   return data as any;
 }
@@ -92,7 +102,7 @@ export async function rpcRecordSupplierPayment(payload: {
   idempotencyKey?: string;
 }): Promise<{ id: string; payableAfter: number; idempotent?: boolean }> {
   const actorId = useAuthStore.getState().user?.id;
-  const { data, error } = await supabase.rpc("record_supplier_payment", {
+  const { data, error } = await scopedRpc("record_supplier_payment", {
     payload: { ...payload, actorId, idempotencyKey: payload.idempotencyKey },
   });
   if (error) throw new Error(friendly(error.message));
@@ -110,7 +120,7 @@ export async function rpcAdjustStock(payload: {
   idempotencyKey?: string;
 }): Promise<{ id: string; qtyBefore: number; qtyChange: number; qtyAfter: number; idempotent?: boolean }> {
   const actorId = useAuthStore.getState().user?.id;
-  const { data, error } = await supabase.rpc("adjust_stock", { payload: { ...payload, actorId } });
+  const { data, error } = await scopedRpc("adjust_stock", { payload: { ...payload, actorId } });
   if (error) throw new Error(friendly(error.message));
   return data as any;
 }
@@ -294,7 +304,7 @@ export async function rpcProcessReturn(payload: {
   if (payload.processedBy) rpcPayload.processedBy = payload.processedBy;
   if (payload.processedByName) rpcPayload.processedByName = payload.processedByName;
 
-  const { data, error } = await supabase.rpc("process_return", { payload: rpcPayload });
+  const { data, error } = await scopedRpc("process_return", { payload: rpcPayload });
   if (error) throw new Error(friendly(error.message));
   // Map snake_case RPC response to camelCase for UI consumption
   return {
@@ -562,7 +572,7 @@ export async function rpcRestoreCustomer(customerId: string): Promise<void> {
 // ─── Void Sale ──────────────────────────────────────────────────────────────
 
 export async function rpcVoidSale(saleId: string, reason: string): Promise<void> {
-  const { error } = await supabase.rpc("void_sale", {
+  const { error } = await scopedRpc("void_sale", {
     p_sale_id: saleId,
     p_reason: reason,
     p_voided_by: useAuthStore.getState().user?.id ?? null,

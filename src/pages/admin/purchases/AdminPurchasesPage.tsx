@@ -3,8 +3,9 @@ import { useNavigate } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
 import EmptyState from "@/components/ui/EmptyState";
-import { SkeletonList } from "@/components/ui/Skeleton";
+import { Skeleton, SkeletonList } from "@/components/ui/Skeleton";
 import { fetchPurchases } from "@/lib/db";
+import { useCompaniesStore } from "@/stores/companiesStore";
 import type { Purchase } from "@/types";
 import { formatCurrency, formatDate } from "@/lib/formatters";
 import { useThemeStore } from "@/stores/themeStore";
@@ -20,6 +21,10 @@ export default function AdminPurchasesPage() {
   const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // The suppliers, for the header's figure — see `owedToSuppliers` below.
+  const companies = useCompaniesStore((s) => s.companies);
+  const companiesReady = useCompaniesStore((s) => s.ready);
+
   useEffect(() => {
     fetchPurchases()
       .then((all) =>
@@ -30,7 +35,21 @@ export default function AdminPurchasesPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  const totalPayable = purchases.reduce((s, p) => s + p.outstandingPayable, 0);
+  /**
+   * What the shop owes suppliers, taken from the one figure that means it:
+   * `companies.outstanding_payable` — the balance `record_supplier_payment` reduces, and the one
+   * the signals engine, the Payments screen and the archive guard all read.
+   *
+   * This header used to sum the rows below, and that is a different question. A delivery carries its
+   * OWN residual (`purchases.amount_due` = `total - paid` at the moment it was recorded), and nothing
+   * allocates a later payment to a delivery — `supplier_payments` has no `purchase_id` — so the sum
+   * kept reporting "Rs. 96,000 to pay" for a delivery whose supplier balance was already settled.
+   * Exactly the computation Payments makes, so the two screens cannot describe the same debt
+   * differently again; the row below now says which number it is.
+   */
+  const owedToSuppliers = companies
+    .filter((c) => c.outstandingPayable > 0)
+    .reduce((sum, c) => sum + c.outstandingPayable, 0);
 
   return (
     <div
@@ -50,9 +69,15 @@ export default function AdminPurchasesPage() {
             <p className="ds-section-label" style={{ color: "var(--text-secondary)" }}>
               {t("purchases.outstandingSupplier")}
             </p>
-            <p className="text-xl font-bold mt-0.5" style={{ color: totalPayable > 0 ? "var(--error)" : "var(--brand-dark)" }}>
-              {formatCurrency(totalPayable)}
-            </p>
+            {companiesReady ? (
+              <p className="text-xl font-bold mt-0.5" style={{ color: owedToSuppliers > 0 ? "var(--error)" : "var(--brand-dark)" }}>
+                {formatCurrency(owedToSuppliers)}
+              </p>
+            ) : (
+              // The figure comes from a shell-level read. Until it answers, wait rather than show a
+              // delivery-derived number under a label that means the suppliers' balance.
+              <Skeleton w="120px" h="26px" className="mt-1" />
+            )}
           </div>
           <button
             onClick={() => navigate("/admin/payments")}
@@ -112,7 +137,7 @@ export default function AdminPurchasesPage() {
                     <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>{formatCurrency(p.totalAmount)}</p>
                     {unpaid && (
                       <p className="text-11" style={{ color: "var(--error)" }}>
-                        {formatCurrency(p.outstandingPayable)} {t("common.payable")}
+                        {formatCurrency(p.outstandingPayable)} {t("purchases.unpaidOnDelivery")}
                       </p>
                     )}
                   </div>

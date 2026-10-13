@@ -65,8 +65,9 @@ export default function BranchEditor({
   const { addToast } = useUIStore();
 
   const setBranchPlace = useShopStore((s) => s.setBranchPlace);
+  const renameBranch = useShopStore((s) => s.renameBranch);
   const setMarketplaceSettings = useShopStore((s) => s.setMarketplaceSettings);
-  const switchTo = useShopStore((s) => s.switchTo);
+  const switchTo = useShopStore((s) => s.switchBranch);
 
   const roles = useRolesStore((s) => s.roles);
   const rolesReady = useRolesStore((s) => s.ready);
@@ -161,7 +162,7 @@ export default function BranchEditor({
     // the caller is a member of. It is also the writer that takes a pin back off, so removing a
     // location is a change like any other rather than a special case that writes nothing.
     const { error: placeError } = await supabase.rpc("set_place", {
-      p_table: "shops",
+      p_table: "branches",
       p_id: branch.id,
       p_latitude: next?.lat ?? null,
       p_longitude: next?.lng ?? null,
@@ -268,12 +269,24 @@ export default function BranchEditor({
               {t(branch.isMain ? "branches.mainBranch" : "branches.subBranch")}
             </span>
           </div>
-          <p className="text-11 mt-0.5 truncate" style={{ color: "var(--text-secondary)" }}>
-            {branchContextLabel(t, branch)}
+          <p className="text-11 mt-0.5 truncate" style={{ color: "var(--text-secondary)" }}>              {branchContextLabel(t, branch)}
           </p>
         </div>
       </div>
 
+      <div className="ds-field mt-4"><input value={name} disabled={busy} maxLength={120}
+        aria-label={t("branches.nameLabel")} onChange={(event) => setName(event.target.value)}
+        className="h-full flex-1 bg-transparent outline-none ds-body text-start" /></div>
+      <button type="button" disabled={busy || !name.trim() || name.trim() === branch.name}
+        data-testid="branch-rename-save" className="h-10 text-12 font-semibold ds-pressable disabled:opacity-50"
+        onClick={async () => {
+          if (savingRef.current) return;
+          savingRef.current = true; setBusy(true);
+          try {
+            const result = await renameBranch(branch.id, name);
+            addToast(t(result.ok ? "branches.saved" : result.code === "name_taken" ? "branches.nameTaken" : "branches.saveFailed", { branch: name.trim() }), result.ok ? "success" : "error");
+          } finally { savingRef.current = false; setBusy(false); }
+        }}>{t("branches.save")}</button>
       {/* ── Where it is ───────────────────────────────────────────────────────── */}
       {/* Not a text field: a branch's location is a point on a map, and an address typed
           beside a pin is how the two end up describing different towns. */}
@@ -328,7 +341,11 @@ export default function BranchEditor({
           <Checkbox checked={marketplaceOn} size={22} />
         </span>
         <span className="text-12 font-semibold" style={{ color: "var(--text-primary)" }}>
-          {t("marketplace.branchToggle")}
+          {branch.isCurrent
+            ? marketplaceOn
+              ? t("marketplace.branchToggleNotice")
+              : t("marketplace.branchToggleOffNotice")
+            : t("marketplace.branchToggleNotice")}
         </span>
       </button>
 

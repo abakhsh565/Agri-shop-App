@@ -184,14 +184,61 @@ describe('the wrong environment’s credentials are refused — the original def
   });
 });
 
-describe('an environment with no project cannot be targeted at all', () => {
-  test('development is refused, because no ref is recorded for it', () => {
-    process.env.DEV_DB_HOST = 'pooler.example';
-    process.env.DEV_DB_USER = `postgres.${STAGING_REF}`;
-    process.env.DEV_DB_PASS = 'x';
+describe('development is targetable only once its OWN project is recorded', () => {
+  test('no two environments claim one project ref — a shared ref IS the reported defect', () => {
+    // "Development and Staging/QA point to the same Supabase project" is the gap this whole task
+    // exists to close, so it is asserted as a rule rather than trusted: a ref may be claimed by
+    // exactly one environment, and the reverse lookup must name that same one. It passes today
+    // (development records no ref) and fails the moment development is wired to staging's or
+    // production's ref — which is the wiring mistake that would silently un-fix the gap.
+    const claimed = ENVIRONMENT_NAMES.map((name) => [name, expectedProjectRefFor(name)] as const).filter(
+      (entry): entry is readonly [string, string] => Boolean(entry[1]),
+    );
+    expect(claimed.length).toBeGreaterThanOrEqual(2);
+    const refs = claimed.map(([, ref]) => ref);
+    expect(new Set(refs).size).toBe(refs.length);
+    for (const [name, ref] of claimed) expect(environmentForProjectRef(ref)).toBe(name);
+  });
 
-    expect(expectedProjectRefFor('development')).toBeNull();
-    expect(() => resolveCredentials('development')).toThrow(/no project ref is recorded/);
+  test('development either has its own ref, or is refused before any connection', () => {
+    const entry = loadEnvironmentConfig().environments.development as {
+      projectRef: string | null;
+      status: string;
+      envPrefix: string;
+      localEnvFile: string | null;
+    };
+
+    // Unconditional: development reads DEV_* and nothing else, from the file .env.example
+    // documents for it. Neither of these is allowed to depend on whether the project exists yet.
+    expect(entry.envPrefix).toBe('DEV');
+    expect(entry.localEnvFile).toBe('.env.local');
+
+    if (entry.status === 'active' && entry.projectRef) {
+      // Provisioned. The two refs it may never be are the other environments' — and the reverse
+      // lookup must agree that this ref is development's alone.
+      expect(entry.projectRef).not.toBe(STAGING_REF);
+      expect(entry.projectRef).not.toBe(PRODUCTION_REF);
+      expect(expectedProjectRefFor('development')).toBe(entry.projectRef);
+      expect(environmentForProjectRef(entry.projectRef)).toBe('development');
+
+      // Isolation is symmetric, so the same pairing rule is asserted here as for staging and
+      // production: credentials naming another environment's project are refused by name, before
+      // a connection is opened. Then the control that makes that refusal mean something.
+      process.env.DEV_DB_HOST = 'pooler.example';
+      process.env.DEV_DB_USER = `postgres.${STAGING_REF}`;
+      process.env.DEV_DB_PASS = 'dev-password';
+      expect(() => resolveCredentials('development')).toThrow(/ABORTED/);
+      expect(() => resolveCredentials('development')).toThrow(new RegExp(STAGING_REF));
+      expect(() => resolveCredentials('development')).toThrow(/which is "staging"/);
+
+      process.env.DEV_DB_USER = `postgres.${entry.projectRef}`;
+      expect(assertCredentialsNameTarget(resolveCredentials('development'))).toBe(entry.projectRef);
+    } else {
+      // Not provisioned (the state today): there is no ref to verify against, so the environment
+      // is refused outright rather than guessed at.
+      expect(expectedProjectRefFor('development')).toBeNull();
+      expect(() => resolveCredentials('development')).toThrow(/no project ref is recorded/);
+    }
   });
 });
 
@@ -222,10 +269,27 @@ describe('the command line refuses out loud, with an exit code', () => {
     expect(output).toMatch(/requires an explicit target and has no default/);
   });
 
-  test('a backup for development is refused, before any connection', () => {
-    const { code, output } = run(BACKUP_SCRIPT, ['--env', 'development']);
+  test('a backup for development is refused, before any connection, in either state', () => {
+    const entry = loadEnvironmentConfig().environments.development as {
+      projectRef: string | null;
+      status: string;
+    };
+    const provisioned = entry.status === 'active' && Boolean(entry.projectRef);
+
+    // Two honest messages for one rule: with no project of its own there is nothing to verify
+    // against, and once it has one its own credentials are still the only ones it may use. The
+    // adversary below is production's identity under the DEV_ prefix — a *string*, so nothing is
+    // contacted and the refusal is decided before a socket exists.
+    const { code, output } = provisioned
+      ? run(BACKUP_SCRIPT, ['--env', 'development'], {
+          DEV_DB_HOST: '203.0.113.1',
+          DEV_DB_USER: `postgres.${PRODUCTION_REF}`,
+          DEV_DB_PASS: 'synthetic-not-a-credential',
+        })
+      : run(BACKUP_SCRIPT, ['--env', 'development']);
+
     expect(code).toBe(2);
-    expect(output).toMatch(/no project ref is recorded/);
+    expect(output).toMatch(provisioned ? /ABORTED/ : /no project ref is recorded/);
   });
 
   test('a backup for production with no production credentials is refused', () => {

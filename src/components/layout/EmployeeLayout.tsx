@@ -15,6 +15,9 @@ import ContextHelp from "@/components/education/ContextHelp";
 import { useT, tNow } from "@/lib/i18n";
 import { useBootstrapData } from "@/stores/useBootstrapData";
 import { useShopStore } from "@/stores/shopStore";
+import ShopSwitcherSheet from "@/components/shop/ShopSwitcherSheet";
+import ListCard from "@/components/ui/ListCard";
+import ListRow from "@/components/ui/ListRow";
 import ShopAccessNotice, { useNoActiveShop } from "@/components/shop/ShopAccessNotice";
 import { isTopLevel } from "@/lib/navDepth";
 import { clearNav } from "@/lib/navContext";
@@ -49,6 +52,9 @@ export default function EmployeeLayout() {
     if (userId) void loadShops();
   }, [loadShops, userId]);
   const noActiveShop = useNoActiveShop();
+  const branchName = useShopStore((s) => s.activeBranchName);
+  const branches = useShopStore((s) => s.branches);
+  const openSwitcher = useShopStore((s) => s.openSwitcher);
   const [pin, setPin] = useState("");
   const [pinError, setPinError] = useState(false);
   const [pinShake, setPinShake] = useState(false);
@@ -186,6 +192,11 @@ export default function EmployeeLayout() {
       <NavTracker />
       <BackButtonHandler />
       <ToastContainer />
+      <ShopSwitcherSheet />
+      {branchName && branches.length > 1 && <div className="px-4 pt-2"><ListCard>
+        <ListRow title={branchName} meta={t("branchFlow.chooseWorking")} testId="employee-switch-branch"
+          onClick={() => openSwitcher()} />
+      </ListCard></div>}
 
       {/* ── Offline banner ── */}
       {!isOnline && (

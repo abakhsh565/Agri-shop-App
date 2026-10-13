@@ -15,6 +15,8 @@
 import { describe, expect, test } from 'vitest';
 
 import {
+  DEVELOPMENT_LOCAL_PROJECT_ID,
+  LOCAL_STACK_API_URL,
   PRODUCTION_PROJECT_ID,
   STAGING_PROJECT_ID,
   extractProjectId,
@@ -47,14 +49,38 @@ const valid = (overrides: Partial<EnvironmentInput> = {}): EnvironmentInput => (
   ...overrides,
 });
 
+/**
+ * A development build as `.env.local` describes it: the stack in Docker on this machine.
+ *
+ * Read from `environments.json` through the contract rather than typed in here, so this test fails
+ * if the recorded local stack and the app's idea of it ever drift apart — which is the whole class
+ * of defect these rules exist to catch.
+ */
+const LOCAL_STACK_URL = LOCAL_STACK_API_URL ?? 'http://127.0.0.1:54321';
+const LOCAL_STACK_PROJECT_ID = DEVELOPMENT_LOCAL_PROJECT_ID ?? 'localdev';
+// The CLI's local anon key carries no readable `ref` claim, so nothing can be cross-checked: that is
+// why a development build reports `credentialsCrossChecked: false`.
+const LOCAL_STACK_KEY = 'sb_publishable_local_stack_key';
+
+const validDevelopment = (overrides: Partial<EnvironmentInput> = {}): EnvironmentInput => ({
+  appEnv: 'development',
+  supabaseUrl: LOCAL_STACK_URL,
+  supabaseProjectId: LOCAL_STACK_PROJECT_ID,
+  supabaseAnonKey: LOCAL_STACK_KEY,
+  otpDelivery: 'demo',
+  ...overrides,
+});
+
 describe('a correct configuration is accepted (so the failures below are not vacuous)', () => {
-  test('development with its own project and demo codes', () => {
-    const verdict = resolveEnvironment(valid({ appEnv: 'development' }));
+  test('development on the local stack with demo codes', () => {
+    const verdict = resolveEnvironment(validDevelopment());
     expect(verdict.ok).toBe(true);
     if (verdict.ok) {
       expect(verdict.environment).toBe('development');
+      expect(verdict.projectId).toBe(LOCAL_STACK_PROJECT_ID);
       expect(verdict.otpDelivery).toBe('demo');
-      expect(verdict.credentialsCrossChecked).toBe(true);
+      // Nothing to cross-check: the CLI's key names no project, which is not a contradiction.
+      expect(verdict.credentialsCrossChecked).toBe(false);
     }
   });
 
@@ -163,9 +189,10 @@ describe('a build may not reach production from anywhere but production', () => 
   });
 
   test('that refusal is caused by the project, not by the environment name', () => {
-    // Same two names, staging project → allowed. Proves the case above tested the project rule.
-    expect(resolveEnvironment(valid({ appEnv: 'development' })).ok).toBe(true);
-    expect(resolveEnvironment(valid({ appEnv: 'staging' })).ok).toBe(true);
+    // Both names are accepted on the target each one owns, so the refusals above came from the
+    // project being named, not from the environment name being present.
+    expect(resolveEnvironment(valid()).ok).toBe(true);
+    expect(resolveEnvironment(validDevelopment()).ok).toBe(true);
   });
 
   test('the production project ref is reachable by exactly one environment', () => {
@@ -222,6 +249,82 @@ describe('the named environments must land on their own project', () => {
     );
     expect(verdict.ok).toBe(false);
     if (!verdict.ok) expect(verdict.code).toBe('PRODUCTION_PROJECT_OUTSIDE_PRODUCTION');
+  });
+});
+
+describe('development is the local stack and may not name a hosted project', () => {
+  test('the local stack is recorded, and a development build resolves to it', () => {
+    expect(LOCAL_STACK_PROJECT_ID).toBe('localdev');
+    expect(LOCAL_STACK_URL).toMatch(/^http:\/\/(127\.0\.0\.1|localhost):\d+$/);
+    const verdict = resolveEnvironment(validDevelopment());
+    expect(verdict.ok).toBe(true);
+    if (verdict.ok) expect(verdict.projectId).toBe(LOCAL_STACK_PROJECT_ID);
+  });
+
+  test('a LAN address is accepted — a phone on the network still talks to the local stack', () => {
+    // The address carries no project ref, so the explicitly named project id identifies the target.
+    // Refusing this would break development on a real device while protecting nothing.
+    const verdict = resolveEnvironment(
+      validDevelopment({ supabaseUrl: 'http://192.168.1.20:54321' }),
+    );
+    expect(verdict.ok).toBe(true);
+  });
+
+  test('the project id alone identifies the target', () => {
+    const verdict = resolveEnvironment(validDevelopment({ supabaseUrl: undefined }));
+    expect(verdict.ok).toBe(true);
+  });
+
+  test('DEV app + STAGING URL → refused: development is not a second client of QA', () => {
+    // This exact configuration is what `.env.local` held before the local stack existed, and it was
+    // ACCEPTED: development plus QA's project was a valid build. That is the gap this rule closes.
+    const verdict = resolveEnvironment(valid({ appEnv: 'development' }));
+    expect(verdict.ok).toBe(false);
+    if (!verdict.ok) expect(verdict.code).toBe('DEVELOPMENT_ENV_HOSTED_URL');
+  });
+
+  test('a hosted URL wins over a local project id → refused', () => {
+    const verdict = resolveEnvironment(
+      validDevelopment({ supabaseUrl: STAGING_URL, supabaseAnonKey: STAGING_KEY }),
+    );
+    expect(verdict.ok).toBe(false);
+    if (!verdict.ok) expect(verdict.code).toBe('DEVELOPMENT_ENV_HOSTED_URL');
+  });
+
+  test('a local URL with a hosted project id → refused: the id alone names a target', () => {
+    const verdict = resolveEnvironment(
+      validDevelopment({ supabaseProjectId: STAGING_PROJECT_ID }),
+    );
+    expect(verdict.ok).toBe(false);
+    if (!verdict.ok) expect(verdict.code).toBe('DEVELOPMENT_ENV_WRONG_TARGET');
+  });
+
+  test('a bare hosted ref in the URL field → refused', () => {
+    // `VITE_SUPABASE_URL` holding a bare ref instead of a URL is a real misconfiguration shape, and
+    // it is not a hosted-URL refusal — the target it names is simply not the local stack.
+    const verdict = resolveEnvironment(
+      validDevelopment({
+        supabaseUrl: STAGING_PROJECT_ID,
+        supabaseProjectId: STAGING_PROJECT_ID,
+      }),
+    );
+    expect(verdict.ok).toBe(false);
+    if (!verdict.ok) expect(verdict.code).toBe('DEVELOPMENT_ENV_WRONG_TARGET');
+  });
+
+  test('DEV app + PROD project → the production refusal, which names the more serious problem', () => {
+    // Both rules would catch this; production's is reported first because "this build reaches
+    // production" is the more dangerous fact, and a message should name the real problem.
+    const verdict = resolveEnvironment(
+      validDevelopment({ supabaseUrl: PRODUCTION_URL, supabaseAnonKey: PRODUCTION_KEY }),
+    );
+    expect(verdict.ok).toBe(false);
+    if (!verdict.ok) expect(verdict.code).toBe('PRODUCTION_PROJECT_OUTSIDE_PRODUCTION');
+  });
+
+  test('staging is unaffected by the development rule', () => {
+    expect(resolveEnvironment(valid()).ok).toBe(true);
+    expect(resolveEnvironment(valid({ supabaseAnonKey: LOCAL_STACK_KEY })).ok).toBe(true);
   });
 });
 

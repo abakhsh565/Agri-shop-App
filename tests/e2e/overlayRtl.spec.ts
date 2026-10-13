@@ -15,7 +15,7 @@
 import { test, expect } from '@playwright/test';
 import { QA_IDS, setupFixtures, cleanupFixtures, injectAdminAuth } from './helpers';
 
-const BASE_URL = 'http://localhost:5173';
+const BASE_URL = process.env.QA_APP_URL || 'http://localhost:5173';
 
 /** The supplier selector's button label, from t("supplier.selectSupplier"). */
 const SUPPLIER_TRIGGER_EN = 'Choose supplier';

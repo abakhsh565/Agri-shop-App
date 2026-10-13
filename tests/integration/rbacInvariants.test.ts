@@ -39,6 +39,21 @@ const ANON_ALLOWED_WRITES = [
   'record_attempt', 'record_incident', 'record_memory', 'record_resolution',
 ];
 
+/**
+ * Write RPCs that authorize on the OWNER ROLE itself rather than through a permission helper.
+ *
+ * `0191`'s branch lifecycle API reads `membership_in_active_shop(NULL)` and refuses anyone whose
+ * `role <> 'owner'`, because no branch-management permission exists to name (the discovery audit's
+ * G12). That is a real guard in a shape this vocabulary does not contain — the guard has to be a role
+ * comparison or the function could not require an owner.
+ *
+ * It is listed here by name rather than by widening the pattern above, because widening would also
+ * accept a function that merely mentions a helper. And the exemption is not taken on trust: the next
+ * test reads each function's source and proves both halves of the guard are present, so removing the
+ * owner check fails here instead of passing quietly.
+ */
+const OWNER_ROLE_GATED_WRITES = ['archive_operating_branch'];
+
 /** Tables that carry business operations and therefore need branch ownership. */
 const BRANCH_OWNED = [
   'sales', 'purchases', 'returns', 'inventory_movements',
@@ -166,7 +181,37 @@ describe('Invariant E — protected writes resolve tenant context', () => {
       .filter((r) => !r.has_guard)
       .filter((r) => !(SELF_SERVICE.test(r.proname) && r.self_guard))
       .map((r) => r.proname)
-      .filter((f) => !ANON_ALLOWED_WRITES.includes(f) && !INTERNAL_FUNCTIONS.includes(f));
+      .filter((f) => !ANON_ALLOWED_WRITES.includes(f) && !INTERNAL_FUNCTIONS.includes(f))
+      .filter((f) => !OWNER_ROLE_GATED_WRITES.includes(f));
     expect(unguarded).toEqual([]);
+  });
+
+  it('every owner-role exemption actually carries an owner check', async () => {
+    for (const name of OWNER_ROLE_GATED_WRITES) {
+      const rows = await sql<{ def: string }>(`
+        SELECT pg_get_functiondef(p.oid) AS def
+          FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+         WHERE n.nspname = 'public' AND p.proname = '${name}'
+      `);
+      expect(rows.length, `${name} is exempted above, so it must still exist`).toBeGreaterThan(0);
+      const definition = rows.map((r) => r.def).join('\n');
+      expect(
+        definition,
+        `${name} must resolve the caller's membership rather than trust an argument`,
+      ).toMatch(/membership_in_active_shop/);
+      // The load-bearing assertion, and deliberately narrower than "the word owner appears".
+      // This file's own source was the counter-example: a definition that kept `role <> 'owner'`
+      // ONLY inside the later staff-scope check still satisfied a loose `/role <> 'owner'/` while
+      // having no authorization check left at all. So the role comparison has to sit INSIDE a
+      // refusal that raises NOT_AUTHORIZED. Non-vacuity was proven by deleting that comparison from a
+      // copy of the live definition and watching this assertion fail.
+      const refusals =
+        definition.match(/IF[\s\S]*?RAISE EXCEPTION 'NOT_AUTHORIZED[^']*'[\s\S]*?END IF;/g) ?? [];
+      expect(refusals.length, `${name} must contain a NOT_AUTHORIZED refusal`).toBeGreaterThan(0);
+      expect(
+        refusals.some((block) => /role\s*(<>|!=)\s*'owner'/.test(block)),
+        `${name} must refuse a caller whose role is not the owner, inside the refusal itself`,
+      ).toBe(true);
+    }
   });
 });

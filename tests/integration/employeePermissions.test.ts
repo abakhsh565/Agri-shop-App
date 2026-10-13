@@ -351,10 +351,18 @@ describe('Permissions — Escalation/Bypass', () => {
     }
   });
 
+  // These two use the CANONICAL void_sale, not `void_sale_v1`. 0192 retired the compatibility
+  // endpoint (`REVOKE ALL ON FUNCTION public.void_sale_v1(jsonb) FROM PUBLIC,anon,authenticated` —
+  // "not used by the application"), so a call to it failed at the grant before any identity was
+  // examined: the assertion passed on `permission denied` while claiming the ghost identity was
+  // rejected. `void_sale(uuid,text,uuid)` is what the app calls (src/lib/db.ts) and carries 0192's
+  // guard, so the refusal now comes from the identity check the test names.
   it('should reject RPC call from user not in users table (no identity)', async () => {
     const ghostId = 'aaaaaaaa-bbbb-cccc-dddd-000000000001';
-    const result = await execRpcAsUser(ghostId, 'void_sale_v1', {
-      payload: { saleId: 'e0000000-0000-0000-0000-000000000001', reason: 'ghost void' },
+    const result = await execRpcAsUser(ghostId, 'void_sale', {
+      p_sale_id: 'e0000000-0000-0000-0000-000000000001',
+      p_reason: 'ghost void',
+      p_voided_by: ghostId,
     });
     // Should fail because ghost user is not in users table
     rec('Ghost user void_sale — rejected', 'error', result.error?.substring(0, 50) || 'no error', result.error ? 'PASS' : 'FAIL');
@@ -362,8 +370,10 @@ describe('Permissions — Escalation/Bypass', () => {
 
   it('should reject fabricated user ID in RPC', async () => {
     const fakeId = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
-    const result = await execRpcAsUser(fakeId, 'void_sale_v1', {
-      payload: { saleId: 'e0000000-0000-0000-0000-000000000002', reason: 'Fake ID void' },
+    const result = await execRpcAsUser(fakeId, 'void_sale', {
+      p_sale_id: 'e0000000-0000-0000-0000-000000000002',
+      p_reason: 'Fake ID void',
+      p_voided_by: fakeId,
     });
     rec('Fabricated user ID — rejected', 'error', result.error?.substring(0, 50) || 'no error', result.error ? 'PASS' : 'FAIL');
   });

@@ -245,9 +245,26 @@ describe("the map service", () => {
     // The three methods the picking screen needs, and no vendor detail above them.
     expect(typeof provider.search).toBe("function");
     expect(typeof provider.reverse).toBe("function");
-    expect(typeof provider.previewUrl).toBe("function");
-    // Attribution travels with the provider: the screen shows what the service requires.
+    // The BASEMAP is asked for here too, and it is deliberately a separate answer to a separate
+    // question: OpenFreeMap serves vector tiles but does no geocoding at all, so the two come
+    // from different services and only meet on the picking screen.
+    expect(typeof provider.mapStyle).toBe("function");
+    // There is no `previewUrl` any more. It drew a 72px snapshot of a raster basemap that the
+    // picker no longer draws on, and keeping it would mean two services behind one decision.
+    expect("previewUrl" in provider).toBe(false);
+  });
+
+  it("draws the basemap for the app's own theme, and credits both services", () => {
+    const provider = mapProvider();
+    // A pale, high-contrast style for a phone held up in sun, a dark one for the app's dark
+    // theme — asking for one style in both would leave one of them unreadable.
+    expect(provider.mapStyle("light")).toContain("positron");
+    expect(provider.mapStyle("dark")).toContain("dark");
+    expect(provider.mapStyle("light")).not.toBe(provider.mapStyle("dark"));
+    // Two services are behind the screen now: the search and address come from OpenStreetMap's
+    // data, the tiles from OpenMapTiles. The credit has to name both or the licence is missed.
     expect(provider.attribution).toContain("OpenStreetMap");
+    expect(provider.attribution).toContain("OpenMapTiles");
   });
 
   it("refuses a response that is not ok, rather than reading it as an empty result", async () => {

@@ -99,13 +99,23 @@ export class AssistantError extends Error {
 }
 
 /**
- * In development the function can be run locally, so the screen can be tried without deploying:
+ * In development the function can be run locally, so the screen can be tried without deploying.
+ * Put this in `.env.local` (which Vite loads for every mode) and `npm run dev` picks it up:
  *
- *   VITE_ASSISTANT_DEV_URL=http://localhost:64701 npm run dev
+ *   VITE_ASSISTANT_DEV_URL=http://localhost:64701   # node ai-assistant/server/dev.mjs
  *
  * The same code answers either way — this only chooses where the request goes.
+ *
+ * HONOURED ONLY IN A DEV BUILD, deliberately. Without the `DEV` test, a variable left in an env
+ * file is baked into whatever is built next, and a shipped bundle whose assistant posts every
+ * question to `http://localhost:64701` is a chat that silently answers nothing for every real
+ * user — and, worse, quietly diverges from the deployed function that is the real boundary. This
+ * is the same rule the rest of the app already runs on (see src/lib/envGuard.ts): the build must
+ * not be able to point somewhere it was never told to point.
  */
-const devUrl = import.meta.env.VITE_ASSISTANT_DEV_URL as string | undefined;
+const devUrl = import.meta.env.DEV
+  ? (import.meta.env.VITE_ASSISTANT_DEV_URL as string | undefined)
+  : undefined;
 
 function codeFor(error: unknown): AssistantErrorCode {
   const raw = String((error as { message?: string })?.message ?? "");

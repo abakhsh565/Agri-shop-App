@@ -83,11 +83,18 @@ export interface MapProvider {
   /** The address at a point, with the country the service says that point is in. */
   reverse(point: LatLng): Promise<ReverseResult>;
   /**
-   * A URL for a picture of this point, for the small preview on the picking screen. Providers
-   * without one return null and the screen simply shows the address instead of a picture.
+   * The map style this provider's tiles are drawn with, for the app's current theme.
+   *
+   * The basemap is a separate concern from geocoding and is asked for separately on purpose:
+   * OpenFreeMap serves vector tiles but does no search or reverse geocoding at all, so the two
+   * answers come from different services and only meet on the picking screen. A light style in
+   * a dark app is unreadable and a dark one under a bright sun is worse, so the theme decides.
    */
-  previewUrl(point: LatLng, size?: number): string | null;
+  mapStyle(theme: MapTheme): string;
 }
+
+/** The app's own light/dark switch, as the map needs to hear it. */
+export type MapTheme = "light" | "dark";
 
 /** Any failure from a map service, in the app's own words rather than the service's. */
 export class GeoError extends Error {
@@ -126,6 +133,14 @@ export interface ReverseResult {
 }
 
 const NOMINATIM = "https://nominatim.openstreetmap.org";
+
+/**
+ * The basemap. OpenFreeMap serves OpenMapTiles vector tiles with no key, no account and no rate
+ * limit, which is what a field app on a metered connection needs; a raster preview tile was the
+ * previous answer and it is gone with the thumbnail it was drawn on.
+ */
+const OPENFREEMAP_LIGHT = "https://tiles.openfreemap.org/styles/positron";
+const OPENFREEMAP_DARK = "https://tiles.openfreemap.org/styles/dark";
 
 /**
  * The two shapes Nominatim answers with, as far as this app uses them. Declared here so the
@@ -201,7 +216,11 @@ async function getJson(url: string): Promise<unknown> {
  */
 export const openStreetMapProvider: MapProvider = {
   name: "openstreetmap",
-  attribution: "© OpenStreetMap contributors",
+  // Two services are behind one screen now, and both have to be credited: the search and the
+  // address come from OpenStreetMap's data through Nominatim, the basemap from OpenMapTiles'
+  // vector tiles served by OpenFreeMap. A single "© OpenStreetMap" line under-crediting the
+  // tiles is the kind of thing a licence takes seriously.
+  attribution: "© OpenMapTiles, © OpenStreetMap contributors",
   async search(query, limit = 6) {
     const text = query.trim();
     if (text.length < MIN_SEARCH_LENGTH) return [];
@@ -269,16 +288,12 @@ export const openStreetMapProvider: MapProvider = {
     const countryCode = String(payload?.address?.country_code ?? "").trim().toLowerCase();
     return { address: display || null, countryCode: countryCode || null };
   },
-  previewUrl(point, size = 240) {
-    // A single tile of the standard OpenStreetMap layer, centred by arithmetic: the tile that
-    // contains this point. Enough to confirm the pin landed in the right town, and it needs no
-    // map library, no key and no extra script in a WebView that may be offline.
-    const zoom = 14;
-    const n = 2 ** zoom;
-    const x = Math.floor(((point.lng + 180) / 360) * n);
-    const latRad = (point.lat * Math.PI) / 180;
-    const y = Math.floor(((1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2) * n);
-    return `https://tile.openstreetmap.org/${zoom}/${x}/${y}.png?size=${size}`;
+  mapStyle(theme) {
+    // OpenFreeMap's public instance: free, no key, no account, no rate limit, and it serves
+    // four styles over the same OpenMapTiles vector schema. `positron` is the one chosen for
+    // the field — pale, high contrast, and it survives direct sun on a cheap screen; `dark` is
+    // the same basemap for the app's dark theme.
+    return theme === "dark" ? OPENFREEMAP_DARK : OPENFREEMAP_LIGHT;
   },
 };
 

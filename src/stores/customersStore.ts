@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/stores/authStore";
-import { getCachedData, setCachedData, clearCachedData } from "@/lib/localCache";
+import { getCachedData, setCachedData, clearCachedData, captureDataContext, isDataContextCurrent } from "@/lib/localCache";
 import { enqueueOperation } from "@/lib/offlineQueue";
 import { isStorablePlace, type PickedPlace } from "@/lib/geo";
 import type { Customer } from "@/types";
@@ -125,6 +125,8 @@ export const useCustomersStore = create<CustomersState>((set, get) => ({
   reset: () => set({ customers: [], loading: false, ready: false, error: null }),
 
   load: async () => {
+    const context = captureDataContext();
+    if (!isDataContextCurrent(context)) return;
     set({ loading: true, error: null });
 
     // Stale-while-revalidate: render the cache immediately, then ALWAYS revalidate.
@@ -143,6 +145,7 @@ export const useCustomersStore = create<CustomersState>((set, get) => ({
         .select("*")
         .eq("is_archived", false)
         .order("name");
+      if (!isDataContextCurrent(context)) return;
       if (error) {
         if (!cached) {
           set({ loading: false, ready: true, error: error.message });
@@ -153,6 +156,7 @@ export const useCustomersStore = create<CustomersState>((set, get) => ({
       setCachedData(CACHE_KEY, customers);
       set({ customers, loading: false, ready: true });
     } catch {
+      if (!isDataContextCurrent(context)) return;
       if (!cached) {
         set({ loading: false, ready: true, error: "Offline — showing cached data" });
       }

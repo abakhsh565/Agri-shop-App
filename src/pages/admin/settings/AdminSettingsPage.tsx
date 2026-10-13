@@ -1,7 +1,7 @@
 import BusinessSettingsSheet from '@/components/ui/BusinessSettingsSheet';
 import StockAlertsSheet from '@/components/ui/StockAlertsSheet';
 import { useNavigate } from "react-router-dom";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
 import ListCard from "@/components/ui/ListCard";
@@ -16,15 +16,12 @@ import { hasPin } from "@/lib/pinLock";
 import { useT } from "@/lib/i18n";
 import {
   Lock, Globe, ChevronRight, Moon, Sun, SlidersHorizontal, AlertTriangle,
-  Fingerprint, Check, Pencil, Loader2, Save, LogOut, X, Trash2, Store as StoreIcon,
+  Fingerprint, Check, Loader2, LogOut, X, Trash2,
 } from "lucide-react";
-import { uploadImage } from "@/lib/storage";
 import { APP_NAME, APP_VERSION } from "@/lib/brand";
-import { supabase } from "@/lib/supabase";
-import DeleteTargetSheet, { branchDeleteSubject } from "@/components/shop/DeleteTargetSheet";
-import BranchEditSheet from "@/components/shop/BranchEditSheet";
-import { useShopStore, type BranchSummary } from "@/stores/shopStore";
-import { branchContextLabel } from "@/lib/branchContext";
+import DeleteTargetSheet from "@/components/shop/DeleteTargetSheet";
+import ProfileCard from "@/components/shop/ProfileCard";
+import { useShopStore } from "@/stores/shopStore";
 import { deleteAccount } from "@/lib/auth";
 import { forgetLastProfile, forgetPhoneVerification } from "@/lib/loginWindow";
 import { entryDoor } from "@/lib/entryDoor";
@@ -48,12 +45,6 @@ export default function AdminSettingsPage() {
   const { addToast } = useUIStore();
   const { user, logout } = useAuthStore();
   const { theme, toggleTheme, language, setLanguage } = useThemeStore();
-  const [avatarUrl, setAvatarUrl] = useState<string | null>(user?.photoUrl ?? null);
-  const [editing, setEditing] = useState(false);
-  const [editName, setEditName] = useState("");
-  const [editImageUrl, setEditImageUrl] = useState<string | null>(null);
-  const [uploading, setUploading] = useState(false);
-  const [saving, setSaving] = useState(false);
   const [showBusinessSettings, setShowBusinessSettings] = useState(false);
   /**
    * Deleting the branch this account is working in.
@@ -63,33 +54,18 @@ export default function AdminSettingsPage() {
    * and remove, and it is the thing whose removal is not obvious. The account itself is not
    * what this screen manages: removing it would take every branch with it.
    */
-  const [branchToDelete, setBranchToDelete] = useState<BranchSummary | null>(null);
   const [accountDeleteOpen, setAccountDeleteOpen] = useState(false);
   const branches = useShopStore((s) => s.branches);
   const branchesLoaded = useShopStore((s) => s.branchesLoaded);
   const loadBranches = useShopStore((s) => s.loadBranches);
   const activeShopId = useShopStore((s) => s.activeShopId);
   const activeShopName = useShopStore((s) => s.activeShopName);
-  /**
-   * Which branch the edit sheet is showing, held in the store rather than in this page.
-   *
-   * The sheet's location control opens the picker page, and that page lives outside the shell —
-   * so choosing a place unmounts this page and the sheet with it. An id in the store outlives
-   * the unmount, and the row is looked back up on `branches`, so the sheet reappears carrying
-   * the point that was just chosen instead of quietly disappearing.
-   */
-  const editingBranchId = useShopStore((s) => s.editingBranchId);
-  const setEditingBranch = useShopStore((s) => s.setEditingBranch);
-  const branchToEdit = useMemo(
-    () => branches.find((b) => b.id === editingBranchId) ?? null,
-    [branches, editingBranchId],
-  );
-
   useEffect(() => {
     if (!branchesLoaded) void loadBranches();
   }, [branchesLoaded, loadBranches]);
 
-  const activeBranch = branches.find((b) => b.id === activeShopId) ?? null;
+  const activeBranchId = useShopStore((s) => s.activeBranchId);
+  const activeBranch = branches.find((b) => b.id === activeBranchId) ?? null;
 
   /**
    * This screen belongs to the branch it is showing.
@@ -110,7 +86,7 @@ export default function AdminSettingsPage() {
    * branch. One row, always something that can actually happen: a control that exists only
    * to be refused teaches the owner the app is broken rather than that the rule exists.
    */
-  const canDeleteActiveBranch = !!activeBranch && !activeBranch.isMain && branches.length > 1;
+  const canDeleteActiveBranch = user?.membershipRole === "owner" && !!activeBranch && !activeBranch.isMain && branches.length > 1;
   // Which rows the owner has moved onto this screen, and the panel that moves them back.
   const [customizing, setCustomizing] = useState(false);
   // The shop's own low-stock policy. It sits here rather than on the suite because it is a
@@ -123,7 +99,6 @@ export default function AdminSettingsPage() {
   const [fingerprintReason, setFingerprintReason] = useState<BiometricReason | null>(null);
   const [fingerprintBusy, setFingerprintBusy] = useState(false);
   const [confirmFingerprintOff, setConfirmFingerprintOff] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const isUrdu = language === "ur";
   const base = useShellBase();
   const { where, rowsOn, move } = useOwnerRows();
@@ -243,73 +218,6 @@ export default function AdminSettingsPage() {
     setLanguage(language === "en" ? "ur" : "en");
   }
 
-  // The membership roles the data actually has: owner / admin / employee.
-  const roleLabel =
-    user?.membershipRole === "owner" ? t("settings.owner")
-    : user?.membershipRole === "admin" ? t("emp.admin")
-    : user ? t("search.employee") : "";
-
-  function startEdit() {
-    setEditName(user?.name ?? "");
-    setEditImageUrl(user?.photoUrl ?? null);
-    setEditing(true);
-  }
-
-  async function saveEdit() {
-    if (!editName.trim()) return;
-    setSaving(true);
-    try {
-      // Saved with the signed-in session, and `.select()` is not decoration: RLS on
-      // `users` filters the row, and PostgREST answers a filtered UPDATE with 204 — no
-      // error. The previous anon-key PATCH therefore reported success, updated the local
-      // store and closed the sheet while the database never changed, which is why a new
-      // photo came back as the initials after a reload. Asking for the updated row back
-      // turns that silent no-op into zero rows, which is a failure we can show.
-      const { data, error } = await supabase
-        .from("users")
-        .update({ name: editName.trim(), photo_url: editImageUrl })
-        .eq("id", user!.id)
-        .select("id, name, photo_url");
-
-      if (error) throw error;
-      if (!data || data.length === 0) {
-        throw new Error("Profile update matched no rows (not saved)");
-      }
-
-      const saved = data[0];
-      useAuthStore.getState().setUser({
-        ...user!,
-        name: saved.name ?? editName.trim(),
-        photoUrl: saved.photo_url ?? undefined,
-      });
-      setAvatarUrl(saved.photo_url ?? null);
-      setEditing(false);
-    } catch (err) {
-      console.error("Profile save failed:", err);
-      addToast(t("copy.profileSaveFailed"), "error");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function handleAvatarUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setUploading(true);
-    try {
-      const url = await uploadImage("employee-photos", file);
-      setEditImageUrl(url);
-    } catch (err) {
-      // Was silent, so a failed upload looked like nothing happened at all.
-      console.error("Avatar upload failed:", err);
-      addToast(t("copy.profileSaveFailed"), "error");
-    } finally {
-      setUploading(false);
-    }
-  }
-
-  const initials = user?.name?.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase() ?? "OW";
-
   return (
     <div
       className="flex flex-col w-full min-h-full justify-between"
@@ -335,151 +243,20 @@ export default function AdminSettingsPage() {
           }
         />
 
-        {/* Profile card — the same card as the ones below it: `--radius-card` (not the
-            row-tile radius), the grouped-list tone, and no drawn edge. The radius was 11px,
-            the fill `--surface-2` and a 1px `--border-light` edge on top, which made the one
-            card at the top of the page the only shape that did not match the cards under it. */}
-        <div
-          className="mx-4 mt-3.5 rounded-[var(--radius-card)] p-4 flex items-center gap-4 animate-fade-in-up"
-          style={{ background: "var(--tone-card)" }}
-        >
-          {/* Whose settings these are, said the same way Home says it: a face on the
-              account's own branch, a branch mark on a branch the account added. A photo
-              there would be the one thing on this screen belonging to somebody else. */}
-          <div className="relative shrink-0">
-            {inAddedBranch ? (
-              <div
-                className="w-12 h-12 rounded-full flex items-center justify-center"
-                style={{ background: "var(--tone-sunken)", color: "var(--text-secondary)" }}
-                aria-hidden="true"
-              >
-                <StoreIcon size={22} />
-              </div>
-            ) : (
-              <div
-                className="w-12 h-12 rounded-full overflow-hidden flex items-center justify-center text-base font-bold"
-                style={{ background: "var(--brand)", color: "#0a0a0a" }}
-              >
-                {avatarUrl
-                  ? <img src={avatarUrl} alt="avatar" className="w-full h-full object-cover" />
-                  : initials
-                }
-              </div>
-            )}
-          </div>
-
-          <div className="flex-1 min-w-0">
-            {inAddedBranch ? (
-              /* The branch's own card: its name, and what is inside it. No phone line —
-                 the number identifies a person, and this card is not about one. */
-              <>
-                <div className="flex items-center gap-2 min-w-0">
-                  <p className="text-base font-bold truncate" style={{ color: "var(--text-primary)" }}>
-                    {activeBranch!.name}
-                  </p>
-                  <span
-                    className="text-11 font-bold px-2 py-0.5 rounded-full shrink-0"
-                    style={{ background: "var(--tone-sunken)", color: "var(--text-secondary)" }}
-                  >
-                    {roleLabel}
-                  </span>
-                </div>
-                <p className="text-12 mt-0.5 truncate" style={{ color: "var(--text-secondary)" }}>
-                  {branchContextLabel(t, activeBranch!)}
-                </p>
-              </>
-            ) : (
-              <>
-                <div className="flex items-center gap-2 min-w-0">
-                  <p className="text-base font-bold truncate" style={{ color: "var(--text-primary)" }}>
-                    {user?.name}
-                  </p>
-                  {roleLabel && (
-                    <span
-                      className="text-11 font-bold px-2 py-0.5 rounded-full shrink-0"
-                      style={{ background: "var(--tone-sunken)", color: "var(--text-secondary)" }}
-                    >
-                      {roleLabel}
-                    </span>
-                  )}
-                </div>
-                <p className="text-12 mt-0.5" style={{ color: "var(--text-secondary)" }}>{user?.phone}</p>
-              </>
-            )}
-          </div>
-
-          <button
-            onClick={() => (inAddedBranch && activeBranch ? setEditingBranch(activeBranch.id) : startEdit())}
-            data-testid={inAddedBranch ? "settings-edit-branch" : "settings-edit-profile"}
-            className="flex items-center h-6.5 px-2.5 rounded-full text-12 font-bold shrink-0"
-            style={{ background: "var(--surface)", color: "var(--text-secondary)", border: "1px solid var(--divider)" }}
-          >
-            {t("common.edit")}
-          </button>
-        </div>
-
-        {/* Edit Profile Popup */}
-        {editing && (
-          <div
-            className="fixed inset-0 z-50 flex items-end"
-            style={{ background: "var(--scrim)" }}
-            onClick={() => setEditing(false)}
-          >
-            <div            className="w-full max-w-[390px] mx-auto rounded-t-[24px] p-6 flex flex-col gap-4"
-            style={{ background: "var(--tone-sheet)", border: "1px solid var(--divider)", borderBottom: "none" }}
-            onClick={(e) => e.stopPropagation()}
-          >
-              {/* Handle bar */}
-              <div className="flex justify-center mb-2">
-                <div className="w-10 h-1 rounded-full" style={{ background: "var(--divider)" }} />
-              </div>
-              <p className="text-base font-bold text-center" style={{ color: "var(--text-primary)" }}>{t("common.edit")} {t("settings.profilePhoto")}</p>
-              {/* Image upload in popup */}
-              <div className="flex justify-center">
-                <div className="relative">
-                  <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarUpload} />
-                  <div
-                    className="w-16 h-16 rounded-full overflow-hidden flex items-center justify-center text-xl font-bold cursor-pointer"
-                    style={{ background: "var(--brand)", color: "#0a0a0a" }}
-                    onClick={() => fileInputRef.current?.click()}
-                  >
-                    {uploading ? (
-                      <Loader2 size={20} className="animate-spin" />
-                    ) : editImageUrl ? (
-                      <img src={editImageUrl} alt="avatar" className="w-full h-full object-cover" />
-                    ) : (
-                      initials
-                    )}
-                  </div>
-                  <button
-                    onClick={() => fileInputRef.current?.click()}
-                    data-testid="account-badge"
-                    className="absolute -bottom-1 -end-1 w-6 h-6 rounded-full flex items-center justify-center shadow"
-                    style={{ background: "var(--brand)", color: "#0a0a0a" }}
-                  >
-                    <Pencil size={10} strokeWidth={2.5} />
-                  </button>
-                </div>
-              </div>
-              <div>
-                <p className="ds-section-label mb-1.5" style={{ color: "var(--text-secondary)" }}>{t("common.name")}</p>
-                <input
-                  value={editName}
-                  onChange={(e) => setEditName(e.target.value)}
-                  className="w-full h-12 rounded-[var(--radius-input)] px-4 text-sm outline-none"
-                  style={{ background: "var(--surface-2)", border: "1px solid var(--border-control)", color: "var(--text-primary)", borderRadius: "24px" }}
-                />
-              </div>
-              <div className="flex gap-3">
-                <button onClick={() => setEditing(false)} className="flex-1 h-12 rounded-full text-sm font-bold"
-                  style={{ border: "1px solid var(--divider)", color: "var(--text-primary)" }}>{t("common.cancel")}</button>
-                <button onClick={saveEdit} disabled={saving}
-                  className="flex-1 h-12 rounded-full text-sm font-bold disabled:opacity-50"
-                  style={{ background: "var(--brand)", color: "#0a0a0a" }}>{saving ? t("common.saving") : t("common.save")}</button>
-              </div>
-            </div>
-          </div>
-        )}
+        {/* Profile card — the same card as the ones below it, and the same card the profile
+            screen repeats at the top of itself (`shop/ProfileCard`, one implementation). It is
+            the way in: a chevron rather than a pill that said "Edit", because a row that opens a
+            screen says so with an arrow. The branches themselves live on that screen too. */}
+        <ProfileCard
+          testId={inAddedBranch ? "settings-edit-branch" : "settings-open-profile"}
+          onOpen={() =>
+            navigate(
+              inAddedBranch && activeBranch
+                ? `${base}/settings/branches/${activeBranch.id}`
+                : `${base}/settings/profile`,
+            )
+          }
+        />
 
         {/* Business setup status. Persistent, not a one-time wizard: it shows what is done
             and what is missing, and disappears by itself once nothing is missing. It carries
@@ -697,10 +474,10 @@ export default function AdminSettingsPage() {
             <ListRow
               danger
               testId="settings-delete-branch"
-              onClick={() => setBranchToDelete(activeBranch)}
+              onClick={() => navigate(`${base}/settings/branches/${activeBranch.id}`)}
               icon={Trash2}
-              title={t("settings.deleteBranch")}
-              meta={t("settings.deleteBranch.meta")}
+              title={t("branchFlow.archive")}
+              meta={t("branchFlow.archiveHint")}
             />
           ) : (
             /* Inside the main branch — and on an account with a single branch — the branch
@@ -747,13 +524,6 @@ export default function AdminSettingsPage() {
 
       {/* The same four steps the Branches screen runs — one flow, one set of words, whether
           the subject is a branch reached from More or from here, or the account itself. */}
-      {branchToDelete && (
-        <DeleteTargetSheet
-          subject={branchDeleteSubject(branchToDelete)}
-          onClose={() => setBranchToDelete(null)}
-          onDeleted={() => setBranchToDelete(null)}
-        />
-      )}
       {accountDeleteOpen && user && (
         <DeleteTargetSheet
           subject={{
@@ -764,14 +534,6 @@ export default function AdminSettingsPage() {
           }}
           onClose={() => setAccountDeleteOpen(false)}
           onDeleted={() => void handleDeleteAccount()}
-        />
-      )}
-      {/* Editing the branch this page belongs to, from the card's own Edit button. */}
-      {branchToEdit && (
-        <BranchEditSheet
-          branch={branchToEdit}
-          onClose={() => setEditingBranch(null)}
-          onRenamed={() => setEditingBranch(null)}
         />
       )}
     </div>

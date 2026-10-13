@@ -6,34 +6,49 @@
  * even for a branch whose pin was in the database. The sheet read the place with
  * `select … from shops where id = …`, and `shops` has exactly one SELECT policy —
  * `id = current_shop_id()`. That policy is correct: you may read the shop you are working in and
- * no other. What made it a bug was the consequence: for any other branch the query came back as an
+ * no other. What made it a bug was the consequence: for any other store the query came back as an
  * EMPTY ARRAY, not an error, so the screen silently reported "this branch has never been located"
  * about a branch that had a location.
  *
- * The fix is not to widen the policy — that would expose every column of every branch to fix one
+ * The fix is not to widen the policy — that would expose every column of every tenant to fix one
  * display — but to read the place from `get_my_branches()`, the read that is allowed to answer
  * about every branch the caller belongs to, in the same call that already lists them.
  *
- * So this lane holds two facts:
+ * REWRITTEN for the post-0188 model, and the rewrite is the point of this lane's second life. The
+ * earlier version modelled "another branch" as a second *tenant* and asserted on a `shop_id` field:
+ * it inserted two rows into `shops`, made the owner a member of both, and called
+ * `set_place(p_table => 'shops', p_id => <shop>)`. `0188` made the distinction real —
+ * `get_my_branches()` returns BRANCHES (`branch_id`, `tenant_id`, …) of the tenant being worked in,
+ * and a pin is written to the `branches` row through `set_place(p_table => 'branches', …)`, which is
+ * what `BranchEditor` actually calls. So this file now creates one tenant with two branches and a
+ * second tenant that must stay invisible, which is the contract the product has.
  *
- *   1. the direct `shops` read really cannot see another branch (so the old code could not have
- *      worked, and a future screen must not try it again); and
- *   2. `get_my_branches()` returns the pin — coordinates, label, source and the address the map
- *      service gave — for a branch the caller is not standing in, and nothing about anybody else's.
+ * So the lane holds three facts:
  *
- * Self-contained: its own tenants, owners and shops, all removed after the run.
+ *   1. `get_my_branches()` returns the pin — coordinates, label, source and the address the map
+ *      service gave — for a branch the caller is not standing in, and reports `is_current` so the
+ *      screen can tell the working branch from a sibling;
+ *   2. a branch that was never pinned reports null rather than 0/0, which is a point in the Atlantic;
+ *   3. the direct `shops` read still cannot see another tenant, and nothing about a branch the
+ *      caller is not a member of is returned or writable — the URL is not an authority.
+ *
+ * Self-contained: its own tenants, owners and branches, all removed after the run.
  */
 
 import { describe, it, beforeAll, afterAll, expect } from 'vitest';
 import { execRpcAsUser, execSqlAsAdmin, selectAsUser } from '../setup/qa-client';
+import { deleteFixtureUsers } from '../setup/fixtures';
 
 const OWNER = '9c000000-0000-4000-8000-0000000000b1';
 const OTHER_OWNER = '9c000000-0000-4000-8000-0000000000b2';
-/** The branch this account registered with — `users.shop_id`, which is what `current_shop_id()` answers. */
-const HOME_SHOP = '9c000000-0000-4000-8000-0000000000b3';
-/** The second branch: the account is a member of it, and is NOT standing in it. */
-const OTHER_BRANCH = '9c000000-0000-4000-8000-0000000000b4';
-const STRANGER_SHOP = '9c000000-0000-4000-8000-0000000000b5';
+/** The account's tenant, and the branch it is working in (`users.shop_id`, what `current_shop_id()` answers). */
+const HOME_TENANT = '9c000000-0000-4000-8000-0000000000b3';
+const MAIN_BRANCH = '9c000000-0000-4000-8000-0000000000b8';
+/** The same tenant's second branch: the account belongs to it, and is NOT standing in it. */
+const SECOND_BRANCH = '9c000000-0000-4000-8000-0000000000b4';
+/** Somebody else's tenant, and the branch inside it. */
+const STRANGER_TENANT = '9c000000-0000-4000-8000-0000000000b5';
+const STRANGER_BRANCH = '9c000000-0000-4000-8000-0000000000b6';
 
 const OWNER_PHONE = '923009650001';
 const OTHER_PHONE = '923009650002';
@@ -46,10 +61,13 @@ async function sql(query: string) {
 }
 
 async function cleanup() {
-  await sql(`DELETE FROM branches WHERE tenant_id IN ('${HOME_SHOP}','${OTHER_BRANCH}','${STRANGER_SHOP}')`).catch(() => undefined);
-  await sql(`DELETE FROM memberships WHERE tenant_id IN ('${HOME_SHOP}','${OTHER_BRANCH}','${STRANGER_SHOP}')`).catch(() => undefined);
-  await sql(`DELETE FROM users WHERE id IN ('${OWNER}','${OTHER_OWNER}')`).catch(() => undefined);
-  await sql(`DELETE FROM shops WHERE id IN ('${HOME_SHOP}','${OTHER_BRANCH}','${STRANGER_SHOP}')`).catch(() => undefined);
+  await sql(`DELETE FROM branches WHERE tenant_id IN ('${HOME_TENANT}','${STRANGER_TENANT}')`).catch(() => undefined);
+  await sql(`DELETE FROM memberships WHERE tenant_id IN ('${HOME_TENANT}','${STRANGER_TENANT}')`).catch(() => undefined);
+  // Through the shared helper, not a bare DELETE: `set_place` writes a `location_updated` audit row
+  // and `audit_events.user_id` is NO ACTION, so a bare delete is silently blocked and the users
+  // survive. `placeLocation` is where that leak was measured; this is the same fix.
+  await deleteFixtureUsers([OWNER, OTHER_OWNER]);
+  await sql(`DELETE FROM shops WHERE id IN ('${HOME_TENANT}','${STRANGER_TENANT}')`).catch(() => undefined);
   // The auth identities these fixtures signed in with, for the same reason every other lane does
   // it: an app user deleted without its auth row leaves a login nothing can use, and the app's
   // credential address is derived from the phone, so a stray holder blocks the next run.
@@ -63,24 +81,27 @@ beforeAll(async () => {
 
   await sql(`
     INSERT INTO shops (id, name) VALUES
-      ('${HOME_SHOP}', 'QA Branch Place Home'),
-      ('${OTHER_BRANCH}', 'QA Branch Place Second'),
-      ('${STRANGER_SHOP}', 'QA Branch Place Stranger')
+      ('${HOME_TENANT}', 'QA Branch Place Home'),
+      ('${STRANGER_TENANT}', 'QA Branch Place Stranger')
+  `);
+  // Two branches of ONE tenant. `is_default` decides which one the account is working in, so the
+  // sibling below is genuinely not the current branch rather than merely named as if it were not.
+  await sql(`
+    INSERT INTO branches (id, tenant_id, name, is_active, is_default) VALUES
+      ('${MAIN_BRANCH}', '${HOME_TENANT}', 'QA Place Main', true, true),
+      ('${SECOND_BRANCH}', '${HOME_TENANT}', 'QA Place Second', true, false),
+      ('${STRANGER_BRANCH}', '${STRANGER_TENANT}', 'QA Place Stranger Branch', true, true)
   `);
   await sql(`
     INSERT INTO users (id, name, phone, role, is_original_owner, is_active, shop_id) VALUES
-      ('${OWNER}', 'QA Branch Place Owner', '${OWNER_PHONE}', 'admin', true, true, '${HOME_SHOP}'),
-      ('${OTHER_OWNER}', 'QA Branch Place Stranger', '${OTHER_PHONE}', 'admin', true, true, '${STRANGER_SHOP}')
+      ('${OWNER}', 'QA Branch Place Owner', '${OWNER_PHONE}', 'admin', true, true, '${HOME_TENANT}'),
+      ('${OTHER_OWNER}', 'QA Branch Place Stranger', '${OTHER_PHONE}', 'admin', true, true, '${STRANGER_TENANT}')
   `);
-  // The membership row that makes the second branch the account's at all. Written explicitly
-  // rather than assumed: this lane is about reading a branch the caller belongs to and is not
-  // standing in, so that membership has to exist before anything else is measured.
+  // The membership row that makes both branches the account's at all, and the reason it is `owner`:
+  // `get_my_branches()` admits a non-owner only to branches in its explicit `branch_scope`, so a
+  // member left on the legacy `admin` role with a NULL scope would see an empty list — and every
+  // assertion below would then be about the fixture rather than about the read.
   await sql(`UPDATE memberships SET role = 'owner', status = 'active' WHERE user_id IN ('${OWNER}','${OTHER_OWNER}')`);
-  await sql(`
-    INSERT INTO memberships (user_id, tenant_id, role, status)
-    SELECT '${OWNER}', '${OTHER_BRANCH}', 'owner', 'active'
-    WHERE NOT EXISTS (SELECT 1 FROM memberships WHERE user_id = '${OWNER}' AND tenant_id = '${OTHER_BRANCH}')
-  `);
 
   // Both owners must be able to sign in, or every assertion below would be about authentication
   // rather than about the rule it exists to test.
@@ -95,17 +116,18 @@ afterAll(async () => {
 describe('The pin travels with the branch, on the read that may see it', () => {
   it('pins the branch the account is not working in', async () => {
     const saved = await execRpcAsUser(OWNER, 'set_place', {
-      p_table: 'shops',
-      p_id: OTHER_BRANCH,
+      p_table: 'branches',
+      p_id: SECOND_BRANCH,
       p_latitude: MULTAN.lat,
       p_longitude: MULTAN.lng,
       p_label: 'Ghanta Ghar (Clock Tower)',
       p_address: 'Ghanta Ghar (Clock Tower), Multan, Punjab, Pakistan',
       p_source: 'openstreetmap',
     });
-    // Writing a setting on another branch of the same account is allowed — `set_place` checks
-    // membership of the row's tenant, not of the shop being worked in.
-    expect(saved.error).toBeNull();
+    // Pinning a sibling branch of the account's own tenant is allowed. The rule this asserts is
+    // tenant membership, not standing in the branch — a branch of somebody else's tenant is refused
+    // further down.
+    expect(saved.error, `a sibling branch of the caller's own tenant must be pinnable: ${saved.error}`).toBeNull();
     expect(saved.data?.ok).toBe(true);
   });
 
@@ -114,8 +136,9 @@ describe('The pin travels with the branch, on the read that may see it', () => {
     expect(error).toBeNull();
 
     const rows = (data ?? []) as Array<Record<string, unknown>>;
-    const second = rows.find((r) => r.shop_id === OTHER_BRANCH);
-    expect(second).toBeTruthy();
+    const second = rows.find((r) => r.branch_id === SECOND_BRANCH);
+    expect(second, 'the sibling branch must be in the caller\'s own list').toBeTruthy();
+    expect(second!.tenant_id, 'the branch must name its tenant, not masquerade as one').toBe(HOME_TENANT);
     expect(Number(second!.latitude)).toBeCloseTo(MULTAN.lat, 4);
     expect(Number(second!.longitude)).toBeCloseTo(MULTAN.lng, 4);
     expect(second!.location_label).toBe('Ghanta Ghar (Clock Tower)');
@@ -124,54 +147,65 @@ describe('The pin travels with the branch, on the read that may see it', () => {
     expect(second!.address).toBe('Ghanta Ghar (Clock Tower), Multan, Punjab, Pakistan');
     // And the branch is genuinely NOT the one being worked in — which is the whole point.
     expect(second!.is_current).toBe(false);
+    expect(second!.is_main).toBe(false);
   });
 
   it('reports a branch that was never pinned as null rather than as a point', async () => {
     const { data } = await execRpcAsUser(OWNER, 'get_my_branches', {});
-    const home = ((data ?? []) as Array<Record<string, unknown>>).find((r) => r.shop_id === HOME_SHOP);
-    expect(home).toBeTruthy();
+    const rows = (data ?? []) as Array<Record<string, unknown>>;
+    const home = rows.find((r) => r.branch_id === MAIN_BRANCH);
+    expect(home, 'the branch the account is working in must be listed').toBeTruthy();
     // A branch that has never been located has no coordinates and no label. The app reads this as
     // "choose on the map", which is the truth; 0/0 would be a point in the Atlantic.
     expect(home!.latitude).toBeNull();
     expect(home!.longitude).toBeNull();
     expect(home!.location_label).toBeNull();
     expect(home!.location_source).toBeNull();
+    // The un-pinned branch IS the working one, and the read has to say so — that is what lets the
+    // screen distinguish "you are here and it is not pinned" from "you are not here".
+    expect(home!.is_current).toBe(true);
+    expect(home!.is_main).toBe(true);
   });
 
   it('cannot be read from `shops` directly — which is why the list carries it', async () => {
-    // The current branch: readable, as the policy intends.
-    const mine = await selectAsUser(OWNER, 'shops', 'id, latitude, longitude', { id: HOME_SHOP });
+    // The working tenant: readable, as the policy intends.
+    const mine = await selectAsUser(OWNER, 'shops', 'id', { id: HOME_TENANT });
     expect(mine.error).toBeNull();
     expect(mine.data?.length).toBe(1);
 
-    // Any other branch: an empty result, NOT an error. This is the shape that made a screen say
+    // Any other tenant: an empty result, NOT an error. This is the shape that made a screen say
     // "no location" about a pinned branch, and it is asserted so that nobody re-derives the direct
-    // read believing it failed loudly.
-    const theirs = await selectAsUser(OWNER, 'shops', 'id, latitude, longitude', { id: OTHER_BRANCH });
+    // read believing it failed loudly. `shops` holds tenants, so the sibling branch is not a `shops`
+    // read at all — which is exactly why the branch list has to carry its own pin.
+    const theirs = await selectAsUser(OWNER, 'shops', 'id', { id: STRANGER_TENANT });
     expect(theirs.error).toBeNull();
     expect(theirs.data).toEqual([]);
   });
 
   it('says nothing about a branch the caller is not a member of', async () => {
     const { data } = await execRpcAsUser(OWNER, 'get_my_branches', {});
-    const ids = ((data ?? []) as Array<Record<string, unknown>>).map((r) => r.shop_id);
-    expect(ids).toContain(HOME_SHOP);
-    expect(ids).toContain(OTHER_BRANCH);
-    expect(ids).not.toContain(STRANGER_SHOP);
+    const ids = ((data ?? []) as Array<Record<string, unknown>>).map((r) => r.branch_id);
+    expect(ids).toContain(MAIN_BRANCH);
+    expect(ids).toContain(SECOND_BRANCH);
+    expect(ids).not.toContain(STRANGER_BRANCH);
 
     // And the stranger's branch cannot be pinned by guessing its id — the URL is not an authority.
     const refused = await execRpcAsUser(OWNER, 'set_place', {
-      p_table: 'shops',
-      p_id: STRANGER_SHOP,
+      p_table: 'branches',
+      p_id: STRANGER_BRANCH,
       p_latitude: MULTAN.lat,
       p_longitude: MULTAN.lng,
       p_label: 'Not mine',
     });
-    expect(refused.error).toBeTruthy();
+    expect(refused.error, 'another tenant\'s branch must not be writable by id').toBeTruthy();
+    const strangerPin = await sql(
+      `SELECT count(*)::int AS c FROM branches WHERE id = '${STRANGER_BRANCH}' AND latitude IS NOT NULL`
+    );
+    expect(strangerPin.rows[0].c, 'the refused write persisted nothing').toBe(0);
 
     // The stranger's owner sees their own branch, and only theirs.
     const { data: strangerRows } = await execRpcAsUser(OTHER_OWNER, 'get_my_branches', {});
-    const strangerIds = ((strangerRows ?? []) as Array<Record<string, unknown>>).map((r) => r.shop_id);
-    expect(strangerIds).toEqual([STRANGER_SHOP]);
+    const strangerIds = ((strangerRows ?? []) as Array<Record<string, unknown>>).map((r) => r.branch_id);
+    expect(strangerIds).toEqual([STRANGER_BRANCH]);
   });
 });

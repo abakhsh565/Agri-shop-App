@@ -63,6 +63,13 @@ export default function RecordSupplierPaymentPage() {
       // Done: this attempt's key retires, so a later payment is a new payment.
       submissionKeyRef.current = null;
 
+      // Read the suppliers back BEFORE leaving this screen. The payable is a store the shell
+      // loaded once and Realtime maintains, so without this the Payments screen this navigates
+      // to (and the alerts, and the supplier's own page) showed the balance from before the
+      // payment until something else happened to refresh it — the number the shopkeeper just
+      // changed was the one number that did not move.
+      await useCompaniesStore.getState().load();
+
       addToast(t("copy.paidToSupplier", { amount: formatCurrency(paid), name: company!.name }), "success");
       navigate("/admin/payments", { replace: true });
     } catch (e) {

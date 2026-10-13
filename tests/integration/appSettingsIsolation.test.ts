@@ -30,6 +30,7 @@
 
 import { describe, it, beforeAll, afterAll, expect } from 'vitest';
 import { execSqlAsAdmin, execRpcAsUser, insertAsUser, selectAsUser, updateAsUser } from '../setup/qa-client';
+import { deleteFixtureUsers } from '../setup/fixtures';
 
 const SHOP_A = '00000000-0000-0000-0000-000000000001';
 // …a0a0 is free; …d0d0 belongs to variantIsolation, …e0e0 to tenantBoundarySweep,
@@ -41,6 +42,20 @@ const ADMIN_B_ID = 'd7000000-0000-0000-0000-00000000000b';
 const EMPLOYEE_B_ID = 'd7000000-0000-0000-0000-0000000000b1';
 const SET_A_ID = 'd7000000-0000-0000-0000-0000000000a1';
 const SET_B_ID = 'd7000000-0000-0000-0000-0000000000b2';
+/**
+ * An employee of shop A who actually holds the permission the settings reader authorizes.
+ *
+ * `get_stock_alert_settings` has required `authorize_business_action('products.view', …)` since 0157
+ * — a settings row is edited on the stock-alert screen, so a reader needs to see products. After
+ * 0195 that helper resolves through `has_effective_permission` AND a non-null `current_branch_id()`,
+ * and the seeded QA employee has a membership with `role_id = NULL` (the legacy `memberships.role`
+ * enum, no template) and no branch scope. Measured: that employee has zero grants, so it is refused
+ * for reasons that have nothing to do with app_settings isolation, and the assertion below was
+ * really testing the fixture's shape. This employee is given the tenant's real role template and a
+ * real branch instead of weakening the requirement the RPC declares.
+ */
+const EMPLOYEE_A_WITH_STOCK_ROLE = 'd7000000-0000-0000-0000-0000000000a2';
+const STOCK_ROLE_PHONE = '923009840003';
 const KEY_OWN = 'qa_appsettings_own';
 const KEY_OTHER = 'qa_appsettings_other';
 const KEY_FORGED = 'qa_appsettings_forged';
@@ -59,7 +74,10 @@ async function cleanup() {
         OR (shop_id IN ('${SHOP_A}','${SHOP_B}') AND setting_key LIKE 'qa_appsettings%')
         OR (shop_id = '${SHOP_A}' AND setting_key IN ('low_stock_threshold_default','stock_alert_frequency'))
   `).catch(() => undefined);
-  await sql(`DELETE FROM users WHERE id IN ('${ADMIN_B_ID}','${EMPLOYEE_B_ID}')`).catch(() => undefined);
+  // Through the shared helper: these users may carry audit rows (`audit_events.user_id` is NO ACTION)
+  // and one blocked row would leave the whole list behind. `placeLocation` is where that leak was
+  // measured and fixed; this is the same fix applied where the same shape occurs.
+  await deleteFixtureUsers([ADMIN_B_ID, EMPLOYEE_B_ID, EMPLOYEE_A_WITH_STOCK_ROLE]);
   await sql(`DELETE FROM shops WHERE id = '${SHOP_B}'`).catch(() => undefined);
 }
 
@@ -72,6 +90,29 @@ beforeAll(async () => {
       ('${ADMIN_B_ID}',    '${RUN} admin B',    '923009840001', 'admin',    true, true, '${SHOP_B}'),
       ('${EMPLOYEE_B_ID}', '${RUN} employee B', '923009840002', 'employee', false, true, '${SHOP_B}')
     ON CONFLICT (id) DO NOTHING
+  `);
+  await sql(`
+    INSERT INTO users (id, name, phone, role, is_original_owner, is_active, shop_id)
+    VALUES ('${EMPLOYEE_A_WITH_STOCK_ROLE}', '${RUN} stock employee', '${STOCK_ROLE_PHONE}', 'employee', false, true, '${SHOP_A}')
+    ON CONFLICT (id) DO UPDATE SET phone = EXCLUDED.phone, is_active = true
+  `);
+  // The template and the branch are read from this tenant rather than hardcoded: an employee of
+  // shop A, holding shop A's real stock-permission role, scoped to shop A's real default branch.
+  await sql(`
+    UPDATE memberships SET
+      role = 'employee',
+      status = 'active',
+      role_id = (SELECT r.id FROM roles r
+                   JOIN role_permissions rp ON rp.role_id = r.id
+                   JOIN permissions p ON p.id = rp.permission_id
+                  WHERE r.tenant_id = '${SHOP_A}' AND p.code = 'products.view'
+                  ORDER BY r.name
+                  LIMIT 1),
+      branch_scope = ARRAY(SELECT b.id FROM branches b
+                            WHERE b.tenant_id = '${SHOP_A}' AND b.is_active
+                            ORDER BY b.is_default DESC, b.created_at
+                            LIMIT 1)
+     WHERE user_id = '${EMPLOYEE_A_WITH_STOCK_ROLE}' AND tenant_id = '${SHOP_A}'
   `);
   await sql(`
     INSERT INTO app_settings (id, shop_id, setting_key, setting_value, description)
@@ -194,7 +235,7 @@ describe('app_settings isolation — configuration belongs to one shop', () => {
     expect(asAdmin.error).toBeNull();
     expect(asAdmin.data).toMatchObject({ threshold: 13, frequency: 'daily' });
 
-    const asEmployee = await execRpcAsUser(EMPLOYEE_A_ID, 'get_stock_alert_settings', { payload: {} });
+    const asEmployee = await execRpcAsUser(EMPLOYEE_A_WITH_STOCK_ROLE, 'get_stock_alert_settings', { payload: {} });
     expect(asEmployee.error, `the employee reader was refused: ${asEmployee.error}`).toBeNull();
     expect(asEmployee.data).toMatchObject({ threshold: 13, frequency: 'daily' });
   });

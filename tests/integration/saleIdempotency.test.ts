@@ -26,7 +26,7 @@
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { randomUUID } from 'crypto';
-import { execRpcAsUser, execSqlAsAdmin } from '../setup/qa-client';
+import { execRpcAsUser, execSqlAsAdmin, updateAsUser } from '../setup/qa-client';
 import { QA_IDS, setupAllFixtures, cleanupTestData } from '../setup/fixtures';
 
 const TENANT = QA_IDS.shop;
@@ -184,5 +184,76 @@ describe('sale idempotency', () => {
     expect(bypass.error, 'naming the inner function must not be a way around the guard').toBeTruthy();
     expect(String(bypass.error)).toMatch(/permission denied|not authorized/i);
     expect(await saleCount(), 'the refused call created nothing').toBe(2);
+  });
+});
+
+/**
+ * The sale note write path — one column, named twice, once wrongly.
+ *
+ * WHY THIS FILE HOLDS IT. The release commit `a6698ebe` updated the sale note with
+ * `.from("sales").update({ note })`. The column is **`notes`**, and migration 0195 grants exactly
+ * `UPDATE(notes) ON public.sales` — so the release build's note save addressed a column that does not
+ * exist, in both `salesStore.updateNote` and the offline queue's `update_note` replay. The correction
+ * landed only in uncommitted work. A source-text assertion would not have caught it and cannot keep it
+ * caught, because the failure is between the client and the database. So the assertions below drive the
+ * real PostgREST path with the real JWT and read the row back, and they pin the schema fact that made
+ * the defect possible.
+ *
+ * The narrowness assertion is deliberate too: 0195 re-granted one column, and a note editor that could
+ * alter totals, actors or branch ownership would be a privilege escalation dressed as a convenience.
+ */
+describe('the sale note write path', () => {
+  let saleId = '';
+
+  it('5. the column is `notes`, and the retired name does not exist', async () => {
+    const cols = await execSqlAsAdmin(`
+      SELECT column_name FROM information_schema.columns
+       WHERE table_schema = 'public' AND table_name = 'sales'
+         AND column_name IN ('note', 'notes')
+    `);
+    const names = (cols.rows ?? []).map((r: any) => String(r.column_name)).sort();
+    expect(
+      names,
+      '`a6698ebe` wrote sales.note; if a future rename ever reintroduces that name this fails here',
+    ).toEqual(['notes']);
+  });
+
+  it('6. the app’s own payload writes the note and the database holds it', async () => {
+    const created = await rpc('create_sale', payload(`qa-saleidem-note-${randomUUID()}`));
+    saleId = String(created.id);
+
+    // Exactly what `salesStore.updateNote` sends: `.from("sales").update({ notes: note }).eq("id", saleId)`.
+    const note = `QA sale note ${Date.now()}`;
+    const written = await updateAsUser(OWNER, 'sales', { notes: note }, { id: saleId });
+    expect(written.error, `the notes write was refused: ${written.error}`).toBeNull();
+    expect(
+      written.data?.length,
+      'an UPDATE RLS refuses matches zero rows instead of erroring, so the row count is the proof',
+    ).toBe(1);
+
+    const stored = await scalar(`SELECT notes FROM sales WHERE id = '${saleId}'`);
+    expect(stored.notes, 'the note must be readable back from the column the grant names').toBe(note);
+  });
+
+  it('7. the retired column name is still refused, so the old defect cannot pass silently', async () => {
+    const before = await scalar(`SELECT notes FROM sales WHERE id = '${saleId}'`);
+    const wrong = await updateAsUser(OWNER, 'sales', { note: 'written through the retired name' }, { id: saleId });
+    expect(
+      wrong.error,
+      'PostgREST must refuse a body naming a column that does not exist — silence here is the old bug',
+    ).toBeTruthy();
+    const after = await scalar(`SELECT notes FROM sales WHERE id = '${saleId}'`);
+    expect(after.notes, 'the refused write must not have changed anything').toBe(before.notes);
+  });
+
+  it('8. the granted update stays narrow — another column on the same row is refused', async () => {
+    const before = await scalar(`SELECT total_amount FROM sales WHERE id = '${saleId}'`);
+    const widened = await updateAsUser(OWNER, 'sales', { total_amount: 1 }, { id: saleId });
+    expect(
+      widened.error ?? '',
+      '0195 granted one column; a totals column must still be refused',
+    ).toMatch(/permission denied|not authorized/i);
+    const after = await scalar(`SELECT total_amount FROM sales WHERE id = '${saleId}'`);
+    expect(after.total_amount, 'the refused widened write must not have changed the total').toBe(before.total_amount);
   });
 });

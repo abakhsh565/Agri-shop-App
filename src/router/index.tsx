@@ -45,6 +45,7 @@ import CompaniesListPage from "@/pages/admin/companies/CompaniesListPage";
 import AddCompanyPage from "@/pages/admin/companies/AddCompanyPage";
 import CompanyDetailPage from "@/pages/admin/companies/CompanyDetailPage";
 import AdminSettingsPage from "@/pages/admin/settings/AdminSettingsPage";
+import ProfileDetailsPage from "@/pages/admin/settings/ProfileDetailsPage";
 import RolesAccessPage from "@/pages/admin/settings/RolesAccessPage";
 import AdminNotificationsPage from "@/pages/admin/notifications/AdminNotificationsPage";
 import AddEmployeePage from "@/pages/admin/employees/AddEmployeePage";
@@ -136,7 +137,6 @@ export const router = createBrowserRouter([
       { path: "dashboard",  element: <AdminDashboardPage /> },
       { path: "assistant",  element: <AssistantPage /> },
       { path: "more",       element: <MoreMenuPage /> },
-      { path: "more/branches/:branchId", element: <BranchDetailPage /> },
       { path: "guide",      element: <AppGuidePage /> },
       { path: "search", element: <SearchPage /> },
 
@@ -222,6 +222,8 @@ export const router = createBrowserRouter([
       { element: <PermissionGuard requires="settings.view" />,
         children: [
           { path: "settings",   element: <AdminSettingsPage /> },
+          { path: "settings/profile", element: <ProfileDetailsPage /> },
+          { path: "settings/branches/:branchId", element: <BranchDetailPage /> },
           { path: "settings/roles", element: <RolesAccessPage /> },
         ] },
 
