@@ -51,6 +51,16 @@ jobs:
     name: Gates (tsc · unit guards · safety proofs · build)
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      # The suite and the build resolve their environment at import time, and a build that cannot
+      # name its database must not guess one — so the process needs the names, exactly as
+      # build-apk.yml already provides them. These are the QA project's public values; the gates
+      # job authorizes nothing with them and never writes to the database.
+      VITE_APP_ENV: staging
+      VITE_OTP_DELIVERY: demo
+      VITE_SUPABASE_URL: ${{ secrets.QA_SUPABASE_URL }}
+      VITE_SUPABASE_ANON_KEY: ${{ secrets.QA_SUPABASE_ANON_KEY }}
+      VITE_SUPABASE_PROJECT_ID: bpybjrjenwccowvtrevu
     steps:
       - name: Checkout the candidate commit
         uses: actions/checkout@v7

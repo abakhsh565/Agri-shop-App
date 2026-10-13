@@ -15,6 +15,10 @@ import {
   localStackUnreachableReason,
   type FetchLike,
 } from '../../src/lib/localStackHealth';
+// The hosted URLs below are built from the project ids rather than written out: the automated
+// surface may not contain a production endpoint literal at all (see productionReachGuard), and a
+// test that hardcodes one to prove it is refused would be the exception that breaks that rule.
+import { PRODUCTION_PROJECT_ID, STAGING_PROJECT_ID } from '../../src/lib/environmentContract';
 
 describe('local stack health — which URLs may be probed', () => {
   it('derives the health URL for the stack address environments.json records', () => {
@@ -36,8 +40,9 @@ describe('local stack health — which URLs may be probed', () => {
   });
 
   it('refuses a hosted project — staging and production alike', () => {
-    expect(localStackHealthUrl('https://bpybjrjenwccowvtrevu.supabase.co')).toBeNull();
-    expect(localStackHealthUrl('https://gkswcfljxlutkfdvvqng.supabase.co')).toBeNull();
+    expect(PRODUCTION_PROJECT_ID).not.toBe(STAGING_PROJECT_ID); // the two ids are real and distinct
+    expect(localStackHealthUrl(`https://${STAGING_PROJECT_ID}.supabase.co`)).toBeNull();
+    expect(localStackHealthUrl(`https://${PRODUCTION_PROJECT_ID}.supabase.co`)).toBeNull();
   });
 
   it('refuses other machines, other protocols and malformed values', () => {
