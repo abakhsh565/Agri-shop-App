@@ -100,6 +100,17 @@ export interface MonitoringStatus {
 
 const MAX_MESSAGE = 500;
 
+/**
+ * A stored diagnostic, not screen copy.
+ *
+ * This string is written to `client_error_events` and read by the service role; it is never
+ * rendered, so it is deliberately not an i18n key. It is a named constant rather than an inline
+ * `|| 'unknown error'` because that shape — a raw English string on the right of `||` — is the one
+ * `tests/unit/microcopy.test.ts` exists to catch, and a real fallback that ships to a screen should
+ * fail that guard rather than be tolerated by it.
+ */
+const UNKNOWN_ERROR_MESSAGE = 'unknown error';
+
 /** The environment the app is running in, or null when it is not one this database accepts. */
 export function resolveEnvironment(value: unknown): MonitoringEnvironment | null {
   return typeof value === 'string' && (MONITORING_ENVIRONMENTS as readonly string[]).includes(value)
@@ -149,7 +160,8 @@ export function messageFrom(error: unknown): string {
               return String(error);
             }
           })();
-  const text = (raw ?? '').trim() || 'unknown error';
+  const text = (raw ?? '').trim();
+  if (!text) return UNKNOWN_ERROR_MESSAGE;
   return text.length > MAX_MESSAGE ? `${text.slice(0, MAX_MESSAGE - 1)}…` : text;
 }
 
