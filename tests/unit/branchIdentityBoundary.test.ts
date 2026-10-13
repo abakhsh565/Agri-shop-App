@@ -8,6 +8,25 @@ import { isDataStatement, phaseReader, EXPECTED_PHASE } from '../../scripts/lib/
 // No remote service, no real personal data: load only schema from the recorded
 // QA snapshot. This is SQL behavior evidence, not a substitute for live API/UI.
 const baseline = JSON.parse(fs.readFileSync('supabase/baseline/staging-baseline.json', 'utf8'));
+
+/**
+ * The snapshot this suite executes SQL against is a logical dump of a real environment, so it lives
+ * in gitignored `backups/` and is deliberately not in the repository. Where it is absent — CI must
+ * not carry one — the suite reports itself as SKIPPED with the reason instead of dying on an ENOENT
+ * that says nothing about the branch rules it is there to prove. `schemaBaseline.test.ts` holds its
+ * artifact-dependent assertions to the same rule, and the owner-side replay
+ * (`npm run verify:baseline -- --baseline staging --since <version>`) is where those files are run:
+ * a check that did not run is reported as skipped, never as passed.
+ */
+const baselineArtifactPath = path.resolve(baseline.artifact);
+const haveBaselineArtifact = fs.existsSync(baselineArtifactPath);
+if (!haveBaselineArtifact) {
+  console.warn(
+    `[branchIdentityBoundary] SKIPPED: ${baseline.artifact} is not present (it is a gitignored ` +
+      'environment snapshot). Run `npm run verify:baseline` where the artifact exists.',
+  );
+}
+const suite = haveBaselineArtifact ? describe : describe.skip;
 const db = new PGlite();
 const tenant = 'e1880000-0000-0000-0000-000000000001';
 const otherTenant = 'e1880000-0000-0000-0000-000000000002';
@@ -44,6 +63,9 @@ async function visibleSales(id: string) {
 }
 
 beforeAll(async () => {
+  // This hook is at module scope, so it runs even when the suite below is skipped: without this
+  // guard it would still try to read the artifact and fail the file.
+  if (!haveBaselineArtifact) return;
   await db.exec(`
     CREATE SCHEMA auth; CREATE SCHEMA extensions; CREATE SCHEMA storage; CREATE SCHEMA cron;
     CREATE ROLE anon; CREATE ROLE authenticated; CREATE ROLE service_role;
@@ -126,7 +148,7 @@ beforeAll(async () => {
 }, 60000);
 afterAll(async () => { await db.close(); });
 
-describe('real branch identity and fail-closed scope — executed SQL', () => {
+suite('real branch identity and fail-closed scope — executed SQL', () => {
   it('owner receives actual Main and Warehouse records, never the tenant as the branch id', async () => {
     const rows = await branches(owner);
     expect(rows.map(r => r.branch_id)).toEqual([main, warehouse]);
@@ -354,7 +376,7 @@ describe('real branch identity and fail-closed scope — executed SQL', () => {
   });
 });
 
-describe('branch responsibility is operational control, never business ownership — executed SQL', () => {
+suite('branch responsibility is operational control, never business ownership — executed SQL', () => {
   it('a non-owner cannot assign responsibility, not even in their own branch', async () => {
     await expect(asUser(warehouseUser, async () => {
       await db.query('SELECT public.grant_branch_responsibility($1,$2)', [warehouse, multiUser]);

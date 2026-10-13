@@ -105,6 +105,12 @@ jobs:
           echo "- commit: \`${{ github.sha }}\`" >> "$GITHUB_STEP_SUMMARY"
           echo "- ref: \`${{ github.ref }}\`" >> "$GITHUB_STEP_SUMMARY"
           echo "- event: \`${{ github.event_name }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "> \`tests/unit/branchIdentityBoundary.test.ts\` reports itself SKIPPED here, and only" >> "$GITHUB_STEP_SUMMARY"
+          echo "> here: it executes SQL against the recorded QA snapshot, which is a logical dump of a" >> "$GITHUB_STEP_SUMMARY"
+          echo "> real environment and therefore lives in gitignored \`backups/\`. That is a check that" >> "$GITHUB_STEP_SUMMARY"
+          echo "> did not run — not one that passed. Run it where the artifact exists:" >> "$GITHUB_STEP_SUMMARY"
+          echo "> \`npm run verify:baseline -- --baseline staging --since <version>\`." >> "$GITHUB_STEP_SUMMARY"
 
   qa:
     name: QA (migration ledger · integration suites)
