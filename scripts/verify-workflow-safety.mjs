@@ -432,14 +432,20 @@ if (targetStep && preflightStep && confirmArtifactStep) {
   // once a production artefact existed alongside the staging one, `ls -t` silently swapped the
   // subject of these checks and they failed for the wrong reason. Each scratch directory therefore
   // holds one manifest and a copy of environments.json, and the step body runs unmodified inside it.
-  const manifests = fs
-    .readdirSync(path.join(ROOT, 'backups'))
-    .filter((name) => name.endsWith('.manifest.json'))
-    .sort();
+  // `backups/` is gitignored, so a fresh CI checkout has no such directory and `readdirSync` would
+  // throw ENOENT before the SKIP below could report anything. An absent directory means there is no
+  // local artefact to present to the gate — a skip, which is printed as a skip and never as a pass.
+  const backupsDir = path.join(ROOT, 'backups');
+  const manifests = fs.existsSync(backupsDir)
+    ? fs
+        .readdirSync(backupsDir)
+        .filter((name) => name.endsWith('.manifest.json'))
+        .sort()
+    : [];
   const byEnvironment = new Map();
   for (const name of manifests) {
     try {
-      const manifest = JSON.parse(fs.readFileSync(path.join(ROOT, 'backups', name), 'utf8'));
+      const manifest = JSON.parse(fs.readFileSync(path.join(backupsDir, name), 'utf8'));
       if (manifest.environment && !byEnvironment.has(manifest.environment)) {
         byEnvironment.set(manifest.environment, name);
       }
@@ -480,6 +486,9 @@ if (targetStep && preflightStep && confirmArtifactStep) {
     for (const scratch of scratchDirs) fs.rmSync(scratch, { recursive: true, force: true });
   }
   if (artefactChecks === 0) {
+    // Recorded as a SKIP, not a PASS. The invariants above prove the gate *exists* in the workflow;
+    // nothing here has executed it against an artefact, and that must stay visible in the summary.
+    checks.push({ id: 'artefact gate executed against a real local artefact', status: 'SKIP' });
     console.log('  SKIP  artefact gate — no artefact in backups/ to present to it');
   }
 }
@@ -487,16 +496,22 @@ console.log('');
 
 console.log('─'.repeat(72));
 const failed = checks.filter((check) => check.status === 'FAIL').length;
+const skipped = checks.filter((check) => check.status === 'SKIP').length;
 console.log(
-  `${checks.length} checks: ${checks.length - failed} passed, ${failed} failed ` +
-    `(${structural} shell blocks syntax-checked)`,
+  `${checks.length} checks: ${checks.length - failed - skipped} passed, ${failed} failed, ` +
+    `${skipped} skipped (${structural} shell blocks syntax-checked)`,
 );
+for (const check of checks.filter((c) => c.status === 'SKIP')) console.log(`  – skipped: ${check.id}`);
 for (const problem of problems) console.log(`  ✗ ${problem}`);
 console.log(
   failed === 0 && problems.length === 0
     ? 'CERTIFIED — the workflow requires an explicit target, refuses to run without the credentials ' +
         'for that exact environment, verifies every artefact before it can be uploaded, and no ' +
-        'invariant is vacuous.'
+        'invariant is vacuous.' +
+        (skipped > 0
+          ? ' The steps that need a real artefact were skipped, not passed: run this with an ' +
+            'artefact in backups/ before treating the artefact gate as executed.'
+          : '')
     : 'NOT CERTIFIED.',
 );
 
