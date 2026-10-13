@@ -2554,3 +2554,46 @@ the remote head as `a17a15fb` at that moment. The only later change is this reco
 here and no source change follows it.
 
 This record is committed separately so that it can name the SHA of the commit it records.
+
+---
+
+## Stage: ordinary development fails closed against the local stack (2026-10-13)
+
+**The finding was stale; the failure direction was not.** By the time this stage ran, `.env.local`
+already resolved `VITE_APP_ENV=development` → `http://127.0.0.1:54321` → project `localdev`, and every
+server the lanes start names its mode (`npx vite --mode qa`). What was still missing was the *failure*
+path: with the local stack stopped, `npm run dev` started anyway and every read failed — a server
+configured against nothing reads as an app bug until someone thinks to check Docker.
+
+The environment gate in `vite.config.ts` now runs for both commands. In Vite's ordinary development
+mode (`command === 'serve'`, not preview, `mode === 'development'`) it refuses unless the resolved
+environment is `development`, then probes GoTrue's `/auth/v1/health` on a **loopback URL only** via
+`src/lib/localStackHealth.ts`; a non-answering stack stops the server with the command that fixes it.
+No credential is read, sent or logged, the probe cannot target a hosted project, and `--mode qa`,
+builds and `npm run preview` are unchanged.
+
+| Check | Command | Result |
+|---|---|---|
+| Unit tests (new check + environment guards) | `npx vitest run tests/unit/localStackHealth.test.ts tests/unit/environmentSafety.test.ts tests/unit/localDevDatabaseOrdering.test.ts` | **64/64 passed in 3 files**, exit 0, run started 19:50:52 |
+| TypeScript | `npx tsc --noEmit` | exit 0 |
+| Production build | `npm run build` | exit 0, built in 7.64s |
+| Positive: ordinary dev, stack up | `npm run dev` | started; `[EnvGuard] serving DEVELOPMENT → localdev (otp: demo)`; HTTP 200, `<title>AgriShop</title>` |
+| Negative A: a VALID staging config in ordinary dev mode | `. ./.env.qa && npm run dev` | refused, exit 1 — "To serve QA on purpose, name it: npx vite --mode qa" |
+| Negative B: development config, stack not answering | `VITE_SUPABASE_URL=http://127.0.0.1:59999 npm run dev` | refused, exit 1 — health URL, `fetch failed`, `npm run local:db -- up` |
+| QA unaffected | `npx vite --mode qa --port 5199` | started; `[EnvGuard] serving STAGING → bpybjrjenwccovtrevu (otp: demo, key verified)`; HTTP 200 |
+| Runbook | `docs/LOCAL_DEVELOPMENT.md` §1 | updated in the worktree; the file is another session's **untracked** artifact, so it is deliberately not staged in this commit |
+
+Limitations, stated rather than hidden: the positive probe was measured against this machine's running
+stack (ports 54321–54324 answering); the two refusals were measured with an exported `VITE_SUPABASE_URL`
+and a sourced `.env.qa` — not against a powered-off Docker daemon, which this stage did not stop.
+`PORT=0` is set in this harness, so the positive dev server listened on a random port (53905) instead of
+the config default 8443; the port is not part of what changed. No QA or production row was read or
+written by any check here.
+
+### Git
+
+Committed as **`1fa7913d`** — `fix(dev): refuse to start ordinary development without the local stack` —
+**3 files changed, 235 insertions(+), 10 deletions(-)**: `src/lib/localStackHealth.ts` (new),
+`tests/unit/localStackHealth.test.ts` (new), `vite.config.ts`. This record follows as its own commit and
+both are pushed to `origin/staging-snapshot` without force; the remote head is verified with
+`git ls-remote`. Nothing else in the worktree is staged.
