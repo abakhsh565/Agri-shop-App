@@ -1,0 +1,195 @@
+name: CI — gates for a candidate commit
+
+# WHY THIS FILE EXISTS
+#
+# Before it, the repository had two workflows: `build-apk.yml` (push to main, dispatch) and
+# `backup-database.yml` (nightly production backup). Neither of them was a gate. A pull request
+# could be merged, and a commit on the development branch could be pushed, with no required check
+# of any kind — the first thing that ever ran the tests against a candidate commit was an Android
+# build that also took ~47 minutes. So "the branch is green" was a claim nobody could make, and
+# the only CI run on record for a development commit was an APK build that failed at keystore
+# decode after the tests had already passed or not passed.
+#
+# What this workflow does, and what it deliberately does not:
+#
+#   * It is the required gate for a candidate commit: TypeScript, the unit guards (which include
+#     the migration-integrity, production-seeding, environment-target and cleanup-ownership
+#     guards), the static workflow/targeting safety proofs, and the production build.
+#   * The QA job proves the ledger matches the directory and runs the integration suites against
+#     the QA project. QA credentials are REQUIRED — if they are absent the job FAILS and says so,
+#     because a check that did not run is not a check that passed.
+#   * It never touches production, and it never empties QA: no step here runs a table-wide
+#     cleanup. Deleting QA business data is an owner action (`npm run qa:clean`), not a side
+#     effect of a build or a test run. A unit guard fails if a workflow re-introduces one.
+#   * E2E runs against QA on pull requests into the release branch and on explicit dispatch. The
+#     full E2E path is proven by the same steps in build-apk.yml; keeping it off the default push
+#     path is what keeps this gate fast enough to actually be required.
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main, staging-snapshot]
+  workflow_dispatch:
+    inputs:
+      run_e2e:
+        description: 'Also run the Playwright E2E lanes against QA'
+        type: boolean
+        required: false
+        default: false
+
+concurrency:
+  # A superseded candidate is not worth finishing; the newest commit on the branch is the truth.
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  gates:
+    name: Gates (tsc · unit guards · safety proofs · build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout the candidate commit
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install Dependencies
+        # `--legacy-peer-deps` matches the rest of the pipeline; `ci` (not `install`) so the
+        # lockfile is authoritative and the gate cannot pass on a resolution the lockfile
+        # does not describe.
+        run: npm ci --legacy-peer-deps
+
+      - name: TypeScript
+        run: npx tsc --noEmit
+
+      - name: Unit guards (migrations · production seeding · environment · cleanup ownership)
+        run: npx vitest run tests/unit --reporter=verbose
+
+      - name: Backup workflow safety proof
+        run: node scripts/verify-workflow-safety.mjs
+
+      - name: Environment targeting refusals
+        run: node scripts/verify-targeting-refusals.mjs
+
+      - name: Production build
+        run: npm run build
+
+      - name: Record what was gated
+        run: |
+          echo "### CI gates passed" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- commit: \`${{ github.sha }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- ref: \`${{ github.ref }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- event: \`${{ github.event_name }}\`" >> "$GITHUB_STEP_SUMMARY"
+
+  qa:
+    name: QA (migration ledger · integration suites)
+    needs: [gates]
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      # Same IPv4 preference as build-apk.yml: Supabase's direct host publishes AAAA but no A.
+      NODE_OPTIONS: --dns-result-order=ipv4first
+      QA_SUPABASE_URL: ${{ secrets.QA_SUPABASE_URL }}
+      QA_SUPABASE_ANON_KEY: ${{ secrets.QA_SUPABASE_ANON_KEY }}
+      QA_SUPABASE_SERVICE_ROLE: ${{ secrets.QA_SUPABASE_SERVICE_ROLE }}
+      QA_DB_HOST: ${{ secrets.QA_DB_HOST }}
+      QA_DB_USER: ${{ secrets.QA_DB_USER }}
+      QA_DB_PASS: ${{ secrets.QA_DB_PASS }}
+      VITE_SUPABASE_URL: ${{ secrets.QA_SUPABASE_URL }}
+      VITE_SUPABASE_ANON_KEY: ${{ secrets.QA_SUPABASE_ANON_KEY }}
+      VITE_SUPABASE_PROJECT_ID: bpybjrjenwccowvtrevu
+    steps:
+      - name: Checkout the candidate commit
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: QA credentials are required — a check that did not run is not a pass
+        run: |
+          missing=""
+          for key in QA_SUPABASE_URL QA_SUPABASE_ANON_KEY QA_SUPABASE_SERVICE_ROLE QA_DB_HOST QA_DB_USER QA_DB_PASS; do
+            if [ -z "${!key:-}" ]; then missing="$missing $key"; fi
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::QA verification is BLOCKED, not passed — missing:$missing"
+            echo "Add the missing repository secrets, then re-run. Until then this gate cannot"
+            echo "claim the candidate was verified against QA."
+            exit 1
+          fi
+
+      - name: QA database reachability
+        run: node scripts/check-qa-connectivity.mjs
+
+      - name: Migration ledger must match the directory exactly
+        run: node scripts/migrate.mjs verify --env staging
+
+      - name: Integration suites (one file at a time — they share the QA database)
+        # Each suite creates and removes its own controlled tenants. QA's own shops and history
+        # are never the fixture, and nothing here deletes them afterwards.
+        run: npx vitest run tests/integration --fileParallelism=false --reporter=verbose
+
+  e2e:
+    name: E2E lanes against QA
+    needs: [gates, qa]
+    if: github.event_name == 'pull_request' || inputs.run_e2e
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      NODE_OPTIONS: --dns-result-order=ipv4first
+      QA_SUPABASE_URL: ${{ secrets.QA_SUPABASE_URL }}
+      QA_SUPABASE_ANON_KEY: ${{ secrets.QA_SUPABASE_ANON_KEY }}
+      QA_SUPABASE_SERVICE_ROLE: ${{ secrets.QA_SUPABASE_SERVICE_ROLE }}
+      QA_DB_HOST: ${{ secrets.QA_DB_HOST }}
+      QA_DB_USER: ${{ secrets.QA_DB_USER }}
+      QA_DB_PASS: ${{ secrets.QA_DB_PASS }}
+      VITE_SUPABASE_URL: ${{ secrets.QA_SUPABASE_URL }}
+      VITE_SUPABASE_ANON_KEY: ${{ secrets.QA_SUPABASE_ANON_KEY }}
+      VITE_SUPABASE_PROJECT_ID: bpybjrjenwccowvtrevu
+    steps:
+      - name: Checkout the candidate commit
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Install Playwright Browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Provision QA Auth Sessions
+        run: node scripts/provision-auth-sessions.mjs
+
+      - name: Run Playwright E2E
+        run: npx playwright test
+
+      - name: Upload Playwright Report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: tests/e2e/results.json
+          retention-days: 7
+
+      # Nothing cleans QA here on purpose. Each spec owns the rows it created
+      # (tests/e2e/cleanupOwnership.ts); emptying the QA database is an owner action.

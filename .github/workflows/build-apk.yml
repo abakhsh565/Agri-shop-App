@@ -106,12 +106,23 @@ jobs:
           path: tests/e2e/results.json
           retention-days: 7
 
-      # ─── Clean QA Database After Tests ──────────────────────────────
-      - name: Clean QA Database
-        if: always()
-        run: node scripts/clean-test-data.mjs
-        env:
-          QA_DATABASE_URL: postgresql://${{ secrets.QA_DB_USER }}:${{ secrets.QA_DB_PASS }}@${{ secrets.QA_DB_HOST }}:5432/postgres
+      # ─── What used to be here, and why it must not come back ────────
+      #
+      # A step named "Clean QA Database" ran `node scripts/clean-test-data.mjs` with
+      # `if: always()`. That script issues table-wide DELETEs — customers, products,
+      # companies, sales, payments, inventory, returns, voids, notifications, reminders,
+      # audit, shop_requests, activity_log — and then deletes every user that is not one of
+      # four seed phones, plus their `auth.users` rows.
+      #
+      # So building an APK — an artefact task, on push to main and on every manual run —
+      # silently destroyed the QA business data and the QA accounts it did not need to touch,
+      # whether the tests passed or failed. A build must never be a reason to lose history,
+      # and it must never be green because it deleted the evidence of what it just ran.
+      #
+      # The suites manage their own fixtures instead: tests/e2e/cleanupOwnership.ts removes
+      # only the rows a run created, and tests/setup/global-teardown.ts cleans only when
+      # QA_CLEAN_AFTER_RUN=1. A deliberate QA reset is an owner action through
+      # `npm run qa:clean`, which refuses to run without that confirmation.
 
   build:
     name: Build APK
