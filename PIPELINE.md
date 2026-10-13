@@ -221,6 +221,35 @@ vacuous: injecting a non-zero count makes the suite refuse to start and print
 SQL passes. The remaining limitation is that no *natural* leak has yet been observed triggering it:
 the proof is an injection, not an accident.
 
+### D5. "Failed checks block the release" needed a mechanism, not a convention
+
+A required status check on the release branch is not available here: GitHub answers
+`403 — Upgrade to GitHub Pro or make this repository public to enable this feature` for both `main`
+and `staging-snapshot` on a private repository at this plan level. So the rule was a convention, and
+nothing stopped a release being started on a commit whose gates were red, in flight, or never run.
+
+`scripts/release-gate.mjs` is that mechanism, and it fails closed. Refusals, each one reproduced:
+
+| Input | Refusal |
+|---|---|
+| missing `--owner-approved` | `no owner approval …` (approval is a separate flag from `--commit`, so approving a plan and releasing a different commit are two actions) |
+| `--env banana --commit zzz` | `--commit must be a commit SHA` and `--env must be one of development, staging, production` |
+| a commit with no run | `no CI run exists for deadbeef … a commit that was never gated cannot be released` |
+| `1bbfc57e` (CI failed) | `CI for 1bbfc57e exists but did not succeed: 38442796610=failure` |
+| `80854e01` (gates green, staging red) | `CI for 80854e01 exists but did not succeed: 38457833270=failure, …` |
+| `c5f6c398` (in flight) | `CI for c5f6c398 is still running … releasing mid-run is releasing an unverified commit` |
+| any dirty tree | lists the uncommitted paths: a release of a directory that differs from the commit is not reproducible |
+
+The gate also requires a **successful QA job inside the same run** — a green unit-only run is not a
+staging verification — and it refuses when production credentials are absent or name a project the
+configuration does not call production. It applies nothing: it prints the reviewed plan and the
+exact `migrate.mjs apply` command the operator runs next. Its own bug was found by probing it: an
+earlier version queried `gh run list --commit <short-sha>`, which does not match, so it refused a
+commit that had run for the wrong reason; it now resolves the SHA first and prefix-matches.
+
+The consequence today is that **no candidate is releasable yet**, because the QA job has never been
+green. That is the gate working, not the gate failing.
+
 ### D4. Blocked on owner action — cannot be fixed from the repository
 
 | Item | Live finding |
