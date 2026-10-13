@@ -176,7 +176,7 @@ gate could be exercised end to end). Production was never a target of any step.
 | Gate: production build | same run, step `Production build`; reproduced locally with `VITE_APP_ENV=staging` and the QA values from `.env.qa` → `built in 13.46s`, exit 0 | PASS |
 | Staging connectivity | run `38453387581`, QA job steps `QA credentials are required` and `QA database reachability` | PASS |
 | Staging migrations | same run, step `Migration ledger must match the directory exactly`; `node scripts/migrate.mjs status --env staging` → 194 files, newest 0202, every hash matches | PASS |
-| Customer deletion security | `tests/integration/customerDeletionSecurity.test.ts` — 13/13 pass locally, twice back to back, against QA project `bpybjrjenwccowvtrevu` | PASS |
+| Customer deletion security | `tests/integration/customerDeletionSecurity.test.ts` — **13/13 inside the full directory run in CI** (run `38457833270`), and 13/13 locally twice back to back, against QA project `bpybjrjenwccowvtrevu` | PASS |
 | Production untouched | every command targeted staging or ran read-only; no production project was addressed | PASS |
 
 ### D2. The defect this pass found and fixed
@@ -192,9 +192,11 @@ checkout is never read as proof that the artefact gate executed. Proven both way
 ### D3. Why the QA job is still red, and the smallest fix
 
 The QA job ran for the first time ever in this pass (every earlier run failed at the gates, so it was
-always skipped). 14 integration files fail there, and 6 of the 13 cases in
-`customerDeletionSecurity.test.ts` failed in the directory run while all 13 pass when the file runs
-alone. Same database, different neighbours — so the failures are inherited state, not behaviour:
+always skipped). The first execution was 14 files failed / 28 passed; after the suite below was
+hardened with an identity-namespace precheck it is **12 failed / 30 passed** (451 tests passed,
+24 failed, 17 skipped), and the 6 cases in `customerDeletionSecurity.test.ts` that failed on
+inherited state now pass inside the same directory run. The remaining 12 fail for the reason below,
+which is inherited state, not behaviour:
 
 * The suites share one QA database and reuse **fixed identities** (for example the phone literals in
   `tests/integration/rbacEnforcement.test.ts`), and their cleanup swallows every error
@@ -212,6 +214,12 @@ the fix, and deleting QA business data to obtain a green run is explicitly ruled
 
 `customerDeletionSecurity.test.ts` now carries that namespace precheck: it fails loudly with the
 leftover row counts and the cleanup failures instead of reporting a misleading authorization denial.
+It counts memberships, active-shop rows, **lingering user rows** and the two tenant shops, because a
+foreign key can block the user delete after the other three are already gone. The precheck is not
+vacuous: injecting a non-zero count makes the suite refuse to start and print
+`Leftover rows: {"memberships":"0","active_shops":"0","users":"0","shops":1}` — while the real
+SQL passes. The remaining limitation is that no *natural* leak has yet been observed triggering it:
+the proof is an injection, not an accident.
 
 ### D4. Blocked on owner action — cannot be fixed from the repository
 
