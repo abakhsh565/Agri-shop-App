@@ -2548,6 +2548,8 @@ Excluded by inspection, not by guesswork: `tests/setup/fixtures.ts` (`deleteFixt
 `logicalDirection` / `rtlLtr` / `overlayRtl` (their only change is the `QA_APP_URL` constant) and `accessibility`
 (route list only) — none of them ownership, all preserved unstaged. The rest of the worktree (farmer app,
 branch/RBAC, media, local stack, environments/scripts, other docs) is untouched and not in the index. Secrets scan of
-the staged patch: no secret-shaped literal (only `process.env.QA_SUPABASE_SERVICE_ROLE` reads). Not pushed.
+the staged patch: no secret-shaped literal (only `process.env.QA_SUPABASE_SERVICE_ROLE` reads). Pushed to
+`origin/staging-snapshot` as a fast-forward (`3dc4843c..a17a15fb`); `git ls-remote` and a fresh `git fetch` both
+report the remote head as `a17a15fb`, so the record and the remote agree.
 
 This record is committed separately so that it can name the SHA of the commit it records.
