@@ -2456,3 +2456,98 @@ archived state after a reload) and the RBAC/branch gate need an authorized QA wi
 `tests/integration/accountDeletion.test.ts` still calls `delete_branch` as a fixture step, so that
 lane is red against the deployed schema for that reason — pre-existing, and not fixable without the
 same window. No APK was built; production was not touched.
+## Stage: QA cleanup ownership — the 19 write lanes migrated, two honestly blocked (2026-10-13)
+
+The cleanup foundation already existed: `tests/e2e/cleanupOwnership.ts` (the whole decision — ownership
+graph, protected ids, SQL shape, no I/O), `tests/e2e/helpers.ts` (`trackOwned` / `claimOwned` /
+`claimNew` / `snapshotIds` / `trackUploadedObject` / `cleanupFixtures`, failures collected and thrown),
+`tests/setup/global-teardown.ts` (QA-only refusal, opt-in cleaning), and the four lanes whose writes were
+suppression fixes. This stage finishes the migration of the **19 lanes that write to QA**: each one now
+names exactly what it creates, registers it by **explicit id or exact foreign key** immediately after
+successful creation, and deletes nothing else.
+
+### What the migration removed, lane by lane
+
+| # | Lane | What it used to destroy, and what replaces it | Status |
+|---|---|---|---|
+| 1 | `accessUx` | Deleted the invited employees inline (user_permissions → memberships → users). Employees are now claimed by the id the app assigned them at invitation; an **override granted to the shared QA employee** is claimed by its own row id (new graph step `user_permissions.id`), so the shared account is never registered and never deleted | PASS (code) |
+| 2 | `actionCenter` | Created a `credit_limit_requests` row via RPC and never removed it (only the customer's limit was restored). The id the RPC returns is registered; cleanup removes exactly that row | FIXED + VERIFIED (code) |
+| 3 | `adminFullAccess` | Deleted a company by **name**, and audit rows by a **time window** (`created_at >= startedAt` — the shape that can sweep another lane's history). The company id is claimed by its unique per-run name; its audit rows are claimed through `entity_id = <company id>` | FIXED + VERIFIED (code) |
+| 4 | `adminMicrocopy` | Two `DELETE FROM companies WHERE name LIKE 'QA Microcopy%'` (a name family). The supplier the lane types is unique per run and is claimed by that exact name right after the save assertion | FIXED + VERIFIED (code) |
+| 5 | `crossScreenSync` | Its own customer/product/supplier/employee are registered by id at creation (the earlier migration) | PASS (code) |
+| 6 | `dependencyContinuity` | Its 23-table wipe is gone; its own rows (the supplier and product built through the UI, and the fixed-id search fixture) are registered by id, and the shared supplier is asserted rather than re-INSERTed-and-renamed. Premise asserted loudly | **BLOCKED** — needs an empty catalogue it does not own |
+| 7 | `designLanguage` | Deleted the shared baseline (`companyA`, QA Product A/B, variants, `customerA`) on every run — the same fixture-deleting behaviour that took seven baseline rows out of QA. Everything it seeds is shared, so nothing is registered and cleanup now deletes nothing | FIXED + VERIFIED (code) |
+| 8 | `doubleTapSafety` | Deleted every payment of the shared fixture customer and supplier before running. Replaced by premise assertions (the fixture must be payment-free) plus `claimNew` of the payment/sale this run's double tap creates | FIXED + VERIFIED (code) |
+| 9 | `education` (`educationHelp.spec.ts`) | Creates nothing; `setupFixtures` + owned-only `cleanupFixtures` | PASS (REUSED) |
+| 10 | `employeeStatusSafety` | Deleted **the shared QA employee's audit history** so a count could read 1. The history is kept; the assertions are now deltas (this action added exactly one entry); this run's audit rows and its history sale are registered by id | FIXED + VERIFIED (code) |
+| 11 | `imageSync` | Uploaded/replaced objects are tracked by their exact storage path; created rows are claimed by id (the earlier migration; upload, replacement, removal and failure paths) | PASS (code) |
+| 12 | `marketplaceListing` | Five deletes (name-scoped `LIKE 'QA Marketplace …%'`, plus hand-written join order). The product the form creates is registered from the id the database returns (before the rename that makes the name marker useless); the branch fixture product is registered by its fixed id | FIXED + VERIFIED (code) |
+| 13 | `productOpeningStock` | Created product/variant claimed by id (the earlier migration) | PASS (code) |
+| 14 | `retryAfterTimeout` | Deleted sales of the shared fixture customer and submissions of the shared shop. Premise asserted; the sale the **timed-out first attempt** creates is claimed by diffing ids taken before that first click | FIXED + VERIFIED (code) |
+| 15 | `roleDeleteSafety` | Registered the throwaway role by id; the inline `role_permissions` → `roles` pair is emitted by the registry in the same order, with failures raised | FIXED + VERIFIED (code) |
+| 16 | `roleInUseDeletion` | Registered the second employee and the throwaway role by id; five inline deletes replaced; audit rows claimed through the employee **this run created** | FIXED + VERIFIED (code) |
+| 17 | `setupCompletion` | Its 24-statement clear of the shared shop's entire business content is gone, as are the three shared-fixture INSERTs that renamed `companyA` / `productA` / `customerA`. Premise asserted loudly; afterAll cleans only owned rows | **BLOCKED** — needs a shop it can empty |
+| 18 | `splitPayment` | Registered its generated customer and its RPC-authorization employee by id; the employee's Supabase Auth credential is removed in afterAll **after** the public row (the FK direction), instead of an inline swallow | FIXED + VERIFIED (code) |
+| 19 | `voidSaleSafety` | Registered the sale by id (items, void and submissions follow `sale_id`); the stock movement the void writes is claimed through `reference_id = <sale id>` — the one relation the sale key alone cannot express | PASS (code) |
+
+Graph addition this stage needed: `{ table: 'user_permissions', column: 'id', from: 'user_permissions' }` — a lane can
+create permission rows **on** a shared user it must not delete. Covered by a new focused test
+("an override granted to a SHARED user is removed by its own row id, and the shared account stays"), which also asserts
+the shared user and an unregistered membership survive.
+
+### Evidence (this machine, 2026-10-13)
+
+| Check | Command | Result |
+|---|---|---|
+| Cleanup-ownership guard (deletes, survival, FK order, failure reporting, idempotency, empty registry, storage, non-vacuity, the no-unscoped-delete scan of `tests/e2e`) | `npx vitest run tests/unit/e2eCleanupOwnership.test.ts` | **23/23 passed**, exit 0, run started 18:22:44 |
+| Focused set (+ keep-list, fixture-id collision, playwright reuse guard) | `npx vitest run tests/unit/e2eCleanupOwnership.test.ts tests/unit/qaFixtureKeepList.test.ts tests/unit/fixtureIdCollision.test.ts tests/unit/playwrightReuseGuard.test.ts` | **43/43 passed in 4 files**, exit 0 |
+| The 18 migrated specs still load, and every test is still collected | `npx playwright test --list <18 spec files>` | **78 tests in 18 files**, exit 0 (compilation and collection only — not execution) |
+| TypeScript | `npx tsc --noEmit` | exit 0 — **caveat: `tsconfig.json` includes only `src` and `vite.config.ts`**, so this does *not* typecheck `tests/`; the specs are validated by vitest execution and by Playwright collection instead |
+| Re-verification on the bytes about to be committed | the same focused command, run immediately before `git commit` | **43/43 passed in 4 files**, exit 0, run started **19:12:29** |
+| The three suppression-removal lanes still collect | `npx playwright test --list tests/e2e/interactionLayer.spec.ts tests/e2e/skeletonCoverage.spec.ts tests/e2e/dashboardScope.spec.ts` | **16 tests in 3 files**, exit 0 |
+
+The previous reported counts (`20/20`, `682/682`, `685/685`) are superseded by the two runs above, which name their own
+fingerprint. No full-suite run was made, and none is claimed.
+
+### What is NOT claimed
+
+* **No lane was executed live.** The ownership code paths are proven by the unit guard, the focused set and collection;
+they are not proven against the QA database. Per the task's own boundary, live QA write lanes stay **BLOCKED** until the
+owner authorises the window.
+* **QA baseline preservation is BLOCKED**, not PASS: no live window was opened, no lane ran, and nothing was deleted —
+but no fresh independent row count was taken either, so the last measurement (686 → 686) stands unrefreshed and the
+historical fluctuation remains unattributed. `qa:clean`, `reset-qa-baseline.mjs` and the 26 orphaned `auth.users` rows
+were deliberately not touched.
+* **Two lanes are BLOCKED by design**, not migrated into a runnable state: `setupCompletion` and `dependencyContinuity`
+need the ABSENCE of rows they did not create. Re-pointing them at a tenant/shop they own is a spec redesign and is
+tracked here as their unblock condition — reintroducing the wipe is not an option. **Minimum authorization needed:** one
+authorized live-QA-write window — create a dedicated QA tenant/shop fixture (its own admin + membership) that each lane
+may empty, run the two lanes against it, and delete only that fixture afterwards. No shared-shop rows and no
+`companyA`/`customerA`/`productA` may be touched by the unblock.
+* Release blockers are unchanged and untouched by this stage: APK signing still needs `ANDROID_KEYSTORE_BASE64`,
+`ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`; production isolation remains **BLOCKED**;
+no APK path other than `.github/workflows/build-apk.yml` was used or substituted.
+
+### Commit
+
+Committed as **`7d8555af`** — `test(qa): scope E2E cleanup to the rows each lane created` —
+**25 files changed, 1545 insertions(+), 269 deletions(-)**, staged hunk by hunk against the intended boundary and
+nothing else:
+
+* `tests/e2e/cleanupOwnership.ts` (new) and `tests/unit/e2eCleanupOwnership.test.ts` (new);
+* `tests/e2e/helpers.ts` and `tests/setup/global-teardown.ts` (the foundation);
+* the 18 lane specs this stage migrated (`accessUx`, `actionCenter`, `adminFullAccess`, `adminMicrocopy`,
+  `crossScreenSync`, `dependencyContinuity`, `designLanguage`, `doubleTapSafety`, `employeeStatusSafety`, `imageSync`,
+  `marketplaceListing`, `productOpeningStock`, `retryAfterTimeout`, `roleDeleteSafety`, `roleInUseDeletion`,
+  `setupCompletion`, `splitPayment`, `voidSaleSafety`);
+* the cleanup-suppression removals (`interactionLayer`, `skeletonCoverage`, and the partial-staged `dashboardScope` —
+  only its `.catch(() => {})` removal is in the commit; the unrelated `QA_APP_URL` line stays in the worktree with its
+  own workstream).
+
+Excluded by inspection, not by guesswork: `tests/setup/fixtures.ts` (`deleteFixtureUsers` — a different workstream),
+`logicalDirection` / `rtlLtr` / `overlayRtl` (their only change is the `QA_APP_URL` constant) and `accessibility`
+(route list only) — none of them ownership, all preserved unstaged. The rest of the worktree (farmer app,
+branch/RBAC, media, local stack, environments/scripts, other docs) is untouched and not in the index. Secrets scan of
+the staged patch: no secret-shaped literal (only `process.env.QA_SUPABASE_SERVICE_ROLE` reads). Not pushed.
+
+This record is committed separately so that it can name the SHA of the commit it records.
