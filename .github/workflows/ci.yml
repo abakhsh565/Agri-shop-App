@@ -61,6 +61,12 @@ jobs:
       VITE_SUPABASE_URL: ${{ secrets.QA_SUPABASE_URL }}
       VITE_SUPABASE_ANON_KEY: ${{ secrets.QA_SUPABASE_ANON_KEY }}
       VITE_SUPABASE_PROJECT_ID: bpybjrjenwccowvtrevu
+      # Two guards (e2eCleanupOwnership, signalEngine) import tests/setup/qa-client, which builds a
+      # client at module load, so the names must resolve here too. Naming them authorizes nothing:
+      # nothing in this job opens a connection or writes a row.
+      QA_SUPABASE_URL: ${{ secrets.QA_SUPABASE_URL }}
+      QA_SUPABASE_ANON_KEY: ${{ secrets.QA_SUPABASE_ANON_KEY }}
+      QA_SUPABASE_SERVICE_ROLE: ${{ secrets.QA_SUPABASE_SERVICE_ROLE }}
     steps:
       - name: Checkout the candidate commit
         uses: actions/checkout@v7
