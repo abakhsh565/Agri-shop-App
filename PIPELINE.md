@@ -155,3 +155,70 @@ Order matters: cheapest and most structural first, so a break is found before th
 7. Push the result; update this table so every row reads done with its commit.
 
 If any item in B lands before the pass, it joins step 4 with its own acceptance checks above.
+
+---
+
+## D. Promotion-pipeline verification — 14 October 2026
+
+Every line below is a command or a workflow run, not a reading of a file. The candidate was
+`f6017ea2` on the temporary branch `ci-proof/full-tree` (the full working tree, committed so the
+gate could be exercised end to end). Production was never a target of any step.
+
+### D1. What is now proven
+
+| Stage | Evidence | Status |
+|---|---|---|
+| CI branch coverage | `ci.yml` triggers on PR → `main` and push → `main`, `staging-snapshot`; a real dispatched run exists for the candidate | PASS |
+| Gate: TypeScript | run `38453387581`, step `TypeScript` | PASS |
+| Gate: unit guards | same run, step `Unit guards` — includes migration integrity, production-seeding, environment and cleanup-ownership guards | PASS |
+| Gate: workflow safety | same run, step `Backup workflow safety proof` (see D2) | PASS |
+| Gate: targeting refusals | `node scripts/verify-targeting-refusals.mjs` — ALL 8 CASES PASS; every refusal is an exit code and arrives before a connection | PASS |
+| Gate: production build | same run, step `Production build`; reproduced locally with `VITE_APP_ENV=staging` and the QA values from `.env.qa` → `built in 13.46s`, exit 0 | PASS |
+| Staging connectivity | run `38453387581`, QA job steps `QA credentials are required` and `QA database reachability` | PASS |
+| Staging migrations | same run, step `Migration ledger must match the directory exactly`; `node scripts/migrate.mjs status --env staging` → 194 files, newest 0202, every hash matches | PASS |
+| Customer deletion security | `tests/integration/customerDeletionSecurity.test.ts` — 13/13 pass locally, twice back to back, against QA project `bpybjrjenwccowvtrevu` | PASS |
+| Production untouched | every command targeted staging or ran read-only; no production project was addressed | PASS |
+
+### D2. The defect this pass found and fixed
+
+`scripts/verify-workflow-safety.mjs` crashed in CI with `ENOENT … scandir 'backups'`. `backups/` is
+gitignored, so a fresh checkout has no such directory and the artefact section threw before its own
+SKIP path could report anything. It now treats an absent directory as "no artefact to present":
+recorded as `SKIP`, named in the summary, and disclosed in the banner, so a green run on an empty
+checkout is never read as proof that the artefact gate executed. Proven both ways: with artefacts
+`24 passed, 0 failed, 0 skipped`; in a scratch mirror without `backups/` `20 passed, 0 failed,
+1 skipped` and exit 0.
+
+### D3. Why the QA job is still red, and the smallest fix
+
+The QA job ran for the first time ever in this pass (every earlier run failed at the gates, so it was
+always skipped). 14 integration files fail there, and 6 of the 13 cases in
+`customerDeletionSecurity.test.ts` failed in the directory run while all 13 pass when the file runs
+alone. Same database, different neighbours — so the failures are inherited state, not behaviour:
+
+* The suites share one QA database and reuse **fixed identities** (for example the phone literals in
+  `tests/integration/rbacEnforcement.test.ts`), and their cleanup swallows every error
+  (`.catch(() => undefined)`).
+* A leftover membership or `user_active_shops` row from an earlier file changes which tenant
+  `current_tenant_id()` resolves to, so a later file's cross-tenant test receives
+  `NOT_AUTHORIZED: tenant access denied` for a reason unrelated to the rule under test.
+* The signature is identical in every failure: tests that stay inside one tenant pass, tests that
+  create or switch to a second tenant fail.
+
+Smallest correct fix (not applied here — it changes test fixtures, not behaviour): give each failing
+suite a per-run identity namespace the way the passing suites already do, and replace the swallowed
+cleanup with a check that refuses to run on a contaminated namespace. Table-wide QA cleanup is **not**
+the fix, and deleting QA business data to obtain a green run is explicitly ruled out.
+
+`customerDeletionSecurity.test.ts` now carries that namespace precheck: it fails loudly with the
+leftover row counts and the cleanup failures instead of reporting a misleading authorization denial.
+
+### D4. Blocked on owner action — cannot be fixed from the repository
+
+| Item | Live finding |
+|---|---|
+| Production backup | repository secret `PROD_DB_PASS` is **absent**; `PROD_DB_HOST` and `PROD_DB_USER` are present. This is the documented cause of the repeated backup failures. |
+| Signed APK | `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD` are all **absent**. No replacement keystore may be generated casually: that would break updates for installations signed with the existing key. |
+
+Both require the owner to add the repository secret through GitHub's secret management. Neither was
+worked around, and no artefact was claimed in their absence.

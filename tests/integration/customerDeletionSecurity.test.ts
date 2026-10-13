@@ -73,28 +73,48 @@ async function historyRows() {
   return { sale: sales.rows[0], payment: pays.rows[0] };
 }
 
+/**
+ * Cleanup that REPORTS instead of swallowing.
+ *
+ * This suite shares the QA database with the other integration files, and it reuses fixed identity
+ * ids on purpose (the fixture-id collision guard requires a per-suite namespace). When a previous
+ * file has left rows attached to these identities, a silent `.catch()` here would leave them in
+ * place — and the suite would then fail deep inside a test with `NOT_AUTHORIZED: tenant access
+ * denied`, which reads like a security finding and is really leftover state. So the failures are
+ * collected and the identity check below refuses to run on a contaminated namespace.
+ */
+const cleanupFailures: string[] = [];
+const trySql = async (label: string, q: string) => {
+  try {
+    await sql(q);
+  } catch (error) {
+    cleanupFailures.push(`${label}: ${(error as Error).message}`);
+  }
+};
+
 async function cleanup() {
+  cleanupFailures.length = 0;
   const byUser = `user_id IN (SELECT id FROM users WHERE id IN ('${OWNER_A}','${OWNER_B}','${EMP_EDIT}','${EMP_DELETE}') OR phone IN (${PHONES.map((p) => `'${p}'`).join(',')}))`;
-  await sql(`DELETE FROM audit_events WHERE ${byUser} OR entity_id::text IN ('${CUSTOMER_A}','${CUSTOMER_B}','${SALE_A}','${PAYMENT_A}')`).catch(() => undefined);
-  await sql(`DELETE FROM inventory_movements WHERE variant_id = '${VARIANT_A}' OR created_by IN (SELECT id FROM users WHERE id IN ('${OWNER_A}','${OWNER_B}','${EMP_EDIT}','${EMP_DELETE}'))`).catch(() => undefined);
-  await sql(`DELETE FROM stock_adjustments WHERE variant_id = '${VARIANT_A}'`).catch(() => undefined);
-  await sql(`DELETE FROM customer_payments WHERE id = '${PAYMENT_A}' OR customer_id IN ('${CUSTOMER_A}','${CUSTOMER_B}')`).catch(() => undefined);
-  await sql(`DELETE FROM sale_items WHERE sale_id = '${SALE_A}'`).catch(() => undefined);
-  await sql(`DELETE FROM voids WHERE sale_id = '${SALE_A}'`).catch(() => undefined);
-  await sql(`DELETE FROM sales WHERE id = '${SALE_A}' OR customer_id IN ('${CUSTOMER_A}','${CUSTOMER_B}')`).catch(() => undefined);
-  await sql(`DELETE FROM product_variants WHERE id = '${VARIANT_A}' OR product_id = '${PRODUCT_A}'`).catch(() => undefined);
-  await sql(`DELETE FROM products WHERE id = '${PRODUCT_A}'`).catch(() => undefined);
-  await sql(`DELETE FROM customers WHERE id IN ('${CUSTOMER_A}','${CUSTOMER_B}') OR name LIKE '${ROW_PREFIX}%'`).catch(() => undefined);
-  await sql(`DELETE FROM user_active_shops WHERE user_id IN ('${OWNER_A}','${OWNER_B}','${EMP_EDIT}','${EMP_DELETE}')`).catch(() => undefined);
-  await sql(`DELETE FROM user_permissions WHERE user_id IN ('${OWNER_A}','${OWNER_B}','${EMP_EDIT}','${EMP_DELETE}')`).catch(() => undefined);
-  await sql(`DELETE FROM memberships WHERE tenant_id IN ('${TENANT_A}','${TENANT_B}') OR user_id IN ('${OWNER_A}','${OWNER_B}','${EMP_EDIT}','${EMP_DELETE}')`).catch(() => undefined);
-  await sql(`DELETE FROM role_permissions WHERE role_id IN (SELECT id FROM roles WHERE name IN ('${ROLE_EDIT}','${ROLE_DELETE}'))`).catch(() => undefined);
-  await sql(`DELETE FROM roles WHERE name IN ('${ROLE_EDIT}','${ROLE_DELETE}')`).catch(() => undefined);
-  await sql(`DELETE FROM branches WHERE tenant_id IN ('${TENANT_A}','${TENANT_B}')`).catch(() => undefined);
-  await sql(`DELETE FROM users WHERE id IN ('${OWNER_A}','${OWNER_B}','${EMP_EDIT}','${EMP_DELETE}') OR phone IN (${PHONES.map((p) => `'${p}'`).join(',')})`).catch(() => undefined);
-  await sql(`DELETE FROM auth.identities WHERE user_id IN ('${OWNER_A}','${OWNER_B}','${EMP_EDIT}','${EMP_DELETE}')`).catch(() => undefined);
-  await sql(`DELETE FROM auth.users WHERE id IN ('${OWNER_A}','${OWNER_B}','${EMP_EDIT}','${EMP_DELETE}')`).catch(() => undefined);
-  await sql(`DELETE FROM shops WHERE id IN ('${TENANT_A}','${TENANT_B}')`).catch(() => undefined);
+  await trySql('audit_events', `DELETE FROM audit_events WHERE ${byUser} OR entity_id::text IN ('${CUSTOMER_A}','${CUSTOMER_B}','${SALE_A}','${PAYMENT_A}')`);
+  await trySql('inventory_movements', `DELETE FROM inventory_movements WHERE variant_id = '${VARIANT_A}' OR created_by IN (SELECT id FROM users WHERE id IN ('${OWNER_A}','${OWNER_B}','${EMP_EDIT}','${EMP_DELETE}'))`);
+  await trySql('stock_adjustments', `DELETE FROM stock_adjustments WHERE variant_id = '${VARIANT_A}'`);
+  await trySql('customer_payments', `DELETE FROM customer_payments WHERE id = '${PAYMENT_A}' OR customer_id IN ('${CUSTOMER_A}','${CUSTOMER_B}')`);
+  await trySql('sale_items', `DELETE FROM sale_items WHERE sale_id = '${SALE_A}'`);
+  await trySql('voids', `DELETE FROM voids WHERE sale_id = '${SALE_A}'`);
+  await trySql('sales', `DELETE FROM sales WHERE id = '${SALE_A}' OR customer_id IN ('${CUSTOMER_A}','${CUSTOMER_B}')`);
+  await trySql('product_variants', `DELETE FROM product_variants WHERE id = '${VARIANT_A}' OR product_id = '${PRODUCT_A}'`);
+  await trySql('products', `DELETE FROM products WHERE id = '${PRODUCT_A}'`);
+  await trySql('customers', `DELETE FROM customers WHERE id IN ('${CUSTOMER_A}','${CUSTOMER_B}') OR name LIKE '${ROW_PREFIX}%'`);
+  await trySql('user_active_shops', `DELETE FROM user_active_shops WHERE user_id IN ('${OWNER_A}','${OWNER_B}','${EMP_EDIT}','${EMP_DELETE}')`);
+  await trySql('user_permissions', `DELETE FROM user_permissions WHERE user_id IN ('${OWNER_A}','${OWNER_B}','${EMP_EDIT}','${EMP_DELETE}')`);
+  await trySql('memberships', `DELETE FROM memberships WHERE tenant_id IN ('${TENANT_A}','${TENANT_B}') OR user_id IN ('${OWNER_A}','${OWNER_B}','${EMP_EDIT}','${EMP_DELETE}')`);
+  await trySql('role_permissions', `DELETE FROM role_permissions WHERE role_id IN (SELECT id FROM roles WHERE name IN ('${ROLE_EDIT}','${ROLE_DELETE}'))`);
+  await trySql('roles', `DELETE FROM roles WHERE name IN ('${ROLE_EDIT}','${ROLE_DELETE}')`);
+  await trySql('branches', `DELETE FROM branches WHERE tenant_id IN ('${TENANT_A}','${TENANT_B}')`);
+  await trySql('users', `DELETE FROM users WHERE id IN ('${OWNER_A}','${OWNER_B}','${EMP_EDIT}','${EMP_DELETE}') OR phone IN (${PHONES.map((p) => `'${p}'`).join(',')})`);
+  await trySql('auth.identities', `DELETE FROM auth.identities WHERE user_id IN ('${OWNER_A}','${OWNER_B}','${EMP_EDIT}','${EMP_DELETE}')`);
+  await trySql('auth.users', `DELETE FROM auth.users WHERE id IN ('${OWNER_A}','${OWNER_B}','${EMP_EDIT}','${EMP_DELETE}')`);
+  await trySql('shops', `DELETE FROM shops WHERE id IN ('${TENANT_A}','${TENANT_B}')`);
 }
 
 let branchA = '';
@@ -102,6 +122,26 @@ let branchB = '';
 
 beforeAll(async () => {
   await cleanup();
+
+  // ── the namespace must be clean before anything is asserted about authorization ──────────
+  // A single leftover membership or active-shop row changes which tenant `current_tenant_id()`
+  // resolves to. Every cross-tenant assertion below would then report `tenant access denied` for
+  // a reason that has nothing to do with the rule under test, so refuse to start instead.
+  const stale = await sql(
+    `SELECT (SELECT count(*) FROM memberships WHERE user_id IN ('${OWNER_A}','${OWNER_B}','${EMP_EDIT}','${EMP_DELETE}')) AS memberships,
+            (SELECT count(*) FROM user_active_shops WHERE user_id IN ('${OWNER_A}','${OWNER_B}','${EMP_EDIT}','${EMP_DELETE}')) AS active_shops,
+            (SELECT count(*) FROM shops WHERE id IN ('${TENANT_A}','${TENANT_B}')) AS shops`,
+  );
+  const staleCounts = stale.rows[0] as Record<string, string>;
+  if (cleanupFailures.length || Number(staleCounts.memberships) || Number(staleCounts.active_shops) || Number(staleCounts.shops)) {
+    throw new Error(
+      `the ${ROW_PREFIX} namespace is not clean, so this suite cannot make a statement about ` +
+        `authorization. Leftover rows: ${JSON.stringify(staleCounts)}. Cleanup failures: ` +
+        `${cleanupFailures.join(' | ') || 'none'}. A previous integration file is probably still ` +
+        `attached to these identities — fix the leak in that file rather than reusing this one's ` +
+        `identities.`,
+    );
+  }
 
   // ── two isolated tenants, each with one active branch ────────────────────────────────────
   await sql(`
