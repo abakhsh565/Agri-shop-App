@@ -259,3 +259,22 @@ green. That is the gate working, not the gate failing.
 
 Both require the owner to add the repository secret through GitHub's secret management. Neither was
 worked around, and no artefact was claimed in their absence.
+
+### D6. Monitoring — implemented on the existing stack, and the destination is proven
+
+There is no error-monitoring provider in this project's catalog (the search returns no recommendation
+and no options), and adding an unreviewed platform is exactly the "large observability platform" the
+scope rules exclude. Monitoring is therefore Supabase, which every environment already reaches:
+`public.client_error_events` (migration `0203`), with the rules enforced in the database.
+
+| Check | Evidence |
+|---|---|
+| A controlled event reaches the destination | client (anon) insert **accepted**, then read back by the service role as `{"environment":"staging","error_code":"MONITORING_TEST_EVENT",…}` |
+| QA and production are distinguishable | `environment` is constrained to `development, staging, production`, so a staging event cannot be counted as production's |
+| Clients cannot read error rows | client (anon) read returned `permission denied for table client_error_events`; there is no SELECT policy at all, and a guard fails if one is added |
+| No secrets or customer data in events | `details` is allow-listed and primitives-only; `tests/unit/monitoringPrivacy.test.ts` (12 tests) proves a payload carrying `phone`, `email`, `amount`, `token` and `notes` reduces to its allowed keys, with a permissive-scrubber control showing the assertion discriminates |
+| Missing configuration is not mistaken for working monitoring | `monitoringStatus()` returns `operational:false` with `NOT operational` for a missing or unrecognised environment and for a missing endpoint; `reportClientError()` then records nothing and says why |
+
+Known gap, recorded rather than hidden: `service_role` has SELECT but no DELETE grant on the table, so
+pruning (retention) requires SQL. The self-test row used for this proof was removed that way; the
+pruned count is 0 and the table has 0 client SELECT policies.
