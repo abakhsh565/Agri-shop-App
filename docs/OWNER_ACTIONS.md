@@ -44,10 +44,24 @@ What I do then: read `QA_DB_PASS` from `.env.qa`, set the `QA_DB_PASS` GitHub se
 never appears in the chat or in a log), then prove it works with `npm run preflight` /
 `scripts/check-qa-connectivity.mjs`, and confirm the secret list shows a fresh timestamp.
 
-Optional, same session: **Project Settings → API** → rotate the `service_role` key, and put the new
-value in `.env.qa` on the **`QA_SUPABASE_SERVICE_ROLE=`** line. The old key's value sits in this
-repository's git history, which is why it should be rotated. (The anon key only needs updating if you
-rotate that too.)
+**Is this a blocker? No.** Staging works today with the current password; this is security hygiene, and
+the staging checkpoint can be called done without it (it stays recorded as an open item).
+
+### The measured position, so the request is not taken on trust
+
+`ENGINEERING_OS_STATE.md` records a guard that, on 2026-10-13, found *two credentials in this
+repository's git history* and asked the owner to rotate the QA database password and the old project's
+service-role key. Re-checked on 2026-10-15, the position is narrower than that sentence suggests:
+
+| Check | Result |
+|---|---|
+| `.env.qa`, `.env.local`, `.env` tracked by git? | **No** — no environment file with values is committed |
+| A `service_role` key value anywhere in the tree or in `-S` history search? | **Not found** — only the *name* `service_role`, in docs and env-var lists |
+| Any key at all in the tracked tree? | anon keys, which ship in the browser bundle by design: the QA key in `playwright.config.ts`, and an **older** project's key (`cmubdztiiqnxxpw…`) in `SUPABASE_CONNECTION_GUIDE.md` and `dev-guide-extracted/utils/supabase/info.tsx` |
+
+So there are two real, low-urgency follow-ups: rotate the QA database password (Action 2 above), and —
+because an old project's anon key is published in this repo — confirm that old project's credentials are
+revoked in the Supabase account that owns it, if that project still exists. Neither is a staging defect.
 
 ---
 
