@@ -191,6 +191,38 @@ hardware remain the user's steps; they cannot be claimed from here.
 4. Then the workflow builds release-signed: dispatch `build-apk.yml`, and I verify the artifact's commit,
    package, version and QA configuration exactly as the table above does for the local build.
 
+## 4c. The CI gate's one failure, classified and fixed
+
+CI ran the pushed commit (`9cbc6db6`, a docs-only delta from `08dae31b`): **Gates ✓ 1m16s**, **QA ✓ 13m55s**,
+and **E2E lanes against QA ✗ — 142 passed, 1 failed, 6 did not run (29.8 m)**. The failure was
+`tests/e2e/accessUx.spec.ts:222` — *"step 2 exposes RBAC vocabulary"* — and the text CI received contains
+the cause in plain sight:
+
+```
+… Modify QA VoidRole 1791985709272 Manager QA manager with the sensitive void permission Modify …
+```
+
+The role name's epoch is **2026-10-14T13:48:29Z**, which is a *local* integration run — mine — not CI's own
+work, and the phrase that tripped `/permission|inherit|override|…/` is a **test role's own description**, not
+the app's copy. Classification: **environment / QA-residue, not an implementation defect** — the product's
+words were never the problem, and the assertion was reading another suite's row as though the app had
+written it.
+
+**Why the leak existed, stated as two defects the fix closes** (`tests/integration/rbacRoleLifecycleTargeted.test.ts`):
+
+1. Its pre-clean matched `QA VoidRole ${Date.now()}%` — **this run's name only** — so a run that never reached
+   `afterAll` (a statement timeout, a killed suite) left its row for the next run *and* for the browser lanes
+   to inherit. It now matches the whole `QA VoidRole %` family: every row of it is test-origin by construction,
+   so any run of the file clears all earlier runs' leftovers and a leak heals instead of compounding.
+2. `cleanup()` swallowed every delete failure (`catch { /* the row may already be gone */ }`), which is exactly
+   how a leaked role reached another lane's assertion unnoticed. Failures are now collected and the function
+   finishes with `expect(failures).toEqual([])`, so a leak is loud instead of silent.
+
+**Verification of the fix:** the creator suite is **11 passed** with the new assertion active (nothing left
+behind); QA pruned through the reviewed tool → **BASELINE OK** (1 notification, 1 supplier payment); and the
+lane CI failed, `accessUx`, is **7 passed (2.7 m)** locally once the residue was gone. Non-vacuity of the
+matcher needs no injected failure here — the real leak and its real red lane are the evidence.
+
 ## 5. Still open — decisions, not defects
 
 * **Residue traps the next run.** A lane killed mid-flight leaves rows a later lane refuses to start on

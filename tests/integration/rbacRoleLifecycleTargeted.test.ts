@@ -95,12 +95,32 @@ async function seedSale(id: string, number: string, employeeId: string) {
   `);
 }
 
+/**
+ * Every role this suite has EVER created, not only this run's.
+ *
+ * The pre-clean below used to match `QA VoidRole ${Date.now()}%` — this run's name alone — so a run
+ * that never reached its `afterAll` (a statement timeout, a killed suite) left its
+ * `QA VoidRole <epoch> Manager` row behind for the NEXT run to inherit, and for the browser lanes to
+ * read in the employee form. That is exactly what failed CI on 2026-10-14: `accessUx`'s no-jargon
+ * scan read a leaked role's description ("…sensitive void permission") and failed as though the
+ * product had exposed RBAC vocabulary, while the product was untouched.
+ *
+ * Every row of this family is test-origin by construction, so any run of this file clears all of
+ * them: a leak heals instead of compounding into the next run's assertion.
+ */
+const TEST_ROLES = `name LIKE 'QA VoidRole %'`;
+
 async function cleanup() {
+  // A swallowed delete is how that leaked role reached a browser lane's assertion. Failures are
+  // collected and reported at the end instead of being discarded as "the row may already be gone".
+  const failures: string[] = [];
+  const label = (statement: string) => statement.replace(/\s+/g, ' ').slice(0, 60);
   const q = async (statement: string) => {
     try {
-      await sql(statement);
-    } catch {
-      /* the row may already be gone */
+      const result: any = await sql(statement);
+      if (result?.error) failures.push(`${label(statement)} → ${String(result.error.message ?? result.error)}`);
+    } catch (error) {
+      failures.push(`${label(statement)} → ${String(error)}`);
     }
   };
 
@@ -116,17 +136,19 @@ async function cleanup() {
   await q(`DELETE FROM audit_events
      WHERE user_id IN ('${OWNER}','${EMP}')
         OR entity_id IN ('${OWNER}','${EMP}')
-        OR entity_id IN (SELECT id FROM roles WHERE name LIKE '${RUN}%')
-        OR details->>'name' LIKE '${RUN}%'`);
+        OR entity_id IN (SELECT id FROM roles WHERE ${TEST_ROLES})
+        OR details->>'name' LIKE 'QA VoidRole %'`);
   await q(`DELETE FROM user_permissions WHERE user_id IN ('${OWNER}','${EMP}')`);
   await q(`DELETE FROM memberships WHERE user_id IN ('${OWNER}','${EMP}')`);
-  await q(`DELETE FROM role_permissions WHERE role_id IN (SELECT id FROM roles WHERE name LIKE '${RUN}%')`);
-  await q(`DELETE FROM roles WHERE name LIKE '${RUN}%'`);
+  await q(`DELETE FROM role_permissions WHERE role_id IN (SELECT id FROM roles WHERE ${TEST_ROLES})`);
+  await q(`DELETE FROM roles WHERE ${TEST_ROLES}`);
   await q(`DELETE FROM inventory_movements WHERE product_id = '${PRODUCT}'`);
   await q(`DELETE FROM product_variants WHERE id = '${VARIANT}'`);
   await q(`DELETE FROM products WHERE id = '${PRODUCT}'`);
   await q(`DELETE FROM customers WHERE id = '${CUSTOMER}'`);
   await q(`DELETE FROM users WHERE id IN ('${OWNER}','${EMP}')`);
+
+  expect(failures, `cleanup left rows behind: ${failures.join(' | ')}`).toEqual([]);
 }
 
 beforeAll(async () => {
