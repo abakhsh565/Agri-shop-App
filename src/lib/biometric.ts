@@ -106,11 +106,46 @@ export type StoredEnrolment = EnrolledBiometric | { kind: "native"; enrolledAt: 
  */
 function isNative(): boolean {
   try {
-    return Capacitor.isNativePlatform() && Capacitor.isPluginAvailable("BiometricAuth");
+    return isInstalledApp() && Capacitor.isPluginAvailable(BIOMETRIC_PLUGIN_NAME);
   } catch {
     return false;
   }
 }
+
+/**
+ * Is this the installed app at all, the bridge aside?
+ *
+ * Kept as its own question because the two halves answer different things: "is this the APK" and
+ * "did the APK ship the native half". Folding them into one boolean made the second unanswerable
+ * — a build with no bridge reported `native=false`, took the browser path, and told the person
+ * "unknown". The only honest sentence for that build is "the app needs updating", and it is
+ * unreachable unless the app and its bridge are asked separately.
+ */
+function isInstalledApp(): boolean {
+  try {
+    return Capacitor.isNativePlatform();
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The name the native bridge knows the biometric plugin by.
+ *
+ * A WRONG NAME HERE IS SILENT, and that is why it is written down once and guarded. This used to
+ * ask for `"BiometricAuth"` while the package registers itself as `"BiometricAuthNative"` in both
+ * halves — `registerPlugin('BiometricAuthNative')` in its JS and
+ * `@CapacitorPlugin(name = "BiometricAuthNative")` in its Android source. `isPluginAvailable`
+ * answers false for a name nobody registered, so `isNative()` reported the installed app as a
+ * browser on EVERY Android phone: no biometric call was ever attempted, `biometricSupported()`
+ * took the web path, and the owner of a phone that unlocks with a fingerprint all day read
+ * "This phone cannot use a fingerprint". Measured on a Sparx Neo 7 Ultra (Android 12, one finger
+ * enrolled) on 2026-10-15 — the screenshot said `native=false plugin=no`.
+ *
+ * `tests/unit/biometricPluginName.test.ts` reads the installed package's JS and Android sources
+ * and fails if this constant stops matching either of them, so the next rename cannot be quiet.
+ */
+const BIOMETRIC_PLUGIN_NAME = "BiometricAuthNative";
 
 /**
  * The plugin's error codes, as values rather than as an enum import.
@@ -477,12 +512,13 @@ export function originCanHostFingerprint(): boolean {
  * (`isAvailable`, `biometryTypes`, `deviceIsSecure`, `reason`) rather than inferred.
  */
 export async function biometricUnavailableReason(): Promise<BiometricReason | null> {
-  const native = isNative();
+  const onDevice = isInstalledApp();
   const plugin = await nativePlugin();
 
-  // Native, but the bridge is missing from the build. Distinguished from "no sensor" on purpose:
-  // this one is fixed by updating the app, and saying "your phone cannot do it" would be a lie.
-  if (native && !plugin) return "no_plugin";
+  // The installed app, but the bridge is missing from the build. Distinguished from "no sensor" on
+  // purpose: this one is fixed by updating the app, and saying "your phone cannot do it" would be a
+  // lie — it was told to every Android phone for as long as the plugin name was wrong.
+  if (onDevice && !plugin) return "no_plugin";
 
   if (plugin) {
     try {
@@ -500,7 +536,6 @@ export async function biometricUnavailableReason(): Promise<BiometricReason | nu
     }
   }
 
-  if (native) return "no_plugin";
   // Asked before the availability question, and before the hardware is blamed: a browser
   // happily answers "yes, this machine has a fingerprint reader" for an origin that cannot
   // use one, so the hardware would be reported as present while every enrolment fails.
