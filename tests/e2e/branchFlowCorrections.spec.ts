@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { seedShopDraft } from './helpers';
 
 // UI contract evidence only. Every remote request is intercepted; this test
 // does not impersonate a live QA session or claim database/API enforcement.
@@ -104,10 +105,11 @@ for (const language of ['en', 'ur'] as const) {
     await expect(page.getByTestId('setup-continue')).toBeDisabled();
     // The map picker itself has a separate lane. Supply its completed place via
     // the real shared draft owner, then exercise the user-visible continue action.
-    await page.evaluate(async () => {
-      const { useShopStore } = await import('/src/stores/shopStore.ts');
-      useShopStore.getState().setSetupDraft({ place: { lat: 31.52, lng: 74.35, label: 'Lahore', address: 'Fixture address', source: 'openstreetmap', countryCode: 'pk' } });
-    });
+    await seedShopDraft(
+      page,
+      { place: { lat: 31.52, lng: 74.35, label: 'Lahore', address: 'Fixture address', source: 'openstreetmap', countryCode: 'pk' } },
+      () => page.getByTestId('setup-continue').isEnabled(),
+    );
     await page.getByTestId('setup-continue').click();
     await expect(page.getByTestId('setup-step-2')).toBeVisible();
     // Keeping the branch is the default, and it must still create the branch under the owner

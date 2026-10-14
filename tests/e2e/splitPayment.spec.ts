@@ -47,6 +47,10 @@ const BASE_URL = process.env.QA_APP_URL || 'http://localhost:5173';
 const RUN = Date.now().toString(36);
 const CUST_ID = randomUUID();
 const CUST_PHONE = `923${RUN.slice(-8).padStart(8, '0')}`;
+// The customer this lane opens is seeded owing this much, and the split below (5000 + 3000) is asserted
+// against it. It was referenced but never defined, so the lane died in `beforeAll` with a ReferenceError
+// before a single assertion ran. 20000 matches the sibling double-tap lane, which seeds the same way.
+const INITIAL_BALANCE = 20000;
 /** The employee created by the authorization test, so its Auth credential is removed in afterAll. */
 let createdAuthUserId: string | null = null;
 

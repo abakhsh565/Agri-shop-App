@@ -22,8 +22,14 @@
  *       permissive by being edited and reviewed;
  *     • the fixtures themselves must EXIST (the keep-list identities with an active membership, the
  *       FK-referenced supplier), because "the baseline is intact" is a claim about them;
+ *     • each fixture must be in the WORK CONTEXT the declaration names — the branch an employee may
+ *       work in (`fixtures.workContext`; 0188 makes an empty scope mean NO branch) and the shop the
+ *       owner fixture is currently working in (`user_active_shops`, 0149) — because a fixture that is
+ *       present but scoped to nothing fails its lanes exactly as loudly as a missing one, and only one
+ *       of those two states used to be visible;
  *     • the dedicated tenant the two write lanes need must still be EMPTY, because that emptiness is
- *       their premise.
+ *       their premise — and the IDENTITIES those lanes sign in with must exist inside it, or the
+ *       premise cannot be reached at all.
  *
  * THE SAFETY RULE
  *   Read-only, structurally: `BEGIN READ ONLY` plus SELECTs, and a refusal for any target that is not
@@ -50,8 +56,9 @@ export function readDeclaration(file = DECLARATION_FILE) {
 /**
  * The whole decision, as a pure function: no I/O, no clock, no database. `observed` is what the
  * database currently holds, shaped as:
- *   { tables: { name: number }, fixtures: { users: [{phone, membershipStatus}], companies: [{id}] },
- *     isolatedTenant: { tables: { name: number } } }
+ *   { tables: { name: number }, fixtures: { users: [{phone, membershipStatus}], companies: [{id}],
+ *     workContext: { owner: {shopId, branchId}|null, employees: [{phone, membership}] } },
+ *     isolatedTenant: { tables: { name: number }, identities: [{phone, membership}] } }
  */
 export function classifyBaseline(observed, declaration) {
   const failures = [];
@@ -114,8 +121,67 @@ export function classifyBaseline(observed, declaration) {
     }
   }
 
+  // WORK CONTEXT — a fixture that exists but works nowhere. The two failure modes are different
+  // screens in the app ("not in a branch" vs another shop's empty dashboard) and both are silent
+  // without this check, which is why each is named separately.
+  const work = declaration.fixtures?.workContext;
+  if (work) {
+    const owner = (observed.fixtures?.workContext ?? {}).owner ?? null;
+    if (!owner) {
+      failures.push(
+        `fixture owner ${work.ownerPhone} has no active-shop row — the app resolves the shop it works in from user_active_shops (0149), so every lane signing in as it lands somewhere unspecified (${work.why ?? ''})`.trim(),
+      );
+    } else {
+      if (owner.shopId !== work.tenantId) {
+        failures.push(
+          `fixture owner ${work.ownerPhone} is working in shop ${owner.shopId ?? '(none)'}, not the declared ${work.tenantId} — the lanes that sign in as it would read another shop's screens`,  
+        );
+      }
+      if (owner.branchId !== work.branchId) {
+        failures.push(
+          `fixture owner ${work.ownerPhone} is working in branch ${owner.branchId ?? '(none)'}, not the declared ${work.branchId}`,
+        );
+      }
+      if (owner.shopId === work.tenantId && owner.branchId === work.branchId) {
+        notes.push(`fixture owner ${work.ownerPhone} works in ${work.tenantId} / ${work.branchId} — as declared`);
+      }
+    }
+    for (const phone of work.employeePhones ?? []) {
+      const employee = ((observed.fixtures?.workContext ?? {}).employees ?? []).find((e) => e.phone === phone);
+      if (!employee?.membership) {
+        failures.push(`fixture employee ${phone} has no ACTIVE membership in ${work.tenantId} — the employee lanes cannot sign in to the tenant they read`);
+        continue;
+      }
+      const scope = employee.membership.branchScope;
+      if (!Array.isArray(scope) || !scope.includes(work.branchId)) {
+        failures.push(
+          `fixture employee ${phone} has branch scope ${JSON.stringify(scope ?? null)} — 0188 makes an empty scope mean NO branch, so every employee lane reads "You are in this business but not in a branch". Declared: ["${work.branchId}"]`,
+        );
+      } else {
+        notes.push(`fixture employee ${phone} is scoped to ${work.branchId} — as declared`);
+      }
+    }
+  }
+
   const tenant = declaration.isolatedTenant;
   if (tenant) {
+    for (const identity of tenant.identities ?? []) {
+      const found = ((observed.isolatedTenant ?? {}).identities ?? []).find((i) => i.phone === identity.phone);
+      if (!found?.membership) {
+        failures.push(
+          `the dedicated tenant's declared identity ${identity.phone} (${identity.membershipRole}) is MISSING — the write lanes cannot sign in to the tenant that isolates them (${identity.why ?? ''})`.trim(),
+        );
+        continue;
+      }
+      if (found.membership.status !== 'active') {
+        failures.push(`the dedicated tenant's identity ${identity.phone} has membership "${found.membership.status ?? 'none'}", not active`);
+      }
+      if (identity.branchScope === 'required' && (!Array.isArray(found.membership.branchScope) || found.membership.branchScope.length === 0)) {
+        failures.push(
+          `the dedicated tenant's employee ${identity.phone} has no branch scope — its case cannot reach an operational screen (0188), so the lane would be blocked rather than run`,
+        );
+      }
+    }
     for (const table of tenant.mustBeEmpty ?? []) {
       const count = observed.isolatedTenant?.tables?.[table] ?? 0;
       if (count > 0) {
@@ -183,7 +249,50 @@ export async function observe(client, declaration) {
       if (!there) continue;
       tenantTables[table] = (await client.query(`select count(*)::int as n from ${table} where shop_id = $1`, [tenantId])).rows[0].n;
     }
-    isolatedTenant = { id: tenantId, found, tables: tenantTables };
+    // The identities the two write lanes sign in with: declared, because a tenant an agent cannot
+    // sign in to is not an isolation boundary, it is an unblockable lane.
+    const identities = [];
+    for (const identity of declaration.isolatedTenant.identities ?? []) {
+      const row = (await client.query(
+        `select m.role::text as role, m.status::text as status, m.branch_scope
+           from users u left join memberships m on m.user_id = u.id and m.tenant_id = $2
+          where u.phone = $1`,
+        [identity.phone, tenantId],
+      )).rows[0] ?? null;
+      identities.push({
+        phone: identity.phone,
+        membership: row && row.role ? { role: row.role, status: row.status, branchScope: row.branch_scope } : null,
+      });
+    }
+    isolatedTenant = { id: tenantId, found, tables: tenantTables, identities };
+  }
+
+  // The declared work context: which shop/branch the owner fixture is working in, and the branch each
+  // employee fixture may work in. Read here so the check is a fact about the database, not about the app.
+  const work = declaration.fixtures?.workContext ?? null;
+  let workContext = null;
+  if (work) {
+    const ownerRow = (await client.query(
+      `select a.shop_id, a.branch_id from user_active_shops a join users u on u.id = a.user_id where u.phone = $1`,
+      [work.ownerPhone],
+    )).rows[0] ?? null;
+    const employees = [];
+    for (const phone of work.employeePhones ?? []) {
+      const row = (await client.query(
+        `select m.role::text as role, m.status::text as status, m.branch_scope
+           from users u left join memberships m on m.user_id = u.id and m.tenant_id = $2 and m.status = 'active'
+          where u.phone = $1`,
+        [phone, work.tenantId],
+      )).rows[0] ?? null;
+      employees.push({
+        phone,
+        membership: row && row.role ? { role: row.role, status: row.status, branchScope: row.branch_scope } : null,
+      });
+    }
+    workContext = {
+      owner: ownerRow ? { shopId: ownerRow.shop_id, branchId: ownerRow.branch_id } : null,
+      employees,
+    };
   }
 
   return {
@@ -192,6 +301,7 @@ export async function observe(client, declaration) {
     fixtures: {
       users: users.map((u) => ({ phone: u.phone, membershipStatus: u.membership_status ?? null })),
       companies: companies.map((c) => ({ id: c.id })),
+      workContext,
     },
     isolatedTenant,
   };

@@ -401,12 +401,20 @@ describe('the owner side still requires authority', () => {
   it('the Branches read carries the switch and no distance', async () => {
     // The screen reads its state from `get_my_branches()`, so the correction has to be visible
     // there too: the switch is present, and a radius column is gone rather than merely hidden.
+    //
+    // The read was reshaped by 0188: it returns a row per BRANCH (`branch_id`, `tenant_id`) for the
+    // shop the account is working in, not the pre-0188 row per SHOP (`shop_id`) across every
+    // membership. Looking for `shop_id` therefore found nothing while the data was all there — the
+    // suite was asserting a field name the contract had removed, which `marketplaceContractGuard`
+    // cannot see because it reads the migration, not the live return shape.
     const { data, error } = await execRpcAsUser(OWNER, 'get_my_branches', {});
     expect(error).toBeNull();
-    const row = (data ?? []).find((b: any) => b.shop_id === TENANT);
+    const row = (data ?? []).find((b: any) => b.tenant_id === TENANT);
     expect(row, 'the shared QA branch must be one of the owner memberships').toBeTruthy();
     expect('marketplace_enabled' in row).toBe(true);
     expect('marketplace_radius_km' in row).toBe(false);
+    // The switch the owner just set is what this read carries, per branch.
+    expect(row.marketplace_enabled).toBe(true);
   });
 
   it('an employee cannot', async () => {

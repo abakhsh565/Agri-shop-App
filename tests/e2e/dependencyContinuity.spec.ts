@@ -16,16 +16,36 @@
  * and an employee — who cannot create stock — is told who can instead of being handed
  * a link the route guard would bounce.
  *
+ * WHERE ITS "EMPTY CATALOGUE" COMES FROM (2026-10-14). This lane works in the DEDICATED tenant
+ * (`WRITE_TENANT`, see `tests/e2e/helpers.ts`): an app-created shop with a default branch, its built-in
+ * roles, and ZERO business rows, whose emptiness the QA gate asserts for exactly this reason. That — not
+ * a delete statement — is what makes "there is nothing to sell" true, which is the premise this whole
+ * spec is built on and the reason it was recorded BLOCKED rather than fixed in place.
+ *
+ * The employee case signs in as `QA Isolation Employee` (the fixture's second identity, with the branch
+ * scope 0188 requires), which is what that identity exists for: the negative case is now observed from
+ * the employee's own session instead of by walking the owner into the employee path.
+ *
  * QA database only. Everything it creates is removed in afterAll.
  */
 import { test, expect, type Page } from '@playwright/test';
-import { execSql, setupFixtures, cleanupFixtures, ownership, trackOwned, QA_IDS } from './helpers';
+import {
+  WRITE_TENANT,
+  claimWriteTenantLeftovers,
+  cleanupFixtures,
+  createInWriteTenant,
+  execSql,
+  loginViaUi,
+  ownership,
+  trackOwned,
+  writeTenantCounts,
+  writeTenantTotal,
+} from './helpers';
 import * as fs from 'fs';
 import * as path from 'path';
 
-const OWNER_PHONE = '923001234567';
-const OTP = '123456';
-const PIN = '4321';
+const OWNER_PHONE = WRITE_TENANT.owner.phone;
+const EMPLOYEE_PHONE = WRITE_TENANT.employee.phone;
 
 function envValue(key: string): string {
   for (const file of ['.env.qa', '.env.local', '.env']) {
@@ -42,37 +62,40 @@ function envValue(key: string): string {
 const BASE_URL = envValue('QA_APP_URL') || envValue('VITE_APP_URL') || 'http://localhost:5173';
 
 /**
- * Clean slate for the graph: no products, no suppliers — the state a brand-new shop
- * is in. Each statement carries a WHERE because the SQL helper refuses an unscoped
- * DELETE on purpose; QA holds nothing but fixture accounts between runs.
+ * The marker every row this lane creates carries, so a FAILED run's rows can be recognised again —
+ * Playwright restarts the worker after a failure and the ownership registry lives in that process.
+ */
+const LANE_MARKER = 'Dep Test';
+
+/**
+ * Clean slate for the graph: no products, no suppliers — the state the dedicated tenant is in, and the
+ * premise of every case below.
  *
- * CHILDREN FIRST. The catalogue is referenced by movements, adjustments, barcodes and line
- * items, so deleting `products` before those throws on the first foreign key — and with the
- * error swallowed this cleanup silently did nothing, leaving the sale screen full while the
- * assertions below blamed the app's empty state. The errors are no longer swallowed either:
- * the empty premise is checked at the end rather than assumed.
+ * WHAT THIS REPLACED. It used to delete 23 tables in full (`DELETE FROM ${table} WHERE true`) to reach
+ * "the catalogue is empty, so the sale screen has nothing to sell". That is the shared-QA wipe removed
+ * everywhere else, and ownership registration cannot replace it: this lane needs the ABSENCE of rows it
+ * did not create, which no amount of ownership gives it. Without a shop of its own the lane could only
+ * fail its own premise — which is why it was recorded BLOCKED rather than "fixed".
+ *
+ * WHAT MAKES IT TRUE NOW. The dedicated tenant holds zero business rows. Cleanup removes what this run
+ * registered, leftovers from a failed run of THIS lane are reclaimed by the lane's own marker (scoped to
+ * this tenant, which only these two lanes write), and the premise is then asserted BY NAME. A row this
+ * lane did not create is never deleted to make the assertion pass — it fails the lane and is reported.
  */
 async function clearStockAndSuppliers() {
-  // OWNERSHIP — and why this lane is currently BLOCKED.
-  //
-  // This used to delete 23 tables in full (`DELETE FROM ${table} WHERE true`) to establish its
-  // premise: "the catalogue is empty, so the sale screen has nothing to sell". That is the
-  // shared-QA wipe that the cleanup work removed everywhere else, and it cannot be replaced by
-  // ownership registration — this lane needs the ABSENCE of rows it did not create, which no amount
-  // of ownership gives it. Running it again would either destroy other runs' data (as it did) or
-  // fail its own premise check.
-  //
-  // So it now removes only what it owns, and keeps the premise check LOUD: when the catalogue is
-  // not empty the lane fails here, by name, instead of quietly deleting the difference. Making it
-  // runnable again means giving it its own tenant/shop to empty (a spec redesign, tracked as a
-  // blocker in ENGINEERING_OS_STATE.md) — not reintroducing the wipe.
   await cleanupFixtures();
-  const [left] = await execSql(
-    'SELECT (SELECT count(*) FROM products)::text AS products, (SELECT count(*) FROM product_variants)::text AS variants, (SELECT count(*) FROM companies)::text AS companies',
-  );
+  const claimed = await claimWriteTenantLeftovers(LANE_MARKER);
+  if (claimed.length) {
+    console.log(
+      `[dependencyContinuity] reclaimed ${claimed.reduce((n, c) => n + c.ids.length, 0)} row(s) left by a failed run of this lane: ` +
+        claimed.map((c) => `${c.table}=${c.ids.length}`).join(' '),
+    );
+    await cleanupFixtures();
+  }
+  const counts = await writeTenantCounts();
   expect(
-    Number(left.products) + Number(left.variants) + Number(left.companies),
-    `the empty catalogue could not be established (products=${left.products} variants=${left.variants} companies=${left.companies})`,
+    writeTenantTotal(counts),
+    `the dedicated tenant ${WRITE_TENANT.id} is not empty (companies=${counts.companies} products=${counts.products} customers=${counts.customers} sales=${counts.sales}): an empty catalogue is this lane's whole premise, and nothing outside this run may write there`,
   ).toBe(0);
 }
 
@@ -92,38 +115,19 @@ async function clearRowCache(page: Page) {
   });
 }
 
-async function login(page: Page) {
-  await page.goto(`${BASE_URL}/login`);
-  await page.evaluate(() => {
-    localStorage.removeItem('agri_auth');
-    for (const k of Object.keys(localStorage)) if (/^sb-/.test(k)) localStorage.removeItem(k);
-  });
-  await page.goto(`${BASE_URL}/login`);
-  // The field takes the local 03… form; the 92… constant is read as a country-code paste
-  // and becomes a 10-digit number the validator refuses.
-  await page.getByPlaceholder('e.g. 03001234567').fill(`0${OWNER_PHONE.slice(2)}`);
-  await page.getByRole('button', { name: 'Send Code' }).click();
-  await page.waitForURL(/\/login\/otp/, { timeout: 20000 });
-  const boxes = page.locator('[data-testid^="otp-digit-"]');
-  await boxes.first().click();
-  await page.keyboard.type(OTP);
-  for (let i = 0; i < OTP.length; i++) await expect(boxes.nth(i)).toHaveValue(OTP[i]);
-  await page.waitForURL(/pin-set|\/admin\/dashboard|\/employee\/dashboard/, { timeout: 30000 });
-  if (page.url().includes('pin-set')) {
-    for (const d of PIN) await page.getByRole('button', { name: d, exact: true }).first().click();
-    await page.waitForTimeout(400);
-    for (const d of PIN) await page.getByRole('button', { name: d, exact: true }).first().click();
-    await page.waitForURL(/\/(admin|employee)\/dashboard/, { timeout: 30000 });
-  }
-  await page.waitForTimeout(1200);
-}
+/**
+ * Sign in through the repo's own helper rather than a second copy of the flow.
+ *
+ * This spec used to hand-roll it (clear storage, type, wait for `pin-set`, type a PIN), which is the
+ * same sequence `loginViaUi` performs with the extra assertions that make a mis-entered digit visible:
+ * the boxes are checked one by one, and `account-ready` — the third screen a first sign-in can land on,
+ * which this copy did not know about — is followed rather than treated as a stuck page.
+ */
+const login = (page: Page) => loginViaUi(page, OWNER_PHONE);
 
 test.describe('Missing dependencies never dead-end a workflow', () => {
-  test.beforeAll(async () => {
-    await setupFixtures();
-  });
-
   test.afterAll(async () => {
+    // Only what this run owns, inside its own tenant. Nothing shared is touched.
     await cleanupFixtures();
   });
 
@@ -247,24 +251,27 @@ test.describe('Missing dependencies never dead-end a workflow', () => {
     // dependency case and the assertion would prove nothing.
     //
     // The company has to exist first — a product cannot be written without one
-    // (products_company_id_fkey). It is the SHARED baseline fixture: this used to be an INSERT
-    // that renamed it 'Search Fixture Supplier', i.e. a test rewriting a row other lanes read.
-    // It is asserted, not written.
-    const [supplierFixture] = await execSql(`SELECT id FROM companies WHERE id = '${QA_IDS.companyA}'`);
-    expect(supplierFixture, 'the shared supplier fixture is missing — setupFixtures must run first').toBeTruthy();
+    // (products_company_id_fkey). Both rows are created HERE, inside this lane's own tenant: an earlier
+    // version asserted the SHARED supplier fixture (and before that, re-INSERTed it under another name),
+    // which made this case depend on a shop it does not own. The names carry the lane's marker, so a run
+    // that fails before cleanup can still be reclaimed.
+    const supplierId = await createInWriteTenant(
+      'companies',
+      `INSERT INTO companies (id, name, shop_id) VALUES ('__ID__', '${LANE_MARKER} Search Fixture Supplier', '${WRITE_TENANT.id}')`,
+    );
+    const productId = await createInWriteTenant(
+      'products',
+      `INSERT INTO products (id, name, company_id, category, stock_qty, shop_id)
+       VALUES ('__ID__', '${LANE_MARKER} Search Fixture', '${supplierId}', 'seed', 5, '${WRITE_TENANT.id}')`,
+    );
+    // The variant is not tracked separately: the registry removes it through the product's id
+    // (`product_variants.product_id`), which is also why no hand-written order is needed here. Its own
+    // id is left to the column default — a fixed id here was what made the product come back carrying an
+    // id the registry did not know, and the delete that should have removed it then matched nothing.
     await execSql(`
-      INSERT INTO products (id, name, company_id, category, stock_qty, shop_id)
-      VALUES ('30000000-0000-0000-0000-0000000000aa', 'Search Fixture', '${QA_IDS.companyA}', 'seed', 5, '${QA_IDS.shop}')
-      ON CONFLICT (id) DO NOTHING;
+      INSERT INTO product_variants (product_id, name, selling_price, cost_price, unit_size, low_stock_threshold, stock_qty)
+      VALUES ('${productId}', '1kg', 500, 300, 1, 1, 5);
     `);
-    await execSql(`
-      INSERT INTO product_variants (id, product_id, name, selling_price, cost_price, unit_size, low_stock_threshold, stock_qty)
-      VALUES ('40000000-0000-0000-0000-0000000000aa', '30000000-0000-0000-0000-0000000000aa', '1kg', 500, 300, 1, 1, 5)
-      ON CONFLICT (id) DO NOTHING;
-    `);
-    // OWNED: the two rows this case creates, by their explicit ids. The registry removes the
-    // variant through `product_id` before the product, so no hand-written order is needed here.
-    await trackOwned(ownership(), 'products', '30000000-0000-0000-0000-0000000000aa');
 
     await login(page);
     await page.goto(`${BASE_URL}/admin/sale/products`);
@@ -387,30 +394,40 @@ test.describe('Missing dependencies never dead-end a workflow', () => {
   });
 
   test('an employee cannot create stock, so they are told who can instead of given a dead link', async ({ page }) => {
-    // Same as the case above: "ask the owner to add products" is the empty catalogue's sentence,
-    // so the empty catalogue (and the browser's cache of a fuller one) is established first.
-    await login(page);
+    // A REAL employee session, not the owner walking into the employee shell.
+    //
+    // WHY THIS CHANGED. The case used to sign in as the OWNER and navigate to `/employee/sale/products`,
+    // then accept either outcome: if the route guard bounced the owner out (it does), the assertion
+    // degraded to "the URL still says /admin/" and the copy this test exists for — "Ask the owner to add
+    // products." — was never read at all. The dedicated tenant's second identity exists for this case:
+    // a real `employee` membership, in the same shop, scoped to its branch (0188/0190), which is what a
+    // screen needs before it can render at all.
+    //
+    // "Ask the owner to add products" is the empty catalogue's sentence, so the catalogue stays empty
+    // (the shared beforeEach) and the browser's cache of a fuller one is dropped first.
+    await page.goto(`${BASE_URL}/login`);
+    await page.evaluate(() => {
+      localStorage.removeItem('agri_auth');
+      for (const k of Object.keys(localStorage)) if (/^sb-/.test(k)) localStorage.removeItem(k);
+    });
+    // The employee door asks which shop invited the number: a phone on its own does not say, and the
+    // fixture's shop id is what the field accepts.
+    await loginViaUi(page, EMPLOYEE_PHONE, 'employee', WRITE_TENANT.id);
     await clearRowCache(page);
 
-    // Impersonate the employee shell for this assertion: the graph decides availability
-    // from the shell + permission, and the employee shell has no /inventory/new route.
     await page.goto(`${BASE_URL}/employee/sale/products`);
     await page.waitForTimeout(1500);
 
-    // The owner reaching the employee path is redirected by the route guard; what
-    // matters here is that no create action is rendered when it cannot be opened.
-    const addProduct = page.getByRole('button', { name: 'Add product' });
-    const onEmployeePath = page.url().includes('/employee/');
-    if (onEmployeePath) {
-      await expect(
-        addProduct,
-        'the employee sale step offered an action the employee shell cannot open',
-      ).toHaveCount(0);
-      await expect(page.getByText('Ask the owner to add products.', { exact: false })).toBeVisible();
-    } else {
-      // The guard bounced the owner out of the employee shell, which is the correct
-      // behaviour and is asserted as such rather than treated as a failure.
-      expect(page.url()).toContain('/admin/');
-    }
+    // The employee's own shell, reached by the employee: the guard must not have bounced them, or the
+    // assertions below would be reading somebody else's screen.
+    expect(page.url(), 'the employee session did not reach the employee shell').toContain('/employee/');
+    await expect(
+      page.getByRole('button', { name: 'Add product' }),
+      'the employee sale step offered an action the employee shell cannot open',
+    ).toHaveCount(0);
+    await expect(
+      page.getByText('Ask the owner to add products.', { exact: false }),
+      'the employee is not told who can add stock',
+    ).toBeVisible({ timeout: 15000 });
   });
 });

@@ -20,6 +20,7 @@ let contextVersion = 0;
 let suspended = false;
 let writesInFlight = 0;
 let confirmedContext: { tenantId: string; userId: string; branchId: string } | null = null;
+let contextWaiters: Array<() => void> = [];
 export const getConfirmedDataContext = () => suspended ? null : confirmedContext;
 export const hasScopedWriteInFlight = () => writesInFlight > 0;
 export function beginScopedWrite(): () => void {
@@ -43,6 +44,46 @@ export function confirmCacheBranch(tenantId: string, userId: string, branchId: s
   adoptCacheOwner(`${tenantId}:${userId}:${branchId}`);
   confirmedContext = { tenantId, userId, branchId };
   suspended = false;
+  // Release the reads that arrived before the context existed. Nothing else wakes them, and a
+  // read that waits for a confirmation that has already happened is the only reason they exist.
+  const waiting = contextWaiters;
+  contextWaiters = [];
+  waiting.forEach((wake) => wake());
+}
+
+/**
+ * Wait until the branch context is confirmed. `false` if it never is (bounded).
+ *
+ * WHY THIS EXISTS. `isDataContextCurrent` answers "may this response publish?", and the stores ask
+ * it before every read. A screen that mounts before the shell has confirmed which shop and branch
+ * the app is working in — a deep link, a refresh on that screen, or the first navigation after
+ * sign-in — asked that question too early and got `no`, and nothing ever asked again: `ready` stayed
+ * false, the screen kept its "Loading…" or skeleton state for the whole session, and the rows were
+ * never read even though the context was confirmed a moment later. The read was not wrong, it was
+ * early, so the answer is to wait for the confirmation it depends on rather than to drop it.
+ *
+ * The bound matters: an app that never confirms a branch (no membership that resolves one) must
+ * still settle, so the caller falls through to its own refusal instead of hanging.
+ */
+export function whenDataContextConfirmed(timeoutMs = 10000): Promise<boolean> {
+  if (!suspended && confirmedContext) return Promise.resolve(true);
+  return new Promise((resolve) => {
+    let settled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const wake = () => {
+      if (settled) return;
+      settled = true;
+      if (timer) clearTimeout(timer);
+      resolve(true);
+    };
+    timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      contextWaiters = contextWaiters.filter((w) => w !== wake);
+      resolve(false);
+    }, timeoutMs);
+    contextWaiters.push(wake);
+  });
 }
 
 interface CacheEntry<T> {

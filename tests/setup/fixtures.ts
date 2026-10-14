@@ -126,14 +126,28 @@ async function waitForPostgRESTVisibility(maxRetries = 10, delayMs = 300): Promi
 export async function cleanupTestData() {
   const customerIds = `('${QA_IDS.customerA}', '${QA_IDS.customerB}', '${QA_IDS.customerC}')`;
 
+  // ORDER IS PART OF THE CONTRACT: a statement that reaches a child THROUGH its parent has to run
+  // before that parent is gone. `voids` used to be deleted after `sales`, so its sub-select matched
+  // nothing and every voided fixture sale kept its void row — measured 2026-10-14, where the reviewed
+  // baseline reads `voids: expected none` and found rows that had survived exactly that way. The
+  // groups below are therefore child-first, and each parent goes only after the rows that reach it.
   const childDeletes = [
+    // 1. a sale's own children, and the rows the void/return flows hang off them
     `DELETE FROM sale_items WHERE sale_id IN (SELECT id FROM sales WHERE customer_id IN ${customerIds})`,
-    `DELETE FROM sales WHERE customer_id IN ${customerIds}`,
-    `DELETE FROM return_items WHERE return_id IN (SELECT id FROM returns WHERE customer_id IN ${customerIds})`,
-    `DELETE FROM returns WHERE customer_id IN ${customerIds}`,
+    `DELETE FROM inventory_movements WHERE reference_id IN (SELECT id FROM sales WHERE customer_id IN ${customerIds})`,
+    `DELETE FROM inventory_movements WHERE reference_id IN (SELECT id FROM voids WHERE sale_id IN (SELECT id FROM sales WHERE customer_id IN ${customerIds}))`,
     `DELETE FROM voids WHERE sale_id IN (SELECT id FROM sales WHERE customer_id IN ${customerIds})`,
+    // 2. a return's children
+    `DELETE FROM return_items WHERE return_id IN (SELECT id FROM returns WHERE customer_id IN ${customerIds})`,
+    `DELETE FROM inventory_movements WHERE reference_id IN (SELECT id FROM returns WHERE customer_id IN ${customerIds})`,
+    `DELETE FROM returns WHERE customer_id IN ${customerIds}`,
+    // 3. the sales themselves, now that nothing reaches them
+    `DELETE FROM sales WHERE customer_id IN ${customerIds}`,
+    // 4. every NO ACTION key that would refuse the fixture customer's own delete
     `DELETE FROM customer_payments WHERE customer_id IN ${customerIds}`,
+    `DELETE FROM payments WHERE customer_id IN ${customerIds}`,
     `DELETE FROM credit_limit_requests WHERE customer_id IN ${customerIds}`,
+    // 5. movements whose SUBJECT is a fixture product, whichever flow wrote them
     `DELETE FROM inventory_movements WHERE product_id IN ('${QA_IDS.productA}', '${QA_IDS.productB}')`,
     // Reminder rows must be scoped to the fixtures this helper owns. Unscoped
     // whole-table deletes wiped a *parallel* suite's reminder config mid-test:

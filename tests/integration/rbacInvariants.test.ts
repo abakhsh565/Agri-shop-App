@@ -12,6 +12,9 @@
  *   C. An operational record with no branch ownership.
  *   D. A user with a shop but no membership (breaks tenant resolution).
  *   E. A protected write RPC with no authorization guard at all.
+ *   F. A foreign key on `users(id)` that would refuse a fixture delete without being named in the
+ *      e2e cleanup guard — which is how such a delete turns into a failing lane instead of a
+ *      guarded one.
  *
  * Tables/functions that are intentionally internal or pre-auth are listed
  * explicitly; anything outside those lists must satisfy the invariant.
@@ -19,6 +22,7 @@
 
 import { describe, it, beforeAll, expect } from 'vitest';
 import { execSqlAsAdmin } from '../setup/qa-client';
+import { USER_DELETE_GUARDS } from '../e2e/cleanupOwnership';
 
 async function sql<T = any>(query: string): Promise<T[]> {
   const res = await execSqlAsAdmin(query);
@@ -142,6 +146,39 @@ describe('Invariant D — User → Membership', () => {
          AND u.created_at < now() - interval '60 seconds'
     `);
     expect(rows[0].c).toBe(0);
+  });
+});
+
+describe('Invariant F — every key that would refuse a fixture delete is named in the cleanup guard', () => {
+  /**
+   * WHY THIS IS A GUARD AND NOT A COMMENT. `tests/e2e/cleanupOwnership.ts` deletes a
+   * lane-created `users` row under a guard, so that a fixture account the database still references
+   * is preserved WITH its membership instead of being orphaned (the defect measured 2026-10-14: four
+   * such rows in QA failed Invariant D below and `rbacEnforcement`). The guard is a hand-written list,
+   * and a new NO ACTION/RESTRICT key on `users(id)` added by a migration would silently make that
+   * delete fail inside an unrelated lane. So the list is checked against the live schema, in both
+   * directions: a key missing from it fails here, and a name in it that no longer refuses fails too —
+   * a guard that over-preserves keeps accounts (and memberships) alive for a reason that is not true.
+   */
+  it('matches the live NO ACTION/RESTRICT foreign keys on users(id) exactly', async () => {
+    const rows = await sql<{ child: string; column: string }>(`
+      SELECT tc.table_name AS child, kcu.column_name AS column
+        FROM information_schema.table_constraints tc
+        JOIN information_schema.key_column_usage kcu
+          ON kcu.constraint_name = tc.constraint_name AND kcu.table_schema = tc.table_schema
+        JOIN information_schema.constraint_column_usage ccu
+          ON ccu.constraint_name = tc.constraint_name AND ccu.table_schema = tc.table_schema
+        JOIN information_schema.referential_constraints rc
+          ON rc.constraint_name = tc.constraint_name AND rc.constraint_schema = tc.table_schema
+       WHERE tc.constraint_type = 'FOREIGN KEY'
+         AND ccu.table_schema = 'public' AND ccu.table_name = 'users'
+         AND rc.delete_rule IN ('NO ACTION', 'RESTRICT')
+       ORDER BY tc.table_name, kcu.column_name
+    `);
+    const live = [...new Set(rows.map((r) => `${r.child}.${r.column}`))].sort();
+    const guarded = USER_DELETE_GUARDS.map((r) => `${r.table}.${r.column}`).sort();
+    expect(live.length, 'the live schema must still have such keys — otherwise this test is vacuous').toBeGreaterThan(0);
+    expect(guarded, 'a key that would refuse the delete must be in the guard').toEqual(live);
   });
 });
 

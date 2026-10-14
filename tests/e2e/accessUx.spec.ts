@@ -17,6 +17,7 @@
  */
 import { test, expect, type Page } from '@playwright/test';
 import {
+  QA_IDS,
   execSql,
   cleanupFixtures,
   claimNew,
@@ -274,9 +275,28 @@ test.describe('Employee job & access — simple for the owner, exact underneath'
     await page.getByRole('button', { name: 'Next' }).click();
     await page.waitForTimeout(800);
 
-    // Choose one branch (the QA shop has two, so this is a real decision).
-    const [branch] = await execSql(`SELECT id, name FROM branches WHERE is_active ORDER BY name LIMIT 1`);
-    await page.getByRole('button', { name: new RegExp(branch.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')) }).first().click();
+    // THE BRANCH IS NOT CLICKED, and that is the assertion now. The screen's own default is the
+    // branch the owner is working in — an employee silently given every branch would see every
+    // branch's customers and takings — so the honest question is whether that default is what gets
+    // saved, and this lane reads the owner's working branch to check it.
+    //
+    // It used to click the alphabetically-first branch instead, which relied on nothing being
+    // selected to begin with: once the default was applied (it is the fix that sends this screen to
+    // the owner's working branch rather than to an empty scope), that click TOGGLED the selected
+    // branch off and the submit refused with "Choose at least one branch".
+    //
+    // Scoped to the QA shop, and read as the owner's own working branch: this query bypasses RLS,
+    // so an unscoped `WHERE is_active` answers with ANY tenant's branch — measured 2026-10-14, it
+    // returned "Baba jaani - Main" (another account's shop, alphabetically first) and the lane then
+    // looked for that name on a screen that correctly lists only this shop's branches.
+    const [branch] = await execSql(`
+      SELECT b.id, b.name FROM branches b
+       WHERE b.is_active AND b.tenant_id = '${QA_IDS.shop}'
+         AND b.id = (SELECT uas.branch_id FROM user_active_shops uas
+                     JOIN users u ON u.id = uas.user_id
+                    WHERE u.phone = '923001234567')
+    `);
+    expect(branch, "the owner fixture has no working branch to default to").toBeTruthy();
     await page.waitForTimeout(400);
 
     const review = await bodyText(page);

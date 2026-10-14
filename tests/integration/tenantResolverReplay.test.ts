@@ -48,6 +48,22 @@ const RESOLVERS = [
 ];
 
 const CANONICAL = ['resolve_active_shop', 'membership_in_active_shop', 'current_shop_id'];
+/**
+ * Functions that read the chain one step further out. `current_branch_id()` (0188) resolves the
+ * branch inside `current_shop_id()`, and `current_branch_scope()` is defined as
+ * `ARRAY[current_branch_id()]` — so it reads the chain transitively.
+ *
+ * The rule this file enforces is "nobody re-derives the active shop from row age"; a direct textual
+ * reference to one of three names was too narrow a proxy for that, and it flagged a function that
+ * reads the chain by calling the branch resolver. The dangerous shape is still caught below, by the
+ * caller-scoped-fallback test, which looks for the actual re-derivation shape — the oldest
+ * membership deciding the shop — and for the chain only being consulted after it.
+ */
+const CHAIN_READS = [...CANONICAL, 'current_branch_id'];
+
+// Included so the branch resolver is itself checked for reading the chain, rather than being the one
+// function exempt from the rule.
+const BRANCH_RESOLVER = ['current_branch_id'];
 const INTERNAL = ['resolve_active_shop', 'membership_in_active_shop', 'create_shop_internal'];
 const AUTHENTICATED_ONLY = ['set_active_shop', 'create_shop_for_me', 'get_my_shops'];
 
@@ -154,12 +170,12 @@ describe('the active shop has exactly one owner', () => {
   });
 
   it('every authority resolver reads the chain', async () => {
-    const defs = await bodies(RESOLVERS);
+    const defs = await bodies([...RESOLVERS, ...BRANCH_RESOLVER]);
     const wrong: string[] = [];
-    for (const name of RESOLVERS) {
+    for (const name of [...RESOLVERS, ...BRANCH_RESOLVER]) {
       const def = defs[name];
       if (!def) { wrong.push(`${name}: missing`); continue; }
-      const reads = CANONICAL.filter((c) => c !== name).some((c) => def.includes(c));
+      const reads = CHAIN_READS.filter((c) => c !== name).some((c) => def.includes(c));
       if (!reads) wrong.push(name);
     }
     expect(wrong, 'these functions re-derive the active shop instead of reading the chain').toEqual([]);

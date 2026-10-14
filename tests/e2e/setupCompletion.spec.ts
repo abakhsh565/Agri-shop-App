@@ -16,17 +16,68 @@
  *   4. Urdu / RTL           → the same block renders in Urdu with dir=rtl
  *
  * QA database only. Everything it creates is removed in afterAll.
+ *
+ * WHERE ITS "EMPTY SHOP" COMES FROM (2026-10-14). This lane signs in as `QA Isolation Owner` and works
+ * in the DEDICATED tenant (`WRITE_TENANT`, see `tests/e2e/helpers.ts`). That tenant — not a delete
+ * statement — is what makes "the shop is empty" true: it was created through the app's own registration
+ * flow and holds zero business rows, and the QA gate asserts it stays that way. The rows this lane needs
+ * are created inside it and registered as this run's own, so `afterAll` removes exactly them.
  */
 import { test, expect, type Page } from '@playwright/test';
-import { execSql, setupFixtures, cleanupFixtures, loginViaUi, QA_IDS } from './helpers';
+import {
+  WRITE_TENANT,
+  claimWriteTenantLeftovers,
+  cleanupFixtures,
+  createInWriteTenant,
+  loginViaUi,
+  writeTenantCounts,
+  writeTenantTotal,
+} from './helpers';
 
-const OWNER_PHONE = '923001234567';
+// The owner of the DEDICATED tenant, not the shared shop's owner: the phone decides which tenant the
+// session lands in (`resolve_active_shop` reads that account's active membership), so this constant is
+// the whole re-point. It comes from `scripts/dev/qa-tenant.mjs`, the one script allowed to write the
+// fixture, so the identity this lane signs in with and the identity the guard checks are the same row.
+const OWNER_PHONE = WRITE_TENANT.owner.phone;
 
 // Sign-in goes through the repo's own helper rather than a hand-rolled copy: the OTP
 // field auto-advances and an entry that lands one box off submits nothing and reports
 // nothing, which reads exactly like a frozen screen. `loginViaUi` types the code as a
 // person does and asserts each digit landed before trusting the navigation.
 const signIn = (page: Page) => loginViaUi(page, OWNER_PHONE);
+
+/**
+ * The three rows the checklist derives from, created inside this lane's own tenant.
+ *
+ * WHAT IT DERIVES FROM (`src/lib/setupStatus.ts`): a supplier is a row in `companies`, a product a row in
+ * `products`, a customer a row in `customers`, read through the app's own stores for the ACTIVE shop —
+ * this tenant, because it is the only membership the owner has. Each insert carries the minimum the
+ * schema requires (everything else defaults) and leaves the row visible to the store's own filter
+ * (`is_active` / `is_archived` already default the way the queries that read them expect).
+ *
+ * Created with `createInWriteTenant`, so ownership is registered in the same call as the insert: a lane
+ * that creates rows and registers them later is how residue accumulated in this repository before.
+ */
+async function addSupplier(name = 'Setup Lane Supplier'): Promise<string> {
+  return createInWriteTenant(
+    'companies',
+    `INSERT INTO companies (id, name, shop_id) VALUES ('__ID__', '${name}', '${WRITE_TENANT.id}')`,
+  );
+}
+
+async function addProduct(companyId: string, name = 'Setup Lane Product'): Promise<string> {
+  return createInWriteTenant(
+    'products',
+    `INSERT INTO products (id, name, company_id, shop_id) VALUES ('__ID__', '${name}', '${companyId}', '${WRITE_TENANT.id}')`,
+  );
+}
+
+async function addCustomer(name = 'Setup Lane Customer'): Promise<string> {
+  return createInWriteTenant(
+    'customers',
+    `INSERT INTO customers (id, name, shop_id) VALUES ('__ID__', '${name}', '${WRITE_TENANT.id}')`,
+  );
+}
 
 /**
  * Remove the setup entities in dependency order.
@@ -36,34 +87,47 @@ const signIn = (page: Page) => loginViaUi(page, OWNER_PHONE);
  * be deleted while stock still pointed at it.
  */
 /**
- * The empty-shop premise — asserted, never manufactured.
+ * The empty-shop premise — asserted against a shop this lane actually owns.
  *
- * OWNERSHIP, AND WHY THIS LANE IS CURRENTLY BLOCKED.
+ * WHAT THIS REPLACED, AND WHY THE LANE WAS BLOCKED. It used to delete the SHARED QA shop's entire
+ * business content (24 statements, hand-derived foreign-key order) to establish "the shop is empty, so
+ * the checklist reads 0/3". Those rows belong to whoever created them — other lanes, and hand-entered
+ * QA data — and no amount of ownership registration makes them this lane's to delete. The deletes are
+ * gone; without a shop of its own the lane could only fail its premise, which is why it was recorded
+ * BLOCKED rather than "fixed".
  *
- * This function used to delete this shop's entire business content — suppliers, products, variants,
- * customers, sales, payments, movements, reminders and requests, 24 statements with a hand-derived
- * FK order — to establish its premise: "the shop is empty, so the checklist reads 0/3". Those rows
- * belong to whoever created them: other lanes, and hand-entered QA data. No amount of ownership
- * registration makes them this lane's to delete, so the deletes are gone.
- *
- * What survives is the premise, and it is checked LOUDLY: when the shop is not empty the lane fails
- * right here, naming exactly what is left, instead of deleting the difference. The lane's own rows
- * (none, in that state) are removed by the ownership registry through `cleanupFixtures()`.
- *
- * Making it runnable again means giving the lane its OWN tenant/shop to empty — a spec redesign,
- * tracked as a blocker in ENGINEERING_OS_STATE.md — not reintroducing the wipe.
+ * WHAT MAKES IT TRUE NOW. The dedicated tenant (`WRITE_TENANT`) holds ZERO business rows, and it is
+ * checked here LOUDLY rather than assumed: cleanup first removes what this run registered, then the
+ * tenant is counted, and anything left fails the lane naming the table it is in — never by deleting the
+ * difference. A lane that has to delete somebody else's rows to start is a lane that should not run.
  */
+/**
+ * The marker every row this lane creates carries, so a FAILED run's rows can be recognised again.
+ * See `claimWriteTenantLeftovers`: Playwright restarts the worker after a failure, taking the ownership
+ * registry with it, and without a marker on its own rows this lane would leave its tenant permanently
+ * dirty — and then fail its premise forever for a reason that has nothing to do with the app.
+ *
+ * It is a NAME MARKER and nothing else: what gets deleted is still an explicit registered id, and the
+ * claim is scoped to this tenant, which only these two lanes write.
+ */
+const LANE_MARKER = 'Setup Lane';
+
 async function clearSetupEntities() {
-  const shop = QA_IDS.shop;
   await cleanupFixtures();
-  const [left] = await execSql(
-    `SELECT (SELECT count(*) FROM companies  WHERE shop_id = '${shop}')::text AS suppliers,
-            (SELECT count(*) FROM products   WHERE shop_id = '${shop}')::text AS products,
-            (SELECT count(*) FROM customers  WHERE shop_id = '${shop}')::text AS customers`,
-  );
+  const claimed = await claimWriteTenantLeftovers(LANE_MARKER);
+  if (claimed.length) {
+    // Reported, not silently swept: a leftover here means a previous run of THIS lane failed after it
+    // created rows, which is worth seeing in the log.
+    console.log(
+      `[setupCompletion] reclaimed ${claimed.reduce((n, c) => n + c.ids.length, 0)} row(s) left by a failed run of this lane: ` +
+        claimed.map((c) => `${c.table}=${c.ids.length}`).join(' '),
+    );
+    await cleanupFixtures();
+  }
+  const counts = await writeTenantCounts();
   expect(
-    Number(left.suppliers) + Number(left.products) + Number(left.customers),
-    `the empty-shop premise could not be established (suppliers=${left.suppliers} products=${left.products} customers=${left.customers}): this lane needs a shop it can empty, and must not delete the shared QA shop's rows to get one`,
+    writeTenantTotal(counts),
+    `the dedicated tenant ${WRITE_TENANT.id} is not empty (companies=${counts.companies} products=${counts.products} customers=${counts.customers} sales=${counts.sales}): its emptiness is this lane's whole premise, and nothing outside this run may write there`,
   ).toBe(0);
 }
 
@@ -102,6 +166,19 @@ async function waitForSetupReady(page: Page) {
 function countOf(text: string): string {
   const m = text.match(/(\d+)\s*\/\s*(\d+)/);
   return m ? `${m[1]}/${m[2]}` : text;
+}
+
+/**
+ * Wait for Home's count chip to settle on a value.
+ *
+ * The chip prints the numbers only once all three stores have answered — until then it reads "–",
+ * because a count drawn from two of three stores would be a lie the card refuses to tell. On a shop
+ * whose data the browser has cached that gap is invisible; this lane works in its own tenant, which the
+ * browser has never seen, so the count has to be waited for like any other asynchronous state. Polling
+ * the SAME expression the assertion uses means a wrong number still fails, showing the real value.
+ */
+async function waitForHomeCount(page: Page, expected: string) {
+  await expect.poll(async () => countOf((await readHomeChecklist(page))?.count ?? ''), { timeout: 25000 }).toBe(expected);
 }
 
 /** Every required entity exists, so neither block may render any more. */
@@ -180,12 +257,8 @@ async function readHomeChecklist(page: Page) {
 }
 
 test.describe('Business setup status is derived and self-retiring', () => {
-  test.beforeAll(async () => {
-    await setupFixtures();
-  });
-
   test.afterAll(async () => {
-    // Only what this run owns is removed. The shared shop is left exactly as found — that is the
+    // Only what this run owns is removed, from its own tenant. Nothing shared is touched — that is the
     // point of the ownership work, and re-running the wipe in afterAll is what made the damage
     // invisible after a FAILED run.
     await cleanupFixtures();
@@ -201,6 +274,7 @@ test.describe('Business setup status is derived and self-retiring', () => {
     await page.goto('/admin/dashboard');
     await expect(page.locator('[data-testid="setup-next-step"]')).toBeVisible({ timeout: 20000 });
     await expect.poll(async () => (await readHomeChecklist(page))?.rows.length ?? 0, { timeout: 25000 }).toBe(3);
+    await waitForHomeCount(page, '0/3');
 
     const home = await readHomeChecklist(page);
     expect(home, 'the checklist did not render on Home').not.toBeNull();
@@ -230,11 +304,12 @@ test.describe('Business setup status is derived and self-retiring', () => {
   });
 
   test('2. adding a supplier moves the status, from the real data', async ({ page }) => {
-    // The supplier row is the SHARED baseline fixture (setupFixtures writes it). This lane used to
-    // INSERT it as 'Setup Supplier', which renamed a shared fixture other lanes read; it is now
-    // asserted, not written, and never registered as owned.
-    const [supplier] = await execSql(`SELECT id FROM companies WHERE id = '${QA_IDS.companyA}'`);
-    expect(supplier, 'the shared supplier fixture is missing — setupFixtures must run first').toBeTruthy();
+    // The supplier is this lane's OWN row, inside its own tenant. It used to be the shared baseline
+    // fixture (and before that, a re-INSERT of it under the name 'Setup Supplier', which renamed a row
+    // four other lanes read): a shared row cannot show that the status follows DATA THIS SHOP HAS.
+    await clearSetupEntities();
+    const supplierId = await addSupplier();
+    expect(supplierId, 'the lane could not create its own supplier').toBeTruthy();
 
     await signIn(page);
     await page.goto('/admin/settings');
@@ -250,6 +325,7 @@ test.describe('Business setup status is derived and self-retiring', () => {
     // its action, which is what "done" means on this card.
     await page.goto('/admin/dashboard');
     await expect.poll(async () => (await readHomeChecklist(page))?.rows.length ?? 0, { timeout: 25000 }).toBe(3);
+    await waitForHomeCount(page, '1/3');
     const home = await readHomeChecklist(page);
     const supplierRow = home!.rows.find((r) => /supplier/i.test(r.text));
     expect(supplierRow, 'the supplier step disappeared instead of being marked done').toBeTruthy();
@@ -259,12 +335,12 @@ test.describe('Business setup status is derived and self-retiring', () => {
   });
 
   test('3. complete setup: the guidance disappears by itself', async ({ page }) => {
-    // Same as test 2: the product and the customer are the SHARED fixtures. They are asserted
-    // rather than INSERTed-and-renamed, and they are never registered as owned.
-    const [product] = await execSql(`SELECT id FROM products WHERE id = '${QA_IDS.productA}'`);
-    expect(product, 'the shared product fixture is missing — setupFixtures must run first').toBeTruthy();
-    const [customer] = await execSql(`SELECT id FROM customers WHERE id = '${QA_IDS.customerA}'`);
-    expect(customer, 'the shared customer fixture is missing — setupFixtures must run first').toBeTruthy();
+    // Same as test 2: the three rows are this lane's own, in its own tenant, so "setup is complete"
+    // is a statement about the state this lane built and will remove.
+    await clearSetupEntities();
+    const supplierId = await addSupplier();
+    await addProduct(supplierId);
+    await addCustomer();
 
     await signIn(page);
     await page.goto('/admin/settings');
@@ -402,16 +478,13 @@ test.describe('Business setup status is derived and self-retiring', () => {
 
     // Configured shop: the guidance retires itself and Home gains nothing.
     //
-    // The three rows are the SHARED baseline fixtures — this used to INSERT them as 'Setup
-    // Supplier' / 'Setup Product' / 'Setup Customer', renaming rows that four other lanes read.
-    // They are asserted instead of written, and never registered as owned: the fixtures are the
-    // baseline the ownership model exists to protect.
-    const [setupSupplier] = await execSql(`SELECT id FROM companies WHERE id = '${QA_IDS.companyA}'`);
-    expect(setupSupplier, 'the shared supplier fixture is missing — setupFixtures must run first').toBeTruthy();
-    const [setupProduct] = await execSql(`SELECT id FROM products WHERE id = '${QA_IDS.productA}'`);
-    expect(setupProduct, 'the shared product fixture is missing — setupFixtures must run first').toBeTruthy();
-    const [setupCustomer] = await execSql(`SELECT id FROM customers WHERE id = '${QA_IDS.customerA}'`);
-    expect(setupCustomer, 'the shared customer fixture is missing — setupFixtures must run first').toBeTruthy();
+    // The three rows are this lane's OWN — created here, inside its own tenant, registered as this
+    // run's, and removed by `afterAll`. An earlier version asserted the SHARED baseline fixtures
+    // instead (and before that, renamed them), which made this test pass for a shop that is not the
+    // one under test and left the lane's own premise unproven.
+    const setupSupplier = await addSupplier('Setup Lane Supplier (retire)');
+    await addProduct(setupSupplier, 'Setup Lane Product (retire)');
+    await addCustomer('Setup Lane Customer (retire)');
 
     await page.goto('/admin/dashboard');
     await page.reload();

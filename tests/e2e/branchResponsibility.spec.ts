@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { seedShopDraft } from './helpers';
 
 // UI contract evidence only. Every remote request is intercepted; this test does not impersonate
 // a live QA session and does not claim database/API enforcement. What it proves is narrower and
@@ -92,10 +93,11 @@ for (const language of ['en', 'ur'] as const) {
     await page.getByTestId('branches-create').click();
     await expect(page.getByTestId('setup-step-1')).toBeVisible();
     await page.getByTestId('shop-name-input').fill('New Branch');
-    await page.evaluate(async () => {
-      const { useShopStore } = await import('/src/stores/shopStore.ts');
-      useShopStore.getState().setSetupDraft({ place: { lat: 31.52, lng: 74.35, label: 'Lahore', address: 'Fixture address', source: 'openstreetmap', countryCode: 'pk' } });
-    });
+    await seedShopDraft(
+      page,
+      { place: { lat: 31.52, lng: 74.35, label: 'Lahore', address: 'Fixture address', source: 'openstreetmap', countryCode: 'pk' } },
+      () => page.getByTestId('setup-continue').isEnabled(),
+    );
     await page.getByTestId('setup-continue').click();
     await expect(page.getByTestId('setup-step-2')).toBeVisible();
     await page.getByTestId('ownership-assign').click();
@@ -110,10 +112,11 @@ for (const language of ['en', 'ur'] as const) {
     await page.goto('/admin/settings/profile');
     await page.getByTestId('branches-create').click();
     await page.getByTestId('shop-name-input').fill('Second Branch');
-    await page.evaluate(async () => {
-      const { useShopStore } = await import('/src/stores/shopStore.ts');
-      useShopStore.getState().setSetupDraft({ place: { lat: 31.52, lng: 74.35, label: 'Lahore', address: 'Fixture address', source: 'openstreetmap', countryCode: 'pk' } });
-    });
+    await seedShopDraft(
+      page,
+      { place: { lat: 31.52, lng: 74.35, label: 'Lahore', address: 'Fixture address', source: 'openstreetmap', countryCode: 'pk' } },
+      () => page.getByTestId('setup-continue').isEnabled(),
+    );
     await page.getByTestId('setup-continue').click();
     await page.getByTestId('ownership-keep').click();
     await page.getByTestId('setup-create-shop').click();

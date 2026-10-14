@@ -17,6 +17,14 @@
  *   only in the column that actually points at them, children before parents. Nothing is inferred
  *   from a name prefix and nothing is table-wide: an empty registry means an empty plan.
  *
+ * THE SECOND DEFECT THIS FILE CARRIES THE FIX FOR (measured 2026-10-14)
+ *   The graph used to delete `memberships` for every owned user and had no `users` step at all, so a
+ *   lane that inserts its own fixture account deleted the account's membership and left the account
+ *   behind — four such rows sat in QA (`Sync Employee`, `Img Employee`, `E2E Employee`, a second
+ *   role-deletion employee) and failed `rbacInvariants` Invariant D and `rbacEnforcement`. Cleanup
+ *   must not be able to produce an orphan: a user row now either goes with its membership by CASCADE,
+ *   or stays with it (guarded, see `USER_DELETE_GUARDS`).
+ *
  *   This file holds the whole decision — the ownership graph, the protected ids, the SQL shape —
  *   and performs no I/O, so every clause is testable without touching QA.
  */
@@ -101,6 +109,12 @@ export interface DeleteStep {
   from?: string;
   ids: string[];
   /**
+   * Pointers that would REFUSE this delete and that cleanup cannot own. With any of them present the
+   * row — and everything that hangs off it — is preserved instead of the statement failing on a
+   * foreign key. See `USER_DELETE_GUARDS` for the only step that carries one, and why.
+   */
+  unlessReferenced?: readonly UserReference[];
+  /**
    * One extra hop for grandchildren: delete rows whose `column` points at a PARENT row that is
    * itself selected through an owned id. Example: a lane registers the customers it created, and
    * `purchase_items` must go before `purchases`, which must go before `companies`. The ids in the
@@ -117,6 +131,39 @@ export interface DeleteStep {
  * A table appears once per column it can be owned through, because two different parents can point
  * at the same child (`customer_payments` belongs to a customer AND can be registered by id).
  */
+/** A column that points at a `users` row, named as table + column. */
+export interface UserReference {
+  table: string;
+  column: string;
+}
+
+/**
+ * Every foreign key on `public.users(id)` whose delete rule would REFUSE the delete.
+ *
+ * MEASURED, not guessed: read from `information_schema.referential_constraints` on the QA project
+ * (2026-10-14). The keys that CASCADE (`memberships`, `user_permissions.user_id`, `user_active_shops`)
+ * or SET NULL (`client_error_events`, `branch_responsibility.granted_by/revoked_by`) are deliberately
+ * NOT here — they cannot refuse anything, and listing them would make the guard preserve rows for a
+ * reason that does not exist.
+ *
+ * THIS LIST IS A CONTRACT. `rbacInvariants` (Invariant F, integration lane) reads the live schema and
+ * fails when a NO ACTION/RESTRICT key on `users(id)` is missing from it, so adding such a key in a
+ * migration cannot silently turn the guarded delete into a failing one. `e2eCleanupOwnership` pins the
+ * list itself, so widening it is a reviewed edit rather than a convenience.
+ */
+export const USER_DELETE_GUARDS: readonly UserReference[] = [
+  { table: 'activity_log', column: 'user_id' },
+  { table: 'audit_events', column: 'user_id' },                              // 0009
+  { table: 'branch_responsibility', column: 'user_id' },                     // RESTRICT
+  { table: 'cash_reconciliations', column: 'reconciled_by' },                // 0009
+  { table: 'daily_cash_reconciliations', column: 'reconciled_by' },          // 0009
+  { table: 'inventory_movements', column: 'created_by' },                    // 0009
+  { table: 'returns', column: 'processed_by' },
+  { table: 'sales', column: 'employee_id' },
+  { table: 'user_permissions', column: 'granted_by' },                       // 0106
+  { table: 'voids', column: 'voided_by' },                                   // 0009
+];
+
 const STEPS: readonly Omit<DeleteStep, 'ids'>[] = [
   { table: 'reminder_logs', column: 'config_id', from: 'reminder_configs' },
   { table: 'reminder_occurrences', column: 'id', from: 'reminder_occurrences' },
@@ -130,7 +177,19 @@ const STEPS: readonly Omit<DeleteStep, 'ids'>[] = [
   { table: 'voids', column: 'sale_id', from: 'sales' },
   { table: 'sale_items', column: 'sale_id', from: 'sales' },
   { table: 'sale_submissions', column: 'sale_id', from: 'sales' },
+  // WHAT THE DATABASE WRITES ALONGSIDE A SALE, and the reason 3 `inventory_movements` and 4
+  // `notifications` were still in QA on 2026-10-14 while their sales were long gone: a lane registers
+  // the sale it created and the RPC writes these two rows as a side effect, so cleanup removed the
+  // parent and left the children pointing at a row that no longer exists. `reference_id`/
+  // `entity_id` are polymorphic (no foreign key), which is why nothing cascaded and nothing complained.
+  // Scoped by the owned sale ids exactly like the other children — a movement or notification
+  // belonging to a sale this run did not create is not in the list.
+  { table: 'inventory_movements', column: 'reference_id', from: 'sales' },
+  { table: 'notifications', column: 'entity_id', from: 'sales' },
   { table: 'voids', column: 'sale_id', from: 'sales', via: { table: 'sales', column: 'customer_id', parent: 'customers' } },
+  // A void writes its own movement (`reference_type = 'void'`), and an owned void's movement is
+  // reachable only through the void id.
+  { table: 'inventory_movements', column: 'reference_id', from: 'voids' },
   { table: 'sale_items', column: 'sale_id', from: 'sales', via: { table: 'sales', column: 'customer_id', parent: 'customers' } },
   { table: 'sale_submissions', column: 'sale_id', from: 'sales', via: { table: 'sales', column: 'customer_id', parent: 'customers' } },
   { table: 'sales', column: 'id', from: 'sales' },
@@ -140,6 +199,12 @@ const STEPS: readonly Omit<DeleteStep, 'ids'>[] = [
   { table: 'returns', column: 'id', from: 'returns' },
   { table: 'customer_payments', column: 'customer_id', from: 'customers' },
   { table: 'customer_payments', column: 'id', from: 'customer_payments' },
+  // A payment notification's `entity_id` is the CUSTOMER on the rows measured here, and the payment on
+  // others (`kind = 'payment'` is written by two different paths), so both readings are listed and
+  // each is scoped by ids this run registered. `notifications` was otherwise only ever deleted by its
+  // own registered id — a lane that registers a customer still left the notification behind.
+  { table: 'notifications', column: 'entity_id', from: 'customers' },
+  { table: 'notifications', column: 'entity_id', from: 'customer_payments' },
   { table: 'payments', column: 'customer_id', from: 'customers' },
   { table: 'payments', column: 'id', from: 'payments' },
   { table: 'supplier_payments', column: 'id', from: 'supplier_payments' },
@@ -165,7 +230,25 @@ const STEPS: readonly Omit<DeleteStep, 'ids'>[] = [
   // account survives while the exception this run granted does not.
   { table: 'user_permissions', column: 'id', from: 'user_permissions' },
   { table: 'user_permissions', column: 'user_id', from: 'users' },
-  { table: 'memberships', column: 'user_id', from: 'users' },
+  // THE USER ROW ITSELF, guarded — and where the memberships delete used to sit.
+  //
+  // A lane that inserts its own `users` row (crossScreenSync's 'Sync Employee', imageSync's
+  // 'Img Employee', splitPayment's 'E2E Employee', roleInUseDeletion's second employee) registers it
+  // here. The membership of that row is written by the product's own trigger (0113
+  // `ensure_user_membership`), and cleanup must never remove it on its own: `memberships` used to be
+  // deleted for every owned user, so a failed `users` delete (or, as measured, the total ABSENCE of
+  // one) left the row in place with no membership — precisely the orphan that `rbacInvariants`
+  // Invariant D and `rbacEnforcement` fail on, four rows deep in QA on 2026-10-14. Deleting the user
+  // removes its membership, its permission rows and its active-shop row by CASCADE, so there is no
+  // statement for those tables here at all.
+  //
+  // The guard exists because a fixture user can legitimately be REFERENCED by rows cleanup cannot
+  // own: `audit_events`/`activity_log` history the system writes when that account acts, a sale
+  // recorded as that employee, an inventory movement it created. Those FKs are NO ACTION/RESTRICT,
+  // so an unguarded delete would fail and fail the lane — turning a leftover row into a red run.
+  // Preserving the row preserves its membership, so the invariant still holds; the row is residue
+  // the drift report can see, which is the honest direction.
+  { table: 'users', column: 'id', from: 'users', unlessReferenced: USER_DELETE_GUARDS },
   { table: 'product_variants', column: 'product_id', from: 'products' },
   { table: 'product_variants', column: 'id', from: 'product_variants' },
   { table: 'products', column: 'id', from: 'products' },
@@ -214,13 +297,25 @@ export function planCleanup(ownership: Ownership): CleanupPlan {
 export function deleteSql(step: DeleteStep): string {
   if (!step.ids.length) throw new Error(`[QA CLEANUP] refusing an empty delete on ${step.table}`);
   for (const id of step.ids) assertSafeId(id);
+  assertSafeId(step.table);
+  assertSafeId(step.column);
   const list = step.ids.map((id) => `'${id}'`).join(', ');
   if (step.via) {
     assertSafeId(step.via.table);
     assertSafeId(step.via.column);
     return `DELETE FROM ${step.table} WHERE ${step.column} IN (SELECT id FROM ${step.via.table} WHERE ${step.via.column} IN (${list}))`;
   }
-  return `DELETE FROM ${step.table} WHERE ${step.column} IN (${list})`;
+  const base = `DELETE FROM ${step.table} WHERE ${step.column} IN (${list})`;
+  const guards = step.unlessReferenced ?? [];
+  if (!guards.length) return base;
+  // A guarded delete says what it refuses to break. Every clause names a real column, so a typo is a
+  // failure here rather than a statement that silently deletes more than it should.
+  const clauses = guards.map((reference) => {
+    assertSafeId(reference.table);
+    assertSafeId(reference.column);
+    return `NOT EXISTS (SELECT 1 FROM ${reference.table} r WHERE r.${reference.column} = ${step.table}.id)`;
+  });
+  return `${base} AND ${clauses.join(' AND ')}`;
 }
 
 /** Storage objects are owned the same way rows are: registered, then removed by name. */

@@ -101,26 +101,37 @@ export default function AddEmployeePage() {
     rolesStore.load();
     permissionsStore.load();
     supabase.from("branches").select("id, name, is_default").eq("is_active", true).then(({ data }) => {
-      const b = (data as any[]) ?? [];
-      setBranches(b);
-      //
-      // WHAT THE DEFAULT SHOULD BE, and why it is not "every branch".
-      //
-      // A shop with one branch has nothing to decide. A shop with several does, and the safe
-      // answer is the branch the owner is standing in: an employee silently given every branch
-      // sees every branch's customers and takings, which is the exact mixing that is supposed to
-      // be impossible. Choosing the current branch by default makes the owner's own working
-      // context the answer unless they deliberately say otherwise — and widening it stays one tap
-      // away, because "All branches" is a choice they can still make.
-      if (b.length === 1) { setBranchScope([b[0].id]); return; }
-      if (b.length > 1 && activeBranchId && b.some((x) => x.id === activeBranchId)) {
-        setBranchScope([activeBranchId]);
-      }
+      setBranches((data as any[]) ?? []);
     });
-    // Once, for the branch this screen was opened in — the store's value is what the screen is
-    // being used in, not a dependency of loading the list.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  /**
+   * The default branch scope, applied as soon as BOTH halves of it exist.
+   *
+   * WHAT THE DEFAULT SHOULD BE, and why it is not "every branch". A shop with one branch has
+   * nothing to decide. A shop with several does, and the safe answer is the branch the owner is
+   * standing in: an employee silently given every branch sees every branch's customers and
+   * takings, which is the exact mixing that is supposed to be impossible. Choosing the current
+   * branch by default makes the owner's own working context the answer unless they deliberately
+   * say otherwise — and widening it stays one tap away, because "All branches" is a choice they
+   * can still make.
+   *
+   * WHY IT IS NOT PART OF THE LOAD ABOVE. It used to be, which made the default depend on the
+   * branch context already being known when the LIST arrived. It is not: this screen is reached by
+   * URL straight after sign-in, when `activeBranchId` is still null, so the default was never
+   * applied and the scope stayed EMPTY — while the summary printed "All branches" for an empty
+   * array, and `Send invitation` then refused with "Choose at least one branch" on a screen that
+   * showed a branch. Measured 2026-10-14, in the browser: the refused invite is exactly how this
+   * screen wasted the owner's time. It now waits for the context and applies the same rule.
+   */
+  const branchDefaultApplied = useRef(false);
+  useEffect(() => {
+    if (branchDefaultApplied.current || !branches.length || !activeBranchId) return;
+    if (!branches.some((b) => b.id === activeBranchId)) return;
+    branchDefaultApplied.current = true;
+    // Only while nothing has been chosen: a deliberate choice is never overwritten by a default.
+    setBranchScope((chosen) => (chosen && chosen.length ? chosen : [activeBranchId]));
+  }, [branches, activeBranchId]);
 
   const steps: { key: Step; label: string; icon: typeof User }[] = [
     { key: "who", label: t("addEmployee.stepWho"), icon: User },
@@ -227,9 +238,13 @@ export default function AddEmployeePage() {
   const roleDefaultSet = new Set(selectedRolePermissions);
   const overrides = diffOverrides(accessValue, roleDefaultSet);
   const changeCount = overrideCount(overrides);
+  // An EMPTY selection is not "All branches". It used to print as such — the fallback below fired
+  // for an empty array as well as for `null` — so the summary promised the widest scope while the
+  // submit refused it as "no branch at all". Only `null` means every branch.
   const branchNames = branchScope === null
     ? t("addEmployee.allBranches")
-    : branches.filter((b) => branchScope.includes(b.id)).map((b) => b.name).join(", ") || t("addEmployee.allBranches");
+    : branches.filter((b) => branchScope.includes(b.id)).map((b) => b.name).join(", ") ||
+      t("addEmployee.noBranchChosen");
 
   /**
    * The employee's access (role defaults with any exception applied), grouped into

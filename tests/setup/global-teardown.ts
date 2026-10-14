@@ -112,6 +112,44 @@ export async function teardown() {
     );
   }
 
+  /**
+   * THE SECOND DOOR, CLOSED (2026-10-14).
+   *
+   * This teardown is the other implementation of the same destruction: `DELETE FROM <table>` over every
+   * business table, plus every user outside the four keep-phones. Running the integration lane as
+   * `QA_CLEAN_AFTER_RUN=1 npx vitest run tests/integration/` reached it, and it destroyed the reviewed
+   * QA baseline — the hand-entered 2026-10-11/12 rows, the 2026-10-06 registration request, the
+   * non-fixture accounts and most of `audit_events`. None of it was recoverable; the newest dump of this
+   * project predates the schema this database has migrated past, and `scripts/dev/qa-baseline.json` had
+   * to be re-reviewed against the fixture floor that remained.
+   *
+   * The declaration is the review that says which rows are real, so it decides here: while it expects
+   * ANY rows, this teardown skips the destruction and says so. Erasing a reviewed baseline is a decision,
+   * not a side effect of one environment variable — `QA_ALLOW_DESTROYING_BASELINE=1` makes it explicit.
+   */
+  function declarationExpectsRows(): string[] {
+    if (process.env.QA_ALLOW_DESTROYING_BASELINE === '1') return [];
+    try {
+      const declaration = JSON.parse(fs.readFileSync('scripts/dev/qa-baseline.json', 'utf8'));
+      return Object.entries(declaration.policies ?? {})
+        .filter(([, rule]: [string, any]) => rule.policy === 'exact' && Number(rule.expected) > 0)
+        .map(([table, rule]: [string, any]) => `${table} (declared ${rule.expected})`);
+    } catch {
+      return ['scripts/dev/qa-baseline.json could not be read, so what would be destroyed is unknown'];
+    }
+  }
+
+  const expectedRows = declarationExpectsRows();
+  if (expectedRows.length) {
+    console.log(
+      '[QA Cleanup] REFUSED — the reviewed declaration expects rows in: ' +
+        expectedRows.join(', ') +
+        '. Nothing was deleted. Review drift with `node scripts/dev/qa-prune-excess.mjs`, or set ' +
+        'QA_ALLOW_DESTROYING_BASELINE=1 if erasing those rows is really intended.',
+    );
+    return;
+  }
+
   try {
     const c = new pg.Client({ connectionString: databaseUrl, ssl: { rejectUnauthorized: false } });
     await c.connect();

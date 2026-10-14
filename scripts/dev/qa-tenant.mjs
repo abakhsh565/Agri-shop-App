@@ -26,6 +26,23 @@
  *     • `QA Isolation Employee` — membership `employee`, for `dependencyContinuity`'s negative case
  *                                  ("an employee is told who can create stock"). Dropping that case
  *                                  to avoid a second row would be weakening the lane, not isolating it.
+ *
+ *   The employee's membership ends up scoped to the tenant's default ACTIVE branch, and that is not a
+ *   detail: 0188 defines a missing employee scope as an EMPTY effective scope ("never permission to
+ *   see every branch"), so an employee row written without one authenticates and then answers
+ *   "You are in this business but not in a branch" on every operational screen — the exact shape the
+ *   two shared-shop employee fixtures were left in on 2026-10-04. A tenant with no active branch is a
+ *   refusal here for the same reason: the fixture would be writing a member who cannot work.
+ *
+ *   HOW THE MEMBERSHIP ITSELF GETS WRITTEN. Not by this script — by the product. `ensure_user_membership`
+ *   (0113) fires AFTER INSERT on `users` and derives the membership from the row: `is_original_owner`
+ *   gives an `owner` membership with no role template, and `role = 'employee'` gives an `employee`
+ *   membership carrying the tenant's system 'Sales Employee' role and `branch_scope = NULL`. So the
+ *   fixture marks the owner row `is_original_owner: true`, which is the product's own rule rather than a
+ *   flag invented here, and then sets the ONE column 0113 leaves empty — the employee's branch scope —
+ *   as an UPDATE of exactly that membership. Writing a whole membership row by hand would collide with
+ *   the trigger's row; the plan below is therefore two phases, and `assertSafeFixtureWrites` allows
+ *   exactly one UPDATE shape and nothing else.
  *   The sign-in credential is NOT hand-written here: `scripts/provision-auth-sessions.mjs` already
  *   owns that derivation (email/password from the phone) and verifies it by signing in, so `--apply`
  *   invokes it rather than duplicating it.
@@ -62,18 +79,19 @@ export const SHARED_QA_SHOP_ID = '00000000-0000-0000-0000-000000000001';
 export const ISOLATED_IDENTITIES = [
   {
     id: '90000000-0000-0000-0000-0000000000a1',
-    membershipId: '90000000-0000-0000-0000-0000000000b1',
     name: 'QA Isolation Owner',
     phone: '923007700001',
     role: 'admin',
+    /** 0113 derives the membership from this flag: true → an `owner` membership. */
+    isOriginalOwner: true,
     membershipRole: 'owner',
   },
   {
     id: '90000000-0000-0000-0000-0000000000a2',
-    membershipId: '90000000-0000-0000-0000-0000000000b2',
     name: 'QA Isolation Employee',
     phone: '923007700002',
     role: 'employee',
+    isOriginalOwner: false,
     membershipRole: 'employee',
   },
 ];
@@ -110,6 +128,11 @@ export function refusalReasons(input) {
   if (input.targetRef !== QA_PROJECT_REF) {
     reasons.push(`the target project ref is "${input.targetRef || '(unreadable)'}", not the QA project (${QA_PROJECT_REF})`);
   }
+  if (input.branchId !== undefined && !input.branchId) {
+    reasons.push(
+      'the dedicated tenant has no ACTIVE branch, so an employee membership written here would carry an empty branch scope (0188) and could not open a single operational screen',
+    );
+  }
   if (input.tenantId === SHARED_QA_SHOP_ID) {
     reasons.push('the fixture tenant is the SHARED QA shop — write lanes must not run against it');
   }
@@ -124,8 +147,14 @@ export function refusalReasons(input) {
   return reasons;
 }
 
-/** The exact rows the fixture creates. Data, not SQL, so a guard can inspect it. */
-export function fixtureRows(tenantId = ISOLATED_TENANT_ID) {
+/**
+ * The exact rows the fixture creates. Data, not SQL, so a guard can inspect it:
+ * the two `users` rows, plus the one membership COLUMN the 0113 trigger leaves empty — the employee's
+ * branch scope. An owner is deliberately left unscoped, because 0188 gives an owner implicit global
+ * branch authority and a scope here would narrow it to one branch.
+ */
+export function fixtureRows(tenantId = ISOLATED_TENANT_ID, defaultBranchId = null) {
+  const employee = ISOLATED_IDENTITIES.find((i) => i.membershipRole === 'employee');
   return ISOLATED_IDENTITIES.map((identity) => ({
     table: 'users',
     values: {
@@ -134,31 +163,37 @@ export function fixtureRows(tenantId = ISOLATED_TENANT_ID) {
       phone: identity.phone,
       role: identity.role,
       shop_id: tenantId,
-      is_original_owner: false,
+      is_original_owner: identity.isOriginalOwner,
       is_active: true,
     },
   })).concat(
-    ISOLATED_IDENTITIES.map((identity) => ({
-      table: 'memberships',
-      values: {
-        id: identity.membershipId,
-        user_id: identity.id,
-        tenant_id: tenantId,
-        role: identity.membershipRole,
-        status: 'active',
-      },
-    })),
+    defaultBranchId && employee
+      ? [{
+          table: 'memberships',
+          kind: 'branch-scope',
+          values: { user_id: employee.id, tenant_id: tenantId, branch_scope: [defaultBranchId] },
+        }]
+      : [],
   );
 }
 
 /**
- * THE WRITE PLAN, as statements. Parameterised, so no value is ever concatenated into SQL, and
- * INSERT-only by construction — `assertInsertsOnly` re-checks that mechanically rather than
- * trusting this function's name.
+ * THE WRITE PLAN, as statements. Parameterised, so no value is ever concatenated into SQL, and checked
+ * mechanically by `assertSafeFixtureWrites` before anything runs.
  */
-export function writePlan(tenantId = ISOLATED_TENANT_ID) {
-  return fixtureRows(tenantId).map(({ table, values }) => {
+export function writePlan(tenantId = ISOLATED_TENANT_ID, defaultBranchId = null) {
+  return fixtureRows(tenantId, defaultBranchId).map(({ table, kind, values }) => {
     const columns = Object.keys(values);
+    if (kind === 'branch-scope') {
+      // The one write that is not an INSERT, and the only one the guard permits: one column of one
+      // row, keyed by the pair that identifies the membership (0113 creates the row; 0188 reads the
+      // scope; nothing here can create or remove a membership).
+      return {
+        table,
+        sql: `UPDATE memberships SET branch_scope = $1::uuid[] WHERE user_id = $2 AND tenant_id = $3`,
+        params: [values.branch_scope, values.user_id, values.tenant_id],
+      };
+    }
     return {
       table,
       sql: `INSERT INTO ${table} (${columns.join(', ')}) VALUES (${columns.map((_, i) => `$${i + 1}`).join(', ')})`,
@@ -168,18 +203,45 @@ export function writePlan(tenantId = ISOLATED_TENANT_ID) {
 }
 
 /**
- * Refuse any plan that is not INSERT-only: the fixture must not be able to remove or edit a row.
- * The placeholder/parameter count is checked too — a mismatch would either fail at the database or,
+ * Refuse anything the fixture is not allowed to do. The rule, in one sentence: it may INSERT the two
+ * fixture identities into `users` and `memberships`, and it may set the branch scope of the fixture
+ * employee's own membership — nothing else, in no other table, for no other user, in no other tenant.
+ *
+ * The placeholder/parameter count is checked too: a mismatch would either fail at the database or,
  * worse, bind values to the wrong columns, and neither is something to discover mid-write.
+ *
+ * This replaces an earlier INSERT-only check, which the 0113 trigger made impossible to satisfy: the
+ * membership row already exists by the time the fixture could insert one, so the employee's scope can
+ * only be an UPDATE. The guard is stricter than before where it matters (it pins WHICH row and WHICH
+ * column, which "no UPDATE at all" never did) and is exercised in both directions by
+ * `tests/unit/qaTenantFixture.test.ts`.
  */
-export function assertInsertsOnly(plan) {
+export function assertSafeFixtureWrites(plan, tenantId = ISOLATED_TENANT_ID) {
   const allowedTables = new Set(['users', 'memberships']);
+  const fixtureUserIds = new Set(ISOLATED_IDENTITIES.map((i) => i.id));
+  const scopeUpdate = /^UPDATE memberships SET branch_scope = \$1::uuid\[\] WHERE user_id = \$2 AND tenant_id = \$3$/;
   for (const step of plan) {
-    if (!/^INSERT INTO [a-z_]+ \(/.test(step.sql)) {
-      throw new Error(`[QA TENANT] refusing a non-INSERT statement: ${step.sql}`);
+    if (/delete|truncate|drop|alter/i.test(step.sql)) {
+      throw new Error(`[QA TENANT] refusing a statement that could remove data: ${step.sql}`);
     }
-    if (/delete|update|truncate|drop|alter/i.test(step.sql)) {
-      throw new Error(`[QA TENANT] refusing a statement that could modify existing data: ${step.sql}`);
+    if (/update/i.test(step.sql)) {
+      if (!scopeUpdate.test(step.sql)) {
+        throw new Error(`[QA TENANT] refusing an UPDATE that is not the fixture's own branch-scope write: ${step.sql}`);
+      }
+      const [scope, userId, target] = step.params;
+      if (target !== tenantId) {
+        throw new Error(`[QA TENANT] refusing to scope a membership in ${target}: the fixture writes ${tenantId} only`);
+      }
+      if (!fixtureUserIds.has(userId)) {
+        throw new Error(`[QA TENANT] refusing to scope ${userId}: not one of the fixture identities`);
+      }
+      if (!Array.isArray(scope) || scope.length === 0) {
+        throw new Error('[QA TENANT] refusing an empty branch scope — 0188 reads that as “no branch at all”');
+      }
+      continue;
+    }
+    if (!/^INSERT INTO [a-z_]+ \(/.test(step.sql)) {
+      throw new Error(`[QA TENANT] refusing a statement that is neither an INSERT nor the branch-scope write: ${step.sql}`);
     }
     if (!allowedTables.has(step.table)) {
       throw new Error(`[QA TENANT] refusing to write ${step.table}: the fixture writes ${[...allowedTables].join(' and ')} only`);
@@ -187,6 +249,9 @@ export function assertInsertsOnly(plan) {
     const placeholders = step.sql.match(/\$\d+/g)?.length ?? 0;
     if (placeholders !== step.params.length) {
       throw new Error(`[QA TENANT] refusing ${step.sql}: ${placeholders} placeholder(s) for ${step.params.length} value(s)`);
+    }
+    if (!step.params.includes(tenantId)) {
+      throw new Error(`[QA TENANT] refusing ${step.sql}: it does not name the dedicated tenant ${tenantId}`);
     }
   }
   return plan;
@@ -212,19 +277,20 @@ async function inspect(client, tenantId) {
   const tenant = (await client.query('select id, name, created_at from shops where id = $1', [tenantId])).rows[0] ?? null;
   const phones = ISOLATED_IDENTITIES.map((i) => i.phone);
   const existing = (await client.query('select id, name, phone from users where phone = any($1)', [phones])).rows;
-  const branch = (await client.query('select id, name, is_default from branches where tenant_id = $1 order by is_default desc', [tenantId])).rows[0] ?? null;
+  const branch = (await client.query('select id, name, is_default from branches where tenant_id = $1 and is_active order by is_default desc, created_at', [tenantId])).rows[0] ?? null;
   const roles = (await client.query('select count(*)::int as n from roles where tenant_id = $1', [tenantId])).rows[0].n;
   return { tenant, perTable, tenantBusinessRows, existing, branch, roles };
 }
 
 function printPlan(facts, apply, asJson) {
-  const plan = writePlan();
+  const plan = writePlan(ISOLATED_TENANT_ID, facts.branch?.id ?? null);
   // The same reasons in both modes: a plan that would be refused must SAY so, or the plan looks
   // like an invitation to run a fixture against a tenant that is no longer empty.
   const refusals = refusalReasons({
     targetRef: facts.targetRef,
     tenantId: ISOLATED_TENANT_ID,
     tenantBusinessRows: facts.tenantBusinessRows,
+    branchId: facts.branch?.id ?? null,
   });
   const out = {
     mode: apply ? 'apply' : 'plan',
@@ -285,7 +351,12 @@ async function main() {
 
     const facts = await inspect(client, ISOLATED_TENANT_ID);
     facts.targetRef = targetRef;
-    const refusals = refusalReasons({ targetRef, tenantId: ISOLATED_TENANT_ID, tenantBusinessRows: facts.tenantBusinessRows });
+    const refusals = refusalReasons({
+      targetRef,
+      tenantId: ISOLATED_TENANT_ID,
+      tenantBusinessRows: facts.tenantBusinessRows,
+      branchId: facts.branch?.id ?? null,
+    });
     if (facts.existing.length) {
       // Not a refusal: the fixture is already there. Say so and stop, rather than re-writing it.
       printPlan(facts, true, asJson);
@@ -299,7 +370,7 @@ async function main() {
       return;
     }
 
-    const plan = assertInsertsOnly(writePlan());
+    const plan = assertSafeFixtureWrites(writePlan(ISOLATED_TENANT_ID, facts.branch?.id ?? null));
     await client.query('BEGIN');
     try {
       for (const step of plan) await client.query(step.sql, step.params);

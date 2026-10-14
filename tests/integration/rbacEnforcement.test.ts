@@ -15,7 +15,13 @@
  */
 
 import { describe, it, beforeAll, afterAll, expect } from 'vitest';
-import { execRpcAsUser, execSqlAsAdmin, selectAsUser } from '../setup/qa-client';
+import {
+  execRpcAsUser,
+  execSqlAsAdmin,
+  selectAsUser,
+  ensureTenantBranch,
+  setActiveBranchAsUser,
+} from '../setup/qa-client';
 
 const TENANT_A = '00000000-0000-0000-0000-000000000001';
 const TENANT_B = '00000000-0000-0000-0000-00000000b0b0';
@@ -97,6 +103,14 @@ beforeAll(async () => {
   branchMain = branches.rows[0]?.id;
   branchWarehouse = branches.rows[1]?.id ?? branchMain;
   expect(branchMain).toBeTruthy();
+
+  // Tenant B was created as a bare shop row, so it has no branch to work in and 0188's
+  // authorize_business_action refuses every action with "branch access denied" — a branch is not its
+  // tenant, and a tenant with no branch cannot operate. Creating the default branch and selecting it,
+  // through the app's own RPC, is what registration plus first branch selection does.
+  const branchB = await ensureTenantBranch(TENANT_B, 'QA Tenant B Main');
+  await setActiveBranchAsUser(OWNER_B, branchB);
+  await setActiveBranchAsUser(OWNER_A, branchMain);
 });
 
 afterAll(async () => {

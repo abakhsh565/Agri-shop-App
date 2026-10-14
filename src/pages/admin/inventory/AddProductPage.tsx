@@ -229,7 +229,53 @@ export default function AddProductPage() {
     resumed?.marketplaceListed ?? existing?.marketplaceListed ?? false
   );
   /**
-   * What the switch read when this screen opened. On an edit, only a move away from this is
+   * Whether the switch has been moved by a person on this screen.
+   *
+   * It has to be tracked, because the row this screen edits can arrive AFTER the first render:
+   * open `/admin/inventory/<id>/edit` by URL and the shell has not filled `productsStore` yet, so
+   * every `useState` initializer above reads nothing. For the switch that was not a cosmetic lag.
+   * The initial value was captured as `false` while `marketplaceInitial` (recomputed on every
+   * render) became `true` a moment later, so `marketplaceChanged` said "the owner moved it" about
+   * a switch nobody had touched — and the next save, about anything at all, wrote
+   * `marketplaceListed: false` and unlisted a listed product. That is the exact defect the
+   * marketplace lane exists to catch (measured 2026-10-14 on a product the form itself had just
+   * listed).
+   */
+  const marketplaceTouched = useRef(false);
+  /**
+   * Adopt the row this screen edits, once it exists.
+   *
+   * WHY THIS IS NECESSARY, and not a nicety. This screen is opened by URL — a deep link, a
+   * refresh, the browser's back button, the redirect after a save — and the row it edits lives in
+   * `productsStore`, which the shell fills AFTER this component's first render. Every field above
+   * reads that row in a `useState` initializer, so on all of those paths the form opened BLANK for a
+   * product that exists. Measured 2026-10-14 on `/admin/inventory/<id>/edit`: the name and barcode
+   * were empty while the packs filled in a moment later (their effect re-runs), and the marketplace
+   * switch read `false` for a listed product — so `marketplaceChanged` said "the owner moved it"
+   * about a switch nobody had touched and the next save, about anything at all, unlisted it.
+   *
+   * A field is only adopted while it still holds what this screen started it with, so a row that
+   * arrives late can never overwrite what a person has typed.
+   */
+  const adoptedRef = useRef(false);
+  useEffect(() => {
+    if (!isEdit || resumed || adoptedRef.current || !existing) return;
+    adoptedRef.current = true;
+    setName((v) => (v === "" ? existing.name ?? "" : v));
+    setCompany((v) => (v === "" ? existing.company ?? "" : v));
+    setBarcode((v) => (v === "" ? existing.barcode ?? "" : v));
+    setImageUrl((v) => (v === null ? existing.imageUrl ?? null : v));
+    // The retired "Spray" name stays folded into Pesticide, exactly as the initializers above do.
+    setCategory((v) =>
+      v === "pesticide" && existing.category && existing.category !== "spray" ? existing.category : v
+    );
+    setBaseUnit((v) =>
+      v === "kg" && existing.baseUnit && existing.baseUnit !== "kg" ? (existing.baseUnit as BaseUnit) : v
+    );
+    if (!marketplaceTouched.current) setMarketplaceListed(existing.marketplaceListed === true);
+  }, [isEdit, resumed, existing]);
+  /**
+   * What the switch reads as the stored decision. On an edit, only a move away from this is
    * sent: the RPC treats an absent value as "unchanged", so a save that did not touch the
    * switch cannot unlist a listed product — not even if the row this device read was stale.
    */
@@ -1144,7 +1190,7 @@ export default function AddProductPage() {
               role="checkbox"
               aria-checked={marketplaceListed}
               aria-label={t("marketplace.listOn")}
-              onClick={() => setMarketplaceListed((v) => !v)}
+              onClick={() => { marketplaceTouched.current = true; setMarketplaceListed((v) => !v); }}
               data-testid="product-marketplace-toggle"
               className="mt-0.5 flex items-center justify-center shrink-0"
             >

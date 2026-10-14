@@ -26,7 +26,17 @@
 import { describe, it, expect } from 'vitest';
 import { readDeclaration, classifyBaseline } from '../../scripts/dev/qa-baseline.mjs';
 import { QA_PROJECT_REF } from '../../scripts/dev/lib.mjs';
-import { SHARED_QA_SHOP_ID } from '../../scripts/dev/qa-tenant.mjs';
+import { ISOLATED_IDENTITIES, SHARED_QA_SHOP_ID } from '../../scripts/dev/qa-tenant.mjs';
+
+/**
+ * The dedicated tenant's two phones, taken from the fixture module that owns them rather than typed in
+ * again here. `tests/unit/fixtureIdCollision.test.ts` fails when two test files declare the same
+ * fixture phone (the second insert would die on `users_phone_key`), and a second literal copy of these
+ * numbers in a file that only needs them as DATA for the policy checker is exactly that collision —
+ * this file does not insert a row for either identity.
+ */
+const PHONE_OWNER = ISOLATED_IDENTITIES.find((i) => i.membershipRole === 'owner')!.phone;
+const PHONE_EMPLOYEE = ISOLATED_IDENTITIES.find((i) => i.membershipRole === 'employee')!.phone;
 
 const declaration = {
   projectRef: QA_PROJECT_REF,
@@ -152,6 +162,92 @@ describe('QA baseline policy — the fixtures and the lanes\' premise', () => {
   });
 });
 
+describe('QA baseline policy — the fixtures\' work context', () => {
+  const BRANCH = 'b17fd67c-44ff-4977-bbb4-79b96abf2edb';
+  const OTHER_SHOP = '88415b7c-975a-41fa-8158-23b63d0cd779';
+  const withContext = {
+    ...declaration,
+    fixtures: {
+      ...declaration.fixtures,
+      workContext: {
+        why: 'the branch the employee fixtures work in, and the shop the owner fixture is working in',
+        tenantId: SHARED_QA_SHOP_ID,
+        branchId: BRANCH,
+        ownerPhone: '923001234567',
+        employeePhones: ['923001122334'],
+      },
+    },
+    isolatedTenant: {
+      ...declaration.isolatedTenant,
+      identities: [
+        { phone: PHONE_OWNER, membershipRole: 'owner' },
+        { phone: PHONE_EMPLOYEE, membershipRole: 'employee', branchScope: 'required' },
+      ],
+    },
+  };
+
+  function contextObservation() {
+    const observed = cleanObservation();
+    observed.fixtures.workContext = {
+      owner: { shopId: SHARED_QA_SHOP_ID, branchId: BRANCH },
+      employees: [{ phone: '923001122334', membership: { role: 'employee', status: 'active', branchScope: [BRANCH] } }],
+    };
+    observed.isolatedTenant.identities = [
+      { phone: PHONE_OWNER, membership: { role: 'owner', status: 'active', branchScope: null } },
+      { phone: PHONE_EMPLOYEE, membership: { role: 'employee', status: 'active', branchScope: ['ea60cd69-dbfd-4da0-9e2e-957af9f47d68'] } },
+    ];
+    return observed;
+  }
+
+  it('passes when both the shop the owner works in and the branch the employee may work in are as declared', () => {
+    const result = classifyBaseline(contextObservation(), withContext);
+    expect(result.failures).toEqual([]);
+    expect(result.notes.join(' ')).toContain('as declared');
+  });
+
+  it('fails when the owner fixture has been left working in another shop', () => {
+    // The observed defect: `user_active_shops` pointed at the other tenant, so every lane signing in as
+    // this account read that shop's — empty — screens and blamed the feature under test.
+    const moved = contextObservation();
+    moved.fixtures.workContext.owner = { shopId: OTHER_SHOP, branchId: BRANCH };
+    const result = classifyBaseline(moved, withContext);
+    expect(result.ok).toBe(false);
+    expect(result.failures.join(' ')).toContain('not the declared');
+    expect(result.failures.join(' ')).toContain(OTHER_SHOP);
+  });
+
+  it('fails when the owner fixture has no active-shop row at all', () => {
+    const none = contextObservation();
+    none.fixtures.workContext.owner = null;
+    expect(classifyBaseline(none, withContext).failures.join(' ')).toContain('no active-shop row');
+  });
+
+  it('fails when an employee fixture is present but scoped to no branch (0188: empty means none)', () => {
+    for (const scope of [null, []]) {
+      const unscoped = contextObservation();
+      unscoped.fixtures.workContext.employees = [
+        { phone: '923001122334', membership: { role: 'employee', status: 'active', branchScope: scope } },
+      ];
+      const result = classifyBaseline(unscoped, withContext);
+      expect(result.ok, `scope=${JSON.stringify(scope)} must fail`).toBe(false);
+      expect(result.failures.join(' ')).toContain('not in a branch');
+    }
+  });
+
+  it('fails when the dedicated tenant\'s identities are missing, or its employee has no scope', () => {
+    const missing = contextObservation();
+    missing.isolatedTenant.identities = [];
+    expect(classifyBaseline(missing, withContext).failures.join(' ')).toContain('is MISSING');
+
+    const unscopedEmployee = contextObservation();
+    unscopedEmployee.isolatedTenant.identities = [
+      { phone: PHONE_OWNER, membership: { role: 'owner', status: 'active', branchScope: null } },
+      { phone: PHONE_EMPLOYEE, membership: { role: 'employee', status: 'active', branchScope: null } },
+    ];
+    expect(classifyBaseline(unscopedEmployee, withContext).failures.join(' ')).toContain('no branch scope');
+  });
+});
+
 describe('the declaration file on disk', () => {
   const real = readDeclaration();
 
@@ -175,6 +271,22 @@ describe('the declaration file on disk', () => {
     // The row that made the zero-row gate unattainable stays classified as history rather than being
     // declared an exact count, which a later run would then trip over.
     expect(real.policies.audit_events.policy).toBe('history');
+  });
+
+  it('declares the work context and the dedicated tenant\'s identities, so neither can be dropped silently', () => {
+    // Non-vacuity for the new rules: without these the checks above would be skipped by absence rather
+    // than satisfied by fact, which is the failure mode a declaration must never have.
+    const context = real.fixtures?.workContext;
+    expect(context, 'fixtures.workContext must be declared').toBeTruthy();
+    expect(context.tenantId).toBeTruthy();
+    expect(context.branchId).toBeTruthy();
+    expect(context.ownerPhone).toBeTruthy();
+    expect(context.employeePhones.length).toBeGreaterThan(0);
+    expect(context.why).toBeTruthy();
+    const identities = real.isolatedTenant?.identities ?? [];
+    expect(identities.map((i: { membershipRole: string }) => i.membershipRole).sort()).toEqual(['employee', 'owner']);
+    const employee = identities.find((i: { membershipRole: string }) => i.membershipRole === 'employee');
+    expect(employee.branchScope).toBe('required');
   });
 
   it('declares the four keep-list identities and the FK-referenced supplier fixture', () => {

@@ -27,12 +27,15 @@ import {
   ISOLATED_IDENTITIES,
   ISOLATED_TENANT_ID,
   SHARED_QA_SHOP_ID,
-  assertInsertsOnly,
+  assertSafeFixtureWrites,
   fixtureRows,
   refusalReasons,
   targetRefFromUrl,
   writePlan,
 } from '../../scripts/dev/qa-tenant.mjs';
+
+/** The tenant's default branch, as the fixture is run with it. */
+const BRANCH = 'ea60cd69-dbfd-4da0-9e2e-957af9f47d68';
 
 /** The QA target is the staging project (environments.json), so 'the wrong project' means production. */
 const OTHER_REF = PRODUCTION_PROJECT_ID;
@@ -81,6 +84,19 @@ describe('isolated tenant fixture — the refusals', () => {
     expect(reasons.join(' ')).toContain('not the dedicated app-created tenant');
   });
 
+  it('refuses a tenant with no ACTIVE branch, because the employee row would be written unscoped', () => {
+    // 0188: a missing employee scope is an EMPTY scope, so this identity would authenticate and then
+    // answer "You are in this business but not in a branch" on every operational screen. Writing it
+    // anyway is how the two shared-shop employee fixtures were left on 2026-10-04.
+    const reasons = refusalReasons({ ...clean, branchId: null });
+    expect(reasons.join(' ')).toContain('no ACTIVE branch');
+    // The same input with a branch is allowed, so the rule is the branch, not the call.
+    expect(refusalReasons({ ...clean, branchId: 'ea60cd69-dbfd-4da0-9e2e-957af9f47d68' })).toEqual([]);
+    // Absent is treated as "not supplied" by the older callers and does not fire — the CLI always
+    // supplies it, and the guard above pins that it does.
+    expect(refusalReasons(clean)).toEqual([]);
+  });
+
   it('refuses a tenant that is no longer empty, and allows the same tenant while it is', () => {
     const dirty = refusalReasons({ ...clean, tenantBusinessRows: 1 });
     expect(dirty.join(' ')).toContain('no longer empty');
@@ -90,22 +106,32 @@ describe('isolated tenant fixture — the refusals', () => {
 });
 
 describe('isolated tenant fixture — what it writes', () => {
-  const plan = writePlan();
+  const plan = writePlan(ISOLATED_TENANT_ID, BRANCH);
 
-  it('writes one users row and one memberships row per identity, inside the dedicated tenant', () => {
-    expect(plan).toHaveLength(ISOLATED_IDENTITIES.length * 2);
-    expect(plan.map((s) => s.table)).toEqual([
-      'users', 'users', 'memberships', 'memberships',
-    ]);
-    for (const row of fixtureRows()) {
-      if (row.table === 'memberships') expect(row.values.tenant_id).toBe(ISOLATED_TENANT_ID);
-      if (row.table === 'users') expect(row.values.shop_id).toBe(ISOLATED_TENANT_ID);
-    }
+  it('writes the two users rows, and the one membership column the product\'s trigger leaves empty', () => {
+    // The memberships themselves are NOT written here: `ensure_user_membership` (0113) creates them
+    // from the users row, so a hand-written membership would collide with its own trigger's row. That
+    // is why the flag matters — the owner identity is marked `is_original_owner`, which is the rule
+    // 0113 uses to derive an `owner` membership.
+    expect(plan).toHaveLength(ISOLATED_IDENTITIES.length + 1);
+    expect(plan.map((s) => s.table)).toEqual(['users', 'users', 'memberships']);
+    const users = fixtureRows(ISOLATED_TENANT_ID, BRANCH).filter((r) => r.table === 'users');
+    for (const row of users) expect(row.values.shop_id).toBe(ISOLATED_TENANT_ID);
+    const owner = users.find((r) => r.values.phone === '923007700001')!;
+    expect(owner.values.is_original_owner, '0113 derives an OWNER membership from this flag').toBe(true);
+    expect(users.find((r) => r.values.phone === '923007700002')!.values.is_original_owner).toBe(false);
   });
 
-  it('carries the owner membership the lane signs in with, and the employee its negative case needs', () => {
-    const memberships = fixtureRows().filter((r) => r.table === 'memberships').map((r) => r.values.role);
-    expect(memberships).toEqual(['owner', 'employee']);
+  it('scopes the employee membership to the tenant\'s branch, and does not touch the owner\'s', () => {
+    const scopes = fixtureRows(ISOLATED_TENANT_ID, BRANCH).filter(
+      (r) => r.table === 'memberships' && r.kind === 'branch-scope',
+    );
+    expect(scopes).toHaveLength(1);
+    expect(scopes[0].values.user_id).toBe(ISOLATED_IDENTITIES.find((i) => i.membershipRole === 'employee')!.id);
+    expect(scopes[0].values.branch_scope).toEqual([BRANCH]);
+    expect(scopes[0].values.tenant_id).toBe(ISOLATED_TENANT_ID);
+    // No branch supplied ⇒ no scope write at all, which the plan itself refuses to invent.
+    expect(fixtureRows(ISOLATED_TENANT_ID, null).filter((r) => r.table === 'memberships')).toHaveLength(0);
   });
 
   it('never names the shared QA shop anywhere in its rows', () => {
@@ -119,22 +145,38 @@ describe('isolated tenant fixture — what it writes', () => {
     }
   });
 
-  it('is INSERT-only, and the validator rejects what it claims to reject', () => {
-    expect(() => assertInsertsOnly(plan)).not.toThrow();
-    // Each of these must be refused: a delete, a write outside the two fixture tables, and a
-    // statement whose parameter count does not match its placeholders.
+  it('never lets the plan reach a DELETE, however it is assembled', () => {
+    // Dropped later in the file as well; the point of pinning it twice is that the refusal must come
+    // from the plan's own content, not from the file's history.
+    expect(JSON.stringify(plan)).not.toMatch(/delete|truncate|drop table/i);
+  });
+
+  it('accepts its own plan, and refuses everything it claims to refuse', () => {
+    expect(() => assertSafeFixtureWrites(plan)).not.toThrow();
+    const employee = ISOLATED_IDENTITIES.find((i) => i.membershipRole === 'employee')!.id;
     for (const bad of [
+      // A delete, and a write outside the two fixture tables.
       { table: 'users', sql: 'DELETE FROM users WHERE phone = $1', params: ['x'] },
       { table: 'products', sql: 'INSERT INTO products (id) VALUES ($1)', params: ['x'] },
+      // A parameter count that does not match its placeholders.
       { table: 'users', sql: 'INSERT INTO users (id) VALUES ($1)', params: [] },
+      // An INSERT that names no row in the dedicated tenant.
+      { table: 'users', sql: 'INSERT INTO users (id, shop_id) VALUES ($1, $2)', params: ['x', SHARED_QA_SHOP_ID] },
+      // An UPDATE of another column of a membership (the role, say), and an UPDATE of the shared shop.
+      { table: 'memberships', sql: 'UPDATE memberships SET role = $1 WHERE user_id = $2 AND tenant_id = $3', params: ['owner', employee, ISOLATED_TENANT_ID] },
+      { table: 'memberships', sql: 'UPDATE memberships SET branch_scope = $1::uuid[] WHERE user_id = $2 AND tenant_id = $3', params: [[BRANCH], employee, SHARED_QA_SHOP_ID] },
+      // …of a user that is not a fixture identity…
+      { table: 'memberships', sql: 'UPDATE memberships SET branch_scope = $1::uuid[] WHERE user_id = $2 AND tenant_id = $3', params: [[BRANCH], '11111111-1111-1111-1111-111111111111', ISOLATED_TENANT_ID] },
+      // …or to an empty scope, which 0188 reads as “no branch at all”.
+      { table: 'memberships', sql: 'UPDATE memberships SET branch_scope = $1::uuid[] WHERE user_id = $2 AND tenant_id = $3', params: [[], employee, ISOLATED_TENANT_ID] },
     ]) {
-      expect(() => assertInsertsOnly([bad]), JSON.stringify(bad)).toThrow();
+      expect(() => assertSafeFixtureWrites([bad]), JSON.stringify(bad)).toThrow();
     }
   });
 
   it('refuses an UPDATE hidden inside an otherwise valid INSERT', () => {
     expect(() =>
-      assertInsertsOnly([{ table: 'users', sql: 'INSERT INTO users (id) VALUES ($1) /* update */', params: ['x'] }]),
+      assertSafeFixtureWrites([{ table: 'users', sql: 'INSERT INTO users (id) VALUES ($1) /* update */', params: ['x'] }]),
     ).toThrow();
   });
 });

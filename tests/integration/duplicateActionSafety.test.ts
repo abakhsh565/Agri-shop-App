@@ -122,7 +122,25 @@ beforeAll(async () => {
 afterAll(async () => {
   await execSqlAsAdmin(`DELETE FROM supplier_payments WHERE company_id = '${COMPANY}'`);
   await execSqlAsAdmin(`DELETE FROM customer_payments WHERE customer_id = '${CUSTOMER}'`).catch(() => undefined);
-  await execSqlAsAdmin(`DELETE FROM customers WHERE id = '${CUSTOMER}'`).catch(() => undefined);
+
+  // THIS SUITE'S OWN SALES, children before parents — and the reason the baseline read `sales: 5,
+  // declared 2` on 2026-10-14.
+  //
+  // `cleanupTestData()` only covers the SHARED fixtures (customerA/B/C), so nothing here removed the
+  // sale test 4 records for this suite's OWN customer, and the customer delete below was wrapped in
+  // `.catch(() => undefined)` — it failed on `sales.customer_id` (NO ACTION) and said nothing. One
+  // voided sale, its line and its void were left behind per run: three of them in QA, each with
+  // `total_amount = 1000.00` and the reason 'QA duplicate-safety void'. Deleted by this suite's own
+  // customer id, which no other file uses (`grep` over tests/ finds this file and the residue
+  // criteria only), so it cannot reach a sibling lane's rows.
+  await execSqlAsAdmin(`DELETE FROM voids WHERE sale_id IN (SELECT id FROM sales WHERE customer_id = '${CUSTOMER}')`);
+  await execSqlAsAdmin(`DELETE FROM sale_items WHERE sale_id IN (SELECT id FROM sales WHERE customer_id = '${CUSTOMER}')`);
+  await execSqlAsAdmin(`DELETE FROM return_items WHERE return_id IN (SELECT id FROM returns WHERE customer_id = '${CUSTOMER}')`);
+  await execSqlAsAdmin(`DELETE FROM returns WHERE customer_id = '${CUSTOMER}'`).catch(() => undefined);
+  await execSqlAsAdmin(`DELETE FROM payments WHERE customer_id = '${CUSTOMER}'`).catch(() => undefined);
+  await execSqlAsAdmin(`DELETE FROM credit_limit_requests WHERE customer_id = '${CUSTOMER}'`).catch(() => undefined);
+  await execSqlAsAdmin(`DELETE FROM sales WHERE customer_id = '${CUSTOMER}'`);
+  await execSqlAsAdmin(`DELETE FROM customers WHERE id = '${CUSTOMER}'`);
   await execSqlAsAdmin(`DELETE FROM companies WHERE id = '${COMPANY}'`).catch(() => undefined);
   await execSqlAsAdmin(`DELETE FROM inventory_movements WHERE product_id = '${PRODUCT}'`).catch(() => undefined);
   await execSqlAsAdmin(`DELETE FROM stock_adjustments WHERE product_id = '${PRODUCT}'`).catch(() => undefined);
@@ -134,6 +152,24 @@ afterAll(async () => {
   await cleanupTestData();
   await execSqlAsAdmin(`UPDATE companies SET outstanding_payable = 15000 WHERE id = '${COMPANY}'`);
   await setVariantStock(100);
+
+  // Read the result back rather than assume it: the three rows this suite used to leave behind were
+  // invisible precisely because the deletes above were fire-and-forget. A survivor fails the run and
+  // names itself, which is how the next such gap gets found in seconds instead of in a baseline diff.
+  const leftOver = await execSqlAsAdmin(
+    `SELECT (SELECT count(*)::int FROM sales WHERE customer_id = '${CUSTOMER}') AS sales,
+            (SELECT count(*)::int FROM voids WHERE sale_id IN (SELECT id FROM sales WHERE customer_id = '${CUSTOMER}')) AS voids,
+            (SELECT count(*)::int FROM sale_items WHERE sale_id IN (SELECT id FROM sales WHERE customer_id = '${CUSTOMER}')) AS sale_items,
+            (SELECT count(*)::int FROM customers WHERE id = '${CUSTOMER}') AS customers`,
+  );
+  const row = (leftOver.rows?.[0] ?? {}) as Record<string, unknown>;
+  const survivors = Object.entries(row).filter(([, n]) => Number(n) > 0);
+  if (survivors.length) {
+    throw new Error(
+      `[QA FIXTURE] duplicateActionSafety left ${survivors.map(([t, n]) => `${t}=${n}`).join(', ')} behind ` +
+        '— find the reference rather than widening a `.catch`.',
+    );
+  }
 });
 
 describe('Duplicate action safety', () => {

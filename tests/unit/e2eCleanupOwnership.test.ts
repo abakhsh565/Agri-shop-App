@@ -15,7 +15,7 @@
  */
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test, vi } from 'vitest';
 import { cleanupFixtures, trackOwned, trackOwnedObject, type OwnedObject } from '../e2e/helpers';
 import {
   createOwnership,
@@ -23,6 +23,7 @@ import {
   ownedCount,
   planCleanup,
   PROTECTED_QA_IDS,
+  USER_DELETE_GUARDS,
   type Ownership,
 } from '../e2e/cleanupOwnership';
 
@@ -33,6 +34,14 @@ function fakeDb(initial: Record<string, Row[]>) {
   const tables: Record<string, Row[]> = JSON.parse(JSON.stringify(initial));
   const executed: string[] = [];
   const exec = async (sql: string): Promise<unknown[]> => {
+    // The read-back cleanup runs after the `users` step to name what the guard preserved.
+    const readBack = /^SELECT id FROM users WHERE id IN \(([^)]*)\)$/.exec(sql);
+    if (readBack) {
+      const ids = new Set([...readBack[1].matchAll(/'([^']+)'/g)].map((m) => m[1]));
+      return (tables.users ?? [])
+        .filter((row) => ids.has(String(row.id)))
+        .map((row) => ({ id: row.id }));
+    }
     // Grandchildren: `... WHERE <col> IN (SELECT id FROM <parent> WHERE <pcol> IN (...))`.
     const via = /^DELETE FROM ([a-z_]+) WHERE ([a-z_]+) IN \(SELECT id FROM ([a-z_]+) WHERE ([a-z_]+) IN \(([^)]*)\)\)$/.exec(sql);
     if (via) {
@@ -47,12 +56,41 @@ function fakeDb(initial: Record<string, Row[]>) {
       tables[table] = (tables[table] ?? []).filter((row) => !ids.has(String(row[column] ?? '')));
       return [];
     }
-    const match = /^DELETE FROM ([a-z_]+) WHERE ([a-z_]+) IN \(([^)]*)\)$/.exec(sql);
+    const simple = /^DELETE FROM ([a-z_]+) WHERE ([a-z_]+) IN \(([^)]*)\)$/.exec(sql);
+    // The GUARDED shape a refused delete needs: `... AND NOT EXISTS (SELECT 1 FROM t r WHERE r.c = <table>.id)`
+    // repeated. Modelled here, not ignored — a runner that only understood the simple shape would make the
+    // users step throw as "unscoped", and a fake that skipped the clauses would let cleanup delete a row
+    // real Postgres refuses to delete. Both halves of the guard are therefore exercised.
+    const guarded = /^DELETE FROM ([a-z_]+) WHERE ([a-z_]+) IN \(([^)]*)\) AND ((?:NOT EXISTS \(SELECT 1 FROM [a-z_]+ r WHERE r\.[a-z_]+ = [a-z_]+\.id\)(?: AND )?)+)$/.exec(sql);
+    const match = simple ?? guarded;
     if (!match) throw new Error(`UNSCOPED STATEMENT: ${sql}`);
     executed.push(sql);
     const [, table, column, list] = match;
     const ids = new Set([...list.matchAll(/'([^']+)'/g)].map((m) => m[1]));
-    tables[table] = (tables[table] ?? []).filter((row) => !ids.has(String(row[column] ?? '')));
+    const blocked = new Set<string>();
+    if (guarded) {
+      const clauses = [...guarded[4].matchAll(/NOT EXISTS \(SELECT 1 FROM ([a-z_]+) r WHERE r\.([a-z_]+) = [a-z_]+\.id\)/g)];
+      for (const row of tables[table] ?? []) {
+        const id = String(row.id);
+        if (!ids.has(id)) continue;
+        for (const [, refTable, refColumn] of clauses) {
+          if ((tables[refTable] ?? []).some((other) => String(other[refColumn] ?? '') === id)) blocked.add(id);
+        }
+      }
+    }
+    const gone = new Set(
+      (tables[table] ?? [])
+        .filter((row) => ids.has(String(row[column] ?? '')) && !blocked.has(String(row.id)))
+        .map((row) => String(row.id)),
+    );
+    tables[table] = (tables[table] ?? []).filter((row) => !gone.has(String(row.id)));
+    // The three CASCADE keys on `users.id` are modelled too: QA's schema removes these rows with the
+    // account (measured 2026-10-14), which is why no statement here names them.
+    if (table === 'users') {
+      for (const child of ['memberships', 'user_permissions', 'user_active_shops']) {
+        tables[child] = (tables[child] ?? []).filter((row) => !gone.has(String(row.user_id ?? '')));
+      }
+    }
     return [];
   };
   return {
@@ -98,6 +136,77 @@ describe('cleanup deletes what this run created, and only that', () => {
     expect(db.rows('sale_items').map((r) => r.sale_id)).not.toContain(RUN_SALE);
     expect(db.rows('voids').map((r) => r.sale_id)).not.toContain(RUN_SALE);
     expect(db.rows('notifications').map((r) => r.id)).not.toContain('notif-run');
+  });
+
+  test("a sale this run created takes the rows the database wrote beside it, and nobody else's", async () => {
+    // Measured on QA 2026-10-14: 3 `inventory_movements` and 4 `notifications` outlived the sales and
+    // payments they describe, because a lane registers the parent it creates and the RPC writes these
+    // two rows as a side effect. `reference_id`/`entity_id` carry no foreign key, so nothing cascaded
+    // and nothing failed — the residue was invisible until the baseline was read row by row.
+    const db = fakeDb({
+      sales: [{ id: RUN_SALE }, { id: OLD_SALE }],
+      inventory_movements: [
+        { id: 'mv-run', reference_id: RUN_SALE },
+        { id: 'mv-old', reference_id: OLD_SALE },
+      ],
+      notifications: [
+        { id: 'n-sale-run', entity_id: RUN_SALE },
+        { id: 'n-sale-old', entity_id: OLD_SALE },
+      ],
+      customers: [{ id: 'cust-run' }, { id: 'cust-old' }],
+    });
+    const ownership = createOwnership();
+    trackOwned(ownership, 'sales', RUN_SALE);
+    trackOwned(ownership, 'customers', 'cust-run');
+
+    await cleanupFixtures({ exec: db.exec, ownership });
+
+    expect(db.rows('inventory_movements').map((r) => r.id), 'the side effect of an owned sale goes with it').toEqual([
+      'mv-old',
+    ]);
+    expect(db.rows('notifications').map((r) => r.id), 'and so does its notification').toEqual([
+      'n-sale-old',
+    ]);
+    expect(db.rows('sales').map((r) => r.id)).toEqual([OLD_SALE]);
+    // Children before the parent, or the movement would be orphaned by the very cleanup that removes it.
+    const at = (needle: string) => db.executed.findIndex((sql) => sql.startsWith(needle));
+    expect(at('DELETE FROM inventory_movements')).toBeGreaterThanOrEqual(0);
+    expect(at('DELETE FROM inventory_movements')).toBeLessThan(at('DELETE FROM sales WHERE id IN'));
+  });
+
+  test('a payment notification for an owned customer is removed by the customer id it carries', async () => {
+    // The second shape: `kind = 'payment'` rows carry the CUSTOMER id in `entity_id` (measured on QA),
+    // while other payment rows carry the payment id. Both are covered, each by the ids this run owns.
+    const db = fakeDb({
+      customers: [{ id: 'cust-run' }, { id: 'cust-old' }],
+      notifications: [
+        { id: 'n-pay-run', entity_id: 'cust-run' },
+        { id: 'n-pay-old', entity_id: 'cust-old' },
+      ],
+    });
+    const ownership = createOwnership();
+    trackOwned(ownership, 'customers', 'cust-run');
+
+    await cleanupFixtures({ exec: db.exec, ownership });
+
+    expect(db.rows('notifications').map((r) => r.id)).toEqual(['n-pay-old']);
+    expect(db.rows('customers').map((r) => r.id)).toEqual(['cust-old']);
+  });
+
+  test('a notification nobody registered, about nothing this run created, is left alone', async () => {
+    const db = fakeDb({
+      sales: [{ id: RUN_SALE }],
+      notifications: [
+        { id: 'n-hand-entered', entity_id: 'hand-entered-sale' },
+        { id: 'n-unrelated' },
+      ],
+    });
+    const ownership = createOwnership();
+    trackOwned(ownership, 'sales', RUN_SALE);
+
+    await cleanupFixtures({ exec: db.exec, ownership });
+
+    expect(db.rows('notifications').map((r) => r.id)).toEqual(['n-hand-entered', 'n-unrelated']);
   });
 
   test('leaves unrelated records in the same tables untouched', async () => {
@@ -501,6 +610,141 @@ describe('no lane can reach the old behaviour again', () => {
     expect(source, 'a reported delete failure must fail the run').toMatch(
       /if \(failures\.length \|\| leftover\.length\)/,
     );
+  });
+});
+
+/**
+ * THE ORPHAN DEFECT (measured on QA 2026-10-14, four rows deep).
+ *
+ * `cleanupOwnership` deleted `memberships` for every owned user and never deleted the user, so a lane
+ * that inserts its own fixture account (`crossScreenSync`'s 'Sync Employee', `imageSync`'s
+ * 'Img Employee', `splitPayment`'s 'E2E Employee', `roleInUseDeletion`'s second employee) left a row
+ * with `shop_id` and no membership behind — exactly what `rbacInvariants` Invariant D and
+ * `rbacEnforcement` count and fail on. The two tests below pin both directions: the account goes when
+ * nothing points at it, and when something does, the account and its membership both stay.
+ */
+describe('a fixture account and its membership are one row\'s worth of cleanup', () => {
+  const OWNED = 'owned-fixture-user';
+  const OTHER = 'another-runs-user';
+
+  test('an owned account with nothing pointing at it is removed, and the statements never name memberships', async () => {
+    const db = fakeDb({
+      users: [{ id: OWNED }, { id: OTHER }],
+      memberships: [
+        { id: 'm-owned', user_id: OWNED },
+        { id: 'm-other', user_id: OTHER },
+      ],
+    });
+    const ownership = createOwnership();
+    trackOwned(ownership, 'users', OWNED);
+
+    await cleanupFixtures({ exec: db.exec, ownership });
+
+    expect(db.rows('users').map((r) => r.id), 'the account this run created goes').toEqual([OTHER]);
+    expect(db.rows('memberships').map((r) => r.id), 'its membership went with it, by cascade').toEqual([
+      'm-other',
+    ]);
+    expect(
+      db.executed.join('\n'),
+      'no statement may delete a membership on its own — that is how an orphan is made',
+    ).not.toMatch(/FROM memberships/);
+  });
+
+  test('an owned account the database still references is preserved WITH its membership', async () => {
+    // No FK can be owned by the run: `audit_events` history for that account is written by the system.
+    const referenced = fakeDb({
+      users: [{ id: OWNED }],
+      memberships: [{ id: 'm-owned', user_id: OWNED }],
+      audit_events: [{ id: 'ev-1', user_id: OWNED }],
+    });
+    const ownership = createOwnership();
+    trackOwned(ownership, 'users', OWNED);
+
+    await cleanupFixtures({ exec: referenced.exec, ownership });
+
+    expect(referenced.rows('users').map((r) => r.id), 'the delete is refused, not attempted').toEqual([OWNED]);
+    expect(
+      referenced.rows('memberships').map((r) => r.id),
+      'and the membership MUST stay — deleting it is the orphan the invariant fails on',
+    ).toEqual(['m-owned']);
+    expect(referenced.executed.join('\n')).toContain('NOT EXISTS (SELECT 1 FROM audit_events r WHERE r.user_id = users.id)');
+
+    // Non-vacuity: the same row with no reference at all IS deleted, so the guard is a condition and
+    // not a blanket refusal.
+    const unreferenced = fakeDb({
+      users: [{ id: OWNED }],
+      memberships: [{ id: 'm-owned', user_id: OWNED }],
+      audit_events: [{ id: 'ev-1', user_id: OTHER }],
+    });
+    const second = createOwnership();
+    trackOwned(second, 'users', OWNED);
+    await cleanupFixtures({ exec: unreferenced.exec, ownership: second });
+    expect(unreferenced.rows('users')).toEqual([]);
+  });
+
+  test('a preserved account is REPORTED, not left to look like a clean run', async () => {
+    // This file's own doctrine: a helper that cannot say what it failed to delete is not cleanup.
+    const db = fakeDb({
+      users: [{ id: OWNED }],
+      memberships: [{ id: 'm-owned', user_id: OWNED }],
+      sales: [{ id: 'sale-1', employee_id: OWNED }],
+    });
+    const ownership = createOwnership();
+    trackOwned(ownership, 'users', OWNED);
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    try {
+      await cleanupFixtures({ exec: db.exec, ownership });
+      const said = log.mock.calls.map((args) => args.join(' ')).join('\n');
+      expect(said, 'the survivor must be named').toContain(OWNED);
+      expect(said).toMatch(/preserved 1 fixture account/);
+      expect(said, 'and why it survived, so the next reader is not guessing').toMatch(/still references/);
+    } finally {
+      log.mockRestore();
+    }
+    expect(db.rows('users').map((r) => r.id)).toEqual([OWNED]);
+    expect(db.rows('memberships').map((r) => r.id), 'still not an orphan').toEqual(['m-owned']);
+  });
+
+  test('the guard names every foreign key that would refuse the delete, and nothing else', () => {
+    // The list is a contract, not a convenience: `rbacInvariants` (Invariant F) reads the live schema
+    // and fails when a NO ACTION/RESTRICT key on `users(id)` is missing here.
+    expect([...USER_DELETE_GUARDS].map((r) => `${r.table}.${r.column}`).sort()).toEqual(
+      [
+        'activity_log.user_id',
+        'audit_events.user_id',
+        'branch_responsibility.user_id',
+        'cash_reconciliations.reconciled_by',
+        'daily_cash_reconciliations.reconciled_by',
+        'inventory_movements.created_by',
+        'returns.processed_by',
+        'sales.employee_id',
+        'user_permissions.granted_by',
+        'voids.voided_by',
+      ].sort(),
+    );
+    // ...and the CASCADE / SET NULL keys must NOT be in it: they cannot refuse anything, and listing
+    // them would preserve a row for a reason that does not exist (and keep its membership forever).
+    for (const harmless of [
+      'memberships.user_id',
+      'user_active_shops.user_id',
+      'user_permissions.user_id',
+      'client_error_events.user_id',
+      'branch_responsibility.granted_by',
+      'branch_responsibility.revoked_by',
+    ]) {
+      expect(
+        USER_DELETE_GUARDS.some((r) => `${r.table}.${r.column}` === harmless),
+        `${harmless} cannot refuse a delete and must not guard one`,
+      ).toBe(false);
+    }
+  });
+
+  test('the guard is what makes the delete safe: without it the same step is unconditional', () => {
+    const unguarded = deleteSql({ table: 'users', column: 'id', ids: ['someone'] });
+    expect(unguarded).toBe("DELETE FROM users WHERE id IN ('someone')");
+    const guarded = deleteSql({ table: 'users', column: 'id', ids: ['someone'], unlessReferenced: USER_DELETE_GUARDS });
+    expect(guarded.match(/NOT EXISTS \(/g) ?? []).toHaveLength(USER_DELETE_GUARDS.length);
+    expect(guarded).toContain("WHERE id IN ('someone') AND NOT EXISTS");
   });
 });
 

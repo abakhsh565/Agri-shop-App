@@ -19,7 +19,7 @@
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { randomUUID } from 'crypto';
-import { execRpcAsUser, execSqlAsAdmin } from '../setup/qa-client';
+import { execRpcAsUser, execSqlAsAdmin, roleIdByName } from '../setup/qa-client';
 import { QA_IDS, setupAllFixtures, cleanupTestData } from '../setup/fixtures';
 
 const TENANT = QA_IDS.shop;
@@ -33,6 +33,11 @@ const PRODUCT = 'c5000000-0000-0000-0000-0000000000d1';
 const VARIANT = 'c5000000-0000-0000-0000-0000000000d2';
 const EMPLOYEE_PHONE = '923009778899';
 const EMPLOYEE_NAME = 'QA Create Once Employee';
+
+// Resolved by NAME in beforeAll. create_employee refuses an invitation with no role (0190), and the id
+// 0107 seeded is not guaranteed to exist — a built-in role is deletable through the app, and roles.id
+// is one global key, so the fixed id can even belong to another tenant's role.
+let ROLE_SALES_EMPLOYEE = '';
 
 async function rpcMaybe(name: string, params: Record<string, unknown>, userId = OWNER) {
   return execRpcAsUser(userId, name, params);
@@ -77,6 +82,7 @@ function purchasePayload(key: string) {
 
 beforeAll(async () => {
   await setupAllFixtures();
+  ROLE_SALES_EMPLOYEE = await roleIdByName(TENANT, 'Sales Employee');
   await execSqlAsAdmin(`
     INSERT INTO memberships (user_id, tenant_id, role, status)
     VALUES ('${OWNER}', '${TENANT}', 'owner', 'active')
@@ -138,8 +144,11 @@ describe('Create once safety', () => {
   });
 
   it('2. employee: two simultaneous confirms create one person', async () => {
+    // The payload an Add-Employee screen sends: a name, a phone and the role the owner chose. Without
+    // the role there is no permission set to assign, and 0190 refuses the invitation — which is the
+    // contract, not a double-tap failure.
     const payload = {
-      payload: { name: EMPLOYEE_NAME, phone: EMPLOYEE_PHONE, role: 'employee' },
+      payload: { name: EMPLOYEE_NAME, phone: EMPLOYEE_PHONE, roleId: ROLE_SALES_EMPLOYEE },
     };
     const [a, b] = await Promise.all([
       rpcMaybe('create_employee', payload),

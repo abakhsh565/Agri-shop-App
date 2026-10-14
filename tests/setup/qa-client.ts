@@ -379,6 +379,97 @@ export async function execSql(sql: string): Promise<{ rows: any[]; rowCount: num
 }
 
 /**
+ * A built-in role's id in a tenant, resolved by NAME at run time.
+ *
+ * THE DEFECT THIS PREVENTS. Suites used to hard-code `a0000000-0000-0000-0000-000000000001` as "the
+ * seeded Sales Employee role". A built-in role is deletable through the app, and the app says so in
+ * its own microcopy (roles.deleteHintBuiltIn): "comes with the app... it can be removed — you can
+ * create it again whenever you need it." When that happens, `delete_role` (0183) clears
+ * `memberships.role_id` for everyone who was on the role, and the fixed id is then either gone or —
+ * because `roles.id` is ONE global key, not one per tenant — held by another tenant's role.
+ *
+ * Observed in QA: `a0000000-…-0001` was deleted in the demo tenant on 2026-10-04 (audit:
+ * { revokedFrom: 2, wasSystemRole: true }) and recreated under a new id, while the old id stayed in
+ * use by the tenant the write lanes register through. Four suites kept assigning an id that no longer
+ * belonged to the tenant they act in.
+ *
+ * (tenant_id, name) is the identity the product actually guarantees, so that is what suites resolve.
+ */
+/**
+ * The branch a tenant's work happens in, created if the tenant has none.
+ *
+ * THE DEFECT THIS PREVENTS. 0188's `authorize_business_action` resolves the branch an action happens
+ * in — `COALESCE(p_branch_id, current_branch_id())` — and refuses with "NOT_AUTHORIZED: branch access
+ * denied" when that branch is NULL or belongs to another tenant. `current_branch_id()` only resolves
+ * inside the ACTIVE shop, so a tenant created as a bare `shops` row (as several suites do) has no
+ * branch to act in and every RPC it attempts is refused. That is the intended contract — a branch is
+ * not its tenant — so a suite that needs a tenant to act must give it a branch, as the app's own
+ * registration flow does.
+ */
+export async function ensureTenantBranch(tenantId: string, name = 'Main Branch'): Promise<string> {
+  const existing = await execSqlAsAdmin(
+    `SELECT id FROM branches WHERE tenant_id = '${tenantId}' AND is_active = true ORDER BY is_default DESC, created_at LIMIT 1`
+  );
+  if (existing.rows[0]?.id) return existing.rows[0].id;
+  const created = await execSqlAsAdmin(
+    `INSERT INTO branches (tenant_id, name, is_default, is_active) VALUES ('${tenantId}', '${name}', true, true) RETURNING id`
+  );
+  const id = created.rows[0]?.id;
+  if (!id) throw new Error(`ensureTenantBranch: could not create a branch for tenant ${tenantId}`);
+  return id;
+}
+
+/**
+ * Select the branch an account is working in, through the app's own RPC.
+ *
+ * 0188's `set_active_branch` writes `user_active_shops`, which is what `current_shop_id()` and
+ * `current_branch_id()` read. Setting this is what "opening a branch" means in the product, so a suite
+ * that acts in a tenant must do it rather than assuming the database will guess.
+ */
+export async function setActiveBranchAsUser(userId: string, branchId: string): Promise<void> {
+  const res = await execRpcAsUser(userId, 'set_active_branch', { p_branch_id: branchId });
+  if (res.error) throw new Error(`setActiveBranchAsUser(${userId}, ${branchId}): ${res.error}`);
+}
+
+/**
+ * Give a membership the branch scope the app's own invitation path writes.
+ *
+ * 0190's `create_employee_core` sets `branch_scope := ARRAY[current_branch_id()]` when the payload
+ * carries no explicit scope, because 0188 denies a non-owner every action whose branch is not inside
+ * the membership's scope (NULL scope resolves to '{}'). An employee inserted by direct SQL therefore
+ * has no scope and is refused everything — realistic only if the product behaved that way, which it
+ * does not.
+ */
+export async function setMembershipBranchScope(
+  userId: string,
+  tenantId: string,
+  branchIds: string[]
+): Promise<void> {
+  const arr = branchIds.map((b) => `'${b}'::uuid`).join(', ');
+  const r = await execSqlAsAdmin(
+    `UPDATE memberships SET branch_scope = ARRAY[${arr}], updated_at = now()
+      WHERE user_id = '${userId}' AND tenant_id = '${tenantId}' RETURNING id`
+  );
+  if (!r.rows[0]?.id) {
+    throw new Error(`setMembershipBranchScope: no membership for ${userId} in ${tenantId}`);
+  }
+}
+
+export async function roleIdByName(tenantId: string, name: string): Promise<string> {
+  const r = await execSqlAsAdmin(
+    `SELECT id FROM roles WHERE tenant_id = '${tenantId}' AND name = '${name}'`
+  );
+  const id = r.rows[0]?.id;
+  if (!id) {
+    throw new Error(
+      `roleIdByName: tenant ${tenantId} has no role named "${name}". The built-in roles are the "${name}" ` +
+        `role 0107 seeds; if an owner deleted it, restore it (node scripts/dev/qa-restore-canonical-roles.mjs).`
+    );
+  }
+  return id;
+}
+
+/**
  * Execute multiple SQL statements (semicolon-separated).
  */
 export async function execMultiSql(sql: string): Promise<void> {

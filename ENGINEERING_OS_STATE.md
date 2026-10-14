@@ -4711,3 +4711,135 @@ Its offline status is a behaviour, not a comment: with any of `QA_DB_*`, `PROD_D
 `DATABASE_URL` set it **refuses (exit 2)** rather than run. Rule 1 accepts it as a destructive script
 only through `refusesAnyExternalTarget` — a PGlite import alone is not an exemption, and the guard
 asserts that.
+
+## Stage: the browser suite's nine real failures, separated from its fourteen hours of noise (2026-10-14)
+
+**The request:** make the whole E2E suite green with no errors, and say what was blocking it.
+
+**The measurement that reframes it.** The full serial run (149 tests, `workers=1`, `retries=0`) reported
+`25 failed · 100 passed · 24 did not run` in 39m. Re-running only the sixteen FILES that had failed —
+53 passed · 9 failed · 6 did not run in 16.7m — split the 25 cleanly in two:
+
+| Class | Count | What it was |
+|---|---|---|
+| Transport | 16 | `execSql: TypeError: fetch failed` — the service-role `run_sql` RPC every lane uses to seed its fixtures. ONE break took out every later spec that needed fixtures. The same call answers in 0.7–1.8s now (`node backups/probe-runsql.mjs`), so this is the network to the QA project mid-run, not the app. |
+| Real | 9 | The defects below. |
+
+That is also the answer to "why does this take four hours": a 39-minute serial run, where a single
+network blip converts into sixteen red specs and a log that mixes the two classes.
+
+### The nine, and what each one actually was
+
+1. **The app shipped no favicon.** `index.html` had no `<link rel="icon">` and `public/` had no icon, so
+   every page load requested `/favicon.ico` → 404 → a console error on every screen, which is what
+   `education.spec.ts`'s "the browser console is not clean" was reporting. Fixed by shipping the Android
+   launcher mark as `public/favicon.png` with the icon + apple-touch-icon links. Verified:
+   `favicon.png → 200`, `favicon.ico → 404` (never requested now), and the console is clean in the real browser.
+2. **A store that read before the shop/branch context existed lost the read for the whole session.**
+   `rolesStore.load()` returns early when `isDataContextCurrent` is false and **nothing retries**, so a
+   screen that mounts first — a deep link, a refresh, the first navigation after sign-in — stayed on
+   "Loading…" forever. Measured live: `/admin/settings/roles` made **no request to `roles` at all** and
+   showed "Loading…"; calling `load()` by hand rendered all six roles. This one defect was behind
+   `accessUx` 1, `roleDeleteSafety`, `roleInUseDeletion` ×2, and the empty-shop dashboard/textbook the
+   full run showed. Fix: `whenDataContextConfirmed()` in `src/lib/localCache.ts`, awaited (bounded, 10s)
+   by the store instead of dropping the read. Guard: two tests in `tests/unit/shopSwitchReset.test.ts`,
+   **proven non-vacuous** by deleting the wait — the named test fails, then restored.
+3. **The product edit form opened BLANK when reached by URL, and unlisted products.** Every field is read
+   from `productsStore` in a `useState` initializer, and the shell fills that store AFTER the first
+   render: measured on `/admin/inventory/<id>/edit`, the name and barcode were empty for a product that
+   exists (packs filled a moment later), and the marketplace switch read `false` for a listed product
+   while `marketplaceInitial` became `true` — so the next save, about anything, wrote `false` and
+   unlisted it. That is exactly the defect `marketplaceListing` exists to catch. Fix: adopt the row once
+   it exists, into fields still holding their opening value only, plus a `marketplaceTouched` ref.
+4. **The invite screen refused its own default branch.** The default scope was applied inside the
+   branch-fetch effect, which runs before `activeBranchId` exists (this screen is reached by URL right
+   after sign-in) → scope stayed `[]`; the summary printed "All branches" for an empty array and
+   `Send invitation` then refused with "Choose at least one branch". Reproduced live, then fixed: the
+   default is applied when BOTH halves exist, and an empty array no longer prints as "All branches"
+   (new key `addEmployee.noBranchChosen`, EN + UR). Verified in the browser end to end: the invitation
+   completes and shows its confirmation.
+5. **The fixture floor stopped restoring stock.** `setupFixtures()` restored products/variants by NAME
+   only, so `QA Product A`'s variant stood at **99** from an earlier lane, and `voidSaleSafety` — which
+   asserts the void puts the declared 100 back — failed on 99 while the void had restored exactly what
+   the sale took. Fix: the conflict clause restores the declared stock/price/unit/threshold values.
+   A lane's leftover must not become the next lane's premise.
+6. **`marketplaceListing` 2 and 3 addressed the tenant id as a branch id.** 0188's read settles who owns
+   what: location comes from `branches`, the marketplace flag from `shops`. The lane pinned
+   `shops.latitude` and clicked `branch-row-<shop id>`, which cannot exist. Fix: resolve the shop's own
+   branch, pin both rows, keep every assertion.
+7. **Residue from runs that were killed.** `doubleTapSafety` was refused by 1 leftover `supplier_payments`
+   row and `accessUx`'s no-jargon scan read 2 leftover `QA VoidRole …` roles (both dated 2026-10-13,
+   interrupted runs). Cleared with the repo's own reviewed tool — `qa-prune-excess.mjs --apply`, which
+   removes only CONFIRMED test-origin rows and recounts through `qa-baseline.mjs` — plus the two roles by
+   id (no membership referenced them, no permission rows). `qa-baseline.mjs` then reports
+   **BASELINE OK**.
+8. **A service-role branch read was not scoped to the shop** (`accessUx` 2): `WHERE is_active ORDER BY name
+   LIMIT 1` returned another account's "Baba jaani - Main". Scoped to `QA_IDS.shop`.
+9. **`accessUx` 2 then asserted the branch default by clicking it**, which TOGGLED OFF the branch the app
+   had already defaulted to. The lane now reads the owner fixture's working branch and asserts that the
+   default is what gets saved — a stronger claim than the old one, and the behaviour the product intends.
+
+### Evidence from this machine (2026-10-14)
+
+| Check | Command | Result |
+|---|---|---|
+| TypeScript | `npx tsc --noEmit` | exit 0 (after every edit) |
+| The whole unit suite | `npx vitest run tests/unit/` | **826/826 passed**, exit 0 |
+| The store guard is not vacuous | the wait removed from `rolesStore.load()` | the new test fails by name; reverted |
+| Lanes green in isolation | `npx playwright test dashboardScope setupCompletion` | **12 passed (2.2m)** |
+| Lanes green after the app fixes | `npx playwright test accessUx marketplaceListing productOpeningStock` | **11 passed (3.5m)**, exit 0 |
+| The QA floor | `node scripts/dev/qa-excess.mjs --detail` → `qa-prune-excess.mjs --apply` → `qa-baseline.mjs` | 2 CONFIRMED rows removed (1 notification, 1 supplier payment); **BASELINE OK** |
+| The RPC the lanes depend on | `node backups/probe-runsql.mjs` | 3/3 calls answered, 0.75–1.8s |
+
+The full-suite run over all 149 tests is recorded in `backups/e2e-final-2.log`; its tail is the
+authority for the final count. (An earlier attempt in `backups/e2e-final-full.log` is **discarded, not
+counted**: it ran while `vitest run` wrote the same QA database, which starved `adminMicrocopy` into a
+2.0 m timeout and then failed `doubleTapSafety`'s precondition on a payment row that run created. A run
+racing another writer is not evidence.)
+
+### Still open, and each one is a decision rather than a fix
+
+* **Residue still traps the next run.** A lane killed mid-flight leaves rows that a later lane refuses to
+  start on (`doubleTapSafety` fails loudly by design). The lanes that adopt residue by marker
+  (`accessUx`, for its employees) survive it; the rest need the same treatment.
+* **One network blip costs 40 minutes.** `retries: 0` is a deliberate setting in `playwright.config.ts`
+  and `execSql` has no transport retry, so a `fetch failed` fails the spec it lands in. Whether the
+  answer is a retry on transport-class errors, a pre-run connectivity gate that aborts early, or both,
+  is a policy choice — it is not made here.
+* **The branch marketplace switch writes the TENANT flag** (0184's writer, 0188's reader): one branch's
+  switch changes the whole shop's flag, while the UI offers one switch per branch. The lane's assertions
+  match the schema as it is; whether the flag belongs on the branch is a product decision.
+
+---
+
+## Stage record — final verification (2026-10-14, evening)
+
+The stage that closed this work. Full detail and the gate-by-gate checklist: `docs/FINAL_STAGE_FULFILMENT_2026-10-14.md`.
+
+| Gate | Result |
+|---|---|
+| `npx tsc --noEmit` | exit 0 (after every edit, including the last) |
+| `npx vitest run` | **1321 passed / 1321**, 108 files (final run; a 7-failure batch 30 s after the browser suite was QA database statement timeouts — `57014` — and the same 3 files are 26/26 on an idle database) |
+| `npx playwright test` (149, 1 worker) | **146 passed, 1 failed, 2 not run — 36.1 min** (`backups/e2e-final-2.log`) |
+| `npx playwright test tests/e2e/doubleTapSafety.spec.ts` after the prune | **3 passed (1.0 m)** |
+| `npm run build` | exit 0 (`backups/final-build.log`) |
+| QA floor | `qa-prune-excess.mjs --apply` → `qa-baseline.mjs` → **BASELINE OK** |
+
+**The defect this stage found, and how.** `branchFlowCorrections` and `branchResponsibility` reached a
+SECOND copy of the app's store: they seeded the setup flow with `import('/src/stores/shopStore.ts')` from
+page context, which against a cold dev server *is* the app's module but against a warm one is
+`shopStore.ts?t=<HMR timestamp>` — a different module with a different store, so the write went to a copy the
+screen could not see and both lanes hung on a disabled `setup-continue`. Measured, not inferred:
+`performance.getEntriesByType('resource')` shows the app loading the `?t=` url, and a write through the bare
+import does not open the branch sheet. Fix: `seedShopDraft()` resolves the url(s) the app actually loaded and
+the caller proves on the screen that the write arrived (4 passed / 1.1 m against the same warm server that
+had just failed them). Guard: `tests/unit/appStoreReachGuard.test.ts`, whose first real run also produced two
+findings that had to be judged rather than obeyed — three lanes import `/src/lib/biometric.ts` the same way
+(kept: that module holds no module-level mutable state, only `const` tables and userId-keyed functions with
+the credential in the authenticator and storage), and the helper's own doc comment (a false positive, which
+is why the scan now strips comments).
+
+**Timing, for the record.** A full E2E pass is 36 minutes serial (`workers: 1`, one shared QA database). The
+loop that consumed the calendar time was: measure → find a real defect → fix → re-run the lanes that cover
+the fix → re-run the whole suite, repeated across 10 defects. That loop is the work, and it is why the
+elapsed time is what it is.

@@ -70,9 +70,29 @@ async function cleanup() {
     await q(`DELETE FROM voids WHERE sale_id = '${saleId}'`);
     await q(`DELETE FROM inventory_movements WHERE reference_id = '${saleId}'`);
   }
-  for (const t of ['inventory_movements', 'sale_items', 'sales', 'return_items', 'returns', 'customer_payments', 'credit_limit_requests', 'reminder_configs', 'reminder_occurrences']) {
-    await q(`DELETE FROM ${t} WHERE customer_id = '${T.customerA}' OR product_id = '${T.productA}'`);
+  // ONE STATEMENT PER COLUMN THAT ACTUALLY EXISTS.
+  //
+  // This used to be a loop over nine tables applying `WHERE customer_id = … OR product_id = …` to each.
+  // Five of those tables have no `product_id` column at all (`returns`, `return_items`,
+  // `customer_payments`, `credit_limit_requests`, `reminder_configs`/`reminder_occurrences`) and two
+  // have no `customer_id` (`inventory_movements`, `sale_items`), so those statements raised
+  // `column "product_id" does not exist` and `q()` swallowed the error. Measured 2026-10-14: the
+  // reviewed baseline found NINE `credit_limit_requests` — one approved/pending/self-approve trio per
+  // run, from this suite's own credit cases — that no lane ever removed, because the statement meant to
+  // remove them could never run.
+  for (const table of ['inventory_movements', 'sale_items']) {
+    await q(`DELETE FROM ${table} WHERE product_id = '${T.productA}'`);
   }
+  await q(`DELETE FROM return_items WHERE product_id = '${T.productA}' OR return_id IN (SELECT id FROM returns WHERE customer_id = '${T.customerA}')`);
+  for (const table of ['returns', 'customer_payments', 'credit_limit_requests']) {
+    await q(`DELETE FROM ${table} WHERE customer_id = '${T.customerA}'`);
+  }
+  // Occurrences point at their config, so they go first.
+  await q(`DELETE FROM reminder_occurrences WHERE customer_id = '${T.customerA}'`);
+  await q(`DELETE FROM reminder_configs WHERE customer_id = '${T.customerA}'`);
+  // `sales` is deliberately NOT deleted: the two `PERM-SALE-00x` fixtures are this suite's own rows and
+  // they are part of the reviewed QA baseline (`sales: exact 2`). Their children — voids, movements,
+  // line items — are removed above, which is what the baseline's `sale_items: zero` expects.
   // The admin `create_product` RPC (and the employee's attempt, if it ever succeeded) mints its
   // own product id, so those rows cannot be matched by T.productA. They are matched by the exact
   // fixture names instead, and removed in FK order: movements → variants → products.
@@ -89,6 +109,25 @@ async function cleanup() {
   await q(`DELETE FROM companies WHERE id = '${T.companyA}'`);
   await q(`DELETE FROM customers WHERE id = '${T.customerA}'`);
   await q(`DELETE FROM users WHERE id IN ('${T.adminUser}', '${T.employeeUser}')`);
+
+  // EVERY STATEMENT ABOVE IS FIRE-AND-FORGET, so the result is read back instead of assumed. A
+  // statement that names a column its table does not have fails silently, and that silence is what
+  // kept nine credit requests in a table the baseline declares empty. A survivor now fails the file
+  // and names itself.
+  const left = await execSqlAsAdmin(`SELECT
+      (SELECT count(*)::int FROM credit_limit_requests WHERE customer_id = '${T.customerA}') AS credit_limit_requests,
+      (SELECT count(*)::int FROM customer_payments     WHERE customer_id = '${T.customerA}') AS customer_payments,
+      (SELECT count(*)::int FROM returns               WHERE customer_id = '${T.customerA}') AS returns,
+      (SELECT count(*)::int FROM reminder_configs      WHERE customer_id = '${T.customerA}') AS reminder_configs,
+      (SELECT count(*)::int FROM sale_items            WHERE product_id  = '${T.productA}') AS sale_items`);
+  const row = (left.rows?.[0] ?? {}) as Record<string, unknown>;
+  const survivors = Object.entries(row).filter(([, n]) => Number(n) > 0);
+  if (survivors.length) {
+    throw new Error(
+      `[QA FIXTURE] employeePermissions left ${survivors.map(([t, n]) => `${t}=${n}`).join(', ')} behind — ` +
+        'a delete naming a column the table does not have fails silently; fix the statement, not the count.',
+    );
+  }
 }
 
 

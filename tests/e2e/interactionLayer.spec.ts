@@ -202,14 +202,18 @@ test.describe('Interaction layer: motion, feedback, skeletons, toasts, date chro
     await page.goto(`${BASE_URL}/admin/purchases`);
     await page.waitForTimeout(500);
 
-    const skel = page.locator('.ds-skeleton');
+    // The LIST's placeholder, not whichever skeleton happens to be first: this screen also waits
+    // on a shell-level figure (the supplier balance in the summary card), whose placeholder is a
+    // single line inside a summary card with no row to be shaped like. Measuring "the first
+    // .ds-skeleton on the page" made this assertion about that line instead of about the list.
+    const skel = page.locator('.ds-listcard .ds-skeleton');
     const count = await skel.count();
     expect(count, 'a loading list renders no skeleton at all').toBeGreaterThan(0);
 
     // The skeleton must sit inside the same grouped card the rows will fill, at the
     // real row height, or the list still jumps when it settles.
     const shape = await page.evaluate(() => {
-      const el = document.querySelector('.ds-skeleton') as HTMLElement;
+      const el = document.querySelector('.ds-listcard .ds-skeleton') as HTMLElement;
       const card = el.closest('.ds-listcard') as HTMLElement | null;
       const row = el.closest('.ds-row') as HTMLElement | null;
       return {

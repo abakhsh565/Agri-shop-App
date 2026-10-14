@@ -81,7 +81,7 @@ import { useNotificationStore } from "@/stores/notificationStore";
 import { useCartStore } from "@/stores/cartStore";
 import { enqueueOperation, loadQueue, saveQueue } from "@/lib/offlineQueue";
 import { navDepth, pushNav } from "@/lib/navContext";
-import { getCachedData, setCachedData, confirmCacheBranch, beginScopedWrite } from "@/lib/localCache";
+import { getCachedData, setCachedData, confirmCacheBranch, suspendCachedData, beginScopedWrite } from "@/lib/localCache";
 
 const QA_ADMIN = {
   id: "user-1", name: "QA Admin", phone: "923009999999", role: "admin",
@@ -208,6 +208,36 @@ describe("switching shop", () => {
     } finally { finish(); }
     expect(await useShopStore.getState().switchBranch("branch-warehouse")).toEqual({ ok: true });
   });
+
+  it("a screen that reads before the shop and branch are confirmed still gets its rows", async () => {
+    // The shape the browser hits on a deep link, a refresh on a data-owning screen, or the first
+    // navigation after sign-in: the page mounts and calls its store's `load()` before the shell has
+    // confirmed which shop and branch the app is working in. That read used to be dropped and never
+    // repeated — measured 2026-10-14, `/admin/settings/roles` made no request to `roles` at all and
+    // stayed on "Loading…" until it was left and re-entered, which is what four suites were failing
+    // on. `load()` now waits for the confirmation it depends on.
+    suspendCachedData();
+    useRolesStore.setState({ roles: [], ready: false });
+
+    const read = useRolesStore.getState().load();
+    // The page is on screen; the context is not confirmed yet.
+    await new Promise((r) => setTimeout(r, 10));
+    expect(useRolesStore.getState().ready, "the read published before the context existed").toBe(false);
+
+    confirmCacheBranch("shop-a", QA_ADMIN.id, "branch-main");
+    await read;
+
+    expect(useRolesStore.getState().ready, "the read was dropped instead of waiting").toBe(true);
+  });
+
+  it("a read that is never confirmed still settles instead of hanging on the screen", async () => {
+    // The bound, so a device that can resolve no branch does not leave the screen in a promise
+    // that never settles: `load()` gives up and the screen says what the store knows.
+    suspendCachedData();
+    useRolesStore.setState({ roles: [], ready: false });
+    await useRolesStore.getState().load();
+    expect(useRolesStore.getState().ready, "the unconfirmed read never settled").toBe(false);
+  }, 15000);
 
   it("takes the server's shop over the one this device remembers", async () => {
     // What the device remembers (shop-a) is what `authStore` was persisted with; the database

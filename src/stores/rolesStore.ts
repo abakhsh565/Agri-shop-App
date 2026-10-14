@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { captureDataContext, isDataContextCurrent } from "@/lib/localCache";
+import { captureDataContext, isDataContextCurrent, whenDataContextConfirmed } from "@/lib/localCache";
 import { supabase } from "@/lib/supabase";
 import { getCurrentTenantId } from "@/lib/tenantContext";
 import type { Role } from "@/types";
@@ -53,6 +53,13 @@ export const useRolesStore = create<RolesState>((set, get) => ({
    * both are scoped to the same shop, which is what every other store already does.
    */
   load: async () => {
+    // A screen that owns this list (Roles & Access, Add Employee, Employee detail, the branch
+    // editor) reads it from its own mount effect, which can run before the shell has confirmed the
+    // shop and branch. Dropping that read left the screen on "Loading…" for the rest of the
+    // session — measured 2026-10-14: the roles screen made no request at all and never recovered
+    // until it was left and re-entered. Waiting for the confirmation is what the read means; it
+    // still refuses to publish if the confirmation never comes.
+    if (!isDataContextCurrent(captureDataContext()) && !(await whenDataContextConfirmed())) return;
     const context = captureDataContext();
     if (!isDataContextCurrent(context)) return;
     const tenantId = getCurrentTenantId();

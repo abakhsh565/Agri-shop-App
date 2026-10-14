@@ -67,6 +67,17 @@ async function setUrdu(page: import('@playwright/test').Page) {
   }
 }
 
+/**
+ * The branch this lane pins: the shop's own default branch row, resolved rather than assumed.
+ *
+ * The lane used to address both rows as `QA_IDS.shop`. That was true while the tenant WAS the
+ * branch; since 0188 a shop owns branch rows with their own ids, and the profile screen lists
+ * them by those ids — while the marketplace FLAG still lives on the shop (0188's read returns
+ * `s.marketplace_enabled` and 0184's write sets it). So the two ids are genuinely different
+ * things, and the selectors below have to say which one they mean.
+ */
+let BRANCH_ID = '';
+
 /** Put the shared QA branch back exactly as the baseline has it: unpinned and unlisted. */
 async function restoreShop() {
   await execSql(
@@ -74,13 +85,27 @@ async function restoreShop() {
        latitude = NULL, longitude = NULL, location_label = NULL, location_source = NULL
      WHERE id = '${QA_IDS.shop}'`,
   ).catch(() => undefined);
+  await execSql(
+    `UPDATE branches SET latitude = NULL, longitude = NULL, location_label = NULL, location_source = NULL
+     WHERE tenant_id = '${QA_IDS.shop}'`,
+  ).catch(() => undefined);
 }
 
 test.describe('Farmer marketplace listing — the owner switches', () => {
   test.beforeAll(async () => {
     await setupFixtures();
-    // A switch that has nothing to measure distance from is refused, so the fixture gives the
-    // shared branch a real pin. Restored in afterAll.
+    const branches = await execSql(
+      `SELECT id FROM branches WHERE tenant_id = '${QA_IDS.shop}' AND is_active ORDER BY is_default DESC, created_at LIMIT 1`,
+    );
+    BRANCH_ID = String(branches[0]?.id ?? '');
+    expect(BRANCH_ID, 'the shared shop has no active branch to list on').not.toBe('');
+    // A switch that has nothing to measure distance from is refused, and since 0188 the location
+    // the branch screen reads is the BRANCH's own — while the flag it writes is the shop's. Both
+    // are pinned, and both are restored in afterAll.
+    await execSql(
+      `UPDATE branches SET latitude = 31.5204, longitude = 74.3587, location_label = 'QA Lahore'
+       WHERE id = '${BRANCH_ID}'`,
+    );
     await execSql(
       `UPDATE shops SET latitude = 31.5204, longitude = 74.3587, location_label = 'QA Lahore'
        WHERE id = '${QA_IDS.shop}'`,
@@ -205,8 +230,8 @@ test.describe('Farmer marketplace listing — the owner switches', () => {
     // ── The branch switch ───────────────────────────────────────────────────
     await page.goto(`${BASE_URL}/admin/settings/profile`);
     await page.waitForLoadState('networkidle');
-    await page.getByTestId(`branch-row-${QA_IDS.shop}`).click();
-    const branchToggle = page.getByTestId(`branch-marketplace-toggle-${QA_IDS.shop}`);
+    await page.getByTestId(`branch-row-${BRANCH_ID}`).click();
+    const branchToggle = page.getByTestId(`branch-marketplace-toggle-${BRANCH_ID}`);
     await expect(branchToggle, 'the branch switch is announced in Urdu').toHaveAttribute(
       'aria-label',
       'اس شاخ کو شامل کریں',
@@ -251,8 +276,8 @@ test.describe('Farmer marketplace listing — the owner switches', () => {
     await page.goto(`${BASE_URL}/admin/settings/profile`);
     await page.waitForLoadState('networkidle');
 
-    await page.getByTestId(`branch-row-${QA_IDS.shop}`).click();
-    const toggle = page.getByTestId(`branch-marketplace-toggle-${QA_IDS.shop}`);
+    await page.getByTestId(`branch-row-${BRANCH_ID}`).click();
+    const toggle = page.getByTestId(`branch-marketplace-toggle-${BRANCH_ID}`);
     await expect(toggle, 'a pinned branch can be listed').toBeEnabled();
     await expect(toggle).toHaveAttribute('aria-checked', 'false');
 
@@ -278,8 +303,8 @@ test.describe('Farmer marketplace listing — the owner switches', () => {
     // on the branch itself, and the row lives on the list.
     await page.goto(`${BASE_URL}/admin/settings/profile`);
     await page.waitForLoadState('networkidle');
-    await page.getByTestId(`branch-row-${QA_IDS.shop}`).click();
-    const offToggle = page.getByTestId(`branch-marketplace-toggle-${QA_IDS.shop}`);
+    await page.getByTestId(`branch-row-${BRANCH_ID}`).click();
+    const offToggle = page.getByTestId(`branch-marketplace-toggle-${BRANCH_ID}`);
     await expect(offToggle, 'the saved switch reads back on').toHaveAttribute('aria-checked', 'true');
     await offToggle.click();
     await page.waitForTimeout(6000);
