@@ -144,6 +144,53 @@ invalidates the part of it that covers the changed file — which means another 
 
 ---
 
+## 4b. The APK — local build, and why it was local
+
+**Why the pipeline could not produce it.** The four signing secrets were never created in the repository
+(`gh secret list` holds only the QA/PROD database and Supabase names), and all **50** historical runs of
+`.github/workflows/build-apk.yml` failed at the same step, *"Decode release keystore"*, in 51 s. GitHub
+Actions run data is additionally no longer readable through this token — `repos/…/actions/runs` answers
+`total_count: 0` and a workflow-scoped query 404s — so the approved local fallback was used, and the QA
+configuration and security posture were not changed to make it work.
+
+**What was built** (mirroring the workflow's own steps, with the workflow's own values taken from `.env.qa`):
+`VITE_APP_ENV=staging VITE_SUPABASE_URL=… VITE_SUPABASE_ANON_KEY=… VITE_SUPABASE_PROJECT_ID=bpybjrjenwccowvtrevu
+VITE_OTP_DELIVERY=demo npm run build` → `npx cap sync android` → `./gradlew assembleDebug` with
+`JAVA_HOME=C:\Users\mg\.jdks\jbr-21.0.11` and `ANDROID_HOME=%LOCALAPPDATA%\Android\Sdk`.
+**Result: BUILD SUCCESSFUL in 2 m 19 s.**
+
+**Verified artifact** — `android/app/build/outputs/apk/debug/app-debug.apk`
+
+| Property | Measured |
+|---|---|
+| Size | 46,098,571 bytes (44 MB) |
+| SHA-256 (first 32) | `41ee1921b848bb6b2b721be3bb75215b` |
+| Package / version | `com.agrishop.app`, versionName **1.0**, versionCode **1** |
+| SDKs | minSdk 23, targetSdk 35, compileSdk 35 |
+| Label | `AgrishopApp` |
+| Signer | `C=US, O=Android, CN=Android Debug` — **debug key, not release** |
+| QA configuration | the QA project ref `bpybjrjenwccowvtrevu` is inside the packaged bundle (`supabase-*.js`, `authStore-*.js`, `monitoring-*.js`) |
+| Source | built from a clean tree at commit **`08dae31b`** (`git status --short src android` = 0) |
+
+**Limitations that matter for the device pass.** This is a *debug-signed* artefact: it installs over other
+debug builds, but a later **release-signed** APK will refuse to install over it — uninstall the debug build
+first. Android App Links stay unverified until a stable release key exists, so invitation links open through
+the app's own scheme rather than as verified https links. And **no device is attached** — `adb devices`
+returns an empty list on this machine — so install, startup, login, sale, language and reopen checks on real
+hardware remain the user's steps; they cannot be claimed from here.
+
+**Closing item 3 when you are ready** (order matters, and nothing here needs to be shared in chat):
+
+1. Create the release keystore once — it becomes the app's permanent signing identity:
+   `keytool -genkeypair -v -keystore release.jks -alias agrishop -keyalg RSA -keysize 2048 -validity 10000 -storetype JKS -dname "CN=AgriShop, O=AgriShop, C=PK"`
+2. Store its password and alias somewhere safe and **back the .jks up off-machine** — losing it means no
+   future build can install over an existing install.
+3. Add four repository secrets (Settings → Secrets and variables → Actions) or from your machine with
+   `gh secret set` — `ANDROID_KEYSTORE_BASE64` (base64 of `release.jks`, single line),
+   `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`.
+4. Then the workflow builds release-signed: dispatch `build-apk.yml`, and I verify the artifact's commit,
+   package, version and QA configuration exactly as the table above does for the local build.
+
 ## 5. Still open — decisions, not defects
 
 * **Residue traps the next run.** A lane killed mid-flight leaves rows a later lane refuses to start on
