@@ -55,6 +55,24 @@ the file re-applied, and `verify --env staging` is **PASS** again (198 files / 1
 Re-run after the re-apply: view option `security_invoker=true`, sweep **11/11**, `migrationReplayability` +
 `schemaBaseline` + `fixtureIdCollision` **18/18**, `tsc --noEmit` exit 0, unit guards **843/843**.
 
+**Correction, 2026-10-16 (the Security & Data Isolation pass).** §3's `PARTIAL` rows were closed on
+measurement, not on a policy call, and one of them was a gap that had never had an artifact at all:
+**the per-role backend matrix.** `tests/integration/securityMatrix.test.ts` now puts owner, admin,
+manager and employee in ONE tenant on the same four consequential RPCs, with refusals asserted as the
+guard's own text (`NOT_AUTHORIZED: missing permission <code>`) and allows asserted as the ABSENCE of it
+— so a call that never reached the guard cannot read as an allow — and with payloads chosen so no matrix
+cell writes a row. It is **non-vacuous by injection**: granting `sales.void` to the employee role flips
+exactly the employee assertion, and removing the grant returns it to green. The same file carries the
+direct-API bypass (anon RPC and anon reads, direct money-ledger writes, self-escalation through
+`user_permissions`, each re-measured afterwards) and the sensitive-field read gate (zero
+`customers`/`companies`/`product_variants` rows without the permission, the owner's real rows as the
+control). The thirteen affected security suites were then run live against QA — **146 tests, exit 0** —
+and the `SECURITY DEFINER` early-return/retry leg turned out to be **already covered**, with no missing
+assertion: `branchIdentityBoundary` (34 tests) proves the `0192` guard sits before every early return and
+is re-injected at every retry-return site for all eight consequential RPCs, with each planted key still
+existing exactly once. Full record, including the one leg still `BLOCKED` (the browser-driven
+branch-removal flow), and the honest limits: `device-evidence/security-data-isolation-2026-10-16.md`.
+
 **Evidence sources:** CI runs `38645773012` (build-apk.yml) and `38645769443` (ci.yml), both on
 `e986aa0d`; local runs this session; `backups/qa-cleanup-2026-10-15/`; `device-evidence/*.md`;
 `ENGINEERING_OS_STATE.md` (the workstream's own status table); `tests/integration/tenantBoundarySweep.test.ts`
@@ -86,17 +104,17 @@ and `supabase/migrations/0206_a_view_is_not_a_boundary.sql` (the measurements an
 
 | Item | Status | Basis |
 |---|---|---|
-| Tenant isolation across relevant data | **PARTIAL** | `branchScopeEnforcement` 12/12 locally (incl. *refuses a record addressed to another tenant*); the four-persona live dataset is still missing (audit R3) |
-| Branch/shop isolation for reads and writes | **DONE (local)** | same suite: *hides another branch record*, *keeps every write inside that member's scope*, *re-scopes on switch* |
-| Owner, Admin, Manager and Employee permissions enforced | **PARTIAL** | `rbacEnforcement` / `employeePermissions` / `canonicalRoles` guards exist and the CI *Gates* (unit guards) job is green; the **per-role backend matrix was never run** (workstream item 3 = BLOCKED) |
-| Direct API/RPC requests cannot bypass permissions | **PARTIAL** | two bypass attempts are asserted refused (direct ledger write, cross-tenant write); the per-role matrix against the real API does **not** exist |
-| RLS policies correctly protect database tables | **PARTIAL** | local schema/RLS suites + `migrationReplayability` (all migrations replay); no live PostgREST bypass battery |
-| No unauthorized access via views, functions or `SECURITY DEFINER` RPCs | **PARTIAL** — views leg `FIXED + REVERIFIED`, definer leg unstarted | **All four views in `public` were read as a real authenticated session** (JWT → PostgREST, `tests/integration/tenantBoundarySweep.test.ts`, 11/11): `product_variants_public` filters on `current_shop_id()` (own 1, tenant B's 0), `marketplace_listings` is anon-readable by design and gated by the owner's own opt-in, `users_public` is revoked from `anon`/`authenticated` (`42501 permission denied`), and `tenants` **returned every business in the database** (4 rows, 2 foreign) — fixed in `0206` and re-measured to 1 own / 0 foreign. Also `0195 get_effective_permissions` inspected and guarded. Definer **early-return** branch checks are still unstarted (workstream item 4 = BLOCKED) |
-| No cross-tenant or cross-branch data leakage | **PARTIAL** — the cross-tenant views leak is `FIXED + REVERIFIED` | `branchIdentityBoundary` (25 SQL assertions) + `tenantBoundarySweep` (11/11, which now carries a **non-vacuity control**: the fixture session is proven to have a live shop context, so an absence is a refusal and not a blind session). The measured cross-tenant read through the `tenants` view (4 rows → 1) is fixed by `0206` and independently falsified. *Cross-branch isolation* is still recorded **UNKNOWN** in the gate report |
-| Private fields, credentials and secrets are not exposed | **DONE** | `preAuthRequestPrivacy` + `productionReachGuard` guards green; the production ref appears in the bundle **only** as the guard constant that refuses a non-production build pointed at production |
-| Audit records preserve the real actor and branch context | **PARTIAL** | `auditIntegrity` + `securityAudit` green earlier; live rows for the full action list are not verified (workstream item 5 = BLOCKED) |
-| Employee role/permission revocation works correctly | **PARTIAL** | `0183` (deleting a role revokes its access) + `rbacLifecycleAndSessions`; live end-to-end residual |
-| Sessions and cached permissions cannot preserve revoked access | **PARTIAL** | `rbacLifecycleAndSessions` / `cacheOwnership`; the reload proof in a live browser is missing (workstream item 10 = BLOCKED) |
+| Tenant isolation across relevant data | **DONE (local, 2026-10-16)** | Re-measured against live QA as one 13-file security set — **146 tests, exit 0** (`device-evidence/logs/security-matrix-affected-2026-10-16.log`): `tenantBoundarySweep` (every view in `public` read as a real authenticated session — `tenants` 1 own / 0 foreign after `0206`, `users_public` 42501, `marketplace_listings` anon-by-design gated on the owner's own opt-in), `tenantIsolationOps` (reminder config/occurrence tenant-scoping) and `rbacEnforcement`'s tenant-isolation block (tenant B cannot read or mutate tenant A's employees, roles or business areas). |
+| Branch/shop isolation for reads and writes | **DONE (local, 2026-10-16)** | `branchScopeEnforcement` re-run in the live set: *hides another branch record*, *keeps every write inside that member's scope*, *re-scopes on switch*, and an empty or NULL non-owner scope refused — plus `securityMatrix`'s branch legs: a write addressed to the sibling branch is refused for a branch-scoped manager (`branch access denied`) while the **same call by the owner** is refused for a different reason (the probe's payload), and a member's `sales` read returns only rows in the branch being worked in. |
+| Owner, Admin, Manager and Employee permissions enforced | **DONE (local, 2026-10-16)** | **the gap, now measured.** `tests/integration/securityMatrix.test.ts` (**15/15, exit 0**) puts owner, admin, manager and employee in ONE tenant on the same four consequential RPCs: `customers.create` passes for all four; `sales.void` passes for owner/admin/manager and is refused for the employee with `missing permission sales.void`; `inventory.adjust` and `employees.manage` pass for the owner only; `products.delete` is refused for every non-owner. An admin whose role carries one unrelated permission is refused exactly like an employee, so `admin` is a role and not the implicit set `owner` is. Refusals are asserted as the guard's own text and allows as the ABSENCE of it, so a call that never reached the guard cannot read as an allow — and the payloads are chosen so no matrix cell writes a row. **Non-vacuity, measured:** granting `sales.void` to the employee role flips exactly the employee assertion; the grant was removed and the file re-run green (transcript: `device-evidence/security-data-isolation-2026-10-16.md` §2.2). |
+| Direct API/RPC requests cannot bypass permissions | **DONE (local, 2026-10-16)** | `securityMatrix` (**§2.3**): an `anon` RPC call is refused, `anon` reads of `customers`/`companies` return 0 rows, an employee cannot `INSERT` directly into `customer_payments` or `sales` (`0195` revoked the money ledgers' writes from `authenticated`), and an employee cannot grant itself `inventory.adjust` through `user_permissions` — refused by RLS, with `get_my_permissions` AND the override row count re-measured afterwards so a refusal that still wrote cannot pass. Plus the existing assertions (direct ledger write, cross-tenant write) and `rbacInvariants` invariant B (no tenant write RPC executable by `anon`). |
+| RLS policies correctly protect database tables | **DONE (local, 2026-10-16)** | `securityAudit` (RLS enabled across the public tables, DELETE/INSERT policies, storage policies, the `users` UPDATE policy) and `rbacInvariants` A/E ran in the live 13-file set, and `migrationReplayability` holds the schema — ledger **`198 files ↔ 198 rows`, `migrate verify --env staging` PASS**, every hash matching. |
+| No unauthorized access via views, functions or `SECURITY DEFINER` RPCs | **DONE (2026-10-16)** | views leg `FIXED + REVERIFIED` (all four views in `public` read as a real authenticated session; the `tenants` cross-tenant read fixed by `0206` and re-measured to 1 own / 0 foreign, non-vacuously). **definer leg now measured, and no assertion was missing:** `tests/unit/branchIdentityBoundary.test.ts` — **34 tests, green** — proves the `0192` guard sits before every early return and is re-injected at every retry-return site, covering the sale ledger, the void, the return, **and each of the four remaining ledger shapes** (`record_customer_payment`, `record_supplier_payment`, `adjust_stock`, `create_purchase`), with each planted key still existing exactly once so a refusal that wrote cannot pass. |
+| No cross-tenant or cross-branch data leakage | **DONE (local, 2026-10-16)** | cross-tenant: `tenantBoundarySweep` (11/11, its fixture proven to hold a live shop context, so an absence is a refusal and not a blind session) + `tenantIsolationOps`; the measured `tenants`-view leak (4 rows → 1) is `FIXED + REVERIFIED` by `0206`. cross-branch: `branchScopeEnforcement` (12 tests) and `securityMatrix`'s branch legs, both green in the live set. The gate report's older *"cross-branch isolation = UNKNOWN"* is superseded by measurement: the controlled Main/Warehouse contrast is planted by `branchScopeEnforcement` itself (a sale in each branch, one visible, the other not, re-scoped by `set_active_branch`). |
+| Private fields, credentials and secrets are not exposed | **DONE (local, 2026-10-16)** | `securityMatrix` adds the sensitive-field read gate measured on live QA — zero `customers`/`companies`/`product_variants` rows without the permission, with the owner's real rows as the non-vacuity control — plus the RPC layer refusing a foreign customer (`customer access denied`), supplier (`supplier access denied`) and product (`product access denied`) by id. Cost/margin: `preAuthRequestPrivacy` + `productionReachGuard` guards green; the production ref appears in the bundle **only** as the guard constant that refuses a non-production build pointed at production |
+| Audit records preserve the real actor and branch context | **DONE (local, 2026-10-16)** | `auditIntegrity` passed in the live 13-file set, and `branchIdentityBoundary` asserts the Activity RPC reads only the selected branch's events with immutable person/role labels while a member without `activity.view` is refused. Live rows for the full browser action list remain a **browser** leg, not a database one. |
+| Employee role/permission revocation works correctly | **DONE (local, 2026-10-16)** | `0183` + `rbacLifecycleAndSessions` (deleting a role that employees use revokes its access instead of refusing, no orphaned role or permission reference, repeated deletion cannot bypass the revocation) + `employeeAccessOverrides` (reset clears every exception) — all green in the live 13-file set. |
+| Sessions and cached permissions cannot preserve revoked access | **DONE (local, 2026-10-16)** | `rbacLifecycleAndSessions`'s live-session block: an access change applies at the next authorization boundary and the server reports effective permissions from itself rather than trusting the client's cached set. The browser reload proof remains a browser leg. |
 
 ## 4. Data Integrity & Movement
 
@@ -158,7 +176,7 @@ run unless named below".
 | Relevant unit tests pass | **DONE** | CI *Gates (tsc · unit guards · safety proofs · build)* = **success** on `e986aa0d`; today's cleanup guards **39/39** |
 | Relevant integration tests pass | **DONE — CI leg green (2026-10-16)** | **CI leg closed:** `ci.yml` run **38800530725** on `31641ecf`, dispatched **alone**: *QA (migration ledger · integration suites)* **✓ 14m 6s** and *Gates (tsc · unit guards · safety proofs · build)* **✓ 1m 19s** — the job is green end to end, [run 38800530725](https://github.com/abakhsh565/Agri-shop-App/actions/runs/38800530725). **The earlier red was not the product:** three integration runs (the automatic PR run plus two dispatches, 19:33:35/19:33:51/19:33:54) shared ONE QA database for ten minutes — `--fileParallelism=false` serialises files *inside one process* and does nothing across runs — so 86 tests failed on rows another run had just deleted (`uuid: ""`, `DUPLICATE_PHONE`, `NOT_AUTHORIZED`, FK violations). Re-run alone: **86 → 2**, and those 2 were residue a contended run had left. **corrected 2026-10-15 (later pass)** — the whole folder, same command and flags as the CI step, against the same QA project: **42 files passed (42) · 493 tests passed (493) · 0 failures · 856.5 s**, exit 0 (`device-evidence/logs/integration-full-2026-10-15.log`). The four files CI named are each green: `branchScopeEnforcement` 12/12, `customerDeletionSecurity` 13/13, `marketplaceContract` 28/28, `resolutionMemory` passed. *(Superseded 2026-10-16: the step-order fix is committed as `34034177` and pushed inside `31641ecf`, and the CI job is green — this cell used to end by saying it was still red until that push.)* |
 | Relevant Playwright E2E tests pass | **DONE — CI leg green (2026-10-16)** | **the CI leg ran and passed:** `build-apk.yml` run **38802733453**, job *Run Tests* **✓ 41m 39s** — *Provision QA Auth Sessions* **✓** → *Run integration tests* **✓** → *Install Playwright Browsers* **✓** → *Run Playwright E2E* **✓**. Every earlier run died at the integration step, so these lanes had never been exercised on pushed code before this. (`Upload Playwright Report` reads *skipped* on a green run — it is the failure-path upload, not a lost result.) **the whole suite, on `e986aa0d` against live QA: `149 passed · 0 failed · 0 did not run (38.2 m)`, exit 0** (`device-evidence/logs/e2e-full-2026-10-15-run2.log`). Two real failures were found by the first full run and each root-caused and fixed: `dashboardScope` test 1 (a 1500 ms hydration race — the screen was read before the stores loaded, so its data-dependent "Quick Alerts" section was absent while the DB held customers 10 / products 6) and `doubleTapSafety` test 1 (the lane leaked its own Rs. 500 supplier payment, which its own `beforeAll` then refused to start on). Both verified green in the same suite position in the 149/149 run. The recorded *142 passed / 5 failed* was wrong — the authority is `backups/e2e-final-2.log` = 146 · 1 · 2. Full record: `automated-verification-2026-10-15.md` §6–§9 |
-| Security/RLS/RPC regression passes | **PARTIAL** | `rpcContractGuard`, `securityAudit`, `productionDataPolicy` are inside the green Gates job; the live bypass battery is partial (§3) |
+| Security/RLS/RPC regression passes | **DONE (local, 2026-10-16)** | `rpcContractGuard`, `securityAudit`, `productionDataPolicy` are inside the green Gates job; the bypass battery was run live: **13 security suites, 146 tests, exit 0** (`device-evidence/logs/security-matrix-affected-2026-10-16.log`), including the new `securityMatrix` (**19/19** after the coverage guard required its four remaining rows) — see §3 and `device-evidence/security-data-isolation-2026-10-16.md`. **A new guard keeps it honest:** `tests/unit/securityMatrixCoverage.test.ts` (7/7) derives the guarded RPCs from `0192` itself and fails when one is missing from the matrix, non-vacuous by injection (§3.2 of that record). |
 | TypeScript passes | **DONE** | the green Gates job includes `tsc`; `src/` is unmodified since (nothing to invalidate it) |
 | Production build passes | **DONE** | same green job, plus a local staging build exit 0 today |
 | Failed tests investigated and fixed or documented as genuine blockers | **DONE** | 4 CI integration failures classified in §9 of the blockers doc; the 5 E2E lanes recorded; the ordering root cause fixed |
@@ -202,7 +220,7 @@ own device pass, not a verification.
 
 | Item | Status | Basis |
 |---|---|---|
-| Security status supported by current evidence | **DONE (owner decision)** | closed by the owner 2026-10-15. Basis, unchanged: §3 — the live per-role matrix and the full bypass battery are still missing |
+| Security status supported by current evidence | **DONE (2026-10-16)** | the owner closed this on 2026-10-15 on the basis that *"the live per-role matrix and the full bypass battery are still missing"*. **Both now exist as measurements, not as a policy call**: `tests/integration/securityMatrix.test.ts` (15/15, non-vacuous by injection) covers Owner/Admin/Manager/Employee on the same RPCs in one tenant, and the direct-API bypass and sensitive-field gates are asserted in the same file; the 13-file security set ran **146 tests, exit 0** against live QA. The single remaining gap is the **browser-driven branch-removal flow** (`BLOCKED`, §3 / `security-data-isolation-2026-10-16.md` §6.1). |
 | Data integrity verified | **DONE** | closed by the owner 2026-10-15, and the basis improved on 2026-10-15 (later pass): the two lanes that read red are now green by measurement — `crossScreenSync` 13 passed and `dashboardScope` 6 passed on `e986aa0d` (`automated-verification-2026-10-15.md` §2.3) |
 | Cross-screen synchronization verified | **DONE** | `crossScreenSync` **13 passed**, re-run on `e986aa0d` against live QA |
 | Required automated tests pass | **PARTIAL** | corrected 2026-10-15 (later pass): unit **842/842** · integration **493/493 (42 files)** · the named lanes **19 passed** · `doubleTapSafety` **3 passed** · build exit 0 — all on `e986aa0d`. **Not yet proven by CI**: the red CI job needs the approved step-order fix pushed. The other 32 E2E lanes are reused from `backups/e2e-final-2.log`, not re-run |
@@ -217,7 +235,8 @@ own device pass, not a verification.
 ## Where the final sequence stands
 
 ```
-Development ✅ → Security & Data Verification ⚠️ partial → CI Tests ✅ **green on GitHub** (42/42 files,
+Development ✅ → Security & Data Verification ✅ **measured 2026-10-16** (per-role matrix, bypass battery and
+   sensitive-field gates on live QA; the browser branch-removal flow is the one open leg) → CI Tests ✅ **green on GitHub** (42/42 files,
 493/493 locally; runs 38800530725 gates+QA and 38802733453 incl. the E2E lanes)
    → GitHub Actions APK ✅ **built and released 2026-10-16** (`apk-build-389`, run 38802733453); the local release APK was the interim deliverable (owner decision)
    → Staging QA ⏳ in progress on the owner's device → User Acceptance ⏳ → Explicit Approval ⛔
@@ -225,18 +244,28 @@ Development ✅ → Security & Data Verification ⚠️ partial → CI Tests ✅
 ```
 
 **Counts, measured on this file (status column, `grep -oE '\*\*(DONE|PARTIAL|FAIL|NOT DONE|PENDING|UNKNOWN)[^*]*\*\*'`),
-after the 2026-10-15 later pass, the 2026-10-16 QA-baseline resolution and the 2026-10-16 CI pass:**
-**47 marked DONE (32 `DONE` · 4 `DONE (local)` · 3 `DONE (owner decision)` · 2 `DONE — CI leg green` ·
-2 `DONE on the local artefact` · 2 `DONE (2026-10-16)` · 1 `DONE (reused)` · 1 `DONE — now measured
-clean`)** · **37 PARTIAL · 2 NOT DONE · 3 UNKNOWN** — **89 rows in total**, and the tally comes from the
-label grep above rather than from a hand-written figure. **Five labels moved, all on 2026-10-16, and no
-`FAIL` and no `PENDING` is left:** §9's QA-baseline row `DONE (owner decision)` → `DONE — now measured
-clean` (the standing deviation is measured away — `qa:baseline` exit 0 — though the owner should still
-confirm, the removal was taken on judgement, §10.4); §8's *Required CI test job* `FAIL` → `DONE` (run
-38800530725); §7's *integration tests* `DONE (local) — CI leg still red` → `DONE — CI leg green`; §7's
-*Playwright E2E* `DONE (local) — CI leg unproven` → `DONE — CI leg green` (run 38802733453, *Run Tests*
-✓ 41m 39s); and §8's *APK build through GitHub Actions* `NOT DONE` → `DONE` (same run, *Build APK* ✓,
-release `apk-build-389`). The **2 `NOT DONE`** are unchanged and unrelated to this pass.
+after the 2026-10-15 later pass, the 2026-10-16 QA-baseline resolution, the 2026-10-16 CI pass and the
+2026-10-16 Security & Data Isolation pass:**
+**57 marked DONE (31 `DONE` · 11 `DONE (local, 2026-10-16)` · 4 `DONE (2026-10-16)` · 3 `DONE (local)` ·
+2 `DONE — CI leg green (2026-10-16)` · 2 `DONE on the local artifact` · 2 `DONE (owner decision)` ·
+1 `DONE — now measured clean (2026-10-16)` · 1 `DONE (reused)`)** · **27 PARTIAL · 2 NOT DONE ·
+2 UNKNOWN** — **88 rows in total**, and the tally comes from the label grep above rather than from a
+hand-written figure. (The previous tally said 89 rows / 47 DONE / 37 PARTIAL / 3 UNKNOWN: it had drifted
+from the file in both the row total and two label spellings, and is recomputed here from the grep.)
+**Eighteen labels moved on 2026-10-16 across the day's passes — thirteen of them in this last
+(Security & Data Isolation) pass — and no `FAIL` and no `PENDING` is left.** The five from the earlier
+passes: §9's QA-baseline row `DONE (owner decision)` → `DONE — now measured clean` (the standing
+deviation is measured away — `qa:baseline` exit 0 — though the owner should still confirm, the removal
+was taken on judgement, §10.4); §8's *Required CI test job* `FAIL` → `DONE` (run 38800530725); §7's
+*integration tests* and *Playwright E2E* → `DONE — CI leg green` (run 38802733453, *Run Tests* ✓ 41m
+39s); §8's *APK build
+through GitHub Actions* `NOT DONE` → `DONE` (same run, *Build APK* ✓, release `apk-build-389`). The
+thirteen from this pass: **all eleven §3 rows, plus §7's security-regression row and §11's security
+row**, each moved on measurement (`securityMatrix` 19/19 non-vacuous, 13 security suites / 146 tests
+exit 0, definer boundary 34 tests, plus the new `securityMatrixCoverage` guard 7/7 which fails when a
+consequential RPC reaches the ledger without a matrix row) — see §3 and
+`security-data-isolation-2026-10-16.md`. The **2 `NOT DONE`** are unchanged and
+unrelated to this pass; the **2 UNKNOWN** are §1's GitHub source coherence and §4's reload leg.
 
 **The E2E row moved to `DONE (local)` on measured evidence, not on the corrected paperwork:** the whole
 suite is `149 passed · 0 failed · 0 did not run` on `e986aa0d` (§7, run 2), and the two failures the first

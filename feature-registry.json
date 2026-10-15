@@ -290,6 +290,8 @@
         "tests/integration/rbacInvariants.test.ts",
         "tests/integration/rbacLifecycleAndSessions.test.ts",
         "tests/integration/rbacRoleLifecycleTargeted.test.ts",
+        "tests/integration/securityMatrix.test.ts",
+        "tests/unit/securityMatrixCoverage.test.ts",
         "tests/integration/employeePermissions.test.ts",
         "tests/integration/employeeAccessOverrides.test.ts",
         "tests/integration/employeeInviteLifecycle.test.ts",
@@ -326,15 +328,25 @@
           "where": "tests/integration/employeeInviteLifecycle.test.ts, tests/integration/employeePermissions.test.ts, supabase/migrations/0192_consequential_records_guard_before_retry.sql, tests/unit/rpcContractGuard.test.ts"
         },
         {
-          "status": "BLOCKED",
-          "proves": "Execution of both retargeted lanes needs the authorized live-QA window (tests/setup/qa-client.ts talks only to the QA project through .env.qa, and this task opened no write window), so the retarget is source-level: the guard fails on any lane call to a revoked or undefined RPC, and the identity refusals themselves remain unmeasured.",
-          "where": "tests/integration/employeeInviteLifecycle.test.ts, tests/integration/employeePermissions.test.ts"
+          "status": "FIXED + REVERIFIED",
+          "proves": "The retargeted lanes are measured, not merely source-level: the whole integration folder ran against the QA project — 42 files, 493 tests, 0 failures (device-evidence/logs/integration-full-2026-10-15.log), which includes employeeInviteLifecycle — and employeePermissions passed again as part of the 13-file security set on 2026-10-16 (146 tests, exit 0). The identity refusals now come from the live contract (`deactivate_employee_v1`, canonical `void_sale`).",
+          "where": "device-evidence/logs/integration-full-2026-10-15.log, device-evidence/logs/security-matrix-affected-2026-10-16.log, tests/integration/employeePermissions.test.ts"
+        },
+        {
+          "status": "VALID",
+          "proves": "The matrix cannot silently stop describing the system it is evidence for: `tests/unit/securityMatrixCoverage.test.ts` (7/7) reads the RPC→permission mapping back out of the migration that owns it (0192's `guard_operational_request`) and out of the same file's REVOKE of the retired compatibility endpoint, then fails when any guarded, still-reachable RPC is not both CALLED by name in the matrix and asserted with the permission code its guard raises — and separately fails if the matrix stops asserting the guard's refusal text at all. A counted list is deliberately not kept: adding an eighth RPC to the guard changes what the test requires without anyone editing a second file. Non-vacuous, measured: injecting `WHEN 'qa_probe_rpc' THEN 'qa.probe'` into the ledger's CASE mapping fails the guard with \"qa_probe_rpc (never called in the matrix)\"; the migration file was reverted byte-clean (`git status` empty for `supabase/migrations/`) and replay/schema guards re-run green (23/23).",
+          "where": "tests/unit/securityMatrixCoverage.test.ts, supabase/migrations/0192_consequential_records_guard_before_retry.sql, tests/unit/migrationReplayability.test.ts, tests/unit/schemaBaseline.test.ts"
+        },
+        {
+          "status": "FIXED + REVERIFIED",
+          "proves": "The per-role backend matrix the staging checklist recorded as never run is now measured in one tenant, on the same consequential RPCs: customers.create is the shop-floor permission (owner, admin, manager and employee all pass the guard), sales.void passes for owner/admin/manager and is refused for the employee with `missing permission sales.void`, inventory.adjust and employees.manage pass for the owner only, and products.delete is refused for every non-owner. An admin whose role carries one unrelated permission is refused exactly like an employee, so `admin` is a role and not the implicit set `owner` is. Refusals are asserted as the guard's own text and allows as the ABSENCE of it, so a call that never reached the guard cannot read as an allow. Non-vacuous, measured: granting sales.void to the employee role flips exactly the employee assertion (\"employee was NOT refused void_sale: expected 'NOT_AUTHORIZED: record branch access …' to contain 'missing permission sales.void'\"). The same file covers the direct-API bypass (anon RPC and anon reads refused; an employee cannot INSERT into customer_payments/sales or grant itself a permission through user_permissions, with the permission set and row count re-measured after the refusal) and the sensitive-field read gate (zero customers/companies/product_variants rows without the permission, real rows for the owner as the control).",
+          "where": "tests/integration/securityMatrix.test.ts (19/19, exit 0), device-evidence/logs/security-matrix-2026-10-16.log, device-evidence/security-data-isolation-2026-10-16.md"
         }
       ],
-      "lastVerified": "2026-10-13",
+      "lastVerified": "2026-10-16",
       "risks": [
         "src/lib/accessModel.ts and permissionLabels.ts are Tier-2 paths: touching them forces the full gate.",
-        "The employeePermissions and employeeInviteLifecycle lanes are red-or-unmeasured until a live-QA window runs them; their fixtures now target live RPCs, which is a precondition for a meaningful result, not a result."
+        "securityMatrix creates its own personas and roles in the QA tenant with unique names and removes them; the QA baseline check is the independent proof it leaves nothing behind."
       ]
     },
     {
@@ -382,6 +394,8 @@
         "tests/integration/tenantIsolationOps.test.ts",
         "tests/integration/tenantResolverReplay.test.ts",
         "tests/integration/branchScopeEnforcement.test.ts",
+        "tests/integration/tenantBoundarySweep.test.ts",
+        "tests/integration/securityMatrix.test.ts",
         "tests/unit/shopSwitchReset.test.ts",
         "tests/unit/branchIdentityBoundary.test.ts",
         "tests/unit/branchLateResponse.test.ts",
@@ -431,16 +445,20 @@
           "where": "tests/integration/accountDeletion.test.ts"
         },
         {
+          "status": "VALID",
+          "proves": "The tenant/branch boundaries were re-measured against the live QA project on 2026-10-16 as one 13-file security set (146 tests, exit 0, EnvGuard verified bpybjrjenwccowvtrevu): tenantBoundarySweep (all four views read as a real authenticated session, `tenants` 1 own / 0 foreign after 0206), branchScopeEnforcement (12 tests: branch stamping, cross-branch write refusal, one-branch-at-a-time reads, an empty or NULL non-owner scope refused), variantIsolation (cost_price hidden from the employee projection and the base table admin-only) and securityMatrix (a write addressed to a sibling branch refused for a branch-scoped manager and accepted for the owner; a member's `sales` read restricted to the branch being worked in; the read gate returning zero customers/companies/product_variants rows without the permission, with the owner's real rows as the non-vacuity control).",
+          "where": "device-evidence/logs/security-matrix-affected-2026-10-16.log, device-evidence/logs/security-matrix-2026-10-16.log, device-evidence/security-data-isolation-2026-10-16.md"
+        },
+        {
           "status": "BLOCKED",
-          "proves": "The live legs of branch removal — create → rename → archive driven in a browser, the archived status and fallback branch the UI shows, and that a reload keeps the archived state — are not verified; they need the authorized live-QA window. The retargeted accountDeletion lane is BLOCKED for the same reason: tests/setup/qa-client.ts talks only to the QA project through .env.qa, and this task did not open a write window, so its archive assertions are grounded in migration 0191 line by line rather than measured. The sheet's branch half also has no caller in the router today (branch removal is reached from BranchesSection → BranchDetailPage), so its half is proven at source and copy level only.",
-          "where": "RBAC_BRANCH_IMPLEMENTATION_STATUS.md, ENGINEERING_OS_STATE.md"
+          "proves": "Only the browser-driven leg of branch removal is still unverified — create → rename → archive driven in a real browser, the archived status and fallback branch the UI shows, and that a reload keeps the archived state. The database half is no longer blocked: 0188–0195 are applied to QA (ledger 198 files / 198 rows, `migrate verify --env staging` PASS) and the archive refusals are measured through `archive_operating_branch` in branchIdentityBoundary and the live integration set. The sheet's branch half also has no caller in the router today (branch removal is reached from BranchesSection → BranchDetailPage), so its half is proven at source and copy level only.",
+          "where": "tests/unit/branchIdentityBoundary.test.ts, device-evidence/logs/security-matrix-affected-2026-10-16.log, RBAC_BRANCH_IMPLEMENTATION_STATUS.md"
         }
       ],
-      "lastVerified": "2026-10-13",
+      "lastVerified": "2026-10-16",
       "risks": [
         "app_settings was missing from BUSINESS_TABLES in scripts/dev/lib.mjs when 0182 was found — verify cleanup coverage when adding a new shop-scoped table.",
-        "0188–0195 are local, unapplied corrections: real branch identity, explicit employee scope, audit attribution and the branch-identity/offline/notification corrections in this patch. Live QA/API evidence is BLOCKED; see RBAC_BRANCH_IMPLEMENTATION_STATUS.md. Older branch-scope evidence is INVALIDATED for this patch.",
-        "This record was corrected on 2026-10-06 to stop asserting live QA evidence for branch identity, offline queue ownership and notification scope; those are now local-only evidence.",
+        "This record's 2026-10-06 caveat that 0188–0195 were local and unapplied is superseded: they are in the QA ledger (198 files / 198 rows, hashes matching) and the tenant/branch boundaries above are measured against the live project. What remains unmeasured is the browser-driven branch-removal flow, not the database contract.",
         "The marketplace enablement keeps its tenant-level storage while the UI presents it beside one branch; that mismatch is documented, not resolved by this patch."
       ]
     },
