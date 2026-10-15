@@ -149,6 +149,14 @@ test.describe('Farmer marketplace listing — the owner switches', () => {
     const created = await execSql(
       `SELECT id, marketplace_listed, marketplace_listed_at FROM products WHERE name = '${PRODUCT_NAME}'`,
     );
+    // OWNED BEFORE ANY ASSERTION ON IT, and that ordering is the whole point. These assertions are
+    // the ones this lane exists to catch — a form that cannot see the stored value saves `false`.
+    // When that happened on 2026-10-14, the row was created, the assertion threw, and the
+    // registration below it never ran: the product, its variant and its opening-stock movement sat
+    // in the QA baseline as unexplained drift (`qa:baseline` reported products 6, declared 5).
+    // "Registered the moment it exists" has to mean before the check, not after it, or a lane can
+    // only clean up after the runs that did not need cleaning up.
+    for (const row of created) await trackOwned(ownership(), 'products', String(row.id));
     expect(created.length, 'the product must be created').toBe(1);
     expect(
       created[0].marketplace_listed,
@@ -156,11 +164,9 @@ test.describe('Farmer marketplace listing — the owner switches', () => {
     ).toBe(true);
     expect(created[0].marketplace_listed_at, 'listing records when it happened').not.toBeNull();
 
+    // The packs and any opening stock movement follow `product_id` in the cleanup graph, and the id
+    // is used before the rename below, which would make the name marker useless.
     const productId = created[0].id as string;
-    // OWNED, immediately after creation (and before the rename below, which would make the name
-    // marker useless): the product the form created. Its packs and any opening stock movement
-    // follow `product_id` in the cleanup graph.
-    await trackOwned(ownership(), 'products', productId);
     const editUrl = `${BASE_URL}/admin/inventory/${productId}/edit`;
 
     // Re-open the product: the switch must read the stored decision, not a default.
