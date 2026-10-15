@@ -70,16 +70,12 @@ jobs:
       - name: Run unit tests
         run: npx vitest run tests/unit --reporter=verbose
 
-      - name: Run integration tests (one file at a time — they share the QA database)
-        run: npx vitest run tests/integration --fileParallelism=false --reporter=verbose
-
-      # ─── Browser E2E Tests (Playwright) ─────────────────────────────
-      - name: Install Playwright Browsers
-        run: npx playwright install --with-deps chromium
-
-      # The E2E suite signs in through the real login flow, which needs each app
-      # user to have a confirmed Supabase Auth credential. Re-provisioning is
-      # idempotent and repairs a QA database that was cleaned without one.
+      # The suites sign in through the real login flow, which needs each app user to have a
+      # confirmed Supabase Auth credential. Re-provisioning is idempotent and repairs a QA
+      # database that was cleaned without one. It runs BEFORE the integration suite because
+      # that suite signs in too — branchScopeEnforcement asserts a warehouse-scoped employee
+      # can sign in — and run 38645773012 failed it with "Invalid login credentials" while
+      # this repair step, the one thing that could have helped, sat later in the job.
       - name: Provision QA Auth Sessions
         run: node scripts/provision-auth-sessions.mjs
         env:
@@ -88,6 +84,13 @@ jobs:
           QA_DB_HOST: ${{ secrets.QA_DB_HOST }}
           QA_DB_USER: ${{ secrets.QA_DB_USER }}
           QA_DB_PASS: ${{ secrets.QA_DB_PASS }}
+
+      - name: Run integration tests (one file at a time — they share the QA database)
+        run: npx vitest run tests/integration --fileParallelism=false --reporter=verbose
+
+      # ─── Browser E2E Tests (Playwright) ─────────────────────────────
+      - name: Install Playwright Browsers
+        run: npx playwright install --with-deps chromium
 
       - name: Run Playwright E2E
         run: npx playwright test
