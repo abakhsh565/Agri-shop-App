@@ -337,6 +337,72 @@ suite('real branch identity and fail-closed scope — executed SQL', () => {
     await expect(asUser(owner, () => db.query('SELECT create_sale($1::jsonb)', [JSON.stringify({ idempotencyKey: 'branch-retry-fixture' })]))).rejects.toThrow('another branch or record');
     expect((await db.query('SELECT id,is_voided,branch_id FROM sales ORDER BY id')).rows).toEqual(before);
   });
+
+  it('refuses a cross-branch idempotency replay on every OTHER guarded ledger, not only the sale ledger', async () => {
+    // WHY THIS EXISTS. 0192 injects `guard_operational_request` as the FIRST statement after BEGIN in
+    // eight consequential RPCs, and re-injects it at every retry-return site. Read back from the
+    // deployed definitions, all eight still carry it in first position — but this suite exercised only
+    // the `create_sale` ledger (the assertion above). Each RPC has its OWN ledger lookup, so an
+    // untested branch can name the wrong table or column and still pass every other suite in the
+    // repository; the untested ones are the reason a migration could silently drop the ordering.
+    //
+    // The four planted here are the remaining SHAPES, not four copies of one: customer payment and
+    // adjustment resolve a parent (customer / product), supplier payment resolves a company, and a
+    // purchase has no parent at all — so the `v_record_parent IS NOT NULL AND …` half of the guard is
+    // only reached by the first three.
+    const customer = 'e1890000-0000-0000-0000-000000000001';
+    const company = 'e1890000-0000-0000-0000-000000000002';
+    const product = 'e1890000-0000-0000-0000-000000000003';
+    const variant = 'e1890000-0000-0000-0000-000000000004';
+    const ledgers = [
+      ['customer_payments', 'boundary-customer-payment'],
+      ['supplier_payments', 'boundary-supplier-payment'],
+      ['stock_adjustments', 'boundary-adjustment'],
+      ['purchases', 'boundary-purchase'],
+    ] as const;
+
+    // Plant as the DEFINER-like path (superuser, real actor claims so the branch triggers see context),
+    // with every ledger row belonging to the WAREHOUSE branch while the owner acts from MAIN.
+    await db.exec('BEGIN');
+    try {
+      await db.query("SELECT set_config('request.jwt.claims',$1,true)", [JSON.stringify({ sub: owner, role: 'authenticated' })]);
+      await db.query('SELECT set_active_branch($1)', [warehouse]);
+      await db.query('INSERT INTO customers(id,name,shop_id) VALUES($1,$2,$3)', [customer, 'Boundary customer', tenant]);
+      await db.query('INSERT INTO companies(id,name,shop_id) VALUES($1,$2,$3)', [company, 'Boundary supplier', tenant]);
+      await db.query('INSERT INTO products(id,name,shop_id) VALUES($1,$2,$3)', [product, 'Boundary product', tenant]);
+      await db.query('INSERT INTO product_variants(id,product_id,name) VALUES($1,$2,$3)', [variant, product, '1kg']);
+      await db.query(`INSERT INTO customer_payments(customer_id,amount,idempotency_key,branch_id) VALUES($1,10,'boundary-customer-payment',$2)`, [customer, warehouse]);
+      await db.query(`INSERT INTO supplier_payments(company_id,amount,idempotency_key,branch_id) VALUES($1,10,'boundary-supplier-payment',$2)`, [company, warehouse]);
+      await db.query(`INSERT INTO stock_adjustments(variant_id,adjustment_type,qty_change,idempotency_key,branch_id) VALUES($1,'adjustment',1,'boundary-adjustment',$2)`, [variant, warehouse]);
+      await db.query(`INSERT INTO purchases(purchase_number,idempotency_key,branch_id) VALUES('BOUNDARY-PURCHASE','boundary-purchase',$1)`, [warehouse]);
+      await db.exec('COMMIT');
+    } catch (error) {
+      await db.exec('ROLLBACK');
+      throw error;
+    }
+
+    await asUser(owner, () => db.query('SELECT set_active_branch($1)', [main]));
+
+    const calls: Array<[string, Record<string, unknown>]> = [
+      ['record_customer_payment', { idempotencyKey: 'boundary-customer-payment', customerId: customer, amount: 10, method: 'cash' }],
+      ['record_supplier_payment', { idempotencyKey: 'boundary-supplier-payment', companyId: company, amount: 10, method: 'cash' }],
+      ['adjust_stock', { idempotencyKey: 'boundary-adjustment', productId: product, variantId: variant, qtyChange: 1, adjustmentType: 'adjustment' }],
+      ['create_purchase', { idempotencyKey: 'boundary-purchase' }],
+    ];
+    for (const [rpc, payload] of calls) {
+      await expect(
+        asUser(owner, () => db.query(`SELECT ${rpc}($1::jsonb)`, [JSON.stringify(payload)])),
+        `${rpc} accepted an idempotency key whose ledger row lives in another branch`,
+      ).rejects.toThrow(/another branch or record/);
+    }
+
+    // A refusal that still wrote would be the bypass with extra steps: each key must exist exactly
+    // once — the planted row — and nothing else may have been recorded beside it.
+    for (const [table, key] of ledgers) {
+      const rows = await db.query(`SELECT count(*)::int n FROM ${table} WHERE idempotency_key=$1`, [key]);
+      expect(rows.rows, `${table} changed while the replay was refused`).toEqual([{ n: 1 }]);
+    }
+  });
   it('Activity RPC reads selected branch audit events and immutable person/role labels', async () => {
     await asUser(owner, () => db.query('SELECT set_active_branch($1)', [warehouse]));
     const feed = await asUser(owner, () => db.query('SELECT * FROM get_branch_activity()'));

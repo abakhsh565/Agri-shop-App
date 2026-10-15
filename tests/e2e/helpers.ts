@@ -456,6 +456,41 @@ export async function injectAdminAuth(page: Page) {
 }
 
 /**
+ * Wait until a route has RENDERED, without demanding a quiet network.
+ *
+ * WHY THIS IS SHARED AND NOT `waitForLoadState('networkidle')`. `networkidle` is unreachable on this
+ * app, and unreachable for a reason that is the product working:
+ *   · `src/stores/companiesStore.ts` subscribes to a realtime channel ("companies-feed"), so
+ *     `/admin/companies` holds an open connection for as long as the screen is up;
+ *   · `src/stores/notificationStore.ts` polls on a timer, so the network is never quiet for the
+ *     500 ms `networkidle` asks for.
+ * Measured on `adminMicrocopy` (three runs, two servers, including one started fresh for the run):
+ * the result was never a wrong assertion but a 120-second navigation timeout, at a different route
+ * each time. The same waits filled `crossScreenSync` — where one of the routes it walks is
+ * `/admin/dashboard`, another live screen — so the fix was already written once and is now written
+ * once for both lanes instead of twice.
+ *
+ * A quiet network is still TRIED, because it makes the read that follows meaningful when it arrives;
+ * it is bounded and optional. What is REQUIRED is that the route rendered — the assertions in these
+ * lanes read rendered text and visible elements, so a blank route must still fail loudly.
+ */
+export async function settle(page: Page, options: { minText?: number; timeout?: number } = {}) {
+  const minText = options.minText ?? 20;
+  const timeout = options.timeout ?? 20_000;
+  await page.waitForLoadState('domcontentloaded');
+  await page.waitForLoadState('networkidle', { timeout: 4_000 }).catch(() => {
+    // Deliberately swallowed: this is the optimistic half, not an assertion. The required
+    // half is the rendered text below, and a live channel must not fail the lane for being live.
+  });
+  await expect
+    .poll(async () => (await page.evaluate(() => document.body.innerText.trim().length)), {
+      timeout,
+      message: 'the route never rendered any text',
+    })
+    .toBeGreaterThan(minText);
+}
+
+/**
  * Write a setup draft into the shop store instance the APP is rendering from.
  *
  * A Vite dev server serves an HMR-invalidated module at `/src/stores/shopStore.ts?t=<ms>`, and an

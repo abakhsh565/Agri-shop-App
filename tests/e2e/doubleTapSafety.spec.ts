@@ -97,6 +97,13 @@ test.describe('Double tap safety', () => {
     const paymentsBefore = await snapshotIds(
       `SELECT id FROM customer_payments WHERE customer_id = '${QA_IDS.customerA}'`,
     );
+    // …and the NOTIFICATION the payment RPC writes beside it. Measured 2026-10-15: recording a
+    // payment for a SHARED fixture customer writes a notification whose `entity_id` is that
+    // customer (`kind='payment'`, `entity_id 20000000-…-0001`, "QA Customer A paid Rs. 3,000"),
+    // and the cleanup plan scopes notifications by owned ids — the customer here belongs to the
+    // fixture floor, not to this run — so the row survived a green run as QA drift. Claiming it by
+    // id is what the plan's `notifications.column = id` entry exists for.
+    const notificationsBefore = await snapshotIds(`SELECT id FROM notifications`);
 
     await doubleTapConfirm(page);
 
@@ -113,6 +120,7 @@ test.describe('Double tap safety', () => {
       `SELECT id FROM customer_payments WHERE customer_id = '${QA_IDS.customerA}'`,
       paymentsBefore,
     );
+    await claimNew('notifications', `SELECT id FROM notifications`, notificationsBefore);
 
     const after = await execSql(
       `SELECT outstanding_balance, total_paid FROM customers WHERE id = '${QA_IDS.customerA}'`
@@ -133,6 +141,8 @@ test.describe('Double tap safety', () => {
     );
     expect(salesBefore.n, 'doubleTapSafety needs a sale-free fixture customer').toBe(0);
     const salesIdsBefore = await snapshotIds(`SELECT id FROM sales WHERE customer_id = '${QA_IDS.customerA}'`);
+    // The sale RPC writes a notification too; whichever id it carries, the difference is this run's.
+    const notificationsBefore = await snapshotIds(`SELECT id FROM notifications`);
 
     await page.goto(BASE_URL);
     await page.waitForLoadState('networkidle');
@@ -159,6 +169,7 @@ test.describe('Double tap safety', () => {
     expect(sales.length, 'a double tap must create exactly one sale').toBe(1);
 
     await claimNew('sales', `SELECT id FROM sales WHERE customer_id = '${QA_IDS.customerA}'`, salesIdsBefore);
+    await claimNew('notifications', `SELECT id FROM notifications`, notificationsBefore);
 
     const items = await execSql(`SELECT count(*)::int AS n FROM sale_items WHERE sale_id = '${sales[0].id}'`);
     expect(Number(items[0].n), 'the sale has its one line').toBe(1);
@@ -189,6 +200,27 @@ test.describe('Double tap safety', () => {
     await page.locator('input[type="number"]').first().waitFor({ timeout: 15000 });
     await page.locator('input[type="number"]').first().fill('500');
 
+    // OWNERSHIP — the snapshot must be taken BEFORE the tap.
+    //
+    // WHY THIS IS HERE NOW (measured 2026-10-15). Tests 1 and 2 of this file already claimed the row
+    // they create (`claimNew('customer_payments', …)`, `claimNew('sales', …)`); this test did not. So
+    // the Rs. 500 payment it records against the SHARED fixture company stayed in the QA database
+    // after a green run and became the exact row that fails this file's own `beforeAll` premise on
+    // the next run — "doubleTapSafety needs a payment-free fixture supplier; QA holds payments from
+    // another run". Reproduced end to end: a standalone green run (3 passed) left
+    // `supplier_payments` = 1 (`22203d47-…`, amount 500.00, `company_id 50000000-…-0001`,
+    // `created_at 2026-10-15T15:54:26Z`), and the next full run failed at `:78` with that count.
+    // The row is now claimed by id like every other row this file writes, so its own cleanup removes
+    // it and the leak cannot compound.
+    const paymentsBefore = await snapshotIds(
+      `SELECT id FROM supplier_payments WHERE company_id = '${QA_IDS.companyA}'`,
+    );
+    // NO notification claim here, and that is measured rather than assumed: the supplier-payment
+    // path writes no notification (the customer payment and the sale do). Claiming one made
+    // `claimNew` throw — "found no new row — the action did not create what this lane believes it
+    // created" — which is exactly the guard working: test 3's earlier leak was the payment row
+    // alone, and it is the row claimed below.
+
     await doubleTapConfirm(page);
 
     await page.waitForTimeout(6000);
@@ -197,6 +229,12 @@ test.describe('Double tap safety', () => {
       `SELECT count(*)::int AS n FROM supplier_payments WHERE company_id = '${QA_IDS.companyA}'`
     );
     expect(payments[0].n, 'a double tap must record exactly one supplier payment').toBe(1);
+
+    await claimNew(
+      'supplier_payments',
+      `SELECT id FROM supplier_payments WHERE company_id = '${QA_IDS.companyA}'`,
+      paymentsBefore,
+    );
 
     const after = await execSql(
       `SELECT outstanding_payable FROM companies WHERE id = '${QA_IDS.companyA}'`

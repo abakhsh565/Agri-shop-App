@@ -6,6 +6,15 @@
  * Tests Zustand store consistency + navigation freshness.
  *
  * Uses the QA database (never production).
+ *
+ * WAITING (2026-10-15). Every navigation here used to end with `waitForLoadState('networkidle')` — 45
+ * calls. That condition is unreachable on this app because two screens this spec walks
+ * (`/admin/dashboard`, `/admin/companies`) hold live connections: `companiesStore` subscribes to a
+ * realtime channel and `notificationStore` polls on a timer. The measured result was a 120-second
+ * timeout rather than an assertion about data, which is the same mechanism `adminMicrocopy` was
+ * already fixed for. The waits now go through the shared `settle()` helper in `helpers.ts`, which
+ * still tries a quiet network (bounded, optional) and REQUIRES rendered text — so a blank route
+ * still fails this lane loudly, and every data assertion below is unchanged.
  */
 import { test, expect } from '@playwright/test';
 import * as path from 'path';
@@ -17,6 +26,7 @@ import {
   execSql,
   ownership,
   trackOwned,
+  settle,
   QA_IDS,
 } from './helpers';
 
@@ -64,12 +74,12 @@ test.describe('Cross-Screen Synchronization', () => {
 
   test('Customer: name change propagates from profile to list', async ({ page }) => {
     await page.goto(BASE_URL);
-    await page.waitForLoadState('networkidle');
+    await settle(page);
     await injectAdminAuth(page);
 
     // Verify original name on list
     await page.goto(`${BASE_URL}/employee/customers`);
-    await page.waitForLoadState('networkidle');
+    await settle(page);
     await expect(page.locator('text=Sync Customer').first()).toBeVisible();
 
     // Update name via DB
@@ -77,16 +87,16 @@ test.describe('Cross-Screen Synchronization', () => {
 
     // Navigate to profile — store reloads
     await page.goto(`${BASE_URL}/employee/customers/${CUST_ID}`);
-    await page.waitForLoadState('networkidle');
+    await settle(page);
 
     // Navigate back to list — should show updated name
     await page.goto(`${BASE_URL}/employee/customers`);
-    await page.waitForLoadState('networkidle');
+    await settle(page);
     await expect(page.locator('text=Sync Customer UPDATED').first()).toBeVisible();
 
     // Hard reload — still updated
     await page.reload();
-    await page.waitForLoadState('networkidle');
+    await settle(page);
     await expect(page.locator('text=Sync Customer UPDATED').first()).toBeVisible();
 
     // Verify DB
@@ -99,7 +109,7 @@ test.describe('Cross-Screen Synchronization', () => {
 
   test('Customer: credit limit change propagates', async ({ page }) => {
     await page.goto(BASE_URL);
-    await page.waitForLoadState('networkidle');
+    await settle(page);
     await injectAdminAuth(page);
 
     // Update credit limit
@@ -107,9 +117,9 @@ test.describe('Cross-Screen Synchronization', () => {
 
     // Navigate to list then profile — store reloads
     await page.goto(`${BASE_URL}/employee/customers`);
-    await page.waitForLoadState('networkidle');
+    await settle(page);
     await page.goto(`${BASE_URL}/employee/customers/${CUST_ID}`);
-    await page.waitForLoadState('networkidle');
+    await settle(page);
 
     // Verify DB
     const db = await execSql(`SELECT credit_limit FROM customers WHERE id = '${CUST_ID}'`);
@@ -121,7 +131,7 @@ test.describe('Cross-Screen Synchronization', () => {
 
   test('Customer: phone change propagates from profile to list', async ({ page }) => {
     await page.goto(BASE_URL);
-    await page.waitForLoadState('networkidle');
+    await settle(page);
     await injectAdminAuth(page);
 
     // Update phone
@@ -129,7 +139,7 @@ test.describe('Cross-Screen Synchronization', () => {
 
     // Navigate to list — should show updated phone
     await page.goto(`${BASE_URL}/employee/customers`);
-    await page.waitForLoadState('networkidle');
+    await settle(page);
 
     // Verify DB
     const db = await execSql(`SELECT phone FROM customers WHERE id = '${CUST_ID}'`);
@@ -141,7 +151,7 @@ test.describe('Cross-Screen Synchronization', () => {
 
   test('Customer: image change propagates across screens', async ({ page }) => {
     await page.goto(BASE_URL);
-    await page.waitForLoadState('networkidle');
+    await settle(page);
     await injectAdminAuth(page);
 
     // Set image
@@ -150,7 +160,7 @@ test.describe('Cross-Screen Synchronization', () => {
 
     // Navigate to list — should reflect image
     await page.goto(`${BASE_URL}/employee/customers`);
-    await page.waitForLoadState('networkidle');
+    await settle(page);
     const db = await execSql(`SELECT image_url FROM customers WHERE id = '${CUST_ID}'`);
     expect(db[0].image_url).toBe(testUrl);
 
@@ -164,12 +174,12 @@ test.describe('Cross-Screen Synchronization', () => {
 
   test('Product: name change propagates from detail to list', async ({ page }) => {
     await page.goto(BASE_URL);
-    await page.waitForLoadState('networkidle');
+    await settle(page);
     await injectAdminAuth(page);
 
     // Verify original
     await page.goto(`${BASE_URL}/employee/products`);
-    await page.waitForLoadState('networkidle');
+    await settle(page);
     await expect(page.locator('text=Sync Product').first()).toBeVisible();
 
     // Update name
@@ -177,14 +187,14 @@ test.describe('Cross-Screen Synchronization', () => {
 
     // Navigate to detail then list
     await page.goto(`${BASE_URL}/employee/products/${PROD_ID}`);
-    await page.waitForLoadState('networkidle');
+    await settle(page);
     await page.goto(`${BASE_URL}/employee/products`);
-    await page.waitForLoadState('networkidle');
+    await settle(page);
     await expect(page.locator('text=Sync Product UPDATED').first()).toBeVisible();
 
     // Hard reload
     await page.reload();
-    await page.waitForLoadState('networkidle');
+    await settle(page);
     await expect(page.locator('text=Sync Product UPDATED').first()).toBeVisible();
 
     // Verify DB
@@ -197,7 +207,7 @@ test.describe('Cross-Screen Synchronization', () => {
 
   test('Product: price change propagates', async ({ page }) => {
     await page.goto(BASE_URL);
-    await page.waitForLoadState('networkidle');
+    await settle(page);
     await injectAdminAuth(page);
 
     // Update price
@@ -205,9 +215,9 @@ test.describe('Cross-Screen Synchronization', () => {
 
     // Navigate
     await page.goto(`${BASE_URL}/employee/products`);
-    await page.waitForLoadState('networkidle');
+    await settle(page);
     await page.goto(`${BASE_URL}/employee/products/${PROD_ID}`);
-    await page.waitForLoadState('networkidle');
+    await settle(page);
 
     // Verify DB
     const db = await execSql(`SELECT selling_price FROM product_variants WHERE id = '${VAR_ID}'`);
@@ -219,7 +229,7 @@ test.describe('Cross-Screen Synchronization', () => {
 
   test('Product: stock change propagates', async ({ page }) => {
     await page.goto(BASE_URL);
-    await page.waitForLoadState('networkidle');
+    await settle(page);
     await injectAdminAuth(page);
 
     // Update stock
@@ -227,7 +237,7 @@ test.describe('Cross-Screen Synchronization', () => {
 
     // Navigate
     await page.goto(`${BASE_URL}/employee/products`);
-    await page.waitForLoadState('networkidle');
+    await settle(page);
 
     // Verify DB
     const db = await execSql(`SELECT stock_qty FROM product_variants WHERE id = '${VAR_ID}'`);
@@ -241,12 +251,12 @@ test.describe('Cross-Screen Synchronization', () => {
 
   test('Company: name change propagates from detail to list', async ({ page }) => {
     await page.goto(BASE_URL);
-    await page.waitForLoadState('networkidle');
+    await settle(page);
     await injectAdminAuth(page);
 
     // Verify original
     await page.goto(`${BASE_URL}/admin/companies`);
-    await page.waitForLoadState('networkidle');
+    await settle(page);
     await expect(page.locator('text=Sync Supplier').first()).toBeVisible();
 
     // Update name
@@ -254,14 +264,14 @@ test.describe('Cross-Screen Synchronization', () => {
 
     // Navigate
     await page.goto(`${BASE_URL}/admin/companies/${COMP_ID}`);
-    await page.waitForLoadState('networkidle');
+    await settle(page);
     await page.goto(`${BASE_URL}/admin/companies`);
-    await page.waitForLoadState('networkidle');
+    await settle(page);
     await expect(page.locator('text=Sync Supplier UPDATED').first()).toBeVisible();
 
     // Hard reload
     await page.reload();
-    await page.waitForLoadState('networkidle');
+    await settle(page);
     await expect(page.locator('text=Sync Supplier UPDATED').first()).toBeVisible();
 
     // Verify DB
@@ -274,7 +284,7 @@ test.describe('Cross-Screen Synchronization', () => {
 
   test('Company: payable change propagates', async ({ page }) => {
     await page.goto(BASE_URL);
-    await page.waitForLoadState('networkidle');
+    await settle(page);
     await injectAdminAuth(page);
 
     // Update payable
@@ -282,7 +292,7 @@ test.describe('Cross-Screen Synchronization', () => {
 
     // Navigate
     await page.goto(`${BASE_URL}/admin/companies`);
-    await page.waitForLoadState('networkidle');
+    await settle(page);
 
     // Verify DB
     const db = await execSql(`SELECT outstanding_payable FROM companies WHERE id = '${COMP_ID}'`);
@@ -296,12 +306,12 @@ test.describe('Cross-Screen Synchronization', () => {
 
   test('Employee: name change propagates from detail to list', async ({ page }) => {
     await page.goto(BASE_URL);
-    await page.waitForLoadState('networkidle');
+    await settle(page);
     await injectAdminAuth(page);
 
     // Verify original
     await page.goto(`${BASE_URL}/admin/employees`);
-    await page.waitForLoadState('networkidle');
+    await settle(page);
     await expect(page.locator('text=Sync Employee').first()).toBeVisible();
 
     // Update name
@@ -309,14 +319,14 @@ test.describe('Cross-Screen Synchronization', () => {
 
     // Navigate
     await page.goto(`${BASE_URL}/admin/employees/${EMP_ID}`);
-    await page.waitForLoadState('networkidle');
+    await settle(page);
     await page.goto(`${BASE_URL}/admin/employees`);
-    await page.waitForLoadState('networkidle');
+    await settle(page);
     await expect(page.locator('text=Sync Employee UPDATED').first()).toBeVisible();
 
     // Hard reload
     await page.reload();
-    await page.waitForLoadState('networkidle');
+    await settle(page);
     await expect(page.locator('text=Sync Employee UPDATED').first()).toBeVisible();
 
     // Verify DB
@@ -329,7 +339,7 @@ test.describe('Cross-Screen Synchronization', () => {
 
   test('Employee: active status change propagates', async ({ page }) => {
     await page.goto(BASE_URL);
-    await page.waitForLoadState('networkidle');
+    await settle(page);
     await injectAdminAuth(page);
 
     // Deactivate
@@ -337,7 +347,7 @@ test.describe('Cross-Screen Synchronization', () => {
 
     // Navigate
     await page.goto(`${BASE_URL}/admin/employees`);
-    await page.waitForLoadState('networkidle');
+    await settle(page);
 
     // Verify DB
     const db = await execSql(`SELECT is_active FROM users WHERE id = '${EMP_ID}'`);
@@ -353,7 +363,7 @@ test.describe('Cross-Screen Synchronization', () => {
 
   test('Navigation: each screen mount loads fresh data from store', async ({ page }) => {
     await page.goto(BASE_URL);
-    await page.waitForLoadState('networkidle');
+    await settle(page);
     await injectAdminAuth(page);
 
     // Update customer
@@ -361,17 +371,17 @@ test.describe('Cross-Screen Synchronization', () => {
 
     // Navigate through multiple screens
     await page.goto(`${BASE_URL}/employee/customers`);
-    await page.waitForLoadState('networkidle');
+    await settle(page);
     await expect(page.locator('text=Nav Test').first()).toBeVisible();
 
     await page.goto(`${BASE_URL}/employee/customers/${CUST_ID}`);
-    await page.waitForLoadState('networkidle');
+    await settle(page);
 
     await page.goto(`${BASE_URL}/admin/dashboard`);
-    await page.waitForLoadState('networkidle');
+    await settle(page);
 
     await page.goto(`${BASE_URL}/employee/customers`);
-    await page.waitForLoadState('networkidle');
+    await settle(page);
     await expect(page.locator('text=Nav Test').first()).toBeVisible();
 
     // Verify DB
@@ -386,7 +396,7 @@ test.describe('Cross-Screen Synchronization', () => {
 
   test('No stale state: dashboard and list screens show consistent data', async ({ page }) => {
     await page.goto(BASE_URL);
-    await page.waitForLoadState('networkidle');
+    await settle(page);
     await injectAdminAuth(page);
 
     // Get current counts from DB
@@ -395,15 +405,15 @@ test.describe('Cross-Screen Synchronization', () => {
 
     // Navigate to admin dashboard
     await page.goto(`${BASE_URL}/admin/dashboard`);
-    await page.waitForLoadState('networkidle');
+    await settle(page);
 
     // Navigate to customer list
     await page.goto(`${BASE_URL}/employee/customers`);
-    await page.waitForLoadState('networkidle');
+    await settle(page);
 
     // Navigate to product list
     await page.goto(`${BASE_URL}/employee/products`);
-    await page.waitForLoadState('networkidle');
+    await settle(page);
 
     // Verify DB counts unchanged
     const custCount2 = await execSql(`SELECT count(*) as cnt FROM customers WHERE shop_id = '${QA_IDS.shop}'`);
