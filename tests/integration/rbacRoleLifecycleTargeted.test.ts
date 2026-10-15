@@ -124,7 +124,24 @@ async function cleanup() {
     }
   };
 
-  for (const saleId of [saleForGrant, saleForRevoke].filter(Boolean)) {
+  // EVERY sale these fixtures could be attached to — not only the two ids this run seeds. The ids
+  // below are fixed (`f7000000-…000a` / `…e1`), so a run that is killed mid-flight leaves rows the
+  // NEXT run cannot name: `void_sale` writes its own ledger and a sale whose id only the dead run
+  // knew. `sales_customer_id_fkey` and `sales_employee_id_fkey` then blocked the customer and user
+  // deletes below, and a user left with a shop and NO membership is exactly what the membership
+  // invariant suites report as a product defect (`expected 2 to be +0`) — the leak compound the
+  // comment on TEST_ROLES describes, one table over. Resolving the sales by the fixture identities
+  // they reference makes this heal instead of compounding, and it stays id-scoped: no table-wide
+  // DELETE, and `audit_events` is never bounded.
+  const attached = await sql(`SELECT id FROM sales
+     WHERE employee_id IN ('${OWNER}','${EMP}') OR customer_id = '${CUSTOMER}'`);
+  const saleIds = new Set<string>([
+    ...(attached.rows ?? []).map((row: any) => String(row.id)),
+    saleForGrant,
+    saleForRevoke,
+  ].filter(Boolean));
+
+  for (const saleId of saleIds) {
     await q(`DELETE FROM inventory_movements WHERE reference_id = '${saleId}'`);
     await q(`DELETE FROM voids WHERE sale_id = '${saleId}'`);
     await q(`DELETE FROM sale_items WHERE sale_id = '${saleId}'`);
