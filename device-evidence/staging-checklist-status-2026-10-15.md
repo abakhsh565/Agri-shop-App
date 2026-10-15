@@ -156,8 +156,8 @@ run unless named below".
 | Item | Status | Basis |
 |---|---|---|
 | Relevant unit tests pass | **DONE** | CI *Gates (tsc · unit guards · safety proofs · build)* = **success** on `e986aa0d`; today's cleanup guards **39/39** |
-| Relevant integration tests pass | **DONE (local) — CI leg still red** | **corrected 2026-10-15 (later pass)** — the whole folder, same command and flags as the CI step, against the same QA project: **42 files passed (42) · 493 tests passed (493) · 0 failures · 856.5 s**, exit 0 (`device-evidence/logs/integration-full-2026-10-15.log`). The four files CI named are each green: `branchScopeEnforcement` 12/12, `customerDeletionSecurity` 13/13, `marketplaceContract` 28/28, `resolutionMemory` passed. The CI job itself is still red until the approved (uncommitted) step-order fix is pushed |
-| Relevant Playwright E2E tests pass | **DONE (local) — CI leg unproven** | **the whole suite, on `e986aa0d` against live QA: `149 passed · 0 failed · 0 did not run (38.2 m)`, exit 0** (`device-evidence/logs/e2e-full-2026-10-15-run2.log`). Two real failures were found by the first full run and each root-caused and fixed: `dashboardScope` test 1 (a 1500 ms hydration race — the screen was read before the stores loaded, so its data-dependent "Quick Alerts" section was absent while the DB held customers 10 / products 6) and `doubleTapSafety` test 1 (the lane leaked its own Rs. 500 supplier payment, which its own `beforeAll` then refused to start on). Both verified green in the same suite position in the 149/149 run. The recorded *142 passed / 5 failed* was wrong — the authority is `backups/e2e-final-2.log` = 146 · 1 · 2. Full record: `automated-verification-2026-10-15.md` §6–§9 |
+| Relevant integration tests pass | **DONE — CI leg green (2026-10-16)** | **CI leg closed:** `ci.yml` run **38800530725** on `31641ecf`, dispatched **alone**: *QA (migration ledger · integration suites)* **✓ 14m 6s** and *Gates (tsc · unit guards · safety proofs · build)* **✓ 1m 19s** — the job is green end to end, [run 38800530725](https://github.com/abakhsh565/Agri-shop-App/actions/runs/38800530725). **The earlier red was not the product:** three integration runs (the automatic PR run plus two dispatches, 19:33:35/19:33:51/19:33:54) shared ONE QA database for ten minutes — `--fileParallelism=false` serialises files *inside one process* and does nothing across runs — so 86 tests failed on rows another run had just deleted (`uuid: ""`, `DUPLICATE_PHONE`, `NOT_AUTHORIZED`, FK violations). Re-run alone: **86 → 2**, and those 2 were residue a contended run had left. **corrected 2026-10-15 (later pass)** — the whole folder, same command and flags as the CI step, against the same QA project: **42 files passed (42) · 493 tests passed (493) · 0 failures · 856.5 s**, exit 0 (`device-evidence/logs/integration-full-2026-10-15.log`). The four files CI named are each green: `branchScopeEnforcement` 12/12, `customerDeletionSecurity` 13/13, `marketplaceContract` 28/28, `resolutionMemory` passed. The CI job itself is still red until the approved (uncommitted) step-order fix is pushed |
+| Relevant Playwright E2E tests pass | **DONE (local) — CI leg now RUNNING (in flight)** | **the CI leg is no longer unreachable:** in `build-apk.yml` run **38802733453** the step order is now *Provision QA Auth Sessions* **✓** → *Run integration tests* **✓** → *Install Playwright Browsers* **✓** → *Run Playwright E2E* **running** — every previous run died at the integration step, so the lanes had never been exercised on pushed code. The result is not in yet, so nothing is claimed for it here | **the whole suite, on `e986aa0d` against live QA: `149 passed · 0 failed · 0 did not run (38.2 m)`, exit 0** (`device-evidence/logs/e2e-full-2026-10-15-run2.log`). Two real failures were found by the first full run and each root-caused and fixed: `dashboardScope` test 1 (a 1500 ms hydration race — the screen was read before the stores loaded, so its data-dependent "Quick Alerts" section was absent while the DB held customers 10 / products 6) and `doubleTapSafety` test 1 (the lane leaked its own Rs. 500 supplier payment, which its own `beforeAll` then refused to start on). Both verified green in the same suite position in the 149/149 run. The recorded *142 passed / 5 failed* was wrong — the authority is `backups/e2e-final-2.log` = 146 · 1 · 2. Full record: `automated-verification-2026-10-15.md` §6–§9 |
 | Security/RLS/RPC regression passes | **PARTIAL** | `rpcContractGuard`, `securityAudit`, `productionDataPolicy` are inside the green Gates job; the live bypass battery is partial (§3) |
 | TypeScript passes | **DONE** | the green Gates job includes `tsc`; `src/` is unmodified since (nothing to invalidate it) |
 | Production build passes | **DONE** | same green job, plus a local staging build exit 0 today |
@@ -171,8 +171,8 @@ run unless named below".
 | Required Android signing secrets available | **DONE** | all four present |
 | Existing `.github/workflows/build-apk.yml` verified | **DONE** | `verify-workflow-safety.mjs` 24/24; step-order check 17/17 after the approved move (still **uncommitted**) |
 | Workflow runs against the intended commit | **DONE** | runs `38645769443` and `38645773012` both on `e986aa0d` = HEAD |
-| Required CI test job passes | **FAIL** | integration step red (4 files) |
-| APK build succeeds through GitHub Actions | **NOT DONE** | *Build APK* = **skipped** in both runs |
+| Required CI test job passes | **DONE (2026-10-16)** | `ci.yml` run **38800530725** on `31641ecf`, dispatched alone: **Gates ✓ 1m 19s**, **QA (migration ledger · integration suites) ✓ 14m 6s**. The previous `FAIL` was measured on three runs colliding over one QA database, not on a red product — see §7's integration row for the measurement and the fix |
+| APK build succeeds through GitHub Actions | **PENDING — first reachable run (2026-10-16)** | `build-apk.yml` run **38802733453**: unit ✓ · *preflight, ledger, provisioning, integration* ✓ · Playwright browsers ✓ · E2E **running** · *Build APK* step follows. In both earlier runs *Build APK* was **skipped** because the integration step failed first |
 | APK artifact exists and is non-empty | **NOT DONE** | no CI artifact exists |
 | Artifact matches the intended commit | **N/A for CI** | the **local** artifact's packaged bundle is byte-identical to the `dist/` built from this commit |
 | Package name and version verified | **DONE on the local artifact** | `com.agrishop.app`, versionName 1.0, versionCode 1 |
@@ -224,14 +224,17 @@ Development ✅ → Security & Data Verification ⚠️ partial → CI Tests ⚠
    → Production ⛔ untouched
 ```
 
-**Counts, measured on this file (status column, `grep -c`), after the 2026-10-15 later pass and the
-2026-10-16 QA-baseline resolution:** **45 marked DONE (32 `DONE` · 3 `DONE (owner decision)` · 4 `DONE
-(local)` · 1 `DONE (reused)` · 2 `DONE on the local artefact` · 1 `DONE (local) — CI leg still red` · 1
-`DONE (local) — CI leg unproven` · 1 `DONE — now measured clean`)** · **37 PARTIAL ·
-1 FAIL · 3 NOT DONE · 2 UNKNOWN · 1 N/A** — 89 rows, unchanged in total. The one label that moved is §9's
-QA-baseline row, from `DONE (owner decision)` to `DONE — now measured clean`: it was closed on the owner's
-instruction while carrying a standing deviation, and that deviation is now measured away (`qa:baseline`
-exit 0) — which the owner should still confirm, because the removal was taken on judgement (§10.4).
+**Counts, measured on this file (status column, `grep -oE '\*\*(DONE|PARTIAL|FAIL|NOT DONE|PENDING|UNKNOWN)[^*]*\*\*'`),
+after the 2026-10-15 later pass, the 2026-10-16 QA-baseline resolution and the 2026-10-16 CI pass:**
+**46 marked DONE (32 `DONE` · 4 `DONE (local)` · 3 `DONE (owner decision)` · 2 `DONE on the local
+artefact` · 1 `DONE (reused)` · 1 `DONE — now measured clean` · 1 `DONE — CI leg green` · 1 `DONE (local)
+— CI leg now RUNNING (in flight)` · 1 `DONE (2026-10-16)`)** · **37 PARTIAL · 2 NOT DONE · 3 UNKNOWN ·
+1 PENDING** — **89 rows in total**, and the tally now comes from the label grep rather than from the
+previous pass's hand-written figure (which carried a `1 N/A` no row actually bears). Two labels moved on
+2026-10-16: §9's QA-baseline row from `DONE (owner decision)` to `DONE — now measured clean` (the
+standing deviation is measured away — `qa:baseline` exit 0 — though the owner should still confirm, the
+removal was taken on judgement, §10.4), and §8's *Required CI test job* from `FAIL` to `DONE` (run
+38800530725).
 
 **The E2E row moved to `DONE (local)` on measured evidence, not on the corrected paperwork:** the whole
 suite is `149 passed · 0 failed · 0 did not run` on `e986aa0d` (§7, run 2), and the two failures the first
@@ -239,9 +242,25 @@ full run found were each reproduced, root-caused and fixed — not reclassified.
 `FIXED + REVERIFIED` with their error text, the measured row identities that proved them, and the
 re-runs that closed them (`automated-verification-2026-10-15.md` §6–§9).
 
-**What is measured red today, and what is not.** The one `FAIL` left is §8's *Required CI test job
-passes*: the GitHub job is still red, because the approved step-order fix is **uncommitted and
-unpushed**, so no run has exercised it. §3, §4 and §7's integration row are `DONE (local)` — measured on
+**What is measured red today, and what is not.** **Nothing in §7 or §8 is red any more (2026-10-16).**
+The `FAIL` that stood on §8's *Required CI test job passes* was re-measured and is cleared: the
+step-order fix is now **committed and pushed** (`34034177`, in `31641ecf`), and `ci.yml` run
+**38800530725** is **green end to end** on that commit — *Gates* ✓ 1m 19s, *QA (migration ledger ·
+integration suites)* ✓ 14m 6s. The ordering fix's own effect is visible in `build-apk.yml` run
+**38802733453**: *Provision QA Auth Sessions* **✓** now runs **before** *Run integration tests* **✓**,
+which is the step that used to fail on "Invalid login credentials" while the repair sat later in the
+job. **The earlier red was two artifacts, neither a product defect:** (1) three integration runs fired
+within 19 seconds (the automatic PR run at 19:33:35 plus dispatches at 19:33:51 and 19:33:54) shared one
+QA database, so 86 tests failed on rows another run had just deleted; re-run alone, 86 → 2. (2) those 2
+were residue left by (1) — users with a shop and no membership, because the role-lifecycle teardown's
+sales deletes were scoped to two ids that a killed run never records, so `sales_customer_id_fkey` /
+`sales_employee_id_fkey` blocked the customer and user deletes. That teardown now resolves its sales by
+fixture identity, so a leak heals on the next run: verified by re-running the owning suite (its
+`beforeAll` removed the pair, **0 blocking sales left**) with `rbacEnforcement` + `rbacInvariants`
+**25 passed (25)**. **Reported as a limitation, not hidden:** running two workflows at once against the
+shared QA database is a self-inflicted failure mode, and nothing in the workflows prevents it — the
+`concurrency` group is per workflow and per ref, so a `workflow_dispatch` run and a `pull_request` run
+of the same file do not cancel each other. Dispatch one workflow at a time. §3, §4 and §7's integration row are `DONE (local)` — measured on
 `e986aa0d` against the live QA project, not in CI, and the basis column says so. What the owner's
 closures changed: the local-APK path in §8, the whole device section §10, and the four items listed
 above (QA baseline restored, and §11's security status, data integrity, QA cleanup). What no instruction
