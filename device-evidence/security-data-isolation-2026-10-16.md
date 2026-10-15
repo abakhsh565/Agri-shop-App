@@ -15,8 +15,11 @@ restart the audit or rebuild working fixes."* The gaps being closed are the `PAR
 
 **Seven of the eleven §3 rows are now measured, and the one thing that had never existed — a per-role
 backend matrix for Owner/Admin/Manager/Employee on the same actions in the same tenant — was written
-and run: `tests/integration/securityMatrix.test.ts`, 15/15, exit 0, non-vacuity proven by injection.**
-The remaining unmeasured leg is named in §6 and is not a code defect.
+and run: `tests/integration/securityMatrix.test.ts`, **19/19, exit 0** (it grew by the four rows the new
+coverage guard required), non-vacuity proven by injection — plus
+`tests/unit/securityMatrixCoverage.test.ts`, **7/7**, which fails if a consequential RPC reaches the
+ledger without a row in that matrix. Both were then committed, pushed and **measured green by CI**
+(§8). The remaining unmeasured leg is named in §6 and is not a code defect.
 
 ---
 
@@ -28,14 +31,15 @@ The remaining unmeasured leg is named in §6 and is not a code defect.
 |---|---|
 | Gates (tsc · unit guards · safety proofs · build) | **success** (21:22:24 → 21:23:45) |
 | QA (migration ledger · integration suites) | **success** (21:23:48 → 21:34:42) |
-| E2E lanes against QA | **in progress** — the *Run Playwright E2E* step has not returned; the runner appears stalled, not failed |
+| E2E lanes against QA | **success** (completed, 46m 5s) |
 
 Its integration half **passed on this commit**, so it is reused rather than re-fired: no relevant code
-changed, and the result is complete for the integration suites. The stalled E2E step changes nothing
-here — the lanes were already green by measurement in `build-apk.yml` run **38802733453**
-(*Run Tests* ✓ 41m 39s) and in the local `149 passed · 0 failed` full run
-(`device-evidence/logs/e2e-full-2026-10-15-run2.log`). Reported as an environment observation, not
-converted into a product claim.
+changed, and the result is complete for the integration suites. **Correction, measured later the same
+day:** while this pass began, that E2E job was still `in_progress` and was described here as *"the
+runner appears stalled, not failed"*. It finished and the whole run reads **success** — so the
+docs-only commit `f0a73d1e` is green end to end in CI (Gates, QA, and the E2E lanes), and the earlier
+*stalled* wording was a snapshot of an unfinished job, now superseded by the job's own conclusion. No
+part of this pass rests on the E2E lanes either way.
 
 ## 2. The new artifact — the per-role matrix that never existed
 
@@ -82,7 +86,8 @@ Granting `sales.void` to the employee role and re-running flips **exactly** the 
  Test Files  1 failed (1) · Tests  1 failed | 14 passed (15)
 ```
 
-The grant was then removed and the file re-run green (15/15). The denial assertions therefore measure
+The grant was then removed and the file re-run green (15/15 at that point; 19/19 once §3.2's rows were
+added). The denial assertions therefore measure
 the permission wiring, not a test that cannot fail.
 
 ### 2.3 Direct API/RPC bypass — four refusals, each re-measured
@@ -224,12 +229,10 @@ The baseline check is what proves the new suite leaves nothing behind: `customer
    state and fallback branch the UI shows, and that a reload keeps it). Database contract measured;
    UI flow not. `BLOCKED` by nothing but not being in this pass's scope — and it is the one item the
    registry still carries as `BLOCKED`.
-2. **The stalled CI run's E2E job.** `38809237887`'s *Run Playwright E2E* step has not returned.
-   Reported as an environment observation; the lanes' green evidence is from run `38802733453` and the
-   local full run.
-3. **`securityMatrix.test.ts` is uncommitted**, so CI has not executed it. Everything above is local
-   evidence against the live QA project, which is exactly what the checklist rows asked for — but
-   "the repository runs it in CI" is not true until it is pushed.
+2. **The E2E lanes of the pushed run are still executing** (§8) — unaffected by a test-and-docs change,
+   and reported as such rather than as a result.
+3. ~~`securityMatrix.test.ts` is uncommitted~~ — **closed:** the suite and its coverage guard were
+   committed as **`d0bfaece`** and pushed, and CI measured them (§8).
 4. **Two 2026-10-06-era documents still describe the gate as unpassed.**
    `docs/RBAC_GATE_READINESS_REPORT.md` and `RBAC_BRANCH_IMPLEMENTATION_STATUS.md` say
    *"RBAC + BRANCH SCOPE + ACCOUNTABILITY: NOT PASSED"* and *"the live per-role matrix … does not
@@ -241,7 +244,7 @@ The baseline check is what proves the new suite leaves nothing behind: `customer
 
 | Gap (checklist §3) | Verdict |
 |---|---|
-| Per-role backend matrix (Owner/Admin/Manager/Employee, allowed + denied RPC) | **FIXED + VERIFIED** — `securityMatrix` 15/15, non-vacuous by injection |
+| Per-role backend matrix (Owner/Admin/Manager/Employee, allowed + denied RPC) | **FIXED + VERIFIED** — `securityMatrix` 19/19, non-vacuous by injection, and green in CI (`38816842445`) |
 | Direct API/RPC bypass | **FIXED + VERIFIED** — anon RPC/reads, direct ledger writes, self-escalation, all refused and re-measured |
 | Sensitive fields (cost/margin, customer, supplier) | **PASS** — `securityMatrix` read gate + `variantIsolation` + `tenantBoundarySweep` |
 | `SECURITY DEFINER` early-return / retry paths | **PASS** — `branchIdentityBoundary` (34) + `duplicateActionSafety` + `createOnceSafety`; no assertion was missing except the ones the new coverage guard required (§3.2) |
@@ -255,9 +258,26 @@ The baseline check is what proves the new suite leaves nothing behind: `customer
 **SECURITY & DATA ISOLATION: PASS for every gap that was identified in §3 except the browser-driven
 branch-removal flow, which is the single remaining blocker and is labelled `BLOCKED`, not passed.**
 
+## 8. The push, and CI's own result
+
+Committed **`d0bfaece`** (5 files: the two new test files, the registry, this record and the checklist)
+and pushed to `origin/ci-proof/full-tree`; `git rev-list --left-right --count HEAD...@{upstream}` = `0 0`.
+The PR run it fired is **`38816842445`**:
+
+| Job | Result | What it executed |
+|---|---|---|
+| Gates (tsc · unit guards · safety proofs · build) | **✓ success** | includes the new `tests/unit/securityMatrixCoverage.test.ts` |
+| QA (migration ledger · integration suites) | **✓ success** | includes the new `tests/integration/securityMatrix.test.ts` against the QA project |
+| E2E lanes against QA | in progress at the time of writing | unaffected by this change (test-only + docs) |
+
+The two jobs that execute the new artifacts are **green in CI**, not only locally. The lanes' own
+verdict is left to the job rather than predicted.
+
 ## Constraint compliance
 
-Production untouched (0 requests, no production credentials, tools refuse production by name); no
-commit, push, deploy or reset; no feature added; no working fix rebuilt; no assertion weakened — the
-one test-file change is the new suite, and the guide's own rule was honoured by injecting a failure and
-watching it catch it.
+Production untouched (0 requests, no production credentials, tools refuse production by name). **The
+commit and push were explicitly requested** ("commit … then push so CI runs it") and are the only
+repository-state changes this pass made: `d0bfaece` on `ci-proof/full-tree`, nothing staged that
+another session had touched, no deploy, no reset, no stash. No feature added; no working fix rebuilt;
+no assertion weakened — the guide's own rule was honoured by injecting a failure into both new guards
+and watching each catch it.
