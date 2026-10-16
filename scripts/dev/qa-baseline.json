@@ -1,0 +1,180 @@
+{
+  "_readme": [
+    "The QA baseline, DEFINED — not the number zero.",
+    "",
+    "WHY THIS FILE EXISTS. The tier-2 gate used to require `qa:count` to be 0. That expectation is not",
+    "attainable: the audit history is written by the SYSTEM, not the caller (0181), and",
+    "`tests/e2e/cleanupOwnership.ts` deliberately never deletes it except by registered id. A gate that",
+    "can only be satisfied by destroying rows is a gate people satisfy destructively — and on 2026-10-14",
+    "that is exactly what happened (see the INCIDENT note below).",
+    "",
+    "So the baseline is defined by OWNERSHIP + EXPECTED FIXTURES, and it fails in BOTH directions:",
+    "a row that appeared without being declared is drift, and a row that DISAPPEARED is also drift.",
+    "",
+    "INCIDENT — 2026-10-14, QA ONLY (production was never a target of any of these tools).",
+    "  Running the integration lane as `QA_CLEAN_AFTER_RUN=1 npx vitest run tests/integration/` invoked",
+    "  `scripts/clean-test-data.mjs`, which does table-wide `DELETE FROM <table>` over every business",
+    "  table and then deletes users outside its four-phone keep-list. It emptied every business table and",
+    "  removed the hand-entered QA rows (the manual 2026-10-11/12 sessions: sales, voids, credit requests,",
+    "  payments, crops, notifications) and the non-fixture accounts. Those rows are NOT recoverable: the",
+    "  newest available dump of this project is from 2026-10-06 and restoring it would roll back the schema",
+    "  this database has migrated past.",
+    "  WHAT CHANGED AS A RESULT:",
+    "    · this declaration was re-reviewed against the fixture floor the lanes actually build, which is",
+    "      stricter than before in every table the cleaner emptied (`zero` where it used to be `exact N`);",
+    "    · `scripts/clean-test-data.mjs` now REFUSES to run when this declaration expects any rows, so the",
+    "      destructive path cannot be taken again by setting one environment variable.",
+    "",
+    "POLICIES, one per table:",
+    "  history — the system writes these rows as a side effect of using the app, no lane can own them, and",
+    "            they are reported rather than bounded. `observed` is for review, not enforcement.",
+    "  exact   — a reviewed inventory: the count must match `expected` in both directions. Every entry",
+    "            carries `why`, naming which rows they are (fixture, tagged suite fixture, hand-entered).",
+    "  zero    — nothing legitimate writes these; any row at all is a lane's leftover.",
+    "",
+    "A table that holds rows and is not declared here FAILS. That direction is deliberate: the file can only",
+    "become more permissive by being edited and reviewed, never by a new table quietly appearing.",
+    "",
+    "HOW DRIFT IS HANDLED NOW (the runbook, so nobody improvises a destructive fix):",
+    "  1. node scripts/dev/qa-baseline.mjs            — what drifted, in both directions",
+    "  2. node scripts/dev/qa-excess.mjs --detail     — which rows are above the declaration, and whose",
+    "  3. node scripts/dev/qa-prune-excess.mjs        — a plan that removes ONLY rows carrying provable",
+    "                                                   test-run evidence (scripts/dev/qa-excess-criteria.mjs)",
+    "                                                   and prints every row it preserves as an exception",
+    "  4. node scripts/dev/qa-prune-excess.mjs --apply  — execute that plan, then recount independently",
+    "  5. Re-review this file only if the remaining rows are legitimate. Never delete to force it green.",
+    "",
+    "Updating it is a reviewed act. `node scripts/dev/qa-baseline.mjs --propose` prints a draft from the",
+    "current database; committing that draft is the review step. No command rewrites this file automatically.",
+    "",
+    "Reviewed 2026-10-14 immediately after the incident above: the fixture floor measured by",
+    "`node scripts/dev/qa-baseline.mjs --propose` following a full integration-lane run plus",
+    "`qa-prune-excess --apply`. Target: the QA project only.",
+    "",
+    "SECOND REVIEW, 2026-10-14 (same day, after two lanes stopped leaking). The floor DROPPED by one row",
+    "in each of customers / products / product_variants, and that direction is reviewed, not assumed:",
+    "  · `duplicateActionSafety` records a sale for its OWN customer and deletes it in teardown — but the",
+    "    customer and product deletes could not run while that sale was still there (both NO ACTION keys",
+    "    on customers(id)/products(id)), and the error was swallowed by `.catch(() => undefined)`. So the",
+    "    suite's own fixture CUSTOMER, PRODUCT and VARIANT survived every run and were being counted as",
+    "    part of the floor. Its teardown now removes the sale, its line and its void for that customer and",
+    "    reads the result back, so the three rows are gone — and with them the `sales: 5 vs declared 2`,",
+    "    `sale_items` and `voids` findings that every fleet run produced.",
+    "  · `employeePermissions` applied one statement shape — `WHERE customer_id = … OR product_id = …` — to",
+    "    nine tables, five of which have no `product_id` column. Each of those statements raised",
+    "    `column \"product_id\" does not exist` into a swallowed catch, so the nine `credit_limit_requests`",
+    "    this file declares as ZERO (one approved/pending/self-approve trio per run) were never removed.",
+    "    Each statement now names a column its table has, and the teardown reads the result back.",
+    "  · `cleanupTestData()` deleted `sales` before `voids`, so every void's sub-select matched nothing.",
+    "    Order is child-first now.",
+    "A per-suite fixture that its owner removes at teardown is not a baseline row, so lowering these three",
+    "counts is the accurate reading of the same rule — `exact` still fails when a row appears or when one",
+    "disappears. The rows are re-created by their suites' `on conflict` seeds on every run.",
+    "",
+    "WORK CONTEXT (added 2026-10-14, after a full browser run failed for this reason). A fixture account",
+    "is not only its row: it is the branch it may work in and the shop it is currently working in.",
+    "  · both employee fixtures were created on 2026-10-04, BEFORE 0188 defined a missing employee",
+    "    `branch_scope` as an EMPTY scope. They authenticated and then answered \"You are in this business",
+    "    but not in a branch\" on every operational screen, which is how six employee lanes failed. The",
+    "    declaration now names the branch they work in, and the gate checks it.",
+    "  · the owner fixture's ACTIVE shop lives in `user_active_shops` (0149) and is changeable from the",
+    "    app, so a hand-run can leave it in another shop and silently move every lane that signs in as",
+    "    that account onto another shop's — here, empty — screens. The declaration pins the shop and the",
+    "    branch the lanes' premise depends on, and the gate fails when they move.",
+    "  · the two identities the dedicated tenant exists for are declared under `isolatedTenant.identities`,",
+    "    because the two write lanes can only run if they can SIGN IN to that tenant.",
+    "Repair, never improvise:  node scripts/dev/qa-restore-canonical-roles.mjs --repair-fixtures --apply"
+  ],
+
+  "reviewedAt": "2026-10-14 (second review: per-suite fixtures now removed by their owners)",
+  "projectRef": "bpybjrjenwccowvtrevu",
+
+  "policies": {
+    "audit_events": {
+      "policy": "history",
+      "observed": 516,
+      "why": "0181 — the system writes these, not the caller. cleanupOwnership.ts deletes them only by registered id, and no lane can own the history its own sign-in produces. Reported, never bounded. (96 after the 2026-10-14 incident truncated the history the cleaner deleted.)"
+    },
+
+    "customers": {
+      "policy": "exact",
+      "expected": 10,
+      "why": "the fixture floor the lanes build: the 3 QA_IDS customers (20000000-…-001..003) plus the 7 tagged per-suite fixtures (Perm/Inv/Fin/Destruct). Was 11: the eighth was `duplicateActionSafety`'s own customer (c4000000-…c1), which survived because its teardown could not delete it while its own leftover sale held the NO ACTION key — the suite now removes it and reads the result back (see the second-review note above). The hand-entered QA customers that used to make this 15 were destroyed by the 2026-10-14 cleaner and are not recoverable"
+    },
+    "products": {
+      "policy": "exact",
+      "expected": 5,
+      "why": "the fixture floor: the QA_IDS products 30000000-…-001..002 plus the tagged per-suite products the suites create for themselves. Was 6: one was `duplicateActionSafety`'s (c4000000-…d1), blocked by its own leftover sale line and removed by the repaired teardown"
+    },
+    "product_variants": {
+      "policy": "exact",
+      "expected": 5,
+      "why": "one variant per fixture product above, plus the QA_IDS variants 40000000-…-001..002. Was 6 for the same single reason as `products`"
+    },
+    "companies": {
+      "policy": "exact",
+      "expected": 3,
+      "why": "QA Supplier A (50000000-…-0001 — FK-referenced by supplier_payments, so it is protected) plus the tagged per-suite suppliers. The two hand-entered suppliers were destroyed by the 2026-10-14 cleaner"
+    },
+    "sales": {
+      "policy": "exact",
+      "expected": 2,
+      "why": "PERM-SALE-001 and PERM-SALE-002, the permissions suite's own fixtures. The 12 hand-entered SALE-xxxxx rows from the manual QA sessions were destroyed by the 2026-10-14 cleaner and are not recoverable"
+    },
+
+    "sale_items": { "policy": "zero", "why": "children of sales; the fixtures above carry no line items. Was `exact 15` before the 2026-10-14 cleaner destroyed the hand-entered sales — zero is the stricter reading of the same rule" },
+    "voids": { "policy": "zero", "why": "the manual voids were destroyed by the 2026-10-14 cleaner; nothing legitimate leaves one behind now" },
+    "customer_payments": { "policy": "zero", "why": "payment lanes own their rows; the two hand-entered payments were destroyed by the 2026-10-14 cleaner" },
+    "supplier_payments": { "policy": "zero", "why": "purchase lanes own their rows; the hand-entered payment against QA Supplier A was destroyed by the 2026-10-14 cleaner" },
+    "inventory_movements": { "policy": "zero", "why": "written by the sales and opening-stock flows, which clean up after themselves" },
+    "credit_limit_requests": { "policy": "zero", "why": "credit-request lanes own their rows (the Perm suite's own three are pruned by qa-prune-excess; the manual runs were destroyed by the 2026-10-14 cleaner)" },
+    "customer_crops": { "policy": "zero", "why": "hand-entered crop records were destroyed by the 2026-10-14 cleaner; the screens write none on their own" },
+    "notifications": { "policy": "zero", "why": "per-event rows a lane can own, so a rise here means a lane left its own behind" },
+    "shop_requests": { "policy": "zero", "why": "the one registration request created through the app's onboarding on 2026-10-06 was destroyed by the 2026-10-14 cleaner; e2e-setup-data.mjs (which TRUNCATEs) was deliberately not run to recreate it, because it would write demo rows this file does not declare" },
+
+    "activity_log": { "policy": "zero", "why": "nothing in the app writes here outside the flows the lanes drive, which clean up after themselves" },
+    "returns": { "policy": "zero", "why": "return flows exist in lanes that own their rows" },
+    "return_items": { "policy": "zero", "why": "children of returns" },
+    "purchases": { "policy": "zero", "why": "purchase lanes own their rows" },
+    "purchase_items": { "policy": "zero", "why": "children of purchases" },
+    "payments": { "policy": "zero", "why": "legacy payment table — no flow writes it" },
+    "stock_adjustments": { "policy": "zero", "why": "adjustment screens register their rows" },
+    "cash_reconciliations": { "policy": "zero", "why": "no lane leaves a reconciliation behind" },
+    "daily_cash_reconciliations": { "policy": "zero", "why": "same" },
+    "reminder_logs": { "policy": "zero", "why": "reminders are exercised by their own workstream" },
+    "reminder_occurrences": { "policy": "zero", "why": "same" },
+    "reminder_configs": { "policy": "zero", "why": "same" },
+    "price_history": { "policy": "zero", "why": "written only by price changes the lanes clean up" }
+  },
+
+  "fixtures": {
+    "users": [
+      { "phone": "923001234567", "why": "owner — the account every lane signs in with" },
+      { "phone": "923001122334", "why": "sales employee — the employee lanes sign in with (re-pointed to the restored built-in 'Sales Employee' role on 2026-10-14; 0183's delete_role had left it with role_id = NULL)" },
+      { "phone": "923009999999", "why": "QA Admin — used by the integration suites" },
+      { "phone": "923008888888", "why": "QA Employee — used by the permission suites (also cleared to role_id = NULL by the same deletion, and re-pointed on 2026-10-14)" }
+    ],
+    "requireActiveMembership": true,
+    "companies": [
+      { "id": "50000000-0000-0000-0000-000000000001", "why": "QA Supplier A (companyA) — FK-referenced by supplier_payments and products" }
+    ],
+    "workContext": {
+      "why": "The shared QA tenant's declared working branch, the shop the owner fixture must be working in, and the branch the two employee fixtures must be scoped to. See the WORK CONTEXT note above: without these the employee lanes read the 'not in a branch' notice and the owner lanes read another shop's empty screens",
+      "tenantId": "00000000-0000-0000-0000-000000000001",
+      "branchId": "b17fd67c-44ff-4977-bbb4-79b96abf2edb",
+      "ownerPhone": "923001234567",
+      "employeePhones": ["923001122334", "923008888888"]
+    }
+  },
+
+  "isolatedTenant": {
+    "id": "1e5f7e4b-7ed0-4787-8148-8f289fc1c107",
+    "why": "The dedicated tenant the two write lanes need (`setupCompletion`, `dependencyContinuity`): app-created through the real registration flow on 2026-10-04, with a default branch, its four built-in roles and ZERO business rows. The gate asserts it is still empty, because that emptiness is the lanes' premise and a hand run could fill it",
+    "branchId": "ea60cd69-dbfd-4da0-9e2e-957af9f47d68",
+    "identities": [
+      { "phone": "923007700001", "membershipRole": "owner", "why": "QA Isolation Owner — the identity `setupCompletion` and the owner half of `dependencyContinuity` sign in with; an owner needs no branch scope (0188 gives it global authority)" },
+      { "phone": "923007700002", "membershipRole": "employee", "branchScope": "required", "why": "QA Isolation Employee — `dependencyContinuity`'s negative case (\"an employee cannot create stock, so they are told who can\"). Without a branch scope that case cannot reach a screen, so the scope is part of the fixture, not a detail" }
+    ],
+    "mustBeEmpty": ["companies", "products", "customers", "sales"]
+  }
+}

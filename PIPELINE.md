@@ -155,3 +155,131 @@ Order matters: cheapest and most structural first, so a break is found before th
 7. Push the result; update this table so every row reads done with its commit.
 
 If any item in B lands before the pass, it joins step 4 with its own acceptance checks above.
+
+---
+
+## D. Promotion-pipeline verification — 14 October 2026
+
+Every line below is a command or a workflow run, not a reading of a file. The candidate was
+`f6017ea2` on the temporary branch `ci-proof/full-tree` (the full working tree, committed so the
+gate could be exercised end to end). Production was never a target of any step.
+
+### D1. What is now proven
+
+| Stage | Evidence | Status |
+|---|---|---|
+| CI branch coverage | `ci.yml` triggers on PR → `main` and push → `main`, `staging-snapshot`; a real dispatched run exists for the candidate | PASS |
+| Gate: TypeScript | run `38453387581`, step `TypeScript` | PASS |
+| Gate: unit guards | same run, step `Unit guards` — includes migration integrity, production-seeding, environment and cleanup-ownership guards | PASS |
+| Gate: workflow safety | same run, step `Backup workflow safety proof` (see D2) | PASS |
+| Gate: targeting refusals | `node scripts/verify-targeting-refusals.mjs` — ALL 8 CASES PASS; every refusal is an exit code and arrives before a connection | PASS |
+| Gate: production build | same run, step `Production build`; reproduced locally with `VITE_APP_ENV=staging` and the QA values from `.env.qa` → `built in 13.46s`, exit 0 | PASS |
+| Staging connectivity | run `38453387581`, QA job steps `QA credentials are required` and `QA database reachability` | PASS |
+| Staging migrations | same run, step `Migration ledger must match the directory exactly`; `node scripts/migrate.mjs status --env staging` → 194 files, newest 0202, every hash matches | PASS |
+| Customer deletion security | `tests/integration/customerDeletionSecurity.test.ts` — **13/13 inside the full directory run in CI** (run `38457833270`), and 13/13 locally twice back to back, against QA project `bpybjrjenwccowvtrevu` | PASS |
+| Production untouched | every command targeted staging or ran read-only; no production project was addressed | PASS |
+
+### D2. The defect this pass found and fixed
+
+`scripts/verify-workflow-safety.mjs` crashed in CI with `ENOENT … scandir 'backups'`. `backups/` is
+gitignored, so a fresh checkout has no such directory and the artefact section threw before its own
+SKIP path could report anything. It now treats an absent directory as "no artefact to present":
+recorded as `SKIP`, named in the summary, and disclosed in the banner, so a green run on an empty
+checkout is never read as proof that the artefact gate executed. Proven both ways: with artefacts
+`24 passed, 0 failed, 0 skipped`; in a scratch mirror without `backups/` `20 passed, 0 failed,
+1 skipped` and exit 0.
+
+### D3. Why the QA job is still red, and the smallest fix
+
+The QA job ran for the first time ever in this pass (every earlier run failed at the gates, so it was
+always skipped). The first execution was 14 files failed / 28 passed; after the suite below was
+hardened with an identity-namespace precheck it is **12 failed / 30 passed** (451 tests passed,
+24 failed, 17 skipped), and the 6 cases in `customerDeletionSecurity.test.ts` that failed on
+inherited state now pass inside the same directory run. The remaining 12 fail for the reason below,
+which is inherited state, not behaviour:
+
+* The suites share one QA database and reuse **fixed identities** (for example the phone literals in
+  `tests/integration/rbacEnforcement.test.ts`), and their cleanup swallows every error
+  (`.catch(() => undefined)`).
+* A leftover membership or `user_active_shops` row from an earlier file changes which tenant
+  `current_tenant_id()` resolves to, so a later file's cross-tenant test receives
+  `NOT_AUTHORIZED: tenant access denied` for a reason unrelated to the rule under test.
+* The signature is identical in every failure: tests that stay inside one tenant pass, tests that
+  create or switch to a second tenant fail.
+
+Smallest correct fix (not applied here — it changes test fixtures, not behaviour): give each failing
+suite a per-run identity namespace the way the passing suites already do, and replace the swallowed
+cleanup with a check that refuses to run on a contaminated namespace. Table-wide QA cleanup is **not**
+the fix, and deleting QA business data to obtain a green run is explicitly ruled out.
+
+`customerDeletionSecurity.test.ts` now carries that namespace precheck: it fails loudly with the
+leftover row counts and the cleanup failures instead of reporting a misleading authorization denial.
+It counts memberships, active-shop rows, **lingering user rows** and the two tenant shops, because a
+foreign key can block the user delete after the other three are already gone. The precheck is not
+vacuous: injecting a non-zero count makes the suite refuse to start and print
+`Leftover rows: {"memberships":"0","active_shops":"0","users":"0","shops":1}` — while the real
+SQL passes. The remaining limitation is that no *natural* leak has yet been observed triggering it:
+the proof is an injection, not an accident.
+
+### D5. "Failed checks block the release" needed a mechanism, not a convention
+
+A required status check on the release branch is not available here: GitHub answers
+`403 — Upgrade to GitHub Pro or make this repository public to enable this feature` for both `main`
+and `staging-snapshot` on a private repository at this plan level. So the rule was a convention, and
+nothing stopped a release being started on a commit whose gates were red, in flight, or never run.
+
+`scripts/release-gate.mjs` is that mechanism, and it fails closed. Refusals, each one reproduced:
+
+| Input | Refusal |
+|---|---|
+| missing `--owner-approved` | `no owner approval …` (approval is a separate flag from `--commit`, so approving a plan and releasing a different commit are two actions) |
+| `--env banana --commit zzz` | `--commit must be a commit SHA` and `--env must be one of development, staging, production` |
+| a commit with no run | `no CI run exists for deadbeef … a commit that was never gated cannot be released` |
+| `1bbfc57e` (CI failed) | `CI for 1bbfc57e exists but did not succeed: 38442796610=failure` |
+| `80854e01` (gates green, staging red) | `CI for 80854e01 exists but did not succeed: 38457833270=failure, …` |
+| `c5f6c398` (in flight) | `CI for c5f6c398 is still running … releasing mid-run is releasing an unverified commit` |
+| any dirty tree | lists the uncommitted paths: a release of a directory that differs from the commit is not reproducible |
+
+The gate also requires a **successful QA job inside the same run** — a green unit-only run is not a
+staging verification — and it refuses when production credentials are absent or name a project the
+configuration does not call production. It applies nothing: it prints the reviewed plan and the
+exact `migrate.mjs apply` command the operator runs next. Its own bug was found by probing it: an
+earlier version queried `gh run list --commit <short-sha>`, which does not match, so it refused a
+commit that had run for the wrong reason; it now resolves the SHA first and prefix-matches.
+
+The consequence today is that **no candidate is releasable yet**, because the QA job has never been
+green. That is the gate working, not the gate failing.
+
+### D4. Blocked on owner action — cannot be fixed from the repository
+
+| Item | Live finding |
+|---|---|
+| Production backup | repository secret `PROD_DB_PASS` is **absent**; `PROD_DB_HOST` and `PROD_DB_USER` are present. This is the documented cause of the repeated backup failures. |
+| Signed APK | `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD` are all **absent**. No replacement keystore may be generated casually: that would break updates for installations signed with the existing key. |
+
+Both require the owner to add the repository secret through GitHub's secret management. Neither was
+worked around, and no artefact was claimed in their absence.
+
+### D6. Monitoring — implemented on the existing stack, and the destination is proven
+
+There is no error-monitoring provider in this project's catalog (the search returns no recommendation
+and no options), and adding an unreviewed platform is exactly the "large observability platform" the
+scope rules exclude. Monitoring is therefore Supabase, which every environment already reaches:
+`public.client_error_events` (migration `0203`), with the rules enforced in the database.
+
+| Check | Evidence |
+|---|---|
+| A controlled event reaches the destination | client (anon) insert **accepted**, then read back by the service role as `{"environment":"staging","error_code":"MONITORING_TEST_EVENT",…}` |
+| QA and production are distinguishable | `environment` is constrained to `development, staging, production`, so a staging event cannot be counted as production's |
+| Clients cannot read error rows | client (anon) read returned `permission denied for table client_error_events`; there is no SELECT policy at all, and a guard fails if one is added |
+| No secrets or customer data in events | `details` is allow-listed and primitives-only; `tests/unit/monitoringPrivacy.test.ts` (12 tests) proves a payload carrying `phone`, `email`, `amount`, `token` and `notes` reduces to its allowed keys, with a permissive-scrubber control showing the assertion discriminates |
+| Missing configuration is not mistaken for working monitoring | `monitoringStatus()` returns `operational:false` with `NOT operational` for a missing or unrecognised environment and for a missing endpoint; `reportClientError()` then records nothing and says why |
+
+The app-side hook is wired in `src/main.tsx`: `error` and `unhandledrejection` are reported before the
+first render, so the errors that happen on the way in — including before sign-in — are the ones the
+write-only table exists for. The handler decides nothing itself; `reportClientError` owns the
+environment check and the payload allow list.
+
+Known gap, recorded rather than hidden: `service_role` has SELECT but no DELETE grant on the table, so
+pruning (retention) requires SQL. The self-test row used for this proof was removed that way; the
+pruned count is 0 and the table has 0 client SELECT policies.

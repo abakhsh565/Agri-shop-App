@@ -1,0 +1,6 @@
+# Migration files are hashed into supabase_migrations.schema_migration_files when applied.
+# That hash is only meaningful if the bytes are the same in every checkout: with core.autocrlf=true
+# a Windows working tree would hold CRLF, a Linux runner LF, and `migrate verify` would report nine
+# applied files as "changed after it was applied" purely from line endings. eol=lf makes the
+# checkout deterministic; existing files are renormalised in the same change.
+supabase/migrations/*.sql text eol=lf

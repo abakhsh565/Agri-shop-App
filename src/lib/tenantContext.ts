@@ -69,10 +69,9 @@ export function isCurrentUserOwner(): boolean {
 export function getCurrentPermissions(): string[] {
   const user = useAuthStore.getState().user;
   if (!user) return [];
-  // The admin shell's two roles have all permissions implicitly. `admin` is here for the
-  // same reason it is in the database's `get_effective_permissions`: a shop's admin is the
-  // shop, not a narrowed role — narrowing is for employees.
-  if (user.membershipRole === "owner" || user.membershipRole === "admin") return ["*"];
+  // Identity/shell does not grant authority. Only the business owner has
+  // implicit access; ordinary memberships use their actual effective grants.
+  if (user.membershipRole === "owner") return ["*"];
   return user.permissions ?? [];
 }
 

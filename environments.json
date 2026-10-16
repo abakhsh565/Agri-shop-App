@@ -23,19 +23,42 @@
     "verified run and compared on every later one, so a cluster swap is detected rather than assumed",
     "away.",
     "",
-    "localEnvFile names the gitignored file a local run may read credentials from. It is null for",
-    "development and production on purpose: there is no development project, and production's",
-    "credentials must come from repository secrets or an explicit export so that none of them can",
-    "end up in the checkout."
+    "localEnvFile names the gitignored file a local run may read credentials from: .env.local for",
+    "development (the same file, and the same copy-to location, that .env.example documents for it)",
+    "and .env.qa for staging. It is null for production on purpose: production's credentials must",
+    "come from repository secrets or an explicit export, so that none of them can end up in the",
+    "checkout.",
+    "",
+    "kind distinguishes a hosted project from the local Docker stack: \"local\" means the environment",
+    "is this machine's Supabase CLI stack (see docs/LOCAL_DEVELOPMENT.md), localProjectId is the",
+    "project id such a build must resolve to, and localStack holds the coordinates tooling uses.",
+    "A local environment deliberately has no projectRef: nothing hosted can be named, so the hosted",
+    "tooling that verifies a project ref refuses it once more instead of guessing.",
+    "",
+    "A LOCAL production run — one with no CI secret to read — may still supply credentials, but only",
+    "from a file OUTSIDE this repository, through scripts/run-with-production-credentials.mjs. That",
+    "keeps the rule above intact rather than relaxing it: the intake tool refuses any path that",
+    "resolves inside the repository before it reads a byte, so there is nothing for `git add` to",
+    "catch, and the backup tooling itself still reads only the process environment."
   ],
 
   "environments": {
     "development": {
+      "kind": "local",
       "projectRef": null,
-      "status": "not-created",
-      "notes": "No development project exists yet. .env.local points at the staging project. Because there is no ref to verify against, the backup tooling refuses to run for this environment rather than guess.",
+      "status": "local-stack",
+      "notes": "A Supabase stack running in Docker ON THIS MACHINE (Postgres 17, PostgREST, GoTrue, Realtime, Storage) - not a hosted project, which is why projectRef is null and status is not \"active\". A third hosted project was the original plan and is blocked by Supabase's free plan (limit 2 active projects per member, already spent on staging and production; `supabase projects create` was refused on 2026-10-12). The local stack resolves that without a third project, without pausing staging or production, and with stronger isolation than a hosted development project would give: there is no network path from it to either hosted environment. Hosted tooling therefore still refuses this environment - a target with no project ref cannot be verified, and local data is disposable, so it is not a backup target either. Runbook: docs/LOCAL_DEVELOPMENT.md. The app enforces the same rule from the other side: src/lib/environmentContract.ts refuses a development build whose VITE_SUPABASE_URL is a hosted *.supabase.co URL, and refuses any resolved project id other than localProjectId below.",
+      "localProjectId": "localdev",
+      "localStack": {
+        "apiUrl": "http://127.0.0.1:54321",
+        "dbPort": 54322,
+        "studioUrl": "http://127.0.0.1:54323",
+        "envFile": ".env.local",
+        "containerPattern": "supabase_db_*",
+        "runbook": "docs/LOCAL_DEVELOPMENT.md"
+      },
       "envPrefix": "DEV",
-      "localEnvFile": null,
+      "localEnvFile": ".env.local",
       "clusterId": null
     },
     "staging": {
@@ -49,10 +72,10 @@
     "production": {
       "projectRef": "gkswcfljxlutkfdvvqng",
       "status": "active",
-      "notes": "Named 'Agrishop APp'. Confirmed as production on 2026-10-01 and confirmed to hold real business data (1 shop, 4 users, 6 customers, 52 sales). Runs on the Free plan, which provides no managed backups, no downloadable backups and no PITR.",
+      "notes": "Named 'Agrishop APp'. Confirmed as production on 2026-10-01. Runs on the Free plan, which provides no managed backups, no downloadable backups and no PITR. First verified backup + isolated restore completed 2026-10-01; cluster enrolled from that run's manifest. CORRECTED 2026-10-13: this entry used to say production was 'confirmed to hold real business data (1 shop, 4 users, 6 customers, 52 sales)'. The rows exist, but the tenant is the DEMO one — shop 00000000-0000-0000-0000-000000000001 named 'Default Shop', created by the seeding migrations 0009/0018/0026 — and 23 rows are keyed by demo identities with four accounts on demo phone numbers. Whether the 52 sales are a real shop's records is UNKNOWN, not established. Measure it with `npm run audit:production-data`; the owner's options are in docs/PRODUCTION_DATA_POLICY.md §6, and no tool here may clear it.",
       "envPrefix": "PROD",
       "localEnvFile": null,
-      "clusterId": null
+      "clusterId": "7666007964130682852"
     }
   }
 }

@@ -61,9 +61,13 @@ beforeAll(async () => {
   const company = await rpc('create_company', {
     name: `${NAME} Supplier`, contactPerson: 'QA', phone: `0304${stamp}`, address: 'QA',
   });
+  // baseUnit is part of the product contract, not decoration: since 0158/0161 a product is
+  // measured in kg or liter (src/lib/packSize.ts keeps `piece` for legacy rows only), and
+  // create_product rejects anything else with INVALID_UNIT. This fixture sent `piece`, which is
+  // why the whole file used to skip — the fixture was older than the contract.
   const product = await rpc('create_product', {
     name: `${NAME} Fertilizer`, company: `${NAME} Supplier`, category: 'fertilizer',
-    baseUnit: 'piece', stockQty: 0, actorId: ownerId,
+    baseUnit: 'kg', stockQty: 0, actorId: ownerId,
     variants: [{ name: 'bag', sellingPrice: 0, costPrice: 0, unitSize: 1, qtyStep: 1, lowStockThreshold: 5, stockQty: 0 }],
   });
   const [variant] = await sql(`SELECT id FROM product_variants WHERE product_id = '${product.id}'`);
@@ -84,7 +88,7 @@ beforeAll(async () => {
     customerId: customer.id, customerName: `${NAME} Customer`, employeeId: ownerId, employeeName: 'QA Price',
     paymentType: 'full', paymentMethod: 'cash', amountPaid: 6000,
     idempotencyKey: `${NAME}-s1-${stamp}`,
-    items: [{ productId: product.id, productName: `${NAME} Fertilizer`, variantId, variantName: 'bag', qty: 20, unitPrice: 300, unitSize: 1, baseUnit: 'piece' }],
+    items: [{ productId: product.id, productName: `${NAME} Fertilizer`, variantId, variantName: 'bag', qty: 20, unitPrice: 300, unitSize: 1, baseUnit: 'kg' }],
   });
   sale1Id = sale.id;
 });
@@ -128,7 +132,7 @@ describe('a completed sale keeps the prices it was made at', () => {
     await rpc('update_product', {
       id: (await sql(`SELECT product_id FROM product_variants WHERE id = '${variantId}'`))[0].product_id,
       name: `${NAME} Fertilizer`, company: `${NAME} Supplier`, category: 'fertilizer',
-      baseUnit: 'piece', actorId: ownerId,
+      baseUnit: 'kg', actorId: ownerId,
       variants: [{ id: variantId, name: 'bag', sellingPrice: 400, costPrice: 280, unitSize: 1, qtyStep: 1, lowStockThreshold: 5 }],
     });
 

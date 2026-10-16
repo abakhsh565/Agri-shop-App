@@ -10,19 +10,36 @@ import fs from 'node:fs';
 import path from 'node:path';
 import net from 'node:net';
 import pg from 'pg';
+import { environmentForProjectRef } from '../lib/environments.mjs';
+import { identityProblem, probeDevServerIdentity } from '../lib/dev-server-identity.mjs';
 
 export const ROOT = process.cwd();
 export const STATE_FILE = 'ENGINEERING_OS_STATE.md';
 export const CHECKPOINT_BEGIN = '<!-- ENGINEERING-OS-CHECKPOINT:BEGIN -->';
 export const CHECKPOINT_END = '<!-- ENGINEERING-OS-CHECKPOINT:END -->';
 export const QA_PROJECT_REF = 'bpybjrjenwccowvtrevu';
-export const QA_PORT = 5173;
+// Overridable because 5173 is shared with other projects on this machine: when another app owns it,
+// this repository runs its QA server elsewhere (`QA_PORT=5174 npm run preflight`).
+export const QA_PORT = Number(process.env.QA_PORT) || 5173;
 export const QA_FIXTURE_PHONES = ['923001234567', '923001122334', '923009999999', '923008888888'];
 
 /** Paths that can never affect web/app verification (machine artifacts, mobile shells). */
 export const EXCLUDED_PATHS = [
   /^\.freebuff\//, /^freebuff\//, /^dist\//, /^android\//, /^ios\//, /^node_modules\//,
   /\.log(\.|$)/, /^tests\/e2e\/results/, /\.apk$/,
+];
+
+/**
+ * Files EVERY E2E lane depends on, whichever spec it runs: the shared setup/helpers and the two
+ * Playwright configs. They belong to no single lane, so a lane's own globs never covered them and
+ * editing one left that lane's recorded green (and its file hashes) intact — the run would then
+ * skip a lane whose harness had just changed. `verify.mjs` appends these to every lane.
+ */
+export const SHARED_E2E_GLOBS = [
+  'tests/e2e/global-setup.ts',
+  'tests/e2e/helpers.ts',
+  'playwright.config.ts',
+  'playwright.media.config.ts',
 ];
 
 /** Business tables the QA baseline must keep empty (schema, auth and fixtures stay). */
@@ -234,25 +251,38 @@ export function portOpen(port = QA_PORT, host = '127.0.0.1', timeoutMs = 800) {
   });
 }
 
-async function serverMode() {
-  // The dev server must be `--mode qa` (see .freebuff/run.md). Read the actual
-  // command line of the process listening on the QA port; report UNKNOWN rather
-  // than guessing when it cannot be read.
-  if (process.platform !== 'win32') return 'unknown';
-  const r = spawnSync('powershell.exe', ['-NoProfile', '-Command',
-    `Get-CimInstance Win32_Process -Filter "Name='node.exe'" | Where-Object { $_.CommandLine -like '*vite*' } | Select-Object -ExpandProperty CommandLine`,
-  ], { encoding: 'utf8', timeout: 8000 });
-  const line = (r.stdout || '').trim();
-  if (!line) return 'unknown';
-  if (/--mode[= ]\s*qa\b/.test(line)) return 'qa';
-  if (/--mode[= ]\s*(?!qa)\w+/.test(line)) return 'non-qa';
-  return 'default (no --mode)';
-}
-
+/**
+ * Is the server answering on this port THIS app's QA server?
+ *
+ * The rule — a served module of this repository, its inlined MODE, the QA project and the
+ * environment marker that goes with it — lives in `scripts/lib/dev-server-identity.mjs` and is
+ * shared with the E2E guard, so the two gates cannot decide this differently. Measured 2026-10-13:
+ * the previous implementation read a `vite` command line found ANYWHERE on the machine, so a
+ * `--mode qa` server on one port certified a default-mode server on another.
+ *
+ * The expected project comes from `environments.json` (the single authority) via
+ * `environmentForProjectRef`, not from a second copy of the ref.
+ *
+ * @returns {Promise<{port: number, origin: string, up: boolean, mode: string|null,
+ *   identity?: object, problem?: string}>} `problem` names why a listening server was rejected.
+ */
 export async function serverProbe(port = QA_PORT) {
-  const up = await portOpen(port);
-  if (!up) return { port, up: false, mode: null };
-  return { port, up: true, mode: await serverMode() };
+  const origin = `http://localhost:${port}`;
+  const expected = {
+    projectId: QA_PROJECT_REF,
+    appEnv: environmentForProjectRef(QA_PROJECT_REF) ?? 'staging',
+  };
+  const probe = await probeDevServerIdentity(origin);
+  if (!probe.listening) return { port, origin, up: false, mode: null };
+  const problem = probe.reason ?? identityProblem(probe.identity, expected);
+  return {
+    port,
+    origin,
+    up: true,
+    mode: probe.identity?.mode ?? null,
+    identity: probe.identity,
+    problem: problem ?? undefined,
+  };
 }
 
 // ── independent QA row count (never trusts the cleaner's own output) ──

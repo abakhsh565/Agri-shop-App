@@ -58,7 +58,7 @@ test.describe('skeleton coverage: a waiting list shows its own shape', () => {
   });
 
   test.afterAll(async () => {
-    await cleanupFixtures().catch(() => {});
+    await cleanupFixtures();
   });
 
   test('every fetching screen waits in shape and never claims to be empty', async ({ page }) => {

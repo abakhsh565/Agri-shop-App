@@ -19,13 +19,18 @@ name: Backup Database (to the environment it names)
 #     scheduled production backup can never be green while backing up nothing;
 #   * every backup is restore-verified in the same job, into a throwaway in-process Postgres, and
 #     the verification report is uploaded beside the artefact.
+#   * the artefact is stored BEFORE anything reports on the run, so no summary, failure notice or
+#     typo in either can discard a verified backup — the order is asserted by the test suite.
 #
 # The artefact contains personal data and password hashes. Keep this repository private, keep the
 # retention window short, and never mirror these artefacts somewhere public.
 
 on:
   schedule:
-    # Daily at 02:00 UTC. Targets production. If the production secrets are not configured this run
+    # Daily at 02:00 UTC (07:00 PKT, before the trading day). THIS CRON IS THE AGREED PRODUCTION RPO
+    # of 24 hours (docs/RECOVERY.md §9); tests/unit/backupTargeting.test.ts asserts the two agree, so
+    # changing the schedule without changing the documented objective fails the suite.
+    # Targets production. If the production secrets are not configured this run
     # FAILS by design — see the preflight step. A backup that did not happen must not look green.
     - cron: '0 2 * * *'
   workflow_dispatch:
@@ -41,7 +46,10 @@ on:
         description: 'Why this backup is being taken (recorded in the run summary)'
         required: false
       retention_days:
-        description: 'Artifact retention in days (1-90)'
+        # 30 is the agreed retention policy (docs/RECOVERY.md §9) and is asserted against that section
+        # by tests/unit/backupTargeting.test.ts. 1-90 is accepted, so a different value is a deliberate
+        # policy change rather than a tweak.
+        description: 'Artifact retention in days (1-90) — agreed policy: 30 (docs/RECOVERY.md §9)'
         required: false
         default: '30'
 
@@ -164,6 +172,30 @@ jobs:
             console.log(`artefact names ${manifest.environment} / ${manifest.projectRef} — as requested`);
           ' "$manifest"
 
+      # ── The artefact is stored BEFORE anything reports on the run ────────────────────────────
+      # A reporting step used to sit here — the Summary below, which runs `if: always()` — and a typo
+      # inside it failed the job, so this upload never executed and a verified production backup was
+      # thrown away (run 38826369696). Storage is now the first thing after the last gate, and
+      # everything ordered after it is a reporter that runs regardless of the outcome. That order is
+      # asserted by tests/unit/backupTargeting.test.ts: moving this step back below a reporter fails
+      # the suite. The invariant is "nothing that only reports may stand between verification and
+      # storage", and it exists because this exact mistake has already cost one backup.
+      #
+      # No `if:` here, deliberately: the upload must be impossible unless every gate above passed,
+      # so an unverified, or wrongly-labelled, artefact can never be stored.
+      - name: Upload the backup and its verification report
+        uses: actions/upload-artifact@v4
+        with:
+          name: database-backup-${{ env.TARGET }}-${{ github.run_number }}
+          # The manifest and the verification report travel with the artefact, so an operator has
+          # the scope, the counts and the hash without re-running anything.
+          path: |
+            backups/backup-${{ env.TARGET }}-*.sql
+            backups/backup-${{ env.TARGET }}-*.manifest.json
+            backups/restore-verification-${{ env.TARGET }}.json
+          retention-days: ${{ fromJSON(env.RETENTION_DAYS) }}
+          if-no-files-found: error
+
       - name: Summary
         if: always()
         run: |
@@ -177,7 +209,13 @@ jobs:
           manifest=$(ls -t backups/*.manifest.json 2>/dev/null | head -1 || true)
           if [ -n "$manifest" ]; then
             node -e '
-              const m = require(process.argv[1]);
+              // Read the manifest as a FILE, not via require(): a relative path without a
+              // leading .// is resolved as a package name, so require("backups/x.json") threw
+              // MODULE_NOT_FOUND. That defect cost a verified production backup (run 38826369696),
+              // because the upload then ran AFTER this report. The report must still never throw —
+              // but it no longer has to be trusted for storage to happen.
+              const fs = require("fs");
+              const m = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
               const rows = [
                 ["project", m.projectRef],
                 ["taken at", m.generatedAt],
@@ -191,19 +229,6 @@ jobs:
               for (const [k, v] of rows) console.log(`| ${k} | ${v} |`);
             ' "$manifest" >> "$GITHUB_STEP_SUMMARY"
           fi
-
-      - name: Upload the backup and its verification report
-        uses: actions/upload-artifact@v4
-        with:
-          name: database-backup-${{ env.TARGET }}-${{ github.run_number }}
-          # The manifest and the verification report travel with the artefact, so an operator has
-          # the scope, the counts and the hash without re-running anything.
-          path: |
-            backups/backup-${{ env.TARGET }}-*.sql
-            backups/backup-${{ env.TARGET }}-*.manifest.json
-            backups/restore-verification-${{ env.TARGET }}.json
-          retention-days: ${{ fromJSON(env.RETENTION_DAYS) }}
-          if-no-files-found: error
 
       - name: Failure notice
         if: failure()

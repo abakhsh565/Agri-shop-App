@@ -13,9 +13,18 @@
  */
 import { test, expect } from '@playwright/test';
 import { randomUUID } from 'crypto';
-import { QA_IDS, execSql, setupFixtures, cleanupFixtures, injectAdminAuth } from './helpers';
+import {
+  QA_IDS,
+  execSql,
+  setupFixtures,
+  cleanupFixtures,
+  claimOwned,
+  ownership,
+  trackOwned,
+  injectAdminAuth,
+} from './helpers';
 
-const BASE_URL = 'http://localhost:5173';
+const BASE_URL = process.env.QA_APP_URL || 'http://localhost:5173';
 const SALE_ID = randomUUID();
 const SALE_ITEM_ID = randomUUID();
 const SALE_NUMBER = `QA-VOID-${Date.now().toString(36).toUpperCase()}`;
@@ -37,13 +46,17 @@ test.describe('Void sale safety', () => {
       ON CONFLICT (id) DO NOTHING
     `);
     await execSql(`UPDATE product_variants SET stock_qty = stock_qty - ${QTY} WHERE id = '${QA_IDS.variantA}'`);
+
+    // OWNED: the sale this lane creates, by its explicit id. Its line items, its void and its
+    // stock movement are removed through that key rather than by re-stating the joins here.
+    await trackOwned(ownership(), 'sales', SALE_ID);
   });
 
   test.afterAll(async () => {
-    await execSql(`DELETE FROM inventory_movements WHERE reference_id = '${SALE_ID}'`).catch(() => {});
-    await execSql(`DELETE FROM voids WHERE sale_id = '${SALE_ID}'`).catch(() => {});
-    await execSql(`DELETE FROM sale_items WHERE sale_id = '${SALE_ID}'`).catch(() => {});
-    await execSql(`DELETE FROM sales WHERE id = '${SALE_ID}'`).catch(() => {});
+    // Nothing is deleted inline any more: the four deletes that used to run here (movements,
+    // voids, items, then the sale — by this lane's own ids, with every error swallowed) are
+    // replaced by the registry, which deletes the same rows in FK order and FAILS the lane if a
+    // delete does not succeed.
     await cleanupFixtures();
   });
 
@@ -55,29 +68,31 @@ test.describe('Void sale safety', () => {
     await page.goto(`${BASE_URL}/admin/sales/${SALE_ID}`);
     await page.waitForLoadState('networkidle');
 
-    // The shipped label is t("admin.voidSale") = "Cancel Sale" — "void" is database
-    // vocabulary, and an owner says cancel. This looked for "Void sale" and had been
-    // finding nothing, so the test was passing on a screen that never opened it.
-    await page.getByRole('button', { name: /cancel sale/i }).first().click();
+    // The shipped label is t("admin.voidSale") = "Delete this sale" — the action is
+    // offered in the owner's own language; the row stays in the history, marked deleted.
+    await page.locator('[data-testid="sale-void"]').click();
 
     // The dialog must identify WHICH sale, and say what will happen to stock, the
     // balance and the history — not ask a generic "are you sure?".
-    const dialogTitle = page.getByText(new RegExp(`Cancel sale ${SALE_NUMBER.replace(/-/g, '\\-')}`, 'i')).first();
-    await expect(dialogTitle).toBeVisible({ timeout: 10000 });
+    const named = page.getByText(new RegExp(`Sale ${SALE_NUMBER.replace(/-/g, '\\-')} will be deleted`, 'i')).first();
+    await expect(named, 'the dialog does not identify which sale is being deleted').toBeVisible({ timeout: 10000 });
     await expect(page.getByText(/back into stock/i).first()).toBeVisible();
     await expect(page.getByText(/history/i).first()).toBeVisible();
     await expect(page.getByText(/are you sure/i)).toHaveCount(0);
 
     // A reason is required before voiding is allowed.
-    const confirmBtn = page.getByRole('button', { name: /^cancel sale$/i }).last();
+    const confirmBtn = page.getByRole('button', { name: /^delete this sale$/i }).last();
     await expect(confirmBtn).toBeDisabled();
     await page.locator('input[type="text"], input:not([type])').last().fill('QA void safety');
 
     // Two clicks in ONE task — a real double tap. The second must not report a
     // failure after the first one succeeded.
     await page.evaluate(() => {
+      // The page's own "Delete this sale" opener also matches the text, so it is
+      // excluded by its hook: only the dialog's confirm button may be double-tapped.
       const btns = Array.from(document.querySelectorAll('button')).filter((b) =>
-        /^cancel sale$/i.test((b.textContent || '').trim())
+        /^delete this sale$/i.test((b.textContent || '').trim()) &&
+        b.getAttribute('data-testid') !== 'sale-void'
       ) as HTMLButtonElement[];
       const btn = btns[btns.length - 1];
       if (!btn) throw new Error('void confirm button not found');
@@ -97,10 +112,11 @@ test.describe('Void sale safety', () => {
         const el = document.querySelector('div.fixed[style*="--tabbar-height"]');
         return el ? (el as HTMLElement).innerText : '';
       }).catch(() => '');
-      // The shipped success toast is t("copy.saleCancelled"). It used to be the literal
-      // "Sale voided successfully", which this control looked for — so once the wording
-      // moved into the dictionary, the control silently stopped seeing the toast.
-      if (text.includes('Sale cancelled')) sawSuccess = true;
+      // The shipped success toast is t("copy.saleCancelled") = "Sale deleted. The item is
+      // back in stock." It used to be the literal "Sale voided successfully", which this
+      // control looked for — so once the wording moved into the dictionary, the control
+      // silently stopped seeing the toast.
+      if (text.includes('Sale deleted')) sawSuccess = true;
       // friendly() maps an unrecognised refusal ("Sale is already voided") to this
       // sentence; seeing it right after a successful void is the misinformation.
       if (/did not work/i.test(text)) sawFailureWord = true;
@@ -118,5 +134,12 @@ test.describe('Void sale safety', () => {
     // Stock is restored exactly once.
     const stock = await execSql(`SELECT stock_qty FROM product_variants WHERE id = '${QA_IDS.variantA}'`);
     expect(Number(stock[0].stock_qty)).toBe(100);
+
+    // The movement the void wrote points at THIS lane's sale, so it is owned by that exact
+    // foreign key — the one relation the sale id alone cannot express in the cleanup graph.
+    await claimOwned(
+      'inventory_movements',
+      `SELECT id FROM inventory_movements WHERE reference_id = '${SALE_ID}'`,
+    );
   });
 });

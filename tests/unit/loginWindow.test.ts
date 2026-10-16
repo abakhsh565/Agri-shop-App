@@ -154,8 +154,48 @@ describe("every door asks the same question", () => {
   });
 
   it("the launch knows the account it last served, so a PIN door can be drawn", () => {
+    // The question itself is asked in ONE place (`lib/entryDoor.ts`); the launch screen asks it
+    // and still keeps the device's memory of the account up to date.
+    const door = read("src/lib/entryDoor.ts");
+    expect(door).toMatch(/lastUsedProfile/);
+    expect(door).toMatch(/pinAllowedOnThisDevice/);
+    expect(door).toMatch(/canOpenWithPin/);
+
     const splash = read("src/pages/auth/SplashPage.tsx");
-    expect(splash).toMatch(/lastUsedProfile/);
     expect(splash).toMatch(/rememberLastProfile/);
+    expect(splash).toMatch(/entryDoor\(\)/);
+  });
+
+  it("signing out asks the same question, so it cannot land on the phone field", () => {
+    // WHY THIS CASE EXISTS. The rule lived only in the launch screen, so signing out dropped the
+    // person on "enter your phone number" — the one screen the rule exists to avoid — on a device
+    // that could have opened with its PIN. Every screen that signs somebody out must ask the same
+    // question, and it must not decide for itself.
+    const signOutScreens = [
+      "src/pages/admin/settings/AdminSettingsPage.tsx",
+      "src/pages/employee/settings/SettingsPage.tsx",
+    ];
+    for (const file of signOutScreens) {
+      const source = read(file);
+      expect(source, `${file} signs out without asking which door this device gets`).toMatch(/entryDoor\(\)/);
+      expect(source, `${file} decides the door itself instead of asking entryDoor`).not.toMatch(
+        /pinAllowedOnThisDevice/,
+      );
+    }
+  });
+
+  it("erasing an account forgets the door it would have opened", () => {
+    // A deleted account must not leave a remembered profile or a live window behind, or the next
+    // launch draws a keypad for somebody who is gone.
+    for (const file of [
+      "src/pages/admin/settings/AdminSettingsPage.tsx",
+      "src/pages/employee/settings/SettingsPage.tsx",
+    ]) {
+      const source = read(file);
+      expect(source, `${file} erases an account but keeps its remembered profile`).toMatch(/forgetLastProfile\(\)/);
+      expect(source, `${file} erases an account but keeps its confirmed-number window`).toMatch(
+        /forgetPhoneVerification\(/,
+      );
+    }
   });
 });

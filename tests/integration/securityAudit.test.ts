@@ -99,8 +99,14 @@ describe('Security Audit — RLS & Authorization', () => {
   // ─── RPC: Admin-only functions properly secured ────────────────────────────
 
   it('RPC: void_sale requires admin authorization', async () => {
-    const result = await execRpcAsUser(EMP_ID, 'void_sale_v1', {
-      payload: { saleId: '00000000-0000-0000-0000-000000000000', reason: 'test' },
+    // 0192 retires the legacy `void_sale_v1` jsonb endpoint for app roles and puts the guard on
+    // the canonical `void_sale(uuid,text,uuid)` — the call the app itself makes (src/lib/db.ts).
+    // The assertion is unchanged in intent: an employee without `sales.void` is refused with an
+    // authorization error, not a raw privilege error.
+    const result = await execRpcAsUser(EMP_ID, 'void_sale', {
+      p_sale_id: '00000000-0000-0000-0000-000000000000',
+      p_reason: 'test',
+      p_voided_by: EMP_ID,
     });
     expect(result.error).toBeTruthy();
     expect(result.error).toContain('NOT_AUTHORIZED');
@@ -244,19 +250,28 @@ describe('Security Audit — RLS & Authorization', () => {
   // ─── RPC: Empty/missing JWT rejected ───────────────────────────────────────
 
   it('RPC: empty JWT claims rejected by auth-checked functions', async () => {
-    const result = await execRpcAsUser(EMP_ID, 'void_sale_v1', {
-      payload: { saleId: '00000000-0000-0000-0000-000000000000', reason: 'test' },
+    // Called on the canonical endpoint, and the assertion is the authentication refusal itself:
+    // through the retired `void_sale_v1` this test passed on a privilege error, which proved the
+    // grant was gone rather than that the identity was rejected — the claim it exists to make.
+    const result = await execRpcAsUser(EMP_ID, 'void_sale', {
+      p_sale_id: '00000000-0000-0000-0000-000000000000',
+      p_reason: 'test',
+      p_voided_by: EMP_ID,
     });
     expect(result.error).toBeTruthy();
+    expect(result.error).toMatch(/NOT_AUTHENTICATED|NOT_AUTHORIZED/);
   });
 
   // ─── RPC: Fabricated user ID rejected ──────────────────────────────────────
 
   it('RPC: fabricated user ID rejected by auth-checked functions', async () => {
-    const result = await execRpcAsUser('00000000-0000-0000-0000-999999999999', 'void_sale_v1', {
-      payload: { saleId: '00000000-0000-0000-0000-000000000000', reason: 'test' },
+    const result = await execRpcAsUser('00000000-0000-0000-0000-999999999999', 'void_sale', {
+      p_sale_id: '00000000-0000-0000-0000-000000000000',
+      p_reason: 'test',
+      p_voided_by: '00000000-0000-0000-0000-999999999999',
     });
     expect(result.error).toBeTruthy();
+    expect(result.error).toMatch(/NOT_AUTHENTICATED|NOT_AUTHORIZED/);
   });
 
   // ─── RPC: Terminal state enforcement ───────────────────────────────────────
@@ -306,8 +321,11 @@ describe('Security Audit — RLS & Authorization', () => {
   // ─── Destructive Operations: Employee cannot void sales ────────────────────
 
   it('Destructive: employee cannot void sales', async () => {
-    const result = await execRpcAsUser(EMP_ID, 'void_sale_v1', {
-      payload: { saleId: '00000000-0000-0000-0000-000000000000', reason: 'test' },
+    // Same retirement as above: the guarded endpoint is `void_sale`, and the employee is refused.
+    const result = await execRpcAsUser(EMP_ID, 'void_sale', {
+      p_sale_id: '00000000-0000-0000-0000-000000000000',
+      p_reason: 'test',
+      p_voided_by: EMP_ID,
     });
     expect(result.error).toContain('NOT_AUTHORIZED');
   });

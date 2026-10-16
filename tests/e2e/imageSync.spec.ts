@@ -9,11 +9,20 @@
 import { test, expect } from '@playwright/test';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
-import { injectAdminAuth, setupFixtures, cleanupFixtures, execSql, QA_IDS } from './helpers';
+import {
+  injectAdminAuth,
+  setupFixtures,
+  cleanupFixtures,
+  execSql,
+  ownership,
+  trackOwned,
+  trackUploadedObject,
+  QA_IDS,
+} from './helpers';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const BASE_URL = 'http://localhost:5173';
+const BASE_URL = process.env.QA_APP_URL || 'http://localhost:5173';
 const IMG_A = path.resolve(__dirname, 'fixtures/test-image.png');
 const IMG_B = path.resolve(__dirname, 'fixtures/test-image-2.png');
 
@@ -35,14 +44,19 @@ test.describe('Image Synchronization — All Entities', () => {
     await execSql(`INSERT INTO product_variants (id, product_id, name, selling_price, cost_price, unit_size, low_stock_threshold, stock_qty) VALUES ('${VAR_ID}', '${PROD_ID}', '1kg', 500, 300, 1, 10, 100) ON CONFLICT (id) DO NOTHING`);
     await execSql(`INSERT INTO companies (id, name, outstanding_payable, total_purchases, shop_id) VALUES ('${COMP_ID}', 'Img Supplier', 0, 0, '${QA_IDS.shop}') ON CONFLICT (id) DO NOTHING`);
     await execSql(`INSERT INTO users (id, name, phone, role, is_original_owner, is_active, shop_id) VALUES ('${EMP_ID}', 'Img Employee', '${EMP_PHONE}', 'employee', false, true, '${QA_IDS.shop}') ON CONFLICT (id) DO NOTHING`);
+
+    // OWNERSHIP: five rows with ids this lane chose — plus, below, the Storage objects it uploads.
+    const own = ownership();
+    trackOwned(own, 'customers', CUST_ID);
+    trackOwned(own, 'products', PROD_ID);
+    trackOwned(own, 'product_variants', VAR_ID);
+    trackOwned(own, 'companies', COMP_ID);
+    trackOwned(own, 'users', EMP_ID);
   });
 
   test.afterAll(async () => {
-    await execSql(`DELETE FROM product_variants WHERE product_id = '${PROD_ID}'`).catch(() => {});
-    await execSql(`DELETE FROM products WHERE id = '${PROD_ID}'`).catch(() => {});
-    await execSql(`DELETE FROM companies WHERE id = '${COMP_ID}'`).catch(() => {});
-    await execSql(`DELETE FROM customers WHERE id = '${CUST_ID}'`).catch(() => {});
-    await execSql(`DELETE FROM users WHERE id = '${EMP_ID}'`).catch(() => {});
+    // Rows AND uploaded objects, both by explicit id/path. A failing removal now fails the lane
+    // (see cleanupFixtures) instead of leaving an orphan nobody counted.
     await cleanupFixtures();
   });
 
@@ -66,6 +80,7 @@ test.describe('Image Synchronization — All Entities', () => {
     let db = await execSql(`SELECT image_url FROM customers WHERE id = '${CUST_ID}'`);
     expect(db[0].image_url).toContain('supabase.co/storage');
     const urlA = db[0].image_url;
+    trackUploadedObject(urlA);
 
     // Reload → view persists
     await page.reload();
@@ -84,6 +99,7 @@ test.describe('Image Synchronization — All Entities', () => {
     db = await execSql(`SELECT image_url FROM customers WHERE id = '${CUST_ID}'`);
     expect(db[0].image_url).not.toBe(urlA);
     const urlB = db[0].image_url;
+    trackUploadedObject(urlB);
 
     // Reload → new image persists
     await page.reload();
@@ -135,6 +151,10 @@ test.describe('Image Synchronization — All Entities', () => {
     const img = page.locator('img[alt]').first();
     const src = await img.getAttribute('src');
     expect(src).toContain('supabase.co/storage');
+    // OWNERSHIP: a src the app uploaded is a real object — the one kind of URL worth tracking.
+    // The synthetic URLs this file writes straight into the database address nothing and are not
+    // tracked, so cleanup never tries to delete an object that never existed.
+    trackUploadedObject(src);
 
     // Set image on product via DB (simulates what saveEdit does)
     const testUrl = `https://bpybjrjenwccowvtrevu.supabase.co/storage/v1/object/public/product-images/prod-${RUN}.jpg`;
@@ -184,6 +204,10 @@ test.describe('Image Synchronization — All Entities', () => {
     const img = page.locator('img[alt]').first();
     const src = await img.getAttribute('src');
     expect(src).toContain('supabase.co/storage');
+    // OWNERSHIP: a src the app uploaded is a real object — the one kind of URL worth tracking.
+    // The synthetic URLs this file writes straight into the database address nothing and are not
+    // tracked, so cleanup never tries to delete an object that never existed.
+    trackUploadedObject(src);
 
     // Set logo via DB
     const testUrl = `https://bpybjrjenwccowvtrevu.supabase.co/storage/v1/object/public/company-logos/comp-${RUN}.jpg`;
@@ -233,6 +257,10 @@ test.describe('Image Synchronization — All Entities', () => {
     const img = page.locator('img[alt]').first();
     const src = await img.getAttribute('src');
     expect(src).toContain('supabase.co/storage');
+    // OWNERSHIP: a src the app uploaded is a real object — the one kind of URL worth tracking.
+    // The synthetic URLs this file writes straight into the database address nothing and are not
+    // tracked, so cleanup never tries to delete an object that never existed.
+    trackUploadedObject(src);
 
     // Set photo via DB
     const testUrl = `https://bpybjrjenwccowvtrevu.supabase.co/storage/v1/object/public/employee-photos/emp-${RUN}.jpg`;
@@ -344,6 +372,7 @@ test.describe('Image Synchronization — All Entities', () => {
     let db = await execSql(`SELECT image_url FROM customers WHERE id = '${CUST_ID}'`);
     expect(db[0].image_url).toBeTruthy();
     const urlA = db[0].image_url;
+    trackUploadedObject(urlA);
 
     // Replace B
     await page.locator('button').filter({ hasText: /Edit|edit/ }).first().click();
@@ -356,6 +385,7 @@ test.describe('Image Synchronization — All Entities', () => {
     db = await execSql(`SELECT image_url FROM customers WHERE id = '${CUST_ID}'`);
     expect(db[0].image_url).not.toBe(urlA);
     const urlB = db[0].image_url;
+    trackUploadedObject(urlB);
 
     // Old URL A is no longer the authoritative reference
     db = await execSql(`SELECT image_url FROM customers WHERE id = '${CUST_ID}' AND image_url = '${urlA}'`);

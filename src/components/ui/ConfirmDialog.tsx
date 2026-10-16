@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { tNow } from "@/lib/i18n";
 import usePresence from "@/hooks/usePresence";
 import Input from "@/components/ui/Input";
@@ -14,6 +14,8 @@ interface ConfirmDialogProps {
   cancelLabel?: string;
   destructive?: boolean;
   loading?: boolean;
+  confirmDisabled?: boolean;
+  children?: ReactNode;
   /**
    * An optional third, quietest answer, for the three-answer alerts this platform uses —
    * save / discard / cancel on unsaved work, where two buttons force one of the three into a
@@ -49,7 +51,7 @@ interface ConfirmDialogProps {
  */
 export default function ConfirmDialog({
   open, title, message, confirmLabel, cancelLabel,
-  destructive = false, loading = false,
+  destructive = false, loading = false, confirmDisabled = false, children,
   tertiaryLabel, onTertiary,
   requireTypedText, typedPrompt,
   onConfirm, onCancel,
@@ -111,12 +113,13 @@ export default function ConfirmDialog({
               data-testid="confirm-typed-input"
               value={typed}
               onChange={(e) => setTyped(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter" && typedOk && !loading) onConfirm(); }}
+              onKeyDown={(e) => { if (e.key === "Enter" && typedOk && !loading && !confirmDisabled) onConfirm(); }}
               placeholder={expected}
             />
           </div>
         )}
 
+        {children && <div className="mb-5">{children}</div>}
         <div className="flex gap-2.5">
           <button
             type="button"
@@ -139,7 +142,7 @@ export default function ConfirmDialog({
             type="button"
             data-testid="confirm-submit"
             onClick={onConfirm}
-            disabled={loading || !typedOk}
+            disabled={loading || confirmDisabled || !typedOk}
             className="flex-1 disabled:opacity-50"
             style={{
               height: 48,

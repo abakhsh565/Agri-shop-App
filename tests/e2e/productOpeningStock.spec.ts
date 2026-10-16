@@ -15,9 +15,9 @@
  * QA database only; the product it creates is deleted again.
  */
 import { test, expect } from '@playwright/test';
-import { QA_IDS, execSql, setupFixtures, cleanupFixtures, injectAdminAuth } from './helpers';
+import { QA_IDS, execSql, setupFixtures, cleanupFixtures, claimOwned, injectAdminAuth } from './helpers';
 
-const BASE_URL = 'http://localhost:5173';
+const BASE_URL = process.env.QA_APP_URL || 'http://localhost:5173';
 const PRODUCT_NAME = `QA Opening Stock ${Date.now().toString(36).toUpperCase()}`;
 const OPENING_STOCK = 50;
 const SELLING_PRICE = 600;
@@ -26,14 +26,14 @@ const SUPPLIER = 'QA Supplier A';
 test.describe('Product opening stock', () => {
   test.beforeAll(async () => {
     await setupFixtures();
-    await execSql(`DELETE FROM product_variants WHERE product_id IN (SELECT id FROM products WHERE name = '${PRODUCT_NAME}')`);
-    await execSql(`DELETE FROM products WHERE name = '${PRODUCT_NAME}'`);
   });
 
   test.afterAll(async () => {
-    await execSql(`DELETE FROM inventory_movements WHERE product_id IN (SELECT id FROM products WHERE name = '${PRODUCT_NAME}')`).catch(() => {});
-    await execSql(`DELETE FROM product_variants WHERE product_id IN (SELECT id FROM products WHERE name = '${PRODUCT_NAME}')`).catch(() => {});
-    await execSql(`DELETE FROM products WHERE name = '${PRODUCT_NAME}'`).catch(() => {});
+    // The product this lane creates is registered by claimOwned() the moment its id exists, so
+    // cleanup removes the product, its variant and its movement by id. The old before/after deletes
+    // matched on the product NAME — a prefix is not ownership: a same-shaped name from another run
+    // would have been deleted here, and this lane's own row could have escaped if it had been
+    // renamed.
     await cleanupFixtures();
   });
 
@@ -42,26 +42,30 @@ test.describe('Product opening stock', () => {
     await page.goto(`${BASE_URL}/admin/inventory/new`);
     await page.waitForLoadState('networkidle');
 
-    await page.getByPlaceholder('e.g. Karate Insecticide').fill(PRODUCT_NAME);
+    await page.getByTestId('product-name').fill(PRODUCT_NAME);
     // The supplier picker is the app's own sheet, not a native <select> — the design
     // revamp removed every browser-default select, so this opens the field and picks
     // the supplier row. Same requirement (choose a supplier), current UI.
     await page.getByRole('button', { name: 'Choose supplier' }).click();
     await page.locator('.ds-row', { hasText: SUPPLIER }).first().click();
-    // The single unit row starts with an empty name, and the form refuses to save
-    // without one — so this is the one unit the opening figure belongs to.
-    await page.getByPlaceholder('Unit name — e.g. 500ml, 50kg').fill('1kg');
 
-    // The opening-stock field comes before the unit rows, so it is the first number
-    // input on the screen; the unit row's selling price is the next one.
-    const numbers = page.locator('input[type="number"]');
-    await numbers.nth(0).fill(String(OPENING_STOCK));
-    await numbers.nth(1).fill(String(SELLING_PRICE));
+    // The form is one card per pack now, and every field carries its own hook. The pack
+    // that starts empty is where the opening figure belongs: its size, its selling price
+    // and the quantity on the shelf, addressed by pack index rather than by position on
+    // the screen — position is what the old locator got wrong, not the requirement.
+    await page.getByTestId('product-pack-size-0').fill('1');
+    await page.getByTestId('product-pack-cost-0').fill(String(SELLING_PRICE - 100));
+    await page.getByTestId('product-pack-sell-0').fill(String(SELLING_PRICE));
+    await page.getByTestId('product-pack-stock-0').fill(String(OPENING_STOCK));
 
-    await page.getByRole('button', { name: 'Add Product' }).click();
+    await page.getByTestId('product-save').click();
 
     // Wait for the real RPC round-trip, then judge the database, not the screen.
     await page.waitForTimeout(5000);
+
+    // OWNERSHIP: the row exists now, so claim it by the exact name this lane generated — and
+    // register the product id cleanup will delete (its variant and movement follow by FK).
+    await claimOwned('products', `SELECT id FROM products WHERE name = '${PRODUCT_NAME}'`);
 
     const rows = await execSql(`
       SELECT v.name, v.stock_qty, v.selling_price

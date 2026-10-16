@@ -1,11 +1,10 @@
 import pg from 'pg';
 import fs from 'node:fs';
+import { qaPoolOptions } from './lib/qa-connection.mjs';
 const { Pool } = pg;
-const pool = new Pool({
-  host: 'aws-0-ap-northeast-1.pooler.supabase.com', port: 6543, database: 'postgres',
-  user: 'postgres.bpybjrjenwccowvtrevu', password: 'LptUWZQm4TZrRksv4nAtFUHk3YG6rO',
-  ssl: { rejectUnauthorized: false }, connectionTimeoutMillis: 15000, statement_timeout: 120000,
-});
+// Credentials come from the environment, and the target must be the QA project. The password literal
+// that used to sit here is in git history and must be rotated — see docs/PRODUCTION_DATA_POLICY.md.
+const pool = new Pool(qaPoolOptions({ statementTimeout: 120000 }));
 const client = await pool.connect();
 try {
   for (const file of ['supabase/migrations/0108_authoritative_access_and_business_areas.sql','supabase/migrations/0109_enforce_business_permissions.sql','supabase/migrations/0110_backfill_legacy_memberships.sql','supabase/migrations/0111_admin_management_defaults.sql']) {

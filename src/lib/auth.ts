@@ -1,6 +1,11 @@
 import { supabase } from "@/lib/supabase";
 import type { User, UserRole, MembershipRole, MembershipStatus } from "@/types";
-import { DEMO_OTP_CODE, isDemoOtpMode } from "@/lib/authMode";
+import {
+  DEMO_OTP_CODE,
+  assertDemoOtpAllowed,
+  demoCodeAccepted,
+  isDemoOtpMode,
+} from "@/lib/authMode";
 import { clearAllCachedData } from "@/lib/localCache";
 
 // ─── Phone normalization ─────────────────────────────────────────────────────
@@ -115,7 +120,12 @@ export async function sendOTP(
   // Demo mode: there is no SMS provider, so there is nothing to send and the
   // code is the shared constant. Reporting success is accurate — the person can
   // complete sign-in (the invitation carries the code).
-  if (isDemoOtpMode) return { success: true };
+  if (isDemoOtpMode) {
+    // Never report "code sent" for a code that was not sent, in an environment that must not
+    // accept one. See authMode.ts.
+    assertDemoOtpAllowed();
+    return { success: true };
+  }
 
   // Live mode: Supabase Auth sends the one-time code over SMS.
   const { error } = await supabase.auth.signInWithOtp({ phone: e164 });
@@ -146,7 +156,12 @@ export async function verifyConfirmOTP(phone: string, token: string): Promise<bo
   const code = token.replace(/\D/g, "");
   if (code.length !== 6) return false;
 
-  if (isDemoOtpMode) return code === DEMO_OTP_CODE;
+  if (isDemoOtpMode) {
+    // Second lock: `isDemoOtpMode` is already false in a production build, and this makes it
+    // impossible for a future caller to honour the shared code there by mistake.
+    assertDemoOtpAllowed();
+    return demoCodeAccepted(code);
+  }
 
   const { error } = await supabase.auth.verifyOtp({
     phone: normalizePhone(phone),
@@ -269,6 +284,11 @@ function isUnreachable(error: { status?: number } | null | undefined): boolean {
 }
 
 async function ensureAuthSession(phone: string): Promise<{ ok: boolean; error?: string }> {
+  // This bridge turns a phone number into a password-derivable Supabase identity. It belongs to
+  // demo sign-in only, so it refuses to run where demo sign-in is not allowed — belt and braces
+  // with the `isDemoOtpMode` check at every call site.
+  assertDemoOtpAllowed();
+
   const { email, password } = phoneToAuthCredentials(phone);
 
   // A session that belongs to a DIFFERENT account is not this person's identity.
@@ -464,8 +484,10 @@ export async function verifyOTPAndResolveUser(
   }
 
   if (isDemoOtpMode) {
-    // Demo mode: the shared constant stands in for the SMS.
-    if (token !== DEMO_OTP_CODE) return { status: "wrong_otp" };
+    // Demo mode: the shared constant stands in for the SMS. The decision itself lives in
+    // authMode.ts so this path and the confirmation path cannot drift apart.
+    assertDemoOtpAllowed();
+    if (!demoCodeAccepted(token)) return { status: "wrong_otp" };
   } else {
     // Live mode: Supabase verifies the code it sent, and establishes the
     // session as part of doing so.
@@ -490,7 +512,10 @@ export async function verifyOTPAndResolveUser(
   if (lookupErr) return { status: "error", message: lookupErr!.message };
 
   if (existing) {
-    const row = existing as UserRow;
+    // `let`, not `const`: 0201 scopes this RPC's answer to the identity the caller has proved, so
+    // the pre-session read below is the door answer only, and the full profile is re-read once the
+    // session exists (see the demo bridge further down).
+    let row = existing as UserRow;
     // Deactivation is decided from the profile alone — no session is minted for a
     // closed account.
     if (!row.is_active) return { status: "deactivated" };
@@ -514,6 +539,21 @@ export async function verifyOTPAndResolveUser(
       return session.error === LOGIN_NOT_READY
         ? { status: "login_not_ready" }
         : { status: "error", message: SESSION_SETUP_FAILED };
+    }
+
+    // 0201 answers an unauthenticated caller with `{is_active, role}` and nobody else with more, so
+    // a profile read taken BEFORE a session existed is the door answer rather than the account. The
+    // door answer carries no `id` (the full row always does — it is the primary key), which makes
+    // that the exact test for "read it again now that the session exists". Demo mode is where this
+    // happens today: it cannot open a session from phone OTP (that is why the bridge above exists),
+    // so its lookup ran before any session did. Live mode reaches here with the session `verifyOtp`
+    // just opened, so its read was already the full profile and this is a no-op. Without it the
+    // demoed sign-in would build its user from the door answer: no id, no tenant, and every screen
+    // behind it empty for no visible reason.
+    if (row.id === undefined) {
+      const { data: fullProfile } = await supabase
+        .rpc("lookup_user_by_phone", { p_phone: e164 });
+      if (fullProfile) row = fullProfile as UserRow;
     }
 
     void touchLogin(row.id, !row.first_login_at);

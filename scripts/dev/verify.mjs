@@ -27,8 +27,8 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import {
   currentHead, EXCLUDED_PATHS, gitLines, hashMap, hashOf, laneSpecPath,
-  matchAny, qaRowCount, readLaneMap, readState, seconds, treeHash, updateState,
-  workingFiles,
+  matchAny, qaRowCount, readLaneMap, readState, seconds, SHARED_E2E_GLOBS, treeHash,
+  updateState, workingFiles,
 } from './lib.mjs';
 
 const argv = process.argv.slice(2);
@@ -61,8 +61,11 @@ const laneMap = readLaneMap();
 const state = readState();
 
 function globsFor(lane) {
-  if (lane in laneMap.lanes) return laneMap.lanes[lane];
-  return laneMap.default;
+  // The shared E2E harness is appended to EVERY lane: a lane's own globs describe the source it
+  // exercises, while global-setup/helpers/the configs are what drive it at all. Editing one of them
+  // must invalidate the lane evidence, and no single lane's globs would have covered it.
+  const own = lane in laneMap.lanes ? laneMap.lanes[lane] : laneMap.default;
+  return [...own, ...SHARED_E2E_GLOBS];
 }
 
 function laneFiles(lane) {
@@ -180,6 +183,8 @@ const plan = {
   lanes: toRun.map((r) => `${r.lane}${r.forced ? ' (tier-2 coverage)' : ''}`),
   skipped,
   build: true,
+  // Kept as the flag that decides whether the tier-2 database gate runs; what it runs is now the
+  // declaration in scripts/dev/qa-baseline.json rather than a zero-row count.
   qaCount: tier >= 2,
 };
 
@@ -189,7 +194,7 @@ console.log(`changed  : ${changed.length} file(s)${changed.length ? ': ' + plan.
 console.log(`vitest   : ${plan.vitest}`);
 console.log(`lanes    : ${plan.lanes.length ? plan.lanes.join(', ') : '(none affected)'}`);
 for (const s of skipped) console.log(`SKIPPED  : ${s.lane} — ${s.reason}`);
-console.log(`build    : yes · qa count: ${plan.qaCount ? 'yes (independent)' : 'no'}`);
+console.log(`build    : yes · qa baseline: ${plan.qaCount ? 'yes (declaration, independent of the cleaner)' : 'no'}`);
 
 if (PLANS_ONLY) process.exit(0);
 
@@ -240,17 +245,18 @@ if (!failure && !step('build', 'npm', ['run', 'build'])) { /* fail-fast */ }
 
 if (!failure && tier >= 2) {
   const count = await qaRowCount();
-  process.stdout.write(`\n─── QA independent row count\n`);
+  process.stdout.write(`\n─── QA baseline (independent of the cleaner: ownership + expected fixtures)\n`);
   if (!count.ok) {
     failure = `QA row count failed: ${count.error}`;
     console.log(`FAIL: ${count.error}`);
-  } else if (count.total > 0) {
-    failure = `QA database is not clean: ${count.total} business row(s)`;
-    const top = Object.entries(count.tables).filter(([, n]) => n).sort((a, b) => b[1] - a[1]).slice(0, 6);
-    console.log(`FAIL: ${count.total} row(s) remain — ${top.map(([t, n]) => `${t}=${n}`).join(', ')}`);
-    console.log('      cleanup is a deliberate step: npm run qa:clean (and re-count after it).');
   } else {
-    console.log('PASS: 0 business rows (counted independently of the cleaner).');
+    // The count is reported, not asserted. What is asserted is the DECLARATION in
+    // scripts/dev/qa-baseline.json: every row attributed, every fixture present, both directions of
+    // drift caught. A zero-row expectation was unreachable without deleting the system's own history
+    // (552 of 687 rows are `audit_events`, written by the system per 0181), so it drove the baseline
+    // to be cleaned destructively rather than kept honest.
+    console.log(`QA business rows: ${count.total} — reported; the declaration decides what is drift`);
+    step('QA baseline vs declaration', 'node', ['scripts/dev/qa-baseline.mjs']);
   }
 }
 

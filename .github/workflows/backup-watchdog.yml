@@ -1,0 +1,94 @@
+name: Backup Watchdog
+
+# WHY THIS FILE IS NOT PART OF backup-database.yml
+#
+# The backup workflow cannot report its own absence, and the failure mode that matters most is
+# exactly that one: the run that is red, the run that is green with no artefact, the run that never
+# started. So the watcher is separate, reads the Actions API, and says so where a person looks — an
+# issue.
+#
+# It closes the gap `docs/RECOVERY.md` §9 used to describe as unbounded: "time to notice" was
+# however long it took someone to wonder. Now it is one watchdog period plus the RPO.
+#
+# What it checks, on the default branch, from the newest completed run of `backup-database.yml`:
+#   * did it succeed?                        (red)
+#   * did it publish a live artefact?        (missing-artifact — expired artefacts do not count)
+#   * is that artefact within the 24 h RPO?  (stale, with a 3 h slack window for cron drift and
+#                                             the job's own queue and runtime)
+#   * could the watcher find out at all?     (unknown — a blind watcher reports unhealthy, never ok)
+#
+# One issue per condition, commented instead of duplicated, and closed automatically by a healthy
+# check. The watcher itself is read-only against the repository's settings and holds no database
+# credential: it never connects to production, it reads the record of the run that did.
+#
+# Tests: tests/unit/backupHealthWatchdog.test.ts pins the decision for each state, and
+# `workflow_dispatch` below can rehearse an alert end to end without waiting for a real outage.
+
+on:
+  schedule:
+    # Daily at 04:40 UTC. The production backup runs at 02:00 UTC and takes minutes; this sits well
+    # after it, so the watcher judges a finished run rather than racing the one it is watching.
+    # GitHub's scheduler can be late, and the 3 h slack in the check exists for exactly that.
+    - cron: '40 4 * * *'
+  workflow_dispatch:
+    inputs:
+      simulate:
+        # Empty on a scheduled run — and empty by default, so the automated path can only ever run
+        # the real check. A rehearsal has to be typed in by a person.
+        description: 'REHEARSAL ONLY: force an alert to prove it fires (red | missing-artifact | stale | never-ran). Leave empty for the real check.'
+        type: string
+        required: false
+        default: ''
+
+concurrency:
+  # One watcher at a time: two overlapping runs could each decide the other's outcome was current.
+  group: backup-watchdog
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  actions: read
+  issues: write
+
+jobs:
+  watchdog:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: Check the scheduled production backup
+        # Needs no dependencies: the watcher uses Node's built-in fetch against the Actions API.
+        # It exits 0 when the backup is healthy, 1 when it is red/empty/stale, and 2 when it could
+        # not find out — so a watcher that breaks is a red run, not a quiet one.
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SIMULATE: ${{ inputs.simulate }}
+        run: |
+          set -euo pipefail
+          if [ -n "${SIMULATE:-}" ]; then
+            echo "::warning::REHEARSAL — simulating '$SIMULATE'. Any alert this opens is labelled SIMULATED and is not a real backup failure."
+            node scripts/check-backup-health.mjs --simulate "$SIMULATE"
+          else
+            node scripts/check-backup-health.mjs
+          fi
+
+      - name: Say what a red watchdog means
+        # Only runs when the check above failed, and only to make the run's own page actionable
+        # without the reader having to open the issue first.
+        if: failure()
+        run: |
+          echo "═══════════════════════════════════════════════════════════"
+          echo "  THE SCHEDULED PRODUCTION BACKUP IS NOT HEALTHY"
+          echo "  Time: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          echo "  An issue labelled 'backup-alert' records the state and what to do."
+          echo "  Until it is closed, the newest restorable backup is older than"
+          echo "  the agreed objective: treat production as unprotected."
+          echo "═══════════════════════════════════════════════════════════"

@@ -15,8 +15,13 @@
  * QA database only; every row this spec creates is deleted again.
  */
 import { test, expect, type Page } from '@playwright/test';
-import { execSql } from './helpers';
+import { cleanupFixtures, execSql } from './helpers';
 import { loginViaUi } from './helpers';
+
+// The server under test is this repository's QA server, on whichever port it runs (5173 may be
+// held by another project on this machine). `npm run preflight` / playwright.config.ts use the
+// same variable, so a spec can never navigate somewhere the identity guard did not verify.
+const BASE_URL = process.env.QA_APP_URL || 'http://localhost:5173';
 
 const OWNER_PHONE = '03001234567';
 const SHOP = '00000000-0000-0000-0000-000000000001';
@@ -133,12 +138,14 @@ test.describe('grouped-list design language', () => {
   });
 
   test.afterAll(async () => {
-    await execSql(`
-      DELETE FROM product_variants WHERE id IN ('${VARIANT_A}', '${VARIANT_B}');
-      DELETE FROM products WHERE id IN ('${PRODUCT_A}', '${PRODUCT_B}');
-      DELETE FROM companies WHERE id = '${COMPANY}';
-      DELETE FROM customers WHERE id = '${CUSTOMER_A}';
-    `);
+    // OWNERSHIP — and the reason this cleanup changed.
+    //
+    // Everything this file seeds is the SHARED baseline (`QA_IDS.companyA` / QA Product A and B /
+    // QA Customer A, the same identities `tests/setup/fixtures.ts` upserts for several suites).
+    // A shared fixture is not this lane's to delete, so nothing is registered here and cleanup
+    // deletes nothing. The previous version removed those rows on every run — the same
+    // fixture-deleting behaviour that took seven baseline rows out of QA on 2026-10-13.
+    await cleanupFixtures();
   });
 
   test('cards, rows and hairlines measure inside the reference bands', async ({ page }) => {
@@ -158,7 +165,7 @@ test.describe('grouped-list design language', () => {
     const evidence: string[] = [];
 
     for (const screen of SCREENS) {
-      await page.goto(`http://localhost:5173${screen.path}`);
+      await page.goto(`${BASE_URL}${screen.path}`);
       await page.waitForLoadState('networkidle');
       await expect
         .poll(async () => (await measure(page)).cards, {

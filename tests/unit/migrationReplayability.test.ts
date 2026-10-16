@@ -2,6 +2,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
+import {
+  LEGACY_VERSION_ALIASES,
+  compareWithLedger,
+  readMigrationDirectory,
+} from '../../scripts/lib/migrations.mjs';
+
 /**
  * A migration file that cannot be replayed from scratch is not a migration.
  *
@@ -163,6 +169,69 @@ describe('migrations are replayable', () => {
    * and this test fails so the team re-decides instead of silently inheriting a
    * half-baseline.
    */
+  /**
+   * The version grammar, enforced rather than assumed.
+   *
+   * Two files broke it and the audit (B5) recorded the consequence:
+   * `0042b_security_rls_fix.sql` carried a letter-suffixed version, and
+   * `20260903_credit_limit_requests__reminder_groups.sql` was numbered like a timestamp, so it
+   * sorted AFTER every 0NNN file — a naive replay applied it last, long after the migration that
+   * deploys the same table. Both are now merged into canonical versions (`0042`, `0060`).
+   *
+   * Four zero-padded digits are what make filename order equal version order, which is the only
+   * property that lets a directory listing be applied as a sequence. So the grammar is asserted
+   * here, and the ledger runner refuses to run while it is broken.
+   */
+  it('uses one canonical four-digit version per file', () => {
+    const directory = readMigrationDirectory();
+    expect(
+      directory.problems,
+      'the directory breaks its own version grammar, so no replay can order it',
+    ).toEqual([]);
+
+    const nonCanonical = directory.entries.filter((e) => !e.canonical).map((e) => e.filename);
+    expect(nonCanonical, 'these filenames are not `<4 digits>_<lower_snake_name>.sql`').toEqual([]);
+  });
+
+  it('orders filenames the same way it orders versions', () => {
+    const directory = readMigrationDirectory();
+    const byFilename = directory.entries.map((e) => e.filename).sort();
+    const byVersion = [...directory.entries]
+      .sort((a, b) => a.version.localeCompare(b.version))
+      .map((e) => e.filename);
+    expect(byFilename).toEqual(byVersion);
+  });
+
+  it('keeps no file under a retired version name, and keeps every retired name mapped', () => {
+    const directory = readMigrationDirectory();
+    const versions = new Set(directory.entries.map((e) => e.version));
+    for (const [alias, target] of Object.entries(LEGACY_VERSION_ALIASES)) {
+      expect(versions.has(alias), `retired version ${alias} is back`).toBe(false);
+      expect(versions.has(target), `alias ${alias} points at ${target}, which has no file`).toBe(true);
+    }
+  });
+
+  /**
+   * The directory must be recordable exactly as it stands: every file it contains can be given a
+   * ledger row whose hash matches the file on disk. If this ever fails, it means the repository
+   * contains a file that cannot be represented in the ledger — which is precisely the state that
+   * made `supabase_migrations.schema_migrations` useless.
+   */
+  it('can be recorded exactly as it stands (no pending, no drift)', () => {
+    const directory = readMigrationDirectory();
+    const idealLedger = directory.entries.map((entry) => ({
+      version: entry.version,
+      name: entry.name,
+      sha256: entry.sha256,
+      source: 'adopted',
+    }));
+    const comparison = compareWithLedger(directory, idealLedger);
+    expect(comparison.pending).toEqual([]);
+    expect(comparison.ledgerOnly).toEqual([]);
+    expect(comparison.changed).toEqual([]);
+    expect(comparison.reconciled).toEqual([]);
+  });
+
   it('stays honest that it is a patch set and not a from-scratch baseline', () => {
     const files = fs.readdirSync(dir).filter((f) => f.endsWith('.sql'));
     const baseTables = ['users', 'products', 'customers', 'shops', 'sales'];

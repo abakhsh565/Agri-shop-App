@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/stores/authStore";
-import { getCachedData, setCachedData } from "@/lib/localCache";
+import { getCachedData, setCachedData, captureDataContext, isDataContextCurrent } from "@/lib/localCache";
 import { rpcResolveProductBarcode } from "@/lib/db";
 import type { Product, ProductVariant, ProductCategory, BaseUnit } from "@/types";
 
@@ -22,6 +22,14 @@ interface ProductRow {
   barcode: string | null;
   base_unit: string | null;
   stock_qty: number;
+  /**
+   * The owner's farmer-marketplace decision for this product.
+   *
+   * Read here rather than left out because the edit form is where the switch is shown, and a
+   * form that cannot see the stored value shows every listed product as unlisted — which, on a
+   * screen that saves the whole product, would unlist it the next time anything was edited.
+   */
+  marketplace_listed: boolean | null;
 }
 
 interface VariantRow {
@@ -114,6 +122,8 @@ export const useProductsStore = create<ProductsState>((set, get) => ({
   },
 
   load: async () => {
+    const context = captureDataContext();
+    if (!isDataContextCurrent(context)) return;
     set({ loading: true, error: null });
 
     // Stale-while-revalidate: render the cache immediately, then ALWAYS revalidate.
@@ -139,6 +149,7 @@ export const useProductsStore = create<ProductsState>((set, get) => ({
             : supabase.from("product_variants_public").select("*"),
         ]);
 
+      if (!isDataContextCurrent(context)) return;
       if (pErr || vErr) {
         // Network error — keep cached data if available, just report error
         if (!cached) {
@@ -156,6 +167,7 @@ export const useProductsStore = create<ProductsState>((set, get) => ({
 
       // Resolve company names for products (company_id → company name)
       const companyRows = (await supabase.from("companies").select("id, name")).data ?? [];
+      if (!isDataContextCurrent(context)) return;
       const companyMap = new Map(companyRows.map((c: any) => [c.id, c.name]));
 
       const products: Product[] = ((prods as ProductRow[]) ?? []).map((p) => {
@@ -175,6 +187,9 @@ export const useProductsStore = create<ProductsState>((set, get) => ({
           barcode: p.barcode ?? undefined,
           baseUnit: (p.base_unit as BaseUnit) ?? "piece",
           stockQty: computedStockQty,
+          // Absent from the row means the column is not there at all (an older cached payload),
+          // which must read as "not listed" rather than as "listed".
+          marketplaceListed: p.marketplace_listed === true,
           variants,
         };
       });
@@ -183,6 +198,7 @@ export const useProductsStore = create<ProductsState>((set, get) => ({
       setCachedData(CACHE_KEY, products);
       set({ products, loading: false, ready: true });
     } catch {
+      if (!isDataContextCurrent(context)) return;
       // Complete network failure — show cached data if available
       if (!cached) {
         set({ loading: false, ready: true, error: "Offline — showing cached data" });

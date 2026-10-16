@@ -13,16 +13,36 @@
  * Usage: node scripts/provision-auth-sessions.mjs [--dry-run]
  */
 import { createClient } from '@supabase/supabase-js';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import pg from 'pg';
 
 const dryRun = process.argv.includes('--dry-run');
 
+// Credentials come from the environment (CI supplies them as repository secrets) or, locally,
+// from .env.qa. A CI checkout has no .env.qa at all, so reading it unconditionally made this
+// step — the one that repairs the QA auth sessions the browser suite signs in with — fail with
+// ENOENT before it could do anything. Read the file only to fill in what the environment did not
+// already provide, and let the environment win when both exist.
+const ENV_NAMES = [
+  'QA_SUPABASE_URL',
+  'QA_SUPABASE_ANON_KEY',
+  'QA_SUPABASE_SERVICE_ROLE',
+  'QA_DB_HOST',
+  'QA_DB_USER',
+  'QA_DB_PASS',
+];
 const env = {};
-for (const line of readFileSync('.env.qa', 'utf8').split('\n')) {
-  if (!line.includes('=')) continue;
-  const key = line.split('=')[0].trim();
-  env[key] = line.split('=').slice(1).join('=').trim();
+if (existsSync('.env.qa')) {
+  for (const line of readFileSync('.env.qa', 'utf8').split('\n')) {
+    if (!line.includes('=')) continue;
+    const key = line.split('=')[0].trim();
+    if (ENV_NAMES.includes(key) && !process.env[key]) {
+      env[key] = line.split('=').slice(1).join('=').trim();
+    }
+  }
+}
+for (const key of ENV_NAMES) {
+  if (process.env[key]) env[key] = process.env[key];
 }
 
 const url = (env.QA_SUPABASE_URL || '').replace(/^\[|\]$/g, '');

@@ -29,7 +29,7 @@ Every consequential decision, tracked in one place. Status meanings:
 | D20 | Platform priority: Android first, iOS later (adds $99/year Apple Developer cost when pursued) | LOCKED | `docs/FUTURE_VISION.md` §7. |
 | D21 | Monetization/pricing model for selling to other shops | FUTURE | `docs/MONETIZATION.md` — explicitly not decided, no logic built against it. |
 | D22 | Multi-shop/franchise mode (Organization → Shop hierarchy) | FUTURE | `docs/FUTURE_VISION.md` §1–2. Schema-ready, not built. |
-| D23 | Farmer App / Agricultural Marketplace / Multi-Business Platform | FUTURE | `docs/FUTURE_VISION.md` §5–6. Vision only, no architecture debt. |
+| D23 | Farmer App / Agricultural Marketplace / Multi-Business Platform | FUTURE | `docs/FUTURE_VISION.md` §5–6. Farmer App itself not built. Owner-side listing + read contract shipped 2026-10-04 by explicit product-owner approval — migrations `0184`–`0187`; the search radius belongs to the Farmer App (owner sets location + switch only, per the 0187 correction), contract in `FARMER_MARKETPLACE_INTEGRATION.md`. |
 | D24 | AI Loop Prevention + AI Self-Improvement Safety guardrails for coding agents | LOCKED | AGENTS.md — applies now, protects current build process. |
 
 ## How to Add a Decision

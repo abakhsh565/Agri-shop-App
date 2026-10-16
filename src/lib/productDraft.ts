@@ -47,6 +47,15 @@ export interface ProductDraft {
    *  which is what `saveProductDraft` reports back rather than failing silently. */
   imageUrl: string | null;
   packs: ProductDraftPack[];
+  /**
+   * "List on Farmer Marketplace" (0185). Carried so a half-written product that was meant to be
+   * listed does not come back unlisted — the switch is a decision, and losing it silently would
+   * be the draft lying about what the person had chosen.
+   *
+   * Optional because drafts saved before this existed are still readable; absent reads as off,
+   * which is the same default the column has.
+   */
+  marketplaceListed?: boolean;
 }
 
 /** The four things `handleSave` refuses to save without, as a draft can be missing any of them. */

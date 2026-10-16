@@ -11,32 +11,41 @@ import { useUIStore } from "@/stores/uiStore";
 import { sendOTP, verifyConfirmOTP } from "@/lib/auth";
 
 /**
- * The destructive flow, in four steps — for a branch, or for the whole account.
+ * The consequential flow, in four steps — for a branch, or for the whole account.
  *
  * One implementation for both, because they are the same act at two sizes and the request
- * was explicit that they must look and read the same: say what will be lost (step 1, and it
+ * was explicit that they must look and read the same: say what will happen (step 1, and it
  * must be ticked), say why (step 2), prove it is the account holder's own hand (step 3, a
- * code to the phone on the account), then show it is done (step 4). A destructive action
- * that only asks "are you sure?" is answered by muscle memory; this one makes the person
- * read the loss, name a reason and reach for their phone, and none of those can be tapped
+ * code to the phone on the account), then show it is done (step 4). An act that only asks
+ * "are you sure?" is answered by muscle memory; this one makes the person read the
+ * consequence, name a reason and reach for their phone, and none of those can be tapped
  * through by accident.
  *
- * The two subjects differ in *what* they erase and *where the account lands afterwards*, so
- * that is the whole of the difference: `DeleteSubject` carries the branch's counts when
- * there is a branch, and the copy keys follow the kind. The steps, the guards, the code
- * window and the layout are shared, so a fix to one is a fix to both.
+ * The two subjects differ in *what happens* and *where the account lands afterwards*, and that
+ * is the whole of the difference: `DeleteSubject` carries the branch's counts when there is a
+ * branch, and the copy keys follow the kind. The steps, the guards, the code window and the
+ * layout are shared, so a fix to one is a fix to both.
+ *
+ * **The branch half archives; it does not erase.** `archive_operating_branch` stops the branch
+ * accepting new work and keeps every record — its own audit row carries `historyPreserved:
+ * true` — and the legacy tenant purge it used to call is revoked from `authenticated`, so this
+ * sheet could not erase a branch now even if it asked. The branch copy therefore describes
+ * archiving, and the acknowledgement is about the branch closing rather than about data being
+ * destroyed. This half has no caller today: branch removal lives on the branch detail page
+ * (`BranchesSection` routes every row there), which offers the same archive through a dialog.
+ * It is kept correct and translated rather than left describing an erasure that cannot happen.
  *
  * Two rules hold the steps together:
  *
- *   1. **Nothing is deleted until step 3 succeeds.** The code is a confirmation, never the
- *      authorization: the database erases everything in one transaction and checks the
- *      caller's membership again when it runs.
+ *   1. **Nothing is attempted until step 3 succeeds.** The code is a confirmation, never the
+ *      authorization: the database checks the caller's membership again when the RPC runs.
  *   2. **A refusal is shown where the decision was made**, in the app's own words, and the
- *      sheet stays open. The main branch and an account's only branch are refused by the
- *      database, not by hiding a button.
+ *      sheet stays open. The main branch, an account's last branch and a branch whose staff have
+ *      not been moved are all refused by the database, not by hiding a button.
  *
- * The reason and the feedback are optional, exactly as the reference is: a person who does
- * not want to explain still gets to delete.
+ * The reason is required for a branch, because the archive is refused without one
+ * (`VALIDATION: a reason is required`) and that reason is what the branch's history records; it
+ * stays optional for an account. The free-text feedback is always optional.
  */
 
 export type DeleteSubject =
@@ -45,8 +54,8 @@ export type DeleteSubject =
       id: string;
       name: string;
       createdAt: string | null;
-      salesCount: number;
-      employeeCount: number;
+      salesCount: number | null;
+      employeeCount: number | null;
     }
   | {
       kind: "account";
@@ -150,7 +159,7 @@ export default function DeleteTargetSheet({
 }) {
   const t = useT();
   const { addToast } = useUIStore();
-  const deleteBranch = useShopStore((s) => s.deleteBranch);
+  const archiveBranch = useShopStore((s) => s.archiveBranch);
   const phone = useAuthStore((s) => s.user?.phone ?? "");
   /** Which wording this run uses. The steps are shared; the nouns are not. */
   const isAccount = subject.kind === "account";
@@ -246,30 +255,46 @@ export default function DeleteTargetSheet({
       return;
     }
 
-    const result = await deleteBranch(
-      subject.id,
-      reason ? t(reason) : undefined,
-      feedback.trim() || undefined,
-    );
+    // The reason the database records. The picked reason is the reason; anything typed into the
+    // feedback box is carried along with it rather than dropped, because
+    // `archive_operating_branch` takes one text field and the person's own words are the useful
+    // part of the history.
+    const archiveReason = [reason ? t(reason) : "", feedback.trim()].filter(Boolean).join(" — ");
+    const result = await archiveBranch(subject.id, archiveReason);
     busyRef.current = false;
     setBusy(false);
 
-    if (!result.ok || !result.deleted) {
+    if (!result.ok || !result.archived) {
       setError(refusalText(result.code));
       return;
     }
 
-    setDone({ name: result.deleted.name, fallbackName: result.deleted.fallbackName });
+    setDone({ name: result.archived.name, fallbackName: result.archived.fallbackName });
     setStep(4);
   }
 
+  /**
+   * The refusal, in the app's own words for the subject being closed.
+   *
+   * The branch-lifecycle codes name branch RPCs, so they read the branch copy whatever the
+   * subject: the account path never calls one and cannot produce them. The three codes both
+   * paths can produce (`denied`, `not_authenticated` and a genuine failure) read their own
+   * kind's words, because "this branch" is the wrong noun on the account screen and the right
+   * one on the branch screen — the bug this split fixes.
+   */
   function refusalText(code: BranchErrorCode | undefined): string {
     switch (code) {
       case "main_branch": return t("branches.delete.errMain");
       case "last_branch": return t("branches.delete.errLast");
-      case "denied": return t("branches.delete.errDenied");
-      case "not_authenticated": return t("branches.delete.errAuth");
-      default: return t("branches.delete.failed");
+      // The archive is refused while anyone still has access here, so that no login or scope is
+      // silently rewritten to another branch. The sentence lives in this sheet's own namespace:
+      // it is the only screen that archives, and the commit that made it archive had to be
+      // self-contained rather than depending on copy that was still in flight elsewhere.
+      case "has_staff": return t("branches.delete.errStaff");
+      case "not_found": return t("branches.delete.errNotFound");
+      case "denied": return t(`${P}.errDenied`);
+      case "not_authenticated": return t(`${P}.errAuth`);
+      default: return t(`${P}.failed`);
     }
   }
 
@@ -348,7 +373,7 @@ export default function DeleteTargetSheet({
                 <FactRow
                   icon={ShoppingCart}
                   text={
-                    branch!.salesCount > 0
+                    branch!.salesCount != null && branch!.salesCount > 0
                       ? t("branches.delete.cardTrades", { count: String(branch!.salesCount) })
                       : t("branches.delete.cardNoTrades")
                   }
@@ -376,7 +401,7 @@ export default function DeleteTargetSheet({
               {t(`${P}.safeBody`)}
             </p>
 
-            {branch && branch.employeeCount > 0 && (
+            {branch && branch.employeeCount != null && branch.employeeCount > 0 && (
               <p className="text-12 mt-3 leading-snug" style={{ color: "var(--text-secondary)" }}>
                 {branch.employeeCount === 1
                   // One is its own sentence rather than "1 employees": a branch with a single
@@ -479,6 +504,9 @@ export default function DeleteTargetSheet({
               variant="danger"
               className="mt-4"
               loading={sending}
+              // A branch is refused without a reason, so the step will not advance without one;
+              // the account keeps the optional reason the reference allows.
+              disabled={!isAccount && !reason}
               onClick={() => void goToCode()}
               testId="delete-confirm"
             >
@@ -594,5 +622,16 @@ export function branchDeleteSubject(branch: BranchSummary): DeleteSubject {
     createdAt: branch.createdAt,
     salesCount: branch.salesCount,
     employeeCount: branch.employeeCount,
+  };
+}
+
+export function branchDeleteSubjectSafe(branch: BranchSummary): DeleteSubject {
+  return {
+    kind: "branch",
+    id: branch.id,
+    name: branch.name,
+    createdAt: branch.createdAt,
+    salesCount: branch.salesCount ?? 0,
+    employeeCount: branch.employeeCount ?? 0,
   };
 }

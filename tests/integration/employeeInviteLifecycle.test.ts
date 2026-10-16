@@ -18,12 +18,15 @@
  */
 
 import { describe, it, beforeAll, afterAll, expect } from 'vitest';
-import { execRpcAsUser, execSqlAsAdmin, qaAnonClient } from '../setup/qa-client';
+import { execRpcAsUser, execSqlAsAdmin, qaAnonClient, roleIdByName } from '../setup/qa-client';
 
 const TENANT = '00000000-0000-0000-0000-000000000001';
 const OWNER = 'c2000000-0000-0000-0000-000000000001';
-// The seeded system role, so "role defaults apply" is provable rather than assumed.
-const ROLE_SALES_EMPLOYEE = 'a0000000-0000-0000-0000-000000000001';
+// The built-in shop-floor role, so "role defaults apply" is provable rather than assumed.
+// Resolved by NAME in beforeAll, not hard-coded: the id is per-role, a built-in role can be deleted
+// through the app (roles.deleteHintBuiltIn), and `roles.id` is one global key — so the id 0107 used
+// can end up belonging to another tenant's role. (tenant, name) is the identity that survives.
+let ROLE_SALES_EMPLOYEE = '';
 const PHONES = ['923009660001', '923009660002', '923009660003', '923009660004'];
 
 let branchId = '';
@@ -66,6 +69,7 @@ beforeAll(async () => {
     ON CONFLICT (user_id, tenant_id) DO UPDATE
       SET role = 'owner', status = 'active', updated_at = now()
   `);
+  ROLE_SALES_EMPLOYEE = await roleIdByName(TENANT, 'Sales Employee');
   const b = await sql(
     `SELECT id FROM branches WHERE tenant_id = '${TENANT}' AND is_active = true ORDER BY is_default DESC, created_at LIMIT 1`
   );
@@ -112,8 +116,11 @@ describe('Employee invite lifecycle — an invitation is not access', () => {
     expect(leaked.rows[0].c).toBe(0);
 
     // A colleague added at the same time stays invited too.
+    // `roleId` is REQUIRED by today's contract: 0190's create_employee_core refuses an invitation
+    // with no role (ROLE_NOT_FOUND_OR_NOT_AUTHORIZED) because the Owner defines which permissions an
+    // employee receives. An invitation without one would be an employee nobody can authorize.
     const second = await execRpcAsUser(OWNER, 'create_employee', {
-      payload: { name: 'QA Invite Colleague', phone: PHONES[2], membershipRole: 'employee', branchScope: [branchId] },
+      payload: { name: 'QA Invite Colleague', phone: PHONES[2], roleId: ROLE_SALES_EMPLOYEE, membershipRole: 'employee', branchScope: [branchId] },
     });
     expect(second.error).toBeNull();
     colleague = second.data.id;
@@ -143,7 +150,12 @@ describe('Employee invite lifecycle — an invitation is not access', () => {
   });
 
   it('never revives a suspended membership', async () => {
-    await execRpcAsUser(OWNER, 'deactivate_employee', {
+    // The real endpoint is `deactivate_employee_v1`; this used to call `deactivate_employee`, which
+    // no migration defines, so the call could only ever fail and the SQL below was doing all the
+    // work. The RPC is still best-effort here *by design* (its own semantics live in their lane) —
+    // what matters is that the failure this test provokes is the membership status, not a missing
+    // function (tests/unit/rpcContractGuard.test.ts now fails on either).
+    await execRpcAsUser(OWNER, 'deactivate_employee_v1', {
       payload: { employeeId: invited },
     }).catch(() => undefined);
     // Deactivation is enforced through the same status field authorization reads.

@@ -4,7 +4,8 @@ import { useAuthStore } from "@/stores/authStore";
 import { canOpenWithPin } from "@/lib/pinLock";
 import { getUserFromSession } from "@/lib/auth";
 import { hasPin as hasPinMarker } from "@/lib/pinLock";
-import { lastUsedProfile, pinAllowedOnThisDevice, rememberLastProfile } from "@/lib/loginWindow";
+import { pinAllowedOnThisDevice, rememberLastProfile } from "@/lib/loginWindow";
+import { entryDoor } from "@/lib/entryDoor";
 import StatusBar from "@/components/ui/StatusBar";
 import { useT } from "@/lib/i18n";
 import { hasSeenIntro } from "@/education/introSeen";
@@ -54,19 +55,12 @@ export default function SplashPage() {
         }
       } else {
         // Nobody is signed in on this device — but it may still know the account it last
-        // served. That is the returning case the rule is about: after signing out, or after
-        // the app was closed, the door is the PIN, not another code.
-        //
-        // It is opened only when the device can actually check that PIN (its own record, or a
-        // session it can ask with) AND the number was confirmed within the month. Otherwise the
-        // sign-in screen is drawn, which is the honest one: nothing here can prove who this is.
-        const last = await lastUsedProfile();
-        if (
-          last &&
-          (await pinAllowedOnThisDevice(last.user.id)) &&
-          (await canOpenWithPin(last.user.id))
-        ) {
-          const remembered = last.user;
+        // served. That is the returning case the rule is about: after signing out, or after the
+        // app was closed, the door is the PIN, not another code. The decision is made in one
+        // place (`lib/entryDoor.ts`) and shared with sign-out, so both draw the same door.
+        const door = await entryDoor();
+        if (door.door === "pin") {
+          const remembered = door.user;
           // Put the remembered profile back in the store first: the PIN screen reads the
           // greeting from it, and the app is entered as this account, not as "someone".
           useAuthStore.getState().setUser(remembered);

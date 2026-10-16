@@ -9,6 +9,7 @@ import { useCompaniesStore } from "@/stores/companiesStore";
 import { useProductsStore } from "@/stores/productsStore";
 import { useUIStore } from "@/stores/uiStore";
 import { fetchPurchases } from "@/lib/db";
+import { digitsOnlyPhone, phoneFieldProps } from "@/lib/phoneInput";
 import type { Purchase } from "@/types";
 import { formatCurrency, formatDate } from "@/lib/formatters";
 import { useThemeStore } from "@/stores/themeStore";
@@ -408,7 +409,7 @@ function EditSupplierSheet({
 
           <div>
             <p className={labelCls} style={{ color: "var(--text-secondary)" }}>{t("addCustomer.phone")}</p>
-            <input type="tel" inputMode="tel" value={edit.phone} onChange={(e) => setEdit({ ...edit, phone: e.target.value })}
+            <input {...phoneFieldProps()} value={edit.phone} onChange={(e) => setEdit({ ...edit, phone: digitsOnlyPhone(e.target.value) })}
               placeholder="03001234567" className="w-full h-12 rounded-[var(--radius-input)] px-4 text-sm outline-none" style={fieldStyle} />
           </div>
 

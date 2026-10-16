@@ -156,6 +156,13 @@ export default function RecordPurchasePage() {
 
       // Done: this attempt's key retires, so a later delivery is a new purchase.
       submissionKeyRef.current = null;
+
+      // The delivery moved the supplier's payable (and the stock it bought), and both live in a
+      // store the shell loaded once. Refresh the suppliers here — the screen this navigates to is
+      // the purchases list, which refetches on mount, but Payments and Alerts read the store and
+      // would otherwise show the payable from before the delivery.
+      await useCompaniesStore.getState().load();
+
       addToast(t("copy.stockedPurchase", { qty: String(qtyNum), variant: variant.name, amount: formatCurrency(total) }), "success");
       navigate("/admin/purchases", { replace: true });
     } catch (e) {

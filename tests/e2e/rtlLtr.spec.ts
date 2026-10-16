@@ -29,7 +29,7 @@ function loadQaEnv() {
 }
 loadQaEnv();
 
-const BASE_URL = 'http://localhost:5173';
+const BASE_URL = process.env.QA_APP_URL || 'http://localhost:5173';
 
 /**
  * Switch language via the Settings page.

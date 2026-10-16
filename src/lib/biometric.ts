@@ -106,11 +106,46 @@ export type StoredEnrolment = EnrolledBiometric | { kind: "native"; enrolledAt: 
  */
 function isNative(): boolean {
   try {
-    return Capacitor.isNativePlatform() && Capacitor.isPluginAvailable("BiometricAuth");
+    return isInstalledApp() && Capacitor.isPluginAvailable(BIOMETRIC_PLUGIN_NAME);
   } catch {
     return false;
   }
 }
+
+/**
+ * Is this the installed app at all, the bridge aside?
+ *
+ * Kept as its own question because the two halves answer different things: "is this the APK" and
+ * "did the APK ship the native half". Folding them into one boolean made the second unanswerable
+ * — a build with no bridge reported `native=false`, took the browser path, and told the person
+ * "unknown". The only honest sentence for that build is "the app needs updating", and it is
+ * unreachable unless the app and its bridge are asked separately.
+ */
+function isInstalledApp(): boolean {
+  try {
+    return Capacitor.isNativePlatform();
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The name the native bridge knows the biometric plugin by.
+ *
+ * A WRONG NAME HERE IS SILENT, and that is why it is written down once and guarded. This used to
+ * ask for `"BiometricAuth"` while the package registers itself as `"BiometricAuthNative"` in both
+ * halves — `registerPlugin('BiometricAuthNative')` in its JS and
+ * `@CapacitorPlugin(name = "BiometricAuthNative")` in its Android source. `isPluginAvailable`
+ * answers false for a name nobody registered, so `isNative()` reported the installed app as a
+ * browser on EVERY Android phone: no biometric call was ever attempted, `biometricSupported()`
+ * took the web path, and the owner of a phone that unlocks with a fingerprint all day read
+ * "This phone cannot use a fingerprint". Measured on a Sparx Neo 7 Ultra (Android 12, one finger
+ * enrolled) on 2026-10-15 — the screenshot said `native=false plugin=no`.
+ *
+ * `tests/unit/biometricPluginName.test.ts` reads the installed package's JS and Android sources
+ * and fails if this constant stops matching either of them, so the next rename cannot be quiet.
+ */
+const BIOMETRIC_PLUGIN_NAME = "BiometricAuthNative";
 
 /**
  * The plugin's error codes, as values rather than as an enum import.
@@ -219,10 +254,12 @@ function fromB64url(value: string): Uint8Array<ArrayBuffer> {
 /**
  * The COSE_Key CBOR reader, limited to what a public key can actually be.
  *
- * A WebAuthn public key arrives as a CBOR map — {@link COSE_EC2} for the key type, the
- * curve, and the two coordinates. Only integers and byte strings occur in the maps this is
- * asked to read, so the reader covers those and refuses anything else rather than guessing
- * at a shape it does not understand.
+ * One of the two shapes a browser may use for a credential's public key — {@link COSE_EC2} for
+ * the key type, the curve, and the two coordinates. Chrome sends a DER SubjectPublicKeyInfo
+ * instead, so this is the branch that serves the other browsers rather than the only branch: see
+ * {@link publicKeyToJwk}, which decides between them. Only integers and byte strings occur in the
+ * maps this is asked to read, so the reader covers those and refuses anything else rather than
+ * guessing at a shape it does not understand.
  */
 function readCborMap(data: Uint8Array<ArrayBuffer>): Map<number, number | Uint8Array<ArrayBuffer>> {
   let offset = 0;
@@ -281,6 +318,56 @@ function coseToJwk(cose: Uint8Array<ArrayBuffer>): JsonWebKey {
   if (!(x instanceof Uint8Array) || !(y instanceof Uint8Array)) throw new Error("Public key is missing a coordinate");
 
   return { kty: "EC", crv: "P-256", x: toB64url(x), y: toB64url(y), ext: true };
+}
+
+/**
+ * The public key of a freshly created credential, as a JWK — in either shape a browser uses.
+ *
+ * This is the piece that was wrong, and it is worth recording exactly how, because the wrong
+ * version was invisible: it passed its own unit test, which built the COSE map it expected.
+ *
+ * A real browser does not return that map. Measured in Chrome against a real authenticator,
+ * `getPublicKey()` answers with 91 bytes of ASN.1:
+ *
+ *     30 59 30 13 06 07 2a 86 48 ce 3d 02 01 06 08 2a 86 48 ce 3d 03 01 07 03 …
+ *     ^SEQUENCE  ^SEQUENCE  ^OID ecPublicKey      ^OID prime256v1        ^BIT STRING
+ *
+ * — a DER SubjectPublicKeyInfo, whose last 65 bytes are the uncompressed `04 || X || Y` point.
+ * The reader here understood only the CBOR COSE_Key spelling, so it answered
+ * "A public key must be a CBOR map" and **every enrolment in a browser failed** while looking
+ * like a device that refused the finger. Inside the app this never ran, because the app uses
+ * the OS prompt instead — which is why it went unnoticed for so long.
+ *
+ * WebCrypto imports a SubjectPublicKeyInfo directly, so the DER path needs no parser of ours at
+ * all: the bytes go straight to `importKey`, and a key that is not P-256 is refused by the
+ * browser rather than misread here. The COSE path stays for the browsers that do return the
+ * map: which spelling arrives is a fact about the browser, not something to assume either way.
+ */
+export async function publicKeyToJwk(key: BufferSource): Promise<JsonWebKey> {
+  // Copied onto its own ArrayBuffer first: WebCrypto and the CBOR reader are both typed over
+  // `ArrayBuffer`, and a view over a SharedArrayBuffer is refused by both. Copying also makes
+  // the two spelling-branches below take one type each, instead of casting at the boundary.
+  const view = ArrayBuffer.isView(key)
+    ? new Uint8Array(key.buffer, key.byteOffset, key.byteLength)
+    : new Uint8Array(key as ArrayBuffer);
+  const bytes: Uint8Array<ArrayBuffer> = new Uint8Array(view);
+
+  // 0x30 is a DER SEQUENCE and the only thing a SubjectPublicKeyInfo can start with. A CBOR
+  // map starts 0xa0-0xbf, so the two shapes cannot be confused.
+  if (bytes[0] !== 0x30) return coseToJwk(bytes);
+
+  const imported = await crypto.subtle.importKey(
+    "spki",
+    bytes,
+    { name: "ECDSA", namedCurve: "P-256" },
+    true,
+    ["verify"],
+  );
+  const jwk = await crypto.subtle.exportKey("jwk", imported);
+  if (jwk.crv !== "P-256" || !jwk.x || !jwk.y) {
+    throw new Error("Only the P-256 curve is supported");
+  }
+  return jwk;
 }
 
 /**
@@ -346,27 +433,127 @@ export function biometricSupported(): boolean {
   );
 }
 
-/** Is there a finger or a face on this device to check? */
-export async function biometricPlatformAvailable(): Promise<boolean> {
+/**
+ * Why this phone cannot offer a fingerprint — the answer the device gives, not a guess.
+ *
+ * The row used to say one thing for every cause ("This phone cannot use a fingerprint"), so a
+ * phone whose owner uses fingerprints in every other app was told it had none, with nothing to
+ * act on. The three real causes are fixed in three different places:
+ *
+ *   no_plugin      — this build shipped without the native bridge. It is not the phone's fault
+ *                    and no setting will change it: the app has to be updated. That is worth
+ *                    saying out loud, because it is exactly what an older sideloaded APK does.
+ *   no_enrolment   — the sensor is there and the phone is unlocked, but no finger is registered.
+ *                    Fixed in the phone's own settings, in a minute.
+ *   no_screen_lock — biometrics need a device credential behind them; a phone with no PIN or
+ *                    pattern cannot use them at all.
+ *   no_sensor      — the hardware is not there. Nothing to do.
+ */
+export type BiometricReason =
+  | "no_plugin"
+  | "no_sensor"
+  | "no_enrolment"
+  | "no_screen_lock"
+  | "no_domain_origin"
+  | "unknown";
+
+/**
+ * The sentence that goes under the row for each cause, as dictionary keys.
+ *
+ * A map rather than an interpolated key, so a new reason cannot be added without a screen deciding
+ * what it says — and so `i18nParity` proves both languages carry every one of them.
+ */
+export const BIOMETRIC_REASON_KEY: Record<BiometricReason, string> = {
+  no_plugin: "settings.fingerprint.why.noPlugin",
+  no_sensor: "settings.fingerprint.why.noSensor",
+  no_enrolment: "settings.fingerprint.why.noEnrolment",
+  no_screen_lock: "settings.fingerprint.why.noScreenLock",
+  no_domain_origin: "settings.fingerprint.why.noDomainOrigin",
+  unknown: "settings.fingerprint.why.unknown",
+};
+
+/**
+ * Can the address this page was opened at host a fingerprint at all?
+ *
+ * WebAuthn names a credential by its *relying party ID*, and the spec requires that to be a
+ * registrable domain. An IP literal is an address, not a domain, so Chrome refuses the whole
+ * ceremony on an origin like `http://127.0.0.1:5174` — before any authenticator is consulted —
+ * with `SecurityError: This is an invalid domain`. Passing no `rp.id` does not rescue it: the
+ * browser then falls back to the same origin's effective domain, which is the same IP.
+ *
+ * This was measured, not assumed, on a real browser:
+ *
+ *     http://127.0.0.1:5174  →  SecurityError: This is an invalid domain.
+ *     http://localhost:5174  →  credential created, public key returned
+ *
+ * It matters because it is the one cause of "the fingerprint does not work" that no phone
+ * setting and no rebuild can fix, so it is named rather than folded in with the hardware
+ * causes. Opening the app by name — `localhost` in development, the installed app's own
+ * `https://localhost`, or the product's domain — is the whole remedy.
+ */
+export function originCanHostFingerprint(): boolean {
+  if (typeof window === "undefined") return false;
+  const host = window.location.hostname.replace(/\.$/, "");
+  if (!host) return false;
+  // `localhost` is the one hostname WebAuthn accepts without a dot, and it is what the
+  // installed app serves itself from, so it must keep working.
+  if (host === "localhost" || host.endsWith(".localhost")) return true;
+  // An IPv6 literal always carries a colon; an IPv4 one is four dotted octets.
+  if (host.includes(":")) return false;
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(host)) return false;
+  // Anything else has to be a real domain name, and a name without a dot is not one.
+  return host.includes(".");
+}
+
+/**
+ * Whether biometrics can be used here, and — when they cannot — which of the causes above it is.
+ *
+ * `null` means it can be used. Anything else is the reason, read from the plugin's own report
+ * (`isAvailable`, `biometryTypes`, `deviceIsSecure`, `reason`) rather than inferred.
+ */
+export async function biometricUnavailableReason(): Promise<BiometricReason | null> {
+  const onDevice = isInstalledApp();
   const plugin = await nativePlugin();
+
+  // The installed app, but the bridge is missing from the build. Distinguished from "no sensor" on
+  // purpose: this one is fixed by updating the app, and saying "your phone cannot do it" would be a
+  // lie — it was told to every Android phone for as long as the plugin name was wrong.
+  if (onDevice && !plugin) return "no_plugin";
+
   if (plugin) {
     try {
       const result = await plugin.BiometricAuth.checkBiometry();
-      return result.isAvailable === true;
+      if (result.isAvailable === true) return null;
+      const types = result.biometryTypes ?? [];
+      const sensorPresent = types.length > 0 || Number(result.biometryType) > 0;
+      if (!sensorPresent) return "no_sensor";
+      if (result.deviceIsSecure === false) return "no_screen_lock";
+      // A sensor, a screen lock, and still nothing usable: nothing is enrolled.
+      if (result.strongBiometryIsAvailable === false) return "no_enrolment";
+      return "unknown";
     } catch {
-      return false;
+      return "unknown";
     }
   }
-  if (isNative()) return false;
-  if (!biometricSupported()) return false;
+
+  // Asked before the availability question, and before the hardware is blamed: a browser
+  // happily answers "yes, this machine has a fingerprint reader" for an origin that cannot
+  // use one, so the hardware would be reported as present while every enrolment fails.
+  if (!originCanHostFingerprint()) return "no_domain_origin";
+  if (!biometricSupported()) return "unknown";
   try {
     const available = await (
       window as unknown as { PublicKeyCredential: { isUserVerifyingPlatformAuthenticatorAvailable(): Promise<boolean> } }
     ).PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
-    return available === true;
+    return available === true ? null : "no_enrolment";
   } catch {
-    return false;
+    return "unknown";
   }
+}
+
+/** Is there a finger or a face on this device to check? */
+export async function biometricPlatformAvailable(): Promise<boolean> {
+  return (await biometricUnavailableReason()) === null;
 }
 
 // ─── Enrolment ────────────────────────────────────────────────────────────────────────
@@ -461,7 +648,7 @@ export async function enrolBiometric(
 
     const enrolment: EnrolledBiometric = {
       credentialId: toB64url(credential.rawId),
-      publicKeyJwk: coseToJwk(new Uint8Array(cose)),
+      publicKeyJwk: await publicKeyToJwk(cose),
       rpId,
       signCount: 0,
       enrolledAt: new Date().toISOString(),
@@ -606,4 +793,4 @@ export async function unlockWithBiometric(userId: string): Promise<UnlockResult>
 }
 
 /** Exposed for the unit tests, which drive it with a locally generated key pair. */
-export const __testing = { readCborMap, coseToJwk, derToRawP256, toB64url, fromB64url };
+export const __testing = { readCborMap, coseToJwk, publicKeyToJwk, derToRawP256, toB64url, fromB64url, originCanHostFingerprint };

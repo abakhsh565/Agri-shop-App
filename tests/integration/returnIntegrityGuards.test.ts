@@ -38,10 +38,28 @@ async function sql(query: string) {
   return execSqlAsAdmin(query);
 }
 
+/**
+ * How many return rows this SUITE could be responsible for — and nothing else.
+ *
+ * WHY THE CUSTOMER IS IN THE PREDICATE. `financialIntegrity` and `inventoryIntegrity` call the same
+ * `process_return` RPC in the same shared tenant, and the whole fleet runs in parallel, so
+ * `WHERE shop_id = TENANT` counted THEIR rows: measured 2026-10-14 during a full lane run, "expected 1
+ * to be +0" and "expected 2 to be 1" in the two `writes nothing` cases that this file exists to
+ * prove. The count now names this suite's own customer fixture (`c3000000-…c001`, created and deleted
+ * by this file), so a rejected attempt is still caught — its row would carry this sale and this
+ * customer — while a sibling suite's legitimate return in flight cannot turn this file red.
+ * Narrowing the measurement is not weakening it: the row a broken RPC would write is inside the
+ * predicate, and the accepted-return case below proves the predicate can rise.
+ */
 async function returnRowCount(): Promise<number> {
-  const r = await sql(`SELECT count(*)::int c FROM returns WHERE shop_id = '${TENANT}'`);
+  const r = await sql(
+    `SELECT count(*)::int c FROM returns WHERE shop_id = '${TENANT}' AND customer_id = '${CUSTOMER}'`,
+  );
   return r.rows[0].c;
 }
+
+/** The same scope, as a sub-select — the rows cleanup is allowed to remove. */
+const OWN_RETURNS = `SELECT id FROM returns WHERE shop_id = '${TENANT}' AND customer_id = '${CUSTOMER}'`;
 
 function payload(overrides: Record<string, unknown> = {}) {
   return {
@@ -58,9 +76,12 @@ function payload(overrides: Record<string, unknown> = {}) {
 }
 
 async function cleanup() {
-  await sql(`DELETE FROM audit_events WHERE entity_id IN (SELECT id FROM returns WHERE shop_id = '${TENANT}')`).catch(() => undefined);
-  await sql(`DELETE FROM return_items WHERE return_id IN (SELECT id FROM returns WHERE shop_id = '${TENANT}')`).catch(() => undefined);
-  await sql(`DELETE FROM returns WHERE shop_id = '${TENANT}'`).catch(() => undefined);
+  // Scoped to this suite's own customer, not the whole tenant: the previous shape was a table-wide
+  // delete for the shared QA shop, so it could remove a sibling suite's return rows while they were
+  // being asserted on (and did — see `returnRowCount`).
+  await sql(`DELETE FROM audit_events WHERE entity_id IN (${OWN_RETURNS})`).catch(() => undefined);
+  await sql(`DELETE FROM return_items WHERE return_id IN (${OWN_RETURNS})`).catch(() => undefined);
+  await sql(`DELETE FROM returns WHERE shop_id = '${TENANT}' AND customer_id = '${CUSTOMER}'`).catch(() => undefined);
   await sql(`DELETE FROM sale_items WHERE sale_id IN ('${SALE}','${SALE_VOIDED}','${SALE_OTHER}')`).catch(() => undefined);
   await sql(`DELETE FROM inventory_movements WHERE reference_id IN ('${SALE}','${SALE_VOIDED}','${SALE_OTHER}') OR product_id = '${PRODUCT}'`).catch(() => undefined);
   await sql(`DELETE FROM sales WHERE id IN ('${SALE}','${SALE_VOIDED}','${SALE_OTHER}')`).catch(() => undefined);

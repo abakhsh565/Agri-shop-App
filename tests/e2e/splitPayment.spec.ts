@@ -10,7 +10,15 @@
 import { test, expect } from '@playwright/test';
 import { randomUUID } from 'crypto';
 import { createClient } from '@supabase/supabase-js';
-import { execSql, QA_IDS, cleanupFixtures, setupFixtures, injectAdminAuth } from './helpers';
+import {
+  execSql,
+  QA_IDS,
+  cleanupFixtures,
+  ownership,
+  setupFixtures,
+  trackOwned,
+  injectAdminAuth,
+} from './helpers';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -34,12 +42,17 @@ loadQaEnv();
 
 const QA_URL = (process.env.QA_SUPABASE_URL || '').replace(/^\[|\]$/g, '').trim();
 const QA_SERVICE_ROLE = process.env.QA_SUPABASE_SERVICE_ROLE || '';
-const BASE_URL = 'http://localhost:5173';
+const BASE_URL = process.env.QA_APP_URL || 'http://localhost:5173';
 
 const RUN = Date.now().toString(36);
 const CUST_ID = randomUUID();
 const CUST_PHONE = `923${RUN.slice(-8).padStart(8, '0')}`;
+// The customer this lane opens is seeded owing this much, and the split below (5000 + 3000) is asserted
+// against it. It was referenced but never defined, so the lane died in `beforeAll` with a ReferenceError
+// before a single assertion ran. 20000 matches the sibling double-tap lane, which seeds the same way.
 const INITIAL_BALANCE = 20000;
+/** The employee created by the authorization test, so its Auth credential is removed in afterAll. */
+let createdAuthUserId: string | null = null;
 
 test.describe('Split Payment Recording', () => {
   test.beforeAll(async () => {
@@ -49,12 +62,21 @@ test.describe('Split Payment Recording', () => {
       VALUES ('${CUST_ID}', 'Split Pay Customer', '${CUST_PHONE}', 50000, ${INITIAL_BALANCE}, ${INITIAL_BALANCE}, 0, '${QA_IDS.shop}', 'QA')
       ON CONFLICT (id) DO NOTHING
     `);
+    // OWNED: this run's own customer, by the id it generated. Its payments are removed through
+    // `customer_payments.customer_id`, so they never have to be deleted table-wide here.
+    await trackOwned(ownership(), 'customers', CUST_ID);
   });
 
   test.afterAll(async () => {
-    await execSql(`DELETE FROM customer_payments WHERE customer_id = '${CUST_ID}'`).catch(() => {});
-    await execSql(`DELETE FROM customers WHERE id = '${CUST_ID}'`).catch(() => {});
+    // The two deletes that used to run here (payments by customer, then the customer) were scoped
+    // to this lane already; they now go through the registry, in FK order, with failures raised
+    // instead of swallowed.
     await cleanupFixtures();
+    // The public row is gone; its Supabase Auth credential is not a table cleanup can register,
+    // so it is removed by the id this run created — after the referencing row, never before.
+    if (createdAuthUserId && QA_URL && QA_SERVICE_ROLE) {
+      await createClient(QA_URL, QA_SERVICE_ROLE).auth.admin.deleteUser(createdAuthUserId);
+    }
   });
 
   test('Split payment: full lifecycle from UI to DB', async ({ page }) => {
@@ -140,6 +162,8 @@ test.describe('Split Payment Recording', () => {
       VALUES ('${empId}', 'E2E Employee', '92300E2E${RUN.slice(-6)}', 'employee', false, true, '${QA_IDS.shop}')
       ON CONFLICT (id) DO NOTHING
     `);
+    // OWNED: the employee this run creates, by its explicit id (memberships follow the user key).
+    await trackOwned(ownership(), 'users', empId);
 
     // Create auth user for employee
     const svcClient = createClient(QA_URL, QA_SERVICE_ROLE);
@@ -151,6 +175,7 @@ test.describe('Split Payment Recording', () => {
     if (empCreateErr && !empCreateErr.message?.includes('already been registered')) {
       console.warn('Emp auth create warning:', empCreateErr.message);
     }
+    createdAuthUserId = empId;
 
     // Sign in as employee via PostgREST
     const anonClient = createClient(QA_URL, process.env.QA_SUPABASE_ANON_KEY || '');
@@ -172,9 +197,5 @@ test.describe('Split Payment Recording', () => {
       `SELECT count(*)::int as cnt FROM customer_payments WHERE customer_id = '${CUST_ID}'`
     );
     expect(payments[0].cnt).toBe(2);
-
-    // ─── Cleanup ─────────────────────────────────────────────────────
-    await execSql(`DELETE FROM users WHERE id = '${empId}'`).catch(() => {});
-    await svcClient.auth.admin.deleteUser(empId).catch(() => {});
   });
 });

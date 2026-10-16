@@ -12,23 +12,24 @@
  *   1. **Counts are said in the right number.** "1 employees" is the kind of thing that
  *      makes an app feel unfinished, and every count on this line is a number that is
  *      regularly 1 in a new branch.
- *   2. **An empty branch says so in words, not in zeroes.** "0 employees · 0 products" is
- *      noise; "No staff or products yet" tells the owner what to do next.
+ *   2. **Unknown is never zero.** Products and customers are business-wide in the current
+ *      model, and restricted counts may be hidden. The label only says "empty" when the
+ *      values actually prove emptiness; otherwise it states only known facts or stays neutral.
  *
  * `t` is passed in rather than imported so this stays a pure function with no store or
  * language dependency, the way the app's other label helpers are written.
  */
-export type Translate = (key: string, params?: Record<string, string>) => string;
+export type Translate = (key: string, params?: Record<string, string | number>) => string;
 
 export interface BranchCounts {
-  employeeCount: number;
-  productCount: number;
+  employeeCount: number | null;
+  productCount: number | null;
 }
 
 export function branchContextLabel(t: Translate, branch: BranchCounts): string {
   const parts: string[] = [];
 
-  if (branch.employeeCount > 0) {
+  if (branch.employeeCount != null && branch.employeeCount > 0) {
     parts.push(
       t(branch.employeeCount === 1 ? "branches.employeeOne" : "branches.employeeOther", {
         count: String(branch.employeeCount),
@@ -36,7 +37,7 @@ export function branchContextLabel(t: Translate, branch: BranchCounts): string {
     );
   }
 
-  if (branch.productCount > 0) {
+  if (branch.productCount != null && branch.productCount > 0) {
     parts.push(
       t(branch.productCount === 1 ? "branches.productOne" : "branches.productOther", {
         count: String(branch.productCount),
@@ -44,6 +45,17 @@ export function branchContextLabel(t: Translate, branch: BranchCounts): string {
     );
   }
 
-  if (parts.length === 0) return t("branches.contextEmpty");
-  return parts.join(" · ");
+  if (parts.length > 0) return parts.join(" · ");
+  if (branch.employeeCount === 0 && branch.productCount === 0) return t("branches.contextEmpty");
+  if (branch.employeeCount === 0) return t("branches.contextNoStaff");
+  if (branch.employeeCount == null && branch.productCount == null) return t("branches.contextUnknown");
+  if (branch.employeeCount != null && branch.productCount != null) {
+    // Both known but zero or negative: that is a real, readable state, not an unknown one.
+    if (branch.employeeCount === 0) return t("branches.contextNoStaff");
+    if (branch.productCount === 0) return t("branches.contextEmpty");
+  }
+  // Any remaining case is either truly unknown, or known in one field and missing in the
+  // other — which for a business-wide master and a permission-bounded count is the same 
+  // practical outcome: state only what is proven.
+  return t("branches.contextUnknown");
 }

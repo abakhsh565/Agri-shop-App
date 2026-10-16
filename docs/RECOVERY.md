@@ -50,11 +50,14 @@ it. Changing a project ref there changes it everywhere.
 |---|---|---|---|---|
 | `development` | *none* (does not exist) | `DEV` | — | — |
 | `staging` (a.k.a. QA) | `bpybjrjenwccowvtrevu` | `QA` | `.env.qa` (gitignored) | `7678069749886157684` |
-| `production` | `gkswcfljxlutkfdvvqng` | `PROD` | **none, by design** | *not enrolled — needs one successful run* |
+| `production` | `gkswcfljxlutkfdvvqng` | `PROD` | `~/.agrishop/production.env` (outside the repo) | `7666007964130682852` |
 
 A project ref is **not** a secret (it is in every Supabase URL). Credentials are **never** stored in
-this file, and production has no credential file at all: `PROD_DB_HOST/USER/PASS` must come from the
-process environment, which in CI means repository secrets.
+this file, and production has no credential file *inside the repository*: `PROD_DB_HOST/USER/PASS`
+come from the process environment — in CI from repository secrets, and locally from
+`~/.agrishop/production.env` (outside the checkout, injected into a single allow-listed child by
+`scripts/run-with-production-credentials.mjs`). The production cluster fingerprint was enrolled on
+2026-10-01, from the manifest of the first verified backup run.
 
 ### Why the fingerprint matters
 
@@ -65,6 +68,41 @@ server cannot be asked which project it is. The project is therefore taken from 
 authenticated with**, and corroborated by `pg_control_system().system_identifier` — a value the
 pooler cannot rewrite — which is compared against the one enrolled in `environments.json`.
 
+### Which migrations are applied here — the ledger
+
+`supabase_migrations.schema_migrations` is the database's own record of what has been applied to
+it, and `scripts/migrate.mjs` is now the only path that writes it:
+
+```bash
+node scripts/migrate.mjs status --env staging          # directory vs ledger, read-only
+node scripts/migrate.mjs verify --env staging          # the same check as an exit code (CI runs this)
+node scripts/migrate.mjs apply  --env staging --apply  # apply pending files; each file is recorded in the same transaction
+```
+
+Every recorded file carries its sha256, so a migration that is edited *after* it was applied is
+reported as `changed after it was applied` instead of being silently trusted. The directory grammar
+is enforced — one canonical `<4 digits>_<name>.sql` per version — and the runner refuses to apply a
+file numbered before the newest recorded version, because that rewrites history.
+
+Nothing in this tool reads or writes production, and history is never replayed anywhere: the decided
+strategy (`SCHEMA_STRATEGY.md`) is a **frozen baseline per environment plus forward-only files**,
+each verified against the target's baseline in PGlite before it is applied anywhere:
+
+```bash
+npm run verify:baseline -- --baseline production --since 0178   # check a file against the frozen schema
+npm run verify:baseline -- --baseline staging    --since 0178
+```
+
+Production's baseline is recorded in `supabase/baseline/production-baseline.json`; its own ledger
+(8 rows, latest `0016`) is left exactly as the server has it, because replaying this directory onto
+production is measured to fail (30/169 files) and rewriting that history would be a fiction. **Staging's ledger today:** 169 files,
+`0009` → `0177` — 167 adopted on 2026-10-01 and two (`0176`, `0177`) applied through the runner
+itself (`PHASE_2_MIGRATION_LEDGER.md`). One of them (`0176`) carries a `reconcile_note`: it was
+edited comment-only after it was applied, and the ledger records that fact rather than hiding it.
+The retired filenames
+`0042b_security_rls_fix.sql` and `20260903_credit_limit_requests__reminder_groups.sql` are gone:
+the first was merged into `0042`, the second renumbered to `0060`.
+
 ## 4. Taking a backup
 
 The environment must be named. **There is no default**, because a default is how the original bug
@@ -74,9 +112,11 @@ happened.
 # Staging (credentials come from .env.qa)
 node scripts/backup-database.mjs --env staging
 
-# Production (credentials must already be in the process environment)
-export PROD_DB_HOST=... PROD_DB_USER=postgres.<project-ref> PROD_DB_PASS=...
-node scripts/backup-database.mjs --env production
+# Production, locally — the credentials live in a file OUTSIDE the repository and are validated and
+# injected into exactly one child process (see §7 step 2). Do NOT `export` them in a shared shell:
+# that puts the value in the shell's history file and in every later process of that shell.
+npm run creds:production -- --check
+npm run creds:production -- -- node scripts/backup-database.mjs --env production
 ```
 
 Both write two files to `backups/` (**gitignored** — they contain personal data and password hashes):
@@ -127,7 +167,9 @@ connection string.
 The artefact is a **logical** dump, so a real recovery is a two-step operation:
 
 1. **Schema** — replay the migrations (`supabase/migrations/`) against the target, which reproduces
-   tables, policies and functions as reviewed and versioned.
+   tables, policies and functions as reviewed and versioned. `node scripts/migrate.mjs status
+   --env <target>` says what that target already has, from its own ledger, before anything is
+   replayed into it.
 2. **Data** — apply the artefact, which supplies every row plus functions, views and policies.
 
 `scripts/restore-verify.mjs` proves step 2 replays cleanly and faithfully. It does **not** prove a
@@ -141,8 +183,10 @@ artefact has been restore-verified into a throwaway target immediately beforehan
 
 ## 6. Retention, and why the copy on disk is not the copy that matters
 
-* GitHub Actions artefacts: `retention-days` (default 30, 1–90). The artefact and its verification
-  report are uploaded together.
+* GitHub Actions artefacts: `retention-days` — **agreed policy: 30 days** (§9), which is also the
+  workflow's default. The input accepts 1–90, so any other value is a deliberate policy change rather
+  than a tweak. The artefact and its verification report are uploaded together, which gives **at least
+  30 daily recovery points** and lets personal data leave GitHub after 30 days.
 * `backups/` on a developer machine is gitignored and is **not** a backup strategy.
 * The Free plan deletes nothing for you: there is no managed copy to fall back on. Keep at least one
   copy somewhere other than the machine that produced it.
@@ -173,11 +217,54 @@ back up the wrong database, and a scheduled run keeps producing nothing. See §1
 actually looked like. **Do not add the credentials before this step**: credentials plus the old
 workflow is how a mislabelled artefact gets produced.
 
-### Step 2 — add the credentials
+**A further correction, 2026-10-16 — and this section's own rule applies to it.** The rewrite fixed the
+*target*; a second defect then discarded the *artefact*: the Summary step read the manifest with
+`require()` on a relative path (`MODULE_NOT_FOUND`), and because that step is ordered before the upload,
+a verified production backup was thrown away (run `38826369696` — preflight, backup, restore-verify and
+artefact-confirmation all ✓, *Upload* skipped). The fix is committed as **`92a8802a`** on
+`ci-proof/full-tree` and sits in **PR #1 → `main`**, **not yet merged** — so `main` does not have it yet.
+After it is merged, re-run the three commands above (they exist precisely so this cannot be missed) and
+dispatch the workflow once to produce the first green run **with** an uploaded artefact.
 
-Supply the three secrets with values obtained from the Supabase dashboard for the production project
-(Settings → Database → Connection string / Connection pooling). Host is the pooler host; the user is
-`postgres.<project-ref>`, not a bare `postgres`.
+**That green run has already happened, without the merge.** `workflow_dispatch` runs the file from the
+ref it is given, so `gh workflow run backup-database.yml --ref ci-proof/full-tree` executed the corrected
+workflow: run **`38828524870`**, every step ✓, artefact **uploaded** — `database-backup-production-36`,
+53,237 bytes, expires 2026-11-15 (the agreed 30 days). The merge is therefore needed only so the
+`main`-based **scheduled** run and future dispatches use the fix; coverage itself no longer waits on it.
+
+### Step 2 — add the credentials  ✅ done 2026-10-16
+
+**Status 2026-10-16:** both routes are configured. Route A's file (`~/.agrishop/production.env`) passes
+the intake check — `npm run creds:production -- --check` → *3 keys loaded, PROD_DB_USER names production
+(gkswcfljxlutkfdvvqng)* — and Route B is complete: `PROD_DB_HOST`, `PROD_DB_USER` and **`PROD_DB_PASS`**
+are all set as repository secrets (2026-10-15T23:54Z), which is what turned the CI preflight from red to
+green. What remains is Step 1's merge and the uploaded artefact (§11).
+
+All three values come from the Supabase dashboard for the production project (Settings → Database →
+Connection string / Connection pooling). The host is the pooler host; the user is
+`postgres.<project-ref>`, **not** a bare `postgres`. There are two routes, and only the second needs
+GitHub.
+
+**Route A — local (free, no runner, works today; this is the route Phase 2A needs).** The value is
+written once into a file that must live **outside this repository**, then injected into exactly one
+allow-listed child process:
+
+```bash
+npm run creds:production -- --init      # ~/.agrishop/production.env — HOST and USER prefilled, PASS empty
+#   ← fill in that one line, from the dashboard. Not into chat, not into a tracked file.
+npm run creds:production -- --check     # validates the file; opens no connection
+```
+
+The location rule is enforced before the file is read, so "not committed" is structural rather than
+an ignore rule: a path that resolves inside the repository is refused even if it does not exist. The
+file is deliberately not `.env.production.local`, which Vite loads during a production build. The
+wrapper refuses a QA identity behind a `PROD_` prefix, a bare `postgres` user, a missing or empty
+password, and any command other than `backup-database.mjs` and `restore-verify.mjs`; it never prints
+the value. `npm run verify:credentials` proves all of it (23 checks) with a fresh canary per run.
+
+**Route B — GitHub repository secrets**, for the CI path, through the authenticated `gh` CLI (`gh` is
+logged in with the `repo` and `workflow` scopes). Encrypted at rest by GitHub, write-only from any
+client, masked in logs. Kept working for when Actions can run — see the billing caveat in step 3.
 
 ```bash
 gh secret list                    # names and timestamps only; never prints a value
@@ -192,8 +279,10 @@ gh secret list                    # confirm the three names now appear
 ```
 
 **Never** put these values in source, a committed `.env`, a report, a chat message, or an artefact.
-The script reads them from the process environment only, and production has no credential file by
-configuration — `scripts/lib/environments.mjs` will not read one.
+The backup tooling reads them from the process environment only, and production has no env file by
+configuration — `scripts/lib/environments.mjs` will not read one. Route A is the sanctioned way to
+fill that environment locally without an `export`: the file is outside the checkout, is read by the
+intake wrapper alone, and is refused outright if it resolves inside the repository.
 
 3. Run the **"Backup Database (to the environment it names)"** workflow with `environment =
    production`, or run the command in §4 locally.
@@ -211,8 +300,9 @@ configuration — `scripts/lib/environments.mjs` will not read one.
    first verified production backup does not have to wait for billing:
 
    ```bash
-   node scripts/backup-database.mjs --env production    # needs PROD_DB_* exported
-   npm run backup:verify -- --from backups/<the new manifest> --compare-with production
+   npm run creds:production -- -- node scripts/backup-database.mjs --env production
+   npm run creds:production -- -- node scripts/restore-verify.mjs \
+     --from backups/<the new manifest> --compare-with production
    ```
 4. The run takes the dump, restore-verifies it, and only then uploads it — a failed verification
    means no artefact is accepted and the run is red.
@@ -235,17 +325,40 @@ Until step 3 has completed successfully, the gate in §1 stands.
 | Credential that names no project | exit 2 — an unverifiable target is not a target |
 | Cluster fingerprint mismatch | exit 1, and no artefact is written |
 
-These are asserted by `tests/unit/backupTargeting.test.ts` (20 tests, each refusal paired with the
-correct configuration that must be accepted, so the refusals cannot pass vacuously).
+| Credential file that resolves inside the repository | exit 2 **before the file is read**, even when the path does not exist |
+| `PROD_DB_PASS` empty (an unfilled template) | exit 2, names the missing key, points at the dashboard |
+| An intake command that is not `backup-database.mjs` / `restore-verify.mjs` | exit 2 — the intake wrapper is not a general credential launcher |
 
-## 9. Honest RPO / RTO
+These are asserted by `tests/unit/backupTargeting.test.ts` (**24 tests**, each refusal paired with the
+correct configuration that must be accepted, so the refusals cannot pass vacuously; the same file also
+asserts the §9 objectives against this workflow, and was proven able to fail by changing the cron and
+by changing §9's RPO figure) and, at the
+process boundary, by `npm run verify:targeting` (8 CLI cases) and `npm run verify:credentials`
+(23 checks, including a mutation injection that deletes the identity check and watches the wrong
+project become acceptable — so the check is known to be load-bearing rather than decorative).
 
-| Metric | Current |
-|---|---|
-| Production RPO | **Unbounded** — no backup can be taken today |
-| Staging RPO | Time since the last successful run (manual; not scheduled) |
-| RTO (staging, small database) | Minutes to create a target and replay; the restore itself replayed in ~2 seconds in-process |
-| PITR | Not available; with the Pro plan + PITR add-on RPO would be seconds, at roughly $100/month plus compute |
+## 9. Recovery objectives — agreed 2026-10-16
+
+These are **agreed figures**, each with the thing that would break it named beside it. They replace the
+2026-10-01 line *"Production RPO: Unbounded — no backup can be taken today"*, which was true when it
+was written and is false now.
+
+| Metric | Agreed | What it means, and what breaks it |
+|---|---|---|
+| Production RPO | **24 hours** | The scheduled run is daily at 02:00 UTC (07:00 PKT, before the trading day), so the worst case is the transactions since that run. **Conditional:** a failed or missing run means the RPO is *exceeded* until a manual dispatch succeeds — the workflow's failure notice exists for exactly that, and dispatching is the repair, and the **Backup Watchdog** below turns it into an issue within one period rather than waiting to be noticed. |
+| Staging RPO | Last successful **manual** run | Staging is deliberately not scheduled; its RPO is whatever the operator last took. |
+| Production RTO | **4 hours from the decision to restore** (database) | For the current size — 30 tables · 249 rows · a ~334 KB artefact: fetch artefact + manifest from GitHub, prepare the target, replay, confirm with `restore-verify --compare-with production`, repoint the app. The replay is measured, not estimated: **769 statements in 1.6 s** in-process. **This is an agreed target, not a drilled result** — no restore has ever been performed into a real production target (PGlite was the stand-in), so the first drill is outstanding work. |
+| Time to *notice* an outage, a bad run or a silent one | **≤ 27 hours** (one watchdog period plus the RPO and slack) | The `Backup Watchdog` workflow (`scripts/check-backup-health.mjs`, daily 04:40 UTC) reads the Actions record of `backup-database.yml` and **opens an issue** labelled `backup-alert` when the newest completed run is red, succeeded with **no live artefact**, or is older than the RPO; a healthy check comments and closes that issue by itself. It is deliberately a separate workflow, because a backup cannot report its own absence — a run that never started is the case this exists for. **What breaks it:** deleting or disabling the watchdog, or GitHub disabling scheduled workflows in an otherwise quiet repository (the risk both schedules share). |
+| Retention | **30 days** of daily artefacts | The workflow's `retention_days` default; 1–90 is accepted, so any other value is a deliberate policy change. Artefact + verification report travel together → at least 30 daily recovery points. Local `backups/` is **not** part of this policy (§6). |
+| PITR | **None** (Free plan) | With Pro + the PITR add-on the RPO becomes seconds at roughly **$100/month plus compute**; that purchase is the owner's decision and is the cheapest way to shrink the 24-hour window. |
+
+**The figures are enforced, not merely written here.** The workflow's schedule and its retention
+default are asserted against this section by `tests/unit/backupTargeting.test.ts`, so editing one side
+without the other fails the suite instead of silently changing the policy. The alerter behind *time to
+notice* is guarded the same way by `tests/unit/backupHealthWatchdog.test.ts`, which pins one case per
+way a backup can be a lie — red, green with no artefact, artefact expired, older than the RPO, and no
+run at all — plus the boundary, the schedule's position after the backup it watches, and the rule that
+a watcher which cannot look must report **unhealthy**, never healthy.
 
 ## 10. Responsibilities
 
@@ -260,6 +373,44 @@ correct configuration that must be accepted, so the refusals cannot pass vacuous
 | Keep this document true | Whoever changes the tooling |
 
 ## 11. What the live backup job has actually been doing
+
+### Update 2026-10-16 — the job runs, the backup happens
+
+| Observation | Value |
+|---|---|
+| `PROD_DB_PASS` secret | **Set** 2026-10-15T23:54Z from the validated out-of-repo file (stdin only) — the preflight is green |
+| CI run `38826369696` (`environment=production`) | *Preflight* ✓ · *Take the backup* ✓ · *Verify the backup against the environment it names* ✓ · *Confirm the artefact names the environment* ✓ · *Summary* ✗ (its own `require()` bug) · *Upload* **skipped** |
+| CI run `38828524870` — the **fixed** workflow, dispatched on `ci-proof/full-tree` | **every step ✓** including *Summary* and *Upload*: the verify step's own output reads *Statements: 769 applied in 0.3 s · Failures: 0* and *PASS integrity · replay · counts · structure · digests*, with the live source identity compared |
+| Local production artefact, 2026-10-16 | `backups/backup-production-gkswcfljxlutkfdvvqng-2026-10-15T23-57-01.sql` — 333,989 bytes, sha256 `ceb62aa9…`, cluster `7666007964130682852`, 30 tables · **249 rows** · 56 FKs · 104 policies |
+| Restore verification on it | **PASS** — integrity, replay (769 statements, 0 failures), counts (per-table `content identical`), structure, digests, auth `auth.users` 2/2 |
+| Production artefacts stored on GitHub | **1** — run `38828524870` uploaded `database-backup-production-36`: **53,237 bytes**, digest `sha256:1c8d0abd…`, **expires 2026-11-15**, i.e. the agreed 30 days |
+
+The 2026-10-01 row *"Runs that succeeded: 0"* has therefore changed, and the reporting step no longer
+fails either: run `38828524870` is **green end to end**, including *Summary* and *Upload*. What remains is
+only that the **scheduled** run takes the fix once `main` carries it (PR #1).
+
+### Update 2026-10-16 — a reporting step can no longer discard a verified artefact
+
+The fix above corrected the *typo* in the summary. It did not correct the *arrangement* that let a typo
+cost a backup, and that arrangement was still in the file: the `Summary` step — which reports, and runs
+`if: always()` — was ordered **before** the upload. So a failure anywhere in a step that only describes
+the run skipped storage entirely, which is exactly what happened in run `38826369696`: every gate passed,
+the backup was real, and it was thrown away by the step that was supposed to tell someone about it.
+
+Storage is now the first step after the last gate. Everything ordered after it is a reporter that runs
+regardless of the outcome, so no summary, notice or typo can sit between "this backup is verified" and
+"this backup is kept". Note the deliberate asymmetry: the upload still carries **no** `if:`, because an
+unverified artefact must be impossible to store — the change removes the ability to lose a verified
+backup, not the ability to publish an unverified one.
+
+That ordering is asserted, not recommended. `tests/unit/backupTargeting.test.ts` parses the job's steps
+in order and fails if any reporting step (`if: always()` / `if: failure()`) is placed before storage, if
+the upload loses its unconditional form, or if a new step is introduced between verification and
+storage without a decision. The guard was proven able to fail by injecting the old arrangement once —
+the suite went red naming run `38826369696` — with the file then restored byte-identically and the suite
+re-run green: **28 tests, exit 0**.
+
+### The 2026-10-01 record, kept because it is why the ten failures looked the way they did
 
 Recorded 2026-10-01, from GitHub, read-only:
 
@@ -280,7 +431,9 @@ the same variables — so it could not have backed up production even when it su
 It never ran at all, though. The ten failures were not the script failing; they were GitHub refusing
 to start the job, which is why it failed in three seconds with zero steps. So the honest statement is
 not "the backup was wrong" but "no backup process has ever executed". There is no artefact of any
-kind, from any environment, on GitHub today. Production has no recovery path, and neither has
+kind, from any environment, on GitHub today. *(Superseded 2026-10-16: production artefacts now exist from
+run `38828524870` — see the update above; this paragraph is kept as the record of what the job was doing
+on 2026-10-01.)* Production has no recovery path, and neither has
 staging.
 
 ### GitHub Actions cannot start any job in this repository at present
@@ -314,8 +467,9 @@ Two consequences for recovery:
 | Corrected workflow on `main` | **Yes** — commit `de13eb1d`, blob-verified identical to this checkout, registered as `Backup Database (to the environment it names)` |
 | `PROD_DB_HOST` secret | **Set** — `aws-0-ap-northeast-1.pooler.supabase.com` (a shared regional address, verified by probe) |
 | `PROD_DB_USER` secret | **Set** — `postgres.gkswcfljxlutkfdvvqng` (a username, already in `environments.json`) |
-| `PROD_DB_PASS` secret | **NOT SET — this is the remaining external input** |
+| `PROD_DB_PASS` secret | **Not set in GitHub — the local route supplies it** (`~/.agrishop/production.env`, written through the sanctioned intake form on 2026-10-01); CI still needs this secret if the scheduled job is ever unblocked |
 | GitHub Actions | **Blocked by billing** — no job can start |
+| First verified production backup + restore | **Done, 2026-10-01** — artifact `backups/backup-production-gkswcfljxlutkfdvvqng-2026-10-01T11-21-48.sql`; isolated restore PASS (788 statements, 0 failures, 28/28 row digests identical); two mutation proofs on the same artifact |
 
 `PROD_DB_HOST` was not guessed. The pooler resolves the project ref in the *username*, so a login
 attempt with a deliberately wrong password distinguishes the two failure modes that matter:
@@ -329,7 +483,7 @@ attempt with a deliberately wrong password distinguishes the two failure modes t
 
 ```bash
 npm run verify:targeting   # 8 cases at the process boundary: exit codes, pre-connection refusal, no secret in any output
-npm run verify:workflow    # 22 checks: structure, shell syntax, and each invariant proven able to fail
+npm run verify:workflow    # 24 checks: structure, shell syntax, and each invariant proven able to fail
 ```
 
 Both are also runnable directly (`node scripts/verify-targeting-refusals.mjs`,
@@ -346,3 +500,5 @@ code rather than by restating the intention.
 | 2026-10-01 | Rewritten against the real tooling: explicit targeting, restore verification, and the honest statement that production has no backup path yet |
 | 2026-10-01 | Added the commit prerequisite (§7 step 0), the exact credential-provisioning commands, and the recorded state of the live backup job (§11) |
 | 2026-10-01 | Workflow pushed to `main` (`de13eb1d`); `PROD_DB_HOST` and `PROD_DB_USER` provisioned and probe-verified; recorded that GitHub Actions is blocked by account billing, and that the ten historic failures were that block rather than the script |
+| 2026-10-01 | **First verified production backup + isolated restore (PASS).** The original database password was not retrievable, so it was reset in the dashboard after a dependency analysis proved no runtime or job used it; the new value went only to `~/.agrishop/production.env` through the local intake form. Cluster `7666007964130682852` enrolled; artifact-gate checks in `verify:workflow` now present a chosen manifest instead of the newest one (24 checks) |
+| 2026-10-16 | **Production credentials complete and §9 objectives agreed.** `PROD_DB_PASS` set from the validated out-of-repo file (stdin only), so the CI preflight passes; run `38826369696` takes the production dump and restore-verifies it in CI; a fresh local artefact (333,989 bytes) restore-verifies **PASS**; the Summary-step `require()` bug that discarded the artefact is fixed (`92a8802a`, PR #1); §9 now records **RPO 24 h** (conditional on the daily run), **RTO 4 h** from the restore decision (target, undrilled), **retention 30 days**, and detection unbounded until monitoring exists |

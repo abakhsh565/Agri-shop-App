@@ -34,6 +34,25 @@ async function dbRows(): Promise<number> {
   return Number(rows[0].n);
 }
 
+/**
+ * Put the account back to "never signed in", in both places the app reads that fact.
+ *
+ * The database is the definition (`users.first_login_at`), but the shell gates the welcome on
+ * `user.firstLoginAt` from the auth store, which persists the signed-in user — and the sign-in
+ * that just ran stamped it. Re-stating the database alone left a reload reading the stamped
+ * copy, so the field the gate actually checks is re-stated too.
+ */
+async function forgetFirstLogin(page: Page, phone: string): Promise<void> {
+  await execSql(`UPDATE users SET first_login_at = NULL WHERE phone = '${phone}'`);
+  await page.evaluate(() => {
+    const raw = localStorage.getItem('agri_auth');
+    if (!raw) return;
+    const parsed = JSON.parse(raw);
+    if (parsed?.state?.user) parsed.state.user.firstLoginAt = null;
+    localStorage.setItem('agri_auth', JSON.stringify(parsed));
+  });
+}
+
 /** Forget that this account was ever introduced, so the first-run path is exercised. */
 async function forgetEducation(page: Page): Promise<void> {
   await page.evaluate(() => {
@@ -76,7 +95,9 @@ async function ringRect(page: Page) {
  * rather than the welcome, need to state that they have already moved past it.
  */
 async function loginAndDismissWelcome(page: Page, phone: string) {
-  await loginViaUi(page, phone);
+  // The login page refuses a number that answers the other door's tab, so the side
+  // this phone belongs to is stated rather than inferred from the default tab.
+  await loginViaUi(page, phone, phone === EMPLOYEE_PHONE ? 'employee' : 'owner');
   const later = page.locator('[data-testid="welcome-later"]');
   if (await later.count()) {
     await later.click();
@@ -134,13 +155,18 @@ test.describe('education — welcome, guided tour, app guide', () => {
   test('a new owner is welcomed once, and the tour it launches rings the real blocks', async ({ page }) => {
     await loginViaUi(page, OWNER_PHONE);
     await forgetEducation(page);
+    // "Brand-new" is the server's fact and the sign-in above consumes it, so the fixture
+    // states it again for the session this test actually asserts.
+    await forgetFirstLogin(page, '923009999999');
     await page.reload();
     await page.waitForTimeout(1800);
 
     // 1. The first-run introduction appears on the screen the owner landed on.
-    const sheetTitle = page.locator('[data-testid="sheet-close"]');
     await expect(page.locator('[data-testid="welcome-body"]')).toBeVisible({ timeout: 15000 });
-    await expect(sheetTitle).toBeVisible();
+    // Both answers to this sheet are buttons inside it, so its header deliberately carries no
+    // third one: what has to be there is the way forward and the way out.
+    await expect(page.locator('[data-testid="welcome-tour"]')).toBeVisible();
+    await expect(page.locator('[data-testid="welcome-later"]')).toBeVisible();
     const landedOn = page.url();
     expect(landedOn, 'the welcome must not move the owner off the landing screen').toContain('/admin/dashboard');
 
@@ -179,7 +205,17 @@ test.describe('education — welcome, guided tour, app guide', () => {
     // A tour that works while shouting into the console is not finished work.
     const consoleErrors: string[] = [];
     page.on('console', (msg) => {
-      if (msg.type() === 'error') consoleErrors.push(msg.text().slice(0, 160));
+      if (msg.type() === 'error') {
+        // The browser's own message says only that something 404'd; the console message's
+        // source location is where the failed resource is named.
+        const loc = msg.location();
+        consoleErrors.push(`${msg.text().slice(0, 160)} @ ${loc.url}:${loc.lineNumber}`);
+      }
+    });
+    // ...and the response side is recorded too, in case the request is one the page reports.
+    const notFound: string[] = [];
+    page.on('response', (r) => {
+      if (r.status() === 404) notFound.push(r.url());
     });
     await loginAndDismissWelcome(page, OWNER_PHONE);
 
@@ -228,7 +264,10 @@ test.describe('education — welcome, guided tour, app guide', () => {
     // letting a document-level warning hide a real error in the tour's own code.
     const KNOWN_DOCUMENT_WARNING = /X-Frame-Options may only be set via an HTTP header/;
     const unexpected = consoleErrors.filter((e) => !KNOWN_DOCUMENT_WARNING.test(e));
-    expect(unexpected, `the browser console is not clean: ${unexpected.join(' | ')}`).toEqual([]);
+    expect(
+      unexpected,
+      `the browser console is not clean: ${unexpected.join(' | ')}\n404 responses: ${notFound.join(' | ')}`,
+    ).toEqual([]);
   });
 
   test('Urdu + RTL + dark: the tour speaks Urdu and stays inside the screen', async ({ page }) => {
@@ -372,7 +411,7 @@ test.describe('education — welcome, guided tour, app guide', () => {
 
     const guide = await page.evaluate(() => document.body.innerText);
     expect(guide, 'the capability list has no heading').toContain('What this app does');
-    for (const capability of ['Sales', 'Stock & products', 'Customers & udhaar', 'Purchases & suppliers', 'Reports & profit', 'Staff & roles']) {
+    for (const capability of ['Sales', 'Stock & products', 'Customers & credit', 'Purchases & suppliers', 'Reports & profit', 'Staff & roles']) {
       expect(guide, `the guide does not explain ${capability}`).toContain(capability);
     }
     // Each capability says what it does and why it matters — the pair, not just a name.
@@ -382,7 +421,7 @@ test.describe('education — welcome, guided tour, app guide', () => {
     expect(guide, 'an owner is shown a lock on their own capability').not.toContain('Owner only');
 
     // A capability, not a label: the row opens the real screen it describes.
-    await page.locator('button:has-text("Customers & udhaar")').first().click();
+    await page.locator('button:has-text("Customers & credit")').first().click();
     await expect(page).toHaveURL(/\/admin\/customers$/, { timeout: 8000 });
     await page.goto('/admin/guide');
     await page.waitForTimeout(1200);
@@ -401,7 +440,7 @@ test.describe('education — welcome, guided tour, app guide', () => {
     // case-insensitively so this asserts the content, not the CSS transform.
     const guideLower = guide.toLowerCase();
     expect(guide, 'the guide has no workflow section').toContain('How the work flows');
-    for (const flow of ['Selling an item', 'Taking the udhaar payment', 'Bringing in stock']) {
+    for (const flow of ['Selling an item', 'Taking the credit payment', 'Bringing in stock']) {
       expect(guideLower, `the guide does not explain ${flow}`).toContain(flow.toLowerCase());
     }
     // The steps name the real control and what happens after it — the part a capability line
@@ -465,7 +504,7 @@ test.describe('education — welcome, guided tour, app guide', () => {
         chevron: !!r.querySelector('svg.ds-row-chevron'),
       });
       const locked = all.find((r) => (r.textContent ?? '').includes('Owner only'));
-      const open = all.find((r) => (r.textContent ?? '').includes('Customers & udhaar'));
+      const open = all.find((r) => (r.textContent ?? '').includes('Customers & credit'));
       return {
         locked: locked ? describe(locked) : null,
         open: open ? describe(open) : null,

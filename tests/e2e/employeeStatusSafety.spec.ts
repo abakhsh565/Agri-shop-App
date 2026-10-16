@@ -28,9 +28,19 @@
  */
 import { test, expect, type Page } from '@playwright/test';
 import { randomUUID } from 'crypto';
-import { QA_IDS, execSql, setupFixtures, cleanupFixtures, injectAdminAuth } from './helpers';
+import {
+  QA_IDS,
+  execSql,
+  setupFixtures,
+  cleanupFixtures,
+  claimNew,
+  ownership,
+  snapshotIds,
+  trackOwned,
+  injectAdminAuth,
+} from './helpers';
 
-const BASE_URL = 'http://localhost:5173';
+const BASE_URL = process.env.QA_APP_URL || 'http://localhost:5173';
 const EMP = QA_IDS.employee;
 const EMP_NAME = 'QA Employee';
 
@@ -132,7 +142,14 @@ async function doubleTap(page: Page, exactLabel: string) {
 test.describe('Employee status safety', () => {
   test.beforeAll(async () => {
     await setupFixtures();
-    await execSql(`DELETE FROM audit_events WHERE entity_id = '${EMP}'`);
+
+    // WHAT CHANGED, AND WHY IT MATTERS: this lane used to open by deleting every audit row of the
+    // shared QA Employee (`DELETE FROM audit_events WHERE entity_id = '<QA Employee>'`) so that its
+    // "exactly one entry" assertions had an empty table. That is the employee's HISTORY — the record
+    // the app exists to keep — destroyed to make a count convenient. The rows are no longer deleted;
+    // the assertions below are deltas (count before this action vs after it), which is the property
+    // the double-tap defect actually violates, and the entries THIS run writes are claimed by id and
+    // removed by cleanupFixtures.
     await execSql(`
       INSERT INTO sales (id, sale_number, customer_id, employee_id, total_amount, status,
         payment_type, payment_method, amount_paid, amount_due, discount, is_voided, shop_id, created_at, updated_at)
@@ -140,13 +157,14 @@ test.describe('Employee status safety', () => {
         'full', 'cash', 1500, 0, 0, false, '${QA_IDS.shop}', NOW(), NOW())
       ON CONFLICT (id) DO NOTHING
     `);
+    // OWNED: the stand-in sale for this employee's history, by the id this run generated.
+    await trackOwned(ownership(), 'sales', HIST_SALE_ID);
   });
 
   test.afterAll(async () => {
-    await execSql(`DELETE FROM sale_items WHERE sale_id = '${HIST_SALE_ID}'`).catch(() => {});
-    await execSql(`DELETE FROM sales WHERE id = '${HIST_SALE_ID}'`).catch(() => {});
-    await execSql(`DELETE FROM audit_events WHERE entity_id = '${EMP}'`).catch(() => {});
     await setActiveState(true).catch(() => {});
+    // The sale and the audit entries this run wrote are registered by id; the employee's earlier
+    // history is NOT registered and therefore survives, which is the point.
     await cleanupFixtures();
   });
 
@@ -171,6 +189,11 @@ test.describe('Employee status safety', () => {
     await expect(page.getByText(/stay on record/i)).toBeVisible();
     await expect(page.getByText(/are you sure/i)).toHaveCount(0);
 
+    // Snapshot the audit trail before the action: the entries that appear are this run's, and are
+    // registered as owned once the assertions below have read the counts.
+    const auditBefore = await snapshotIds(`SELECT id FROM audit_events WHERE entity_id = '${EMP}'`);
+    const deactivationsOnRecord = await auditCount('employee_deactivated');
+
     await doubleTap(page, "Turn off this employee's account");
 
     const toasts = await collectToasts(page);
@@ -189,12 +212,21 @@ test.describe('Employee status safety', () => {
     expect(deactivations.length, 'a double tap must send exactly one deactivation').toBe(1);
     expect(activations.length, 'deactivating must never activate').toBe(0);
 
+    // The trail the action ADDED, which is what "one action = one entry" means for a table that
+    // already holds this employee's history.
+    const auditAdded = await snapshotIds(`SELECT id FROM audit_events WHERE entity_id = '${EMP}'`);
+    expect(auditAdded.length, 'the action wrote no audit entry at all').toBeGreaterThan(auditBefore.length);
+    await claimNew('audit_events', `SELECT id FROM audit_events WHERE entity_id = '${EMP}'`, auditBefore);
+
     const state = await readState();
     expect(state.is_active).toBe(false);
     expect(state.deactivated_at).not.toBeNull();
     expect(state.membership_status).toBe('suspended');
 
-    expect(await auditCount('employee_deactivated'), 'one action = one audit entry').toBe(1);
+    expect(
+      await auditCount('employee_deactivated'),
+      'one action = one new audit entry (a double tap must not write two)',
+    ).toBe(deactivationsOnRecord + 1);
 
     // Offboarding revokes access; it never erases what the employee did.
     expect(await historySaleExists(), 'the employee’s past sale must survive deactivation').toBe(true);
@@ -209,10 +241,13 @@ test.describe('Employee status safety', () => {
   test('reactivating: a double tap restores access once and keeps the history intact', async ({ page }) => {
     await setActiveState(false);
     // A record of the earlier deactivation, which reactivation must not rewrite.
+    const auditBeforeSeed = await snapshotIds(`SELECT id FROM audit_events WHERE entity_id = '${EMP}'`);
     await execSql(`
       INSERT INTO audit_events (user_id, action, entity_type, entity_id, details)
       VALUES ('${QA_IDS.admin}', 'employee_deactivated', 'user', '${EMP}', '{"name":"${EMP_NAME}"}'::jsonb)
     `);
+    // Owned by id: the row this lane just wrote, claimed through the employee it names.
+    await claimNew('audit_events', `SELECT id FROM audit_events WHERE entity_id = '${EMP}'`, auditBeforeSeed);
 
     // What is already on the books before we touch anything. Reactivation must add a
     // record and leave these alone — so this is captured rather than hardcoded, which
@@ -233,6 +268,8 @@ test.describe('Employee status safety', () => {
     await expect(page.getByText(`Turn access back on for ${EMP_NAME}?`)).toBeVisible({ timeout: 10000 });
     await expect(page.getByText(/current role and access/i)).toBeVisible();
 
+    const auditBeforeActivation = await snapshotIds(`SELECT id FROM audit_events WHERE entity_id = '${EMP}'`);
+
     await doubleTap(page, 'Turn the account back on');
 
     const toasts = await collectToasts(page);
@@ -252,6 +289,11 @@ test.describe('Employee status safety', () => {
     expect(state.deactivated_at).toBeNull();
     expect(state.membership_status).toBe('active');
 
+    await claimNew(
+      'audit_events',
+      `SELECT id FROM audit_events WHERE entity_id = '${EMP}'`,
+      auditBeforeActivation,
+    );
     expect(
       await auditCount('employee_activated'),
       'one reactivation = one new audit entry'

@@ -12,6 +12,9 @@
  *   C. An operational record with no branch ownership.
  *   D. A user with a shop but no membership (breaks tenant resolution).
  *   E. A protected write RPC with no authorization guard at all.
+ *   F. A foreign key on `users(id)` that would refuse a fixture delete without being named in the
+ *      e2e cleanup guard — which is how such a delete turns into a failing lane instead of a
+ *      guarded one.
  *
  * Tables/functions that are intentionally internal or pre-auth are listed
  * explicitly; anything outside those lists must satisfy the invariant.
@@ -19,6 +22,7 @@
 
 import { describe, it, beforeAll, expect } from 'vitest';
 import { execSqlAsAdmin } from '../setup/qa-client';
+import { USER_DELETE_GUARDS } from '../e2e/cleanupOwnership';
 
 async function sql<T = any>(query: string): Promise<T[]> {
   const res = await execSqlAsAdmin(query);
@@ -38,6 +42,21 @@ const ANON_ALLOWED_WRITES = [
   'insert_shop_request',   // public shop registration form
   'record_attempt', 'record_incident', 'record_memory', 'record_resolution',
 ];
+
+/**
+ * Write RPCs that authorize on the OWNER ROLE itself rather than through a permission helper.
+ *
+ * `0191`'s branch lifecycle API reads `membership_in_active_shop(NULL)` and refuses anyone whose
+ * `role <> 'owner'`, because no branch-management permission exists to name (the discovery audit's
+ * G12). That is a real guard in a shape this vocabulary does not contain — the guard has to be a role
+ * comparison or the function could not require an owner.
+ *
+ * It is listed here by name rather than by widening the pattern above, because widening would also
+ * accept a function that merely mentions a helper. And the exemption is not taken on trust: the next
+ * test reads each function's source and proves both halves of the guard are present, so removing the
+ * owner check fails here instead of passing quietly.
+ */
+const OWNER_ROLE_GATED_WRITES = ['archive_operating_branch'];
 
 /** Tables that carry business operations and therefore need branch ownership. */
 const BRANCH_OWNED = [
@@ -130,6 +149,39 @@ describe('Invariant D — User → Membership', () => {
   });
 });
 
+describe('Invariant F — every key that would refuse a fixture delete is named in the cleanup guard', () => {
+  /**
+   * WHY THIS IS A GUARD AND NOT A COMMENT. `tests/e2e/cleanupOwnership.ts` deletes a
+   * lane-created `users` row under a guard, so that a fixture account the database still references
+   * is preserved WITH its membership instead of being orphaned (the defect measured 2026-10-14: four
+   * such rows in QA failed Invariant D below and `rbacEnforcement`). The guard is a hand-written list,
+   * and a new NO ACTION/RESTRICT key on `users(id)` added by a migration would silently make that
+   * delete fail inside an unrelated lane. So the list is checked against the live schema, in both
+   * directions: a key missing from it fails here, and a name in it that no longer refuses fails too —
+   * a guard that over-preserves keeps accounts (and memberships) alive for a reason that is not true.
+   */
+  it('matches the live NO ACTION/RESTRICT foreign keys on users(id) exactly', async () => {
+    const rows = await sql<{ child: string; column: string }>(`
+      SELECT tc.table_name AS child, kcu.column_name AS column
+        FROM information_schema.table_constraints tc
+        JOIN information_schema.key_column_usage kcu
+          ON kcu.constraint_name = tc.constraint_name AND kcu.table_schema = tc.table_schema
+        JOIN information_schema.constraint_column_usage ccu
+          ON ccu.constraint_name = tc.constraint_name AND ccu.table_schema = tc.table_schema
+        JOIN information_schema.referential_constraints rc
+          ON rc.constraint_name = tc.constraint_name AND rc.constraint_schema = tc.table_schema
+       WHERE tc.constraint_type = 'FOREIGN KEY'
+         AND ccu.table_schema = 'public' AND ccu.table_name = 'users'
+         AND rc.delete_rule IN ('NO ACTION', 'RESTRICT')
+       ORDER BY tc.table_name, kcu.column_name
+    `);
+    const live = [...new Set(rows.map((r) => `${r.child}.${r.column}`))].sort();
+    const guarded = USER_DELETE_GUARDS.map((r) => `${r.table}.${r.column}`).sort();
+    expect(live.length, 'the live schema must still have such keys — otherwise this test is vacuous').toBeGreaterThan(0);
+    expect(guarded, 'a key that would refuse the delete must be in the guard').toEqual(live);
+  });
+});
+
 describe('Invariant E — protected writes resolve tenant context', () => {
   it('every business write RPC carries an authorization guard', async () => {
     const rows = await sql<{ proname: string; has_guard: boolean; self_guard: boolean }>(`
@@ -166,7 +218,37 @@ describe('Invariant E — protected writes resolve tenant context', () => {
       .filter((r) => !r.has_guard)
       .filter((r) => !(SELF_SERVICE.test(r.proname) && r.self_guard))
       .map((r) => r.proname)
-      .filter((f) => !ANON_ALLOWED_WRITES.includes(f) && !INTERNAL_FUNCTIONS.includes(f));
+      .filter((f) => !ANON_ALLOWED_WRITES.includes(f) && !INTERNAL_FUNCTIONS.includes(f))
+      .filter((f) => !OWNER_ROLE_GATED_WRITES.includes(f));
     expect(unguarded).toEqual([]);
+  });
+
+  it('every owner-role exemption actually carries an owner check', async () => {
+    for (const name of OWNER_ROLE_GATED_WRITES) {
+      const rows = await sql<{ def: string }>(`
+        SELECT pg_get_functiondef(p.oid) AS def
+          FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+         WHERE n.nspname = 'public' AND p.proname = '${name}'
+      `);
+      expect(rows.length, `${name} is exempted above, so it must still exist`).toBeGreaterThan(0);
+      const definition = rows.map((r) => r.def).join('\n');
+      expect(
+        definition,
+        `${name} must resolve the caller's membership rather than trust an argument`,
+      ).toMatch(/membership_in_active_shop/);
+      // The load-bearing assertion, and deliberately narrower than "the word owner appears".
+      // This file's own source was the counter-example: a definition that kept `role <> 'owner'`
+      // ONLY inside the later staff-scope check still satisfied a loose `/role <> 'owner'/` while
+      // having no authorization check left at all. So the role comparison has to sit INSIDE a
+      // refusal that raises NOT_AUTHORIZED. Non-vacuity was proven by deleting that comparison from a
+      // copy of the live definition and watching this assertion fail.
+      const refusals =
+        definition.match(/IF[\s\S]*?RAISE EXCEPTION 'NOT_AUTHORIZED[^']*'[\s\S]*?END IF;/g) ?? [];
+      expect(refusals.length, `${name} must contain a NOT_AUTHORIZED refusal`).toBeGreaterThan(0);
+      expect(
+        refusals.some((block) => /role\s*(<>|!=)\s*'owner'/.test(block)),
+        `${name} must refuse a caller whose role is not the owner, inside the refusal itself`,
+      ).toBe(true);
+    }
   });
 });

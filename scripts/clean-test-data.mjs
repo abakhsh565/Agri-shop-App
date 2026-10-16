@@ -30,6 +30,51 @@ if ((process.env.QA_DB_USER || '').split('.')[1] !== 'bpybjrjenwccowvtrevu') {
   process.exit(1);
 }
 
+/**
+ * REFUSAL — the second one, and the one this file was missing.
+ *
+ * INCIDENT 2026-10-14. This script TRUNCATEs every business table and deletes users outside its
+ * four-phone keep-list. It was reached in one step — `QA_CLEAN_AFTER_RUN=1 npx vitest run
+ * tests/integration/` — and it destroyed the reviewed QA baseline: the hand-entered rows of the
+ * 2026-10-11/12 manual sessions (sales, voids, credit requests, payments, crops, notifications), the
+ * registration request from 2026-10-06, the non-fixture accounts, and most of `audit_events`. None of
+ * it was recoverable; the newest dump of this project predates the schema this database has migrated
+ * past. `scripts/dev/qa-baseline.json` was re-reviewed afterwards, which made the loss visible in the
+ * one place that had always been able to see it — but only after the fact.
+ *
+ * So the rule is now the declaration's: while `scripts/dev/qa-baseline.json` expects ANY rows in a
+ * business table, this script refuses. Emptying a table that a review says holds real rows is a
+ * decision, not a side effect of an environment variable, and it must be made explicitly with
+ * `--allow-destroying-baseline` by someone who has read what will be lost. The deliberate use case
+ * (`qa.mjs clean` on a database whose declaration expects nothing) still works unchanged.
+ */
+function refusedByDeclaration() {
+  if (process.argv.includes('--allow-destroying-baseline')) return null;
+  let declaration;
+  try {
+    declaration = JSON.parse(fs.readFileSync('scripts/dev/qa-baseline.json', 'utf8'));
+  } catch {
+    return 'the QA declaration (scripts/dev/qa-baseline.json) could not be read, so what this script would destroy is unknown';
+  }
+  const expected = Object.entries(declaration.policies ?? {})
+    .filter(([, rule]) => rule.policy === 'exact' && Number(rule.expected) > 0)
+    .map(([table, rule]) => `${table} (declared ${rule.expected}: ${String(rule.why ?? '').split('.')[0]})`);
+  if (!expected.length) return null;
+  return `the reviewed declaration expects rows in:\n    - ${expected.join('\n    - ')}`;
+}
+
+const refusal = refusedByDeclaration();
+if (refusal) {
+  console.error(
+    'Refusing to run: this script empties every business table and deletes every non-fixture account, but\n' +
+      `  ${refusal}\n\n` +
+      '  On 2026-10-14 exactly this destroyed the reviewed QA baseline, irrecoverably.\n' +
+      '  To review drift instead of erasing it:  node scripts/dev/qa-prune-excess.mjs\n' +
+      '  To proceed anyway (destroys the rows above):  node scripts/clean-test-data.mjs --allow-destroying-baseline',
+  );
+  process.exit(2);
+}
+
 const DATABASE_URL = process.env.QA_DATABASE_URL
   || `postgresql://${process.env.QA_DB_USER}:${process.env.QA_DB_PASS}@${process.env.QA_DB_HOST}:5432/postgres`;
 

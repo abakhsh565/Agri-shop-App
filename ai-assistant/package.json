@@ -1,0 +1,15 @@
+{
+  "name": "agrishop-assistant",
+  "private": true,
+  "version": "0.2.0",
+  "type": "module",
+  "description": "AgriShop Assistant — the local runner and the proof for the `assistant` edge function. The assistant itself lives in the app (a tab, on the app's own sign-in) and in supabase/functions/assistant; see README.md.",
+  "scripts": {
+    "dev": "node --watch server/dev.mjs",
+    "start": "node server/dev.mjs",
+    "selftest": "node server/selftest.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

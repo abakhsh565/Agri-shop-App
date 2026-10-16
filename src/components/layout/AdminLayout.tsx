@@ -13,6 +13,7 @@ import { useProductsStore } from "@/stores/productsStore";
 import { useUIStore } from "@/stores/uiStore";
 import { clearNav } from "@/lib/navContext";
 import BackButtonHandler from "@/components/ui/BackButtonHandler";
+import AssistantFab from "@/components/layout/AssistantFab";
 import { useOfflineStore } from "@/stores/offlineStore";
 import { getPendingCount } from "@/lib/offlineQueue";
 import { useAuthStore } from "@/stores/authStore";
@@ -123,7 +124,10 @@ export default function AdminLayout() {
         path.startsWith("/admin/reports") ||
         path.startsWith("/admin/settings") ||
         path.startsWith("/admin/payments"))  return "/admin/more";
-    return "/admin/dashboard";
+    // `null` rather than a stand-in: the assistant is no longer a tab, so on that screen
+    // NO tab is the current one, and lighting up "Dashboard" would send someone there
+    // believing the assistant lives under it.
+    return null;
   }
 
   const active = activeTab();
@@ -295,7 +299,10 @@ export default function AdminLayout() {
           selector, one mount, one place where switching is decided. */}
       <ShopSwitcherSheet />
 
-      {/* ── Bottom tab bar (5 tabs) — only on top-level navigation screens ── */}
+      {/* The assistant, off the bar and within thumb reach of home. See AssistantFab. */}
+      {location.pathname === "/admin/dashboard" && <AssistantFab path="/admin/assistant" />}
+
+      {/* ── Bottom tab bar (4 tabs) — only on top-level navigation screens ── */}
       {showTabBar && (
       <div
         className="fixed bottom-0 start-0 end-0 max-w-[480px] mx-auto flex items-start pt-2 border-t"
@@ -311,6 +318,11 @@ export default function AdminLayout() {
           paddingRight: "16px",
         }}
       >
+        {/* Every tab carries an explicit 44px floor. The icon+label stack is only ~41px tall
+            on its own, and the accessibility lane measures real rendered boxes: with the
+            assistant tab added, five sub-44px targets per route were counted (55 across the
+            admin routes) and the frozen structural baseline − which may only shrink −
+            refused the growth. The floor is the app's to meet, not the baseline's to record. */}
         {TAB_DEFS.map(({ key, icon: Icon, path }) => {
           if (path === "__scan__") {
             return (
@@ -319,7 +331,7 @@ export default function AdminLayout() {
                 onClick={handleNavScan}
                 disabled={scanning}
                 data-tour="tab:scan"
-                className="ds-pressable flex flex-col items-center justify-center flex-1 gap-1 cursor-pointer"
+                className="ds-pressable flex flex-col items-center justify-center flex-1 gap-1 cursor-pointer min-h-[44px]"
               >
                 <div
                   className="flex items-center justify-center rounded-full -mt-3"
@@ -339,7 +351,7 @@ export default function AdminLayout() {
               key={path}
               onClick={() => { clearNav(); navigate(path); }}
               data-tour={`tab:${key}`}
-              className="ds-pressable flex flex-col items-center justify-center flex-1 gap-1 cursor-pointer"
+              className="ds-pressable flex flex-col items-center justify-center flex-1 gap-1 cursor-pointer min-h-[44px]"
             >
               <Icon
                 size={22}

@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { captureDataContext, isDataContextCurrent } from "@/lib/localCache";
 import { supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/stores/authStore";
 import { tNow } from "@/lib/i18n";
@@ -70,6 +71,8 @@ export const useCompaniesStore = create<CompaniesState>((set, get) => ({
   reset: () => set({ companies: [], loading: false, ready: false, error: null }),
 
   load: async () => {
+    const context = captureDataContext();
+    if (!isDataContextCurrent(context)) return;
     set({ loading: true, error: null });
     const { data, error } = await supabase
       .from("companies")
@@ -78,6 +81,7 @@ export const useCompaniesStore = create<CompaniesState>((set, get) => ({
       // purchase history is untouched — purchases keep their own company snapshot.
       .eq("is_active", true)
       .order("name");
+    if (!isDataContextCurrent(context)) return;
     if (error) {
       set({ loading: false, ready: true, error: error.message });
       return;

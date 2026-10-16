@@ -14,9 +14,16 @@
  * separate batch, deliberately not touched here.
  */
 import { test, expect } from '@playwright/test';
-import { QA_IDS, execSql, setupFixtures, cleanupFixtures, injectAdminAuth } from './helpers';
+import {
+  QA_IDS,
+  execSql,
+  setupFixtures,
+  cleanupFixtures,
+  claimOwned,
+  injectAdminAuth,
+} from './helpers';
 
-const BASE_URL = 'http://localhost:5173';
+const BASE_URL = process.env.QA_APP_URL || 'http://localhost:5173';
 
 /** Language switch, the same way the RTL/LTR suite does it. */
 async function setLanguage(page: import('@playwright/test').Page, lang: 'en' | 'ur') {
@@ -34,9 +41,41 @@ async function setLanguage(page: import('@playwright/test').Page, lang: 'en' | '
     document.documentElement.lang = l;
   }, lang);
   await page.reload();
-  await page.waitForLoadState('networkidle');
+  await settle(page);
 }
 
+/**
+ * Wait for the SCREEN, not for the network to fall silent.
+ *
+ * Every navigation here used to end with `waitForLoadState('networkidle')`. That condition is
+ * unreachable on this app, and unreachable for a reason that is the product working:
+ *
+ *   · `src/stores/companiesStore.ts` subscribes to a realtime channel ("companies-feed"), so
+ *     `/admin/companies` holds an open connection for as long as the screen is up;
+ *   · `src/stores/notificationStore.ts` polls on a timer, so the network is never quiet for
+ *     the half-second `networkidle` asks for.
+ *
+ * The result was not a wrong assertion but a 120-second timeout, on a different route each run
+ * — measured three times, once against a server started fresh for the run, which is how it was
+ * told apart from load on the shared dev server.
+ *
+ * What the assertions below actually need is a screen that has rendered: they read
+ * `document.body.innerText`. So a quiet network is still *tried* (it makes the read below
+ * meaningful when it arrives) but it is bounded and optional, and rendered text is required.
+ */
+async function settle(page: import('@playwright/test').Page) {
+  await page.waitForLoadState('domcontentloaded');
+  await page.waitForLoadState('networkidle', { timeout: 4_000 }).catch(() => {
+    // Deliberately swallowed: this is the optimistic half, not an assertion. The required
+    // half is the rendered text below, and a live channel must not fail the lane for being live.
+  });
+  await expect
+    .poll(async () => (await page.evaluate(() => document.body.innerText.trim().length)), {
+      timeout: 20_000,
+      message: 'the route never rendered any text',
+    })
+    .toBeGreaterThan(20);
+}
 /** Words that must never reach a shop owner's screen, in either language. */
 const FORBIDDEN_ON_SCREEN = [
   'Postgres', 'postgres', 'SQL', 'RPC', 'JWT', 'foreign key', 'constraint',
@@ -45,24 +84,25 @@ const FORBIDDEN_ON_SCREEN = [
 
 test.describe('Admin microcopy — English and Urdu', () => {
   test.beforeAll(async () => {
+    // The prefix DELETE that used to run here (and in afterAll) removed every company whose name
+    // started with "QA Microcopy" — a name prefix is not ownership. Nothing needs clearing: this
+    // lane names its supplier uniquely per run, so its own row is claimed by that exact name.
     await setupFixtures();
-    await execSql(`DELETE FROM companies WHERE name LIKE 'QA Microcopy%'`).catch(() => {});
   });
 
   test.afterAll(async () => {
-    await execSql(`DELETE FROM companies WHERE name LIKE 'QA Microcopy%'`).catch(() => {});
     await cleanupFixtures();
   });
 
   test('validation and success messages are plain, translated, and fit the screen', async ({ page }) => {
     await page.goto(BASE_URL);
-    await page.waitForLoadState('networkidle');
+    await settle(page);
     await injectAdminAuth(page);
 
     // ── English / LTR ───────────────────────────────────────────────────────
     await setLanguage(page, 'en');
     await page.goto(`${BASE_URL}/admin/companies/new`);
-    await page.waitForLoadState('networkidle');
+    await settle(page);
 
     // Submitting an empty form must explain what is missing, in plain words.
     // Exact label: a loose /add/i also matches the "Add logo" button, which submits
@@ -74,7 +114,7 @@ test.describe('Admin microcopy — English and Urdu', () => {
     // ── Urdu / RTL: the same screen, the same moment ────────────────────────
     await setLanguage(page, 'ur');
     await page.goto(`${BASE_URL}/admin/companies/new`);
-    await page.waitForLoadState('networkidle');
+    await settle(page);
 
     // In Urdu the button label is Urdu too, so it is addressed by that label — an
     // English-name lookup matches nothing and the "missing validation" would look
@@ -101,6 +141,10 @@ test.describe('Admin microcopy — English and Urdu', () => {
     await page.locator('button', { hasText: /نئی کمپنی/ }).last().click();
     await expect(page.getByText(new RegExp(name)).first()).toBeVisible({ timeout: 15000 });
 
+    // OWNED: the company this lane just created through the form, claimed by the unique name it
+    // typed — immediately after creation, so cleanup deletes this row and not a name family.
+    await claimOwned('companies', `SELECT id FROM companies WHERE name = '${name}'`);
+
     const toastText = await page.evaluate(() => document.body.innerText);
     for (const banned of FORBIDDEN_ON_SCREEN) {
       expect(toastText, `technical wording "${banned}" reached the screen`).not.toContain(banned);
@@ -110,17 +154,17 @@ test.describe('Admin microcopy — English and Urdu', () => {
   test('the first screens a shop owner sees — phone, then code — read in both languages', async ({ page }) => {
     // ── English ────────────────────────────────────────────────────────────
     await page.goto(`${BASE_URL}/login`);
-    await page.waitForLoadState('networkidle');
+    await settle(page);
     await setLanguage(page, 'en');
     await page.goto(`${BASE_URL}/login`);
-    await page.waitForLoadState('networkidle');
+    await settle(page);
     await expect(page.getByText('Welcome back').first()).toBeVisible({ timeout: 15000 });
     await expect(page.getByText('Enter your phone number to sign in').first()).toBeVisible();
 
     // ── Urdu: the same screen, and the code screen an owner reaches from it ─
     await setLanguage(page, 'ur');
     await page.goto(`${BASE_URL}/login`);
-    await page.waitForLoadState('networkidle');
+    await settle(page);
     await expect(page.getByText('خوش آمدید').first()).toBeVisible({ timeout: 15000 });
     await expect(page.getByText('سائن ان کرنے کے لیے اپنا فون نمبر لکھیں').first()).toBeVisible();
     await expect(page.getByText('Welcome back').first()).toHaveCount(0);
@@ -142,7 +186,17 @@ test.describe('Admin microcopy — English and Urdu', () => {
     await page.waitForURL(/\/login\/otp|pin-set|dashboard/, { timeout: 20000 });
 
     if (page.url().includes('/login/otp')) {
-      await expect(page.getByText('اپنے 6 نمبر لکھیں').first()).toBeVisible({ timeout: 10000 });
+      // The shipped code screen: `auth.verifyOtp` (header) over `auth.enterCode` (subtitle).
+      //
+      // This assertion used to pin an older literal — 'اپنے 6 نمبر لکھیں', "write your 6
+      // digits" — that the plain-language copy pass replaced. It was a stale expectation, not
+      // a missing translation: the screen rendered Urdu the whole time, in different words,
+      // and the trace showed the correct Urdu header, subtitle and "sent to your number" line
+      // with no English anywhere on it. Both halves of the shipped line are asserted so this
+      // cannot pass against a screen that silently reverted to English.
+      await expect(page.getByText('اپنا کوڈ لکھیں').first()).toBeVisible({ timeout: 10000 });
+      await expect(page.getByText('6 ہندسوں کا کوڈ لکھیں').first()).toBeVisible({ timeout: 10000 });
+      await expect(page.getByText('Enter 6-digit code').first()).toHaveCount(0);
     }
   });
 
@@ -157,8 +211,14 @@ test.describe('Admin microcopy — English and Urdu', () => {
   ];
 
   test('the screens whose wording was replaced now read Urdu only', async ({ page }) => {
+    // Ten routes, each loaded twice (once in English, once after the Urdu dictionary is
+    // planted), on a dev server that transforms every module on first request. The default
+    // 120s per test cannot hold that loop, and the first version of this lane hid the fact
+    // behind a `networkidle` that never returned: the ceiling and the wait were both wrong,
+    // so raising the ceiling without fixing the wait would only have moved the timeout.
+    test.setTimeout(300_000);
     await page.goto(BASE_URL);
-    await page.waitForLoadState('networkidle');
+    await settle(page);
     await injectAdminAuth(page);
 
     const routes = [
@@ -176,7 +236,7 @@ test.describe('Admin microcopy — English and Urdu', () => {
 
     for (const path of routes) {
       await page.goto(`${BASE_URL}${path}`);
-      await page.waitForLoadState('networkidle');
+      await settle(page);
       // setLanguage reloads the page, so this same route is already re-entered with the
       // Urdu dictionary stored. A second `goto` on top of that reload is what produced
       // the net::ERR_ABORTED flake in a full-suite run: two navigations racing for one
@@ -202,16 +262,22 @@ test.describe('Admin microcopy — English and Urdu', () => {
   });
 
   test('the admin dashboard and settings show no raw or technical wording in Urdu', async ({ page }) => {
+    // Ten routes, each loaded twice (once in English, once after the Urdu dictionary is
+    // planted), on a dev server that transforms every module on first request. The default
+    // 120s per test cannot hold that loop, and the first version of this lane hid the fact
+    // behind a `networkidle` that never returned: the ceiling and the wait were both wrong,
+    // so raising the ceiling without fixing the wait would only have moved the timeout.
+    test.setTimeout(300_000);
     await page.goto(BASE_URL);
-    await page.waitForLoadState('networkidle');
+    await settle(page);
     await injectAdminAuth(page);
 
     for (const path of ['/admin/dashboard', '/admin/settings', '/admin/companies', '/admin/products', '/admin/employees']) {
       await page.goto(`${BASE_URL}${path}`);
-      await page.waitForLoadState('networkidle');
+      await settle(page);
       await setLanguage(page, 'ur');
       await page.goto(`${BASE_URL}${path}`);
-      await page.waitForLoadState('networkidle');
+      await settle(page);
 
       const screen = await page.evaluate(() => ({
         text: document.body.innerText,

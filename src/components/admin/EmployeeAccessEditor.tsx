@@ -59,14 +59,21 @@ export default function EmployeeAccessEditor({ roleDefaults, value, onChange, st
     );
   }
 
-  const LEGEND = [
-    { key: "fromRole", dot: "var(--brand)" },
-    { key: "onlyThis", dot: "#3b82f6" },
-    { key: "offForThis", dot: "var(--error)" },
-  ] as const;
-
   return (
     <div>
+      {/*
+       * The sentence that says what this list is, said once, above it.
+       *
+       * This replaced a three-dot legend (green/blue/red). The dots were answering a question
+       * nobody had asked yet — what do the markers mean — while the question everybody has when
+       * forty boxes appear is "what am I deciding here?". A line of plain words answers that, and
+       * the markers on the rows keep doing their work without a key: a row that differs from the
+       * role is the exception, and an exception is visible on its own.
+       */}
+      <p className="text-12 leading-snug mb-2" style={{ color: "var(--text-secondary)" }} data-testid="emp-access-context">
+        {t("access.subheading")}
+      </p>
+
       <PermissionChecklist
         value={value}
         onChange={onChange}
@@ -74,26 +81,6 @@ export default function EmployeeAccessEditor({ roleDefaults, value, onChange, st
         maxHeight="400px"
         testIdPrefix="emp-perm"
       />
-
-      {/* The markers only mean something next to their own key, and the middle one is the
-          only state that has no marker on the row — a box that is ticked for nobody else. */}
-      <div className="flex flex-wrap items-center gap-3 mt-3">
-        {LEGEND.map(({ key, dot }) => (
-          <span key={key} className="flex items-center gap-1 text-10" style={{ color: "var(--text-secondary)" }}>
-            <span
-              className="inline-block w-2.5 h-2.5 rounded-full shrink-0"
-              style={{ background: dot }}
-            />
-            {t(
-              key === "fromRole"
-                ? "empDetail.fromRole"
-                : key === "onlyThis"
-                  ? "empDetail.onlyThis"
-                  : "empDetail.offForThis"
-            )}
-          </span>
-        ))}
-      </div>
     </div>
   );
 }

@@ -48,6 +48,22 @@ const RESOLVERS = [
 ];
 
 const CANONICAL = ['resolve_active_shop', 'membership_in_active_shop', 'current_shop_id'];
+/**
+ * Functions that read the chain one step further out. `current_branch_id()` (0188) resolves the
+ * branch inside `current_shop_id()`, and `current_branch_scope()` is defined as
+ * `ARRAY[current_branch_id()]` — so it reads the chain transitively.
+ *
+ * The rule this file enforces is "nobody re-derives the active shop from row age"; a direct textual
+ * reference to one of three names was too narrow a proxy for that, and it flagged a function that
+ * reads the chain by calling the branch resolver. The dangerous shape is still caught below, by the
+ * caller-scoped-fallback test, which looks for the actual re-derivation shape — the oldest
+ * membership deciding the shop — and for the chain only being consulted after it.
+ */
+const CHAIN_READS = [...CANONICAL, 'current_branch_id'];
+
+// Included so the branch resolver is itself checked for reading the chain, rather than being the one
+// function exempt from the rule.
+const BRANCH_RESOLVER = ['current_branch_id'];
 const INTERNAL = ['resolve_active_shop', 'membership_in_active_shop', 'create_shop_internal'];
 const AUTHENTICATED_ONLY = ['set_active_shop', 'create_shop_for_me', 'get_my_shops'];
 
@@ -83,24 +99,83 @@ afterAll(async () => {
 });
 
 describe('the active shop has exactly one owner', () => {
-  it('only resolve_active_shop derives the active shop from the first membership', async () => {
+  /**
+   * The property, not a snapshot of the function list.
+   *
+   * This test used to assert the exact list of functions whose body contains
+   * `ORDER BY m.created_at ASC` and expect `['resolve_active_shop']`. That list is not the rule:
+   * the rule is *who owns the decision*. Measured against QA, three functions contain the shape,
+   * and two of them are legitimate:
+   *
+   *   resolve_active_shop      the owner — selection, then oldest membership, then users.shop_id.
+   *   authorize_business_action reads current_shop_id() first (line before the fallback) and only
+   *                            falls back to the oldest membership when there is no usable active
+   *                            shop. The chain still decides; the fallback is the pre-0149
+   *                            behaviour for memberships with no selection.
+   *   resolve_invite           asks a different question entirely — the first membership of an
+   *                            INVITED PHONE in a given shop (`m.tenant_id = p_shop_id` plus a phone
+   *                            match), not the caller's own shop. Its query is not caller-scoped.
+   *
+   * So the assertion is: the shape must still exist and belong to `resolve_active_shop`, and any
+   * CALLER-SCOPED function that contains it must consult the chain *before* it falls back. A
+   * function that derives the caller's shop from the oldest membership without asking the chain
+   * first is the regression this guards (that is what 0165 reintroduced), and it fails here.
+   *
+   * The limit is stated rather than implied: presence and order are checked, semantics are not. A
+   * function that consults the chain and then overrides its answer would still pass.
+   */
+  it('only resolve_active_shop owns the active-shop derivation', async () => {
     const { rows } = await client.query(
-      `SELECT p.proname
+      `SELECT p.proname, pg_get_functiondef(p.oid) AS def
          FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
         WHERE n.nspname = 'public' AND p.prokind = 'f'
-          AND pg_get_functiondef(p.oid) LIKE '%ORDER BY m.created_at ASC%'
-        ORDER BY 1`,
+          -- ILIKE, not LIKE: the first version of this test searched case-sensitively, so a
+          -- function that wrote the clause in lower case was invisible to it. Found by injecting
+          -- exactly that and watching the check stay green.
+          AND pg_get_functiondef(p.oid) ILIKE '%ORDER BY m.created_at ASC%'`,
     );
-    expect(rows.map((r: any) => r.proname)).toEqual(['resolve_active_shop']);
+    const matching = rows.map((r: any) => String(r.proname));
+
+    // Non-vacuity: the shape must still be there, and the owner must be one of the matches.
+    expect(matching, 'no function derives anything from the oldest membership any more')
+      .toContain('resolve_active_shop');
+
+    const chainCall = /(current_shop_id|resolve_active_shop)\s*\(/;
+    // Any identifier on the right of `m.user_id =` — not a list of the three names in use today.
+    // Measured against QA: exactly two functions match this (resolve_active_shop and
+    // authorize_business_action), and resolve_invite's reversed `u.id = m.user_id` join does not.
+    const callerScopedFallback = /m\.user_id\s*=\s*[a-z_][\w.]*[\s\S]{0,400}?ORDER BY m\.created_at ASC/i;
+
+    const problems: string[] = [];
+    for (const row of rows) {
+      const name = String(row.proname);
+      if (name === 'resolve_active_shop') continue; // the owner, by definition
+      const def = String(row.def);
+      const fallback = callerScopedFallback.exec(def);
+      if (!fallback) continue; // not a caller-scoped derivation of the active shop
+      const chain = chainCall.exec(def);
+      if (!chain) {
+        problems.push(`${name}: derives the caller's shop from the oldest membership and never asks the chain`);
+        continue;
+      }
+      if (chain.index > fallback.index) {
+        problems.push(`${name}: asks the chain only AFTER falling back to the oldest membership`);
+      }
+    }
+
+    expect(
+      problems,
+      'these functions let row age decide the active shop instead of the chain — read resolve_active_shop() first',
+    ).toEqual([]);
   });
 
   it('every authority resolver reads the chain', async () => {
-    const defs = await bodies(RESOLVERS);
+    const defs = await bodies([...RESOLVERS, ...BRANCH_RESOLVER]);
     const wrong: string[] = [];
-    for (const name of RESOLVERS) {
+    for (const name of [...RESOLVERS, ...BRANCH_RESOLVER]) {
       const def = defs[name];
       if (!def) { wrong.push(`${name}: missing`); continue; }
-      const reads = CANONICAL.filter((c) => c !== name).some((c) => def.includes(c));
+      const reads = CHAIN_READS.filter((c) => c !== name).some((c) => def.includes(c));
       if (!reads) wrong.push(name);
     }
     expect(wrong, 'these functions re-derive the active shop instead of reading the chain').toEqual([]);

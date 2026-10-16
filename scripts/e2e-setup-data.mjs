@@ -11,6 +11,18 @@ for (const l of lines) {
   }
 }
 
+// REFUSAL, AND WHY IT IS HERE. This script TRUNCATEs fourteen business tables. Until now its only
+// protection was that it read `.env.qa` — implicit, and an implicit protection is not one: whatever
+// that file happened to hold was the target. A script that can destroy rows must refuse a target it
+// was not meant for, in code (docs/PRODUCTION_DATA_POLICY.md, enforced by
+// tests/unit/productionDataPolicy.test.ts).
+const QA_PROJECT_REF = 'bpybjrjenwccowvtrevu';
+const projectRef = String(env.QA_SUPABASE_URL || '').match(/^https:\/\/([a-z]{20})\.supabase\.co/)?.[1] ?? '';
+if (projectRef !== QA_PROJECT_REF) {
+  console.error(`Refusing to run: QA_SUPABASE_URL points at "${projectRef || '(unreadable)'}", not the QA project (${QA_PROJECT_REF}).`);
+  process.exit(1);
+}
+
 const c = createClient(env.QA_SUPABASE_URL, env.QA_SUPABASE_SERVICE_ROLE);
 const SHOP = '00000000-0000-0000-0000-000000000001';
 const OWNER = 'bfb26cc6-b32c-4d8f-a0b9-ac69caa1e483';

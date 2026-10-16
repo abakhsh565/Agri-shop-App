@@ -1,0 +1,6 @@
+# Local environment: the QA connection and, when one is supplied, the model key.
+# Never committed — a key in the repository is a key in everyone's repository.
+.env
+
+# Whatever the local runner prints.
+.log

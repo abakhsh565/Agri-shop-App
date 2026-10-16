@@ -93,12 +93,17 @@ export default function AdminDashboardPage() {
   // Loaded through `@/lib/money` so Reports reads the same table exactly the same way.
   const [creditPayments, setCreditPayments] = useState<CreditPaymentRow[]>([]);
 
+  const workingBranchId = useShopStore((s) => s.activeBranchId);
+  const switchingBranch = useShopStore((s) => s.switching);
   // Fetch returns + the payments — store raw rows so we can filter by date range
   useEffect(() => {
+    let cancelled = false;
+    setAllReturns([]); setCreditPayments([]);
+    if (!workingBranchId || switchingBranch) return;
     async function fetchReturns() {
       try {
         const { data } = await supabase.from("returns").select("total_refund, created_at");
-        if (data) {
+        if (data && !cancelled) {
           setAllReturns(data.map((r: any) => ({
             amount: Number(r.total_refund || 0),
             createdAt: r.created_at || "",
@@ -107,8 +112,9 @@ export default function AdminDashboardPage() {
       } catch {}
     }
     fetchReturns();
-    loadCreditPayments().then(setCreditPayments).catch(() => {});
-  }, []);
+    loadCreditPayments().then((rows) => { if (!cancelled) setCreditPayments(rows); }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [workingBranchId, switchingBranch]);
 
   function getCustomerImg(customerId: string) {
     return customers.find((c) => c.id === customerId)?.imageUrl;
@@ -141,7 +147,8 @@ export default function AdminDashboardPage() {
    * guess about names. Until the branches have been read the header stays with the person:
    * showing branch chrome and then replacing it would make the screen jump on every open.
    */
-  const activeBranch = branches.find((b) => b.id === activeShopId) ?? null;
+  const activeBranchId = useShopStore((s) => s.activeBranchId);
+  const activeBranch = branches.find((b) => b.id === activeBranchId) ?? null;
   const inAddedBranch = branchesLoaded && !!activeBranch && !activeBranch.isMain;
   // The same sentence the Branches screen puts on a row, from the same derivation.
   const branchContext = activeBranch ? branchContextLabel(t, activeBranch) : null;
@@ -368,7 +375,7 @@ export default function AdminDashboardPage() {
               `truncate` do its job instead of overflowing. */}
           <span className="flex items-center gap-1 min-w-0 max-w-full">
             <span className="font-bold text-15 leading-tight truncate" style={{ color: "var(--text-primary)" }}>
-              {inAddedBranch ? activeShopName : displayName}
+              {displayName}
             </span>
             <ChevronDown size={15} className="shrink-0" style={{ color: "var(--text-secondary)" }} />
           </span>
@@ -377,9 +384,7 @@ export default function AdminDashboardPage() {
               day. On an added branch the branch is already the first line, so this one
               says what is IN it — the two lines never repeat each other. */}
           <span className="text-12 mt-0.5 truncate" style={{ color: "var(--text-secondary)" }}>
-            {inAddedBranch
-              ? branchContext
-              : activeShopName ? `${activeShopName} · ${todayLabel}` : todayLabel}
+            {activeBranch?.name ? `${activeBranch.name} · ${todayLabel}` : todayLabel}
           </span>
         </button>
 

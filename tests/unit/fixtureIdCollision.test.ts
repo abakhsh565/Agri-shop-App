@@ -95,4 +95,58 @@ describe('Fixture identity', () => {
       'two test files share a fixture UUID, so one suite\'s cleanup deletes the other\'s rows'
     ).toEqual([]);
   });
+
+  /**
+   * The same defect wears a second costume: two files declaring the same PHONE. `users.phone`
+   * is unique, so the second file's insert dies on `users_phone_key` instead — and because
+   * the suites insert with `ON CONFLICT (id) DO NOTHING`, the conflict arrives on a row the
+   * file never names, which reads as an infrastructure error rather than a fixture collision.
+   *
+   * That is exactly what `tenantBoundarySweep` did on its first run: it reused
+   * `923009790001`–`923009790003`, which `branchScopeEnforcement` already owns, and that suite
+   * then failed as a whole file (11 tests skipped) while the new one passed. The UUID guard
+   * could not see it. Numbers in the reserved QA ranges are literals, so they are checked the
+   * same way.
+   */
+  it('never lets two test files declare the same fixture phone', () => {
+    // A phone literal is 11–13 digits starting 92 (or 0 for the local form the app accepts).
+    const PHONE = /(?<![0-9])(92[0-9]{9,11})(?![0-9])/g;
+    const owners = new Map<string, Set<string>>();
+
+    for (const file of testFiles(path.resolve(process.cwd(), 'tests'))) {
+      const source = fs.readFileSync(file, 'utf-8');
+      for (const match of source.matchAll(PHONE)) {
+        const phone = match[1];
+        const rel = path.relative(process.cwd(), file).replace(/\\/g, '/');
+        if (!owners.has(phone)) owners.set(phone, new Set());
+        owners.get(phone)!.add(rel);
+      }
+    }
+
+    // The four seeded fixture accounts belong to the shared baseline by design; every other
+    // number must be declared by exactly one file.
+    const SHARED_PHONES = new Set([
+      '923001234567', // the QA owner (seeded baseline)
+      '923009999999', // QA Admin (seeded baseline)
+      '923008888888', // QA Employee (seeded baseline)
+      '923001122334', // Sales Employee (seeded baseline)
+      // The three seeded QA customers. `helpers.ts` and `tests/setup/fixtures.ts` must mean the
+      // same rows (Playwright seeds through one, vitest through the other), and the unit suites
+      // that reason about signals/recommendations read the same fixtures rather than seeding
+      // their own copies — the same reason the seeded UUIDs are listed above.
+      '923001111111', // QA Customer A (seeded baseline)
+      '923002222222', // QA Customer B (seeded baseline)
+      '923003333333', // QA Customer C (seeded baseline)
+    ]);
+
+    const collisions = [...owners.entries()]
+      .filter(([phone, files]) => !SHARED_PHONES.has(phone) && files.size > 1)
+      .map(([phone, files]) => `${phone} → ${[...files].join(', ')}`)
+      .sort();
+
+    expect(
+      collisions,
+      'two test files share a fixture phone, so the second insert dies on users_phone_key'
+    ).toEqual([]);
+  });
 });

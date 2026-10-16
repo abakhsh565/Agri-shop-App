@@ -46,12 +46,26 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { ROOT, loadEnvironmentConfig } from './lib/environments.mjs';
+import { ENVIRONMENT_NAMES, ROOT, loadEnvironmentConfig } from './lib/environments.mjs';
 
 const config = loadEnvironmentConfig();
 const STAGING_REF = config.environments.staging.projectRef;
 const PRODUCTION_REF = config.environments.production.projectRef;
-const DEVELOPMENT_STATUS = config.environments.development.status;
+
+/**
+ * Development's own state, read from environments.json rather than assumed.
+ *
+ * This harness used to hardcode "development has no project ref" as the expected refusal. That was
+ * true when it was written and stops being true the moment the dedicated development project this
+ * repository is waiting for exists — at which point a correct environment would be reported as a
+ * failure and the harness would have to be weakened to go green. The rule it is really testing is
+ * wider than the current state: **development is never a target unless its OWN project is recorded,
+ * and then only with its own credentials.** Both branches are asserted, and each is refused with
+ * exit 2 before a socket exists.
+ */
+const DEVELOPMENT = config.environments.development;
+const DEVELOPMENT_REF = DEVELOPMENT.projectRef ?? null;
+const DEVELOPMENT_TARGETABLE = DEVELOPMENT.status === 'active' && Boolean(DEVELOPMENT_REF);
 
 // Unroutable by definition: RFC 5737 reserves 203.0.113.0/24 for documentation, and `.invalid` is
 // reserved by RFC 2606, so it fails resolution locally instead of waiting on a network.
@@ -62,14 +76,12 @@ const NOWHERE_HOST = 'nonexistent-backup-target.invalid';
 // see it; because it is random, no formatting or redaction rule can have been written to expect it.
 const CANARY = `CANARY_${crypto.randomBytes(12).toString('hex')}`;
 
-const CREDENTIAL_KEYS = [
-  'PROD_DB_HOST',
-  'PROD_DB_USER',
-  'PROD_DB_PASS',
-  'QA_DB_HOST',
-  'QA_DB_USER',
-  'QA_DB_PASS',
-];
+/** Every environment's credential variables, derived from environments.json so a new prefix
+ *  (development's DEV_) is cleared here without anyone remembering to add it to a list. */
+const CREDENTIAL_KEYS = ENVIRONMENT_NAMES.flatMap((name) => {
+  const prefix = config.environments[name].envPrefix;
+  return [`${prefix}_DB_HOST`, `${prefix}_DB_USER`, `${prefix}_DB_PASS`];
+});
 
 /**
  * @param {object} c
@@ -100,12 +112,16 @@ const CASES = [
     expectStderr: /banana/,
   },
   {
-    name: 'development_has_no_project',
-    why: 'development has no recorded ref, so it cannot be verified, so it is refused',
+    name: DEVELOPMENT_TARGETABLE ? 'development_without_its_own_credentials' : 'development_has_no_project',
+    why: DEVELOPMENT_TARGETABLE
+      ? 'development now has its own project, so the refusal must be about ITS credentials — never a fallback to another environment’s'
+      : 'development has no recorded ref, so it cannot be verified, so it is refused',
     argv: ['scripts/backup-database.mjs', '--env', 'development'],
     clearCredentials: CREDENTIAL_KEYS,
     expectExit: 2,
-    expectStderr: /Refusing to run for "development".*no project ref is recorded/s,
+    expectStderr: DEVELOPMENT_TARGETABLE
+      ? /missing DEV_DB_HOST, DEV_DB_USER, DEV_DB_PASS[\s\S]*will not fall back/
+      : /Refusing to run for "development".*no project ref is recorded/s,
   },
   {
     name: 'production_without_credentials',
@@ -178,7 +194,11 @@ let failures = 0;
 console.log('Targeting refusal matrix — real processes, real exit codes');
 console.log(`  production ref : ${PRODUCTION_REF}`);
 console.log(`  staging ref    : ${STAGING_REF}`);
-console.log(`  development    : status "${DEVELOPMENT_STATUS}", no ref, therefore untargetable`);
+console.log(
+  DEVELOPMENT_TARGETABLE
+    ? `  development    : status "${DEVELOPMENT.status}", project ${DEVELOPMENT_REF}, targetable only with DEV_ credentials`
+    : `  development    : status "${DEVELOPMENT.status}", no ref, therefore untargetable`,
+);
 console.log(`  canary         : ${CANARY.length} chars, generated this run`);
 console.log('');
 

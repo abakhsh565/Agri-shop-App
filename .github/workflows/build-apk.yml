@@ -22,6 +22,16 @@ jobs:
       QA_DB_HOST: ${{ secrets.QA_DB_HOST }}
       QA_DB_USER: ${{ secrets.QA_DB_USER }}
       QA_DB_PASS: ${{ secrets.QA_DB_PASS }}
+      # The vitest steps below run the app's own modules, which resolve their environment from
+      # `import.meta.env` at import time. Without these three names the suite refuses to resolve
+      # an environment at all ([CONFIG] Neither VITE_SUPABASE_URL nor VITE_SUPABASE_PROJECT_ID
+      # is set), which takes `authSafetyGuard` down with it: a refused configuration implies
+      # "sms", so the suite's own "we really are in demo mode" assertion fails. Proven locally by
+      # running the suite with these three names empty (9/9 files red) and with the QA values
+      # (9/9 files, 82 tests green). PROJECT_ID is a project ref, not a secret.
+      VITE_SUPABASE_URL: ${{ secrets.QA_SUPABASE_URL }}
+      VITE_SUPABASE_ANON_KEY: ${{ secrets.QA_SUPABASE_ANON_KEY }}
+      VITE_SUPABASE_PROJECT_ID: bpybjrjenwccowvtrevu
     steps:
       - name: Checkout Code
         uses: actions/checkout@v7
@@ -41,6 +51,15 @@ jobs:
       - name: Verify QA Database Reachability
         run: node scripts/check-qa-connectivity.mjs
 
+      # ─── The migration ledger must agree with the directory ──────────
+      # Read-only. Every file in supabase/migrations/ must be recorded in
+      # supabase_migrations.schema_migrations with the sha256 it had when it was applied, every
+      # recorded version must still have a file, and no file may be numbered before the newest
+      # recorded version. Before this check existed the ledger held 3 rows while the directory
+      # held 167 files, and the only way to notice was to diff them by hand.
+      - name: Verify the migration ledger matches the directory
+        run: node scripts/migrate.mjs verify --env staging
+
       # ─── Unit + Integration Tests (Vitest) ──────────────────────────
       # Unit tests are isolated; they run in parallel. The integration suite shares ONE QA
       # database, and some files mutate the shared fixture users (active shop, permissions) while
@@ -51,16 +70,12 @@ jobs:
       - name: Run unit tests
         run: npx vitest run tests/unit --reporter=verbose
 
-      - name: Run integration tests (one file at a time — they share the QA database)
-        run: npx vitest run tests/integration --fileParallelism=false --reporter=verbose
-
-      # ─── Browser E2E Tests (Playwright) ─────────────────────────────
-      - name: Install Playwright Browsers
-        run: npx playwright install --with-deps chromium
-
-      # The E2E suite signs in through the real login flow, which needs each app
-      # user to have a confirmed Supabase Auth credential. Re-provisioning is
-      # idempotent and repairs a QA database that was cleaned without one.
+      # The suites sign in through the real login flow, which needs each app user to have a
+      # confirmed Supabase Auth credential. Re-provisioning is idempotent and repairs a QA
+      # database that was cleaned without one. It runs BEFORE the integration suite because
+      # that suite signs in too — branchScopeEnforcement asserts a warehouse-scoped employee
+      # can sign in — and run 38645773012 failed it with "Invalid login credentials" while
+      # this repair step, the one thing that could have helped, sat later in the job.
       - name: Provision QA Auth Sessions
         run: node scripts/provision-auth-sessions.mjs
         env:
@@ -69,6 +84,13 @@ jobs:
           QA_DB_HOST: ${{ secrets.QA_DB_HOST }}
           QA_DB_USER: ${{ secrets.QA_DB_USER }}
           QA_DB_PASS: ${{ secrets.QA_DB_PASS }}
+
+      - name: Run integration tests (one file at a time — they share the QA database)
+        run: npx vitest run tests/integration --fileParallelism=false --reporter=verbose
+
+      # ─── Browser E2E Tests (Playwright) ─────────────────────────────
+      - name: Install Playwright Browsers
+        run: npx playwright install --with-deps chromium
 
       - name: Run Playwright E2E
         run: npx playwright test
@@ -87,12 +109,23 @@ jobs:
           path: tests/e2e/results.json
           retention-days: 7
 
-      # ─── Clean QA Database After Tests ──────────────────────────────
-      - name: Clean QA Database
-        if: always()
-        run: node scripts/clean-test-data.mjs
-        env:
-          QA_DATABASE_URL: postgresql://${{ secrets.QA_DB_USER }}:${{ secrets.QA_DB_PASS }}@${{ secrets.QA_DB_HOST }}:5432/postgres
+      # ─── What used to be here, and why it must not come back ────────
+      #
+      # A step named "Clean QA Database" ran `node scripts/clean-test-data.mjs` with
+      # `if: always()`. That script issues table-wide DELETEs — customers, products,
+      # companies, sales, payments, inventory, returns, voids, notifications, reminders,
+      # audit, shop_requests, activity_log — and then deletes every user that is not one of
+      # four seed phones, plus their `auth.users` rows.
+      #
+      # So building an APK — an artefact task, on push to main and on every manual run —
+      # silently destroyed the QA business data and the QA accounts it did not need to touch,
+      # whether the tests passed or failed. A build must never be a reason to lose history,
+      # and it must never be green because it deleted the evidence of what it just ran.
+      #
+      # The suites manage their own fixtures instead: tests/e2e/cleanupOwnership.ts removes
+      # only the rows a run created, and tests/setup/global-teardown.ts cleans only when
+      # QA_CLEAN_AFTER_RUN=1. A deliberate QA reset is an owner action through
+      # `npm run qa:clean`, which refuses to run without that confirmation.
 
   build:
     name: Build APK
@@ -117,13 +150,32 @@ jobs:
           distribution: 'zulu'
           java-version: '21'
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+      # ─── Android SDK ─────────────────────────────────────────────────────
+      # ubuntu-latest already carries the Android SDK and its cmdline-tools. The
+      # android-actions/setup-android@v3 action was removed because it runs
+      # `sdkmanager tools`, and the `tools` package no longer exists in the SDK
+      # repository — run 37072640900 failed inside the action itself with
+      # "Warning: Failed to find package 'tools'" and exit 1, before any build step
+      # ran. This step only locates the SDK the runner already has.
+      - name: Locate the runner's Android SDK
+        run: |
+          if [ -z "${ANDROID_HOME:-}" ] || [ ! -d "$ANDROID_HOME" ]; then
+            echo "ANDROID_HOME is not set on this runner image — the build has no SDK to use." >&2
+            exit 1
+          fi
+          SDKMANAGER="$(ls -d "$ANDROID_HOME"/cmdline-tools/*/bin/sdkmanager 2>/dev/null | sort -V | tail -1)"
+          if [ -z "$SDKMANAGER" ]; then
+            echo "No sdkmanager found under $ANDROID_HOME/cmdline-tools." >&2
+            exit 1
+          fi
+          echo "SDKMANAGER=$SDKMANAGER" >> "$GITHUB_ENV"
+          [ -n "${ANDROID_SDK_ROOT:-}" ] || echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> "$GITHUB_ENV"
+          echo "Android SDK: $ANDROID_HOME (sdkmanager: $SDKMANAGER)"
 
       - name: Install Android SDK Platform 35
         run: |
-          sdkmanager --install "platforms;android-35" "build-tools;35.0.0"
-          yes | sdkmanager --licenses || true
+          "$SDKMANAGER" --install "platforms;android-35" "build-tools;35.0.0"
+          yes | "$SDKMANAGER" --licenses || true
 
       - name: Install Dependencies
         run: npm install --legacy-peer-deps

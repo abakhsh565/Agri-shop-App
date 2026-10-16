@@ -56,7 +56,9 @@ async function login(page: Page) {
     for (const k of Object.keys(localStorage)) if (/^sb-/.test(k)) localStorage.removeItem(k);
   });
   await page.goto(`${BASE_URL}/login`);
-  await page.getByPlaceholder('e.g. 03001234567').fill(OWNER_PHONE);
+  // The field takes the local 03… form; the 92… constant is read as a country-code paste
+  // and becomes a 10-digit number the validator refuses.
+  await page.getByPlaceholder('e.g. 03001234567').fill(`0${OWNER_PHONE.slice(2)}`);
   await page.getByRole('button', { name: 'Send Code' }).click();
   await page.waitForURL(/\/login\/otp/, { timeout: 20000 });
   const boxes = page.locator('[data-testid^="otp-digit-"]');
@@ -114,7 +116,7 @@ test.describe('Interaction layer: motion, feedback, skeletons, toasts, date chro
   });
 
   test.afterAll(async () => {
-    await cleanupFixtures().catch(() => {});
+    await cleanupFixtures();
   });
 
   test('1. a sheet animates IN and OUT, and a dying overlay never swallows a tap', async ({ page }) => {
@@ -200,14 +202,18 @@ test.describe('Interaction layer: motion, feedback, skeletons, toasts, date chro
     await page.goto(`${BASE_URL}/admin/purchases`);
     await page.waitForTimeout(500);
 
-    const skel = page.locator('.ds-skeleton');
+    // The LIST's placeholder, not whichever skeleton happens to be first: this screen also waits
+    // on a shell-level figure (the supplier balance in the summary card), whose placeholder is a
+    // single line inside a summary card with no row to be shaped like. Measuring "the first
+    // .ds-skeleton on the page" made this assertion about that line instead of about the list.
+    const skel = page.locator('.ds-listcard .ds-skeleton');
     const count = await skel.count();
     expect(count, 'a loading list renders no skeleton at all').toBeGreaterThan(0);
 
     // The skeleton must sit inside the same grouped card the rows will fill, at the
     // real row height, or the list still jumps when it settles.
     const shape = await page.evaluate(() => {
-      const el = document.querySelector('.ds-skeleton') as HTMLElement;
+      const el = document.querySelector('.ds-listcard .ds-skeleton') as HTMLElement;
       const card = el.closest('.ds-listcard') as HTMLElement | null;
       const row = el.closest('.ds-row') as HTMLElement | null;
       return {
@@ -391,7 +397,8 @@ test.describe('Interaction layer: motion, feedback, skeletons, toasts, date chro
     // `--divider` (#242422) in dark: the in-card hairline in BOTH themes, so no edge was
     // ever drawn. This measures the boxes where the complaint was raised.
     await page.goto(`${BASE_URL}/login`);
-    await page.getByPlaceholder('e.g. 03001234567').fill('923001234567');
+    // Local form: the 92… constant would be read as a country-code paste by the field.
+    await page.getByPlaceholder('e.g. 03001234567').fill('03001234567');
     await page.getByRole('button', { name: 'Send Code' }).click();
     await page.waitForURL(/\/login\/otp/, { timeout: 20000 });
 

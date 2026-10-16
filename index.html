@@ -12,6 +12,12 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="AgriShop" />
+    <!-- The tab icon the app never had: without an explicit <link rel="icon"> the browser
+         requests /favicon.ico on every page load and the dev server answers 404, which is a
+         console error on every screen (and a real 404 for the owner in production). The
+         Android launcher mark is the same asset, so the tab and the app icon agree. -->
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <link rel="apple-touch-icon" href="/favicon.png" />
     <title><!-- figma:title --></title>
     
     <!-- Security Headers -->

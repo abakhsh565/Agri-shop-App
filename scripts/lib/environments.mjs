@@ -38,6 +38,7 @@
  *   in every manifest so two runs can be compared after the fact.
  */
 
+import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -47,6 +48,12 @@ export const ROOT = path.resolve(fileURLToPath(new URL('../..', import.meta.url)
 const CONFIG_PATH = path.join(ROOT, 'environments.json');
 
 export const ENVIRONMENT_NAMES = ['development', 'staging', 'production'];
+
+/** `docker` on Windows can be a shell shim with no extension; prefer the real executable. */
+const DOCKER = process.platform === 'win32' ? 'docker.exe' : 'docker';
+
+/** Hostnames that can only ever be this machine, so a connection to one cannot be a hosted project. */
+const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '::1', '[::1]', '0:0:0:0:0:0:0:1']);
 
 let cached = null;
 
@@ -343,6 +350,182 @@ export function requireEnvironmentOrExit(argv, { command }) {
     console.error(String(error.message));
     process.exit(2);
   }
+}
+
+// ── Local environments: the Supabase CLI stack on this machine ────────────────────────────────
+//
+// A local environment is the one kind of target that is not a hosted project, so it is described by
+// different facts: which container is running, on which loopback port, and which project id a build
+// for it must resolve to. Those live in environments.json (`kind`, `localProjectId`, `localStack`)
+// so that the app's contract, this tooling and the runbook all read one description.
+//
+// The isolation rule is enforced here rather than assumed: the DB_URL the stack reports must be a
+// LOOPBACK address. A `.env.local` (or a `supabase status`) that points somewhere else is refused
+// before a socket is opened, so "development" can never become a quiet alias for a hosted project.
+
+/** Is this environment the local stack rather than a hosted project? */
+export function isLocalEnvironment(name) {
+  return environmentConfig(name).kind === 'local';
+}
+
+/** The project id a build for this environment must resolve to, or null when it has none. */
+export function localProjectIdFor(name) {
+  return environmentConfig(name).localProjectId ?? null;
+}
+
+/** True only for an address that can only be this machine. */
+export function isLoopbackHost(host) {
+  return LOOPBACK_HOSTS.has(String(host ?? '').trim().toLowerCase());
+}
+
+/** The Supabase CLI shipped as a dependency, so no global install is required. */
+export function supabaseCliPath() {
+  const base = path.join(ROOT, 'node_modules/@supabase');
+  if (fs.existsSync(base)) {
+    for (const dir of fs.readdirSync(base)) {
+      if (!dir.startsWith('cli-')) continue;
+      const binDir = path.join(base, dir, 'bin');
+      if (!fs.existsSync(binDir)) continue;
+      const file = fs.readdirSync(binDir).find((name) => /^supabase(\.exe)?$/.test(name));
+      if (file) return path.join(binDir, file);
+    }
+  }
+  const shim = path.join(ROOT, `node_modules/.bin/supabase${process.platform === 'win32' ? '.cmd' : ''}`);
+  if (fs.existsSync(shim)) return shim;
+  return null;
+}
+
+/**
+ * Where the local stack says it is listening, straight from the CLI (`supabase status -o env`).
+ *
+ * Asking the CLI rather than hardcoding ports means the tooling follows a changed port instead of
+ * connecting to whatever is on the old one.
+ */
+export function localStackStatusEnv() {
+  const cli = supabaseCliPath();
+  if (!cli) {
+    throw new Error(
+      '[TARGETING] The Supabase CLI is not installed in this checkout (node_modules/@supabase). ' +
+        "Run `npm install`; the local stack's address is read from the CLI rather than guessed.",
+    );
+  }
+  const result = spawnSync(cli, ['status', '-o', 'env'], {
+    cwd: ROOT,
+    encoding: 'utf8',
+    maxBuffer: 64 * 1024 * 1024,
+  });
+  if (result.status !== 0) {
+    throw new Error(
+      `[TARGETING] The local Supabase stack is not running (\`supabase status\` exited ` +
+        `${result.status ?? -1}). Start it with \`npm run local:db -- up\` — see ` +
+        `docs/LOCAL_DEVELOPMENT.md.`,
+    );
+  }
+  const values = {};
+  for (const line of `${result.stdout}`.split('\n')) {
+    const match = line.match(/^([A-Z0-9_]+)="?(.*?)"?$/);
+    if (match) values[match[1]] = match[2].replace(/"$/, '');
+  }
+  return values;
+}
+
+/** The local database containers on this machine, for the record. A hosted project is not one. */
+export function localStackContainers(name) {
+  const pattern = environmentConfig(name).localStack?.containerPattern ?? 'supabase_db_*';
+  const filter = pattern.replace(/\*$/, '');
+  const result = spawnSync(DOCKER, ['ps', '--filter', `name=${filter}`, '--format', '{{.Names}}'], {
+    cwd: ROOT,
+    encoding: 'utf8',
+  });
+  if (result.status !== 0) return [];
+  return `${result.stdout}`
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
+/**
+ * Resolve a local environment's connection, or refuse.
+ *
+ * @throws when the environment is not local, when the stack is not running, or when the address it
+ *         reports is not loopback — the last one is the check that stops ``.env.local`` from turning
+ *         development into a pointer at a hosted project.
+ */
+export function localStackConnection(name) {
+  const entry = environmentConfig(name);
+  if (entry.kind !== 'local') {
+    throw new Error(
+      `[TARGETING] "${name}" is not a local environment (kind: ${entry.kind ?? 'hosted'}), so its ` +
+        `connection comes from credentials, not from the local stack.`,
+    );
+  }
+
+  const status = localStackStatusEnv();
+  const dbUrl = (status.DB_URL || '').trim();
+  if (!dbUrl) {
+    throw new Error(
+      "[TARGETING] The local stack reported no DB_URL, so there is nothing to verify. Start it " +
+        'with `npm run local:db -- up`.',
+    );
+  }
+
+  let parsed;
+  try {
+    parsed = new URL(dbUrl);
+  } catch {
+    throw new Error(`[TARGETING] The local stack reported an unparseable DB_URL (${dbUrl}).`);
+  }
+
+  if (!isLoopbackHost(parsed.hostname)) {
+    throw new Error(
+      `[TARGETING] ABORTED. "${name}" is the local stack, but its database address is ` +
+        `"${parsed.hostname}" — not this machine. Refusing: a local environment that reaches a ` +
+        `hosted address is not local, and calling it development would hide exactly the ` +
+        `cross-environment write this guard exists to prevent.`,
+    );
+  }
+
+  return {
+    environment: name,
+    connectionString: dbUrl,
+    host: parsed.hostname,
+    port: parsed.port || null,
+    database: parsed.pathname.replace(/^\//, '') || 'postgres',
+    apiUrl: status.API_URL || entry.localStack?.apiUrl || null,
+    projectId: entry.localProjectId ?? null,
+    containers: localStackContainers(name),
+    /** Loopback, so this is this machine by construction: no project ref is needed to know it. */
+    loopback: true,
+  };
+}
+
+/**
+ * Confirm, from the connection itself, that it is a local Supabase stack on this machine.
+ *
+ * The address check above is the guarantee; this is the positive half — the database must actually
+ * answer as the local stack, so "reached nothing" cannot be mistaken for "reached a stack".
+ */
+export async function identifyLocalStack(client, target) {
+  const row = (
+    await client.query(
+      "select current_database() as db, current_user as u, " +
+        "(select count(*)::int from pg_roles where rolname in ('anon','authenticated','service_role')) as api_roles, " +
+        "current_setting('server_version') as version",
+    )
+  ).rows[0];
+
+  return {
+    environment: target.environment,
+    host: target.host,
+    port: target.port,
+    database: row?.db ?? null,
+    serverUser: row?.u ?? null,
+    serverVersion: row?.version ?? null,
+    apiRoles: row?.api_roles ?? 0,
+    containers: target.containers,
+    /** Supabase's own roles, which a plain Postgres does not have. */
+    looksLikeSupabaseStack: (row?.api_roles ?? 0) === 3,
+  };
 }
 
 /**

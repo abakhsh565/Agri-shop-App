@@ -1,5 +1,6 @@
-import { describe, expect, it } from "vitest";
-import { __testing } from "@/lib/biometric";
+import { describe, expect, it, vi } from "vitest";
+import { BIOMETRIC_REASON_KEY, __testing, originCanHostFingerprint } from "@/lib/biometric";
+import { translations } from "@/lib/i18n";
 
 /**
  * What this file is for.
@@ -8,7 +9,10 @@ import { __testing } from "@/lib/biometric";
  * here with WebCrypto rather than trusted because it arrived. Two pieces of that are easy
  * to get subtly wrong and impossible to notice by reading —
  *
- *   1. the COSE_Key a WebAuthn public key arrives as has to be turned into a JWK, and
+ *   1. the public key a WebAuthn registration returns has to be turned into a JWK — and it
+ *      arrives in **two different shapes**: Chrome sends a DER SubjectPublicKeyInfo, while the
+ *      spec's other spelling is a CBOR COSE_Key map. The reader once understood only the map,
+ *      which passed the test below that built a map itself, and failed on every real browser;
  *   2. WebAuthn signs with ASN.1 DER while WebCrypto verifies P-256 in raw form, so the
  *      signature must be converted before it is checked.
  *
@@ -21,7 +25,17 @@ import { __testing } from "@/lib/biometric";
  * exactly what these tests make unnecessary.
  */
 
-const { readCborMap, coseToJwk, derToRawP256, toB64url, fromB64url } = __testing;
+const { readCborMap, coseToJwk, publicKeyToJwk, derToRawP256, toB64url, fromB64url } = __testing;
+
+/** Run the origin rule as if the page had been opened at this host. */
+function originAt(hostname: string): boolean {
+  vi.stubGlobal("window", { location: { hostname } });
+  try {
+    return originCanHostFingerprint();
+  } finally {
+    vi.unstubAllGlobals();
+  }
+}
 
 const subtle = globalThis.crypto.subtle;
 
@@ -109,6 +123,75 @@ describe("biometric — reading the public key a device returns", () => {
     expect(map.get(3)).toBe(-7);
     expect(map.get(-1)).toBe(1);
     expect((map.get(-2) as Uint8Array).length).toBe(32);
+  });
+});
+
+describe("biometric — the address a fingerprint can be enrolled on", () => {
+  it("accepts the names WebAuthn accepts, and refuses an address", () => {
+    // Measured on a real browser, not reasoned about: an IP-literal origin raises
+    // `SecurityError: This is an invalid domain` before any authenticator is consulted, so
+    // a row that offers a fingerprint there is offering something that cannot work. The
+    // dev preview used to be opened exactly that way, which is why the feature looked
+    // broken on a machine where every other app's fingerprint login works.
+    expect(originAt("localhost")).toBe(true);
+    expect(originAt("localhost.")).toBe(true);
+    expect(originAt("app.agrishop.pk")).toBe(true);
+    expect(originAt("127.0.0.1")).toBe(false);
+    expect(originAt("192.168.1.20")).toBe(false);
+    expect(originAt("::1")).toBe(false);
+    // A single-label host is not a registrable domain either.
+    expect(originAt("mybrowser")).toBe(false);
+  });
+});
+
+describe("biometric — every reason it is unavailable can actually be said", () => {
+  it("has a sentence in both languages for every reason", () => {
+    // The type makes the map total; this makes every entry of that map *readable*. A reason
+    // added without a sentence in one language would otherwise render as a blank row where
+    // the device is supposed to explain itself.
+    const en = translations.en as unknown as Record<string, string>;
+    const ur = translations.ur as unknown as Record<string, string>;
+    for (const [reason, key] of Object.entries(BIOMETRIC_REASON_KEY)) {
+      expect(en[key], `en is missing ${reason} (${key})`).toBeTruthy();
+      expect(ur[key], `ur is missing ${reason} (${key})`).toBeTruthy();
+    }
+  });
+});
+
+describe("biometric — the public key a real browser sends", () => {
+  it("reads the DER SubjectPublicKeyInfo Chrome actually returns", async () => {
+    // Not a hand-built fixture: this is the exact encoding `getPublicKey()` hands back, taken
+    // from WebCrypto's own SPKI export of a real P-256 key.
+    const pair = await subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, true, ["sign", "verify"]);
+    const spki = new Uint8Array(await subtle.exportKey("spki", pair.publicKey));
+    const expected = await subtle.exportKey("jwk", pair.publicKey);
+
+    // The shape this test exists to pin down. A CBOR map starts 0xa0-0xbf; this starts 0x30.
+    expect(spki[0]).toBe(0x30);
+    expect(spki.length).toBe(91);
+
+    const jwk = await publicKeyToJwk(spki);
+    expect(jwk.kty).toBe("EC");
+    expect(jwk.crv).toBe("P-256");
+    expect(jwk.x).toBe(expected.x);
+    expect(jwk.y).toBe(expected.y);
+
+    // And it is a key that can actually verify.
+    const imported = await subtle.importKey("jwk", jwk, { name: "ECDSA", namedCurve: "P-256" }, false, ["verify"]);
+    expect(imported.type).toBe("public");
+  });
+
+  it("still reads the CBOR spelling, so a browser that sends the map is not broken", async () => {
+    const { jwk } = await makeKeyPair();
+    const parsed = await publicKeyToJwk(coseFromJwk(jwk));
+    expect(parsed.x).toBe(jwk.x);
+    expect(parsed.y).toBe(jwk.y);
+  });
+
+  it("refuses a curve it cannot use rather than importing the wrong one", async () => {
+    const p384 = await subtle.generateKey({ name: "ECDSA", namedCurve: "P-384" }, true, ["sign", "verify"]);
+    const spki = new Uint8Array(await subtle.exportKey("spki", p384.publicKey));
+    await expect(publicKeyToJwk(spki)).rejects.toThrow();
   });
 });
 

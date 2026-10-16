@@ -78,9 +78,18 @@ export default function App() {
       className="app-shell-bg flex justify-center"
       style={{ background: "var(--surface-3)", minHeight: "100dvh" }}
     >
+      {/*
+        The frame is the viewport, not a box that grows past it.
+        It used to be `min-height: 100dvh` with `overflow-hidden`, so a screen whose content
+        was a few pixels over the viewport — or a browser reporting a slightly larger `dvh` —
+        pushed the page itself taller and the whole app scrolled, with empty space below it.
+        Now the frame is exactly `100dvh` and scrolls inside itself only when a screen genuinely
+        has more content than the window; every scrolling app shell (Admin, Employee) already
+        keeps its own scroll area, so nothing changes for them.
+      */}
       <div
-        className="app-frame w-full max-w-[480px] relative overflow-hidden shadow-2xl"
-        style={{ background: "var(--background)", minHeight: "100dvh" }}
+        className="app-frame w-full max-w-[480px] relative overflow-y-auto overflow-x-hidden shadow-2xl"
+        style={{ background: "var(--background)", height: "100dvh" }}
       >
         <ErrorBoundary><Dir><RouterProvider router={router} /></Dir></ErrorBoundary>
       </div>

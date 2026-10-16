@@ -19,7 +19,7 @@
  * RLS-protected reads are exercised. QA database only.
  */
 import { test, expect, type Page } from '@playwright/test';
-import { execSql, setupFixtures, cleanupFixtures } from './helpers';
+import { execSql, setupFixtures, cleanupFixtures, QA_IDS } from './helpers';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -40,7 +40,7 @@ function loadQaEnv() {
 }
 loadQaEnv();
 
-const BASE = 'http://localhost:5173';
+const BASE = process.env.QA_APP_URL || 'http://localhost:5173';
 const OTP = '123456';
 const PIN = '4321';
 
@@ -55,6 +55,13 @@ function rs(n: number) {
 /** Sign in through the real flow: phone -> dev OTP -> set & confirm PIN. */
 async function login(page: Page, phone: string) {
   await page.goto(`${BASE}/login`);
+  // One phone, one door: an employee's number has to be entered on the employee tab,
+  // which the page enforces before it sends anything.
+  if (phone === EMPLOYEE_PHONE) {
+    await page.getByTestId('auth-tab-employee').click();
+    // An invited number also has to name the shop it was invited by before a code is spent.
+    await page.getByTestId('shop-id-input').fill(QA_IDS.shop);
+  }
   await page.getByPlaceholder('e.g. 03001234567').fill(phone);
   await page.getByRole('button', { name: 'Send Code' }).click();
   await page.waitForURL(/\/login\/otp/, { timeout: 20000 });
@@ -98,7 +105,7 @@ async function setLanguage(page: Page, lang: 'en' | 'ur') {
 test.describe('Locked dashboard scope: figures reconcile with the database', () => {
   test.afterAll(async () => {
     // The figures are asserted against the DB, so leave the QA base as it was found.
-    await cleanupFixtures().catch(() => {});
+    await cleanupFixtures();
   });
 
   test('1. ADM-DASH-HOME shows every spec metric and its money figures equal the DB', async ({ page }) => {
@@ -110,7 +117,31 @@ test.describe('Locked dashboard scope: figures reconcile with the database', () 
     await login(page, OWNER_PHONE);
     expect(page.url()).toContain('/admin/dashboard');
 
-    const body = await page.textContent('body');
+    // WAIT FOR THE SCREEN TO HYDRATE — data-driven, not a stopwatch.
+    //
+    // WHY (reproduced 2026-10-15, full-suite run: `145 passed · 2 failed · 2 did not run`). `login()`
+    // waits a fixed 1500 ms after the dashboard route appears. That is enough on a fresh dev server
+    // (this lane is 6/6 on its own) and NOT enough on a dev server that has been serving for half an
+    // hour: the body at the moment of the read was the un-hydrated shell — "No suppliers yet · No
+    // products yet · No customers yet", "Total Sales Rs. 0", and a trailing "Loading…" — while the
+    // database held customers 10 / products 6 / companies 3 and the fixtures were intact. The lane
+    // then failed on `expect(body).toContain('Quick Alerts')`, which points at the wrong thing
+    // entirely: the section is data-dependent, so an empty store hides it.
+    //
+    // The gate removes the stopwatch and keeps — strengthens — the requirement: the rendered
+    // dashboard must converge on the figure the database actually holds. A blank, stale or wrong
+    // dashboard still fails here, and it fails naming the DB value instead of timing out.
+    const [gateSales] = await execSql(
+      `SELECT coalesce(sum(total_amount),0)::text AS total FROM sales WHERE is_voided = false`,
+    );
+    await expect
+      .poll(async () => (await page.textContent('body')) ?? '', {
+        timeout: 30_000,
+        message: `the dashboard never showed the DB total ${rs(Number(gateSales.total))} — it stayed un-hydrated`,
+      })
+      .toContain(rs(Number(gateSales.total)));
+
+    const body = (await page.textContent('body')) ?? '';
     // ADM-DASH-HOME metrics that remain: the hero figures and the action rows.
     for (const label of ['Total Sales', 'Gross profit', 'Credit collect', 'Action needed']) {
       expect(body, `dashboard is missing the "${label}" metric`).toContain(label);

@@ -22,6 +22,7 @@
  */
 
 import { execFileSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, test } from 'vitest';
@@ -184,14 +185,61 @@ describe('the wrong environment’s credentials are refused — the original def
   });
 });
 
-describe('an environment with no project cannot be targeted at all', () => {
-  test('development is refused, because no ref is recorded for it', () => {
-    process.env.DEV_DB_HOST = 'pooler.example';
-    process.env.DEV_DB_USER = `postgres.${STAGING_REF}`;
-    process.env.DEV_DB_PASS = 'x';
+describe('development is targetable only once its OWN project is recorded', () => {
+  test('no two environments claim one project ref — a shared ref IS the reported defect', () => {
+    // "Development and Staging/QA point to the same Supabase project" is the gap this whole task
+    // exists to close, so it is asserted as a rule rather than trusted: a ref may be claimed by
+    // exactly one environment, and the reverse lookup must name that same one. It passes today
+    // (development records no ref) and fails the moment development is wired to staging's or
+    // production's ref — which is the wiring mistake that would silently un-fix the gap.
+    const claimed = ENVIRONMENT_NAMES.map((name) => [name, expectedProjectRefFor(name)] as const).filter(
+      (entry): entry is readonly [string, string] => Boolean(entry[1]),
+    );
+    expect(claimed.length).toBeGreaterThanOrEqual(2);
+    const refs = claimed.map(([, ref]) => ref);
+    expect(new Set(refs).size).toBe(refs.length);
+    for (const [name, ref] of claimed) expect(environmentForProjectRef(ref)).toBe(name);
+  });
 
-    expect(expectedProjectRefFor('development')).toBeNull();
-    expect(() => resolveCredentials('development')).toThrow(/no project ref is recorded/);
+  test('development either has its own ref, or is refused before any connection', () => {
+    const entry = loadEnvironmentConfig().environments.development as {
+      projectRef: string | null;
+      status: string;
+      envPrefix: string;
+      localEnvFile: string | null;
+    };
+
+    // Unconditional: development reads DEV_* and nothing else, from the file .env.example
+    // documents for it. Neither of these is allowed to depend on whether the project exists yet.
+    expect(entry.envPrefix).toBe('DEV');
+    expect(entry.localEnvFile).toBe('.env.local');
+
+    if (entry.status === 'active' && entry.projectRef) {
+      // Provisioned. The two refs it may never be are the other environments' — and the reverse
+      // lookup must agree that this ref is development's alone.
+      expect(entry.projectRef).not.toBe(STAGING_REF);
+      expect(entry.projectRef).not.toBe(PRODUCTION_REF);
+      expect(expectedProjectRefFor('development')).toBe(entry.projectRef);
+      expect(environmentForProjectRef(entry.projectRef)).toBe('development');
+
+      // Isolation is symmetric, so the same pairing rule is asserted here as for staging and
+      // production: credentials naming another environment's project are refused by name, before
+      // a connection is opened. Then the control that makes that refusal mean something.
+      process.env.DEV_DB_HOST = 'pooler.example';
+      process.env.DEV_DB_USER = `postgres.${STAGING_REF}`;
+      process.env.DEV_DB_PASS = 'dev-password';
+      expect(() => resolveCredentials('development')).toThrow(/ABORTED/);
+      expect(() => resolveCredentials('development')).toThrow(new RegExp(STAGING_REF));
+      expect(() => resolveCredentials('development')).toThrow(/which is "staging"/);
+
+      process.env.DEV_DB_USER = `postgres.${entry.projectRef}`;
+      expect(assertCredentialsNameTarget(resolveCredentials('development'))).toBe(entry.projectRef);
+    } else {
+      // Not provisioned (the state today): there is no ref to verify against, so the environment
+      // is refused outright rather than guessed at.
+      expect(expectedProjectRefFor('development')).toBeNull();
+      expect(() => resolveCredentials('development')).toThrow(/no project ref is recorded/);
+    }
   });
 });
 
@@ -222,10 +270,27 @@ describe('the command line refuses out loud, with an exit code', () => {
     expect(output).toMatch(/requires an explicit target and has no default/);
   });
 
-  test('a backup for development is refused, before any connection', () => {
-    const { code, output } = run(BACKUP_SCRIPT, ['--env', 'development']);
+  test('a backup for development is refused, before any connection, in either state', () => {
+    const entry = loadEnvironmentConfig().environments.development as {
+      projectRef: string | null;
+      status: string;
+    };
+    const provisioned = entry.status === 'active' && Boolean(entry.projectRef);
+
+    // Two honest messages for one rule: with no project of its own there is nothing to verify
+    // against, and once it has one its own credentials are still the only ones it may use. The
+    // adversary below is production's identity under the DEV_ prefix — a *string*, so nothing is
+    // contacted and the refusal is decided before a socket exists.
+    const { code, output } = provisioned
+      ? run(BACKUP_SCRIPT, ['--env', 'development'], {
+          DEV_DB_HOST: '203.0.113.1',
+          DEV_DB_USER: `postgres.${PRODUCTION_REF}`,
+          DEV_DB_PASS: 'synthetic-not-a-credential',
+        })
+      : run(BACKUP_SCRIPT, ['--env', 'development']);
+
     expect(code).toBe(2);
-    expect(output).toMatch(/no project ref is recorded/);
+    expect(output).toMatch(provisioned ? /ABORTED/ : /no project ref is recorded/);
   });
 
   test('a backup for production with no production credentials is refused', () => {
@@ -259,5 +324,116 @@ describe('the command line refuses out loud, with an exit code', () => {
     const { code, output } = run(RESTORE_SCRIPT, []);
     expect(code).toBe(2);
     expect(output).toMatch(/--from <artifact\|manifest> is required/);
+  });
+});
+
+describe('the agreed recovery objectives are what the workflow and the doc both say', () => {
+  /**
+   * §9 of docs/RECOVERY.md is the policy of record; the workflow is where that policy takes effect —
+   * the cron IS the RPO, the retention default IS the retention policy. Nothing tied the two together,
+   * so either side could be edited alone and the agreed objective would change without anyone deciding
+   * it. That is the same silent-drift defect this file exists for, one layer up.
+   */
+  const WORKFLOW = readFileSync(join(ROOT, '.github/workflows/backup-database.yml'), 'utf8');
+  const RECOVERY_DOC = readFileSync(join(ROOT, 'docs/RECOVERY.md'), 'utf8');
+
+  test('the schedule is daily — which is the agreed 24-hour RPO', () => {
+    expect(WORKFLOW, 'the production backup is no longer scheduled daily').toMatch(/\s*-\s*cron:\s*'0 2 \* \* \*'/);
+    expect(RECOVERY_DOC, 'the doc no longer states the agreed production RPO').toContain('24 hours');
+  });
+
+  test('the retention default is the agreed 30 days, on BOTH sides', () => {
+    const declared = WORKFLOW.match(/retention_days:[\s\S]{0,600}?default:\s*'(\d+)'/);
+    expect(declared, 'the workflow no longer declares a retention default').toBeTruthy();
+    expect(declared![1], 'the retention default drifted from the agreed figure').toBe('30');
+    expect(RECOVERY_DOC, 'the doc no longer agrees with the workflow on retention').toContain('30 days');
+  });
+
+  test('the upload keeps the gates that make an artefact trustworthy', () => {
+    expect(WORKFLOW).toContain('if-no-files-found: error');
+    expect(WORKFLOW, 'the upload no longer honours the retention input').toMatch(
+      /retention-days:\s*\$\{\{\s*fromJSON\(env\.RETENTION_DAYS\)\s*\}\}/,
+    );
+  });
+});
+
+// ── the artefact is stored before anything reports on the run ─────────────────────────────────
+describe('a verified backup cannot be discarded by a step that only reports', () => {
+  /**
+   * The second half of the Phase 2A defect, and the quieter half.
+   *
+   * `Summary` — a step that only writes to the run summary and runs `if: always()` — was ordered
+   * BEFORE the upload. A typo inside it failed the job, so the upload step never executed and a
+   * verified production backup was thrown away (run 38826369696). Every gate had passed; the
+   * backup was real; it was deleted by a reporting step that was never supposed to gate anything.
+   *
+   * Moving one step is a one-line edit that nothing else in this repository would notice, which is
+   * why the order is asserted here rather than left to the comment in the workflow that recommends
+   * it. Two rules, in the shape of the defect:
+   *
+   *   - no step that only reports may be ordered before storage;
+   *   - storage itself is unconditional, so an unverified or mislabelled artefact is never kept.
+   */
+  const WORKFLOW = readFileSync(join(ROOT, '.github/workflows/backup-database.yml'), 'utf8');
+
+  /** The job's steps, in the order the runner executes them. */
+  const steps: { name: string; body: string }[] = (() => {
+    const heads = [...WORKFLOW.matchAll(/^ {6}- name: (.+)$/gm)].map((m) => ({ name: m[1].trim(), at: m.index! }));
+    return heads.map((h, i) => ({
+      name: h.name,
+      body: WORKFLOW.slice(h.at, i + 1 < heads.length ? heads[i + 1].at : WORKFLOW.length),
+    }));
+  })();
+
+  /** A step that runs whatever happened before it, and only tells someone about it. */
+  const REPORT_ONLY = /^\s+if: (always\(\)|failure\(\))$/m;
+
+  const UPLOAD = 'Upload the backup and its verification report';
+
+  function positionOf(prefix: string): number {
+    const at = steps.findIndex((s) => s.name.startsWith(prefix));
+    expect(at, `no step named "${prefix}…" — the parse below is stale, so these checks are vacuous`).toBeGreaterThanOrEqual(0);
+    return at;
+  }
+
+  test('the step parse sees the whole job, so the assertions below cannot pass vacuously', () => {
+    // Eleven steps today. If this collapses, the indentation changed and every check in this block
+    // silently became a no-op — the failure mode a guard must not have.
+    expect(steps.length).toBeGreaterThanOrEqual(9);
+    for (const expected of ['Verify the backup', UPLOAD, 'Summary', 'Failure notice']) positionOf(expected);
+  });
+
+  test('no reporting step is ordered before the artefact is stored', () => {
+    const uploadAt = positionOf(UPLOAD);
+    steps.forEach((step, at) => {
+      if (REPORT_ONLY.test(step.body)) {
+        expect(
+          at,
+          `"${step.name}" only reports on the run, yet it is ordered before the backup is stored: ` +
+            'a failure inside it would discard a verified artefact — the defect of run 38826369696',
+        ).toBeGreaterThan(uploadAt);
+      }
+    });
+  });
+
+  test('storage is ordered before every reporter, and after every gate', () => {
+    const uploadAt = positionOf(UPLOAD);
+    expect(uploadAt, 'the backup is uploaded after the run summary again').toBeLessThan(positionOf('Summary'));
+    expect(uploadAt, 'the backup is uploaded after the failure notice again').toBeLessThan(positionOf('Failure notice'));
+    expect(positionOf('Verify the backup'), 'the artefact is stored before it has been replayed').toBeLessThan(uploadAt);
+    // Between "it replayed correctly" and "keep it" stands one step, the label check. Anything
+    // else introduced there is either a reporter (caught above) or a new gate, and a new gate must
+    // be a deliberate decision rather than a side effect of editing the file.
+    expect(steps.slice(positionOf('Verify the backup') + 1, uploadAt).map((s) => s.name)).toEqual([
+      'Confirm the artefact names the environment it was asked for',
+    ]);
+  });
+
+  test('storage is unconditional, so a failed gate can never publish an artefact', () => {
+    const upload = steps[positionOf(UPLOAD)].body;
+    expect(upload, 'the upload became conditional — an unverified artefact could now be stored').not.toMatch(/^\s+if:/m);
+    expect(upload).toContain('if-no-files-found: error');
+    expect(upload, 'the upload no longer travels with its manifest and verification report')
+      .toContain('restore-verification-${{ env.TARGET }}.json');
   });
 });

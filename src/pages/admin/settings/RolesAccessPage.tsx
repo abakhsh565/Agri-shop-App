@@ -218,31 +218,31 @@ export default function RolesAccessPage() {
   }
 
   /**
-   * A role that employees are still using cannot be deleted, and saying so is a business
-   * explanation rather than a raw failure. Otherwise the owner confirms in the app's own
-   * dialog, so the wording and the button order follow the language.
-   */
-  /**
    * Remove a role.
    *
-   * One rule, for built-in and custom roles alike: nobody may be assigned to it. It used to
-   * refuse every built-in role outright, which meant a shop that never used Inventory Clerk
-   * had no way to remove it — "built-in" says where the role came from, not whether this shop
-   * still wants it. The role can be created again with the same access, so the rule that
-   * actually matter is kept: a role somebody is using is not deletable, and the screen says
-   * which rule it hit.
+   * Deleting a role takes the access it provided away from the employees working under it,
+   * which is what the owner means by deleting it. It used to be refused while anyone was
+   * assigned, which left the access in place and sent the owner to a second screen to
+   * reassign everybody first. The role's access is now revoked by the deletion itself, and
+   * the confirmation says so — naming how many employees will lose it — before anything is
+   * confirmed. The employees, their memberships and their history are not touched.
    */
   function handleDelete(role: Role) {
-    const count = memberCounts[role.id] ?? 0;
-    if (count > 0) { addToast(t("roles.deleteBlocked", { count }), "error"); return; }
     setDeleteTarget(role);
   }
 
-  /** Why this role cannot be removed, in the owner's words — empty when it can be. */
-  function deleteBlockedReason(role: Role): string {
+  /**
+   * What deleting this role does, in the owner's words.
+   *
+   * `onRow` is the one-line form the row can actually show — a row's meta line truncates,
+   * and a truncated sentence about who loses access is worse than a short one. The dialog
+   * gets the full sentence, because that is the screen where the destructive decision is
+   * made and the whole consequence belongs on it.
+   */
+  function deleteConsequence(role: Role, onRow = false): string {
     const count = memberCounts[role.id] ?? 0;
-    if (count > 0) return t("roles.deleteBlocked", { count });
-    return "";
+    if (count > 0) return t(onRow ? "roles.deleteRevokesShort" : "roles.deleteRevokes", { count });
+    return t(role.isSystem ? "roles.deleteHintBuiltIn" : "roles.deleteHint", { name: role.name });
   }
 
   async function confirmDelete() {
@@ -456,14 +456,10 @@ export default function RolesAccessPage() {
               <ListRow
                 danger
                 icon={Trash2}
-                disabled={Boolean(deleteBlockedReason(editingRole))}
                 onClick={() => handleDelete(editingRole)}
                 testId="role-delete-row"
                 title={t("roles.deleteAction")}
-                meta={
-                  deleteBlockedReason(editingRole)
-                  || t(editingRole.isSystem ? "roles.deleteHintBuiltIn" : "roles.deleteHint", { name: editingRole.name })
-                }
+                meta={deleteConsequence(editingRole, true)}
               />
             </ListCard>
           </div>
@@ -488,7 +484,7 @@ export default function RolesAccessPage() {
       <ConfirmDialog
         open={deleteTarget !== null}
         title={t("roles.deleteConfirm")}
-        message={t(deleteTarget?.isSystem ? "roles.deleteHintBuiltIn" : "roles.deleteHint", { name: deleteTarget?.name ?? "" })}
+        message={deleteTarget ? deleteConsequence(deleteTarget) : ""}
         confirmLabel={t("roles.deleteAction")}
         cancelLabel={t("common.cancel")}
         destructive

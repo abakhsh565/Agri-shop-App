@@ -1,7 +1,18 @@
 import { defineConfig } from '@playwright/test';
 
+// The suite's port is configurable because 5173 is shared with other projects on this machine.
+// Whichever port is used, the identity guard below still proves the server is THIS app's QA server.
+const PORT = Number(process.env.E2E_PORT) || 5173;
+// `QA_APP_URL` is the same variable the specs read for their own navigations, so config, guard and
+// specs can never disagree about which server is under test.
+const ORIGIN = process.env.QA_APP_URL || `http://localhost:${PORT}`;
+
 export default defineConfig({
   testDir: './tests/e2e',
+  // Reusing a running server is safe only when it is THIS app's QA-mode server on the port. The
+  // setup below reads that server's own environment block and fails the run closed otherwise, so a
+  // foreign application can never be driven silently (see tests/e2e/global-setup.ts).
+  globalSetup: './tests/e2e/global-setup.ts',
   fullyParallel: false,
   forbidOnly: true,
   retries: 0,
@@ -14,12 +25,16 @@ export default defineConfig({
   use: {
     // Use system Chrome instead of downloading Chromium
     channel: 'chrome',
-    baseURL: 'http://localhost:5173',
+    baseURL: ORIGIN,
     headless: true,
     screenshot: 'only-on-failure',
     trace: 'on-first-retry',
     actionTimeout: 10000,
-    navigationTimeout: 30000,
+    // A dev server transforms the whole app on the first request; when Playwright starts
+    // Vite itself (no server already on 5173) that first navigation can outrun 30s and
+    // fail the first test for a reason that is not the app. The wait is for the cold
+    // server to serve the app, not a weaker assertion about it.
+    navigationTimeout: 90000,
   },
   projects: [
     {
@@ -29,14 +44,19 @@ export default defineConfig({
   ],
   webServer: {
     // Use --mode qa so Vite loads .env.qa → QA Supabase instead of production
-    command: 'npx vite --mode qa --port 5173',
-    url: 'http://localhost:5173',
+    command: `npx vite --mode qa --port ${PORT}`,
+    url: ORIGIN,
     reuseExistingServer: true,
     timeout: 60000,
     env: {
       VITE_SUPABASE_URL: 'https://bpybjrjenwccowvtrevu.supabase.co',
       VITE_SUPABASE_ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJweWJqcmplbndjY293dnRyZXZ1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkwMjY1NzIsImV4cCI6MjEwNDYwMjU3Mn0.nHzYWdjmZ_TEp_2mzqeinCNoXeLvVdvOETgvJXxldS0',
       VITE_SUPABASE_PROJECT_ID: 'bpybjrjenwccowvtrevu',
+      // The app now refuses to start in an environment it cannot name, and refuses to accept the
+      // demo code outside development/staging. The lanes sign in through the real login flow
+      // against the staging project, so they say so explicitly rather than relying on defaults.
+      VITE_APP_ENV: 'staging',
+      VITE_OTP_DELIVERY: 'demo',
     },
   },
 });

@@ -9,6 +9,7 @@ import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import ListCard from "@/components/ui/ListCard";
 import ListRow from "@/components/ui/ListRow";
 import LogoTile from "@/components/ui/LogoTile";
+import Checkbox from "@/components/ui/Checkbox";
 import { backToSelf, dependencyHint, readReturnTo } from "@/lib/dependencyGraph";
 import { useCompaniesStore } from "@/stores/companiesStore";
 import { useProductsStore } from "@/stores/productsStore";
@@ -213,6 +214,73 @@ export default function AddProductPage() {
   // `false`, and a second generate would race the first.
   const barcodeBusyRef = useRef(false);
   const [packs, setPacks] = useState<PackDraft[]>(resumed?.packs ?? []);
+  /**
+   * "List on Farmer Marketplace" (0185).
+   *
+   * Off for a product being created, and read from the row when editing, so opening a listed
+   * product and saving it cannot quietly unlist it. The switch is the owner's decision and the
+   * database stores it as one: `update_product` distinguishes "not mentioned" from `false`, so an
+   * unlisting is recorded rather than inferred.
+   *
+   * A draft carries it too, because a half-written product that was meant to be listed must not
+   * come back unlisted.
+   */
+  const [marketplaceListed, setMarketplaceListed] = useState(
+    resumed?.marketplaceListed ?? existing?.marketplaceListed ?? false
+  );
+  /**
+   * Whether the switch has been moved by a person on this screen.
+   *
+   * It has to be tracked, because the row this screen edits can arrive AFTER the first render:
+   * open `/admin/inventory/<id>/edit` by URL and the shell has not filled `productsStore` yet, so
+   * every `useState` initializer above reads nothing. For the switch that was not a cosmetic lag.
+   * The initial value was captured as `false` while `marketplaceInitial` (recomputed on every
+   * render) became `true` a moment later, so `marketplaceChanged` said "the owner moved it" about
+   * a switch nobody had touched — and the next save, about anything at all, wrote
+   * `marketplaceListed: false` and unlisted a listed product. That is the exact defect the
+   * marketplace lane exists to catch (measured 2026-10-14 on a product the form itself had just
+   * listed).
+   */
+  const marketplaceTouched = useRef(false);
+  /**
+   * Adopt the row this screen edits, once it exists.
+   *
+   * WHY THIS IS NECESSARY, and not a nicety. This screen is opened by URL — a deep link, a
+   * refresh, the browser's back button, the redirect after a save — and the row it edits lives in
+   * `productsStore`, which the shell fills AFTER this component's first render. Every field above
+   * reads that row in a `useState` initializer, so on all of those paths the form opened BLANK for a
+   * product that exists. Measured 2026-10-14 on `/admin/inventory/<id>/edit`: the name and barcode
+   * were empty while the packs filled in a moment later (their effect re-runs), and the marketplace
+   * switch read `false` for a listed product — so `marketplaceChanged` said "the owner moved it"
+   * about a switch nobody had touched and the next save, about anything at all, unlisted it.
+   *
+   * A field is only adopted while it still holds what this screen started it with, so a row that
+   * arrives late can never overwrite what a person has typed.
+   */
+  const adoptedRef = useRef(false);
+  useEffect(() => {
+    if (!isEdit || resumed || adoptedRef.current || !existing) return;
+    adoptedRef.current = true;
+    setName((v) => (v === "" ? existing.name ?? "" : v));
+    setCompany((v) => (v === "" ? existing.company ?? "" : v));
+    setBarcode((v) => (v === "" ? existing.barcode ?? "" : v));
+    setImageUrl((v) => (v === null ? existing.imageUrl ?? null : v));
+    // The retired "Spray" name stays folded into Pesticide, exactly as the initializers above do.
+    setCategory((v) =>
+      v === "pesticide" && existing.category && existing.category !== "spray" ? existing.category : v
+    );
+    setBaseUnit((v) =>
+      v === "kg" && existing.baseUnit && existing.baseUnit !== "kg" ? (existing.baseUnit as BaseUnit) : v
+    );
+    if (!marketplaceTouched.current) setMarketplaceListed(existing.marketplaceListed === true);
+  }, [isEdit, resumed, existing]);
+  /**
+   * What the switch reads as the stored decision. On an edit, only a move away from this is
+   * sent: the RPC treats an absent value as "unchanged", so a save that did not touch the
+   * switch cannot unlist a listed product — not even if the row this device read was stale.
+   */
+  const marketplaceInitial = resumed?.marketplaceListed ?? existing?.marketplaceListed ?? false;
+  const marketplaceChanged = marketplaceListed !== marketplaceInitial;
   const [shopAlerts, setShopAlerts] = useState<StockAlertSettings>(DEFAULT_STOCK_ALERT_SETTINGS);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -266,6 +334,7 @@ export default function AddProductPage() {
       barcode,
       imageUrl,
       packs,
+      marketplaceListed,
     };
     const outcome = saveProductDraft(draft);
     if (!outcome.ok) {
@@ -581,6 +650,11 @@ export default function AddProductPage() {
           category,
           baseUnit,
           imageUrl: imageUrl ?? undefined,
+          // Only sent when the switch moved. `update_product` distinguishes "not mentioned"
+          // from false on purpose, and this is that distinction being used honestly: a save
+          // that never touched the switch leaves the stored decision exactly as it was, while
+          // an actual unlisting still travels as `false` and is recorded as a decision.
+          ...(marketplaceChanged ? { marketplaceListed } : {}),
           // Sent even when empty, because on an edit an empty field is a fact about the
           // product — it has no barcode — and not an omission. The database retires the code
           // it replaces. On create the same empty value means the opposite (mint one), which
@@ -598,6 +672,9 @@ export default function AddProductPage() {
           baseUnit,
           imageUrl: imageUrl ?? undefined,
           barcode: barcode.trim() || undefined,
+          // Sent on create unconditionally, including as false: there is no stored value to
+          // preserve yet, so this screen's switch IS the first decision about the product.
+          marketplaceListed,
           variants,
         });
         await useProductsStore.getState().load();
@@ -1093,6 +1170,41 @@ export default function AddProductPage() {
           >
             <Plus size={15} /> {t("addProduct.addAnotherVariant")}
           </button>
+
+          {/* ── Listing on the farmer marketplace ────────────────────────────────
+              A checkbox row, not a switch: it is the same control the permission and branch
+              lists already use, and it reads as a decision the owner ticks rather than a
+              setting he slides. The subtitle states the two things that decide whether it
+              actually appears — the branch has to be listing too, and the product has to be
+              in stock — because a tick that produces nothing visible is the failure this
+              whole screen has been fixed for before.
+
+              No separate save: the switch travels with the product on the same button, so
+              there is no second write to forget and no half-listed state. */}
+          <div
+            className="rounded-[var(--radius-card)] p-3.5 flex items-start gap-3"
+            style={{ background: "var(--tone-card)" }}
+          >
+            <button
+              type="button"
+              role="checkbox"
+              aria-checked={marketplaceListed}
+              aria-label={t("marketplace.listOn")}
+              onClick={() => { marketplaceTouched.current = true; setMarketplaceListed((v) => !v); }}
+              data-testid="product-marketplace-toggle"
+              className="mt-0.5 flex items-center justify-center shrink-0"
+            >
+              <Checkbox checked={marketplaceListed} />
+            </button>
+            <div className="min-w-0">
+              <p className="text-14 font-bold" style={{ color: "var(--text-primary)" }}>
+                {t("marketplace.listOn")}
+              </p>
+              <p className="text-11 mt-1" style={{ color: "var(--text-secondary)" }}>
+                {t("marketplace.listOnHint")}
+              </p>
+            </div>
+          </div>
 
           {error && <p className="text-xs" style={{ color: "var(--error)" }} data-testid="product-error">{error}</p>}
         </div>

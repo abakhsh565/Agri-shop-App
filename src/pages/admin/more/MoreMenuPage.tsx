@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   UserCheck,
@@ -12,9 +12,6 @@ import {
   ScanLine,
   ChevronRight,
   Compass,
-  Plus,
-  Store,
-  Check,
   type LucideIcon,
 } from "lucide-react";
 import StatusBar from "@/components/ui/StatusBar";
@@ -22,16 +19,10 @@ import BusinessSettingsSheet from "@/components/ui/BusinessSettingsSheet";
 import { useOwnerRows, type SuiteGroup } from "@/lib/ownerRows";
 import ListCard from "@/components/ui/ListCard";
 import ListRow from "@/components/ui/ListRow";
-import Button from "@/components/ui/Button";
-import { SkeletonList } from "@/components/ui/Skeleton";
-import BranchEditSheet from "@/components/shop/BranchEditSheet";
-import DeleteTargetSheet, { branchDeleteSubject } from "@/components/shop/DeleteTargetSheet";
 import { useT, type I18nKey } from "@/lib/i18n";
-import { branchContextLabel } from "@/lib/branchContext";
 import { useShellBase } from "@/lib/useShellBase";
 import { useDir } from "@/lib/dirContext";
 import { useShopStore } from "@/stores/shopStore";
-import type { BranchSummary } from "@/stores/shopStore";
 import { useAuthStore } from "@/stores/authStore";
 
 /**
@@ -154,36 +145,11 @@ export default function MoreMenuPage() {
   const activeShopName = useShopStore((s) => s.activeShopName);
   const openSwitcher = useShopStore((s) => s.openSwitcher);
   const membershipRole = useAuthStore((s) => s.user?.membershipRole);
+
   const { rowsOn } = useOwnerRows();
   // Crop configuration is a sheet, not a screen, so it opens here exactly as it opens from
   // Settings — one sheet, whichever screen the row is currently on.
   const [sheetOpen, setSheetOpen] = useState(false);
-
-  // ── Branches ──────────────────────────────────────────────────────────────────
-  const branches = useShopStore((s) => s.branches);
-  const branchesLoading = useShopStore((s) => s.branchesLoading);
-  const branchesLoaded = useShopStore((s) => s.branchesLoaded);
-  const branchesError = useShopStore((s) => s.branchesError);
-  const loadBranches = useShopStore((s) => s.loadBranches);
-  const activeShopId = useShopStore((s) => s.activeShopId);
-  const [editing, setEditing] = useState<BranchSummary | null>(null);
-  const [deleting, setDeleting] = useState<BranchSummary | null>(null);
-
-  /**
-   * Read the branches when this screen is opened, not once at sign-in.
-   *
-   * This is the screen where a branch is added or removed, so it is the one screen that has
-   * to be right immediately after somebody changes something — on this phone or another
-   * one. `branchesLoaded` keeps the repeat visits free.
-   */
-  useEffect(() => {
-    if (!branchesLoaded) void loadBranches();
-  }, [branchesLoaded, loadBranches]);
-
-  // What one branch holds. One derivation, shared with Home (`lib/branchContext`), because
-  // two screens writing the same sentence is how they start disagreeing about the same
-  // branch.
-  const branchContext = (b: BranchSummary) => branchContextLabel(t, b);
 
   // What this account is in THIS shop — the same three words Settings uses. It used to be a
   // constant ("Owner access") printed for everyone who opened this screen.
@@ -238,130 +204,10 @@ export default function MoreMenuPage() {
         </button>
       </div>
 
-      {/* ── Branches ──
-          The owner's own screen for the branches this account runs: the one it registered
-          with first (renameable, never deletable), then every branch added afterwards, each
-          with the two things management means — edit it, or remove it. A row is not a
-          navigation target: which branch you are WORKING in is the card above, and mixing
-          "open this branch" into the same row as "delete this branch" is how the wrong one
-          gets tapped. */}
-      <div className="px-4 pt-4" data-testid="branches-section">
-        <ListCard section={t("branches.title")}>
-          {branchesLoading && branches.length === 0 && (
-            <div data-testid="branches-loading">
-              <SkeletonList rows={2} />
-            </div>
-          )}
-
-          {!branchesLoading && branches.length === 0 && (
-            <ListRow
-              title={t(branchesError === "load_failed" ? "branches.loadFailed" : "shop.noneOwned")}
-              testId="branches-empty"
-              trailing={
-                branchesError === "load_failed" ? (
-                  <Button variant="outline" size="sm" onClick={() => void loadBranches()}>
-                    {t("common.tryAgain")}
-                  </Button>
-                ) : undefined
-              }
-            />
-          )}
-
-          {branches.map((branch) => {
-            // "Which one am I in" is read from the ONE owner of that fact — the same value
-            // the header and every query follow — rather than from the row's own snapshot,
-            // so a switch marks the right row without waiting for this list to reload.
-            const isCurrent = branch.id === activeShopId;
-            return (
-            <ListRow
-              key={branch.id}
-              testId={`branch-row-${branch.id}`}
-              tile={
-                <div
-                  className="w-9 h-9 rounded-full flex items-center justify-center shrink-0"
-                  style={{
-                    background: isCurrent ? "var(--brand)" : "var(--tone-sunken)",
-                    color: isCurrent ? "#0a0a0a" : "var(--text-secondary)",
-                  }}
-                  aria-hidden="true"
-                >
-                  <Store size={16} />
-                </div>
-              }
-              title={branch.name}
-              // One state, not two: the branch you are in is the more useful fact, and the
-              // main one is already first in the list with its own note in the edit sheet.
-              qualifier={
-                isCurrent ? t("branches.mine") : branch.isMain ? t("branches.main") : undefined
-              }
-              meta={branchContext(branch)}
-              trailing={
-                <div className="flex items-center gap-3 shrink-0">
-                  {isCurrent && (
-                    <Check size={16} style={{ color: "var(--brand-dark)" }} />
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => setEditing(branch)}
-                    data-testid={`branch-edit-action-${branch.id}`}
-                    className="text-12 font-bold ds-pressable"
-                    style={{ color: "var(--brand-dark)" }}
-                  >
-                    {t("branches.edit")}
-                  </button>
-                  {/* The main branch has no Delete at all: it is refused by the database,
-                      and a control that exists only to be refused is a lie about what is
-                      possible. Renaming it is how it is managed. */}
-                  {!branch.isMain && (
-                    <button
-                      type="button"
-                      onClick={() => setDeleting(branch)}
-                      data-testid={`branch-delete-action-${branch.id}`}
-                      className="text-12 font-bold ds-pressable"
-                      style={{ color: "var(--error)" }}
-                    >
-                      {t("branches.delete")}
-                    </button>
-                  )}
-                </div>
-              }
-            />
-            );
-          })}
-
-          {/* The way in, as a row of the same list rather than a button floating under it:
-              adding a branch belongs to the set of branches, and it is the last thing in
-              that set because it is the newest. */}
-          <ListRow
-            testId="branches-create"
-            icon={Plus}
-            title={t("branches.create")}
-            meta={t("branches.createHint")}
-            // `create` rather than the plain open: this row asked for a new branch, and the
-            // sheet opens on the name step instead of making the person find the link again.
-            onClick={() => openSwitcher("create")}
-
-          />
-        </ListCard>
-
-      </div>
-
-      {/* Editing and deleting are one sheet each, mounted here rather than inside a row, so
-          there is exactly one of each and nothing is left half-open when the list changes. */}
-      {editing && (
-        <BranchEditSheet
-          branch={editing}
-          onClose={() => setEditing(null)}
-          onRenamed={() => setEditing(null)}
-        />
-      )}
-      {deleting && (
-        <DeleteTargetSheet
-          subject={branchDeleteSubject(deleting)}
-          onClose={() => setDeleting(null)}
-          onDeleted={() => setDeleting(null)}
-        />
-      )}
+      {/* Branches used to be a block at the top of this screen. They live on Settings now, with
+          the profile card that answers the same "which shop am I in" question, and they are one
+          implementation (`shop/BranchesSection`) rather than a copy that could drift. This
+          screen keeps what only this screen answers: the shop switch, and the shop's own menu. */}
 
       {/* One titled card per group. The card title is the same section label the rest of the
           app uses above a list, so a group of rows here reads exactly like a group of rows

@@ -1,5 +1,6 @@
 import { supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/stores/authStore";
+import { useShopStore } from "@/stores/shopStore";
 import { enqueueOperation } from "@/lib/offlineQueue";
 import { isAlertDue, loadStockAlertSettings } from "@/lib/stockAlerts";
 
@@ -7,11 +8,12 @@ import { isAlertDue, loadStockAlertSettings } from "@/lib/stockAlerts";
  * Create a notification from the frontend.
  * Used after RPC calls that don't create notifications in the DB.
  *
- * `shop_id` is sent explicitly, and it is the ACTIVE branch: a notification is a fact
- * about one branch, and writing it against whichever branch happened to be active when it
- * was queued is how one branch's events end up under another's name. It is the caller's
- * own tenant, taken from the auth store — the same value every read in the app is scoped
- * by — and the database stamps the row with it if this field is ever missing.
+ * `shop_id` is the active tenant (shop) at the moment the notification is created, taken from
+ * the auth store — the value every read in the app is scoped by. A notification is a shop-level
+ * fact about a business, and writing it against whatever branch happened to be active when it 
+ * was queued is how one branch's events end up under another's name. The database stamps the 
+ * row with this shop_id if the field is ever missing, but never promotes it into a per-branch 
+ * permission.
  */
 export async function createNotification(input: {
   kind: string;
@@ -27,7 +29,10 @@ export async function createNotification(input: {
     entity_id: input.entityId ?? null,
     actor_id: user?.id ?? null,
     actor_name: user?.name ?? null,
-    shop_id: user?.tenantId ?? null,
+    shop_id: user?.tenantId ?? useShopStore.getState().activeShopId ?? null,
+    // A notification is a shop-level fact; the notifications screen still groups by shop_id.
+    // Do not invent a branch attribution the database does not assert.
+    branch_id: undefined,
   };
 
   try {

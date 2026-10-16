@@ -13,9 +13,17 @@
  * QA database only; the throwaway role is deleted again.
  */
 import { test, expect, type Page } from '@playwright/test';
-import { QA_IDS, execSql, setupFixtures, cleanupFixtures, injectAdminAuth } from './helpers';
+import {
+  QA_IDS,
+  execSql,
+  setupFixtures,
+  cleanupFixtures,
+  ownership,
+  trackOwned,
+  injectAdminAuth,
+} from './helpers';
 
-const BASE_URL = 'http://localhost:5173';
+const BASE_URL = process.env.QA_APP_URL || 'http://localhost:5173';
 const ROLE_ID = 'aaaa0000-0000-4000-8000-000000000001';
 const ROLE_NAME = `QA Throwaway Role ${Date.now().toString(36).toUpperCase()}`;
 
@@ -51,11 +59,14 @@ test.describe('Role delete safety', () => {
       VALUES ('${ROLE_ID}', '${QA_IDS.shop}', '${ROLE_NAME}', 'QA throwaway role', false)
       ON CONFLICT (id) DO NOTHING
     `);
+    // OWNED: the throwaway role, by the explicit id this lane created it with.
+    await trackOwned(ownership(), 'roles', ROLE_ID);
   });
 
   test.afterAll(async () => {
-    await execSql(`DELETE FROM role_permissions WHERE role_id = '${ROLE_ID}'`).catch(() => {});
-    await execSql(`DELETE FROM roles WHERE id = '${ROLE_ID}'`).catch(() => {});
+    // The two inline deletes (role_permissions, then roles) are replaced by the registry, which
+    // emits the same pair in FK order and raises a failure instead of swallowing one. In the
+    // passing case the app has already deleted the role, so these statements match nothing.
     await cleanupFixtures();
   });
 
@@ -72,28 +83,21 @@ test.describe('Role delete safety', () => {
 
     await expect(page.getByText(ROLE_NAME).first()).toBeVisible({ timeout: 15000 });
 
-    // The row's action buttons carry icons, not labels: walk up from the role's name to
-    // the first container holding them and press the last one (edit is rendered first,
-    // and the delete button only exists for roles that are not built in).
-    await page.evaluate((name) => {
-      const label = Array.from(document.querySelectorAll('p')).find(
-        (el) => (el.textContent || '').trim() === name
-      );
-      if (!label) throw new Error(`role row not found: ${name}`);
-      let node: HTMLElement | null = label;
-      let buttons: HTMLButtonElement[] = [];
-      while (node && buttons.length < 2) {
-        node = node.parentElement;
-        if (!node) break;
-        buttons = Array.from(node.querySelectorAll('button')) as HTMLButtonElement[];
-      }
-      const del = buttons[buttons.length - 1];
-      if (!del) throw new Error('delete button not found in the role row');
-      del.click();
-    }, ROLE_NAME);
+    // Removing a role is a row of its own at the foot of that role's editor sheet now —
+    // not an icon in the row, which was a target you only found if you already knew it was
+    // there. So the flow is: open the role, then press its delete row.
+    await page.getByTestId(`role-${ROLE_ID}`).click();
+    await expect(page.getByTestId('role-delete-row'), 'the role editor has no delete row').toBeVisible({ timeout: 10000 });
+    await page.getByTestId('role-delete-row').click();
 
     await expect(page.getByText('Delete this role?')).toBeVisible({ timeout: 10000 });
-    await expect(page.getByText(new RegExp(`No employee is using ${ROLE_NAME}`, 'i'))).toBeVisible();
+    // Read through the row that carries it: the same sentence also appears in the sheet's body,
+    // so matching the page by text resolves to two elements and would fail on strictness rather
+    // than on the fact being asserted.
+    await expect(
+      page.getByTestId('role-delete-row'),
+      'the delete row does not say why this role can go',
+    ).toContainText(new RegExp(`No employee is using ${ROLE_NAME}`, 'i'));
 
     await page.evaluate(() => {
       const btns = Array.from(document.querySelectorAll('button')).filter(

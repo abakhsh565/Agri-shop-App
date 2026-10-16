@@ -15,10 +15,14 @@ import ContextHelp from "@/components/education/ContextHelp";
 import { useT, tNow } from "@/lib/i18n";
 import { useBootstrapData } from "@/stores/useBootstrapData";
 import { useShopStore } from "@/stores/shopStore";
+import ShopSwitcherSheet from "@/components/shop/ShopSwitcherSheet";
+import ListCard from "@/components/ui/ListCard";
+import ListRow from "@/components/ui/ListRow";
 import ShopAccessNotice, { useNoActiveShop } from "@/components/shop/ShopAccessNotice";
 import { isTopLevel } from "@/lib/navDepth";
 import { clearNav } from "@/lib/navContext";
 import BackButtonHandler from "@/components/ui/BackButtonHandler";
+import AssistantFab from "@/components/layout/AssistantFab";
 
 const TAB_DEFS = [
   { key: "nav.home" as const,    icon: Home,          path: "/employee/dashboard" },
@@ -48,6 +52,9 @@ export default function EmployeeLayout() {
     if (userId) void loadShops();
   }, [loadShops, userId]);
   const noActiveShop = useNoActiveShop();
+  const branchName = useShopStore((s) => s.activeBranchName);
+  const branches = useShopStore((s) => s.branches);
+  const openSwitcher = useShopStore((s) => s.openSwitcher);
   const [pin, setPin] = useState("");
   const [pinError, setPinError] = useState(false);
   const [pinShake, setPinShake] = useState(false);
@@ -121,7 +128,10 @@ export default function EmployeeLayout() {
     if (path.startsWith("/employee/sales"))     return "/employee/sales";
     if (path.startsWith("/employee/customers")) return "/employee/customers";
     if (path.startsWith("/employee/products"))  return "/employee/products";
-    return "/employee/dashboard";
+    // `null` rather than a stand-in: the assistant is no longer a tab, so on that screen NO
+    // tab is the current one, and lighting up "Home" would send someone there believing the
+    // assistant lives under it.
+    return null;
   }
 
   const active = activeTab();
@@ -182,6 +192,11 @@ export default function EmployeeLayout() {
       <NavTracker />
       <BackButtonHandler />
       <ToastContainer />
+      <ShopSwitcherSheet />
+      {branchName && branches.length > 1 && <div className="px-4 pt-2"><ListCard>
+        <ListRow title={branchName} meta={t("branchFlow.chooseWorking")} testId="employee-switch-branch"
+          onClick={() => openSwitcher()} />
+      </ListCard></div>}
 
       {/* ── Offline banner ── */}
       {!isOnline && (
@@ -306,7 +321,12 @@ export default function EmployeeLayout() {
       <FirstRunGate />
       <ContextHelp />
 
-      {/* ── Bottom tab bar (4 tabs) — only on top-level navigation screens ── */}
+      {/* The assistant, off the bar and within thumb reach of home. It answers on the employee's
+          own session — from what this account can already open — so it is safe to put in front
+          of everyone; it is simply not a place you go to look. See AssistantFab. */}
+      {location.pathname === "/employee/dashboard" && <AssistantFab path="/employee/assistant" />}
+
+      {/* ── Bottom tab bar — only on top-level navigation screens ── */}
       {showTabBar && (
       <div
         className="fixed bottom-0 start-0 end-0 max-w-[480px] mx-auto flex items-start pt-2 border-t"
@@ -322,6 +342,9 @@ export default function EmployeeLayout() {
           paddingRight: "16px",
         }}
       >
+        {/* Every tab carries an explicit 44px floor, the same contract as the admin shell:
+            the icon+label stack is only ~41px tall on its own, and a rendered-box audit
+            counts anything under 44px as an undersized finger target. */}
         {TAB_DEFS.map(({ key, icon: Icon, path }) => {
           if (path === "__scan__") {
             return (
@@ -330,7 +353,7 @@ export default function EmployeeLayout() {
                 onClick={handleEmpNavScan}
                 disabled={empScanning}
                 data-tour="tab:scan"
-                className="ds-pressable flex flex-col items-center justify-center flex-1 gap-1 cursor-pointer"
+                className="ds-pressable flex flex-col items-center justify-center flex-1 gap-1 cursor-pointer min-h-[44px]"
               >
                 <div
                   className="flex items-center justify-center rounded-full -mt-3"
@@ -350,7 +373,7 @@ export default function EmployeeLayout() {
               key={path}
               onClick={() => { clearNav(); navigate(path); }}
               data-tour={`tab:${key}`}
-              className="ds-pressable flex flex-col items-center justify-center flex-1 gap-1 cursor-pointer"
+              className="ds-pressable flex flex-col items-center justify-center flex-1 gap-1 cursor-pointer min-h-[44px]"
             >
               <Icon
                 size={22}

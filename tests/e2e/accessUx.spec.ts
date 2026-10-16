@@ -16,15 +16,28 @@
  * QA database only; every record this spec creates is deleted again.
  */
 import { test, expect, type Page } from '@playwright/test';
-import { execSql } from './helpers';
+import {
+  QA_IDS,
+  execSql,
+  cleanupFixtures,
+  claimNew,
+  claimOwned,
+  ownership,
+  snapshotIds,
+  trackOwned,
+} from './helpers';
 import { waitForSignedIn } from './signInDiagnostics';
 
-const BASE = 'http://localhost:5173';
+const BASE = process.env.QA_APP_URL || 'http://localhost:5173';
 const OTP = '123456';
 const PIN = '4321';
 
 const OWNER_PHONE = '03001234567';    // Shop Owner  -> 923001234567 (owner membership)
-const QA_EMPLOYEE_ID = '2603007e-696a-4836-84e5-694d7a9173df'; // Sales Employee, template "Sales Employee"
+// The Sales Employee fixture (role template "Sales Employee"). Its id is read from the database
+// in beforeAll rather than pinned to one seeding's uuid: the QA seed recreates this user, and a
+// stale id made every deep link land on the employee page's "not found" state.
+const QA_EMPLOYEE_PHONE = '923001122334';
+let QA_EMPLOYEE_ID = '';
 
 const NEW_NAME = 'UX Check Employee';
 const NEW_PHONE_LOCAL = '03007770011';
@@ -106,35 +119,73 @@ async function dbAreasForRole(roleName: string): Promise<string[]> {
   return rows.map((r) => String(r.module).toLowerCase());
 }
 
-/** Business-area labels the screen lists under "Access from this role". */
-async function shownAreas(page: Page): Promise<string[]> {
-  const panel = page.locator('p').filter({ hasText: 'Access from this role' }).first();
-  await expect(panel).toBeVisible();
-  // Each row is <div data-testid="access-area-row"><span>area</span><span>actions</span></div>.
-  // Addressed by its own hook rather than by position, so adding a row to the
-  // panel cannot silently change what this compares against the database.
-  const labels = await page
-    .locator('[data-testid="access-area-row"] span:first-child')
-    .allInnerTexts();
-  return labels.map((l) => l.trim().toLowerCase()).filter(Boolean);
+/**
+ * Access areas the screen lists, addressed by the permission module the database
+ * stores — the same value `dbAreasForRole` reads — rather than by their translated
+ * label, so this compares the set the screen shows with the set the role grants.
+ */
+async function shownAreaModules(page: Page): Promise<string[]> {
+  const rows = page.locator('[data-testid^="emp-perm-area-"]');
+  await expect(rows.first()).toBeVisible();
+  // The list draws the whole catalogue; the areas THIS role grants are the rows whose
+  // box is not empty. Each row prints "granted/total", so "granted > 0" is the row's
+  // own answer rather than a second opinion from a mapping this test would have to keep.
+  const modules = await rows.evaluateAll((els) =>
+    els
+      .map((el) => {
+        const counts = (el.textContent ?? '').match(/(\d+)\/(\d+)/);
+        const granted = counts ? Number(counts[1]) : 0;
+        return granted > 0 ? (el.getAttribute('data-testid') ?? '').replace('emp-perm-area-', '') : null;
+      })
+      .filter((m): m is string => !!m)
+  );
+  return modules.sort();
 }
 
-async function deleteEmployeeByPhone(phone: string) {
-  const [user] = await execSql(`SELECT id FROM users WHERE phone = '${phone}'`);
-  if (!user) return;
-  await execSql(`DELETE FROM user_permissions WHERE user_id = '${user.id}'`).catch(() => undefined);
-  await execSql(`DELETE FROM memberships WHERE user_id = '${user.id}'`);
-  await execSql(`DELETE FROM users WHERE id = '${user.id}'`);
+/** The role's own id, so the screen's Modify handle can be addressed by it. */
+async function roleIdByName(roleName: string): Promise<string> {
+  const [row] = await execSql(`SELECT id FROM roles WHERE name = '${roleName}'`);
+  return String(row.id);
+}
+
+/**
+ * Release an employee THIS LANE created, through the ownership registry.
+ *
+ * The phone numbers this is called with (`923007770011`, `923007770033`) are markers only this
+ * spec uses, so a row found for one of them is residue from an earlier, crashed run of this same
+ * lane. It is ADOPTED into the registry and removed by cleanupFixtures — children first — instead
+ * of being deleted inline, so the deletion is scoped by explicit id like every other cleanup in
+ * this suite, and a failure is raised rather than swallowed.
+ */
+async function releaseEmployeeByPhone(phone: string) {
+  const ids = await snapshotIds(`SELECT id FROM users WHERE phone = '${phone}'`);
+  if (!ids.length) return;
+  trackOwned(ownership(), 'users', ids);
+  await cleanupFixtures();
 }
 
 test.describe.configure({ mode: 'serial' });
 
 test.describe('Employee job & access — simple for the owner, exact underneath', () => {
+  test.beforeAll(async () => {
+    const [emp] = await execSql(`SELECT id FROM users WHERE phone = '${QA_EMPLOYEE_PHONE}'`);
+    QA_EMPLOYEE_ID = String(emp?.id ?? '');
+    expect(QA_EMPLOYEE_ID, 'the Sales Employee fixture is missing from the QA database').not.toBe('');
+  });
+
   test.afterAll(async () => {
-    await deleteEmployeeByPhone(OVR_PHONE_DB);
-    await deleteEmployeeByPhone(NEW_PHONE_DB);
-    // never leave the QA employee with employee-specific access
-    await execSql(`DELETE FROM user_permissions WHERE user_id = '${QA_EMPLOYEE_ID}' AND is_override = true`).catch(() => undefined);
+    await releaseEmployeeByPhone(OVR_PHONE_DB);
+    await releaseEmployeeByPhone(NEW_PHONE_DB);
+    // Never leave the SHARED QA employee with employee-specific access. The rows are adopted and
+    // removed by their own row id (the shared employee itself is on the protected list and can
+    // never be registered or deleted); on a green run the reset in test 5 has already removed
+    // them, so this only fires for residue from a crashed run of this lane.
+    trackOwned(
+      ownership(),
+      'user_permissions',
+      await snapshotIds(`SELECT id FROM user_permissions WHERE user_id = '${QA_EMPLOYEE_ID}' AND is_override = true`),
+    );
+    await cleanupFixtures();
   });
 
   test('1. Adding an employee asks only who / what job / where, with no RBAC jargon', async ({ page }) => {
@@ -174,15 +225,22 @@ test.describe('Employee job & access — simple for the owner, exact underneath'
     await expect(page.getByRole('button', { name: 'Next' })).toBeDisabled();
     expect(step2, 'a role is preselected again').not.toContain('Access from this role');
 
-    // Choosing a role answers "what access will they get?" in place: the access
-    // panel appears with the selected role, not after every other role card.
+    // Choosing a role answers "what access will they get?" on that role's own Modify
+    // handle — the list opens on the role, and every area it shows is an area the
+    // database grants that role.
     await page.getByRole('button', { name: /Sales Manager/ }).first().click();
     await page.waitForTimeout(800);
-    expect(await bodyText(page)).toContain('Access from this role');
+    expect(await bodyText(page), 'the read-only access panel is back').not.toContain('Access from this role');
     await expect(page.getByRole('button', { name: 'Next' })).toBeEnabled();
-    const [shown, fromDb] = [await shownAreas(page), await dbAreasForRole('Sales Manager')];
+    const salesManagerId = await roleIdByName('Sales Manager');
+    await page.locator(`[data-testid="role-modify-${salesManagerId}"]`).click();
+    await expect(page.locator('[data-testid="emp-access-context"]')).toBeVisible();
+    const [shown, fromDb] = [await shownAreaModules(page), (await dbAreasForRole('Sales Manager')).sort()];
     expect(shown.length, 'no areas rendered for the selected role').toBeGreaterThan(0);
-    expect(shown.sort()).toEqual(fromDb.sort());
+    expect(shown, 'the areas on screen are not the areas the role grants').toEqual(fromDb);
+    expect(await bodyText(page), 'the access list exposes RBAC vocabulary').not.toMatch(JARGON);
+    await page.locator('[data-testid="role-modify-done"]').click();
+    await expect(page.locator('[data-testid="emp-access-context"]')).toBeHidden();
 
     await page.getByRole('button', { name: 'Next' }).click();
     await page.waitForTimeout(800);
@@ -201,7 +259,7 @@ test.describe('Employee job & access — simple for the owner, exact underneath'
   });
 
   test('2. Creating from the simplified screen writes the right membership, then the list shows it', async ({ page }) => {
-    await deleteEmployeeByPhone(NEW_PHONE_DB);
+    await releaseEmployeeByPhone(NEW_PHONE_DB);
 
     await login(page, OWNER_PHONE);
     await page.goto(`${BASE}/admin/employees/new`);
@@ -217,9 +275,28 @@ test.describe('Employee job & access — simple for the owner, exact underneath'
     await page.getByRole('button', { name: 'Next' }).click();
     await page.waitForTimeout(800);
 
-    // Choose one branch (the QA shop has two, so this is a real decision).
-    const [branch] = await execSql(`SELECT id, name FROM branches WHERE is_active ORDER BY name LIMIT 1`);
-    await page.getByRole('button', { name: new RegExp(branch.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')) }).first().click();
+    // THE BRANCH IS NOT CLICKED, and that is the assertion now. The screen's own default is the
+    // branch the owner is working in — an employee silently given every branch would see every
+    // branch's customers and takings — so the honest question is whether that default is what gets
+    // saved, and this lane reads the owner's working branch to check it.
+    //
+    // It used to click the alphabetically-first branch instead, which relied on nothing being
+    // selected to begin with: once the default was applied (it is the fix that sends this screen to
+    // the owner's working branch rather than to an empty scope), that click TOGGLED the selected
+    // branch off and the submit refused with "Choose at least one branch".
+    //
+    // Scoped to the QA shop, and read as the owner's own working branch: this query bypasses RLS,
+    // so an unscoped `WHERE is_active` answers with ANY tenant's branch — measured 2026-10-14, it
+    // returned "Baba jaani - Main" (another account's shop, alphabetically first) and the lane then
+    // looked for that name on a screen that correctly lists only this shop's branches.
+    const [branch] = await execSql(`
+      SELECT b.id, b.name FROM branches b
+       WHERE b.is_active AND b.tenant_id = '${QA_IDS.shop}'
+         AND b.id = (SELECT uas.branch_id FROM user_active_shops uas
+                     JOIN users u ON u.id = uas.user_id
+                    WHERE u.phone = '923001234567')
+    `);
+    expect(branch, "the owner fixture has no working branch to default to").toBeTruthy();
     await page.waitForTimeout(400);
 
     const review = await bodyText(page);
@@ -271,6 +348,9 @@ test.describe('Employee job & access — simple for the owner, exact underneath'
     const [created] = await execSql(`SELECT id, name, phone FROM users WHERE phone = '${NEW_PHONE_DB}'`);
     expect(created, 'employee row was not created').toBeTruthy();
     expect(created.name).toBe(NEW_NAME);
+    // OWNED, immediately after creation: the invited employee, by the id the app assigned it
+    // (its membership and any permission rows follow the user key in the cleanup graph).
+    await claimOwned('users', `SELECT id FROM users WHERE phone = '${NEW_PHONE_DB}'`);
 
     const [membership] = await execSql(`
       SELECT m.role, m.status, m.tenant_id, r.name AS template, m.branch_scope
@@ -342,10 +422,11 @@ test.describe('Employee job & access — simple for the owner, exact underneath'
       page.getByPlaceholder('e.g. 03001234567'),
       'the invitation link does not fill in the employee\u2019s number'
     ).toHaveValue(NEW_PHONE_DB);
+    // The link carries the shop now, so the line names it: "You were invited to {shop}."
     expect(
       await bodyText(page),
       'the invited person is not told why the number is already filled in'
-    ).toContain('You have been invited');
+    ).toContain('You were invited to');
   });
 
   test('3. The same flow in Urdu: RTL, translated, no English copy leaking', async ({ page }) => {
@@ -384,8 +465,20 @@ test.describe('Employee job & access — simple for the owner, exact underneath'
 
     await page.getByRole('button', { name: /سیلز مینیجر|Sales Manager/ }).first().click();
     await page.waitForTimeout(700);
-    // The role's access is stated in Urdu, in place, as soon as the role is chosen.
-    expect(await bodyText(page)).toContain('اس کردار سے ملنے والی رسائی');
+
+    // The role's access opens from its own Modify handle, in Urdu: the list's own
+    // sentence, the "as it is" default, and no English left in it.
+    const salesManagerId = await roleIdByName('Sales Manager');
+    await page.locator(`[data-testid="role-modify-${salesManagerId}"]`).click();
+    await expect(page.locator('[data-testid="emp-access-context"]')).toBeVisible();
+    const accessEditor = await bodyText(page);
+    expect(accessEditor).toContain('طے کریں کہ یہ شخص سسٹم میں کیا کر سکتا ہے');
+    expect(accessEditor).toContain('کردار کی رسائی ویسے ہی رہے گی');
+    expect(accessEditor, 'English copy leaked into the Urdu access editor').not.toContain('Choose what this person can do');
+    expect(accessEditor, 'English copy leaked into the Urdu access editor').not.toContain('Customize access');
+    const overflowEditor = await page.evaluate(() => document.body.scrollWidth > document.body.clientWidth);
+    expect(overflowEditor, 'horizontal overflow in the Urdu access editor').toBe(false);
+    await page.locator('[data-testid="role-modify-done"]').click();
 
     await page.getByRole('button', { name: 'آگے' }).click();
     await page.waitForTimeout(900);
@@ -396,24 +489,6 @@ test.describe('Employee job & access — simple for the owner, exact underneath'
     expect(step3, 'English copy leaked into the Urdu confirmation step').not.toContain('Send invitation');
     const overflowStep3 = await page.evaluate(() => document.body.scrollWidth > document.body.clientWidth);
     expect(overflowStep3, 'horizontal overflow on the Urdu confirmation step').toBe(false);
-
-    // Customizing access in Urdu: the label, the states and the "as it is" default.
-    // Addressed by its visible text, not by accessible name: the header's back control is
-    // icon-only and now carries the same "واپس" label (for screen readers), so a name-based
-    // lookup matches two buttons. `:has-text` reads text content, which only this one has.
-    await page.locator('button:has-text("واپس")').first().click();
-    await page.waitForTimeout(700);
-    const step2b = await bodyText(page);
-    expect(step2b).toContain('رسائی میں تبدیلی');
-    expect(step2b).toContain('کردار کی رسائی ویسے ہی رہے گی');
-    await page.getByRole('button', { name: 'رسائی میں تبدیلی' }).click();
-    await page.waitForTimeout(700);
-    const editing = await bodyText(page);
-    expect(editing).toContain('کی رسائی');
-    expect(editing).toContain('کردار سے');
-    expect(editing, 'English copy leaked into the Urdu access editor').not.toContain('Customize access');
-    const overflowEditor = await page.evaluate(() => document.body.scrollWidth > document.body.clientWidth);
-    expect(overflowEditor, 'horizontal overflow in the Urdu access editor').toBe(false);
   });
 
   test('4. Employee detail explains role, place and access without RBAC vocabulary', async ({ page }) => {
@@ -455,6 +530,13 @@ test.describe('Employee job & access — simple for the owner, exact underneath'
     const suppliersRow = page.locator('button').filter({ hasText: /^\s*Suppliers/ }).first();
     await expect(suppliersRow).toBeVisible();
     await suppliersRow.click();
+
+    // The override rows this save will create for the SHARED QA employee, credited to this run by
+    // a before/after diff — the employee itself stays protected and is never registered.
+    const overridesBefore = await snapshotIds(
+      `SELECT id FROM user_permissions WHERE user_id = '${QA_EMPLOYEE_ID}' AND is_override = true`,
+    );
+
     await page.getByRole('button', { name: 'Save', exact: true }).click();
     await page.waitForTimeout(2000);
 
@@ -464,6 +546,11 @@ test.describe('Employee job & access — simple for the owner, exact underneath'
        WHERE up.user_id = '${QA_EMPLOYEE_ID}' AND up.is_override = true AND p.module = 'companies'`);
     expect(overrides.length, 'no override row was stored for the customized area').toBeGreaterThan(0);
     expect(overrides.every((o) => o.is_granted === true)).toBe(true);
+    await claimNew(
+      'user_permissions',
+      `SELECT id FROM user_permissions WHERE user_id = '${QA_EMPLOYEE_ID}' AND is_override = true`,
+      overridesBefore,
+    );
 
     // The screen must now say the access differs from the role, and reset must clear it.
     await page.waitForTimeout(1000);
@@ -480,7 +567,7 @@ test.describe('Employee job & access — simple for the owner, exact underneath'
   });
 
   test('6. Access can be customized while inviting, and a role change keeps those exceptions', async ({ page }) => {
-    await deleteEmployeeByPhone(OVR_PHONE_DB);
+    await releaseEmployeeByPhone(OVR_PHONE_DB);
 
     await login(page, OWNER_PHONE);
     await page.goto(`${BASE}/admin/employees/new`);
@@ -493,20 +580,23 @@ test.describe('Employee job & access — simple for the owner, exact underneath'
     await page.getByRole('button', { name: /Sales Employee/ }).first().click();
     await page.waitForTimeout(800);
     const roleStep = await bodyText(page);
+    expect(roleStep, 'the read-only access panel is back').not.toContain('Access from this role');
     // The role's access is a STARTING POINT the owner can change here, not a
-    // conclusion they would have to leave the flow to adjust.
-    expect(roleStep).toContain('Access from this role');
-    expect(roleStep).toContain("Uses the role's access as it is");
+    // conclusion they would have to leave the flow to adjust: it opens from the
+    // role's own Modify handle.
+    const salesEmployeeId = await roleIdByName('Sales Employee');
+    await page.locator(`[data-testid="role-modify-${salesEmployeeId}"]`).click();
+    await expect(page.locator('[data-testid="emp-access-context"]')).toBeVisible();
+    expect(await bodyText(page)).toContain("Uses the role's access as it is");
 
-    await page.getByRole('button', { name: 'Customize access' }).click();
-    await page.waitForTimeout(600);
     // Suppliers is outside a Sales Employee's role, so granting it is a real
     // exception and must be visible as one.
-    await page.locator('button').filter({ hasText: /^\s*Suppliers/ }).first().click();
+    await page.locator('[data-testid="emp-perm-area-companies"]').click();
     await page.waitForTimeout(500);
-    expect(await bodyText(page), 'a customization is not reported to the owner').toContain('changes from Sales Employee');
-    // The editor replaces the read-only list instead of listing the same areas twice.
-    expect(await bodyText(page)).not.toContain('Access from this role');
+    expect(await bodyText(page), 'a customization is not reported to the owner').toMatch(/\d+ changes? from Sales Employee/);
+    await page.locator('[data-testid="role-modify-done"]').click();
+    // The chosen card says what was changed, without opening the list again.
+    expect(await bodyText(page), 'the role card does not report the change').toMatch(/\d+ changes? from Sales Employee/);
 
     await page.getByRole('button', { name: 'Next' }).click();
     await page.waitForTimeout(800);
@@ -523,6 +613,8 @@ test.describe('Employee job & access — simple for the owner, exact underneath'
     await page.waitForTimeout(2000);
     const [ovr] = await execSql(`SELECT id FROM users WHERE phone = '${OVR_PHONE_DB}'`);
     expect(ovr, 'the employee was not created').toBeTruthy();
+    // OWNED, immediately after creation — this employee carries the exceptions being asserted below.
+    await claimOwned('users', `SELECT id FROM users WHERE phone = '${OVR_PHONE_DB}'`);
 
     // ── Database is the judge: the exceptions were written with the employee ──
     const stored = await execSql(`

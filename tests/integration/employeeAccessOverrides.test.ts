@@ -21,7 +21,7 @@
  */
 
 import { describe, it, beforeAll, afterAll, expect } from 'vitest';
-import { execRpcAsUser, execSqlAsAdmin, checkAuthAsUser } from '../setup/qa-client';
+import { execRpcAsUser, execSqlAsAdmin, checkAuthAsUser, roleIdByName } from '../setup/qa-client';
 
 const TENANT = '00000000-0000-0000-0000-000000000001';
 // Must not be shared with another suite. It was 'c3000000-…-0001', which
@@ -31,8 +31,12 @@ const TENANT = '00000000-0000-0000-0000-000000000001';
 // authorized. tests/unit/fixtureIdCollision.test.ts now fails if that ever happens
 // again.
 const OWNER = 'c3000000-0000-0000-0000-000000000009';
-const ROLE_SALES_EMPLOYEE = 'a0000000-0000-0000-0000-000000000001';
-const ROLE_STORE_MANAGER = 'a0000000-0000-0000-0000-000000000003';
+// Built-in roles, resolved by NAME in beforeAll. Hard-coding `a0000000-…-0001` assumed a global id
+// that a built-in role keeps forever; it does not. The role can be deleted through the app, and
+// `roles.id` is ONE key across tenants, so the id 0107 seeded for this tenant can be held by another
+// tenant's role (observed in QA on 2026-10-04: role_deleted a0000000-…-0001, { revokedFrom: 2 }).
+let ROLE_SALES_EMPLOYEE = '';
+let ROLE_STORE_MANAGER = '';
 const EMP_PHONE = '923009670001';
 
 let branchId = '';
@@ -120,6 +124,8 @@ beforeAll(async () => {
     ON CONFLICT (user_id, tenant_id) DO UPDATE
       SET role = 'owner', status = 'active', updated_at = now()
   `);
+  ROLE_SALES_EMPLOYEE = await roleIdByName(TENANT, 'Sales Employee');
+  ROLE_STORE_MANAGER = await roleIdByName(TENANT, 'Store Manager');
   const b = await sql(
     `SELECT id FROM branches WHERE tenant_id = '${TENANT}' AND is_active = true ORDER BY is_default DESC, created_at LIMIT 1`
   );

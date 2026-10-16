@@ -3,6 +3,8 @@ import { useNavigate } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
 import ImageUpload from "@/components/ui/ImageUpload";
+import LocationField from "@/components/ui/LocationField";
+import type { PickedPlace } from "@/lib/geo";
 import { useAuthStore } from "@/stores/authStore";
 import { useShopRequestsStore } from "@/stores/shopRequestsStore";
 import { useUIStore } from "@/stores/uiStore";
@@ -26,8 +28,10 @@ export default function RegisterShopDetailsPage() {
 
   const [ownerName, setOwnerName] = useState("");
   const [shopName, setShopName] = useState("");
-  const [shopAddress, setShopAddress] = useState("");
   const [shopCity, setShopCity] = useState("");
+  // The place picked on the map. `shopAddress` is gone: it was a typed line, and the address that
+  // is stored now comes from the service that produced the point.
+  const [place, setPlace] = useState<PickedPlace | null>(null);
   const [shopType, setShopType] = useState("retail");
   const [businessRegNumber, setBusinessRegNumber] = useState("");
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
@@ -63,11 +67,14 @@ export default function RegisterShopDetailsPage() {
       ownerName: ownerName.trim(),
       ownerPhone: normalized,
       shopName: shopName.trim(),
-      shopAddress: shopAddress.trim() || undefined,
+      // The map service's own address, plus the point it belongs to. The city stays a field: it is
+      // what the owner calls the place, and the platform reads it when looking at the queue.
+      shopAddress: place?.address ?? undefined,
       shopCity: shopCity.trim() || undefined,
       shopType,
       businessRegistrationNumber: businessRegNumber.trim() || undefined,
       logoUrl: logoUrl ?? undefined,
+      location: place,
     });
 
     if (result.success) {
@@ -168,19 +175,21 @@ export default function RegisterShopDetailsPage() {
           />
         </div>
 
-        {/* Address */}
-        <div>
-          <p className="ds-section-label mb-2" style={{ color: "var(--text-secondary)" }}>
-            {t("register.shopAddress")}
-          </p>
-          <input
-            value={shopAddress}
-            onChange={(e) => setShopAddress(e.target.value)}
-            placeholder={t("register.addressPlaceholder")}
-            className="w-full h-12 rounded-[var(--radius-input)] px-4 text-sm outline-none"
-            style={fieldStyle}
-          />
-        </div>
+        {/*
+          Where the shop is — the same map picker the rest of the app uses.
+
+          A shop being registered is exactly the case where a typed address is least useful: the
+          person approving it has never been there, and "near the bus stop" is not something the
+          platform can look at. The address below is what the map service returned for the point,
+          and it is the only address this form can produce — there is no field to type one into.
+        */}
+        <LocationField
+          value={place}
+          onChange={setPlace}
+          label={t("register.shopAddress")}
+          hint={t("location.notTyped")}
+          testId="register-location"
+        />
 
         {/* Business Registration */}
         <div>

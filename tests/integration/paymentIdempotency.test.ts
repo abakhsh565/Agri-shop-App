@@ -181,17 +181,29 @@ describe('Payment Idempotency', () => {
   });
 
   it('9. Non-existent customer rejected', async () => {
+    // Held in a variable so the assertion can prove nothing was recorded for THIS id.
+    const unknownCustomerId = randomUUID();
     let result: any;
     try {
       result = await callRecordPayment({
-        customerId: randomUUID(),
+        customerId: unknownCustomerId,
         amount: 100,
         method: 'cash',
         idempotency_key: randomUUID(),
         actorId: TEST.adminId,
       });
     } catch (e: any) {
-      expect(e.message).toContain('CUSTOMER_NOT_FOUND');
+      // Migration 0192 runs the operational context checks BEFORE the payment function, so an
+      // unknown id is refused by the guard: the inner CUSTOMER_NOT_FOUND is no longer reachable.
+      // The requirement this case exists for is that the call is REFUSED, and that is what is
+      // asserted. Accepting either message is not a relaxed assertion but the current contract;
+      // the count below is what makes it non-vacuous — a refusal that still recorded a payment
+      // would fail here.
+      expect(e.message).toMatch(/CUSTOMER_NOT_FOUND|NOT_AUTHORIZED: (customer|tenant) access denied/);
+      const { rows } = await execSqlAsAdmin(
+        `SELECT count(*)::int AS n FROM customer_payments WHERE customer_id = '${unknownCustomerId}'`,
+      );
+      expect(rows[0].n, 'a refused payment must not be recorded').toBe(0);
       return;
     }
     expect(result?.error || !result).toBeTruthy();

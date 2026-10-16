@@ -1,8 +1,9 @@
 import { create } from "zustand";
 import { supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/stores/authStore";
-import { getCachedData, setCachedData, clearCachedData } from "@/lib/localCache";
+import { getCachedData, setCachedData, clearCachedData, captureDataContext, isDataContextCurrent } from "@/lib/localCache";
 import { enqueueOperation } from "@/lib/offlineQueue";
+import { isStorablePlace, type PickedPlace } from "@/lib/geo";
 import type { Customer } from "@/types";
 
 const CACHE_KEY = "customers";
@@ -72,6 +73,14 @@ interface CustomersState {
     address?: string;
     creditLimit?: number;
     createdBy?: string | null;
+    /**
+     * The place picked on the map, when one was.
+     *
+     * Carried with the customer so the ordinary path is ONE write, and only ever a point the map
+     * service produced — the address above is what that service returned, not something typed
+     * (see lib/geo.ts). The database refuses a point outside Pakistan either way (0172).
+     */
+    place?: PickedPlace | null;
   }) => Promise<Customer>;
   updateCustomerImage: (id: string, imageUrl: string | null) => Promise<void>;
   /**
@@ -116,6 +125,8 @@ export const useCustomersStore = create<CustomersState>((set, get) => ({
   reset: () => set({ customers: [], loading: false, ready: false, error: null }),
 
   load: async () => {
+    const context = captureDataContext();
+    if (!isDataContextCurrent(context)) return;
     set({ loading: true, error: null });
 
     // Stale-while-revalidate: render the cache immediately, then ALWAYS revalidate.
@@ -134,6 +145,7 @@ export const useCustomersStore = create<CustomersState>((set, get) => ({
         .select("*")
         .eq("is_archived", false)
         .order("name");
+      if (!isDataContextCurrent(context)) return;
       if (error) {
         if (!cached) {
           set({ loading: false, ready: true, error: error.message });
@@ -144,6 +156,7 @@ export const useCustomersStore = create<CustomersState>((set, get) => ({
       setCachedData(CACHE_KEY, customers);
       set({ customers, loading: false, ready: true });
     } catch {
+      if (!isDataContextCurrent(context)) return;
       if (!cached) {
         set({ loading: false, ready: true, error: "Offline — showing cached data" });
       }
@@ -166,7 +179,10 @@ export const useCustomersStore = create<CustomersState>((set, get) => ({
   },
 
   createCustomer: async (input) => {
-    const rowPayload = {
+    // A place is stored as numbers, and only when it is a complete one: half a coordinate is
+    // refused by the table, so sending one would turn a saved customer into a failed save.
+    const place = isStorablePlace(input.place) ? input.place : null;
+    const rowPayload: Record<string, unknown> = {
       name: input.name,
       phone: input.phone,
       address: input.address ?? null,
@@ -174,6 +190,15 @@ export const useCustomersStore = create<CustomersState>((set, get) => ({
       created_by: asUuidOrNull(input.createdBy),
       userId: useAuthStore.getState().user?.id ?? null,
     };
+    if (place) {
+      rowPayload.latitude = place.lat;
+      rowPayload.longitude = place.lng;
+      rowPayload.locationLabel = place.label;
+      rowPayload.locationSource = place.source;
+      // The service's own address wins over anything the caller passed: a location's address is
+      // what the map said, and mixing the two is how a wrong town gets stored next to a right pin.
+      rowPayload.address = place.address ?? input.address ?? null;
+    }
 
     // Try online first - use RPC for secure creation
     try {

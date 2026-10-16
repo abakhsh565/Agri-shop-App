@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { User } from "@/types";
 import { signOut } from "@/lib/auth";
-import { adoptCacheOwner } from "@/lib/localCache";
+import { adoptCacheOwner, suspendCachedData } from "@/lib/localCache";
 import { supabase, supabaseUrl } from "@/lib/supabase";
 
 /**
@@ -80,7 +80,10 @@ export const useAuthStore = create<AuthState>()(
       setUser: (user) => {
         if (user) writePendingPhone("");
         // Cached business rows must belong to whoever is signed in now.
-        adoptCacheOwner(ownerIdFor(user));
+        if (user?.id !== get().user?.id || user?.tenantId !== get().user?.tenantId) {
+          suspendCachedData();
+          adoptCacheOwner(ownerIdFor(user));
+        }
         set({ user });
       },
       setPendingPhone: (pendingPhone) => {
@@ -140,6 +143,7 @@ export const useAuthStore = create<AuthState>()(
         // End the Supabase Auth session too (fire-and-forget).
         void signOut();
         writePendingPhone("");
+        suspendCachedData();
         set({ user: null, isLocked: false, pendingPhone: "", pendingFlow: null });
       },
     }),
@@ -149,7 +153,7 @@ export const useAuthStore = create<AuthState>()(
       // Launching with a stored session skips setUser, so re-claim the cache
       // here too — otherwise the guard only holds on an explicit sign-in.
       onRehydrateStorage: () => (state) => {
-        if (state?.user) adoptCacheOwner(ownerIdFor(state.user));
+        if (state?.user) suspendCachedData();
       },
     }
   )

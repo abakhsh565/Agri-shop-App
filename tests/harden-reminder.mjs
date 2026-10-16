@@ -1,10 +1,38 @@
 import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'fs';
 
-const content = readFileSync('utils/supabase/info.tsx', 'utf8');
-const pm = content.match(/VITE_SUPABASE_PROJECT_ID\s*\|\|\s*"([^"]+)"/);
-const km = content.match(/VITE_SUPABASE_ANON_KEY\s*\|\|\s*"([^"]+)"/);
-const supabase = createClient('https://' + pm[1] + '.supabase.co', km[1]);
+// NEUTRALIZED TARGET.
+//
+// This script used to read its target out of the hardcoded fallback in utils/supabase/info.tsx,
+// which pointed at the PRODUCTION project. It creates and deletes reminder configurations,
+// occurrences, logs and payments, and edits customer balances — so it was one command away from
+// mutating production data, and the fallback was the only thing deciding where it landed.
+//
+// That fallback no longer exists, and this script now requires an explicit, non-production
+// target. It refuses to run otherwise. Nothing references this file, but it is a real writer, so
+// the refusal matters.
+const PRODUCTION_PROJECT_ID = 'gkswcfljxlutkfdvvqng';
+
+const url = (process.env.VITE_SUPABASE_URL || '').trim();
+const anonKey = (process.env.VITE_SUPABASE_ANON_KEY || '').trim();
+
+if (!url || !anonKey) {
+  throw new Error(
+    '[HARDEN-REMINDER] VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY must be set explicitly. ' +
+      'This script writes and deletes rows, so it will not pick a target for you.',
+  );
+}
+
+const projectId = url.match(/\/\/([a-z0-9]+)\.supabase\.(co|in)/i)?.[1]?.toLowerCase() ?? '';
+
+if (projectId === PRODUCTION_PROJECT_ID) {
+  throw new Error(
+    `[HARDEN-REMINDER] Refusing to run against the PRODUCTION project (${projectId}). ` +
+      'This script writes and deletes rows.',
+  );
+}
+
+const supabase = createClient(url, anonKey);
 
 function pkDate(d) {
   const pk = new Date(d.toLocaleString('en-US', { timeZone: 'Asia/Karachi' }));

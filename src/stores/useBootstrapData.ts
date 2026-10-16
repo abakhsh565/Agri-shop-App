@@ -21,8 +21,11 @@ export function useBootstrapData() {
   // Without this the shell would keep the previous shop's rows loaded after a switch, which
   // is the one thing a shop selector must never allow.
   const shopId = useShopStore((s) => s.activeShopId);
+  const branchId = useShopStore((s) => s.activeBranchId);
+  const switching = useShopStore((s) => s.switching);
 
   useEffect(() => {
+    if (!shopId || !branchId || switching) return;
     const unsubs: Array<() => void> = [];
 
     useProductsStore.getState().load();
@@ -48,5 +51,5 @@ export function useBootstrapData() {
     return () => unsubs.forEach((fn) => fn());
     // Re-run if the role changes (e.g. after login) so admin-only data loads, and if the
     // active shop changes so nothing from the shop we left survives into this one.
-  }, [isAdmin, shopId]);
+  }, [isAdmin, shopId, branchId, switching]);
 }

@@ -16,6 +16,75 @@
 const CACHE_PREFIX = "agrishop_cache_";
 const OWNER_KEY = CACHE_PREFIX + "owner";
 const STALE_MS = 5 * 60 * 1000; // 5 minutes
+let contextVersion = 0;
+let suspended = false;
+let writesInFlight = 0;
+let confirmedContext: { tenantId: string; userId: string; branchId: string } | null = null;
+let contextWaiters: Array<() => void> = [];
+export const getConfirmedDataContext = () => suspended ? null : confirmedContext;
+export const hasScopedWriteInFlight = () => writesInFlight > 0;
+export function beginScopedWrite(): () => void {
+  writesInFlight += 1;
+  let finished = false;
+  return () => { if (!finished) { finished = true; writesInFlight -= 1; } };
+}
+
+/** Requests capture this before awaiting; obsolete responses may not publish. */
+export const captureDataContext = () => contextVersion;
+export const isDataContextCurrent = (version: number) => !suspended && version === contextVersion;
+
+/** Fail closed while the server resolves a branch, including after rehydration. */
+export function suspendCachedData(): void {
+  confirmedContext = null;
+  suspended = true;
+  clearAllCachedData();
+}
+
+export function confirmCacheBranch(tenantId: string, userId: string, branchId: string): void {
+  adoptCacheOwner(`${tenantId}:${userId}:${branchId}`);
+  confirmedContext = { tenantId, userId, branchId };
+  suspended = false;
+  // Release the reads that arrived before the context existed. Nothing else wakes them, and a
+  // read that waits for a confirmation that has already happened is the only reason they exist.
+  const waiting = contextWaiters;
+  contextWaiters = [];
+  waiting.forEach((wake) => wake());
+}
+
+/**
+ * Wait until the branch context is confirmed. `false` if it never is (bounded).
+ *
+ * WHY THIS EXISTS. `isDataContextCurrent` answers "may this response publish?", and the stores ask
+ * it before every read. A screen that mounts before the shell has confirmed which shop and branch
+ * the app is working in — a deep link, a refresh on that screen, or the first navigation after
+ * sign-in — asked that question too early and got `no`, and nothing ever asked again: `ready` stayed
+ * false, the screen kept its "Loading…" or skeleton state for the whole session, and the rows were
+ * never read even though the context was confirmed a moment later. The read was not wrong, it was
+ * early, so the answer is to wait for the confirmation it depends on rather than to drop it.
+ *
+ * The bound matters: an app that never confirms a branch (no membership that resolves one) must
+ * still settle, so the caller falls through to its own refusal instead of hanging.
+ */
+export function whenDataContextConfirmed(timeoutMs = 10000): Promise<boolean> {
+  if (!suspended && confirmedContext) return Promise.resolve(true);
+  return new Promise((resolve) => {
+    let settled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const wake = () => {
+      if (settled) return;
+      settled = true;
+      if (timer) clearTimeout(timer);
+      resolve(true);
+    };
+    timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      contextWaiters = contextWaiters.filter((w) => w !== wake);
+      resolve(false);
+    }, timeoutMs);
+    contextWaiters.push(wake);
+  });
+}
 
 interface CacheEntry<T> {
   data: T;
@@ -24,6 +93,7 @@ interface CacheEntry<T> {
 
 /** Read cached data for a key. Returns null if no cache exists. */
 export function getCachedData<T>(key: string): T | null {
+  if (suspended) return null;
   try {
     const raw = localStorage.getItem(CACHE_PREFIX + key);
     if (!raw) return null;
@@ -48,6 +118,7 @@ export function isCacheStale(key: string): boolean {
 
 /** Write data to cache with current timestamp. */
 export function setCachedData<T>(key: string, data: T): void {
+  if (suspended) return;
   try {
     const entry: CacheEntry<T> = { data, timestamp: Date.now() };
     localStorage.setItem(CACHE_PREFIX + key, JSON.stringify(entry));
@@ -63,6 +134,7 @@ export function clearCachedData(key: string): void {
 
 /** Drop every cached payload, and the ownership marker with it. */
 export function clearAllCachedData(): void {
+  contextVersion += 1;
   try {
     const doomed: string[] = [];
     for (let i = 0; i < localStorage.length; i++) {

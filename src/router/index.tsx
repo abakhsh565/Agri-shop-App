@@ -15,15 +15,13 @@ import DeactivatedPage from "@/pages/auth/DeactivatedPage";
 import UnderReviewPage from "@/pages/auth/UnderReviewPage";
 import RejectedPage from "@/pages/auth/RejectedPage";
 import PermissionGuard from "@/components/auth/PermissionGuard";
+import LocationPickerPage from "@/pages/shared/LocationPickerPage";
 
 // Registration
 import RegisterPhonePage from "@/pages/register/RegisterPhonePage";
 import RegisterOTPPage from "@/pages/register/RegisterOTPPage";
 import RegisterShopDetailsPage from "@/pages/register/RegisterShopDetailsPage";
 import RegisterStatusPage from "@/pages/register/RegisterStatusPage";
-
-// Super Admin
-import SuperAdminDashboard from "@/pages/super-admin/SuperAdminDashboard";
 
 // Layout
 import EmployeeLayout from "@/components/layout/EmployeeLayout";
@@ -40,12 +38,14 @@ const AdminSalesListPage = React.lazy(() => import("@/pages/admin/sales/AdminSal
 const SaleDetailView = React.lazy(() => import("@/components/sales/SaleDetailView"));
 
 import MoreMenuPage from "@/pages/admin/more/MoreMenuPage";
+import BranchDetailPage from "@/pages/admin/more/BranchDetailPage";
 const EmployeesListPage = React.lazy(() => import("@/pages/admin/employees/EmployeesListPage"));
 const EmployeeDetailPage = React.lazy(() => import("@/pages/admin/employees/EmployeeDetailPage"));
 import CompaniesListPage from "@/pages/admin/companies/CompaniesListPage";
 import AddCompanyPage from "@/pages/admin/companies/AddCompanyPage";
 import CompanyDetailPage from "@/pages/admin/companies/CompanyDetailPage";
 import AdminSettingsPage from "@/pages/admin/settings/AdminSettingsPage";
+import ProfileDetailsPage from "@/pages/admin/settings/ProfileDetailsPage";
 import RolesAccessPage from "@/pages/admin/settings/RolesAccessPage";
 import AdminNotificationsPage from "@/pages/admin/notifications/AdminNotificationsPage";
 import AddEmployeePage from "@/pages/admin/employees/AddEmployeePage";
@@ -63,6 +63,9 @@ import DailyCashReconciliationPage from "@/pages/admin/payments/DailyCashReconci
 
 // Employee pages
 const DashboardPage = React.lazy(() => import("@/pages/employee/dashboard/DashboardPage"));
+// One screen, both shells: the assistant runs on the session that is already open, so there is
+// nothing about it that belongs to the owner side or the employee side.
+const AssistantPage = React.lazy(() => import("@/pages/assistant/AssistantPage"));
 import SelectCustomerPage from "@/pages/employee/sale/SelectCustomerPage";
 import BrowseProductsPage from "@/pages/employee/sale/BrowseProductsPage";
 import VariantSelectorPage from "@/pages/employee/sale/VariantSelectorPage";
@@ -114,14 +117,15 @@ export const router = createBrowserRouter([
   { path: "/login/under-review", element: <UnderReviewPage /> },
   { path: "/login/rejected", element: <RejectedPage /> },
 
+  // Choosing a location is a process — search, check, retry — so it is a page of its own,
+  // opened by any field that needs a point. It returns the choice through the router state.
+  { path: "/pick-location", element: <LocationPickerPage /> },
+
   // Registration flow
   { path: "/register", element: <RegisterPhonePage /> },
   { path: "/register/otp", element: <RegisterOTPPage /> },
   { path: "/register/shop-details", element: <RegisterShopDetailsPage /> },
   { path: "/register/status", element: <RegisterStatusPage /> },
-
-  // Super Admin
-  { path: "/super-admin", element: <SuperAdminDashboard /> },
 
   {
     element: <ProtectedRoute allowedRoles={["admin"]} />,
@@ -131,6 +135,7 @@ export const router = createBrowserRouter([
     children: [
       { index: true, element: <Navigate to="/admin/dashboard" replace /> },
       { path: "dashboard",  element: <AdminDashboardPage /> },
+      { path: "assistant",  element: <AssistantPage /> },
       { path: "more",       element: <MoreMenuPage /> },
       { path: "guide",      element: <AppGuidePage /> },
       { path: "search", element: <SearchPage /> },
@@ -217,6 +222,8 @@ export const router = createBrowserRouter([
       { element: <PermissionGuard requires="settings.view" />,
         children: [
           { path: "settings",   element: <AdminSettingsPage /> },
+          { path: "settings/profile", element: <ProfileDetailsPage /> },
+          { path: "settings/branches/:branchId", element: <BranchDetailPage /> },
           { path: "settings/roles", element: <RolesAccessPage /> },
         ] },
 
@@ -254,6 +261,7 @@ export const router = createBrowserRouter([
     children: [
       { index: true, element: <Navigate to="/employee/dashboard" replace /> },
       { path: "dashboard", element: <DashboardPage /> },
+      { path: "assistant", element: <AssistantPage /> },
       { path: "sale", element: <SelectCustomerPage /> },
       { path: "sale/products", element: <BrowseProductsPage /> },
       { path: "sale/products/:productId", element: <VariantSelectorPage /> },
