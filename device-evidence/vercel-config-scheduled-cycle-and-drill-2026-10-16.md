@@ -81,6 +81,7 @@ still took the pre-fix workflow").
 | Fact | Evidence |
 |---|---|
 | The cron was late: at 02:10 UTC the 02:00 run had not appeared | `gh run list --workflow=backup-database.yml --event schedule` showed only `38696121562` (2026-10-15T07:02:29Z, the pre-fix run, `failure` at the credentials preflight) |
+| It is lateness, not a disabled schedule — the failure mode `docs/RECOVERY.md` §9 warns about | `gh workflow list --all` → both `Backup Database (to the environment it names)` and `Backup Watchdog` are **active** (no `disabled_inactivity`), and `main` was committed to at `2026-10-16T00:45:47Z`, fourteen minutes before the cron, so the 60-day inactivity rule cannot apply |
 | The previous scheduled run failed **by design preparation**, before the fix | `38696121562` — the missing `PROD_DB_PASS` preflight; the credential was set 2026-10-15T23:54Z |
 | `main` now has production credentials | preflight passes in dispatch runs on `main` (above) |
 
@@ -109,7 +110,9 @@ recorded in `device-evidence/recovery-drill-2026-10-16.md` §2 and is not repeat
 
 **Status of item 2, stated precisely:** the pipeline is verified on `main` and the watchdog's decision
 is verified against the live API; the **cron-triggered** pair (02:00 backup, 04:40 watchdog) had not
-fired at 02:10 UTC when this was written. Confirming it is one command at any later time:
+fired by 02:15 UTC when this was written, and the schedule is armed (both workflows `active`). The
+watchdog's scheduled slot (04:40 UTC) is more than two hours after this record, so the cron half is
+reported as **pending**, not as passing. Confirming it is one command at any later time:
 
 ```bash
 gh run list --workflow=backup-database.yml --event schedule --limit 1   # expect: schedule, success
@@ -152,7 +155,22 @@ documents:
 41-character string, and accepts `owner`, `@owner`, `a-b-c` — asserted, so "anything becomes a
 mention" cannot pass.
 
-### 3.3 What remains, and why it is not mine to set
+### 3.3 The recipient, set and then proved on GitHub itself
+
+| Step | Result |
+|---|---|
+| Repository variable set | `BACKUP_ALERT_RESPONSIBLE = abakhsh565` (2026-10-16T02:12:34Z) — the repository owner, and the only account with access; `gh variable list` confirms it |
+| Rehearsed alert | dispatch `38839239666` (`simulate=red`) on the branch carrying the change → **issue #5**, `[SIMULATED] Backup watchdog alert — red`, body line **`@abakhsh565 — this alert is addressed to you…`** and `| responsible | @abakhsh565 |`; the run's own report: `"responsible": "@abakhsh565", "action": "opened", "issue": 5` |
+| The real check, with the same code | run `38839353287` — `state: ok`, *"Verified backup 1.4 h old with 1 live artefact(s)"*, `"responsible": "@abakhsh565"`, `"action": "closed", "issue": 5` |
+| Issue #5 afterwards | `CLOSED`, reason `COMPLETED`, `closedAt 2026-10-16T02:14:07Z` — closed by the watcher, not by hand |
+
+So the mention is in the issue body GitHub actually stores, and the report records who was addressed.
+**One scope limit, stated plainly:** both runs above were dispatched on
+`production/schema-reconciliation`, because that is where the change is. On `main` the workflow still
+carries the previous version until the pull request merges, so the 04:40 UTC scheduled watcher will
+not mention anybody yet — and the repository variable alone cannot change that.
+
+### 3.4 What remains, and why it is not mine to set
 
 Two settings decide whether the issue actually reaches a person, and both are **user-level**, not
 repository-level: the responsible person's email/inbox notification settings, and — for a failed
