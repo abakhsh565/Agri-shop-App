@@ -43,7 +43,7 @@ guessed:
 | `inventory_movements`, `stock_adjustments`, `notifications`, `voids` | 17, 13, 51, 3 | — | |
 | `returns` / `return_items` | 1 / 1 | — | the return is `processed_by` the Test QA User |
 | `supplier_payments`, `customer_crops`, `app_settings`, `business_settings`, `shop_requests` | 2, 4, 5, 1, 4 | — | |
-| `audit_events`, `purchases`, `purchase_items`, `credit_limit_requests`, `cash_reconciliations`, `reminder_*` | **0** | — | the runbook still names them, so it stays correct if that changes |
+| `audit_events`, `purchases`, `purchase_items`, `credit_limit_requests`, `cash_reconciliations`, `reminder_*` | **0** | — | the runbook still names them, so it stays correct if that changes. **`audit_events` is deleted by Plan A too** — history that belongs to the tenant being removed goes with it, and its counts are printed before and after rather than assumed to be zero |
 
 ## Preconditions — all three, before any statement below
 
@@ -85,11 +85,20 @@ statements minus the final `rollback;`, and then rolls back:
 |---|---|
 | The artifact loads cleanly | **788 statements, 0 failures**, 56 foreign keys in place |
 | Plan A against a database given a second, real shop | **refuses** — "STOP: production holds 2 shop(s)…" — and deletes nothing (sales stay 52) |
-| Plan A against the demo tenant alone | every table **52 → 0, 6 → 0, 4 → 0, 2 → 0 … 0**, then `rollback` restores sales to 52 |
+| Plan A against the demo tenant alone | **all 30 tables → 0** — the 28 public tables production has, plus `auth.users` and `auth.identities` — then `rollback` restores sales to 52 |
+| Plan A's **coverage of the schema** | **names all 20 tables that hold rows, of 30 present.** The table list is read from the loaded schema rather than written by hand, so a table added by a later migration is either named by a `delete from` or the check fails |
+| Plan A's **postcondition** | its own AFTER step raises if any public table is non-zero or a login remains, so a table this file forgot fails the transaction instead of surviving it |
+| Non-vacuity — the FK order | with `delete from public.customers;` removed, the run **fails**: `customers_created_by_fkey` blocks the `users` delete (exit 1) |
+| Non-vacuity — the coverage rule | with `delete from public.app_settings;` removed, the run **fails and names the table**: *"Plan A never deletes from table(s) that hold rows: app_settings(5)"* (exit 1) |
 | Plan B | users 4 → 3, logins 2 → 0, and **every business row unchanged** (sales 52, customers 6, products 6, returns 1, notifications 51); the return now reads "processed by Yaqoob Malik" |
+| **Not covered** | the storage files in Step 2b — the offline verifier has no storage schema, so that step is documented as *not verified offline* rather than implied |
 
 Re-run it against whatever artifact is newest before you run the SQL for real: if production's
 schema has moved on, the order is the thing that breaks first, and this is where that shows up.
+
+Two flags make that an experiment rather than a claim: `--runbook <path>` points the verifier at
+another copy, which is how the two non-vacuity rows above were produced, and `--from <artifact.sql>`
+picks the artifact when the newest one is not the one you mean.
 
 ## Step 1 — measure first (read-only)
 
@@ -141,10 +150,10 @@ begin
     raise exception 'STOP: production holds % shop(s) and not exactly the demo tenant — this cleanup is not for this database', v_total;
   end if;
 
-  -- Audit history is evidence, not test data: stop rather than delete it silently.
-  if (select count(*) from public.audit_events) > 0 then
-    raise exception 'STOP: audit_events holds % row(s). Review them before deleting this tenant', (select count(*) from public.audit_events);
-  end if;
+  -- Audit history belongs to the tenant being deleted, so it goes with it — but never silently:
+  -- the count is printed here and again by the AFTER block below. Nothing in production is
+  -- discarded without a number attached to it.
+  raise notice 'audit_events rows this run will remove: %', (select count(*) from public.audit_events);
 end $$;
 
 -- ── BEFORE: print the counts (Appendix A's query is the same shape) ─────────────────────
@@ -164,6 +173,7 @@ delete from public.supplier_payments;
 delete from public.purchase_items;
 delete from public.purchases;
 delete from public.notifications;
+delete from public.audit_events;
 delete from public.shop_requests;
 delete from public.credit_limit_requests;
 delete from public.cash_reconciliations;
@@ -185,7 +195,34 @@ delete from auth.identities where user_id in (select id from auth.users);
 delete from auth.users;
 
 -- ── AFTER: every one of these must be 0 ─────────────────────────────────────────────────
-select 'after' as phase, 'sales' as table_name, count(*) from public.sales;
+--    AFTER: EVERY public table must be 0, and no login may remain. This measures that rather than
+--    listing the tables it hopes are empty — a table added by a later migration is covered the day
+--    it exists, and a table this file forgot to delete from fails the transaction instead of
+--    leaving a row behind for a new owner to find.
+do $$
+declare
+  r      record;
+  v_rows bigint;
+  v_left text := '';
+begin
+  for r in select tablename from pg_tables where schemaname = 'public' order by tablename loop
+    execute format('select count(*) from public.%I', r.tablename) into v_rows;
+    if v_rows > 0 then
+      v_left := v_left || r.tablename || '=' || v_rows || ' ';
+    end if;
+    raise notice '%: %', r.tablename, v_rows;
+  end loop;
+
+  if v_left <> '' then
+    raise exception 'STOP: NOT EMPTY after the wipe — % (a table above is not covered by the deletes)', v_left;
+  end if;
+
+  if exists (select 1 from auth.users) then
+    raise exception 'STOP: auth.users still holds % row(s) — a login would survive the wipe', (select count(*) from auth.users);
+  end if;
+
+  raise notice 'OK: every public table is 0 and no login remains';
+end $$;
 
 -- ── DRY RUN BY DEFAULT. Read the counts printed above: if they read as expected, change this
 --    single word to `commit;` and run the block again. If anything looks wrong, `rollback;`
@@ -194,9 +231,38 @@ rollback;
 ```
 
 **What Plan A does not do:** it does not touch the schema, the migrations, the functions or the
-policies (production keeps working, empty), and it does not delete the uploaded files in the
-storage bucket — a company logo referenced by `companies.logo_url` survives as an object. List and
-remove those separately if you want them gone.
+policies (production keeps working, empty) — and **the schema it keeps is production's own, which is
+`0016`. See Plan R if that is the problem.** It also does not delete the uploaded files themselves:
+SQL removes their metadata rows (`storage.objects`), but the files live in the storage backend, which
+is why Step 2b exists and is separate.
+
+**Plan A alone does not make production "a new app".** It removes every row; it does not move the
+schema forward. The app at HEAD expects tables introduced long after `0016` (`roles`,
+`user_permissions`, `branches`, `user_active_shops`, `audit_events`' newer columns …), so a wiped
+`0016` database is empty *and* unreadable to the current build. If your goal is a fresh install that
+behaves like a new user's first day, read Plan R before choosing.
+
+## Step 2b — the uploaded files (storage)
+
+Plan A deletes the `storage.objects` metadata rows that point at product images, employee photos,
+company logos and customer images. **Deleting the metadata does not delete the file** — the object
+stays in the bucket's backend and would be an orphan. Do this part with the Storage API or the
+dashboard, after the wipe, so nothing can be re-linked in between:
+
+```bash
+# after the Plan A commit — the four buckets 0013 creates
+SUPABASE_URL=https://gkswcfljxlutkfdvvqng.supabase.co
+for bucket in product-images employee-photos company-logos customer-images; do
+  curl -sS -X POST "$SUPABASE_URL/storage/v1/object/list/$bucket" \
+    -H "Authorization: Bearer $PROD_SERVICE_ROLE" -H 'Content-Type: application/json' \
+    -d '{"prefix":"","limit":1000}' | head -c 400; echo
+done
+```
+
+The listing is read-only and safe to run first. Removal is not: use the dashboard's Storage browser
+("empty bucket") or `storage/v1/object/<bucket>` DELETE calls, and keep the listing output as the
+record of what was there. **This step is not covered by `verify:cleanup-runbook`** (the offline
+verifier has no storage schema), so it is marked here as *not verified offline* rather than implied.
 
 ## Plan B — remove only what is not a customer's
 
@@ -278,6 +344,41 @@ select 'customers' as untouched, count(*) from public.customers;
 rollback;
 ```
 
+## Plan R — rebuild production empty **at the current schema**
+
+This is the plan for "the app a new user installs sees nothing dummy **and works**". Plan A empties
+the data but keeps a schema from migration `0016`; the app at HEAD cannot run on that. Measured, not
+assumed: the frozen production baseline records `ledgerOnServer {count: 8, latest: "0016"}` against
+**198** migration files in `supabase/migrations/`, and the app's own shop-creation path
+(`create_shop_internal`, `0150_shop_creation_and_switching.sql`) writes to `shops`, `branches`,
+`roles` and `user_active_shops` — three of which do not exist in production at all today. So there
+are two things to fix, and only one of them is data.
+
+Three ways to get to a current-schema, zero-row production. All are owner-run; none is done by this
+repository, and `scripts/migrate.mjs` **refuses production as a target by policy** — that refusal is
+the first thing to decide about, not a bug to work around.
+
+| Route | What it means | Keeps | Cost / risk |
+|---|---|---|---|
+| **R1 — bring the existing schema forward** | Apply the 182 pending migrations through the reviewed path, then run Plan A to empty it | the project ref, the buckets, the domain | needs the §D schema-strategy decision **and** `migrate` to accept production as a target; a forward-only replay onto a schema whose ledger disagrees is exactly what the policy forbids doing blind |
+| **R2 — a new project, built from the migration set** | Provision a fresh Supabase project, apply all 198 migrations from zero, point the app at it, retire the old one | nothing — cleanest possible "new app" | the Free plan allows 2 active projects and both are spent (`supabase projects create` was refused 2026-10-12), so this needs a plan decision or pausing one project |
+| **R3 — reset the existing project's database in place** | Drop the `public` schema and re-run the migration set, keeping the ref, the domain and the four buckets | ref, domain, buckets | destructive by definition; needs a verified backup first, and it is the route where "did every migration really reappear?" must be proven, not assumed |
+
+Whichever is chosen, the acceptance test is the same, and it is a **first-run test, not a count**:
+
+```bash
+npm run migrate -- verify --env <target>     # the ledger matches the directory
+npm run audit:production-data                # exit 0 — no row is keyed by a demo identity
+# then, in the app, as if you were the first user:  register → create the shop → add a product → make one sale
+```
+
+What that first-run must produce, and where it is defined (so "no gap" is checked against the schema
+rather than against a feeling): a `shops` row, its default `branches` row, its **four system role
+templates** in `roles`, and the owner's membership — all in ONE transaction, in
+`0150_shop_creation_and_switching.sql` (`create_shop_internal`, the `INSERT`s at lines 59, 65, 82 and
+129). If a fresh account ends up without one of those, the gap is in the creation path, not in the
+data that was removed.
+
 ## Step 3 — verify, then close the loop
 
 1. **Counts.** Re-run [Appendix A](#appendix-a--the-count-query). Plan A: every table `0`. Plan B:
@@ -304,7 +405,7 @@ today there is no backup from the last eleven days.**
 
 * It does not delete a customer's records ahead of their owner — Plan B keeps every one of them.
 * It does not delete accounts that hold history; it names them and points at deactivate-in-app.
-* It does not delete audit history; Plan A stops if any exists.
+* Plan A removes the deleted tenant's own `audit_events` — with the count printed before and after, never silently. Plan B does not touch audit history at all.
 * It does not touch the schema, the migrations, or the storage buckets.
 * It does not run itself. `tests/unit/productionDataPolicy.test.ts` (rule 10) checks that this file
   keeps its shape: dry-run by default, a precondition before any unscoped delete, no `truncate`,

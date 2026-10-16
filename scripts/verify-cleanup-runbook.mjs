@@ -20,6 +20,11 @@
  *      rollback it then performs, and reports the before/after counts per table.
  *   3. Runs Plan A a second time with a second (real-looking) shop inserted, and requires the
  *      precondition to REFUSE and nothing to be deleted. A guard that cannot fail is not a guard.
+ *   4. Requires Plan A to leave EVERY table empty — the table list is read from the loaded schema,
+ *      not written here, so a table added by a later migration is covered the day it exists — and
+ *      to NAME every table that holds rows. A table the runbook forgets to delete from fails here
+ *      instead of leaving a row behind for a new owner to find. Point it at another file with
+ *      `--runbook <path>` to prove that rule is not vacuous.
  *
  * WHAT IT DOES NOT DO
  *   It never opens a network connection, holds no credentials, and cannot reach production or
@@ -34,7 +39,7 @@ import path from 'node:path';
 import { PGlite } from '@electric-sql/pglite';
 import { splitStatements } from './lib/sql-statements.mjs';
 
-const RUNBOOK = 'docs/PRODUCTION_DEMO_DATA_CLEANUP.md';
+const DEFAULT_RUNBOOK = 'docs/PRODUCTION_DEMO_DATA_CLEANUP.md';
 const DEMO_SHOP = '00000000-0000-0000-0000-000000000001';
 
 const argv = process.argv.slice(2);
@@ -42,6 +47,10 @@ const flag = (name) => {
   const i = argv.indexOf(name);
   return i === -1 ? undefined : argv[i + 1];
 };
+
+// `--runbook` exists so the coverage rule below can be shown to be non-vacuous: point it at a copy of
+// the runbook with one `delete from` removed and this tool must FAIL, naming the table that leaks.
+const RUNBOOK = flag('--runbook') || DEFAULT_RUNBOOK;
 
 function refuse(message) {
   console.error(`REFUSED: ${message}`);
@@ -125,8 +134,15 @@ for (const f of loadFailures.slice(0, 6)) console.log(`  ! ${f}`);
 if (loadFailures.length) fail('the artifact did not load cleanly, so nothing about the runbook can be trusted from it');
 
 const count = async (table) => (await db.query(`select count(*)::int n from ${table}`)).rows[0].n;
-const TABLES = ['shops', 'users', 'customers', 'companies', 'products', 'product_variants', 'sales',
-  'sale_items', 'customer_payments', 'returns', 'notifications', 'auth.users', 'auth.identities'];
+const AUTH_TABLES = ['auth.users', 'auth.identities'];
+// The list is read from the loaded schema rather than written here. A hand-written list is exactly how
+// a wipe stops covering a table nobody remembered, and "every table is empty" is the property the
+// owner is buying — so it should be measured against the database, not against the runbook's prose.
+const TABLES = [
+  ...(await db.query(`select tablename from pg_tables where schemaname = 'public' order by tablename`))
+    .rows.map((r) => r.tablename),
+  ...AUTH_TABLES,
+];
 
 const before = {};
 for (const t of TABLES) before[t] = await count(t);
@@ -178,9 +194,25 @@ if (!ranA.ok) {
   for (const t of TABLES) after[t] = await count(t);
   const leftover = TABLES.filter((t) => after[t] !== 0);
   console.log('\nPlan A:');
-  for (const t of TABLES) console.log(`  ${t.padEnd(18)} ${String(before[t]).padStart(4)} -> ${after[t]}`);
+  for (const t of TABLES) console.log(`  ${t.padEnd(20)} ${String(before[t]).padStart(4)} -> ${after[t]}`);
   if (leftover.length) problems.push(`Plan A left rows behind: ${leftover.join(', ')}`);
-  else console.log('  every table 0, so the delete order works against the real constraint set');
+  else console.log(`  all ${TABLES.length} tables 0, so the delete order works against the real constraint set`);
+
+  // ── Coverage: counting afterwards only proves the tables this tool thought to count. This proves
+  //    the runbook's own delete list names every table that holds rows, so a table added later cannot
+  //    be silently left full on a database whose only copy is the backup you are trying not to need.
+  const named = new Set(
+    [...planA.matchAll(/delete\s+from\s+(?:public\.)?"?([a-z_]+)"?/gi)].map((m) => m[1].toLowerCase()),
+  );
+  const holding = TABLES.filter((t) => !AUTH_TABLES.includes(t) && before[t] > 0);
+  const uncovered = holding.filter((t) => !named.has(t));
+  if (uncovered.length) {
+    problems.push(
+      `Plan A never deletes from table(s) that hold rows: ${uncovered.map((t) => `${t}(${before[t]})`).join(', ')}`,
+    );
+  } else {
+    console.log(`  coverage: Plan A names all ${holding.length} table(s) that hold rows (of ${TABLES.length} present)`);
+  }
   await ranA.rollback();
   const restored = await count('sales');
   if (restored !== before.sales) problems.push(`the rollback did not restore: sales = ${restored}`);
@@ -215,5 +247,10 @@ if (problems.length) {
   for (const p of problems) console.error(`  • ${p}`);
   process.exit(1);
 }
-console.log('\nPASS: both plans behave as documented — Plan A refuses a database with a real shop, empties the demo tenant and rolls back; Plan B removes exactly the two test artifacts, reassigns the return, and touches no business row.');
+console.log(
+  '\nPASS: both plans behave as documented — Plan A refuses a database with a real shop, then leaves'
+    + ' every table in the database empty and rolls back; and it names every table that holds rows, so a'
+    + ' forgotten table cannot survive the wipe. Plan B removes exactly the two test artifacts, reassigns'
+    + ' the return, and touches no business row.',
+);
 process.exit(0);
