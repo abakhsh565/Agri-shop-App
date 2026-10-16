@@ -13,6 +13,12 @@ turns out to be seconds, and §4 names everything it excludes. The parallel reco
 the first real alert and a PGlite drill; this file adds what that one names as missing — the
 *provisioning* half of a recovery, on a real engine — and does not repeat it.
 
+**UPDATED later the same day, with the Vercel project readable at last.** Two sentences above are now
+superseded, and are corrected in a named section rather than quietly edited away: a Vercel project
+**was** read (§1.4 — the Production scope was wrong in three of its five names, and five consecutive
+production deployments had failed because of it), and the **cron pair did fire** (§2.3 — the 02:00
+backup `success`, the watchdog `state: ok`). The 4-hour RTO remains unvalidated.
+
 ---
 
 ## 1. Vercel Production configuration — the required variables, and what the gate does with them
@@ -64,6 +70,164 @@ everything else**, before an artifact exists.
 | Does a build without them fail instead of shipping? | **Yes** — three of the four runs above |
 | Is the Vercel **dashboard** configured that way today? | **UNKNOWN.** No Vercel CLI, `.vercel` link, or `VERCEL_*` credential exists in this checkout, and the MCP tool registry for this session exposes only `supabase`. The dashboard was not read, so this file does not claim it is fixed. |
 | Would a correctly-configured production deploy now work? | **No** — and not because of the variables. Production's schema is 182 ledger entries behind (`supabase/baseline/production-baseline.json`: ledger `{count: 8, latest: "0016"}` vs 198 files), so the deployed app would point at a database without the tables it reads. That is the §D schema decision, unchanged by this work. |
+
+### 1.4 The dashboard, read at last — it was wrong, and that is why deploys were red
+
+A Vercel MCP connection became available, so §1.3's UNKNOWN was answered rather than left standing.
+The project is `agri-shop-app` (`prj_tWZoyuctxYUj6RiA60q1d3ZACK52`, scope `ab-s-projects-7cb39308`,
+framework `vite`). `filter_project_envs` returns the scope, and the four `VITE_*` names it holds are
+**all targeting `production`** — there is no Preview or Development-scoped variable in this project at
+all, which is itself worth knowing (a Preview build is refused for `ENV_NAME_MISSING`, by design).
+
+| Name | Held by the Production scope | Must hold |
+|---|---|---|
+| `VITE_APP_ENV` | `production` ✓ (read decrypted) | `production` |
+| `VITE_OTP_DELIVERY` | `sms` ✓ (read decrypted) | `sms` |
+| `VITE_SUPABASE_URL` | `https://supabase.com/dashboard/project/bpybjrjenwccowvtrevu` — a **dashboard link**, and the **staging** ref | `https://gkswcfljxlutkfdvvqng.supabase.co` |
+| `VITE_SUPABASE_ANON_KEY` | a JWT whose own `ref` claim decodes to `bpybjrjenwccowvtrevu` — **staging's** key | the production project's publishable/anon key |
+| `VITE_SUPABASE_PROJECT_ID` | **absent** | `gkswcfljxlutkfdvvqng` |
+
+All five deployments of `main` @ `de1a962e` (`source: redeploy`, the newest
+`dpl_4kxkuW9zowAZBnA6vU2HW5BEqsmD`, 2026-10-16T01:35:00Z) are `state: ERROR` with
+`errorCode: BUILD_UTILS_SPAWN_1` and `errorMessage: Command "npm run build" exited with 1`. The env
+values were being edited while those builds ran (their `createdAt`/`updatedAt` timestamps interleave
+with the deployment timestamps), which is consistent with the cause being the values themselves.
+Rebuilding the scope's exact configuration locally — the same command Vercel runs — reproduces the
+refusal rather than inferring it:
+
+```
+[ENVIRONMENT GATE] Refusing to build.
+  PROJECT_ID_UNREADABLE
+  Cannot read a Supabase project id from this build's config
+  (VITE_SUPABASE_URL="https://supabase.com/dashboard/project/bpybjrjenwccowvtrevu", VITE_SUPABASE_PROJECT_ID="")
+
+  Build mode: production
+  VITE_APP_ENV: production
+  VITE_OTP_DELIVERY: sms
+```
+
+exit 1. **The gate is working; the scope is not.** A dashboard link reads as "the URL is set" while
+naming no project, and the bare-ref fallback cannot read it either.
+
+The corrected set was then built with **production's own key**, read from the production project
+(`get_publishable_keys gkswcfljxlutkfdvvqng`) rather than synthesised:
+
+```
+$ VITE_APP_ENV=production VITE_OTP_DELIVERY=sms VITE_SUPABASE_PROJECT_ID=gkswcfljxlutkfdvvqng \
+  VITE_SUPABASE_URL=https://gkswcfljxlutkfdvvqng.supabase.co VITE_SUPABASE_ANON_KEY=<production key> \
+  npx vite build --mode production
+[EnvGuard] building PRODUCTION → gkswcfljxlutkfdvvqng (otp: sms, key verified)
+```
+
+exit 0, a real `dist/` (18 MB). So the successful row of §1.2 now rests on the real credential, not
+a synthetic one.
+
+**What has not happened: the write.** §1.3's answer changes from *UNKNOWN* to *measured, and wrong*,
+but it does not become *fixed*, because every path that could change these values is closed:
+
+| Path | Why it cannot be used |
+|---|---|
+| Vercel MCP (connected, 144 tools) | **Read-only.** Every tool it exposes reports `readOnly: true`; repeated searches for a create/update/redeploy tool return only readers. `list_deployment_events` (build logs) is additionally refused: 403 for this scope |
+| Vercel CLI on this machine | Authenticated as a **different account** — `abakhsh56-3780`, team `farmer-app1`; `project ls --scope ab-s-projects-7cb39308` answers `The specified scope does not exist`, and that scope's projects are not in its list |
+| A push to `main` | Would only rebuild with the same wrong values — and would fail the same way |
+
+That was the position at 14:25Z. It is no longer: the owner approved a Vercel CLI login and the three
+values were set, redeployed and verified — see **§1.6**.
+
+**One trap, reported rather than fixed.** `PROJECT_ID_UNREADABLE` fires *only* because no project id
+is set. Leave the dashboard link and add `VITE_SUPABASE_PROJECT_ID` alone and the gate accepts the
+build — while `src/lib/supabase.ts` uses `VITE_SUPABASE_URL` verbatim (`resolvedUrl = rawUrl || …`),
+so production would serve a client pointed at a dashboard page. Replace the URL; do not merely add
+the missing name. Requiring a *usable* hosted URL for staging and production would close the hole, and
+it is not done here: that changes the gate's semantics and belongs in its own reviewed pass.
+
+**What production is serving while this is true.** The newest `READY` production deployment is
+`dpl_6n2fh2Xgyns3a3Kb29THxs8trz1L`, created **2026-10-02T19:36:11Z** (commit `ca1e0c2b`) — so `main`
+has not reached production in fourteen days, and the eight attempts listed above are the gap. One
+more fact matters for "does the deployment serve": opening the production alias
+(`https://agri-shop-app-ab-s-projects-7cb39308.vercel.app`) redirects to
+`https://vercel.com/login?next=/sso-api?url=…agri-shop-app-ab-s-projects-7cb39308.vercel.app…`, i.e.
+Vercel's Deployment Protection (**Vercel Authentication**) covers the production URL. Nothing in this
+MCP connection exposes the protection setting, so it is *observed* (an anonymous browser is answered
+with the SSO wall), not read. Two consequences: the app is not publicly reachable today, and "the
+deployment serves" cannot be checked from an anonymous browser even after the values are fixed — the
+check is deployment `state: READY` plus a fetch through an authenticated session (or a deliberate
+protection exemption while checking).
+
+### 1.5 The guard this pass added
+
+Until now, `PROJECT_ID_UNREADABLE` existed in the contract (`src/lib/environmentContract.ts`) and in
+the start-up guard (`src/lib/envGuard.ts`) with **no test feeding it** — so the gate's ability to
+catch a URL it cannot read was an assertion, not evidence. `tests/unit/environmentSafety.test.ts` now
+carries a `describe` for exactly this shape: nothing is readable in a dashboard link by either route
+(`extractProjectId`, `projectIdFromTarget`); production pointed at one is refused with
+`PROJECT_ID_UNREADABLE`; staging pointed at one is refused too, not quietly accepted; the same
+configuration with the API URL is accepted; and adding the right project id does **not** rescue a key
+from the other project (`CREDENTIALS_MISMATCHED`). Proven non-vacuous by injecting the defect once —
+making `projectIdFromTarget` read a ref out of a `dashboard/project/<ref>` link — which failed four of
+the new cases, after which the injection was reverted (`git diff --quiet` clean).
+
+| Check | Result |
+|---|---|
+| `npx vitest run tests/unit` | **72 files, 918 tests, passed** (913 before this pass; +5) |
+| `npx tsc --noEmit` | exit 0 |
+
+### 1.6 The write, the redeploy, and what the live site does — 14:35Z–14:45Z
+
+The owner approved signing the Vercel CLI in as **`abuxkhawaja56-1850`** (the account that owns the
+scope) through the OAuth device flow, into an **isolated config dir** (`../.vercel-agrishop-login`) so
+this machine's existing CLI session, which belongs to another account, was left untouched — and the
+project link was placed **outside the repository** (`../.vercel-agrishop-link`), so nothing was added
+to the checkout.
+
+| Step | How | Result |
+|---|---|---|
+| Read the scope | `vercel env ls production` | matched §1.4 exactly: four `VITE_*` names, all Production, no `PROJECT_ID` |
+| Replace the URL | `env rm VITE_SUPABASE_URL production --yes`, then `env add … --no-sensitive` (value on **stdin**, never argv) | `https://gkswcfljxlutkfdvvqng.supabase.co` |
+| Replace the key | the same pair for `VITE_SUPABASE_ANON_KEY` | production's legacy anon JWT — a **publishable** key, which ships in the bundle by design |
+| Add the missing name | `vercel env add VITE_SUPABASE_PROJECT_ID production` | `gkswcfljxlutkfdvvqng` |
+| Read back, independently | `vercel env pull` into a file **outside** the repo, then decode it | `VITE_APP_ENV="production"`, `VITE_OTP_DELIVERY="sms"`, `VITE_SUPABASE_URL="https://gkswcfljxlutkfdvvqng.supabase.co"`, `VITE_SUPABASE_PROJECT_ID="gkswcfljxlutkfdvvqng"`, and the key's own `ref` claim = `gkswcfljxlutkfdvvqng`; the pulled file was deleted |
+| Redeploy `main` | `vercel redeploy dpl_4kxkuW9zowAZBnA6vU2HW5BEqsmD --target production` | **`✓ Ready in 26s`** — `dpl_7eK8MW8YH17cRkSeq7FMb5QBrVdk`, aliased to `https://hisaabkitaab.dpdns.org` |
+
+The build log of that deployment, quoted:
+
+```
+2026-10-16T14:40:50.256Z  [EnvGuard] building PRODUCTION → gkswcfljxlutkfdvvqng (otp: sms, key verified)
+2026-10-16T14:40:50.260Z  vite v8.2.2 building client environment for production...
+status   ● Ready
+```
+
+The gate that refused this configuration an hour earlier now accepts it, with the key cross-checked.
+
+**What the live site does** — anonymous HTTP, no session:
+
+| URL | Result |
+|---|---|
+| `https://hisaabkitaab.dpdns.org` | **HTTP 200** — `<title>AgriShop</title>`, `id="root"`: the real app shell |
+| `https://agri-shop-app-…vercel.app`, `https://agri-shop-9kjungaj1-…vercel.app` | 200 after a redirect to `vercel.com/sso-api?…` — Deployment Protection, the posture the owner chose to keep |
+
+Rendered in a real browser on the custom domain, the app boots and is interactive (onboarding at
+`/welcome`, "Run your shop from the phone") and its **own** console prints
+`[EnvGuard] PRODUCTION → gkswcfljxlutkfdvvqng (otp: sms, key verified)`. In the shipped chunks the ref
+appears once in `assets/supabase-*.js` (the value the client was built with) and, separately, in the
+contract's bundled environment map — the one `bpybjrjenwccowvtrevu` occurrence is that map from
+`environments.json`, not a connection target.
+
+**Not verified, and why.** Production sign-in uses real SMS, so no authenticated end-to-end session
+was created here. And production's schema is still 182 ledger entries behind (§1.3), so the app boots
+to onboarding while its data-backed screens are expected to fail until that decision is taken. The
+variables make the deploy succeed; they were never going to make the app work.
+
+**A pre-existing defect found while verifying it, unrelated to the variables.** `src/main.tsx`
+registers a service worker at `/sw.js` in every production web build and injects
+`<link rel="manifest" href="/manifest.json">`, but neither `public/sw.js` nor `public/manifest.json`
+exists, and `vercel.json`'s catch-all rewrite answers both with `index.html` — so `/sw.js` returns
+`HTTP 200` `text/html`, the browser refuses it, and **every production page load logs** *"The script
+has an unsupported MIME type ('text/html')"* (observed on the live site). Add-to-Home-Screen is
+therefore broken and the service worker never installs — silently, because the registration is
+`.catch(() => {})`. Reported rather than fixed here: shipping a real `sw.js`/`manifest.json` is a
+product decision, and the narrower alternative — excluding those paths from the rewrite — belongs to
+a config pass.
 
 ---
 
@@ -118,6 +282,37 @@ reported as **pending**, not as passing. Confirming it is one command at any lat
 gh run list --workflow=backup-database.yml --event schedule --limit 1   # expect: schedule, success
 gh run list --workflow=backup-watchdog.yml --event schedule --limit 1   # expect: schedule, success
 ```
+
+### 2.3 Both commands were run — the cron pair fired, and both passed
+
+The status above was *pending*, not failing. It is now resolved, by the runs themselves:
+
+| Slot | Run | Event | Created (UTC) | Conclusion |
+|---|---|---|---|---|
+| 02:00 backup | [`38863164224`](https://github.com/abakhsh565/Agri-shop-App/actions/runs/38863164224) | **`schedule`** | 2026-10-16T06:46:59Z | **`success`** |
+| watchdog | [`38879348888`](https://github.com/abakhsh565/Agri-shop-App/actions/runs/38879348888) | **`schedule`** | 2026-10-16T09:16:39Z | **`success`** |
+
+Both are `head_branch: main`, so both ran against the merged fix. The backup's every step succeeded —
+including *Verify the backup against the environment it names* and *Confirm the artefact names the
+environment it was asked for* — and it stored `database-backup-production-38` (**53,241 bytes**, not
+expired, created 06:47:51Z). This is the first **scheduled** run to succeed: the only earlier one
+(`38696121562`, 2026-10-15T07:02:29Z) died at the credentials preflight, which is the pre-fix failure.
+
+The watchdog then judged that artefact **with its own code**, on its own schedule:
+
+```json
+{ "run": { "id": 38863164224, "created_at": "2026-10-16T06:46:59Z" },
+  "artefactCount": 1, "ageHours": 2.4971558333333332,
+  "state": "ok", "healthy": true,
+  "summary": "Verified backup 2.5 h old with 1 live artefact(s), within the 24 h RPO.",
+  "alert": { "action": "none (healthy)", "issue": null } }
+```
+
+exit 0 — and no issue was opened, which is the point: an issue appears only when there is something to
+say. **Both slots fired late** (4h47m and ~4h36m after their cron times), which confirms the earlier
+lateness finding as a scheduler property rather than a disabled workflow, and is why "late" was
+recorded as pending instead of broken. Item 2 is therefore **PASS**: the cron takes a verified backup,
+and the watcher that judges it runs on a schedule too.
 
 ---
 

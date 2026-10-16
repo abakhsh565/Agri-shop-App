@@ -22,6 +22,7 @@ import {
   extractProjectId,
   parseAppEnvironment,
   projectIdFromKey,
+  projectIdFromTarget,
   resolveEnvironment,
   type EnvironmentInput,
 } from '@/lib/environmentContract';
@@ -376,5 +377,77 @@ describe('project ids are read only from real Supabase URLs', () => {
     expect(extractProjectId('not a url')).toBeNull();
     expect(extractProjectId('https://example.com')).toBeNull();
     expect(extractProjectId(undefined)).toBeNull();
+  });
+});
+
+describe('a dashboard link is not a URL — the shape that failed the Production scope', () => {
+  /*
+   * Measured on 2026-10-16, read from the real Vercel project (`agri-shop-app`, scope
+   * `ab-s-projects-7cb39308`), Production environment:
+   *
+   *   VITE_APP_ENV            = production
+   *   VITE_OTP_DELIVERY       = sms
+   *   VITE_SUPABASE_URL       = https://supabase.com/dashboard/project/<staging ref>
+   *   VITE_SUPABASE_ANON_KEY  = a key whose own `ref` claim names the STAGING project
+   *   VITE_SUPABASE_PROJECT_ID = (absent)
+   *
+   * Five consecutive production deployments failed with `BUILD_UTILS_SPAWN_1 — Command "npm run
+   * build" exited with 1`, and rebuilding that exact configuration locally produced the refusal
+   * asserted below. So this is the failure the pipeline reported, not a guess about it.
+   *
+   * The lesson the case encodes: a dashboard link reads as "the URL is set" while naming no
+   * project, and the bare-ref fallback cannot read it either — so a build can be confidently
+   * misconfigured in a way nothing could previously catch. Nothing in this repository can see the
+   * dashboard; the gate is the last line that can, which is why it has to be exercised here.
+   */
+  const DASHBOARD_URL = `https://supabase.com/dashboard/project/${STAGING_PROJECT_ID}`;
+
+  test('nothing is readable in it, by either route the gate uses', () => {
+    expect(extractProjectId(DASHBOARD_URL)).toBeNull();
+    expect(projectIdFromTarget(DASHBOARD_URL)).toBeNull();
+  });
+
+  test('production pointed at a dashboard link is refused, naming the real problem', () => {
+    const verdict = resolveEnvironment({
+      appEnv: 'production',
+      supabaseUrl: DASHBOARD_URL,
+      supabaseAnonKey: PRODUCTION_KEY,
+      otpDelivery: 'sms',
+    });
+    expect(verdict.ok).toBe(false);
+    if (!verdict.ok) expect(verdict.code).toBe('PROJECT_ID_UNREADABLE');
+  });
+
+  test('staging pointed at a dashboard link is refused too, not quietly accepted', () => {
+    const verdict = resolveEnvironment(
+      valid({ supabaseUrl: DASHBOARD_URL, supabaseProjectId: undefined }),
+    );
+    expect(verdict.ok).toBe(false);
+    if (!verdict.ok) expect(verdict.code).toBe('PROJECT_ID_UNREADABLE');
+  });
+
+  test('the same configuration with the API URL is accepted — the refusal is about the URL', () => {
+    const verdict = resolveEnvironment({
+      appEnv: 'production',
+      supabaseUrl: PRODUCTION_URL,
+      supabaseAnonKey: PRODUCTION_KEY,
+      otpDelivery: 'sms',
+    });
+    expect(verdict.ok).toBe(true);
+    if (verdict.ok) expect(verdict.projectId).toBe(PRODUCTION_PROJECT_ID);
+  });
+
+  test('naming the project does not rescue a key from the other project', () => {
+    // The next mistake after the one above: add VITE_SUPABASE_PROJECT_ID and keep the staging key.
+    // The URL is then irrelevant — the pair is still contradictory, and it must still be refused.
+    const verdict = resolveEnvironment({
+      appEnv: 'production',
+      supabaseUrl: DASHBOARD_URL,
+      supabaseProjectId: PRODUCTION_PROJECT_ID,
+      supabaseAnonKey: STAGING_KEY,
+      otpDelivery: 'sms',
+    });
+    expect(verdict.ok).toBe(false);
+    if (!verdict.ok) expect(verdict.code).toBe('CREDENTIALS_MISMATCHED');
   });
 });

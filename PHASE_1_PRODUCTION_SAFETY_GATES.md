@@ -313,6 +313,72 @@ production's schema is 182 ledger entries behind this repository (`supabase/base
 so the deployed app would point at a database without the tables it reads. The variables make the build
 succeed; they do not make the app work.
 
+#### F3.2 Measured 2026-10-16 (second pass) — the dashboard read, and the Production scope was wrong
+
+**CORRECTED.** §F3.1 closed by saying the Production scope's contents were UNKNOWN, because no Vercel
+credential existed in this checkout. A Vercel MCP connection made the scope readable, and it was read.
+Three of the five names were wrong or missing — and five consecutive production deployments had
+failed as a result.
+
+| Name (Production scope) | What it held | What it must hold |
+|---|---|---|
+| `VITE_APP_ENV` | `production` ✓ | `production` |
+| `VITE_OTP_DELIVERY` | `sms` ✓ | `sms` |
+| `VITE_SUPABASE_URL` | `https://supabase.com/dashboard/project/bpybjrjenwccowvtrevu` — a **dashboard link**, and the **staging** ref | `https://gkswcfljxlutkfdvvqng.supabase.co` |
+| `VITE_SUPABASE_ANON_KEY` | a JWT whose own `ref` claim is `bpybjrjenwccowvtrevu` — **staging's** key | the production project's publishable/anon key |
+| `VITE_SUPABASE_PROJECT_ID` | **absent** | `gkswcfljxlutkfdvvqng` |
+
+**The failure that produced.** The five most recent production deployments — `main` @ `de1a962e`,
+`source: redeploy`, the newest `dpl_4kxkuW9zowAZBnA6vU2HW5BEqsmD` — are all `state: ERROR` with
+`errorCode: BUILD_UTILS_SPAWN_1`, `errorMessage: Command "npm run build" exited with 1`. Rebuilding
+that exact configuration locally produces the refusal, so this is the reported failure and not a
+guess about it:
+
+```
+[ENVIRONMENT GATE] Refusing to build.
+  PROJECT_ID_UNREADABLE
+  Cannot read a Supabase project id from this build's config
+  (VITE_SUPABASE_URL="https://supabase.com/dashboard/project/bpybjrjenwccowvtrevu", VITE_SUPABASE_PROJECT_ID="")
+```
+
+exit 1. The gate behaved exactly as designed; the scope is what is wrong.
+
+**The corrected set, built — with the production project's own key**, read from that project rather
+than synthesised (so this is the real credential, not a stand-in):
+
+```
+$ VITE_APP_ENV=production VITE_OTP_DELIVERY=sms VITE_SUPABASE_PROJECT_ID=gkswcfljxlutkfdvvqng \
+  VITE_SUPABASE_URL=https://gkswcfljxlutkfdvvqng.supabase.co VITE_SUPABASE_ANON_KEY=<the production key> \
+  npx vite build --mode production
+[EnvGuard] building PRODUCTION → gkswcfljxlutkfdvvqng (otp: sms, key verified)
+```
+
+exit 0. **The write was then done, and the deploy verified.** The connected Vercel MCP is read-only —
+every tool it exposes reports `readOnly: true`, and no create/update/redeploy tool exists — and the
+Vercel CLI session on this machine belongs to a different account (`abakhsh56-3780`, team
+`farmer-app1`) that cannot see this scope (`The specified scope does not exist`). The owner approved
+signing the CLI in as `abuxkhawaja56-1850` (OAuth device flow, isolated config dir, project linked
+outside the repository), after which the three values were set, read back through `vercel env pull`,
+and `main` was redeployed:
+
+| Result | Evidence |
+|---|---|
+| Production scope now holds all five names, with the key cross-checked to production | `vercel env pull`: `VITE_APP_ENV=production`, `VITE_OTP_DELIVERY=sms`, `VITE_SUPABASE_URL=https://gkswcfljxlutkfdvvqng.supabase.co`, `VITE_SUPABASE_PROJECT_ID=gkswcfljxlutkfdvvqng`, key `ref` = `gkswcfljxlutkfdvvqng` |
+| The redeploy is green | `vercel redeploy dpl_4kxkuW9zowAZBnA6vU2HW5BEqsmD --target production` → **`✓ Ready in 26s`**, aliased `https://hisaabkitaab.dpdns.org` |
+| The gate accepted it at build time | build log: `[EnvGuard] building PRODUCTION → gkswcfljxlutkfdvvqng (otp: sms, key verified)` |
+| The site serves the app | `https://hisaabkitaab.dpdns.org` → HTTP 200, `<title>AgriShop</title>`, and the running app logs `[EnvGuard] PRODUCTION → gkswcfljxlutkfdvvqng (otp: sms, key verified)` |
+
+Full record: `device-evidence/vercel-config-scheduled-cycle-and-drill-2026-10-16.md` §1.6.
+`tests/unit/environmentSafety.test.ts` also encodes the refusal (`PROJECT_ID_UNREADABLE`) and its
+non-vacuity, because until this pass no test fed the gate a URL it cannot read.
+
+**One trap, reported rather than fixed.** `PROJECT_ID_UNREADABLE` fires *only* because no project id
+is set. Leave the dashboard link in place and add `VITE_SUPABASE_PROJECT_ID` alone, and the gate
+accepts the build — while `src/lib/supabase.ts` uses `VITE_SUPABASE_URL` verbatim, so production
+would serve a client pointed at a dashboard page. Replace the URL; do not merely add the missing
+name. Requiring a *usable* hosted URL for staging and production would close that hole, and it is not
+done here: it changes the gate's semantics and belongs in its own reviewed pass.
+
 ### F4. GitHub Actions risks (reported only — nothing rewritten)
 
 | Workflow | Trigger | Targets | Secrets used | Risk |
