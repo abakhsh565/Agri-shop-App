@@ -347,7 +347,7 @@ was written and is false now.
 |---|---|---|
 | Production RPO | **24 hours** | The scheduled run is daily at 02:00 UTC (07:00 PKT, before the trading day), so the worst case is the transactions since that run. **Conditional:** a failed or missing run means the RPO is *exceeded* until a manual dispatch succeeds — the workflow's failure notice exists for exactly that, and dispatching is the repair, and the **Backup Watchdog** below turns it into an issue within one period rather than waiting to be noticed. |
 | Staging RPO | Last successful **manual** run | Staging is deliberately not scheduled; its RPO is whatever the operator last took. |
-| Production RTO | **4 hours from the decision to restore** (database) | For the current size — 30 tables · 249 rows · a ~334 KB artefact: fetch artefact + manifest from GitHub, prepare the target, replay, confirm with `restore-verify --compare-with production`, repoint the app. The replay is measured, not estimated: **769 statements in 1.6 s** in-process. **This is an agreed target, not a drilled result** — no restore has ever been performed into a real production target (PGlite was the stand-in), so the first drill is outstanding work. |
+| Production RTO | **4 hours from the decision to restore** (database) | The objective. **The mechanical path is now measured, not estimated:** a timed drill on 2026-10-16 went from the artefact stored on GitHub to a full `PASS` in **30.0 s** — fetch `3.6 s` + independent digest check `3.1 s` + replay and live comparison `23.2 s` (769 statements, 1.08 s of it the replay itself), at 30 tables · 249 rows · a 334 KB dump. See `device-evidence/recovery-drill-2026-10-16.md`. **What the 4 hours still covers, because the drill did not exercise it:** provisioning the recovery target, its credentials and network access, and repointing the app — the repository refuses a Supabase restore destination by design, so the isolated target was PGlite, and standing up a second home for production data is the owner's decision. |
 | Time to *notice* an outage, a bad run or a silent one | **≤ 27 hours** (one watchdog period plus the RPO and slack) | The `Backup Watchdog` workflow (`scripts/check-backup-health.mjs`, daily 04:40 UTC) reads the Actions record of `backup-database.yml` and **opens an issue** labelled `backup-alert` when the newest completed run is red, succeeded with **no live artefact**, or is older than the RPO; a healthy check comments and closes that issue by itself. It is deliberately a separate workflow, because a backup cannot report its own absence — a run that never started is the case this exists for. **What breaks it:** deleting or disabling the watchdog, or GitHub disabling scheduled workflows in an otherwise quiet repository (the risk both schedules share). |
 | Retention | **30 days** of daily artefacts | The workflow's `retention_days` default; 1–90 is accepted, so any other value is a deliberate policy change. Artefact + verification report travel together → at least 30 daily recovery points. Local `backups/` is **not** part of this policy (§6). |
 | PITR | **None** (Free plan) | With Pro + the PITR add-on the RPO becomes seconds at roughly **$100/month plus compute**; that purchase is the owner's decision and is the cheapest way to shrink the 24-hour window. |
@@ -388,6 +388,17 @@ a watcher which cannot look must report **unhealthy**, never healthy.
 The 2026-10-01 row *"Runs that succeeded: 0"* has therefore changed, and the reporting step no longer
 fails either: run `38828524870` is **green end to end**, including *Summary* and *Upload*. What remains is
 only that the **scheduled** run takes the fix once `main` carries it (PR #1).
+
+### Update 2026-10-16 — the fix is on `main`, watched, and drilled
+
+| Observation | Value |
+|---|---|
+| **PR #1 merged** `2026-10-16T00:45:48Z` | merge commit `de1a962e` — `main` carries the fix, the upload ordering, both guards and the watchdog |
+| Backup run on `main` `38831480604` | **success**, every step ✓ with *Upload* before *Summary*; stored **`database-backup-production-37`** (53,239 bytes, digest `sha256:f5134f9c…`, expires 2026-11-15) |
+| First real alert | watchdog run `38831384562` found `state: red` (`simulated: false`, newest completed run `38826369696` = failure) and **opened issue #2**; after the successful run above, watchdog `38831620800` found `state: ok` and **closed it** (`00:49:04Z`) — no human involved |
+| Timed recovery drill | artefact from `main`'s run → **`PASS` integrity · replay · counts · structure · digests · auth**, `failures: []`, in **30.0 s** of tool time; artefact digest matched GitHub's recorded digest exactly |
+
+The full record, including what the drill does *not* cover, is `device-evidence/recovery-drill-2026-10-16.md`.
 
 ### Update 2026-10-16 — a reporting step can no longer discard a verified artefact
 

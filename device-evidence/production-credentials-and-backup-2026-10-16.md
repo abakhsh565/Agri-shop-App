@@ -154,16 +154,9 @@ credentials` → exit 2. The tool cannot reach production by accident.
 
 ## 6. What is still open — stated, not smoothed
 
-1. **The workflow fix is not merged to the default branch yet — but coverage no longer waits on it.**
-   It is committed as `92a8802a` and sits in **[PR #1](https://github.com/abakhsh565/Agri-shop-App/pull/1)**
-   (OPEN, `MERGEABLE`, `ci-proof/full-tree` → `main`), and it has been **run and proven on the branch**:
-   dispatching with `--ref ci-proof/full-tree` gives run **`38828524870`**, every step ✓ with the
-   artefact uploaded (`database-backup-production-36`, 53,237 bytes, expires 2026-11-15). What the
-   merge still buys is that the **scheduled** 02:00 UTC run and future `main` dispatches use the fix;
-   until it lands, those keep succeeding at the dump and discarding the artefact at the Summary step.
-   The branch now also carries the **upload-ordering fix** and the **`Backup Watchdog`** (both in §8),
-   so one merge delivers the typo fix, the arrangement that made the typo expensive, and the alerting
-   that reports a future failure — and both new guarantees are guarded by tests in the same branch.
+1. ~~**The workflow fix is not merged to the default branch yet.**~~ **CLOSED 2026-10-16** — **[PR #1](https://github.com/abakhsh565/Agri-shop-App/pull/1)** is **MERGED** (merge commit `de1a962e`, 2026-10-16T00:45:48Z), and the fix has been **run on `main` and proved there**: run **`38831480604`** is green with every step ✓, *Upload* ordered before *Summary*, and it stored **`database-backup-production-37`** (53,239 bytes, digest `sha256:f5134f9c…`, expires 2026-11-15). The same merge delivered the **upload-ordering fix** and the **`Backup Watchdog`** (§8), both guarded by tests. The watchdog then produced the **first real alert** from a real red run and closed it by itself after the successful backup, and a **timed recovery drill** from that run's stored artefact reached a full `PASS` in 30.0 s — all three in
+   `device-evidence/recovery-drill-2026-10-16.md`. What is *not* closed: the drill's target was PGlite,
+   and the first **scheduled** run on the corrected `main` is still ahead (02:00 UTC).
 2. **`APP_LINK_HOST` is unset, and only the owner can fill it** — it needs the real https host the app
    will be served from (`scripts/android-assetlinks.mjs:18` gives `app.agrishop.pk` as an *example*,
    not a decision). The action is one command, and it is a plain variable, not a secret:
