@@ -400,6 +400,8 @@
         "tests/unit/branchIdentityBoundary.test.ts",
         "tests/unit/branchLateResponse.test.ts",
         "tests/e2e/branchFlowCorrections.spec.ts",
+        "tests/e2e/branchRemoval.spec.ts",
+        "tests/e2e/sessionRefresh.spec.ts",
         "tests/unit/branchArchiveSheetGuard.test.ts",
         "tests/unit/rpcContractGuard.test.ts"
       ],
@@ -450,15 +452,15 @@
           "where": "device-evidence/logs/security-matrix-affected-2026-10-16.log, device-evidence/logs/security-matrix-2026-10-16.log, device-evidence/security-data-isolation-2026-10-16.md"
         },
         {
-          "status": "BLOCKED",
-          "proves": "Only the browser-driven leg of branch removal is still unverified — create → rename → archive driven in a real browser, the archived status and fallback branch the UI shows, and that a reload keeps the archived state. The database half is no longer blocked: 0188–0195 are applied to QA (ledger 198 files / 198 rows, `migrate verify --env staging` PASS) and the archive refusals are measured through `archive_operating_branch` in branchIdentityBoundary and the live integration set. The sheet's branch half also has no caller in the router today (branch removal is reached from BranchesSection → BranchDetailPage), so its half is proven at source and copy level only.",
-          "where": "tests/unit/branchIdentityBoundary.test.ts, device-evidence/logs/security-matrix-affected-2026-10-16.log, RBAC_BRANCH_IMPLEMENTATION_STATUS.md"
+          "status": "VALID",
+          "proves": "The browser-driven leg of branch removal is now measured, not blocked: `tests/e2e/branchRemoval.spec.ts` drives the real screen against the real database — the main branch offers no archive action, the confirmation names the branch and states the real consequence (history preserved), the confirm button is DISABLED until a reason is typed, the owner's archive succeeds and the success toast agrees with the rows (`is_active = false`, the branch row still present, the main branch and the `shops` row untouched), and an employee is shown no archive surface at all. The reload/resume half is measured by `tests/e2e/sessionRefresh.spec.ts`: the owner's customer data and the permission-gated settings route are the same before, after `page.reload()` and after a NEW page in the same profile, and the branch switched through the app's own switcher (the real `set_active_branch`) survives both — asserted in `user_active_shops.branch_id` AND in the switcher's `aria-selected` row. Each lane deletes its own branch by id and reads back 0 rows left behind. Non-vacuity: the first run of `branchRemoval` failed on a selector that could not match the shared `Input` (a bare <input> with no `type`), and `sessionRefresh`'s branch test failed on a precondition `UPDATE` that matched 0 rows because `user_active_shops` had no row for that user — both were real failure modes the lanes surfaced, fixed, and re-run green.",
+          "where": "tests/e2e/branchRemoval.spec.ts (2 passed), tests/e2e/sessionRefresh.spec.ts (2 passed), device-evidence/session-and-branch-removal-live-2026-10-16.md, device-evidence/logs/session-branch-lanes-2026-10-16-run{1,2,3}.log"
         }
       ],
       "lastVerified": "2026-10-16",
       "risks": [
         "app_settings was missing from BUSINESS_TABLES in scripts/dev/lib.mjs when 0182 was found — verify cleanup coverage when adding a new shop-scoped table.",
-        "This record's 2026-10-06 caveat that 0188–0195 were local and unapplied is superseded: they are in the QA ledger (198 files / 198 rows, hashes matching) and the tenant/branch boundaries above are measured against the live project. What remains unmeasured is the browser-driven branch-removal flow, not the database contract.",
+        "This record's 2026-10-06 caveat that 0188–0195 were local and unapplied is superseded: they are in the QA ledger (198 files / 198 rows, hashes matching) and the tenant/branch boundaries above are measured against the live project. The browser-driven branch-removal flow it also named was measured on 2026-10-16 (`tests/e2e/branchRemoval.spec.ts`, `sessionRefresh.spec.ts`), so no leg of this record is `BLOCKED` any more — see device-evidence/session-and-branch-removal-live-2026-10-16.md.",
         "The marketplace enablement keeps its tenant-level storage while the UI presents it beside one branch; that mismatch is documented, not resolved by this patch."
       ]
     },

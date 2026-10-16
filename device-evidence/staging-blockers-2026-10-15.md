@@ -241,6 +241,25 @@ only thing that changes — the statuses are evidence-backed.
 
 That gate is **NOT PASSED** in that document and this pass did not change it.
 
+**Update, 2026-10-16 (later pass — the browser/reload window rows 2, 7 and 10 were waiting for).** The window
+exists and has been used, so those residuals are measured rather than pending. `tests/e2e/sessionRefresh.spec.ts`
+(**2 passed**, live QA) reloads and reopens the app as a real signed-in owner: the customer name and balance
+(recomputed from `customers`) and the permission-gated `/admin/settings` route are unchanged after
+`page.reload()` and after a NEW page in the same profile, and the branch switched through the app's own switcher
+(the real `set_active_branch`) is still `user_active_shops.branch_id` after both, with the switcher's row still
+`aria-selected="true"`. `tests/e2e/branchRemoval.spec.ts` (**2 passed**) drives branch removal end-to-end in the
+browser and reads the resulting row back: the main branch offers no archive action, the confirmation names the
+branch and states the real consequence, the confirm button is disabled until a reason is typed, the archive
+leaves `is_active = false` with the row still present and the main branch and `shops` untouched, and an employee
+is shown no such surface. **What that closes, precisely:** row 2's browser/reload leg and row 10's reload leg are
+closed for the flows above (the in-flight late-response half stays with `tests/unit/branchLateResponse.test.ts`);
+row 3's per-role matrix is closed separately by `securityMatrix` (§8b's quoted table predates it, so read the
+registry and the security record for that one); row 7's residual is closed for **removal** — create- and
+rename-in-the-browser remain the mocked contract's territory (`branchFlowCorrections.spec.ts`) and are **not**
+claimed here. Rows 4, 5, 6, 8 and 9 are untouched by this pass. Record and logs:
+`device-evidence/session-and-branch-removal-live-2026-10-16.md`. The quoted table itself is left as that
+document records it.
+
 ---
 
 ## 9. The CI integration failure — one core test run, 2026-10-15

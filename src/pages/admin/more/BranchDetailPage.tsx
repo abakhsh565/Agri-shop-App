@@ -190,7 +190,8 @@ export default function BranchDetailPage() {
         message={t("branchFlow.archiveBody")} confirmLabel={t("branchFlow.archive")}
         destructive loading={busy} confirmDisabled={!reason.trim()} onConfirm={() => void archive()}
         onCancel={() => { if (!busy) setDeleting(false); }}>
-        <Input value={reason} onChange={(e) => setReason(e.target.value)} label={t("branchFlow.reason")} maxLength={500} />
+        <Input value={reason} onChange={(e) => setReason(e.target.value)} label={t("branchFlow.reason")} maxLength={500}
+          data-testid="branch-archive-reason" />
       </ConfirmDialog>
 
       {/* Rendered only while open, deliberately. ConfirmDialog keeps itself mounted through its
