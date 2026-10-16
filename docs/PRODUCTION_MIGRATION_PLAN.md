@@ -9,7 +9,8 @@ read-only to every automated path: the tool refuses `--env production` before it
 credential, except for `apply` with a named batch and all four preconditions.
 
 The report this answers: production's `supabase_migrations` holds **8 entries through 0016** while the
-repository holds **198 migration files**, so "applying migrations" could damage data or break the app.
+repository then held **198 migration files** (**200** today, through `0208`), so "applying migrations"
+could damage data or break the app.
 The measurement behind every claim here is `device-evidence/production-schema-reconciliation-2026-10-16.md`;
 the standing decision is [SCHEMA_STRATEGY.md](../SCHEMA_STRATEGY.md) — never replay history, frozen
 baselines, forward-only files.
@@ -18,7 +19,7 @@ baselines, forward-only files.
 
 | | Production (measured) | Repository |
 |---|---|---|
-| Recorded history | **8 rows, latest `0016`** — identical at the 2026-10-01 and 2026-10-15T23:57Z captures | **198 files**, newest `0206` |
+| Recorded history | **8 rows, latest `0016`** — identical at the 2026-10-01 and 2026-10-15T23:57Z captures | **200 files**, newest `0208` (198 through `0206` when this plan was written) |
 | Schema | 28 tables · 37 functions · 2 views · 47 indexes · 56 FKs · 9 checks · 9 uniques · 10 triggers · 104 policies · 8 enums | — |
 
 **The ledger is not a record of what production has.** Production's schema is far ahead of anything
@@ -35,8 +36,9 @@ schema). Two further facts follow, and they decide the whole plan:
 
 ## 2. What production can take unchanged — measured, and verified as a batch
 
-Selection = every file after production's recorded position (0177 → 0206, 30 files), applied in order
-onto the production schema in-process, data statements counted and skipped, no environment contacted:
+Selection = every file after production's recorded position (0177 → 0208, 32 files; 0177 → 0206, 30,
+before batch 2 was written), applied in order onto the production schema in-process, data statements
+counted and skipped, no environment contacted:
 
 ```
 --since 0177                     → FAIL: 30 files, 275 statements, 106 sql failures, 0 env-gap failures
