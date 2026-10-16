@@ -74,7 +74,13 @@ artifact, is in the reconciliation record §3.
 ## 4. The plan
 
 **Batch 1 — apply on approval, verified twice: on the baseline and on a real engine.** The eleven files
-listed in §2, ascending, exactly as verified. All are additive or behaviour-tightening; none removes
+listed in §2, ascending, exactly as verified. **One measured caveat, 2026-10-17:** applied to *staging's*
+baseline the batch reports 1 failure — `0181` creates `audit_events_no_client_writes` with a bare
+`create policy` (`policy "audit_events_no_client_writes" for table "audit_events" already exists`). On
+production's baseline it passes, and the tool's transaction-per-file plus the ledger's hash skip mean it
+cannot be applied twice to the same environment — but §6.3 asks files to be catalog-guarded, and that
+statement is not. It is recorded here as a known, bounded deviation; the guarded form belongs in the
+re-issue below, not in an edit to a file whose verification this batch rests on. All are additive or behaviour-tightening; none removes
 data or drops an object. Verified by replay onto the production baseline in PGlite **and** rehearsed on
 the local Supabase CLI stack (§9.3) with the same result. Precondition: a fresh verified production
 backup taken immediately before, which the backup path now provides (`38831480604`, artifact 37,
@@ -220,6 +226,17 @@ plus one row per verified forward file. Nothing is written for 0017–0176, whic
 **The owner chose (a).** `migrate.mjs` still refuses production by default — `status`, `verify`,
 `adopt`, `reconcile`, and `apply` with no named batch are all refused before a credential is read —
 and exactly one path was added:
+
+**Measured 2026-10-17, and this is what makes the apply an owner act rather than a step:** the credential
+intake refuses `migrate.mjs` even when the command is complete and every precondition file exists:
+
+```
+[CREDENTIAL INTAKE REFUSED] "scripts/migrate.mjs" is not on the allow-list. Production credentials are
+handed only to the commands that read production and write nothing:
+  scripts\backup-database.mjs
+  scripts\restore-verify.mjs
+  An injector that runs anything is a credential leak with a polite interface.
+```
 
 ```bash
 npm run verify:baseline -- --baseline production --files <the batch> --json backups/<batch>-verified.json
