@@ -26,8 +26,16 @@
  *             exists means the file committed.
  *
  * WHAT IT REFUSES, AND WHY THAT IS THE POINT
- *   * production: never, for reads or writes, until the production schema-strategy decision is
- *     recorded (PRODUCTION_READINESS_AUDIT.md §D). This tool will not be the way around it.
+ *   * production: never, for reads or writes — with one exception, granted by the owner on
+ *     2026-10-16 and written down in docs/PRODUCTION_MIGRATION_PLAN.md §7(a): `apply` may target
+ *     production when a batch is NAMED and every precondition holds — a PASS verification report
+ *     against production's own baseline, taken minutes earlier; no batch file edited since; a
+ *     backup taken immediately before and restore-verified; and nothing in the batch sorting at or
+ *     before production's recorded position. The rules live in scripts/lib/production-batch-gate.mjs
+ *     and the check runs before a credential is resolved or a socket is opened. Everything else
+ *     (status, verify, adopt, reconcile, and `apply` with no named batch) is refused as before.
+ *     The blanket refusal is still the default because a directory replay is the failure mode the
+ *     schema strategy exists to prevent.
  *   * a pending file whose version sorts before the newest recorded version: applying it would
  *     rewrite history out of order.
  *   * a directory with a non-canonical name, a duplicate version, or an order conflict.
@@ -57,6 +65,7 @@ import {
   readMigrationDirectory,
 } from './lib/migrations.mjs';
 import { splitStatements } from './lib/sql-statements.mjs';
+import { FRESHNESS_WINDOW_MINUTES, describeGate, productionBatchGate } from './lib/production-batch-gate.mjs';
 import {
   ROOT,
   assertReached,
@@ -81,15 +90,23 @@ if (has('help') || args.includes('-h') || args.length === 0) {
     [
       'Usage: node scripts/migrate.mjs <status|verify|adopt|apply|reconcile> --env staging [--apply] [--dir <dir>] [--json <file>]',
       '       node scripts/migrate.mjs reconcile --env staging --version <v> --reason "<why the edit is cosmetic>" [--apply]',
+      '       node scripts/migrate.mjs apply --env production --files <a.sql,b.sql> --verification <report.json>',
+      '                                      --backup <artifact>.manifest.json --restored <report.json> [--apply]',
       '       node scripts/migrate.mjs <status|verify|apply> --target pglite [--dir <dir>] [--apply]',
       '',
       '  --env staging      the QA project (the only live environment this tool will touch)',
-      '  --env production   refused, by policy',
+      '  --env production   refused, by policy — one exception: `apply` with a NAMED batch and all four',
+      '                     preconditions satisfied (verification report, backup manifest, restore report,',
+      '                     in-position versions). See docs/PRODUCTION_MIGRATION_PLAN.md §7(a).',
       '  --target pglite    a throwaway in-process Postgres, discarded on exit',
       '  --dir <dir>        migration directory (default supabase/migrations)',
       '  --apply            actually write (adopt/apply are dry runs without it)',
       '  --attest <ver>     required by adopt: the newest version being adopted',
       '  --json <file>      machine-readable report',
+      '  --files <list>     production apply only: the batch to apply, in the verified order',
+      '  --verification <f> production apply only: the PASS verify:baseline report for that batch',
+      '  --backup <f>       production apply only: the manifest of the backup taken just before',
+      '  --restored <f>     production apply only: the restore-verify report proving that backup',
     ].join('\n'),
   );
   process.exit(args.length === 0 ? 2 : 0);
@@ -138,12 +155,17 @@ if (!targetFlag && !envName) {
   );
 }
 
-if (envName === 'production') {
+// The blanket refusal, and the one exception to it. `apply` with an explicit `--files` batch is the
+// only path that proceeds, and it has to satisfy the gate below — which runs before this tool
+// resolves a credential. Every other mode, and `apply` without a named batch, is refused here.
+if (envName === 'production' && !(mode === 'apply' && Boolean(flag('files')))) {
   refuse(
     'production is not a target of this tool. Its schema does not yet match this directory ' +
       '(the ledger says 0016; the membership model is absent), so what production needs is the ' +
       'schema-strategy decision in PRODUCTION_READINESS_AUDIT.md §D — not a replay.\n' +
-      '  Nothing was read and nothing was written. This refusal is deliberate and is not a bug.',
+      '  Nothing was read and nothing was written. This refusal is deliberate and is not a bug.\n' +
+      '  The single exception is `apply` with a NAMED batch and a PASS verification report, a fresh\n' +
+      '  restore-verified backup, and an in-position file list — see docs/PRODUCTION_MIGRATION_PLAN.md §7(a).',
   );
 }
 
@@ -412,6 +434,76 @@ async function evidenceFor(target, entry) {
 
 // ── The run ─────────────────────────────────────────────────────────────────────────────────
 const directory = readMigrationDirectory(dir);
+
+/**
+ * Read one report the operator named, or refuse. A missing or unreadable report is a refusal, not a
+ * `null` the gate has to interpret: the difference between "no report" and "a report I could not
+ * read" is exactly the difference between an honest gate and one that can be satisfied by accident.
+ */
+function readNamedJson(label, rawPath) {
+  if (!rawPath) return null;
+  const abs = path.isAbsolute(rawPath) ? rawPath : path.join(ROOT, rawPath);
+  if (!fs.existsSync(abs)) refuse(`${label} does not exist: ${path.relative(ROOT, abs)}.`);
+  try {
+    return { json: JSON.parse(fs.readFileSync(abs, 'utf8')), abs, mtimeMs: fs.statSync(abs).mtimeMs };
+  } catch (error) {
+    refuse(`${label} is not readable JSON (${path.relative(ROOT, abs)}): ${error.message}`);
+    return null;
+  }
+}
+
+/**
+ * Assemble the gate's inputs. Kept separate from the verdict so the same call can be made twice: once
+ * before the connection (with `ledgerRows: null`) and once after the ledger has been read.
+ *
+ * @param {{ ledgerRows?: Array<object>|null }} [options]
+ */
+function gateProductionBatch({ ledgerRows = null } = {}) {
+  const batch = String(flag('files') ?? '')
+    .split(',')
+    .map((name) => name.trim())
+    .filter(Boolean)
+    // Accept a path as well as a bare filename, because that is what a shell's tab-completion produces.
+    .map((name) => path.basename(name));
+
+  const verification = readNamedJson('the verification report (--verification)', flag('verification'));
+  const backup = readNamedJson('the backup manifest (--backup)', flag('backup'));
+  const restored = readNamedJson('the restore-verification report (--restored)', flag('restored'));
+
+  const entries = directory.entries.map((entry) => ({
+    version: entry.version,
+    filename: entry.filename,
+    sha256: entry.sha256,
+    bytes: entry.bytes,
+    mtimeMs: fs.statSync(path.join(dir, entry.filename)).mtimeMs,
+  }));
+
+  return productionBatchGate({
+    batch,
+    entries,
+    ledgerRows,
+    verification: verification?.json ?? null,
+    backupManifest: backup?.json ?? null,
+    restoreReport: restored?.json ?? null,
+    restoreReportMtimeMs: restored?.mtimeMs ?? null,
+    now: Date.now(),
+    windowMinutes: Number(flag('window-minutes', FRESHNESS_WINDOW_MINUTES)),
+  });
+}
+
+// ── Production: the gate runs here, before a credential is resolved and before a socket exists ──
+let productionGate = null;
+if (envName === 'production') {
+  productionGate = gateProductionBatch();
+  describeGate(productionGate);
+  if (!productionGate.ok) {
+    refuse(
+      'the production gate did not pass, so nothing was read from production and nothing was written:\n' +
+        productionGate.problems.map((p) => `    ✗ ${p}`).join('\n'),
+    );
+  }
+}
+
 const target = targetFlag === 'pglite' ? await openPgliteTarget(stateDir) : await openLiveTarget(envName);
 
 /** @type {{ mode: string, target: string, dir: string, directoryProblems: any[], ledger: any, comparison: any, order: any, applied: any[], report: any }} */
@@ -509,7 +601,7 @@ if (mode === 'verify') {
 } else if (mode === 'adopt') {
   exitCode = await runAdopt();
 } else if (mode === 'apply') {
-  exitCode = await runApply();
+  exitCode = productionGate ? await runProductionApply() : await runApply();
 } else if (mode === 'reconcile') {
   exitCode = await runReconcile();
 }
@@ -695,8 +787,139 @@ async function runApply() {
     applied.push({ version: entry.version, filename: entry.filename, ok: true, statements: outcome.statements });
     console.log(`    ✓ ${entry.version} ${entry.filename} (${outcome.statements} statement(s), recorded)`);
   }
+}
+
+/** The objects a file declared, read back after its transaction rolled back. */
+async function objectsPresentAfterRollback(target, entry) {
+  const declared = declaredObjects(entry.body);
+  const present = [];
+  for (const table of declared.tables) {
+    const found = (await target.query(`select to_regclass($1) as t`, [`public.${table}`])).rows[0].t;
+    if (found) present.push(`table ${table}`);
+  }
+  for (const view of declared.views) {
+    const found = (await target.query(`select to_regclass($1) as t`, [`public.${view}`])).rows[0].t;
+    if (found) present.push(`view ${view}`);
+  }
+  for (const fn of declared.functions) {
+    const found = (
+      await target.query(
+        `select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+          where n.nspname = 'public' and p.proname = $1 limit 1`,
+        [fn],
+      )
+    ).rows.length;
+    if (found) present.push(`function ${fn}`);
+  }
+  return {
+    declared: declared.tables.length + declared.views.length + declared.functions.length + declared.columns.length,
+    present,
+  };
+}
+
+/**
+ * `apply --env production` — the single exception to the blanket refusal, and the only code path in
+ * this repository that writes to production.
+ *
+ * The gate was already run before the connection; it runs again here with the ledger in hand, because
+ * "already applied" is only knowable over a connection and a file recorded under a different hash must
+ * stop the run rather than be applied twice. Everything else is the same contract as staging: one
+ * transaction per file, containing the file AND its ledger rows, in the verified order.
+ *
+ * Nothing is replayed: only the named batch is considered, and only the part of it production has not
+ * recorded. 0017-0176 are never named at all (the gate refuses them), so production's schema keeps
+ * whatever its out-of-band setup created for them.
+ */
+async function runProductionApply() {
+  if (directory.problems.length) return fail('the directory breaks its own grammar; nothing was applied.');
+
+  const gate = gateProductionBatch({ ledgerRows: ledger.rows });
+  result.gate = gate.context;
+  if (!gate.ok) {
+    return fail(
+      'the production gate did not pass with production\'s ledger in hand:\n' +
+        gate.problems.map((p) => `    ✗ ${p}`).join('\n'),
+    );
+  }
+  if (!gate.toApply.length) {
+    console.log(
+      `\n  Nothing to apply: all ${gate.alreadyRecorded.length} file(s) in the batch are already recorded, ` +
+        'with hashes matching the files on disk.',
+    );
+    return 0;
+  }
+
+  console.log(`\n  Batch: ${gate.toApply.length} file(s) to apply, in this order`);
+  for (const entry of gate.toApply) console.log(`    ${entry.version} ${entry.filename}`);
+  if (gate.alreadyRecorded.length) {
+    console.log(`  Already recorded (not re-applied): ${gate.alreadyRecorded.map((e) => e.version).join(', ')}`);
+  }
+
+  if (dryRun) {
+    console.log(
+      '\n  DRY RUN — nothing was written and production was only read (the ledger).\n' +
+        '  Re-run the same command with --apply to apply the batch.',
+    );
+    return 0;
+  }
+
+  await ensureLedger(target);
+  const applied = [];
+  for (const entry of gate.toApply) {
+    const outcome = await applyOne(target, entry);
+    if (!outcome.ok) {
+      const after = await objectsPresentAfterRollback(target, entry);
+      const ledgerRowPresent =
+        (
+          await target.query(`select 1 from supabase_migrations.schema_migrations where version = $1`, [entry.version])
+        ).rows.length > 0;
+      applied.push({ version: entry.version, filename: entry.filename, ok: false, error: outcome.error });
+      result.applied = applied;
+      result.failed = {
+        version: entry.version,
+        filename: entry.filename,
+        error: outcome.error,
+        ledgerRowPresentAfterRollback: ledgerRowPresent,
+        objectsPresentAfterRollback: after.present,
+        objectsDeclared: after.declared,
+      };
+      console.log(`    ✗ ${entry.version} ${entry.filename} failed and was rolled back: ${outcome.error}`);
+      console.log(
+        `      after rollback: ledger row = ${ledgerRowPresent ? 'PRESENT (wrong)' : 'absent'}, ` +
+          `declared objects present = ${after.present.length}/${after.declared}`,
+      );
+      return fail(
+        `${entry.filename} failed and was rolled back (no ledger row). ` +
+          `Applied before it in this run: ${applied.filter((a) => a.ok).map((a) => a.version).join(', ') || 'none'}. ` +
+          `Production said: ${outcome.error}\n` +
+          '  The batch is resumable: re-running it skips what is recorded and continues from here.',
+      );
+    }
+    applied.push({ version: entry.version, filename: entry.filename, ok: true, statements: outcome.statements });
+    console.log(`    ✓ ${entry.version} ${entry.filename} (${outcome.statements} statement(s), recorded)`);
+  }
   result.applied = applied;
-  console.log(`\n  Applied ${applied.length} file(s), each recorded in the same transaction.`);
+
+  // Read production's own ledger back. The mode exists so that what production has and what the
+  // repository says production has are the same fact, so the check is not optional.
+  const after = await readLedger(target);
+  const unrecorded = gate.toApply.filter(
+    (entry) => !after.rows.some((row) => String(row.version) === entry.version),
+  );
+  result.ledgerAfter = {
+    rows: after.rows.length,
+    latest: after.rows.length ? String(after.rows[after.rows.length - 1].version) : null,
+  };
+  console.log(
+    `\n  Applied ${applied.length} file(s), each with its ledger rows in the same transaction.`,
+  );
+  console.log(`  Production's ledger now: ${after.rows.length} row(s), latest ${result.ledgerAfter.latest}`);
+  if (unrecorded.length) {
+    return fail(
+      `the ledger has no row for ${unrecorded.map((e) => e.version).join(', ')} — the files ran but production ` +
+        'does not record them, which is exactly the state this tool exists to prevent.',
+    );
+  }
   return 0;
 }
 

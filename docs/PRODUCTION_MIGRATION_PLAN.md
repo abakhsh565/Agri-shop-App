@@ -1,7 +1,12 @@
 # Production migration plan — reconciled against production itself
 
-**Status: prepared and measured; NOTHING HAS BEEN APPLIED.** Production remains read-only to this
-workstream. The approval gate is §8, and it is not satisfied.
+**Status: prepared and measured; the sanctioned apply path is BUILT (§7.1).** NOTHING HAS BEEN APPLIED —
+no file in this plan has reached production. The approval gate is §8.
+
+**Update 2026-10-16:** the owner chose §7(a) and the mode it describes is implemented and tested
+(`scripts/migrate.mjs` + `scripts/lib/production-batch-gate.mjs`, 42 tests). Production is still
+read-only to every automated path: the tool refuses `--env production` before it resolves a
+credential, except for `apply` with a named batch and all four preconditions.
 
 The report this answers: production's `supabase_migrations` holds **8 entries through 0016** while the
 repository holds **198 migration files**, so "applying migrations" could damage data or break the app.
@@ -167,11 +172,56 @@ record it, so the owner chooses:
 Either way production's ledger ends up recording exactly what ran: the historical 8 rows for 0009–0016,
 plus one row per verified forward file. Nothing is written for 0017–0176, which were never executed here.
 
+### 7.1 Decided and implemented, 2026-10-16 — option (a)
+
+**The owner chose (a).** `migrate.mjs` still refuses production by default — `status`, `verify`,
+`adopt`, `reconcile`, and `apply` with no named batch are all refused before a credential is read —
+and exactly one path was added:
+
+```bash
+npm run verify:baseline -- --baseline production --files <the batch> --json backups/<batch>-verified.json
+node scripts/run-with-production-credentials.mjs -- node scripts/backup-database.mjs --env production
+node scripts/run-with-production-credentials.mjs -- node scripts/restore-verify.mjs \
+     --from backups/<artifact>.manifest.json --compare-with production --json backups/restore-verification-production.json
+
+node scripts/migrate.mjs apply --env production --files <the batch> \
+     --verification backups/<batch>-verified.json \
+     --backup backups/<artifact>.manifest.json \
+     --restored backups/restore-verification-production.json --apply
+```
+
+The preconditions are enforced in `scripts/lib/production-batch-gate.mjs`, which is pure — no socket,
+no credentials, no clock of its own — so the whole rule set is exercised in CI with nothing running,
+and `migrate.mjs` runs it **before** `openLiveTarget()`. Each rule below has a test plus a
+non-vacuity half in `tests/unit/productionBatchGate.test.ts` (42 tests):
+
+| # | Rule | Refuses when |
+|---|---|---|
+| 1 | The batch is named, canonical, present, ascending, and every file sorts at or after `0017` | `--files` is absent, names a file twice, names a file the directory does not have, names a file without a 4-digit version, is given out of order, or names a pre-position file — the range whose intent production already holds from its out-of-band setup |
+| 2 | A verification report for **this** batch, against **production's** baseline, whose artifact hash was verified, PASS, and taken ≤ 60 minutes ago | the report is missing/FAIL/UNVERIFIABLE, is against staging, did not verify its baseline hash, resolves to a different file list, carries SQL failures, is stale, is dated in the future — **or the file's mtime is newer than the report**, because a file edited after verification is not the verified file |
+| 3 | A backup of production taken ≤ 60 minutes ago | the manifest is missing, is another environment's, records no sha256, is stale, or has no readable timestamp |
+| 4 | That exact backup was restored into a throwaway database and passed every check | the restore report is missing, carries no verdict, has a failed check or a recorded failure, names no artifact hash, points at a **different** artifact than the backup named here, or is stale |
+
+The ledger is read over the connection and the partition is deliberate: a version already recorded with a
+**matching** hash is skipped (so a re-run resumes rather than double-applies), and one recorded with a
+**different** hash, or with no hash at all, stops the run — an applied file is corrected by a new file,
+never by editing the old one. The ledger rows for each applied file are written in the same transaction
+as the file itself, and after the batch production's own ledger is read back: a file that ran without a
+row fails the run.
+
+**Two things this deliberately does not do.** It does not extend the credential intake: the allow-list in
+`scripts/run-with-production-credentials.mjs` still hands the production password only to the backup and
+the restore verifier, so running the apply path is a **deliberate owner act** — exporting the credentials
+by hand — and no automated path in this repository can reach production on its own. And it does not
+touch data: this mode applies schema files. Clearing rows is still the owner-run runbook
+([§6 of the data policy](PRODUCTION_DATA_POLICY.md)), where the policy says it belongs.
+
 ## 8. Approval gate and preconditions
 
 Nothing in this plan is applied, and nothing should be until every line below is true:
 
-- [ ] The owner approves this plan, and specifically decision §7 (a) or (b).
+- [x] The owner approved this plan, and decision §7(a) — recorded in §7.1, with the mode implemented
+      and tested. The four per-batch boxes below are what the gate checks on every run.
 - [ ] `SCHEMA_STRATEGY.md`'s §D decision stands unchanged: production moves only by verified new files.
 - [ ] A fresh production backup exists, restore-verified, from immediately before the batch.
 - [ ] The batch's own `verify:baseline --baseline production --files …` run reports **PASS**, from a run

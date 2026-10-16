@@ -122,12 +122,47 @@ describe('the plan’s premises cannot drift unnoticed', () => {
     expect(plan).toContain('8 rows, latest `0016`');
   });
 
-  test('the tool still refuses production before connecting, which is what keeps this a plan', () => {
+  test('the tool still refuses production before connecting, except for a named, gated batch', () => {
     // If this refusal is removed without the §7 decision, production has become an ordinary target of
-    // a tool that can also replay history — the one thing the strategy forbids.
+    // a tool that can also replay history — the one thing the strategy forbids. Asserted by RUNNING
+    // the tool, not by reading it: each case below must exit 2 and must say so, and this suite has no
+    // production credentials in its environment, so a refusal that happened after connecting would
+    // fail here instead of passing.
     expect(migrateTool).toContain('production is not a target of this tool');
-    expect(migrateTool).toMatch(/if \(envName === 'production'\) \{\s*\n\s*refuse\(/);
+    const refused: string[][] = [
+      ['status', '--env', 'production'],
+      ['verify', '--env', 'production'],
+      ['adopt', '--env', 'production', '--attest', '0206', '--apply'],
+      ['apply', '--env', 'production'], // no batch named
+      ['apply', '--env', 'production', '--files', BATCH_1[0]], // named, but unverified and unbacked
+    ];
+    for (const args of refused) {
+      const result = spawnSync(process.execPath, [join(ROOT, 'scripts/migrate.mjs'), ...args], { encoding: 'utf8' });
+      const output = `${result.stdout}${result.stderr}`;
+      expect(result.status, `${args.join(' ')} should be refused (exit 2):\n${output}`).toBe(2);
+      expect(output, `${args.join(' ')} was refused for an unexpected reason:\n${output}`).toMatch(
+        /not a target of this tool|gate did not pass/,
+      );
+      // The refusal must happen before any credential is resolved: a missing-secret error here would
+      // mean the tool reached for production first and only then objected.
+      expect(output).not.toMatch(/must be set|is not set|PROD_DB_PASS/);
+    }
     expect(plan, 'the owner decision the refusal creates is not recorded').toContain('## 7. The one decision the owner must make');
+  });
+
+  test('the gate runs before a connection, and its rules are where the plan says they are', () => {
+    const gate = readFileSync(join(ROOT, 'scripts/lib/production-batch-gate.mjs'), 'utf8');
+    expect(gate).toContain('export function productionBatchGate');
+    // No socket, no credentials, no clock of its own: the purity is what makes the rule set testable
+    // without production, and it is what lets migrate.mjs refuse before it resolves anything.
+    expect(gate, 'the gate must not read credentials').not.toMatch(/resolveCredentials|process\.env/);
+    expect(gate, 'the gate must take the clock as a parameter').toMatch(/now,/);
+    expect(gate, 'the gate must open nothing').not.toMatch(/new pg\.|Client\(|fetch\(/);
+    // And the tool must run it before it opens the target.
+    const gateCall = migrateTool.indexOf('productionGate = gateProductionBatch()');
+    const connection = migrateTool.indexOf('await openLiveTarget(envName)');
+    expect(gateCall, 'migrate.mjs no longer runs the production gate').toBeGreaterThan(0);
+    expect(gateCall, 'the gate must be checked before the target is opened').toBeLessThan(connection);
   });
 
   test('the plan still says nothing has been applied', () => {
