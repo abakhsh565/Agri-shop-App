@@ -19,9 +19,9 @@
  *      until the exemption counts it, and every candidate is checked against the ledger too.
  *   3. Every lane call through `execRpcAsUser(…, "…")` / `supabase.rpc("…")` in `tests/` is held to
  *      the same contract, because a fixture built on a retired RPC measures nothing.
- *   4. A client call into a function the ledger never grants or revokes (the PostgreSQL PUBLIC
- *      default) is listed in `UNWRITTEN_ALLOWLIST` with where it is defined and why the default is
- *      acceptable — a new one fails, and a stale entry fails.
+ *   4. A client call into a function the ledger never statically grants or revokes (the PostgreSQL
+ *      PUBLIC default) is listed in `UNWRITTEN_ALLOWLIST` with where it is defined and why the default
+ *      is acceptable — a new one fails, and a stale entry fails.
  *   5. A function the ledger does not create at all is a `LEDGER_GAPS` entry, accepted only while
  *      committed SQL in the named file would fail if the function did not exist. The list is empty
  *      now: `0200_the_pre_login_lookup_returns_only_what_the_screen_shows.sql` writes the CREATE and
@@ -122,34 +122,43 @@ const DYNAMIC_ALLOWLIST = {
 };
 
 /**
- * Client RPCs held only by PostgreSQL's PUBLIC default: no migration ever granted or revoked them.
+ * Client RPCs held only by PostgreSQL's PUBLIC default: no migration statically grants or revokes them.
  *
- * Each entry records where the function is defined, so the reason is anchored to SQL that can be
- * read, and each one is a `SECURITY DEFINER` function that resolves the caller itself
+ * Each entry records where the function is defined, so the reason is anchored to SQL that can be read,
+ * and each one is a `SECURITY DEFINER` function that resolves the caller itself
  * (`public.current_shop_id()` / `public.app_current_user_id()`, plus
  * `authorize_business_action('products.edit', …)` in the writers) — which is why the default is
  * survivable here rather than a hole. A call that reaches one of these with no identity fails the
  * function's own authorization, not the grant check.
+ *
+ * **Why the location is `0208` for all five.** These definitions used to live inside a `do $$ … execute
+ * $ddl$ … $ddl$` block in 0158/0160, which this scan cannot see — so the ledger looked silent about the
+ * function *and* about its ACL. `0208` (batch 2 of `docs/PRODUCTION_MIGRATION_PLAN.md`) now carries the
+ * visible `CREATE OR REPLACE FUNCTION` for each of them, wrapped in its own `pg_proc` guard, and its
+ * grants are emitted dynamically (`execute format('grant execute on function %s …', r.sig)` over the
+ * catalog) — deliberate, because it has to cover whatever signature the name has — so the ACL still
+ * does not appear as a `GRANT … ON FUNCTION public.x(…)` this scan can read. The definition's location
+ * moved; the reason did not.
  */
 const UNWRITTEN_ALLOWLIST: Record<string, { definedIn: string; reason: string }> = {
   resolve_product_barcode: {
-    definedIn: '0158_product_barcodes_and_create_product.sql',
+    definedIn: '0208_the_functions_the_app_calls_and_the_tables_they_read.sql',
     reason: 'Lookup of a code the caller is scanning: resolves the shop from the caller, refuses when it does not match.',
   },
   set_product_barcode: {
-    definedIn: '0160_barcode_registry_and_history.sql',
+    definedIn: '0208_the_functions_the_app_calls_and_the_tables_they_read.sql',
     reason: 'A write, and gated as one: `authorize_business_action(\'products.edit\', v_shop)` inside the body.',
   },
   delete_product_barcode: {
-    definedIn: '0160_barcode_registry_and_history.sql',
+    definedIn: '0208_the_functions_the_app_calls_and_the_tables_they_read.sql',
     reason: 'A write, and gated as one: `authorize_business_action(\'products.edit\', v_shop)` inside the body.',
   },
   preview_product_barcode: {
-    definedIn: '0160_barcode_registry_and_history.sql',
+    definedIn: '0208_the_functions_the_app_calls_and_the_tables_they_read.sql',
     reason: 'Generates a candidate code for the shop the caller is working in; gated by `current_shop_id()`.',
   },
   product_barcodes_for: {
-    definedIn: '0160_barcode_registry_and_history.sql',
+    definedIn: '0208_the_functions_the_app_calls_and_the_tables_they_read.sql',
     reason: 'Reads the codes of one product for the caller\'s own shop; returns nothing when the shop does not match.',
   },
 };
