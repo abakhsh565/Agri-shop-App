@@ -104,11 +104,32 @@ The numbers above are the record.
    was a manual dispatch, not the cron. So "the schedule fires daily on `main` and stays green" is not yet
    a claim this repository can make; the first *scheduled* run on the corrected `main` is the next one at
    02:00 UTC.
-4. **Vercel's preview deployment for the branch is red, and was red before this work.** Every branch
-   deployment since `2026-10-14` failed while `main`'s production deployment succeeded, and `npm run build`
-   on this head exits 0 — so it is a preview-scope environment condition, not this branch's code. It is
-   recorded here rather than quietly ignored, and it does not gate the merge (no branch protection is
-   configured on this plan).
+4. **Merging PR #1 turned `main`'s Vercel *Production* deploy red — because a safety gate refused to
+   produce a mis-targeted artifact.** This is recorded rather than smoothed, and an earlier draft of this
+   section got it wrong: it called the failure "preview-scope" after checking only preview deployments.
+   The measured position is: the last pre-merge `main` tip (`ca1e0c2b`) had a **green** Production
+   deployment, the **merge commit `de1a962e` failed** (`Production -> failure`), and every branch Preview
+   has failed at least since `2026-10-14` — which is *before* the five commits made in this pass.
+
+   The cause is not a broken build. The branch carries a new **environment gate** in `vite.config.ts` — a
+   plugin with no `apply` filter that reads the `VITE_*` environment at `configResolved` and **refuses to
+   build** when the environment is unnamed, unknown, or pointed at another environment's project ("a
+   release APK or a Vercel production deploy should never come into existence in the first place").
+   Vercel's project has none of those variables set, so its build is refused before an artifact exists.
+   Reproduced against this code locally: `VITE_APP_ENV=not-an-environment npx vite build` →
+   `[ENVIRONMENT GATE] Refusing to build.` / `ENV_NAME_UNKNOWN`, **exit 1**, while `npm run build` with the
+   repository's own `.env.local` passes (**exit 0**). The variables the gate expects are the ones
+   `.env.example` lists: `VITE_APP_ENV`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_OTP_DELIVERY`.
+
+   **Not verified:** Vercel's own build log — no Vercel credential exists on this machine — so the
+   mechanism is a strong inference from a gapless new plugin, the timing (green before the gate, red after
+   on both Preview and Production), and the local reproduction, not a read log line.
+
+   **What it means, and the repair.** The green deploys that preceded the gate were artifacts whose
+   environment was never named; the gate now declines to make one. Fixing it is Vercel configuration, not
+   code: set those four variables for the Production environment (and Preview, if previews matter). It does
+   **not** gate the product, and the backup path is untouched — production release is still refused by the
+   release gate and the `SCHEMA_STRATEGY.md` §D decision, which this merge did not change.
 
 ## 5. Records updated
 
