@@ -274,6 +274,45 @@ a Production-scoped deploy has both `VITE_APP_ENV` and `VITE_OTP_DELIVERY` set. 
 the deploy will now fail at build time rather than serve a broken environment — which is the
 intended outcome, but it will look like a broken pipeline at first.
 
+#### F3.1 Measured 2026-10-16 — what the Production scope must hold, and that the gate agrees
+
+`vercel.json` still contains only the SPA rewrite, and the dashboard still cannot be read from this
+checkout. What changed is that the requirement stopped being prose: `tests/unit/vercelDeployScopes.test.ts`
+derives the required names from `.env.example` and from `src/lib/environmentContract.ts`, and puts each
+scope's configuration through the same decision the build makes. The guard is non-vacuous — adding a
+required name to the template, or pointing one scope at another's project, fails it.
+
+The build was then run four times with `vite build --mode production` — the command `npm run build`
+runs, which is what Vercel runs:
+
+| Configuration given to the build | Result |
+|---|---|
+| nothing (today's state if the Production scope holds no variables) | **refused, exit 1** — `ENV_NAME_MISSING` |
+| `VITE_APP_ENV=production`, production URL + key, **no** `VITE_OTP_DELIVERY` | **refused, exit 1** — `DEMO_OTP_IN_PRODUCTION` |
+| `VITE_APP_ENV=production`, `VITE_OTP_DELIVERY=sms`, **staging** project | **refused, exit 1** — `PRODUCTION_ENV_WRONG_PROJECT` |
+| the four required names, for the production project | **built, exit 0** — `[EnvGuard] building PRODUCTION → gkswcfljxlutkfdvvqng (otp: sms, key verified)` |
+
+So the **Production** scope, on the `main` branch, must define exactly:
+
+| Name | Value |
+|---|---|
+| `VITE_APP_ENV` | `production` |
+| `VITE_SUPABASE_URL` | `https://gkswcfljxlutkfdvvqng.supabase.co` |
+| `VITE_SUPABASE_PROJECT_ID` | `gkswcfljxlutkfdvvqng` |
+| `VITE_SUPABASE_ANON_KEY` | the production project's publishable/anon key |
+| `VITE_OTP_DELIVERY` | `sms` |
+
+`VITE_APP_URL` is optional; nothing else is read. A test key was used for the successful build, in the
+same shape `tests/unit/environmentSafety.test.ts` already uses — it proves the *gate and the build*
+accept that configuration, and it is not a production credential.
+
+**Two things this does not settle.** Whether the Production scope currently holds these values is
+**UNKNOWN** — no Vercel credential or project link exists in this checkout, so the dashboard was not
+read. And a *working* production deployment is blocked by something the variables cannot fix:
+production's schema is 182 ledger entries behind this repository (`supabase/baseline/production-baseline.json`),
+so the deployed app would point at a database without the tables it reads. The variables make the build
+succeed; they do not make the app work.
+
 ### F4. GitHub Actions risks (reported only — nothing rewritten)
 
 | Workflow | Trigger | Targets | Secrets used | Risk |
