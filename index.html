@@ -20,12 +20,17 @@
     <link rel="apple-touch-icon" href="/favicon.png" />
     <title><!-- figma:title --></title>
     
-    <!-- Security Headers -->
-    <meta http-equiv="X-Content-Type-Options" content="nosniff" />
-    <meta http-equiv="X-Frame-Options" content="DENY" />
-    <meta http-equiv="X-XSS-Protection" content="1; mode=block" />
-    <meta name="referrer" content="strict-origin-when-cross-origin" />
-    <meta http-equiv="Permissions-Policy" content="camera=(), microphone=(), geolocation=()" />
+    <!-- Security headers are NOT declared here. X-Frame-Options, X-Content-Type-Options and
+         Permissions-Policy are header-only directives: `http-equiv` is ignored for them, so the
+         block that used to sit here provided nothing — and Chrome logged "X-Frame-Options may only
+         be set via an HTTP header sent along with a document" on every production page load. They
+         belong to the response, so they now live in `vercel.json`'s `headers` block, where they are
+         actually enforced.
+
+         Permissions-Policy is deliberately NOT among them. `camera=()` would block the camera the
+         in-app barcode scanner and photo capture use, so that directive must not be moved to a
+         header without an explicit decision to break scanning. Referrer-Policy is enforced by the
+         response too; it was the one directive that also worked in markup. -->
     <!-- figma:head-end -->
   </head>
   <body>
