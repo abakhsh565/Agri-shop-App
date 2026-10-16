@@ -18,6 +18,7 @@
  *      invalidating a reviewed document.
  */
 
+import { spawnSync } from 'node:child_process';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -132,5 +133,75 @@ describe('the plan’s premises cannot drift unnoticed', () => {
   test('the plan still says nothing has been applied', () => {
     expect(plan).toMatch(/NOTHING HAS BEEN APPLIED/);
     expect(plan, 'the approval gate disappeared').toContain('## 8. Approval gate and preconditions');
+  });
+});
+
+// ── the real-engine rehearsal, and the harness that performs it ───────────────────────────────
+describe('the rehearsal harness refuses before it touches anything', () => {
+  /**
+   * The harness loads a baseline into a real Supabase engine, so its refusals are the thing standing
+   * between a rehearsal and an accident. These three checks need no Docker precisely because they run
+   * before the engine is looked for — which is also what makes them testable in CI.
+   */
+  const HARNESS = join(ROOT, 'scripts/dev/rehearse-on-local-engine.mjs');
+  const runHarness = (args: string[]) => spawnSync(process.execPath, [HARNESS, ...args], { encoding: 'utf8' });
+
+  test('nothing named → refused before any engine work', () => {
+    const result = runHarness([]);
+    expect(result.status, `expected a refusal, got:\n${result.stdout}${result.stderr}`).toBe(2);
+    expect(result.stderr).toMatch(/REFUSED: name a baseline/);
+  });
+
+  test('a database that is not named rehearsal_* → refused', () => {
+    const result = runHarness(['--baseline', 'production', '--since', '0177', '--db', 'postgres']);
+    expect(result.status, `expected a refusal, got:\n${result.stdout}${result.stderr}`).toBe(2);
+    expect(result.stderr).toMatch(/must be named rehearsal_/);
+  });
+
+  test('--since and --files together → refused', () => {
+    const result = runHarness(['--baseline', 'production', '--since', '0177', '--files', 'a.sql']);
+    expect(result.status).toBe(2);
+    expect(result.stderr).toMatch(/exactly one of/);
+  });
+
+  test('the harness carries the baseline record\'s own preconditions', () => {
+    const source = readFileSync(HARNESS, 'utf8');
+    // The sha256/byte check: a rehearsal must not run against an artifact whose record has drifted.
+    expect(source).toMatch(/artifact sha256 mismatch/);
+    expect(source).toMatch(/artifact length mismatch/);
+    // Production rows are counted and never applied — asserted in the report it writes.
+    expect(source).toContain('isDataStatement(');
+    expect(source).toContain('dataStatementsApplied: 0');
+    // The defect that made the first version unable to fail: stdout-only capture misses psql errors.
+    // It may be NAMED in the comment that records the defect; it must not be imported or called.
+    expect(source, 'stdout-only capture would score every failing statement as a success').toContain("stdio: ['pipe', 'pipe', 'pipe']");
+    expect(source, 'execFileSync returns stdout only — psql reports errors on stderr').not.toMatch(/execFileSync\s*\(/);
+    expect(source).not.toMatch(/import\s*\{[^}]*execFileSync[^}]*\}\s*from/);
+    expect(source, 'the harness must capture both streams').toMatch(/import \{ spawnSync \} from 'node:child_process'/);
+  });
+
+  test('the documented entry point exists', () => {
+    const packageJson = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
+    expect(packageJson.scripts['rehearse:engine']).toBe('node scripts/dev/rehearse-on-local-engine.mjs');
+  });
+});
+
+describe('the rehearsal result is recorded, on both sides', () => {
+  const evidence = readFileSync(join(ROOT, 'device-evidence/production-schema-reconciliation-2026-10-16.md'), 'utf8');
+
+  test('the plan states the real-engine result and what it still does not cover', () => {
+    expect(plan).toMatch(/rehearsed on a real Supabase engine/);
+    expect(plan, 'the PGlite comparison result is not recorded').toMatch(/AGREES/);
+    expect(plan, 'the hosted-platform limits were dropped').toMatch(/Supavisor/);
+  });
+
+  test('the evidence record carries the engine, the data refusal and the comparison', () => {
+    expect(evidence).toMatch(/Postgres 17\.6/);
+    expect(evidence).toMatch(/268 data statements counted, 0 applied/);
+    expect(evidence).toMatch(/AGREES/);
+    // The harness defect is recorded rather than quietly fixed: a PASS from a harness that could not
+    // fail is not evidence, and that is worth a line in the record.
+    expect(evidence).toMatch(/stdout only/);
+    expect(evidence).toMatch(/exit 1/);
   });
 });

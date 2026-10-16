@@ -44,6 +44,7 @@
     "verify:credentials": "node scripts/verify-credential-intake.mjs",
     "verify:workflow": "node scripts/verify-workflow-safety.mjs",
     "verify:baseline": "node scripts/verify-forward-on-baseline.mjs",
+    "rehearse:engine": "node scripts/dev/rehearse-on-local-engine.mjs",
     "index:build": "node scripts/dev/index.mjs"
   },
   "dependencies": {

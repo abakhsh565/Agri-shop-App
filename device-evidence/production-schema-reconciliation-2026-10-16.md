@@ -106,23 +106,59 @@ The tool's 106 failures reduce to 36 distinct reasons. Grouped by the decision e
 The second column matters: the tool's report and a direct reading of the artifact agree, so the
 differences are not an artifact of PGlite's behaviour.
 
-## 4. What this did not measure
+## 4. Rehearsed on a real Supabase engine, not PGlite
+
+The plan carried one honest caveat: PGlite is Postgres without the platform, so "applies onto the
+baseline" was weaker than "applies onto the real server". That is now measured instead of caveated.
+
+`scripts/dev/rehearse-on-local-engine.mjs` (new, `npm run rehearse:engine`) loads a baseline record's
+artifact into a **scratch database on the local Supabase CLI stack** and applies a named file
+selection to it. It refuses to run without a named baseline, without a `rehearsal_*` database name,
+when the artifact's sha256 or byte length disagrees with its record, and when the engine is not
+reachable. It counts the artifact's data statements, **refuses to apply them**, and never touches the
+local development database or any hosted project.
+
+| | Measured |
+|---|---|
+| Engine | local Supabase CLI stack, container `supabase_db_…`, **Postgres 17.6** — production's own server version — with `pg_net, pgcrypto, pgsodium` available |
+| Platform shape | `auth`, `storage` and `extensions` schemas copied **schema-only** from the stack's own database, so a file that touches storage is judged on a shape production has |
+| Baseline loaded | `backups/…2026-10-01T11-21-48.sql`, sha256 re-measured and matched: **520 statements, 0 failures** after the pre-table retry |
+| Production rows | **268 data statements counted, 0 applied** — no production row is loaded anywhere |
+| Batch 1 applied | **PASS: 11 files, 50 statements, 0 failures**, exit 0 |
+| Versus PGlite | **AGREES** — same 11 files, same 50 statements, zero failures, no per-file difference |
+| Post-state on the engine | `public.client_error_events` exists with policy `client_error_events_insert_only`; 29 tables and 108 policies in `public` (the baseline+platform shape the batch was applied to) |
+
+**The harness was proven able to fail, because the first version could not.** The initial
+implementation ran `docker exec` through `execFileSync`, which returns **stdout only** — and psql
+reports SQL errors on **stderr**. Every statement that failed would therefore have been scored as a
+success, and the rehearsal would have reported PASS no matter what. Fixed to `spawnSync` with both
+streams captured, and then proven: injecting `select * from public.this_relation_does_not_exist;` made
+the harness report `✗ 1 statements, 1 failures` with the stderr text and **exit 1**. The exit contract
+is measured in full: **2** with nothing named, **2** for a non-`rehearsal_*` database, **1** for a
+failing statement, **0** for the PASS above.
+
+**What the rehearsal still does not cover, and is not claimed:** the hosted platform's *behaviour* —
+Supavisor pooling, the real default-privilege configuration, the storage and auth services — and the
+runtime RBAC path, because the scratch database is deliberately row-less (`scripts/dev/local-db.mjs`
+is the tool that restores rows, and it does so for local development against the staging baseline).
+
+## 5. What this did not measure
 
 1. **Production's ledger now.** The dump excludes `supabase_migrations` (a stated limitation of the
    backup tool), and `migrate.mjs` refuses production before connecting, so 8/`0016` is as of
    **2026-10-15T23:57Z** — the newest capture. Nothing later has been measured.
 2. **Production as a migration target.** No connection was made to apply anything; `migrate.mjs`
    refuses production by policy and was not modified.
-3. **PGlite is Postgres, not Supabase.** The measured range reported **0 environment-gap failures**,
-   but extensions and platform behaviour differ (`pgcrypto` is unavailable in PGlite and is reported as
-   an env note), so "applies onto the baseline" is not the same claim as "applies onto the real
-   server". A rehearsal against a production-shaped Supabase target is the missing step, and it is the
-   one thing a restore drill into PGlite cannot stand in for.
+3. **Hosted-platform behaviour.** The rehearsal in §4 covered a real PostgreSQL 17.6 with Supabase's
+extensions and platform schemas; it did not cover Supavisor pooling, the hosted default-privilege
+   configuration, or the storage/auth services, and its database is row-less by design so no runtime
+   authorization path was exercised. "Applies onto the baseline" is now also "applies onto a real
+   Supabase engine" — it is still not "behaves correctly on the hosted project".
 4. **Batch 3 membership is predicted, not measured** — see `docs/PRODUCTION_MIGRATION_PLAN.md` §4.
 5. **Semantics.** That a file applies says nothing about what it does to behaviour; RBAC and RLS
    claims still need their own evidence.
 
-## 5. Reproducing every number here
+## 6. Reproducing every number here
 
 ```bash
 # both sides

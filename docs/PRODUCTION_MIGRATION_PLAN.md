@@ -63,10 +63,12 @@ artifact, is in the reconciliation record §3.
 
 ## 4. The plan
 
-**Batch 1 — apply on approval, already verified.** The 11 files of §2, ascending, exactly as verified.
-All are additive or behaviour-tightening; none removes data or drops an object. Precondition: a fresh
-verified production backup taken immediately before, which the backup path now provides
-(`38831480604`, artifact 37, restore-verified).
+**Batch 1 — apply on approval, verified twice: on the baseline and on a real engine.** The eleven files
+listed in §2, ascending, exactly as verified. All are additive or behaviour-tightening; none removes
+data or drops an object. Verified by replay onto the production baseline in PGlite **and** rehearsed on
+the local Supabase CLI stack (§9.3) with the same result. Precondition: a fresh verified production
+backup taken immediately before, which the backup path now provides (`38831480604`, artifact 37,
+restore-verified).
 
 **Batch 2 — the gap migration (to author, then verify; it does not exist yet).** One new file that only
 ADDS what D-1 and D-2 name, in a backward-compatible shape: `add column if not exists` for
@@ -183,10 +185,18 @@ Nothing in this plan is applied, and nothing should be until every line below is
 1. **It does not make `supabase/migrations` replayable**, and deliberately does not try to.
 2. **It does not prove semantics.** Applying a file says nothing about what it does to behaviour; RBAC
    and RLS claims still need their own evidence.
-3. **PGlite is Postgres, not Supabase.** The measured range reported 0 environment-gap failures, but
-   extensions differ (`pgcrypto` is unavailable in PGlite), so "applies onto the baseline" is weaker
-   than "applies onto the real server". Until a production-shaped Supabase target has been rehearsed,
-   batch 1's PASS is strong evidence, not a guarantee.
+3. **PGlite is not Supabase — but batch 1 has now been rehearsed on a real Supabase engine.** The
+   measurement: `scripts/dev/rehearse-on-local-engine.mjs` (new) loaded this baseline artifact into a
+   scratch database on the local Supabase CLI stack — **Postgres 17.6, the production server's own
+   version**, with `pgcrypto`/`pg_sodium`/`pg_net` present and the platform's `auth`/`storage` schemas
+   copied schema-only — then applied batch 1. Result: **PASS, 11 files, 50 statements, 0 failures**, the
+   same numbers PGlite produced (`AGREES`). It counted and **skipped every one of the 268 data
+   statements**: production's rows are not loaded anywhere. The post-state on the engine shows the work
+   done (`public.client_error_events` exists with its policy, 29 tables, 108 policies).
+   **What still differs from hosted, and is therefore not claimed:** the platform *behaviour* around the
+   schema — Supavisor pooling, the real default-privilege configuration, the storage and auth services,
+   and the hosted `postgres` role's authority. The rehearsal proves the DDL against a real PostgreSQL 17
+   with Supabase's extensions and schemas; it does not prove the hosted platform's execution of it.
 4. **Batch 3 membership is predicted**, not measured (§4).
 5. **Production's ledger is only known to capture time**: the dump excludes `supabase_migrations`, so
    8/`0016` is as of **2026-10-15T23:57Z**.
@@ -200,3 +210,6 @@ Nothing in this plan is applied, and nothing should be until every line below is
 * `backups/baseline-prod-batch1.{log,json}` — the 12-file attempt that exposed the 0193 trap.
 * `backups/baseline-prod-batch1-verified.{log,json}` — batch 1's PASS, 11 files, 50 statements.
 * `supabase/baseline/production-baseline.json` — the artifact the verification runs against.
+* `scripts/dev/rehearse-on-local-engine.mjs` — the real-engine rehearsal (§9.3); `npm run rehearse:engine`.
+* `backups/rehearsal-prod-batch1-real-engine.{log,json}` — the rehearsal's own report (gitignored).
+* `tests/unit/productionMigrationPlan.test.ts` — the guard over this plan and that harness.
