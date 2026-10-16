@@ -43,6 +43,11 @@ onto the production schema in-process, data statements counted and skipped, no e
 --files <the 11 in the table>    → PASS: 11 files,  50 statements,   0 sql failures, 0 env-gap failures
 ```
 
+**Re-measured 2026-10-17, with batch 2 in the range:** `--since 0177` now selects 32 files / 510
+statements — the same 106 failures, none of them in `0207` or `0208` (`✓ 0207 … 0 failures`, `✓ 0208 …
+0 failures`). The number is unchanged because failures and passes are independent here: batch 2's two
+files add 235 statements that all apply, and change nothing about the 30 files that fail ahead of them.
+
 **Batch 1 — verified PASS, ready to apply on approval, no new code required:**
 
 `0179` · `0181` · `0190` · `0199` · `0200` · `0201` · `0202` · `0203` · `0204` · `0205` · `0206`
@@ -91,17 +96,46 @@ with PGlite. Nothing is dropped, renamed, retyped or narrowed; every create is `
 catalog-guarded, so a re-run invents no state. Then the files that depend on batch 2 are re-verified as
 a batch, which is batch 3's job.
 
-**Batch 3 — the gap-dependent files (predicted, not yet measured).** 0180, 0183–0189, 0191, 0192,
-0194–0197 fail only for D-1/D-2 and should apply once batch 2 lands. **This is a prediction.** It is
-tested by re-running the range after batch 2 exists; membership is not to be treated as settled until
-that run is green. Split into sub-batches of ≤6 files so that one failure invalidates a small amount of
-work rather than a whole push.
+**Batches 3 and 4 — MEASURED 2026-10-17, and the schedule as written cannot be applied.** The
+prediction was that the gap-dependent files "should apply once batch 2 lands". Measured, they cannot —
+for a reason that is structural rather than a matter of missing DDL:
 
-**Batch 4 — the files that need their own shape.** 0177, 0178, 0182 and 0198 are not waiting on
-missing objects: 0177 needs the production-shaped variant already proven, 0178/0182 need catalog-driven
-cleanups of whatever permissive policies actually exist, and 0198 needs an idempotent forward file for
-the `process_return` rename. Each is verified individually before it joins a batch, and 0193 goes after
-all of them because its only PASS so far was an accident of a predecessor.
+1. **The tools only ever apply in version order.** `verify-forward-on-baseline` sorts a `--files`
+   selection by version (`selected.sort`, deliberately: a `--files` order is not trusted), and the
+   production gate refuses a batch that is not ascending. So `0188` precedes `0207` in every batch the
+   gate will accept, and the objects `0188` needs are created by `0207`.
+2. **Measured, that is exactly what happens.** Batch 1 + batch 2 + all 14 batch-3 candidates, ascending,
+   on production's baseline: **101 statements still fail**. Classified against what 0207/0208 actually
+   create: **86 name objects batch 2 creates** (`memberships`, `branches`, `user_active_shops`,
+   `branch_responsibility`, `get_my_branches`, `set_marketplace_settings`, `allowed_branch_scope`,
+   `membership_in_active_shop`, `assign_employee_branch`, `create/archive_operating_branch`, the four
+   branch-responsibility functions, `current_branch_id`, `set_active_branch`,
+   `authorize_business_action`, …), **10 are objects no file creates yet** and **5 are the files' own
+   assertions firing**. No accepted ordering can turn the 86 into passes.
+3. **On the real engine, in dependency order — the order the gate refuses — most of that content is
+   fine.** Batch 2 first, then the candidates: **19 of the 27 selected files apply cleanly**, including
+   `0183`, `0184`, `0188`, `0189`, `0194`, `0196`. So it is the *file numbering* that does not work, not
+the SQL.
+
+**Therefore the remaining work is a re-issue, not a batch: the intent of 0177–0198 has to be expressed
+in files numbered after `0208`,** which is the strategy's own rule — an applied change is corrected by a
+new file, never by replaying history — applied to files that were written assuming a history production
+never had. The measured contents of that re-issue:
+
+| What the re-issue must carry | Measured from |
+|---|---|
+| `shops.latitude` (and whatever else 0185–0187's bodies read off `shops`) | `column s.latitude does not exist` ×3 |
+| `marketplace_listings` | `relation "public.marketplace_listings" does not exist` ×3 (0185) |
+| `sales.notes` | `column "notes" of relation "sales" does not exist` (0195) |
+| `stock_adjustments.shop_id` | 0180's three policies (`column "shop_id" does not exist`) |
+| `my_shop_ids()` | 0197 ×3. Defined by `0168` — **a pre-position file that will never be replayed**, so the re-issue has to bring it, exactly as it must bring the rest of what 0017–0176 realized out of band |
+| `delete_branch(uuid, text, text)` | 0191 ×1: its `REVOKE` needs the function to exist, and production never had it |
+| The catalog-driven corrections | `0180 left a tenant-blind policy in place: cash_reconciliations.public_all_cash_reconciliations, stock_adjustments…` and `0192: unexpected body for public.record_customer_payment(jsonb)` — both are the files' **own assertions firing on production's real shape**, which is D-4 doing its job |
+
+Split into sub-batches of ≤6 files, each verified on production's baseline — and on staging's — before
+it is proposed, exactly as batch 1 and batch 2 were. `0177`, `0178`, `0182` and `0198` fold in here too:
+their D-3/D-4 work is a shape problem, not an ordering one, and each needs its own verified file rather
+than a place in a queue.
 
 **Ordering rule for anything that can be applied twice:** a batch is applied once, in its verified
 order; a file whose ledger row exists is not re-applied.
@@ -113,28 +147,28 @@ appear here exactly once, so a newly added migration cannot exist without a prod
 
 | File | Disposition |
 |---|---|
-| `0177_a_definer_knows_where_it_looks.sql` | fails (D-1 ×2) — batch 4: production-shaped variant (pattern proven) |
-| `0178_a_variant_belongs_to_a_shop.sql` | fails (D-4 ×1) — batch 4: catalog-driven cleanup variant |
+| `0177_a_definer_knows_where_it_looks.sql` | fails (D-1 ×2) — **re-issue after 0208**: production-shaped variant (pattern proven), measured 2026-10-17 |
+| `0178_a_variant_belongs_to_a_shop.sql` | fails (D-4 ×1) — **re-issue after 0208**: catalog-driven cleanup variant, measured 2026-10-17 |
 | `0179_cost_price_is_the_owner_s_business.sql` | **batch 1 — verified PASS** |
-| `0180_admin_is_not_a_boundary.sql` | fails (D-1/D-2 ×3 + D-4 ×1) — batch 3, then its D-4 cleanup in batch 4 |
+| `0180_admin_is_not_a_boundary.sql` | **not applicable as numbered** (measured 2026-10-17): its three `stock_adjustments` policies need `stock_adjustments.shop_id`, which no file creates, and its own assertion fires on production's permissive policies — **re-issue after 0208** with the column and the catalog-driven cleanup |
 | `0181_audit_rows_are_written_by_the_system_not_by_the_caller.sql` | **batch 1 — verified PASS** |
-| `0182_settings_belong_to_their_shop.sql` | fails (D-4 ×1) — batch 4: catalog-driven cleanup variant |
-| `0183_deleting_a_role_revokes_its_access.sql` | fails (D-1/D-2 ×1) — batch 3 |
-| `0184_a_branch_decides_how_far_it_serves.sql` | fails (D-1/D-2 ×4) — batch 3 |
-| `0185_a_product_can_be_listed_on_the_marketplace.sql` | fails (D-1/D-2 ×4) — batch 3 |
-| `0186_the_branches_read_carries_its_marketplace_state.sql` | fails (D-1/D-2 ×4) — batch 3 |
-| `0187_the_distance_belongs_to_the_farmer_not_the_branch.sql` | fails (D-1/D-2 ×8) — batch 3 |
-| `0188_a_branch_is_not_its_tenant.sql` | fails (D-1/D-2 ×24) — batch 3 |
-| `0189_access_changes_keep_the_person_and_history.sql` | fails (D-1/D-2 ×6) — batch 3 |
+| `0182_settings_belong_to_their_shop.sql` | fails (D-4 ×1) — **re-issue after 0208**: catalog-driven cleanup variant, measured 2026-10-17 |
+| `0183_deleting_a_role_revokes_its_access.sql` | **not applicable as numbered** (measured 2026-10-17): applies cleanly in dependency order on the real engine, and only fails 1 statement ascending — **re-issue after 0208** |
+| `0184_a_branch_decides_how_far_it_serves.sql` | **not applicable as numbered** (measured 2026-10-17): clean in dependency order on the real engine — **re-issue after 0208** |
+| `0185_a_product_can_be_listed_on_the_marketplace.sql` | **not applicable as numbered** (measured 2026-10-17): still fails in dependency order on `marketplace_listings` (a relation **no file creates**) and `shops.latitude` — **re-issue after 0208** carrying both |
+| `0186_the_branches_read_carries_its_marketplace_state.sql` | **not applicable as numbered** (measured 2026-10-17): still fails in dependency order on `shops.latitude`, which kills its `DROP`+`CREATE` of `get_my_branches()` and cascades — **re-issue after 0208** |
+| `0187_the_distance_belongs_to_the_farmer_not_the_branch.sql` | **not applicable as numbered** (measured 2026-10-17): same `shops.latitude` root as 0186 — **re-issue after 0208** |
+| `0188_a_branch_is_not_its_tenant.sql` | **not applicable as numbered** (measured 2026-10-17): 24 ascending failures, **clean in dependency order on the real engine** — **re-issue after 0208** |
+| `0189_access_changes_keep_the_person_and_history.sql` | **not applicable as numbered** (measured 2026-10-17): **clean in dependency order on the real engine** — **re-issue after 0208** |
 | `0190_invitation_starts_in_the_selected_branch.sql` | **batch 1 — verified PASS** |
-| `0191_operating_branches_preserve_the_business.sql` | fails (D-1/D-2 ×8) — batch 3 |
-| `0192_consequential_records_guard_before_retry.sql` | fails (D-1/D-2 ×1 + D-4 ×1) — batch 3, then its D-4 in batch 4 |
-| `0193_activity_reads_the_action_history.sql` | batch-order sensitive (D-2): `audit_events.tenant_id`; passes only behind a predecessor's partial apply — batch 4 |
-| `0194_access_edits_do_not_widen_the_editor.sql` | fails (D-1/D-2 ×6) — batch 3 |
-| `0195_permissions_are_not_just_navigation.sql` | fails (D-1/D-2 ×3) — batch 3 |
-| `0196_a_branch_has_a_responsible_person.sql` | fails (D-1/D-2 ×20) — batch 3 |
-| `0197_a_notification_says_which_branch.sql` | fails (D-1/D-2 ×7) — batch 3 |
-| `0198_a_sale_keeps_its_due_date_and_leaves_a_movement.sql` | fails (D-3 ×1) — batch 4: new idempotent forward file for the rename |
+| `0191_operating_branches_preserve_the_business.sql` | **not applicable as numbered** (measured 2026-10-17): dependency order leaves 1 failure — its `REVOKE` names `delete_branch(uuid, text, text)`, which production never had — **re-issue after 0208** |
+| `0192_consequential_records_guard_before_retry.sql` | **not applicable as numbered** (measured 2026-10-17): dependency order leaves its own assertion — `unexpected body for public.record_customer_payment(jsonb)`, production's body differs — **re-issue after 0208** |
+| `0193_activity_reads_the_action_history.sql` | measured **PASS** in the ascending range after batch 2 (2026-10-17), which confirms the batch-order sensitivity it was recorded for: it consumes `audit_events.tenant_id`, created by 0189 earlier in the same range — **re-issue after 0208** rather than leave a pass that depends on a predecessor's side effect |
+| `0194_access_edits_do_not_widen_the_editor.sql` | **not applicable as numbered** (measured 2026-10-17): **clean in dependency order on the real engine** — **re-issue after 0208** |
+| `0195_permissions_are_not_just_navigation.sql` | **not applicable as numbered** (measured 2026-10-17): dependency order leaves 1 failure — `column "notes" of relation "sales" does not exist` — **re-issue after 0208** |
+| `0196_a_branch_has_a_responsible_person.sql` | **not applicable as numbered** (measured 2026-10-17): 20 ascending failures, **clean in dependency order on the real engine** — **re-issue after 0208** |
+| `0197_a_notification_says_which_branch.sql` | **not applicable as numbered** (measured 2026-10-17): dependency order leaves 3 failures on `my_shop_ids()`, defined by the pre-position file 0168 that will never be replayed — **re-issue after 0208**, carrying it |
+| `0198_a_sale_keeps_its_due_date_and_leaves_a_movement.sql` | fails (D-3 ×1) — **re-issue after 0208**: a new idempotent forward file for the rename, measured 2026-10-17 |
 | `0199_uploads_and_live_updates_survive_a_restore.sql` | **batch 1 — verified PASS** |
 | `0200_the_pre_login_lookup_returns_only_what_the_screen_shows.sql` | **batch 1 — verified PASS** |
 | `0201_the_pre_login_lookup_answers_for_the_number_only.sql` | **batch 1 — verified PASS** |
@@ -317,9 +351,12 @@ Nothing in this plan is applied, and nothing should be until every line below is
 - [x] `SCHEMA_STRATEGY.md`'s §D decision stands unchanged: production moves only by verified new files —
       and this plan is an instance of it: nothing is replayed, both files are new, and neither has run
       anywhere but QA.
-- [ ] A fresh production backup exists, restore-verified, from immediately before the batch. **Not yet
-      done, and it is the one box that must be closed per apply — the gate refuses a backup older than
-      60 minutes or one that has not been restore-verified.**
+- [ ] A fresh production backup exists, restore-verified, from immediately before the batch. **Taken
+      2026-10-17 (`backup-production-gkswcfljxlutkfdvvqng-2026-10-16T20-31-20`, 30 tables / 249 rows,
+      restore verification PASS on integrity, replay, counts, structure, digests and auth) — and it is
+      deliberately left UNTICKED, because the gate refuses a backup older than 60 minutes: it was taken
+      to prove the path works and to feed the demo-data audit and the round-trip check, not to sit here
+      as a substitute for the one taken immediately before an apply.**
 - [x] The batch's own `verify:baseline --baseline production --files …` run reports **PASS**, from a run
       made after the last edit to any file in that batch — `--files 0207,0208` → PASS, 235 statements,
       0 sql failures (`backups/baseline-prod-batch2-verified.json`), re-run after the last regeneration
@@ -360,6 +397,16 @@ engine showed: 46 missing client RPCs → 0, none unreachable by `authenticated`
 5. **Production's ledger is only known to capture time**: the dump excludes `supabase_migrations`, so
    8/`0016` is as of **2026-10-15T23:57Z**.
 6. **No PITR**: the recovery objective is the daily verified backup (docs/RECOVERY.md §9).
+7. **Batches 3 and 4 are measured, not predicted, and they are not a queue** — §4's re-issue is the
+   work, and until it exists production cannot receive the intent of 0177–0198 at all.
+8. **Production's EXECUTE privileges are unmeasured.** Neither artifact this repository holds of it
+   carries a `GRANT` or a `REVOKE` (the project's own backup format writes schema and data, not
+   privileges), so the "pre-existing `anon` divergences" this plan and its evidence file recorded on
+   2026-10-16 were a property of the rehearsal, not of production: **withdrawn on 2026-10-17**. Asked
+   where ACLs exist — live QA, 23 names — `anon` may execute 1 of 23 (`delete_role`, which the ledger's
+   contract also leaves to PUBLIC) and `authenticated` 23 of 23, i.e. **no discrepancy on QA**. Measuring
+   production's needs a read-only catalog query, which is an owner act: the intake hands the password
+   only to the backup and the restore verifier.
 
 ## 10. Evidence
 
@@ -379,5 +426,10 @@ engine showed: 46 missing client RPCs → 0, none unreachable by `authenticated`
 * `supabase/baseline/production-baseline.json` — the artifact the verification runs against.
 * `scripts/dev/rehearse-on-local-engine.mjs` — the real-engine rehearsal (§9.3); `npm run rehearse:engine`.
 * `backups/rehearsal-prod-batch1-real-engine.{log,json}` — the rehearsal's own report (gitignored).
+* `backups/rehearsal-batch3-candidates.json` — the ascending measurement of batch 1 + batch 2 + all 14
+  batch-3 candidates on the real engine, in dependency order (19 of 27 files clean).
+* `backups/baseline-prod-batch3-candidates.json`, `backups/baseline-prod-after-batch2.json` — the same
+  selections on production's baseline (gitignored).
+* `backups/restore-verification-production.json` — the 2026-10-17 backup's restore verification (PASS).
 * `tests/unit/productionMigrationPlan.test.ts` — the guard over this plan and that harness.
 * `tests/unit/forwardFilesAdditionality.test.ts` — §6's rules as a test over both batch-2 files.

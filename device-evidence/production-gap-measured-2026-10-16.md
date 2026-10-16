@@ -156,15 +156,29 @@ database (production's baseline + 0207 + 0208, real PostgreSQL 17.6):
 |---|---|
 | Client RPCs with no function | **0 of 65** (was 46) |
 | Client RPCs `authenticated` cannot execute | **0 of 65** |
-| Client RPCs whose `anon` access disagrees with the ledger's contract | **5 — none of them created by this file** |
+| `anon` access that disagrees with the ledger's contract | **the rehearsal cannot answer this** — see the correction below |
 
-Those five (`create_sale`, `create_purchase`, `process_return`, `upsert_reminder_occurrence`,
-`update_reminder_occurrence_status`) are in production's baseline already, are **not** in 0208's closure,
-and carry PostgreSQL's PUBLIC default where the ledger says `REVOKE … FROM public, anon`. The same five
-read the same way on staging's rehearsed baseline, so this is a **pre-existing divergence between the
-ledger's contract and both environments**, not an effect of this file: of the 62 functions 0208 creates,
-**0** disagree with the contract. It is recorded here rather than fixed here, because narrowing EXECUTE
-on a live RPC is its own deliberate change with its own evidence.
+**Correction — a rehearsal artifact, found and fixed 2026-10-17.** An earlier version of this table
+recorded "5 client RPCs whose `anon` access disagrees with the ledger's contract", read off the scratch
+database. That number was a property of the **harness**, not of any environment: the project's own backup
+format carries schema and data and **no privileges at all** — the production artifact contains 0 `GRANT`
+and 0 `REVOKE` statements, and staging's contains 0 of each too — so every function loaded from a baseline
+starts out with PostgreSQL's default `EXECUTE TO PUBLIC`, and a comparison against it measures that
+default. The question can only be asked of a database that has ACLs:
+
+```
+live QA, 23 names (the seven that showed a rehearsal difference, the twelve that differed between the two
+rehearsal databases, and four batch-2/batch-3 names chosen as controls):
+  anon may execute: 1 of 23 — `delete_role`, which the ledger's own contract also leaves to PUBLIC
+  authenticated may execute: 23 of 23
+```
+
+So QA's ACLs **match the ledger**: no discrepancy to fix there. Production is the open question, and it
+is now stated as one: **production's EXECUTE privileges have never been measured**, because every
+artifact this repository holds of it was written without them (`backups/migration-proof/…` §
+`get-my-shop-request-acl` measured six names read-only on 2026-10-13 through a catalog probe, which is the
+only such measurement on record). Closing that gap needs a read-only catalog query against production —
+an owner act, since the credential intake hands the password only to the backup and the restore verifier.
 
 ## 3d. The batch run through the ledger on QA — 2026-10-17
 
@@ -199,6 +213,36 @@ Regression afterwards, all green: unit **75 files / 976 tests**; targeted integr
 apply); browser **27 tests in real Chrome** against QA — branch responsibility in EN and UR, branch
 flow corrections in EN and UR, branch removal, role-in-use deletion, session refresh, RTL/LTR, and
 retry-after-timeout. `tsc` and the production build both exit 0.
+
+## 3e. Batches 3 and 4, measured — and the schedule as written cannot be applied (2026-10-17)
+
+The plan predicted that the gap-dependent files "should apply once batch 2 lands". Measured, they cannot:
+
+| Measurement | Result |
+|---|---|
+| Batch 1 + batch 2 + all 14 batch-3 candidates, **ascending** (the only order the tools accept), production's baseline | **101 statements fail** |
+| Classified against what 0207/0208 actually create | **86 name objects batch 2 creates**, 10 name objects no file creates, 5 are the files' own assertions firing |
+| The same selection on the **real engine in dependency order** (batch 2 first — an order the gate refuses) | **19 of the 27 files apply cleanly**, including 0183, 0184, 0188, 0189, 0194, 0196 |
+
+The order is not a preference, it is the tools' rule: `verify-forward-on-baseline` sorts a `--files`
+selection by version, and the production gate refuses a batch that is not ascending. `0188` therefore
+always precedes `0207`, and the objects it needs are created by `0207`. So the remaining work is not a
+batch but a **re-issue**: the intent of 0177–0198 expressed in files numbered after `0208`, carrying the
+objects the dependency-order run still names — `marketplace_listings`, `shops.latitude`,
+`sales.notes`, `stock_adjustments.shop_id`, `my_shop_ids()` (defined by the pre-position file 0168),
+`delete_branch(uuid, text, text)`, plus the two catalog-driven corrections 0180 and 0192 assert for
+themselves. Full table: `docs/PRODUCTION_MIGRATION_PLAN.md` §4.
+
+## 3f. The owner-run steps, measured where they can be (2026-10-17)
+
+| Step | Result |
+|---|---|
+| Fresh production backup, read-only, through the credential intake | **taken** — `backup-production-gkswcfljxlutkfdvvqng-2026-10-16T20-31-20` (326 KB, 30 tables, 249 rows, 56 FKs, 104 policies, cluster `7666007964130682852` — production's own fingerprint) |
+| Restore verification of that backup | **PASS** — integrity, replay, counts, structure, digests, auth; `memberships`, `roles`, `permissions`, `role_permissions` reported "not in this environment", which is the gap seen from the data side |
+| Demo-data audit, read-only, from that artifact | **a finding, not a cleanup**: demo-identity ids in 6 tables (`shops` 1, `users` 2, `companies` 3, `customers` 3, `products` 4, `product_variants` 10), demo names/phones in `auth.users` 2, `shops` 1, `users` 3; and **79 rows across 8 tables** reference the demo tenant (`sales` 52, `customers` 6, `products` 6, `app_settings` 5, `companies` 4, `users` 4, `returns` 1, `shops` 1) |
+| The cleanup runbook's own guard | **PASS** — Plan A refuses a database with a real shop, then empties every table and rolls back; it names every table that holds rows, so a forgotten table cannot survive the wipe; Plan B removes exactly the two test artifacts and touches no business row |
+| The release gate | **REFUSED** — `no owner approval: pass --owner-approved only after the exact migration plan above has been reviewed by the owner`. The other conditions are unmeasured from here: the tree carries other threads' artifacts (`.freebuff/`, `tests/e2e/results/`), and the repository's Actions API is not readable without credentials, so "is there a green CI run for this commit" is **UNKNOWN**, not assumed |
+| Production's EXECUTE privileges | **UNMEASURED** — see §3c's correction. The only such measurement on record is the six-name read-only probe of 2026-10-13 |
 
 ## 4. What is *not* claimed
 
