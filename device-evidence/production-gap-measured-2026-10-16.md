@@ -181,11 +181,24 @@ $ npm run migrate:verify → 200 rows ↔ 200 files, every hash matches. VERIFY:
 On QA both files are **no-ops with an effect on the record only** — every object they carry already
 exists there, which is why staging's own baseline replay passed with 0 failures *before* the apply.
 What the apply proves is the recorded path itself: on a live project, the file and its ledger row land
-in one transaction, and `verify` reads the hash back on every later run. Regression afterwards, all
-green: unit **75 files / 976 tests**; targeted integration **12 files / 159 tests** (tenant and branch
-isolation, RBAC, membership, permissions — two files re-run after the apply); browser **25 tests in
-real Chrome** against QA — branch responsibility in EN and UR, branch removal, role-in-use deletion,
-session refresh, RTL/LTR, and retry-after-timeout. `tsc` exits 0.
+in one transaction, and `verify` reads the hash back on every later run.
+
+**The live QA schema, asked after the apply** (read-only `run_sql` over the HTTP API, the same path the
+integration suite uses — not inferred from the file, and not from the regression alone):
+
+| Question | Answer |
+|---|---|
+| Batch 2's functions present | **62 of 62** |
+| Batch 2's relations present | **7 of 7** |
+| Batch 2's columns present | **28 of 28** |
+| The 46 client RPCs `authenticated` cannot execute | **0 of 46** |
+| Ledger rows for `0207`, `0208` | both present (200 rows total, hashes verified by `migrate:verify`) |
+
+Regression afterwards, all green: unit **75 files / 976 tests**; targeted integration **12 files /
+159 tests** (tenant and branch isolation, RBAC, membership, permissions — two files re-run after the
+apply); browser **27 tests in real Chrome** against QA — branch responsibility in EN and UR, branch
+flow corrections in EN and UR, branch removal, role-in-use deletion, session refresh, RTL/LTR, and
+retry-after-timeout. `tsc` and the production build both exit 0.
 
 ## 4. What is *not* claimed
 

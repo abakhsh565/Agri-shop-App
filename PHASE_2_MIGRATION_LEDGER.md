@@ -336,7 +336,8 @@ in a ledger that `verify` reads back on every run.
 | Post-state, asked of the rehearsed engine | client RPCs missing **46 → 0**; unreachable by `authenticated` **0**; `anon` access disagreeing with the ledger's contract **5, none of them created by this batch** | `device-evidence/production-gap-measured-2026-10-16.md` §3c |
 | Ledger `apply` on QA | 2 applied and recorded in one transaction each; 198 → 200 rows | quoted above |
 | Ledger `verify` on QA | **PASS** — 200 files ↔ 200 rows, every hash matches | quoted above |
-| Regression after the apply | unit **75 files / 976 tests**; integration **12 files / 159 tests** targeted at tenant and branch isolation, RBAC, membership and permissions (two of the files re-run after the apply); browser **25 tests** in real Chrome (branch responsibility EN+UR, branch removal, role-in-use deletion, session refresh, RTL/LTR, retry-after-timeout) — 0 failures, `tsc` exit 0 | `npm run test:unit`, the targeted suite runs, the Playwright runs |
+| QA's live schema after the apply | functions **62 of 62**, relations **7 of 7**, columns **28 of 28**; the 46 client RPCs `authenticated` cannot execute: **0**; both ledger rows present | read-only `run_sql` over the HTTP API, recorded in §14 above |
+| Regression after the apply | unit **75 files / 976 tests**; integration **12 files / 159 tests** targeted at tenant and branch isolation, RBAC, membership and permissions (two of the files re-run after the apply); browser **27 tests** in real Chrome (branch responsibility EN+UR, branch flow corrections EN+UR, branch removal, role-in-use deletion, session refresh, RTL/LTR, retry-after-timeout) — 0 failures, `tsc` and `build` exit 0 | `npm run test:unit`, the targeted suite runs, the Playwright runs |
 
 **Production was not contacted.** Its ledger still reads `8 / 0016`, no file in this batch has been
 applied there, and the apply path remains an owner act (`docs/PRODUCTION_MIGRATION_PLAN.md` §7.1).
