@@ -183,8 +183,10 @@ artefact has been restore-verified into a throwaway target immediately beforehan
 
 ## 6. Retention, and why the copy on disk is not the copy that matters
 
-* GitHub Actions artefacts: `retention-days` (default 30, 1–90). The artefact and its verification
-  report are uploaded together.
+* GitHub Actions artefacts: `retention-days` — **agreed policy: 30 days** (§9), which is also the
+  workflow's default. The input accepts 1–90, so any other value is a deliberate policy change rather
+  than a tweak. The artefact and its verification report are uploaded together, which gives **at least
+  30 daily recovery points** and lets personal data leave GitHub after 30 days.
 * `backups/` on a developer machine is gitignored and is **not** a backup strategy.
 * The Free plan deletes nothing for you: there is no managed copy to fall back on. Keep at least one
   copy somewhere other than the machine that produced it.
@@ -215,7 +217,28 @@ back up the wrong database, and a scheduled run keeps producing nothing. See §1
 actually looked like. **Do not add the credentials before this step**: credentials plus the old
 workflow is how a mislabelled artefact gets produced.
 
-### Step 2 — add the credentials
+**A further correction, 2026-10-16 — and this section's own rule applies to it.** The rewrite fixed the
+*target*; a second defect then discarded the *artefact*: the Summary step read the manifest with
+`require()` on a relative path (`MODULE_NOT_FOUND`), and because that step is ordered before the upload,
+a verified production backup was thrown away (run `38826369696` — preflight, backup, restore-verify and
+artefact-confirmation all ✓, *Upload* skipped). The fix is committed as **`92a8802a`** on
+`ci-proof/full-tree` and sits in **PR #1 → `main`**, **not yet merged** — so `main` does not have it yet.
+After it is merged, re-run the three commands above (they exist precisely so this cannot be missed) and
+dispatch the workflow once to produce the first green run **with** an uploaded artefact.
+
+**That green run has already happened, without the merge.** `workflow_dispatch` runs the file from the
+ref it is given, so `gh workflow run backup-database.yml --ref ci-proof/full-tree` executed the corrected
+workflow: run **`38828524870`**, every step ✓, artefact **uploaded** — `database-backup-production-36`,
+53,237 bytes, expires 2026-11-15 (the agreed 30 days). The merge is therefore needed only so the
+`main`-based **scheduled** run and future dispatches use the fix; coverage itself no longer waits on it.
+
+### Step 2 — add the credentials  ✅ done 2026-10-16
+
+**Status 2026-10-16:** both routes are configured. Route A's file (`~/.agrishop/production.env`) passes
+the intake check — `npm run creds:production -- --check` → *3 keys loaded, PROD_DB_USER names production
+(gkswcfljxlutkfdvvqng)* — and Route B is complete: `PROD_DB_HOST`, `PROD_DB_USER` and **`PROD_DB_PASS`**
+are all set as repository secrets (2026-10-15T23:54Z), which is what turned the CI preflight from red to
+green. What remains is Step 1's merge and the uploaded artefact (§11).
 
 All three values come from the Supabase dashboard for the production project (Settings → Database →
 Connection string / Connection pooling). The host is the pooler host; the user is
@@ -306,20 +329,36 @@ Until step 3 has completed successfully, the gate in §1 stands.
 | `PROD_DB_PASS` empty (an unfilled template) | exit 2, names the missing key, points at the dashboard |
 | An intake command that is not `backup-database.mjs` / `restore-verify.mjs` | exit 2 — the intake wrapper is not a general credential launcher |
 
-These are asserted by `tests/unit/backupTargeting.test.ts` (20 tests, each refusal paired with the
-correct configuration that must be accepted, so the refusals cannot pass vacuously) and, at the
+These are asserted by `tests/unit/backupTargeting.test.ts` (**24 tests**, each refusal paired with the
+correct configuration that must be accepted, so the refusals cannot pass vacuously; the same file also
+asserts the §9 objectives against this workflow, and was proven able to fail by changing the cron and
+by changing §9's RPO figure) and, at the
 process boundary, by `npm run verify:targeting` (8 CLI cases) and `npm run verify:credentials`
 (23 checks, including a mutation injection that deletes the identity check and watches the wrong
 project become acceptable — so the check is known to be load-bearing rather than decorative).
 
-## 9. Honest RPO / RTO
+## 9. Recovery objectives — agreed 2026-10-16
 
-| Metric | Current |
-|---|---|
-| Production RPO | **Unbounded** — no backup can be taken today |
-| Staging RPO | Time since the last successful run (manual; not scheduled) |
-| RTO (staging, small database) | Minutes to create a target and replay; the restore itself replayed in ~2 seconds in-process |
-| PITR | Not available; with the Pro plan + PITR add-on RPO would be seconds, at roughly $100/month plus compute |
+These are **agreed figures**, each with the thing that would break it named beside it. They replace the
+2026-10-01 line *"Production RPO: Unbounded — no backup can be taken today"*, which was true when it
+was written and is false now.
+
+| Metric | Agreed | What it means, and what breaks it |
+|---|---|---|
+| Production RPO | **24 hours** | The scheduled run is daily at 02:00 UTC (07:00 PKT, before the trading day), so the worst case is the transactions since that run. **Conditional:** a failed or missing run means the RPO is *exceeded* until a manual dispatch succeeds — the workflow's failure notice exists for exactly that, and dispatching is the repair, and the **Backup Watchdog** below turns it into an issue within one period rather than waiting to be noticed. |
+| Staging RPO | Last successful **manual** run | Staging is deliberately not scheduled; its RPO is whatever the operator last took. |
+| Production RTO | **4 hours from the decision to restore** (database) | For the current size — 30 tables · 249 rows · a ~334 KB artefact: fetch artefact + manifest from GitHub, prepare the target, replay, confirm with `restore-verify --compare-with production`, repoint the app. The replay is measured, not estimated: **769 statements in 1.6 s** in-process. **This is an agreed target, not a drilled result** — no restore has ever been performed into a real production target (PGlite was the stand-in), so the first drill is outstanding work. |
+| Time to *notice* an outage, a bad run or a silent one | **≤ 27 hours** (one watchdog period plus the RPO and slack) | The `Backup Watchdog` workflow (`scripts/check-backup-health.mjs`, daily 04:40 UTC) reads the Actions record of `backup-database.yml` and **opens an issue** labelled `backup-alert` when the newest completed run is red, succeeded with **no live artefact**, or is older than the RPO; a healthy check comments and closes that issue by itself. It is deliberately a separate workflow, because a backup cannot report its own absence — a run that never started is the case this exists for. **What breaks it:** deleting or disabling the watchdog, or GitHub disabling scheduled workflows in an otherwise quiet repository (the risk both schedules share). |
+| Retention | **30 days** of daily artefacts | The workflow's `retention_days` default; 1–90 is accepted, so any other value is a deliberate policy change. Artefact + verification report travel together → at least 30 daily recovery points. Local `backups/` is **not** part of this policy (§6). |
+| PITR | **None** (Free plan) | With Pro + the PITR add-on the RPO becomes seconds at roughly **$100/month plus compute**; that purchase is the owner's decision and is the cheapest way to shrink the 24-hour window. |
+
+**The figures are enforced, not merely written here.** The workflow's schedule and its retention
+default are asserted against this section by `tests/unit/backupTargeting.test.ts`, so editing one side
+without the other fails the suite instead of silently changing the policy. The alerter behind *time to
+notice* is guarded the same way by `tests/unit/backupHealthWatchdog.test.ts`, which pins one case per
+way a backup can be a lie — red, green with no artefact, artefact expired, older than the RPO, and no
+run at all — plus the boundary, the schedule's position after the backup it watches, and the rule that
+a watcher which cannot look must report **unhealthy**, never healthy.
 
 ## 10. Responsibilities
 
@@ -334,6 +373,44 @@ project become acceptable — so the check is known to be load-bearing rather th
 | Keep this document true | Whoever changes the tooling |
 
 ## 11. What the live backup job has actually been doing
+
+### Update 2026-10-16 — the job runs, the backup happens
+
+| Observation | Value |
+|---|---|
+| `PROD_DB_PASS` secret | **Set** 2026-10-15T23:54Z from the validated out-of-repo file (stdin only) — the preflight is green |
+| CI run `38826369696` (`environment=production`) | *Preflight* ✓ · *Take the backup* ✓ · *Verify the backup against the environment it names* ✓ · *Confirm the artefact names the environment* ✓ · *Summary* ✗ (its own `require()` bug) · *Upload* **skipped** |
+| CI run `38828524870` — the **fixed** workflow, dispatched on `ci-proof/full-tree` | **every step ✓** including *Summary* and *Upload*: the verify step's own output reads *Statements: 769 applied in 0.3 s · Failures: 0* and *PASS integrity · replay · counts · structure · digests*, with the live source identity compared |
+| Local production artefact, 2026-10-16 | `backups/backup-production-gkswcfljxlutkfdvvqng-2026-10-15T23-57-01.sql` — 333,989 bytes, sha256 `ceb62aa9…`, cluster `7666007964130682852`, 30 tables · **249 rows** · 56 FKs · 104 policies |
+| Restore verification on it | **PASS** — integrity, replay (769 statements, 0 failures), counts (per-table `content identical`), structure, digests, auth `auth.users` 2/2 |
+| Production artefacts stored on GitHub | **1** — run `38828524870` uploaded `database-backup-production-36`: **53,237 bytes**, digest `sha256:1c8d0abd…`, **expires 2026-11-15**, i.e. the agreed 30 days |
+
+The 2026-10-01 row *"Runs that succeeded: 0"* has therefore changed, and the reporting step no longer
+fails either: run `38828524870` is **green end to end**, including *Summary* and *Upload*. What remains is
+only that the **scheduled** run takes the fix once `main` carries it (PR #1).
+
+### Update 2026-10-16 — a reporting step can no longer discard a verified artefact
+
+The fix above corrected the *typo* in the summary. It did not correct the *arrangement* that let a typo
+cost a backup, and that arrangement was still in the file: the `Summary` step — which reports, and runs
+`if: always()` — was ordered **before** the upload. So a failure anywhere in a step that only describes
+the run skipped storage entirely, which is exactly what happened in run `38826369696`: every gate passed,
+the backup was real, and it was thrown away by the step that was supposed to tell someone about it.
+
+Storage is now the first step after the last gate. Everything ordered after it is a reporter that runs
+regardless of the outcome, so no summary, notice or typo can sit between "this backup is verified" and
+"this backup is kept". Note the deliberate asymmetry: the upload still carries **no** `if:`, because an
+unverified artefact must be impossible to store — the change removes the ability to lose a verified
+backup, not the ability to publish an unverified one.
+
+That ordering is asserted, not recommended. `tests/unit/backupTargeting.test.ts` parses the job's steps
+in order and fails if any reporting step (`if: always()` / `if: failure()`) is placed before storage, if
+the upload loses its unconditional form, or if a new step is introduced between verification and
+storage without a decision. The guard was proven able to fail by injecting the old arrangement once —
+the suite went red naming run `38826369696` — with the file then restored byte-identically and the suite
+re-run green: **28 tests, exit 0**.
+
+### The 2026-10-01 record, kept because it is why the ten failures looked the way they did
 
 Recorded 2026-10-01, from GitHub, read-only:
 
@@ -354,7 +431,9 @@ the same variables — so it could not have backed up production even when it su
 It never ran at all, though. The ten failures were not the script failing; they were GitHub refusing
 to start the job, which is why it failed in three seconds with zero steps. So the honest statement is
 not "the backup was wrong" but "no backup process has ever executed". There is no artefact of any
-kind, from any environment, on GitHub today. Production has no recovery path, and neither has
+kind, from any environment, on GitHub today. *(Superseded 2026-10-16: production artefacts now exist from
+run `38828524870` — see the update above; this paragraph is kept as the record of what the job was doing
+on 2026-10-01.)* Production has no recovery path, and neither has
 staging.
 
 ### GitHub Actions cannot start any job in this repository at present
@@ -422,3 +501,4 @@ code rather than by restating the intention.
 | 2026-10-01 | Added the commit prerequisite (§7 step 0), the exact credential-provisioning commands, and the recorded state of the live backup job (§11) |
 | 2026-10-01 | Workflow pushed to `main` (`de13eb1d`); `PROD_DB_HOST` and `PROD_DB_USER` provisioned and probe-verified; recorded that GitHub Actions is blocked by account billing, and that the ten historic failures were that block rather than the script |
 | 2026-10-01 | **First verified production backup + isolated restore (PASS).** The original database password was not retrievable, so it was reset in the dashboard after a dependency analysis proved no runtime or job used it; the new value went only to `~/.agrishop/production.env` through the local intake form. Cluster `7666007964130682852` enrolled; artifact-gate checks in `verify:workflow` now present a chosen manifest instead of the newest one (24 checks) |
+| 2026-10-16 | **Production credentials complete and §9 objectives agreed.** `PROD_DB_PASS` set from the validated out-of-repo file (stdin only), so the CI preflight passes; run `38826369696` takes the production dump and restore-verifies it in CI; a fresh local artefact (333,989 bytes) restore-verifies **PASS**; the Summary-step `require()` bug that discarded the artefact is fixed (`92a8802a`, PR #1); §9 now records **RPO 24 h** (conditional on the daily run), **RTO 4 h** from the restore decision (target, undrilled), **retention 30 days**, and detection unbounded until monitoring exists |

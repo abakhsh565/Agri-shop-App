@@ -172,7 +172,11 @@ parsing the file, and is reported as such.
 `docs/RECOVERY.md` was **rewritten** — its previous contents described a backup system that did not
 exist. It now records, for a backup: source environment, source project (and how it is verified),
 timestamp, scope, artefact identity (sha256), retention, restore target, verification method, the
-four refusal behaviours, and honest RPO/RTO figures (production RPO is **unbounded** today).
+four refusal behaviours, and honest RPO/RTO figures (production RPO is **unbounded** as of this
+report's date). *Superseded 2026-10-16: the production credentials are configured, a fresh production
+artefact restore-verified PASS, and `docs/RECOVERY.md` §9 now records the agreed objectives — RPO 24 h
+(conditional on the daily run), RTO 4 h from the restore decision, retention 30 days — guarded by
+`tests/unit/backupTargeting.test.ts`. Read §9 for the live figures.*
 
 ## 4. The restore — actually performed
 
