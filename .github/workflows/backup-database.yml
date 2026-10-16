@@ -177,7 +177,12 @@ jobs:
           manifest=$(ls -t backups/*.manifest.json 2>/dev/null | head -1 || true)
           if [ -n "$manifest" ]; then
             node -e '
-              const m = require(process.argv[1]);
+              // Read the manifest as a FILE, not via require(): a relative path without a
+              // leading .// is resolved as a package name, so require("backups/x.json") threw
+              // MODULE_NOT_FOUND — and because this step is ordered before the upload, a
+              // verified production backup was discarded by a summary typo (run 38826369696).
+              const fs = require("fs");
+              const m = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
               const rows = [
                 ["project", m.projectRef],
                 ["taken at", m.generatedAt],
