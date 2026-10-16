@@ -71,6 +71,11 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SIMULATE: ${{ inputs.simulate }}
+          # WHO these alerts reach. A repository VARIABLE, not a secret: a GitHub handle is public,
+          # and hiding it would hide the one thing an operator needs to read back — who is being
+          # addressed. Unset is not silent: the issue and the run summary both state that the alert
+          # names nobody, because an alert with no recipient is a record, not a delivery.
+          BACKUP_ALERT_RESPONSIBLE: ${{ vars.BACKUP_ALERT_RESPONSIBLE }}
         run: |
           set -euo pipefail
           if [ -n "${SIMULATE:-}" ]; then

@@ -225,8 +225,30 @@ export function alertMarker(decision) {
   return `<!-- backup-watchdog state=${decision.state} run=${decision.run?.id ?? 'none'} -->`;
 }
 
+/**
+ * The GitHub handle an alert should reach, or null when none is configured.
+ *
+ * GitHub's own notification rules are the delivery mechanism here, and they are documented rather
+ * than assumed: being `@mentioned` subscribes a person to the conversation and gives them the
+ * `mention` reason in the notification email (docs.github.com → "About notifications"), and an
+ * issue notifies the repository's watchers according to what they watch ("Configuring
+ * notifications"). Neither is guaranteed — delivery still depends on that person's settings — so an
+ * alert with no handle is reported as reaching nobody BY NAME, rather than looking like an alert.
+ *
+ * A handle is a name, not a credential, so it comes from a repository variable. It is normalised
+ * here (a leading `@` is optional, and anything that is not a GitHub-shaped handle is refused)
+ * rather than pasted into an issue body unchecked.
+ */
+export function normalizeResponsible(value) {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const handle = trimmed.startsWith('@') ? trimmed.slice(1) : trimmed;
+  return /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/.test(handle) ? `@${handle}` : null;
+}
+
 /** What the operator reads. Short, specific, and it says what to do next. */
-export function alertBody(decision, { repository, workflowUrl }) {
+export function alertBody(decision, { repository, workflowUrl, responsible = null }) {
   const run = decision.run;
   const lines = [];
 
@@ -239,6 +261,18 @@ export function alertBody(decision, { repository, workflowUrl }) {
   }
   lines.push(`**${decision.state}** — ${decision.summary}`);
   lines.push('');
+  // The mention is the delivery. Without it this issue is a durable record that reaches a person
+  // only if they happen to be watching the repository's Issues — which is not the same thing as an
+  // alert, so the absence is stated in the issue itself instead of being left implicit.
+  lines.push(
+    responsible
+      // The handle is written plainly, not inside bold: `@name` must be the mention GitHub parses,
+      // and nothing decorative belongs inside it.
+      ? `${responsible} — this alert is addressed to you. There is no other channel: it reached you ` +
+        `because this issue mentions you (and, if you watch this repository's Issues, because it was opened).`
+      : '**No responsible person is named for this alert.** The repository variable `BACKUP_ALERT_RESPONSIBLE` is unset, so nothing here notifies anybody by name. Set it to a GitHub handle and the next alert will address that person.',
+  );
+  lines.push('');
   lines.push('| field | value |');
   lines.push('|---|---|');
   lines.push(`| state | \`${decision.state}\` |`);
@@ -247,6 +281,7 @@ export function alertBody(decision, { repository, workflowUrl }) {
   lines.push(`| live artefacts | ${decision.artefactCount} |`);
   lines.push(`| age | ${decision.ageHours === null ? 'n/a — no run' : `${decision.ageHours.toFixed(1)} h`} |`);
   lines.push(`| RPO of record | ${decision.thresholds.rpoHours} h (+${decision.thresholds.slackHours} h slack = ${decision.thresholds.thresholdHours} h) |`);
+  lines.push(`| responsible | ${responsible ?? '**none configured**'} |`);
   lines.push('');
   lines.push('**What this means:** the newest restorable production backup is older than the agreed objective.');
   lines.push('');
@@ -266,7 +301,7 @@ export function alertBody(decision, { repository, workflowUrl }) {
 // ── the plumbing ────────────────────────────────────────────────────────────────────────────────
 
 function parseArgs(argv) {
-  const args = { dryRun: false, simulate: '', branch: 'main', json: null };
+  const args = { dryRun: false, simulate: '', branch: 'main', json: null, responsible: null };
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
     const value = () => argv[++i];
@@ -274,6 +309,7 @@ function parseArgs(argv) {
     else if (arg === '--simulate') args.simulate = value();
     else if (arg === '--branch') args.branch = value();
     else if (arg === '--repo') args.repository = value();
+    else if (arg === '--responsible') args.responsible = value();
     else if (arg === '--rpo-hours') args.rpoHours = Number(value());
     else if (arg === '--slack-hours') args.slackHours = Number(value());
     else if (arg === '--runs-file') args.runsFile = value();
@@ -343,7 +379,7 @@ async function readHealth({ args, repository, token, now }) {
   };
 }
 
-async function alert({ decision, repository, token, dryRun, workflowUrl }) {
+async function alert({ decision, repository, token, dryRun, workflowUrl, responsible }) {
   if (dryRun) return { action: decision.healthy ? 'none (healthy)' : 'would-open-or-comment', issue: null };
 
   const client = githubClient(token);
@@ -364,7 +400,7 @@ async function alert({ decision, repository, token, dryRun, workflowUrl }) {
     return { action: 'closed', issue: existing.number };
   }
 
-  const body = alertBody(decision, { repository, workflowUrl });
+  const body = alertBody(decision, { repository, workflowUrl, responsible });
   if (existing) {
     // One issue per condition: comment when the situation changed, stay quiet when it has not.
     if (typeof existing.body === 'string' && existing.body.includes(marker)) {
@@ -388,6 +424,9 @@ async function main() {
   const args = parseArgs(process.argv.slice(2));
   const repository = args.repository ?? process.env.GITHUB_REPOSITORY ?? '';
   const token = process.env.GH_TOKEN ?? process.env.GITHUB_TOKEN ?? '';
+  // A repository VARIABLE (not a secret): a GitHub handle is public, and a secret would hide the
+  // one thing an operator needs to be able to read back — who these alerts are addressed to.
+  const responsible = normalizeResponsible(args.responsible ?? process.env.BACKUP_ALERT_RESPONSIBLE ?? '');
   const now = args.now ? new Date(args.now).getTime() : Date.now();
 
   if (!repository) throw new Error('no repository — set GITHUB_REPOSITORY or pass --repo owner/name');
@@ -412,7 +451,7 @@ async function main() {
 
   let outcome = { action: 'not attempted', issue: null };
   try {
-    outcome = await alert({ decision, repository, token, dryRun: args.dryRun, workflowUrl });
+    outcome = await alert({ decision, repository, token, dryRun: args.dryRun, workflowUrl, responsible });
   } catch (error) {
     decision = { ...decision, healthy: false, state: decision.state === 'unknown' ? 'unknown' : decision.state, unhealthyReason: `alerting failed: ${error.message}` };
     console.error(`::warning::alerting failed: ${error.message}`);
@@ -422,7 +461,7 @@ async function main() {
     }
   }
 
-  const report = { ...decision, alert: outcome };
+  const report = { ...decision, responsible, alert: outcome };
   const text = JSON.stringify(report, null, 2);
   console.log(text);
   if (args.json) {
@@ -437,7 +476,8 @@ async function main() {
         `- newest completed run: ${decision.run ? `#${decision.run.run_number} (${decision.run.conclusion})` : 'none'}\n` +
         `- live artefacts: ${decision.artefactCount}\n` +
         `- age: ${decision.ageHours === null ? 'n/a' : `${decision.ageHours.toFixed(1)} h`} vs RPO ${decision.thresholds.rpoHours} h (+${decision.thresholds.slackHours} h slack)\n` +
-        `- alert: ${outcome.action}${outcome.issue ? ` (#${outcome.issue})` : ''}\n`,
+        `- alert: ${outcome.action}${outcome.issue ? ` (#${outcome.issue})` : ''}\n` +
+        `- addressed to: ${responsible ?? '**nobody by name** — set the repository variable BACKUP_ALERT_RESPONSIBLE'}\n`,
     );
   }
 

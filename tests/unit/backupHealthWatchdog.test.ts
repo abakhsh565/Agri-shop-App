@@ -32,6 +32,7 @@ import {
   alertBody,
   alertMarker,
   classifyBackupHealth,
+  normalizeResponsible,
   simulatedHealth,
 } from '../../scripts/check-backup-health.mjs';
 
@@ -223,6 +224,58 @@ describe('the alert is actionable and is one issue, not a stream', () => {
     expect(ALERT_LABEL).toBe('backup-alert');
     expect(script).toContain('labels: [ALERT_LABEL]');
     expect(script).toContain(`labels=\${ALERT_LABEL}`);
+  });
+});
+
+describe('an alert that names nobody is a record, not a delivery', () => {
+  // The gap this closes was recorded in the post-merge proof of 2026-10-16: the issue was opened
+  // and closed correctly, but nothing proved it reached a human who was not already looking at
+  // GitHub. GitHub's documented mechanism for reaching a person is the mention — being `@mentioned`
+  // gives them the `mention` notification reason — so the alert now carries one, and the ABSENCE of
+  // one is stated in the issue and in the run summary rather than being invisible.
+  const alertFor = (over = {}) => {
+    const decision = decide({ runs: [run({ conclusion: 'failure' })], artifactsByRun: {}, ...over });
+    return decision;
+  };
+
+  test('a configured handle is mentioned, plainly enough to be parsed as a mention', () => {
+    const body = alertBody(alertFor(), {
+      repository: 'example/agrishop',
+      workflowUrl: 'https://github.com/example/agrishop/actions/workflows/backup-database.yml',
+      responsible: '@owner-handle',
+    });
+    expect(body).toContain('@owner-handle');
+    expect(body).toMatch(/\| responsible \| @owner-handle \|/);
+    expect(body).not.toMatch(/No responsible person is named/);
+    // The mention must not be wrapped in decoration: `@name` is what GitHub parses out of the body.
+    expect(body).not.toContain('**@owner-handle**');
+  });
+
+  test('with no handle configured the issue says so, in the body and in the report', () => {
+    const body = alertBody(alertFor(), {
+      repository: 'example/agrishop',
+      workflowUrl: 'https://github.com/example/agrishop/actions/workflows/backup-database.yml',
+    });
+    expect(body).toMatch(/No responsible person is named for this alert/);
+    expect(body).toMatch(/BACKUP_ALERT_RESPONSIBLE/);
+    expect(script).toContain('addressed to:');
+    expect(script).toContain('nobody by name');
+  });
+
+  test('a handle is normalised, and anything that is not one is refused rather than pasted in', () => {
+    expect(normalizeResponsible('owner')).toBe('@owner');
+    expect(normalizeResponsible('  @owner  ')).toBe('@owner');
+    expect(normalizeResponsible('a-b-c')).toBe('@a-b-c');
+    for (const bad of ['', '   ', '@', '@@owner', 'two words', 'a'.repeat(40), 'owner!', undefined, null]) {
+      expect(normalizeResponsible(bad as never), `"${String(bad)}" should not become a mention`).toBeNull();
+    }
+  });
+
+  test('the workflow supplies the handle from a repository variable, never a secret', () => {
+    expect(watchdogYml).toContain('BACKUP_ALERT_RESPONSIBLE: ${{ vars.BACKUP_ALERT_RESPONSIBLE }}');
+    expect(watchdogYml, 'a handle in a secret cannot be read back, and it is not a credential').not.toContain(
+      'BACKUP_ALERT_RESPONSIBLE: ${{ secrets.',
+    );
   });
 });
 

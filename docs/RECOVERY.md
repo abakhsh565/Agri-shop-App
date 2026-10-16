@@ -389,6 +389,34 @@ The 2026-10-01 row *"Runs that succeeded: 0"* has therefore changed, and the rep
 fails either: run `38828524870` is **green end to end**, including *Summary* and *Upload*. What remains is
 only that the **scheduled** run takes the fix once `main` carries it (PR #1).
 
+### Update 2026-10-16 — the alert now names a person, because an issue is a record, not a delivery
+
+Issue #2 proved the watchdog's mechanics against a real red run, and the post-merge proof recorded
+the gap honestly: nothing showed the alert reached a human who was not already looking at GitHub.
+GitHub's own documentation says what does reach one — being `@mentioned` gives a person the `mention`
+notification reason and subscribes them to the conversation, whereas a new issue notifies the
+repository's watchers only if what they watch includes Issues ("Configuring notifications",
+`docs.github.com`).
+
+So an alert now addresses a person. The handle comes from the **repository variable**
+`BACKUP_ALERT_RESPONSIBLE` — a variable rather than a secret, because a handle is public and an
+operator must be able to read back who is being addressed. It is normalised to `@handle`, and
+anything that is not a GitHub-shaped handle is refused rather than pasted into an issue body.
+
+With the variable unset — the state today — the issue and the run summary both state *"No responsible
+person is named for this alert"*. An alert with no recipient is not allowed to look like one.
+
+**What still has to be true for an alert to arrive**, and cannot be set from this repository:
+
+| Channel | Where it is configured |
+|---|---|
+| Email/push for the alert **issue** | the responsible person's notification settings — mention/participating email, and Issues in the repository's custom watch settings |
+| Email for a **failed scheduled run** | *Settings → Notifications → System → Actions*: "Only notify for failed workflows" with Email. GitHub sends scheduled-workflow notifications to **the user who created the workflow**, so who created `backup-database.yml` decides who receives them ("Notifications for workflow runs", `docs.github.com`) |
+
+Both are user-level settings, so they are recorded as required configurations rather than asserted as
+done. A push channel (chat, SMS) would need a destination and a secret; the issue stays the durable
+record either way.
+
 ### Update 2026-10-16 — a reporting step can no longer discard a verified artefact
 
 The fix above corrected the *typo* in the summary. It did not correct the *arrangement* that let a typo
