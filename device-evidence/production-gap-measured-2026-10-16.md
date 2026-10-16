@@ -166,6 +166,27 @@ ledger's contract and both environments**, not an effect of this file: of the 62
 **0** disagree with the contract. It is recorded here rather than fixed here, because narrowing EXECUTE
 on a live RPC is its own deliberate change with its own evidence.
 
+## 3d. The batch run through the ledger on QA — 2026-10-17
+
+Batch 2 was applied to **staging (QA)** through the same recorded path production will use, and only
+there:
+
+```
+$ node scripts/migrate.mjs apply --env staging          → pending 2, "Nothing was applied"
+$ node scripts/migrate.mjs apply --env staging --apply  → ✓ 0207 (76 statements, recorded)
+                                                          ✓ 0208 (159 statements, recorded)
+$ npm run migrate:verify → 200 rows ↔ 200 files, every hash matches. VERIFY: PASS
+```
+
+On QA both files are **no-ops with an effect on the record only** — every object they carry already
+exists there, which is why staging's own baseline replay passed with 0 failures *before* the apply.
+What the apply proves is the recorded path itself: on a live project, the file and its ledger row land
+in one transaction, and `verify` reads the hash back on every later run. Regression afterwards, all
+green: unit **75 files / 976 tests**; targeted integration **12 files / 159 tests** (tenant and branch
+isolation, RBAC, membership, permissions — two files re-run after the apply); browser **25 tests in
+real Chrome** against QA — branch responsibility in EN and UR, branch removal, role-in-use deletion,
+session refresh, RTL/LTR, and retry-after-timeout. `tsc` exits 0.
+
 ## 4. What is *not* claimed
 
 * Nothing has been applied to production. Its ledger still reads `8 / 0016`.

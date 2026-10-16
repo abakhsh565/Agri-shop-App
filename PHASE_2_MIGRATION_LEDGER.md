@@ -295,3 +295,48 @@ compare against (`tests/unit/migrationLedger.test.ts`).
 changes with real product behaviour behind them (the employee catalogue, the audit trail, admin
 permission editing), so they get their own change set and their own verification rather than being
 appended to this one.
+
+---
+
+## 14. Batch 2 of the production gap, through the same ledger — 2026-10-17
+
+`docs/PRODUCTION_MIGRATION_PLAN.md` §4 batch 2 is two files: `0207` (the relations half, extracted
+schema-only from the accepted staging baseline) and `0208` (the function half — the 46 client RPCs
+production lacks, the 16 functions their bodies call, the 7 relations and 28 columns those bodies
+read). Both were verified against production's own frozen baseline *and* staging's before either was
+recorded anywhere (`PASS, 2 files, 235 statements, 0 sql failures` on each), and rehearsed on the real
+Supabase engine (`PASS`, agreeing with PGlite). This section is the ledger half of that record.
+
+```
+$ node scripts/migrate.mjs apply --env staging          # dry run
+  Pending: 2 file(s) … Nothing was applied. Re-run with --apply to apply them.
+$ node scripts/migrate.mjs apply --env staging --apply
+  ✓ 0207 … (76 statement(s), recorded)
+  ✓ 0208 … (159 statement(s), recorded)
+$ npm run migrate:verify
+  Ledger: 200 row(s) in schema_migrations (+ file hashes)
+  Directory and ledger agree exactly: every file recorded, every record has a file, every hash matches.
+  VERIFY: PASS
+```
+
+The ledger moved **198 → 200 rows**, each recorded by the same transaction that applied the file, and
+the dry run is quoted because it is what makes the recorded run meaningful: the tool refused to write
+until asked. On QA these two files are **no-ops with an effect on the record only** — every object they
+carry already exists there, which is why staging's own baseline replay passed with 0 failures before
+the apply and why nothing in QA's schema changed when it ran. What the apply buys is the thing a QA
+environment is for: the *recorded* path production will take (file + ledger row, one transaction) is
+exercised on a live project before it is used on the one that matters, and its hashes are now pinned
+in a ledger that `verify` reads back on every run.
+
+| Evidence | Result | Artefact |
+|---|---|---|
+| Batch verification, production's baseline | **PASS** — 2 files, 235 statements, 0 sql failures, 268 data statements counted and skipped | `backups/baseline-prod-batch2-verified.json` |
+| Batch verification, staging's baseline | **PASS** — same counts, 2267 data statements counted and skipped | `backups/baseline-staging-batch2-verified.json` |
+| Real-engine rehearsal, both baselines | **PASS** — 235 statements, 0 failures, `vs PGlite: AGREES` | `backups/rehearsal-batch2-{production,staging}.json` |
+| Post-state, asked of the rehearsed engine | client RPCs missing **46 → 0**; unreachable by `authenticated` **0**; `anon` access disagreeing with the ledger's contract **5, none of them created by this batch** | `device-evidence/production-gap-measured-2026-10-16.md` §3c |
+| Ledger `apply` on QA | 2 applied and recorded in one transaction each; 198 → 200 rows | quoted above |
+| Ledger `verify` on QA | **PASS** — 200 files ↔ 200 rows, every hash matches | quoted above |
+| Regression after the apply | unit **75 files / 976 tests**; integration **12 files / 159 tests** targeted at tenant and branch isolation, RBAC, membership and permissions (two of the files re-run after the apply); browser **25 tests** in real Chrome (branch responsibility EN+UR, branch removal, role-in-use deletion, session refresh, RTL/LTR, retry-after-timeout) — 0 failures, `tsc` exit 0 | `npm run test:unit`, the targeted suite runs, the Playwright runs |
+
+**Production was not contacted.** Its ledger still reads `8 / 0016`, no file in this batch has been
+applied there, and the apply path remains an owner act (`docs/PRODUCTION_MIGRATION_PLAN.md` §7.1).

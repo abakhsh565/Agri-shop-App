@@ -314,13 +314,27 @@ Nothing in this plan is applied, and nothing should be until every line below is
 
 - [x] The owner approved this plan, and decision §7(a) — recorded in §7.1, with the mode implemented
       and tested. The four per-batch boxes below are what the gate checks on every run.
-- [ ] `SCHEMA_STRATEGY.md`'s §D decision stands unchanged: production moves only by verified new files.
-- [ ] A fresh production backup exists, restore-verified, from immediately before the batch.
-- [ ] The batch's own `verify:baseline --baseline production --files …` run reports **PASS**, from a run
-      made after the last edit to any file in that batch.
+- [x] `SCHEMA_STRATEGY.md`'s §D decision stands unchanged: production moves only by verified new files —
+      and this plan is an instance of it: nothing is replayed, both files are new, and neither has run
+      anywhere but QA.
+- [ ] A fresh production backup exists, restore-verified, from immediately before the batch. **Not yet
+      done, and it is the one box that must be closed per apply — the gate refuses a backup older than
+      60 minutes or one that has not been restore-verified.**
+- [x] The batch's own `verify:baseline --baseline production --files …` run reports **PASS**, from a run
+      made after the last edit to any file in that batch — `--files 0207,0208` → PASS, 235 statements,
+      0 sql failures (`backups/baseline-prod-batch2-verified.json`), re-run after the last regeneration
+      of `0208`.
 - [ ] `scripts/release-gate.mjs --owner-approved` passes, and the release gate's other refusals
       (schema-strategy, monitoring) are satisfied or explicitly waived by the owner.
-- [ ] A production-shaped rehearsal target has been used at least once for the batch (see §9.3).
+- [x] A production-shaped rehearsal target has been used at least once for the batch — the real
+      PostgreSQL 17 Supabase engine, `PASS` and `AGREES` with PGlite (§9.3), plus the batch applied to
+      QA through the ledger (`PHASE_2_MIGRATION_LEDGER.md` §14).
+
+**The QA application is a rehearsal of the record, not of the outcome.** On QA both files are no-ops —
+the objects exist there — so the part it exercises is the one production cannot rehearse twice: the
+file and its ledger row landing in one transaction on a live project, with `verify` reading the hash
+back afterwards (200 rows ↔ 200 files, PASS). The outcome production will see is the one the rehearsed
+engine showed: 46 missing client RPCs → 0, none unreachable by `authenticated` (§9.3).
 
 ## 9. What this plan does not claim
 
