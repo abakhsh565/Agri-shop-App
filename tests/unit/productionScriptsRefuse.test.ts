@@ -99,8 +99,11 @@ describe('the production scripts refuse what they must, before connecting', () =
     const dir = mkdtempSync(join(tmpdir(), 'refusal-guard-'));
     const mutated = join(dir, 'rehearse-production-flows.mjs');
     const original = readFileSync(join(ROOT, 'scripts/rehearse-production-flows.mjs'), 'utf8');
+    // `\r?\n`, not `\n`: the mutation has to apply on the checkout it runs in. With a bare `\n` this
+    // guard failed on a CRLF working copy — a quiet, platform-specific way for a non-vacuity check to
+    // stop proving anything, which is the failure mode it exists to prevent.
     const withoutRefusal = original.replace(
-      /if \(envIndex === -1 \|\| process\.argv\[envIndex \+ 1\] !== 'production'\) \{[\s\S]*?process\.exit\(2\);\n\}/,
+      /if \(envIndex === -1 \|\| process\.argv\[envIndex \+ 1\] !== 'production'\) \{[\s\S]*?process\.exit\(2\);\r?\n\}/,
       '// refusal removed for the non-vacuity check',
     );
     expect(withoutRefusal, 'the mutation did not apply — the guard text moved').not.toBe(original);

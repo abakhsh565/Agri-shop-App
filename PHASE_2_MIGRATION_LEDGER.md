@@ -513,3 +513,79 @@ JWT claims set to the owner of shop `1e5f7e4b…`, who is read-only relative to 
 (`loop` + its `execute` on one line) so the replay guard does not read a bare keyword line as a split
 identifier. `migrate.mjs reconcile` compared the statements ignoring comments and whitespace, reported
 **identical**, and re-recorded the hash with that reason. The applied behaviour never changed.
+
+---
+
+## 17. QA's forward batch finishes — `0222`–`0231`, and two recorded divergences — 2026-10-18
+
+QA's ledger stopped at `0221` while the repository carried ten more files. The batch was applied
+through the tool, not by hand, and it exposed the two places where one directory genuinely cannot
+describe two lineages. Both are now recorded in the ledger, with their reasons, rather than resolved
+by editing an applied file.
+
+```text
+$ node scripts/migrate.mjs apply --env staging --apply
+  ✓ 0222 (2 statements, recorded)   ✓ 0223 (2 statements, recorded)
+  ✗ 0224 failed and was rolled back: column "outstanding_payable" does not exist
+      after rollback: ledger row = absent, declared objects present = 4/4
+```
+
+`0224` is a **production-lineage repair**: it backfills `purchases.outstanding_payable` and
+`purchase_items.cost_price`, legacy columns QA never had, and it adds `sale_submissions` plus the
+three write RPCs the app calls. Measured on QA before deciding anything: `sale_submissions` exists,
+and `create_sale` / `create_purchase` / `adjust_stock` all carry the `payload` parameter and the
+`guard_operational_request(...)` call — the effect `0224` exists to produce is already there. The
+remaining seven files were verified statement-by-statement inside a rolled-back transaction first
+(all `OK`), then applied:
+
+```text
+✓ 0225   ✓ 0226   ✓ 0227   ✓ 0228   ✓ 0229   ✓ 0230   ✓ 0231
+```
+
+### The divergence record
+
+`reconcile` covers a file whose statements are the same once normalised. These two cases are not
+that, so `migrate.mjs diverge` records the difference itself — the version, one of two kinds, **both
+exact hashes**, and a reason of at least 40 characters:
+
+| Version | Kind on QA | Why | Recorded / on-disk |
+|---|---|---|---|
+| `0220` | `superseded` | QA applied the narrower staging variant on 2026-10-17; the repository now carries the bytes production recorded. The seeding is identical — the diff is the post-condition assertions: QA's asserts about the rows the file created, production's about every membership. QA legitimately held multi-shop memberships, so the wider assertion cannot run there. | `9817e2aa5a92…` / `270c81c1315c…` |
+| `0224` | `not-applicable` | A production-lineage repair whose effect QA already holds and whose backfills reference columns QA never had. It was never run here, so it has no ledger row — which is exactly what this kind records. | *(none)* / `19a099b91438…` |
+
+Neither record is an ignore list. Both hashes are stored, so the version stops being explained the
+moment either side changes, and `verify` reports a stale record as a problem of its own. Every run
+prints the divergences with their reasons:
+
+```text
+$ node scripts/migrate.mjs verify --env staging
+  DIVERGED — recorded in the ledger, with a reason (2):
+    0220 superseded (0220_the_rows_the_membership_model_needs.sql)
+      QA applied the narrower staging variant …
+    0224 not-applicable (0224_the_three_write_rpcs_a_caller_could_not_call.sql)
+      0224 is a production-lineage repair …
+  Directory and ledger agree exactly: every file recorded, every record has a file, every hash matches.
+  VERIFY: PASS
+```
+
+**The record was proved non-vacuous against the real ledger**, not only in unit tests: appending one
+comment line to `0220` made `verify` fail again with `changed after it was applied: 1` and
+`divergence records that no longer describe this pair of files: 1` (exit 1); restoring the file
+returned `VERIFY: PASS`. `tests/unit/migrationDivergenceGuard.test.ts` holds the same property for
+both kinds, and for re-recording the ledger side.
+
+### What QA holds after the batch
+
+| Object | Check |
+|---|---|
+| `users.pin_failed_count`, `users.pin_locked_until` (`0231`) | present |
+| `return_items.qty` mirror (`0227`) | skipped by its own guard — QA has only `qty_to_return` |
+| `business_settings` / `customer_crops` / `reminder_configs` repairs (`0228`) | skipped by their own guards — QA carries the post-`0093` shape |
+| retired mirror helpers (`0226`, `0229`) | absent, as intended |
+| storage policies (`0230`) | `images public read` / SELECT, `images auth write` / INSERT |
+| `anon` EXECUTE on `create_sale` (`0225`) | false |
+| `anon` write grants in `public` | 0 (excluding `sale_submissions`, which `0225` narrows) |
+| row counts after the batch | sales 2 · products 5 · memberships 14 · branches 7 — DDL only |
+
+Production's ledger and database were **not touched** by any of this: no reconcile, no divergence
+record, no apply.

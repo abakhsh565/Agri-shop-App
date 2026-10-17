@@ -167,28 +167,63 @@ export function readMigrationDirectory(dir = MIGRATIONS_DIR, options = {}) {
  *
  * @param {{entries: Array}} directory  result of readMigrationDirectory
  * @param {Array<{version: string, name?: string, sha256?: string|null, source?: string|null}>} ledgerRows
- * @returns {{pending: Array, ledgerOnly: Array, changed: Array, reconciled: Array}}
+ * @param {Array<{version: string, kind: string, recorded_sha256: string, current_sha256: string, reason?: string, recorded_at?: string}>} [divergences]
+ * @returns {{pending: Array, ledgerOnly: Array, changed: Array, reconciled: Array, diverged: Array, staleDivergences: Array}}
  *   pending    files with no ledger row          — the database is behind the directory
  *   ledgerOnly rows with no file                 — the database is ahead, or a file was deleted
  *   changed    recorded sha256 differs           — a file was edited after it was applied
  *   reconciled a retired version satisfied by its canonical target
+ *   diverged   a difference a human recorded, with its reason, against EXACT byte pairs
+ *   staleDivergences  a divergence record that no longer describes this pair of files — a problem
+ *
+ * A divergence is not an ignore list. It names one version, one kind, and the two exact hashes it
+ * was recorded for; the version drops out of `changed` only while both still hold. Edit the file,
+ * or re-record the applied statements, and the difference is reported again — which is the whole
+ * point: the record explains a known, measured difference and cannot cover a new one.
  */
-export function compareWithLedger(directory, ledgerRows) {
+export function compareWithLedger(directory, ledgerRows, divergences = []) {
   const fileByVersion = new Map(directory.entries.map((entry) => [entry.version, entry]));
   const rowByVersion = new Map(ledgerRows.map((row) => [String(row.version), row]));
+  const divergenceByVersion = new Map(divergences.map((row) => [String(row.version), row]));
 
   const pending = [];
   const ledgerOnly = [];
   const changed = [];
   const reconciled = [];
+  const diverged = [];
+  const staleDivergences = [];
 
   for (const entry of directory.entries) {
     const row = rowByVersion.get(entry.version);
+    const divergence = divergenceByVersion.get(entry.version);
     if (!row) {
+      if (divergence) {
+        if (divergence.kind === 'not-applicable' && divergence.current_sha256 === entry.sha256) {
+          diverged.push({ ...divergence, filename: entry.filename });
+          continue;
+        }
+        staleDivergences.push({
+          version: entry.version,
+          filename: entry.filename,
+          why:
+            divergence.kind !== 'not-applicable'
+              ? 'recorded as superseded, but this database has no row for it'
+              : 'the file changed since the divergence was recorded',
+        });
+      }
       pending.push(entry);
       continue;
     }
     if (row.sha256 && row.sha256 !== entry.sha256) {
+      if (
+        divergence &&
+        divergence.kind === 'superseded' &&
+        divergence.recorded_sha256 === row.sha256 &&
+        divergence.current_sha256 === entry.sha256
+      ) {
+        diverged.push({ ...divergence, filename: entry.filename });
+        continue;
+      }
       changed.push({
         version: entry.version,
         filename: entry.filename,
@@ -196,7 +231,27 @@ export function compareWithLedger(directory, ledgerRows) {
         current: entry.sha256,
         source: row.source ?? null,
       });
+      if (divergence) {
+        staleDivergences.push({
+          version: entry.version,
+          filename: entry.filename,
+          why: 'the file or the recorded statements changed since the divergence was recorded',
+        });
+      }
+    } else if (divergence) {
+      // The hashes agree again, so the record has nothing left to explain. It is kept (history is
+      // not rewritten) but it must not sit there looking authoritative.
+      staleDivergences.push({
+        version: entry.version,
+        filename: entry.filename,
+        why: 'the file and the ledger agree again; the divergence record is obsolete',
+      });
     }
+  }
+
+  for (const row of divergences) {
+    if (fileByVersion.has(String(row.version))) continue;
+    staleDivergences.push({ version: String(row.version), filename: null, why: 'no file carries this version' });
   }
 
   for (const row of ledgerRows) {
@@ -210,7 +265,7 @@ export function compareWithLedger(directory, ledgerRows) {
     }
   }
 
-  return { pending, ledgerOnly, changed, reconciled };
+  return { pending, ledgerOnly, changed, reconciled, diverged, staleDivergences };
 }
 
 /**
@@ -308,5 +363,7 @@ export function describeComparisons(comparison) {
     ['ledger-only', comparison.ledgerOnly.map((r) => `${r.version} ${r.name ?? ''}`.trim())],
     ['changed-after-apply', comparison.changed.map((c) => `${c.version} ${c.filename}`)],
     ['reconciled-alias', comparison.reconciled.map((r) => `${r.recorded} -> ${r.satisfiedBy}`)],
+    ['diverged-recorded', (comparison.diverged ?? []).map((d) => `${d.version} (${d.kind})`)],
+    ['stale-divergence', (comparison.staleDivergences ?? []).map((d) => `${d.version} ${d.why}`)],
   ];
 }

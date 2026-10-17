@@ -81,7 +81,7 @@ import {
   resolveCredentials,
 } from './lib/environments.mjs';
 
-const MODES = ['status', 'verify', 'adopt', 'apply', 'reconcile'];
+const MODES = ['status', 'verify', 'adopt', 'apply', 'reconcile', 'diverge'];
 
 const args = process.argv.slice(2);
 const flag = (name, fallback = null) => {
@@ -95,8 +95,9 @@ const has = (name) => args.some((a) => a === `--${name}` || a.startsWith(`--${na
 if (has('help') || args.includes('-h') || args.length === 0) {
   console.log(
     [
-      'Usage: node scripts/migrate.mjs <status|verify|adopt|apply|reconcile> --env staging [--apply] [--dir <dir>] [--json <file>]',
+      'Usage: node scripts/migrate.mjs <status|verify|adopt|apply|reconcile|diverge> --env staging [--apply] [--dir <dir>] [--json <file>]',
       '       node scripts/migrate.mjs reconcile --env staging --version <v> --reason "<why the edit is cosmetic>" [--apply]',
+      '       node scripts/migrate.mjs diverge   --env staging --version <v> --kind superseded|not-applicable --reason "<why>" [--apply]',
       '       node scripts/migrate.mjs apply --env production --files <a.sql,b.sql> --verification <report.json>',
       '                                      --backup <artifact>.manifest.json --restored <report.json> [--apply]',
       '       node scripts/migrate.mjs <status|verify|apply> --target pglite [--dir <dir>] [--apply]',
@@ -211,6 +212,21 @@ const LEDGER_DDL = [
   // ledger must be able to tell them apart.
   `alter table supabase_migrations.schema_migration_files add column if not exists reconciled_at timestamptz`,
   `alter table supabase_migrations.schema_migration_files add column if not exists reconcile_note text`,
+  // A recorded divergence: this environment legitimately cannot hold the file on disk. Two shapes
+  // exist and both are named here, because they are different facts:
+  //   * `superseded`      the database applied a different text at this version (staging's 0220);
+  //   * `not-applicable`  the database has the effect already and the file's rest is a repair for
+  //                       another lineage, so it was never run at all (staging's 0224).
+  // The two exact hashes are stored, so the record can only ever explain THIS pair of bytes.
+  `create table if not exists supabase_migrations.schema_migration_divergences (
+     version text primary key,
+     kind text not null check (kind in ('superseded','not-applicable')),
+     recorded_sha256 text not null,
+     current_sha256 text not null,
+     reason text not null,
+     recorded_at timestamptz not null default now(),
+     recorded_by text not null default current_user
+   )`,
 ];
 
 async function openLiveTarget(name) {
@@ -264,11 +280,23 @@ async function readLedger(target) {
   const haveCliTable = (
     await target.query(`select to_regclass('supabase_migrations.schema_migrations') as t`)
   ).rows[0].t;
-  if (!haveCliTable) return { present: false, rows: [], hasFileTable: false };
+  if (!haveCliTable) return { present: false, rows: [], hasFileTable: false, divergences: [] };
 
   const haveFileTable = (
     await target.query(`select to_regclass('supabase_migrations.schema_migration_files') as t`)
   ).rows[0].t;
+
+  const haveDivergenceTable = (
+    await target.query(`select to_regclass('supabase_migrations.schema_migration_divergences') as t`)
+  ).rows[0].t;
+  const divergences = haveDivergenceTable
+    ? (
+        await target.query(
+          `select version, kind, recorded_sha256, current_sha256, reason, recorded_at
+             from supabase_migrations.schema_migration_divergences order by version`,
+        )
+      ).rows
+    : [];
 
   const rows = haveFileTable
     ? (
@@ -286,7 +314,7 @@ async function readLedger(target) {
         )
       ).rows;
 
-  return { present: true, rows, hasFileTable: haveFileTable };
+  return { present: true, rows, hasFileTable: haveFileTable, divergences };
 }
 
 async function ensureLedger(target) {
@@ -400,6 +428,88 @@ async function runReconcile() {
   );
   console.log(`  Reconciled ${entry.version}: the new hash is recorded, with the reason.`);
   console.log('  The file is still the applied file — only its recorded hash changed.');
+  return 0;
+}
+
+/**
+ * Record that THIS environment legitimately cannot hold the file on disk, and why.
+ *
+ * `reconcile` is for a file whose statements are the same after normalisation. This is for the two
+ * cases that are not: a database that applied a different text at the same version, and a database
+ * that already has the file's effect and was never meant to run its other half. Neither is allowed
+ * to be silent, and neither is allowed to be broad: the record stores both exact hashes, so it
+ * stops explaining anything the moment either side changes.
+ */
+async function runDiverge() {
+  const version = flag('version');
+  const kind = flag('kind');
+  const reason = flag('reason');
+  if (!version) return fail('diverge requires --version <version>.');
+  if (!['superseded', 'not-applicable'].includes(String(kind))) {
+    return fail('diverge requires --kind superseded|not-applicable.');
+  }
+  if (!reason || reason.trim().length < 40) {
+    return fail(
+      'diverge requires --reason "<what the difference is and why it is intentional>" ' +
+        '(at least 40 characters). A record nobody can review is not a record.',
+    );
+  }
+  if (target.kind !== 'postgres') return fail('diverge records history; --target pglite has none.');
+  if (directory.problems.length) return fail('the directory breaks its own grammar; fix it first.');
+
+  const entry = directory.entries.find((e) => e.version === String(version).replace(/^0+/, '').padStart(4, '0'));
+  if (!entry) return fail(`no file in ${dir} has version ${version}.`);
+  const row = ledger.rows.find((r) => String(r.version) === entry.version);
+
+  if (kind === 'superseded') {
+    if (!row) return fail(`${entry.filename} has no ledger row on this database — use --kind not-applicable.`);
+    if (!row.sha256) return fail(`${entry.version} was recorded without a hash; use \`adopt --apply\` first.`);
+    if (row.sha256 === entry.sha256) {
+      console.log(`\n  ${entry.filename} already matches its recorded hash — nothing diverges.`);
+      return 0;
+    }
+    const { rows } = await target.query(
+      `select statements from supabase_migrations.schema_migrations where version = $1`,
+      [entry.version],
+    );
+    const verdict = classifyReconciliation({ recordedStatements: rows[0]?.statements ?? null, fileBody: entry.body });
+    if (verdict.cosmetic) {
+      return fail(
+        `${entry.filename} differs only by comments and whitespace — use \`reconcile --version ${entry.version}\`,\n` +
+          '  which re-records the hash instead of claiming a divergence that is not there.',
+      );
+    }
+    console.log(`\n  ${entry.filename}: recorded ${row.sha256.slice(0, 12)}…, on disk ${entry.sha256.slice(0, 12)}…`);
+    console.log('  The statements differ, and this database applied the recorded one.');
+  } else {
+    if (row) {
+      return fail(
+        `${entry.filename} HAS a ledger row here (${row.sha256?.slice(0, 12) ?? 'no hash'}). ` +
+          'A version that was applied is superseded, not not-applicable.',
+      );
+    }
+    console.log(`\n  ${entry.filename}: no ledger row, and the file is ${entry.sha256.slice(0, 12)}…`);
+    console.log("  Recording that this environment's lineage already holds its effect and it was not run here.");
+  }
+
+  if (dryRun) {
+    console.log('  Nothing was written. Re-run with --apply to record it.');
+    return 0;
+  }
+
+  await ensureLedger(target);
+  await target.query(
+    `insert into supabase_migrations.schema_migration_divergences
+       (version, kind, recorded_sha256, current_sha256, reason, recorded_at, recorded_by)
+     values ($1, $2, $3, $4, $5, now(), current_user)
+     on conflict (version) do update set
+       kind = excluded.kind, recorded_sha256 = excluded.recorded_sha256,
+       current_sha256 = excluded.current_sha256, reason = excluded.reason,
+       recorded_at = now(), recorded_by = current_user`,
+    [entry.version, kind, row?.sha256 ?? '', entry.sha256, reason.trim()],
+  );
+  console.log(`  Recorded ${entry.version} as ${kind}, for these bytes only.`);
+  console.log('  Any later edit to the file, or to the recorded statements, is reported again.');
   return 0;
 }
 
@@ -546,7 +656,7 @@ result.ledger = {
   })),
 };
 
-const comparison = compareWithLedger(directory, ledger.rows);
+const comparison = compareWithLedger(directory, ledger.rows, ledger.divergences);
 const pendingVersions = comparison.pending.map((e) => e.version);
 const order = orderHazards(directory, ledger.rows, pendingVersions);
 
@@ -560,6 +670,8 @@ result.comparison = {
   ledgerOnly: comparison.ledgerOnly.map((r) => `${r.version} ${r.name ?? ''}`.trim()),
   changed: comparison.changed.map((c) => `${c.version} ${c.filename}`),
   reconciled: comparison.reconciled.map((r) => `${r.recorded} -> ${r.satisfiedBy}`),
+  diverged: comparison.diverged.map((d) => `${d.version} ${d.kind} ${d.filename}`),
+  staleDivergences: comparison.staleDivergences.map((d) => `${d.version} ${d.why}`),
   unattested: unattested.map((r) => `${r.version} ${r.name ?? ''}`.trim()),
   order,
 };
@@ -582,6 +694,7 @@ const differences = [
   ['changed after it was applied', result.comparison.changed],
   ['recorded without a hash', result.comparison.unattested],
   ['reconciled old version names', result.comparison.reconciled],
+  ['divergence records that no longer describe this pair of files', result.comparison.staleDivergences],
 ];
 const totalDifferences = differences.reduce((sum, [, list]) => sum + list.length, 0);
 if (totalDifferences) {
@@ -591,6 +704,15 @@ if (totalDifferences) {
     console.log(`  ${label}: ${list.length}`);
     for (const item of list.slice(0, 25)) console.log(`    ${item}`);
     if (list.length > 25) console.log(`    … and ${list.length - 25} more`);
+  }
+}
+// Named, never silent: a divergence is a measured fact with a reason, and it is printed on every
+// run so nobody has to remember that it exists.
+if (comparison.diverged.length) {
+  console.log(`\n  DIVERGED — recorded in the ledger, with a reason (${comparison.diverged.length}):`);
+  for (const d of comparison.diverged) {
+    console.log(`    ${d.version} ${d.kind} (${d.filename})`);
+    console.log(`      ${d.reason}`);
   }
 }
 if (order.hazards.length) {
@@ -614,6 +736,8 @@ if (mode === 'verify') {
   exitCode = productionGate ? await runProductionApply() : await runApply();
 } else if (mode === 'reconcile') {
   exitCode = await runReconcile();
+} else if (mode === 'diverge') {
+  exitCode = await runDiverge();
 }
 
 async function runAdopt() {
