@@ -171,6 +171,23 @@ try {
     measured: counts,
   });
 
+  // ── 2b. No stored object survives ─────────────────────────────────────────────────────────
+  // Images are data too: a QA screenshot or a demo product photo in a bucket is test data in
+  // production even though it is not a row in `public`. The demo set was removed on 2026-10-18
+  // (71 objects); this check is what notices a file coming back, including one written through the
+  // Storage API by a client that never touches SQL.
+  const hasStorage = await one(`select to_regclass('storage.objects') is not null present`);
+  if (hasStorage.present) {
+    const byBucket = await client.query(
+      `select bucket_id, count(*)::int n from storage.objects group by bucket_id order by bucket_id`,
+    );
+    const total = byBucket.rows.reduce((sum, r) => sum + r.n, 0);
+    check('no stored image or object survives in any bucket', total === 0, {
+      total,
+      byBucket: Object.fromEntries(byBucket.rows.map((r) => [r.bucket_id, r.n])),
+    });
+  }
+
   // ── 3. Derived figures match ───────────────────────────────────────────────────────────────
   const figures = {};
   for (const [table, column] of ZERO_FIGURES) {
