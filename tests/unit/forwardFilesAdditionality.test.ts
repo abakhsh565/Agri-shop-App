@@ -29,7 +29,7 @@
  */
 
 import { spawnSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { describe, expect, test } from 'vitest';
@@ -37,6 +37,17 @@ import { describe, expect, test } from 'vitest';
 import { splitStatements } from '../../scripts/lib/sql-statements.mjs';
 
 const ROOT = process.cwd();
+
+/**
+ * The generator reads the frozen staging snapshot to know which columns production lacks. That snapshot
+ * is a logical dump of a real environment, so it lives in gitignored `backups/` and is absent on CI —
+ * where the comparison therefore cannot run. Same rule as `branchIdentityBoundary.test.ts`: an
+ * artifact-dependent check reports itself SKIPPED with the reason, never as a pass.
+ */
+const baseline = JSON.parse(readFileSync(join(ROOT, 'supabase/baseline/staging-baseline.json'), 'utf8')) as {
+  artifact: string;
+};
+const haveBaselineArtifact = existsSync(join(ROOT, baseline.artifact));
 const BATCH_TWO = [
   'supabase/migrations/0207_the_membership_model_exists_in_the_repository.sql',
   'supabase/migrations/0208_the_functions_the_app_calls_and_the_tables_they_read.sql',
@@ -178,12 +189,16 @@ describe('the re-issue of 0177–0198 obeys the same binding rules', () => {
     });
   }
 
-  test('the files are what the generator produces — a source edit cannot silently invalidate them', () => {
-    const result = spawnSync(process.execPath, [join(ROOT, 'scripts/dev/reissue-forward-files.mjs'), '--check'], {
-      encoding: 'utf8',
-    });
-    expect(result.status, `the re-issue is stale against the ledger:\n${result.stdout}${result.stderr}`).toBe(0);
-  });
+  test.skipIf(!haveBaselineArtifact)(
+    `the files are what the generator produces — a source edit cannot silently invalidate them` +
+      (haveBaselineArtifact ? '' : ` [SKIPPED: ${baseline.artifact} is absent; run where the artifact exists]`),
+    () => {
+      const result = spawnSync(process.execPath, [join(ROOT, 'scripts/dev/reissue-forward-files.mjs'), '--check'], {
+        encoding: 'utf8',
+      });
+      expect(result.status, `the re-issue is stale against the ledger:\n${result.stdout}${result.stderr}`).toBe(0);
+    },
+  );
 });
 
 describe('the guard is not vacuous', () => {
