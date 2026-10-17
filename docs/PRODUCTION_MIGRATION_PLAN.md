@@ -1,12 +1,17 @@
 # Production migration plan — reconciled against production itself
 
-**Status: prepared and measured; the sanctioned apply path is BUILT (§7.1).** NOTHING HAS BEEN APPLIED —
-no file in this plan has reached production. The approval gate is §8.
+**Status: APPLIED 2026-10-17 — production's ledger holds 42 rows, latest `0229`.** The first apply closed the schema; the second closed the reasons the screens were empty: `0222` attaches every operational row — and every future one — to its branch, `0223` shuts the anon key out of every business table, `0224` repairs the three write RPCs a sale, purchase or stock adjustment could not get past, and the production test transactions were removed under the owner's written authorization (`scripts/purge-production-test-transactions.mjs`, dry-run by default, one transaction, invariants asserted before commit; pre-purge backup restored and compared PASS). The 24-file batch
+went in at 14:44Z; `0220` and `0221` followed at 15:00:49Z and 15:00:50Z through the same gate. The
+approval gate remains §8, and what the apply did **not** fix is §5.1 — read it before using production:
+all 52 sales are invisible to every signed-in role because no historical row has a `branch_id`.
+Measured evidence: [device-evidence/production-apply-verification-2026-10-17.md](../device-evidence/production-apply-verification-2026-10-17.md).
 
 **Update 2026-10-16:** the owner chose §7(a) and the mode it describes is implemented and tested
 (`scripts/migrate.mjs` + `scripts/lib/production-batch-gate.mjs`, 42 tests). Production is still
 read-only to every automated path: the tool refuses `--env production` before it resolves a
-credential, except for `apply` with a named batch and all four preconditions.
+credential, except for `apply` with a named batch and all four preconditions. That held: the
+credential in `~/.agrishop/production.env` is read-only (`default_transaction_read_only = on`), so the
+apply is a deliberate owner act and no automated path can reach production on its own.
 
 The report this answers: production's `supabase_migrations` holds **8 entries through 0016** while the
 repository then held **198 migration files** (**200** today, through `0208`), so "applying migrations"
@@ -19,7 +24,7 @@ baselines, forward-only files.
 
 | | Production (measured) | Repository |
 |---|---|---|
-| Recorded history | **8 rows, latest `0016`** — identical at the 2026-10-01 and 2026-10-15T23:57Z captures | **200 files**, newest `0208` (198 through `0206` when this plan was written) |
+| Recorded history | **8 rows, latest `0016`** at the time of writing — identical at the 2026-10-01 and 2026-10-15T23:57Z captures; **34 rows, latest `0221`** after the 2026-10-17 apply (§5.1) | **200 files**, newest `0208` (198 through `0206` when this plan was written) |
 | Schema | 28 tables · 37 functions · 2 views · 47 indexes · 56 FKs · 9 checks · 9 uniques · 10 triggers · 104 policies · 8 enums | — |
 
 **The ledger is not a record of what production has.** Production's schema is far ahead of anything
@@ -286,6 +291,16 @@ appear here exactly once, so a newly added migration cannot exist without a prod
 | `0217_a_retired_function_is_not_for_the_client.sql` | **closure 3 of 3 — the retired functions — verified PASS on production's baseline and staging's; APPLIED to hosted QA** (1 statement, 0 sql failures; in the 22-file batch: 448 statements, 0 failures). The correction for the widening described below: revokes `PUBLIC, anon, authenticated` from the fifteen functions the ledger retires from the client, each inside an existence test (production never had `create_sale_unchecked`, `create_employee_core`, `purge_shop_data` or `marketplace_distance_km`), and raises if any is still reachable. Its list is not hand-maintained — `tests/unit/writeRpcAnonGuard.test.ts` reads the ledger's own server-only set and fails on a drift in either direction. |
 | `0218_permission_overrides_stay_in_their_shop.sql` | **Shop-isolation fix — verified PASS in the 24-file batch on production's baseline, 452 statements, 0 sql failures** (2 statements). `user_permissions` carries no tenant column, and its insert/delete policies asked only "is the caller an admin", so an admin of shop A could write a permission override for a person in shop B — effective the next time that person acted there. All three policies now require the target to have a membership in `current_shop_id()`; self-reads are unchanged, and the RPC path (`update_employee_access` → `guard_employee_access_edit`) already matched. The file asserts that no client write policy on the table names no shop. |
 | `0219_the_people_table_is_its_own_shop.sql` | **Shop-isolation fix — verified PASS in the same 24-file batch** (2 statements). Production measured `users` among its fourteen always-true permissive policies, which is what let an admin edit a person outside their shop there; `0216` closed only the unauthenticated half. This file drops any policy on `public.users` whose expression is exactly `true` (and nothing else), then installs `users_select`/`users_insert`/`users_update` with the shop predicate the tracked model already carries, plus `id = app_current_user_id()` so a person can always reach their own row. `prevent_role_escalation` is untouched. It raises if an always-true policy survives. |
+| `0220_the_rows_the_membership_model_needs.sql` | **Data completion for the model `0207` created schema-only — measured on production, dry-run there inside a transaction, then applied** (1 statement). Production had 1 shop, 4 users with `shop_id`, and **0** memberships / branches / roles / permissions after the schema batch, so every `authorize_business_action` refused. Idempotent and additive: the `0106` permission catalogue, one default branch per shop that has users and none, the four canonical role templates matched by `(tenant_id, name)`, and one membership per user **in that user's own `users.shop_id`** — owner for the original owner, `admin` + Store Manager for the other admins, `employee` + Sales Employee for the rest. It asserts one membership per user, a role and scope on every non-owner, and an active branch on every shop with users, and — in the repository body only — that the rows it inserted name the user's own shop. **APPLIED 2026-10-17T15:00:49Z**, sha256 `f4c0cba2…`; the repository body is `9817e2aa…` and differs in its assertions alone (§5.2). Measured after: 4 memberships, 4 roles, 32 permissions, 1 branch — and the branch data gap this creates is §5.1. |
+| `0221_the_tables_0208_created_are_not_open.sql` | **Closes the exposure the restore check found — applied** (1 statement). `0208` created `product_barcodes`, `barcode_registry`, `barcode_history`, `incidents`, `incident_rate_limits` and `incident_signatures` from ledger shapes; their RLS lived in `0072`/`0158`/`0160`, which production never received, so after the batch all six had `relrowsecurity = false`, **0 policies** and `anon` + `authenticated` holding SELECT/INSERT. `restore-verify` caught it as a structure mismatch and the gate refused the next apply, so the six `ALTER TABLE … ENABLE ROW LEVEL SECURITY` statements were run as an owner-authorized correction to break the deadlock, then re-issued here and recorded in the ledger. No policy is created on purpose: the client reaches these tables only through `product_barcodes_for` and `record_incident`, both SECURITY DEFINER. Grants are untouched; RLS with no policy denies by default. **APPLIED 2026-10-17T15:00:50Z**, sha256 `36d88d04…`; measured after: `relrowsecurity = true` and 0 policies on all six. |
+| `0222_operational_rows_learn_their_branch.sql` | **The root cause of the empty screens — verified PASS on production's 2026-10-01 baseline, rehearsed on production inside a rolled-back transaction, then APPLIED 2026-10-17T16:32:33Z** (2 statements). Backfills every NULL `branch_id` from the row's own shop's active branch (never "the first branch", which is the mistake `0118` made) across sales, purchases, returns, stock adjustments, customer/supplier payments, inventory movements and notifications, then installs one BEFORE INSERT trigger that stamps `current_branch_id()` on every operational table. The trigger is the part that matters for the future: `create_sale_unchecked` and its siblings never wrote `branch_id`, so backfilling alone would have fixed the past and left the next sale invisible. Every statement is guarded by `information_schema`, because the frozen baseline predates the column. Measured after: 52/52 sales, 0 NULL branches, 9 triggers installed. |
+| `0223_an_unauthenticated_caller_reads_no_business_table.sql` | **Closes the anon read exposure — verified PASS, rehearsed, APPLIED 2026-10-17T16:32:34Z** (2 statements). Measured before: the anon key read sales 52, customers 6, products 6, companies 4, users 4 and memberships 4, because 42 tables carried an `anon` grant and 38 carried a permissive policy whose predicate was the literal `true` (the `0022` demo-era `*_select_anon` / `public_all_*` set). Every permissive policy naming `public` or `anon` is retargeted to `authenticated` — predicate untouched — and every table, view, materialised view and sequence in `public` is revoked from `anon`. Pre-session flows use SECURITY DEFINER RPCs (`lookup_user_by_phone`, `get_my_shop_request`, `resolve_invite`, `insert_shop_request`), which are functions and are unaffected. Measured after: **0 anon table privileges, 0 policies naming anon or public**, `set role anon; select from sales` → `permission denied`. |
+| `0224_the_three_write_rpcs_a_caller_could_not_call.sql` | **The write path itself — verified PASS, rehearsed end to end on production inside a rolled-back transaction, APPLIED 2026-10-17T16:36Z** (27 statements). Found by trying to create a sale as the owner: `ERROR: column "payload" does not exist`. Three of the eight write RPCs — `create_sale`, `create_purchase`, `adjust_stock` — take `p_payload` and had `0213`'s textual guard splice inserted as `guard_operational_request(…, payload)`, which compiles and fails on the first call. Production's `create_sale` was also the pre-`0134` body with no idempotency wrapper, and `sale_submissions` (the idempotency ledger) had never been created there. The file drops each mis-parameterised signature and installs the body staging has been exercised against, creates `sale_submissions` with its deny-all policy, adds the `purchases.amount_due/status/notes/recorded_by/due_date` and `purchase_items.unit_price/base_unit` columns the UI reads, and makes the legacy `sales.customer_name NOT NULL` nullable (the working body writes `customer_name_snapshot`). Rehearsed after: sale created with `branch_id` stamped, movement stamped, owner sees 1, purchase created, stock adjustment applied — then rolled back. |
+| `0225_the_idempotency_ledger_is_not_addressed_to_anon.sql` | **One-role narrowing — verified PASS, APPLIED 2026-10-17T16:39Z** (1 statement). `0224` copied `sale_submissions`' deny-all policy from staging, where it is addressed to `anon, authenticated`; `0223` had just established that no policy in `public` names either. The policy is recreated `to authenticated` only. The predicate is unchanged and still `false`; narrowing only. Measured after: 0 policies naming anon or public. |
+| `0226_the_trigger_function_is_named_where_it_is_retired.sql` | **Keeps the retirement guard honest — verified PASS, APPLIED 2026-10-17T16:44Z** (1 statement). `0222` revokes EXECUTE on `stamp_operational_branch()` from every API role; `tests/unit/writeRpcAnonGuard.test.ts` compares the ledger's server-only set with the names declared inside migrations, and `0217`'s array cannot be edited because it is applied. The file declares the new name in the same `v_server_only constant text[]` shape and asserts it is unreachable; the guard now unions every such declaration instead of reading `0217` alone, so a future retirement cannot appear without its name. |
+| `0228_the_reminder_tables_the_app_actually_queries.sql` | **The columns the client names, and the boundaries those tables never had — verified PASS on production's 2026-10-01 baseline (6 statements, 0 failures), rehearsed on production in a rolled-back transaction (9/9), then APPLIED 2026-10-17, immediately after the 17:42Z backup that the gate required.** (6 statements). Found by `node scripts/audit-app-surface.mjs --env production`, which reads the client's own `.from(x).select(…)` and `supabase.rpc(…)` calls in `src/` and asks the live database for them: `business_settings.setting_value` (and the `setting_key` its query filters on), `customer_crops.acreage/planting_date/expected_harvest`, `reminder_configs.group_id/group_name` — six columns, none of them present, so the crop-based reminders were silently empty and PostgREST answered **400** to the crops read once per customer row. The same call measured three permissive policies (`business_settings_all`, `customer_crops_all`, `reminder_configs_all`, plus `customer_crops_select_anon`/`_insert_anon`) whose predicate was the literal `true` or absent: 0223 could retarget those to `authenticated` but could not scope them, so any signed-in user could read and write any shop's crops and reminder schedules. This file adds the columns (additive, nullable/defaulted, `shop_id` defaulting to `current_shop_id()` so the app's own insert — which sends no shop — is still scoped), replaces every policy on the three tables with shop-scoped ones, and asserts both the columns and that no always-true policy survives. Guarded on `to_regclass`, `information_schema` and the presence of `current_shop_id()`, because the frozen baseline predates all of it. Rehearsed after: `loadBusinessSettings()` reads the existing crops row back, `saveBusinessSettings()` updates it, a first-time setting is inserted and stamped with the shop, `customer_crops` accepts and returns the three columns, `reminder_configs` accepts a group and stamps its shop — 9/9, nothing left behind. |
+| `0229_the_return_mirror_is_named_where_it_is_retired.sql` | **Keeps the retirement guard honest for `0227`/`0228`'s trigger function — verified PASS, APPLIED 2026-10-17** (1 statement, 0 sql failures). `0227` and `0228` install `return_items_mirror_qty()` and revoke EXECUTE on it from `public, anon, authenticated`; `tests/unit/writeRpcAnonGuard.test.ts` compares the ledger's server-only set with the names declared inside migrations, in both directions, and neither applied file can be edited. This file declares the name in the same `v_server_only constant text[]` shape `0217` (for the write surface) and `0226` (for `stamp_operational_branch`) use — the third time a retirement has had to be named after the fact, which is why the guard reads every declaration in the directory rather than one file. |
+| `0227_returns_store_their_quantity_and_voids_can_finish.sql` | **Two defects only a real flow could find — verified PASS on production's 2026-10-01 baseline (5 statements, 0 failures), rehearsed on production inside a rolled-back transaction, then APPLIED 2026-10-17, after the 16:58Z baseline verification.** Found by driving the four flows (`rehearsal: a credit sale → customer payment → return → void → credit purchase → supplier payment`) rather than a smoke test: (1) `process_return` finished its writes and then failed on `null value in column "qty" of relation "return_items"` — production carries a legacy `qty` (NOT NULL, no default) beside the `qty_to_return` the function writes, and it is `qty` the sale-detail and return-select screens read, so a return would have failed *and*, had it got past the constraint, displayed zero returned units; the file installs a `return_items_mirror_qty_trg` BEFORE INSERT/UPDATE trigger that keeps the legacy column equal to the real quantity, and brings existing rows into step. (2) `void_sale` raised `relation "activity_log" does not exist` — production's body was the pre-`0145` one, restoring product rather than variant stock, ignoring quantities already returned, writing a row for a table production never received and recording no `voids` row; the file replaces the body in place with the one the app has been exercised against, which authorises `sales.void`, restores only the unreturned quantity to the variant, writes the movement, reverses the customer's outstanding balance and purchases, records the void and an audit event. Both fixes are conditional on the columns existing, because staging has only `qty_to_return`. Measured after, through the RPCs as the owner, in one rolled-back transaction: sale → payment 50 of 200 → return 1 unit (restocked, `qty` reads 1.0000) → void (stock restored, `voids` row written, `is_voided`) → credit purchase (payable 150) → supplier payment 50 → payable 100, with 0 rows left behind. |
 
 **The defect that made closure 3 necessary — a closure that widened while it narrowed.** `0215`'s first
 form revoked `PUBLIC, anon` from the whole write surface — and then granted `authenticated`
@@ -303,6 +318,84 @@ from the ledger's server-only set — its list read from the ledger by
 across the batch: nothing widened; `0215`'s grant exists only between two files of one owner-run batch,
 never on an end state.
 
+
+### 5.1 Measured after the apply (2026-10-17, 15:04–15:22Z) — the ledger is right, the data model is not
+
+| Question | Measured |
+|---|---|
+| Ledger | **34 rows, latest `0221`**; 26 file rows, **25 hashes match**; `0220` is the one difference (§5.2) |
+| The rows `0220` exists to create | shops 1 · users 4 · branches 1 · permissions 32 · roles 4 (29/12/12/6) · memberships 4 · user_active_shops 4, every membership in the user's own shop |
+| Authorization | owner 32 permissions, `sales.view` allowed; Store Manager 29, `sales.create` allowed and `employees.manage` refused; employee 6, `reports.view` refused; `anon` cannot execute `authorize_business_action` |
+| The six tables `0221` closed | `relrowsecurity = true`, 0 policies on all six — deny-by-default, definer RPCs unaffected |
+| **`branch_id` on existing rows** | **NULL on every branch-scoped row**: sales 52/52, inventory_movements 17/17, stock_adjustments 13/13, supplier_payments 2/2, customer_payments 1/1, returns 1/1, notifications 51/51 |
+| **Rows each role can see** | owner, Store Manager and employee see **0 of 52 sales** (`branch_id = ANY(current_branch_scope())` is not true for NULL); `anon` sees **52** through the pre-existing `sales_select` policy |
+| `anon` reach | reads `sales` 52, `customers` 6, `products` 6, `permissions` 32; holds INSERT **grants** on the six `0207` relations (RLS denies today, no permissive insert policy) |
+| Always-true permissive policies | **11 left**, on 8 tables (`companies`, `customers`×2, `products`×2, `sales`×2, `purchases`, `inventory_movements`, `shop_requests`, `shops`) |
+
+**The blocker, stated plainly:** the branch model arrived before any row belonged to a branch. Every
+signed-in screen that reads sales, purchases, returns, stock adjustments or supplier payments is empty on
+production, while an unauthenticated caller can read the sales. The fix is a forward file that attaches
+NULL `branch_id` rows to the shop's single active branch and asserts none remains — it is **not applied**,
+and the read-only credential means it cannot be applied from here. Nothing was weakened to make any gate
+pass; the finding is reported instead.
+
+### 5.2 `0220`'s repository body differs from the applied body in its assertions only — RESOLVED 2026-10-17T16:32:09Z
+
+The file was corrected after it was applied, because the version production received refuses to run on
+staging's data (two multi-shop owners, two pending invitations — both supported states). The correction was
+made before that was noticed. Applied `f4c0cba2…` (11,192 bytes) vs the then-repository `9817e2aa…`
+(12,469 bytes): the declare block, a `GET DIAGNOSTICS` that records what the file itself inserted, and the
+two narrow assertions that use it. No `insert`, no `update`, no DDL, no loop differed — reconstructing the
+applied body from the repository file reproduced `f4c0cba2…` byte for byte.
+
+**How it was resolved, without rewriting history.** The repository file was rebuilt from
+`schema_migrations.statements` — the exact statement production ran — and only its comments changed. The
+ledger's file hash was then re-recorded against those bytes (`270c81c1…`, 12,462 bytes) with
+`reconciled_at = 2026-10-17T16:32:09.913Z` and a `reconcile_note` naming the earlier hash and the reason.
+That is the tool's own `reconcile` contract, applied to the one database whose ledger it concerns: the
+statements do not change, `applied_at` is untouched, and nothing is hidden. The narrower assertion variant
+was not kept in the repository: a from-scratch replay has no pre-existing membership, so the wide form is
+the correct one there, and staging already has the file applied. `reconcile` cannot be run through
+`migrate --env production` (that mode is refused by design), so the same `UPDATE` it performs was executed
+once, in a transaction, after asserting the file contained the applied statements verbatim.
+
+### 5.3 Measured after the second apply (2026-10-17T16:32–16:45Z)
+
+| Question | Measured |
+|---|---|
+| Ledger | **42 rows, latest `0229`**; `0220`–`0229` recorded against the files on disk (`0227` 5 statements, `0228` 6 statements, `0229` 1 statement — each verified PASS on production's baseline, rehearsed in a rolled-back transaction where it changes anything, and applied through the gate) |
+| `branch_id` | **0 NULL** across sales, movements, adjustments, payments, returns and notifications; 9 stamp triggers installed |
+| Write path | `create_sale` as the owner: sale and movement created with `branch_id = d717d974…`, owner sees it, rolled back; `create_purchase` and `adjust_stock` succeed the same way |
+| `anon` | 0 table privileges, 0 policies; `set role anon; select from sales` → `permission denied` |
+| Test transactions | **0 rows** in sales, sale_items, returns, customer/supplier payments, purchases, movements, adjustments, notifications, audit; customer balances, stock and supplier payables all 0 |
+| Configuration | shops 1 · branches 1 · users 4 · memberships 4 · permissions 32 · roles 4 |
+| Reversibility | pre-purge backup `backup-production-gkswcfljxlutkfdvvqng-2026-10-17T16-28-09` restored into PGlite and compared with production: integrity, replay, counts, structure, digests and auth all PASS; the `0227` apply was gated the same way (backup `…-17-02-56`, restored and compared PASS first) |
+| The four flows, driven for real (after `0227`) | `rehearsal: node device-evidence/tmp/flow-test-production.mjs` — as the owner, inside one rolled-back transaction: credit sale sets the balance 200 → `record_customer_payment` 50 → balance 150, total_paid 50; `process_return` on a second sale (1 unit, restocked, `return_items.qty` reads 1.0000 — the column the screens read) → `void_sale` on a third (stock restored, `voids` row written, `is_voided`, `voided_at`) → credit purchase payable 150 → `record_supplier_payment` 50 → payable 100. **7/7 PASS, 0 rows left behind.** |
+| The client's own view of the schema | `node scripts/audit-app-surface.mjs --env production` asked production for every simple `.from(x).select(a,b)` and every `supabase.rpc(name)` in `src/`: **before `0228` six columns the app names did not exist and three permissive policies were live; after it, PASS — 0 missing columns, 0 missing RPCs.** The browser agreed: the crops read that came back **400** on every customer row (`business_settings?select=setting_value&setting_key=eq.crops`) now answers **200, with no console errors on the customers or reminders screens.** |
+| Isolation, demonstrated rather than asserted | `npm run probe:isolation` (QA, two real shops with their own owners, one rolled-back transaction): 26/26 checks — each session resolves `current_shop_id()` to one shop; neither can read, count or change the other's sale, product or person; a cross-shop `create_sale` is refused; a cross-shop permission override is refused by RLS; and a user who genuinely belongs to **both** shops still sees only the shop the session resolved to. Production has one shop, so this cannot be shown there — the two-shop proof belongs to QA, and the production evidence is the policy/grant state above. |
+
+### 5.4 Line endings: four recorded hashes re-based on the repository's own form (2026-10-17)
+
+`.gitattributes` declares `*.sql` as `text eol=lf`, so the canonical repository form is LF. Four of the
+files written during this work (`0222`, `0224`, `0225`, `0227`) were written with CRLF in this Windows
+working copy, and `schema_migration_files` recorded the hash of *those* bytes — which a fresh checkout
+cannot reproduce, because git normalises them to LF on commit. Nothing had changed in what production
+ran; the recorded identity of the file had.
+
+Measured before the change: 0222 `29f78a07…`/11915B, 0224 `9b6f22c4…`/19666B, 0225 `e1d9002b…`/2458B,
+0227 `f5bab8da…`/8874B — all four CRLF-derived. For each file the four steps were: rewrite the working
+copy with LF endings, split both the file and `schema_migrations.statements` with the project's own
+splitter, normalise line endings on both sides, and compare — *identical, in order* (2/27/1/5
+statements). Only then was `sha256`/`bytes` re-recorded, in one transaction, with `reconciled_at` and a
+`reconcile_note` that says what changed and that the statements did not; `applied_at` untouched. New
+hashes: `d6de5592…`, `19a099b9…`, `e4a15105…`, `7ae62fbd…`.
+
+`scripts/measure-production-final-state.mjs` now asserts the property itself, for every file: the ledger
+row's `sha256` and `bytes` must equal the file on disk (221 files checked, 0 drifted), and every
+batch-era apply must carry both its statements and its file row (42 statements · 34 file rows · the 8
+rows below `0017` are production's out-of-band setup and predate the tooling). That check is why this
+was found at all: the plan's old claim — "hashes match the files on disk" — was true on the machine
+that wrote them and false on any other checkout.
 
 ## 6. Backward-compatibility rules (binding on every batch)
 

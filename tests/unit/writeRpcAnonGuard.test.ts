@@ -233,13 +233,34 @@ function ledgerServerOnly(): string[] {
 
 // Deliberately `describe`, not `suite`: this half reads the repository, not the baseline artifact, so it
 // must run everywhere — including CI, where the gitignored snapshot is absent and the PGlite half skips.
+//
+// The declaration is looked for in EVERY migration, not just `0217`. `0217` is applied and cannot be
+// edited, so the next function a later file retires (the first is `0222`'s branch-stamp trigger, named
+// in `0226`) had no way to enter the list — and an undeclarable retirement is a check that silently
+// stops covering the newest function in the ledger. The union is compared in both directions, exactly
+// as before: a name declared twice is harmless, a name retired but undeclared fails, and a name
+// declared but not retired fails.
+const SERVER_ONLY_DECLARATION = /v_server_only constant text\[\] := array\[([\s\S]*?)\];/g;
+
+function declaredServerOnly(): string[] {
+  const names: string[] = [];
+  const dir = path.join(ROOT, 'supabase/migrations');
+  for (const file of fs.readdirSync(dir).filter((f) => f.endsWith('.sql'))) {
+    const sql = fs.readFileSync(path.join(dir, file), 'utf8');
+    for (const block of sql.matchAll(SERVER_ONLY_DECLARATION)) {
+      for (const name of block[1].matchAll(/'([a-z_0-9]+)'/g)) names.push(name[1]);
+    }
+  }
+  return [...new Set(names)].sort();
+}
+
 describe('the correction names exactly what the ledger retires', () => {
   it('matches the ledger’s server-only set, in both directions', () => {
     const sql = fs.readFileSync(path.join(ROOT, RETIRED), 'utf8');
     const block = /v_server_only constant text\[\] := array\[([\s\S]*?)\];/.exec(sql);
     expect(block, 'the array this test reads has moved — point the guard at its new shape').toBeTruthy();
-    const unique = [...new Set([...block![1].matchAll(/'([a-z_0-9]+)'/g)].map((m) => m[1]))].sort();
-    expect(unique.length, 'the file must name the server-only set, not a subset').toBeGreaterThan(0);
+    const unique = declaredServerOnly();
+    expect(unique.length, 'the files must name the server-only set, not a subset').toBeGreaterThan(0);
     expect(unique).toEqual(ledgerServerOnly());
   });
 

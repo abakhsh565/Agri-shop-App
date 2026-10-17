@@ -33,6 +33,27 @@ import {
 describe('migrations are replayable', () => {
   const dir = path.resolve(process.cwd(), 'supabase/migrations');
 
+  /**
+   * The shapes the guard must never flag: a bare PL/pgSQL block keyword is a COMPLETE statement, so the
+   * line after it starting lower-case is normal code, not a split identifier. `loop` and `else` are four
+   * lower-case letters and were false positives the moment a migration used a multi-line `for … loop` or
+   * `if … else` — measured on `0220` and `0221`, which are applied to production and cannot be reflowed
+   * to satisfy a heuristic. Narrowing the rule is the fix; the sample below keeps it non-vacuous.
+   */
+  const BLOCK_KEYWORDS = new Set(['loop', 'else', 'then']);
+  const splitsIdentifier = (current: string, next: string) =>
+    /^[a-z]{1,4}$/.test(current) && !BLOCK_KEYWORDS.has(current) && /^[a-z]/.test(next);
+
+  it('the split-identifier rule still catches the shape it exists for', () => {
+    // The exact 0012 defect, and one near miss that must stay caught.
+    expect(splitsIdentifier('o', 'utstanding_payable = outstanding_payable + v_payable')).toBe(true);
+    expect(splitsIdentifier('nul', 'l::text')).toBe(true);
+    // …and the block keywords that are legitimate on a line of their own.
+    for (const keyword of BLOCK_KEYWORDS) expect(splitsIdentifier(keyword, 'select 1')).toBe(false);
+    // …and anything outside that closed list is still judged on the original rule.
+    expect(splitsIdentifier('o', 'ther')).toBe(true);
+  });
+
   it('no migration splits an identifier across a line break', () => {
     const files = fs.readdirSync(dir).filter((f) => f.endsWith('.sql'));
     expect(files.length).toBeGreaterThan(0);
@@ -44,8 +65,7 @@ describe('migrations are replayable', () => {
       for (let i = 0; i < lines.length - 1; i++) {
         const current = lines[i].trim();
         const next = lines[i + 1].trim();
-        if (!/^[a-z]{1,4}$/.test(current)) continue;
-        if (!/^[a-z]/.test(next)) continue;
+        if (!splitsIdentifier(current, next)) continue;
         offenders.push(`${file}:${i + 1} — a bare "${current}" ends the line, then "${next.slice(0, 40)}" continues it`);
       }
     }
