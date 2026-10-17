@@ -65,6 +65,13 @@ import {
   readMigrationDirectory,
 } from './lib/migrations.mjs';
 import { splitStatements } from './lib/sql-statements.mjs';
+import { rehearseBatchData } from './lib/data-rehearsal.mjs';
+import {
+  describeFingerprints,
+  diffFingerprints,
+  fingerprintDatabase,
+  parseApprovals,
+} from './lib/data-fingerprint.mjs';
 import { FRESHNESS_WINDOW_MINUTES, describeGate, productionBatchGate } from './lib/production-batch-gate.mjs';
 import {
   ROOT,
@@ -107,6 +114,9 @@ if (has('help') || args.includes('-h') || args.length === 0) {
       '  --verification <f> production apply only: the PASS verify:baseline report for that batch',
       '  --backup <f>       production apply only: the manifest of the backup taken just before',
       '  --restored <f>     production apply only: the restore-verify report proving that backup',
+      '  --data-change <t>  production apply only: tables this batch is ALLOWED to change (comma',
+      '                     separated). Without it, a batch that moves a user-owned row is refused, in a',
+      '                     rehearsal that is always rolled back, before production is written.',
     ].join('\n'),
   );
   process.exit(args.length === 0 ? 2 : 0);
@@ -818,6 +828,25 @@ async function objectsPresentAfterRollback(target, entry) {
 }
 
 /**
+ * Apply a batch inside a transaction that is ALWAYS rolled back, and compare the data on both sides.
+ *
+ * This is the only way to know what a migration does to rows *before* it does it for real. The batch
+ * is executed against production inside `BEGIN … ROLLBACK`, the protected tables are fingerprinted
+ * on both sides of that transaction, and any table that moved without being named in `--data-change`
+ * stops the run with production untouched. An additive column is invisible here by construction (the
+ * digest is taken over the columns that existed before), so a safe schema change is not refused for
+ * looking different.
+ */
+async function rehearseBatch(entries, approvedTables) {
+  return rehearseBatchData({
+    target,
+    entries,
+    approvedTables,
+    readFile: (entry) => fs.readFileSync(path.join(dir, entry.filename), 'utf8'),
+  });
+}
+
+/**
  * `apply --env production` — the single exception to the blanket refusal, and the only code path in
  * this repository that writes to production.
  *
@@ -862,6 +891,53 @@ async function runProductionApply() {
     );
     return 0;
   }
+
+  const approvals = parseApprovals(flag('data-change'));
+  if (approvals.unknown.length) {
+    return fail(
+      `--data-change names table(s) this tool does not protect: ${approvals.unknown.join(', ')}. ` +
+        'Names are checked so a typo cannot silently approve the wrong table. Nothing was written.',
+    );
+  }
+
+  console.log('\n  Rehearsing the batch against production inside a transaction that will be rolled back…');
+  const rehearsal = await rehearseBatch(gate.toApply, approvals.names);
+  result.rehearsal = {
+    ok: false,
+    approvedTables: approvals.names,
+    error: rehearsal.error,
+    changed: rehearsal.diff?.changed ?? [],
+    allowedChanges: rehearsal.diff?.allowedChanges ?? [],
+    unexpected: rehearsal.diff?.unexpected ?? [],
+    before: rehearsal.before,
+    after: rehearsal.after,
+  };
+
+  if (rehearsal.error) {
+    return fail(
+      `the batch could not be rehearsed, so its effect on data is unknown: ${rehearsal.error}\n` +
+        '  Nothing was written (the rehearsal was rolled back). Fix the statement before applying.',
+    );
+  }
+  if (!rehearsal.diff.ok) {
+    return fail(
+      'the batch changes rows it was not approved to change. Production was NOT written; the rehearsal\n' +
+        '  was rolled back. Per-table movement:\n' +
+        describeFingerprints(rehearsal.before, rehearsal.after)
+          .split('\n')
+          .map((line) => `    ${line}`)
+          .join('\n') +
+        '\n  If this change is intended, name exactly the tables it may touch:\n' +
+        `    --data-change ${rehearsal.diff.unexpected.join(',')}\n` +
+        '  Anything not named must move by zero rows.',
+    );
+  }
+  result.rehearsal.ok = true;
+  console.log(
+    `    rehearsal holds: ${Object.values(rehearsal.before).filter((f) => f.count !== null).length} table(s) fingerprinted, ` +
+      '0 unexpected row changes' +
+      (rehearsal.diff.allowedChanges.length ? `, approved changes: ${rehearsal.diff.allowedChanges.join(', ')}` : ''),
+  );
 
   await ensureLedger(target);
   const applied = [];
@@ -927,6 +1003,26 @@ async function runProductionApply() {
         'does not record them, which is exactly the state this tool exists to prevent.',
     );
   }
+
+  // The rehearsal predicted the row-level effect; this checks that what committed is that effect and
+  // not something the rehearsal could not see (a trigger firing only outside a rolled-back block, a
+  // sequence that advanced, an ON CONFLICT path taken differently).
+  const appliedFingerprints = await fingerprintDatabase((sql, params = []) => target.query(sql, params), {
+    previous: rehearsal.before,
+  });
+  const drift = diffFingerprints(rehearsal.after, appliedFingerprints, []);
+  result.dataAfterApply = { matchesRehearsal: drift.ok, changed: drift.changed, missing: drift.missing };
+  if (!drift.ok) {
+    console.log(describeFingerprints(rehearsal.after, appliedFingerprints));
+    return fail(
+      'the applied batch changed rows differently from its rehearsal: ' +
+        `${[...new Set([...drift.changed, ...drift.missing])].join(', ')}. The batch is recorded and applied; ` +
+        'this is a data-integrity alarm, not a retry. Compare the two fingerprints in the report before touching production again.',
+    );
+  }
+  console.log(
+    '  Data after apply matches the rehearsal exactly: every protected table is where the rehearsal said it would be.',
+  );
   return 0;
 }
 

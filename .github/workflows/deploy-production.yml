@@ -1,0 +1,91 @@
+name: Deploy production — only a gated commit
+
+# WHY THIS FILE EXISTS
+#
+# Production used to go live from a push to `main`, with nothing between the push and the users: the
+# live commit on 2026-10-16 (`7d19c25`) was promoted at 15:18:55Z while its own CI run was still
+# starting, and that run failed 14 minutes later. Vercel's git integration cannot wait for a check, and
+# this repository's plan has no branch protection, so the wait has to live here.
+#
+# Two halves, and both are required:
+#
+#   * `vercel.json` sets `git.deploymentEnabled.main = false` — a push to `main` no longer deploys.
+#   * this workflow asks Vercel to build one exact commit, after the CI workflow concluded `success`
+#     for that same commit, while that commit is still `main`'s head.
+#
+# The decision itself is `scripts/lib/deploy-gate.mjs` (pure, unit-tested, exits 2 on refusal), and the
+# request is `scripts/deploy/trigger-production.mjs`. If `VERCEL_TOKEN` or `VERCEL_PROJECT_ID` is
+# missing the script refuses and nothing is deployed: a missing credential is never a reason to fall
+# back to the git integration.
+#
+# Required configuration (repository secrets/variables):
+#   secret   VERCEL_TOKEN         a Vercel token that may create deployments for this project
+#   variable VERCEL_PROJECT_ID    prj_tWZoyuctxYUj6RiA60q1d3ZACK52
+#   variable VERCEL_TEAM_ID       team_pNyiPYZgdGx5L8CvqMaPL3ai
+#
+# A dispatch exists for a re-deploy or a manual gate check. It is not an override: the script reads the
+# CI run for the named commit and refuses unless that run concluded `success`.
+
+on:
+  workflow_run:
+    workflows: ['CI — gates for a candidate commit']
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: 'Commit to deploy (must have a successful CI run and be main’s head)'
+        required: true
+        type: string
+      dry_run:
+        description: 'Decide and print only — do not ask Vercel to deploy'
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy the gated commit
+    # The failed-gate behaviour is this line: a CI run that did not conclude `success` never enters
+    # the job at all. A dispatch enters it, and the script applies the same rule to the named commit.
+    if: >
+      (github.event_name == 'workflow_run' &&
+        github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.head_branch == 'main') ||
+      github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout the gated commit
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || inputs.sha }}
+          fetch-depth: 1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: Decide, and deploy only if the gate passes
+        # No soft-fail flag and no fallback to the git integration: a refusal here is the intended
+        # outcome for a red, stale or unattributed candidate.
+        env:
+          DEPLOY_EVENT: ${{ github.event_name }}
+          CI_CONCLUSION: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.conclusion || '' }}
+          GATED_BRANCH: main
+          GATED_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || inputs.sha }}
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && '1' || '0' }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
+          VERCEL_TEAM_ID: ${{ vars.VERCEL_TEAM_ID }}
+        run: node scripts/deploy/trigger-production.mjs

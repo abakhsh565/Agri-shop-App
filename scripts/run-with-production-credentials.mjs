@@ -89,6 +89,7 @@ const ALLOWED_SCRIPTS = [
   'scripts/audit-app-surface.mjs',
   'scripts/measure-production-acls.mjs',
   'scripts/measure-production-final-state.mjs',
+  'scripts/data-fingerprint.mjs',
   'scripts/purge-production-test-transactions.mjs',
   'scripts/clean-production-demo-data.mjs',
   'scripts/attach-production-owner.mjs',

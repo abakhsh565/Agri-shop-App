@@ -496,6 +496,8 @@ never by editing the old one. The ledger rows for each applied file are written 
 as the file itself, and after the batch production's own ledger is read back: a file that ran without a
 row fails the run.
 
+**The rows are checked as well (2026-10-18).** Every production apply first runs the whole batch inside `BEGIN … ROLLBACK` — `scripts/lib/data-rehearsal.mjs`, the same function the local-stack probe exercises — and fingerprints 32 protected tables (`scripts/lib/data-fingerprint.mjs`: accounts, memberships, customers, catalogues, stock, every transactional table, the derived balances and `storage.objects`). Each digest is taken over the columns that existed *before* the batch, so an additive column is invisible while an UPDATE, DELETE or INSERT is not. A table that moves without being named in `--data-change <tables>` stops the run with production untouched; a named one is recorded as an approved change, with both digests in the report. After the real apply the tables are fingerprinted again and compared with the rehearsal: if the committed effect differs, the run fails as a data-integrity alarm. `scripts/data-fingerprint.mjs` is the read-only way to take the same measurement outside an apply.
+
 **Two things this deliberately does not do.** It does not extend the credential intake to the apply: the
 allow-list in `scripts/run-with-production-credentials.mjs` hands the production password only to the
 three commands that read production and write **nothing** (backup, restore-verify, ACL measurement), and
