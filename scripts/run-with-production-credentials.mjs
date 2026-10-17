@@ -55,16 +55,33 @@ const args = process.argv.slice(2);
  *   restore-verify    reads the artifact and compares it with production
  *   measure-production-acls  reads `pg_class` / `pg_policy` / `pg_proc` inside a READ ONLY
  *                     transaction and prints what `anon` and `authenticated` actually hold
+ *   purge-production-test-transactions
+ *                     the owner-authorized removal of the demo tenant's test transactions,
+ *                     dry-run unless the exact confirmation token is passed, and committed only if
+ *                     its own invariants hold.
+ *   migrate            `apply --env production --files <named batch>` and nothing else. It is not
+ *                     trusted here: `scripts/lib/production-batch-gate.mjs` refuses it before a
+ *                     credential is resolved unless the batch is named, a PASS report against
+ *                     production's baseline is minutes old, and a restored backup of that same
+ *                     artifact exists. The wrapper's job is to carry the password to that gate,
+ *                     not to be a second, weaker gate of its own.
  *
- * The last one was added because the question it answers had never been measured: the baseline
- * artifact carries no GRANT at all, so no rehearsal can say what production already grants. Adding it
- * does not widen what the credential can do — it is a third reader, and every other command is still
+ * The two writers were added on 2026-10-17 under the owner's authorization, because a credential
+ * that can only read cannot carry out a decision the owner has made. Every other command is still
  * refused before a credential is read (`npm run verify:credentials` asserts that with a canary).
+ *
+ * The ACL reader was added because the question it answers had never been measured: the baseline
+ * artifact carries no GRANT at all, so no rehearsal can say what production already grants.
  */
 const ALLOWED_SCRIPTS = [
   'scripts/backup-database.mjs',
   'scripts/restore-verify.mjs',
+  'scripts/audit-app-surface.mjs',
   'scripts/measure-production-acls.mjs',
+  'scripts/measure-production-final-state.mjs',
+  'scripts/purge-production-test-transactions.mjs',
+  'scripts/rehearse-production-flows.mjs',
+  'scripts/migrate.mjs',
 ].map((p) => path.join(ROOT, p));
 
 function flag(name, fallback = null) {
