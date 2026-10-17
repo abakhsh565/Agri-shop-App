@@ -59,6 +59,11 @@ const args = process.argv.slice(2);
  *                     the owner-authorized removal of the demo tenant's test transactions,
  *                     dry-run unless the exact confirmation token is passed, and committed only if
  *                     its own invariants hold.
+ *   clean-production-demo-data
+ *                     the owner-authorized removal (2026-10-18) of the seeded demo identities, their
+ *                     logins and the catalog they created. Rehearses unless `--apply` is passed;
+ *                     refuses unless `public.users` is exactly the four seeded rows and every
+ *                     transaction table is empty.
  *   migrate            `apply --env production --files <named batch>` and nothing else. It is not
  *                     trusted here: `scripts/lib/production-batch-gate.mjs` refuses it before a
  *                     credential is resolved unless the batch is named, a PASS report against
@@ -80,6 +85,7 @@ const ALLOWED_SCRIPTS = [
   'scripts/measure-production-acls.mjs',
   'scripts/measure-production-final-state.mjs',
   'scripts/purge-production-test-transactions.mjs',
+  'scripts/clean-production-demo-data.mjs',
   'scripts/rehearse-production-flows.mjs',
   'scripts/migrate.mjs',
 ].map((p) => path.join(ROOT, p));

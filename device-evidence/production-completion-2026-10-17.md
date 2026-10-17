@@ -149,7 +149,10 @@ now carries the assertion for every file: **221 checked, 0 drifted**, 42 stateme
    that can receive it. *Action needed: sign in yourself on a real number and tell me the screens you
    want walked, or confirm an SMS provider is configured and give me a number to use.* Nothing in the
    sign-in path was changed or bypassed.
-2. **Two leftover identities that will look like a real user's.** `public.users` still holds
+2. **RESOLVED 2026-10-18** — the identities below were removed, with their logins and the catalog
+   they created, by `scripts/clean-production-demo-data.mjs` after a rehearsal and a verified
+   backup. Evidence: `production-demo-identities-removed-2026-10-18.md`. The original finding is
+   kept verbatim: **Two leftover identities that will look like a real user's.** `public.users` still holds
    `Test QA User` (`923001999999`, admin) and the demo pairs `Yaqoob Malik`/`923001234567` and
    `Akram`/`923001122334`, and `auth.users` holds two identities whose phones are those demo numbers.
    They are configuration, not transactions, so the earlier cleanup left them. They cannot breach

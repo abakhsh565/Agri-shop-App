@@ -222,9 +222,21 @@ export function refusesAnyExternalTarget(text: string): boolean {
  *   * the credential's own user string must end with the declared project ref (`endsWith`).
  */
 export function refusesProductionWithoutExplicitConfirmation(text: string): boolean {
-  return (
+  // The purge tool's gate, unchanged.
+  const purge =
     /PRODUCTION-PURGE-GUARDED/.test(text) &&
     /PURGE-PRODUCTION-TEST-TRANSACTIONS/.test(text) &&
+    /flag\('confirm'\) !== CONFIRMATION/.test(text) &&
+    /rollback/.test(text) &&
+    /endsWith\(/.test(text);
+  if (purge) return true;
+  // The second owner-authorized production writer (2026-10-18, demo identities). It is held to the
+  // same shape — a named confirmation, dry-run default, one transaction, and the credential's user
+  // string asserted against the project ref — under its own decision token, so neither script can
+  // satisfy the check by borrowing the other's words.
+  return (
+    /PRODUCTION-DEMO-CLEANUP-GUARDED/.test(text) &&
+    /CLEAN-PRODUCTION-DEMO-IDENTITIES/.test(text) &&
     /flag\('confirm'\) !== CONFIRMATION/.test(text) &&
     /rollback/.test(text) &&
     /endsWith\(/.test(text)
@@ -367,6 +379,13 @@ describe('rule 1 — a script that can delete rows refuses a non-QA target', () 
     expect(refusesProductionWithoutExplicitConfirmation(purge)).toBe(true);
     expect(refusesProductionWithoutExplicitConfirmation(purge.replace(/flag\('confirm'\) !== CONFIRMATION/, 'false'))).toBe(false);
     expect(refusesProductionWithoutExplicitConfirmation(purge.replace('PRODUCTION-PURGE-GUARDED', 'unescorted'))).toBe(false);
+    // The demo-identity cleanup is recognized the same way, and stops being recognized the moment
+    // its confirmation comparison or its decision token is removed.
+    const cleanup = read(join(ROOT, 'scripts/clean-production-demo-data.mjs'));
+    expect(refusesProductionWithoutExplicitConfirmation(cleanup)).toBe(true);
+    expect(refusesProductionWithoutExplicitConfirmation(cleanup.replace(/flag\('confirm'\) !== CONFIRMATION/, 'false'))).toBe(false);
+    expect(refusesProductionWithoutExplicitConfirmation(cleanup.replace('PRODUCTION-DEMO-CLEANUP-GUARDED', 'unescorted'))).toBe(false);
+    expect(refusesProductionWithoutExplicitConfirmation(cleanup.replace(/CLEAN-PRODUCTION-DEMO-IDENTITIES/g, 'anything')), 'the purge token must not satisfy the cleanup gate').toBe(false);
     expect(refusesAnyExternalTarget(read(join(ROOT, 'scripts/verify-cleanup-runbook.mjs')))).toBe(true);
   });
 });
@@ -572,7 +591,13 @@ describe('rule 5 — records are deleted by their owner\'s action, never on a sc
       .map(rel);
     // The only legitimate case is a test-cleanup/QA tool, which rule 1 already proves is QA-guarded.
     for (const file of purges) {
-      expect(refusesNonQa(read(join(ROOT, file))), `${file} deletes customers and does not refuse a non-QA target`).toBe(true);
+      const text = read(join(ROOT, file));
+      // A QA tool must refuse a non-QA target. A production-only writer is the mirror image: it must
+      // refuse every target that is not production AND refuse to commit without the owner's named
+      // confirmation, which is what `refusesProductionWithoutExplicitConfirmation` proves. Either way
+      // no script deletes customers unless it knows exactly which database it is on.
+      if (refusesNonQa(text) || refusesProductionWithoutExplicitConfirmation(text)) continue;
+      expect.fail(`${file} deletes customers and refuses neither a non-QA target nor an unconfirmed production one`);
     }
   });
 });

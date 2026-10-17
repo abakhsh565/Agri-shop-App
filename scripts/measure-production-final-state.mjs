@@ -197,15 +197,26 @@ try {
     configuration[table] = (await one(`select count(*)::int n from public.${table}`)).n;
   }
   check(
-    'the business configuration survived the reset',
+    'the tenant shell survived the reset',
     configuration.shops >= 1 &&
       configuration.branches >= 1 &&
-      configuration.users >= 1 &&
-      configuration.memberships >= 1 &&
       configuration.roles >= 1 &&
-      configuration.permissions >= 1,
+      configuration.permissions === 32,
     configuration,
   );
+
+  // `users` and `memberships` are NOT required to be non-zero any more: the seeded demo identities
+  // were removed on 2026-10-18, so production is entitled to hold none until the owner signs in on
+  // a real number. What must be true instead is that none of the seeded identities came back.
+  const seeded = ['923001234567', '923009876543', '923001122334', '923001999999'];
+  const demo = await one(
+    `select
+       (select count(*)::int from public.users where phone = any($1)) users,
+       (select count(*)::int from auth.users where phone = any($1)) logins,
+       (select count(*)::int from auth.identities i join auth.users u on u.id = i.user_id where u.phone = any($1)) identities`,
+    [seeded],
+  );
+  check('no seeded demo identity or login survives', demo.users === 0 && demo.logins === 0 && demo.identities === 0, demo);
 
   // ── 5. Every operational row, when there are any, is attached to a branch ──────────────────
   const branchGaps = {};
