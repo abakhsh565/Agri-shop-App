@@ -194,6 +194,67 @@ describe('the objects outside `public` are restored from the definitions that es
   });
 });
 
+/**
+ * The rehearsal engine needs the same base, and for the same reason.
+ *
+ * `scripts/dev/rehearse-on-local-engine.mjs` creates a scratch database, loads an environment's baseline
+ * and applies a selection to it. The baseline artifact carries no GRANT, so a scratch database arrives
+ * with no privileges at all — and the first intent probe of the production-baseline rehearsal reported
+ * `authenticated` unable to read `sales`, `products`, `customers` and `companies`. That was a statement
+ * about an empty database, not about the batch, and it would have been the same false negative for every
+ * future run. The rehearsal therefore installs hosted's defaults before the objects exist.
+ *
+ * The two literals have to stay identical: a rehearsal whose platform base drifts from the one the app is
+ * built against rehearses a different schema. That is asserted here rather than left to review.
+ */
+describe('the rehearsal engine installs the same platform defaults, in the same order', () => {
+  const REHEARSAL = fs.readFileSync(path.join(ROOT, 'scripts/dev/rehearse-on-local-engine.mjs'), 'utf8');
+
+  /** Every `alter default privileges … ;` statement in a source file, whitespace-normalised. */
+  const defaultStatements = (source: string) =>
+    (source.match(/alter default privileges in schema public[\s\S]*?;/gi) ?? []).map((s) =>
+      s.replace(/\s+/g, ' ').trim().toLowerCase(),
+    );
+
+  it('grants exactly what the local development database grants', () => {
+    const expected = defaultStatements(defaultsSql);
+    expect(expected.length).toBe(3);
+    expect(defaultStatements(REHEARSAL)).toEqual(expected);
+  });
+
+  it('applies them to the SCRATCH database, before the baseline loads', () => {
+    // Not the maintenance database: the first version passed the defaults to the helper that connects to
+    // `postgres`, so they took effect where no object is ever created and the check below refused the run.
+    // A rehearsal database is the one the baseline and the selection are written into.
+    const applied = REHEARSAL.slice(
+      REHEARSAL.indexOf('const PLATFORM_DEFAULTS_SQL'),
+      REHEARSAL.indexOf('the platform default privileges did not take'),
+    );
+    expect(applied).toMatch(/'-d', DB_NAME/);
+
+    const defaults = REHEARSAL.indexOf('PLATFORM_DEFAULTS_SQL]');
+    const baseline = REHEARSAL.indexOf('applyStatements(schemaStatements)');
+    expect(defaults).toBeGreaterThan(-1);
+    expect(baseline).toBeGreaterThan(-1);
+    expect(defaults).toBeLessThan(baseline);
+  });
+
+  it('reads the default ACL back instead of trusting the ALTER', () => {
+    // The ALTER is a no-op for a role that is not the one creating the objects; a rehearsal that lost
+    // its platform base silently would answer every privilege question with "denied".
+    expect(REHEARSAL).toMatch(/pg_default_acl/);
+    expect(REHEARSAL).toMatch(/authenticated=arwdDxtm/);
+    expect(REHEARSAL).toMatch(/the platform default privileges did not take/);
+  });
+
+  it('the probe refuses a database that has no platform base, rather than blaming the batch', () => {
+    const probe = fs.readFileSync(path.join(ROOT, 'scripts/dev/probe-rehearsal-intent.mjs'), 'utf8');
+    expect(probe).toMatch(/pg_default_acl/);
+    expect(probe).toMatch(/authenticated=arwdDxtm/);
+    expect(probe).toMatch(/was created without hosted's default privileges/);
+  });
+});
+
 describe('the local tool cannot reach a hosted environment', () => {
   it('never reads QA or production credentials', () => {
     expect(LOCAL_DB).not.toMatch(/QA_(DB|ANON|SERVICE|PROJECT)/);

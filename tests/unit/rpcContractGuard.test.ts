@@ -344,8 +344,18 @@ describe('the guard fails when it should', () => {
     expect(problems).toHaveLength(1);
     expect(problems[0]).toContain('delete_branch');
     expect(problems[0]).toContain('cannot execute');
-    // The diagnostic names the statement that retired it, so the next reader does not have to search.
-    expect(problems[0]).toContain('0191_operating_branches_preserve_the_business.sql');
+    // The diagnostic names the statement that DECIDED the contract — the last one in the ledger, so the
+    // next reader does not have to search. That is `0214` since the re-issue of 0177–0198: its ACL pass
+    // re-applies every ledger ACL statement after the batch's last create, which is where `0191`'s
+    // revoke of `delete_branch` is re-asserted. The origin is still in the ledger, and is pinned here so
+    // moving the deciding statement never lets the original retire go missing.
+    expect(problems[0]).toContain('0214_the_definer_and_the_sale_record.sql');
+    expect(
+      fs.readFileSync(
+        path.join(process.cwd(), 'supabase/migrations/0191_operating_branches_preserve_the_business.sql'),
+        'utf8',
+      ),
+    ).toMatch(/REVOKE ALL ON FUNCTION public\.delete_branch/i);
   });
 
   it('catches a migration that revokes a function the client still calls', () => {

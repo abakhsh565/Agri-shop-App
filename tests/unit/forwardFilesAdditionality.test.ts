@@ -28,6 +28,7 @@
  * terminator, and a function created outside its `pg_proc` guard).
  */
 
+import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -39,6 +40,20 @@ const ROOT = process.cwd();
 const BATCH_TWO = [
   'supabase/migrations/0207_the_membership_model_exists_in_the_repository.sql',
   'supabase/migrations/0208_the_functions_the_app_calls_and_the_tables_they_read.sql',
+];
+
+/**
+ * The re-issue of 0177–0198 (plan §4). Same binding rules, and it is the half most likely to drift:
+ * the files are generated, so a hand edit that adds an unguarded `create policy` or a bare `drop`
+ * would otherwise reach production unremarked.
+ */
+const REISSUE = [
+  'supabase/migrations/0209_the_objects_no_tracked_file_creates.sql',
+  'supabase/migrations/0210_the_marketplace_chain_at_the_state_it_ends_in.sql',
+  'supabase/migrations/0211_a_branch_is_its_own_identity.sql',
+  'supabase/migrations/0212_the_policies_that_scope_a_row_to_its_shop.sql',
+  'supabase/migrations/0213_audit_and_access_history_keep_their_owner.sql',
+  'supabase/migrations/0214_the_definer_and_the_sale_record.sql',
 ];
 
 /**
@@ -120,6 +135,31 @@ describe('the batch-2 forward files obey the plan’s binding rules', () => {
       expect(sql.length, `${file} is empty`).toBeGreaterThan(1000);
     });
   }
+});
+
+describe('the re-issue of 0177–0198 obeys the same binding rules', () => {
+  for (const file of REISSUE) {
+    test(`${file.split('/').pop()} only adds`, () => {
+      const sql = readFileSync(join(ROOT, file), 'utf8');
+      expect(violations(sql), `${file} breaks a rule docs/PRODUCTION_MIGRATION_PLAN.md §6 makes binding`).toEqual([]);
+      expect(sql.length, `${file} is empty`).toBeGreaterThan(1000);
+      // Every create is inside a `do` block that reads a catalog — the guard above accepts that, and
+      // this asserts the stronger thing the re-issue promises: the block is what replaces the object.
+      const creates = sql.match(/^\s*create\s+(policy|trigger|view|function|table|index)/gim) ?? [];
+      const guardedBlocks = sql.match(/^do \$guard\$/gim) ?? [];
+      expect(
+        creates.length,
+        `${file} has ${creates.length} creates but only ${guardedBlocks.length} guarded blocks — a create was emitted bare`,
+      ).toBeLessThanOrEqual(guardedBlocks.length + 2); // two exceptions: `create or replace function`, `create table/index if not exists`
+    });
+  }
+
+  test('the files are what the generator produces — a source edit cannot silently invalidate them', () => {
+    const result = spawnSync(process.execPath, [join(ROOT, 'scripts/dev/reissue-forward-files.mjs'), '--check'], {
+      encoding: 'utf8',
+    });
+    expect(result.status, `the re-issue is stale against the ledger:\n${result.stdout}${result.stderr}`).toBe(0);
+  });
 });
 
 describe('the guard is not vacuous', () => {

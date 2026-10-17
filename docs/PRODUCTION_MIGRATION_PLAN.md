@@ -82,7 +82,9 @@ baseline the batch reports 1 failure — `0181` creates `audit_events_no_client_
 production's baseline it passes, and the tool's transaction-per-file plus the ledger's hash skip mean it
 cannot be applied twice to the same environment — but §6.3 asks files to be catalog-guarded, and that
 statement is not. It is recorded here as a known, bounded deviation; the guarded form belongs in the
-re-issue below, not in an edit to a file whose verification this batch rests on. All are additive or behaviour-tightening; none removes
+re-issue below, not in an edit to a file whose verification this batch rests on **— and it is there
+now: the re-issue re-establishes both of 0181's policies catalog-guarded, drops the bare name first,
+and its staging replay is clean (16 files, 429 statements, 0 failures, 2026-10-17)**. All are additive or behaviour-tightening; none removes
 data or drops an object. Verified by replay onto the production baseline in PGlite **and** rehearsed on
 the local Supabase CLI stack (§9.3) with the same result. Precondition: a fresh verified production
 backup taken immediately before, which the backup path now provides (`38831480604`, artifact 37,
@@ -145,8 +147,70 @@ it is proposed, exactly as batch 1 and batch 2 were. `0177`, `0178`, `0182` and 
 their D-3/D-4 work is a shape problem, not an ordering one, and each needs its own verified file rather
 than a place in a queue.
 
+**The re-issue is WRITTEN AND VERIFIED as one batch (2026-10-17).** Six files, `0209`–`0214`, generated
+by `scripts/dev/reissue-forward-files.mjs` from the range's own statements — the script re-expresses the
+per-file intent (it does not copy SQL), refuses to emit an object that two files would both define, and
+refuses a do-block that reads no catalog and declares no dependency. Measured:
+
+```
+--files <batch 1 + batch 2 + 0209–0214>, production's baseline   → PASS: 19 files, 445 statements, 0 sql failures
+--files <the 16 files QA's ledger lacks>, staging's baseline     → PASS: 16 files, 429 statements, 0 sql failures
+both, rehearsed on the local Supabase CLI stack (Postgres 17.6)  → PASS, per-file counts AGREE with PGlite
+intent probe on the production-baseline rehearsal                → PASS: 20/20 checks held
+```
+
+The probe is the point. `scripts/dev/probe-rehearsal-intent.mjs` reads `pg_catalog` and the privilege
+tables **after** the batch has been applied, so "applied cleanly" becomes "delivered the intent": the
+marketplace view exists and `anon` can read it, the radius column is gone, `search_marketplace` and the
+switch keep the shapes `0187` ended with, `audit_events` has no permissive INSERT policy and every SELECT
+policy carries a shop predicate, the snapshot trigger sits on all three financial tables, the permission
+gate is restrictive on ten tables, **all seven** branch-read policies are restrictive, `authenticated`
+can still read `sales`/`products`/`customers`/`companies` while holding no write privilege on the money
+tables, no guard or trigger function is executable by `anon`, and the membership substrate and the 29
+named RPCs are present. It also refuses to run against a scratch database that was built without hosted's
+default privileges — otherwise every ACL answer would describe an empty database instead of the batch.
+
+Three defects were found and fixed by measuring the RESULT rather than the failure count, which is the
+lesson this batch adds to §2's: a guarded statement that declines to run reports no failure, so a clean
+apply is a floor, not the outcome.
+
+1. **Guarding on the object instead of its dependency.** Every create was emitted as "if this policy /
+   view exists, replace it", which is clean on production precisely because production lacks those
+   objects: `marketplace_listings` was never created there, and the two `comment on` guards resolved
+   their subject to `public` (`relname = 'public'`) so they could never run anywhere. The guard now
+   names the dependency the statement needs (the table a policy belongs to, the relations a view reads,
+   the function a body calls), so the statement runs wherever that is and creates what is missing.
+2. **`CONTINUE` outside a loop.** `0192`'s patch block skips a function the catalog lacks; the test for
+   it was injected after the block's `BEGIN` rather than inside the `FOREACH`, so PostgreSQL refused the
+   whole file — `CONTINUE cannot be used outside a loop`, three statements.
+3. **Two files defining one policy.** `0188`'s branch-read sweep and `0180`'s permissive rewrite of one
+   of the same seven policies were split across two files, and the higher version won: the rehearsal
+   engine held six restrictive branch-read policies and one permissive. The sweep is now the last
+   statement of the file that rewrites the policies — the range's own last writer — and the generator
+   refuses the shape from here on.
+4. **A trigger guard that could never be true.** `drop trigger if exists audit_sale_created_trg on
+   public.sales` was emitted guarded on `c.relname = 'undefined'`: the statement's own grammar was not
+   read for the table, so the superseded definition was never removed anywhere and no failure count
+   could see it. The classifier reads the table now, and the emission refuses a guard whose subject has
+   no name.
+5. **A REVOKE that a later CREATE undid.** The ledger's ACL statements are emitted where the ledger puts
+   them, and a REVOKE can precede the CREATE of the function it concerns; the guard then skips it, the
+   CREATE runs, and PostgreSQL grants the new function `PUBLIC EXECUTE`. Measured, not suspected:
+   `my_shop_ids` — which `0209` creates on a schema that never had it — came out executable by
+   `PUBLIC`, and `audit_operational_snapshot` arrived with the same default because no ledger statement
+   names it at all. Every ledger ACL statement is therefore applied a **second** time at the end of
+   `0214`, after every create in the batch, and the trigger-returning functions the batch creates are
+   closed to every role (their only legitimate caller is the trigger). This narrows access; nothing is
+   granted. The probe asserts both halves, and the rehearsal now installs hosted's default privileges
+   **before** the baseline loads — without that base, a privilege check describes an empty database
+   (`authenticated` appeared unable to read `sales`), which is a fact about the harness, not the batch.
+
 **Ordering rule for anything that can be applied twice:** a batch is applied once, in its verified
 order; a file whose ledger row exists is not re-applied.
+
+**Nothing has been applied to production.** The measurement above is onto a frozen baseline in process
+and onto a scratch database on the local stack; production's own ACLs are still unmeasured, and the
+one-hour backup gate means the pre-apply backup has to be taken again immediately before any apply.
 
 ## 5. Disposition of every file after production's recorded position
 
@@ -187,6 +251,12 @@ appear here exactly once, so a newly added migration cannot exist without a prod
 | `0206_a_view_is_not_a_boundary.sql` | **batch 1 — verified PASS** |
 | `0207_the_membership_model_exists_in_the_repository.sql` | **batch 2, relations half — verified PASS on production's baseline and staging's** (76 statements, 0 sql failures; real engine PASS, `AGREES`). Not a rewrite of any file above: it is the DDL for six relations that **no tracked file ever created** (`branches`, `roles`, `memberships`, `permissions`, `role_permissions`, `user_permissions`) plus the one they need to become reachable (`user_active_shops`), extracted schema-only from the accepted staging baseline under the owner decision in §7.2. Its closure pulls three enum types and eleven functions, ordered so each function follows the ones it calls. |
 | `0208_the_functions_the_app_calls_and_the_tables_they_read.sql` | **batch 2, function half — verified PASS on production's baseline and staging's, as part of the batch `0207,0208`** (0208: 159 statements, 0 sql failures; batch: 235 statements, 0 sql failures; real engine PASS, `AGREES`). Carries the 62 functions the app's call surface needs and production lacks (46 client RPCs + 16 called by their bodies), the 7 relations those bodies read, and the 28 additive columns they read, each with the ledger's own EXECUTE contract. Generated by `scripts/dev/extract-missing-functions.mjs` from the ledger's last-wins definition per name, in computed dependency order; the one column the ledger never writes (`notifications.shop_id`) is extracted schema-only from the accepted staging baseline under §7.3. |
+| `0209_the_objects_no_tracked_file_creates.sql` | **re-issue 1 of 6 — the substrate — verified PASS** (25 statements, 0 sql failures, production's baseline and staging's; real engine PASS, `AGREES`; probed: `my_shop_ids` is not executable by `anon`). The columns production lacks that the range reads, copied schema-only from the accepted staging baseline, plus the two functions `0168` defines and production never received (`delete_branch`, `my_shop_ids`) and `0191`'s EXECUTE contract for `delete_branch`. Each object carries the measurement that put it here (which files cite it, which of them production's catalog lacks). It ends with a proof block that raises if any object it creates is still missing, so an extraction that quietly skipped one cannot pass downstream. Generated by `scripts/dev/reissue-forward-files.mjs`. |
+| `0210_the_marketplace_chain_at_the_state_it_ends_in.sql` | **re-issue 2 of 6 — the marketplace chain at the state the range ends in — verified PASS** (20 statements, 0 sql failures; real engine PASS; probed on the rehearsed engine: the listing view is present and readable by `anon`, `shops.marketplace_radius_km` is absent, `search_marketplace` keeps its signature, and the switch is the two-argument form). `0185`'s listing view is **created where production never had it** — the first revision of this file guarded the create on the view's own existence and therefore did nothing on production, which is invisible to a failure count and is why the guard now names the dependency (the relations the view reads) instead. Intermediate states (`0186`'s branch read, `0184`'s radius writer) are not re-issued. |
+| `0211_a_branch_is_its_own_identity.sql` | **re-issue 3 of 6 — branch identity, branch scope and a responsible person — verified PASS** (19 statements, 0 sql failures; real engine PASS). `0183`, `0191` and `0196`, plus `0188`'s functions (`allowed_branch_scope`, `current_branch_id`, `current_branch_scope`, `set_active_branch`, `authorize_business_action`, `enforce_branch_scope`, `get_my_branches`, `validate_member_branch_scope`). `0188`'s branch-read sweep is deliberately NOT here — see the next row. |
+| `0212_the_policies_that_scope_a_row_to_its_shop.sql` | **re-issue 4 of 6 — the tenant-scoped policies and the permission gates — verified PASS** (29 statements, 0 sql failures; real engine PASS; probed: ten restrictive permission gates and all seven branch-read policies restrictive). `0178`, `0180`, `0182` and `0195`, and then **`0188`'s branch-read sweep last**, because it is the range's last writer of those seven policies. Measured on the rehearsal engine 2026-10-17 with the sweep in the earlier file: six of the seven were restrictive and `stock_adjustments_branch_select` was not, because `0180` re-creates that one policy permissively and a permissive policy ORs with its neighbours instead of ANDing. The generator now refuses to emit one object from two different files, which is the shape that hid it. |
+| `0213_audit_and_access_history_keep_their_owner.sql` | **re-issue 5 of 6 — audit and access history — verified PASS** (44 statements, 0 sql failures; real engine PASS; probed: no permissive INSERT policy on `audit_events`, the client write policy says `false`, every SELECT policy carries a shop predicate, and the snapshot trigger is installed on all three financial tables). `0189`, `0192`, `0193`, `0194` and `0197`, plus `0181`'s two policies in catalog-guarded form — the answer to batch 1's one known deviation. `0192`'s body patches keep their measured corrections: the CRLF tolerance and the lowercase-`begin` anchor are applied, and a function the catalog lacks is skipped with `CONTINUE` inside the loop rather than failing the file (the first revision placed that test after `BEGIN`, outside the loop, and PostgreSQL refused the file outright: `CONTINUE cannot be used outside a loop`, measured 2026-10-17). |
+| `0214_the_definer_and_the_sale_record.sql` | **re-issue 6 of 6 — the definer's `search_path`, the sale's own record, and the batch's ACL pass — verified PASS** (23 statements, 0 sql failures; real engine PASS; probed: `process_return` is the renamed `payload jsonb` shape, and no guard or trigger function is executable by `anon`). The last sixteen statements are the ACL pass: every ledger ACL statement re-applied after every create, plus the trigger functions closed to all roles. It is here because "after every create" is only true at the end of the batch. `0177`'s three `ALTER FUNCTION … SET search_path` in the existence-guarded form (production lacks two of the three names), and `0198`'s two bodies, with the parameter rename done by dropping the old signature first where it exists. |
 
 ## 6. Backward-compatibility rules (binding on every batch)
 
