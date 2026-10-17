@@ -57,6 +57,17 @@ const REISSUE = [
 ];
 
 /**
+ * The batch's closing file: the ACL pass that asks the live schema one question and narrows. It is
+ * listed here so the same binding rules apply to it — the defect it corrects came from a generated
+ * file, so a hand-written one does not get to skip the rules that generated file was held to.
+ */
+const ACL_CLOSURE = [
+  'supabase/migrations/0215_a_write_rpc_is_not_for_an_unauthenticated_caller.sql',
+  'supabase/migrations/0216_an_unauthenticated_caller_cannot_write_the_people_table.sql',
+  'supabase/migrations/0217_a_retired_function_is_not_for_the_client.sql',
+];
+
+/**
  * The ways a create can be idempotent, one of which every create in a forward file must use.
  *
  * The catalog query (`pg_proc`, `pg_class`, …) is the strongest — it decides what to do before running
@@ -133,6 +144,19 @@ describe('the batch-2 forward files obey the plan’s binding rules', () => {
       const sql = readFileSync(join(ROOT, file), 'utf8');
       expect(violations(sql), `${file} breaks a rule docs/PRODUCTION_MIGRATION_PLAN.md §6 makes binding`).toEqual([]);
       expect(sql.length, `${file} is empty`).toBeGreaterThan(1000);
+    });
+  }
+});
+
+describe('the ACL closure obeys the same binding rules', () => {
+  for (const file of ACL_CLOSURE) {
+    test(`${file.split('/').pop()} only narrows`, () => {
+      const sql = readFileSync(join(ROOT, file), 'utf8');
+      expect(violations(sql), `${file} breaks a rule docs/PRODUCTION_MIGRATION_PLAN.md §6 makes binding`).toEqual([]);
+      // The one rule this file exists for, asserted on its text: it may take access away and never
+      // hand it out again. The grant to `authenticated`/`service_role` is not a widening — both
+      // already held it — but a grant to `anon` would be.
+      expect(sql, `${file} hands EXECUTE back to anon`).not.toMatch(/grant execute[^;']*to anon/i);
     });
   }
 });

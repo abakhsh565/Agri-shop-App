@@ -70,8 +70,16 @@ batch is written to close exactly these shapes:
 * 0212 carries 0195's `REVOKE INSERT, UPDATE, DELETE, TRUNCATE` for the money tables;
 * 0214's ACL pass re-applies every ledger ACL statement after the last create, and closes the
   trigger functions the batch itself creates;
-* 0208 carries the ledger's EXECUTE contract per function, which is where `anon` loses the RPCs it
-  currently holds.
+* 0208 carries the ledger's EXECUTE contract per function — **and that contract is not the same thing
+  as least privilege.** Corrected 2026-10-17 after the batch was applied to hosted QA: nine write RPCs
+  (`create_role`, `update_role`, `delete_role`, `create_company`, `archive_company`, `delete_my_account`,
+  `delete_product_barcode`, `approve_credit_limit_request_v2`, `reject_credit_limit_request_v2`) came
+  out **still executable by `anon`**, because staging's own catalog holds that grant and `0214`'s ACL
+  pass re-applied it after every create. The repository's live guard caught it on QA; `0215` is the
+  closure (revoke `PUBLIC, anon` on the whole write surface, keep `authenticated`/`service_role`, close
+  trigger functions, assert the result). So on production `anon` loses the legacy RPCs it holds here
+  **through `0215`**, not through `0208`, and the post-apply measurement must show **0** write-surface
+  functions reachable by `anon` — not merely "fewer".
 
 **But "the batch should fix it" is not a measurement.** The post-apply state of production can only be
 confirmed by running this same measurement again after the apply, and that is a precondition of calling

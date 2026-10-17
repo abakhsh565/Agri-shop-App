@@ -147,17 +147,21 @@ it is proposed, exactly as batch 1 and batch 2 were. `0177`, `0178`, `0182` and 
 their D-3/D-4 work is a shape problem, not an ordering one, and each needs its own verified file rather
 than a place in a queue.
 
-**The re-issue is WRITTEN AND VERIFIED as one batch (2026-10-17).** Six files, `0209`–`0214`, generated
-by `scripts/dev/reissue-forward-files.mjs` from the range's own statements — the script re-expresses the
+**The re-issue is WRITTEN AND VERIFIED as one batch (2026-10-17).** Nine files: the six generated re-issues
+`0209`–`0214`, written by `scripts/dev/reissue-forward-files.mjs` from the range's own statements — the script re-expresses the
 per-file intent (it does not copy SQL), refuses to emit an object that two files would both define, and
-refuses a do-block that reads no catalog and declares no dependency. Measured:
+refuses a do-block that reads no catalog and declares no dependency — plus `0215`, `0216` and `0217`, the
+ACL closures defects 6, 7 and 8 below made necessary.
 
 ```
---files <batch 1 + batch 2 + 0209–0214>, production's baseline   → PASS: 19 files, 445 statements, 0 sql failures
---files <the 16 files QA's ledger lacks>, staging's baseline     → PASS: 16 files, 429 statements, 0 sql failures
+--files <batch 1 + batch 2 + 0209–0217>, production's baseline   → PASS: 22 files, 448 statements, 0 sql failures
+--files <0207–0217>, staging's baseline                          → PASS: 11 files, 398 statements, 0 sql failures
 both, rehearsed on the local Supabase CLI stack (Postgres 17.6)  → PASS, per-file counts AGREE with PGlite
 intent probe on the production-baseline rehearsal                → PASS: 20/20 checks held
 ```
+
+(The 20-file selection against staging's baseline reports exactly one failure, `0181`'s known
+non-re-runnable bare `create policy` — the deviation §5 already records, not a new one.)
 
 The probe is the point. `scripts/dev/probe-rehearsal-intent.mjs` reads `pg_catalog` and the privilege
 tables **after** the batch has been applied, so "applied cleanly" becomes "delivered the intent": the
@@ -205,12 +209,32 @@ apply is a floor, not the outcome.
    **before** the baseline loads — without that base, a privilege check describes an empty database
    (`authenticated` appeared unable to read `sales`), which is a fact about the harness, not the batch.
 
+6. **A reproduced contract that should not be reproduced.** Fix 5 re-applied *every* ledger ACL
+   statement, including the ones that GRANT `anon` EXECUTE — and staging's catalog holds nine write
+   RPCs open that way (`create_role`, `update_role`, `delete_role`, `create_company`, `archive_company`,
+   `delete_my_account`, `delete_product_barcode`, `approve_credit_limit_request_v2`,
+   `reject_credit_limit_request_v2`). "Reproduce the environment" and "an unauthenticated role cannot
+   reach a tenant write" are not the same rule, and this batch was written to the first one.
+   **Found by the repository's own live guard, not by a failure count:** after the batch was applied to
+   hosted QA, `tests/integration/rbacInvariants.test.ts` Invariant B failed with those nine names. The
+   production apply would have shipped them unchanged. `0215` is the closure — it revokes
+   `PUBLIC, anon` from the write surface (the same regex and the same pre-session allow-list the live
+   guard uses), keeps `authenticated`/`service_role`, closes trigger functions to every API role, and
+   asserts its own effect. `tests/unit/writeRpcAnonGuard.test.ts` now asks the question **before** an
+   apply, on production's own baseline, and proves itself non-vacuous by finding the surface reachable
+   first. Measured after the QA apply: 51 write-surface functions, **0** executable by `anon` (was 9),
+   `insert_shop_request` and `lookup_user_by_phone` still executable, 0 trigger functions exposed,
+   every real RPC still executable by `authenticated`.
+
 **Ordering rule for anything that can be applied twice:** a batch is applied once, in its verified
 order; a file whose ledger row exists is not re-applied.
 
 **Nothing has been applied to production.** The measurement above is onto a frozen baseline in process
-and onto a scratch database on the local stack; production's own ACLs are still unmeasured, and the
-one-hour backup gate means the pre-apply backup has to be taken again immediately before any apply.
+and onto a scratch database on the local stack; production's own ACLs were measured read-only on
+2026-10-17 (`device-evidence/production-acls-measured-2026-10-17.md`) and are still open — 4 tables
+writable by `anon`, 12 by `authenticated`, 14 always-true policies, every one of the 37 functions
+`anon`-executable — and the one-hour backup gate means the pre-apply backup has to be taken again
+immediately before any apply.
 
 ## 5. Disposition of every file after production's recorded position
 
@@ -257,6 +281,26 @@ appear here exactly once, so a newly added migration cannot exist without a prod
 | `0212_the_policies_that_scope_a_row_to_its_shop.sql` | **re-issue 4 of 6 — the tenant-scoped policies and the permission gates — verified PASS, and APPLIED to hosted QA** (29 statements, 0 sql failures; real engine PASS; probed: ten restrictive permission gates and all seven branch-read policies restrictive). **Measured on hosted QA, which no rehearsal could show:** its first application failed and rolled back on 0180's own assertion — `0180 left a tenant-blind policy in place: stock_adjustments.permission_insert_gate, stock_adjustments.permission_read_gate`. Those two are 0195's **restrictive** gates, already present on QA; a restrictive policy cannot widen anything (it ANDs), and neither frozen baseline carries them, so the assertion only ever had to be precise on the live schema. The re-issued assertion now asks the question of `p.polpermissive` policies — the ones that can OR a hole open — and the file applied cleanly on the retry, then on both baselines. `0178`, `0180`, `0182` and `0195`, and then **`0188`'s branch-read sweep last**, because it is the range's last writer of those seven policies. Measured on the rehearsal engine 2026-10-17 with the sweep in the earlier file: six of the seven were restrictive and `stock_adjustments_branch_select` was not, because `0180` re-creates that one policy permissively and a permissive policy ORs with its neighbours instead of ANDing. The generator now refuses to emit one object from two different files, which is the shape that hid it. |
 | `0213_audit_and_access_history_keep_their_owner.sql` | **re-issue 5 of 6 — audit and access history — verified PASS** (44 statements, 0 sql failures; real engine PASS; probed: no permissive INSERT policy on `audit_events`, the client write policy says `false`, every SELECT policy carries a shop predicate, and the snapshot trigger is installed on all three financial tables). `0189`, `0192`, `0193`, `0194` and `0197`, plus `0181`'s two policies in catalog-guarded form — the answer to batch 1's one known deviation. `0192`'s body patches keep their measured corrections: the CRLF tolerance and the lowercase-`begin` anchor are applied, and a function the catalog lacks is skipped with `CONTINUE` inside the loop rather than failing the file (the first revision placed that test after `BEGIN`, outside the loop, and PostgreSQL refused the file outright: `CONTINUE cannot be used outside a loop`, measured 2026-10-17). |
 | `0214_the_definer_and_the_sale_record.sql` | **re-issue 6 of 6 — the definer's `search_path`, the sale's own record, and the batch's ACL pass — verified PASS** (23 statements, 0 sql failures; real engine PASS; probed: `process_return` is the renamed `payload jsonb` shape, and no guard or trigger function is executable by `anon`). The last sixteen statements are the ACL pass: every ledger ACL statement re-applied after every create, plus the trigger functions closed to all roles. It is here because "after every create" is only true at the end of the batch. `0177`'s three `ALTER FUNCTION … SET search_path` in the existence-guarded form (production lacks two of the three names), and `0198`'s two bodies, with the parameter rename done by dropping the old signature first where it exists. |
+| `0215_a_write_rpc_is_not_for_an_unauthenticated_caller.sql` | **closure 1 of 3 — the ACL closure — verified PASS on production's baseline and staging's; APPLIED to hosted QA** (1 statement, 0 sql failures; in the 20-file batch: 446 statements, 0 failures). Revokes `PUBLIC, anon` EXECUTE from every function on the write surface (`0208`'s ledger contract left nine open, and `0214` re-applied those grants), keeps `authenticated`/`service_role`, closes trigger functions to every API role, and raises if anything on the surface is still reachable. Written as a policy decision rather than extracted, so it is hand-written and held to the same §6 binding rules by `tests/unit/forwardFilesAdditionality.test.ts`; the pre-apply counterpart of the live guard is `tests/unit/writeRpcAnonGuard.test.ts`. Measured on QA after the apply: 51 write-surface functions, 0 anon-executable (was 9), 0 trigger functions exposed, `insert_shop_request`/`lookup_user_by_phone` unchanged. |
+| `0216_an_unauthenticated_caller_cannot_write_the_people_table.sql` | **closure 2 of 3 — the people table's unauthenticated write path — verified PASS on production's baseline and staging's; APPLIED to hosted QA** (1 statement, 0 sql failures; in the 21-file batch: 447 statements, 0 failures). Production measures `anon` holding INSERT/UPDATE/DELETE on `public.users` **and** on three other tables; the money tables are closed by `0212`'s re-applied `0195` REVOKE and `audit_events` by `0213`'s write policy, but `users` is named by no tracked migration, and a privilege a migration never granted cannot be closed by one that does not name it. Revokes INSERT/UPDATE/DELETE/TRUNCATE on `public.users` from `anon` only — the app's profile edits run as `authenticated`, which the file asserts is unchanged — and raises if `anon` holds anything afterwards. |
+| `0217_a_retired_function_is_not_for_the_client.sql` | **closure 3 of 3 — the retired functions — verified PASS on production's baseline and staging's; APPLIED to hosted QA** (1 statement, 0 sql failures; in the 22-file batch: 448 statements, 0 failures). The correction for the widening described below: revokes `PUBLIC, anon, authenticated` from the fifteen functions the ledger retires from the client, each inside an existence test (production never had `create_sale_unchecked`, `create_employee_core`, `purge_shop_data` or `marketplace_distance_km`), and raises if any is still reachable. Its list is not hand-maintained — `tests/unit/writeRpcAnonGuard.test.ts` reads the ledger's own server-only set and fails on a drift in either direction. |
+
+**The defect that made closure 3 necessary — a closure that widened while it narrowed.** `0215`'s first
+form revoked `PUBLIC, anon` from the whole write surface — and then granted `authenticated`
+unconditionally, on every one of those functions. `0215`'s own guard could not see it (it asks about
+`anon`), and neither could the ACL ledger (a `format()` grant names no function). Two of the
+repository's live guards could: after the QA apply, `tests/integration/saleIdempotency.test.ts` ("the
+unchecked implementation is not reachable from an authenticated client") and
+`tests/integration/tenantResolverReplay.test.ts` ("anon and authenticated cannot execute the
+resolvers") failed, naming `create_sale_unchecked` and `create_shop_internal`. The ledger retires
+fifteen functions from the client; seven of them are on the write surface, so the "closure" handed
+back exactly the bypass those tests exist to prevent. §6's first binding rule is that access is never
+widened, and the fix is the plan's own correction rule: `0217` revokes `PUBLIC, anon, authenticated`
+from the ledger's server-only set — its list read from the ledger by
+`tests/unit/writeRpcAnonGuard.test.ts`, in both directions — and asserts none is reachable. Net effect
+across the batch: nothing widened; `0215`'s grant exists only between two files of one owner-run batch,
+never on an end state.
+
 
 ## 6. Backward-compatibility rules (binding on every batch)
 
@@ -502,14 +546,23 @@ engine showed: 46 missing client RPCs → 0, none unreachable by `authenticated`
 6. **No PITR**: the recovery objective is the daily verified backup (docs/RECOVERY.md §9).
 7. **Batches 3 and 4 are measured, not predicted, and they are not a queue** — §4's re-issue is the
    work, and until it exists production cannot receive the intent of 0177–0198 at all.
-8. **Production's EXECUTE privileges are unmeasured.** Neither artifact this repository holds of it
-   carries a `GRANT` or a `REVOKE` (the project's own backup format writes schema and data, not
-   privileges), so the "pre-existing `anon` divergences" this plan and its evidence file recorded on
-   2026-10-16 were a property of the rehearsal, not of production: **withdrawn on 2026-10-17**. Asked
-   where ACLs exist — live QA, 23 names — `anon` may execute 1 of 23 (`delete_role`, which the ledger's
-   contract also leaves to PUBLIC) and `authenticated` 23 of 23, i.e. **no discrepancy on QA**. Measuring
-   production's needs a read-only catalog query, which is an owner act: the intake hands the password
-   only to the backup and the restore verifier.
+8. **Production's privileges were unmeasured until 2026-10-17, and they are worse than the rehearsal
+   suggested.** Neither artifact this repository holds of it carries a `GRANT` or a `REVOKE`, so the
+   divergences recorded on 2026-10-16 were a property of the rehearsal and were **withdrawn**. They have
+   now been measured read-only, through the credential wrapper's own `measure-production-acls` command
+   (`device-evidence/production-acls-measured-2026-10-17.md`): **all 37 functions executable by `anon`**
+   (including `create_sale`, `void_sale`, `process_return`, `adjust_stock`,
+   `record_customer_payment`), **14 always-true permissive policies**, `anon` holding INSERT/UPDATE/DELETE
+   on **4** tables and `authenticated` on **12**. None of that is a rehearsal artefact. `0215` closes the
+   function surface and `0216` closes the one table the batch would otherwise leave `anon`-writable;
+   the rest is closed by the policies and grants the batch already carries.
+9. **One table's row-level policy is still open, deliberately, and needs an owner decision.**
+   `public.users` carries an always-true policy on production, and `authenticated` holds INSERT/UPDATE/
+   DELETE there. The app edits profile rows **directly** (`src/lib/auth.ts`, the settings screens,
+   `stores/employeesStore.ts`), so the correct narrowing is a policy — self for profile edits, RPC for
+   employee management — and it cannot be written from the measurements in this plan: which rows an
+   administrator is expected to be able to update is a product decision. Recorded here rather than
+   guessed at. `0216` removes the unauthenticated half in the meantime, which has no product meaning.
 
 ## 10. Evidence
 
