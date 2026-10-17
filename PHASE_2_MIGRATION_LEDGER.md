@@ -295,3 +295,221 @@ compare against (`tests/unit/migrationLedger.test.ts`).
 changes with real product behaviour behind them (the employee catalogue, the audit trail, admin
 permission editing), so they get their own change set and their own verification rather than being
 appended to this one.
+
+---
+
+## 14. Batch 2 of the production gap, through the same ledger — 2026-10-17
+
+`docs/PRODUCTION_MIGRATION_PLAN.md` §4 batch 2 is two files: `0207` (the relations half, extracted
+schema-only from the accepted staging baseline) and `0208` (the function half — the 46 client RPCs
+production lacks, the 16 functions their bodies call, the 7 relations and 28 columns those bodies
+read). Both were verified against production's own frozen baseline *and* staging's before either was
+recorded anywhere (`PASS, 2 files, 235 statements, 0 sql failures` on each), and rehearsed on the real
+Supabase engine (`PASS`, agreeing with PGlite). This section is the ledger half of that record.
+
+```
+$ node scripts/migrate.mjs apply --env staging          # dry run
+  Pending: 2 file(s) … Nothing was applied. Re-run with --apply to apply them.
+$ node scripts/migrate.mjs apply --env staging --apply
+  ✓ 0207 … (76 statement(s), recorded)
+  ✓ 0208 … (159 statement(s), recorded)
+$ npm run migrate:verify
+  Ledger: 200 row(s) in schema_migrations (+ file hashes)
+  Directory and ledger agree exactly: every file recorded, every record has a file, every hash matches.
+  VERIFY: PASS
+```
+
+The ledger moved **198 → 200 rows**, each recorded by the same transaction that applied the file, and
+the dry run is quoted because it is what makes the recorded run meaningful: the tool refused to write
+until asked. On QA these two files are **no-ops with an effect on the record only** — every object they
+carry already exists there, which is why staging's own baseline replay passed with 0 failures before
+the apply and why nothing in QA's schema changed when it ran. What the apply buys is the thing a QA
+environment is for: the *recorded* path production will take (file + ledger row, one transaction) is
+exercised on a live project before it is used on the one that matters, and its hashes are now pinned
+in a ledger that `verify` reads back on every run.
+
+| Evidence | Result | Artefact |
+|---|---|---|
+| Batch verification, production's baseline | **PASS** — 2 files, 235 statements, 0 sql failures, 268 data statements counted and skipped | `backups/baseline-prod-batch2-verified.json` |
+| Batch verification, staging's baseline | **PASS** — same counts, 2267 data statements counted and skipped | `backups/baseline-staging-batch2-verified.json` |
+| Real-engine rehearsal, both baselines | **PASS** — 235 statements, 0 failures, `vs PGlite: AGREES` | `backups/rehearsal-batch2-{production,staging}.json` |
+| Post-state, asked of the rehearsed engine | client RPCs missing **46 → 0**; unreachable by `authenticated` **0**. The `anon` column this row used to carry (**5** discrepancies) was withdrawn on 2026-10-17: neither baseline artifact contains a `GRANT` or a `REVOKE`, so a scratch database measures PostgreSQL's PUBLIC default rather than any environment. Asked where ACLs exist — live QA, 23 names — **1 of 23** is executable by `anon` (`delete_role`, which the ledger's contract also leaves to PUBLIC), and `authenticated` can execute all 23. Production's privileges remain **unmeasured** | `device-evidence/production-gap-measured-2026-10-16.md` §3c |
+| Ledger `apply` on QA | 2 applied and recorded in one transaction each; 198 → 200 rows | quoted above |
+| Ledger `verify` on QA | **PASS** — 200 files ↔ 200 rows, every hash matches | quoted above |
+| QA's live schema after the apply | functions **62 of 62**, relations **7 of 7**, columns **28 of 28**; the 46 client RPCs `authenticated` cannot execute: **0**; both ledger rows present | read-only `run_sql` over the HTTP API, recorded in §14 above |
+| Regression after the apply | unit **75 files / 976 tests**; integration **12 files / 159 tests** targeted at tenant and branch isolation, RBAC, membership and permissions (two of the files re-run after the apply); browser **27 tests** in real Chrome (branch responsibility EN+UR, branch flow corrections EN+UR, branch removal, role-in-use deletion, session refresh, RTL/LTR, retry-after-timeout) — 0 failures, `tsc` and `build` exit 0 | `npm run test:unit`, the targeted suite runs, the Playwright runs |
+
+**Production was not contacted.** Its ledger still reads `8 / 0016`, no file in this batch has been
+applied there, and the apply path remains an owner act (`docs/PRODUCTION_MIGRATION_PLAN.md` §7.1).
+
+---
+
+## 15. The ACL closure the re-issue made necessary — `0215` — 2026-10-17
+
+**What failed, and where.** After `0209`–`0214` were applied to hosted QA, the repository's own
+live-schema guard failed:
+
+```
+FAIL  tests/integration/rbacInvariants.test.ts > Invariant B — no tenant write RPC is executable by anon
+AssertionError: expected [ …(9) ] to deeply equal []
++ [ "approve_credit_limit_request_v2", "archive_company", "create_company", "create_role",
++   "delete_my_account", "delete_product_barcode", "delete_role",
++   "reject_credit_limit_request_v2", "update_role" ]
+```
+
+§14's row above is not wrong: at that measurement — before the re-issue — **1 of 23** app-called
+functions was `anon`-executable (`delete_role`). `0214`'s ACL pass then re-applied *every* ledger ACL
+statement after the last create, which re-established the eight `anon` grants `0208` had reproduced from
+staging's catalog. Reproducing an environment and enforcing least privilege are different rules, and only
+the second one is a security property.
+
+**The correction is a new file, not an edit.** `0215_a_write_rpc_is_not_for_an_unauthenticated_caller.sql`
+(1 statement) revokes `PUBLIC, anon` EXECUTE from every function on the write surface — the same regex
+and the same pre-session allow-list as the live guard — grants `authenticated`/`service_role` back,
+closes trigger functions to every API role, and raises if anything on the surface is still reachable.
+`0208` and `0214` are applied and stay byte-identical.
+
+```text
+$ node scripts/verify-forward-on-baseline.mjs --baseline production --files <batch 1+2 + 0209–0215>
+  SUMMARY PASS: 20 files, 446 statements, 0 sql failures, 0 env-gap failures
+$ node scripts/verify-forward-on-baseline.mjs --baseline staging --files <0207–0215>
+  SUMMARY PASS: 9 files, 396 statements, 0 sql failures, 0 env-gap failures
+$ node scripts/migrate.mjs apply --env staging --apply
+  Pending: 1 file(s)
+  ✓ 0215_a_write_rpc_is_not_for_an_unauthenticated_caller.sql (1 statement(s), recorded)
+$ node scripts/migrate.mjs verify --env staging
+  Ledger: 207 row(s) in schema_migrations (+ file hashes)
+  Directory and ledger agree exactly: every file recorded, every record has a file, every hash matches.
+  VERIFY: PASS
+```
+
+**Post-state, measured on QA by privilege, not by reading the file** (`has_function_privilege`, read
+only):
+
+| Question | Answer |
+|---|---|
+| Functions on the write surface | **51** |
+| Of those, executable by `anon` | **0** (was 9) |
+| The nine, individually | `anon` false, `authenticated` true — all nine |
+| `insert_shop_request` / `lookup_user_by_phone` (pre-session) | still executable by `anon` |
+| Trigger functions executable by `anon` or `authenticated` | **0** |
+| Real RPCs on the surface executable by `authenticated` | **49 of 51**; the two it cannot call are trigger functions, by design |
+| `rbacInvariants.test.ts` after the apply | **8/8 PASS**, Invariant B included |
+
+**Production is unchanged.** Its ledger still reads `8 / 0016`; the closure reaches it only if the batch
+is applied there, and the pre-apply measurement that would confirm the starting state is
+`device-evidence/production-acls-measured-2026-10-17.md` (all 37 functions `anon`-executable today).
+
+### 15a. The second closure — `0216`, the people table — 2026-10-17
+
+`0215` closes functions. The read-only measurement of production also found `anon` holding
+INSERT/UPDATE/DELETE on four **tables** (`audit_events`, `customer_payments`, `stock_adjustments`,
+`users`). Three of those the batch already closes — `0212` re-applies `0195`'s
+`REVOKE INSERT, UPDATE, DELETE, TRUNCATE` on the money tables, `0213` replaces `audit_events`' legacy
+always-true policy and installs `audit_events_no_client_writes … with check (false)` — but nothing in the
+range names `public.users`, and hosted QA measures `anon` false there only because its grants were built
+by the migrations while production's were made out of band. A privilege a migration never granted cannot
+be closed by one that does not name it.
+
+`0216_an_unauthenticated_caller_cannot_write_the_people_table.sql` (1 statement) revokes
+INSERT/UPDATE/DELETE/TRUNCATE on `public.users` from `anon`, leaves `authenticated` untouched (the app
+edits profile rows directly — `src/lib/auth.ts`, the settings screens, `stores/employeesStore.ts` — so
+narrowing that role is a product change, not a hardening), and compares the before/after readings of both
+roles rather than hard-coding them, so it applies on a schema with no grants at all.
+
+```text
+$ node scripts/verify-forward-on-baseline.mjs --baseline production --files <batch 1+2 + 0209–0216>
+  SUMMARY PASS: 21 files, 447 statements, 0 sql failures, 0 env-gap failures
+$ node scripts/verify-forward-on-baseline.mjs --baseline staging --files <0207–0216>
+  SUMMARY PASS: 10 files, 397 statements, 0 sql failures, 0 env-gap failures
+$ node scripts/migrate.mjs apply --env staging --apply
+  ✓ 0216_an_unauthenticated_caller_cannot_write_the_people_table.sql (1 statement(s), recorded)
+$ node scripts/migrate.mjs verify --env staging
+  Ledger: 208 row(s) in schema_migrations (+ file hashes)
+  Directory and ledger agree exactly: every file recorded, every record has a file, every hash matches.
+  VERIFY: PASS
+```
+
+**Still open, and deliberately not guessed at:** production's `users` table carries an always-true policy
+and `authenticated` holds INSERT/UPDATE/DELETE there, so which ROWS a signed-in principal may edit is an
+owner decision (plan §9.9). `0216` removes the half that has no product meaning.
+
+### 15b. The widening `0215` introduced, and `0217` — 2026-10-17
+
+`0215` closed `anon` and, in the same statement, granted `authenticated` EXECUTE on every function on
+the write surface — a widening, which §6 forbids. It was found the same way as 15's defect, by the
+repository's own guards running against QA:
+
+```
+FAIL tests/integration/saleIdempotency.test.ts
+     4. the unchecked implementation is not reachable from an authenticated client
+FAIL tests/integration/tenantResolverReplay.test.ts > the chain is internal
+     anon and authenticated cannot execute the resolvers → [ 'create_shop_internal' ]
+```
+
+`0217_a_retired_function_is_not_for_the_client.sql` (1 statement) revokes `PUBLIC, anon, authenticated`
+from the ledger's fifteen server-only functions, each inside an existence test, and raises if any is
+still reachable. Its list is read from the ledger by `tests/unit/writeRpcAnonGuard.test.ts` in both
+directions, so a newly retired function cannot be missed and a stale name cannot sit in the file.
+
+`0215` itself keeps its recorded effect and its file; the only edit to it after the apply was white —
+`LOOP` moved onto the preceding line so the repository's identifier-split guard can read the file. That
+edit was recorded through `migrate reconcile`, which first proved it: *"Compared with the recorded
+statements, ignoring comments and whitespace: identical"*, and stored the reason alongside the new hash.
+
+```text
+$ node scripts/migrate.mjs reconcile --env staging --version 0215 --reason "whitespace only: …" --apply
+  Reconciled 0215: the new hash is recorded, with the reason.
+$ node scripts/migrate.mjs verify --env staging
+  Ledger: 209 row(s) in schema_migrations (+ file hashes)
+  Directory and ledger agree exactly: every file recorded, every record has a file, every hash matches.
+  VERIFY: PASS
+$ node scripts/verify-forward-on-baseline.mjs --baseline production --files <batch 1+2 + 0209–0217>
+  SUMMARY PASS: 22 files, 448 statements, 0 sql failures, 0 env-gap failures
+$ node scripts/verify-forward-on-baseline.mjs --baseline staging --files <0207–0217>
+  SUMMARY PASS: 11 files, 398 statements, 0 sql failures, 0 env-gap failures
+```
+
+**The lesson, again the same one:** a guard that asks one question answers one question. `0215`'s own
+assertion asked "can `anon` reach the surface?", and the answer was correct while the file was still
+wrong. What caught it was a *different* guard asking about `authenticated`, which is why the two live
+integration guards are part of the acceptance test for this batch rather than a formality.
+
+---
+
+## 16. The Own-shop closures — `0218`, `0219` — 2026-10-17
+
+Two policies, both decided by the owner rather than discovered: a permission override may only be
+written for a person who belongs to the caller's shop, and a `users` row may only be read or written
+inside the caller's shop. Both are applied to hosted QA and recorded; **production is untouched**.
+
+| File | What it changes | Verified |
+|---|---|---|
+| `0218_permission_overrides_stay_in_their_shop.sql` | all three `user_permissions` policies now require a `memberships` row for the target in `current_shop_id()`; self-reads unchanged | 2 statements, 0 failures on both baselines; QA applied |
+| `0219_the_people_table_is_its_own_shop.sql` | drops any policy on `public.users` whose expression is exactly `true`, installs the shop-scoped `users_select`/`users_insert`/`users_update` (plus self), asserts none survives | 2 statements, 0 failures on both baselines; QA applied |
+
+```text
+$ node scripts/verify-forward-on-baseline.mjs --baseline production --files <24-file batch>
+  SUMMARY PASS: 24 files, 452 statements, 0 sql failures, 0 env-gap failures
+$ node scripts/migrate.mjs apply --env staging --apply
+  ✓ 0218 (2 statements, recorded)   ✓ 0219 (2 statements, recorded)
+$ node scripts/migrate.mjs verify --env staging
+  Ledger: 211 row(s)          VERIFY: PASS
+```
+
+**Behaviour on hosted QA, measured inside rolled-back transactions** (`set local role authenticated`,
+JWT claims set to the owner of shop `1e5f7e4b…`, who is read-only relative to the other shop):
+
+| Probe | Result |
+|---|---|
+| `user_permissions` insert for a member of **another** shop | **blocked** — `42501` row-level security |
+| `user_permissions` insert for a member of the **own** shop | allowed, 1 row (rolled back) |
+| `users` update of a row in another shop | 0 rows affected |
+| `users` update of a row in the own shop | 1 row (rolled back) |
+| `users` select of rows outside the active shop | 0 rows |
+| always-true permissive policies left on `users` | 0 |
+
+**One reconciliation, recorded rather than hidden.** `0219` was applied, then one line was rejoined
+(`loop` + its `execute` on one line) so the replay guard does not read a bare keyword line as a split
+identifier. `migrate.mjs reconcile` compared the statements ignoring comments and whitespace, reported
+**identical**, and re-recorded the hash with that reason. The applied behaviour never changed.

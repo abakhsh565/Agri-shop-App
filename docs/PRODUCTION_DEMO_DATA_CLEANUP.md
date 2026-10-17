@@ -1,3 +1,10 @@
+> **EXECUTED 2026-10-18.** The demo identities — and the catalog they created — were removed from
+> production by `scripts/clean-production-demo-data.mjs` (rehearsed, backed up, then applied with an
+> explicit confirmation token). The tenant shell was kept on purpose: production has no
+> `approve_shop_request`, so deleting the shop would leave no route back to a working tenant. See
+> [`device-evidence/production-demo-identities-removed-2026-10-18.md`](../device-evidence/production-demo-identities-removed-2026-10-18.md).
+> The runbook below describes the older, all-or-nothing tenant decision and is kept for that case.
+
 # Cleanup runbook — the demo rows in production
 
 **Owner-run.** Nothing in this repository connects to production, so this is a runbook, not a

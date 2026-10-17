@@ -41,8 +41,15 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { baselineMetadataPath, isDataStatement, selectForwardFiles, validateBaselineMetadata } from '../lib/baseline.mjs';
-import { splitStatements } from '../lib/sql-statements.mjs';
+import {
+  EXPECTED_PHASE,
+  baselineMetadataPath,
+  isDataStatement,
+  phaseReader,
+  selectForwardFiles,
+  validateBaselineMetadata,
+} from '../lib/baseline.mjs';
+import { splitStatements, splitStatementsWithOffsets } from '../lib/sql-statements.mjs';
 
 const ROOT = path.resolve(import.meta.dirname, '../..');
 const MIGRATIONS = path.join(ROOT, 'supabase/migrations');
@@ -117,9 +124,17 @@ if (artifactSha !== record.artifactSha256) refuse(`artifact sha256 mismatch: rec
 if (artifactBytes.length !== record.artifactBytes) refuse(`artifact length mismatch: recorded ${record.artifactBytes}, on disk ${artifactBytes.length}`);
 
 // ── Load the baseline's SCHEMA (never its data) into a scratch database ──────────────────────
-const statements = splitStatements(artifactBytes.toString('utf8'));
-const dataStatements = statements.filter(isDataStatement);
-const schemaStatements = statements.filter((s) => !isDataStatement(s));
+// The artifact's own `-- @phase:` markers are read with the same rule `restore-verify` and the PGlite
+// verifier use, so a baseline statement that cannot run before the tables exist is reported as
+// expected rather than as a broken baseline — without being swallowed: it is counted and printed.
+const artifactText = artifactBytes.toString('utf8');
+const phaseAt = phaseReader(artifactText);
+const statements = splitStatementsWithOffsets(artifactText).map((entry) => ({
+  text: entry.text,
+  phase: phaseAt(entry.offset),
+}));
+const dataStatements = statements.filter((entry) => isDataStatement(entry.text));
+const schemaStatements = statements.filter((entry) => !isDataStatement(entry.text));
 if (dataStatements.length !== record.dataStatements) {
   refuse(`the record says ${record.dataStatements} data statements; the splitter found ${dataStatements.length} — the record and the artifact disagree.`);
 }
@@ -162,9 +177,54 @@ adminSql('create extension if not exists pgcrypto; create extension if not exist
 docker(['exec', container, 'psql','-U','postgres','-d', DB_NAME, '-X','-q','-v','ON_ERROR_STOP=0',
   '-c', 'create extension if not exists pgcrypto; create extension if not exists pg_trgm;']);
 
+// ── The second thing the artifact cannot carry: hosted's DEFAULT PRIVILEGES ──────────────────
+/**
+ * WHY THIS RUNS HERE
+ *   The baseline artifact contains no GRANT at all, and a freshly created database has no default
+ *   privileges to give: that is a property of the artifact and of a new database, not of the schema.
+ *   `scripts/dev/local-db.mjs` documents the consequence and installs hosted's mapping before its
+ *   objects exist; a rehearsal database needs the same base for the same reason, and its absence was
+ *   measured rather than assumed — the first intent probe of the production-baseline rehearsal
+ *   reported `authenticated` unable to SELECT `sales`, `products`, `customers` and `companies`, which
+ *   said nothing about the batch and everything about the database it was asked.
+ *
+ *   The SQL is kept IDENTICAL to `local-db.mjs`'s (a unit test compares the two literals), and it is
+ *   applied BEFORE the baseline loads, so it is a default for every object created afterwards — the
+ *   same order hosted has, and the only order in which a forward file's REVOKE can mean anything.
+ *   Applied after the batch it would undo 0189's and 0195's revokes.
+ */
+const PLATFORM_DEFAULTS_SQL = `
+alter default privileges in schema public
+  grant all on tables to anon, authenticated, service_role;
+alter default privileges in schema public
+  grant select, update, usage on sequences to anon, authenticated, service_role;
+alter default privileges in schema public
+  grant execute on functions to anon, authenticated, service_role;
+`;
+// `adminSql` connects to the `postgres` maintenance database — that is deliberately where create/drop
+// run — so the defaults have to be applied through a connection to the scratch database itself.
+{
+  const applied = docker(['exec', container, 'psql','-U', 'postgres','-d', DB_NAME, '-X','-q','-v','ON_ERROR_STOP=1',
+    '-c', PLATFORM_DEFAULTS_SQL]);
+  if (applied.status !== 0) {
+    refuse(`the platform default privileges could not be applied in ${DB_NAME}: ${(applied.stderr || applied.stdout).trim().split('\n')[0]}`);
+  }
+}
+// The ALTER is a no-op when it runs as a role that is not the one creating the objects, and a rehearsal
+// that silently lost its platform base would answer every privilege question with "denied" — the exact
+// false negative this block exists to prevent. Read it back instead of trusting it.
+{
+  const acl = docker(['exec', container, 'psql','-U','postgres','-d', DB_NAME, '-X','-t','-A','-c',
+    "select coalesce(string_agg(coalesce(d.defaclacl::text, ''), ' '), '(none)') from pg_default_acl d " +
+      "where d.defaclrole = 'postgres'::regrole and d.defaclnamespace = 'public'::regnamespace and d.defaclobjtype = 'r'"]).stdout.trim();
+  if (!/authenticated=arwdDxtm/.test(acl)) {
+    refuse(`the platform default privileges did not take in ${DB_NAME} (pg_default_acl said ${acl || '(nothing)'}). Every privilege check after this would be about a database no hosted project resembles.`);
+  }
+}
+
 function applyStatements(list) {
   const failures = [];
-  for (const statement of list) {
+  for (const { text: statement, phase } of list) {
     const out = runSql(statement);
     // stderr included: psql reports SQL errors there, and a harness that reads only stdout would
     // score every failing statement as a success.
@@ -172,6 +232,7 @@ function applyStatements(list) {
       // The statement is kept WHOLE for the pre-table retry below; only its display form is cut.
       failures.push({
         statement,
+        phase,
         display: statement.split('\n')[0].slice(0, 90),
         error: (out.text.match(/ERROR:[^\n]*/) ?? [`psql exit ${out.status}`])[0].slice(0, 200),
       });
@@ -184,11 +245,16 @@ const baselinePass1 = applyStatements(schemaStatements);
 // The artifact interleaves a `functions-pre-tables` phase: a function that returns a table row type
 // cannot exist before its table. The PGlite loader reports those as expected and re-applies them
 // after the tables exist; the same rule holds on a real engine, so the retry is mirrored here.
-const retry = applyStatements(baselinePass1.failures.map((f) => f.statement));
+const retry = applyStatements(baselinePass1.failures.map((f) => ({ text: f.statement, phase: f.phase })));
 // Whatever still fails after the retry is reported as it is. It is not swallowed and not classified
 // away: the schema load's own result is part of the evidence, and a silently broken baseline would
 // invalidate everything the selection proves.
 const baselineFailures = retry.failures;
+// Only a failure in an authoritative phase says the baseline is broken. The pre-table pass is
+// best-effort BY CONSTRUCTION (a function returning a table's row type cannot exist before it), and
+// the PGlite verifier classes those the same way — this is the same rule, so the two reports agree.
+const unexpectedBaselineFailures = baselineFailures.filter((failure) => failure.phase !== EXPECTED_PHASE);
+const expectedPhaseFailures = baselineFailures.length - unexpectedBaselineFailures.length;
 
 // ── The selection ────────────────────────────────────────────────────────────────────────────
 const entries = fs.readdirSync(MIGRATIONS).filter((f) => f.endsWith('.sql')).sort()
@@ -209,7 +275,10 @@ if (filesArg) {
 
 const results = [];
 for (const entry of selection) {
-  const fileStatements = splitStatements(fs.readFileSync(path.join(MIGRATIONS, entry.filename), 'utf8'));
+  const fileStatements = splitStatements(fs.readFileSync(path.join(MIGRATIONS, entry.filename), 'utf8')).map((text) => ({
+    text,
+    phase: 'forward',
+  }));
   const outcome = applyStatements(fileStatements);
   results.push({ filename: entry.filename, statements: outcome.attempted, failures: outcome.failures.length, messages: outcome.failures.slice(0, 6).map((f) => f.error) });
 }
@@ -219,18 +288,21 @@ const report = {
   generatedAt: new Date().toISOString(),
   engine: { kind: 'local-supabase-cli-stack', container, serverVersion, platformExtensionsAvailable: platformExtensions },
   baseline: { environment: baselineArg, artifact: record.artifact, artifactSha256: artifactSha, dataStatementsCounted: dataStatements.length, dataStatementsApplied: 0 },
+  platformPrivileges: 'hosted default privileges applied before the baseline loads (mirrors scripts/dev/local-db.mjs) — the artifact carries no GRANT, so without this an ACL check would be about an empty database',
   scratchDatabase: DB_NAME,
   platformSchemas: 'auth, storage, extensions — copied schema-only from the local stack, so a file that touches storage is judged on a shape production has',
   schemaLoad: {
     statements: schemaStatements.length,
     failuresFirstPass: baselinePass1.failures.length,
     failuresAfterRetry: baselineFailures.length,
-    firstFew: baselineFailures.slice(0, 5).map((f) => ({ statement: f.display, error: f.error })),
+    unexpectedAfterRetry: unexpectedBaselineFailures.length,
+    expectedPhaseAfterRetry: expectedPhaseFailures,
+    firstFew: baselineFailures.slice(0, 5).map((f) => ({ statement: f.display, phase: f.phase, error: f.error })),
   },
   selection: { kind: filesArg ? 'files' : 'since', since: since ?? null, files: selection.map((e) => e.filename) },
   results,
   summary: { files: results.length, statements: totals.statements, sqlFailures: totals.failures },
-  status: totals.failures === 0 && baselineFailures.length === 0 ? 'PASS' : 'FAIL',
+  status: totals.failures === 0 && unexpectedBaselineFailures.length === 0 ? 'PASS' : 'FAIL',
 };
 
 // ── Compare with a PGlite report, when one is given ──────────────────────────────────────────
@@ -257,7 +329,10 @@ console.log(`\nRehearsal on the local Supabase engine — ${baselineArg} baselin
 console.log(`  engine      : ${container} (Postgres ${serverVersion}; extensions available: ${platformExtensions || 'none'})`);
 console.log(`  baseline    : ${record.artifact}`);
 console.log(`  data        : ${dataStatements.length} statements counted, 0 applied (production rows are not loaded)`);
-console.log(`  schema load : ${schemaStatements.length} statements, ${baselineFailures.length} failures after the pre-table retry`);
+console.log(
+  `  schema load : ${schemaStatements.length} statements, ${unexpectedBaselineFailures.length} failures after the pre-table retry` +
+    (expectedPhaseFailures ? ` (${expectedPhaseFailures} expected-phase, the artifact's own best-effort pass — not the batch's doing)` : ''),
+);
 console.log(`  scratch db  : ${DB_NAME} (the local development database is untouched)\n`);
 for (const r of results) console.log(`  ${r.failures === 0 ? '✓' : '✗'} ${r.filename}: ${r.statements} statements, ${r.failures} failures${r.messages[0] ? `\n      ${r.messages[0]}` : ''}`);
 console.log(`\nSUMMARY ${report.status}: ${report.summary.files} files, ${report.summary.statements} statements, ${report.summary.sqlFailures} sql failures`);

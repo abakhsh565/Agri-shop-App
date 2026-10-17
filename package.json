@@ -45,8 +45,12 @@
     "verify:workflow": "node scripts/verify-workflow-safety.mjs",
     "verify:baseline": "node scripts/verify-forward-on-baseline.mjs",
     "rehearse:engine": "node scripts/dev/rehearse-on-local-engine.mjs",
+    "extract:functions": "node scripts/dev/extract-missing-functions.mjs",
     "rehearse:restore": "node scripts/dev/rehearse-restore-local-engine.mjs",
-    "index:build": "node scripts/dev/index.mjs"
+    "index:build": "node scripts/dev/index.mjs",
+    "rehearse:flows": "node scripts/rehearse-production-flows.mjs",
+    "measure:production-final-state": "node scripts/measure-production-final-state.mjs",
+    "probe:isolation": "node scripts/dev/probe-two-shop-isolation.mjs"
   },
   "dependencies": {
     "@aparajita/capacitor-biometric-auth": "^9.1.2",

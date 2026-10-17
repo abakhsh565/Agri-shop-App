@@ -165,8 +165,19 @@ describe('the plan’s premises cannot drift unnoticed', () => {
     expect(gateCall, 'the gate must be checked before the target is opened').toBeLessThan(connection);
   });
 
-  test('the plan still says nothing has been applied', () => {
-    expect(plan).toMatch(/NOTHING HAS BEEN APPLIED/);
+  test('the plan records what was applied, and what the apply did not fix', () => {
+    // This test used to assert the opposite: that the plan still said nothing had been applied. That
+    // sentence is no longer true, and a plan that kept saying it would be the same defect from the
+    // other side — a record that does not match the database. What must hold now is that the claim is
+    // specific (which versions, how many ledger rows), sourced (the after-state measurement), honest
+    // about the blocker the apply created, and still gated on §8. A plan that said "applied" and
+    // stopped there would pass a weaker test and fail the shop.
+    expect(plan).toMatch(/APPLIED 2026-10-17/);
+    expect(plan, 'the applied ledger position is not named').toMatch(/34 rows, latest `0221`/);
+    expect(plan, 'the after-state measurement is not linked').toContain(
+      'device-evidence/production-apply-verification-2026-10-17.md',
+    );
+    expect(plan, 'the branch-data blocker is not stated').toContain('0 of 52 sales');
     expect(plan, 'the approval gate disappeared').toContain('## 8. Approval gate and preconditions');
   });
 });

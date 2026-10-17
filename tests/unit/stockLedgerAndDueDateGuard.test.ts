@@ -452,10 +452,22 @@ describe('the guard is not vacuous', () => {
 
   it('reads each function from the migration that defines it last', () => {
     // The whole point of `latestDefinition`: a later migration wins, so a redefined writer that
-    // forgets the insert is checked instead of the historical one that had it.
-    expect(saleWriter.file).toMatch(/^\d{4}_/);
-    expect(returnWriter.file).toMatch(/^\d{4}_/);
-    expect(saleWriter.file <= '0198_a_sale_keeps_its_due_date_and_leaves_a_movement.sql').toBe(true);
-    expect(returnWriter.file <= '0198_a_sale_keeps_its_due_date_and_leaves_a_movement.sql').toBe(true);
+    // forgets the insert is checked instead of the historical one that had it. The expected file is
+    // COMPUTED from the directory rather than written down, because the re-issue of 0177–0198
+    // (`0214`) now carries the last definition of both writers: the same bodies as `0198`, re-expressed
+    // after `0208` so they can be applied to a production that never replayed the history.
+    const lastDefining = (pattern: RegExp) =>
+      migrationFiles()
+        .filter((entry) => pattern.test(entry.sql))
+        .map((entry) => entry.file)
+        .sort()
+        .at(-1) ?? '(missing)';
+
+    expect(saleWriter.file).toBe(lastDefining(/CREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\s+(?:public\.)?create_sale_unchecked\s*\(/i));
+    expect(returnWriter.file).toBe(lastDefining(/CREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\s+(?:public\.)?process_return\s*\(/i));
+    // And the file the rule picked is at least the one that carried the fix: a stale pick from earlier
+    // in the ledger would satisfy "last wins" only by accident.
+    expect(saleWriter.file >= '0198_a_sale_keeps_its_due_date_and_leaves_a_movement.sql').toBe(true);
+    expect(returnWriter.file >= '0198_a_sale_keeps_its_due_date_and_leaves_a_movement.sql').toBe(true);
   });
 });

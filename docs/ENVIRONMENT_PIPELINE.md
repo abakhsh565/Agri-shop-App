@@ -63,6 +63,19 @@ recorded green (2026-09-24/27) in `ENGINEERING_OS_STATE.md`; QA cleaning is opt-
 
 ## Stage 4 — Production: **not met, and it is the deepest gap**
 
+> **Update 2026-10-18 — three of the gaps below are closed, two remain.** (1) There *is* a release
+> path now: `migrate.mjs apply --env production --files` behind the four preconditions in §7(a) of
+> `PRODUCTION_MIGRATION_PLAN.md`, and a code release path that waits for CI — `vercel.json` no longer
+> auto-deploys `main`, and `.github/workflows/deploy-production.yml` asks Vercel to build one exact
+> commit only after that commit's CI run concluded `success` and it is still `main`'s head. (2) The
+> backup gap is closed: nightly production backups are green and every apply starts from a
+> restore-verified artifact. (3) Schema divergence and demo data are closed as measured in
+> `production-closed-out-2026-10-17.md`. **Still open:** production has never been restored (a restore
+> is human-approved, and the rollback point is the pre-apply backup), and there is still no
+> error-reporting instrument. The deploy path needs one owner action before it can publish:
+> `VERCEL_TOKEN` as a repository secret plus `VERCEL_PROJECT_ID`/`VERCEL_TEAM_ID` as repository
+> variables — without them the workflow refuses and nothing deploys.
+
 Production is `gkswcfljxlutkfdvvqng` (`PROD_*`, cluster fingerprint `7666007964130682852`).
 
 **What is enforced** — production is deliberately hard to touch, and that part works:
