@@ -19,7 +19,7 @@ says so instead of claiming a pass.
 | `.github/workflows/deploy-production.yml` | Runs on a completed CI run (or a dispatch). The job's `if:` requires `conclusion == 'success'` **and** `head_branch == 'main'`; a failed run never enters the job. |
 | `scripts/lib/deploy-gate.mjs` | The decision, pure: trigger, conclusion, branch, gated SHA vs current `main` head, token and project present. |
 | `scripts/deploy/trigger-production.mjs` | Resolves `origin/main` with `git ls-remote`, asks the gate, and **only then** asks Vercel for `POST /v13/deployments` with `gitSource.sha` = the gated commit — never "the branch". A dispatch fetches that commit's own CI conclusion from GitHub and applies the same rule. |
-| `tests/unit/productionDeployGate.test.ts` | 17 tests: the decision matrix, the repository wiring, and the script end to end against a local fake Vercel API. |
+| `tests/unit/productionDeployGate.test.ts` | 18 tests: the decision matrix, the repository wiring, and the script end to end against a local fake Vercel API. |
 
 ### Failed-gate behaviour — measured
 
@@ -123,7 +123,7 @@ moves.
 ## 3. Unrelated work preserved, and the checks that passed
 
 * `npx tsc --noEmit` — clean.
-* `npx vitest run tests/unit` — **81 files, 1050/1050** (was 1020 before these tests; the 30 new ones
+* `npx vitest run tests/unit` — **81 files, 1051/1051** (was 1020 before these tests; the 31 new ones
   are the gate and fingerprint suites).
 * `npm run build` — succeeds.
 * `node --check` on every changed script, and `node scripts/migrate.mjs --help` loads the new imports.
