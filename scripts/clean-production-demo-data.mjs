@@ -209,11 +209,11 @@ try {
     ['auth one-time tokens', 'delete from auth.one_time_tokens'],
     ['auth sessions', 'delete from auth.sessions'],
     ['auth users (the two demo logins)', 'delete from auth.users'],
-    // NOT deleted: storage.objects. Supabase refuses a direct delete there ("Direct deletion from
-    // storage tables is not allowed. Use the Storage API instead.") and this process holds the
-    // database password, not a service-role key. The 71 demo images stay in their buckets, orphaned
-    // — no row references them any more — and are reported as the one remnant below rather than
-    // silently half-removed.
+    // NOT deleted here: storage.objects. Supabase refuses a direct delete there ("Direct deletion
+    // from storage tables is not allowed. Use the Storage API instead."), and the Storage API is the
+    // only path that removes the object itself rather than just its row. The 71 demo images were
+    // removed through that API on 2026-10-18 (0 objects remained; a former public URL answers 400),
+    // so this script reports the count instead of pretending it can delete them.
   ];
   for (const [label, sql] of steps) {
     const result = await client.query(sql);

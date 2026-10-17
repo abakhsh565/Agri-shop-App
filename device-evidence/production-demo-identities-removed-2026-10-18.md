@@ -28,10 +28,7 @@ rehearsal of the same statements (transaction, every check, `rollback`). Backup 
 reads, not people or business records; production has no `approve_shop_request`/`create_shop_for_me`,
 so deleting the shop would leave the database with no route back to a working tenant.
 
-**One remnant, named rather than hidden:** 71 demo images remain in the four storage buckets.
-Supabase refuses `delete from storage.objects` ("Direct deletion from storage tables is not allowed.
-Use the Storage API instead") and this process holds the database password, not a service-role key.
-No row references them any more.
+**The 71 demo images were removed too, later the same day — see §5.**
 
 ### The guards that ran before the delete
 
@@ -130,7 +127,47 @@ The four seeded numbers (`923001234567`, `923009876543`, `923001122334`, `923001
 nowhere in `public.users`, `auth.users`, `auth.identities`, `shop_requests` or the customer/supplier
 phone columns — measured inside the applying transaction and again afterwards.
 
-## 5. Verification run for this change
+## 5. The 71 demo images, and the policy that let an anonymous client delete them
+
+`storage.objects` refuses a direct delete ("Direct deletion from storage tables is not allowed. Use
+the Storage API instead"), so the objects were removed through the Storage API itself —
+`DELETE /storage/v1/object/<bucket>` with `{prefixes: […]}` — in four calls:
+
+```
+objects before: 71
+  company-logos:    5 → HTTP 200
+  customer-images: 15 → HTTP 200
+  employee-photos: 37 → HTTP 200
+  product-images:  14 → HTTP 200
+objects after: 0
+a former public URL → HTTP 400 (no longer served)
+```
+
+**The finding that made this possible, and that is still open.** No service-role key was used: the
+four calls carried only the project's *publishable* key, from an unauthenticated client. production's
+`storage.objects` carries four policies addressed to role `public` —
+
+```
+public_all_storage_delete  DELETE  USING (bucket_id = ANY(ARRAY['product-images','employee-photos','company-logos','customer-images']))
+public_all_storage_insert  INSERT  CHECK (bucket_id = ANY(…same four…))
+public_all_storage_update  UPDATE  USING (bucket_id = ANY(…same four…))
+public_all_storage_select  SELECT  USING (bucket_id = ANY(…same four…))
+```
+
+— so anyone who has the key the browser bundle already ships can delete, overwrite or upload any
+image in all four buckets. That is the same class of defect `0228` fixed for `business_settings`,
+`customer_crops` and `reminder_configs`; the storage policies were missed because they live in the
+`storage` schema. The authenticated pair (`images auth delete/update/write`, `Authenticated users can
+delete their uploads`) is also bucket-wide rather than owner-scoped, so one signed-in shop could
+delete another's images through the API.
+
+**Recommended fix (not applied):** drop the four `public_all_storage_*` policies, keep public
+`SELECT` (images must be serveable), and scope `INSERT/UPDATE/DELETE` to `authenticated` with
+`owner_id = auth.uid()::text` — the owner column Supabase sets on upload (the demo rows carried an
+empty `owner_id` because they predate that). The app only uploads while signed in, so nothing it
+does depends on anonymous write.
+
+## 6. Verification run for this change
 
 | Check | Result |
 |---|---|
