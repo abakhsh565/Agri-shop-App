@@ -866,7 +866,14 @@ async function runProductionApply() {
   await ensureLedger(target);
   const applied = [];
   for (const entry of gate.toApply) {
-    const outcome = await applyOne(target, entry);
+    // The gate hands back directory entries (version/name/hash/mtime) — the SQL itself is read here,
+    // from the very file the gate verified. Without this the splitter receives `undefined`, which is
+    // exactly how the first attempt to apply this batch to production ended: gate PASS, then a crash
+    // before a single statement ran.
+    const outcome = await applyOne(target, {
+      ...entry,
+      body: fs.readFileSync(path.join(dir, entry.filename), 'utf8'),
+    });
     if (!outcome.ok) {
       const after = await objectsPresentAfterRollback(target, entry);
       const ledgerRowPresent =
