@@ -104,6 +104,18 @@ describe('the repository wiring', () => {
     expect(workflow).not.toMatch(/\|\|\s*true/);
     expect(workflow).not.toMatch(/vercel\s+(deploy|--prod)/);
   });
+
+  it('names the CI workflow it waits for, exactly as ci.yml names it', () => {
+    // A rename on either side would leave this workflow waiting for a run that never arrives: the
+    // gate would not be wrong, it would be silent. Pin the coupling.
+    const ci = fs.readFileSync(path.join(ROOT, '.github/workflows/ci.yml'), 'utf8');
+    const ciName = /^name:\s*(.+)$/m.exec(ci)?.[1].trim();
+    expect(ciName).toBeTruthy();
+    const deploy = fs.readFileSync(path.join(ROOT, '.github/workflows/deploy-production.yml'), 'utf8');
+    expect(deploy).toContain(`workflows: ['${ciName}']`);
+    // And CI must run on a push to main, or there is no run to wait for.
+    expect(ci).toMatch(/push:\s*\n\s*branches:\s*\[[^\]]*main[^\]]*\]/);
+  });
 });
 
 describe('the trigger script end to end, against a local fake Vercel API', () => {
