@@ -474,3 +474,42 @@ $ node scripts/verify-forward-on-baseline.mjs --baseline staging --files <0207�
 assertion asked "can `anon` reach the surface?", and the answer was correct while the file was still
 wrong. What caught it was a *different* guard asking about `authenticated`, which is why the two live
 integration guards are part of the acceptance test for this batch rather than a formality.
+
+---
+
+## 16. The Own-shop closures — `0218`, `0219` — 2026-10-17
+
+Two policies, both decided by the owner rather than discovered: a permission override may only be
+written for a person who belongs to the caller's shop, and a `users` row may only be read or written
+inside the caller's shop. Both are applied to hosted QA and recorded; **production is untouched**.
+
+| File | What it changes | Verified |
+|---|---|---|
+| `0218_permission_overrides_stay_in_their_shop.sql` | all three `user_permissions` policies now require a `memberships` row for the target in `current_shop_id()`; self-reads unchanged | 2 statements, 0 failures on both baselines; QA applied |
+| `0219_the_people_table_is_its_own_shop.sql` | drops any policy on `public.users` whose expression is exactly `true`, installs the shop-scoped `users_select`/`users_insert`/`users_update` (plus self), asserts none survives | 2 statements, 0 failures on both baselines; QA applied |
+
+```text
+$ node scripts/verify-forward-on-baseline.mjs --baseline production --files <24-file batch>
+  SUMMARY PASS: 24 files, 452 statements, 0 sql failures, 0 env-gap failures
+$ node scripts/migrate.mjs apply --env staging --apply
+  ✓ 0218 (2 statements, recorded)   ✓ 0219 (2 statements, recorded)
+$ node scripts/migrate.mjs verify --env staging
+  Ledger: 211 row(s)          VERIFY: PASS
+```
+
+**Behaviour on hosted QA, measured inside rolled-back transactions** (`set local role authenticated`,
+JWT claims set to the owner of shop `1e5f7e4b…`, who is read-only relative to the other shop):
+
+| Probe | Result |
+|---|---|
+| `user_permissions` insert for a member of **another** shop | **blocked** — `42501` row-level security |
+| `user_permissions` insert for a member of the **own** shop | allowed, 1 row (rolled back) |
+| `users` update of a row in another shop | 0 rows affected |
+| `users` update of a row in the own shop | 1 row (rolled back) |
+| `users` select of rows outside the active shop | 0 rows |
+| always-true permissive policies left on `users` | 0 |
+
+**One reconciliation, recorded rather than hidden.** `0219` was applied, then one line was rejoined
+(`loop` + its `execute` on one line) so the replay guard does not read a bare keyword line as a split
+identifier. `migrate.mjs reconcile` compared the statements ignoring comments and whitespace, reported
+**identical**, and re-recorded the hash with that reason. The applied behaviour never changed.
