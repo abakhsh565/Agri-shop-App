@@ -104,6 +104,26 @@ person who does not own this product.
    membership + `shops.owner_id`), and the app works with the empty shop exactly as a fresh install
    would. No demo row, no demo number, no bypass.
 
+### The attach is built and rehearsed, waiting only on the sign-in
+
+`scripts/attach-production-owner.mjs` writes the profile, the owner membership, the active-shop row
+and `shops.owner_id` for the id Supabase creates when the owner verifies a code on their own phone.
+It refuses a non-production target, a tenant that is not the empty one, a number with no login
+(`exit 3`, "sign in with the code first"), and `--apply` without `--confirm ATTACH-PRODUCTION-OWNER`;
+`--simulate-first-signin` is a rehearsal aid that is refused with `--apply`.
+
+Rehearsed on production with a throwaway auth row, rolled back:
+
+```
+simulated first sign-in: throwaway auth row …   (rolled back)
+wrote profile …, owner membership in 00000000-…0001, active shop/branch, shops.owner_id
+lookup by phone → Shop Owner, owner · active shop 00000000-…0001 · 32 permissions
+REHEARSAL PASSED — rolling back, nothing changed
+```
+
+That rehearsal also proves the two door properties: an unauthenticated `lookup_user_by_phone` returns
+the door answer with **no `id`**, and the same call under the owner's claim returns the full profile.
+
 ## 4. No demo phone number remains
 
 The four seeded numbers (`923001234567`, `923009876543`, `923001122334`, `923001999999`) exist

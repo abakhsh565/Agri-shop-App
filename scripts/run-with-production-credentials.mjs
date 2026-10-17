@@ -64,6 +64,11 @@ const args = process.argv.slice(2);
  *                     logins and the catalog they created. Rehearses unless `--apply` is passed;
  *                     refuses unless `public.users` is exactly the four seeded rows and every
  *                     transaction table is empty.
+ *   attach-production-owner
+ *                     writes the profile, owner membership and `shops.owner_id` for the login
+ *                     Supabase created when the owner verifies a code on their own phone. Refuses
+ *                     unless that login exists, the tenant is empty, and `--apply --confirm` names
+ *                     the decision.
  *   migrate            `apply --env production --files <named batch>` and nothing else. It is not
  *                     trusted here: `scripts/lib/production-batch-gate.mjs` refuses it before a
  *                     credential is resolved unless the batch is named, a PASS report against
@@ -86,6 +91,7 @@ const ALLOWED_SCRIPTS = [
   'scripts/measure-production-final-state.mjs',
   'scripts/purge-production-test-transactions.mjs',
   'scripts/clean-production-demo-data.mjs',
+  'scripts/attach-production-owner.mjs',
   'scripts/rehearse-production-flows.mjs',
   'scripts/migrate.mjs',
 ].map((p) => path.join(ROOT, p));
