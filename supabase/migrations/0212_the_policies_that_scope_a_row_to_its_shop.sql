@@ -271,6 +271,7 @@ begin
     join pg_class c on c.oid = p.polrelid
    where c.relname in ('stock_adjustments', 'cash_reconciliations')
      and c.relnamespace = 'public'::regnamespace
+     and p.polpermissive
      and coalesce(pg_get_expr(p.polqual, p.polrelid), '') !~ 'current_shop_id'
      and coalesce(pg_get_expr(p.polwithcheck, p.polrelid), '') !~ 'current_shop_id';
 

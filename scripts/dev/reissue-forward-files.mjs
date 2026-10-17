@@ -382,6 +382,30 @@ const BACKSLASH = String.fromCharCode(92);
 const SQL_LF = `${BACKSLASH}n`;
 const SQL_CR = `${BACKSLASH}r`;
 
+/**
+ * 0180's own assertion, asked only of the policies that can WIDEN — because on hosted QA the two that
+ * cannot were already there.
+ *
+ * The assertion requires every policy on `stock_adjustments` / `cash_reconciliations` to mention the
+ * caller's shop. For a PERMISSIVE policy that is the right question: permissive policies OR together,
+ * so one blind policy re-opens the table. A RESTRICTIVE policy can only narrow — it ANDs — and 0195
+ * deliberately installs two of them on these tables (`permission_read_gate`,
+ * `permission_insert_gate`, whose predicate names `has_effective_permission`, not `current_shop_id`).
+ *
+ * MEASURED, and only measurable on the live schema: applying the batch to hosted QA on 2026-10-17,
+ * 0212 failed and rolled back with `0180 left a tenant-blind policy in place:
+ * stock_adjustments.permission_insert_gate, stock_adjustments.permission_read_gate`. Neither frozen
+ * baseline carries those gates, so neither rehearsal could have produced that failure. The re-issue
+ * asks the question of the policies where the answer is a boundary.
+ */
+function patchTenantBlindAssertion(statement) {
+  if (!statement.includes('tenant-blind policy in place')) return statement;
+  const anchor =
+    "   where c.relname in ('stock_adjustments', 'cash_reconciliations')\n     and c.relnamespace = 'public'::regnamespace\n";
+  if (!statement.includes(anchor)) refuse("0180: the tenant-blind assertion's catalog query moved — the re-issue cannot make it precise.");
+  return statement.replace(anchor, `${anchor}     and p.polpermissive\n`);
+}
+
 function patchTolerances(statement, version) {
   let text = statement;
   if (!text.includes('pg_get_functiondef')) return text; // not a patch block
@@ -926,7 +950,9 @@ $guard$;`),
         const patched =
           sourceVersion.version === '0192' || sourceVersion.version === '0194'
             ? patchTolerances(statement, sourceVersion.version)
-            : statement;
+            : sourceVersion.version === '0180'
+              ? patchTenantBlindAssertion(statement)
+              : statement;
         // A DO block that reads no catalog runs against whatever state it finds, and the four below
         // did not read one: they install policies and triggers across a list of tables, or assert a
         // contract. A block like that needs a declared dependency, so the generator cannot emit one

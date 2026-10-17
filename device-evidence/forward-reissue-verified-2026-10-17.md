@@ -81,6 +81,9 @@ never read out of the statement), and a guard note containing a newline, which b
 engine (`syntax error at or near "default"`) while the generator reported success — the emission now
 refuses a multi-line note.
 
+A sixth was found only on the live schema (see §7): 0180's assertion counted 0195's restrictive
+permission gates as if they were tenant-blind. It now asks only permissive policies.
+
 ## 5. What this does NOT establish
 
 * **Production's ACLs have not been measured.** The batch's own revokes and grants are asserted; the
@@ -110,6 +113,41 @@ node scripts/dev/probe-rehearsal-intent.mjs --db rehearsal_production \
 The QA lane swaps `production` for `staging` and selects `0199`–`0214`; its reports are
 `backups/baseline-staging-qa-lane-verified.json`, `backups/rehearsal-staging-qa-lane.json`.
 
-Supporting checks, all green: `npx tsc --noEmit` (exit 0), `npx vitest run tests/unit` (75 files, 987
-tests), and `node scripts/dev/reissue-forward-files.mjs --check` (the emitted files are byte-identical
-to what the generator produces).
+Supporting checks: `npx tsc --noEmit` (exit 0), `npx vitest run tests/unit` (75 files, 987 tests), and
+`node scripts/dev/reissue-forward-files.mjs --check` (the emitted files are byte-identical to what the
+generator produces).
+
+## 7. Applied to hosted QA, 2026-10-17
+
+`node scripts/migrate.mjs apply --env staging --apply` — six files, each one transaction together with
+its ledger rows:
+
+```
+✓ 0209 (25 statements, recorded)   ✓ 0212 (29, recorded)
+✓ 0210 (20, recorded)             ✓ 0213 (44, recorded)
+✓ 0211 (19, recorded)             ✓ 0214 (23, recorded)
+```
+
+**The first attempt failed, and that is the most useful result of the day.** 0209–0211 applied; then
+`0212` failed and rolled back with `0180 left a tenant-blind policy in place:
+stock_adjustments.permission_insert_gate, stock_adjustments.permission_read_gate`. Those are 0195's
+**restrictive** permission gates, which hosted QA already carries and neither frozen baseline does — a
+restrictive policy only narrows, so an assertion about "a policy that mentions neither the shop nor a
+parent row's shop" has to be asked of permissive policies. The re-issued assertion now filters on
+`p.polpermissive`; the file applied on the retry, and both baselines were re-verified afterwards with
+the same 445/429 statements and zero failures.
+
+Ledger: **206 files, 206 rows, every hash matches — `VERIFY: PASS`.**
+
+Regression against the migrated QA schema:
+
+```
+tests/integration: branchScopeEnforcement, tenantBoundarySweep, auditIntegrity, branchPlaceRead,
+                   marketplaceContract, rbacEnforcement          6 files / 79 tests PASS (exit 0)
+Playwright (the lanes verify:plan selected for this change): branchFlowCorrections, branchRemoval,
+branchResponsibility, retryAfterTimeout, roleInUseDeletion, rtlLtr, sessionRefresh
+                                                                 27 tests PASS (6.8m, exit 0)
+```
+
+The browser run drives Vite in `--mode qa`, i.e. the hosted QA project, and the global setup refuses to
+reuse a server that is not this app's QA server.

@@ -48,10 +48,24 @@ import {
 
 const args = process.argv.slice(2);
 
-/** The only commands a production credential may be handed to. Both are read-only on production. */
-const ALLOWED_SCRIPTS = ['scripts/backup-database.mjs', 'scripts/restore-verify.mjs'].map((p) =>
-  path.join(ROOT, p),
-);
+/**
+ * The only commands a production credential may be handed to. All three are read-only on production:
+ *
+ *   backup-database   reads every row and writes a LOCAL artifact
+ *   restore-verify    reads the artifact and compares it with production
+ *   measure-production-acls  reads `pg_class` / `pg_policy` / `pg_proc` inside a READ ONLY
+ *                     transaction and prints what `anon` and `authenticated` actually hold
+ *
+ * The last one was added because the question it answers had never been measured: the baseline
+ * artifact carries no GRANT at all, so no rehearsal can say what production already grants. Adding it
+ * does not widen what the credential can do — it is a third reader, and every other command is still
+ * refused before a credential is read (`npm run verify:credentials` asserts that with a canary).
+ */
+const ALLOWED_SCRIPTS = [
+  'scripts/backup-database.mjs',
+  'scripts/restore-verify.mjs',
+  'scripts/measure-production-acls.mjs',
+].map((p) => path.join(ROOT, p));
 
 function flag(name, fallback = null) {
   const i = args.findIndex((a) => a === `--${name}` || a.startsWith(`--${name}=`));
