@@ -589,3 +589,31 @@ both kinds, and for re-recording the ledger side.
 
 Production's ledger and database were **not touched** by any of this: no reconcile, no divergence
 record, no apply.
+
+### The batch found a live regression: `0232` restores the public door — 2026-10-18
+
+The first CI run on the batch went green on the ledger step and red on the integration suites, in
+three files at once, all with the same cause:
+
+```text
+view read failed: permission denied for view marketplace_listings   (42501)
+```
+
+`0223` narrowed `anon` to nothing across `public` — including `marketplace_listings`, whose `SELECT`
+grant to `anon` is the ledger's own ACL (`0185` statement 13, re-issued by `0210` and re-applied at
+the end of `0214`). The view is public **on purpose**: the farmer's own radius and the owner's
+`marketplace_enabled` flag are the boundary, and `tenantBoundarySweep` says so in as many words
+("`marketplace_listings` is readable by ANON on purpose"). `0223` is applied here and on production,
+so the correction is a new file, not an edit:
+
+| File | What it does | Verified |
+|---|---|---|
+| `0232_the_curated_view_is_the_public_door_again.sql` | restores `grant select on public.marketplace_listings to anon`; asserts anon can read it, holds no privilege on any other relation in `public`, and holds no write on the view | 2 statements; `anon` reads the view (`42501` gone) and `products`, `product_variants`, `shops`, `inventory_movements`, `sales` stay refused 5/5 |
+
+`tests/integration/securityAudit.test.ts` needed the same treatment for a different reason: its
+storage check required at least four `public_all_*` policies — it recorded the demo-era state as the
+expected one, which is the hole `0230` measured and closed. It now asserts the property that must
+hold instead: no anon/public write policy, no client `UPDATE`/`DELETE` policy, and exactly
+`images public read/SELECT` + `images auth write/INSERT`.
+
+The full integration lane was then run against QA at this revision: **43 files, 519 tests, exit 0**.

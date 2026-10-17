@@ -359,13 +359,30 @@ describe('Security Audit — RLS & Authorization', () => {
 
   // ─── Storage Security (documented) ─────────────────────────────────────────
 
-  it('Storage: public_all policies allow unrestricted access to image buckets', async () => {
+  it('Storage: no anonymous write, and exactly the two intended policies', async () => {
+    // This assertion used to require at least four `public_all_*` policies — i.e. it recorded the
+    // demo-era state as the expected one. `0230` measured what that state meant (the publishable key
+    // the browser bundle ships could delete or overwrite any image in all four buckets) and closed
+    // it. The check is therefore rewritten to the property that now has to hold, and it is stronger:
+    // it asserts an absence, the exact policy set, and that no client role can mutate an object.
     const policies = await execSqlAsAdmin(
-      `SELECT policyname, cmd FROM pg_policies WHERE schemaname = 'storage' AND tablename = 'objects' AND policyname LIKE 'public_all%'`
+      `SELECT policyname, cmd, roles::text AS roles FROM pg_policies WHERE schemaname = 'storage' AND tablename = 'objects'`
     );
-    expect(policies.rows.length).toBeGreaterThanOrEqual(4);
-    // No per-user ownership restriction at storage layer
-    // Documented as Phase 3 hardening item
+
+    const anonWrite = policies.rows.filter(
+      (p: { cmd: string; roles: string }) =>
+        ['INSERT', 'UPDATE', 'DELETE', 'ALL'].includes(p.cmd) && /(^|\{|,)\s*(public|anon)\s*(\}|,|$)/.test(p.roles),
+    );
+    expect(anonWrite, `an anonymous write policy survived: ${JSON.stringify(anonWrite)}`).toEqual([]);
+
+    const clientMutation = policies.rows.filter((p: { cmd: string }) => ['UPDATE', 'DELETE'].includes(p.cmd));
+    expect(
+      clientMutation,
+      `an object can still be updated or deleted by a client role: ${JSON.stringify(clientMutation)}`,
+    ).toEqual([]);
+
+    const names = policies.rows.map((p: { policyname: string; cmd: string }) => `${p.policyname}/${p.cmd}`).sort();
+    expect(names).toEqual(['images auth write/INSERT', 'images public read/SELECT']);
   });
 
   // ─── Users table: UPDATE policy fixed ──────────────────────────────────────
