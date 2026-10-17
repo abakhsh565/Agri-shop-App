@@ -18,10 +18,10 @@ name: Deploy production — only a gated commit
 # missing the script refuses and nothing is deployed: a missing credential is never a reason to fall
 # back to the git integration.
 #
-# Required configuration (repository secrets/variables):
-#   secret   VERCEL_TOKEN         a Vercel token that may create deployments for this project
-#   variable VERCEL_PROJECT_ID    prj_tWZoyuctxYUj6RiA60q1d3ZACK52
-#   variable VERCEL_TEAM_ID       team_pNyiPYZgdGx5L8CvqMaPL3ai
+# Required configuration (repository secrets — the names are the ones already configured):
+#   secret   VERCEL_TOKEN        a Vercel token that may create deployments for this project
+#   secret   VERCEL_PROJECTID    prj_tWZoyuctxYUj6RiA60q1d3ZACK52
+#   secret   VERCEL_TEAMID       team_pNyiPYZgdGx5L8CvqMaPL3ai
 #
 # A dispatch exists for a re-deploy or a manual gate check. It is not an override: the script reads the
 # CI run for the named commit and refuses unless that run concluded `success`.
@@ -86,6 +86,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
-          VERCEL_TEAM_ID: ${{ vars.VERCEL_TEAM_ID }}
+          # The repository's secret names are VERCEL_PROJECTID / VERCEL_TEAMID (no underscore). The
+          # script's own environment names stay descriptive; the mapping happens here, once.
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECTID }}
+          VERCEL_TEAM_ID: ${{ secrets.VERCEL_TEAMID }}
         run: node scripts/deploy/trigger-production.mjs
