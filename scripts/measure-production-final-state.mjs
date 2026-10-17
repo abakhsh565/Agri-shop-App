@@ -321,6 +321,25 @@ try {
     if (present.n === 0) missingRpcs.push(name);
   }
   check('every write RPC the app calls exists in public', missingRpcs.length === 0, { missing: missingRpcs });
+
+  // 0231: the PIN functions' bodies read two columns that only `0148` ever created, and production
+  // never received that file. PL/pgSQL resolves column names at execution, so a missing column is
+  // invisible until somebody sets a PIN — which is exactly how it failed. This asks the standing
+  // measurement to keep checking the pair.
+  const pinColumns = await one(
+    `select
+       (select data_type from information_schema.columns
+         where table_schema = 'public' and table_name = 'users' and column_name = 'pin_failed_count') count_type,
+       (select column_default from information_schema.columns
+         where table_schema = 'public' and table_name = 'users' and column_name = 'pin_failed_count') count_default,
+       (select data_type from information_schema.columns
+         where table_schema = 'public' and table_name = 'users' and column_name = 'pin_locked_until') locked_type`,
+  );
+  check(
+    'the PIN lockout columns the PIN functions use exist with the shape they assume',
+    pinColumns.count_type === 'integer' && pinColumns.count_default === '0' && pinColumns.locked_type === 'timestamp with time zone',
+    pinColumns,
+  );
 } catch (error) {
   check('the measurement completed', false, { error: `${error.message} [${error.code ?? ''}]` });
 } finally {
