@@ -632,34 +632,43 @@ async function cmdVerify({ expectCatalog = false } = {}) {
                          from pg_publication_tables where pubname = 'supabase_realtime'))::text`,
     ),
   );
+  // 0230 replaced the four demo-mode policies (`public_all_storage_*`, role PUBLIC, write included)
+  // with exactly two: public read and authenticated upload. The check follows the final state, and
+  // also fails if any of the old public-write policies comes back.
   const wantPolicies = [
+    'images auth write',
+    'images public read',
+  ];
+  const forbiddenPolicies = [
     'public_all_storage_delete',
     'public_all_storage_insert',
-    'public_all_storage_select',
     'public_all_storage_update',
   ];
   const wantPublished = [
     'companies', 'customers', 'notifications', 'product_variants', 'products', 'sales', 'users',
   ];
   const missingPolicies = wantPolicies.filter((n) => !platformObjects.storage_policies.includes(n));
+  const restoredWritePolicies = forbiddenPolicies.filter((n) => platformObjects.storage_policies.includes(n));
   const missingPublished = wantPublished.filter((n) => !platformObjects.published.includes(n));
   console.log('    · objects outside `public` (what the artifact cannot carry):');
   console.log(
-    `      ${missingPolicies.length ? '✗' : '✓'} storage.objects policies  ` +
-      `${platformObjects.storage_policies.length}  (0022 / 0199 define 4)`,
+    `      ${missingPolicies.length || restoredWritePolicies.length ? '✗' : '✓'} storage.objects policies  ` +
+      `${platformObjects.storage_policies.length}  (0230 leaves public read + authenticated upload)`,
   );
   console.log(
     `      ${missingPublished.length ? '✗' : '✓'} supabase_realtime tables ` +
       `${platformObjects.published.length}  (0144 / 0199 publish 7)`,
   );
-  if (missingPolicies.length || missingPublished.length) {
+  if (missingPolicies.length || restoredWritePolicies.length || missingPublished.length) {
     fail(
-      `the objects outside \`public\` are not restored` +
-        (missingPolicies.length ? `; missing upload policy(ies): ${missingPolicies.join(', ')}` : '') +
+      `the objects outside \`public\` are not in the state the migrations decide` +
+        (missingPolicies.length ? `; missing policy(ies): ${missingPolicies.join(', ')}` : '') +
+        (restoredWritePolicies.length ? `; a public-write policy 0230 deleted is back: ${restoredWritePolicies.join(', ')}` : '') +
         (missingPublished.length ? `; missing from supabase_realtime: ${missingPublished.join(', ')}` : '') +
-        `. Image uploads are denied and every Realtime subscription delivers nothing, while the ` +
-        `schema counts still match. Fix the forward set (0199) or the ownership step in \`init\` — ` +
-        `do not relax this check.`,
+        `. Image uploads are denied (or anonymous callers can write images) and every Realtime ` +
+        `subscription delivers nothing, while the schema counts still match. Fix the forward set ` +
+        `(0199 for realtime, 0230 for the policies) or the ownership step in \`init\` — do not relax ` +
+        `this check.`,
     );
   }
 

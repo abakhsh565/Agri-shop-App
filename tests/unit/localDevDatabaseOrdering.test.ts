@@ -188,9 +188,17 @@ describe('the objects outside `public` are restored from the definitions that es
   });
 
   it('is asserted at runtime by the tool that builds the local database', () => {
-    for (const name of new Set(policyNames)) expect(LOCAL_DB).toContain(name);
+    // 0230 replaced the four demo-mode policies 0199 restores with public read + authenticated
+    // upload, so the runtime check asserts that final state — and still names the write policies
+    // 0199 brings back, so one of them surviving fails the check instead of passing quietly.
+    expect(LOCAL_DB).toContain('images public read');
+    expect(LOCAL_DB).toContain('images auth write');
+    for (const name of ['public_all_storage_delete', 'public_all_storage_insert', 'public_all_storage_update']) {
+      expect(LOCAL_DB).toContain(name);
+    }
     for (const table of publishedTables) expect(LOCAL_DB).toMatch(new RegExp(`'${table}'`));
-    expect(LOCAL_DB).toMatch(/are not restored/);
+    expect(LOCAL_DB).toMatch(/0230/);
+    expect(LOCAL_DB).toMatch(/not in the state the migrations decide/);
   });
 });
 

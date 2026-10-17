@@ -161,11 +161,13 @@ image in all four buckets. That is the same class of defect `0228` fixed for `bu
 delete their uploads`) is also bucket-wide rather than owner-scoped, so one signed-in shop could
 delete another's images through the API.
 
-**Recommended fix (not applied):** drop the four `public_all_storage_*` policies, keep public
-`SELECT` (images must be serveable), and scope `INSERT/UPDATE/DELETE` to `authenticated` with
-`owner_id = auth.uid()::text` — the owner column Supabase sets on upload (the demo rows carried an
-empty `owner_id` because they predate that). The app only uploads while signed in, so nothing it
-does depends on anonymous write.
+**Fixed the same day:** `0230` drops every public write by catalogue sweep and removes the
+bucket-wide authenticated UPDATE/DELETE policies, leaving one public `SELECT` and one authenticated
+`INSERT` restricted to the four buckets. Ownership is not expressed as `owner_id = auth.uid()` because
+this deployment cannot prove that column is populated; the app never updates or deletes an object, so
+no client write policy is needed at all. Applied through the production batch gate, rehearsed and
+verified against the live project — see
+[production-storage-authorization-2026-10-18.md](production-storage-authorization-2026-10-18.md).
 
 ## 6. Verification run for this change
 
