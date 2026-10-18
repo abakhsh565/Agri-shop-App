@@ -9,13 +9,16 @@
  * A run that cannot claim THROWS here. Vitest then reports one failure and never loads a file, which
  * is the point: the second run must stop BEFORE it can delete someone else's fixtures, not halfway
  * through, where the damage is already done. The same is true of a run whose configured database is
- * not the QA project: it stops before the first connection, not after the first assertion.
+ * not the QA project — it stops before the first connection — and of a session whose cluster is not
+ * the one enrolled for staging, which stops before the lock is claimed.
  *
  * A unit-only run (`npx vitest run tests/unit` — the CI gates job) never reaches QA and never claims.
  */
 
+import { environmentConfig } from '../../scripts/lib/environments.mjs';
 import {
-  acquireQaRunLock,
+  claimVerifiedQaRunLock,
+  closeQaClient,
   createQaClient,
   loadQaEnv,
   qaDatabaseIsInScope,
@@ -61,9 +64,15 @@ export async function setup() {
     );
   }
 
-  const result = await acquireQaRunLock(client);
+  // Identity is proven on this very session BEFORE the claim: the cluster fingerprint the pooler
+  // cannot rewrite must be the one enrolled for staging. A refused claim closes the session — it
+  // never held the lock, so there is nothing to unlock.
+  const result = await claimVerifiedQaRunLock(client, {
+    enrolled: environmentConfig('staging').clusterId ?? null,
+    rehearsal: process.env.QA_LOCK_DB_PORT !== undefined,
+  });
   if (!result.ok) {
-    await releaseQaRunLock(client); // closes the session this process opened
+    await closeQaClient(client);
     throw new Error(`\n[QA LOCK] ${result.reason}\n`);
   }
   claimed = true;

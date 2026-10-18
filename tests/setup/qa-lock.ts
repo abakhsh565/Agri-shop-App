@@ -21,6 +21,14 @@
  * returned 200 — no conflict exists to lose), and `pg_advisory_lock` over the HTTP `run_sql` RPC
  * (each statement can land on a different backend, so a session lock is released immediately).
  *
+ * IDENTITY, NOT JUST CONFIGURATION. A configured target can lie: the pooler rewrites `current_user`
+ * to `postgres` and `current_setting('supabase.project_ref')` is NULL, so the credential's
+ * `postgres.<ref>` is all the configuration names — and a host can be pointed elsewhere. So the
+ * session that takes the lock also reads the physical cluster's fingerprint
+ * (`pg_control_system().system_identifier`, which the pooler cannot rewrite) and refuses unless it
+ * is the cluster enrolled for staging in `environments.json`. Measured against QA on 2026-10-18:
+ * the lock's own connection shape answers it in one read-only statement, with EXECUTE available.
+ *
  * NOT HERE YET, deliberately: terminating a stale session's backend. A run that is SIGKILLed cannot
  * release, and today that means waiting for the server to notice the dead socket. That recovery is
  * the next task, not this one.
@@ -136,6 +144,122 @@ export interface LockClient {
 
 export type AcquireResult = { ok: true } | { ok: false; reason: string };
 
+/** What `pg_control_system()` answered, or why it could not be asked. */
+export interface ClusterRead {
+  id: string | null;
+  error: string | null;
+}
+
+/**
+ * Ask the live session which physical cluster it is on.
+ *
+ * The same statement `scripts/lib/environments.mjs` (`identifyConnection`) already uses for the
+ * backup and restore targeting checks — one vocabulary for one measurement. Read-only: it reads
+ * `pg_control_system()` and writes nothing, takes no lock, and changes no setting.
+ *
+ * A failure is returned, never thrown: the caller decides what a session that cannot be placed must
+ * do, and that decision is "do not take the lock".
+ */
+export async function readQaClusterId(client: LockClient): Promise<ClusterRead> {
+  try {
+    const { rows } = await client.query('select system_identifier::text as id from pg_control_system()');
+    const id = rows[0]?.id;
+    return { id: typeof id === 'string' && id.trim() ? id.trim() : null, error: null };
+  } catch (error) {
+    return { id: null, error: (error as Error).message };
+  }
+}
+
+/**
+ * Why this session must not take the lock, judging by the cluster it is actually on — `null` when it
+ * may.
+ *
+ * The fingerprint is the one identity the pooler cannot rewrite, so it closes the gap the
+ * configuration check cannot: a `postgres.<ref>` username that names QA while the connection lands
+ * on another cluster, and a credential copied from the wrong environment.
+ *
+ * Every unverifiable answer fails closed. A run that cannot be placed on the enrolled staging
+ * cluster does not get to delete another run's fixtures, so the absence of a fingerprint is treated
+ * exactly like a mismatch rather than as permission to proceed.
+ *
+ * Rehearsal against the local stack is skipped on purpose: that database has its own cluster id and
+ * `environments.json` records none for it, and the rehearsal path is separately restricted to a
+ * loopback host — so it can never be a hosted project wearing a local stack's name.
+ */
+export function qaClusterProblem(input: {
+  observed: ClusterRead;
+  enrolled: string | null;
+  rehearsal: boolean;
+}): string | null {
+  if (input.rehearsal) return null;
+
+  if (input.observed.error) {
+    return (
+      'QA could not be asked which cluster it is, so the target of this run cannot be verified.\n' +
+      `  ${input.observed.error}\n` +
+      '  The check needs EXECUTE on pg_control_system() for the QA role. Without it a lock could be\n' +
+      '  taken on a database that is not the one enrolled for staging, so this run stops here.'
+    );
+  }
+
+  if (!input.observed.id) {
+    return (
+      'QA answered without a cluster identity, so the target of this run cannot be verified.\n' +
+      '  pg_control_system() returned no system_identifier. A run that cannot be placed on the\n' +
+      '  enrolled staging cluster does not take the lock.'
+    );
+  }
+
+  if (!input.enrolled) {
+    return (
+      'environments.json records no clusterId for "staging", so the cluster reached cannot be verified.\n' +
+      '  Enrol it from a verified run (the backup tooling records the same value), then re-run.\n' +
+      '  A lock is not taken against a target that cannot be checked.'
+    );
+  }
+
+  if (input.observed.id !== input.enrolled) {
+    return (
+      `the database reached is cluster ${input.observed.id}, not the cluster enrolled for staging ` +
+      `(${input.enrolled}).\n` +
+      '  A credential can name one project while the connection lands on another; the cluster\n' +
+      '  fingerprint is the identity the pooler cannot rewrite. If the QA project was migrated to a\n' +
+      '  new instance, re-enrol the clusterId in environments.json deliberately, then re-run.\n' +
+      '  No lock was taken.'
+    );
+  }
+
+  return null;
+}
+
+/**
+ * Take the lock for a session whose identity is proven first, or say why not.
+ *
+ * The order is the point, and it is asserted as ORDER in the unit tests: the fingerprint is read
+ * before `pg_try_advisory_lock` is even sent, so a wrong target never holds — and never briefly
+ * holds — the lock a real run depends on. Keeping the two steps in one function is what makes that
+ * order testable without a database.
+ */
+export async function claimVerifiedQaRunLock(
+  client: LockClient,
+  options: { enrolled: string | null; rehearsal: boolean },
+): Promise<AcquireResult> {
+  // The read is skipped on the rehearsal path, not merely ignored after the fact: `qaClusterProblem`
+  // would return early there, but evaluating its argument first would still send the identity query
+  // to the local stack. A rehearsal must not send QA's identity statement anywhere — caught by this
+  // file's own ordering test, which failed on the eager version.
+  if (!options.rehearsal) {
+    const problem = qaClusterProblem({
+      observed: await readQaClusterId(client),
+      enrolled: options.enrolled,
+      rehearsal: false,
+    });
+    if (problem) return { ok: false, reason: problem };
+  }
+
+  return acquireQaRunLock(client);
+}
+
 /**
  * Does this vitest invocation reach QA at all?
  *
@@ -233,6 +357,17 @@ export async function releaseQaRunLock(client: LockClient): Promise<void> {
   } catch {
     // The session ends below; an unlock that failed is covered by that.
   }
+  await closeQaClient(client);
+}
+
+/**
+ * End the session, and never throw while doing it.
+ *
+ * Separate from `releaseQaRunLock` because a session that never claimed the lock has nothing to
+ * unlock: sending `pg_advisory_unlock` there asks the server to release a lock it does not own,
+ * which is noise in the QA log for no gain. Closing is the whole job in that case.
+ */
+export async function closeQaClient(client: LockClient): Promise<void> {
   try {
     await client.end();
   } catch {

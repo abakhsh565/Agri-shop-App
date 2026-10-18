@@ -12,6 +12,8 @@ import { describe, it, expect } from 'vitest';
 import {
   QA_RUN_LOCK_ID,
   acquireQaRunLock,
+  claimVerifiedQaRunLock,
+  qaClusterProblem,
   qaDatabaseIsInScope,
   qaLockTargetProblem,
   qaLockTargetRef,
@@ -20,12 +22,32 @@ import {
 } from '../setup/qa-lock';
 import { QA_PROJECT_REF } from '../../scripts/dev/lib.mjs';
 import { PRODUCTION_PROJECT_ID, STAGING_PROJECT_ID } from '../../src/lib/environmentContract';
+import { environmentConfig } from '../../scripts/lib/environments.mjs';
 
 /** The pooler host both CI and `.env.qa` use; it carries no ref, the user does. */
 const POOLER = 'aws-0-ap-northeast-1.pooler.supabase.com';
 
+/**
+ * The cluster the guard must be given — read from `environments.json`, never restated here, so this
+ * file cannot go on passing against a value the repository no longer enrols.
+ */
+const ENROLLED_CLUSTER_ID = environmentConfig('staging').clusterId;
+
+/** A well-formed id that is not the enrolled one, for the mismatch cases. */
+const OTHER_CLUSTER_ID = '1234567890123456789';
+
 /** A client that answers the two statements this module sends, and records what it was asked. */
-function fakeClient(options: { held?: boolean; failure?: string; unlockFails?: boolean } = {}) {
+function fakeClient(
+  options: {
+    held?: boolean;
+    failure?: string;
+    unlockFails?: boolean;
+    /** What `pg_control_system()` answers. `undefined` = the enrolled staging id. */
+    clusterId?: string | null;
+    /** What `pg_control_system()` throws instead of answering. */
+    clusterError?: string;
+  } = {},
+) {
   const calls: Array<{ sql: string; values?: unknown[] }> = [];
   let ended = false;
   const client: LockClient = {
@@ -35,6 +57,10 @@ function fakeClient(options: { held?: boolean; failure?: string; unlockFails?: b
     async query(sql: string, values?: unknown[]) {
       calls.push({ sql, values });
       if (options.failure) throw new Error(options.failure);
+      if (/pg_control_system/.test(sql)) {
+        if (options.clusterError) throw new Error(options.clusterError);
+        return { rows: [{ id: options.clusterId === undefined ? ENROLLED_CLUSTER_ID : options.clusterId }] };
+      }
       if (/pg_try_advisory_lock/.test(sql)) return { rows: [{ ok: !options.held }] };
       if (/pg_advisory_unlock/.test(sql)) {
         if (options.unlockFails) throw new Error('unlock refused');
@@ -156,6 +182,90 @@ describe('QA run lock — the project it is taken on', () => {
     // both accept a target that is not the one they think they are on.
     expect(QA_PROJECT_REF).toBe(STAGING_PROJECT_ID);
     expect(QA_PROJECT_REF).not.toBe(PRODUCTION_PROJECT_ID);
+  });
+});
+
+describe('QA run lock — the cluster it is taken on', () => {
+  it('reads the fingerprint first and claims second, on a cluster that matches', async () => {
+    const { client, calls } = fakeClient();
+    const result = await claimVerifiedQaRunLock(client, { enrolled: ENROLLED_CLUSTER_ID, rehearsal: false });
+
+    expect(result.ok).toBe(true);
+    expect(calls.map((c) => c.sql)).toHaveLength(2);
+    expect(calls[0].sql, 'identity must be read before the lock is even asked for').toMatch(/pg_control_system/);
+    expect(calls[0].sql, 'the identity read must be a read-only statement').toMatch(/^select/i);
+    expect(calls[1].sql).toMatch(/pg_try_advisory_lock/);
+    expect(calls[1].values).toEqual([QA_RUN_LOCK_ID]);
+  });
+
+  it('refuses a different cluster and never asks for the lock', async () => {
+    const { client, calls } = fakeClient({ clusterId: OTHER_CLUSTER_ID });
+    const result = await claimVerifiedQaRunLock(client, { enrolled: ENROLLED_CLUSTER_ID, rehearsal: false });
+
+    expect(result.ok).toBe(false);
+    expect(calls.some((c) => /pg_try_advisory_lock/.test(c.sql)), 'a wrong cluster must not reach the claim').toBe(false);
+    if (result.ok) return;
+    expect(result.reason).toContain(OTHER_CLUSTER_ID);
+    expect(result.reason).toContain(ENROLLED_CLUSTER_ID);
+    expect(result.reason).toMatch(/No lock was taken/);
+  });
+
+  it('treats an empty answer as unverifiable, not as permission', async () => {
+    const { client, calls } = fakeClient({ clusterId: null });
+    const result = await claimVerifiedQaRunLock(client, { enrolled: ENROLLED_CLUSTER_ID, rehearsal: false });
+
+    expect(result.ok).toBe(false);
+    expect(calls.some((c) => /pg_try_advisory_lock/.test(c.sql))).toBe(false);
+    if (result.ok) return;
+    expect(result.reason).toMatch(/without a cluster identity/);
+  });
+
+  it('fails closed when the fingerprint cannot be read, and names the permission it needs', async () => {
+    const { client, calls } = fakeClient({ clusterError: 'permission denied for function pg_control_system' });
+    const result = await claimVerifiedQaRunLock(client, { enrolled: ENROLLED_CLUSTER_ID, rehearsal: false });
+
+    expect(result.ok).toBe(false);
+    expect(calls.some((c) => /pg_try_advisory_lock/.test(c.sql))).toBe(false);
+    if (result.ok) return;
+    expect(result.reason).toContain('permission denied for function pg_control_system');
+    expect(result.reason).toMatch(/EXECUTE on pg_control_system\(\)/);
+  });
+
+  it('refuses when no cluster is enrolled, rather than comparing against nothing', () => {
+    const problem = qaClusterProblem({
+      observed: { id: ENROLLED_CLUSTER_ID, error: null },
+      enrolled: null,
+      rehearsal: false,
+    });
+    expect(problem).toMatch(/records no clusterId for "staging"/);
+  });
+
+  it('skips the fingerprint only on the rehearsal path — the local stack has its own cluster', async () => {
+    const { client, calls } = fakeClient({ clusterId: 'some-local-cluster' });
+    const result = await claimVerifiedQaRunLock(client, { enrolled: ENROLLED_CLUSTER_ID, rehearsal: true });
+
+    expect(result.ok).toBe(true);
+    expect(calls.map((c) => c.sql), 'rehearsal must not touch the QA identity check').toHaveLength(1);
+    expect(calls[0].sql).toMatch(/pg_try_advisory_lock/);
+
+    // The decision itself also declines to compare on the rehearsal path, so a caller that reaches
+    // it directly cannot turn a local cluster into a QA refusal.
+    expect(
+      qaClusterProblem({ observed: { id: OTHER_CLUSTER_ID, error: null }, enrolled: ENROLLED_CLUSTER_ID, rehearsal: true }),
+    ).toBeNull();
+  });
+
+  it('accepts only the exact enrolled id — never a prefix or a superset', () => {
+    const base = { observed: { id: ENROLLED_CLUSTER_ID, error: null }, enrolled: ENROLLED_CLUSTER_ID, rehearsal: false };
+    expect(qaClusterProblem(base)).toBeNull();
+    expect(qaClusterProblem({ ...base, observed: { id: `${ENROLLED_CLUSTER_ID}0`, error: null } })).toBeTruthy();
+    expect(qaClusterProblem({ ...base, observed: { id: ENROLLED_CLUSTER_ID.slice(0, -1), error: null } })).toBeTruthy();
+  });
+
+  it('the staging cluster the guard compares against is actually enrolled', () => {
+    // Without an enrolled id every real run refuses; that is the right behaviour, but it is worth a
+    // failing test rather than a QA run discovering it.
+    expect(environmentConfig('staging').clusterId).toBeTruthy();
   });
 });
 
