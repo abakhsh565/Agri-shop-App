@@ -114,6 +114,28 @@ jobs:
           echo "> did not run — not one that passed. Run it where the artifact exists:" >> "$GITHUB_STEP_SUMMARY"
           echo "> \`npm run verify:baseline -- --baseline staging --since <version>\`." >> "$GITHUB_STEP_SUMMARY"
 
+      # A red gate used to leave nothing but an expiring log. This seeds the five fields in the run's
+      # own summary, so the observed failure survives the session. `if: failure()` keeps it off a
+      # green run, and `continue-on-error` keeps a bug in this reporting step from replacing the
+      # reason the job actually failed.
+      - name: Failure record — required when this job fails
+        if: failure()
+        continue-on-error: true
+        run: |
+          {
+            echo "### CI failure — the five fields are required"
+            echo ""
+            echo "- commit: \`${{ github.sha }}\`"
+            echo "- run: \`${{ github.run_id }}\` — ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            echo "- job: \`${{ github.job }}\`"
+            echo "- observed: the failing step above; its log is the evidence"
+            echo "- root cause: **not yet confirmed**"
+            echo "- prevention: pending"
+            echo "- regression: name the test that must pass, and its result"
+            echo ""
+            echo "Add a reviewed entry to \`docs/FAILURE-LOG.md\` before this failure is closed."
+          } >> "$GITHUB_STEP_SUMMARY"
+
   qa:
     name: QA (migration ledger · integration suites)
     needs: [gates]
@@ -167,6 +189,26 @@ jobs:
         # Each suite creates and removes its own controlled tenants. QA's own shops and history
         # are never the fixture, and nothing here deletes them afterwards.
         run: npx vitest run tests/integration --fileParallelism=false --reporter=verbose
+
+      # Same seed as the gates job: whichever step in this job failed — credentials, reachability,
+      # ledger, or an integration suite — the summary names the run and requires the record.
+      - name: Failure record — required when this job fails
+        if: failure()
+        continue-on-error: true
+        run: |
+          {
+            echo "### CI failure — the five fields are required"
+            echo ""
+            echo "- commit: \`${{ github.sha }}\`"
+            echo "- run: \`${{ github.run_id }}\` — ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            echo "- job: \`${{ github.job }}\`"
+            echo "- observed: the failing step above; its log is the evidence"
+            echo "- root cause: **not yet confirmed**"
+            echo "- prevention: pending"
+            echo "- regression: name the test that must pass, and its result"
+            echo ""
+            echo "Add a reviewed entry to \`docs/FAILURE-LOG.md\` before this failure is closed."
+          } >> "$GITHUB_STEP_SUMMARY"
 
   e2e:
     name: E2E lanes against QA

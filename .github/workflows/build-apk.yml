@@ -109,6 +109,27 @@ jobs:
           path: tests/e2e/results.json
           retention-days: 7
 
+      # Same seed as ci.yml: whichever test step failed, the run leaves the five fields behind.
+      # Last in the job on purpose — a failing E2E run is prompted too, and this job's only failure
+      # artifact is the Playwright report, which does not exist when unit or integration fails first.
+      - name: Failure record — required when this job fails
+        if: failure()
+        continue-on-error: true
+        run: |
+          {
+            echo "### CI failure — the five fields are required"
+            echo ""
+            echo "- commit: \`${{ github.sha }}\`"
+            echo "- run: \`${{ github.run_id }}\` — ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            echo "- job: \`${{ github.job }}\`"
+            echo "- observed: the failing step above; its log is the evidence"
+            echo "- root cause: **not yet confirmed**"
+            echo "- prevention: pending"
+            echo "- regression: name the test that must pass, and its result"
+            echo ""
+            echo "Add a reviewed entry to \`docs/FAILURE-LOG.md\` before this failure is closed."
+          } >> "$GITHUB_STEP_SUMMARY"
+
       # ─── What used to be here, and why it must not come back ────────
       #
       # A step named "Clean QA Database" ran `node scripts/clean-test-data.mjs` with
