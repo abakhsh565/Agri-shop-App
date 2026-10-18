@@ -26,7 +26,9 @@ export default defineConfig({
     testTimeout: 30000,
     hookTimeout: 120000,
     setupFiles: ['tests/setup/localStorage-mock.cjs'],
-    globalSetup: 'tests/setup/global-teardown.ts',
+    // The QA run lock is claimed FIRST, so a second run stops before any data is touched (see
+    // tests/setup/qa-lock.ts). The data teardown then runs while this run still owns the lock.
+    globalSetup: ['tests/setup/qa-lock.global.ts', 'tests/setup/global-teardown.ts'],
     pool: 'forks',
     // Declared explicitly instead of inherited from whatever `.env.local` happens to hold on the
     // machine running the suite. Before this, `src/lib/supabase.ts` fell back to a hardcoded
