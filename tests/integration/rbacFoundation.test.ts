@@ -13,6 +13,18 @@ const tenant = '00000000-0000-0000-0000-000000000001';
  */
 const admin = 'b1080000-0000-0000-0000-0000000000a1';
 const adminPhone = '923008880002';
+/**
+ * This file's own second branch, and its own customer phone.
+ *
+ * Both used to be borrowed from the seeded shop. `branches.rows[1]` fell back to the MAIN branch
+ * when the seeded shop had only one active branch, which quietly turned the branch-denial
+ * assertion into a success assertion — and that success created the customer below. The next run
+ * then failed with `DUPLICATE_CUSTOMER_PHONE`, a failure caused entirely by the previous run of
+ * the same file. The branch is now created here and the customer is removed in both ends of the
+ * run, so the file is repeatable instead of order-dependent.
+ */
+const WAREHOUSE = 'b1080000-0000-0000-0000-00000000b001';
+const DENIED_CUSTOMER_PHONE = '923008880099';
 let employee = 'b1080000-0000-0000-0000-000000000001';
 const roleName = `QA RBAC ${Date.now()}`;
 let roleId = '';
@@ -33,10 +45,18 @@ beforeAll(async () => {
   await sql(`DELETE FROM user_permissions WHERE user_id IN (SELECT id FROM users WHERE id='${employee}' OR phone='923008880001')`);
   await sql(`DELETE FROM memberships WHERE user_id IN (SELECT id FROM users WHERE id='${employee}' OR phone='923008880001')`);
   await sql(`DELETE FROM users WHERE id='${employee}' OR phone='923008880001'`);
+  // Whatever a previous run of this file created, removed before this one starts.
+  await sql(`DELETE FROM customers WHERE phone='${DENIED_CUSTOMER_PHONE}'`);
+  // A second branch this file owns, so the denial assertion always has somewhere else to point.
+  await sql(`
+    INSERT INTO branches (id, tenant_id, name, is_default, is_active)
+    VALUES ('${WAREHOUSE}', '${tenant}', '${roleName} warehouse', false, true)
+    ON CONFLICT (id) DO UPDATE SET tenant_id = '${tenant}', is_active = true
+  `);
   const branches = await sql(`SELECT id,name FROM branches WHERE tenant_id='${tenant}' AND is_active=true ORDER BY is_default DESC, created_at`);
-  mainBranch = branches.rows[0]?.id;
-  warehouseBranch = branches.rows[1]?.id ?? mainBranch;
-  expect(mainBranch).toBeTruthy();
+  mainBranch = branches.rows.find((b: { id: string }) => b.id !== WAREHOUSE)?.id;
+  warehouseBranch = WAREHOUSE;
+  expect(mainBranch, 'the seeded tenant needs a branch besides this file\'s warehouse').toBeTruthy();
 });
 
 afterAll(async () => {
@@ -52,6 +72,15 @@ afterAll(async () => {
   await sql(`DELETE FROM user_permissions WHERE user_id='${admin}'`);
   await sql(`DELETE FROM memberships WHERE user_id='${admin}'`);
   await sql(`DELETE FROM users WHERE id='${admin}'`);
+  // This file's own rows, removed and read back: a cleanup that silently failed is what made the
+  // NEXT run fail with a duplicate phone.
+  await sql(`DELETE FROM customers WHERE phone='${DENIED_CUSTOMER_PHONE}'`).catch(() => undefined);
+  await sql(`DELETE FROM branches WHERE id='${WAREHOUSE}'`).catch(() => undefined);
+  const { rows: left } = await sql(
+    `SELECT (SELECT count(*) FROM customers WHERE phone='${DENIED_CUSTOMER_PHONE}')
+          + (SELECT count(*) FROM branches WHERE id='${WAREHOUSE}') AS n`
+  );
+  expect(Number(left[0]?.n ?? -1), 'this suite\'s own rows survived its cleanup').toBe(0);
 });
 
 describe('Authoritative RBAC foundation', () => {
