@@ -49,6 +49,9 @@ const TENANT_B = 'd2000000-0000-0000-0000-00000000b0b0';
 const OWNER_A = 'd2000000-0000-0000-0000-00000000000a';
 const EMP_MAIN = 'd2000000-0000-0000-0000-0000000000e1';
 const EMP_BOTH = 'd2000000-0000-0000-0000-0000000000e2';
+// This suite's own second branch. It used to take the seeded shop's second branch instead, which
+// is real but mutable — see `beforeAll`.
+const WAREHOUSE = 'd2000000-0000-0000-0000-00000000b001';
 const CUSTOMER = 'd2000000-0000-0000-0000-0000000000c1';
 const PRODUCT = 'd2000000-0000-0000-0000-0000000000d1';
 const VARIANT = 'd2000000-0000-0000-0000-0000000000d2';
@@ -82,6 +85,14 @@ async function cleanup() {
   // `audit_events.user_id` is NO ACTION, so a bare DELETE is silently blocked (and one blocked row
   // takes the whole list with it). `placeLocation` is where that leak was measured.
   await deleteFixtureUsers([OWNER_A, EMP_MAIN, EMP_BOTH]);
+  // The suite's own branch, removed only after the rows that point at it are gone (sales first, then
+  // the users whose active branch it may have been). Read back, because a cleanup that silently
+  // failed is how a fixture becomes another suite's inherited state.
+  await sql(`DELETE FROM branches WHERE id = '${WAREHOUSE}'`).catch(() => undefined);
+  expect(
+    await count(`SELECT count(*)::int AS c FROM branches WHERE id = '${WAREHOUSE}'`),
+    'this suite\'s branch survived its own cleanup',
+  ).toBe(0);
   await sql(`DELETE FROM shops WHERE id = '${TENANT_B}'`).catch(() => undefined);
   await sql(
     `DELETE FROM auth.users a WHERE a.email LIKE 'user-92300979%' AND NOT EXISTS (SELECT 1 FROM users u WHERE u.id = a.id)`
@@ -140,12 +151,28 @@ beforeAll(async () => {
   // and not a foreign key.
   await sql(`INSERT INTO shops (id, name) VALUES ('${TENANT_B}', 'QA Branch Tenant B') ON CONFLICT (id) DO NOTHING`);
 
+  // A SECOND branch that this file owns.
+  //
+  // It used to take the seeded shop's second active branch (`branches.rows[1]`) and assert it
+  // exists. That branch is real but mutable: it was deactivated in QA between two runs, so the
+  // query returned one row and the whole file died at `expect(warehouseBranch).toBeTruthy()` — an
+  // inherited-state failure that said nothing about branch scoping, and made every assertion below
+  // unreachable. The branch is now created here under this file's own id and removed in `cleanup`,
+  // the way the branch-removal lane already handles its own branch.
+  await sql(`
+    INSERT INTO branches (id, tenant_id, name, is_default, is_active)
+    VALUES ('${WAREHOUSE}', '${TENANT_A}', '${TAG} Warehouse', false, true)
+    ON CONFLICT (id) DO UPDATE SET tenant_id = '${TENANT_A}', is_active = true
+  `);
+
   const branches = await sql(
     `SELECT id, name FROM branches WHERE tenant_id = '${TENANT_A}' AND is_active = true ORDER BY is_default DESC, created_at`
   );
-  mainBranch = branches.rows[0]?.id;
-  warehouseBranch = branches.rows[1]?.id;
-  expect(mainBranch).toBeTruthy();
+  // The main branch is the tenant's default — and never this file's warehouse, even if the seeded
+  // shop has been left without a default.
+  mainBranch = branches.rows.find((b: { id: string }) => b.id !== WAREHOUSE)?.id;
+  warehouseBranch = WAREHOUSE;
+  expect(mainBranch, 'the tenant needs a second active branch besides this file\'s warehouse').toBeTruthy();
   expect(warehouseBranch).toBeTruthy();
 
   await sql(`
