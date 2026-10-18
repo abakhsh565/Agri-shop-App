@@ -304,6 +304,14 @@ export default function LoginPage() {
                  filling the field with something the check will reject. */
               onChange={(e) => setPhone(e.target.value.replace(/\D/g, ""))}
               error={phoneError}
+              /* The sentence belongs to the number, so it sits with the number.
+
+                 It used to be a paragraph after the shop-code field, which made it read as
+                 something about the code — the one field on this screen it does not describe.
+                 Handing it to `Input`'s own hint keeps it under the field it explains, and gets
+                 the error rule for free: a phone error replaces the hint instead of stacking
+                 two lines under the same box. */
+              hint={isDemoOtpMode ? t("auth.codeHintDemo") : t("auth.codeHint")}
               autoComplete="tel"
               onKeyDown={(e) => e.key === "Enter" && handleSignIn()}
             />
@@ -330,9 +338,6 @@ export default function LoginPage() {
                 />
               </>
             )}
-            <p className="text-12" style={{ color: "var(--text-secondary)" }}>
-              {isDemoOtpMode ? t("auth.codeHintDemo") : t("auth.codeHint")}
-            </p>
           </div>
         </div>
 
