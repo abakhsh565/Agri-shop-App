@@ -2,8 +2,9 @@
  * Vitest globalSetup — claim the QA run lock before any integration file opens a table.
  *
  * WHY GLOBALSETUP. It is the one hook both entry points share: CI runs
- * `npx vitest run tests/integration --fileParallelism=false`, a developer runs
- * `npm run test:integration` or a single file, and both go through `vitest.config.ts`. So both run
+ * `npx vitest run --config vitest.integration.config.ts`, a developer runs
+ * `npm run test:integration` or a single file, and both reach this file through the integration
+ * config, which extends `vitest.config.ts`. So both run
  * this `setup()` once, before the first test file, and its `teardown()` once, after the last one.
  *
  * A run that cannot claim THROWS here. Vitest then reports one failure and never loads a file, which

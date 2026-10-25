@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import http from 'node:http';
+import os from 'node:os';
 import path from 'node:path';
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -100,6 +101,11 @@ describe('the repository wiring', () => {
     expect(workflow).toMatch(/conclusion == 'success'/);
     expect(workflow).toMatch(/head_branch == 'main'/);
     expect(workflow).toContain('scripts/deploy/trigger-production.mjs');
+    // Accepted is not released: the workflow must wait for the deployment and verify it, and that
+    // step must be bound to the id the trigger reported (a missing output skips verification).
+    expect(workflow).toContain('scripts/deploy/verify-production.mjs');
+    expect(workflow).toContain("steps.trigger.outputs.deployment_id != ''");
+    expect(workflow).toMatch(/DEPLOYMENT_ID: \$\{\{ steps\.trigger\.outputs\.deployment_id \}\}/);
     expect(workflow).not.toMatch(/continue-on-error:\s*true/);
     expect(workflow).not.toMatch(/\|\|\s*true/);
     expect(workflow).not.toMatch(/vercel\s+(deploy|--prod)/);
@@ -203,5 +209,19 @@ describe('the trigger script end to end, against a local fake Vercel API', () =>
     expect(status, out).toBe(0);
     expect(requests).toHaveLength(0);
     expect(out).toContain('DRY RUN');
+  });
+
+  it('reports the deployment id to the workflow, so the verify step can wait for it', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'deploy-output-'));
+    const output = path.join(dir, 'github-output');
+    try {
+      const { status, out } = await run({ CI_CONCLUSION: 'success', GITHUB_OUTPUT: output });
+      expect(status, out).toBe(0);
+      const written = fs.readFileSync(output, 'utf8');
+      expect(written).toContain('deployment_id=dpl_fake');
+      expect(written).toContain('deployment_url=fake.vercel.app');
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

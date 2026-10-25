@@ -212,12 +212,14 @@ describe('failure feedback — both workflows seed the record', () => {
   const ci = seedSteps(readRepoFile('.github/workflows/ci.yml') as string);
   const apk = seedSteps(readRepoFile('.github/workflows/build-apk.yml') as string);
 
-  it('ci.yml covers its unit and integration jobs', () => {
-    expect(ci.map((step) => step.job).sort()).toEqual(['gates', 'qa']);
+  it('ci.yml covers its gates, integration and e2e jobs', () => {
+    // e2e was missing until run 39131593134 failed there and left no summary at all.
+    expect(ci.map((step) => step.job).sort()).toEqual(['e2e', 'gates', 'qa']);
   });
 
-  it("build-apk.yml covers its own test job, which does not delegate to ci.yml", () => {
-    expect(apk.map((step) => step.job)).toEqual(['test']);
+  it("build-apk.yml covers both of its jobs, which do not delegate to ci.yml", () => {
+    // `build` was the last job in either workflow that could fail and leave no record.
+    expect(apk.map((step) => step.job)).toEqual(['test', 'build']);
   });
 
   it('every seeded step is last in its job, runs only on failure, and cannot block the run', () => {
@@ -229,8 +231,8 @@ describe('failure feedback — both workflows seed the record', () => {
     }
   });
 
-  it('all three seeds name the same fields — one feedback loop, two workflows', () => {
-    expect(ci.length + apk.length).toBe(3);
+  it('all five seeds name the same fields — one feedback loop, two workflows', () => {
+    expect(ci.length + apk.length).toBe(5);
     const bodies = [...ci, ...apk].map((step) => step.body.replace(/\s+/g, ' ').trim());
     expect(new Set(bodies).size, 'the seeded summaries have drifted apart').toBe(1);
     for (const field of ['commit:', 'run:', 'job:', 'observed:', 'root cause:', 'prevention:', 'regression:']) {

@@ -18,7 +18,8 @@
  * is also the employee onboarding path, so the Supabase session is genuine and
  * RLS-protected reads are exercised. QA database only.
  */
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect } from './base';
+import type { Page } from '@playwright/test';
 import { execSql, setupFixtures, cleanupFixtures, QA_IDS } from './helpers';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -49,6 +50,95 @@ const EMPLOYEE_PHONE = '03001122334'; // Sales Employee (923001122334)
 
 function rs(n: number) {
   return 'Rs. ' + Math.round(n).toLocaleString('en-PK');
+}
+
+/** A figure as the Settings overview prints it: digits only, grouped, no currency prefix. */
+function figure(n: number) {
+  return Math.round(n).toLocaleString('en-PK');
+}
+
+/**
+ * A branch's stock value, the way migration 0234 computes it.
+ *
+ * This is deliberately a second implementation: the assertion must not ask the function under
+ * test what the answer is. It reads the same ledger the server reads — this branch's net
+ * movements, valued at today's cost, never below zero — and adds the main branch's remainder,
+ * which is what makes the branches add up to the business total.
+ */
+async function branchInventoryValue(branchId: string): Promise<number> {
+  const [row] = await execSql(`
+    WITH net AS (
+      SELECT m.variant_id, sum(m.qty_change) AS qty
+        FROM inventory_movements m
+       WHERE m.branch_id = '${branchId}'
+       GROUP BY m.variant_id
+    ), mine AS (
+      SELECT coalesce(sum(n.qty * pv.cost_price)
+               FILTER (WHERE n.qty > 0 AND pv.cost_price > 0), 0) AS v
+        FROM net n
+        JOIN product_variants pv ON pv.id = n.variant_id
+        JOIN products p ON p.id = pv.product_id
+       WHERE p.is_active AND pv.is_active AND p.shop_id = '${QA_IDS.shop}'
+    ), shop AS (
+      SELECT coalesce(sum(pv.stock_qty * pv.cost_price)
+               FILTER (WHERE pv.stock_qty > 0 AND pv.cost_price > 0), 0) AS v
+        FROM product_variants pv
+        JOIN products p ON p.id = pv.product_id
+       WHERE p.is_active AND pv.is_active AND p.shop_id = '${QA_IDS.shop}'
+    ), every_branch AS (
+      SELECT coalesce(sum(x.v), 0) AS v FROM (
+        SELECT n.branch_id,
+               coalesce(sum(n.qty * pv.cost_price)
+                 FILTER (WHERE n.qty > 0 AND pv.cost_price > 0), 0) AS v
+          FROM (SELECT branch_id, variant_id, sum(qty_change) AS qty
+                  FROM inventory_movements
+                 WHERE branch_id IN (SELECT id FROM branches
+                                      WHERE tenant_id = '${QA_IDS.shop}' AND is_active)
+                 GROUP BY branch_id, variant_id) n
+          JOIN product_variants pv ON pv.id = n.variant_id
+          JOIN products p ON p.id = pv.product_id
+         WHERE p.is_active AND pv.is_active AND p.shop_id = '${QA_IDS.shop}'
+         GROUP BY n.branch_id
+      ) x
+    )
+    SELECT ((SELECT v FROM mine)
+      + CASE WHEN (SELECT is_default FROM branches WHERE id = '${branchId}')
+             THEN (SELECT v FROM shop) - (SELECT v FROM every_branch) ELSE 0 END)::text AS value`);
+  return Number(row.value);
+}
+
+/** A branch's receivables, the way migration 0234 computes it: billed there, collected there. */
+async function branchCreditOutstanding(branchId: string): Promise<number> {
+  const [row] = await execSql(`
+    WITH mine AS (
+      SELECT greatest(
+        coalesce((SELECT sum(s.amount_due) FROM sales s
+                   WHERE s.shop_id = '${QA_IDS.shop}' AND s.branch_id = '${branchId}'
+                     AND s.is_voided = false), 0)
+        - coalesce((SELECT sum(cp.amount) FROM customer_payments cp
+                      JOIN customers c ON c.id = cp.customer_id
+                     WHERE c.shop_id = '${QA_IDS.shop}' AND c.is_archived = false
+                       AND cp.branch_id = '${branchId}'), 0), 0) AS v
+    ), shop AS (
+      SELECT coalesce(sum(greatest(outstanding_balance, 0)), 0) AS v
+        FROM customers
+       WHERE shop_id = '${QA_IDS.shop}' AND is_archived = false
+    ), every_branch AS (
+      SELECT coalesce(sum(greatest(
+        coalesce((SELECT sum(s.amount_due) FROM sales s
+                   WHERE s.shop_id = b.tenant_id AND s.branch_id = b.id
+                     AND s.is_voided = false), 0)
+        - coalesce((SELECT sum(cp.amount) FROM customer_payments cp
+                      JOIN customers c ON c.id = cp.customer_id
+                     WHERE c.shop_id = b.tenant_id AND c.is_archived = false
+                       AND cp.branch_id = b.id), 0), 0)), 0) AS v
+        FROM branches b
+       WHERE b.tenant_id = '${QA_IDS.shop}' AND b.is_active
+    )
+    SELECT ((SELECT v FROM mine)
+      + CASE WHEN (SELECT is_default FROM branches WHERE id = '${branchId}')
+             THEN (SELECT v FROM shop) - (SELECT v FROM every_branch) ELSE 0 END)::text AS value`);
+  return Number(row.value);
 }
 
 
@@ -102,6 +192,128 @@ async function setLanguage(page: Page, lang: 'en' | 'ur') {
   await page.waitForTimeout(1500);
 }
 
+/**
+ * One of the app's live zustand stores, read in the page's own module graph.
+ *
+ * `page.evaluate` sees the same module instances the app renders from: after an HMR update the
+ * dev server serves the module under a `?t=` url, so the newest url the page has already
+ * fetched is preferred, with the plain path as the fallback for a cold module map. Returns
+ * undefined while no candidate can be reached, so callers poll instead of guessing at a wait.
+ */
+async function readStoreState(page: Page, storeName: string, modulePath: string): Promise<any | undefined> {
+  return page.evaluate(
+    async ({ storeName, modulePath }) => {
+      const loaded = performance
+        .getEntriesByType('resource')
+        .map((entry) => entry.name)
+        .filter((name) => name.includes(modulePath));
+      const candidates = [...new Set(loaded)].reverse();
+      candidates.push(modulePath);
+      for (const url of candidates) {
+        try {
+          const mod: any = await import(/* @vite-ignore */ url);
+          const store = mod[storeName];
+          if (store && typeof store.getState === 'function') return store.getState();
+        } catch {
+          // Not the app's instance — the next candidate may be.
+        }
+      }
+      return undefined;
+    },
+    { storeName, modulePath },
+  );
+}
+
+/**
+ * Switch the working branch the way the header's branch sheet does — through the store's own
+ * action, so the real `set_active_branch` RPC runs rather than a mocked one.
+ */
+async function switchBranchInApp(page: Page, branchId: string): Promise<any> {
+  return page.evaluate(
+    async ({ branchId }) => {
+      const loaded = performance
+        .getEntriesByType('resource')
+        .map((entry) => entry.name)
+        .filter((name) => name.includes('/src/stores/shopStore.ts'));
+      const candidates = [...new Set(loaded)].reverse();
+      candidates.push('/src/stores/shopStore.ts');
+      for (const url of candidates) {
+        try {
+          const mod: any = await import(/* @vite-ignore */ url);
+          const store = mod.useShopStore;
+          if (store && typeof store.getState === 'function') {
+            return await store.getState().switchBranch(branchId);
+          }
+        } catch {
+          // Not the app's instance — the next candidate may be.
+        }
+      }
+      return { ok: false, code: 'store_unreachable' };
+    },
+    { branchId },
+  );
+}
+
+/**
+ * The branch Home is actually working in — read from the running app, never re-derived.
+ *
+ * `activeBranchId` comes from `get_my_branches()`, whose `is_current` column is
+ * `(b.id = current_branch_id())` in the database, and that same function backs the
+ * RESTRICTIVE `sales_branch_select` policy on `sales`. So this value is exactly the branch
+ * whose sales the dashboard can read and sum, and reading it here cannot drift from the
+ * database's precedence (selected branch → default → oldest) the way a second SQL copy of
+ * that rule would.
+ *
+ * A shop with no current branch is handled explicitly: the RLS scope is then empty, the
+ * dashboard legitimately shows zero sales, and this spec — which asserts figures — has no
+ * valid expectation to hold it to, so it fails here by name instead of inventing a fallback.
+ */
+async function readActiveBranch(page: Page): Promise<string> {
+  let branchId: string | null | undefined;
+  await expect
+    .poll(
+      async () => {
+        const state = await readStoreState(page, 'useShopStore', '/src/stores/shopStore.ts');
+        branchId = state?.branchesLoaded ? (state.activeBranchId ?? null) : undefined;
+        return branchId;
+      },
+      {
+        timeout: 20_000,
+        message:
+          'the shop store never finished loading branches, so which branch Home is showing cannot be known',
+      },
+    )
+    .not.toBeUndefined();
+
+  if (!branchId) {
+    throw new Error(
+      'the shop store resolved no current branch: the database branch scope is empty, so RLS denies every sales row and Home can only show zero sales. This spec asserts figures and needs a shop with an active branch.',
+    );
+  }
+  return branchId;
+}
+
+/**
+ * The fallback half of the COGS reading lives in the products store: a line whose snapshot is
+ * NULL is priced from the ACTIVE variant's current cost, and until that store is ready the
+ * screen itself cannot know those lines — the three-state classification below would then be
+ * read from a half-loaded app. Wait for it, bounded, before judging the figure.
+ */
+async function waitForProductsReady(page: Page): Promise<void> {
+  await expect
+    .poll(
+      async () => {
+        const state = await readStoreState(page, 'useProductsStore', '/src/stores/productsStore.ts');
+        return state?.ready === true;
+      },
+      {
+        timeout: 20_000,
+        message: 'the products store never became ready, so a line without a cost snapshot cannot be priced',
+      },
+    )
+    .toBe(true);
+}
+
 test.describe('Locked dashboard scope: figures reconcile with the database', () => {
   test.afterAll(async () => {
     // The figures are asserted against the DB, so leave the QA base as it was found.
@@ -131,8 +343,22 @@ test.describe('Locked dashboard scope: figures reconcile with the database', () 
     // The gate removes the stopwatch and keeps — strengthens — the requirement: the rendered
     // dashboard must converge on the figure the database actually holds. A blank, stale or wrong
     // dashboard still fails here, and it fails naming the DB value instead of timing out.
+    //
+    // THE AGGREGATE CARRIES THE SCREEN'S OWN SCOPE — shop AND branch — because `execSql` runs
+    // as the service role and bypasses RLS entirely. Home reads `useSalesStore().sales`, an
+    // unfiltered `select` narrowed by RLS to the caller's shop and to the single branch the
+    // RESTRICTIVE `sales_branch_select` policy allows; `activeBranchId`, read above, is the
+    // value that policy's `current_branch_id()` resolves to. Without these two predicates the
+    // gate compares the hero figure against every tenant's — and every branch's — sales, so
+    // the moment another shop (or a concurrent lane's tenant, or the shop's other branch)
+    // holds a live sale the dashboard can never show that total and the test reports
+    // "stayed un-hydrated": the wrong diagnosis. Observed 2026-10-14 and 2026-10-16.
+    const activeBranch = await readActiveBranch(page);
     const [gateSales] = await execSql(
-      `SELECT coalesce(sum(total_amount),0)::text AS total FROM sales WHERE is_voided = false`,
+      `SELECT coalesce(sum(total_amount),0)::text AS total FROM sales
+        WHERE is_voided = false
+          AND shop_id = '${QA_IDS.shop}'
+          AND branch_id = '${activeBranch}'`,
     );
     await expect
       .poll(async () => (await page.textContent('body')) ?? '', {
@@ -148,6 +374,60 @@ test.describe('Locked dashboard scope: figures reconcile with the database', () 
     }
     expect(body, 'Quick Alerts section missing').toContain('Quick Alerts');
 
+    // Shop overview moved to Settings on 2026-10-25, and all three of its figures follow the branch
+    // the account is working in (0233 for staff, 0234 for stock and credit), so it must not sit on
+    // Home, whose figures follow the date pill. Asserted as gone from Home first, then read off
+    // Settings against the branch's own ledger — never inferred from the labels.
+    await expect(
+      page.getByTestId('shop-overview'),
+      'the branch overview is still on Home; it belongs to Settings',
+    ).toHaveCount(0);
+    await page.goto(`${BASE}/admin/settings`);
+    await expect(page.getByTestId('shop-overview')).toBeVisible();
+    // RE-READ THE BRANCH HERE. A full navigation re-resolves the working branch from the server,
+    // so the branch captured on Home two navigations ago is not necessarily the branch this page
+    // shows — observed 2026-10-25: Home read "Malik agro", Settings rendered "Default Shop - Main",
+    // and the assertion below then compared the card against the wrong branch's ledger. The figures
+    // are still checked against the database, not against the screen.
+    const settingsBranch = await readActiveBranch(page);
+    // The staff figure is the branch's, by the same rule `get_my_branches()` uses: an active
+    // membership whose branch scope contains this branch. Two branches that both scope the same
+    // employee each count that person — that is the question the card answers ("how many people
+    // work here"), not "how many people does the business employ".
+    const [activeEmployees] = await execSql(`
+      SELECT count(*)::text AS value
+        FROM memberships m
+       WHERE m.tenant_id = '${QA_IDS.shop}' AND m.status = 'active'
+         AND m.role <> 'owner'
+         AND '${settingsBranch}' = ANY(COALESCE(m.branch_scope, '{}'::uuid[]))`);
+    // Stock and credit are the branch's own, read from the ledgers it stamped (0234).
+    const inventoryValue = await branchInventoryValue(settingsBranch);
+    const creditValue = await branchCreditOutstanding(settingsBranch);
+    // The card names the branch it is speaking for — read from the DB, not hard-coded, so the
+    // assertion holds whichever branch the QA account is working in.
+    const [activeBranchRow] = await execSql(
+      `SELECT name FROM branches WHERE id = '${settingsBranch}' AND tenant_id = '${QA_IDS.shop}'`,
+    );
+    await expect(page.getByTestId('shop-overview-branch')).toHaveText(String(activeBranchRow.name));
+    await expect(page.getByTestId('shop-overview-inventory')).toContainText(figure(inventoryValue));
+    await expect(page.getByTestId('shop-overview-employees')).toHaveText(figure(Number(activeEmployees.value)));
+    await expect(page.getByTestId('shop-overview-credit')).toHaveText(figure(creditValue));
+    await expect(page.getByTestId('shop-overview-invite')).toBeVisible();
+
+    // BACK TO HOME. Everything below is about the dashboard — the removed cards, Quick Alerts
+    // and the hero figures — and this test left it to read Settings. Without this the
+    // `home-gross-profit` assertion below looked for a Home test id on the Settings page and
+    // failed as "element not found", naming the wrong thing entirely (observed 2026-10-25).
+    // Hydration starts again on the remount, so the same data gate is re-applied instead of
+    // trusting a stopwatch.
+    await page.goto(`${BASE}/admin/dashboard`);
+    await expect
+      .poll(async () => (await page.textContent('body')) ?? '', {
+        timeout: 30_000,
+        message: `the dashboard did not come back with the DB total ${rs(Number(gateSales.total))}`,
+      })
+      .toContain(rs(Number(gateSales.total)));
+
     // The five removed cards must be gone from Home. Asserted per tile rather
     // than against the page text, because "Credit collect" legitimately contains
     // the word Credit — a blob check would pass on a card that is still there.
@@ -161,46 +441,107 @@ test.describe('Locked dashboard scope: figures reconcile with the database', () 
     // The Quick Alerts headline count is data-dependent copy ("1 action needed" vs
     // "2 actions needed"), so assert the authoritative thing instead: any pending
     // credit request in the DB must be surfaced, with its real count.
-    const [pending] = await execSql(`SELECT count(*)::text AS n FROM credit_limit_requests WHERE status = 'pending'`);
+    // The RLS policy on `credit_limit_requests` scopes a row through its customer's shop
+    // (0115), so the app's count is this shop's pending requests; an unscoped service-role
+    // count mixes every tenant in and can demand a number Home must not show.
+    const [pending] = await execSql(`
+      SELECT count(*)::text AS n
+        FROM credit_limit_requests r
+       WHERE r.status = 'pending'
+         AND EXISTS (SELECT 1 FROM customers c
+                      WHERE c.id = r.customer_id AND c.shop_id = '${QA_IDS.shop}')`);
     const pendingCount = Number(pending.n);
     if (pendingCount > 0) {
       expect(body, 'pending credit requests are not surfaced in Quick Alerts').toContain(`${pendingCount} request`);
     }
 
     // ── Authoritative expectations, recomputed from the QA database ──
+    // Same scope as the screen: one shop, one branch. Only the figures Home actually prints
+    // are read here — Home prints Total Sales and Gross Profit from this sale set, while
+    // "Credit collect" is a sum of `customer_payments` (src/lib/money.ts), not a column of
+    // `sales`, so a paid/credit aggregate would be a different quantity wearing the same name.
+    // (The unused paid, credit and transaction columns were removed for that reason.)
     const [sales] = await execSql(`
-      SELECT coalesce(sum(total_amount),0)::text AS total,
-             coalesce(sum(amount_paid),0)::text AS paid,
-             coalesce(sum(amount_due),0)::text AS credit,
-             count(*)::text AS tx
-        FROM sales WHERE is_voided = false`);
-    // COGS on its own, so the expected profit is revenue - COGS on the SAME
-    // authoritative revenue Home uses (the sale's stored total), which is also
-    // what Reports uses. Deriving it from line totals instead would let the two
-    // screens disagree by rounding.
+      SELECT coalesce(sum(total_amount),0)::text AS total
+        FROM sales
+       WHERE is_voided = false
+         AND shop_id = '${QA_IDS.shop}'
+         AND branch_id = '${activeBranch}'`);
+    // COGS covers exactly the sales the revenue above covers, and it reads each line the way
+    // the screen reads it (src/lib/profit.ts `lineCogs`): a recorded snapshot is used when it
+    // is above zero, a NULL snapshot alone falls back to the ACTIVE variant's current cost,
+    // and everything else is UNKNOWN — never zero. The old `coalesce(cogs_amount, 0)` turned an
+    // unrecorded cost into a free item, exactly the flattering arithmetic migration 0159 and
+    // profit.ts exist to forbid. Revenue and COGS stay in separate statements: joining
+    // `sale_items` into the revenue query would multiply every sale by its line count.
     const [cogs] = await execSql(`
-      SELECT coalesce(sum(coalesce(si.cogs_amount,0)),0)::text AS v
-        FROM sale_items si JOIN sales s ON s.id = si.sale_id WHERE s.is_voided = false`);
-    // Overdue is the system-wide business metric: the REMAINING balance of every
-    // credit whose due date has already passed in Pakistan time — not the shop's
-    // total customer outstanding. Computed here from the database with the same
-    // authoritative definition Home and the overdue-credit signals share.
+      WITH line_cogs AS (
+        SELECT CASE
+                 WHEN si.cogs_amount IS NOT NULL THEN NULLIF(si.cogs_amount, 0)
+                 WHEN pv.cost_price > 0 AND p.is_active AND pv.is_active
+                   THEN pv.cost_price * si.qty
+                 ELSE NULL
+               END AS cogs
+          FROM sale_items si
+          JOIN sales s ON s.id = si.sale_id
+          LEFT JOIN product_variants pv ON pv.id = si.variant_id
+          LEFT JOIN products p ON p.id = pv.product_id
+         WHERE s.is_voided = false
+           AND s.shop_id = '${QA_IDS.shop}'
+           AND s.branch_id = '${activeBranch}'
+      )
+      SELECT count(*)::text AS lines,
+             count(*) FILTER (WHERE cogs IS NULL)::text AS unknown_lines,
+             coalesce(sum(cogs),0)::text AS cogs_known
+        FROM line_cogs`);
+    // Overdue is the shop-wide business metric: the REMAINING balance of every credit whose
+    // due date has already passed in Pakistan time — every customer of this shop, not one
+    // customer's outstanding and not other tenants' customers. `customers` has no branch
+    // column in the branch-scope policy (0212), so its RLS scope is the shop, and the
+    // predicate itself is `isCreditOverdue` (src/lib/signalEngine.ts) written in SQL.
     const [pastDue] = await execSql(`
       SELECT coalesce(sum(outstanding_balance),0)::text AS overdue,
              count(*)::text AS n
         FROM customers
-       WHERE is_archived = false
+       WHERE shop_id = '${QA_IDS.shop}'
+         AND is_archived = false
          AND outstanding_balance > 0
          AND due_date IS NOT NULL
          AND due_date < (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Karachi')::date`);
     const [allOutstanding] = await execSql(
-      `SELECT coalesce(sum(outstanding_balance),0)::text AS v FROM customers WHERE is_archived = false`,
+      `SELECT coalesce(sum(outstanding_balance),0)::text AS v FROM customers
+        WHERE is_archived = false AND shop_id = '${QA_IDS.shop}'`,
     );
 
-    const total = Number(sales.total), gp = total - Number(cogs.v);
+    const total = Number(sales.total);
+    const cogsKnown = Number(cogs.cogs_known);
+    const unknownLines = Number(cogs.unknown_lines);
+    const pricedLines = Number(cogs.lines);
 
     expect(body, 'Total Sales does not match the DB').toContain(rs(total));
-    expect(body, 'Gross Profit does not match revenue - COGS').toContain(rs(gp));
+
+    // Gross Profit is deliberately three-state (src/lib/profit.ts `profitDisplay`): exact when
+    // every line has a usable cost, "≥" when some do not, and "—" when none does. Assert the
+    // state the data justifies — the figure the screen is allowed to show — instead of
+    // re-adding the unknown lines as zero.
+    const grossProfit = page.getByTestId('home-gross-profit');
+    await waitForProductsReady(page);
+    if (unknownLines === 0) {
+      await expect(
+        grossProfit,
+        'Gross Profit does not match revenue minus the recorded line costs',
+      ).toHaveText(rs(total - cogsKnown));
+    } else if (unknownLines === pricedLines) {
+      await expect(
+        grossProfit,
+        'no line has a known cost, so Home must show no profit figure at all',
+      ).toHaveText('—');
+    } else {
+      await expect(
+        grossProfit,
+        'Gross Profit must be labelled as a floor while some line costs are unknown',
+      ).toHaveText(`≥ ${rs(total - cogsKnown)}`);
+    }
 
     // Read the figure the owner actually sees, then hold it to the DB value.
     const overdueEl = page.locator('p').filter({ hasText: /overdue/ }).first();
@@ -248,6 +589,16 @@ test.describe('Locked dashboard scope: figures reconcile with the database', () 
     expect(body, 'Total Sales not translated').toContain('کل فروخت');
     expect(body, 'Gross Profit not translated').toContain('مجموعی منافع');
     expect(body, 'Credit collect not translated').toContain('ادھار کی وصولی');
+    // The overview is not on Home any more, so its Urdu labels are checked where it now lives.
+    expect(body).not.toContain('ملازم کو مدعو کریں اور رسائی مقرر کریں');
+    await page.goto(`${BASE}/admin/settings`);
+    const settingsBody = await page.textContent('body');
+    expect(settingsBody, 'the overview lost its Urdu invitation line').toContain('ملازم کو مدعو کریں اور رسائی مقرر کریں');
+    expect(settingsBody, 'the overview lost its Urdu credit label').toContain('کل ادھار');
+    await expect(
+      page.getByTestId('shop-overview-invite'),
+      'the Invite button is not translated',
+    ).toHaveText('مدعو کریں');
     // The removed cards are gone in Urdu too, and no English leaks through.
     expect(body).not.toContain('کم اسٹاک');
     expect(body).not.toContain('سپلائر کو دینا ہے');
@@ -289,6 +640,47 @@ test.describe('Locked dashboard scope: figures reconcile with the database', () 
     expect(body).toContain('لین دین');
     expect(body).toContain('جن کو بیچا');
     expect(body).not.toContain('Customers Served');
+  });
+
+  test('7. the Settings overview follows the branch the account switches into', async ({ page }) => {
+    // The owner's actual complaint: the three figures did not change when the branch did. This
+    // switches through the app's own action (the real RPC), then reads the card against the
+    // second branch's ledger — so a card that still reports the first branch fails by name and
+    // by number, not by inference.
+    await login(page, OWNER_PHONE);
+    await page.goto(`${BASE}/admin/settings`);
+    await expect(page.getByTestId('shop-overview')).toBeVisible();
+
+    const first = await readActiveBranch(page);
+    const others = await execSql(`
+      SELECT id, name FROM branches
+       WHERE tenant_id = '${QA_IDS.shop}' AND is_active AND id <> '${first}'
+       ORDER BY is_default, created_at, id LIMIT 1`);
+    if (others.length === 0) {
+      test.skip(true, 'the QA shop has one branch, so there is no second branch to switch into');
+      return;
+    }
+    const other = others[0] as { id: string; name: string };
+
+    try {
+      const switched = await switchBranchInApp(page, other.id);
+      expect(switched?.ok, `the app refused the branch switch: ${switched?.code ?? 'unknown'}`).toBe(true);
+
+      await page.goto(`${BASE}/admin/settings`);
+      await expect(page.getByTestId('shop-overview-branch')).toHaveText(String(other.name));
+      await expect(page.getByTestId('shop-overview-inventory'))
+        .toContainText(figure(await branchInventoryValue(other.id)));
+      await expect(page.getByTestId('shop-overview-credit'))
+        .toHaveText(figure(await branchCreditOutstanding(other.id)));
+      const [staff] = await execSql(`
+        SELECT count(*)::text AS value FROM memberships m
+         WHERE m.tenant_id = '${QA_IDS.shop}' AND m.status = 'active' AND m.role <> 'owner'
+           AND '${other.id}' = ANY(COALESCE(m.branch_scope, '{}'::uuid[]))`);
+      await expect(page.getByTestId('shop-overview-employees')).toHaveText(figure(Number(staff.value)));
+    } finally {
+      // Leave the QA account in the branch it was found in.
+      await switchBranchInApp(page, first);
+    }
   });
 
   test('5. No horizontal overflow on either dashboard in RTL', async ({ page }) => {

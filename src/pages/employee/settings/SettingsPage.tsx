@@ -12,7 +12,8 @@ import { useT } from "@/lib/i18n";
 import { uploadImage } from "@/lib/storage";
 import { supabase } from "@/lib/supabase";
 import { useUIStore } from "@/stores/uiStore";
-import { Lock, Bell, Globe, ChevronRight, Moon, Sun, ClipboardList, Camera, Loader2, Save, LogOut, X, Trash2, Check, Fingerprint } from "lucide-react";
+import { useShopStore } from "@/stores/shopStore";
+import { BarChart3, Lock, Bell, Globe, ChevronRight, Moon, Sun, ClipboardList, Camera, Loader2, Save, LogOut, X, Trash2, Check, Fingerprint } from "lucide-react";
 import {
   biometricUnavailableReason,
   BIOMETRIC_REASON_KEY,
@@ -36,6 +37,15 @@ export default function SettingsPage() {
   const t = useT();
   const { user, logout } = useAuthStore();
   const { theme, toggleTheme, language, setLanguage } = useThemeStore();
+  const activeBranchName = useShopStore((s) => s.activeBranchName);
+  // Reports are only worth a row when this branch actually grants something to report on.
+  // The report itself is branch-scoped, so the row tells the employee which branch it opens.
+  const reportPermissions = user?.membershipRole === "owner" ? ["*"] : user?.permissions ?? [];
+  const canSeeReports =
+    reportPermissions.includes("*") ||
+    ["sales.view", "returns.view", "products.view", "inventory.view"].some((code) =>
+      reportPermissions.includes(code),
+    );
   /**
    * Fingerprint login, on the employee's own screen.
    *
@@ -306,6 +316,19 @@ export default function SettingsPage() {
             shop-management group, so this screen needs no section label at all. */}
         <div className="px-4 pt-3.5 animate-fade-in-up delay-75">
           <ListCard>
+            {/* One row, one destination: the report is a screen of its own, not a second
+                copy of the figures on Home. The branch under the label says which slice of
+                the business the report will describe. */}
+            {canSeeReports && (
+              <ListRow
+                onClick={() => navigate("/employee/reports")}
+                icon={BarChart3}
+                title={t("reports.mine")}
+                meta={activeBranchName ?? t("reports.thisBranch")}
+                testId="settings-my-reports"
+                trailing={<ChevronRight size={14} style={{ color: "var(--text-secondary)" }} className="shrink-0" />}
+              />
+            )}
             {/* Comfort first, and state under the label — the reference's grammar, the
                 same as the admin twin. An employee has no shop block, so this screen has
                 no headings at all. */}

@@ -6,7 +6,7 @@
  *
  * Uses the QA database (never production).
  */
-import { test, expect } from '@playwright/test';
+import { test, expect } from './base';
 import { injectAdminAuth, setupFixtures, cleanupFixtures, QA_IDS } from './helpers';
 import * as fs from 'fs';
 import * as path from 'path';

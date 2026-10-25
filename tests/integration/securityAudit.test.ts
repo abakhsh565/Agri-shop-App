@@ -455,7 +455,9 @@ describe('Security Audit — RLS & Authorization', () => {
     await execSqlAsAdmin(`UPDATE users SET phone = '923009999999', role = 'admin', is_active = true WHERE id = '${QA_IDS.admin}'`);
     await execSqlAsAdmin(`UPDATE auth.users SET phone = '923009999999' WHERE id = '${QA_IDS.admin}'`);
 
-    // Ensure admin exists with correct state (other tests delete it via cleanupTestData)
+    // Ensure the admin exists with the correct state. Nothing deletes the fixture accounts any more
+    // (tests/unit/qaFixtureKeepList.test.ts holds that rule), but this suite also re-seeds them so it
+    // never depends on whoever ran last.
     await execSqlAsAdmin(`
       INSERT INTO users (id, name, phone, role, is_original_owner, is_active, shop_id)
       VALUES ('${QA_IDS.admin}', 'QA Admin', '923009999999', 'admin', true, true, '${QA_IDS.shop}')

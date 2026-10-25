@@ -21,6 +21,7 @@ import {
 import { APP_NAME, APP_VERSION } from "@/lib/brand";
 import DeleteTargetSheet from "@/components/shop/DeleteTargetSheet";
 import ProfileCard from "@/components/shop/ProfileCard";
+import ShopOverviewCard from "@/components/shop/ShopOverviewCard";
 import { useShopStore } from "@/stores/shopStore";
 import { deleteAccount } from "@/lib/auth";
 import { forgetLastProfile, forgetPhoneVerification } from "@/lib/loginWindow";
@@ -257,6 +258,10 @@ export default function AdminSettingsPage() {
             )
           }
         />
+
+        {/* The shop's three facts. They moved here from Home because they describe the shop,
+            not the day: Home's figures follow a date filter and a branch, these never do. */}
+        <ShopOverviewCard />
 
         {/* Business setup status. Persistent, not a one-time wizard: it shows what is done
             and what is missing, and disappears by itself once nothing is missing. It carries

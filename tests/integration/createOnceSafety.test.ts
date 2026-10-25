@@ -20,14 +20,17 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { randomUUID } from 'crypto';
 import { execRpcAsUser, execSqlAsAdmin, roleIdByName } from '../setup/qa-client';
-import { QA_IDS, setupAllFixtures, cleanupTestData } from '../setup/fixtures';
+import { QA_IDS, setupAllFixtures } from '../setup/fixtures';
+import { runCleanupStatements } from '../setup/ownedCleanup';
 
 const TENANT = QA_IDS.shop;
 const OWNER = QA_IDS.admin;
 
-// This suite's own supplier, product and variant: the shared QA baseline is cleaned by
-// every other suite that calls cleanupTestData(), so a purchase built on it can vanish
-// mid-assertion.
+// This suite's own supplier, product and variant. A purchase built on the shared QA baseline could
+// vanish mid-assertion: several files reseed it, and the sweep those files ran in their afterAll
+// deleted baseline purchases and movements outright. Its own ids put the rows out of every other
+// file's reach — and the cleanup below names the ids it owns, so it cannot reach out of them either
+// (tests/setup/ownedCleanup.ts holds the rule and the reason).
 const COMPANY = 'c5000000-0000-0000-0000-0000000000c1';
 const PRODUCT = 'c5000000-0000-0000-0000-0000000000d1';
 const VARIANT = 'c5000000-0000-0000-0000-0000000000d2';
@@ -108,15 +111,27 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await execSqlAsAdmin(`DELETE FROM purchase_items WHERE purchase_id IN (SELECT id FROM purchases WHERE company_id = '${COMPANY}')`).catch(() => undefined);
-  await execSqlAsAdmin(`DELETE FROM purchases WHERE company_id = '${COMPANY}'`).catch(() => undefined);
-  await execSqlAsAdmin(`DELETE FROM inventory_movements WHERE product_id = '${PRODUCT}'`).catch(() => undefined);
-  await execSqlAsAdmin(`DELETE FROM memberships WHERE user_id IN (SELECT id FROM users WHERE phone = '${EMPLOYEE_PHONE}')`).catch(() => undefined);
-  await execSqlAsAdmin(`DELETE FROM users WHERE phone = '${EMPLOYEE_PHONE}'`).catch(() => undefined);
-  await execSqlAsAdmin(`DELETE FROM product_variants WHERE id = '${VARIANT}'`).catch(() => undefined);
-  await execSqlAsAdmin(`DELETE FROM products WHERE id = '${PRODUCT}'`).catch(() => undefined);
-  await execSqlAsAdmin(`DELETE FROM companies WHERE id = '${COMPANY}'`).catch(() => undefined);
-  await cleanupTestData();
+  // This suite's own rows, children before parents — and every failure reported.
+  //
+  // Each of these statements used to end in `.catch(() => undefined)`, so a delete that failed (an FK
+  // that was not anticipated, a column that moved) left the row in the shared QA database while the
+  // suite reported success — and the NEXT run then read this suite's purchase or employee as if it
+  // were the fixture. The list is handed to `runCleanupStatements`, which runs all of them, collects
+  // every failure, and throws one error naming the statement and the error it produced.
+  await runCleanupStatements(
+    execSqlAsAdmin,
+    [
+      `DELETE FROM purchase_items WHERE purchase_id IN (SELECT id FROM purchases WHERE company_id = '${COMPANY}')`,
+      `DELETE FROM purchases WHERE company_id = '${COMPANY}'`,
+      `DELETE FROM inventory_movements WHERE product_id = '${PRODUCT}'`,
+      `DELETE FROM memberships WHERE user_id IN (SELECT id FROM users WHERE phone = '${EMPLOYEE_PHONE}')`,
+      `DELETE FROM users WHERE phone = '${EMPLOYEE_PHONE}'`,
+      `DELETE FROM product_variants WHERE id = '${VARIANT}'`,
+      `DELETE FROM products WHERE id = '${PRODUCT}'`,
+      `DELETE FROM companies WHERE id = '${COMPANY}'`,
+    ],
+    'createOnceSafety removal of its own rows',
+  );
 });
 
 describe('Create once safety', () => {

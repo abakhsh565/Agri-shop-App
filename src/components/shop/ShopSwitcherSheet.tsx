@@ -125,7 +125,8 @@ export default function ShopSwitcherSheet() {
           {!loading && branchesError && <div className="py-4"><p className="ds-meta">{t("branches.loadFailed")}</p><Button onClick={() => void load()}>{t("common.tryAgain")}</Button></div>}
           {!loading && !branchesError && branches.length === 0 && <p className="ds-meta py-6 text-center">{t("shop.noneMember")}</p>}
           {branches.length > 0 && <ListCard>{branches.map((branch) => <ListRow key={branch.id}
-            title={branch.name} testId={`shop-option-${branch.id}`} selected={branch.id === activeBranchId}
+            title={branch.name} meta={branch.roleName ?? undefined}
+            testId={`shop-option-${branch.id}`} selected={branch.id === activeBranchId}
             disabled={busy || branch.membershipStatus !== "active"} onClick={() => void select(branch)}
             trailing={pendingId === branch.id ? <Loader2 size={18} className="animate-spin" /> : branch.id === activeBranchId ? <Check size={18} /> : undefined}
           />)}</ListCard>}

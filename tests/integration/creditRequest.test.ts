@@ -9,18 +9,19 @@
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { execRpcAsUser, execSqlAsAdmin } from '../setup/qa-client';
-import { setupAllFixtures, cleanupTestData, QA_IDS } from '../setup/fixtures';
+import { setupAllFixtures, QA_IDS } from '../setup/fixtures';
+import { runCleanupStatements } from '../setup/ownedCleanup';
 import { recordEvidence, printReport, clearEvidence } from '../setup/evidence';
 
 // Use the admin user from fixtures for RPC calls
 const ADMIN_ID = QA_IDS.admin;
 
-// Dedicated customers for THIS suite. The suite previously used the shared
-// customerB/customerC fixtures, but cleanupTestData() (run by several suites in
-// their afterAll) deletes credit_limit_requests for those shared customers, so a
-// parallel suite finishing mid-run wiped this suite's request and it failed with
-// CUSTOMER_NOT_FOUND / 'Request not found or already processed'. Owning the
-// fixture removes the interference entirely.
+// Dedicated customers for THIS suite. It previously used the shared customerB/customerC fixtures,
+// but the sweep several suites ran in their afterAll deleted credit_limit_requests for those shared
+// customers, so a finishing suite wiped this suite's request mid-run and it failed with
+// CUSTOMER_NOT_FOUND / 'Request not found or already processed'. The sweep is gone
+// (tests/setup/ownedCleanup.ts) and this suite owns its customers anyway — two independent reasons
+// no other file's cleanup can reach these rows.
 const CR_CUSTOMER_C = 'c0c00000-0000-0000-0000-000000000001';
 const CR_CUSTOMER_B = 'c0c00000-0000-0000-0000-000000000002';
 
@@ -42,9 +43,17 @@ describe('Credit Request Integration', () => {
   });
 
   afterAll(async () => {
-    await execSqlAsAdmin(`DELETE FROM credit_limit_requests WHERE customer_id IN ('${CR_CUSTOMER_C}','${CR_CUSTOMER_B}')`).catch(() => {});
-    await execSqlAsAdmin(`DELETE FROM customers WHERE id IN ('${CR_CUSTOMER_C}','${CR_CUSTOMER_B}')`).catch(() => {});
-    await cleanupTestData();
+    // This suite's own rows, reported rather than swallowed: `.catch(() => {})` on both of these meant
+    // a request or a customer that survived a failed delete was invisible, and the next run's
+    // `create_credit_limit_request` then read it as state it had to work around.
+    await runCleanupStatements(
+      execSqlAsAdmin,
+      [
+        `DELETE FROM credit_limit_requests WHERE customer_id IN ('${CR_CUSTOMER_C}','${CR_CUSTOMER_B}')`,
+        `DELETE FROM customers WHERE id IN ('${CR_CUSTOMER_C}','${CR_CUSTOMER_B}')`,
+      ],
+      'creditRequest removal of its own rows',
+    );
     printReport();
   });
 

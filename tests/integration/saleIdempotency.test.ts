@@ -27,7 +27,8 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { randomUUID } from 'crypto';
 import { execRpcAsUser, execSqlAsAdmin, updateAsUser } from '../setup/qa-client';
-import { QA_IDS, setupAllFixtures, cleanupTestData } from '../setup/fixtures';
+import { QA_IDS, setupAllFixtures, cleanupOwnedTransactions } from '../setup/fixtures';
+import { runCleanupStatements } from '../setup/ownedCleanup';
 
 const TENANT = QA_IDS.shop;
 const OWNER = QA_IDS.admin;
@@ -115,15 +116,28 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await execSqlAsAdmin(`DELETE FROM sale_submissions WHERE idempotency_key LIKE 'qa-saleidem-%'`).catch(() => undefined);
-  await execSqlAsAdmin(`DELETE FROM sale_items WHERE sale_id IN (SELECT id FROM sales WHERE customer_id = '${CUSTOMER}')`).catch(() => undefined);
-  await execSqlAsAdmin(`DELETE FROM sales WHERE customer_id = '${CUSTOMER}'`).catch(() => undefined);
-  await execSqlAsAdmin(`DELETE FROM inventory_movements WHERE product_id = '${PRODUCT}'`).catch(() => undefined);
-  await execSqlAsAdmin(`DELETE FROM stock_adjustments WHERE product_id = '${PRODUCT}'`).catch(() => undefined);
-  await execSqlAsAdmin(`DELETE FROM product_variants WHERE id = '${VARIANT}'`).catch(() => undefined);
-  await execSqlAsAdmin(`DELETE FROM products WHERE id = '${PRODUCT}'`).catch(() => undefined);
-  await execSqlAsAdmin(`DELETE FROM customers WHERE id = '${CUSTOMER}'`).catch(() => undefined);
-  await cleanupTestData();
+  // Its own customer and product, so the sales, line items, voids, returns, payments and movements
+  // this suite created through the RPC are the only rows in reach. The shared-identity sweep that
+  // used to be called here (and deleted the same rows for customerA/B/C and productA/B) is gone;
+  // `tests/setup/ownedCleanup.ts` carries the rule and the reason.
+  await cleanupOwnedTransactions({ customerIds: [CUSTOMER], productIds: [PRODUCT] });
+  // The identity rows this suite inserted, by id — reported rather than swallowed, so a refuse-to-
+  // delete (an FK nobody anticipated) names itself instead of leaving this suite's product behind for
+  // the next run to read as the fixture.
+  await runCleanupStatements(
+    execSqlAsAdmin,
+    [
+      // The submission keys, first and in the same report: a stale key from an interrupted run is
+      // what makes the next run's first confirm look like a duplicate, and `.catch(() => undefined)`
+      // here meant that key stayed put while this teardown reported clean.
+      `DELETE FROM sale_submissions WHERE idempotency_key LIKE 'qa-saleidem-%'`,
+      `DELETE FROM stock_adjustments WHERE product_id = '${PRODUCT}'`,
+      `DELETE FROM product_variants WHERE id = '${VARIANT}'`,
+      `DELETE FROM products WHERE id = '${PRODUCT}'`,
+      `DELETE FROM customers WHERE id = '${CUSTOMER}'`,
+    ],
+    'saleIdempotency removal of its own rows',
+  );
 });
 
 describe('sale idempotency', () => {

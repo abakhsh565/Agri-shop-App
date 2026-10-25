@@ -1,5 +1,5 @@
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
-import { LayoutDashboard, ShoppingBag, Package, ScanLine, MoreHorizontal, X } from "lucide-react";
+import { LayoutDashboard, ShoppingBag, Package, ScanLine, MessageSquare, X } from "lucide-react";
 import { useT, tNow } from "@/lib/i18n";
 import ToastContainer from "@/components/ui/Toast";
 import NavTracker from "@/components/ui/NavTracker";
@@ -30,7 +30,10 @@ const TAB_DEFS = [
   { key: "admin.sales"     as const, icon: ShoppingBag,     path: "/admin/sales"     },
   { key: "scan"            as const, icon: ScanLine,        path: "__scan__"         },
   { key: "admin.inventory" as const, icon: Package,         path: "/admin/products"    },
-  { key: "admin.more"      as const, icon: MoreHorizontal,  path: "/admin/more"      },
+  // The fifth slot was "More", which opened a menu of rows. Those rows now ship on the account
+  // screen, and the slot holds Messages — the surface a farmer's product request and a team's
+  // own conversation will share. `/admin/more` still resolves as a page; it is simply not a tab.
+  { key: "admin.messages"  as const, icon: MessageSquare,   path: "/admin/messages"   },
 ];
 
 export default function AdminLayout() {
@@ -117,13 +120,11 @@ export default function AdminLayout() {
     if (path.startsWith("/admin/products"))  return "/admin/products";
     if (path.startsWith("/admin/inventory") || path.startsWith("/admin/inventory/movements") || path.startsWith("/admin/inventory/reorder")) return "/admin/products";
     if (path.startsWith("/admin/customers")) return "/admin/customers";
-    if (path.startsWith("/admin/more") ||
-        path.startsWith("/admin/employees") ||
-        path.startsWith("/admin/companies") ||
-        path.startsWith("/admin/purchases") ||
-        path.startsWith("/admin/reports") ||
-        path.startsWith("/admin/settings") ||
-        path.startsWith("/admin/payments"))  return "/admin/more";
+    if (path.startsWith("/admin/messages")) return "/admin/messages";
+    // `/admin/more`, employees, companies, purchases, reports, settings and payments used to
+    // light the More tab, because More was where they were reached from. More is no longer a
+    // tab and none of them is Messages, so none of them lights anything — the same answer the
+    // assistant screen gives, rather than pointing at a tab that does not own them.
     // `null` rather than a stand-in: the assistant is no longer a tab, so on that screen
     // NO tab is the current one, and lighting up "Dashboard" would send someone there
     // believing the assistant lives under it.

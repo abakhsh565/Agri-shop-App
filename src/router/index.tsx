@@ -38,6 +38,7 @@ const AdminSalesListPage = React.lazy(() => import("@/pages/admin/sales/AdminSal
 const SaleDetailView = React.lazy(() => import("@/components/sales/SaleDetailView"));
 
 import MoreMenuPage from "@/pages/admin/more/MoreMenuPage";
+import AdminMessagesPage from "@/pages/admin/messages/AdminMessagesPage";
 import BranchDetailPage from "@/pages/admin/more/BranchDetailPage";
 const EmployeesListPage = React.lazy(() => import("@/pages/admin/employees/EmployeesListPage"));
 const EmployeeDetailPage = React.lazy(() => import("@/pages/admin/employees/EmployeeDetailPage"));
@@ -86,6 +87,7 @@ import ReturnConfirmPage from "@/pages/employee/returns/ReturnConfirmPage";
 import ReturnSuccessPage from "@/pages/employee/returns/ReturnSuccessPage";
 import SearchPage from "@/pages/employee/search/SearchPage";
 import SettingsPage from "@/pages/employee/settings/SettingsPage";
+import MyReportsPage from "@/pages/employee/reports/MyReportsPage";
 import ActivityLogPage from "@/pages/employee/activity/ActivityLogPage";
 import EmployeeNotificationsPage from "@/pages/employee/notifications/EmployeeNotificationsPage";
 import EmployeeMorePage from "@/pages/employee/more/MorePage";
@@ -137,6 +139,7 @@ export const router = createBrowserRouter([
       { path: "dashboard",  element: <AdminDashboardPage /> },
       { path: "assistant",  element: <AssistantPage /> },
       { path: "more",       element: <MoreMenuPage /> },
+      { path: "messages",   element: <AdminMessagesPage /> },
       { path: "guide",      element: <AppGuidePage /> },
       { path: "search", element: <SearchPage /> },
 
@@ -284,6 +287,7 @@ export const router = createBrowserRouter([
       { path: "products/:productId", element: <ProductDetailPage /> },
       { path: "search", element: <SearchPage /> },
       { path: "settings", element: <SettingsPage /> },
+      { path: "reports", element: <MyReportsPage /> },
       { path: "activity", element: <ActivityLogPage /> },
       { path: "notifications", element: <EmployeeNotificationsPage /> },
       { path: "more", element: <EmployeeMorePage /> },

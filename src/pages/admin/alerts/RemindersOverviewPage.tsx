@@ -661,8 +661,8 @@ export default function RemindersOverviewPage() {
             />
             <button
               onClick={() => setShowGroupSheet(true)}
-              className="flex items-center justify-center gap-2 h-11 rounded-full text-13 font-bold transition-transform active:scale-[0.97]"
-              style={{ background: "var(--brand)", color: "#0a0a0a" }}
+              className="mx-5 flex items-center justify-center gap-2 h-11 rounded-full text-13 font-bold transition-transform active:scale-[0.97]"
+              style={{ width: "calc(100% - 2.5rem)", background: "var(--brand)", color: "#0a0a0a" }}
             >
               <Plus size={15} /> {t("inline.create_group_reminder_x")}
             </button>

@@ -27,6 +27,7 @@ this file exists so an impact map starts from a lookup instead of fresh reconnai
 | `dashboard` | AdminDashboardPage | `src/pages/admin/dashboard/AdminDashboardPage` | accessibility, actionCenter, adminMicrocopy, crossScreenSync, dashboardScope, dependencyContinuity, imageSync, setupCompletion, skeletonCoverage |
 | `assistant` | AssistantPage | `src/pages/assistant/AssistantPage` | accessibility, crossScreenSync, imageSync, skeletonCoverage |
 | `more` | MoreMenuPage | `src/pages/admin/more/MoreMenuPage` | accessibility, adminMicrocopy, crossScreenSync, education, imageSync, marketplaceListing, skeletonCoverage |
+| `messages` | AdminMessagesPage | `src/pages/admin/messages/AdminMessagesPage` | accessibility, adminMicrocopy, crossScreenSync, imageSync, skeletonCoverage |
 | `guide` | AppGuidePage | `src/pages/shared/AppGuidePage` | accessibility, crossScreenSync, imageSync, skeletonCoverage |
 | `search` | SearchPage | `src/pages/employee/search/SearchPage` | accessibility, crossScreenSync, employeeStatusSafety, imageSync, skeletonCoverage |
 | `customers` | CustomersListPage | `src/pages/employee/customers/CustomersListPage` | accessibility, crossScreenSync, employeeStatusSafety, imageSync, skeletonCoverage |

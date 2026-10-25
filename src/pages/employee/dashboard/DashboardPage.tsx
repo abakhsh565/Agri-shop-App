@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "@/stores/authStore";
 import { useNotificationStore, type AppNotification } from "@/stores/notificationStore";
 import { useSalesStore } from "@/stores/salesStore";
+import { useShopStore } from "@/stores/shopStore";
 import PullToRefresh from "@/components/ui/PullToRefresh";
 import { useCustomersStore } from "@/stores/customersStore";
 import { formatSmartDateTime, translateNotification } from "@/lib/formatters";
@@ -10,7 +11,7 @@ import { useT } from "@/lib/i18n";
 import { generateReminders } from "@/lib/reminderEngine";
 import { useThemeStore } from "@/stores/themeStore";
 import { useCurrentTime } from "@/lib/useCurrentTime";
-import { ShoppingCart, CreditCard, ChevronRight, Bell, Search, ArrowRight, ClipboardList } from "lucide-react";
+import { ShoppingCart, CreditCard, ChevronRight, ChevronDown, Bell, Search, ArrowRight, ClipboardList, MapPin } from "lucide-react";
 import { pkToday, pkDateFromISO } from "@/lib/pkDate";
 import StatusBar from "@/components/ui/StatusBar";
 import ListCard from "@/components/ui/ListCard";
@@ -58,6 +59,12 @@ export default function DashboardPage() {
   const [showNotifs, setShowNotifs] = useState(false);
   const allSales = useSalesStore((s) => s.sales);
   const customers = useCustomersStore((s) => s.customers);
+  // The branch this person is working in. A person enrolled in one branch has nothing to
+  // switch to, so the control only exists when the server returned more than one.
+  const branches = useShopStore((s) => s.branches);
+  const activeBranchId = useShopStore((s) => s.activeBranchId);
+  const activeBranchName = useShopStore((s) => s.activeBranchName);
+  const openSwitcher = useShopStore((s) => s.openSwitcher);
   // Read both stores unconditionally: short-circuiting a hook call is what
   // crashed this screen, since React must see the same hooks every render.
   const salesReady = useSalesStore((s) => s.ready);
@@ -81,16 +88,15 @@ export default function DashboardPage() {
   const isUrdu = language === "ur";
   const firstName = user?.name?.split(" ")[0] ?? "Ahmed";
   const now = useCurrentTime();
-  const today = now;
-  const hour = today.getHours();
-  const greetingKey =
-    hour < 12 ? "dashboard.greeting.morning"
-    : hour < 17 ? "dashboard.greeting.afternoon"
-    : "dashboard.greeting.evening";
-
-  const dateStr = today.toLocaleDateString(isUrdu ? "ur-PK" : "en-PK", {
-    weekday: "long", day: "numeric", month: "long",
-  });
+  // The header states where this person is working, not who they are or what time it is:
+  // the branch is the one fact that changes what every number below means.
+  const activeBranch = branches.find((b) => b.id === activeBranchId) ?? null;
+  const branchPlace = activeBranch?.place ?? null;
+  // A branch with coordinates but no map label falls back to its own name in `place`. Showing
+  // that would print the branch twice, so in that case the address is the useful second line.
+  const branchLocation = branchPlace
+    ? (branchPlace.label && branchPlace.label !== activeBranchName ? branchPlace.label : branchPlace.address)
+    : null;
 
   // Live metrics
   const todayStr = pkToday();
@@ -198,10 +204,33 @@ export default function DashboardPage() {
         </button>
 
         <div className="flex flex-col flex-1 min-w-0">
-          <p className="font-bold text-17 truncate" style={{ color: "var(--text-primary)" }}>
-            {t(greetingKey)}, {firstName}
-          </p>
-          <p className="text-12" style={{ color: "var(--text-secondary)" }}>{dateStr}</p>
+          {branches.length > 1 ? (
+            <button
+              type="button"
+              data-testid="employee-branch-switch"
+              onClick={() => openSwitcher()}
+              className="flex items-center gap-1.5 self-start max-w-full active:opacity-60"
+            >
+              <span className="font-bold text-17 truncate" style={{ color: "var(--text-primary)" }}>
+                {activeBranchName ?? t("audit.noBranch")}
+              </span>
+              <ChevronDown size={14} style={{ color: "var(--text-secondary)" }} className="shrink-0" />
+            </button>
+          ) : (
+            <p className="font-bold text-17 truncate" style={{ color: "var(--text-primary)" }}>
+              {activeBranchName ?? t("audit.noBranch")}
+            </p>
+          )}
+          {branchLocation && (
+            <p
+              data-testid="employee-branch-location"
+              className="text-12 mt-0.5 flex items-center gap-1 min-w-0"
+              style={{ color: "var(--text-secondary)" }}
+            >
+              <MapPin size={11} className="shrink-0" />
+              <span className="truncate">{branchLocation}</span>
+            </p>
+          )}
         </div>
 
         <div className="flex items-center gap-2 shrink-0">

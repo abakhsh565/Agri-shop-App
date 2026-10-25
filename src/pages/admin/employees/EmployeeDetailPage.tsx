@@ -6,12 +6,11 @@ import { usePermissionLabels } from "@/lib/permissionLabels";
 import { applyOverrides, diffOverrides, overrideCount, overridesToStore } from "@/lib/accessModel";
 import EmployeeAccessEditor from "@/components/admin/EmployeeAccessEditor";
 import InviteLinkCard from "@/components/admin/InviteLinkCard";
-import { useEmployeesStore } from "@/stores/employeesStore";
+import SelectSheet from "@/components/ui/SelectSheet";
+import { useEmployeesStore, type EmployeePerformance } from "@/stores/employeesStore";
 import { SkeletonList } from "@/components/ui/Skeleton";
 import { usePermissionsStore } from "@/stores/permissionsStore";
 import { useRolesStore } from "@/stores/rolesStore";
-import { useSalesStore } from "@/stores/salesStore";
-import { useCustomersStore } from "@/stores/customersStore";
 import { useAuthStore } from "@/stores/authStore";
 import { useUIStore } from "@/stores/uiStore";
 import { provisionMemberLogin } from "@/lib/auth";
@@ -22,14 +21,13 @@ import NavHeader from "@/components/ui/NavHeader";
 import ListCard from "@/components/ui/ListCard";
 import ListRow from "@/components/ui/ListRow";
 import { formatCurrency, formatSmartDateTime } from "@/lib/formatters";
-import { pkToday, pkDateFromISO } from "@/lib/pkDate";
 import { useCurrentTime } from "@/lib/useCurrentTime";
 import {
   Phone, Hash, ShieldCheck, UserX, UserCheck, Clock,
   TrendingUp, ShoppingCart, Users, Calendar, ChevronRight,
   Eye, Search,
 } from "lucide-react";
-import type { Sale, MembershipRole } from "@/types";
+import type { MembershipRole } from "@/types";
 
 function initBgColor(name: string | null | undefined) {
   const colors = ["#84cc16","#3b82f6","#8b5cf6","#f59e0b","#06b6d4","#ec4899"];
@@ -51,9 +49,9 @@ export default function EmployeeDetailPage() {
   const employees = useEmployeesStore((s) => s.employees);
   const setActiveAction = useEmployeesStore((s) => s.setActive);
   const updateAccess = useEmployeesStore((s) => s.updateAccess);
+  const setBranchRoles = useEmployeesStore((s) => s.setBranchRoles);
   const getEmployeeAccess = useEmployeesStore((s) => s.getEmployeeAccess);
-  const sales = useSalesStore((s) => s.sales);
-  const customers = useCustomersStore((s) => s.customers);
+  const getEmployeePerformance = useEmployeesStore((s) => s.getEmployeePerformance);
   const permissionsStore = usePermissionsStore();
   const rolesStore = useRolesStore();
   const now = useCurrentTime();
@@ -80,6 +78,17 @@ export default function EmployeeDetailPage() {
   // The employee's own exceptions, straight from user_permissions.
   const [storedOverrides, setStoredOverrides] = useState<Record<string, boolean>>({});
   const [branches, setBranches] = useState<{ id: string; name: string }[]>([]);
+  // { branchId: roleId }. A branch with no entry uses the default role above, which is how the
+  // database reads a missing row — it is not the same as "no access".
+  const [editBranchRoles, setEditBranchRoles] = useState<Record<string, string>>({});
+  // Only sent when the owner actually changed a branch's role. Saving an unrelated override must
+  // not turn "all branches" into a frozen list of today's branch ids.
+  const [branchRolesDirty, setBranchRolesDirty] = useState(false);
+  const [roleSheetBranch, setRoleSheetBranch] = useState<string | null>(null);
+  // The person's work in each branch, read from one authorized aggregate. The sales store is
+  // branch-scoped, so it cannot answer "all branches" on its own.
+  const [performance, setPerformance] = useState<EmployeePerformance | null>(null);
+  const [perfTab, setPerfTab] = useState<string>("all");
   const [saving, setSaving] = useState(false);
   // Which consequential access change the owner is confirming, if any.
   const [confirmAction, setConfirmAction] = useState<null | "deactivate" | "cancelInvite" | "reactivate">(null);
@@ -131,6 +140,12 @@ export default function EmployeeDetailPage() {
           setEmpMembershipRole(access.membershipRole);
           setEditRoleId(access.roleId);
           setEditBranchScope(access.branchScope);
+          setBranchRolesDirty(false);
+          setEditBranchRoles(Object.fromEntries(
+            Object.entries(access.branchRoles)
+              .filter(([, v]) => !!v.roleId)
+              .map(([branchId, v]) => [branchId, v.roleId as string]),
+          ));
           applyAccess(access);
         })
         // A failed read must not leave a skeleton spinning forever, and must never fall
@@ -138,6 +153,20 @@ export default function EmployeeDetailPage() {
         .catch(() => setAccessState("error"));
     }
   }, [emp?.id]);
+
+  // Performance is read through its own authorized aggregate because `sales` is branch-scoped:
+  // the owner's store only holds the branch they are standing in, so one view of a person who
+  // works two branches is impossible from the client alone.
+  useEffect(() => {
+    if (!emp || !employeeId) return;
+    let cancelled = false;
+    setPerformance(null);
+    setPerfTab("all");
+    getEmployeePerformance(employeeId)
+      .then((next) => { if (!cancelled) setPerformance(next); })
+      .catch(() => { if (!cancelled) setPerformance(null); });
+    return () => { cancelled = true; };
+  }, [emp?.id, employeeId, getEmployeePerformance]);
 
   if (!emp) return (
     <div style={{ background: "var(--background)", color: "var(--text-primary)" }} className="flex flex-col min-h-full">
@@ -154,20 +183,16 @@ export default function EmployeeDetailPage() {
     </div>
   );
 
-  // Attribution is strictly by employee id. sales.employee_id is NOT NULL, so the
-  // old `|| s.employeeName === emp.name` fallback had no legitimate purpose and
-  // credited one person's sales to any colleague sharing their name.
-  const empSales = sales.filter((s: Sale) => !s.isVoided && s.employeeId === emp.id);
-  const recentSales = [...empSales].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 5);
-  const todayStr = pkToday();
-  const totalRevenue = empSales.reduce((sum, x) => sum + x.totalAmount, 0);
-  const totalTransactions = empSales.length;
-  const todaySales = empSales.filter(s => pkDateFromISO(s.createdAt) === todayStr);
-  const todayRevenue = todaySales.reduce((sum, x) => sum + x.totalAmount, 0);
-  const todayTransactions = todaySales.length;
-  const totalItems = empSales.reduce((sum, s) => sum + s.items.reduce((isum, it) => isum + it.qty, 0), 0);
-  const customerIds = [...new Set(empSales.map(s => s.customerId).filter(Boolean))];
-  const uniqueCustomers = customerIds.map(id => customers.find(c => c.id === id)).filter(Boolean);
+  // The figures come from the server, grouped the same way this screen tabs them: one aggregate
+  // for every branch and one per branch, so "All" and a branch tab can never disagree.
+  const perfLine = perfTab === "all"
+    ? performance?.totals ?? { salesCount: 0, revenue: 0, itemsSold: 0, customers: 0, todaySales: 0, todayRevenue: 0 }
+    : performance?.branches.find((b) => b.branchId === perfTab) ??
+      { salesCount: 0, revenue: 0, itemsSold: 0, customers: 0, todaySales: 0, todayRevenue: 0 };
+  const recentSales = (performance?.recent ?? []).filter((s) => perfTab === "all" || s.branchId === perfTab);
+  const performanceBranches = performance?.branches ?? [];
+  const scopeBranchIds = editBranchScope === null ? branches.map((b) => b.id) : editBranchScope;
+  const scopedBranches = branches.filter((b) => scopeBranchIds.includes(b.id));
 
   const initials = emp.name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase();
   const isActive = emp.isActive;
@@ -213,9 +238,10 @@ export default function EmployeeDetailPage() {
   // reset button into a lie either.
   const hasOverridesToClear = changeCount > 0 || storedCount > 0;
 
-  const branchNames = editBranchScope === null
-    ? t("addEmployee.allBranches")
-    : branches.filter((b) => editBranchScope.includes(b.id)).map((b) => b.name).join(", ") || t("addEmployee.allBranches");
+  function roleNameFor(branchId: string): string {
+    const roleId = editBranchRoles[branchId] ?? editRoleId;
+    return roleId ? rolesStore.roles.find((r) => r.id === roleId)?.name ?? t("empDetail.noRole") : t("empDetail.noRole");
+  }
 
   async function resetToRoleDefaults() {
     if (!employeeId) return;
@@ -246,11 +272,25 @@ export default function EmployeeDetailPage() {
       // exception the role now covers on its own (a role change must not retire an
       // earlier decision, which is how the database resolves access).
       const overrides = overridesToStore(editPerms, roleDefaults, storedOverrides);
+      // Every branch in scope gets an explicit role when the owner has edited one. The database
+      // derives the branch scope from this map, and a branch left at the default keeps working
+      // because its entry is the default role.
+      const branchRoles = branchRolesDirty
+        ? Object.fromEntries(scopeBranchIds
+            .map((id) => [id, editBranchRoles[id] ?? editRoleId] as const)
+            .filter((entry): entry is readonly [string, string] => !!entry[1]))
+        : undefined;
       await updateAccess(employeeId, {
         roleId: editRoleId,
         overrides,
         branchScope: editBranchScope,
       });
+      // The per-branch map is its own RPC: the access editor keeps the guards it already had, and
+      // this call cannot widen scope beyond the branches the owner selected above.
+      if (branchRoles && Object.keys(branchRoles).length > 0) {
+        await setBranchRoles(employeeId, { ...branchRoles });
+      }
+      setBranchRolesDirty(false);
       addToast(t("empDetail.accessUpdated"), "success");
       setShowPermEditor(false);
       applyAccess(await getEmployeeAccess(employeeId));
@@ -482,6 +522,33 @@ export default function EmployeeDetailPage() {
               </div>
             )}
 
+            {/* Who they are in each branch */}
+            {scopedBranches.length > 0 && (
+              <div className="px-4 py-3" style={{ borderTop: "1px solid var(--divider)" }}>
+                <p className="text-xs font-bold mb-2" style={{ color: "var(--text-secondary)" }}>
+                  {t("empDetail.roleByBranch")}
+                </p>
+                <div className="flex flex-col gap-2">
+                  {scopedBranches.map((b) => (
+                    <button
+                      key={b.id}
+                      type="button"
+                      onClick={() => setRoleSheetBranch(b.id)}
+                      className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-[var(--radius-tile)] text-start"
+                      style={{ background: "var(--surface)", border: "1px solid var(--divider)" }}
+                    >
+                      <span className="text-xs font-semibold truncate" style={{ color: "var(--text-primary)" }}>{b.name}</span>
+                      <span className="text-xs font-semibold flex items-center gap-1 shrink-0" style={{ color: "var(--text-secondary)" }}>
+                        {roleNameFor(b.id)}
+                        <ChevronRight size={12} />
+                      </span>
+                    </button>
+                  ))}
+                </div>
+                <p className="text-10 mt-2" style={{ color: "var(--text-secondary)" }}>{t("empDetail.roleByBranchHint")}</p>
+              </div>
+            )}
+
             {/* Access */}
             <div className="px-4 py-3" style={{ borderTop: "1px solid var(--divider)" }}>
               <p className="text-xs font-bold mb-2" style={{ color: "var(--text-secondary)" }}>
@@ -536,7 +603,11 @@ export default function EmployeeDetailPage() {
             </div>
             <div className="px-4 py-3 flex items-center justify-between" style={{ borderTop: "1px solid var(--divider)" }}>
               <span className="text-sm" style={{ color: "var(--text-secondary)" }}>{t("empDetail.worksAt")}</span>
-              <span className="text-sm font-bold text-end max-w-[60%]" style={{ color: "var(--text-primary)" }}>{branchNames}</span>
+              <span className="text-sm font-bold text-end max-w-[60%]" style={{ color: "var(--text-primary)" }}>
+                {scopeBranchIds.length === branches.length
+                  ? t("addEmployee.allBranches")
+                  : scopedBranches.map((b) => b.name).join(", ") || t("addEmployee.allBranches")}
+              </span>
             </div>
             <div className="px-4 py-3 flex items-start justify-between gap-3" style={{ borderTop: "1px solid var(--divider)" }}>
               <span className="text-sm shrink-0" style={{ color: "var(--text-secondary)" }}>{t("empDetail.access")}</span>
@@ -558,6 +629,27 @@ export default function EmployeeDetailPage() {
           </div>
         )}
       </div>
+
+      {/* Which role each branch grants. A person can be a cashier in one branch and a
+          manager in another; the single "role" above is only the default for branches that
+          have no row of their own. */}
+      {branches.length > 0 && (
+        <div className="px-4 pt-5 animate-fade-in-up delay-[125ms]">
+          <p className="ds-section-label mb-3" style={{ color: "var(--text-secondary)" }}>
+            {t("empDetail.roleByBranch")}
+          </p>
+          <ListCard>
+            {scopedBranches.map((b) => (
+              <ListRow
+                key={b.id}
+                title={b.name}
+                trailing={<span className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>{roleNameFor(b.id)}</span>}
+              />
+            ))}
+          </ListCard>
+          <p className="text-10 mt-2" style={{ color: "var(--text-secondary)" }}>{t("empDetail.roleByBranchHint")}</p>
+        </div>
+      )}
 
       {/* Invited: they have never signed in, so there is no work to report and
           showing zeros as "performance" would read as a real result. */}
@@ -612,13 +704,43 @@ export default function EmployeeDetailPage() {
         <p className="ds-section-label mb-3" style={{ color: "var(--text-secondary)" }}>
           {t("empDetail.performance")}
         </p>
+        {/* One person, every branch. "All" is the sum the server computed across the branches this
+            employee may work in; a branch chip is that branch alone. One tab is not a choice, so
+            the row only appears when there is a second branch to compare. */}
+        {performanceBranches.length > 1 && (
+          <div className="flex gap-2 overflow-x-auto pb-3" role="tablist" aria-label={t("empDetail.performance")}>
+            {[{ id: "all", name: t("empDetail.allBranchesTab") }, ...performanceBranches.map((b) => ({ id: b.branchId ?? "", name: b.branchName ?? "" }))]
+              .filter((tab) => tab.id)
+              .map((tab) => {
+                const selected = perfTab === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={selected}
+                    data-testid={`emp-perf-tab-${tab.id}`}
+                    onClick={() => setPerfTab(tab.id)}
+                    className="shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold ds-pressable"
+                    style={{
+                      background: selected ? "var(--brand)" : "var(--surface-2)",
+                      color: selected ? "#0a0a0a" : "var(--text-secondary)",
+                      border: `1px solid ${selected ? "var(--brand)" : "var(--divider)"}`,
+                    }}
+                  >
+                    {tab.name}
+                  </button>
+                );
+              })}
+          </div>
+        )}
         <div className="grid grid-cols-2 gap-3">
           {[
-            { icon: TrendingUp, label: t("empDetail.totalRevenue"), value: formatCurrency(totalRevenue), color: "var(--brand)" },
-            { icon: ShoppingCart, label: t("empDetail.totalSales"), value: String(totalTransactions), color: "#3b82f6" },
-            { icon: ShoppingCart, label: t("employee.itemsSold"), value: String(totalItems), color: "#8b5cf6" },
-            { icon: Users, label: t("empDetail.customers"), value: String(uniqueCustomers.length), color: "#06b6d4" },
-            { icon: Calendar, label: t("empDetail.today"), value: `${todayTransactions} · ${formatCurrency(todayRevenue)}`, color: "#f59e0b" },
+            { icon: TrendingUp, label: t("empDetail.totalRevenue"), value: formatCurrency(perfLine.revenue), color: "var(--brand)" },
+            { icon: ShoppingCart, label: t("empDetail.totalSales"), value: String(perfLine.salesCount), color: "#3b82f6" },
+            { icon: ShoppingCart, label: t("employee.itemsSold"), value: String(perfLine.itemsSold), color: "#8b5cf6" },
+            { icon: Users, label: t("empDetail.customers"), value: String(perfLine.customers), color: "#06b6d4" },
+            { icon: Calendar, label: t("empDetail.today"), value: `${perfLine.todaySales} · ${formatCurrency(perfLine.todayRevenue)}`, color: "#f59e0b" },
           ].map(({ icon: Icon, label, value, color }) => (
             <div
               key={label}
@@ -645,7 +767,7 @@ export default function EmployeeDetailPage() {
           <p className="ds-section-label" style={{ color: "var(--text-secondary)" }}>
             {t("empDetail.recentSales")}
           </p>
-          {empSales.length > 5 && (
+          {recentSales.length >= 5 && (
             <button
               onClick={() => navigate("/admin/sales", { state: { employeeId: emp.id } })}
               className="text-xs font-semibold flex items-center gap-1"
@@ -680,7 +802,8 @@ export default function EmployeeDetailPage() {
                     </span>
                   </div>
                   <p className="text-10 mt-0.5" style={{ color: "var(--text-secondary)", opacity: 0.7 }}>
-                    {sale.items.length} · {sale.paymentType === "full" ? t("sales.paid") : t("sales.credit")}
+                    {perfTab === "all" && sale.branchName ? `${sale.branchName} · ` : ""}
+                    {sale.itemCount} · {sale.paymentType === "full" ? t("sales.paid") : t("sales.credit")}
                   </p>
                 </div>
               </ListRow>
@@ -736,6 +859,21 @@ export default function EmployeeDetailPage() {
           )}
         </div>
       )}
+
+      {/* Choosing the role a single branch grants. The list is the same role catalogue the
+          default-role control uses, so the two cannot drift apart. */}
+      <SelectSheet
+        open={roleSheetBranch !== null}
+        title={t("empDetail.rolePickerTitle")}
+        options={rolesStore.roles.map((r) => ({ value: r.id, label: r.name }))}
+        selected={roleSheetBranch ? editBranchRoles[roleSheetBranch] ?? editRoleId ?? undefined : undefined}
+        onSelect={(value) => {
+          if (!roleSheetBranch) return;
+          setEditBranchRoles((prev) => ({ ...prev, [roleSheetBranch]: value }));
+          setBranchRolesDirty(true);
+        }}
+        onClose={() => setRoleSheetBranch(null)}
+      />
 
       {/* Contextual confirmation: names the employee and states what the change does. */}
       <ConfirmDialog

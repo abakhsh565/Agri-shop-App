@@ -4,7 +4,7 @@ import AuthLayout from "@/components/layout/AuthLayout";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 import { sendOTP, checkPhoneRegistration, resolveInvite, resolveShopCode } from "@/lib/auth";
-import { rememberInviteShop } from "@/lib/appInvite";
+import { internationalPhone, rememberInviteShop } from "@/lib/appInvite";
 import { isDemoOtpMode } from "@/lib/authMode";
 import { lastUsedProfile } from "@/lib/loginWindow";
 import { useAuthStore } from "@/stores/authStore";
@@ -46,22 +46,51 @@ export default function LoginPage() {
   // shop id from an older link. Accepting both is deliberate: the code is what a person is given
   // today, and the id is what is already sitting in messages people have on their phones.
   const [shopId, setShopId] = useState(inviteShopId);
-  //
-  // Arriving from an invitation link, the person should be told WHICH shop invited them before
-  // they tap anything — the id in the field is meaningless to them on its own. The name comes
-  // back from the database for the (shop, number) pair, so the line cannot be spoofed by the
-  // link; a pair that does not match simply gets no line here and is refused on submit.
+
+  /**
+   * An invitation is not the generic sign-in form with two boxes filled in.
+   *
+   * The link already answered the two questions that screen asks — which door (employee) and
+   * which shop — so showing the tabs and both fields asked the person to re-read answers they
+   * had not given, and every field left editable is a way to break the (shop, number) pair the
+   * server is about to check. Arriving from a complete invitation (both params) therefore opens
+   * a single screen: the shop, the number and one Continue. `Use a different number` reveals the
+   * full form, still prefilled, for the person who forwarded the link or typed the wrong number.
+   *
+   * The pair is checked here as well as on submit. This check only decides what the screen says;
+   * `handleSignIn` remains the one that spends the code, and it re-resolves the pair first.
+   */
+  const [inviteEntryOnly, setInviteEntryOnly] = useState(Boolean(invitedPhone && inviteShopId));
+  const [inviteCheck, setInviteCheck] = useState<"idle" | "checking" | "valid" | "invalid">("idle");
   useEffect(() => {
+    if (!inviteEntryOnly) return;
     const claimed = shopId.trim();
-    if (!claimed || !phone) return;
+    const number = phone.replace(/\s/g, "");
     let alive = true;
-    void resolveInvite(claimed, phone).then((invite) => {
-      if (alive && invite.found && invite.invited && invite.shopName) setInviteShopName(invite.shopName);
-    });
+    if (!claimed || !number) { setInviteCheck("invalid"); return; }
+    setInviteCheck("checking");
+    void (async () => {
+      // The link carries the shop's short code when it could be read, and a raw id on older
+      // links; resolveInvite takes the id, so the code is turned into one first. The name comes
+      // back from the database for the pair, never from the link.
+      let shopUuid = UUID_RE.test(claimed) ? claimed : "";
+      if (!shopUuid) {
+        const code = await resolveShopCode(claimed);
+        if (!alive) return;
+        if (!code.found || !code.shopId) { setInviteCheck("invalid"); return; }
+        shopUuid = code.shopId;
+        if (code.shopName) setInviteShopName(code.shopName);
+      }
+      const invite = await resolveInvite(shopUuid, number);
+      if (!alive) return;
+      if (!invite.found || !invite.invited) { setInviteCheck("invalid"); return; }
+      if (invite.shopName) setInviteShopName(invite.shopName);
+      setInviteCheck("valid");
+    })().catch(() => { if (alive) setInviteCheck("invalid"); });
     return () => { alive = false; };
     // Once, on arrival: this is what the link said about the pair, not a live check.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [inviteEntryOnly]);
 
   // The number being confirmed is the one this device last served, so it is filled in rather
   // than asked for again: the person is standing on the same phone they always use.
@@ -200,6 +229,79 @@ export default function LoginPage() {
     } finally {
       setLoading(false);
     }
+  }
+
+  // The invitation entry: one decision, no fields. See the state block above for why the pair
+  // is re-checked rather than trusted from the link.
+  if (inviteEntryOnly) {
+    const shownPhone = internationalPhone(phone || invitedPhone);
+    return (
+      <AuthLayout>
+        <div className="flex flex-col flex-1 justify-between" data-testid="invite-join">
+          <div className="flex flex-col gap-5 p-6">
+            <div className="flex flex-col gap-2">
+              <p className="text-26 font-bold" style={{ color: "var(--text-primary)" }} data-testid="invite-join-title">
+                {t("auth.inviteJoinTitle")}
+              </p>
+              <p className="text-14" style={{ color: "var(--text-secondary)" }} data-testid="invite-join-body">
+                {inviteShopName
+                  ? t("auth.inviteJoinBody", { shop: inviteShopName, phone: shownPhone })
+                  : t("auth.inviteJoinBodyNoShop", { phone: shownPhone })}
+              </p>
+            </div>
+
+            <div
+              className="rounded-[var(--radius-card)] px-4 py-3"
+              style={{ background: "var(--surface-2)", border: "1px solid var(--divider)" }}
+            >
+              <p className="ds-section-label" style={{ color: "var(--text-secondary)" }}>{t("auth.phoneNumber")}</p>
+              <p className="text-15 font-semibold mt-1" style={{ color: "var(--text-primary)" }} data-testid="invite-join-phone">
+                {shownPhone}
+              </p>
+            </div>
+
+            {inviteCheck === "checking" && (
+              <p className="text-12" style={{ color: "var(--text-secondary)" }} data-testid="invite-join-checking">
+                {t("auth.inviteJoinChecking")}
+              </p>
+            )}
+            {inviteCheck === "invalid" && (
+              <p className="text-12" style={{ color: "var(--error)" }} data-testid="invite-join-error">
+                {t("auth.inviteJoinInvalid")}
+              </p>
+            )}
+            {phoneError && (
+              <p className="text-12" style={{ color: "var(--error)" }} data-testid="invite-join-error">
+                {phoneError}
+              </p>
+            )}
+          </div>
+
+          <div className="flex flex-col gap-3 p-6">
+            {inviteCheck === "valid" && (
+              <Button
+                fullWidth
+                size="lg"
+                onClick={handleSignIn}
+                loading={loading}
+                testId="invite-join-continue"
+              >
+                {t("auth.inviteJoinContinue")}
+              </Button>
+            )}
+            <button
+              type="button"
+              onClick={() => { setInviteEntryOnly(false); setInviteCheck("idle"); }}
+              className="text-13 text-center underline"
+              style={{ color: "var(--text-secondary)" }}
+              data-testid="invite-join-change"
+            >
+              {t("auth.inviteJoinChange")}
+            </button>
+          </div>
+        </div>
+      </AuthLayout>
+    );
   }
 
   return (

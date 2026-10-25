@@ -83,10 +83,10 @@ export default function AdminDashboardPage() {
   const mockCompanies = useCompaniesStore((s) => s.companies);
   const mockEmployees = useEmployeesStore((s) => s.employees);
   const customers = useCustomersStore((s) => s.customers);
+  const customersReady = useCustomersStore((s) => s.ready);
   // Read both stores unconditionally: short-circuiting a hook call is what
   // crashed this screen, since React must see the same hooks every render.
   const salesReady = useSalesStore((s) => s.ready);
-  const customersReady = useCustomersStore((s) => s.ready);
   const listsReady = salesReady && customersReady;
   const [allReturns, setAllReturns] = useState<{ amount: number; createdAt: string }[]>([]);
   // The udhaar payments, raw rows, so the date pill can filter them without a second query.
@@ -310,6 +310,8 @@ export default function AdminDashboardPage() {
     await Promise.all([
       useSalesStore.getState().load(),
       useProductsStore.getState().load(),
+      useEmployeesStore.getState().load(),
+      useCustomersStore.getState().load(),
       load(),
     ]);
   }

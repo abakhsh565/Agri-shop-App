@@ -17,7 +17,7 @@
  *
  * QA database only.
  */
-import { test, expect } from '@playwright/test';
+import { test, expect } from './base';
 import {
   QA_IDS,
   execSql,
@@ -27,11 +27,27 @@ import {
   snapshotIds,
   injectAdminAuth,
 } from './helpers';
+import {
+  captureSharedCells,
+  restorationStatements,
+  sharedCellLabel,
+  type CapturedSharedCell,
+} from './sharedRowRestore';
+import { runCleanupStatements, runTeardownSteps } from '../setup/ownedCleanup';
 
 const BASE_URL = process.env.QA_APP_URL || 'http://localhost:5173';
 const INITIAL_BALANCE = 20000;
 const INITIAL_PAYABLE = 10000;
 const PAYMENT_AMOUNT = 3000;
+
+/**
+ * The shared cells this lane writes, with the value each had BEFORE it wrote. Filled in beforeAll.
+ *
+ * `INITIAL_BALANCE` / `INITIAL_PAYABLE` are this lane's own starting points, not the fixture's — the
+ * lane moved QA Customer A's balance and QA Supplier A's payable to them and never put them back, so
+ * a green run still left both rows off-baseline for whoever ran next.
+ */
+const sharedCells: CapturedSharedCell[] = [];
 
 /** Click the same element twice in one task, i.e. what a double tap really is. */
 async function doubleTapButton(page: import('@playwright/test').Page, pattern: string) {
@@ -54,6 +70,18 @@ async function doubleTapConfirm(page: import('@playwright/test').Page) {
 test.describe('Double tap safety', () => {
   test.beforeAll(async () => {
     await setupFixtures();
+
+    // CAPTURE BEFORE THE FIRST WRITE — see `sharedCells` above and `afterAll` below.
+    sharedCells.push(
+      ...(await captureSharedCells(execSql, [
+        { table: 'product_variants', column: 'stock_qty', id: QA_IDS.variantA },
+        { table: 'customers', column: 'outstanding_balance', id: QA_IDS.customerA },
+        { table: 'customers', column: 'total_purchases', id: QA_IDS.customerA },
+        { table: 'customers', column: 'total_paid', id: QA_IDS.customerA },
+        { table: 'companies', column: 'outstanding_payable', id: QA_IDS.companyA },
+      ])),
+    );
+
     await execSql(`UPDATE customers SET outstanding_balance = ${INITIAL_BALANCE}, total_paid = 0 WHERE id = '${QA_IDS.customerA}'`);
     await execSql(`UPDATE companies SET outstanding_payable = ${INITIAL_PAYABLE} WHERE id = '${QA_IDS.companyA}'`);
 
@@ -79,8 +107,18 @@ test.describe('Double tap safety', () => {
   });
 
   test.afterAll(async () => {
-    // Only this run's rows, by id — never "every payment of QA Customer A".
-    await cleanupFixtures();
+    // Only this run's rows, by id — never "every payment of QA Customer A". And the shared cells the
+    // lane moved go back to their captured values here, whatever the tests above did: the payment and
+    // sale screens write to the shared customer, the supplier and the variant, so a failing assertion
+    // no longer leaves those rows holding this lane's numbers.
+    await runTeardownSteps([
+      {
+        label: `restore ${sharedCells.map(sharedCellLabel).join(', ') || 'the shared cells this lane mutates'}`,
+        run: () =>
+          runCleanupStatements(execSql, restorationStatements(sharedCells), 'doubleTapSafety shared-row restore'),
+      },
+      { label: 'remove the rows this lane owns', run: () => cleanupFixtures() },
+    ]);
   });
 
   test('customer payment: double-tapping confirm records one payment', async ({ page }) => {

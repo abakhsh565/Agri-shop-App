@@ -43,6 +43,9 @@ describe("invitation link", () => {
     expect(inviteLink("+92 300 1234567")).toBe(
       "https://app.agrishop.pk/login?phone=923001234567"
     );
+    expect(inviteLink("03001234567", "shop-id", "A1B2C3")).toBe(
+      "https://app.agrishop.pk/login?phone=923001234567&shop=A1B2C3"
+    );
   });
 
   it("falls back to the app's own scheme inside the native shell, where no https address exists", () => {
@@ -53,6 +56,9 @@ describe("invitation link", () => {
     // which is what made the installed app's invite a dead end; the scheme link opens the app.
     expect(appShareUrl()).toBeNull();
     expect(inviteLink("03001234567")).toBe("agrishop://login?phone=923001234567");
+    expect(inviteLink("03001234567", "shop-id", "A1B2C3")).toBe(
+      "agrishop://login?phone=923001234567&shop=A1B2C3",
+    );
   });
 
   it("carries the shop into the scheme link as well", () => {

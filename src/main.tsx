@@ -2,6 +2,7 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { Capacitor } from '@capacitor/core'
 import App from './App'
+import { captureError, initErrorReporting, resolveReleaseId } from './lib/errorReporting'
 import './index.css'
 
 const isNative = Capacitor.isNativePlatform();
@@ -55,17 +56,27 @@ if (isNative) {
 
 // Error visibility. Before this, a crash on an owner's phone left nothing behind anywhere.
 //
-// The handler stays this small on purpose: it does no filtering, decides nothing about the
-// environment, and never retries. `reportClientError` owns those rules — it refuses to record when
-// the environment is not configured instead of looking like coverage, and it allow-lists the
-// payload so a caught error cannot carry a customer's details to the server.
+// Two destinations, one handler. `client_error_events` is the private record (write-only, read by the
+// service role); `src/lib/errorReporting.ts` is the notification channel that makes a broken release
+// visible to the team. Both refuse to look like coverage when they are not configured, and both own
+// their own allow-list — this handler filters nothing and decides nothing.
 //
 // It is registered before the first render, because the errors worth having include the ones that
 // happen on the way in — including before sign-in, which is why the table accepts pre-login writes.
+// The release id is resolved here, once, so the record and the alert name the same commit.
+const releaseId = resolveReleaseId(import.meta.env as unknown as Record<string, unknown>);
+
+void initErrorReporting();
+
 function reportUncaught(error: unknown): void {
   void import('./lib/monitoring').then(({ reportClientError }) =>
-    reportClientError({ error, screen: window.location.pathname }),
+    reportClientError({
+      error,
+      screen: window.location.pathname,
+      ...(releaseId ? { appVersion: releaseId } : {}),
+    }),
   );
+  void captureError(error, { screen: window.location.pathname });
 }
 
 window.addEventListener('error', (event) => reportUncaught(event.error ?? event.message));

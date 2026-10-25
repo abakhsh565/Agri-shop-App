@@ -33,7 +33,7 @@ name, domain, status, screens, components, state/stores, libs, DB tables, RPC/AP
 permissions, business rules, direct dependencies, dependent features, tests, evidence
 (status + what it proves + where the log lives), last verified date, known risks.
 
-27 registered capabilities (`status` is `LIVE` unless noted):
+28 registered capabilities (`status` is `LIVE` unless noted):
 
 | Feature | Domain | Key screens | Depends on | Evidence |
 |---|---|---|---|---|
@@ -64,6 +64,7 @@ permissions, business rules, direct dependencies, dependent features, tests, evi
 | In-app guide and education content | Onboarding | `guide` | language | VALID |
 | Super-admin console | Platform | `/super-admin` | registration, RBAC | VALID |
 | Assistant, recommendations and signals | Assistant | `assistant` | dashboard, sales, customers | VALID |
+| Production error reporting and release timeline | Reliability | — (no screen) | — | VALID in a real browser; **BLOCKED** in production until a DSN exists (`docs/MONITORING.md` §2) |
 
 Add a record when a **meaningful capability** is added or materially changed; do not add records
 for individual elements.

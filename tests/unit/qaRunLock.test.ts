@@ -10,9 +10,12 @@
 
 import { describe, it, expect } from 'vitest';
 import {
+  QA_LOCK_APPLICATION_NAME,
   QA_RUN_LOCK_ID,
   acquireQaRunLock,
   claimVerifiedQaRunLock,
+  playwrightDatabaseIsInScope,
+  qaClientConfig,
   qaClusterProblem,
   qaDatabaseIsInScope,
   qaLockTargetProblem,
@@ -279,5 +282,70 @@ describe('QA run lock — which runs claim it', () => {
   it('does not claim for a unit-only run — the CI gates job must not hold a database lock', () => {
     expect(qaDatabaseIsInScope(['node', 'vitest', 'run', 'tests/unit', '--reporter=verbose'])).toBe(false);
     expect(qaDatabaseIsInScope(['node', 'vitest', 'run', 'tests/unit/qaRunLock.test.ts'])).toBe(false);
+  });
+
+  it('claims for a Playwright run that executes tests, whole suite or one spec', () => {
+    expect(playwrightDatabaseIsInScope(['node', 'playwright', 'test'])).toBe(true);
+    expect(
+      playwrightDatabaseIsInScope(['node', 'playwright', 'test', 'tests/e2e/dashboardScope.spec.ts', '--workers=1']),
+    ).toBe(true);
+    // The media capture config drives the same QA app through the same shared global setup.
+    expect(
+      playwrightDatabaseIsInScope(['node', 'playwright', 'test', '--config=playwright.media.config.ts']),
+    ).toBe(true);
+  });
+
+  it('does not claim when Playwright exits without running a spec', () => {
+    // `--list` is used by the verification sequence: it must not block a real run behind it.
+    expect(playwrightDatabaseIsInScope(['node', 'playwright', 'test', '--list'])).toBe(false);
+    expect(playwrightDatabaseIsInScope(['node', 'playwright', 'test', '--list', '--reporter=json'])).toBe(false);
+    expect(playwrightDatabaseIsInScope(['node', 'playwright', 'test', '--help'])).toBe(false);
+    expect(playwrightDatabaseIsInScope(['node', 'playwright', 'test', '-h'])).toBe(false);
+    expect(playwrightDatabaseIsInScope(['node', 'playwright', 'test', '--version'])).toBe(false);
+    expect(playwrightDatabaseIsInScope(['node', 'playwright', 'test', '-V'])).toBe(false);
+  });
+
+  it('treats an argument it does not recognise as executing, not as a reason to skip', () => {
+    expect(playwrightDatabaseIsInScope(['node', 'playwright', 'test', '--project=e2e'])).toBe(true);
+    expect(playwrightDatabaseIsInScope([])).toBe(true);
+  });
+});
+
+describe('QA run lock — the session it opens', () => {
+  it('announces this module, so a refusal can name the holder instead of only the lock id', () => {
+    const config = qaClientConfig({
+      QA_DB_USER: `postgres.${QA_PROJECT_REF}`,
+      QA_DB_PASS: 'p@ss:word',
+      QA_DB_HOST: POOLER,
+    });
+
+    expect(config.application_name).toBe(QA_LOCK_APPLICATION_NAME);
+    expect(config.application_name, 'the name must identify a QA run lock, not a generic client').toMatch(
+      /qa-run-lock/,
+    );
+    expect(config.application_name).not.toContain(' ');
+  });
+
+  it('uses the same direct QA connection the teardown uses, with the password encoded', () => {
+    const config = qaClientConfig({
+      QA_DB_USER: `postgres.${QA_PROJECT_REF}`,
+      QA_DB_PASS: 'p@ss:word',
+      QA_DB_HOST: POOLER,
+    });
+
+    expect(config.connectionString).toContain(`${POOLER}:5432/postgres`);
+    expect(config.connectionString, 'an unencoded password would split the URL at the colon').toContain(
+      'p%40ss%3Aword',
+    );
+    expect(config.connectionString).not.toContain('p@ss:word');
+    expect(config.ssl).toEqual({ rejectUnauthorized: false });
+    expect(config.connectionTimeoutMillis, 'the claim is bounded: no unbounded wait for a session').toBe(15000);
+  });
+
+  it('names the rehearsal port and drops TLS only when QA_LOCK_DB_PORT is set', () => {
+    const rehearsal = qaClientConfig({ QA_DB_USER: 'postgres', QA_DB_PASS: 'x', QA_DB_HOST: '127.0.0.1', QA_LOCK_DB_PORT: '54322' });
+    expect(rehearsal.connectionString).toContain('127.0.0.1:54322/postgres');
+    expect(rehearsal.ssl).toBe(false);
+    expect(rehearsal.application_name).toBe(QA_LOCK_APPLICATION_NAME);
   });
 });

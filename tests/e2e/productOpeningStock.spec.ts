@@ -14,7 +14,7 @@
  *
  * QA database only; the product it creates is deleted again.
  */
-import { test, expect } from '@playwright/test';
+import { test, expect } from './base';
 import { QA_IDS, execSql, setupFixtures, cleanupFixtures, claimOwned, injectAdminAuth } from './helpers';
 
 const BASE_URL = process.env.QA_APP_URL || 'http://localhost:5173';

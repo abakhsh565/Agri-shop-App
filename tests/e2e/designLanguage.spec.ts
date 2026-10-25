@@ -14,7 +14,8 @@
  *
  * QA database only; every row this spec creates is deleted again.
  */
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect } from './base';
+import type { Page } from '@playwright/test';
 import { cleanupFixtures, execSql } from './helpers';
 import { loginViaUi } from './helpers';
 

@@ -67,6 +67,11 @@
         "layer": "test"
       },
       {
+        "file": "tests/integration/customerDeletionSecurity.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
         "file": "tests/integration/destructiveSafety.test.ts",
         "evidence": "from_call",
         "layer": "test"
@@ -97,6 +102,11 @@
         "layer": "test"
       },
       {
+        "file": "tests/integration/securityMatrix.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
         "file": "tests/unit/e2eCleanupOwnership.test.ts",
         "evidence": "sql_reference",
         "layer": "test"
@@ -107,12 +117,22 @@
         "layer": "test"
       },
       {
+        "file": "tests/unit/pinSurfaceParity.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
         "file": "tests/unit/preAuthRequestPrivacy.test.ts",
         "evidence": "sql_reference",
         "layer": "test"
       },
       {
         "file": "tests/unit/productionDataPolicy.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/unit/qaExcessCriteria.test.ts",
         "evidence": "sql_reference",
         "layer": "test"
       },
@@ -140,6 +160,11 @@
       },
       {
         "file": "tests/e2e/doubleTapSafety.spec.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/integration/customerDeletionSecurity.test.ts",
         "evidence": "sql_reference",
         "layer": "test"
       },
@@ -174,7 +199,17 @@
         "layer": "test"
       },
       {
+        "file": "tests/integration/securityMatrix.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
         "file": "tests/integration/splitPayments.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/unit/branchIdentityBoundary.test.ts",
         "evidence": "sql_reference",
         "layer": "test"
       },
@@ -226,9 +261,9 @@
         "layer": "store"
       },
       {
-        "file": "src/pages/admin/more/MoreMenuPage.tsx",
+        "file": "src/components/shop/OwnerSuiteSections.tsx",
         "evidence": "sql_reference",
-        "layer": "page"
+        "layer": "component"
       },
       {
         "file": "tests/e2e/accessUx.spec.ts",
@@ -261,13 +296,28 @@
         "layer": "test"
       },
       {
+        "file": "tests/e2e/helpers.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
         "file": "tests/e2e/imageSync.spec.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/e2e/setupCompletion.spec.ts",
         "evidence": "sql_reference",
         "layer": "test"
       },
       {
         "file": "tests/integration/securityAudit.test.ts",
         "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/integration/securityMatrix.test.ts",
+        "evidence": "from_call",
         "layer": "test"
       },
       {
@@ -281,12 +331,22 @@
         "layer": "test"
       },
       {
+        "file": "tests/unit/localDevDatabaseOrdering.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
         "file": "tests/unit/ownerRows.test.ts",
         "evidence": "sql_reference",
         "layer": "test"
       },
       {
         "file": "tests/unit/productionDataPolicy.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/unit/qaExcessCriteria.test.ts",
         "evidence": "sql_reference",
         "layer": "test"
       },
@@ -375,9 +435,9 @@
         "layer": "lib"
       },
       {
-        "file": "src/pages/admin/more/MoreMenuPage.tsx",
+        "file": "src/components/shop/OwnerSuiteSections.tsx",
         "evidence": "sql_reference",
-        "layer": "page"
+        "layer": "component"
       },
       {
         "file": "src/pages/admin/purchases/PurchaseDetailPage.tsx",
@@ -427,6 +487,11 @@
         "layer": "test"
       },
       {
+        "file": "tests/integration/customerDeletionSecurity.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
         "file": "tests/integration/draftIsolation.test.ts",
         "evidence": "sql_reference",
         "layer": "test"
@@ -443,6 +508,11 @@
       },
       {
         "file": "tests/integration/tenantBoundarySweep.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/unit/branchIdentityBoundary.test.ts",
         "evidence": "sql_reference",
         "layer": "test"
       },
@@ -489,6 +559,11 @@
         "layer": "store"
       },
       {
+        "file": "src/components/shop/OwnerSuiteSections.tsx",
+        "evidence": "sql_reference",
+        "layer": "component"
+      },
+      {
         "file": "src/components/ui/GroupReminderSheet.tsx",
         "evidence": "sql_reference",
         "layer": "component"
@@ -496,11 +571,6 @@
       {
         "file": "src/pages/admin/alerts/RemindersOverviewPage.tsx",
         "evidence": "from_call",
-        "layer": "page"
-      },
-      {
-        "file": "src/pages/admin/more/MoreMenuPage.tsx",
-        "evidence": "sql_reference",
         "layer": "page"
       },
       {
@@ -524,7 +594,17 @@
         "layer": "test"
       },
       {
+        "file": "tests/e2e/helpers.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
         "file": "tests/e2e/imageSync.spec.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/e2e/setupCompletion.spec.ts",
         "evidence": "sql_reference",
         "layer": "test"
       },
@@ -574,6 +654,11 @@
         "layer": "test"
       },
       {
+        "file": "tests/integration/securityMatrix.test.ts",
+        "evidence": "from_call",
+        "layer": "test"
+      },
+      {
         "file": "tests/unit/branchIdentityBoundary.test.ts",
         "evidence": "sql_reference",
         "layer": "test"
@@ -589,7 +674,17 @@
         "layer": "test"
       },
       {
+        "file": "tests/unit/dataFingerprint.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
         "file": "tests/unit/e2eCleanupOwnership.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/unit/localDevDatabaseOrdering.test.ts",
         "evidence": "sql_reference",
         "layer": "test"
       },
@@ -605,6 +700,11 @@
       },
       {
         "file": "tests/unit/qaBaselinePolicy.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/unit/qaExcessCriteria.test.ts",
         "evidence": "sql_reference",
         "layer": "test"
       }
@@ -676,6 +776,11 @@
         "layer": "test"
       },
       {
+        "file": "tests/integration/customerDeletionSecurity.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
         "file": "tests/integration/destructiveSafety.test.ts",
         "evidence": "sql_reference",
         "layer": "test"
@@ -736,6 +841,11 @@
         "layer": "test"
       },
       {
+        "file": "tests/integration/securityMatrix.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
         "file": "tests/unit/branchIdentityBoundary.test.ts",
         "evidence": "sql_reference",
         "layer": "test"
@@ -747,6 +857,11 @@
       },
       {
         "file": "tests/unit/cacheOwnership.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/unit/dataFingerprint.test.ts",
         "evidence": "sql_reference",
         "layer": "test"
       },
@@ -777,6 +892,11 @@
       },
       {
         "file": "tests/unit/productionDataPolicy.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/unit/qaExcessCriteria.test.ts",
         "evidence": "sql_reference",
         "layer": "test"
       },
@@ -828,6 +948,11 @@
         "layer": "test"
       },
       {
+        "file": "tests/e2e/helpers.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
         "file": "tests/e2e/imageSync.spec.ts",
         "evidence": "sql_reference",
         "layer": "test"
@@ -839,6 +964,16 @@
       },
       {
         "file": "tests/e2e/productOpeningStock.spec.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/e2e/setupCompletion.spec.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/integration/customerDeletionSecurity.test.ts",
         "evidence": "sql_reference",
         "layer": "test"
       },
@@ -874,6 +1009,11 @@
       },
       {
         "file": "tests/unit/e2eCleanupOwnership.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/unit/localDevDatabaseOrdering.test.ts",
         "evidence": "sql_reference",
         "layer": "test"
       },
@@ -963,6 +1103,11 @@
         "file": "tests/unit/productionDataPolicy.test.ts",
         "evidence": "sql_reference",
         "layer": "test"
+      },
+      {
+        "file": "tests/unit/qaExcessCriteria.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
       }
     ],
     "reminder_configs": [
@@ -1034,6 +1179,11 @@
         "layer": "test"
       },
       {
+        "file": "tests/e2e/doubleTapSafety.spec.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
         "file": "tests/e2e/notificationsBranchTabs.spec.ts",
         "evidence": "sql_reference",
         "layer": "test"
@@ -1057,6 +1207,11 @@
         "file": "tests/unit/productionDataPolicy.test.ts",
         "evidence": "sql_reference",
         "layer": "test"
+      },
+      {
+        "file": "tests/unit/qaExcessCriteria.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
       }
     ],
     "employees": [
@@ -1071,9 +1226,9 @@
         "layer": "lib"
       },
       {
-        "file": "src/pages/admin/more/MoreMenuPage.tsx",
+        "file": "src/components/shop/OwnerSuiteSections.tsx",
         "evidence": "sql_reference",
-        "layer": "page"
+        "layer": "component"
       },
       {
         "file": "tests/unit/branchIdentityBoundary.test.ts",
@@ -1191,6 +1346,11 @@
         "layer": "test"
       },
       {
+        "file": "tests/e2e/helpers.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
         "file": "tests/e2e/imageSync.spec.ts",
         "evidence": "sql_reference",
         "layer": "test"
@@ -1201,7 +1361,17 @@
         "layer": "test"
       },
       {
+        "file": "tests/integration/customerDeletionSecurity.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
         "file": "tests/integration/marketplaceContract.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/integration/securityMatrix.test.ts",
         "evidence": "sql_reference",
         "layer": "test"
       },
@@ -1248,6 +1418,11 @@
         "layer": "test"
       },
       {
+        "file": "tests/integration/customerDeletionSecurity.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
         "file": "tests/integration/marketplaceContract.test.ts",
         "evidence": "sql_reference",
         "layer": "test"
@@ -1259,6 +1434,11 @@
       },
       {
         "file": "tests/integration/rbacInvariants.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/integration/tenantBoundarySweep.test.ts",
         "evidence": "sql_reference",
         "layer": "test"
       },
@@ -1342,6 +1522,11 @@
         "layer": "test"
       },
       {
+        "file": "tests/e2e/doubleTapSafety.spec.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
         "file": "tests/integration/financialIntegrity.test.ts",
         "evidence": "sql_reference",
         "layer": "test"
@@ -1352,12 +1537,22 @@
         "layer": "test"
       },
       {
+        "file": "tests/unit/branchIdentityBoundary.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
         "file": "tests/unit/e2eCleanupOwnership.test.ts",
         "evidence": "sql_reference",
         "layer": "test"
       },
       {
         "file": "tests/unit/productionDataPolicy.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/unit/qaExcessCriteria.test.ts",
         "evidence": "sql_reference",
         "layer": "test"
       },
@@ -1394,6 +1589,16 @@
         "layer": "test"
       },
       {
+        "file": "tests/integration/customerDeletionSecurity.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/integration/rbacRoleLifecycleTargeted.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
         "file": "tests/integration/shopScopedPolicyGuard.test.ts",
         "evidence": "sql_reference",
         "layer": "test"
@@ -1417,11 +1622,21 @@
         "file": "tests/unit/qaBaselinePolicy.test.ts",
         "evidence": "sql_reference",
         "layer": "test"
+      },
+      {
+        "file": "tests/unit/qaExcessCriteria.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
       }
     ],
     "sale_items": [
       {
         "file": "tests/e2e/cleanupOwnership.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/integration/customerDeletionSecurity.test.ts",
         "evidence": "sql_reference",
         "layer": "test"
       },
@@ -1469,6 +1684,11 @@
     "voids": [
       {
         "file": "tests/e2e/cleanupOwnership.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/integration/customerDeletionSecurity.test.ts",
         "evidence": "sql_reference",
         "layer": "test"
       },
@@ -1532,6 +1752,11 @@
         "layer": "test"
       },
       {
+        "file": "tests/integration/customerDeletionSecurity.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
         "file": "tests/integration/destructiveSafety.test.ts",
         "evidence": "sql_reference",
         "layer": "test"
@@ -1572,12 +1797,51 @@
         "layer": "test"
       },
       {
+        "file": "tests/unit/e2eCleanupOwnership.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
         "file": "tests/unit/marketplaceContractGuard.test.ts",
         "evidence": "sql_reference",
         "layer": "test"
       },
       {
         "file": "tests/unit/productionDataPolicy.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/unit/qaExcessCriteria.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      }
+    ],
+    "cash_reconciliations": [
+      {
+        "file": "tests/e2e/cleanupOwnership.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/integration/shopScopedPolicyGuard.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/integration/tenantBoundarySweep.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      }
+    ],
+    "daily_cash_reconciliations": [
+      {
+        "file": "tests/e2e/cleanupOwnership.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/integration/rbacInvariants.test.ts",
         "evidence": "sql_reference",
         "layer": "test"
       }
@@ -1639,25 +1903,6 @@
       },
       {
         "file": "tests/integration/shopScopedPolicyGuard.test.ts",
-        "evidence": "sql_reference",
-        "layer": "test"
-      }
-    ],
-    "daily_cash_reconciliations": [
-      {
-        "file": "tests/integration/rbacInvariants.test.ts",
-        "evidence": "sql_reference",
-        "layer": "test"
-      }
-    ],
-    "cash_reconciliations": [
-      {
-        "file": "tests/integration/shopScopedPolicyGuard.test.ts",
-        "evidence": "sql_reference",
-        "layer": "test"
-      },
-      {
-        "file": "tests/integration/tenantBoundarySweep.test.ts",
         "evidence": "sql_reference",
         "layer": "test"
       }
@@ -1767,6 +2012,11 @@
         "file": "src/stores/customersStore.ts",
         "evidence": "rpc_call",
         "layer": "store"
+      },
+      {
+        "file": "tests/integration/securityMatrix.test.ts",
+        "evidence": "rpc_call",
+        "layer": "test"
       }
     ],
     "update_customer_image": [
@@ -3644,16 +3894,11 @@
         "layer": "test"
       }
     ],
-    "/admin/more": [
+    "/admin/messages": [
       {
         "file": "src/components/layout/AdminLayout.tsx",
         "evidence": "route_definition",
         "layer": "component"
-      },
-      {
-        "file": "tests/e2e/designLanguage.spec.ts",
-        "evidence": "route_definition",
-        "layer": "test"
       }
     ],
     "/employee/dashboard": [
@@ -3691,72 +3936,72 @@
     ],
     "/payments": [
       {
-        "file": "src/pages/admin/more/MoreMenuPage.tsx",
+        "file": "src/components/shop/OwnerSuiteSections.tsx",
         "evidence": "route_definition",
-        "layer": "page"
+        "layer": "component"
       }
     ],
     "/payments/daily-cash": [
       {
-        "file": "src/pages/admin/more/MoreMenuPage.tsx",
+        "file": "src/components/shop/OwnerSuiteSections.tsx",
         "evidence": "route_definition",
-        "layer": "page"
+        "layer": "component"
       }
     ],
     "/reports": [
       {
-        "file": "src/pages/admin/more/MoreMenuPage.tsx",
+        "file": "src/components/shop/OwnerSuiteSections.tsx",
         "evidence": "route_definition",
-        "layer": "page"
+        "layer": "component"
       }
     ],
     "/purchases": [
       {
-        "file": "src/pages/admin/more/MoreMenuPage.tsx",
+        "file": "src/components/shop/OwnerSuiteSections.tsx",
         "evidence": "route_definition",
-        "layer": "page"
+        "layer": "component"
       }
     ],
     "/inventory/movements": [
       {
-        "file": "src/pages/admin/more/MoreMenuPage.tsx",
+        "file": "src/components/shop/OwnerSuiteSections.tsx",
         "evidence": "route_definition",
-        "layer": "page"
+        "layer": "component"
       }
     ],
     "/inventory/reorder": [
       {
-        "file": "src/pages/admin/more/MoreMenuPage.tsx",
+        "file": "src/components/shop/OwnerSuiteSections.tsx",
         "evidence": "route_definition",
-        "layer": "page"
+        "layer": "component"
       }
     ],
     "/inventory/barcodes": [
       {
-        "file": "src/pages/admin/more/MoreMenuPage.tsx",
+        "file": "src/components/shop/OwnerSuiteSections.tsx",
         "evidence": "route_definition",
-        "layer": "page"
+        "layer": "component"
       }
     ],
     "/customers": [
       {
-        "file": "src/pages/admin/more/MoreMenuPage.tsx",
+        "file": "src/components/shop/OwnerSuiteSections.tsx",
         "evidence": "route_definition",
-        "layer": "page"
+        "layer": "component"
       }
     ],
     "/guide": [
       {
-        "file": "src/pages/admin/more/MoreMenuPage.tsx",
+        "file": "src/components/shop/OwnerSuiteSections.tsx",
         "evidence": "route_definition",
-        "layer": "page"
+        "layer": "component"
       }
     ],
     "/settings": [
       {
-        "file": "src/pages/admin/more/MoreMenuPage.tsx",
+        "file": "src/components/shop/OwnerSuiteSections.tsx",
         "evidence": "route_definition",
-        "layer": "page"
+        "layer": "component"
       }
     ],
     "/employee/notifications": [
@@ -3814,6 +4059,13 @@
       },
       {
         "file": "tests/e2e/skeletonCoverage.spec.ts",
+        "evidence": "route_definition",
+        "layer": "test"
+      }
+    ],
+    "/admin/more": [
+      {
+        "file": "tests/e2e/designLanguage.spec.ts",
         "evidence": "route_definition",
         "layer": "test"
       }
@@ -3918,6 +4170,7 @@
     "/admin/dashboard": "src/pages/admin/dashboard/AdminDashboardPage.tsx",
     "/admin/assistant": "src/pages/assistant/AssistantPage.tsx",
     "/admin/more": "src/pages/admin/more/MoreMenuPage.tsx",
+    "/admin/messages": "src/pages/admin/messages/AdminMessagesPage.tsx",
     "/admin/guide": "src/pages/shared/AppGuidePage.tsx",
     "/admin/search": "src/pages/employee/search/SearchPage.tsx",
     "/admin/customers": "src/pages/employee/customers/CustomersListPage.tsx",
@@ -3997,6 +4250,6 @@
     "/employee/notifications": "src/pages/employee/notifications/EmployeeNotificationsPage.tsx",
     "/employee/guide": "src/pages/shared/AppGuidePage.tsx"
   },
-  "scannedAt": "2026-10-13T17:37:14.075Z",
-  "fileCount": 363
+  "scannedAt": "2026-10-18T00:05:49.144Z",
+  "fileCount": 389
 }

@@ -39,3 +39,4 @@ logs/
 *.keystore
 *.p12
 /keystore/
+/freebuff-sites-build/

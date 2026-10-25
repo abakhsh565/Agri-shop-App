@@ -18,10 +18,28 @@
  * It reads the declarations out of the files rather than importing them, so it keeps
  * working if a suite is refactored — and a UUID reused deliberately must be moved
  * into a shared fixture module and referenced from there.
+ *
+ * THE SHARED BASELINE HAS A SECOND CONTRACT (2026-10-18). The eleven seeded rows are declared once in
+ * `tests/setup/qa-fixtures.ts`, and both seeders consume it. That module derives its INSERT column list
+ * and its `ON CONFLICT … DO UPDATE SET` list from the declared rows, which is what makes "declared" and
+ * "restored" the same set — the drift this replaced was `tests/e2e/helpers.ts` restoring product stock
+ * but only customer names while `tests/setup/fixtures.ts` restored customer balances but only product
+ * names. The block at the bottom holds an INDEPENDENT copy of the column contract and the id values, so
+ * dropping a column from the declaration, dropping it from the generated SQL, or letting a seeder
+ * restate its own INSERT all fail here rather than drifting silently in the shared database.
  */
 import { describe, it, expect } from 'vitest';
 import fs from 'fs';
 import path from 'path';
+import {
+  FIXTURE_SQL,
+  QA_FIXTURE_COLUMNS,
+  QA_FIXTURE_CUSTOMERS,
+  QA_FIXTURE_COMPANIES,
+  QA_FIXTURE_IDS,
+  QA_FIXTURE_PRODUCTS,
+  QA_FIXTURE_VARIANTS,
+} from '../setup/qa-fixtures';
 
 /** Every .ts under tests/, excluding this guard and generated output. */
 function testFiles(dir: string): string[] {
@@ -148,5 +166,167 @@ describe('Fixture identity', () => {
       collisions,
       'two test files share a fixture phone, so the second insert dies on users_phone_key'
     ).toEqual([]);
+  });
+});
+
+/**
+ * The declared contract, restated independently of the module that implements it.
+ *
+ * If a column is removed from `qa-fixtures.ts` (or from the SQL it generates), this list and the
+ * declaration disagree and the guard fails. If a new baseline column is genuinely needed, it is added
+ * HERE first — that is the review step that stops a seeder quietly narrowing its restore again.
+ */
+const BASELINE = [
+  {
+    table: 'users',
+    sql: FIXTURE_SQL.users,
+    columns: ['id', 'name', 'phone', 'role', 'is_original_owner', 'is_active', 'shop_id'],
+  },
+  {
+    table: 'companies',
+    sql: FIXTURE_SQL.companies,
+    columns: ['id', 'name', 'outstanding_payable', 'total_purchases', 'shop_id'],
+  },
+  {
+    table: 'customers',
+    sql: FIXTURE_SQL.customers,
+    columns: [
+      'id',
+      'name',
+      'phone',
+      'credit_limit',
+      'outstanding_balance',
+      'total_purchases',
+      'total_paid',
+      'shop_id',
+      'created_by',
+    ],
+  },
+  {
+    table: 'products',
+    sql: FIXTURE_SQL.products,
+    columns: ['id', 'name', 'company_id', 'category', 'stock_qty', 'shop_id'],
+  },
+  {
+    table: 'product_variants',
+    sql: FIXTURE_SQL.productVariants,
+    columns: [
+      'id',
+      'product_id',
+      'name',
+      'selling_price',
+      'cost_price',
+      'unit_size',
+      'low_stock_threshold',
+      'stock_qty',
+    ],
+  },
+] as const;
+
+/** `INSERT INTO t (a, b)` → ['a', 'b']. */
+function insertedColumns(sql: string): string[] {
+  const match = /INSERT INTO\s+[a-z_]+\s*\(([^)]*)\)/i.exec(sql);
+  if (!match) throw new Error(`no INSERT column list in: ${sql.slice(0, 120)}`);
+  return match[1].split(',').map((column) => column.trim()).filter(Boolean);
+}
+
+/** The assignments of the conflict-update clause. */
+function restoredAssignments(sql: string): string[] {
+  const setAt = sql.toUpperCase().lastIndexOf('DO UPDATE SET');
+  if (setAt === -1) throw new Error(`no DO UPDATE SET in: ${sql.slice(0, 120)}`);
+  return sql
+    .slice(setAt + 'DO UPDATE SET'.length)
+    .split(',')
+    .map((assignment) => assignment.trim())
+    .filter(Boolean);
+}
+
+describe('the shared QA baseline — declared once, restored completely', () => {
+  it('keeps the eleven ids the specs and cleanup protection key on', () => {
+    // Restated literally: these values are premises (QA_IDS in specs, PROTECTED_QA_IDS in cleanup,
+    // the keep-list phones). A refactor may move where they are declared, never what they are.
+    expect(QA_FIXTURE_IDS).toEqual({
+      shop: '00000000-0000-0000-0000-000000000001',
+      admin: '10000000-0000-0000-0000-000000000001',
+      employee: '10000000-0000-0000-0000-000000000002',
+      customerA: '20000000-0000-0000-0000-000000000001',
+      customerB: '20000000-0000-0000-0000-000000000002',
+      customerC: '20000000-0000-0000-0000-000000000003',
+      productA: '30000000-0000-0000-0000-000000000001',
+      productB: '30000000-0000-0000-0000-000000000002',
+      variantA: '40000000-0000-0000-0000-000000000001',
+      variantB: '40000000-0000-0000-0000-000000000002',
+      companyA: '50000000-0000-0000-0000-000000000001',
+    });
+  });
+
+  for (const { table, sql, columns } of BASELINE) {
+    it(`declares and restores every ${table} column`, () => {
+      expect(
+        [...QA_FIXTURE_COLUMNS[table as keyof typeof QA_FIXTURE_COLUMNS]],
+        `${table}: the canonical declaration no longer holds the agreed columns`,
+      ).toEqual([...columns]);
+
+      expect(
+        insertedColumns(sql),
+        `${table}: the generated INSERT no longer lists the declared columns`,
+      ).toEqual([...columns]);
+
+      const assignments = restoredAssignments(sql);
+      expect(
+        assignments,
+        `${table}: a declared column is not restored on conflict — that is the drift this guard exists for`,
+      ).toHaveLength(columns.length - 1);
+      for (const column of columns.filter((name) => name !== 'id')) {
+        expect(assignments, `${table}.${column} is inserted but never restored`).toContain(
+          `${column} = EXCLUDED.${column}`,
+        );
+      }
+    });
+  }
+
+  it('restores the values the lanes reason about, not just the column names', () => {
+    const customerB = QA_FIXTURE_CUSTOMERS.find((row) => row.id === QA_FIXTURE_IDS.customerB)!;
+    expect(
+      Number(customerB.outstanding_balance),
+      'Quick Alerts exists because QA Customer B is over its limit',
+    ).toBeGreaterThan(Number(customerB.credit_limit));
+
+    const productB = QA_FIXTURE_PRODUCTS.find((row) => row.id === QA_FIXTURE_IDS.productB)!;
+    expect(productB.stock_qty, 'the dashboard out-of-stock alert is this fixture row').toBe(0);
+
+    const variantA = QA_FIXTURE_VARIANTS.find((row) => row.id === QA_FIXTURE_IDS.variantA)!;
+    expect(variantA.stock_qty, 'voidSaleSafety restores stock to the declared 100').toBe(100);
+
+    expect(
+      QA_FIXTURE_COMPANIES[0].outstanding_payable,
+      'doubleTapSafety resets the supplier payable to this value',
+    ).toBe(15000);
+  });
+
+  it('is consumed by both seeders, and neither restates its own baseline SQL', () => {
+    const seeders = [
+      { file: 'tests/e2e/helpers.ts', executor: 'execSql' },
+      { file: 'tests/setup/fixtures.ts', executor: 'execSqlAsAdmin' },
+    ];
+
+    for (const { file, executor } of seeders) {
+      const source = fs.readFileSync(path.resolve(process.cwd(), file), 'utf-8');
+
+      expect(source, `${file} must import the canonical declaration`).toMatch(
+        /import\s*\{[^}]*FIXTURE_SQL[^}]*\}\s*from\s*'\.\.?\/(setup\/)?qa-fixtures'/s,
+      );
+
+      for (const key of ['users', 'companies', 'customers', 'productsAndVariants']) {
+        expect(source, `${file} must seed ${key} from FIXTURE_SQL.${key}`).toContain(
+          `${executor}(FIXTURE_SQL.${key})`,
+        );
+      }
+
+      expect(
+        source,
+        `${file} still carries its own baseline INSERT — the two seeders can drift again`,
+      ).not.toMatch(/INSERT INTO (users|customers|companies|products|product_variants)\b/i);
+    }
   });
 });

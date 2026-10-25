@@ -22,7 +22,21 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
-    include: ['tests/unit/**/*.test.ts', 'tests/integration/**/*.test.ts'],
+    // UNIT ONLY — the integration suite has its own config, on purpose.
+    //
+    // WHY A SEPARATE CONFIG AND NOT JUST A FLAG. Integration files share one QA database, so running
+    // them in parallel lets one file's ownership cleanup delete the rows a sibling is mid-assertion
+    // on — a red that says nothing about the product. `ci.yml` always passed
+    // `--fileParallelism=false`; `package.json` and the tier-2 gate did not, so the same suites ran
+    // under two different execution semantics depending on who started them.
+    //
+    // Excluding integration from THIS include is the load-bearing part: a hand-typed
+    // `npx vitest run` cannot reach QA at all, and `npx vitest run tests/integration` matches zero
+    // files here (measured: `npx vitest list tests/integration` lists none), so it cannot run the
+    // suite with parallel files no matter how it is invoked. The integration config is
+    // `vitest.integration.config.ts`; `tests/unit/integrationSerialGuard.test.ts` pins both configs,
+    // the npm scripts, the verify gate and both workflows against drift.
+    include: ['tests/unit/**/*.test.ts'],
     testTimeout: 30000,
     hookTimeout: 120000,
     setupFiles: ['tests/setup/localStorage-mock.cjs'],

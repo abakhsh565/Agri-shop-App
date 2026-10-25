@@ -10,76 +10,43 @@
  */
 
 import { execSqlAsAdmin, qaServiceClient } from './qa-client';
+import { FIXTURE_SQL, QA_FIXTURE_IDS } from './qa-fixtures';
+import { planOwnedTransactionCleanup, runCleanupStatements, type OwnedTransactionScope } from './ownedCleanup';
 
 // ─── Deterministic Test IDs ──────────────────────────────────────────────
 
-export const QA_IDS = {
-  shop: '00000000-0000-0000-0000-000000000001',
-  admin: '10000000-0000-0000-0000-000000000001',
-  employee: '10000000-0000-0000-0000-000000000002',
-  customerA: '20000000-0000-0000-0000-000000000001',
-  customerB: '20000000-0000-0000-0000-000000000002',
-  customerC: '20000000-0000-0000-0000-000000000003',
-  productA: '30000000-0000-0000-0000-000000000001',
-  productB: '30000000-0000-0000-0000-000000000002',
-  variantA: '40000000-0000-0000-0000-000000000001',
-  variantB: '40000000-0000-0000-0000-000000000002',
-  companyA: '50000000-0000-0000-0000-000000000001',
-} as const;
+/**
+ * The eleven shared ids — declared once in `./qa-fixtures`, re-exported so the many suites that
+ * import `QA_IDS` from here keep working against the same rows the Playwright seeder writes.
+ */
+export const QA_IDS = QA_FIXTURE_IDS;
 
 // ─── Setup Functions ─────────────────────────────────────────────────────
+//
+// The VALUES are not restated here. `./qa-fixtures` holds them once, and derives the INSERT column
+// list and the conflict-update list from them — which is what closes the measured drift: this file
+// used to restore customer balances but only product NAMES, while the E2E seeder restored product
+// stock but only customer names. Reseeding must restore every shared column both suites read.
 
 export async function setupUsers() {
-  await execSqlAsAdmin(`
-    INSERT INTO users (id, name, phone, role, is_original_owner, is_active, shop_id)
-    VALUES
-      ('${QA_IDS.admin}', 'QA Admin', '923009999999', 'admin', true, true, '${QA_IDS.shop}'),
-      ('${QA_IDS.employee}', 'QA Employee', '923008888888', 'employee', false, true, '${QA_IDS.shop}')
-    ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, phone = EXCLUDED.phone, role = EXCLUDED.role, is_active = EXCLUDED.is_active;
-  `);
+  await execSqlAsAdmin(FIXTURE_SQL.users);
 }
 
 export async function setupCustomers() {
   // No DELETE before the insert. Deleting first opened a window in which a
   // parallel suite that shares these fixtures saw CUSTOMER_NOT_FOUND; the
-  // upsert below already resets every value that matters, so re-seeding is
-  // atomic for concurrent readers.
-  await execSqlAsAdmin(`
-    INSERT INTO customers (id, name, phone, credit_limit, outstanding_balance, total_purchases, total_paid, shop_id, created_by)
-    VALUES
-      ('${QA_IDS.customerA}', 'QA Customer A', '923001111111', 50000, 30000, 80000, 50000, '${QA_IDS.shop}', 'QA'),
-      ('${QA_IDS.customerB}', 'QA Customer B', '923002222222', 25000, 26000, 40000, 14000, '${QA_IDS.shop}', 'QA'),
-      ('${QA_IDS.customerC}', 'QA Customer C', '923003333333', 10000, 0, 15000, 15000, '${QA_IDS.shop}', 'QA')
-    ON CONFLICT (id) DO UPDATE SET
-      name = EXCLUDED.name, credit_limit = EXCLUDED.credit_limit,
-      outstanding_balance = EXCLUDED.outstanding_balance, total_purchases = EXCLUDED.total_purchases,
-      total_paid = EXCLUDED.total_paid;
-  `);
+  // upsert already resets every declared value, so re-seeding is atomic for
+  // concurrent readers.
+  await execSqlAsAdmin(FIXTURE_SQL.customers);
 }
 
 export async function setupProducts() {
-  await execSqlAsAdmin(`
-    INSERT INTO products (id, name, company_id, category, stock_qty, shop_id)
-    VALUES
-      ('${QA_IDS.productA}', 'QA Product A', '${QA_IDS.companyA}', 'seed', 100, '${QA_IDS.shop}'),
-      ('${QA_IDS.productB}', 'QA Product B', '${QA_IDS.companyA}', 'fertilizer', 0, '${QA_IDS.shop}')
-    ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name;
-
-    INSERT INTO product_variants (id, product_id, name, selling_price, cost_price, unit_size, low_stock_threshold, stock_qty)
-    VALUES
-      ('${QA_IDS.variantA}', '${QA_IDS.productA}', '1kg', 500, 300, 1, 10, 100),
-      ('${QA_IDS.variantB}', '${QA_IDS.productB}', '5kg', 2000, 1500, 5, 5, 0)
-    ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name;
-  `);
+  // One call for both statements, exactly as before: the variants reference the products above.
+  await execSqlAsAdmin(FIXTURE_SQL.productsAndVariants);
 }
 
 export async function setupCompanies() {
-  await execSqlAsAdmin(`
-    INSERT INTO companies (id, name, outstanding_payable, total_purchases, shop_id)
-    VALUES
-      ('${QA_IDS.companyA}', 'QA Supplier A', 15000, 50000, '${QA_IDS.shop}')
-    ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name;
-  `);
+  await execSqlAsAdmin(FIXTURE_SQL.companies);
 }
 
 /** Setup all fixtures and wait for PostgREST pooler visibility */
@@ -123,52 +90,25 @@ async function waitForPostgRESTVisibility(maxRetries = 10, delayMs = 300): Promi
 
 // ─── Cleanup Functions ───────────────────────────────────────────────────
 
-export async function cleanupTestData() {
-  const customerIds = `('${QA_IDS.customerA}', '${QA_IDS.customerB}', '${QA_IDS.customerC}')`;
-
-  // ORDER IS PART OF THE CONTRACT: a statement that reaches a child THROUGH its parent has to run
-  // before that parent is gone. `voids` used to be deleted after `sales`, so its sub-select matched
-  // nothing and every voided fixture sale kept its void row — measured 2026-10-14, where the reviewed
-  // baseline reads `voids: expected none` and found rows that had survived exactly that way. The
-  // groups below are therefore child-first, and each parent goes only after the rows that reach it.
-  const childDeletes = [
-    // 1. a sale's own children, and the rows the void/return flows hang off them
-    `DELETE FROM sale_items WHERE sale_id IN (SELECT id FROM sales WHERE customer_id IN ${customerIds})`,
-    `DELETE FROM inventory_movements WHERE reference_id IN (SELECT id FROM sales WHERE customer_id IN ${customerIds})`,
-    `DELETE FROM inventory_movements WHERE reference_id IN (SELECT id FROM voids WHERE sale_id IN (SELECT id FROM sales WHERE customer_id IN ${customerIds}))`,
-    `DELETE FROM voids WHERE sale_id IN (SELECT id FROM sales WHERE customer_id IN ${customerIds})`,
-    // 2. a return's children
-    `DELETE FROM return_items WHERE return_id IN (SELECT id FROM returns WHERE customer_id IN ${customerIds})`,
-    `DELETE FROM inventory_movements WHERE reference_id IN (SELECT id FROM returns WHERE customer_id IN ${customerIds})`,
-    `DELETE FROM returns WHERE customer_id IN ${customerIds}`,
-    // 3. the sales themselves, now that nothing reaches them
-    `DELETE FROM sales WHERE customer_id IN ${customerIds}`,
-    // 4. every NO ACTION key that would refuse the fixture customer's own delete
-    `DELETE FROM customer_payments WHERE customer_id IN ${customerIds}`,
-    `DELETE FROM payments WHERE customer_id IN ${customerIds}`,
-    `DELETE FROM credit_limit_requests WHERE customer_id IN ${customerIds}`,
-    // 5. movements whose SUBJECT is a fixture product, whichever flow wrote them
-    `DELETE FROM inventory_movements WHERE product_id IN ('${QA_IDS.productA}', '${QA_IDS.productB}')`,
-    // Reminder rows must be scoped to the fixtures this helper owns. Unscoped
-    // whole-table deletes wiped a *parallel* suite's reminder config mid-test:
-    // tenantIsolationOps then failed with "insert or update on table
-    // reminder_occurrences violates foreign key constraint
-    // reminder_occurrences_config_id_fkey", intermittently, ~1 run in 3.
-    `DELETE FROM reminder_logs WHERE config_id IN (SELECT id FROM reminder_configs WHERE customer_id IN ${customerIds})`,
-    `DELETE FROM reminder_occurrences WHERE customer_id IN ${customerIds}`,
-    `DELETE FROM reminder_configs WHERE customer_id IN ${customerIds}`,
-  ];
-
-  for (const sql of childDeletes) {
-    try { await execSqlAsAdmin(sql); } catch { /* ignore */ }
-  }
-
-  // The seeded identities (users, customers, products, company) are a SHARED
-  // baseline: several suites seed them through setupAllFixtures() and run in
-  // parallel in the same QA database. Deleting them here made a finishing suite
-  // wipe fixtures another suite was still using, which surfaced as unrelated
-  // failures such as CUSTOMER_NOT_FOUND. Only transactional children are
-  // removed, so suites stay isolated without destroying the shared baseline.
+/**
+ * Remove the transactions of the rows this suite OWNS — and nothing else.
+ *
+ * Phase-3 exit criterion EC2: cleanup may remove only data it can prove it created. The version this
+ * replaces deleted every sale, return, void, payment, credit request and movement of the SHARED
+ * baseline customers (customerA/B/C) and products (productA/B), so any suite calling it could wipe a
+ * sibling file’s row mid-assertion — and several did, which is why the integration suite had to be
+ * pinned to one file at a time. Passing ids makes a call’s blast radius its own rows, which is what
+ * makes cleanup correct under ANY scheduling, serial included.
+ *
+ * The refusal happens before a single statement is built: a shared baseline id, an empty scope or a
+ * non-uuid value throws in `./ownedCleanup`, which is where the rule and its reasoning live. Failures
+ * here are reported rather than swallowed — a cleanup that reports clean while dirty is the defect
+ * this pair exists to stop, and `deleteFixtureUsers` below already refuses to lie the same way.
+ */
+export async function cleanupOwnedTransactions(scope: OwnedTransactionScope): Promise<void> {
+  // The failure collection lives in `./ownedCleanup` so the E2E lanes can use the same one; this is
+  // the integration side's executor.
+  await runCleanupStatements(execSqlAsAdmin, planOwnedTransactionCleanup(scope), 'owned transaction cleanup');
 }
 
 /**

@@ -50,6 +50,18 @@ import { QA_PROJECT_REF } from '../../scripts/dev/lib.mjs';
  */
 export const QA_RUN_LOCK_ID = 918273645;
 
+/**
+ * The name this module's sessions announce on `pg_stat_activity`.
+ *
+ * A run that holds the lock is idle by design while its suite works, so the holder must be
+ * identifiable by a human reading the database — otherwise the owner of `918273645` looks like any
+ * other `postgres.<ref>` connection, and the only diagnostic available is "something holds it".
+ *
+ * A constant, not an environment variable: it describes this module, and a value that differed per
+ * machine would identify nothing.
+ */
+export const QA_LOCK_APPLICATION_NAME = 'cropbook-qa-run-lock';
+
 /** The hosts `QA_LOCK_DB_PORT` may name: the local stack, and nothing else. */
 const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '::1', '[::1]']);
 
@@ -273,26 +285,71 @@ export function qaDatabaseIsInScope(argv: readonly string[]): boolean {
   return paths.some((p) => !p.startsWith('tests/unit'));
 }
 
+/** Arguments under which Playwright answers and exits without executing a single spec. */
+const NON_EXECUTING_PLAYWRIGHT_ARGUMENTS = new Set(['--list', '--help', '-h', '--version', '-V']);
+
 /**
- * Build the client the way the QA teardown does — same host, same port, same SSL posture.
+ * Does this Playwright invocation execute tests?
+ *
+ * The Playwright counterpart of `qaDatabaseIsInScope`, for the same reason: a claim is a claim on
+ * the shared database, and a run that never opens a browser has nothing to coordinate. Playwright's
+ * argv is not a path filter, so the flags that make it exit early are named explicitly — `--list`
+ * (used by the verification sequence) and the help/version flags.
+ *
+ * An unknown argument is treated as executing: guessing "this probably does not run" is what would
+ * let an unguarded run proceed.
+ */
+export function playwrightDatabaseIsInScope(argv: readonly string[]): boolean {
+  return !argv.some((arg) => NON_EXECUTING_PLAYWRIGHT_ARGUMENTS.has(arg));
+}
+
+/** The connection settings the lock's session uses. */
+export interface QaClientConfig {
+  connectionString: string;
+  ssl: false | { rejectUnauthorized: boolean };
+  connectionTimeoutMillis: number;
+  application_name: string;
+}
+
+/**
+ * Build the session settings from configuration alone — no connection, no query — so the shape is
+ * testable without dialling anything.
  *
  * `QA_LOCK_DB_PORT` exists for ONE purpose: rehearsing the lock against the local stack (Postgres on
  * 54322), which is how the ordering claim was verified without touching QA. It cannot name another
  * database by itself — the host still comes from `QA_DB_HOST`, which every other QA tool in this
  * repository also trusts — so it is not a way to point the lock somewhere unexpected.
+ *
+ * `application_name` is what makes a refusal diagnostic name a holder instead of a bare lock id:
+ * the session that holds `QA_RUN_LOCK_ID` is idle while its suite runs, and an idle session with no
+ * name is indistinguishable in `pg_stat_activity` from an unowned one.
  */
-export function createQaClient(): LockClient | null {
-  const { QA_DB_USER, QA_DB_PASS, QA_DB_HOST, QA_LOCK_DB_PORT } = process.env;
-  if (!QA_DB_USER || !QA_DB_PASS || !QA_DB_HOST) return null;
-  const rehearsal = QA_LOCK_DB_PORT !== undefined;
-  const port = QA_LOCK_DB_PORT ?? '5432';
-  return new pg.Client({
-    connectionString: `postgresql://${QA_DB_USER}:${encodeURIComponent(QA_DB_PASS)}@${QA_DB_HOST}:${port}/postgres`,
+export function qaClientConfig(
+  env: { QA_DB_USER?: string; QA_DB_PASS?: string; QA_DB_HOST?: string; QA_LOCK_DB_PORT?: string } = process.env,
+): QaClientConfig {
+  const rehearsal = env.QA_LOCK_DB_PORT !== undefined;
+  const port = env.QA_LOCK_DB_PORT ?? '5432';
+  return {
+    connectionString: `postgresql://${env.QA_DB_USER}:${encodeURIComponent(env.QA_DB_PASS ?? '')}@${env.QA_DB_HOST}:${port}/postgres`,
     // The local stack serves no TLS; QA's pooler requires it. Naming a rehearsal port is the switch,
     // so the two cannot be confused at call time.
     ssl: rehearsal ? false : { rejectUnauthorized: false },
     connectionTimeoutMillis: 15000,
-  }) as unknown as LockClient;
+    application_name: QA_LOCK_APPLICATION_NAME,
+  };
+}
+
+/**
+ * Build the client the way the QA teardown does — same host, same port, same SSL posture.
+ *
+ * Missing credentials return null rather than a half-configured client: the caller refuses, and a
+ * client that would fail on connect cannot be mistaken for an established exclusivity claim.
+ */
+export function createQaClient(
+  env: { QA_DB_USER?: string; QA_DB_PASS?: string; QA_DB_HOST?: string; QA_LOCK_DB_PORT?: string } = process.env,
+): LockClient | null {
+  if (!env.QA_DB_USER || !env.QA_DB_PASS || !env.QA_DB_HOST) return null;
+  return new pg.Client(qaClientConfig(env)) as unknown as LockClient;
 }
 
 /** Load `.env.qa` the way the rest of the setup files do; CI provides real env vars instead. */
