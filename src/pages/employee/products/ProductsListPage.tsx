@@ -57,6 +57,7 @@ export default function ProductsListPage() {
   // Half-finished products, read from this device and only for the branch being looked at —
   // a draft is not a product, so it cannot arrive from the products store with the rest.
   const activeShopId = useShopStore((s) => s.activeShopId);
+  const activeBranchName = useShopStore((s) => s.activeBranchName);
   const drafts = loadProductDrafts(activeShopId);
   const [search, setSearch] = useState("");
   const [cat, setCat] = useState<"all" | ProductCategory>("all");
@@ -101,6 +102,11 @@ export default function ProductsListPage() {
       <div className="flex items-center justify-center h-11">
         <p className="text-base font-bold" style={{ color: "var(--text-primary)" }}>{t("products.title")}</p>
       </div>
+      {activeBranchName && (
+        <p className="text-10 text-center pb-2" style={{ color: "var(--text-secondary)" }}>
+          {t("products.stockInBranch", { branch: activeBranchName })}
+        </p>
+      )}
 
       {/* Search */}
       <div className="px-4 pb-3">

@@ -7,6 +7,7 @@ import ListCard from "@/components/ui/ListCard";
 import ListRow from "@/components/ui/ListRow";
 import { CategoryChip } from "@/components/ui/Badge";
 import { useProductsStore } from "@/stores/productsStore";
+import { useShopStore } from "@/stores/shopStore";
 import { useUIStore } from "@/stores/uiStore";
 import { formatCurrency, getStockStatusColor } from "@/lib/formatters";
 import { useShellBase } from "@/lib/useShellBase";
@@ -56,6 +57,7 @@ export default function ProductDetailPage() {
   };
   const products = useProductsStore((s) => s.products);
   const productsReady = useProductsStore((s) => s.ready);
+  const activeBranchName = useShopStore((s) => s.activeBranchName);
   const product = products.find((p) => p.id === productId);
   const { addToast } = useUIStore();
 
@@ -166,7 +168,7 @@ export default function ProductDetailPage() {
     ? Math.min(...product.variants.map((v) => v.lowStockThreshold))
     : 5;
   const stockStatus =
-    totalStock === 0 ? "out_of_stock" : totalStock <= minThreshold ? "low_stock" : "in_stock";
+    totalStock <= 0 ? "out_of_stock" : totalStock <= minThreshold ? "low_stock" : "in_stock";
   const stockColor = getStockStatusColor(stockStatus);
 
   // Price range
@@ -227,7 +229,11 @@ export default function ProductDetailPage() {
             </p>
           </div>
           <div className="text-center" style={{ borderLeft: "1px solid var(--divider)", borderRight: "1px solid var(--divider)" }}>
-            <p className="ds-section-label" style={{ color: "var(--text-secondary)" }}>{t("products.stock")}</p>
+            <p className="ds-section-label" style={{ color: "var(--text-secondary)" }}>
+              {activeBranchName
+                ? t("products.stockInBranch", { branch: activeBranchName })
+                : t("products.stock")}
+            </p>
             <p className="text-sm font-bold mt-0.5" style={{ color: "var(--text-primary)" }}>
               {t("common.itemsCount", { count: String(totalStock) })}
             </p>
@@ -317,7 +323,7 @@ export default function ProductDetailPage() {
           {/* Variants list */}
           {product.variants.map((v, i) => {
             const available = v.stockQty ?? 0;
-            const vStatus = available === 0 ? "out_of_stock" : available <= v.lowStockThreshold ? "low_stock" : "in_stock";
+            const vStatus = available <= 0 ? "out_of_stock" : available <= v.lowStockThreshold ? "low_stock" : "in_stock";
             const vColor = getStockStatusColor(vStatus);
             return (
               <div

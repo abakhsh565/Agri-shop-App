@@ -3,6 +3,7 @@ import { supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/stores/authStore";
 import { getCachedData, setCachedData, captureDataContext, isDataContextCurrent } from "@/lib/localCache";
 import { rpcResolveProductBarcode } from "@/lib/db";
+import { applyBranchStock } from "@/lib/branchStock";
 import type { Product, ProductVariant, ProductCategory, BaseUnit } from "@/types";
 
 const CACHE_KEY = "products";
@@ -141,12 +142,16 @@ export const useProductsStore = create<ProductsState>((set, get) => ({
     );
 
     try {
-      const [{ data: prods, error: pErr }, { data: vars, error: vErr }] =
+      const [{ data: prods, error: pErr }, { data: vars, error: vErr }, branchStock] =
         await Promise.all([
           supabase.from("products").select("*").eq("is_active", true).order("name"),
           isAdmin
             ? supabase.from("product_variants").select("*").eq("is_active", true)
             : supabase.from("product_variants_public").select("*"),
+          // The shelf is the branch's, not the shop's (0238). A failure here is not a reason
+          // to blank the catalogue: `applyBranchStock(null)` keeps the loaded shop quantities,
+          // which is the pre-0238 behaviour until the database carries the read.
+          supabase.rpc("get_branch_variant_stock"),
         ]);
 
       if (!isDataContextCurrent(context)) return;
@@ -170,7 +175,7 @@ export const useProductsStore = create<ProductsState>((set, get) => ({
       if (!isDataContextCurrent(context)) return;
       const companyMap = new Map(companyRows.map((c: any) => [c.id, c.name]));
 
-      const products: Product[] = ((prods as ProductRow[]) ?? []).map((p) => {
+      const mapped: Product[] = ((prods as ProductRow[]) ?? []).map((p) => {
         const variants = byProduct.get(p.id) ?? [];
         // Compute total stock from variants (not from products.stock_qty which may be stale)
         const computedStockQty = variants.length > 0
@@ -193,6 +198,16 @@ export const useProductsStore = create<ProductsState>((set, get) => ({
           variants,
         };
       });
+
+      // The branch read is authoritative when it answered. An empty answer is a real answer
+      // (this branch holds nothing), so only an error falls back to the shop quantities.
+      const branchQty = branchStock.error
+        ? null
+        : new Map<string, number>(
+            ((branchStock.data as { variant_id: string; qty: number | string }[] | null) ?? [])
+              .map((row) => [row.variant_id, Number(row.qty)]),
+          );
+      const products = applyBranchStock(mapped, branchQty);
 
       // Save to cache
       setCachedData(CACHE_KEY, products);
