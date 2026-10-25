@@ -22,6 +22,7 @@ import { APP_NAME, APP_VERSION } from "@/lib/brand";
 import DeleteTargetSheet from "@/components/shop/DeleteTargetSheet";
 import ProfileCard from "@/components/shop/ProfileCard";
 import ShopOverviewCard from "@/components/shop/ShopOverviewCard";
+import OwnerSuiteSections from "@/components/shop/OwnerSuiteSections";
 import { useShopStore } from "@/stores/shopStore";
 import { deleteAccount } from "@/lib/auth";
 import { forgetLastProfile, forgetPhoneVerification } from "@/lib/loginWindow";
@@ -268,6 +269,42 @@ export default function AdminSettingsPage() {
             this page's own section markup, so it reads as one of the existing sections. */}
         <SetupProgress className="px-4 pt-3.5 animate-fade-in-up delay-75" />
 
+        {/* The shop's own menu — Money, Stock, People and App (owner's request, 2026-10-26).
+            These groups used to sit one screen further away, on the account's detail page, so
+            an owner had to open their profile to reach Purchases or Reports. Settings is the
+            screen that answers "what is in this shop", which is the question these rows answer,
+            so they are here now. Same component, same groups, same rows, same routes — the
+            "Settings" row inside the App group is the one exception: this screen IS Settings. */}
+        <OwnerSuiteSections hideRowIds={["settings"]} />
+
+        {/* Rows the owner moved out of the suite.
+            Every one of these has a home in a group above, so the block sits beside the groups
+            rather than below the device preferences: a moved row that reappeared three sections
+            further down read as a second, unrelated menu. It renders whatever the catalogue says
+            belongs on this screen, and nothing when nothing does. */}
+        {rowsOn("settings").some((row) => row.group !== "app") && (
+          <div className="px-4 pt-3.5 animate-fade-in-up delay-100">
+            <ListCard>
+              {rowsOn("settings")
+                .filter((row) => row.group !== "app")
+                .map((row) => {
+                  const Icon = row.icon;
+                  return (
+                    <ListRow
+                      key={row.id}
+                      anchor={row.anchor}
+                      onClick={() => (row.path ? navigate(`${base}${row.path}`) : setShowBusinessSettings(true))}
+                      icon={Icon}
+                      title={t(row.labelKey)}
+                      meta={row.metaKey ? t(row.metaKey) : undefined}
+                      trailing={<ChevronRight size={14} style={{ color: "var(--text-secondary)" }} className="shrink-0" />}
+                    />
+                  );
+                })}
+            </ListCard>
+          </div>
+        )}
+
         {/* Comfort first — no heading anywhere on this page.
             A heading earns its place only when a row could otherwise be misread; "Language"
             and "Dark Mode" cannot be, so they are simply the first block, above the work.
@@ -379,35 +416,6 @@ export default function AdminSettingsPage() {
 
         {showBusinessSettings && <BusinessSettingsSheet onClose={() => setShowBusinessSettings(false)} onSave={() => {}} />}
         {showStockAlerts && <StockAlertsSheet onClose={() => setShowStockAlerts(false)} />}
-
-        {/* The shop's work is not on this screen.
-            Employees, Companies, Inventory, Roles and Crop configuration each had a row here
-            *and* a row in the owner suite, so the same destination had two doors and the two
-            copies could disagree. They live in the suite now — which is the shop's own screen —
-            and this block exists only for an owner who moved one back: it renders whatever the
-            catalogue says belongs here, and nothing when nothing does. */}
-        {rowsOn("settings").some((row) => row.group !== "app") && (
-          <div className="px-4 pt-3.5 animate-fade-in-up delay-100">
-            <ListCard>
-              {rowsOn("settings")
-                .filter((row) => row.group !== "app")
-                .map((row) => {
-                  const Icon = row.icon;
-                  return (
-                    <ListRow
-                      key={row.id}
-                      anchor={row.anchor}
-                      onClick={() => (row.path ? navigate(`${base}${row.path}`) : setShowBusinessSettings(true))}
-                      icon={Icon}
-                      title={t(row.labelKey)}
-                      meta={row.metaKey ? t(row.metaKey) : undefined}
-                      trailing={<ChevronRight size={14} style={{ color: "var(--text-secondary)" }} className="shrink-0" />}
-                    />
-                  );
-                })}
-            </ListCard>
-          </div>
-        )}
 
         {/* Where each row lives.
             The owner suite is the screen for the shop and this is the screen for the phone and

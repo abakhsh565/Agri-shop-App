@@ -37,6 +37,9 @@ export const OWNER_ROWS: OwnerRow[] = [
   {
     id: "employees",
     labelKey: "admin.employees",
+    // The second line the group rows carry (owner's request, 2026-10-26): every row in
+    // Money, Stock and People says what it holds, so two destinations cannot be confused.
+    metaKey: "more.hint.employees",
     icon: Users,
     path: "/employees",
     group: "people",
@@ -46,6 +49,7 @@ export const OWNER_ROWS: OwnerRow[] = [
   {
     id: "companies",
     labelKey: "admin.companies",
+    metaKey: "more.hint.companies",
     icon: Building2,
     path: "/companies",
     group: "people",
@@ -55,6 +59,7 @@ export const OWNER_ROWS: OwnerRow[] = [
   {
     id: "roles",
     labelKey: "settings.rolesAccess",
+    metaKey: "more.hint.roles",
     icon: ShieldCheck,
     path: "/settings/roles",
     group: "people",
@@ -64,6 +69,7 @@ export const OWNER_ROWS: OwnerRow[] = [
   {
     id: "inventory",
     labelKey: "admin.inventory",
+    metaKey: "more.hint.inventory",
     icon: Package,
     path: "/products",
     group: "stock",

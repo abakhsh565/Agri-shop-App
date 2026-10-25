@@ -11,17 +11,20 @@ import { uploadImage } from "@/lib/storage";
 import { supabase } from "@/lib/supabase";
 import ProfileCard from "@/components/shop/ProfileCard";
 import BranchesSection from "@/components/shop/BranchesSection";
-import OwnerSuiteSections from "@/components/shop/OwnerSuiteSections";
 
 /**
- * The account itself, as a page: who this person is, every branch they run, and the shop's own
- * menu.
+ * The account itself, as a page: who this person is, and every branch they run.
  *
- * Settings shows the card and the phone's own preferences; this is the other half. It used to
- * carry the edit form as a panel of its own, which pushed the branches — the thing most owners
- * came here for — off the bottom of the screen. The form is a bottom sheet again, opened by the
- * card's own Edit button, exactly as it was before the card became a row: it is a two-field
- * form, and a form is what a sheet is for. The page itself is now only facts.
+ * Settings shows the card, the shop's figures and the shop's own menu; this is the other half.
+ * It used to carry the edit form as a panel of its own, which pushed the branches — the thing
+ * most owners came here for — off the bottom of the screen. The form is a bottom sheet again,
+ * opened by the card's own Edit button, exactly as it was before the card became a row: it is a
+ * two-field form, and a form is what a sheet is for. The page itself is now only facts.
+ *
+ * The shop's menu (Money, Stock, People, App) was rendered here until 2026-10-26. It moved back
+ * to Settings, so reaching Purchases or Reports no longer means opening your own profile first;
+ * this page is left with the two things that are genuinely about the account: the person and
+ * their branches.
  */
 export default function ProfileDetailsPage() {
   const t = useT();
@@ -111,13 +114,6 @@ export default function ProfileDetailsPage() {
           the top of this page is the thing at the top of Settings. Its trailing control is Edit
           rather than a chevron: this screen IS the profile, so there is nothing to point at. */}
       <ProfileCard testId="profile-details-card" onEdit={startEdit} editTestId="settings-edit-profile" />
-
-      {/* The shop's own menu — Money, Stock, People and App — rendered by the same component
-          `/admin/more` renders. It moved here when the bottom bar's More tab became Messages:
-          the rows answer "what can I do in this shop", which is the question this account screen
-          already answers for the branch, so they no longer need a tab of their own to be reached.
-          Nothing about the rows changed — same groups, same labels, same order, same routes. */}
-      <OwnerSuiteSections />
 
       {/* The branches this account runs. They moved here from the owner suite's More screen and
           then from Settings: a branch is a fact about the account itself, so it belongs on the

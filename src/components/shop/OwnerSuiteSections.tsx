@@ -26,10 +26,11 @@ import { useDir } from "@/lib/dirContext";
  * Every row the owner suite offers, grouped by the question it answers.
  *
  * This block used to live inside `MoreMenuPage` — the screen that the bottom bar's More tab
- * opened. The tab is gone (Messages took its place) and the rows now ship on the account screen
- * as well, so the block was extracted rather than copied: two screens render it, and one module
- * decides what is in it. A second copy would drift, which is the exact failure the shared
- * `ownerRows` catalogue was introduced to end.
+ * opened. The tab is gone (Messages took its place) and the rows now ship on **Settings**, the
+ * screen an owner opens for the shop, and on the plain `/admin/more` page kept for deep links
+ * and the guided tour. The block was extracted rather than copied: those screens render it, and
+ * one module decides what is in it. A second copy would drift, which is the exact failure the
+ * shared `ownerRows` catalogue was introduced to end.
  *
  * Rows use the same treatment as Settings — `ListCard` + `ListRow` with a plain thin-stroke
  * leading icon at the icon token's size in `--text-secondary`, and the 52px separator inset
@@ -52,9 +53,9 @@ const GROUPS: Array<{
     group: "money",
     sectionKey: "more.groupMoney",
     rows: [
-      { id: "payments", labelKey: "admin.payments", icon: CreditCard, path: "/payments", anchor: "more:payments" },
-      { id: "dailyCash", labelKey: "admin.dailyCash", icon: Calculator, path: "/payments/daily-cash", anchor: "more:dailyCash" },
-      { id: "reports", labelKey: "admin.reports", icon: BarChart2, path: "/reports", anchor: "more:reports" },
+      { id: "payments", labelKey: "admin.payments", hintKey: "more.hint.payments", icon: CreditCard, path: "/payments", anchor: "more:payments" },
+      { id: "dailyCash", labelKey: "admin.dailyCash", hintKey: "more.hint.dailyCash", icon: Calculator, path: "/payments/daily-cash", anchor: "more:dailyCash" },
+      { id: "reports", labelKey: "admin.reports", hintKey: "more.hint.reports", icon: BarChart2, path: "/reports", anchor: "more:reports" },
     ],
     order: ["payments", "dailyCash", "reports"],
   },
@@ -62,10 +63,10 @@ const GROUPS: Array<{
     group: "stock",
     sectionKey: "more.groupStock",
     rows: [
-      { id: "purchases", labelKey: "admin.purchases", icon: ShoppingCart, path: "/purchases", anchor: "more:purchases" },
-      { id: "movements", labelKey: "admin.stockMovements", icon: History, path: "/inventory/movements", anchor: "more:movements" },
-      { id: "reorder", labelKey: "admin.reorderSuggestions", icon: AlertTriangle, path: "/inventory/reorder", anchor: "more:reorder" },
-      { id: "barcodes", labelKey: "admin.generateBarcodes", icon: ScanLine, path: "/inventory/barcodes", anchor: "more:barcodes" },
+      { id: "purchases", labelKey: "admin.purchases", hintKey: "more.hint.purchases", icon: ShoppingCart, path: "/purchases", anchor: "more:purchases" },
+      { id: "movements", labelKey: "admin.stockMovements", hintKey: "more.hint.movements", icon: History, path: "/inventory/movements", anchor: "more:movements" },
+      { id: "reorder", labelKey: "admin.reorderSuggestions", hintKey: "more.hint.reorder", icon: AlertTriangle, path: "/inventory/reorder", anchor: "more:reorder" },
+      { id: "barcodes", labelKey: "admin.generateBarcodes", hintKey: "more.hint.barcodes", icon: ScanLine, path: "/inventory/barcodes", anchor: "more:barcodes" },
     ],
     // Inventory leads the group; Crop configuration is setup, so it follows the daily rows.
     order: ["inventory", "purchases", "movements", "reorder", "barcodes", "crops"],
@@ -76,7 +77,7 @@ const GROUPS: Array<{
     // Companies and Employees are catalogue rows (they can be moved to Settings), so they are
     // not repeated here — they arrive through `rowsOn("suite")` with their own group.
     rows: [
-      { id: "customers", labelKey: "admin.customers", icon: UserCheck, path: "/customers", anchor: "more:customers" },
+      { id: "customers", labelKey: "admin.customers", hintKey: "more.hint.customers", icon: UserCheck, path: "/customers", anchor: "more:customers" },
     ],
     order: ["customers", "companies", "employees", "roles"],
   },
@@ -107,12 +108,25 @@ function rankIn(group: (typeof GROUPS)[number], id: string): number {
 interface MenuRow {
   id: string;
   labelKey: I18nKey;
+  /**
+   * The row's second line. Every row in Money, Stock and People carries one, so the list reads
+   * as heading + subheading the way the owner's reference does — and so "Payments" and "Daily
+   * cash" are distinguishable before they are opened. App rows keep the single line.
+   */
+  hintKey?: I18nKey;
   icon: LucideIcon;
   path: string;
   anchor: string;
 }
 
-export default function OwnerSuiteSections() {
+export default function OwnerSuiteSections({
+  /**
+   * Rows this screen must not repeat. Settings renders this block, and the `app` group's own
+   * "Settings" row would point at the page it is already on: a control that does nothing when
+   * tapped is worse than one that is absent.
+   */
+  hideRowIds = [],
+}: { hideRowIds?: string[] } = {}) {
   const navigate = useNavigate();
   const t = useT();
   const base = useShellBase();
@@ -129,7 +143,9 @@ export default function OwnerSuiteSections() {
         // One list per group: the rows that always live here, plus the catalogue rows that are
         // on this screen right now, sorted into the group's own reading order.
         const entries = [
-          ...group.rows.map((row) => ({ kind: "route" as const, ...row })),
+          // `hintKey` is carried into the row as `metaKey` so a fixed row and a catalogue row
+          // render their second line through the same slot, one row component.
+          ...group.rows.map((row) => ({ kind: "route" as const, ...row, metaKey: row.hintKey })),
           ...rowsOn("suite")
             .filter((row) => row.group === group.group)
             .map((row) => ({
@@ -141,7 +157,9 @@ export default function OwnerSuiteSections() {
               anchor: row.anchor,
               metaKey: row.metaKey,
             })),
-        ].sort((a, b) => rankIn(group, a.id) - rankIn(group, b.id));
+        ]
+          .filter((entry) => !hideRowIds.includes(entry.id))
+          .sort((a, b) => rankIn(group, a.id) - rankIn(group, b.id));
 
         return (
           <div key={group.sectionKey} className="px-4 pt-4">
@@ -157,7 +175,7 @@ export default function OwnerSuiteSections() {
                     // the same sheet Settings opens, so there is one of it in the app.
                     onClick={() => (entry.path ? navigate(`${base}${entry.path}`) : setSheetOpen(true))}
                     title={t(entry.labelKey)}
-                    meta={entry.kind === "owner" && entry.metaKey ? t(entry.metaKey) : undefined}
+                    meta={entry.metaKey ? t(entry.metaKey) : undefined}
                     trailing={
                       <ChevronRight
                         size={14}
