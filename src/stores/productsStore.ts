@@ -3,7 +3,7 @@ import { supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/stores/authStore";
 import { getCachedData, setCachedData, captureDataContext, isDataContextCurrent } from "@/lib/localCache";
 import { rpcResolveProductBarcode } from "@/lib/db";
-import { applyBranchStock } from "@/lib/branchStock";
+import { applyBranchStock, filterProductsForBranch } from "@/lib/branchStock";
 import type { Product, ProductVariant, ProductCategory, BaseUnit } from "@/types";
 
 const CACHE_KEY = "products";
@@ -142,7 +142,7 @@ export const useProductsStore = create<ProductsState>((set, get) => ({
     );
 
     try {
-      const [{ data: prods, error: pErr }, { data: vars, error: vErr }, branchStock] =
+      const [{ data: prods, error: pErr }, { data: vars, error: vErr }, branchStock, branchCatalogue] =
         await Promise.all([
           supabase.from("products").select("*").eq("is_active", true).order("name"),
           isAdmin
@@ -152,6 +152,10 @@ export const useProductsStore = create<ProductsState>((set, get) => ({
           // to blank the catalogue: `applyBranchStock(null)` keeps the loaded shop quantities,
           // which is the pre-0238 behaviour until the database carries the read.
           supabase.rpc("get_branch_variant_stock"),
+          // Which of these products this branch carries at all (0240). A new branch has no
+          // rows, so its catalogue is empty rather than the whole shop at zero. A failed
+          // read falls back to the loaded catalogue, never to an empty screen.
+          supabase.rpc("get_branch_product_ids"),
         ]);
 
       if (!isDataContextCurrent(context)) return;
@@ -207,9 +211,25 @@ export const useProductsStore = create<ProductsState>((set, get) => ({
             ((branchStock.data as { variant_id: string; qty: number | string }[] | null) ?? [])
               .map((row) => [row.variant_id, Number(row.qty)]),
           );
-      const products = applyBranchStock(mapped, branchQty);
 
-      // Save to cache
+      // PostgREST returns a `setof uuid` as bare strings; accept the named-object shape too,
+      // so a client built against a different PostgREST version does not silently see nothing.
+      const branchProductIds = branchCatalogue.error
+        ? null
+        : new Set<string>(
+            ((branchCatalogue.data as unknown[] | null) ?? [])
+              .map((row) =>
+                typeof row === "string"
+                  ? row
+                  : (row as { get_branch_product_ids?: string })?.get_branch_product_ids,
+              )
+              .filter((id): id is string => Boolean(id)),
+          );
+
+      const products = applyBranchStock(filterProductsForBranch(mapped, branchProductIds), branchQty);
+
+      // Save to cache. The cache is owned per shop+user+branch (localCache), so a list
+      // filtered for Malik agro cannot paint in Main Branch.
       setCachedData(CACHE_KEY, products);
       set({ products, loading: false, ready: true });
     } catch {

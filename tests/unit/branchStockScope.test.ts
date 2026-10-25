@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyBranchStock } from "@/lib/branchStock";
+import { applyBranchStock, filterProductsForBranch } from "@/lib/branchStock";
 import type { Product, ProductVariant } from "@/types";
 
 /**
@@ -76,5 +76,31 @@ describe("branch stock scope", () => {
     const [applied] = applyBranchStock([base], new Map([["v1", 40]]));
 
     expect(applied.stockQty).toBe(7);
+  });
+});
+
+describe("branch catalogue scope", () => {
+  const kPlus = product({ id: "product-1", name: "K plus" });
+  const lambda = product({ id: "product-2", name: "Lambda", variants: [variant("v3", 8)] });
+
+  it("keeps only the products the branch carries", () => {
+    const visible = filterProductsForBranch([kPlus, lambda], new Set(["product-2"]));
+
+    expect(visible.map((p) => p.id)).toEqual(["product-2"]);
+  });
+
+  it("empties the catalogue when the branch carries nothing", () => {
+    expect(filterProductsForBranch([kPlus, lambda], new Set())).toEqual([]);
+  });
+
+  it("keeps the loaded catalogue when the branch read failed", () => {
+    expect(filterProductsForBranch([kPlus, lambda], null)).toHaveLength(2);
+  });
+
+  it("does not mutate the rows", () => {
+    const rows = [kPlus, lambda];
+    filterProductsForBranch(rows, new Set(["product-2"]));
+
+    expect(rows).toHaveLength(2);
   });
 });

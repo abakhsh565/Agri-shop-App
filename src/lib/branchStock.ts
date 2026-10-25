@@ -17,6 +17,24 @@ import type { Product } from "@/types";
  * shop total. The product's own total is the sum of those branch quantities, not the value
  * `products.stock_qty` carried.
  */
+/**
+ * Keep only the products this branch actually carries.
+ *
+ * `product_branches` (0240) records where a product exists: the branch that created it,
+ * plus every branch that has moved stock of it. A branch created today has no rows, so its
+ * catalogue is empty instead of echoing the whole shop at quantity zero.
+ *
+ * `null` means the branch read failed. Showing the loaded catalogue is the pre-0240
+ * behaviour and is safer than blanking every screen on a failed request.
+ */
+export function filterProductsForBranch(
+  products: Product[],
+  productIds: Set<string> | null,
+): Product[] {
+  if (!productIds) return products;
+  return products.filter((product) => productIds.has(product.id));
+}
+
 export function applyBranchStock(
   products: Product[],
   qtyByVariant: Map<string, number> | null,
