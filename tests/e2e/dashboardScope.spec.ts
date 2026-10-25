@@ -52,92 +52,125 @@ function rs(n: number) {
   return 'Rs. ' + Math.round(n).toLocaleString('en-PK');
 }
 
-/** A figure as the Settings overview prints it: digits only, grouped, no currency prefix. */
+/** A count as the Settings overview prints it: whole, grouped, no currency prefix. */
 function figure(n: number) {
   return Math.round(n).toLocaleString('en-PK');
 }
 
 /**
- * A branch's stock value, the way migration 0234 computes it.
+ * A rupee amount as the Settings overview prints it: compact K / M, at most two decimals,
+ * trailing zeros dropped — the same rule as `formatAmount` in ShopOverviewCard. Written out here
+ * so the assertion does not import the implementation it is testing.
+ */
+function compact(n: number) {
+  const amount = Math.round(n);
+  const abs = Math.abs(amount);
+  const trim = (v: number) => v.toFixed(2).replace(/0+$/, '').replace(/[.]$/, '');
+  if (abs >= 1_000_000) return `${trim(amount / 1_000_000)}M`;
+  if (abs >= 1_000) return `${trim(amount / 1_000)}K`;
+  return String(amount);
+}
+
+/**
+ * The shop's only active branch, or NULL when it has more than one.
  *
- * This is deliberately a second implementation: the assertion must not ask the function under
- * test what the answer is. It reads the same ledger the server reads — this branch's net
- * movements, valued at today's cost, never below zero — and adds the main branch's remainder,
- * which is what makes the branches add up to the business total.
+ * An operational row that predates branch stamping has no branch_id. 0237 attributes such a
+ * row to a branch only when there is exactly one it could belong to; this is the same rule,
+ * expressed once for the three helpers below.
+ */
+function onlyBranchCte(): string {
+  return `only_branch AS (
+      SELECT (array_agg(b.id))[1] AS id
+        FROM branches b
+       WHERE b.tenant_id = '${QA_IDS.shop}' AND b.is_active
+      HAVING count(*) = 1
+    )`;
+}
+
+/**
+ * A branch's stock value, the way migration 0237 computes it.
+ *
+ * Deliberately a second implementation: the assertion must not ask the function under test what
+ * the answer is. It reads this branch's own net movements from the ledger and values them at
+ * today's cost, never below zero — and adds no business-wide remainder. A variant with no
+ * movement anywhere was never branch-stamped, so its whole shelf sits on the shop's default
+ * branch; that is the one case 0237 attributes stock without a ledger row, and this mirrors it.
  */
 async function branchInventoryValue(branchId: string): Promise<number> {
   const [row] = await execSql(`
-    WITH net AS (
+    WITH ${onlyBranchCte()}, def AS (
+      SELECT b.id FROM branches b
+       WHERE b.tenant_id = '${QA_IDS.shop}' AND b.is_active
+       ORDER BY b.is_default DESC, b.created_at, b.id LIMIT 1
+    ), net AS (
       SELECT m.variant_id, sum(m.qty_change) AS qty
         FROM inventory_movements m
+        LEFT JOIN only_branch ob ON true
        WHERE m.branch_id = '${branchId}'
+          OR (m.branch_id IS NULL AND ob.id = '${branchId}')
        GROUP BY m.variant_id
-    ), mine AS (
-      SELECT coalesce(sum(n.qty * pv.cost_price)
-               FILTER (WHERE n.qty > 0 AND pv.cost_price > 0), 0) AS v
-        FROM net n
-        JOIN product_variants pv ON pv.id = n.variant_id
-        JOIN products p ON p.id = pv.product_id
-       WHERE p.is_active AND pv.is_active AND p.shop_id = '${QA_IDS.shop}'
-    ), shop AS (
-      SELECT coalesce(sum(pv.stock_qty * pv.cost_price)
-               FILTER (WHERE pv.stock_qty > 0 AND pv.cost_price > 0), 0) AS v
-        FROM product_variants pv
-        JOIN products p ON p.id = pv.product_id
-       WHERE p.is_active AND pv.is_active AND p.shop_id = '${QA_IDS.shop}'
-    ), every_branch AS (
-      SELECT coalesce(sum(x.v), 0) AS v FROM (
-        SELECT n.branch_id,
-               coalesce(sum(n.qty * pv.cost_price)
-                 FILTER (WHERE n.qty > 0 AND pv.cost_price > 0), 0) AS v
-          FROM (SELECT branch_id, variant_id, sum(qty_change) AS qty
-                  FROM inventory_movements
-                 WHERE branch_id IN (SELECT id FROM branches
-                                      WHERE tenant_id = '${QA_IDS.shop}' AND is_active)
-                 GROUP BY branch_id, variant_id) n
-          JOIN product_variants pv ON pv.id = n.variant_id
-          JOIN products p ON p.id = pv.product_id
-         WHERE p.is_active AND pv.is_active AND p.shop_id = '${QA_IDS.shop}'
-         GROUP BY n.branch_id
-      ) x
+    ), legacy AS (
+      SELECT v.id AS variant_id, v.stock_qty AS qty
+        FROM product_variants v
+        JOIN products p ON p.id = v.product_id
+       WHERE p.shop_id = '${QA_IDS.shop}' AND p.is_active AND v.is_active
+         AND v.stock_qty > 0
+         AND (SELECT id FROM def) = '${branchId}'
+         AND NOT EXISTS (SELECT 1 FROM inventory_movements m WHERE m.variant_id = v.id)
+    ), every AS (
+      SELECT * FROM net UNION ALL SELECT * FROM legacy
     )
-    SELECT ((SELECT v FROM mine)
-      + CASE WHEN (SELECT is_default FROM branches WHERE id = '${branchId}')
-             THEN (SELECT v FROM shop) - (SELECT v FROM every_branch) ELSE 0 END)::text AS value`);
+    SELECT coalesce(sum(n.qty * pv.cost_price)
+             FILTER (WHERE n.qty > 0 AND pv.cost_price > 0), 0)::text AS value
+      FROM every n
+      JOIN product_variants pv ON pv.id = n.variant_id
+      JOIN products p ON p.id = pv.product_id
+     WHERE p.is_active AND pv.is_active AND p.shop_id = '${QA_IDS.shop}'`);
   return Number(row.value);
 }
 
-/** A branch's receivables, the way migration 0234 computes it: billed there, collected there. */
+/**
+ * A branch's receivables, the way migration 0237 computes it: billed there, collected there,
+ * never negative. Money recorded at another branch does not enter this one's figure, and a
+ * customer balance the ledgers cannot place is not invented on main.
+ */
 async function branchCreditOutstanding(branchId: string): Promise<number> {
   const [row] = await execSql(`
-    WITH mine AS (
-      SELECT greatest(
-        coalesce((SELECT sum(s.amount_due) FROM sales s
-                   WHERE s.shop_id = '${QA_IDS.shop}' AND s.branch_id = '${branchId}'
-                     AND s.is_voided = false), 0)
-        - coalesce((SELECT sum(cp.amount) FROM customer_payments cp
-                      JOIN customers c ON c.id = cp.customer_id
-                     WHERE c.shop_id = '${QA_IDS.shop}' AND c.is_archived = false
-                       AND cp.branch_id = '${branchId}'), 0), 0) AS v
-    ), shop AS (
-      SELECT coalesce(sum(greatest(outstanding_balance, 0)), 0) AS v
-        FROM customers
-       WHERE shop_id = '${QA_IDS.shop}' AND is_archived = false
-    ), every_branch AS (
-      SELECT coalesce(sum(greatest(
-        coalesce((SELECT sum(s.amount_due) FROM sales s
-                   WHERE s.shop_id = b.tenant_id AND s.branch_id = b.id
-                     AND s.is_voided = false), 0)
-        - coalesce((SELECT sum(cp.amount) FROM customer_payments cp
-                      JOIN customers c ON c.id = cp.customer_id
-                     WHERE c.shop_id = b.tenant_id AND c.is_archived = false
-                       AND cp.branch_id = b.id), 0), 0)), 0) AS v
-        FROM branches b
-       WHERE b.tenant_id = '${QA_IDS.shop}' AND b.is_active
-    )
-    SELECT ((SELECT v FROM mine)
-      + CASE WHEN (SELECT is_default FROM branches WHERE id = '${branchId}')
-             THEN (SELECT v FROM shop) - (SELECT v FROM every_branch) ELSE 0 END)::text AS value`);
+    WITH ${onlyBranchCte()}
+    SELECT greatest(
+      coalesce((SELECT sum(s.amount_due) FROM sales s
+                 LEFT JOIN only_branch ob ON true
+                 WHERE s.shop_id = '${QA_IDS.shop}' AND s.is_voided = false
+                   AND (s.branch_id = '${branchId}'
+                        OR (s.branch_id IS NULL AND ob.id = '${branchId}'))), 0)
+      - coalesce((SELECT sum(cp.amount) FROM customer_payments cp
+                    JOIN customers c ON c.id = cp.customer_id
+                    LEFT JOIN only_branch ob ON true
+                   WHERE c.shop_id = '${QA_IDS.shop}' AND c.is_archived = false
+                     AND (cp.branch_id = '${branchId}'
+                          OR (cp.branch_id IS NULL AND ob.id = '${branchId}'))), 0), 0)::text AS value`);
+  return Number(row.value);
+}
+
+/**
+ * How many people work at a branch, the way migration 0237 computes it.
+ *
+ * Written out here rather than taken from the function under test: active, non-owner members
+ * the roster ties to this branch — an explicit scope entry or an explicit per-branch role row
+ * (the map 0233 introduced). Owners are not "employees": the team screen tags them Owner, and
+ * counting them at every branch inflated a two-owner shop by two on every branch. Nobody is
+ * moved onto a branch to make the shop's roster add up; a member scoped nowhere counts nowhere.
+ * Suspended and invited accounts are not counted.
+ */
+async function branchStaffCount(branchId: string): Promise<number> {
+  const [row] = await execSql(`
+    SELECT count(DISTINCT m.user_id)::int::text AS value
+      FROM memberships m
+     WHERE m.tenant_id = '${QA_IDS.shop}' AND m.status = 'active' AND m.role <> 'owner'
+       AND ('${branchId}' = ANY(COALESCE(m.branch_scope, '{}'::uuid[]))
+            OR EXISTS (SELECT 1 FROM membership_branch_roles mbr
+                        WHERE mbr.membership_id = m.id
+                          AND mbr.branch_id = '${branchId}'))`);
   return Number(row.value);
 }
 
@@ -375,7 +408,7 @@ test.describe('Locked dashboard scope: figures reconcile with the database', () 
     expect(body, 'Quick Alerts section missing').toContain('Quick Alerts');
 
     // Shop overview moved to Settings on 2026-10-25, and all three of its figures follow the branch
-    // the account is working in (0233 for staff, 0234 for stock and credit), so it must not sit on
+    // the account is working in (0233 for the branch model, 0237 for the three figures), so it must not sit on
     // Home, whose figures follow the date pill. Asserted as gone from Home first, then read off
     // Settings against the branch's own ledger — never inferred from the labels.
     await expect(
@@ -390,28 +423,24 @@ test.describe('Locked dashboard scope: figures reconcile with the database', () 
     // and the assertion below then compared the card against the wrong branch's ledger. The figures
     // are still checked against the database, not against the screen.
     const settingsBranch = await readActiveBranch(page);
-    // The staff figure is the branch's, by the same rule `get_my_branches()` uses: an active
-    // membership whose branch scope contains this branch. Two branches that both scope the same
-    // employee each count that person — that is the question the card answers ("how many people
-    // work here"), not "how many people does the business employ".
-    const [activeEmployees] = await execSql(`
-      SELECT count(*)::text AS value
-        FROM memberships m
-       WHERE m.tenant_id = '${QA_IDS.shop}' AND m.status = 'active'
-         AND m.role <> 'owner'
-         AND '${settingsBranch}' = ANY(COALESCE(m.branch_scope, '{}'::uuid[]))`);
-    // Stock and credit are the branch's own, read from the ledgers it stamped (0234).
+    // The staff figure is the branch's, by the same rule `get_my_branches()` uses (0237): the
+    // shop's active, non-owner members the roster ties to this branch — explicit scope or an
+    // explicit per-branch role row. Nothing is carried onto main to make the roster add up, and
+    // owners are not employees. Two branches that both scope the same person each count them:
+    // the card answers "how many people work here", not how many the business employs.
+    // Suspended and invited accounts are not counted.
+    const activeEmployees = await branchStaffCount(settingsBranch);
+    // Stock and credit are the branch's own, read from the ledgers it stamped (0237). No
+    // business-wide remainder is added to any branch; only a variant with no movement anywhere
+    // is placed whole on the default branch, because the ledger never saw where it went.
     const inventoryValue = await branchInventoryValue(settingsBranch);
     const creditValue = await branchCreditOutstanding(settingsBranch);
-    // The card names the branch it is speaking for — read from the DB, not hard-coded, so the
-    // assertion holds whichever branch the QA account is working in.
-    const [activeBranchRow] = await execSql(
-      `SELECT name FROM branches WHERE id = '${settingsBranch}' AND tenant_id = '${QA_IDS.shop}'`,
-    );
-    await expect(page.getByTestId('shop-overview-branch')).toHaveText(String(activeBranchRow.name));
-    await expect(page.getByTestId('shop-overview-inventory')).toContainText(figure(inventoryValue));
-    await expect(page.getByTestId('shop-overview-employees')).toHaveText(figure(Number(activeEmployees.value)));
-    await expect(page.getByTestId('shop-overview-credit')).toHaveText(figure(creditValue));
+    // The card no longer captions itself with the branch name (owner's correction, 2026-10-25);
+    // the values are what prove it is speaking for `settingsBranch`, and each is expected from
+    // that branch's own rows, not from whatever the previous branch happened to hold.
+    await expect(page.getByTestId('shop-overview-inventory')).toContainText(compact(inventoryValue));
+    await expect(page.getByTestId('shop-overview-employees')).toHaveText(figure(activeEmployees));
+    await expect(page.getByTestId('shop-overview-credit')).toHaveText(compact(creditValue));
     await expect(page.getByTestId('shop-overview-invite')).toBeVisible();
 
     // BACK TO HOME. Everything below is about the dashboard — the removed cards, Quick Alerts
@@ -667,16 +696,14 @@ test.describe('Locked dashboard scope: figures reconcile with the database', () 
       expect(switched?.ok, `the app refused the branch switch: ${switched?.code ?? 'unknown'}`).toBe(true);
 
       await page.goto(`${BASE}/admin/settings`);
-      await expect(page.getByTestId('shop-overview-branch')).toHaveText(String(other.name));
+      // The switch is proven by the figures moving to `other`'s ledger, not by a caption: the
+      // card no longer repeats the branch name.
       await expect(page.getByTestId('shop-overview-inventory'))
-        .toContainText(figure(await branchInventoryValue(other.id)));
+        .toContainText(compact(await branchInventoryValue(other.id)));
       await expect(page.getByTestId('shop-overview-credit'))
-        .toHaveText(figure(await branchCreditOutstanding(other.id)));
-      const [staff] = await execSql(`
-        SELECT count(*)::text AS value FROM memberships m
-         WHERE m.tenant_id = '${QA_IDS.shop}' AND m.status = 'active' AND m.role <> 'owner'
-           AND '${other.id}' = ANY(COALESCE(m.branch_scope, '{}'::uuid[]))`);
-      await expect(page.getByTestId('shop-overview-employees')).toHaveText(figure(Number(staff.value)));
+        .toHaveText(compact(await branchCreditOutstanding(other.id)));
+      const staff = await branchStaffCount(other.id);
+      await expect(page.getByTestId('shop-overview-employees')).toHaveText(figure(staff));
     } finally {
       // Leave the QA account in the branch it was found in.
       await switchBranchInApp(page, first);

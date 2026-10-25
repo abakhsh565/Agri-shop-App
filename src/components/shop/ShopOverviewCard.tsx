@@ -7,10 +7,24 @@ import { hasPermission } from "@/lib/tenantContext";
 /**
  * Figures only, no currency prefix (owner's decision, 2026-10-25). The labels already say what
  * each number is, and three `Rs.` in a row made a narrow card read as a table of prices rather
- * than a snapshot. Grouped exactly as the rest of the app groups digits (`en-PK`).
+ * than a snapshot.
+ *
+ * COMPACT UNITS (owner's decision, 2026-10-25): a nine-digit rupee amount is unreadable in a
+ * third of a phone width, so the card abbreviates thousands and millions the way the shop
+ * speaks — K and M, at most two decimals, trailing zeros dropped. 49,294,000 becomes `49.29M`,
+ * 944,500 becomes `944.5K`, 30,000 becomes `30K`. Below a thousand nothing is abbreviated.
+ * Counts (employees) are people, not money, and stay whole.
  */
+function trimUnit(value: number) {
+  return value.toFixed(2).replace(/0+$/, "").replace(/[.]$/, "");
+}
+
 function formatAmount(n: number) {
-  return Math.round(n).toLocaleString("en-PK");
+  const amount = Math.round(n);
+  const abs = Math.abs(amount);
+  if (abs >= 1_000_000) return `${trimUnit(amount / 1_000_000)}M`;
+  if (abs >= 1_000) return `${trimUnit(amount / 1_000)}K`;
+  return String(amount);
 }
 
 /**
@@ -20,21 +34,25 @@ function formatAmount(n: number) {
  * ALL THREE FOLLOW THE BRANCH (owner's correction, 2026-10-25, twice). The first version was
  * business-wide and an owner working in a second branch read it as that branch's. The second
  * version made only the staff count follow the branch and labelled the other two as covering all
- * branches — honest, but not the answer asked for. Since migration 0234 the server answers all
- * three per branch from the ledgers that were already stamped with one: staff from the
- * membership's branch scope, stock from the movement ledger, receivables from the sales and
- * payments recorded there.
+ * branches — honest, but not the answer asked for. Since migration 0237 the server answers all
+ * three from this branch alone: staff from the branch assignments the roster records, stock
+ * from the movement ledger stamped with this branch, receivables from the sales and payments
+ * recorded there.
  *
  * What the numbers mean, because a card must not make its reader guess:
  *   • Inventory — what this branch received and has not sold, at today's cost. Stock that left a
- *     branch it never arrived at is worth nothing there rather than a negative shelf.
- *   • Employees — active people whose branch scope contains this branch. The same count the
- *     Branches list shows on the branch's own row.
+ *     branch it never arrived at is worth nothing there rather than a negative shelf. A variant
+ *     the ledger has never seen (imported before branch stamping) sits whole on the default
+ *     branch, because there is nowhere else it could have been.
+ *   • Employees — active, non-owner people the roster ties to this branch: an explicit branch
+ *     scope or an explicit per-branch role. Owners are labelled Owner on the team screen and are
+ *     not staff; suspended and invited accounts are not counted either.
  *   • Total credit — what this branch billed and has not collected at this branch.
- * The main branch also carries whatever the ledgers cannot attribute (stock that predates them,
- * a payment taken against another branch's bill), so the three branches' figures always add up
- * to the business's own totals. That remainder is the reason the numbers reconcile instead of
- * drifting into a second, private set of books.
+ * NOTHING is added to any branch to make the three add up to the business: 0236 removed the
+ * remainder-to-main rule because an empty main branch read "3 employees, 40,000 credit" and the
+ * owner could not tell whose money or people those were. A customer balance that no sale or
+ * payment explains is bookkeeping drift, not a receivable of any branch, and is not placed on
+ * one to make the totals reconcile.
  *
  * THE SHAPE IS THE OWNER'S REFERENCE: one plate, three columns, the figure on top and its name
  * beneath, no icons. The plate is a tone surface, not literal white (owner's correction,
@@ -49,7 +67,6 @@ export default function ShopOverviewCard() {
   const navigate = useNavigate();
   const activeShopId = useShopStore((s) => s.activeShopId);
   const activeBranchId = useShopStore((s) => s.activeBranchId);
-  const activeBranchName = useShopStore((s) => s.activeBranchName);
 
   const branches = useShopStore((s) => s.branches);
   const branchesLoaded = useShopStore((s) => s.branchesLoaded);
@@ -57,11 +74,10 @@ export default function ShopOverviewCard() {
 
   // The branch this card speaks for comes from the one store that owns that fact. The tenant
   // check matters between a shop switch and its reload: the previous business's rows are still
-  // in this list for a moment, and a branch id from them would title the card with a branch of
-  // the shop the account just left.
+  // in this list for a moment, and a branch id from them would show a branch of the shop the
+  // account just left.
   const shopBranches = branches.filter((branch) => branch.tenantId === activeShopId);
   const activeBranch = shopBranches.find((branch) => branch.id === activeBranchId) ?? null;
-  const branchName = activeBranch?.name ?? activeBranchName ?? null;
 
   // This screen is reached without the dashboard's preload, so it asks for the branch list it
   // reads. The live store flags are checked rather than the render's copies: the Branches block
@@ -106,27 +122,19 @@ export default function ShopOverviewCard() {
         </div>
 
         <div className="px-2 py-5" style={{ background: "var(--tone-card)" }}>
-          {/* Which branch these figures are about. Without it the card read as the whole
-              business, which is exactly the thing the owner could not tell from it. */}
-          {branchName && (
-            <p
-              className="text-11 text-center mb-3 px-2 truncate"
-              style={{ color: "var(--text-tertiary)" }}
-              data-testid="shop-overview-branch"
-            >
-              {branchName}
-            </p>
-          )}
-
+          {/* No branch caption (owner's correction, 2026-10-25): the working branch is already
+              named in the header, and repeating it here pushed the three figures down and made
+              the card read as a table of sections. The figures are 2px smaller than the first
+              layout so a seven-digit amount and its neighbours stay on one line. */}
           <div className="grid grid-cols-3">
             <div className="min-w-0 text-center">
-              <p className="text-18 font-bold leading-tight break-words" style={{ color: "var(--text-primary)" }} data-testid="shop-overview-inventory">
+              <p className="text-16 font-bold leading-tight break-words" style={{ color: "var(--text-primary)" }} data-testid="shop-overview-inventory">
                 {inventoryValueLabel}
               </p>
               <p className="text-14 mt-1 leading-tight" style={{ color: "var(--text-secondary)" }}>{t("admin.inventory")}</p>
             </div>
             <div className="min-w-0 text-center">
-              <p className="text-18 font-bold leading-tight" style={{ color: "var(--text-primary)" }} data-testid="shop-overview-employees">
+              <p className="text-16 font-bold leading-tight" style={{ color: "var(--text-primary)" }} data-testid="shop-overview-employees">
                 {activeBranch?.employeeCount != null
                   ? activeBranch.employeeCount.toLocaleString("en-PK")
                   : "—"}
@@ -134,7 +142,7 @@ export default function ShopOverviewCard() {
               <p className="text-14 mt-1 leading-tight" style={{ color: "var(--text-secondary)" }}>{t("admin.employees")}</p>
             </div>
             <div className="min-w-0 text-center">
-              <p className="text-18 font-bold leading-tight break-words" style={{ color: "var(--text-primary)" }} data-testid="shop-overview-credit">
+              <p className="text-16 font-bold leading-tight break-words" style={{ color: "var(--text-primary)" }} data-testid="shop-overview-credit">
                 {creditOutstanding != null ? formatAmount(creditOutstanding) : "—"}
               </p>
               <p className="text-14 mt-1 leading-tight" style={{ color: "var(--text-secondary)" }}>{t("shop.totalCredit")}</p>

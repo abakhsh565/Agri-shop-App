@@ -57,7 +57,7 @@ permissions, business rules, direct dependencies, dependent features, tests, evi
 | Notifications | Messaging | `notifications` | — | VALID |
 | Dashboard and action center | Overview | `dashboard` | sales, customers, inventory, stock alerts, reminders, notifications, language | VALID |
 | Reports and exports | Reports | `reports` | sales, purchases, supplier payments, customers, inventory | VALID |
-| Shop settings and business configuration | Settings | `settings`, `more` | branch scope, language | VALID |
+| Shop settings and business configuration, incl. the per-branch overview | Settings | `settings`, `more` | branch scope, language | VALID (overview: 0236/0237, lane `dashboardScope`) |
 | Activity log and audit events | Audit | `activity` | — | FIXED + REVERIFIED (0181) |
 | Offline queue and sync | Reliability | — | login, sales | VALID (status PARTIAL: offline PIN open, PIPELINE B1) |
 | Bilingual language system (EN/LTR + UR/RTL) | Language | all | — | VALID |

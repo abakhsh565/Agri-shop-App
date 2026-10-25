@@ -6,6 +6,13 @@ skipping tests, database checks, or browser verification.
 
 Read this file, then `ARCHITECTURE.md` (project map), `DESIGN-SYSTEM.md`, `LANGUAGE-SYSTEM.md`.
 
+**Preview rule — permanent (owner's instruction, 2026-10-25).** Whenever the owner asks to open
+the app or the preview, open the **DEVELOPMENT** environment: the Vite server on `.env.local`
+talking to the local Supabase stack, registered as the thread's preview. Never open staging or
+production as the preview unless the owner names that environment in the same request. The QA
+server (`--mode qa`, staging database) belongs to Playwright lanes and QA checks only. Details:
+`.freebuff/run.md`.
+
 ---
 
 ## 0. Capability disclosure — read before claiming parallelism

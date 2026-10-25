@@ -1330,6 +1330,7 @@
       "components": [
         "src/pages/admin/settings",
         "src/components/shop/BranchesSection.tsx",
+        "src/components/shop/ShopOverviewCard.tsx",
         "src/components/shop/ProfileCard.tsx",
         "src/pages/admin/more"
       ],
@@ -1342,15 +1343,23 @@
         "src/lib/feedback.ts"
       ],
       "tables": [
-        "business_settings"
+        "business_settings",
+        "inventory_movements",
+        "sales",
+        "customer_payments",
+        "memberships",
+        "membership_branch_roles"
       ],
-      "rpcs": [],
+      "rpcs": [
+        "get_my_branches"
+      ],
       "permissions": [
         "settings.view"
       ],
       "rules": [
         "Business settings are shop-scoped and versioned; changing them never edits history.",
-        "The app version shown in the footer comes from one place (src/lib/brand.ts)."
+        "The app version shown in the footer comes from one place (src/lib/brand.ts).",
+        "The Settings overview reports the working branch's own inventory value, employee count and outstanding credit; no other branch's figures and no business-wide remainder are added to it."
       ],
       "dependsOn": [
         "branch-tenant-scope",
@@ -1362,16 +1371,22 @@
       "tests": [
         "tests/e2e/systemDrive.spec.ts",
         "tests/e2e/adminMicrocopy.spec.ts",
-        "tests/e2e/designLanguage.spec.ts"
+        "tests/e2e/designLanguage.spec.ts",
+        "tests/e2e/dashboardScope.spec.ts"
       ],
       "evidence": [
         {
           "status": "VALID",
           "proves": "Settings screens follow the design/language system in both languages.",
           "where": "tests/e2e/systemDrive.spec.ts, adminMicrocopy.spec.ts, designLanguage.spec.ts"
+        },
+        {
+          "status": "FIXED + REVERIFIED",
+          "proves": "The Settings overview's inventory value, employee count and outstanding credit each follow the branch the account switches into, recomputed from that branch's ledger and roster.",
+          "where": "tests/e2e/dashboardScope.spec.ts (7/7); supabase/migrations/0236, 0237"
         }
       ],
-      "lastVerified": "2026-10-02",
+      "lastVerified": "2026-10-25",
       "risks": []
     },
     {
