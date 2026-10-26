@@ -5,6 +5,7 @@ import ProtectedRoute from "@/components/auth/ProtectedRoute";
 // Auth
 import SplashPage from "@/pages/auth/SplashPage";
 import LoginPage from "@/pages/auth/LoginPage";
+import RequestAccessPage from "@/pages/auth/RequestAccessPage";
 import OTPVerifyPage from "@/pages/auth/OTPVerifyPage";
 import AccountReadyPage from "@/pages/auth/AccountReadyPage";
 import PINSetPage from "@/pages/auth/PINSetPage";
@@ -47,9 +48,13 @@ import AddCompanyPage from "@/pages/admin/companies/AddCompanyPage";
 import CompanyDetailPage from "@/pages/admin/companies/CompanyDetailPage";
 import AdminSettingsPage from "@/pages/admin/settings/AdminSettingsPage";
 import ProfileDetailsPage from "@/pages/admin/settings/ProfileDetailsPage";
+import BusinessProfilePage from "@/pages/admin/settings/BusinessProfilePage";
+import BusinessOverviewPage from "@/pages/admin/settings/BusinessOverviewPage";
 import RolesAccessPage from "@/pages/admin/settings/RolesAccessPage";
 import AdminNotificationsPage from "@/pages/admin/notifications/AdminNotificationsPage";
 import AddEmployeePage from "@/pages/admin/employees/AddEmployeePage";
+import EmployeeAccessRequestsPage from "@/pages/admin/employees/EmployeeAccessRequestsPage";
+import EmployeeAccessRequestDetailPage from "@/pages/admin/employees/EmployeeAccessRequestDetailPage";
 const AdminPurchasesPage = React.lazy(() => import("@/pages/admin/purchases/AdminPurchasesPage"));
 const RecordPurchasePage = React.lazy(() => import("@/pages/admin/purchases/RecordPurchasePage"));
 import AdminPaymentsPage from "@/pages/admin/payments/AdminPaymentsPage";
@@ -107,6 +112,7 @@ export const router = createBrowserRouter([
   // Shown once per device, before sign-in: what the app is for, in three screens.
   { path: "/welcome", element: <IntroPage /> },
   { path: "/login", element: <LoginPage /> },
+  { path: "/login/request-access", element: <RequestAccessPage /> },
   { path: "/login/otp", element: <OTPVerifyPage /> },
   // A brand-new account lands here instead of on the PIN keypad: signed in, told so, and
   // offered the PIN as the next small step rather than as the first thing the app says.
@@ -207,6 +213,16 @@ export const router = createBrowserRouter([
           { path: "companies/:companyId", element: <CompanyDetailPage /> },
         ] },
 
+      // ── Access requests (requires employees.manage) ──────────────────────
+      // A request is a staffing decision, not a read of the staff list. Keeping
+      // these routes behind manage means a view-only role cannot see the
+      // requester's phone number or close the request.
+      { element: <PermissionGuard requires="employees.manage" />,
+        children: [
+          { path: "employees/requests", element: <EmployeeAccessRequestsPage /> },
+          { path: "employees/requests/:requestId", element: <EmployeeAccessRequestDetailPage /> },
+        ] },
+
       // ── Employees (requires employees.view) ──────────────────────────────
       { element: <PermissionGuard requires="employees.view" />,
         children: [
@@ -226,6 +242,13 @@ export const router = createBrowserRouter([
         children: [
           { path: "settings",   element: <AdminSettingsPage /> },
           { path: "settings/profile", element: <ProfileDetailsPage /> },
+          { path: "settings/overview", element: <BusinessOverviewPage /> },
+          { path: "settings/business", element: <BusinessProfilePage /> },
+          // A branch is a row on the account screen, so the list has no screen of its own —
+          // `/admin/settings/branches` used to answer with React Router's own "Unexpected
+          // Application Error! 404" page, which is a developer's page, not an owner's. The
+          // address now lands on the screen that lists the branches instead.
+          { path: "settings/branches", element: <Navigate to="/admin/settings/profile" replace /> },
           { path: "settings/branches/:branchId", element: <BranchDetailPage /> },
           { path: "settings/roles", element: <RolesAccessPage /> },
         ] },
@@ -295,4 +318,10 @@ export const router = createBrowserRouter([
     ],
   }],
   },
+
+  // Any address the app does not have a screen for goes to the door rather than to React
+  // Router's default error page. That page is written for the person who built the app — it
+  // names `errorElement`, shows a stack and says "Hey developer" — and a shopkeeper who
+  // follows a stale link or types half an address should land somewhere that works.
+  { path: "*", element: <Navigate to="/" replace /> },
 ]);

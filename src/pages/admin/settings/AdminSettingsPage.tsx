@@ -16,13 +16,12 @@ import { hasPin } from "@/lib/pinLock";
 import { useT } from "@/lib/i18n";
 import {
   Lock, Globe, ChevronRight, Moon, Sun, SlidersHorizontal, AlertTriangle,
-  Fingerprint, Check, Loader2, LogOut, X, Trash2,
+  Fingerprint, Check, Loader2, LogOut, X, Trash2, MessageSquare, Building2, Gauge,
 } from "lucide-react";
 import { APP_NAME, APP_VERSION } from "@/lib/brand";
 import DeleteTargetSheet from "@/components/shop/DeleteTargetSheet";
 import ProfileCard from "@/components/shop/ProfileCard";
 import ShopOverviewCard from "@/components/shop/ShopOverviewCard";
-import OwnerSuiteSections from "@/components/shop/OwnerSuiteSections";
 import { useShopStore } from "@/stores/shopStore";
 import { deleteAccount } from "@/lib/auth";
 import { forgetLastProfile, forgetPhoneVerification } from "@/lib/loginWindow";
@@ -269,19 +268,63 @@ export default function AdminSettingsPage() {
             this page's own section markup, so it reads as one of the existing sections. */}
         <SetupProgress className="px-4 pt-3.5 animate-fade-in-up delay-75" />
 
-        {/* The shop's own menu — Money, Stock, People and App (owner's request, 2026-10-26).
-            These groups used to sit one screen further away, on the account's detail page, so
-            an owner had to open their profile to reach Purchases or Reports. Settings is the
-            screen that answers "what is in this shop", which is the question these rows answer,
-            so they are here now. Same component, same groups, same rows, same routes — the
-            "Settings" row inside the App group is the one exception: this screen IS Settings. */}
-        <OwnerSuiteSections hideRowIds={["settings"]} />
+        {/* The business itself, above the inbox.
+            Settings already answers "who am I" (the card), "what does my shop hold" (the
+            figures) and "what is waiting for me" (Messages). The business's own record — its
+            name, address, registration answers and shop ID — is the one thing a shopkeeper is
+            asked for on paper, and it now has the row above Messages. Owner and admin only:
+            the read behind it refuses everyone else, so a row shown to an employee would exist
+            only to fail. */}
+        {(user?.membershipRole === "owner" || user?.membershipRole === "admin") && (
+          <div className="px-4 pt-3.5 animate-fade-in-up delay-100">
+            <ListCard>
+              {/* The figures first, then the record they come from: "how is the business doing"
+                  is the question that opens the app, "what do we hold on paper" is the one
+                  asked afterwards. */}
+              <ListRow
+                onClick={() => navigate(`${base}/settings/overview`)}
+                icon={Gauge}
+                title={t("overview.cardTitle")}
+                meta={t("overview.cardHint")}
+                testId="settings-business-overview"
+                trailing={<ChevronRight size={14} style={{ color: "var(--text-secondary)" }} className="shrink-0" />}
+              />
+              <ListRow
+                onClick={() => navigate(`${base}/settings/business`)}
+                icon={Building2}
+                title={t("business.title")}
+                meta={t("business.hint")}
+                testId="settings-business-profile"
+                trailing={<ChevronRight size={14} style={{ color: "var(--text-secondary)" }} className="shrink-0" />}
+              />
+            </ListCard>
+          </div>
+        )}
+
+        {/* The inbox.
+            Messages was the bar's fifth tab for a while, and the bar's fifth slot is the owner's
+            menu again — so the inbox ships here, one row away from the screen that already
+            answers "what is in this account". Its own card rather than a row inside the
+            preferences below: an unread conversation is not a device setting, and putting it
+            between "Language" and "Dark Mode" would have said it was. */}
+        <div className="px-4 pt-3.5 animate-fade-in-up delay-100">
+          <ListCard>
+            <ListRow
+              onClick={() => navigate(`${base}/messages`)}
+              icon={MessageSquare}
+              title={t("admin.messages")}
+              testId="settings-messages"
+              trailing={<ChevronRight size={14} style={{ color: "var(--text-secondary)" }} className="shrink-0" />}
+            />
+          </ListCard>
+        </div>
 
         {/* Rows the owner moved out of the suite.
-            Every one of these has a home in a group above, so the block sits beside the groups
-            rather than below the device preferences: a moved row that reappeared three sections
-            further down read as a second, unrelated menu. It renders whatever the catalogue says
-            belongs on this screen, and nothing when nothing does. */}
+            The shop's own menu — Money, Stock, People and App — is no longer rendered on this
+            page: it lives on the More screen, the bar's fifth tab (`pages/admin/more`). So a row
+            appears here only because the owner moved it, through the control at the foot of this
+            page, and the block renders nothing at all when nothing was moved. Both screens still
+            read one catalogue (`lib/ownerRows`), so a row can never be listed twice. */}
         {rowsOn("settings").some((row) => row.group !== "app") && (
           <div className="px-4 pt-3.5 animate-fade-in-up delay-100">
             <ListCard>

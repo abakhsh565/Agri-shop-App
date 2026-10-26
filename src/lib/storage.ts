@@ -2,6 +2,15 @@ import { supabase } from "@/lib/supabase";
 
 export type ImageBucket = "product-images" | "employee-photos" | "company-logos" | "customer-images";
 
+/**
+ * The business's papers live in a bucket of their own, and it is PRIVATE (migration 0250).
+ *
+ * A product photo rendered in a list is not a secret; a licence and a CNIC are. So nothing from
+ * this bucket is ever read through `getPublicUrl` — the value stored on the business is the
+ * object's PATH, and the screen turns it into a short-lived signed URL when it draws it.
+ */
+export const BUSINESS_DOCUMENT_BUCKET = "business-documents";
+
 // ─── Image Compression (WhatsApp-quality) ───────────────────────────────────
 // Resizes to max 1200px on longest edge, converts to JPEG at quality 0.82.
 // Skips tiny images that are already well-compressed.
@@ -110,4 +119,45 @@ export async function uploadImage(bucket: ImageBucket, file: File): Promise<stri
 
   const { data } = supabase.storage.from(bucket).getPublicUrl(path);
   return data.publicUrl;
+}
+
+/**
+ * Upload one business paper and return the object's PATH (not a URL).
+ *
+ * The path is prefixed with the shop it belongs to, because that prefix is what the storage policy
+ * checks against `current_shop_id()`: a member of one business cannot write into another's folder,
+ * and cannot list it either. The name itself is timestamp + random, as every other upload here.
+ */
+export async function uploadBusinessDocument(file: File, shopId: string): Promise<string> {
+  const compressed = await compressImage(file);
+  const ext = compressed.type === "image/png" ? "png" : "jpg";
+  const path = `${shopId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+
+  const { error } = await supabase.storage.from(BUSINESS_DOCUMENT_BUCKET).upload(path, compressed, {
+    cacheControl: "3600",
+    upsert: false,
+    contentType: compressed.type || "image/jpeg",
+  });
+  if (error) throw new Error(error.message);
+
+  return path;
+}
+
+/**
+ * A stored paper as something an <img> can load.
+ *
+ * Two shapes reach this: a path in the private bucket (anything the owner added here) and a full
+ * https URL from the signup form, which was stored as a link before this bucket existed. The URL is
+ * passed through; only a bare path is signed, and the signature lasts an hour — long enough to read
+ * a document, short enough not to be a permanent link to someone's identity card.
+ */
+export async function businessDocumentUrl(value: string | null | undefined): Promise<string | null> {
+  if (!value) return null;
+  if (/^https?:\/\//i.test(value)) return value;
+
+  const { data, error } = await supabase.storage
+    .from(BUSINESS_DOCUMENT_BUCKET)
+    .createSignedUrl(value, 60 * 60);
+  if (error) return null;
+  return data?.signedUrl ?? null;
 }

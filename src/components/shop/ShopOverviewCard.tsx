@@ -124,28 +124,29 @@ export default function ShopOverviewCard() {
         <div className="px-2 py-5" style={{ background: "var(--tone-card)" }}>
           {/* No branch caption (owner's correction, 2026-10-25): the working branch is already
               named in the header, and repeating it here pushed the three figures down and made
-              the card read as a table of sections. The figures are 2px smaller than the first
-              layout so a seven-digit amount and its neighbours stay on one line. */}
+              the card read as a table of sections. The figure and its name beneath are each
+              2px smaller than the first layout (owner's request, 2026-10-26, again): 14 and 12
+              on the ramp, so a seven-digit amount and its neighbours stay on one line. */}
           <div className="grid grid-cols-3">
             <div className="min-w-0 text-center">
-              <p className="text-16 font-bold leading-tight break-words" style={{ color: "var(--text-primary)" }} data-testid="shop-overview-inventory">
+              <p className="text-14 font-bold leading-tight break-words" style={{ color: "var(--text-primary)" }} data-testid="shop-overview-inventory">
                 {inventoryValueLabel}
               </p>
-              <p className="text-14 mt-1 leading-tight" style={{ color: "var(--text-secondary)" }}>{t("admin.inventory")}</p>
+              <p className="text-12 mt-1 leading-tight" style={{ color: "var(--text-secondary)" }}>{t("admin.inventory")}</p>
             </div>
             <div className="min-w-0 text-center">
-              <p className="text-16 font-bold leading-tight" style={{ color: "var(--text-primary)" }} data-testid="shop-overview-employees">
+              <p className="text-14 font-bold leading-tight" style={{ color: "var(--text-primary)" }} data-testid="shop-overview-employees">
                 {activeBranch?.employeeCount != null
                   ? activeBranch.employeeCount.toLocaleString("en-PK")
                   : "—"}
               </p>
-              <p className="text-14 mt-1 leading-tight" style={{ color: "var(--text-secondary)" }}>{t("admin.employees")}</p>
+              <p className="text-12 mt-1 leading-tight" style={{ color: "var(--text-secondary)" }}>{t("admin.employees")}</p>
             </div>
             <div className="min-w-0 text-center">
-              <p className="text-16 font-bold leading-tight break-words" style={{ color: "var(--text-primary)" }} data-testid="shop-overview-credit">
+              <p className="text-14 font-bold leading-tight break-words" style={{ color: "var(--text-primary)" }} data-testid="shop-overview-credit">
                 {creditOutstanding != null ? formatAmount(creditOutstanding) : "—"}
               </p>
-              <p className="text-14 mt-1 leading-tight" style={{ color: "var(--text-secondary)" }}>{t("shop.totalCredit")}</p>
+              <p className="text-12 mt-1 leading-tight" style={{ color: "var(--text-secondary)" }}>{t("shop.totalCredit")}</p>
             </div>
           </div>
 
