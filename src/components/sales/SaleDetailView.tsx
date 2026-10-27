@@ -60,7 +60,9 @@ export default function SaleDetailView() {
   const { addToast } = useUIStore();
 
   const isManager = user?.role === "admin";
-  const canVoid = isManager && hasPermission("sales.void");
+  // `sales.void` is the owner's grant, not a job title: an employee trusted with voiding must
+  // be able to, and the database checks the same code either way.
+  const canVoid = hasPermission("sales.void");
 
   const [note, setNote] = useState("");
   const [savingNote, setSavingNote] = useState(false);
@@ -137,8 +139,9 @@ export default function SaleDetailView() {
   const withinReturnWindow = sale
     ? Date.now() - new Date(sale.createdAt).getTime() <= 30 * 24 * 60 * 60 * 1000
     : false;
-  // An employee may return what they sold; the shop's own sales are open to its owner.
-  const canReturn = !!sale && (isManager || sale.employeeId === user?.id) && withinReturnWindow;
+  // An employee may return what they sold — and only when the owner granted `returns.create`,
+  // which is the code the return RPC checks. The shop's own sales are open to its owner.
+  const canReturn = !!sale && hasPermission("returns.create") && (isManager || sale.employeeId === user?.id) && withinReturnWindow;
 
   // Cost is the snapshot taken when the sale was made, never today's price — editing a
   // product must not silently rewrite the profit of every sale already made. The live

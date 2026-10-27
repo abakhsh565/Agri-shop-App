@@ -4,6 +4,13 @@ The agreed model is four stages: **development → automated checks → staging/
 development data disposable, staging holding controlled test data, and production serving real
 customers with no experimental changes or test data.
 
+**Promotion is a human decision (owner's policy, 2026-10-26).** Development is the only active
+workspace. A change reaches staging only with the owner's approval in that request, and production
+only with approval *and* a passed staging verification. A push to GitHub runs checks and nothing
+else: it does not deploy, and it does not apply a migration. `deploy-production.yml` therefore has
+one trigger — a dispatch — and `tests/unit/productionDeployGate.test.ts` fails if an automatic
+trigger or a `migrate.mjs apply` is reintroduced into any workflow.
+
 This document says, stage by stage, **what the repository actually enforces** and **where the gap
 is**. Measured on 2026-10-13. Nothing here is aspirational: every "enforced" line has a command, a
 file or a workflow run behind it, and every gap is stated with the evidence that shows it.
@@ -67,7 +74,8 @@ recorded green (2026-09-24/27) in `ENGINEERING_OS_STATE.md`; QA cleaning is opt-
 > path now: `migrate.mjs apply --env production --files` behind the four preconditions in §7(a) of
 > `PRODUCTION_MIGRATION_PLAN.md`, and a code release path that waits for CI — `vercel.json` no longer
 > auto-deploys `main`, and `.github/workflows/deploy-production.yml` asks Vercel to build one exact
-> commit only after that commit's CI run concluded `success` and it is still `main`'s head. (2) The
+> commit only on a manual dispatch, after that commit's CI run concluded `success` and it is still
+> `main`'s head. (2) The
 > backup gap is closed: nightly production backups are green and every apply starts from a
 > restore-verified artifact. (3) Schema divergence and demo data are closed as measured in
 > `production-closed-out-2026-10-17.md`. **Still open:** production has never been restored (a restore
@@ -126,9 +134,9 @@ repository; nothing is "remembered" by a person.
 
 | # | Step | What it proves | Where |
 |---|---|---|---|
-| 1 | Push to `main` | — | — |
+| 1 | Push to `main` | runs checks only — a push is never promotion (owner's policy, 2026-10-26) | — |
 | 2 | `ci.yml` runs `gates` (tsc, unit guards, workflow-safety proof, targeting refusals, production build) and `qa` (ledger matches the directory, integration suites against staging) | the candidate compiles, passes its guards, and its migrations match the repository | `.github/workflows/ci.yml` |
-| 3 | `deploy-production.yml` starts on that CI run's completion, and its job condition admits **only** `conclusion == 'success'` on `main` | a red, cancelled or unfinished candidate never reaches the deploy step | `.github/workflows/deploy-production.yml` |
+| 3 | `deploy-production.yml` starts **only** from a `workflow_dispatch` that names the commit (`dry_run: false` to deploy); nothing starts on a push or on a CI run completing | a merge, or a green run, is evidence rather than authorization | `.github/workflows/deploy-production.yml` |
 | 4 | `scripts/lib/deploy-gate.mjs` re-checks the same facts from the run itself: success, `main`, a full 40-character SHA that is **still** `main`'s head, credential + project present | a green run for a commit that has since been superseded is not permission | pure function, unit-tested |
 | 5 | `scripts/deploy/trigger-production.mjs` posts a deployment for that exact commit (`gitSource.sha`), never "the branch" | Vercel builds the gated commit and nothing else | — |
 | 6 | **New:** `scripts/deploy/verify-production.mjs` waits for the deployment to be READY **with its alias assigned**, then fetches `https://hisaabkitaab.dpdns.org` and requires 200 + HTML + the SPA shell + `X-Content-Type-Options: nosniff`, **and** that the entry bundle (`/assets/index-<hash>.js`) is the one the deployment's own URL serves. The reference is mandatory: an unreadable, protected, timed-out or entry-less deployment URL fails the run rather than downgrading it to page checks | "Vercel accepted it" is replaced by "production serves *this* build"; a timeout, a 200 error page, a cached page from the previous build, or a reference that cannot be read fails the run | new step in the same workflow |

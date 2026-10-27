@@ -11,6 +11,7 @@ import ListRow from "@/components/ui/ListRow";
 import LogoTile from "@/components/ui/LogoTile";
 import Checkbox from "@/components/ui/Checkbox";
 import { backToSelf, dependencyHint, readReturnTo } from "@/lib/dependencyGraph";
+import { useShellBase } from "@/lib/useShellBase";
 import { useCompaniesStore } from "@/stores/companiesStore";
 import { useProductsStore } from "@/stores/productsStore";
 import {
@@ -153,6 +154,10 @@ function withSellingFromMarkup(p: PackDraft, markup: string): PackDraft {
 
 export default function AddProductPage() {
   const navigate = useNavigate();
+  // This screen answers under both shells: the owner habitually opens it from /admin, and an
+  // employee who was granted `products.create` opens the same screen from /employee. Every
+  // path it writes back to follows the shell it was opened in.
+  const base = useShellBase();
   const { productId } = useParams();
   const { addToast } = useUIStore();
   const { language } = useThemeStore();
@@ -167,7 +172,7 @@ export default function AddProductPage() {
   // is shown, not asked, and the product is linked to that company.
   const [searchParams] = useSearchParams();
   const presetCompanyId = searchParams.get("companyId") || "";
-  const returnTo = readReturnTo(searchParams, "/admin/products");
+  const returnTo = readReturnTo(searchParams, `${base}/products`);
   const presetCompany = companies.find((c) => c.id === presetCompanyId);
   const companyLocked = Boolean(presetCompany) && !isEdit;
 
@@ -352,7 +357,7 @@ export default function AddProductPage() {
     leavingRef.current = true;
     if (blocker.state === "blocked") blocker.reset();
     clearNav();
-    navigate("/admin/products", { replace: true });
+    navigate(`${base}/products`, { replace: true });
   }
 
   /** Throw the work away and go. The draft, if this screen was finishing one, goes too. */
@@ -592,6 +597,18 @@ export default function AddProductPage() {
     return Number.isFinite(n) && n >= 0 ? n : fallback;
   }
 
+  /**
+   * A quantity or an amount is never negative, and the field says so as it is typed.
+   *
+   * `numeric` above already refuses a negative at save time — but it refuses it by turning it
+   * into 0, which means a `-5` typed into opening stock looked accepted, was stored as 0, and
+   * the number on the screen was never the number that got saved. A field that cannot hold a
+   * value it will not store is the honest version: the minus never lands.
+   */
+  function unsigned(raw: string): string {
+    return raw.replace(/-/g, "");
+  }
+
   async function handleSave() {
     setError("");
     if (!name.trim()) {
@@ -657,8 +674,8 @@ export default function AddProductPage() {
           ...(marketplaceChanged ? { marketplaceListed } : {}),
           // Sent even when empty, because on an edit an empty field is a fact about the
           // product — it has no barcode — and not an omission. The database retires the code
-          // it replaces. On create the same empty value means the opposite (mint one), which
-          // is why this is not shared with the branch below.
+          // it replaces. The create branch below sends nothing at all rather than an empty
+          // string; since 0246 that means the same thing in both places: no code.
           barcode: barcode.trim(),
           variants,
         });
@@ -671,6 +688,8 @@ export default function AddProductPage() {
           category,
           baseUnit,
           imageUrl: imageUrl ?? undefined,
+          // Absent, not empty, when the field was left alone — and absent now means the product
+          // has no barcode. `create_product` used to mint one for exactly this case (0246).
           barcode: barcode.trim() || undefined,
           // Sent on create unconditionally, including as false: there is no stored value to
           // preserve yet, so this screen's switch IS the first decision about the product.
@@ -714,10 +733,10 @@ export default function AddProductPage() {
       color: active ? "#0a0a0a" : "var(--text-secondary)",
     }) as const;
 
-  const herePath = isEdit ? `/admin/inventory/${productId}/edit` : "/admin/inventory/new";
+  const herePath = isEdit ? `${base}/inventory/${productId}/edit` : `${base}/inventory/new`;
   const supplierHint = dependencyHint("supplier", t, {
-    base: "/admin",
-    returnTo: backToSelf(herePath, returnTo, "/admin/products"),
+    base,
+    returnTo: backToSelf(herePath, returnTo, `${base}/products`),
   });
 
   /**
@@ -966,7 +985,8 @@ export default function AddProductPage() {
                     type="number"
                     inputMode="decimal"
                     value={p.sizeValue}
-                    onChange={(e) => setPack(i, { sizeValue: e.target.value })}
+                    min={0}
+                    onChange={(e) => setPack(i, { sizeValue: unsigned(e.target.value) })}
                     data-testid={`product-pack-size-${i}`}
                     className="flex-1 min-w-0 h-11 rounded-[var(--radius-card)] px-3 text-sm outline-none"
                     style={fieldStyle}
@@ -1005,7 +1025,8 @@ export default function AddProductPage() {
                     type="number"
                     inputMode="decimal"
                     value={p.costPrice}
-                    onChange={(e) => setPack(i, withMarkup({ ...p, costPrice: e.target.value }))}
+                    min={0}
+                    onChange={(e) => setPack(i, withMarkup({ ...p, costPrice: unsigned(e.target.value) }))}
                     data-testid={`product-pack-cost-${i}`}
                     className="w-full h-11 rounded-[var(--radius-card)] px-3 text-sm outline-none"
                     style={fieldStyle}
@@ -1029,7 +1050,8 @@ export default function AddProductPage() {
                     type="number"
                     inputMode="decimal"
                     value={p.sellingPrice}
-                    onChange={(e) => setPack(i, withMarkup({ ...p, sellingPrice: e.target.value }))}
+                    min={0}
+                    onChange={(e) => setPack(i, withMarkup({ ...p, sellingPrice: unsigned(e.target.value) }))}
                     data-testid={`product-pack-sell-${i}`}
                     className="w-full h-11 rounded-[var(--radius-card)] px-3 text-sm outline-none"
                     style={fieldStyle}
@@ -1051,7 +1073,8 @@ export default function AddProductPage() {
                   type="number"
                   inputMode="decimal"
                   value={p.markup}
-                  onChange={(e) => setPack(i, withSellingFromMarkup(p, e.target.value))}
+                  min={0}
+                  onChange={(e) => setPack(i, withSellingFromMarkup(p, unsigned(e.target.value)))}
                   data-testid={`product-pack-markup-${i}`}
                   placeholder="%"
                   className="w-full h-11 rounded-[var(--radius-card)] px-3 text-sm outline-none"
@@ -1083,7 +1106,7 @@ export default function AddProductPage() {
                     </span>
                     <button
                       type="button"
-                      onClick={() => navigate(`/admin/inventory/${productId}/adjust`)}
+                      onClick={() => navigate(`${base}/inventory/${productId}/adjust`)}
                       className="text-xs font-semibold underline underline-offset-2 shrink-0"
                       style={{ color: "var(--brand-dark)" }}
                     >
@@ -1095,7 +1118,8 @@ export default function AddProductPage() {
                     type="number"
                     inputMode="numeric"
                     value={p.stockQty}
-                    onChange={(e) => setPack(i, { stockQty: e.target.value })}
+                    min={0}
+                    onChange={(e) => setPack(i, { stockQty: unsigned(e.target.value) })}
                     data-testid={`product-pack-stock-${i}`}
                     className="w-full h-11 rounded-[var(--radius-card)] px-3 text-sm outline-none"
                     style={fieldStyle}
@@ -1115,7 +1139,8 @@ export default function AddProductPage() {
                       type="number"
                       inputMode="numeric"
                       value={p.lowStockThreshold}
-                      onChange={(e) => setPack(i, { lowStockThreshold: e.target.value })}
+                      min={0}
+                      onChange={(e) => setPack(i, { lowStockThreshold: unsigned(e.target.value) })}
                       data-testid={`product-pack-warn-${i}`}
                       /* Same type size as every other input on the screen: a number typed
                          here is the same kind of thing as a number typed above. */

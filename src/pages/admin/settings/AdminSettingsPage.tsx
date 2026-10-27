@@ -1,33 +1,35 @@
 import BusinessSettingsSheet from '@/components/ui/BusinessSettingsSheet';
 import StockAlertsSheet from '@/components/ui/StockAlertsSheet';
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
+import {
+  AlertTriangle, BarChart3, BellRing, Building2, Check, ChevronRight, Cog, Fingerprint,
+  Gauge, GitBranch, Globe, Landmark, Loader2, Lock, LogOut, MessageSquare, Moon, Package,
+  ShoppingCart, SlidersHorizontal, Sun, Trash2, TrendingUp, Truck, UserCog, Users, X,
+} from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
 import ListCard from "@/components/ui/ListCard";
 import ListRow from "@/components/ui/ListRow";
 import SetupProgress from "@/components/ui/SetupProgress";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
+import ProfileCard from "@/components/shop/ProfileCard";
+import ShopOverviewCard from "@/components/shop/ShopOverviewCard";
+import DeleteTargetSheet from "@/components/shop/DeleteTargetSheet";
 import { useAuthStore } from "@/stores/authStore";
 import { useThemeStore, applyTheme } from "@/stores/themeStore";
+import { useShopStore } from "@/stores/shopStore";
 import { useUIStore } from "@/stores/uiStore";
 import { clearDeviceSession } from "@/lib/deviceSession";
 import { hasPin } from "@/lib/pinLock";
 import { useT } from "@/lib/i18n";
-import {
-  Lock, Globe, ChevronRight, Moon, Sun, SlidersHorizontal, AlertTriangle,
-  Fingerprint, Check, Loader2, LogOut, X, Trash2, MessageSquare, Building2, Gauge,
-} from "lucide-react";
-import { APP_NAME, APP_VERSION } from "@/lib/brand";
-import DeleteTargetSheet from "@/components/shop/DeleteTargetSheet";
-import ProfileCard from "@/components/shop/ProfileCard";
-import ShopOverviewCard from "@/components/shop/ShopOverviewCard";
-import { useShopStore } from "@/stores/shopStore";
+import { useShellBase } from "@/lib/useShellBase";
 import { deleteAccount } from "@/lib/auth";
 import { forgetLastProfile, forgetPhoneVerification } from "@/lib/loginWindow";
 import { entryDoor } from "@/lib/entryDoor";
 import { OWNER_ROWS, useOwnerRows } from "@/lib/ownerRows";
-import { useShellBase } from "@/lib/useShellBase";
+import { APP_NAME, APP_VERSION } from "@/lib/brand";
 import {
   biometricUnavailableReason,
   BIOMETRIC_REASON_KEY,
@@ -39,6 +41,34 @@ import {
 } from "@/lib/biometric";
 
 const LANG_LABELS: Record<string, string> = { en: "English", ur: "اردو" };
+
+/**
+ * Which screen each part of the business lives on, in four groups.
+ *
+ * The owner asked for this shape: Business, Operations, Finance & insights, People & configuration
+ * — and under every row, the things inside it, so "Products & Inventory" says *Products · Stock ·
+ * Movements · Low Stock · Expiry* before it is opened. A row opens the section's own screen
+ * (`settings/hub/:sectionId`), which lists the jobs inside that part of the business from the same
+ * catalogue this menu reads (`lib/settingsHub`) — so a section can never offer a job the app does
+ * not have, and the two levels cannot drift apart.
+ *
+ * ONLY HOME IS NOT A SECTION. It is the dashboard itself, and a hub whose single row said "go to
+ * the dashboard" would be a screen that exists to be clicked through.
+ *
+ * WHAT THIS IS NOT is a replacement for the screen. Everything Settings already carried stays
+ * exactly where it was — the profile card, the shop's figures, the setup line, the inbox, the
+ * device preferences (language, theme, PIN, fingerprint) and the way out. The menu is added
+ * above them: the destinations first, then the state of the business and the phone.
+ */
+interface MenuRow {
+  id: string;
+  icon: LucideIcon;
+  label: string;
+  hint: string;
+  /** The section's own screen, or the one route that is not a section (`/dashboard`). */
+  to: string;
+  testId?: string;
+}
 
 export default function AdminSettingsPage() {
   const navigate = useNavigate();
@@ -103,8 +133,28 @@ export default function AdminSettingsPage() {
   const isUrdu = language === "ur";
   const base = useShellBase();
   const { where, rowsOn, move } = useOwnerRows();
+  const location = useLocation();
 
   useEffect(() => { applyTheme(theme); }, []);
+
+  /**
+   * An address that names a block on this page brings it into view — that is what such an address
+   * says it does, and it is how the Settings section of the menu reaches "Language / Appearance".
+   *
+   * The scroll belongs to this screen, not to the sender. `SectionHubPage` yields the address
+   * (`/settings#settings-preferences`) but cannot know when these cards have been laid out; a
+   * timer fired from there ran against a half-built page and scrolled nothing, leaving the block
+   * 1541px below the frame with the scroll still at the top (observed 2026-10-28). One frame after
+   * the route renders, the layout is final and the element is where the reader will find it.
+   */
+  useEffect(() => {
+    if (!location.hash) return;
+    const id = location.hash.slice(1);
+    const frame = requestAnimationFrame(() => {
+      document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [location.hash]);
 
   // Which of the three states this phone is in. Asked once, when the screen opens, because
   // the answer decides whether the row is an action or a statement.
@@ -219,10 +269,51 @@ export default function AdminSettingsPage() {
     setLanguage(language === "en" ? "ur" : "en");
   }
 
+  const menuGroups: { id: string; heading: string; rows: MenuRow[] }[] = [
+    {
+      id: "business",
+      heading: t("settings.menuGroup.business"),
+      rows: [
+        { id: "home", icon: Gauge, label: t("settings.menu.home"), hint: t("settings.menu.home.hint"), to: "/dashboard" },
+        { id: "overview", icon: TrendingUp, label: t("settings.menu.overview"), hint: t("settings.menu.overview.hint"), to: "/settings/hub/overview" },
+        { id: "branches", icon: GitBranch, label: t("settings.menu.branches"), hint: t("settings.menu.branches.hint"), to: "/settings/hub/branches" },
+      ],
+    },
+    {
+      id: "operations",
+      heading: t("settings.menuGroup.operations"),
+      rows: [
+        { id: "sales", icon: ShoppingCart, label: t("settings.menu.sales"), hint: t("settings.menu.sales.hint"), to: "/settings/hub/sales" },
+        { id: "inventory", icon: Package, label: t("settings.menu.inventory"), hint: t("settings.menu.inventory.hint"), to: "/settings/hub/inventory" },
+        { id: "customers", icon: Users, label: t("settings.menu.customers"), hint: t("settings.menu.customers.hint"), to: "/settings/hub/customers" },
+        { id: "purchases", icon: Truck, label: t("settings.menu.purchases"), hint: t("settings.menu.purchases.hint"), to: "/settings/hub/purchases" },
+      ],
+    },
+    {
+      id: "finance",
+      heading: t("settings.menuGroup.finance"),
+      rows: [
+        { id: "money", icon: Landmark, label: t("settings.menu.finance"), hint: t("settings.menu.finance.hint"), to: "/settings/hub/finance" },
+        { id: "reports", icon: BarChart3, label: t("settings.menu.reports"), hint: t("settings.menu.reports.hint"), to: "/settings/hub/reports" },
+        { id: "reminders", icon: BellRing, label: t("settings.menu.reminders"), hint: t("settings.menu.reminders.hint"), to: "/settings/hub/reminders" },
+      ],
+    },
+    {
+      id: "people",
+      heading: t("settings.menuGroup.people"),
+      rows: [
+        { id: "people", icon: UserCog, label: t("settings.menu.people"), hint: t("settings.menu.people.hint"), to: "/settings/hub/people" },
+        { id: "business-profile", icon: Building2, label: t("settings.menu.businessProfile"), hint: t("settings.menu.businessProfile.hint"), to: "/settings/hub/business-profile" },
+        { id: "preferences", icon: Cog, label: t("settings.menu.settings"), hint: t("settings.menu.settings.hint"), to: "/settings/hub/preferences" },
+      ],
+    },
+  ];
+
   return (
     <div
       className="flex flex-col w-full min-h-full justify-between"
       style={{ background: "var(--background)", color: "var(--text-primary)", direction: isUrdu ? "rtl" : "ltr" }}
+      data-testid="admin-settings-page"
     >
       <div>
         <StatusBar />
@@ -259,47 +350,41 @@ export default function AdminSettingsPage() {
           }
         />
 
-        {/* The shop's three facts. They moved here from Home because they describe the shop,
-            not the day: Home's figures follow a date filter and a branch, these never do. */}
+        {/* ── What the business runs on ────────────────────────────────────────────
+            Four groups, and under each name the things inside it. The rows are the
+            destinations; the cards below are the state of the business and of this phone. */}
+        {menuGroups.map((group) => (
+          <section key={group.id} className="px-4 pt-4" data-testid={`settings-group-${group.id}`}>
+            {/* A real heading, so the groups are navigable by heading in a screen reader as
+                well as by eye — the rows underneath are the group's contents. */}
+            <h2 className="ds-section px-1 mb-2">{group.heading}</h2>
+            <ListCard>
+              {group.rows.map((row) => {
+                const Icon = row.icon;
+                return (
+                  <ListRow
+                    key={row.id}
+                    testId={`settings-row-${row.id}`}
+                    icon={Icon}
+                    title={row.label}
+                    meta={row.hint}
+                    onClick={() => navigate(`${base}${row.to}`)}
+                    trailing={<ChevronRight size={14} style={{ color: "var(--text-secondary)" }} className="shrink-0" />}
+                  />
+                );
+              })}
+            </ListCard>
+          </section>
+        ))}
+
+        {/* The shop's three facts. They describe the shop, not the day: Home's figures follow a
+            date filter and a branch, these never do. */}
         <ShopOverviewCard />
 
         {/* Business setup status. Persistent, not a one-time wizard: it shows what is done
             and what is missing, and disappears by itself once nothing is missing. It carries
             this page's own section markup, so it reads as one of the existing sections. */}
         <SetupProgress className="px-4 pt-3.5 animate-fade-in-up delay-75" />
-
-        {/* The business itself, above the inbox.
-            Settings already answers "who am I" (the card), "what does my shop hold" (the
-            figures) and "what is waiting for me" (Messages). The business's own record — its
-            name, address, registration answers and shop ID — is the one thing a shopkeeper is
-            asked for on paper, and it now has the row above Messages. Owner and admin only:
-            the read behind it refuses everyone else, so a row shown to an employee would exist
-            only to fail. */}
-        {(user?.membershipRole === "owner" || user?.membershipRole === "admin") && (
-          <div className="px-4 pt-3.5 animate-fade-in-up delay-100">
-            <ListCard>
-              {/* The figures first, then the record they come from: "how is the business doing"
-                  is the question that opens the app, "what do we hold on paper" is the one
-                  asked afterwards. */}
-              <ListRow
-                onClick={() => navigate(`${base}/settings/overview`)}
-                icon={Gauge}
-                title={t("overview.cardTitle")}
-                meta={t("overview.cardHint")}
-                testId="settings-business-overview"
-                trailing={<ChevronRight size={14} style={{ color: "var(--text-secondary)" }} className="shrink-0" />}
-              />
-              <ListRow
-                onClick={() => navigate(`${base}/settings/business`)}
-                icon={Building2}
-                title={t("business.title")}
-                meta={t("business.hint")}
-                testId="settings-business-profile"
-                trailing={<ChevronRight size={14} style={{ color: "var(--text-secondary)" }} className="shrink-0" />}
-              />
-            </ListCard>
-          </div>
-        )}
 
         {/* The inbox.
             Messages was the bar's fifth tab for a while, and the bar's fifth slot is the owner's
@@ -348,16 +433,15 @@ export default function AdminSettingsPage() {
           </div>
         )}
 
-        {/* Comfort first — no heading anywhere on this page.
+        {/* The phone and the person: comfort first, and no heading anywhere on this block.
             A heading earns its place only when a row could otherwise be misread; "Language"
-            and "Dark Mode" cannot be, so they are simply the first block, above the work.
-            The reference splits groups by whitespace alone, and state is carried as a quiet
-            line under the label rather than a value pushed to the far right. */}
-        <div className="px-4 pt-3.5 animate-fade-in-up delay-75">
+            and "Dark Mode" cannot be, so they are simply the first rows. The reference splits
+            groups by whitespace alone, and state is carried as a quiet line under the label
+            rather than a value pushed to the far right. */}
+        <div className="px-4 pt-3.5 animate-fade-in-up delay-75" id="settings-preferences">
           <ListCard>
             {/* "My shops" used to open here as well as on the owner suite's own card. Which shop
-                you are working in is a fact about the shop, so it is named once, on the suite.
-                No heading anywhere on this page: the rows are self-evident. */}
+                you are working in is a fact about the shop, so it is named once, on the suite. */}
             <ListRow
               onClick={cycleLanguage}
               icon={Globe}

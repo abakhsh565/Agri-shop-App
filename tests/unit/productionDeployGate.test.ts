@@ -95,11 +95,17 @@ describe('the repository wiring', () => {
     expect(config.git?.deploymentEnabled?.main).toBe(false);
   });
 
-  it('has a deploy workflow that cannot run on a non-successful CI run', () => {
+  it('deploys only from an explicit dispatch — a push or a green run cannot start it', () => {
     const workflow = fs.readFileSync(path.join(ROOT, '.github/workflows/deploy-production.yml'), 'utf8');
-    expect(workflow).toMatch(/workflow_run:/);
-    expect(workflow).toMatch(/conclusion == 'success'/);
-    expect(workflow).toMatch(/head_branch == 'main'/);
+    // The trigger block is the only place an automatic start could be reintroduced, so it is read
+    // on its own: a comment elsewhere mentioning a push must not satisfy this check.
+    const triggers = /on:\r?\n([\s\S]*?)(?=\r?\npermissions:)/.exec(workflow)?.[1] ?? '';
+    expect(triggers).not.toBe('');
+    expect(triggers).toMatch(/\bworkflow_dispatch:/);
+    expect(triggers).not.toMatch(/\bworkflow_run:/);
+    expect(triggers).not.toMatch(/^\s*push:/m);
+    expect(triggers).not.toMatch(/^\s*schedule:/m);
+    // A dispatch is not an override: the gate still checks the named commit and its CI run.
     expect(workflow).toContain('scripts/deploy/trigger-production.mjs');
     // Accepted is not released: the workflow must wait for the deployment and verify it, and that
     // step must be bound to the id the trigger reported (a missing output skips verification).
@@ -111,16 +117,20 @@ describe('the repository wiring', () => {
     expect(workflow).not.toMatch(/vercel\s+(deploy|--prod)/);
   });
 
-  it('names the CI workflow it waits for, exactly as ci.yml names it', () => {
-    // A rename on either side would leave this workflow waiting for a run that never arrives: the
-    // gate would not be wrong, it would be silent. Pin the coupling.
+  it('runs CI on a push without deploying or migrating anything', () => {
+    // A push runs checks. It must never be the thing that moves an environment: not a deployment,
+    // not `migrate.mjs apply`, not `supabase db push`. CI may only READ staging (ledger verify).
     const ci = fs.readFileSync(path.join(ROOT, '.github/workflows/ci.yml'), 'utf8');
-    const ciName = /^name:\s*(.+)$/m.exec(ci)?.[1].trim();
-    expect(ciName).toBeTruthy();
-    const deploy = fs.readFileSync(path.join(ROOT, '.github/workflows/deploy-production.yml'), 'utf8');
-    expect(deploy).toContain(`workflows: ['${ciName}']`);
-    // And CI must run on a push to main, or there is no run to wait for.
     expect(ci).toMatch(/push:\s*\n\s*branches:\s*\[[^\]]*main[^\]]*\]/);
+
+    const dir = path.join(ROOT, '.github/workflows');
+    for (const name of fs.readdirSync(dir)) {
+      const text = fs.readFileSync(path.join(dir, name), 'utf8');
+      expect(text, name).not.toMatch(/migrate\.mjs\s+apply/);
+      expect(text, name).not.toMatch(/supabase\s+db\s+push/);
+      if (name === 'deploy-production.yml') continue;
+      expect(text, name).not.toMatch(/trigger-production\.mjs/);
+    }
   });
 });
 

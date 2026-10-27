@@ -4,10 +4,10 @@
  * WHY A GUARD AND NOT JUST THE CODE. The rule has two halves and only one of them is visible when
  * it breaks. The half people notice is the message ("this number belongs to a shop owner"). The
  * half that matters is WHERE the check sits: an owner pushed through the employee's questions, or
- * an employee signing in without ever naming their shop, is a wrong-door sign-in that looks like a
- * successful one. Moving the check one line down — after `sendOTP` — would leave every visible
- * symptom identical and quietly allow a code to be spent on a sign-in that should have been
- * refused, so the position is asserted rather than trusted.
+ * an employee sent through the owner's, is a wrong-door sign-in that looks like a successful one.
+ * Moving the check one line down — after `sendOTP` — would leave every visible symptom identical
+ * and quietly allow a code to be spent on a sign-in that should have been refused, so the position
+ * is asserted rather than trusted.
  *
  * The rule reads `lookup_user_by_phone`'s role (owner ⇒ "owner" tab, anything else ⇒ "employee"
  * tab). That the RPC still reports a role at all is proved against the database in

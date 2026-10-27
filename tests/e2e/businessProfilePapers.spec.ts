@@ -117,7 +117,7 @@ test.describe('Business profile — lines, papers and codes', () => {
     }
   });
 
-  test('a paper added from its slot is stored as a path and drawn from a signed URL', async ({ page }) => {
+  test('a paper added from its slot is framed, stored as a path and drawn from a signed URL', async ({ page }) => {
     await openProfile(page);
 
     const tile = page.getByTestId('business-document-licence');
@@ -126,6 +126,14 @@ test.describe('Business profile — lines, papers and codes', () => {
     // screen uploads. `filechooser` is the same event a finger on a real device produces.
     const [chooser] = await Promise.all([page.waitForEvent('filechooser'), tile.click()]);
     await chooser.setFiles(PAPER);
+
+    // The picture is framed before it is stored: the camera's own file is never uploaded raw, and
+    // the frame is the shape the slot will draw. Confirming it is what starts the upload.
+    const crop = page.getByTestId('image-crop');
+    await expect(crop).toBeVisible({ timeout: 20000 });
+    await expect(page.getByTestId('image-crop-confirm')).toBeEnabled({ timeout: 20000 });
+    await page.getByTestId('image-crop-confirm').click();
+    await expect(crop).toHaveCount(0, { timeout: 20000 });
 
     const stored = await waitForColumn('licence_url', (value) => Boolean(value));
     expect(stored, 'a paper must be stored as a path in this business\'s own folder').toContain(`${QA_IDS.shop}/`);
@@ -143,6 +151,15 @@ test.describe('Business profile — lines, papers and codes', () => {
     await page.reload();
     await settle(page, { minText: 40 });
     await expect(page.getByTestId('business-document-licence').locator('img')).toBeVisible({ timeout: 20000 });
+
+    // A stored picture opens full screen — the reference's grammar of a cross on the leading edge
+    // and Change on the trailing edge, over the picture itself rather than in a bottom sheet.
+    await page.getByTestId('business-document-licence').click();
+    const viewer = page.getByTestId('business-image-viewer');
+    await expect(viewer).toBeVisible({ timeout: 20000 });
+    await expect(page.getByTestId('business-image-change')).toBeVisible();
+    await page.getByTestId('business-image-viewer-close').click();
+    await expect(viewer).toHaveCount(0, { timeout: 20000 });
   });
 
   test('a descriptive field saves without a code, and its link becomes Change', async ({ page }) => {

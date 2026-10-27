@@ -1,4 +1,4 @@
-import { ArrowLeft, ArrowRight } from "lucide-react";
+import { ArrowLeft, ArrowRight, X } from "lucide-react";
 import { useThemeStore } from "@/stores/themeStore";
 import { useNavigate } from "react-router-dom";
 import { type ReactNode } from "react";
@@ -13,9 +13,15 @@ interface NavHeaderProps {
   onBack?: () => void;
   right?: ReactNode;
   noBack?: boolean;
+  /**
+   * What the leading control looks like. A screen opened as a panel over another one closes, so
+   * it wears a cross; a step in a journey goes back, so it keeps the arrow. The behaviour is the
+   * same either way — this only changes the glyph and the name a screen reader announces.
+   */
+  backIcon?: "arrow" | "close";
 }
 
-export default function NavHeader({ title, backTo, onBack, right, noBack }: NavHeaderProps) {
+export default function NavHeader({ title, backTo, onBack, right, noBack, backIcon = "arrow" }: NavHeaderProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const { language } = useThemeStore();
@@ -59,7 +65,7 @@ export default function NavHeader({ title, backTo, onBack, right, noBack }: NavH
           onClick={handleBack}
           // Icon-only, and it is on every sub-screen: without a name a screen reader
           // announces nothing at all here.
-          aria-label={tNow("common.back")}
+          aria-label={backIcon === "close" ? tNow("common.close") : tNow("common.back")}
           data-testid="nav-back"
           // 44px of TARGET around an 18px arrow. The box was the icon's own size, so the tappable
           // area was 18×18 — under the touch floor, on every sub-screen in the app, and invisible
@@ -76,7 +82,9 @@ export default function NavHeader({ title, backTo, onBack, right, noBack }: NavH
           // pixels inward of the header it belongs to, and of the language switch above it.
           style={{ color: "var(--text-primary)", insetInlineStart: 20 }}
         >
-          {isRtl ? <ArrowRight size={18} /> : <ArrowLeft size={18} />}
+          {backIcon === "close"
+            ? <X size={18} />
+            : isRtl ? <ArrowRight size={18} /> : <ArrowLeft size={18} />}
         </button>
       )}
       <p

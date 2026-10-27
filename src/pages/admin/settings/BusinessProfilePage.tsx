@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { BadgeCheck, Camera, Copy, Loader2 } from "lucide-react";
+import { BadgeCheck, Camera, Copy, Loader2, X } from "lucide-react";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
-import Sheet from "@/components/ui/Sheet";
+import ImageCrop from "@/components/ui/ImageCrop";
 import { SkeletonList } from "@/components/ui/Skeleton";
 import BusinessProfileSheet, { type BusinessField } from "@/components/shop/BusinessProfileSheet";
 import { useAuthStore } from "@/stores/authStore";
@@ -75,6 +75,8 @@ export default function BusinessProfilePage() {
   const [uploading, setUploading] = useState<ImageKey | null>(null);
   /** The paper URLs, signed and ready to draw. Keyed by paper, because paths expire. */
   const [pictures, setPictures] = useState<Record<string, string | null>>({});
+  /** The picture just chosen, waiting under the crop frame before it is stored. */
+  const [crop, setCrop] = useState<{ key: ImageKey; file: File } | null>(null);
 
   const fileRef = useRef<HTMLInputElement>(null);
   const pendingKeyRef = useRef<ImageKey | null>(null);
@@ -128,6 +130,16 @@ export default function BusinessProfilePage() {
     })();
     return () => { alive = false; };
   }, [rawPictures]);
+
+  // A picture opened full screen is closed the way every other overlay in the app is.
+  useEffect(() => {
+    if (!viewer) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setViewer(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [viewer]);
 
   /**
    * The location, written by the one function that knows a place must be a point inside Pakistan
@@ -197,24 +209,31 @@ export default function BusinessProfilePage() {
     fileRef.current?.click();
   }
 
-  async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
+  function onFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     const key = pendingKeyRef.current;
     pendingKeyRef.current = null;
     if (fileRef.current) fileRef.current.value = "";
     if (!file || !key) return;
+    // The picture is framed before it is stored. The tile draws a fixed shape, so a photo saved
+    // as it came off the camera would be cut by the tile — and only the owner knows which part
+    // of the frame is the business.
+    setCrop({ key, file });
+  }
 
+  /** Store the framed picture — the same upload it always was, now from behind the crop frame. */
+  async function savePicture(picture: File, key: ImageKey) {
     uploadingRef.current = true;
     setUploading(key);
     try {
       if (key === "logo") {
         // The logo is a public picture, like every other image in the app.
-        const url = await uploadImage("company-logos", file);
+        const url = await uploadImage("company-logos", picture);
         await updateBusinessProfile({ logo: url });
       } else {
         if (!activeShopId) throw new Error("NO_SHOP");
         // A paper goes to the private bucket, and the record keeps the PATH, never a URL.
-        const path = await uploadBusinessDocument(file, activeShopId);
+        const path = await uploadBusinessDocument(picture, activeShopId);
         await updateBusinessProfile({ [key]: path } as BusinessPatch);
       }
       await read();
@@ -247,7 +266,8 @@ export default function BusinessProfilePage() {
       data-testid="business-profile-page"
     >
       <StatusBar />
-      <NavHeader title={t("business.title")} backTo={`${base}/settings`} />
+      {/* Opened from Settings as a panel, so it closes with a cross rather than stepping back. */}
+      <NavHeader title={t("business.title")} backTo={`${base}/settings`} backIcon="close" />
       <div style={{ borderTop: "1px solid var(--divider)" }} />
 
       <input
@@ -316,7 +336,7 @@ export default function BusinessProfilePage() {
             </button>
 
             <div className="min-w-0 flex-1">
-              <h1 className="text-18 font-semibold break-words leading-snug" data-testid="business-name">
+              <h1 className="text-16 font-semibold break-words leading-snug" data-testid="business-name">
                 {shop?.name ?? t("business.noName")}
               </h1>
               <p className="flex items-center gap-1.5 mt-0.5 min-w-0">
@@ -324,7 +344,9 @@ export default function BusinessProfilePage() {
                     string "+92 300 1234567" is reordered by the bidi algorithm and reads
                     "1234567 300 92+", which is a different number. */}
                 <span
-                  className="text-13 truncate"
+                  // One step below the name, as the reference draws it: the block reads as the
+                  // business's name and the number that reaches it, not as two headings.
+                  className="text-14 font-semibold truncate"
                   dir="ltr"
                   style={{ color: "var(--text-secondary)" }}
                   data-testid="business-phone"
@@ -427,7 +449,7 @@ export default function BusinessProfilePage() {
                   {/* The place's own name leads, as the branch screen does: it is what a person
                       says out loud, and the full address under it is what a courier reads. */}
                   <p
-                    className="mt-2.5 text-15 font-semibold break-words"
+                    className="mt-2.5 text-14 font-semibold break-words"
                     dir={city ? "auto" : undefined}
                     style={{ color: city ? "var(--text-primary)" : "var(--text-tertiary)" }}
                     data-testid="business-field-city"
@@ -436,7 +458,7 @@ export default function BusinessProfilePage() {
                   </p>
                   {shopAddress && (
                     <p
-                      className="text-13 leading-relaxed mt-0.5 text-pretty"
+                      className="text-12 leading-relaxed mt-0.5 text-pretty"
                       dir="auto"
                       style={{ color: "var(--text-secondary)" }}
                       data-testid="business-address-value"
@@ -530,14 +552,32 @@ export default function BusinessProfilePage() {
         />
       )}
 
-      <Sheet
-        open={viewer !== null}
-        title={viewer?.title ?? t("business.images")}
-        onClose={() => setViewer(null)}
-      >
-        {viewer && (
-          <div className="px-5 pb-4 flex flex-col gap-4">
-            <img src={viewer.url} alt={viewer.title} className="w-full rounded-[var(--radius-tile)]" />
+      {/* ── A picture, full screen ──────────────────────────────────────────────
+          The reference's own grammar: the picture owns the screen, a cross on the leading edge
+          closes it, and Change sits on the trailing edge. No card and no sheet: what the owner
+          asked to see is the picture, at the size the picture deserves. */}
+      {viewer && (
+        <div
+          className="fixed inset-0 z-50 flex flex-col"
+          style={{ background: "#0a0a0a" }}
+          role="dialog"
+          aria-modal="true"
+          aria-label={viewer.title}
+          data-testid="business-image-viewer"
+        >
+          {/* The controls sit 48px down rather than on the very edge, so the picture starts
+              below them and nothing the owner wants to read is covered by a control. */}
+          <div className="flex items-center justify-between px-5" style={{ paddingTop: 48 }}>
+            <button
+              type="button"
+              onClick={() => setViewer(null)}
+              aria-label={t("common.close")}
+              data-testid="business-image-viewer-close"
+              className="size-11 -ms-3 flex items-center justify-center ds-pressable"
+              style={{ color: "#fff" }}
+            >
+              <X size={22} />
+            </button>
             <button
               type="button"
               onClick={() => {
@@ -546,14 +586,34 @@ export default function BusinessProfilePage() {
                 pickPicture(key);
               }}
               data-testid="business-image-change"
-              className="w-full h-11 rounded-full text-13 font-bold ds-pressable"
-              style={{ background: "var(--surface-2)", color: "var(--text-primary)", border: "1px solid var(--divider)" }}
+              className="h-11 text-14 font-semibold ds-pressable"
+              style={{ color: "#fff" }}
             >
               {t("business.changeImage")}
             </button>
           </div>
-        )}
-      </Sheet>
+
+          <div className="flex-1 min-h-0 flex items-center justify-center">
+            <img src={viewer.url} alt={viewer.title} className="w-full max-h-full object-contain" />
+          </div>
+        </div>
+      )}
+
+      {/* ── The crop step ─────────────────────────────────────────────────────── */}
+      {crop && (
+        <ImageCrop
+          file={crop.file}
+          // The business picture is drawn in a square tile, so it is framed square. A paper keeps
+          // its own shape: squaring a licence would cut the words off it.
+          aspect={crop.key === "logo" ? 1 : undefined}
+          onCancel={() => setCrop(null)}
+          onConfirm={(picture) => {
+            const key = crop.key;
+            setCrop(null);
+            void savePicture(picture, key);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -561,8 +621,8 @@ export default function BusinessProfilePage() {
 /**
  * One fact on the page: its name, then what it says, then the quiet way to change it.
  *
- * A missing value is an em dash rather than a blank, because "nothing recorded here" is itself
- * information — and the control beside it already offers to fill it in.
+ * A missing value says so in words ("Not added") rather than as a dash, because "nothing
+ * recorded here" is itself information — and the control beside it already offers to fill it in.
  */
 function DetailLine({
   label,
@@ -580,6 +640,7 @@ function DetailLine({
   changeLabel?: string;
   trailing?: React.ReactNode;
 }) {
+  const t = useT();
   const shown = value && value.trim() ? value.trim() : null;
   return (
     <div
@@ -588,14 +649,14 @@ function DetailLine({
       data-missing={shown ? "false" : "true"}
     >
       <div className="min-w-0">
-        <p className="text-13" style={{ color: "var(--text-secondary)" }}>{label}</p>
+        <p className="text-12" style={{ color: "var(--text-secondary)" }}>{label}</p>
         <div className="flex items-center gap-1.5 mt-0.5 min-w-0">
           <p
-            className="text-15 font-semibold break-words"
+            className="text-14 break-words"
             style={{ color: shown ? "var(--text-primary)" : "var(--text-tertiary)" }}
             dir={shown ? "auto" : undefined}
           >
-            {shown ?? "—"}
+            {shown ?? t("business.notAdded")}
           </p>
           {trailing}
         </div>

@@ -13,6 +13,27 @@ production as the preview unless the owner names that environment in the same re
 server (`--mode qa`, staging database) belongs to Playwright lanes and QA checks only. Details:
 `.freebuff/run.md`.
 
+**Environment workflow — permanent (owner's instruction, 2026-10-26).**
+
+```
+Development  →  Staging  →  Production
+local stack     approved     approved, after staging passed
+```
+
+- **Development is the only active workspace.** Features, fixes and development testing happen
+  there, against the local Supabase stack. Do not modify staging or production data.
+- **Staging** receives a change only when the owner approves it in that request, and only for
+  pre-production verification. Opening or verifying staging without being asked is a violation of
+  this rule, not thoroughness.
+- **Production** is released only after the owner approves it *and* staging verification passed.
+- **A push is never promotion.** Pushing to GitHub runs checks; CI may *read* staging (ledger
+  `verify`) and must never deploy, apply a migration, or change any environment.
+  `deploy-production.yml` is dispatch-only for this reason, and
+  `tests/unit/productionDeployGate.test.ts` fails if an automatic trigger or a migration `apply`
+  returns to any workflow.
+- **Code promotion stays separate from environment data and database operations.** No environment
+  change happens without authorization.
+
 ---
 
 ## 0. Capability disclosure — read before claiming parallelism

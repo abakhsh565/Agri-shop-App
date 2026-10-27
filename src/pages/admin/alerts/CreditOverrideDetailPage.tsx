@@ -106,7 +106,7 @@ export default function CreditOverrideDetailPage() {
                 </span>
               }
             >
-              <span className="text-13" style={{ color: "var(--text-secondary)" }}>
+              <span className="text-12" style={{ color: "var(--text-secondary)" }}>
                 {row.label}
               </span>
             </ListRow>

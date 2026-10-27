@@ -1,9 +1,14 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Loader2 } from "lucide-react";
+import {
+  BarChart3, Boxes, ChevronRight, History, Loader2, Package, ShoppingCart, TrendingUp, Truck, Users,
+} from "lucide-react";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
 import BranchEditor from "@/components/shop/BranchEditor";
+import BranchIdentity from "@/components/shop/BranchIdentity";
+import BranchPerformance from "@/components/shop/BranchPerformance";
+import { hasPermission } from "@/lib/tenantContext";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import Input from "@/components/ui/Input";
 import { useRef } from "react";
@@ -38,6 +43,7 @@ export default function BranchDetailPage() {
   const branches = useShopStore((s) => s.branches);
   const branchesLoaded = useShopStore((s) => s.branchesLoaded);
   const loadBranches = useShopStore((s) => s.loadBranches);
+  const workingBranchName = useShopStore((s) => s.activeBranchName);
 
   const [deleting, setDeleting] = useState(false);
   const [reason, setReason] = useState("");
@@ -128,18 +134,48 @@ export default function BranchDetailPage() {
 
   const branch = branches.find((b) => b.id === branchId);
 
+  /**
+   * The doors this page offers, grouped the way the work is grouped.
+   *
+   * A row appears only when the account holds the permission its destination requires, so the
+   * page cannot offer a screen the route guard refuses — and it does not re-implement any of
+   * them: each is a pointer at the one implementation, exactly as the Settings menu's rows are.
+   * The section names are the menu's own names, because they are the same places.
+   */
+  const operationalRows = [
+    { id: "products", icon: Package, label: t("settings.menu.inventory"), to: "/products", permission: "products.view" },
+    { id: "sales", icon: ShoppingCart, label: t("settings.menu.sales"), to: "/sales", permission: "sales.view" },
+    { id: "customers", icon: Users, label: t("settings.menu.customers"), to: "/customers", permission: "customers.view" },
+    { id: "purchases", icon: Truck, label: t("settings.menu.purchases"), to: "/purchases", permission: "purchases.view" },
+  ].filter((row) => hasPermission(row.permission));
+
+  /**
+   * The reports, each naming what it holds rather than only what it is called.
+   *
+   * These are the screens the figures on this page are READ in full; the summary above is
+   * deliberately not a report, and this is where it says so by pointing instead of duplicating.
+   */
+  const reportRows = [
+    { id: "sales", icon: BarChart3, label: t("branchPage.salesReport"), meta: t("branchPage.salesReportHint"), to: "/reports", permission: "reports.view" },
+    { id: "profit", icon: TrendingUp, label: t("branchPage.profitReport"), meta: t("branchPage.profitReportHint"), to: "/reports", permission: "reports.view" },
+    { id: "customer-balances", icon: Users, label: t("branchPage.customerBalances"), meta: t("branchPage.customerBalancesHint"), to: "/customers", permission: "customers.view" },
+    { id: "supplier-balances", icon: Truck, label: t("branchPage.supplierBalances"), meta: t("branchPage.supplierBalancesHint"), to: "/companies", permission: "companies.view" },
+    { id: "inventory", icon: Boxes, label: t("branchPage.inventoryReport"), meta: t("branchPage.inventoryReportHint"), to: "/reports", permission: "reports.view" },
+    { id: "activity", icon: History, label: t("branchPage.activityHistory"), meta: t("branchPage.activityHistoryHint"), to: "/activity", permission: "activity.view" },
+  ].filter((row) => hasPermission(row.permission));
+
   // Once the list is read and the branch is not in it, this URL names nothing the account can
   // open; going back is the honest answer, and this avoids flashing a stale "not found" claim.
-  // The list lives on Settings now, so back goes there rather than to More.
+  // Back goes to the branch list — the screen whose cards open this page.
   useEffect(() => {
-    if (branchesLoaded && !branch) navigate(`${base}/settings`, { replace: true });
+    if (branchesLoaded && !branch) navigate(`${base}/settings/branches`, { replace: true });
   }, [branchesLoaded, branch, base, navigate]);
 
   if (!branch) {
     return (
       <div className="flex flex-col w-full min-h-full" style={{ background: "var(--background)" }}>
         <StatusBar />
-        <NavHeader title={t("branches.editTitle")} backTo={`${base}/settings`} />
+        <NavHeader title={t("branches.editTitle")} backTo={`${base}/settings/branches`} />
         <div className="flex items-center justify-center py-10" role="status" aria-busy="true">
           <Loader2 size={18} className="animate-spin" style={{ color: "var(--text-secondary)" }} />
         </div>
@@ -150,10 +186,24 @@ export default function BranchDetailPage() {
   return (
     <div className="flex flex-col w-full min-h-full" style={{ background: "var(--background)" }}>
       <StatusBar />
-      <NavHeader title={branch.name} backTo={`${base}/settings`} />
+      <NavHeader title={branch.name} backTo={`${base}/settings/branches`} />
 
-      {/* The same form the sheet renders, page-sized. Saving keeps the page open: the name it
-          just saved is the page's title, and everything else it wrote is visible in place. */}
+      {/* ── Which branch, then what it is doing ────────────────────────────────────────────────
+          The page opens with the branch itself: its icon and name, the kind of branch it is, where
+          it is and whether it is open. Directly under that, its own figures — so a reader who
+          came to check on a branch has both answers before the configuration form begins. */}
+      <div className="px-4 pt-4">
+        <BranchIdentity branch={branch} />
+      </div>
+      <div className="px-4 pt-4">
+        <BranchPerformance branch={branch} />
+      </div>
+
+      <p className="ds-section px-5 mt-6 mb-1">{t("branchPage.configuration")}</p>
+
+      {/* The configuration itself: everything that was answered when this branch was created, and
+          every change writes the moment it is made. Saving keeps the page open — the name it just
+          saved is the page's title, and everything else it wrote is visible in place. */}
       <BranchEditor branch={branch} onClose={() => undefined} onRenamed={() => undefined} />
 
       {isOwner && (
@@ -172,8 +222,55 @@ export default function BranchDetailPage() {
         </div>
       )}
 
+      {/* ── The doors ───────────────────────────────────────────────────────────────────────────
+          Everything that is a whole screen now lives one tap away, grouped the way the work is
+          grouped: the operational areas first, then the reports. Each row is drawn only when the
+          account holds the permission that screen requires, so this page never offers a door the
+          route guard would refuse — the same rule the Settings menu follows. */}
+      {operationalRows.length > 0 && (
+        <div className="px-4 pt-5">
+          <ListCard section={t("branchPage.operationalAreas")}>
+            {operationalRows.map((row) => (
+              <ListRow
+                key={row.id}
+                icon={row.icon}
+                title={row.label}
+                testId={`branch-area-${row.id}-${branch.id}`}
+                onClick={() => navigate(`${base}${row.to}`)}
+                trailing={<ChevronRight size={14} style={{ color: "var(--text-secondary)" }} className="shrink-0" />}
+              />
+            ))}
+          </ListCard>
+          {/* Said only when it is true and would otherwise surprise: these screens follow the branch
+              the account is WORKING in, and this page is about a different one. */}
+          {!branch.isCurrent && (
+            <p className="text-11 mt-2 px-1" style={{ color: "var(--text-tertiary)" }}>
+              {t("branchPage.followsBranch", { branch: workingBranchName ?? "" })}
+            </p>
+          )}
+        </div>
+      )}
+
+      {reportRows.length > 0 && (
+        <div className="px-4 pt-4">
+          <ListCard section={t("settings.menu.reports")}>
+            {reportRows.map((row) => (
+              <ListRow
+                key={row.id}
+                icon={row.icon}
+                title={row.label}
+                meta={row.meta}
+                testId={`branch-report-${row.id}-${branch.id}`}
+                onClick={() => navigate(`${base}${row.to}`)}
+                trailing={<ChevronRight size={14} style={{ color: "var(--text-secondary)" }} className="shrink-0" />}
+              />
+            ))}
+          </ListCard>
+        </div>
+      )}
+
       {!branch.isMain && isOwner && (
-        <div className="px-4 pb-8">
+        <div className="px-4 pt-4 pb-8">
           <button
             type="button"
             onClick={() => setDeleting(true)}

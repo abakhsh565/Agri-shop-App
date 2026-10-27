@@ -11,11 +11,12 @@ import { useAuthStore } from "@/stores/authStore";
 import { useThemeStore } from "@/stores/themeStore";
 import { useCurrentTime } from "@/lib/useCurrentTime";
 import { useT } from "@/lib/i18n";
+import { branchKind } from "@/lib/branchKind";
 import { formatSmartDateTime, translateNotification } from "@/lib/formatters";
 import { pkDate, pkDateFromISO, pkToday, pkYesterday } from "@/lib/pkDate";
 import {
   Bell, ShoppingCart, CreditCard, RotateCcw, Package,
-  AlertTriangle, Users, Truck, Info,
+  AlertTriangle, Users, Truck, Info, UserPlus,
 } from "lucide-react";
 
 /** Map notification kind + entity_id → the correct admin route */
@@ -26,6 +27,7 @@ function notificationRoute(n: AppNotification): string | null {
       case "return": return "/admin/sales/" + n.entity_id;
       case "purchase": return "/admin/purchases/" + n.entity_id;
       case "employee": return "/admin/employees/" + n.entity_id;
+      case "employee_access_request": return "/admin/employees/requests/" + n.entity_id;
       case "low_stock": return "/admin/products/" + n.entity_id;
       case "stock_adjust": return "/admin/products";
       case "payment": return "/admin/payments";
@@ -39,6 +41,7 @@ function notificationRoute(n: AppNotification): string | null {
     case "purchase": return "/admin/purchases";
     case "low_stock": case "stock_adjust": return "/admin/products";
     case "employee": return "/admin/employees";
+    case "employee_access_request": return "/admin/employees/requests";
     default: return null;
   }
 }
@@ -50,6 +53,7 @@ const KIND_ICON: Record<string, any> = {
   stock_adjust: Package,
   low_stock: AlertTriangle,
   employee: Users,
+  employee_access_request: UserPlus,
   purchase: Truck,
   system: Info,
 };
@@ -180,7 +184,10 @@ export default function AdminNotificationsPage() {
           aria-label={t("notifications.tabsLabel")}
           data-testid="notifications-branch-tabs"
         >
-          {[{ id: "all", name: t("notifications.allBranches") }, ...branches.map((b) => ({ id: b.id, name: b.name }))]
+          {[
+            { id: "all", name: t("notifications.allBranches"), kind: null as string | null },
+            ...branches.map((b) => ({ id: b.id, name: b.name, kind: branchKind(t, b.isMain) })),
+          ]
             .map((entry) => {
               const selected = entry.id === activeTab;
               // Counted from the WHOLE set, not from the tab on screen: the point of the
@@ -203,6 +210,9 @@ export default function AdminNotificationsPage() {
                   }}
                 >
                   <span className="max-w-[140px] truncate">{entry.name}</span>
+                  {entry.kind && (
+                    <span className="text-10 font-semibold shrink-0" style={{ opacity: 0.7 }}>{entry.kind}</span>
+                  )}
                   {unreadHere > 0 && (
                     <span
                       className="text-10 font-bold rounded-full px-1.5"

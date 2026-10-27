@@ -8,6 +8,7 @@ import { SkeletonList } from "@/components/ui/Skeleton";
 import { useAuthStore } from "@/stores/authStore";
 import { useT } from "@/lib/i18n";
 import { branchContextLabel } from "@/lib/branchContext";
+import { branchKind } from "@/lib/branchKind";
 import { useShellBase } from "@/lib/useShellBase";
 import { useDir } from "@/lib/dirContext";
 import { useShopStore, type BranchSummary } from "@/stores/shopStore";
@@ -99,9 +100,11 @@ export default function BranchesSection() {
                 </div>
               }
               title={branch.name}
-              // One state, not two: the branch you are in is the more useful fact, and the main
-              // one is already first in the list with its own note in the edit sheet.
-              qualifier={isCurrent ? t("branches.mine") : branch.isMain ? t("branches.main") : undefined}
+              // The KIND first, because it never changes: this is the branch the business
+              // started with, or one added later. Which row you are standing in is a second,
+              // temporary fact, so it follows the kind rather than replacing it.
+              qualifier={[branchKind(t, branch.isMain), isCurrent ? t("shop.current") : null]
+                .filter(Boolean).join(" · ")}
               meta={branchContext(branch)} // branchContextLabel already treats unknown as neutral
               // The whole row is the way into the branch's detail page. Edit and delete are not
               // squeezed in beside it: a row that is both a destination and a set of controls is

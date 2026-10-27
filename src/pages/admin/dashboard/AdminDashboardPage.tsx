@@ -20,6 +20,7 @@ import { summariseSales, profitDisplay } from "@/lib/profit";
 import { summariseMoneyIn, loadCreditPayments, type CreditPaymentRow } from "@/lib/money";
 import { useT } from "@/lib/i18n";
 import { branchContextLabel } from "@/lib/branchContext";
+import { branchKind } from "@/lib/branchKind";
 import { AlertTriangle, TrendingUp, ChevronRight, ChevronDown, TrendingDown, ShoppingCart, Search, Bell, Wallet, CheckCircle2, HandCoins, PackagePlus, Store } from "lucide-react";
 import StatusBar from "@/components/ui/StatusBar";
 import ListCard from "@/components/ui/ListCard";
@@ -386,7 +387,12 @@ export default function AdminDashboardPage() {
               day. On an added branch the branch is already the first line, so this one
               says what is IN it — the two lines never repeat each other. */}
           <span className="text-12 mt-0.5 truncate" style={{ color: "var(--text-secondary)" }}>
-            {activeBranch?.name ? `${activeBranch.name} · ${todayLabel}` : todayLabel}
+            {/* The kind travels with the name: "Main" and "Sub" are what tell an owner that
+                the figures below are the parent shop or a branch added later, and the two
+                never share a ledger. */}
+            {activeBranch?.name
+              ? `${activeBranch.name} · ${branchKind(t, activeBranch.isMain)} · ${todayLabel}`
+              : todayLabel}
           </span>
         </button>
 

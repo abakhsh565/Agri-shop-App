@@ -17,6 +17,7 @@ import ListCard from "@/components/ui/ListCard";
 import ListRow from "@/components/ui/ListRow";
 import { SkeletonList } from "@/components/ui/Skeleton";
 import { groupSalesByDateSections } from "@/lib/salesGrouping";
+import { netSalesOf, refundsBySale, useReturns } from "@/lib/salesActivity";
 import { pkDate, pkDateFromISO, pkToday, pkYesterday, pkWeekStart, pkMonthStart } from "@/lib/pkDate";
 
 function initBgColor(name: string | null | undefined) {
@@ -40,7 +41,7 @@ const SORT_OPTIONS: { key: SortKey; label: string }[] = [
 
 export default function AdminSalesListPage() {
   const navigate = useNavigate();
-  const { state } = useLocation();
+  const { state, search } = useLocation();
   const t = useT();
   const { language } = useThemeStore();
   const isUrdu = language === "ur";
@@ -50,7 +51,9 @@ export default function AdminSalesListPage() {
   const [showDateModal, setShowDateModal] = useState(false);
   const [customFrom, setCustomFrom] = useState("");
   const [customTo, setCustomTo] = useState("");
-  const [query, setQuery] = useState("");
+  // A search started on the Sales section's screen arrives as `?q=` and lands here, where the
+  // searching actually happens — one search field, one implementation.
+  const [query, setQuery] = useState(() => new URLSearchParams(search).get("q") ?? "");
   const [sort, setSort] = useState<SortKey>("newest");
   const [showSortMenu, setShowSortMenu] = useState(false);
 
@@ -71,6 +74,9 @@ export default function AdminSalesListPage() {
   }
 
   const now = useCurrentTime();
+  // Returns, so the list's net figure is sales less the refunds of those same sales. Read once
+  // here and spent once; the rule itself lives in `lib/salesActivity`.
+  const { returns } = useReturns();
   const today = now;
   const todayStr = pkToday();
   const yesterdayStr = pkYesterday();
@@ -117,7 +123,8 @@ export default function AdminSalesListPage() {
       if (sort === "highest") return b.totalAmount - a.totalAmount;
       return a.totalAmount - b.totalAmount;
     });
-  const total     = filtered.reduce((s, x) => s + x.totalAmount, 0);
+  // Sales less their own refunds — the same reading of "net sales" the Sales section shows.
+  const netSales  = netSalesOf(filtered, refundsBySale(returns));
   // Real cost of goods, from the same calculation Home, the sale record and Reports use.
   // This read `Math.round(total * 0.2)` — a flat fifth of whatever was sold, which was not
   // anybody's margin: it disagreed with Home and with every sale opened from this list, and
@@ -148,11 +155,6 @@ export default function AdminSalesListPage() {
     { key: "paid",   label: t("sales.paid") },
   ];
 
-  const summaryLabel =
-    tab === "all"    ? t("sales.summaryToday") :
-    tab === "credit" ? t("sales.summaryCreditSales") :
-                       t("sales.summaryPaidSales");
-
   return (
     <div
       className="flex flex-col w-full min-h-full"
@@ -167,17 +169,42 @@ export default function AdminSalesListPage() {
         <div className="w-8" />
       </div>
 
-      {/* Summary strip */}
-      <div
-        className="mx-4 rounded-[var(--radius-tile)] px-4 py-3 flex items-center justify-between"
-        style={{ background: "var(--surface-2)" }}
-      >
-        <p className="ds-section-label" style={{ color: "var(--text-secondary)" }}>
-          {summaryLabel}
-        </p>
-        <p className="text-base font-bold" style={{ color: "var(--text-primary)" }}>
-          {formatCurrency(total)}
-        </p>
+      {/* What this screen is, and the period its two figures are read over. */}
+      <div className="px-4 pt-2">
+        <div
+          className="rounded-[var(--radius-tile)] px-4 py-3"
+          style={{ background: "var(--surface-2)" }}
+        >
+          <div className="flex items-baseline justify-between gap-3">
+            <p className="text-15 font-bold" style={{ color: "var(--text-primary)" }}>
+              {t("sales.allSalesTitle")}
+            </p>
+            <p className="text-12 shrink-0" style={{ color: "var(--text-secondary)" }}>
+              {t("sales.selectedPeriod")}
+            </p>
+          </div>
+          <div className="flex gap-3 mt-3">
+            <div className="flex-1 min-w-0">
+              <p className="ds-section-label" style={{ color: "var(--text-secondary)" }}>
+                {t("sales.transactions")}
+              </p>
+              <p className="text-16 font-bold" style={{ color: "var(--text-primary)" }} data-testid="sales-transactions">
+                {filtered.length}
+              </p>
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="ds-section-label" style={{ color: "var(--text-secondary)" }}>
+                {t("sales.netSales")}
+              </p>
+              <p className="text-16 font-bold" style={{ color: "var(--brand-dark)" }} data-testid="sales-net">
+                {formatCurrency(netSales)}
+              </p>
+              <p className="text-11" style={{ color: "var(--text-secondary)" }}>
+                {t("sales.netSalesHint")}
+              </p>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* ── Paid Sales · Credit Sales · Gross Profit ── */}
@@ -419,6 +446,9 @@ export default function AdminSalesListPage() {
         </div>
       ) : (
         <div className="flex flex-col pb-8">
+          <p className="ds-section-label px-4 mt-4" style={{ color: "var(--text-secondary)" }}>
+            {t("sales.transactionList")}
+          </p>
           {groupSalesByDateSections(filtered, now).map((section) => (
             <div key={section.label} className="mt-4">
               <div className="px-4 mb-2">

@@ -57,7 +57,13 @@ export default function ForgotPINPage() {
     setError("");
     try {
       setPendingPhone(phone.trim());
-      await sendOTP(phone.trim());
+      // The result decides whether this is the code screen or the phone screen with a reason on
+      // it: advancing on a refused send asks for a code that was never sent.
+      const result = await sendOTP(phone.trim());
+      if (!result.success) {
+        setError(t("auth.errSendCode"));
+        return;
+      }
       setStep("otp");
     } catch {
       setError(t("copy.sendCodeFailed"));

@@ -5,6 +5,7 @@ import Sheet from "@/components/ui/Sheet";
 import ListCard from "@/components/ui/ListCard";
 import ListRow from "@/components/ui/ListRow";
 import Button from "@/components/ui/Button";
+import BranchKindChip from "@/components/ui/BranchKindChip";
 import SetupChecklist from "@/components/ui/SetupChecklist";
 import LocationField from "@/components/ui/LocationField";
 import { useT } from "@/lib/i18n";
@@ -12,6 +13,7 @@ import { useShopStore, type BranchSummary } from "@/stores/shopStore";
 import { useAuthStore } from "@/stores/authStore";
 import { useEmployeesStore } from "@/stores/employeesStore";
 import { useUIStore } from "@/stores/uiStore";
+import { branchKind } from "@/lib/branchKind";
 
 // One existing selector, one branch identity. A branch does not provision another
 // business, copy roles, or require stock/staff before it can be entered.
@@ -21,7 +23,7 @@ export default function ShopSwitcherSheet() {
   const location = useLocation();
   const { addToast } = useUIStore();
   const { switcherOpen: open, closeSwitcher: close, openSwitcher, branches, activeBranchId,
-    activeBranchName, branchesLoading: loading, branchesError, load, switching, creating,
+    activeBranchName, activeShopName, branchesLoading: loading, branchesError, load, switching, creating,
     switchBranch, create, assignBranchResponsibility, switcherIntent, setupDraft, setSetupDraft } = useShopStore();
   const canCreate = useAuthStore((s) => s.user?.membershipRole === "owner");
   const employees = useEmployeesStore((s) => s.employees);
@@ -124,12 +126,20 @@ export default function ShopSwitcherSheet() {
           {loading && branches.length === 0 && <div className="flex justify-center py-8" role="status" aria-busy="true"><Loader2 size={20} className="animate-spin" /></div>}
           {!loading && branchesError && <div className="py-4"><p className="ds-meta">{t("branches.loadFailed")}</p><Button onClick={() => void load()}>{t("common.tryAgain")}</Button></div>}
           {!loading && !branchesError && branches.length === 0 && <p className="ds-meta py-6 text-center">{t("shop.noneMember")}</p>}
-          {branches.length > 0 && <ListCard>{branches.map((branch) => <ListRow key={branch.id}
-            title={branch.name} meta={branch.roleName ?? undefined}
-            testId={`shop-option-${branch.id}`} selected={branch.id === activeBranchId}
-            disabled={busy || branch.membershipStatus !== "active"} onClick={() => void select(branch)}
-            trailing={pendingId === branch.id ? <Loader2 size={18} className="animate-spin" /> : branch.id === activeBranchId ? <Check size={18} /> : undefined}
-          />)}</ListCard>}
+          {branches.length > 0 && <ListCard>{branches.map((branch) => {
+            const kind = branchKind(t, branch.isMain);
+            // The main branch IS the business — it is the one the owner signed up into, and its
+            // row is the business's name rather than a branch label. An added branch keeps the
+            // name the owner gave it, because that is the only thing that tells two of them apart.
+            const label = branch.isMain ? activeShopName ?? branch.name : branch.name;
+            return <ListRow key={branch.id}
+              title={label} meta={branch.roleName ?? undefined}
+              badge={kind ? <BranchKindChip isMain={branch.isMain} label={kind} /> : undefined}
+              testId={`shop-option-${branch.id}`} selected={branch.id === activeBranchId}
+              disabled={busy || branch.membershipStatus !== "active"} onClick={() => void select(branch)}
+              trailing={pendingId === branch.id ? <Loader2 size={18} className="animate-spin" /> : branch.id === activeBranchId ? <Check size={18} /> : undefined}
+            />;
+          })}</ListCard>}
           {canCreate && <Button className="mt-3" variant="outline" fullWidth testId="shop-setup-start" disabled={busy}
             onClick={() => { setSetupDraft({ name: "", place: null, requestId: null }); setStep(1); }}>{t("branches.create")}</Button>}
         </>}

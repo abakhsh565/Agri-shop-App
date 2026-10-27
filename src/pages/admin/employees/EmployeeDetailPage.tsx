@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useThemeStore } from "@/stores/themeStore";
 import { useT } from "@/lib/i18n";
+import { branchKind } from "@/lib/branchKind";
 import { usePermissionLabels } from "@/lib/permissionLabels";
 import { applyOverrides, diffOverrides, overrideCount, overridesToStore } from "@/lib/accessModel";
 import EmployeeAccessEditor from "@/components/admin/EmployeeAccessEditor";
@@ -77,7 +78,7 @@ export default function EmployeeDetailPage() {
   const [empPerms, setEmpPerms] = useState<string[]>([]);
   // The employee's own exceptions, straight from user_permissions.
   const [storedOverrides, setStoredOverrides] = useState<Record<string, boolean>>({});
-  const [branches, setBranches] = useState<{ id: string; name: string }[]>([]);
+  const [branches, setBranches] = useState<{ id: string; name: string; is_default: boolean }[]>([]);
   // { branchId: roleId }. A branch with no entry uses the default role above, which is how the
   // database reads a missing row — it is not the same as "no access".
   const [editBranchRoles, setEditBranchRoles] = useState<Record<string, string>>({});
@@ -107,7 +108,7 @@ export default function EmployeeDetailPage() {
   useEffect(() => {
     permissionsStore.load();
     rolesStore.load();
-    supabase.from("branches").select("id, name").eq("is_active", true).then(({ data }) => {
+    supabase.from("branches").select("id, name, is_default").eq("is_active", true).then(({ data }) => {
       setBranches((data as any[]) ?? []);
     });
   }, []);
@@ -515,7 +516,7 @@ export default function EmployeeDetailPage() {
                         border: `1px solid ${editBranchScope?.includes(b.id) ? "var(--brand)" : "var(--divider)"}`,
                       }}
                     >
-                      {b.name}
+                      {b.name} · {branchKind(t, b.is_default)}
                     </button>
                   ))}
                 </div>
@@ -537,7 +538,9 @@ export default function EmployeeDetailPage() {
                       className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-[var(--radius-tile)] text-start"
                       style={{ background: "var(--surface)", border: "1px solid var(--divider)" }}
                     >
-                      <span className="text-xs font-semibold truncate" style={{ color: "var(--text-primary)" }}>{b.name}</span>
+                      <span className="text-xs font-semibold truncate" style={{ color: "var(--text-primary)" }}>
+                        {b.name} · <span style={{ color: "var(--text-tertiary)" }}>{branchKind(t, b.is_default)}</span>
+                      </span>
                       <span className="text-xs font-semibold flex items-center gap-1 shrink-0" style={{ color: "var(--text-secondary)" }}>
                         {roleNameFor(b.id)}
                         <ChevronRight size={12} />

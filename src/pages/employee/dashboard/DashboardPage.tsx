@@ -8,6 +8,7 @@ import PullToRefresh from "@/components/ui/PullToRefresh";
 import { useCustomersStore } from "@/stores/customersStore";
 import { formatSmartDateTime, translateNotification } from "@/lib/formatters";
 import { useT } from "@/lib/i18n";
+import { branchKind } from "@/lib/branchKind";
 import { generateReminders } from "@/lib/reminderEngine";
 import { useThemeStore } from "@/stores/themeStore";
 import { useCurrentTime } from "@/lib/useCurrentTime";
@@ -214,11 +215,23 @@ export default function DashboardPage() {
               <span className="font-bold text-17 truncate" style={{ color: "var(--text-primary)" }}>
                 {activeBranchName ?? t("audit.noBranch")}
               </span>
+              {branchKind(t, activeBranch?.isMain) && (
+                <span className="text-10 font-bold h-5 px-1.5 rounded-full flex items-center shrink-0"
+                  style={{ background: "var(--brand-light)", color: "var(--brand-dark)" }}>
+                  {branchKind(t, activeBranch?.isMain)}
+                </span>
+              )}
               <ChevronDown size={14} style={{ color: "var(--text-secondary)" }} className="shrink-0" />
             </button>
           ) : (
-            <p className="font-bold text-17 truncate" style={{ color: "var(--text-primary)" }}>
-              {activeBranchName ?? t("audit.noBranch")}
+            <p className="font-bold text-17 truncate flex items-center gap-1.5" style={{ color: "var(--text-primary)" }}>
+              <span className="truncate">{activeBranchName ?? t("audit.noBranch")}</span>
+              {branchKind(t, activeBranch?.isMain) && (
+                <span className="text-10 font-bold h-5 px-1.5 rounded-full flex items-center shrink-0"
+                  style={{ background: "var(--brand-light)", color: "var(--brand-dark)" }}>
+                  {branchKind(t, activeBranch?.isMain)}
+                </span>
+              )}
             </p>
           )}
           {branchLocation && (

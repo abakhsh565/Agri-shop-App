@@ -33,6 +33,14 @@ import AdminLayout from "@/components/layout/AdminLayout";
 // Admin pages
 const AdminDashboardPage = React.lazy(() => import("@/pages/admin/dashboard/AdminDashboardPage"));
 const AdminSalesListPage = React.lazy(() => import("@/pages/admin/sales/AdminSalesListPage"));
+// The Sales section's own screen. It is not `SectionHubPage` because the section has a quick
+// action, today's two figures and a search of its own; the rows it does show still come from the
+// same catalogue (`lib/settingsHub`), so the menu and the screen cannot disagree.
+const AdminSalesSectionPage = React.lazy(() => import("@/pages/admin/sales/AdminSalesSectionPage"));
+// Products & Inventory's own screen, for the same reason: a quick action, four counts and a
+// search of its own, with the section's rows still read from `lib/settingsHub`.
+const AdminInventorySectionPage = React.lazy(() => import("@/pages/admin/inventory/AdminInventorySectionPage"));
+const StockManagementPage = React.lazy(() => import("@/pages/admin/inventory/StockManagementPage"));
 // One sale record for both shells. It was two pages that drifted apart (one printed cost and
 // profit under every line, the other did not; neither showed the sale number), so the screen
 // is shared and the numbers it shows follow the signed-in role.
@@ -48,8 +56,12 @@ import AddCompanyPage from "@/pages/admin/companies/AddCompanyPage";
 import CompanyDetailPage from "@/pages/admin/companies/CompanyDetailPage";
 import AdminSettingsPage from "@/pages/admin/settings/AdminSettingsPage";
 import ProfileDetailsPage from "@/pages/admin/settings/ProfileDetailsPage";
+import SectionHubPage from "@/pages/admin/settings/SectionHubPage";
 import BusinessProfilePage from "@/pages/admin/settings/BusinessProfilePage";
 import BusinessOverviewPage from "@/pages/admin/settings/BusinessOverviewPage";
+// The Business Overview design as it stood before the redesign — what "Branch details" opens.
+import BranchDetailsOverviewPage from "@/pages/admin/settings/BranchDetailsOverviewPage";
+import AllBranchesPage from "@/pages/admin/settings/AllBranchesPage";
 import RolesAccessPage from "@/pages/admin/settings/RolesAccessPage";
 import AdminNotificationsPage from "@/pages/admin/notifications/AdminNotificationsPage";
 import AddEmployeePage from "@/pages/admin/employees/AddEmployeePage";
@@ -105,6 +117,7 @@ import CreditOverrideDetailPage from "@/pages/admin/alerts/CreditOverrideDetailP
 import CreditRequestDetailPage from "@/pages/admin/alerts/CreditRequestDetailPage";
 import RemindersOverviewPage from "@/pages/admin/alerts/RemindersOverviewPage";
 import InventoryAlertsPage from "@/pages/admin/alerts/InventoryAlertsPage";
+import ExpiryAlertsPage from "@/pages/admin/alerts/ExpiryAlertsPage";
 import GroupDetailPage from "@/pages/admin/alerts/GroupDetailPage";
 
 export const router = createBrowserRouter([
@@ -169,6 +182,7 @@ export const router = createBrowserRouter([
           { path: "inventory/new", element: <AddProductPage /> },
           { path: "inventory/:productId/edit", element: <AddProductPage /> },
           { path: "inventory/:productId/adjust", element: <InventoryAdjustPage /> },
+          { path: "inventory/stock", element: <StockManagementPage /> },
           { path: "inventory/movements", element: <StockMovementHistoryPage /> },
           { path: "inventory/reorder", element: <ReorderSuggestionsPage /> },
           { path: "inventory/barcodes", element: <BarcodeGeneratePage /> },
@@ -242,13 +256,19 @@ export const router = createBrowserRouter([
         children: [
           { path: "settings",   element: <AdminSettingsPage /> },
           { path: "settings/profile", element: <ProfileDetailsPage /> },
+          // One hub per menu section: the jobs inside Sales, Finance, Branches and the rest,
+          // listed from the same catalogue the menu itself reads (`lib/settingsHub`).
+          { path: "settings/hub/sales", element: <AdminSalesSectionPage /> },
+          { path: "settings/hub/inventory", element: <AdminInventorySectionPage /> },
+          { path: "settings/hub/:sectionId", element: <SectionHubPage /> },
           { path: "settings/overview", element: <BusinessOverviewPage /> },
+          { path: "settings/branch-details", element: <BranchDetailsOverviewPage /> },
           { path: "settings/business", element: <BusinessProfilePage /> },
-          // A branch is a row on the account screen, so the list has no screen of its own —
-          // `/admin/settings/branches` used to answer with React Router's own "Unexpected
-          // Application Error! 404" page, which is a developer's page, not an owner's. The
-          // address now lands on the screen that lists the branches instead.
-          { path: "settings/branches", element: <Navigate to="/admin/settings/profile" replace /> },
+          // The list of every branch this account may work in. It used to be rows at the foot of
+          // the account screen (`/admin/settings/profile`) and this address only redirected
+          // there; the Branches section's "All branches" row opens it directly now, and each
+          // branch's own page is the row below.
+          { path: "settings/branches", element: <AllBranchesPage /> },
           { path: "settings/branches/:branchId", element: <BranchDetailPage /> },
           { path: "settings/roles", element: <RolesAccessPage /> },
         ] },
@@ -272,6 +292,7 @@ export const router = createBrowserRouter([
           { path: "alerts/credit-overrides/:customerId", element: <CreditOverrideDetailPage /> },
           { path: "alerts/reminders", element: <RemindersOverviewPage /> },
           { path: "alerts/inventory", element: <InventoryAlertsPage /> },
+          { path: "alerts/expiry", element: <ExpiryAlertsPage /> },
           { path: "alerts/credit-requests/:requestId", element: <CreditRequestDetailPage /> },
           { path: "alerts/groups/:groupId", element: <GroupDetailPage /> },
         ] },
@@ -308,6 +329,23 @@ export const router = createBrowserRouter([
       { path: "customers/:customerId/reminders", element: <ReminderHistoryPage /> },
       { path: "products", element: <ProductsListPage /> },
       { path: "products/:productId", element: <ProductDetailPage /> },
+      // Inventory surfaces an employee may hold. The owner's grant is what puts the screen
+      // in reach — each group carries the permission its own writes need, so an employee
+      // granted "Add Product" finds a working Add Product screen here, on their own side,
+      // and an employee without it is not walked into a page the database will refuse.
+      { element: <PermissionGuard requires="products.create" fallback="/employee/products" />,
+        children: [
+          { path: "inventory/new", element: <AddProductPage /> },
+        ] },
+      { element: <PermissionGuard requires="products.edit" fallback="/employee/products" />,
+        children: [
+          { path: "inventory/:productId/edit", element: <AddProductPage /> },
+          { path: "inventory/barcodes", element: <BarcodeGeneratePage /> },
+        ] },
+      { element: <PermissionGuard requires="inventory.adjust" fallback="/employee/products" />,
+        children: [
+          { path: "inventory/:productId/adjust", element: <InventoryAdjustPage /> },
+        ] },
       { path: "search", element: <SearchPage /> },
       { path: "settings", element: <SettingsPage /> },
       { path: "reports", element: <MyReportsPage /> },

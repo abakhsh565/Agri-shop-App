@@ -110,6 +110,15 @@ export interface BranchSummary {
    */
   place: PickedPlace | null;
   /**
+   * The address typed into the branch's location field, whether or not it was ever pinned.
+   *
+   * `place` is null until the branch has coordinates, because a map marker and a marketplace
+   * listing need a point — but the address is a fact about the branch on its own, and a list
+   * that showed "no location" for a branch whose address is on file would be describing the
+   * map, not the branch.
+   */
+  address: string | null;
+  /**
    * Whether this branch offers its listed products to the farmer marketplace.
    *
    * It travels with the branch for the same reason the place does: `shops` may only be read
@@ -528,6 +537,7 @@ export const useShopStore = create<ShopState>((set, get) => ({
         salesCount: r.sales_count != null ? Number(r.sales_count) : null,
         salesTotal: r.sales_total != null ? Number(r.sales_total) : null,
         place: branchPlaceFrom(r),
+        address: r.address ?? null,
         marketplaceEnabled: r.marketplace_enabled === true,
         inventoryValue: r.inventory_value != null ? Number(r.inventory_value) : null,
         inventoryCostIncomplete: r.inventory_cost_incomplete === true,

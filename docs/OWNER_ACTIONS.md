@@ -91,6 +91,41 @@ merged, every APK build has to be dispatched by hand.
 
 ---
 
+## Action 5 — production: clear the test OTPs — DONE 2026-10-27, verified
+
+**Done and verified.** The test-OTP list is gone (`sms_test_otp: null`) and a live probe with
+`923001234567` + `123456` now answers **403 `otp_expired` with no session**; the registration screen
+fails at the provider instead of accepting a code. Full result: `docs/FAILURE-LOG.md` → F-0002 and
+`docs/PRODUCTION_PHONE_AUTH.md` §2a. What is left is the real SMS provider, which you will send later
+— **never paste its credentials into the chat.**
+
+The steps below are kept for the record.
+
+Production's Supabase project carries a list of test phone numbers with fixed codes, and that list is a
+login bypass: a listed number plus its published code signs in without any SMS. It is why `03001234567`
+accepted `123456` on the live site (`docs/FAILURE-LOG.md` → F-0002). The app side is already correct;
+this is the project side, and no tool here may write it.
+
+1. Open <https://supabase.com/dashboard> → the **production** project, ref **`gkswcfljxlutkfdvvqng`**
+   ("Agrishop APp"). Staging is a different project — do not touch it.
+2. **Authentication → Providers → Phone → Test OTPs**. Delete every entry — it currently reads
+   `923001234567=123456, 923001122334=123456, 923008888888=000000, 923009988776=000000,
+   923009988777=000000, 923009988778=000000`.
+3. Save. Leave the Twilio fields as they are for now; with the list gone, phone sign-in fails closed
+   instead of accepting a fixed code. The real provider values go in when you send them.
+4. Tell me **"test otp hata diye"**.
+
+What I do then: read the project's auth configuration back and require `sms_test_otp` to be empty, then
+probe production from outside with `923001234567` + `123456` and require a refusal with **no session** in
+the response. Both checks, and what each result means, are in `docs/PRODUCTION_PHONE_AUTH.md` §4. Until
+the first one passes, production is not secure and I will say so.
+
+The real SMS provider (Twilio, or a 2L-style sender) is configured later, in the same screen —
+**never paste its credentials into the chat**; put them in a file outside this repository and tell me the
+path, as with every other secret.
+
+---
+
 ## What needs nothing from you
 
 CI gates, the APK artifact verification, QA residue pruning, tier-2 verification, migrations, the

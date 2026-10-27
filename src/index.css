@@ -158,6 +158,16 @@
      app's row size, not a Settings-only override: every list — More, Employees,
      Companies, Products — reads at the same size as the screen it was approved on. */
   --text-row: 14px;
+  /* A row's second line — "Your team and their access". One size below the label instead of
+     level with it (owner's request, 2026-10-26): at 13 the pair read as one block, and the
+     line that exists to explain the row competed with the row's own name. It has its own
+     token because `--text-meta` also sizes group labels and help paragraphs, which are not
+     subheadings and stay where they are. */
+  --text-row-meta: 12px;
+  /* A group label — MONEY, STOCK, PEOPLE, APP, BRANCHES. 12px like the row's second line
+     (owner's request, 2026-10-26): the uppercase and the letter-spacing already separate a
+     group from the rows under it, so it does not also need to be a step larger. */
+  --text-section: 12px;
   --text-body: 15px;
   --text-meta: 13px;
   --weight-body: 400;
@@ -1221,12 +1231,12 @@ svg.lucide {
   /* -- Type -- */
   .ds-title-page    { font-size: var(--text-page-title); font-weight: var(--weight-strong); color: var(--text-primary); line-height: 1.15; }
   .ds-title-sheet   { font-size: var(--text-sheet-title); font-weight: var(--weight-strong); color: var(--text-primary); }
-  .ds-section       { font-size: var(--text-meta); font-weight: var(--weight-strong); color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.06em; }
+  .ds-section       { font-size: var(--text-section); font-weight: var(--weight-strong); color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.06em; }
   .ds-row-label     { font-size: var(--text-row); font-weight: var(--weight-body); color: var(--text-primary); }
   .ds-row-strong    { font-size: var(--text-row); font-weight: var(--weight-strong); color: var(--text-primary); }
   .ds-row-qualifier { font-size: var(--text-row); font-weight: var(--weight-body); color: var(--text-tertiary); }
   .ds-row-value     { font-size: var(--text-row); font-weight: var(--weight-body); color: var(--text-secondary); }
-  .ds-row-meta      { font-size: var(--text-meta); font-weight: var(--weight-body); color: var(--text-tertiary); }
+  .ds-row-meta      { font-size: var(--text-row-meta); font-weight: var(--weight-body); color: var(--text-tertiary); }
   .ds-row-desc      { font-size: var(--text-body); font-weight: var(--weight-body); color: var(--text-secondary); line-height: 1.4; }
   .ds-body          { font-size: var(--text-body); font-weight: var(--weight-body); color: var(--text-primary); }
   .ds-meta          { font-size: var(--text-meta); font-weight: var(--weight-body); color: var(--text-secondary); }
@@ -1240,6 +1250,12 @@ svg.lucide {
     background: var(--tone-card);
     border-radius: var(--radius-card);
     overflow: hidden;
+  }
+  /* A list inside a card that is already drawn: same rows, same full-bleed hairlines below,
+     no second surface. Only the surface is dropped — the grammar stays one implementation. */
+  .ds-listcard-plain {
+    background: transparent;
+    border-radius: 0;
   }
   .ds-listcard > * + * {
     position: relative;
@@ -1415,9 +1431,10 @@ svg.lucide {
      Group headings used to restate their own size, weight, tracking and casing at each
      call site, which is how an app ends up with six versions of the same label. They are
      all this class now: one sentence-case line in the secondary tone, no uppercase, no
-     letter-spacing. Retune the whole app's headings by editing the four values below. */
+     letter-spacing. Its size is the group-label token the uppercase variant uses too, one step
+     under the rows it heads. */
   .ds-section-label {
-    font-size: var(--fs-13);
+    font-size: var(--text-section);
     font-weight: 600;
     letter-spacing: 0;
     text-transform: none;

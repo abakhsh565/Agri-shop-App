@@ -47,6 +47,19 @@ on conflict (id) do update set
 -- ─── Its default branch ─────────────────────────────────────────────────────────────────────
 -- Required, not decorative: stock movements and sales stamp a branch, and `default_branch_id()`
 -- resolves NULL when a tenant has no active branch (see the forward migration 0191 comment).
+--
+-- A shop holds exactly ONE default (`0211` made a branch its own identity, and nothing at the schema
+-- level forbids a second one — there is no partial unique index on `(tenant_id) where is_default`).
+-- The `0094` backfill gave every existing shop a branch named '<shop> - Main' with `is_default =
+-- true`; this file adds its own branch below. Matching on `id` cannot adopt that older row, so
+-- without the demotion the two coexist and the Branches screen lists two "Main"s. Demote first,
+-- then insert: the seed is the authority on which branch is the default, and this is idempotent.
+update public.branches
+   set is_default = false
+ where tenant_id = '00000000-0000-0000-0000-000000000001'
+   and id <> '00000000-0000-0000-0000-000000000002'
+   and is_default;
+
 insert into public.branches (id, tenant_id, name, is_default, is_active, address)
 values (
   '00000000-0000-0000-0000-000000000002',

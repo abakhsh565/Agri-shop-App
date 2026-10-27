@@ -9,14 +9,13 @@ import { hasPin } from "@/lib/pinLock";
 import { markPhoneVerified, rememberLastProfile } from "@/lib/loginWindow";
 import { useAuthStore } from "@/stores/authStore";
 import { useT } from "@/lib/i18n";
+import { OTP_RESEND_DELAY_SECONDS, OTP_VALIDITY_SECONDS } from "@/lib/otpPolicy";
 
-const OTP_VALIDITY = 2 * 60;
 // There is deliberately NO cap on tries and NO lockout. A shop owner or their
 // new employee who mistypes a number must be able to keep trying — being shut
 // out of their own shop for mistyping is far worse than the risk it guards
 // against, and the code itself (later a real SMS code) is the gate. The only
 // limit left is a short cooldown between texts, so "Resend" cannot be hammered.
-const RESEND_DELAY = 30;
 /** After this many wrong codes we suggest a fresh one instead of just saying no. */
 const NUDGE_RESEND_AFTER = 3;
 
@@ -29,10 +28,10 @@ export default function OTPVerifyPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [attempts, setAttempts] = useState(0);
-  const [countdown, setCountdown] = useState(OTP_VALIDITY);
+  const [countdown, setCountdown] = useState(OTP_VALIDITY_SECONDS);
   // Starts at the cooldown, not at zero: a code was just sent, so Resend arrives disabled and
   // becomes usable 30 seconds later — the same wait the person gets after pressing it.
-  const [resendCountdown, setResendCountdown] = useState(RESEND_DELAY);
+  const [resendCountdown, setResendCountdown] = useState(OTP_RESEND_DELAY_SECONDS);
   const verifying = useRef(false);
 
   useEffect(() => {
@@ -165,12 +164,18 @@ export default function OTPVerifyPage() {
 
   async function handleResend() {
     if (resendCountdown > 0) return;
-    await sendOTP(pendingPhone);
-    setResendCountdown(RESEND_DELAY);
-    setCountdown(OTP_VALIDITY);
+    // A code that was never sent must be said so: restarting the clock and the cooldown would
+    // otherwise leave the person waiting on an SMS the server refused to send.
+    setError("");
+    const result = await sendOTP(pendingPhone);
+    if (!result.success) {
+      setError(t("auth.errSendCode"));
+      return;
+    }
+    setResendCountdown(OTP_RESEND_DELAY_SECONDS);
+    setCountdown(OTP_VALIDITY_SECONDS);
     setAttempts(0);
     setOtp("");
-    setError("");
   }
 
   const expired = countdown === 0;

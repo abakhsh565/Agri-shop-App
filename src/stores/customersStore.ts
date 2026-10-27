@@ -26,6 +26,21 @@ interface CustomerRow {
   archived_by: string | null;
 }
 
+/**
+ * The customer's money for the branch being worked in.
+ *
+ * The customer row keeps shop-wide running columns for history. They are not the
+ * answer to "what does this person owe this branch": a customer who bought in two
+ * branches showed the combined debt in each. Migration 0242 derives these from the
+ * branch's own sales, returns and payments, and the app renders that answer instead.
+ */
+interface BranchCustomerBalanceRow {
+  customer_id: string;
+  total_purchases: number | string;
+  total_paid: number | string;
+  outstanding_balance: number | string;
+}
+
 function customerFromRow(r: CustomerRow): Customer {
   return {
     id: r.id,
@@ -99,9 +114,12 @@ interface CustomersState {
     currentLimit: number;
     requestedLimit: number;
     requestedBy: string;
+    /** Optional note the owner reads when deciding (0251). */
+    reason?: string;
   }) => Promise<void>;
   loadCreditLimitRequests: () => Promise<CreditLimitRequest[]>;
-  approveCreditLimitRequest: (requestId: string, reviewedBy: string) => Promise<void>;
+  /** `approvedLimit` is the owner's own figure; omitted means "grant what was asked" (0251). */
+  approveCreditLimitRequest: (requestId: string, reviewedBy: string, approvedLimit?: number | null) => Promise<void>;
   rejectCreditLimitRequest: (requestId: string, reviewedBy: string, reason?: string) => Promise<void>;
   /** Drop every row: the app is about to read a different shop. */
   reset: () => void;
@@ -152,7 +170,36 @@ export const useCustomersStore = create<CustomersState>((set, get) => ({
         }
         return;
       }
-      const customers = (data as CustomerRow[]).map(customerFromRow);
+      const mapped = (data as CustomerRow[]).map(customerFromRow);
+
+      // The branch's money, not the shop's. On a failed read this falls back to zero
+      // for every row rather than to the shop-wide column: showing another branch's
+      // debt is worse than showing an unknown one, and the next revalidation corrects it.
+      const { data: branchBalances, error: balanceError } = await supabase.rpc(
+        "get_branch_customer_balances"
+      );
+      if (!isDataContextCurrent(context)) return;
+      const balanceById = new Map<string, BranchCustomerBalanceRow>(
+        balanceError
+          ? []
+          : ((branchBalances as BranchCustomerBalanceRow[] | null) ?? []).map((row) => [
+              row.customer_id,
+              row,
+            ])
+      );
+      const customers = mapped.map((customer) => {
+        const balance = balanceById.get(customer.id);
+        if (!balance) {
+          return { ...customer, totalPurchases: 0, totalPaid: 0, outstandingBalance: 0 };
+        }
+        return {
+          ...customer,
+          totalPurchases: Number(balance.total_purchases),
+          totalPaid: Number(balance.total_paid),
+          outstandingBalance: Number(balance.outstanding_balance),
+        };
+      });
+
       setCachedData(CACHE_KEY, customers);
       set({ customers, loading: false, ready: true });
     } catch {
@@ -343,7 +390,7 @@ export const useCustomersStore = create<CustomersState>((set, get) => ({
       currentLimit: input.currentLimit,
       requestedLimit: input.requestedLimit,
       requestedBy: input.requestedBy,
-      reason: (input as any).reason || "",
+      reason: input.reason ?? "",
     });
   },
 
@@ -356,9 +403,9 @@ export const useCustomersStore = create<CustomersState>((set, get) => ({
     }
   },
 
-  approveCreditLimitRequest: async (requestId, reviewedBy) => {
+  approveCreditLimitRequest: async (requestId, reviewedBy, approvedLimit) => {
     const { approveCreditRequest } = await import("@/lib/localGroupRegistry");
-    await approveCreditRequest(requestId, reviewedBy);
+    await approveCreditRequest(requestId, reviewedBy, approvedLimit ?? null);
     // Reload customers to reflect updated credit limit
     await get().load();
   },

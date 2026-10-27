@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
 import ListCard from "@/components/ui/ListCard";
@@ -9,9 +9,10 @@ import { useEmployeesStore } from "@/stores/employeesStore";
 import { useUIStore } from "@/stores/uiStore";
 import { useAuthStore } from "@/stores/authStore";
 import { useRolesStore } from "@/stores/rolesStore";
-import { digitsOnlyPhone, phoneFieldProps } from "@/lib/phoneInput";
+import { digitsOnlyPhone, localPhone, phoneFieldProps } from "@/lib/phoneInput";
 import { usePermissionsStore } from "@/stores/permissionsStore";
 import { useT } from "@/lib/i18n";
+import { branchKind } from "@/lib/branchKind";
 import { usePermissionLabels } from "@/lib/permissionLabels";
 import { applyOverrides, diffOverrides, overrideCount } from "@/lib/accessModel";
 import EmployeeAccessEditor from "@/components/admin/EmployeeAccessEditor";
@@ -23,6 +24,7 @@ import Button from "@/components/ui/Button";
 import { normalizePhone } from "@/lib/auth";
 import { clearNav } from "@/lib/navContext";
 import { supabase } from "@/lib/supabase";
+import { markEmployeeAccessRequestAdded } from "@/lib/employeeAccessRequests";
 import { Check, CheckCircle2, ChevronRight, User, Shield, MapPin } from "lucide-react";
 
 /**
@@ -49,6 +51,7 @@ type Step = "who" | "role" | "where";
 
 export default function AddEmployeePage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { addToast } = useUIStore();
   const { user } = useAuthStore();
   const { language } = useThemeStore();
@@ -65,8 +68,12 @@ export default function AddEmployeePage() {
   // invitation instead of navigating away from it.
   const [sent, setSent] = useState<{ id: string | null; name: string; phone: string } | null>(null);
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
-  const [name, setName] = useState("");
-  const [phone, setPhone] = useState("");
+  // An access request opens this screen with the requester already named and
+  // numbered. The branch and the role are still the owner's decisions, so only
+  // the two facts the employee supplied are prefilled.
+  const [requestId, setRequestId] = useState<string | null>(searchParams.get("request"));
+  const [name, setName] = useState(() => searchParams.get("name") ?? "");
+  const [phone, setPhone] = useState(() => localPhone(searchParams.get("phone") ?? ""));
   const [roleId, setRoleId] = useState<string | null>(null);
   // The selected role's reusable defaults.
   const [selectedRolePermissions, setSelectedRolePermissions] = useState<string[]>([]);
@@ -163,6 +170,7 @@ export default function AddEmployeePage() {
   function resetForm() {
     setSent(null);
     setStep("who");
+    setRequestId(null);
     setName("");
     setPhone("");
     setPhotoUrl(null);
@@ -210,6 +218,14 @@ export default function AddEmployeePage() {
         branchScope: branchScope,
         createdBy: user?.id,
       });
+      // The invitation is the access. Closing the request is bookkeeping after
+      // it succeeded; a failure here must not turn a created employee into an
+      // error the owner would retry. The request screen treats an existing
+      // membership as already invited even while the row is still pending.
+      if (requestId && created?.id) {
+        void markEmployeeAccessRequestAdded(requestId, created.id);
+        setRequestId(null);
+      }
       addToast(t("addEmployee.created", { name: name.trim() }), "success");
       clearNav();
       // Show the invitation rather than leaving the screen: the link is the one
@@ -551,7 +567,11 @@ export default function AddEmployeePage() {
                       </div>
                       <div>
                         <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>{b.name}</p>
-                        {b.is_default && <p className="text-10" style={{ color: "var(--brand)" }}>{t("addEmployee.mainBranch")}</p>}
+                        {/* Every branch says which kind it is, not only the main one: a sub-branch
+                            starts empty, and the person choosing scope should see that. */}
+                        <p className="text-10" style={{ color: b.is_default ? "var(--brand)" : "var(--text-secondary)" }}>
+                          {branchKind(t, b.is_default)}
+                        </p>
                       </div>
                     </button>
                   ))}

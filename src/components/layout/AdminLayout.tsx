@@ -1,5 +1,5 @@
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
-import { LayoutDashboard, ShoppingBag, Package, ScanLine, MessageSquare, X } from "lucide-react";
+import { LayoutDashboard, ShoppingBag, Package, ScanLine, MoreHorizontal, X } from "lucide-react";
 import { useT, tNow } from "@/lib/i18n";
 import ToastContainer from "@/components/ui/Toast";
 import NavTracker from "@/components/ui/NavTracker";
@@ -30,10 +30,11 @@ const TAB_DEFS = [
   { key: "admin.sales"     as const, icon: ShoppingBag,     path: "/admin/sales"     },
   { key: "scan"            as const, icon: ScanLine,        path: "__scan__"         },
   { key: "admin.inventory" as const, icon: Package,         path: "/admin/products"    },
-  // The fifth slot was "More", which opened a menu of rows. Those rows now ship on the account
-  // screen, and the slot holds Messages — the surface a farmer's product request and a team's
-  // own conversation will share. `/admin/more` still resolves as a page; it is simply not a tab.
-  { key: "admin.messages"  as const, icon: MessageSquare,   path: "/admin/messages"   },
+  // The fifth slot is "More" again: the owner's menu — the shop this account is working in, then
+  // Money, Stock, People and App — which is what this slot answered before it briefly held
+  // Messages. Messages is a destination, not a menu, and it now ships as a row on Settings
+  // (`pages/admin/settings`), where the rest of the account's own screen already is.
+  { key: "admin.more"      as const, icon: MoreHorizontal,  path: "/admin/more"      },
 ];
 
 export default function AdminLayout() {
@@ -116,15 +117,19 @@ export default function AdminLayout() {
 
   function activeTab() {
     const path = location.pathname;
+    // Home first, and it has to be stated: the Dashboard tab opened the dashboard but nothing
+    // lit it, because every branch below named a section and the landing screen named none.
+    // A tab that is the current screen and does not say so reads as a tab that did not work.
+    if (path.startsWith("/admin/dashboard")) return "/admin/dashboard";
     if (path.startsWith("/admin/sales"))     return "/admin/sales";
     if (path.startsWith("/admin/products"))  return "/admin/products";
     if (path.startsWith("/admin/inventory") || path.startsWith("/admin/inventory/movements") || path.startsWith("/admin/inventory/reorder")) return "/admin/products";
     if (path.startsWith("/admin/customers")) return "/admin/customers";
-    if (path.startsWith("/admin/messages")) return "/admin/messages";
-    // `/admin/more`, employees, companies, purchases, reports, settings and payments used to
-    // light the More tab, because More was where they were reached from. More is no longer a
-    // tab and none of them is Messages, so none of them lights anything — the same answer the
-    // assistant screen gives, rather than pointing at a tab that does not own them.
+    if (path.startsWith("/admin/more")) return "/admin/more";
+    // Messages is not a tab any more, so opening it lights nothing — the same answer the
+    // assistant screen gives, rather than pointing at a tab that does not own it. Employees,
+    // companies, purchases, reports, settings and payments are reached from More, but none of
+    // them IS More, so they light nothing either.
     // `null` rather than a stand-in: the assistant is no longer a tab, so on that screen
     // NO tab is the current one, and lighting up "Dashboard" would send someone there
     // believing the assistant lives under it.

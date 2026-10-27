@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Loader2, Store } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import ListCard from "@/components/ui/ListCard";
 import ListRow from "@/components/ui/ListRow";
@@ -8,7 +8,6 @@ import LocationField from "@/components/ui/LocationField";
 import Checkbox from "@/components/ui/Checkbox";
 import { supabase } from "@/lib/supabase";
 import type { PickedPlace } from "@/lib/geo";
-import { branchContextLabel } from "@/lib/branchContext";
 import { useT } from "@/lib/i18n";
 import { useShopStore, type BranchSummary } from "@/stores/shopStore";
 import { useRolesStore } from "@/stores/rolesStore";
@@ -18,10 +17,10 @@ import { useShellBase } from "@/lib/useShellBase";
 /**
  * Everything a branch answers, in one form.
  *
- * This is the same content in two containers: the bottom sheet on the Settings screen, and the
- * branch detail page the Branches list opens. It lives here once because two copies of a form
- * is how the two copies start disagreeing — the sheet would gain a field the page does not
- * have, and each would save a different subset.
+ * This is the whole of a branch's configuration, as the page the Branches list opens. The
+ * branch's identity and its figures are drawn ABOVE it by that page (`BranchIdentity`,
+ * `BranchPerformance`), so the form begins where configuration begins and never repeats the
+ * name and place it sits under.
  *
  * Editing a branch means everything that was answered when it was created. Creating a branch
  * collects two things: a name and which roles it starts with. Both are editable here, which is
@@ -244,37 +243,10 @@ export default function BranchEditor({
 
   return (
     <div className="px-4 pt-1 pb-2" data-testid={`branch-edit-${branch.id}`}>
-      {/* Which branch this is, said once: its icon, its name, the kind of branch it is (the
-          account's Main branch, or one added afterwards), and what is inside it. Nothing here is
-          an edit control — this screen changes where the branch is and whether farmers can find
-          it, and every one of those is a deliberate, separate action. */}
-      <div className="flex items-start gap-2.5">
-        <div
-          className="size-9 rounded-full flex items-center justify-center shrink-0"
-          style={{ background: "var(--tone-sunken)", color: "var(--text-secondary)" }}
-          aria-hidden="true"
-        >
-          <Store size={17} />
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2 min-w-0">
-            <p className="text-14 font-bold truncate" style={{ color: "var(--text-primary)" }}>
-              {branch.name}
-            </p>
-            <span
-              className="text-11 font-bold px-2 py-0.5 rounded-full shrink-0"
-              style={{ background: "var(--tone-sunken)", color: "var(--text-secondary)" }}
-              data-testid={`branch-kind-${branch.id}`}
-            >
-              {t(branch.isMain ? "branches.mainBranch" : "branches.subBranch")}
-            </span>
-          </div>
-          <p className="text-11 mt-0.5 truncate" style={{ color: "var(--text-secondary)" }}>              {branchContextLabel(t, branch)}
-          </p>
-        </div>
-      </div>
-
-      <div className="ds-field mt-4"><input value={name} disabled={busy} maxLength={120}
+      {/* No identity block here: this form is hosted by the branch's own page, which opens with
+          `BranchIdentity` and the branch's figures before the form begins. Said once, at the top
+          of the page, rather than twice on one screen. */}
+      <div className="ds-field"><input value={name} disabled={busy} maxLength={120}
         aria-label={t("branches.nameLabel")} onChange={(event) => setName(event.target.value)}
         className="h-full flex-1 bg-transparent outline-none ds-body text-start" /></div>
       <button type="button" disabled={busy || !name.trim() || name.trim() === branch.name}

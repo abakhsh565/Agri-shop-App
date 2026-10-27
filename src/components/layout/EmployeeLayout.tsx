@@ -119,6 +119,9 @@ export default function EmployeeLayout() {
 
   function activeTab() {
     const path = location.pathname;
+    // Home is a tab, so it has to be answered for: without this line the employee's landing
+    // screen opened with no tab lit, the same defect the owner's bar had.
+    if (path.startsWith("/employee/dashboard")) return "/employee/dashboard";
     if (path.startsWith("/employee/sale"))      return "/employee/sales";
     if (path.startsWith("/employee/sales"))     return "/employee/sales";
     if (path.startsWith("/employee/customers")) return "/employee/customers";

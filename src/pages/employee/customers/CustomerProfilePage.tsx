@@ -15,7 +15,7 @@ import { formatCurrency, calculateCreditHealth, getCreditHealthStatusColor } fro
 import { useThemeStore } from "@/stores/themeStore";
 import { useT } from "@/lib/i18n";
 import { useShellBase } from "@/lib/useShellBase";
-import { History, Wallet, Bell, Pencil, Trash2, Receipt, Plus, Package } from "lucide-react";
+import { History, Wallet, Bell, Pencil, Trash2, Receipt, Plus, Package, Clock } from "lucide-react";
 import { getRecommendationsForCustomer, KNOWN_CROPS, type CustomerCropRecord, type RecommendationReason } from "@/lib/recommendationEngine";
 import { loadReminderConfigs, saveReminderConfig as saveReminderConfigToDb, loadCustomerCrops, loadCustomerCropRows, saveCustomerCrops as saveCustomerCropsToDb, loadBusinessSettings, calculatePaymentStatus, getPaymentStatusLabel, getPaymentStatusColor, isDuplicateReminder } from "@/lib/reminderEngine";
 import RecommendationReasonLine from "@/components/recommendations/RecommendationReason";
@@ -23,6 +23,8 @@ import { useProductsStore } from "@/stores/productsStore";
 import { SkeletonList } from "@/components/ui/Skeleton";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import CreditLimitSheet from "@/components/customers/CreditLimitSheet";
+import { hasPermission } from "@/lib/tenantContext";
+import type { LocalCreditRequest } from "@/lib/localGroupRegistry";
 import ReminderConfigSheet from "@/components/ui/ReminderConfigSheet";
 import type { ReminderConfig, BusinessSettings, CropConfig } from "@/types";
 
@@ -56,13 +58,17 @@ export default function CustomerProfilePage() {
   }, []);
   const { addToast } = useUIStore();
   const { user } = useAuthStore();
-  const isAdmin = user?.role === "admin";
+  // What this person may actually do, read from the grants the owner set — not from which
+  // shell they happen to be in. The database enforces the same codes either way.
+  const canEditCustomers = hasPermission("customers.edit");
+  const canSetCreditLimit = hasPermission("customers.credit_limit");
+  const canRecordPayments = hasPermission("customers.payments");
+  const canArchiveCustomers = hasPermission("customers.delete");
 
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState("");
   const [editPhone, setEditPhone] = useState("");
   const [editAddress, setEditAddress] = useState("");
-  const [editCreditLimit, setEditCreditLimit] = useState("");
   const [editImageUrl, setEditImageUrl] = useState<string | null>(null);
   const [editCrops, setEditCrops] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
@@ -78,9 +84,40 @@ export default function CustomerProfilePage() {
   const [editDueDate, setEditDueDate] = useState("");
   const [customerCrops, setCustomerCrops] = useState<string[]>([]);
   const [businessSettings, setBusinessSettings] = useState<BusinessSettings>({ crops: [] });
-  const [showLimitSheet, setShowLimitSheet] = useState(false);
+  // One sheet, two jobs: `set` writes the limit, `request` asks the owner for one (0251).
+  const [limitMode, setLimitMode] = useState<null | "set" | "request">(null);
   const [savingLimit, setSavingLimit] = useState(false);
   const setCreditLimit = useCustomersStore((s) => s.setCreditLimit);
+  const requestCreditLimitIncrease = useCustomersStore((s) => s.requestCreditLimitIncrease);
+  // A request that is already waiting is a fact this card has to show. Without it the screen
+  // looks identical before and after asking — the employee cannot tell whether the request went
+  // anywhere, and the owner, opening the same card, cannot see that a decision is waiting on them.
+  const [pendingLimitRequest, setPendingLimitRequest] = useState<LocalCreditRequest | null>(null);
+
+  /**
+   * Read back whether this customer has a request waiting. The row is the answer, not the local
+   * state: a request that was just sent has to appear here in the same breath, or the card keeps
+   * offering "Request limit" and the employee files the same request twice.
+   */
+  const loadPendingLimitRequest = async () => {
+    if (!customerId) return;
+    try {
+      // Imported on demand, the way the store does it: this module is otherwise only needed by
+      // the alerts screens, and the customer card should not pull it into every page's chunk.
+      const { getCreditRequestsDB } = await import("@/lib/localGroupRegistry");
+      const rows = await getCreditRequestsDB();
+      setPendingLimitRequest(
+        rows.find((r) => r.customerId === customerId && r.status === "pending") ?? null,
+      );
+    } catch {
+      // Unreadable: leave the card as it is rather than claiming the request went nowhere.
+    }
+  };
+
+  useEffect(() => {
+    void loadPendingLimitRequest();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the customer, not the closure
+  }, [customerId]);
 
   useEffect(() => {
     if (!customerId) return;
@@ -120,18 +157,37 @@ export default function CustomerProfilePage() {
     } catch { addToast(t("customerProfile.reminderDeleteFailed"), "error"); }
   }
 
-  async function handleSetCreditLimit(value: number) {
+  async function handleSaveCreditLimit(value: number, reason: string) {
     if (!customer || savingLimit) return;
     setSavingLimit(true);
     try {
-      // One write path for this column: the permission-checked, audited RPC. The customer
-      // edit form used to write it straight to the table, which is how a limit could move
-      // with nothing in the audit trail and no cache refresh behind it.
-      const applied = await setCreditLimit(customer.id, value);
-      setShowLimitSheet(false);
-      addToast(t("sale.creditLimitSet", { amount: formatCurrency(applied) }), "success");
+      if (canSetCreditLimit) {
+        // One write path for this column: the permission-checked, audited RPC. The customer
+        // edit form used to write it straight to the table, which is how a limit could move
+        // with nothing in the audit trail and no cache refresh behind it.
+        const applied = await setCreditLimit(customer.id, value);
+        addToast(t("sale.creditLimitSet", { amount: formatCurrency(applied) }), "success");
+      } else {
+        // Without the lending permission the number is a proposal: the owner approves it,
+        // and may approve a different amount than the one asked for.
+        await requestCreditLimitIncrease({
+          customerId: customer.id,
+          customerName: customer.name,
+          currentLimit: customer.creditLimit,
+          requestedLimit: value,
+          requestedBy: user?.name || user?.id || "",
+          reason,
+        });
+        addToast(t("creditLimit.requestSent"), "success");
+        // The card must now say a decision is waiting, and stop offering to file another.
+        await loadPendingLimitRequest();
+      }
+      setLimitMode(null);
     } catch (e) {
-      addToast(e instanceof Error ? e.message : t("sale.creditLimitFailed"), "error");
+      addToast(
+        e instanceof Error ? e.message : canSetCreditLimit ? t("sale.creditLimitFailed") : t("creditLimit.requestFailed"),
+        "error",
+      );
     } finally {
       setSavingLimit(false);
     }
@@ -160,7 +216,6 @@ export default function CustomerProfilePage() {
     setEditName(customer.name);
     setEditPhone(customer.phone);
     setEditAddress(customer.address ?? "");
-    setEditCreditLimit(customer.creditLimit > 0 ? String(customer.creditLimit) : "");
     setEditImageUrl(customer.imageUrl ?? null);
     setEditCrops([...customerCrops]);
     setEditing(true);
@@ -179,24 +234,9 @@ export default function CustomerProfilePage() {
     setSaving(true);
     try {
       const { supabase } = await import("@/lib/supabase");
-      const creditLim = editCreditLimit.trim() ? parseFloat(editCreditLimit.trim()) : 0;
-      // Note what this does NOT do: write the limit. The column has one owner — the
-      // `Set limit` / `Change limit` action on the customer card, through the audited RPC.
-      const creditLimitChanged = !isNaN(creditLim) && creditLim !== customer.creditLimit;
-      
-      // Employee: submit credit limit request instead of direct edit
-      if (creditLimitChanged && !isAdmin) {
-        const { requestCreditLimitIncrease } = useCustomersStore.getState();
-        await requestCreditLimitIncrease({
-          customerId: customerId!,
-          customerName: customer.name,
-          currentLimit: customer.creditLimit,
-          requestedLimit: creditLim,
-          requestedBy: user?.name || user?.id || "Unknown",
-        });
-        addToast("Credit limit request submitted for approval", "success");
-      }
-      
+      // Note what this does NOT do: write the credit limit. The column has one owner — the
+      // `Set limit` / `Request limit` action on this customer's card, through the audited
+      // RPC or the owner-approval request — so a form save can never move it silently.
       const { error } = await supabase
         .from("customers")
         .update({
@@ -377,18 +417,70 @@ export default function CustomerProfilePage() {
               <span className="text-15 font-bold" style={{ color: "var(--text-primary)" }}>
                 {customer.creditLimit > 0 ? formatCurrency(customer.creditLimit) : "\u2014"}
               </span>
-              {isAdmin && (
+              {canSetCreditLimit ? (
                 <button
-                  onClick={() => setShowLimitSheet(true)}
+                  onClick={() => setLimitMode("set")}
                   className="text-12 font-semibold px-3 py-1.5 rounded-full"
                   style={{ background: "var(--surface-2)", color: "var(--text-primary)", border: "1px solid var(--divider)" }}
                   data-testid="credit-limit-action"
                 >
                   {customer.creditLimit > 0 ? t("customers.changeLimit") : t("customers.setLimit")}
                 </button>
+              ) : (
+                // An employee without the lending permission is not left with a button that
+                // can only fail: the same sheet collects a number and files a request. While one
+                // is already waiting, the button would only file a second, so it is the waiting
+                // line below that is shown instead — one outstanding request per customer.
+                !pendingLimitRequest && (
+                  <button
+                    onClick={() => setLimitMode("request")}
+                    className="text-12 font-semibold px-3 py-1.5 rounded-full"
+                    style={{ background: "var(--surface-2)", color: "var(--text-primary)", border: "1px solid var(--divider)" }}
+                    data-testid="credit-limit-request-action"
+                  >
+                    {t("creditLimit.requestShort")}
+                  </button>
+                )
               )}
             </div>
           </div>
+
+          {/*
+            A request that is waiting for an answer. Both people who look at this card need it:
+            the employee who asked (was it sent?) and the owner who has to decide. In the owner's
+            shell the line opens the request itself, where the amount can be changed before it is
+            approved (0251) — the customer card alone cannot answer it.
+          */}
+          {pendingLimitRequest && (() => {
+            const line = (
+              <>
+                <Clock size={14} className="shrink-0 mt-0.5" style={{ color: "var(--text-secondary)" }} />
+                <span className="text-11" style={{ color: "var(--text-secondary)" }}>
+                  {t("creditLimit.requestPending")}{" "}
+                  {t("creditRequest.requestedAmount")}: {formatCurrency(pendingLimitRequest.requestedLimit)}
+                </span>
+              </>
+            );
+            const lineClass = "w-full flex items-start gap-2 mt-3 rounded-[var(--radius-tile)] p-2.5 text-start";
+            const lineStyle = { background: "var(--surface-2)" };
+            // Only the owner's shell has the request screen to open. For anyone else this is a
+            // statement, not a control — a disabled button would announce one that does nothing.
+            return base === "/admin" ? (
+              <button
+                type="button"
+                onClick={() => navigate(`/admin/alerts/credit-requests/${pendingLimitRequest.id}`)}
+                className={lineClass}
+                style={lineStyle}
+                data-testid="credit-limit-pending"
+              >
+                {line}
+              </button>
+            ) : (
+              <div className={lineClass} style={lineStyle} data-testid="credit-limit-pending">
+                {line}
+              </div>
+            );
+          })()}
 
           {/* Progress bar */}
           {customer.creditLimit > 0 && (
@@ -424,9 +516,14 @@ export default function CustomerProfilePage() {
                   {customer.dueDate ? new Date(customer.dueDate).toLocaleDateString(isUrdu ? "ur-PK" : "en-PK", { day: "numeric", month: "short", year: "numeric" }) : t("common.notSet")}
                 </p>
               </div>
-              <button onClick={() => { setEditDueDate(customer.dueDate || ""); setShowEditDueDate(true); }} className="text-12 font-semibold px-3 py-1.5 rounded-full" style={{ background: "var(--surface-2)", color: "#5A5A55" }}>
-                {customer.dueDate ? t("customerProfile.edit") : t("common.save")}
-              </button>
+              {/* The due date is written through `update_customer_due_date`, which requires
+                  `customers.edit` — so the control follows the same grant instead of being
+                  offered to someone the database will refuse. */}
+              {canEditCustomers && (
+                <button onClick={() => { setEditDueDate(customer.dueDate || ""); setShowEditDueDate(true); }} className="text-12 font-semibold px-3 py-1.5 rounded-full" style={{ background: "var(--surface-2)", color: "#5A5A55" }}>
+                  {customer.dueDate ? t("customerProfile.edit") : t("common.save")}
+                </button>
+              )}
             </div>
           </div>
           {/* Reminder schedules */}
@@ -483,22 +580,31 @@ export default function CustomerProfilePage() {
           {/* Same row as its neighbours: it was the only one carrying a tinted background and a
               hardcoded dark green label, which read as a different kind of control and was
               invisible once the page is dark. */}
-          <ListRow
-            onClick={() => navigate(base + "/customers/" + customerId + "/record-payment")}
-            icon={Receipt}
-            title={t("customerProfile.recordPayment")}
-          />
-          <ListRow
-            onClick={startEdit}
-            icon={Pencil}
-            title={t("customerProfile.editCustomer")}
-          />
-          <ListRow
-            onClick={() => setShowDelete(true)}
-            icon={Trash2}
-          >
-            <span className="text-sm" style={{ color: "var(--error)" }}>{t("customerProfile.deleteCustomer")}</span>
-          </ListRow>
+          {/* Each row follows the grant its action needs: recording a payment is
+              `customers.payments`, editing is `customers.edit`, archiving is
+              `customers.delete`. A row that is only refused by the database is clutter. */}
+          {canRecordPayments && (
+            <ListRow
+              onClick={() => navigate(base + "/customers/" + customerId + "/record-payment")}
+              icon={Receipt}
+              title={t("customerProfile.recordPayment")}
+            />
+          )}
+          {canEditCustomers && (
+            <ListRow
+              onClick={startEdit}
+              icon={Pencil}
+              title={t("customerProfile.editCustomer")}
+            />
+          )}
+          {canArchiveCustomers && (
+            <ListRow
+              onClick={() => setShowDelete(true)}
+              icon={Trash2}
+            >
+              <span className="text-sm" style={{ color: "var(--error)" }}>{t("customerProfile.deleteCustomer")}</span>
+            </ListRow>
+          )}
         </ListCard>
 
       </div>
@@ -571,19 +677,6 @@ export default function CustomerProfilePage() {
                   ))}
                 </div>
               </div>
-              {/* The limit is no longer a field in this form. It has one home — the
-                  "Set limit" / "Change limit" action beside the amount on this customer's
-                  card — so there is one place to look for it and one audited way to change
-                  it. Employees keep the read-only line that tells them who to ask. */}
-              {!isAdmin && (
-                <div>
-                  <label className="ds-section-label block mb-1.5" style={{ color: "var(--text-secondary)" }}>{t("common.creditLimitOptional")}</label>
-                  <div className="rounded-[var(--radius-card)] p-3" style={{ background: "var(--tone-card)" }}>
-                    <p className="text-12" style={{ color: "var(--text-secondary)" }}>{formatCurrency(customer.creditLimit)}</p>
-                    <p className="text-11 mt-1" style={{ color: "var(--text-secondary)" }}>{t("customer.actionCenterHint")}</p>
-                  </div>
-                </div>
-              )}
             </div>
 
             <div className="flex gap-3 mt-1">
@@ -629,12 +722,13 @@ export default function CustomerProfilePage() {
       {/* The credit limit: one field, one save, and a plain statement when the new limit
           leaves the customer over it. */}
       <CreditLimitSheet
-        open={showLimitSheet}
+        open={limitMode !== null}
         currentLimit={customer.creditLimit}
         outstanding={customer.outstandingBalance}
         saving={savingLimit}
-        onClose={() => setShowLimitSheet(false)}
-        onSave={handleSetCreditLimit}
+        mode={limitMode ?? "set"}
+        onClose={() => setLimitMode(null)}
+        onSave={handleSaveCreditLimit}
       />
 
       {/* Archive Confirmation */}

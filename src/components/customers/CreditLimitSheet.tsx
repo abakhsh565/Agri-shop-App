@@ -11,8 +11,15 @@ interface CreditLimitSheetProps {
   /** What this customer already owes — the figure a reduction has to be measured against. */
   outstanding: number;
   saving?: boolean;
+  /**
+   * `set` writes the limit directly (the actor holds `customers.credit_limit`); `request`
+   * asks the owner instead, and the owner's own figure is what applies (0251). The two
+   * share one sheet so "a limit" means the same thing on both paths — only who decides
+   * changes.
+   */
+  mode?: "set" | "request";
   onClose: () => void;
-  onSave: (limit: number) => void;
+  onSave: (limit: number, reason: string) => void;
 }
 
 /**
@@ -20,27 +27,37 @@ interface CreditLimitSheetProps {
  * "Set limit" means the same thing in both and there is a single write path (the audited
  * `set_customer_credit_limit` RPC) rather than two that can disagree.
  *
- * No close cross: the sheet collects one number, and Cancel, the scrim, Escape and the
+ * No close cross: the sheet collects a number, and Cancel, the scrim, Escape and the
  * Android back button are all ways out. A second exit on a one-field form is noise.
  *
  * Lowering a limit below what is already owed is **allowed** — a shop must be able to stop
  * lending to a customer who is not paying — and that decision is stated plainly instead of
  * being blocked or hidden: the debt is not touched, and the customer simply cannot take
  * more credit until they are back under the new limit. Raising it needs no ceremony.
+ *
+ * In request mode nothing is written here at all: the number and the optional reason go to
+ * the owner as a request, and the copy says so rather than letting the employee believe the
+ * new limit is already in force.
  */
 export default function CreditLimitSheet({
   open,
   currentLimit,
   outstanding,
   saving = false,
+  mode = "set",
   onClose,
   onSave,
 }: CreditLimitSheetProps) {
   const t = useT();
   const [draft, setDraft] = useState("");
+  const [reason, setReason] = useState("");
+  const requesting = mode === "request";
 
   useEffect(() => {
-    if (open) setDraft(currentLimit > 0 ? String(currentLimit) : "");
+    if (open) {
+      setDraft(currentLimit > 0 ? String(currentLimit) : "");
+      setReason("");
+    }
   }, [open, currentLimit]);
 
   const parsed = Number(draft.replace(/[^\d.]/g, ""));
@@ -52,7 +69,7 @@ export default function CreditLimitSheet({
   return (
     <Sheet
       open={open}
-      title={currentLimit > 0 ? t("customers.changeLimit") : t("customers.setLimit")}
+      title={requesting ? t("creditLimit.requestTitle") : currentLimit > 0 ? t("customers.changeLimit") : t("customers.setLimit")}
       onClose={onClose}
       closeButton={false}
     >
@@ -78,6 +95,22 @@ export default function CreditLimitSheet({
           className="w-full h-12 rounded-[var(--radius-input)] border border-border px-4 text-sm text-foreground placeholder:text-caption outline-none"
         />
 
+        {requesting && (
+          <div className="flex flex-col gap-1.5">
+            <label className="ds-section-label" style={{ color: "var(--text-secondary)" }} htmlFor="credit-limit-reason">
+              {t("creditLimit.reasonLabel")}
+            </label>
+            <textarea
+              id="credit-limit-reason"
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder={t("creditLimit.reasonPlaceholder")}
+              rows={2}
+              className="w-full rounded-[var(--radius-input)] border border-border px-4 py-3 text-sm text-foreground placeholder:text-caption outline-none resize-none"
+            />
+          </div>
+        )}
+
         {overBy > 0 ? (
           <div
             className="rounded-[var(--radius-tile)] p-3"
@@ -94,7 +127,7 @@ export default function CreditLimitSheet({
           </div>
         ) : (
           <p className="text-11" style={{ color: "var(--text-secondary)" }}>
-            {t("sale.creditLimitHint")}
+            {requesting ? t("creditLimit.requestHint") : t("sale.creditLimitHint")}
           </p>
         )}
 
@@ -106,10 +139,10 @@ export default function CreditLimitSheet({
             variant="primary"
             size="md"
             className="flex-1"
-            onClick={() => onSave(parsed)}
+            onClick={() => onSave(parsed, reason.trim())}
             disabled={saving || !valid}
           >
-            {saving ? t("common.loading") : t("common.save")}
+            {saving ? t("common.loading") : requesting ? t("creditLimit.requestSend") : t("common.save")}
           </Button>
         </div>
       </div>

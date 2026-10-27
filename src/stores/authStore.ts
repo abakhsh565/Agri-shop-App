@@ -66,6 +66,8 @@ interface AuthState {
   logout: () => void;
   /** Confirm the device still holds a live server session (see below). */
   verifySession: () => Promise<void>;
+  /** Re-read the owner's current grants for this account (see below). */
+  refreshPermissions: () => Promise<void>;
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -137,6 +139,35 @@ export const useAuthStore = create<AuthState>()(
           // A throw here means the auth client could not be reached at all, which
           // is indistinguishable from a flaky connection. Keep the user signed in
           // and let the cached rows serve the offline case.
+        }
+      },
+      /**
+       * Re-read the grants the owner has actually given this account.
+       *
+       * The permissions carried on the stored user are a snapshot taken at sign-in. An owner
+       * changing an employee's access — granting Add Product, or taking away the right to
+       * change a customer's credit limit — is editing the database minutes later, while the
+       * employee's phone is still open on the previous answer. Without this the employee's
+       * screen keeps offering actions the server has already stopped accepting (and hides
+       * the ones just granted) until the app is fully relaunched, which is precisely the
+       * "the owner ticked it but the employee still cannot do it" report.
+       *
+       * Identity still is not authority: this only re-reads what the server says. A call that
+       * could not be answered changes NOTHING — offline is not a revocation.
+       */
+      refreshPermissions: async () => {
+        const user = get().user;
+        if (!user) return;
+        try {
+          const { data, error } = await supabase.rpc("get_my_permissions");
+          if (error || !Array.isArray(data)) return;
+          const next = data as string[];
+          const current = user.permissions ?? [];
+          // Nothing the owner did since sign-in means nothing to re-render.
+          if (next.length === current.length && next.every((code) => current.includes(code))) return;
+          set({ user: { ...user, permissions: next } });
+        } catch {
+          // Unreachable server: keep the grants this device was last told about.
         }
       },
       logout: () => {

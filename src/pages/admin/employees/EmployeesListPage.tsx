@@ -1,11 +1,16 @@
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useThemeStore } from "@/stores/themeStore";
 import { useT } from "@/lib/i18n";
 import { useEmployeesStore } from "@/stores/employeesStore";
+import { useShopStore } from "@/stores/shopStore";
+import { supabase } from "@/lib/supabase";
+import { hasPermission } from "@/lib/tenantContext";
+import { listEmployeeAccessRequests } from "@/lib/employeeAccessRequests";
 import type { User } from "@/types";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
-import { Plus, ChevronRight, Users } from "lucide-react";
+import { Plus, ChevronRight, Users, UserPlus } from "lucide-react";
 import ListCard from "@/components/ui/ListCard";
 import ListRow from "@/components/ui/ListRow";
 import { SkeletonList } from "@/components/ui/Skeleton";
@@ -43,6 +48,70 @@ export default function EmployeesListPage() {
   const isUrdu = language === "ur";
   const employees = useEmployeesStore((s) => s.employees);
   const ready = useEmployeesStore((s) => s.ready);
+  const activeBranchId = useShopStore((s) => s.activeBranchId);
+  const activeBranchName = useShopStore((s) => s.activeBranchName);
+  const canManage = hasPermission("employees.manage");
+
+  // A request remains actionable even after its notification is marked read, so
+  // the staff list carries its own small door to the inbox. A view-only role
+  // never calls the RPC and never sees the row.
+  const [pendingRequests, setPendingRequests] = useState(0);
+  useEffect(() => {
+    if (!canManage) return;
+    let alive = true;
+    void listEmployeeAccessRequests("pending")
+      .then((rows) => { if (alive) setPendingRequests(rows.length); })
+      .catch(() => { if (alive) setPendingRequests(0); });
+    return () => { alive = false; };
+  }, [canManage]);
+
+  /**
+   * The roster that belongs to the branch being worked in.
+   *
+   * The store is business-wide because pickers (an owner handing a new branch to
+   * someone) legitimately need the whole team. This screen is not a picker: it is the
+   * team of the branch named above the list. `get_branch_employee_ids()` counts the
+   * same population as the branch card (0243), so "5 employees" on the card and the
+   * rows here are the same five people.
+   *
+   * A failed read yields an empty set, not everyone: an authorization read that could
+   * not answer must not widen the list it was meant to narrow.
+   */
+  const [branchEmployeeIds, setBranchEmployeeIds] = useState<Set<string> | null>(null);
+  useEffect(() => {
+    if (!activeBranchId) {
+      setBranchEmployeeIds(new Set());
+      return;
+    }
+    let cancelled = false;
+    setBranchEmployeeIds(null);
+    void supabase
+      .rpc("get_branch_employee_ids")
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        if (error) {
+          setBranchEmployeeIds(new Set());
+          return;
+        }
+        const rows = (data as unknown[] | null) ?? [];
+        const ids = rows
+          .map((row) =>
+            typeof row === "string"
+              ? row
+              : (row as { get_branch_employee_ids?: string })?.get_branch_employee_ids
+          )
+          .filter((id): id is string => Boolean(id));
+        setBranchEmployeeIds(new Set(ids));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeBranchId]);
+
+  const visibleEmployees = branchEmployeeIds
+    ? employees.filter((employee) => branchEmployeeIds.has(employee.id))
+    : [];
+  const loading = !ready || branchEmployeeIds === null;
 
   return (
     <div
@@ -51,20 +120,62 @@ export default function EmployeesListPage() {
     >
       <StatusBar />
       <NavHeader title={t("admin.employees")} />
+      {activeBranchName && (
+        <p className="text-10 text-center pb-2" style={{ color: "var(--text-secondary)" }}>
+          {activeBranchName}
+        </p>
+      )}
 
       <div className="flex flex-col px-4 gap-3 pb-24">
+        {canManage && pendingRequests > 0 && (
+          <ListCard>
+            <ListRow
+              testId="employee-access-requests"
+              onClick={() => navigate("/admin/employees/requests")}
+              tile={
+                <div
+                  className="size-11 rounded-full flex items-center justify-center shrink-0"
+                  style={{ background: "var(--brand-light)" }}
+                >
+                  <UserPlus size={18} style={{ color: "var(--brand-dark)" }} />
+                </div>
+              }
+              trailing={
+                <div className="flex items-center gap-2 shrink-0">
+                  <span
+                    className="text-10 font-bold px-2 py-0.5 rounded-full"
+                    style={{ background: "var(--brand)", color: "#0a0a0a" }}
+                  >
+                    {pendingRequests}
+                  </span>
+                  <ChevronRight size={16} style={{ color: "var(--text-secondary)" }} />
+                </div>
+              }
+            >
+              <div className="flex flex-col min-w-0">
+                <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>
+                  {t("accessRequests.title")}
+                </p>
+                <p className="text-xs mt-0.5" style={{ color: "var(--text-secondary)" }}>
+                  {t("accessRequests.pendingCount", { count: pendingRequests })}
+                </p>
+              </div>
+            </ListRow>
+          </ListCard>
+        )}
+
         {/* The list is fetched once per shell mount, so on a cold load this screen used
             to sit blank and then fill. It now holds the shape it will become. */}
-        {!ready && <SkeletonList rows={4} tile />}
-        {ready && employees.length === 0 && (
+        {loading && <SkeletonList rows={4} tile />}
+        {!loading && visibleEmployees.length === 0 && (
           <div className="flex flex-col items-center py-20 gap-2">
             <Users size={28} className="mx-auto block" style={{ color: "var(--text-tertiary)" }} />
             <p className="text-sm" style={{ color: "var(--text-secondary)" }}>{t("empList.empty")}</p>
           </div>
         )}
-        {employees.length > 0 && (
+        {!loading && visibleEmployees.length > 0 && (
         <ListCard>
-        {employees.map((emp) => {
+        {visibleEmployees.map((emp) => {
           const { bg, color } = statusColor(emp);
           return (
             <ListRow

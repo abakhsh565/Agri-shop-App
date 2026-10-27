@@ -423,6 +423,9 @@ test.describe('RTL/LTR + Urdu Support', () => {
       '/admin/customers',
       '/admin/employees',
       '/admin/payments',
+      // The redesigned overview: its own cards, its own figures, and a chart that must mirror
+      // with the reading direction. It entered this lane with the screen (2026-10-28).
+      '/admin/settings/overview',
     ];
 
     for (const route of routes) {

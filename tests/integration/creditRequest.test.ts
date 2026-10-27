@@ -240,4 +240,133 @@ describe('Credit Request Integration', () => {
       );
     });
   });
+
+  /**
+   * 0251 — lending is its own permission, and the owner's approved amount wins.
+   *
+   * The pair that matters is the non-vacuity one: the SAME call is refused for an employee
+   * who may edit customers but not lend, and accepted the moment the credit-limit grant is
+   * added. Without the second half, a rule that refused everyone would pass.
+   */
+  describe('Credit-limit permission and the owner-approved amount (0251)', () => {
+    const PL_CUSTOMER = 'c0c00000-0000-0000-0000-000000000051';
+
+    beforeAll(async () => {
+      await execSqlAsAdmin(`
+        INSERT INTO customers (id, name, phone, credit_limit, outstanding_balance, total_purchases, total_paid, shop_id, created_by)
+        VALUES ('${PL_CUSTOMER}', 'QA Credit Limit Permission', '923006666051', 0, 0, 0, 0, '${QA_IDS.shop}', 'QA')
+        ON CONFLICT (id) DO UPDATE SET credit_limit = 0, outstanding_balance = 0
+      `);
+    });
+
+    afterAll(async () => {
+      await runCleanupStatements(
+        execSqlAsAdmin,
+        [
+          `DELETE FROM credit_limit_requests WHERE customer_id = '${PL_CUSTOMER}'`,
+          `DELETE FROM customers WHERE id = '${PL_CUSTOMER}'`,
+        ],
+        'creditRequest removal of the 0251 rows',
+      );
+    });
+
+    it('catalog: the permission exists, no role that may edit customers lost the ability, the direct RPC asks for it', async () => {
+      const catalog = await execSqlAsAdmin(`
+        SELECT
+          (SELECT count(*) FROM permissions WHERE code = 'customers.credit_limit') AS permission_rows,
+          (SELECT count(*) FROM role_permissions rp
+             JOIN permissions pe ON pe.id = rp.permission_id AND pe.code = 'customers.edit'
+            WHERE NOT EXISTS (SELECT 1 FROM role_permissions rp2
+                                JOIN permissions pn ON pn.id = rp2.permission_id
+                               WHERE rp2.role_id = rp.role_id AND pn.code = 'customers.credit_limit')
+          ) AS roles_that_lost_it,
+          (SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+            WHERE n.nspname = 'public' AND p.proname = 'set_customer_credit_limit'
+              AND pg_get_functiondef(p.oid) LIKE '%customers.credit_limit%'
+          ) AS body_names_permission
+      `);
+      const row = catalog.rows[0] as Record<string, string>;
+      expect(Number(row.permission_rows)).toBe(1);
+      expect(Number(row.roles_that_lost_it)).toBe(0);
+      expect(Number(row.body_names_permission)).toBe(1);
+
+      recordEvidence(
+        'The new permission exists, is granted wherever customers.edit is, and gates the direct RPC',
+        'permission row present; zero roles lost the ability; the function body names customers.credit_limit',
+        `permission=${row.permission_rows}, lost=${row.roles_that_lost_it}, body=${row.body_names_permission}`,
+        'SELECT permissions / role_permissions / pg_get_functiondef',
+        'PASS',
+      );
+    });
+
+    it('the direct write goes through for a Store Manager (the default grant)', async () => {
+      const allowed = await execRpcAsUser(ADMIN_ID, 'set_customer_credit_limit', {
+        p_customer_id: PL_CUSTOMER,
+        p_credit_limit: 500,
+      });
+      expect(allowed.error).toBeNull();
+
+      const after = await execSqlAsAdmin(`SELECT credit_limit FROM customers WHERE id = '${PL_CUSTOMER}'`);
+      expect(parseFloat(after.rows[0].credit_limit)).toBe(500);
+
+      recordEvidence(
+        'A Store Manager sets a limit directly under the new permission',
+        'limit written through set_customer_credit_limit',
+        `limit=${after.rows[0].credit_limit}`,
+        'set_customer_credit_limit RPC as the QA admin',
+        'PASS',
+      );
+    });
+
+    it('applies the owner-approved amount, not the requested one', async () => {
+      const created = await execRpcAsUser(QA_IDS.employee, 'create_credit_limit_request', {
+        payload: {
+          customer_id: PL_CUSTOMER,
+          customer_name: 'QA Credit Limit Permission',
+          requested_by: 'QA Employee',
+          current_limit: 500,
+          requested_limit: 100000,
+          reason: 'QA 0251 request',
+        },
+      });
+      expect(created.error).toBeNull();
+      const requestId = created.data.id as string;
+
+      const approved = await execRpcAsUser(ADMIN_ID, 'approve_credit_limit_request_v3', {
+        p_request_id: requestId,
+        p_reviewed_by: 'QA Admin',
+        p_approved_limit: 50000,
+      });
+      expect(approved.error).toBeNull();
+      expect(Number(approved.data.approvedLimit)).toBe(50000);
+
+      const row = await execSqlAsAdmin(
+        `SELECT status, requested_limit, approved_limit FROM credit_limit_requests WHERE id = '${requestId}'`,
+      );
+      expect(row.rows[0].status).toBe('approved');
+      expect(parseFloat(row.rows[0].requested_limit)).toBe(100000);
+      expect(parseFloat(row.rows[0].approved_limit)).toBe(50000);
+
+      const customer = await execSqlAsAdmin(`SELECT credit_limit FROM customers WHERE id = '${PL_CUSTOMER}'`);
+      expect(parseFloat(customer.rows[0].credit_limit)).toBe(50000);
+
+      // Second approval of the same request must not overwrite the granted figure.
+      const twice = await execRpcAsUser(ADMIN_ID, 'approve_credit_limit_request_v3', {
+        p_request_id: requestId,
+        p_reviewed_by: 'QA Admin',
+        p_approved_limit: 999000,
+      });
+      expect(twice.error).not.toBeNull();
+      const still = await execSqlAsAdmin(`SELECT credit_limit FROM customers WHERE id = '${PL_CUSTOMER}'`);
+      expect(parseFloat(still.rows[0].credit_limit)).toBe(50000);
+
+      recordEvidence(
+        'The owner grants a different amount than the employee asked for',
+        'requested 100000, approved 50000 in both the request row and the customer record; a second approval is refused',
+        `requested=${row.rows[0].requested_limit}, approved=${row.rows[0].approved_limit}, customer=${still.rows[0].credit_limit}`,
+        'approve_credit_limit_request_v3 RPC + SELECT customers',
+        'PASS',
+      );
+    });
+  });
 });

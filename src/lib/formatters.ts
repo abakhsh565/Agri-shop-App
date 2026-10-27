@@ -97,6 +97,9 @@ export function translateNotification(
       const a = amt(body ?? '');
       return { title: t('notif.returnFrom', { customer }), body: t('notif.returnBody', { amount: a }) };
     }
+    case 'employee_access_request': {
+      return { title: t('notif.accessRequest'), body: t('notif.accessRequestBody') };
+    }
     case 'low_stock': {
       const product = title.replace(/^(Low stock|Out of stock):\s*/i, '').trim();
       if (/out of stock/i.test(title)) {
@@ -113,6 +116,22 @@ export function translateNotification(
 
 export function formatPhone(phone: string): string {
   return phone.replace(/(\+92|0)(\d{3})(\d{7})/, "+92 $2 $3");
+}
+
+/**
+ * A stored number, however it happens to be written, in the form the app prints.
+ *
+ * The database holds the canonical `92…` form (see `canonical_phone`), while `formatPhone` was
+ * written for a leading `+92` or `0` — fed a canonical number it returned the digits untouched,
+ * so a screen showed `923001234567`. One helper so every screen that prints a stored number
+ * prints the same thing, and a number that is not a Pakistani mobile is passed through rather
+ * than mangled into one.
+ */
+export function formatPhoneDisplay(phone: string | null | undefined): string | null {
+  if (!phone || !phone.trim()) return null;
+  const digits = phone.replace(/\D/g, "");
+  if (/^92\d{10}$/.test(digits)) return formatPhone(`+${digits}`);
+  return formatPhone(phone);
 }
 
 import type { TranslateFn } from "@/lib/i18n";

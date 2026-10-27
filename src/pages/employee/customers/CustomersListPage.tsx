@@ -8,6 +8,7 @@ import { formatCurrency } from "@/lib/formatters";
 import { useT } from "@/lib/i18n";
 import { useThemeStore } from "@/stores/themeStore";
 import { useShellBase } from "@/lib/useShellBase";
+import { hasPermission } from "@/lib/tenantContext";
 import { Plus, ChevronRight, SlidersHorizontal, Check, UserRound } from "lucide-react";
 import SearchBar from "@/components/ui/SearchBar";
 import { getCreditHealth, calculateCreditHealth, getCreditHealthStatusColor } from "@/lib/formatters";
@@ -316,7 +317,9 @@ export default function CustomersListPage() {
         </div>
       )}
 
-      {/* Floating Add Customer */}
+      {/* Floating Add Customer — shown to whoever holds `customers.create`, the grant the
+          create RPC checks, rather than to the admin shell alone. */}
+      {hasPermission("customers.create") && (
       <div
         className="fixed start-0 end-0 max-w-[480px] mx-auto pointer-events-none z-40"
         style={{ bottom: "calc(var(--tabbar-height) + 16px)" }}
@@ -331,6 +334,7 @@ export default function CustomersListPage() {
           </button>
         </div>
       </div>
+      )}
     </div>
     </PullToRefresh>
   );

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
 import PullToRefresh from "@/components/ui/PullToRefresh";
 import { useProductsStore } from "@/stores/productsStore";
@@ -13,6 +13,7 @@ import type { Product } from "@/types";
 import { useT } from "@/lib/i18n";
 import { useThemeStore } from "@/stores/themeStore";
 import { useShellBase } from "@/lib/useShellBase";
+import { hasPermission } from "@/lib/tenantContext";
 import { ChevronRight, Plus, Package, Pencil } from "lucide-react";
 import SearchBar from "@/components/ui/SearchBar";
 import ListCard from "@/components/ui/ListCard";
@@ -59,7 +60,10 @@ export default function ProductsListPage() {
   const activeShopId = useShopStore((s) => s.activeShopId);
   const activeBranchName = useShopStore((s) => s.activeBranchName);
   const drafts = loadProductDrafts(activeShopId);
-  const [search, setSearch] = useState("");
+  // A search started on the Products & Inventory screen arrives as `?q=` and lands here, where
+  // searching the shelf actually happens — one search field, one implementation.
+  const { search: addressQuery } = useLocation();
+  const [search, setSearch] = useState(() => new URLSearchParams(addressQuery).get("q") ?? "");
   const [cat, setCat] = useState<"all" | ProductCategory>("all");
 
   const FILTERS: { key: "all" | ProductCategory }[] = [
@@ -248,15 +252,17 @@ export default function ProductsListPage() {
         </div>
       )}
     </div>
-      {/* Floating Add Product (admin only) */}
-      {base === "/admin" && (
+      {/* Floating Add Product — shown wherever the owner granted `products.create`, which the
+          Add Product screen's own guard checks too. It used to be tied to the admin shell, so
+          an employee who was granted the permission saw no way to use it at all. */}
+      {hasPermission("products.create") && (
         <div
           className="fixed start-0 end-0 max-w-[480px] mx-auto pointer-events-none z-40"
           style={{ bottom: "calc(var(--tabbar-height) + 16px)" }}
         >
           <div className={`flex px-4 ${isUrdu ? "justify-start" : "justify-end"}`}>
             <button
-              onClick={() => navigate("/admin/inventory/new")}
+              onClick={() => navigate(`${base}/inventory/new`)}
               className="pointer-events-auto h-13 ps-4 pe-5 rounded-full flex items-center gap-2 text-sm font-bold shadow-lg active:scale-95 transition-transform"
               style={{ background: "var(--brand)", color: "#0a0a0a", height: "52px", boxShadow: "0 6px 20px rgba(0,0,0,0.25)" }}
             >

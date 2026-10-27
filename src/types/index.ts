@@ -177,6 +177,9 @@ export interface Permission {
 
 export type PermissionCode =
   | 'customers.view' | 'customers.create' | 'customers.edit' | 'customers.delete' | 'customers.payments'
+  // Setting a customer's credit limit is its own switch (0251): the rest of the customer
+  // surface does not imply lending authority, and an employee without it asks the owner.
+  | 'customers.credit_limit'
   | 'products.view' | 'products.create' | 'products.edit' | 'products.delete'
   | 'sales.view' | 'sales.create' | 'sales.void'
   | 'returns.view' | 'returns.create'
