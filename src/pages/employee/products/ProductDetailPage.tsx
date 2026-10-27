@@ -14,7 +14,7 @@ import { formatCurrency, getStockStatusColor } from "@/lib/formatters";
 import { useShellBase } from "@/lib/useShellBase";
 import { hasPermission } from "@/lib/tenantContext";
 import { rpcDeleteProduct, rpcDeleteProductBarcode, rpcPreviewProductBarcode, rpcSetProductBarcode } from "@/lib/db";
-import { Pencil, TrendingUp, Barcode, Trash2, Copy, Download, Package, Camera, Loader2, Bell, ChevronRight } from "lucide-react";
+import { Pencil, TrendingUp, Barcode, Trash2, Copy, Download, Package, Camera, Loader2, Bell } from "lucide-react";
 import { getRecommendationsForProduct, type CustomerCropRecord } from "@/lib/recommendationEngine";
 import { loadCustomerCropRows } from "@/lib/reminderEngine";
 import RecommendationReasonLine from "@/components/recommendations/RecommendationReason";
@@ -238,10 +238,10 @@ export default function ProductDetailPage() {
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-base font-bold truncate" style={{ color: "var(--text-primary)" }}>{product.name}</p>
-            {/* What kind of thing it is, then who supplies it — one line, as the product is
-                described everywhere else, rather than the supplier alone. */}
+            {/* The supplier alone. The category already has its own chip on the line below,
+                so naming it here too read as the same fact stated twice on one card. */}
             <p className="text-xs truncate" style={{ color: "var(--text-secondary)" }}>
-              {t(CATEGORY_LABEL_KEY[product.category] as any)} · {product.company}
+              {product.company}
             </p>
             <div className="flex items-center gap-2 mt-1 flex-wrap">
               <CategoryChip label={t(CATEGORY_LABEL_KEY[product.category] as any)} />
@@ -359,7 +359,9 @@ export default function ProductDetailPage() {
         <div>
           {/* "Pack sizes", not "Variants": the tile above already counts the variants, and two
               headings with the same word on one screen read as two different lists. */}
-          <p className="text-15 font-bold mb-2" style={{ color: "var(--text-primary)" }}>
+          {/* The same muted group label the customers card below uses, not a second heading
+              style on one screen. */}
+          <p className="ds-section-label mb-2" style={{ color: "var(--text-secondary)" }}>
             {t("products.packSizesTitle")}
           </p>
           {product.variants.length === 0 ? (
@@ -377,26 +379,28 @@ export default function ProductDetailPage() {
                     onClick={
                       canAdjustStock ? () => navigate(`${base}/inventory/${product.id}/adjust`) : undefined
                     }
-                    trailing={<ChevronRight size={14} style={{ color: "var(--text-secondary)" }} className="shrink-0" />}
+                    trailing={
+                      /* What the pack holds and whether that is healthy, on the row's own line:
+                         a bare number cannot say whether "0" means empty shelf or full one. */
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="text-13 font-bold" style={{ color: "var(--text-primary)" }}>
+                          {available}
+                        </span>
+                        <span
+                          className="text-10 font-bold px-2 py-0.5 rounded-full"
+                          style={{ color: vColor, background: vColor + "22" }}
+                        >
+                          {stockStatusLabel(vStatus, t)}
+                        </span>
+                      </div>
+                    }
                   >
-                    <div className="flex flex-col">
+                    <div className="flex flex-col min-w-0">
                       <p className="text-13 font-bold truncate" style={{ color: "var(--text-primary)" }}>{v.name}</p>
-                      <div className="flex items-baseline justify-between gap-3 mt-2">
-                        <span className="text-12" style={{ color: "var(--text-secondary)" }}>
-                          {t("products.sellingPrice")}
-                        </span>
-                        <span className="text-13 font-bold shrink-0" style={{ color: "var(--text-primary)" }}>
-                          {formatCurrency(v.sellingPrice)}
-                        </span>
-                      </div>
-                      <div className="flex items-baseline justify-between gap-3 mt-1">
-                        <span className="text-12" style={{ color: "var(--text-secondary)" }}>
-                          {t("hub.inventory.branchStock")}
-                        </span>
-                        <span className="text-13 font-bold shrink-0" style={{ color: vColor }}>
-                          {available} {unitWord(product.baseUnit, t)}
-                        </span>
-                      </div>
+                      {/* Size · price — the two facts a shopkeeper reads before the quantity. */}
+                      <p className="text-12 mt-1 truncate" style={{ color: "var(--text-secondary)" }}>
+                        {v.unitSize} {unitWord(product.baseUnit, t)} · {formatCurrency(v.sellingPrice)}
+                      </p>
                     </div>
                   </ListRow>
                 );
