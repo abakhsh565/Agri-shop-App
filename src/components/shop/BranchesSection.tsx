@@ -16,6 +16,13 @@ import { useShopStore, type BranchSummary } from "@/stores/shopStore";
 /**
  * The branches this account runs, as one block.
  *
+ * TWO SURFACES, ONE SET OF ROWS. `card` (the default) is the grouped block the account screen
+ * shows: a section label and one surface holding the rows. `plain` drops the card and its
+ * hairlines so the section hub can draw the same rows straight on the page, the way every other
+ * section hub draws its jobs — the owner asked for no lines between those rows (2026-10-28).
+ * The rows, the create row and the route into a branch are the same implementation in both, so
+ * the two surfaces cannot drift.
+ *
  * It used to live only on the owner suite's More screen. It is here now because a branch is a
  * fact about the shop the account works in, and Settings is the screen that answers "which shop
  * am I in and what is in it" — the same question the profile card at the top of that page
@@ -25,7 +32,7 @@ import { useShopStore, type BranchSummary } from "@/stores/shopStore";
  * Every row opens that branch's own detail page, which is the one place all of it is edited or
  * removed — so the row itself carries no check and no Edit control, just the way in.
  */
-export default function BranchesSection() {
+export default function BranchesSection({ variant = "card" }: { variant?: "card" | "plain" }) {
   const navigate = useNavigate();
   const t = useT();
   const base = useShellBase();
@@ -55,10 +62,9 @@ export default function BranchesSection() {
   // screens writing the same sentence is how they start disagreeing about the same branch.
   const branchContext = (b: BranchSummary) => branchContextLabel(t, b);
 
-  return (
-    <div className="px-4 pt-4" data-testid="branches-section">
-      <ListCard section={t("branches.title")}>
-        {branchesLoading && branches.length === 0 && (
+  const rows = (
+    <>
+      {branchesLoading && branches.length === 0 && (
           <div data-testid="branches-loading">
             <SkeletonList rows={2} />
           </div>
@@ -124,16 +130,32 @@ export default function BranchesSection() {
         {/* The way in, as a row of the same list rather than a button floating under it: adding a
             branch belongs to the set of branches, and it is the last thing in that set because it
             is the newest. */}
-        {isOwner && <ListRow
-          testId="branches-create"
-          icon={Plus}
-          title={t("branches.create")}
-          meta={t("branches.createHint")}
-          // `create` rather than the plain open: this row asked for a new branch, and the sheet
-          // opens on the name step instead of making the person find the link again.
-          onClick={() => openSwitcher("create")}
-        />}
-      </ListCard>
+      {isOwner && <ListRow
+        testId="branches-create"
+        icon={Plus}
+        title={t("branches.create")}
+        meta={t("branches.createHint")}
+        // `create` rather than the plain open: this row asked for a new branch, and the sheet
+        // opens on the name step instead of making the person find the link again.
+        onClick={() => openSwitcher("create")}
+      />}
+    </>
+  );
+
+  // The section hub: no card, no section label, no line between rows. The page's own title
+  // already names the section, and the owner's reference (Customers & Credit) draws its CTAs
+  // straight on the page, so Branches does the same.
+  if (variant === "plain") {
+    return (
+      <div className="pt-4 pb-2" data-testid="branches-section">
+        {rows}
+      </div>
+    );
+  }
+
+  return (
+    <div className="px-4 pt-4" data-testid="branches-section">
+      <ListCard section={t("branches.title")}>{rows}</ListCard>
     </div>
   );
 }

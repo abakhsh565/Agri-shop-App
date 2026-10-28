@@ -68,6 +68,8 @@ export function stockItems(products: Product[]): StockItem[] {
 export interface InventoryCounts {
   /** Products this branch carries — the catalogue screen's own row count. */
   products: number;
+  /** Packs on the shelf — every size and packing the products above are stocked in. */
+  packs: number;
   /** Packs with nothing left: the rows the Stock alerts screen lists. */
   out: number;
   /** Packs at or below their own level, still with something to sell. */
@@ -94,6 +96,7 @@ export function inventoryCounts(products: Product[], todayISO: string = pkToday(
   const items = stockItems(products);
   return {
     products: products.length,
+    packs: items.length,
     out: items.filter((item) => item.status === "out_of_stock").length,
     low: items.filter((item) => item.status === "low_stock").length,
     expiring: expiryItems(products, todayISO).length,

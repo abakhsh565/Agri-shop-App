@@ -241,6 +241,11 @@ export interface User {
   membershipStatus?: MembershipStatus;
   permissions?: string[];  // granted permission codes (owner gets all implicitly)
   branchScope?: string[] | null;
+  /**
+   * The membership's default role, by name. Read with the team so a directory can say what a
+   * person does without one access RPC per row; null means the read did not resolve it.
+   */
+  roleName?: string | null;
 }
 
 export interface AuthSession {
@@ -461,6 +466,8 @@ export interface Purchase {
   purchaseNumber: string;
   companyId: string;
   companyName: string;
+  /** The branch the delivery was recorded for; absent on rows written before 0118. */
+  branchId?: string;
   items: PurchaseItem[];
   totalAmount: number;
   amountPaid: number;

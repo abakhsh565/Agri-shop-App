@@ -19,6 +19,12 @@ export interface HubRow {
   id: string;
   /** Dictionary key for the row's label. */
   labelKey: string;
+  /**
+   * Dictionary key for the one line under the label, when the screen draws one. Optional
+   * because most hubs are a list of places and the label is enough; the Reports board asks
+   * what each report answers before the reader commits a tap.
+   */
+  hintKey?: string;
   /** Route under the shell. */
   to: string;
 }
@@ -31,36 +37,11 @@ export interface HubSection {
 }
 
 export const HUB_SECTIONS: HubSection[] = [
-  {
-    id: "overview",
-    titleKey: "settings.menu.overview",
-    rows: [
-      { id: "performance", labelKey: "hub.overview.performance", to: "/settings/overview" },
-      { id: "branch-comparison", labelKey: "hub.overview.branchComparison", to: "/settings/profile" },
-      { id: "financial", labelKey: "hub.overview.financial", to: "/payments" },
-      { id: "inventory-health", labelKey: "hub.overview.inventoryHealth", to: "/products" },
-      { id: "alerts", labelKey: "hub.overview.alerts", to: "/alerts/reminders" },
-    ],
-  },
-  {
-    id: "branches",
-    titleKey: "settings.menu.branches",
-    rows: [
-      // The list itself, as cards: every branch this account may work in, with its own sales
-      // figure and the three ways into it. This row used to open the account screen, where the
-      // branches were rows at the foot of the page.
-      { id: "all", labelKey: "hub.branches.all", to: "/settings/branches" },
-      // The Business Overview design as it stood before the redesign — its own screen now, so the
-      // two can change independently (owner's instruction, 2026-10-28).
-      { id: "details", labelKey: "hub.branches.details", to: "/settings/branch-details" },
-      // Reports, not the Business Overview screen. "Branch performance" sent the reader to the
-      // business-wide overview, which is the one screen this row is not: the figures a branch is
-      // judged by — its sales, profit and stock by period — are gathered in Reports, where the
-      // branch reporting and comparison live (owner's correction, 2026-10-28).
-      { id: "performance", labelKey: "hub.branches.performance", to: "/reports" },
-      { id: "reports", labelKey: "hub.branches.reports", to: "/reports" },
-    ],
-  },
+  // Overview and Branches have no entry here on purpose: both sections are screens rather than
+  // lists of jobs (`pages/admin/settings/BusinessOverviewPage` and
+  // `pages/admin/settings/AdminBranchesSectionPage`), so there is no generic hub to describe.
+  // Keeping a catalogue for a section that no longer renders one would be the drift this file
+  // exists to prevent.
   {
     id: "sales",
     titleKey: "settings.menu.sales",
@@ -103,10 +84,10 @@ export const HUB_SECTIONS: HubSection[] = [
     rows: [
       { id: "all", labelKey: "hub.customers.all", to: "/customers" },
       { id: "details", labelKey: "hub.customers.details", to: "/customers" },
-      { id: "outstanding", labelKey: "hub.customers.outstanding", to: "/customers" },
+      { id: "outstanding", labelKey: "hub.customers.outstanding", to: "/customers/outstanding" },
       { id: "payments", labelKey: "hub.customers.payments", to: "/payments" },
-      { id: "credit-requests", labelKey: "hub.customers.creditRequests", to: "/alerts/credit-overrides" },
-      { id: "reminders", labelKey: "hub.customers.reminders", to: "/alerts/reminders" },
+      { id: "credit-requests", labelKey: "hub.customers.creditRequests", to: "/customers/credit-requests" },
+      { id: "reminders", labelKey: "hub.customers.reminders", to: "/customers/reminders" },
     ],
   },
   {
@@ -121,26 +102,42 @@ export const HUB_SECTIONS: HubSection[] = [
     ],
   },
   {
+    // Finance has its own screen (`pages/admin/finance/AdminFinanceSectionPage`): recorded cash,
+    // the two balances, these four jobs and the last payments. The rows stay here because the
+    // screen reads its labels and destinations from this catalogue — the section's list and the
+    // screen's list cannot drift apart. Each destination is the screen that answers that job:
+    //   - Receivables and payables used to open the general customer and supplier lists, which
+    //     are address books; the ledgers behind the hub's own two figures are the receipt book
+    //     and the payable book.
     id: "finance",
     titleKey: "settings.menu.finance",
     rows: [
-      { id: "cash", labelKey: "hub.finance.cash", to: "/payments/daily-cash" },
-      { id: "receivables", labelKey: "hub.finance.receivables", to: "/customers" },
-      { id: "payables", labelKey: "hub.finance.payables", to: "/companies" },
+      { id: "cash", labelKey: "hub.finance.cash", to: "/payments/cash-position" },
+      { id: "receivables", labelKey: "hub.finance.receivables", to: "/settings/overview/customers" },
+      { id: "payables", labelKey: "hub.finance.payables", to: "/settings/overview/suppliers" },
       { id: "transactions", labelKey: "hub.finance.transactions", to: "/payments" },
     ],
   },
   {
+    // Reports is a screen of six tiles (`pages/admin/reports/AdminReportsHubPage`), not the
+    // generic row list. It reads this section for its destinations and labels, so the six names
+    // live in one place; the page owns only the icon, the tile shape and the permission each
+    // destination asks for.
+    //
+    // EVERY ROW IS THE SCREEN THAT ANSWERS THE QUESTION. It used to send all seven at the same
+    // general Reports page, which meant five of them opened something that was not what their
+    // label said. Profit now has its own report (`/settings/hub/reports/profit`); Customers and
+    // Suppliers open their ledgers; Inventory opens the stock hub; Activity opens the audit trail.
+    // The general Reports page is still reachable at `/reports` and stays the long-form screen.
     id: "reports",
     titleKey: "settings.menu.reports",
     rows: [
-      { id: "sales", labelKey: "hub.reports.sales", to: "/reports" },
-      { id: "profit", labelKey: "hub.reports.profit", to: "/reports" },
-      { id: "inventory", labelKey: "hub.reports.inventory", to: "/reports" },
-      { id: "credit", labelKey: "hub.reports.credit", to: "/reports" },
-      { id: "purchases", labelKey: "hub.reports.purchases", to: "/reports" },
-      { id: "branches", labelKey: "hub.reports.branches", to: "/reports" },
-      { id: "download", labelKey: "hub.reports.download", to: "/reports" },
+      { id: "sales", labelKey: "hub.reports.sales", hintKey: "reports.hub.salesHint", to: "/settings/hub/sales" },
+      { id: "profit", labelKey: "hub.reports.profit", hintKey: "reports.hub.profitHint", to: "/settings/hub/reports/profit" },
+      { id: "customers", labelKey: "hub.reports.customers", hintKey: "reports.hub.customersHint", to: "/customers" },
+      { id: "suppliers", labelKey: "hub.reports.suppliers", hintKey: "reports.hub.suppliersHint", to: "/settings/overview/suppliers" },
+      { id: "inventory", labelKey: "hub.reports.inventory", hintKey: "reports.hub.inventoryHint", to: "/settings/hub/inventory" },
+      { id: "activity", labelKey: "hub.reports.activity", hintKey: "reports.hub.activityHint", to: "/activity" },
     ],
   },
   {
@@ -156,14 +153,18 @@ export const HUB_SECTIONS: HubSection[] = [
     ],
   },
   {
+    // Employees & Access is a directory (`pages/admin/people/AdminPeopleHubPage`), not the
+    // generic row list. The page reads the three rows below for its "Manage access" group, so
+    // the labels and destinations stay one source; the two rows that only described the screen
+    // itself (the directory and the invite form) are not repeated there.
     id: "people",
     titleKey: "settings.menu.people",
     rows: [
-      { id: "employees", labelKey: "hub.people.employees", to: "/employees" },
+      { id: "employees", labelKey: "hub.people.employees", to: "/settings/hub/people" },
       { id: "invite", labelKey: "hub.people.invite", to: "/employees/new" },
-      { id: "roles", labelKey: "hub.people.roles", to: "/settings/roles" },
-      { id: "branches", labelKey: "hub.people.branches", to: "/settings/profile" },
-      { id: "activity", labelKey: "hub.people.activity", to: "/activity" },
+      { id: "roles", labelKey: "hub.people.roles", hintKey: "people.rolesHint", to: "/settings/roles" },
+      { id: "branches", labelKey: "hub.people.branches", hintKey: "people.branchAssignmentsHint", to: "/settings/hub/people/branches" },
+      { id: "activity", labelKey: "hub.people.activity", hintKey: "people.employeeActivityHint", to: "/settings/hub/people/activity" },
     ],
   },
   {

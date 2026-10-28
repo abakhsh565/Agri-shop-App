@@ -7,6 +7,8 @@ import Button from "@/components/ui/Button";
 import EmptyState from "@/components/ui/EmptyState";
 import { SkeletonList } from "@/components/ui/Skeleton";
 import { useT } from "@/lib/i18n";
+import { useReturnTo } from "@/lib/useReturnTo";
+import { AUDIT_ACTION_KEYS } from "@/lib/auditActions";
 import { supabase } from "@/lib/supabase";
 import { useShopStore } from "@/stores/shopStore";
 import { useAuthStore } from "@/stores/authStore";
@@ -19,22 +21,14 @@ interface AuditEvent {
   actor_id: string; actor_name: string | null; actor_role: string | null;
   branch_id: string; branch_name: string | null; details: Record<string, unknown>; created_at: string;
 }
-const ACTION_KEYS: Record<string, string> = {
-  sale_created: "audit.saleCreated", sale_voided: "audit.saleVoided", return_processed: "audit.returnProcessed",
-  purchase_recorded: "audit.purchaseRecorded", customer_payment_recorded: "audit.paymentRecorded",
-  supplier_payment_recorded: "audit.paymentRecorded", customer_payments_insert: "audit.paymentRecorded",
-  supplier_payments_insert: "audit.paymentRecorded", stock_adjusted: "audit.stockAdjusted",
-  stock_adjustments_insert: "audit.stockAdjusted", employee_branch_add: "audit.employeeAdded",
-  employee_branch_move: "audit.employeeMoved", employee_access_updated: "audit.accessUpdated",
-  employee_created: "audit.employeeCreated", branch_selected: "audit.branchSelected",
-  branch_created: "audit.branchCreated", branch_renamed: "audit.branchRenamed", branch_archived: "audit.branchArchived",
-  membership_access_changed: "audit.accessUpdated",
-  role_created: "audit.roleUpdated", role_updated: "audit.roleUpdated", role_deleted: "audit.roleUpdated",
-  location_updated: "audit.locationUpdated",
-};
+// The labels are shared with the per-employee history (`lib/auditActions`) so the same action
+// cannot be named two different ways on two activity screens.
 
 export default function ActivityLogPage() {
   const t = useT();
+  // No fixed parent: the audit trail is a tab destination, so with no caller-supplied return
+  // path it keeps the journey-stack behaviour it always had.
+  const returnTo = useReturnTo();
   const branchId = useShopStore((s) => s.activeBranchId);
   const branchName = useShopStore((s) => s.activeBranchName);
   const switching = useShopStore((s) => s.switching);
@@ -80,7 +74,7 @@ export default function ActivityLogPage() {
 
   const ready = !loading || events.length > 0;
   return <div className="flex flex-col w-full min-h-full" style={{ background: "var(--background)" }}>
-    <StatusBar /><NavHeader title={t("activity.activityLog")} />
+    <StatusBar /><NavHeader title={t("activity.activityLog")} backTo={returnTo} />
     <div className="px-4 pt-3 pb-6">
       <p className="ds-meta mb-3" data-testid="activity-branch-context">{branchName ?? t("audit.noBranch")}</p>
       {!ready && <SkeletonList rows={4} />}
@@ -88,9 +82,9 @@ export default function ActivityLogPage() {
         <Button variant="outline" onClick={() => setRetry((value) => value + 1)}>{t("common.tryAgain")}</Button></div>}
       {!loading && !failed && events.length === 0 && <EmptyState icon={History} title={t("admin.noActivityYet")} />}
       {events.length > 0 && <ListCard>{events.map((event) => <ListRow key={event.id} testId={`audit-event-${event.id}`}
-        title={t(ACTION_KEYS[event.action] ?? "audit.otherAction")}
+        title={t(AUDIT_ACTION_KEYS[event.action] ?? "audit.otherAction")}
         meta={`${event.actor_name ?? t("audit.unknownActor")} · ${event.actor_role ?? t("audit.unknownRole")} · ${event.branch_name ?? t("audit.unknownBranch")}`}
-      ><p className="text-13 font-semibold">{t(ACTION_KEYS[event.action] ?? "audit.otherAction")}</p>
+      ><p className="text-13 font-semibold">{t(AUDIT_ACTION_KEYS[event.action] ?? "audit.otherAction")}</p>
         <p className="text-12 mt-1" style={{ color: "var(--text-secondary)" }}>{event.actor_name ?? t("audit.unknownActor")} · {event.actor_role ?? t("audit.unknownRole")} · {event.branch_name ?? t("audit.unknownBranch")}</p>
         <p className="text-11" style={{ color: "var(--text-secondary)" }}>{formatDateTime(event.created_at)}</p>
         {typeof event.details.reason === "string" && <p className="text-12 mt-1">{t("audit.reason", { reason: event.details.reason })}</p>}

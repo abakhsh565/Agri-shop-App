@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   captureDataContext,
   isDataContextCurrent,
@@ -24,12 +24,19 @@ import {
  * Rows a reader may see are the rows the database returns: shop and branch scope are row
  * policies, not filters applied here.
  */
-export function useScopedRows<T>(read: () => Promise<T[]>): { rows: T[]; ready: boolean } {
+export function useScopedRows<T>(
+  read: () => Promise<T[]>,
+): { rows: T[]; ready: boolean; refresh: () => void } {
   const [rows, setRows] = useState<T[]>([]);
   const [ready, setReady] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const latest = useRef(read);
   latest.current = read;
+
+  // A screen that offers "refresh" must re-read the ledger it is showing, including one that
+  // was issued through this hook. Bumping the attempt re-runs the same read without dropping
+  // the rows already on screen, so the figures stay readable while the new answer arrives.
+  const refresh = useCallback(() => setAttempt((n) => n + 1), []);
 
   useEffect(() => {
     let active = true;
@@ -62,5 +69,5 @@ export function useScopedRows<T>(read: () => Promise<T[]>): { rows: T[]; ready: 
     };
   }, [attempt]);
 
-  return { rows, ready };
+  return { rows, ready, refresh };
 }

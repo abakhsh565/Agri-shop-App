@@ -30,7 +30,26 @@ interface RolesState {
    * painted forty unticked boxes, which is indistinguishable from a deliberate answer.
    */
   loadRolePermissions: (roleId: string) => Promise<{ codes: string[]; error: string | null }>;
+  /**
+   * How many people hold this role.
+   *
+   * With a `branchId` the answer is the branch's own figure: a role is granted per branch, so
+   * counting the tenant's memberships made a branch that says "0 employees" list "Sales Manager ·
+   * 1 employee" directly underneath. Without one it stays the shop-wide number the roles screen
+   * asks for.
+   */
   getRoleMemberCount: (roleId: string) => Promise<number>;
+  /**
+   * How many people hold each role AT one branch, keyed by role id.
+   *
+   * A branch page states a headcount for the branch, so the rows under it have to be counted from
+   * the same population that number counts (`get_my_branches().employee_count`, migration 0244):
+   * an active member belongs where their branch scope or a per-branch role places them, whoever
+   * the roster places nowhere belongs to the main branch, and their role there is the per-branch
+   * grant when one exists and the membership's own role otherwise. Counting the shop's
+   * memberships instead put "Sales Manager · 1 employee" under a branch reading "0 employees".
+   */
+  getBranchRoleCounts: (branchId: string, isMain: boolean) => Promise<Record<string, number>>;
   /** Drop every row: the app is about to read a different shop. */
   reset: () => void;
 }
@@ -152,5 +171,61 @@ export const useRolesStore = create<RolesState>((set, get) => ({
       .eq("role_id", roleId)
       .eq("status", "active");
     return count ?? 0;
+  },
+
+  getBranchRoleCounts: async (branchId, isMain) => {
+    const tenantId = getCurrentTenantId();
+    if (!tenantId) return {};
+
+    // The roster, and every per-branch grant this account may read. Two reads, not one per role:
+    // the answer is the same set of people whichever row is being printed.
+    const [{ data: members }, { data: grants }] = await Promise.all([
+      supabase
+        .from("memberships")
+        .select("id, role_id, branch_scope")
+        .eq("tenant_id", tenantId)
+        .eq("status", "active"),
+      supabase.from("membership_branch_roles").select("membership_id, branch_id, role_id"),
+    ]);
+
+    const scopes = new Map<string, unknown>();
+    const ownRole = new Map<string, string | null>();
+    for (const row of (members ?? []) as Array<{
+      id: string;
+      role_id: string | null;
+      branch_scope: unknown;
+    }>) {
+      scopes.set(row.id, row.branch_scope);
+      ownRole.set(row.id, row.role_id);
+    }
+
+    const placedHere = new Set<string>();
+    const placedAnywhere = new Set<string>();
+    const roleHere = new Map<string, string>();
+    for (const grant of (grants ?? []) as Array<{
+      membership_id: string;
+      branch_id: string;
+      role_id: string;
+    }>) {
+      if (!scopes.has(grant.membership_id)) continue;
+      placedAnywhere.add(grant.membership_id);
+      if (grant.branch_id === branchId) {
+        placedHere.add(grant.membership_id);
+        roleHere.set(grant.membership_id, grant.role_id);
+      }
+    }
+    for (const [membershipId, scope] of scopes) {
+      if (Array.isArray(scope) && scope.includes(branchId)) placedHere.add(membershipId);
+      if (Array.isArray(scope) && scope.length > 0) placedAnywhere.add(membershipId);
+      // The roster places whoever it never assigned on the main branch.
+      if (isMain && !placedAnywhere.has(membershipId)) placedHere.add(membershipId);
+    }
+
+    const counts: Record<string, number> = {};
+    for (const membershipId of placedHere) {
+      const roleId = roleHere.get(membershipId) ?? ownRole.get(membershipId) ?? null;
+      if (roleId) counts[roleId] = (counts[roleId] ?? 0) + 1;
+    }
+    return counts;
   },
 }));

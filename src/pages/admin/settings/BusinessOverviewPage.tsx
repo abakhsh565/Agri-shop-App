@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  ArrowDownRight, ArrowUpRight, BarChart3, Building2, CalendarDays, ChevronRight, GitBranch,
-  TrendingUp, Users, Wallet,
+  AlertTriangle, ArrowDownRight, ArrowUpRight, BarChart3, Building2, CalendarClock,
+  ChevronRight, GitBranch, Package, TrendingUp, Users,
 } from "lucide-react";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
 import DateRangeSheet from "@/components/ui/DateRangeSheet";
-import ListCard from "@/components/ui/ListCard";
+import PeriodTabs from "@/components/ui/PeriodTabs";
 import ListRow from "@/components/ui/ListRow";
 import { SkeletonList } from "@/components/ui/Skeleton";
 import { useShopStore } from "@/stores/shopStore";
@@ -17,35 +17,44 @@ import { useCustomersStore } from "@/stores/customersStore";
 import { useCompaniesStore } from "@/stores/companiesStore";
 import { useT } from "@/lib/i18n";
 import { useShellBase } from "@/lib/useShellBase";
-import { formatCurrency } from "@/lib/formatters";
+import { formatCurrency, getStockStatus, productLowStockThreshold } from "@/lib/formatters";
 import { summariseSales, profitDisplay, type LiveCostLookup } from "@/lib/profit";
-import { computeOverdueCreditTotal } from "@/lib/signalEngine";
-import { pkDateFromISO, pkMonthStart, pkToday, pkWeekStart } from "@/lib/pkDate";
+import { EXPIRY_WARNING_DAYS, computeOverdueCreditTotal } from "@/lib/signalEngine";
+import { pkDateFromISO, pkMonthStart, pkToday } from "@/lib/pkDate";
 
 /**
- * The whole business in one screen — "Overall business performance".
+ * The whole business in one screen — "Business overview".
  *
- * Four blocks, in the order an owner asks the questions:
+ * SHAPE (owner's reference, 2026-10-28). The screen is no longer a stack of boxes: a box per
+ * section with more boxes inside it meant a card edge on every side of every figure, and the
+ * reader had to see through two frames to find one number. The sections now sit straight on the
+ * page — a heading, a sentence, then the surfaces that actually hold something: the two period
+ * figures with their change, the trend chart, the two collection cards, the branch cards, the
+ * stock rows and the report rows.
  *
- *   1. Business overview            what came in, what was made, what is owed either way
- *   2. Sales and profit trends      how this window compares with the one before it, week for week
- *   3. Branch performance           the same comparison across the branches this account may see
- *   4. Customer and supplier balances  the two standing balances, kept apart
+ * THE ORDER IS THE ORDER THE OWNER ASKED THEM:
+ *
+ *   1. How much came in, how much was made, and which way it is moving  → figures + chart
+ *   2. What am I owed and what do I owe                                 → customers + suppliers
+ *   3. Which branch is doing what                                       → branch performance
+ *   4. What is my stock worth and what needs attention                  → inventory and stock
+ *   5. Where do I read the detail                                       → reports
  *
  * EVERY NUMBER IS THE NUMBER THE REST OF THE APP SHOWS. Profit is `lib/profit`'s (an unknown cost
  * is never a zero cost), overdue credit is the S1 rule (`computeOverdueCreditTotal`), the branch
- * figures are the ones `get_my_branches()` already publishes per branch — sales to date and the
- * credit that branch is owed — and nothing here adds two branches together where the app refuses
- * to: the branch rows are each branch's own ledger, read through the one call that may see every
- * branch the account is a member of.
+ * figures are the ones `get_my_branches()` publishes per branch, and the two balance cards are
+ * summed from the same branch-scoped rows the two screens behind them list — so a card and the
+ * list it opens can never disagree. The stock counts use the inventory screens' own threshold and
+ * the S9 expiry window.
  *
  * NO ILLUSTRATIVE FIGURES ANYWHERE. Where a figure is not available to this account it reads "—";
- * where a comparison has nothing to compare against (a previous period with no sales) the change
- * is not shown at all rather than printed as an infinite gain.
+ * where a comparison has nothing to compare against (a previous window with no sales) the change
+ * is not shown at all rather than printed as an infinite gain. The chart draws a floor-height bar
+ * for a window with no sales, so an empty period is still a chart rather than a blank block.
  */
 
-/** The three presets, plus the hand-picked window the calendar opens. */
-type Preset = "today" | "week" | "month";
+/** The three presets in the owner's reference, plus the hand-picked window the filter opens. */
+type Preset = "month" | "sixMonths" | "year";
 type Period = Preset | "custom";
 
 /** Days between two PK days, inclusive of both ends. */
@@ -62,6 +71,12 @@ function shiftDays(iso: string, days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
+/** The first day of the month `delta` months away from the one this day falls in. */
+function monthStart(iso: string, delta = 0): string {
+  const [year, month] = iso.split("-").map(Number);
+  return new Date(Date.UTC(year, month - 1 + delta, 1)).toISOString().slice(0, 10);
+}
+
 /** A bucket's start, as a reader would say it: "12 Oct". */
 function shortDay(iso: string): string {
   return new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-GB", {
@@ -69,15 +84,44 @@ function shortDay(iso: string): string {
   });
 }
 
+/** A month, as a chart axis says it: "Oct". */
+function shortMonth(iso: string): string {
+  return new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-GB", {
+    month: "short", timeZone: "UTC",
+  });
+}
+
 /**
  * The change against the previous window, or `null` when there is nothing honest to say.
  *
- * A previous window of zero sales has no percentage: any number printed over it would be a
- * division by nothing dressed up as growth. `null` draws no change line at all.
+ * A previous window of zero has no percentage: any number printed over it would be a division
+ * by nothing dressed up as growth. `null` draws no change line at all.
  */
 function changePct(current: number, previous: number): number | null {
   if (!(previous > 0)) return null;
   return ((current - previous) / previous) * 100;
+}
+
+/** A section heading that stands on the page rather than inside a card. */
+function SectionHead({ title, hint }: { title: string; hint: string }) {
+  return (
+    <div className="px-4 mt-6 mb-2">
+      <h2 className="text-15 font-bold">{title}</h2>
+      <p className="text-12 mt-0.5" style={{ color: "var(--text-secondary)" }}>{hint}</p>
+    </div>
+  );
+}
+
+/** The measured part of a total, drawn as a bar. A zero total draws an empty track. */
+function Progress({ pct }: { pct: number }) {
+  return (
+    <div className="h-1.5 rounded-full overflow-hidden" style={{ background: "var(--muted)" }}>
+      <div
+        className="h-full rounded-full"
+        style={{ width: `${Math.max(0, Math.min(100, pct))}%`, background: "var(--brand)" }}
+      />
+    </div>
+  );
 }
 
 export default function BusinessOverviewPage() {
@@ -90,7 +134,6 @@ export default function BusinessOverviewPage() {
   const loadBranches = useShopStore((s) => s.loadBranches);
   const activeBranchId = useShopStore((s) => s.activeBranchId);
   const activeBranch = branches.find((b) => b.id === activeBranchId) ?? null;
-  const activeShopName = useShopStore((s) => s.activeShopName);
 
   const sales = useSalesStore((s) => s.sales);
   const salesReady = useSalesStore((s) => s.ready);
@@ -123,8 +166,10 @@ export default function BusinessOverviewPage() {
   const todayISO = pkToday();
   const rangeFrom =
     period === "custom"
-      ? customFrom || pkMonthStart()
-      : period === "today" ? todayISO : period === "week" ? pkWeekStart() : pkMonthStart();
+      ? customFrom || monthStart(todayISO)
+      : period === "sixMonths" ? monthStart(todayISO, -5)
+      : period === "year" ? `${todayISO.slice(0, 4)}-01-01`
+      : monthStart(todayISO);
   const rangeTo = period === "custom" ? customTo || todayISO : todayISO;
 
   const windowDays = daysInclusive(rangeFrom, rangeTo);
@@ -182,9 +227,6 @@ export default function BusinessOverviewPage() {
 
   const totalSales = periodSales.reduce((sum, sale) => sum + sale.totalAmount, 0);
   const prevTotalSales = prevSales.reduce((sum, sale) => sum + sale.totalAmount, 0);
-  const customerCredit = activeBranch?.creditOutstanding ?? null;
-  const supplierPayables = companies.reduce((sum, company) => sum + company.outstandingPayable, 0);
-  const overdueCredit = computeOverdueCreditTotal(customers);
 
   // Only a known profit can be compared: an unknown one (costs missing) has no number to put
   // next to last window's, so the change line is simply absent.
@@ -202,42 +244,105 @@ export default function BusinessOverviewPage() {
       ? t("profit.costMissingOn", { count: profit.unknownLines })
       : t("overview.netProfitHint");
 
+  const overdueCredit = computeOverdueCreditTotal(customers);
+  const inventoryValue = activeBranch?.inventoryValue ?? null;
+  const inventoryIncomplete = activeBranch?.inventoryCostIncomplete === true;
+
+  // Stock health is a current fact, not a period figure: counted per product with the same
+  // threshold rule the inventory screens use, and the S9 expiry window.
+  const lowOrOut = products.filter(
+    (product) => getStockStatus(product.stockQty, productLowStockThreshold(product.variants)) !== "in_stock",
+  ).length;
+  const expiring = products.filter((product) =>
+    (product.variants ?? []).some((variant) => {
+      if (!variant.expiryDate) return false;
+      const days = Math.round((Date.parse(pkDateFromISO(variant.expiryDate)) - Date.parse(todayISO)) / 86400000);
+      return days <= EXPIRY_WARNING_DAYS;
+    }),
+  ).length;
+
   /**
-   * The four parts of the window, each against the same part of the window before it.
+   * The two standing balances, each from the rows its own screen lists.
    *
-   * The window is divided into four — the month's four weeks, a custom range's four quarters —
-   * and a window shorter than four days is one part rather than four slivers. Each part carries
-   * its own previous-period figure, which is what makes the pair of bars a comparison rather
-   * than two unrelated numbers.
+   * A customer row carries what this branch has billed them, what has been collected and what is
+   * still owed (0242). The supplier rows carry the branch's purchases and the payable left on
+   * them, so money paid is the difference. Both are branch money, never the shop's, and the two
+   * are never netted against each other.
+   */
+  const receivable = useMemo(() => {
+    const billed = customers.reduce((sum, c) => sum + Math.max(0, c.totalPurchases), 0);
+    const due = customers.reduce((sum, c) => sum + Math.max(0, c.outstandingBalance), 0);
+    const total = Math.max(billed, due);
+    // Collected is what is left of the bill once the remainder is removed, NOT the sum of the
+    // payments column: a return lowers the bill but not the money once taken, so using the
+    // column alone produced "100,000 collected of 0 billed" after a full refund.
+    const paid = Math.max(0, total - due);
+    return { total, paid, due, pct: total > 0 ? Math.round((paid / total) * 100) : 0 };
+  }, [customers]);
+
+  const payable = useMemo(() => {
+    const billed = companies.reduce((sum, c) => sum + Math.max(0, c.totalPurchases), 0);
+    const due = companies.reduce((sum, c) => sum + Math.max(0, c.outstandingPayable), 0);
+    const total = Math.max(billed, due);
+    return { total, paid: Math.max(0, total - due), due, pct: total > 0 ? Math.round((total - due) / total * 100) : 0 };
+  }, [companies]);
+
+  /**
+   * The chart's buckets. A window of a month or less is divided into its weeks; a longer window
+   * is divided by month, because four "weeks" over a year would not be weeks. Each bucket carries
+   * the same number of days from the window before it, which is what makes the pair a comparison
+   * rather than two unrelated numbers.
    */
   const buckets = useMemo(() => {
-    const count = windowDays >= 4 ? 4 : 1;
-    const span = Math.ceil(windowDays / count);
-    return Array.from({ length: count }, (_, i) => {
-      const start = shiftDays(rangeFrom, i * span);
-      const end = [shiftDays(start, span - 1), rangeTo].sort()[0];
-      const prevStart = shiftDays(start, -windowDays);
-      const prevEnd = shiftDays(end, -windowDays);
-      return {
-        key: start,
-        label: count === 1 ? shortDay(rangeFrom) : t("overall.week", { n: i + 1 }),
+    if (windowDays <= 31) {
+      const count = windowDays >= 4 ? 4 : 1;
+      const span = Math.ceil(windowDays / count);
+      return Array.from({ length: count }, (_, i) => {
+        const start = shiftDays(rangeFrom, i * span);
+        const end = [shiftDays(start, span - 1), rangeTo].sort()[0];
+        return {
+          key: start,
+          label: count === 1 ? shortDay(rangeFrom) : t("overall.week", { n: i + 1 }),
+          current: salesIn(start, end),
+          previous: salesIn(shiftDays(start, -windowDays), shiftDays(end, -windowDays)),
+        };
+      });
+    }
+    const out: { key: string; label: string; current: number; previous: number }[] = [];
+    let cursor = monthStart(rangeFrom);
+    while (cursor <= rangeTo) {
+      const next = monthStart(cursor, 1);
+      const start = cursor < rangeFrom ? rangeFrom : cursor;
+      const lastDay = shiftDays(next, -1);
+      const end = lastDay > rangeTo ? rangeTo : lastDay;
+      out.push({
+        key: cursor,
+        label: shortMonth(cursor),
         current: salesIn(start, end),
-        previous: salesIn(prevStart, prevEnd),
-      };
-    });
+        previous: salesIn(shiftDays(start, -windowDays), shiftDays(end, -windowDays)),
+      });
+      cursor = next;
+    }
+    return out;
+    // `windowDays`, `rangeFrom` and `rangeTo` fully describe the buckets; `t` supplies the label.
   }, [rangeFrom, rangeTo, windowDays, salesIn, t]);
 
   // The tallest bar owns the scale, so every other bar is a share of it; a floor keeps an empty
-  // period visible as a line rather than as nothing.
+  // bucket visible as a tick rather than as nothing.
   const barMax = Math.max(0, ...buckets.flatMap((b) => [b.current, b.previous]));
+  const barHeight = (value: number) => `${barMax ? Math.max(4, (value / barMax) * 100) : 6}%`;
 
+  const periodOptions: { key: Preset; label: string }[] = [
+    { key: "month", label: t("overall.periodMonth") },
+    { key: "sixMonths", label: t("overall.periodSixMonths") },
+    { key: "year", label: t("overall.periodYear") },
+  ];
   const periodLabel =
-    period === "today" ? t("sales.today")
-    : period === "week" ? t("sales.thisWeek")
-    : period === "month" ? t("sales.thisMonth")
+    period === "sixMonths" ? t("overall.periodSixMonths")
+    : period === "year" ? t("overall.periodYear")
+    : period === "month" ? t("overall.periodMonth")
     : t("overall.custom");
 
-  const scopeLine = `${activeBranch?.name ?? activeShopName ?? ""} · PKR`;
   const branchRows = branches.map((branch) => ({
     id: branch.id,
     name: branch.name,
@@ -260,12 +365,14 @@ export default function BusinessOverviewPage() {
   }) {
     const up = (change ?? 0) >= 0;
     return (
-      <div data-testid={testId}>
+      <div className="min-w-0 flex-1" data-testid={testId}>
         <p className="text-12" style={{ color: "var(--text-secondary)" }}>{label}</p>
-        <p className="text-18 font-bold mt-1 tabular-nums break-words">{value}</p>
+        <p className="text-22 font-bold mt-1 tabular-nums break-words">{value}</p>
         {change != null ? (
           <p
             className="text-11 mt-1 flex items-center gap-1 tabular-nums"
+            // The measured change reads green upwards and red downwards. `--brand-dark` is the
+            // one green that stays legible on both themes (dark olive in light, lime in dark).
             style={{ color: up ? "var(--brand-dark)" : "var(--error)" }}
           >
             {up ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />}
@@ -285,46 +392,42 @@ export default function BusinessOverviewPage() {
       data-testid="business-overview-page"
     >
       <StatusBar />
-      <NavHeader title={t("overall.title")} backTo={`${base}/settings/hub/overview`} />
+      {/* This screen IS the Overview section now, so the arrow returns to the Settings menu
+          rather than to a hub list that no longer exists. */}
+      <NavHeader title={t("overall.title")} backTo={`${base}/settings`} />
 
       {!ready ? (
         <SkeletonList rows={6} />
       ) : (
-        <div className="px-4 pt-2 pb-8 flex flex-col gap-3.5">
-          {/* ── 1. Business overview ─────────────────────────────────────────────────────
-              The four figures the owner opens with, each labelled with what it is: two are
-              period figures and carry their change, two are standing balances and say so. */}
-          <section
-            className="rounded-[var(--radius-card)] p-4"
-            style={{ background: "var(--tone-card)" }}
-            data-testid="overall-summary"
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <h1 className="text-16 font-bold" data-testid="overall-scope-title">{t("overview.title")}</h1>
-                <p className="text-12 mt-1 truncate" style={{ color: "var(--text-secondary)" }} data-testid="overall-scope">
-                  {scopeLine}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setRangeOpen(true)}
-                data-testid="overall-period"
-                className="shrink-0 flex flex-col items-center gap-1 rounded-[var(--radius-control)] px-2.5 py-1.5 active:opacity-60"
-                style={{ background: "var(--surface-2)" }}
-              >
-                <CalendarDays size={18} style={{ color: "var(--text-primary)" }} />
-                <span className="text-11" style={{ color: "var(--text-secondary)" }}>{periodLabel}</span>
-              </button>
-            </div>
+        <div className="pb-8">
+          {/* ── The head of the screen, straight on the page ───────────────────────────── */}
+          <div className="px-4 pt-2">
+            <h1 className="text-22 font-bold">{t("overview.title")}</h1>
+            <p className="text-13 mt-1" style={{ color: "var(--text-secondary)" }}>{t("overview.subtitle")}</p>
+          </div>
 
-            <div className="grid grid-cols-2 gap-x-4 gap-y-4 mt-5">
+          <div className="px-4 pt-4">
+            <PeriodTabs
+              options={periodOptions}
+              value={period === "custom" ? null : period}
+              onChange={(key) => setPeriod(key)}
+              onFilter={() => setRangeOpen(true)}
+              filterActive={period === "custom"}
+              label={t("overview.periodLabel")}
+              filterLabel={t("admin.selectDateRange")}
+              testIdPrefix="overall-period"
+            />
+          </div>
+
+          {/* ── 1. The two period figures, their change, and the trend ─────────────────── */}
+          <div className="px-4 pt-5" data-testid="overall-figures">
+            <div className="flex gap-5">
               <Figure
                 testId="overall-net-sales"
                 label={t("overall.netSales")}
                 value={money(totalSales)}
                 change={salesChange}
-                note={t("overview.selectedPeriod")}
+                note={periodLabel}
               />
               <Figure
                 testId="overall-net-profit"
@@ -333,247 +436,275 @@ export default function BusinessOverviewPage() {
                 change={profitChange}
                 note={profitHint}
               />
-              <Figure
-                testId="overall-receivables"
-                label={t("overall.receivables")}
-                value={money(customerCredit)}
-                note={t("overall.outstandingBalance")}
-              />
-              <Figure
-                testId="overall-payables"
-                label={t("overall.supplierPayables")}
-                value={money(supplierPayables)}
-                note={t("overall.outstandingBalance")}
-              />
-            </div>
-          </section>
-
-          {/* ── 2. Sales and profit trends ───────────────────────────────────────────────
-              Four pairs of bars: this window's part against the same part of the last one. */}
-          <section
-            className="rounded-[var(--radius-card)] p-4"
-            style={{ background: "var(--tone-card)" }}
-            data-testid="overall-trends"
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <h2 className="text-16 font-bold">{t("overall.trends")}</h2>
-                <p className="text-12 mt-1" style={{ color: "var(--text-secondary)" }}>{t("overall.trendsHint")}</p>
-              </div>
-              <TrendingUp size={18} className="shrink-0" style={{ color: "var(--text-secondary)" }} />
             </div>
 
-            <div className="flex items-baseline justify-between mt-4">
-              <span className="text-12" style={{ color: "var(--text-secondary)" }}>{t("overall.netSales")}</span>
-              <span className="text-14 font-bold tabular-nums">{money(totalSales)}</span>
-            </div>
-
-            <div className="mt-3 flex items-end gap-2 h-24" data-testid="overall-trend-bars">
+            <div
+              className="mt-5 flex items-end gap-1.5 h-28"
+              role="img"
+              aria-label={t("overall.trends")}
+              data-testid="overall-trend-bars"
+            >
               {buckets.map((bucket) => (
-                <div key={bucket.key} className="flex-1 flex items-end justify-center gap-1">
+                <div key={bucket.key} className="flex-1 min-w-0 h-full flex items-end justify-center gap-[3px]">
                   <div
-                    className="w-2.5 rounded-t-[3px]"
-                    style={{
-                      height: `${barMax ? Math.max(4, (bucket.previous / barMax) * 100) : 4}%`,
-                      background: "var(--muted)",
-                    }}
+                    className="w-1/2 max-w-3 rounded-t-[3px]"
+                    style={{ height: barHeight(bucket.previous), background: "var(--muted)" }}
                   />
                   <div
-                    className="w-2.5 rounded-t-[3px]"
-                    style={{
-                      height: `${barMax ? Math.max(4, (bucket.current / barMax) * 100) : 4}%`,
-                      background: "var(--brand)",
-                    }}
+                    className="w-1/2 max-w-3 rounded-t-[3px]"
+                    style={{ height: barHeight(bucket.current), background: "var(--brand)" }}
                   />
                 </div>
               ))}
             </div>
-            <div className="mt-2 flex gap-2">
+            <div className="mt-2 flex gap-1.5">
               {buckets.map((bucket) => (
                 <span
                   key={bucket.key}
-                  className="flex-1 text-11 text-center truncate"
+                  className="flex-1 min-w-0 text-10 text-center truncate"
                   style={{ color: "var(--text-secondary)" }}
                 >
                   {bucket.label}
                 </span>
               ))}
             </div>
+            <div className="mt-2 flex items-center gap-4">
+              <span className="flex items-center gap-1.5 text-10" style={{ color: "var(--text-secondary)" }}>
+                <span className="size-2 rounded-[2px]" style={{ background: "var(--brand)" }} />
+                {t("overall.legendCurrent")}
+              </span>
+              <span className="flex items-center gap-1.5 text-10" style={{ color: "var(--text-secondary)" }}>
+                <span className="size-2 rounded-[2px]" style={{ background: "var(--muted)" }} />
+                {t("overall.legendPrevious")}
+              </span>
+            </div>
             {barMax === 0 && (
               <p className="text-11 mt-2" style={{ color: "var(--text-tertiary)" }}>{t("overall.noSales")}</p>
             )}
-          </section>
+          </div>
 
-          {/* ── 3. Branch performance ────────────────────────────────────────────────────
-              Every branch this account may see, with that branch's own ledger: the sales it has
-              billed and what it is still owed. The bar is each branch's share of the busiest
-              branch's sales — a real ratio between the rows on this card. */}
-          <section
-            className="rounded-[var(--radius-card)] p-4"
-            style={{ background: "var(--tone-card)" }}
-            data-testid="overall-branches"
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <h2 className="text-16 font-bold">{t("overall.branchPerformance")}</h2>
-                <p className="text-12 mt-1" style={{ color: "var(--text-secondary)" }}>{t("overall.branchHint")}</p>
+          {/* ── 2. The two standing balances, each opening its own collection screen ───── */}
+          <SectionHead title={t("overall.balances")} hint={t("overall.balancesHint")} />
+
+          <div className="px-4 flex flex-col gap-2.5">
+            <button
+              type="button"
+              onClick={() => navigate(`${base}/settings/overview/customers`)}
+              data-testid="overall-receivables-row"
+              className="rounded-[var(--radius-card)] p-4 text-start active:opacity-70"
+              style={{ background: "var(--tone-card)" }}
+            >
+              <div className="flex items-start gap-3">
+                <div className="min-w-0 flex-1">
+                  <p className="text-14 font-bold">{t("overall.customerReceivable")}</p>
+                  <p className="text-12 mt-0.5" style={{ color: "var(--text-secondary)" }}>{t("overall.oweYou")}</p>
+                </div>
+                <ChevronRight size={16} className="shrink-0 mt-0.5" style={{ color: "var(--text-secondary)" }} />
               </div>
-              <GitBranch size={18} className="shrink-0" style={{ color: "var(--text-secondary)" }} />
-            </div>
-
-            <div className="mt-3 flex flex-col gap-2.5">
-              {branchRows.map((branch) => (
-                <button
-                  key={branch.id}
-                  type="button"
-                  onClick={() => navigate(`${base}/settings/branches/${branch.id}`)}
-                  data-testid={`overall-branch-${branch.id}`}
-                  className="text-start rounded-[var(--radius-card)] p-3 active:opacity-70"
-                  style={{ background: "var(--surface-2)" }}
-                >
-                  <div className="flex items-center gap-2">
-                    <span className="text-14 font-bold truncate min-w-0">{branch.name}</span>
-                    <ChevronRight size={14} className="ms-auto shrink-0" style={{ color: "var(--text-secondary)" }} />
-                  </div>
-                  <p className="text-12 mt-0.5 truncate" style={{ color: "var(--text-secondary)" }}>
-                    {branch.where}{branch.isCurrent ? ` · ${t("shop.current")}` : ""}
-                  </p>
-                  <div className="flex items-baseline justify-between mt-2.5 gap-3">
-                    <div className="min-w-0">
-                      <p className="text-11" style={{ color: "var(--text-secondary)" }}>{t("overall.salesToDate")}</p>
-                      <p className="text-14 font-bold tabular-nums">{money(branch.salesToDate)}</p>
-                    </div>
-                    <div className="min-w-0 text-end">
-                      <p className="text-11" style={{ color: "var(--text-secondary)" }}>{t("overall.outstandingCredit")}</p>
-                      <p className="text-14 font-bold tabular-nums">{money(branch.credit)}</p>
-                    </div>
-                  </div>
-                  <div className="mt-2 h-1.5 rounded-full overflow-hidden" style={{ background: "var(--muted)" }}>
-                    <div
-                      className="h-full rounded-full"
-                      style={{
-                        width: `${branchSalesMax ? ((branch.salesToDate ?? 0) / branchSalesMax) * 100 : 0}%`,
-                        background: "var(--brand)",
-                      }}
-                    />
-                  </div>
-                </button>
-              ))}
-            </div>
-
-            <p className="text-11 mt-3" style={{ color: "var(--text-tertiary)" }}>{t("overall.branchFooter")}</p>
-          </section>
-
-          {/* ── 4. Customer and supplier balances ───────────────────────────────────────
-              Two separate balances, never netted. The receivables bar is the overdue share of
-              them — a real part of a real total; payables has no ageing to divide, so it carries
-              its amount and no invented bar. */}
-          <section
-            className="rounded-[var(--radius-card)] p-4"
-            style={{ background: "var(--tone-card)" }}
-            data-testid="overall-balances"
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <h2 className="text-16 font-bold">{t("overall.balances")}</h2>
-                <p className="text-12 mt-1" style={{ color: "var(--text-secondary)" }}>{t("overall.balancesHint")}</p>
-              </div>
-              <Wallet size={18} className="shrink-0" style={{ color: "var(--text-secondary)" }} />
-            </div>
-
-            <div className="mt-4" data-testid="overall-receivables-row">
-              <div className="flex items-baseline justify-between gap-3">
-                <span className="text-14">{t("overall.receivables")}</span>
-                <span className="text-14 font-bold tabular-nums">{money(customerCredit)}</span>
-              </div>
-              <p className="text-12 mt-0.5" style={{ color: "var(--text-secondary)" }}>{t("overall.oweYou")}</p>
-              <div className="mt-2 h-1.5 rounded-full overflow-hidden" style={{ background: "var(--muted)" }}>
-                <div
-                  className="h-full rounded-full"
-                  style={{
-                    width: `${customerCredit && customerCredit > 0
-                      ? Math.min(100, (overdueCredit / customerCredit) * 100) : 0}%`,
-                    background: "var(--brand)",
-                  }}
-                />
-              </div>
-              {overdueCredit > 0 && (
-                <p className="text-11 mt-1" style={{ color: "var(--text-tertiary)" }}>
-                  {t("overall.overdue", { amount: formatCurrency(overdueCredit) })}
+              <div className="flex items-baseline justify-between gap-3 mt-3">
+                <p className="text-18 font-bold tabular-nums break-words min-w-0">
+                  {money(receivable.total)}
+                  <span className="text-11 font-normal ms-1.5" style={{ color: "var(--text-secondary)" }}>
+                    {t("overall.totalDue")}
+                  </span>
                 </p>
-              )}
-            </div>
-
-            <div className="mt-4" data-testid="overall-payables-row">
-              <div className="flex items-baseline justify-between gap-3">
-                <span className="text-14">{t("overall.supplierPayables")}</span>
-                <span className="text-14 font-bold tabular-nums">{money(supplierPayables)}</span>
+                <p className="text-12 font-semibold tabular-nums shrink-0" style={{ color: "var(--text-secondary)" }}>
+                  {receivable.pct}%
+                </p>
               </div>
-              <p className="text-12 mt-0.5" style={{ color: "var(--text-secondary)" }}>{t("overall.youOwe")}</p>
+              <div className="mt-2">
+                <Progress pct={receivable.pct} />
+              </div>
+              <div className="flex items-end justify-between gap-3 mt-2">
+                <div className="min-w-0">
+                  <p className="text-10 flex items-center gap-1.5" style={{ color: "var(--text-secondary)" }}>
+                    <span className="size-1.5 rounded-full shrink-0" style={{ background: "var(--brand)" }} />
+                    {t("overall.collected")}
+                  </p>
+                  <p className="text-13 font-bold tabular-nums mt-0.5 break-words">{money(receivable.paid)}</p>
+                </div>
+                <div className="min-w-0 text-end">
+                  <p className="text-10 flex items-center gap-1.5 justify-end" style={{ color: "var(--text-secondary)" }}>
+                    <span className="size-1.5 rounded-full shrink-0" style={{ background: "var(--muted)" }} />
+                    {t("overall.remaining")}
+                  </p>
+                  <p className="text-13 font-bold tabular-nums mt-0.5 break-words">{money(receivable.due)}</p>
+                </div>
+              </div>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => navigate(`${base}/settings/overview/suppliers`)}
+              data-testid="overall-payables-row"
+              className="rounded-[var(--radius-card)] p-4 text-start active:opacity-70"
+              style={{ background: "var(--tone-card)" }}
+            >
+              <div className="flex items-start gap-3">
+                <div className="min-w-0 flex-1">
+                  <p className="text-14 font-bold">{t("overall.supplierPayable")}</p>
+                  <p className="text-12 mt-0.5" style={{ color: "var(--text-secondary)" }}>{t("overall.youOwe")}</p>
+                </div>
+                <ChevronRight size={16} className="shrink-0 mt-0.5" style={{ color: "var(--text-secondary)" }} />
+              </div>
+              <div className="flex items-baseline justify-between gap-3 mt-3">
+                <p className="text-18 font-bold tabular-nums break-words min-w-0">
+                  {money(payable.total)}
+                  <span className="text-11 font-normal ms-1.5" style={{ color: "var(--text-secondary)" }}>
+                    {t("overall.totalPayable")}
+                  </span>
+                </p>
+                <p className="text-12 font-semibold tabular-nums shrink-0" style={{ color: "var(--text-secondary)" }}>
+                  {payable.pct}%
+                </p>
+              </div>
+              <div className="mt-2">
+                <Progress pct={payable.pct} />
+              </div>
+              <div className="flex items-end justify-between gap-3 mt-2">
+                <div className="min-w-0">
+                  <p className="text-10 flex items-center gap-1.5" style={{ color: "var(--text-secondary)" }}>
+                    <span className="size-1.5 rounded-full shrink-0" style={{ background: "var(--brand)" }} />
+                    {t("overall.paid")}
+                  </p>
+                  <p className="text-13 font-bold tabular-nums mt-0.5 break-words">{money(payable.paid)}</p>
+                </div>
+                <div className="min-w-0 text-end">
+                  <p className="text-10 flex items-center gap-1.5 justify-end" style={{ color: "var(--text-secondary)" }}>
+                    <span className="size-1.5 rounded-full shrink-0" style={{ background: "var(--muted)" }} />
+                    {t("overall.remaining")}
+                  </p>
+                  <p className="text-13 font-bold tabular-nums mt-0.5 break-words">{money(payable.due)}</p>
+                </div>
+              </div>
+            </button>
+
+            {overdueCredit > 0 && (
+              <p className="text-11" style={{ color: "var(--text-tertiary)" }}>
+                {t("overall.overdue", { amount: formatCurrency(overdueCredit) })}
+              </p>
+            )}
+          </div>
+
+          {/* ── 3. Branch performance ──────────────────────────────────────────────────── */}
+          <SectionHead title={t("overall.branchPerformance")} hint={t("overall.branchHint")} />
+
+          <div className="px-4 flex flex-col gap-2.5" data-testid="overall-branches">
+            {branchRows.map((branch) => (
+              <button
+                key={branch.id}
+                type="button"
+                onClick={() => navigate(`${base}/settings/branches/${branch.id}`)}
+                data-testid={`overall-branch-${branch.id}`}
+                className="text-start rounded-[var(--radius-card)] p-4 active:opacity-70"
+                style={{ background: "var(--tone-card)" }}
+              >
+                <div className="flex items-center gap-2">
+                  <span className="text-14 font-bold truncate min-w-0">{branch.name}</span>
+                  <ChevronRight size={14} className="ms-auto shrink-0" style={{ color: "var(--text-secondary)" }} />
+                </div>
+                <p className="text-12 mt-0.5 truncate" style={{ color: "var(--text-secondary)" }}>
+                  {branch.where}{branch.isCurrent ? ` · ${t("shop.current")}` : ""}
+                </p>
+                <div className="flex items-baseline justify-between mt-2.5 gap-3">
+                  <div className="min-w-0">
+                    <p className="text-11" style={{ color: "var(--text-secondary)" }}>{t("overall.salesToDate")}</p>
+                    <p className="text-14 font-bold tabular-nums break-words">{money(branch.salesToDate)}</p>
+                  </div>
+                  <div className="min-w-0 text-end">
+                    <p className="text-11" style={{ color: "var(--text-secondary)" }}>{t("overall.outstandingCredit")}</p>
+                    <p className="text-14 font-bold tabular-nums break-words">{money(branch.credit)}</p>
+                  </div>
+                </div>
+                <div className="mt-2">
+                  <Progress pct={branchSalesMax ? ((branch.salesToDate ?? 0) / branchSalesMax) * 100 : 0} />
+                </div>
+              </button>
+            ))}
+            {branchRows.length === 0 && (
+              <p className="text-12" style={{ color: "var(--text-secondary)" }}>{t("overall.branchFooter")}</p>
+            )}
+          </div>
+
+          {/* ── 4. Inventory and stock ─────────────────────────────────────────────────── */}
+          <SectionHead title={t("overall.inventory")} hint={t("overall.inventoryHint")} />
+
+          {/* Rows straight on the page, the way the section hubs list their jobs (owner's
+              reference, 2026-10-28): there is no card and no hairline between two CTAs, because
+              each row is a different place rather than a line in a table. `ListRow` still owns
+              the height, the insets and the press state. */}
+          <div>
+            <ListRow
+              icon={Package}
+              title={t("overview.inventoryValue")}
+              onClick={() => navigate(`${base}/inventory/stock`)}
+              testId="overall-inventory-value"
+              trailing={<span className="ds-row-value shrink-0">{money(inventoryValue, inventoryIncomplete)}</span>}
+            />
+            <ListRow
+              icon={AlertTriangle}
+              title={t("overview.lowOut")}
+              onClick={() => navigate(`${base}/alerts/inventory`)}
+              testId="overall-low-stock"
+              trailing={<span className="ds-row-value shrink-0">{lowOrOut.toLocaleString("en-PK")}</span>}
+            />
+            <ListRow
+              icon={CalendarClock}
+              title={t("overview.expiring")}
+              meta={t("overview.withinDays", { days: EXPIRY_WARNING_DAYS })}
+              onClick={() => navigate(`${base}/alerts/expiry`)}
+              testId="overall-expiring"
+              trailing={<span className="ds-row-value shrink-0">{expiring.toLocaleString("en-PK")}</span>}
+            />
+          </div>
+
+          {/* ── 5. Reports ─────────────────────────────────────────────────────────────── */}
+          <SectionHead title={t("overall.reports")} hint={t("overall.reportsHint")} />
+
+          <div className="pb-4">
+            <div>
+              <ListRow
+                icon={BarChart3}
+                testId="report-sales"
+                title={t("overall.reportSales")}
+                meta={t("overall.reportSalesHint")}
+                onClick={() => navigate(`${base}/reports`)}
+                trailing={<ChevronRight size={14} style={{ color: "var(--text-secondary)" }} className="shrink-0" />}
+              />
+              <ListRow
+                icon={TrendingUp}
+                testId="report-profit"
+                title={t("overall.reportProfit")}
+                meta={t("overall.reportProfitHint")}
+                onClick={() => navigate(`${base}/reports`)}
+                trailing={<ChevronRight size={14} style={{ color: "var(--text-secondary)" }} className="shrink-0" />}
+              />
+              <ListRow
+                icon={Users}
+                testId="report-customer-balances"
+                title={t("overall.reportCustomers")}
+                meta={t("overall.reportCustomersHint")}
+                onClick={() => navigate(`${base}/settings/overview/customers`)}
+                trailing={<ChevronRight size={14} style={{ color: "var(--text-secondary)" }} className="shrink-0" />}
+              />
+              <ListRow
+                icon={Building2}
+                testId="report-supplier-balances"
+                title={t("overall.reportSuppliers")}
+                meta={t("overall.reportSuppliersHint")}
+                onClick={() => navigate(`${base}/settings/overview/suppliers`)}
+                trailing={<ChevronRight size={14} style={{ color: "var(--text-secondary)" }} className="shrink-0" />}
+              />
+              <ListRow
+                icon={GitBranch}
+                testId="report-branches"
+                title={t("overall.reportBranches")}
+                meta={t("overall.reportBranchesHint")}
+                onClick={() => navigate(`${base}/reports`)}
+                trailing={<ChevronRight size={14} style={{ color: "var(--text-secondary)" }} className="shrink-0" />}
+              />
             </div>
-
-            <p className="text-11 mt-4" style={{ color: "var(--text-tertiary)" }}>{t("overall.balancesNote")}</p>
-          </section>
-
-          {/* ── 5. Detailed reports ──────────────────────────────────────────────────────
-              The way into the reports themselves. Each row opens the screen that owns that
-              work today — the reports screen for sales, profit and branches, the customer and
-              supplier ledgers for the two balance reports — so nothing here is a second copy.
-
-              The rows wear the app's own list grammar but sit *inside* this card (`plain`), so
-              the separators span the block instead of drawing a box within a box. */}
-          <section
-            className="rounded-[var(--radius-card)] p-4"
-            style={{ background: "var(--tone-card)" }}
-            data-testid="overall-reports"
-          >
-            <h2 className="text-16 font-bold">{t("overall.reports")}</h2>
-            <p className="text-12 mt-1" style={{ color: "var(--text-secondary)" }}>{t("overall.reportsHint")}</p>
-            <div className="mt-3 -mx-4">
-              <ListCard variant="plain">
-                <ListRow
-                  icon={BarChart3}
-                  testId="report-sales"
-                  title={t("overall.reportSales")}
-                  meta={t("overall.reportSalesHint")}
-                  onClick={() => navigate(`${base}/reports`)}
-                  trailing={<ChevronRight size={14} style={{ color: "var(--text-secondary)" }} className="shrink-0" />}
-                />
-                <ListRow
-                  icon={TrendingUp}
-                  testId="report-profit"
-                  title={t("overall.reportProfit")}
-                  meta={t("overall.reportProfitHint")}
-                  onClick={() => navigate(`${base}/reports`)}
-                  trailing={<ChevronRight size={14} style={{ color: "var(--text-secondary)" }} className="shrink-0" />}
-                />
-                <ListRow
-                  icon={Users}
-                  testId="report-customer-balances"
-                  title={t("overall.reportCustomers")}
-                  meta={t("overall.reportCustomersHint")}
-                  onClick={() => navigate(`${base}/customers`)}
-                  trailing={<ChevronRight size={14} style={{ color: "var(--text-secondary)" }} className="shrink-0" />}
-                />
-                <ListRow
-                  icon={Building2}
-                  testId="report-supplier-balances"
-                  title={t("overall.reportSuppliers")}
-                  meta={t("overall.reportSuppliersHint")}
-                  onClick={() => navigate(`${base}/companies`)}
-                  trailing={<ChevronRight size={14} style={{ color: "var(--text-secondary)" }} className="shrink-0" />}
-                />
-                <ListRow
-                  icon={GitBranch}
-                  testId="report-branches"
-                  title={t("overall.reportBranches")}
-                  meta={t("overall.reportBranchesHint")}
-                  onClick={() => navigate(`${base}/reports`)}
-                  trailing={<ChevronRight size={14} style={{ color: "var(--text-secondary)" }} className="shrink-0" />}
-                />
-              </ListCard>
-            </div>
-          </section>
+          </div>
         </div>
       )}
 
@@ -589,8 +720,7 @@ export default function BusinessOverviewPage() {
           setPeriod("custom");
           setRangeOpen(false);
         }}
-        // Clearing the range hands the screen back to its own period — this month, which is the
-        // window the screen opens on.
+        // Clearing the range hands the screen back to its own period — this month.
         onClear={() => {
           setCustomFrom("");
           setCustomTo("");

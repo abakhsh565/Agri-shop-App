@@ -380,6 +380,7 @@ interface PurchaseRow {
   purchase_number: string;
   company_id: string | null;
   company_name: string;
+  branch_id: string | null;
   total_amount: number;
   amount_paid: number;
   // The unpaid balance column is `amount_due`. It was read as `outstanding_payable`,
@@ -409,6 +410,7 @@ export async function fetchPurchases(): Promise<Purchase[]> {
     purchaseNumber: r.purchase_number,
     companyId: r.company_id ?? "",
     companyName: r.company_name,
+    branchId: r.branch_id ?? undefined,
     items: (r.purchase_items ?? []).map<PurchaseItem>((it) => ({
       id: it.id,
       purchaseId: it.purchase_id,
@@ -427,6 +429,55 @@ export async function fetchPurchases(): Promise<Purchase[]> {
     note: r.note ?? undefined,
     createdAt: r.created_at,
     createdBy: r.created_by ?? "",
+  }));
+}
+
+/** A payment recorded against a supplier, as the supplier's own page reads it. */
+export interface SupplierPaymentEntry {
+  id: string;
+  companyId: string;
+  amount: number;
+  method: PaymentMethod;
+  notes: string | null;
+  recordedByName: string | null;
+  createdAt: string;
+}
+
+interface SupplierPaymentDbRow {
+  id: string;
+  company_id: string;
+  amount: number;
+  method: PaymentMethod;
+  notes: string | null;
+  recorded_by_name: string | null;
+  created_at: string;
+}
+
+/**
+ * The payments made to suppliers, newest first — all of them, or one supplier's.
+ *
+ * The supplier's page shows what has actually been paid against their bills, so it reads the
+ * payment records themselves rather than inferring them from a running total. The hub asks the
+ * same question for the whole month, which is why the supplier is optional: a second query with
+ * a different shape would be a second definition of "what we paid". Row-level security still
+ * decides which branch's payments an account may see.
+ */
+export async function fetchSupplierPayments(companyId?: string): Promise<SupplierPaymentEntry[]> {
+  let query = supabase
+    .from("supplier_payments")
+    .select("*")
+    .order("created_at", { ascending: false });
+  if (companyId) query = query.eq("company_id", companyId);
+  const { data, error } = await query.limit(200);
+  if (error) throw new Error(error.message);
+  return (data as SupplierPaymentDbRow[]).map((r) => ({
+    id: r.id,
+    companyId: r.company_id,
+    amount: Number(r.amount),
+    method: r.method,
+    notes: r.notes,
+    recordedByName: r.recorded_by_name,
+    createdAt: r.created_at,
   }));
 }
 

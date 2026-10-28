@@ -9,35 +9,26 @@ import { useT } from "@/lib/i18n";
 import { formatCurrency, getStockStatus, productLowStockThreshold } from "@/lib/formatters";
 import { summariseSales, profitDisplay, type LiveCostLookup } from "@/lib/profit";
 import { EXPIRY_WARNING_DAYS } from "@/lib/signalEngine";
-import { pkDateFromISO, pkMonthStart, pkToday, pkWeekStart } from "@/lib/pkDate";
+import { pkDateFromISO, pkMonthStart, pkToday } from "@/lib/pkDate";
 import type { BranchSummary } from "@/stores/shopStore";
 
-/** The three presets, plus the hand-picked window the filter opens. */
-type Preset = "today" | "week" | "month";
-type Period = Preset | "custom";
+/** The periods a branch is judged over, plus the hand-picked window the filter opens. */
+type Period = "month" | "sixMonths" | "year" | "custom";
 
 /**
- * What this branch is doing, in the two states this app can honestly measure it.
+ * What this branch is doing, laid out as the owner's reference has it.
  *
- * A branch's figures fall into exactly two kinds, and the card never mixes them without saying
- * which one is on screen:
+ * SHAPE (2026-10-28): the period strip first, directly under the branch's identity; then the
+ * four money figures in one block — net sales, net profit, customer receivables, supplier
+ * payables; then inventory health as its own card. There is no card title above them: the
+ * screen is the branch, so "Main Branch performance" repeated what the header already said.
  *
- *   1. **The branch this account is WORKING IN.** The loaded ledger IS this branch's — sales,
- *      products, supplier books and stock all belong to it (branches never share a ledger, 0233 /
- *      0234 / 0241) — so the period is the reader's to choose and the figures are the same ones
- *      the Business Overview and the reports show, computed by the same code: profit through
- *      `lib/profit` (an unknown cost is never a zero cost), stock health through the threshold
- *      helper the inventory screens use, expiry through the S9 window.
- *   2. **Any other branch.** Only the branch read's own lifetime figures exist for it — sales to
- *      date, what it is owed, what its stock is worth. There is no period for a branch you are
- *      not working in, and no per-branch profit or stock health in any read, so the card says
- *      "All Time" and shows those three instead of inventing a window the data does not have.
+ * THE TWO HONEST STATES STAY. The branch this account is WORKING IN has the loaded ledger, so
+ * the period is the reader's to choose and stock health can be counted from real products. Any
+ * other branch only has the lifetime figures that travelled with the branch row; it shows those
+ * and says why the period and stock card are absent, rather than inventing a window.
  *
- * A figure the account may not read arrives as `null` from the branch read and is drawn as "—",
- * never as zero: a hidden number and a real zero look identical otherwise.
- *
- * This is a SUMMARY on the branch's own page, not a report — the page's rows are the way to the
- * report screens, which is where the full set of figures belongs.
+ * A figure the account may not read arrives as `null` and is drawn as "—", never as zero.
  */
 export default function BranchPerformance({ branch }: { branch: BranchSummary }) {
   const t = useT();
@@ -54,15 +45,10 @@ export default function BranchPerformance({ branch }: { branch: BranchSummary })
   const loadCompanies = useCompaniesStore((s) => s.load);
 
   const [period, setPeriod] = useState<Period>("month");
-  // A hand-picked range, both ends YYYY-MM-DD in Pakistan time. Neither end may be in the future:
-  // the ledger has no rows there, so a future date could only widen an already empty window.
   const [customFrom, setCustomFrom] = useState("");
   const [customTo, setCustomTo] = useState("");
   const [rangeOpen, setRangeOpen] = useState(false);
 
-  // Nothing is read for a branch this account is not working in: those three figures already
-  // travelled with the branch row, and loading the shop's ledgers to show another branch's
-  // numbers would be exactly the mistake this card is written to avoid.
   useEffect(() => {
     if (!isCurrent) return;
     if (!salesReady) void loadSales();
@@ -77,10 +63,24 @@ export default function BranchPerformance({ branch }: { branch: BranchSummary })
   }, [isCurrent, companiesReady, loadCompanies]);
 
   const todayISO = pkToday();
+  const [thisYear, thisMonth] = todayISO.split("-").map(Number);
+
+  // "6 months" is the six calendar months ending with this one, not 180 days: a month is the
+  // unit the ledger and the reports already group by, and a rolling count of days would put a
+  // different set of bills in the same tab on two consecutive days.
+  const sixMonthStart = new Date(Date.UTC(thisYear, thisMonth - 6, 1))
+    .toISOString()
+    .slice(0, 10);
+  const yearStart = `${thisYear}-01-01`;
+
   const rangeFrom =
     period === "custom"
       ? customFrom || pkMonthStart()
-      : period === "today" ? todayISO : period === "week" ? pkWeekStart() : pkMonthStart();
+      : period === "sixMonths"
+        ? sixMonthStart
+        : period === "year"
+          ? yearStart
+          : pkMonthStart();
   const rangeTo = period === "custom" ? customTo || todayISO : todayISO;
 
   const periodSales = useMemo(() => {
@@ -89,13 +89,11 @@ export default function BranchPerformance({ branch }: { branch: BranchSummary })
       return day >= rangeFrom && day <= rangeTo;
     };
     return sales.filter((sale) => !sale.isVoided && inPeriod(sale.createdAt));
-    // The window is derived from `period`, `customFrom` and `customTo`; all three are captured by
-    // `rangeFrom`/`rangeTo` above.
+    // The window is derived from `period`, `customFrom` and `customTo`; all three are captured
+    // by `rangeFrom`/`rangeTo` above.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sales, period, customFrom, customTo]);
 
-  // A line written before cost snapshots existed is priced at today's cost — the same fallback
-  // `lib/profit` uses everywhere else, so this card cannot invent a different margin.
   const liveCost: LiveCostLookup = useMemo(() => {
     const byVariant = new Map<string, number>();
     for (const product of products) {
@@ -106,12 +104,13 @@ export default function BranchPerformance({ branch }: { branch: BranchSummary })
     return (variantId) => (variantId ? byVariant.get(variantId) : undefined);
   }, [products]);
 
-  const profit = useMemo(() => profitDisplay(summariseSales(periodSales, liveCost)), [periodSales, liveCost]);
+  const profit = useMemo(
+    () => profitDisplay(summariseSales(periodSales, liveCost)),
+    [periodSales, liveCost],
+  );
   const periodTotal = periodSales.reduce((sum, sale) => sum + sale.totalAmount, 0);
   const supplierPayables = companies.reduce((sum, company) => sum + company.outstandingPayable, 0);
 
-  // Stock health is a current state, not a period figure: counted per product, with the same
-  // threshold rule the inventory screens use and the same expiry window the alerts use.
   const health = useMemo(() => {
     let low = 0;
     let out = 0;
@@ -146,29 +145,22 @@ export default function BranchPerformance({ branch }: { branch: BranchSummary })
         ? t("profit.costMissingOn", { count: profit.unknownLines })
         : null;
 
-  const periodLabel =
-    period === "today" ? t("sales.today")
-      : period === "week" ? t("sales.thisWeek")
-        : period === "month" ? t("sales.thisMonth")
-          : t("admin.customDateRange");
-
-  const periodOptions: { key: Preset; label: string }[] = [
-    { key: "today", label: t("sales.today") },
-    { key: "week", label: t("sales.thisWeek") },
-    { key: "month", label: t("sales.thisMonth") },
+  const periodOptions: { key: Exclude<Period, "custom">; label: string }[] = [
+    { key: "month", label: t("branchPage.thisMonth") },
+    { key: "sixMonths", label: t("branchPage.sixMonths") },
+    { key: "year", label: t("branchPage.thisYear") },
   ];
 
-  /** The two figures the branch row itself carries, for a branch this account is not working in. */
-  const cardFigures = isCurrent
+  const figures = isCurrent
     ? [
-        { id: "sales", label: t("overview.totalSales"), value: money(periodTotal), note: null as string | null },
+        { id: "sales", label: t("branchPage.netSales"), value: money(periodTotal), note: null as string | null },
         { id: "profit", label: t("overview.netProfit"), value: profitValue, note: profitHint },
-        { id: "receivables", label: t("overview.customerCredit"), value: money(branch.creditOutstanding), note: null },
+        { id: "receivables", label: t("branchPage.customerReceivables"), value: money(branch.creditOutstanding), note: null },
         { id: "payables", label: t("overview.supplierPayables"), value: money(supplierPayables), note: null },
       ]
     : [
         { id: "sales", label: t("overall.salesToDate"), value: money(branch.salesTotal), note: null as string | null },
-        { id: "receivables", label: t("overview.customerCredit"), value: money(branch.creditOutstanding), note: null },
+        { id: "receivables", label: t("branchPage.customerReceivables"), value: money(branch.creditOutstanding), note: null },
         {
           id: "inventory",
           label: t("overview.inventoryValue"),
@@ -180,62 +172,51 @@ export default function BranchPerformance({ branch }: { branch: BranchSummary })
   const waiting = isCurrent && !(salesReady && productsReady && companiesReady);
 
   return (
-    <div
-      className="rounded-[var(--radius-card)] p-4"
-      style={{ background: "var(--tone-card)" }}
-      data-testid={`branch-performance-${branch.id}`}
-    >
-      <div className="flex items-start gap-3">
-        <div className="min-w-0 flex-1">
-          <p className="text-14 font-bold truncate" data-testid={`branch-performance-title-${branch.id}`}>
-            {t("branchPage.performance", { branch: branch.name })}
-          </p>
-          <p className="text-11 mt-0.5" style={{ color: "var(--text-secondary)" }}>
-            {isCurrent ? `${periodLabel} · PKR` : `${t("sales.allTime")} · PKR`}
-          </p>
-        </div>
-      </div>
-
-      {/* The period is the reader's only when the branch is the one being worked in — the tab is
-          the app's one period control, and it is absent rather than disabled otherwise, because
-          there is no window to choose. */}
-      {isCurrent && !waiting && (
-        <div className="mt-3">
-          <PeriodTabs
-            options={periodOptions}
-            value={period === "custom" ? null : period}
-            onChange={(key) => setPeriod(key)}
-            onFilter={() => setRangeOpen(true)}
-            filterActive={period === "custom"}
-            label={t("overview.periodLabel")}
-            filterLabel={t("admin.selectDateRange")}
-            testIdPrefix={`branch-period-${branch.id}`}
-          />
-        </div>
+    <div data-testid={`branch-performance-${branch.id}`}>
+      {isCurrent && (
+        <PeriodTabs
+          options={periodOptions}
+          value={period === "custom" ? null : period}
+          onChange={(key) => setPeriod(key)}
+          onFilter={() => setRangeOpen(true)}
+          filterActive={period === "custom"}
+          label={t("overview.periodLabel")}
+          filterLabel={t("admin.selectDateRange")}
+          testIdPrefix={`branch-period-${branch.id}`}
+        />
       )}
 
       {waiting ? (
-        <div className="mt-3"><SkeletonList rows={2} bare tile={false} /></div>
+        <div className="mt-3">
+          <SkeletonList rows={2} bare tile={false} />
+        </div>
       ) : (
         <>
-          <div className="grid grid-cols-2 gap-x-3 gap-y-4 mt-4">
-            {cardFigures.map((figure) => (
-              <div className="min-w-0" key={figure.id} data-testid={`branch-figure-${figure.id}-${branch.id}`}>
-                <p className="text-12" style={{ color: "var(--text-secondary)" }}>{figure.label}</p>
-                <p className="text-18 font-bold mt-1 tabular-nums break-words">{figure.value}</p>
-                {figure.note && (
-                  <p className="text-11 mt-0.5" style={{ color: "var(--text-tertiary)" }}>{figure.note}</p>
-                )}
-              </div>
-            ))}
+          <div
+            className={`${isCurrent ? "mt-3" : ""} rounded-[var(--radius-card)] p-4`}
+            style={{ background: "var(--tone-card)" }}
+          >
+            <div className="grid grid-cols-2 gap-x-4 gap-y-5">
+              {figures.map((figure) => (
+                <div className="min-w-0" key={figure.id} data-testid={`branch-figure-${figure.id}-${branch.id}`}>
+                  <p className="text-12" style={{ color: "var(--text-secondary)" }}>{figure.label}</p>
+                  <p className="text-18 font-bold mt-1 tabular-nums break-words">{figure.value}</p>
+                  {figure.note && (
+                    <p className="text-11 mt-0.5" style={{ color: "var(--text-tertiary)" }}>{figure.note}</p>
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
 
-          {/* Stock health belongs to the branch being worked in, for the same reason the period
-              does: it is counted from the products this branch's ledger is loaded into. */}
           {isCurrent ? (
-            <div className="mt-4 pt-3.5" style={{ borderTop: "1px solid var(--divider)" }}>
-              <p className="text-14 font-bold">{t("branchPage.inventoryHealth")}</p>
-              <div className="mt-2.5 flex flex-col gap-2">
+            <div
+              className="mt-2 rounded-[var(--radius-card)] p-4"
+              style={{ background: "var(--tone-card)" }}
+              data-testid={`branch-health-card-${branch.id}`}
+            >
+              <p className="text-15 font-bold">{t("branchPage.inventoryHealth")}</p>
+              <div className="mt-3 flex flex-col gap-2.5">
                 {[
                   { id: "low", label: t("branchPage.lowStock"), count: health.low },
                   { id: "out", label: t("branchPage.outOfStock"), count: health.out },
@@ -255,10 +236,10 @@ export default function BranchPerformance({ branch }: { branch: BranchSummary })
               </div>
             </div>
           ) : (
-            /* Said once, where the missing figures would have been: a branch this account is not
-               working in has no period and no stock health in any read, so the card is smaller
-               rather than padded with numbers that would belong to another branch. */
-            <p className="text-11 mt-3.5 pt-3" style={{ color: "var(--text-tertiary)", borderTop: "1px solid var(--divider)" }}>
+            <p
+              className="text-11 mt-2 px-1"
+              style={{ color: "var(--text-tertiary)" }}
+            >
               {t("branchPage.otherBranchNote")}
             </p>
           )}

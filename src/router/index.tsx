@@ -57,11 +57,19 @@ import CompanyDetailPage from "@/pages/admin/companies/CompanyDetailPage";
 import AdminSettingsPage from "@/pages/admin/settings/AdminSettingsPage";
 import ProfileDetailsPage from "@/pages/admin/settings/ProfileDetailsPage";
 import SectionHubPage from "@/pages/admin/settings/SectionHubPage";
+import AdminBranchesSectionPage from "@/pages/admin/settings/AdminBranchesSectionPage";
 import BusinessProfilePage from "@/pages/admin/settings/BusinessProfilePage";
 import BusinessOverviewPage from "@/pages/admin/settings/BusinessOverviewPage";
+// The two collection screens the overview's balance cards open. They answer the money question
+// the card asks, not the catalogue question the Customers and Suppliers lists answer.
+import CustomerReceivablePage from "@/pages/admin/settings/CustomerReceivablePage";
+import SupplierPayablePage from "@/pages/admin/settings/SupplierPayablePage";
+// The pending and overdue books behind the collection tiles, and one supplier's own payable page.
+import CustomerCreditPage from "@/pages/admin/settings/CustomerCreditPage";
+import SupplierCreditPage from "@/pages/admin/settings/SupplierCreditPage";
+import SupplierDetailsPage from "@/pages/admin/settings/SupplierDetailsPage";
 // The Business Overview design as it stood before the redesign — what "Branch details" opens.
 import BranchDetailsOverviewPage from "@/pages/admin/settings/BranchDetailsOverviewPage";
-import AllBranchesPage from "@/pages/admin/settings/AllBranchesPage";
 import RolesAccessPage from "@/pages/admin/settings/RolesAccessPage";
 import AdminNotificationsPage from "@/pages/admin/notifications/AdminNotificationsPage";
 import AddEmployeePage from "@/pages/admin/employees/AddEmployeePage";
@@ -72,12 +80,26 @@ const RecordPurchasePage = React.lazy(() => import("@/pages/admin/purchases/Reco
 import AdminPaymentsPage from "@/pages/admin/payments/AdminPaymentsPage";
 import RecordSupplierPaymentPage from "@/pages/admin/payments/RecordSupplierPaymentPage";
 const AdminReportsPage = React.lazy(() => import("@/pages/admin/reports/AdminReportsPage"));
+// The Reports *hub* and its Profit screen are eager: both are entered from Settings, whose
+// section pages are already in the shell's first bundle, and one is the parent of the other.
+import AdminReportsHubPage from "@/pages/admin/reports/AdminReportsHubPage";
+import AdminProfitReportPage from "@/pages/admin/reports/AdminProfitReportPage";
+// Employees & Access: the directory, its branch grouping, and the per-employee history. All
+// three are entered from Settings, and each one's back returns to the directory.
+import AdminPeopleHubPage from "@/pages/admin/people/AdminPeopleHubPage";
+// One role's own screen: what it is called and what it opens. Opened from the roles list, so it
+// stays eager with the rest of the Employees & Access group.
+import RoleEditorPage from "@/pages/admin/people/RoleEditorPage";
+import AdminBranchAssignmentsPage from "@/pages/admin/people/AdminBranchAssignmentsPage";
+import AdminEmployeeActivityPage from "@/pages/admin/people/AdminEmployeeActivityPage";
+import AdminEmployeeActivityDetailPage from "@/pages/admin/people/AdminEmployeeActivityDetailPage";
 const InventoryAdjustPage = React.lazy(() => import("@/pages/admin/inventory/InventoryAdjustPage"));
 const AddProductPage = React.lazy(() => import("@/pages/admin/inventory/AddProductPage"));
 import PurchaseDetailPage from "@/pages/admin/purchases/PurchaseDetailPage";
 import StockMovementHistoryPage from "@/pages/admin/inventory/StockMovementHistoryPage";
 import ReorderSuggestionsPage from "@/pages/admin/inventory/ReorderSuggestionsPage";
 import DailyCashReconciliationPage from "@/pages/admin/payments/DailyCashReconciliationPage";
+import CashPositionPage from "@/pages/admin/payments/CashPositionPage";
 
 // Employee pages
 const DashboardPage = React.lazy(() => import("@/pages/employee/dashboard/DashboardPage"));
@@ -116,6 +138,16 @@ import CreditOverridesPage from "@/pages/admin/alerts/CreditOverridesPage";
 import CreditOverrideDetailPage from "@/pages/admin/alerts/CreditOverrideDetailPage";
 import CreditRequestDetailPage from "@/pages/admin/alerts/CreditRequestDetailPage";
 import RemindersOverviewPage from "@/pages/admin/alerts/RemindersOverviewPage";
+// Customers & Credit: the section hub and the three ledgers its rows open. Payments is the
+// existing `/payments` screen, rebuilt as the ledger of money that actually moved.
+import AdminCustomersSectionPage from "@/pages/admin/customers/AdminCustomersSectionPage";
+// Purchases & Suppliers: the section hub built around the payable book, like Customers & Credit.
+import AdminPurchasesSectionPage from "@/pages/admin/purchases/AdminPurchasesSectionPage";
+// Finance: recorded cash, the two balances and the section's four jobs on one screen.
+import AdminFinanceSectionPage from "@/pages/admin/finance/AdminFinanceSectionPage";
+import OutstandingCreditPage from "@/pages/admin/customers/OutstandingCreditPage";
+import CreditLimitRequestsPage from "@/pages/admin/customers/CreditLimitRequestsPage";
+import PaymentRemindersPage from "@/pages/admin/customers/PaymentRemindersPage";
 import InventoryAlertsPage from "@/pages/admin/alerts/InventoryAlertsPage";
 import ExpiryAlertsPage from "@/pages/admin/alerts/ExpiryAlertsPage";
 import GroupDetailPage from "@/pages/admin/alerts/GroupDetailPage";
@@ -167,6 +199,18 @@ export const router = createBrowserRouter([
         children: [
           { path: "customers",  element: <CustomersListPage /> },
           { path: "customers/new", element: <AddCustomerPage /> },
+          // The three ledgers the Customers & Credit hub opens. They are declared BEFORE the
+          // profile route: `customers/:customerId` would otherwise swallow `outstanding` and
+          // open a customer called "outstanding".
+          { path: "customers/outstanding", element: <OutstandingCreditPage /> },
+          // A credit request is a decision about money and a follow-up list is the Action
+          // Center's work, so both keep the grant their old screens had (`alerts.view`)
+          // instead of opening to anyone who may read customers.
+          { element: <PermissionGuard requires="alerts.view" fallback="/admin/customers" />,
+            children: [
+              { path: "customers/credit-requests", element: <CreditLimitRequestsPage /> },
+              { path: "customers/reminders", element: <PaymentRemindersPage /> },
+            ] },
           { path: "customers/:customerId", element: <CustomerProfilePage /> },
           { path: "customers/:customerId/purchases", element: <CustomerPurchaseHistoryPage /> },
           { path: "customers/:customerId/payments",  element: <CustomerPaymentHistoryPage /> },
@@ -217,6 +261,10 @@ export const router = createBrowserRouter([
           { path: "payments",   element: <AdminPaymentsPage /> },
           { path: "payments/supplier/:companyId", element: <RecordSupplierPaymentPage /> },
           { path: "payments/daily-cash", element: <DailyCashReconciliationPage /> },
+          // Cash position is its own screen: the figure the Finance hub opens with, the money
+          // that moved each way, and the last movements. The daily check stays beside it —
+          // counting the till at closing time is a different job from reading the position.
+          { path: "payments/cash-position", element: <CashPositionPage /> },
         ] },
 
       // ── Suppliers/Companies (requires companies.view) ────────────────────
@@ -258,19 +306,67 @@ export const router = createBrowserRouter([
           { path: "settings/profile", element: <ProfileDetailsPage /> },
           // One hub per menu section: the jobs inside Sales, Finance, Branches and the rest,
           // listed from the same catalogue the menu itself reads (`lib/settingsHub`).
+          //
+          // Overview is the exception, and it is a screen rather than a menu (owner's
+          // instruction, 2026-10-28): tapping Business Overview in Settings opens the business
+          // performance dashboard itself — the period figures, the trend, the two balances and
+          // the branch cards — instead of a list whose first row opened the same dashboard.
+          { path: "settings/hub/overview", element: <BusinessOverviewPage /> },
+          // Branches is a screen too: the section opens on the branch card itself — every
+          // branch with its headcount, plus the row that creates another — rather than on four
+          // job rows whose first one opened this same list (owner's reference, 2026-10-28).
+          { path: "settings/hub/branches", element: <AdminBranchesSectionPage /> },
+          // Reports is a screen of six destinations, not a list of jobs (owner's reference,
+          // 2026-10-29): Sales, Profit, Customers, Suppliers, Inventory and Activity. It sits
+          // before the generic `:sectionId` route so its own address cannot fall into it.
+          { path: "settings/hub/reports", element: <AdminReportsHubPage /> },
+          // Employees & Access is a directory, not a list of jobs (owner's reference,
+          // 2026-10-29). The nested guard keeps the roster behind employees.view even though
+          // the section itself lives in Settings; the old generic hub only needed settings.view
+          // because every row opened a screen that carried its own guard.
+          { element: <PermissionGuard requires="employees.view" />,
+            children: [
+              { path: "settings/hub/people", element: <AdminPeopleHubPage /> },
+              { path: "settings/hub/people/branches", element: <AdminBranchAssignmentsPage /> },
+              { path: "settings/hub/people/activity", element: <AdminEmployeeActivityPage /> },
+              { path: "settings/hub/people/activity/:employeeId", element: <AdminEmployeeActivityDetailPage /> },
+              // The roles list and one role's editor. `new` is declared before `:roleId` so a
+              // new role can never be read as a role whose id is the word "new".
+              { path: "settings/roles", element: <RolesAccessPage /> },
+              { path: "settings/roles/new", element: <RoleEditorPage /> },
+              { path: "settings/roles/:roleId", element: <RoleEditorPage /> },
+            ] },
+          // Profit used to share the general Reports page; it now has the screen the board gives
+          // it, on the one profit calculation the rest of the app uses.
+          { path: "settings/hub/reports/profit", element: <AdminProfitReportPage /> },
           { path: "settings/hub/sales", element: <AdminSalesSectionPage /> },
           { path: "settings/hub/inventory", element: <AdminInventorySectionPage /> },
+          { path: "settings/hub/customers", element: <AdminCustomersSectionPage /> },
+          { path: "settings/hub/purchases", element: <AdminPurchasesSectionPage /> },
+          // Finance is a screen as well (owner's reference, 2026-10-29): recorded cash, the two
+          // balances, the four jobs and the last payments. It sits before the generic route so
+          // `/settings/hub/finance` cannot fall into the plain row list.
+          { path: "settings/hub/finance", element: <AdminFinanceSectionPage /> },
           { path: "settings/hub/:sectionId", element: <SectionHubPage /> },
           { path: "settings/overview", element: <BusinessOverviewPage /> },
+          { path: "settings/overview/customers", element: <CustomerReceivablePage /> },
+          { path: "settings/overview/customers/pending", element: <CustomerCreditPage mode="pending" /> },
+          { path: "settings/overview/customers/overdue", element: <CustomerCreditPage mode="overdue" /> },
+          { path: "settings/overview/suppliers", element: <SupplierPayablePage /> },
+          { path: "settings/overview/suppliers/pending", element: <SupplierCreditPage mode="pending" /> },
+          { path: "settings/overview/suppliers/overdue", element: <SupplierCreditPage mode="overdue" /> },
+          { path: "settings/overview/suppliers/:companyId", element: <SupplierDetailsPage /> },
           { path: "settings/branch-details", element: <BranchDetailsOverviewPage /> },
           { path: "settings/business", element: <BusinessProfilePage /> },
-          // The list of every branch this account may work in. It used to be rows at the foot of
-          // the account screen (`/admin/settings/profile`) and this address only redirected
-          // there; the Branches section's "All branches" row opens it directly now, and each
-          // branch's own page is the row below.
-          { path: "settings/branches", element: <AllBranchesPage /> },
+          // One branch's own page. The card list that used to live at `/settings/branches` is
+          // gone (owner's instruction, 2026-10-28): the Branches section already lists every
+          // branch in its card, and a second list whose only job was to open the first one's
+          // rows was a screen with no question of its own.
           { path: "settings/branches/:branchId", element: <BranchDetailPage /> },
-          { path: "settings/roles", element: <RolesAccessPage /> },
+          // The deleted card list's address still lives in bookmarks and old links; it hands the
+          // reader to the Branches section that replaced it rather than falling through to the
+          // app root and the sign-in door.
+          { path: "settings/branches", element: <Navigate to="/admin/settings/hub/branches" replace /> },
         ] },
 
       // ── Activity (requires activity.view) ────────────────────────────────

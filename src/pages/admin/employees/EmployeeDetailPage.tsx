@@ -13,6 +13,8 @@ import { SkeletonList } from "@/components/ui/Skeleton";
 import { usePermissionsStore } from "@/stores/permissionsStore";
 import { useRolesStore } from "@/stores/rolesStore";
 import { useAuthStore } from "@/stores/authStore";
+import { hasPermission } from "@/lib/tenantContext";
+import { useShellBase } from "@/lib/useShellBase";
 import { useUIStore } from "@/stores/uiStore";
 import { provisionMemberLogin } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
@@ -26,7 +28,7 @@ import { useCurrentTime } from "@/lib/useCurrentTime";
 import {
   Phone, Hash, ShieldCheck, UserX, UserCheck, Clock,
   TrendingUp, ShoppingCart, Users, Calendar, ChevronRight,
-  Eye, Search,
+  Eye, Search, History,
 } from "lucide-react";
 import type { MembershipRole } from "@/types";
 
@@ -41,8 +43,12 @@ function initBgColor(name: string | null | undefined) {
 export default function EmployeeDetailPage() {
   const { employeeId } = useParams<{ employeeId: string }>();
   const navigate = useNavigate();
+  const base = useShellBase();
   const { language } = useThemeStore();
   const t = useT();
+  // The business history is an accountability read, not a profile field; a role that may not
+  // read the activity log is not offered the door either.
+  const canViewActivity = hasPermission("activity.view");
   const { areaLabel } = usePermissionLabels();
   const { addToast } = useUIStore();
   const { user } = useAuthStore();
@@ -814,6 +820,34 @@ export default function EmployeeDetailPage() {
           </ListCard>
         )}
       </div>
+      )}
+
+      {/* Their business history, one screen away. The activity picker remains the front door,
+          but a person's page is where an owner looking at that person expects to find it; the
+          row says what the next screen leaves out, so "no activity" cannot be misread as "they
+          did nothing" when the rule is that minor profile edits are not listed. */}
+      {!isInvited && canViewActivity && (
+        <div className="px-4 pt-5 animate-fade-in-up delay-[150ms]">
+          <p className="ds-section-label mb-3" style={{ color: "var(--text-secondary)" }}>
+            {t("hub.people.activity")}
+          </p>
+          <ListCard>
+            <ListRow
+              icon={History}
+              testId="emp-activity-link"
+              title={t("people.viewActivity")}
+              description={t("people.businessOnlyHint")}
+              trailing={
+                <ChevronRight
+                  size={14}
+                  className="shrink-0"
+                  style={{ color: "var(--text-secondary)" }}
+                />
+              }
+              onClick={() => navigate(`${base}/settings/hub/people/activity/${emp.id}`)}
+            />
+          </ListCard>
+        </div>
       )}
 
       {/* Actions */}

@@ -22,26 +22,17 @@ import { useShellBase } from "@/lib/useShellBase";
  * `BranchPerformance`), so the form begins where configuration begins and never repeats the
  * name and place it sits under.
  *
- * Editing a branch means everything that was answered when it was created. Creating a branch
- * collects two things: a name and which roles it starts with. Both are editable here, which is
- * the point the request makes about products: an input you can set but never change is not
- * management.
+ * The name is NOT edited here. It has its own pencil on the identity block above, where
+ * renaming asks before it writes: a branch's name is its identity in every other screen — the
+ * switcher, the sales, the reports — not a line to be changed on the way to the map.
  *
- * The name is NOT edited here, and the roles are not either. The name is left alone because a
- * branch's name is its identity in every other screen — the switcher, the sales, the reports —
- * and this one is about where the branch is and whether farmers can find it; renaming from
- * beside the place map put a second, differently-scoped Edit on a screen that already had one.
  * The roles are a deliberate limit rather than a missing feature: a role belongs to the branch it
  * was created in, and this app's role screens — the list, the permission grid, the delete — are
- * all authorized against the branch the account is working in. Showing another branch's roles in
- * a form here and then having every save refused would be worse than saying where they are
- * edited. So for the branch you are standing in, the roles are listed with the number of people
- * on each and this form hands off to the real role screen; for any other branch the form names
- * where they live and offers to open it, stating the consequence it has — that opening it means
- * working in that branch.
- *
- * The main branch carries one extra sentence: it can be renamed and never deleted, which is
- * the reason it has no Delete row anywhere on the Branches screen.
+ * all authorized against the branch the account is working in. For the branch you are standing
+ * in, the roles are listed with the number of people on each and the section hands off to the
+ * real role screen. For any other branch the section states where roles are managed and shows
+ * the branch's total employees, because showing roles this account cannot read (or whose saves
+ * would be refused) would be worse than saying where they live.
  *
  * The location is read from the branch row the list handed in and written through `set_place`,
  * which is the only writer that knows a location is a point inside Pakistan. It is deliberately
@@ -50,30 +41,21 @@ import { useShellBase } from "@/lib/useShellBase";
  * that a branch which is pinned has never been located.
  */
 
-export default function BranchEditor({
-  branch,
-  onClose,
-}: {
-  branch: BranchSummary;
-  onClose: () => void;
-  onRenamed: (name: string) => void;
-}) {
+export default function BranchEditor({ branch }: { branch: BranchSummary }) {
   const t = useT();
   const navigate = useNavigate();
   const base = useShellBase();
   const { addToast } = useUIStore();
 
   const setBranchPlace = useShopStore((s) => s.setBranchPlace);
-  const renameBranch = useShopStore((s) => s.renameBranch);
   const setMarketplaceSettings = useShopStore((s) => s.setMarketplaceSettings);
   const switchTo = useShopStore((s) => s.switchBranch);
 
   const roles = useRolesStore((s) => s.roles);
   const rolesReady = useRolesStore((s) => s.ready);
   const loadRoles = useRolesStore((s) => s.load);
-  const getRoleMemberCount = useRolesStore((s) => s.getRoleMemberCount);
+  const getBranchRoleCounts = useRolesStore((s) => s.getBranchRoleCounts);
 
-  const [name, setName] = useState(branch.name);
   /**
    * Where this branch is, as a point — read from the branch row, then picked on a map.
    *
@@ -126,17 +108,15 @@ export default function BranchEditor({
   }, [isActive, rolesReady, loadRoles]);
 
   useEffect(() => {
-    if (!isActive || roles.length === 0) return;
+    if (!isActive) return;
     let cancelled = false;
     (async () => {
-      const next: Record<string, number> = {};
-      for (const role of roles) next[role.id] = await getRoleMemberCount(role.id);
+      const next = await getBranchRoleCounts(branch.id, branch.isMain);
       if (!cancelled) setCounts(next);
     })();
     return () => { cancelled = true; };
-  }, [isActive, roles, getRoleMemberCount]);
+  }, [isActive, branch.id, branch.isMain, getBranchRoleCounts]);
 
-  const clean = branch.name.trim();
   // A farmer measures the distance from their own search point, so a branch that was never
   // pinned can never be found however close the search is; the switch refuses to turn ON
   // without a location. Turning it OFF is always allowed, whatever state it is in.
@@ -179,7 +159,7 @@ export default function BranchEditor({
     // The list is what the next open of this page reads, so it is told now rather than after a
     // round trip: a pin that saved must not come back as the old one a moment later.
     setBranchPlace(branch.id, next);
-    addToast(t("branches.saved", { branch: clean }), "success");
+    addToast(t("branches.saved", { branch: branch.name }), "success");
     return true;
   }
 
@@ -205,7 +185,7 @@ export default function BranchEditor({
       return false;
     }
     setMarketplaceOn(next);
-    addToast(t("branches.saved", { branch: clean }), "success");
+    addToast(t("branches.saved", { branch: branch.name }), "success");
     return true;
   }
 
@@ -237,32 +217,15 @@ export default function BranchEditor({
       }
       addToast(t("shop.switched", { shop: branch.name }), "success");
     }
-    onClose();
     navigate(`${base}/settings/roles`);
   }
 
   return (
-    <div className="px-4 pt-1 pb-2" data-testid={`branch-edit-${branch.id}`}>
-      {/* No identity block here: this form is hosted by the branch's own page, which opens with
-          `BranchIdentity` and the branch's figures before the form begins. Said once, at the top
-          of the page, rather than twice on one screen. */}
-      <div className="ds-field"><input value={name} disabled={busy} maxLength={120}
-        aria-label={t("branches.nameLabel")} onChange={(event) => setName(event.target.value)}
-        className="h-full flex-1 bg-transparent outline-none ds-body text-start" /></div>
-      <button type="button" disabled={busy || !name.trim() || name.trim() === branch.name}
-        data-testid="branch-rename-save" className="h-10 text-12 font-semibold ds-pressable disabled:opacity-50"
-        onClick={async () => {
-          if (savingRef.current) return;
-          savingRef.current = true; setBusy(true);
-          try {
-            const result = await renameBranch(branch.id, name);
-            addToast(t(result.ok ? "branches.saved" : result.code === "name_taken" ? "branches.nameTaken" : "branches.saveFailed", { branch: name.trim() }), result.ok ? "success" : "error");
-          } finally { savingRef.current = false; setBusy(false); }
-        }}>{t("branches.save")}</button>
+    <div className="px-4" data-testid={`branch-edit-${branch.id}`}>
       {/* ── Where it is ───────────────────────────────────────────────────────── */}
       {/* Not a text field: a branch's location is a point on a map, and an address typed
           beside a pin is how the two end up describing different towns. */}
-      <div className="mt-4">
+      <div className="pt-4">
         <LocationField
           pagePicker
           value={place}
@@ -296,7 +259,7 @@ export default function BranchEditor({
           is refused HERE with the instruction to add one — a disabled control that explains
           nothing would say the same thing less usefully. How far a search reaches stays the
           farmer's choice, not this branch's. */}
-      <p className="text-14 font-bold mt-4" style={{ color: "var(--text-primary)" }}>
+      <p className="text-14 font-bold mt-5" style={{ color: "var(--text-primary)" }}>
         {t("marketplace.branchTitle")}
       </p>
       <button
@@ -313,11 +276,12 @@ export default function BranchEditor({
           <Checkbox checked={marketplaceOn} size={22} />
         </span>
         <span className="text-12 font-semibold" style={{ color: "var(--text-primary)" }}>
-          {branch.isCurrent
-            ? marketplaceOn
-              ? t("marketplace.branchToggleNotice")
-              : t("marketplace.branchToggleOffNotice")
-            : t("marketplace.branchToggleNotice")}
+          {/* The sentence follows the box, on every branch. It used to read "listed" on every
+              branch this account was not working in, so an unchecked box could sit beside words
+              claiming the opposite. */}
+          {marketplaceOn
+            ? t("marketplace.branchToggleNotice")
+            : t("marketplace.branchToggleOffNotice")}
         </span>
       </button>
 
@@ -332,13 +296,37 @@ export default function BranchEditor({
       )}
 
       {/* ── The roles ─────────────────────────────────────────────────────────── */}
-      <p className="text-12 font-semibold mt-4" style={{ color: "var(--text-primary)" }}>
-        {t("branches.rolesTitle")}
-      </p>
+      {/* The employee total sits on the section's own line, so the answer to "how many people
+          are in this branch" is visible before the per-role breakdown, on every branch page. */}
+      <div className="flex items-baseline justify-between gap-3 mt-6">
+        <p className="text-14 font-bold" style={{ color: "var(--text-primary)" }}>
+          {t("branchPage.rolesAndPermissions")}
+        </p>
+        {branch.employeeCount != null && (
+          <p className="text-11 shrink-0" style={{ color: "var(--text-secondary)" }}>
+            {t(
+              branch.employeeCount === 1 ? "branches.employeeOne" : "branches.employeeOther",
+              { count: String(branch.employeeCount) },
+            )}
+          </p>
+        )}
+      </div>
 
       {isActive && !rolesReady && (
         <div className="flex items-center justify-center py-5" role="status" aria-busy="true">
           <Loader2 size={18} className="animate-spin" style={{ color: "var(--text-secondary)" }} />
+        </div>
+      )}
+
+      {!isActive && (
+        <div
+          className="mt-2 rounded-[var(--radius-card)] p-4"
+          style={{ background: "var(--tone-card)" }}
+          data-testid={`branch-roles-other-${branch.id}`}
+        >
+          <p className="text-13" style={{ color: "var(--text-primary)" }}>
+            {t("branches.rolesOtherBranch")}
+          </p>
         </div>
       )}
 

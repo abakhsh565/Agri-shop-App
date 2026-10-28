@@ -37,8 +37,8 @@ export interface VoidedSaleRecord {
 }
 
 /** Every return this account may see, newest first. */
-export function useReturns(): { returns: ReturnRecord[]; ready: boolean } {
-  const { rows, ready } = useScopedRows<ReturnRecord>(async () => {
+export function useReturns(): { returns: ReturnRecord[]; ready: boolean; refresh: () => void } {
+  const { rows, ready, refresh } = useScopedRows<ReturnRecord>(async () => {
     const { data, error } = await supabase
       .from("returns")
       .select("id, return_number, sale_id, customer_name, total_refund, resolution, created_at")
@@ -54,7 +54,7 @@ export function useReturns(): { returns: ReturnRecord[]; ready: boolean } {
       createdAt: String(r.created_at ?? ""),
     }));
   });
-  return { returns: rows, ready };
+  return { returns: rows, ready, refresh };
 }
 
 /**
@@ -64,8 +64,8 @@ export function useReturns(): { returns: ReturnRecord[]; ready: boolean } {
  * most recent 200 sales, so a void from three weeks ago would simply be missing from a list
  * whose whole job is to show it.
  */
-export function useVoidedSales(): { voided: VoidedSaleRecord[]; ready: boolean } {
-  const { rows, ready } = useScopedRows<VoidedSaleRecord>(async () => {
+export function useVoidedSales(): { voided: VoidedSaleRecord[]; ready: boolean; refresh: () => void } {
+  const { rows, ready, refresh } = useScopedRows<VoidedSaleRecord>(async () => {
     const { data, error } = await supabase
       .from("sales")
       .select("id, sale_number, customer_name_snapshot, total_amount, voided_at, created_at")
@@ -81,7 +81,7 @@ export function useVoidedSales(): { voided: VoidedSaleRecord[]; ready: boolean }
       createdAt: String(r.created_at ?? ""),
     }));
   });
-  return { voided: rows, ready };
+  return { voided: rows, ready, refresh };
 }
 
 /** How much of each sale has already been refunded, keyed by the sale's own id. */

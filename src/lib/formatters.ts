@@ -3,6 +3,21 @@ export function formatCurrency(amount: number | null | undefined): string {
   return `Rs. ${safe.toLocaleString("en-PK")}`;
 }
 
+/**
+ * A large rupee amount in the shortest form a phone screen reads it in — `Rs. 2.45M`,
+ * `Rs. 940K` — for a headline figure where the full number would wrap or cross the column.
+ * Trailing zeros are dropped, so 20,000,000 reads `Rs. 20M`, and anything under a thousand is
+ * stated in full (`Rs. 850`) because abbreviating it would save nothing and lose precision.
+ */
+export function formatCompactCurrency(amount: number | null | undefined): string {
+  const safe = typeof amount === 'number' && !isNaN(amount) ? amount : 0;
+  const trim = (value: number) => value.toFixed(2).replace(/0+$/, "").replace(/[.]$/, "");
+  const abs = Math.abs(safe);
+  if (abs >= 1_000_000) return `Rs. ${trim(safe / 1_000_000)}M`;
+  if (abs >= 1_000) return `Rs. ${trim(safe / 1_000)}K`;
+  return formatCurrency(safe);
+}
+
 export function formatDate(iso: string): string {
   const d = new Date(iso);
   return d.toLocaleDateString("en-PK", { day: "numeric", month: "short", year: "numeric" });

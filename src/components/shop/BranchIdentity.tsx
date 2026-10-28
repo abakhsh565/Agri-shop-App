@@ -1,52 +1,69 @@
-import { CheckCircle2, Store } from "lucide-react";
+import { Pencil } from "lucide-react";
 import BranchKindChip from "@/components/ui/BranchKindChip";
 import { useT } from "@/lib/i18n";
 import { branchKind } from "@/lib/branchKind";
-import { branchContextLabel, branchPlaceLine } from "@/lib/branchContext";
+import { branchPlaceLine } from "@/lib/branchContext";
 import type { BranchSummary } from "@/stores/shopStore";
 
 /**
- * Which branch this is, said once — the block every screen about a single branch opens with.
+ * Which branch this is, said once — the block the branch's page opens with.
  *
- * It answers the five things a person checking a branch needs before anything else on the page
- * means anything: its icon and name, the KIND of branch it is (the one the business started with
- * or one added afterwards), whether it is the one they are working in, where it is, and whether
- * it is open. The counts line under it says what is inside it.
+ * SHAPE (owner's reference, 2026-10-28): a large circular mark carrying the branch's initial,
+ * the name at the size of a title with its Main/Sub chip and the word Current beside it, the
+ * address under that, then what the branch holds — starting with its total employees.
  *
- * ONE IMPLEMENTATION, TWO HOSTS. The bottom sheet on Settings and the branch's own page both
- * render this, so the two can never describe the same branch differently — and every fact here
- * comes from the branch row the caller was handed (`get_my_branches`), not from a second read:
- * `shops` may only be read for the branch the account is working in, so asking it about another
- * branch answers nothing at all rather than answering wrongly.
+ * The large mark is the branch's initial rather than a generic shop glyph: on a list of nine
+ * branches every row would otherwise open onto the same picture, and the header's job is to say
+ * which one this is. `Current` is a word, not a pill, because it describes the session rather
+ * than the branch; the Main/Sub chip stays the only pill on the line.
  *
- * Nothing here is an edit control. A branch is renamed, pinned or listed by the deliberate
- * actions further down the page, and a header that could also be tapped would make every one of
- * them a guess about which tap the person meant.
+ * Rename is one small pencil, not a field. The name is the branch's identity on every other
+ * screen, so changing it is an act with a question around it (`BranchDetailPage`), not something
+ * a stray tap on a header can do.
  */
-export default function BranchIdentity({ branch }: { branch: BranchSummary }) {
+export default function BranchIdentity({
+  branch,
+  onRename,
+}: {
+  branch: BranchSummary;
+  onRename?: () => void;
+}) {
   const t = useT();
   const kind = branchKind(t, branch.isMain);
   const place = branchPlaceLine(branch);
-  // The membership state, in the same word the Employees list uses for it, so "active" means one
-  // thing across the app rather than a second vocabulary that only branches speak.
-  const status = t(branch.membershipStatus === "active" ? "employees.active" : "employees.invited");
+  const initial = branch.name.trim().charAt(0).toUpperCase() || "•";
+  // The total is said even when it is zero: "0 employees" is an answer, and the owner asked to
+  // see every branch's total. Only an unreadable count (no permission) is left unsaid.
+  const employees =
+    branch.employeeCount == null
+      ? null
+      : t(branch.employeeCount === 1 ? "branches.employeeOne" : "branches.employeeOther", {
+          count: String(branch.employeeCount),
+        });
+  const products =
+    branch.productCount != null && branch.productCount > 0
+      ? t(branch.productCount === 1 ? "branches.productOne" : "branches.productOther", {
+          count: String(branch.productCount),
+        })
+      : null;
 
   return (
-    <div className="flex items-start gap-3" data-testid={`branch-identity-${branch.id}`}>
+    <div className="flex items-start gap-3.5" data-testid={`branch-identity-${branch.id}`}>
       <span
-        className="size-10 rounded-full flex items-center justify-center shrink-0"
+        className="size-16 rounded-full flex items-center justify-center shrink-0 text-22 font-bold"
         style={{
-          background: branch.isCurrent ? "var(--brand)" : "var(--tone-sunken)",
-          color: branch.isCurrent ? "#0a0a0a" : "var(--text-secondary)",
+          background: branch.isCurrent ? "var(--brand)" : "var(--brand-light)",
+          color: branch.isCurrent ? "#0a0a0a" : "var(--brand-dark)",
         }}
         aria-hidden="true"
+        data-testid={`branch-avatar-${branch.id}`}
       >
-        <Store size={18} />
+        {initial}
       </span>
 
-      <div className="min-w-0 flex-1">
+      <div className="min-w-0 flex-1 pt-0.5">
         <div className="flex items-center gap-2 min-w-0">
-          <p className="text-16 font-bold truncate" data-testid={`branch-name-${branch.id}`}>
+          <p className="text-18 font-bold truncate" data-testid={`branch-name-${branch.id}`}>
             {branch.name}
           </p>
           {kind && <BranchKindChip isMain={branch.isMain} label={kind} />}
@@ -59,30 +76,37 @@ export default function BranchIdentity({ branch }: { branch: BranchSummary }) {
               {t("shop.current")}
             </span>
           )}
+          {onRename && (
+            <button
+              type="button"
+              onClick={onRename}
+              aria-label={t("branches.rename")}
+              data-testid={`branch-rename-${branch.id}`}
+              className="size-7 rounded-full flex items-center justify-center shrink-0 ms-auto active:opacity-70"
+              style={{ background: "var(--surface-2)", color: "var(--text-secondary)" }}
+            >
+              <Pencil size={13} />
+            </button>
+          )}
         </div>
 
         <p
-          className="text-12 mt-1 truncate"
+          className="text-13 mt-1 truncate"
           style={{ color: "var(--text-secondary)" }}
           data-testid={`branch-place-${branch.id}`}
         >
           {place ?? t("branches.noLocation")}
         </p>
 
-        <p
-          className="text-12 mt-1 flex items-center gap-1.5"
-          style={{ color: "var(--brand-dark)" }}
-          data-testid={`branch-status-${branch.id}`}
-        >
-          <CheckCircle2 size={13} />
-          {status}
-        </p>
-
         {/* Counts come from the branch read and are permission-gated there: a count this account
-            may not see arrives as null and the line simply says what it does know, rather than
-            claiming the branch is empty. */}
-        <p className="text-12 mt-1" style={{ color: "var(--text-secondary)" }}>
-          {branchContextLabel(t, branch)}
+            may not see arrives as null, and the label states only what it knows. The employee
+            total leads the line — it is the fact the owner asked to see for every branch. */}
+        <p
+          className="text-12 mt-1.5"
+          style={{ color: "var(--text-secondary)" }}
+          data-testid={`branch-context-${branch.id}`}
+        >
+          {[employees, products].filter(Boolean).join(" · ") || t("branches.contextUnknown")}
         </p>
       </div>
     </div>

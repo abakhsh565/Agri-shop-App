@@ -28,7 +28,9 @@ const GATED: Array<[file: string, gate: RegExp, howItWaits: string]> = [
   // ── Admin ────────────────────────────────────────────────────────────────
   ["src/pages/admin/sales/AdminSalesListPage.tsx", /\{!ready \? \(/, "waits for salesStore.ready"],
   ["src/components/sales/SaleDetailView.tsx", /if \(!salesReady\)/, "separates 'not arrived' from 'not found'"],
-  ["src/pages/admin/payments/AdminPaymentsPage.tsx", /\{!ready \? \(/, "waits for customers + companies"],
+  // Payments is the movement ledger now: it gates on its own read of the payments, not on the
+  // customer and supplier stores it no longer lists (2026-10-28).
+  ["src/pages/admin/payments/AdminPaymentsPage.tsx", /\{!ledger \? \(/, "waits for its own payments read"],
   ["src/pages/admin/companies/CompaniesListPage.tsx", /\{!ready && <SkeletonList/, "waits for companiesStore.ready"],
   ["src/pages/admin/companies/CompanyDetailPage.tsx", /companiesReady \? \(/, "waits before claiming 'not found'"],
   ["src/pages/admin/purchases/AdminPurchasesPage.tsx", /\{loading \? \(/, "waits for its own purchase query"],
@@ -39,14 +41,17 @@ const GATED: Array<[file: string, gate: RegExp, howItWaits: string]> = [
   ["src/pages/admin/alerts/CreditOverridesPage.tsx", /\{!ready \? \(/, "waits for customers + sales"],
   ["src/pages/admin/alerts/InventoryAlertsPage.tsx", /\{!ready \? \(/, "waits before declaring 'all clear'"],
   ["src/pages/admin/alerts/GroupDetailPage.tsx", /if \(loading\)/, "waits for its own group query"],
-  ["src/pages/admin/settings/RolesAccessPage.tsx", /!rolesStore\.ready && <SkeletonList/, "waits for rolesStore"],
+  // The screen reads its gate from the store's own `ready` selector now (the store object is no
+  // longer destructured whole), so the entry names that selector. The invariant is unchanged:
+  // no role row, and no "no roles" claim, until the roles have actually arrived.
+  ["src/pages/admin/settings/RolesAccessPage.tsx", /!ready && <SkeletonList/, "waits for the roles read"],
   ["src/pages/admin/reports/AdminReportsPage.tsx", /\{!ready \? \(/, "waits for all four stores before reporting"],
   ["src/pages/admin/returns/AdminReturnSelectItemsPage.tsx", /if \(loadingReturned\)/, "waits for the already-returned query"],
   ["src/pages/admin/dashboard/AdminDashboardPage.tsx", /\{!listsReady && \(/, "waits before its recent-sales section"],
 
   // ── Employee ─────────────────────────────────────────────────────────────
   ["src/pages/employee/sales/SalesListPage.tsx", /\{!ready \? \(/, "waits for salesStore.ready"],
-  ["src/pages/employee/products/ProductsListPage.tsx", /\{!ready \? \(/, "waits for productsStore.ready"],
+  ["src/pages/employee/products/ProductsListPage.tsx", /!ready \? \(/, "waits for productsStore.ready"],
   ["src/pages/employee/products/ProductDetailPage.tsx", /productsReady \? null : <SkeletonList/, "waits before claiming 'not found'"],
   ["src/pages/employee/customers/CustomersListPage.tsx", /\{!ready \? \(/, "waits for customersStore.ready"],
   ["src/pages/employee/customers/CustomerProfilePage.tsx", /customersReady \? null : <SkeletonList/, "waits before rendering a blank screen"],

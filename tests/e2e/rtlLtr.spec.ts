@@ -426,6 +426,22 @@ test.describe('RTL/LTR + Urdu Support', () => {
       // The redesigned overview: its own cards, its own figures, and a chart that must mirror
       // with the reading direction. It entered this lane with the screen (2026-10-28).
       '/admin/settings/overview',
+      // The credit book behind the overview's balance cards: the collection lists, the pending
+      // and overdue books, and the supplier's own payable page (2026-10-28).
+      '/admin/settings/overview/customers',
+      '/admin/settings/overview/customers/pending',
+      '/admin/settings/overview/customers/overdue',
+      '/admin/settings/overview/suppliers',
+      '/admin/settings/overview/suppliers/pending',
+      '/admin/settings/overview/suppliers/overdue',
+      // The Purchases & Suppliers hub: four figure cards, the quick actions and the recent
+      // deliveries. It entered this lane with the screen (2026-10-28).
+      '/admin/settings/hub/purchases',
+      // The Finance hub: the recorded-cash figure, the receivables/payables pair, the four jobs
+      // and the recent payments. It entered this lane with the screen (2026-10-29).
+      '/admin/settings/hub/finance',
+      // The cash position behind that hub's first row (2026-10-29).
+      '/admin/payments/cash-position',
     ];
 
     for (const route of routes) {

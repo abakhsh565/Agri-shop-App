@@ -27,7 +27,12 @@ interface UserRow {
 // `membershipStatus` comes from the memberships table, not from `users` — that
 // table has no status column, and memberships is what authorization reads. It is
 // the authoritative invite/active state the owner sees.
-function userFromRow(r: UserRow, membershipStatus?: MembershipStatus): User {
+function userFromRow(
+  r: UserRow,
+  membershipStatus?: MembershipStatus,
+  branchScope?: string[] | null,
+  roleName?: string | null
+): User {
   return {
     id: r.id,
     name: r.name,
@@ -36,6 +41,11 @@ function userFromRow(r: UserRow, membershipStatus?: MembershipStatus): User {
     isOriginalOwner: r.is_original_owner,
     isActive: r.is_active,
     membershipStatus,
+    // Which branch(es) the membership is placed in. An invitation that has not been
+    // accepted yet is placed in exactly the branches chosen when it was sent, and that
+    // placement is the only thing that says which branch's team screen it belongs on.
+    branchScope: branchScope ?? null,
+    roleName: roleName ?? null,
     employeeNumber: r.employee_number ?? undefined,
     jobTitle: r.job_title ?? undefined,
     photoUrl: r.photo_url ?? undefined,
@@ -154,16 +164,57 @@ export const useEmployeesStore = create<EmployeesState>((set, get) => ({
       return;
     }
     // Read the membership status alongside, so the list can distinguish an
-    // invitation that has not been accepted from an employee who works here.
+    // invitation that has not been accepted from an employee who works here — and
+    // the branch placement, because an invitation that is still pending is not in
+    // `get_branch_employee_ids()` (that read is the ACTIVE team of a branch), so
+    // without its placement the person the owner just invited would belong to no
+    // screen at all.
     const { data: memberships } = await supabase
       .from("memberships")
-      .select("user_id, status");
+      .select("user_id, status, branch_scope, role_id");
     if (!isDataContextCurrent(context)) return;
     const statusByUser = new Map<string, MembershipStatus>(
       (memberships ?? []).map((m) => [m.user_id as string, m.status as MembershipStatus])
     );
+    const scopeByUser = new Map<string, string[]>();
+    const roleIdByUser = new Map<string, string>();
+    for (const m of (memberships ?? []) as Array<{
+      user_id: string;
+      branch_scope: unknown;
+      role_id: string | null;
+    }>) {
+      if (!m.user_id) continue;
+      const scope = Array.isArray(m.branch_scope)
+        ? (m.branch_scope as unknown[]).filter((id): id is string => typeof id === "string")
+        : [];
+      if (scope.length > 0) scopeByUser.set(m.user_id, scope);
+      if (m.role_id) roleIdByUser.set(m.user_id, m.role_id);
+    }
+
+    // The name behind each default role, in ONE read. The alternative — asking
+    // `get_employee_access` once per row — is an RPC per employee just to print a directory, and
+    // it fails for a viewer who may see the team but not inspect each person's access. A failed
+    // read leaves the name null, and the screen falls back to the job title rather than inventing
+    // one.
+    const roleNameById = new Map<string, string>();
+    const roleIds = [...new Set(roleIdByUser.values())];
+    if (roleIds.length > 0) {
+      const { data: roleRows } = await supabase.from("roles").select("id, name").in("id", roleIds);
+      if (!isDataContextCurrent(context)) return;
+      for (const role of (roleRows ?? []) as Array<{ id: string; name: string }>) {
+        roleNameById.set(role.id, role.name);
+      }
+    }
+
     set({
-      employees: (data as UserRow[]).map((r) => userFromRow(r, statusByUser.get(r.id))),
+      employees: (data as UserRow[]).map((r) =>
+        userFromRow(
+          r,
+          statusByUser.get(r.id),
+          scopeByUser.get(r.id),
+          roleIdByUser.has(r.id) ? roleNameById.get(roleIdByUser.get(r.id) as string) ?? null : null
+        )
+      ),
       loading: false,
       ready: true,
     });

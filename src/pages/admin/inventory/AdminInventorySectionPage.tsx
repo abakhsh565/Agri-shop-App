@@ -1,13 +1,10 @@
-import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   AlertTriangle,
   Barcode,
   CalendarClock,
   ChevronRight,
-  Layers,
   Package,
-  PackagePlus,
   Plus,
   RefreshCw,
   Warehouse,
@@ -16,27 +13,36 @@ import {
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
 import ListRow from "@/components/ui/ListRow";
-import SearchBar from "@/components/ui/SearchBar";
 import { useT } from "@/lib/i18n";
 import { useShellBase } from "@/lib/useShellBase";
+import { useReturnTo } from "@/lib/useReturnTo";
 import { useProductsStore } from "@/stores/productsStore";
 import { useShopStore } from "@/stores/shopStore";
 import { hasPermission } from "@/lib/tenantContext";
 import { inventoryCounts } from "@/lib/inventoryView";
 import { hubSection } from "@/lib/settingsHub";
+import { EXPIRY_WARNING_DAYS } from "@/lib/signalEngine";
+import { formatCompactCurrency } from "@/lib/formatters";
 
 /**
- * Products & Inventory, as one screen: the shelf in four figures, one way to add to it, and the
- * section's own doors.
+ * Products & Inventory, as one screen: what the shelf is worth, four figures about it, one way
+ * to add to it, and the section's own doors.
  *
- * SHAPE (owner's reference, 2026-10-28): the section's header card, Add product as the one quick
- * action, the four counts, the search field, then the shortcut rows — the same anatomy as the
- * Sales section screen, so the two parts of the business are read the same way.
+ * SHAPE (owner's reference, 2026-10-28): the two headline figures sit unboxed at the top — the
+ * value of what the branch holds and how many products are listed; the four counts follow as one
+ * plate; Add product is the single quick action; the shortcut rows close the screen. This is the
+ * same anatomy as the Sales section screen, so the two parts of the business are read the same
+ * way, while the figures are the ones a shopkeeper asks for about stock.
  *
- * THE FOUR FIGURES ARE THE SCREEN'S OWN. Products, low stock, out of stock and expiring are
- * counted by `lib/inventoryView`, which is also what the four screens behind these rows count —
- * so a figure and the list it opens can never disagree. Nothing here is estimated: the products
- * are the working branch's rows, already scoped by the read that loaded them.
+ * THE VALUE IS THE SERVER'S, NOT A SUM THIS SCREEN INVENTS. The branch's `inventoryValue` is
+ * calculated from the movement ledger, with `inventoryCostIncomplete` saying whether every pack
+ * had a cost to value it at — so an incomplete shelf shows a floor (`≥`) rather than a smaller,
+ * wrong number, exactly as the branch card and the business overview state it.
+ *
+ * THE FOUR FIGURES ARE THE SCREEN'S OWN. Packs, low stock, out of stock and expiring are counted
+ * by `lib/inventoryView`, which is also what the four screens behind these rows count — so a
+ * figure and the list it opens can never disagree. Nothing here is estimated: the products are
+ * the working branch's rows, already scoped by the read that loaded them.
  *
  * The rows come from `lib/settingsHub`, the same catalogue the Settings menu reads, so this
  * screen cannot offer a job the app does not have.
@@ -45,10 +51,15 @@ export default function AdminInventorySectionPage() {
   const t = useT();
   const base = useShellBase();
   const navigate = useNavigate();
+  // Settings when opened from the menu, the Reports hub when opened from its Inventory tile.
+  const returnTo = useReturnTo(`${base}/settings`);
   const products = useProductsStore((s) => s.products);
   const ready = useProductsStore((s) => s.ready);
   const branchName = useShopStore((s) => s.activeBranchName);
-  const [query, setQuery] = useState("");
+  const branches = useShopStore((s) => s.branches);
+  const activeBranchId = useShopStore((s) => s.activeBranchId);
+  const branchesLoaded = useShopStore((s) => s.branchesLoaded);
+  const activeBranch = branches.find((b) => b.id === activeBranchId) ?? null;
 
   const catalogue = hubSection("inventory")?.rows ?? [];
   const rowLabel = (id: string, fallbackKey: string) => {
@@ -58,34 +69,14 @@ export default function AdminInventorySectionPage() {
 
   const counts = inventoryCounts(products);
 
-  /** The search field hands its words to the products list, which owns searching the shelf. */
-  function search() {
-    const term = query.trim();
-    navigate(term ? `${base}/products?q=${encodeURIComponent(term)}` : `${base}/products`);
-  }
-
-  const figure = (label: string, count: number, tone?: "error" | "warning") => (
-    <div className="flex-1 min-w-0 flex flex-col gap-1">
-      <p className="ds-section-label truncate" style={{ color: "var(--text-secondary)" }}>
-        {label}
-      </p>
-      <p
-        className="text-16 font-bold"
-        style={{
-          color:
-            !ready || count === 0
-              ? "var(--text-primary)"
-              : tone === "error"
-                ? "var(--error)"
-                : tone === "warning"
-                  ? "var(--warning)"
-                  : "var(--text-primary)",
-        }}
-      >
-        {ready ? count : "—"}
-      </p>
-    </div>
-  );
+  // What this branch's own stock is worth, at today's cost — never a figure summed here from a
+  // price the screen happened to hold. NULL means the caller may not see inventory value.
+  const inventoryValue = branchesLoaded ? activeBranch?.inventoryValue ?? null : null;
+  const valueIncomplete = branchesLoaded && activeBranch?.inventoryCostIncomplete === true;
+  const valueLabel =
+    inventoryValue == null
+      ? "—"
+      : `${valueIncomplete ? "≥ " : ""}${formatCompactCurrency(inventoryValue)}`;
 
   const shortcuts: { id: string; icon: LucideIcon; title: string; hint: string; run: () => void }[] = [
     {
@@ -93,13 +84,6 @@ export default function AdminInventorySectionPage() {
       icon: Package,
       title: rowLabel("products", "hub.inventory.products"),
       hint: t("hub.inventory.productsHint"),
-      run: () => navigate(`${base}/products`),
-    },
-    {
-      id: "variants",
-      icon: Layers,
-      title: rowLabel("variants", "hub.inventory.variants"),
-      hint: t("hub.inventory.variantsHint"),
       run: () => navigate(`${base}/products`),
     },
     {
@@ -143,6 +127,39 @@ export default function AdminInventorySectionPage() {
     });
   }
 
+  /**
+   * One of the four figures: its name, the count, and what the count actually measures. The
+   * caption is the reference's second line under each count — in the mock it was a placeholder
+   * ("Illustrative count"); here it says what the number counts, so "12 low" cannot be read as
+   * twelve products when it is twelve packs.
+   */
+  const figure = (
+    label: string,
+    count: number,
+    caption: string,
+    tone?: "error" | "warning",
+  ) => (
+    <div className="min-w-0">
+      <p className="text-12" style={{ color: "var(--text-secondary)" }}>{label}</p>
+      <p
+        className="text-16 font-bold mt-0.5"
+        style={{
+          color:
+            !ready || count === 0
+              ? "var(--text-primary)"
+              : tone === "error"
+                ? "var(--error)"
+                : tone === "warning"
+                  ? "var(--warning)"
+                  : "var(--text-primary)",
+        }}
+      >
+        {ready ? count : "—"}
+      </p>
+      <p className="text-10 mt-0.5" style={{ color: "var(--text-tertiary)" }}>{caption}</p>
+    </div>
+  );
+
   return (
     <div
       className="flex flex-col w-full min-h-full"
@@ -150,85 +167,108 @@ export default function AdminInventorySectionPage() {
       data-testid="inventory-hub-page"
     >
       <StatusBar />
-      <NavHeader title={t("settings.menu.inventory")} backTo={`${base}/settings`} />
+      <NavHeader title={t("settings.menu.inventory")} backTo={returnTo} />
 
-      <div className="px-4 pt-1">
-        <div
-          className="rounded-[var(--radius-card)] p-4"
-          style={{ background: "var(--surface)", border: "1px solid var(--border-light)" }}
-        >
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <p className="text-16 font-bold" style={{ color: "var(--text-primary)" }}>
-                {t("settings.menu.inventory")}
-              </p>
-              <p className="text-12 mt-1" style={{ color: "var(--text-secondary)" }}>
-                {t("hub.inventory.subtitle")}
-              </p>
-            </div>
-            {/* The mark alone, as the reference draws it: the card's own title already says
-                which part of the business this is. */}
-            <Package size={20} style={{ color: "var(--brand-dark)" }} className="shrink-0" />
-          </div>
-
-          {/* The one quick action: putting something new on the shelf. */}
-          <button
-            type="button"
-            onClick={() => navigate(`${base}/inventory/new`)}
-            data-testid="hub-row-new-product"
-            className="mt-3 w-full flex items-center gap-3 rounded-[var(--radius-tile)] p-3 text-start active:opacity-70"
-            style={{ background: "var(--surface-2)" }}
+      {/* The two headline figures, unboxed, as the reference draws them: what the shelf is
+          worth and how many products are listed on it. */}
+      <div className="px-4 pt-2 flex items-start gap-5">
+        <div className="min-w-0 flex-1">
+          <p className="text-12" style={{ color: "var(--text-secondary)" }}>
+            {t("hub.inventory.totalValue")}
+          </p>
+          <p
+            className="text-22 font-bold mt-1 leading-none break-words"
+            style={{ color: "var(--text-primary)" }}
+            data-testid="inventory-hub-value"
           >
-            <span
-              className="size-10 rounded-[var(--radius-tile)] flex items-center justify-center shrink-0"
-              style={{ background: "var(--brand)" }}
-            >
-              <Plus size={20} style={{ color: "#0a0a0a" }} />
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="block text-14 font-bold" style={{ color: "var(--text-primary)" }}>
-                {t("hub.inventory.addProduct")}
-              </span>
-              <span className="block text-12 mt-0.5" style={{ color: "var(--text-secondary)" }}>
-                {t("hub.inventory.addProductHint")}
-              </span>
-            </span>
-            <ChevronRight size={16} style={{ color: "var(--text-secondary)" }} className="shrink-0" />
-          </button>
-
-          <div className="flex gap-3 mt-4">
-            {figure(t("hub.inventory.productsCount"), counts.products)}
-            {figure(t("hub.inventory.lowStockCount"), counts.low, "warning")}
-          </div>
-          <div className="flex gap-3 mt-3">
-            {figure(t("hub.inventory.outOfStockCount"), counts.out, "error")}
-            {figure(t("hub.inventory.expiryCount"), counts.expiring, "warning")}
-          </div>
-
-          {branchName && (
-            <p className="text-10 mt-3" style={{ color: "var(--text-tertiary)" }}>
-              {t("products.stockInBranch", { branch: branchName })}
+            {valueLabel}
+          </p>
+          {valueIncomplete && inventoryValue != null && (
+            <p className="text-10 mt-1" style={{ color: "var(--text-tertiary)" }}>
+              {t("shop.inventoryValueIncomplete")}
             </p>
+          )}
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-12" style={{ color: "var(--text-secondary)" }}>
+            {t("hub.inventory.listedProducts")}
+          </p>
+          <p
+            className="text-22 font-bold mt-1 leading-none"
+            style={{ color: "var(--text-primary)" }}
+            data-testid="inventory-hub-products"
+          >
+            {ready ? counts.products : "—"}
+          </p>
+        </div>
+      </div>
+      {branchName && (
+        <p className="px-4 pt-2 text-10" style={{ color: "var(--text-tertiary)" }}>
+          {t("products.stockInBranch", { branch: branchName })}
+        </p>
+      )}
+
+      <div className="px-4 pt-4">
+        <div
+          className="rounded-[var(--radius-card)] p-4 grid grid-cols-2 gap-x-4 gap-y-4"
+          style={{ background: "var(--surface)" }}
+        >
+          {figure(
+            t("hub.inventory.packsCount"),
+            counts.packs,
+            t("hub.inventory.packsCaption"),
+          )}
+          {figure(
+            t("hub.inventory.lowStockCount"),
+            counts.low,
+            t("hub.inventory.lowStockCaption"),
+            "warning",
+          )}
+          {figure(
+            t("hub.inventory.outOfStockCount"),
+            counts.out,
+            t("hub.inventory.outOfStockCaption"),
+            "error",
+          )}
+          {figure(
+            t("hub.inventory.expiryCount"),
+            counts.expiring,
+            t("hub.inventory.expiryCaption", { days: EXPIRY_WARNING_DAYS }),
+            "warning",
           )}
         </div>
       </div>
 
-      {/* Search hands off to the products list, which owns searching the shelf. */}
+      {/* The one quick action: putting something new on the shelf. */}
       <div className="px-4 pt-3">
-        <SearchBar
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          onClear={() => setQuery("")}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") search();
-          }}
-          placeholder={t("products.search")}
-        />
+        <button
+          type="button"
+          onClick={() => navigate(`${base}/inventory/new`)}
+          data-testid="hub-row-new-product"
+          className="w-full flex items-center gap-3 rounded-[var(--radius-card)] p-3 text-start active:opacity-70"
+          style={{ background: "var(--surface)" }}
+        >
+          <span
+            className="size-10 rounded-[var(--radius-tile)] flex items-center justify-center shrink-0"
+            style={{ background: "var(--surface-2)" }}
+          >
+            <Plus size={20} style={{ color: "var(--brand-dark)" }} />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-14 font-bold" style={{ color: "var(--text-primary)" }}>
+              {t("hub.inventory.addProduct")}
+            </span>
+            <span className="block text-12 mt-0.5" style={{ color: "var(--text-secondary)" }}>
+              {t("hub.inventory.addProductHint")}
+            </span>
+          </span>
+          <ChevronRight size={16} style={{ color: "var(--text-secondary)" }} className="shrink-0" />
+        </button>
       </div>
 
-      <p className="text-15 font-bold px-4 mt-5 mb-1">{t("hub.inventory.shortcuts")}</p>
-
-      <div className="pb-6">
+      {/* The section's doors, unboxed like the Sales hub: each row is a different place, so a
+          card around them would draw a second edge without grouping anything. */}
+      <div className="pt-4 pb-6">
         {shortcuts.map((row) => (
           <ListRow
             key={row.id}
@@ -240,15 +280,12 @@ export default function AdminInventorySectionPage() {
             onClick={row.run}
           />
         ))}
-        {/* One quiet line for the case the shelf is empty: a new branch has nothing to count, and
-            four zeroes with no explanation read as a broken screen. */}
+        {/* One quiet line for the case the shelf is empty: four zeroes with no explanation read as
+            a broken screen. */}
         {ready && counts.products === 0 && (
-          <div className="px-4 pt-5 flex items-center gap-2">
-            <PackagePlus size={16} style={{ color: "var(--text-tertiary)" }} />
-            <p className="text-12" style={{ color: "var(--text-secondary)" }}>
-              {t("hub.inventory.emptyShelf")}
-            </p>
-          </div>
+          <p className="px-4 pt-4 text-12" style={{ color: "var(--text-secondary)" }}>
+            {t("hub.inventory.emptyShelf")}
+          </p>
         )}
       </div>
     </div>

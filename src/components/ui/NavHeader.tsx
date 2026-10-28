@@ -29,30 +29,30 @@ export default function NavHeader({ title, backTo, onBack, right, noBack, backIc
 
   function handleBack() {
     if (onBack) { onBack(); return; }
-    if (backTo) { navigate(backTo); return; }
 
-    // On dashboard, back is handled by hardware back button (exit flow)
-    if (isDashboardPath(location.pathname)) return;
-
-    // On a top-level screen (tab destination), go to dashboard
-    if (isTopLevel(location.pathname)) {
-      const role = location.pathname.startsWith("/admin") ? "/admin" : "/employee";
+    // Where the reader actually came from wins over the parent a screen assumes for itself.
+    // The same screen is opened from several places (the Finance hub, the overview, a report),
+    // and `backTo` can only name one of them — the journey stack knows which one they used. It
+    // is also right about replaced screens: a form that saved itself with `replace` is not
+    // behind the screen it opened, so back cannot reopen a form the reader already completed.
+    const from = popNav(location.pathname);
+    if (from && from !== location.pathname) {
+      // The tracker must not record this back step as a new forward frame.
       setSkipNext();
-      navigate(role + "/dashboard", { replace: true });
+      navigate(from, { replace: true });
       return;
     }
 
-    // Nested screen: pop from journey stack
-    const from = popNav(location.pathname);
-    if (from) {
-      setSkipNext();
-      navigate(from, { replace: true });
-    } else {
-      // Fallback: go to dashboard of current role
-      const role = location.pathname.startsWith("/admin") ? "/admin" : "/employee";
-      setSkipNext();
-      navigate(role + "/dashboard", { replace: true });
-    }
+    // Nothing behind this screen (a deep link, a cold start): use the parent it names.
+    if (backTo) { navigate(backTo); return; }
+
+    // On dashboard, back is handled by the hardware back button (the exit flow).
+    if (isDashboardPath(location.pathname)) return;
+
+    // Nothing behind it and no parent named: the dashboard is the floor for this shell.
+    const role = location.pathname.startsWith("/admin") ? "/admin" : "/employee";
+    setSkipNext();
+    navigate(role + "/dashboard", { replace: true });
   }
 
   return (

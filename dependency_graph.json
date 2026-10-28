@@ -169,6 +169,11 @@
         "layer": "lib"
       },
       {
+        "file": "src/lib/paymentLedger.ts",
+        "evidence": "from_call",
+        "layer": "lib"
+      },
+      {
         "file": "tests/e2e/cleanupOwnership.ts",
         "evidence": "sql_reference",
         "layer": "test"
@@ -261,6 +266,11 @@
         "layer": "lib"
       },
       {
+        "file": "src/lib/paymentLedger.ts",
+        "evidence": "from_call",
+        "layer": "lib"
+      },
+      {
         "file": "src/lib/permissionLabels.ts",
         "evidence": "sql_reference",
         "layer": "lib"
@@ -284,6 +294,11 @@
         "file": "src/components/shop/OwnerSuiteSections.tsx",
         "evidence": "sql_reference",
         "layer": "component"
+      },
+      {
+        "file": "src/pages/admin/purchases/AdminPurchasesSectionPage.tsx",
+        "evidence": "sql_reference",
+        "layer": "page"
       },
       {
         "file": "tests/e2e/accessUx.spec.ts",
@@ -515,11 +530,6 @@
         "layer": "component"
       },
       {
-        "file": "src/pages/admin/more/BranchDetailPage.tsx",
-        "evidence": "sql_reference",
-        "layer": "page"
-      },
-      {
         "file": "src/pages/admin/purchases/PurchaseDetailPage.tsx",
         "evidence": "from_call",
         "layer": "page"
@@ -607,6 +617,68 @@
         "layer": "test"
       }
     ],
+    "supplier_payments": [
+      {
+        "file": "src/lib/db.ts",
+        "evidence": "from_call",
+        "layer": "lib"
+      },
+      {
+        "file": "src/lib/paymentLedger.ts",
+        "evidence": "from_call",
+        "layer": "lib"
+      },
+      {
+        "file": "src/pages/admin/purchases/AdminPurchasesPage.tsx",
+        "evidence": "sql_reference",
+        "layer": "page"
+      },
+      {
+        "file": "tests/e2e/cleanupOwnership.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/e2e/doubleTapSafety.spec.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/integration/financialIntegrity.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/integration/rbacInvariants.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/unit/branchIdentityBoundary.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/unit/e2eCleanupOwnership.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/unit/productionDataPolicy.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/unit/qaExcessCriteria.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/unit/supplierPayableFreshness.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      }
+    ],
     "customers": [
       {
         "file": "src/lib/i18n.ts",
@@ -625,6 +697,11 @@
       },
       {
         "file": "src/lib/offlineQueue.ts",
+        "evidence": "from_call",
+        "layer": "lib"
+      },
+      {
+        "file": "src/lib/paymentLedger.ts",
         "evidence": "from_call",
         "layer": "lib"
       },
@@ -661,16 +738,6 @@
       {
         "file": "src/pages/admin/alerts/RemindersOverviewPage.tsx",
         "evidence": "from_call",
-        "layer": "page"
-      },
-      {
-        "file": "src/pages/admin/more/BranchDetailPage.tsx",
-        "evidence": "sql_reference",
-        "layer": "page"
-      },
-      {
-        "file": "src/pages/admin/payments/AdminPaymentsPage.tsx",
-        "evidence": "sql_reference",
         "layer": "page"
       },
       {
@@ -896,16 +963,6 @@
         "layer": "page"
       },
       {
-        "file": "src/pages/admin/more/BranchDetailPage.tsx",
-        "evidence": "sql_reference",
-        "layer": "page"
-      },
-      {
-        "file": "src/pages/admin/sales/AdminSalesSectionPage.tsx",
-        "evidence": "sql_reference",
-        "layer": "page"
-      },
-      {
         "file": "src/pages/admin/settings/AdminSettingsPage.tsx",
         "evidence": "sql_reference",
         "layer": "page"
@@ -1114,11 +1171,6 @@
       },
       {
         "file": "src/pages/admin/inventory/AdminInventorySectionPage.tsx",
-        "evidence": "sql_reference",
-        "layer": "page"
-      },
-      {
-        "file": "src/pages/admin/more/BranchDetailPage.tsx",
         "evidence": "sql_reference",
         "layer": "page"
       },
@@ -1607,6 +1659,11 @@
         "layer": "page"
       },
       {
+        "file": "src/pages/admin/customers/PaymentRemindersPage.tsx",
+        "evidence": "sql_reference",
+        "layer": "page"
+      },
+      {
         "file": "tests/e2e/cleanupOwnership.ts",
         "evidence": "sql_reference",
         "layer": "test"
@@ -1775,11 +1832,6 @@
         "layer": "component"
       },
       {
-        "file": "src/components/shop/BranchIdentity.tsx",
-        "evidence": "sql_reference",
-        "layer": "component"
-      },
-      {
         "file": "src/pages/admin/settings/BusinessProfilePage.tsx",
         "evidence": "sql_reference",
         "layer": "page"
@@ -1883,58 +1935,6 @@
       },
       {
         "file": "tests/unit/productionDataPolicy.test.ts",
-        "evidence": "sql_reference",
-        "layer": "test"
-      }
-    ],
-    "supplier_payments": [
-      {
-        "file": "src/pages/admin/purchases/AdminPurchasesPage.tsx",
-        "evidence": "sql_reference",
-        "layer": "page"
-      },
-      {
-        "file": "tests/e2e/cleanupOwnership.ts",
-        "evidence": "sql_reference",
-        "layer": "test"
-      },
-      {
-        "file": "tests/e2e/doubleTapSafety.spec.ts",
-        "evidence": "sql_reference",
-        "layer": "test"
-      },
-      {
-        "file": "tests/integration/financialIntegrity.test.ts",
-        "evidence": "sql_reference",
-        "layer": "test"
-      },
-      {
-        "file": "tests/integration/rbacInvariants.test.ts",
-        "evidence": "sql_reference",
-        "layer": "test"
-      },
-      {
-        "file": "tests/unit/branchIdentityBoundary.test.ts",
-        "evidence": "sql_reference",
-        "layer": "test"
-      },
-      {
-        "file": "tests/unit/e2eCleanupOwnership.test.ts",
-        "evidence": "sql_reference",
-        "layer": "test"
-      },
-      {
-        "file": "tests/unit/productionDataPolicy.test.ts",
-        "evidence": "sql_reference",
-        "layer": "test"
-      },
-      {
-        "file": "tests/unit/qaExcessCriteria.test.ts",
-        "evidence": "sql_reference",
-        "layer": "test"
-      },
-      {
-        "file": "tests/unit/supplierPayableFreshness.test.ts",
         "evidence": "sql_reference",
         "layer": "test"
       }
@@ -2887,17 +2887,17 @@
         "layer": "page"
       },
       {
-        "file": "src/pages/admin/payments/AdminPaymentsPage.tsx",
-        "evidence": "direct_import",
-        "layer": "page"
-      },
-      {
         "file": "src/pages/admin/payments/DailyCashReconciliationPage.tsx",
         "evidence": "direct_import",
         "layer": "page"
       },
       {
         "file": "src/pages/admin/payments/RecordSupplierPaymentPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/people/RoleEditorPage.tsx",
         "evidence": "direct_import",
         "layer": "page"
       },
@@ -2928,6 +2928,11 @@
       },
       {
         "file": "src/pages/admin/sales/AdminSalesListPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/sales/AdminSalesSectionPage.tsx",
         "evidence": "direct_import",
         "layer": "page"
       },
@@ -2967,11 +2972,6 @@
         "layer": "page"
       },
       {
-        "file": "src/pages/employee/customers/CustomersListPage.tsx",
-        "evidence": "direct_import",
-        "layer": "page"
-      },
-      {
         "file": "src/pages/employee/customers/RecordCustomerPaymentPage.tsx",
         "evidence": "direct_import",
         "layer": "page"
@@ -2988,11 +2988,6 @@
       },
       {
         "file": "src/pages/employee/more/MorePage.tsx",
-        "evidence": "direct_import",
-        "layer": "page"
-      },
-      {
-        "file": "src/pages/employee/products/ProductsListPage.tsx",
         "evidence": "direct_import",
         "layer": "page"
       },
@@ -3119,6 +3114,16 @@
         "layer": "page"
       },
       {
+        "file": "src/pages/admin/customers/OutstandingCreditPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/customers/PaymentRemindersPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
         "file": "src/pages/admin/dashboard/AdminDashboardPage.tsx",
         "evidence": "direct_import",
         "layer": "page"
@@ -3169,12 +3174,42 @@
         "layer": "page"
       },
       {
-        "file": "src/pages/admin/settings/AdminSettingsPage.tsx",
+        "file": "src/pages/admin/payments/CashPositionPage.tsx",
         "evidence": "direct_import",
         "layer": "page"
       },
       {
-        "file": "src/pages/admin/settings/AllBranchesPage.tsx",
+        "file": "src/pages/admin/people/AdminBranchAssignmentsPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/people/AdminEmployeeActivityDetailPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/people/AdminEmployeeActivityPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/people/AdminPeopleHubPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/purchases/AdminPurchasesSectionPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/sales/AdminSalesSectionPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/settings/AdminSettingsPage.tsx",
         "evidence": "direct_import",
         "layer": "page"
       },
@@ -3194,12 +3229,27 @@
         "layer": "page"
       },
       {
+        "file": "src/pages/admin/settings/CustomerCreditPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
         "file": "src/pages/admin/settings/RolesAccessPage.tsx",
         "evidence": "direct_import",
         "layer": "page"
       },
       {
+        "file": "src/pages/admin/settings/SupplierCreditPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
         "file": "src/pages/employee/activity/ActivityLogPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/employee/customers/CustomersListPage.tsx",
         "evidence": "direct_import",
         "layer": "page"
       },
@@ -3288,6 +3338,11 @@
         "layer": "page"
       },
       {
+        "file": "src/pages/admin/finance/AdminFinanceSectionPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
         "file": "src/pages/admin/inventory/AddProductPage.tsx",
         "evidence": "direct_import",
         "layer": "page"
@@ -3298,17 +3353,17 @@
         "layer": "page"
       },
       {
-        "file": "src/pages/admin/payments/AdminPaymentsPage.tsx",
-        "evidence": "direct_import",
-        "layer": "page"
-      },
-      {
         "file": "src/pages/admin/payments/RecordSupplierPaymentPage.tsx",
         "evidence": "direct_import",
         "layer": "page"
       },
       {
         "file": "src/pages/admin/purchases/AdminPurchasesPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/purchases/AdminPurchasesSectionPage.tsx",
         "evidence": "direct_import",
         "layer": "page"
       },
@@ -3329,6 +3384,21 @@
       },
       {
         "file": "src/pages/admin/settings/BusinessOverviewPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/settings/SupplierCreditPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/settings/SupplierDetailsPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/settings/SupplierPayablePage.tsx",
         "evidence": "direct_import",
         "layer": "page"
       },
@@ -3390,12 +3460,27 @@
         "layer": "page"
       },
       {
+        "file": "src/pages/admin/customers/AdminCustomersSectionPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/customers/OutstandingCreditPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/customers/PaymentRemindersPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
         "file": "src/pages/admin/dashboard/AdminDashboardPage.tsx",
         "evidence": "direct_import",
         "layer": "page"
       },
       {
-        "file": "src/pages/admin/payments/AdminPaymentsPage.tsx",
+        "file": "src/pages/admin/finance/AdminFinanceSectionPage.tsx",
         "evidence": "direct_import",
         "layer": "page"
       },
@@ -3416,6 +3501,16 @@
       },
       {
         "file": "src/pages/admin/settings/BusinessOverviewPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/settings/CustomerCreditPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/settings/CustomerReceivablePage.tsx",
         "evidence": "direct_import",
         "layer": "page"
       },
@@ -3602,6 +3697,11 @@
         "layer": "page"
       },
       {
+        "file": "src/pages/admin/reports/AdminProfitReportPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
         "file": "src/pages/admin/reports/AdminReportsPage.tsx",
         "evidence": "direct_import",
         "layer": "page"
@@ -3751,6 +3851,26 @@
         "layer": "page"
       },
       {
+        "file": "src/pages/admin/people/AdminBranchAssignmentsPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/people/AdminEmployeeActivityDetailPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/people/AdminEmployeeActivityPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/people/AdminPeopleHubPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
         "file": "src/pages/admin/sales/AdminSalesListPage.tsx",
         "evidence": "direct_import",
         "layer": "page"
@@ -3835,6 +3955,11 @@
         "layer": "page"
       },
       {
+        "file": "src/pages/admin/people/RoleEditorPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
         "file": "src/pages/admin/settings/RolesAccessPage.tsx",
         "evidence": "direct_import",
         "layer": "page"
@@ -3887,7 +4012,17 @@
         "layer": "page"
       },
       {
+        "file": "src/pages/admin/customers/PaymentRemindersPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
         "file": "src/pages/admin/dashboard/AdminDashboardPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/finance/AdminFinanceSectionPage.tsx",
         "evidence": "direct_import",
         "layer": "page"
       },
@@ -3897,7 +4032,17 @@
         "layer": "page"
       },
       {
+        "file": "src/pages/admin/payments/CashPositionPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
         "file": "src/pages/admin/payments/DailyCashReconciliationPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/reports/AdminProfitReportPage.tsx",
         "evidence": "direct_import",
         "layer": "page"
       },
@@ -3938,11 +4083,6 @@
       },
       {
         "file": "src/pages/employee/customers/CustomerPurchaseHistoryPage.tsx",
-        "evidence": "direct_import",
-        "layer": "page"
-      },
-      {
-        "file": "src/pages/employee/customers/CustomersListPage.tsx",
         "evidence": "direct_import",
         "layer": "page"
       },
@@ -4119,6 +4259,11 @@
         "layer": "page"
       },
       {
+        "file": "src/pages/admin/people/RoleEditorPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
         "file": "src/pages/admin/purchases/RecordPurchasePage.tsx",
         "evidence": "direct_import",
         "layer": "page"
@@ -4129,12 +4274,12 @@
         "layer": "page"
       },
       {
-        "file": "src/pages/admin/settings/AdminSettingsPage.tsx",
+        "file": "src/pages/admin/sales/AdminSalesSectionPage.tsx",
         "evidence": "direct_import",
         "layer": "page"
       },
       {
-        "file": "src/pages/admin/settings/AllBranchesPage.tsx",
+        "file": "src/pages/admin/settings/AdminSettingsPage.tsx",
         "evidence": "direct_import",
         "layer": "page"
       },
@@ -4145,11 +4290,6 @@
       },
       {
         "file": "src/pages/admin/settings/ProfileDetailsPage.tsx",
-        "evidence": "direct_import",
-        "layer": "page"
-      },
-      {
-        "file": "src/pages/admin/settings/RolesAccessPage.tsx",
         "evidence": "direct_import",
         "layer": "page"
       },
@@ -4227,6 +4367,11 @@
       },
       {
         "file": "src/pages/admin/employees/EmployeeDetailPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/people/RoleEditorPage.tsx",
         "evidence": "direct_import",
         "layer": "page"
       },
@@ -4689,6 +4834,9 @@
     "/admin/search": "src/pages/employee/search/SearchPage.tsx",
     "/admin/customers": "src/pages/employee/customers/CustomersListPage.tsx",
     "/admin/customers/new": "src/pages/employee/customers/AddCustomerPage.tsx",
+    "/admin/customers/outstanding": "src/pages/admin/customers/OutstandingCreditPage.tsx",
+    "/admin/customers/credit-requests": "src/pages/admin/customers/CreditLimitRequestsPage.tsx",
+    "/admin/customers/reminders": "src/pages/admin/customers/PaymentRemindersPage.tsx",
     "/admin/customers/:customerId": "src/pages/employee/customers/CustomerProfilePage.tsx",
     "/admin/customers/:customerId/purchases": "src/pages/employee/customers/CustomerPurchaseHistoryPage.tsx",
     "/admin/customers/:customerId/payments": "src/pages/employee/customers/CustomerPaymentHistoryPage.tsx",
@@ -4719,6 +4867,7 @@
     "/admin/payments": "src/pages/admin/payments/AdminPaymentsPage.tsx",
     "/admin/payments/supplier/:companyId": "src/pages/admin/payments/RecordSupplierPaymentPage.tsx",
     "/admin/payments/daily-cash": "src/pages/admin/payments/DailyCashReconciliationPage.tsx",
+    "/admin/payments/cash-position": "src/pages/admin/payments/CashPositionPage.tsx",
     "/admin/companies": "src/pages/admin/companies/CompaniesListPage.tsx",
     "/admin/companies/new": "src/pages/admin/companies/AddCompanyPage.tsx",
     "/admin/companies/:companyId": "src/pages/admin/companies/CompanyDetailPage.tsx",
@@ -4730,15 +4879,34 @@
     "/admin/reports": "src/pages/admin/reports/AdminReportsPage.tsx",
     "/admin/settings": "src/pages/admin/settings/AdminSettingsPage.tsx",
     "/admin/settings/profile": "src/pages/admin/settings/ProfileDetailsPage.tsx",
+    "/admin/settings/hub/overview": "src/pages/admin/settings/BusinessOverviewPage.tsx",
+    "/admin/settings/hub/branches": "src/pages/admin/settings/AdminBranchesSectionPage.tsx",
+    "/admin/settings/hub/reports": "src/pages/admin/reports/AdminReportsHubPage.tsx",
+    "/admin/settings/hub/people": "src/pages/admin/people/AdminPeopleHubPage.tsx",
+    "/admin/settings/hub/people/branches": "src/pages/admin/people/AdminBranchAssignmentsPage.tsx",
+    "/admin/settings/hub/people/activity": "src/pages/admin/people/AdminEmployeeActivityPage.tsx",
+    "/admin/settings/hub/people/activity/:employeeId": "src/pages/admin/people/AdminEmployeeActivityDetailPage.tsx",
+    "/admin/settings/roles": "src/pages/admin/settings/RolesAccessPage.tsx",
+    "/admin/settings/roles/new": "src/pages/admin/people/RoleEditorPage.tsx",
+    "/admin/settings/roles/:roleId": "src/pages/admin/people/RoleEditorPage.tsx",
+    "/admin/settings/hub/reports/profit": "src/pages/admin/reports/AdminProfitReportPage.tsx",
     "/admin/settings/hub/sales": "src/pages/admin/sales/AdminSalesSectionPage.tsx",
     "/admin/settings/hub/inventory": "src/pages/admin/inventory/AdminInventorySectionPage.tsx",
+    "/admin/settings/hub/customers": "src/pages/admin/customers/AdminCustomersSectionPage.tsx",
+    "/admin/settings/hub/purchases": "src/pages/admin/purchases/AdminPurchasesSectionPage.tsx",
+    "/admin/settings/hub/finance": "src/pages/admin/finance/AdminFinanceSectionPage.tsx",
     "/admin/settings/hub/:sectionId": "src/pages/admin/settings/SectionHubPage.tsx",
     "/admin/settings/overview": "src/pages/admin/settings/BusinessOverviewPage.tsx",
+    "/admin/settings/overview/customers": "src/pages/admin/settings/CustomerReceivablePage.tsx",
+    "/admin/settings/overview/customers/pending": "src/pages/admin/settings/CustomerCreditPage.tsx",
+    "/admin/settings/overview/customers/overdue": "src/pages/admin/settings/CustomerCreditPage.tsx",
+    "/admin/settings/overview/suppliers": "src/pages/admin/settings/SupplierPayablePage.tsx",
+    "/admin/settings/overview/suppliers/pending": "src/pages/admin/settings/SupplierCreditPage.tsx",
+    "/admin/settings/overview/suppliers/overdue": "src/pages/admin/settings/SupplierCreditPage.tsx",
+    "/admin/settings/overview/suppliers/:companyId": "src/pages/admin/settings/SupplierDetailsPage.tsx",
     "/admin/settings/branch-details": "src/pages/admin/settings/BranchDetailsOverviewPage.tsx",
     "/admin/settings/business": "src/pages/admin/settings/BusinessProfilePage.tsx",
-    "/admin/settings/branches": "src/pages/admin/settings/AllBranchesPage.tsx",
     "/admin/settings/branches/:branchId": "src/pages/admin/more/BranchDetailPage.tsx",
-    "/admin/settings/roles": "src/pages/admin/settings/RolesAccessPage.tsx",
     "/admin/activity": "src/pages/employee/activity/ActivityLogPage.tsx",
     "/admin/notifications": "src/pages/admin/notifications/AdminNotificationsPage.tsx",
     "/admin/alerts/credit-overrides": "src/pages/admin/alerts/CreditOverridesPage.tsx",
@@ -4780,6 +4948,6 @@
     "/employee/notifications": "src/pages/employee/notifications/EmployeeNotificationsPage.tsx",
     "/employee/guide": "src/pages/shared/AppGuidePage.tsx"
   },
-  "scannedAt": "2026-10-27T23:12:10.369Z",
-  "fileCount": 449
+  "scannedAt": "2026-10-28T21:19:19.108Z",
+  "fileCount": 479
 }

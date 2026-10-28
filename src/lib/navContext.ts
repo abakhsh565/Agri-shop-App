@@ -34,6 +34,41 @@ export function shouldSkipNext() {
   return false;
 }
 
+/** How the reader arrived: a fresh step, an overwritten step, or a step back. */
+export type NavMove = "push" | "replace" | "back";
+
+/**
+ * Record one navigation with the move that caused it.
+ *
+ * WHY THE MOVE MATTERS. This stack is what the back button walks, so it has to describe the
+ * journey the reader can actually retrace. A screen that finishes a form and `replace`s itself
+ * with the saved record is ONE step, not two: recording it as a push left the completed form
+ * behind the record, and back then re-opened a form the reader had just submitted — one of the
+ * ways this button used to go somewhere the reader had never been.
+ *
+ *   - `push`    — a new step; the screen it came from is behind it.
+ *   - `replace` — the reader's current entry is gone; the new screen inherits its place.
+ *   - `back`    — the step is being undone; the frame being left is dropped.
+ */
+export function recordNav(to: string, from: string, move: NavMove) {
+  if (move === "back") {
+    popNav(from);
+    return;
+  }
+  if (move === "replace") {
+    // The new screen takes the place of the one it replaced, so whatever was behind the form
+    // is still what is behind the saved record.
+    for (let i = stack.length - 1; i >= 0; i--) {
+      if (stack[i].path === from) {
+        stack[i] = { path: to, from: stack[i].from };
+        lastPushed = "";
+        return;
+      }
+    }
+  }
+  pushNav(to, from);
+}
+
 /** Call this when the user navigates to a new page */
 export function pushNav(to: string, from: string) {
   // Deduplicate: don't push if we just pushed this exact frame

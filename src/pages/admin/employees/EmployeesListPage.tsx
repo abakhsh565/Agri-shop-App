@@ -111,6 +111,28 @@ export default function EmployeesListPage() {
   const visibleEmployees = branchEmployeeIds
     ? employees.filter((employee) => branchEmployeeIds.has(employee.id))
     : [];
+
+  /**
+   * The invitations this branch is waiting on.
+   *
+   * The roster above is `get_branch_employee_ids()`, which answers for the branch's
+   * ACTIVE team — the same population the branch card counts (0244). An invitation is
+   * a membership with status `pending`, so it is correctly absent from that count and
+   * was therefore absent from every screen as well: the owner sent an invitation, read
+   * "Invitation sent", came back, and found nobody. The person is already placed in a
+   * branch when the invitation is written (`create_employee_core` refuses an empty
+   * placement), so the placement is what puts them under the branch they were invited
+   * to. They move into the roster above by themselves on first sign-in, when the
+   * membership becomes active.
+   */
+  const invitedHere = activeBranchId
+    ? employees.filter(
+        (employee) =>
+          employee.membershipStatus === "pending" &&
+          (employee.branchScope ?? []).includes(activeBranchId)
+      )
+    : [];
+
   const loading = !ready || branchEmployeeIds === null;
 
   return (
@@ -162,12 +184,49 @@ export default function EmployeesListPage() {
               </div>
             </ListRow>
           </ListCard>
+        )}        {/* Invitations, above the team rather than inside it: the number beside the
+            branch is the people who work there, and an invitation is not one yet. */}
+        {!loading && invitedHere.length > 0 && (
+          <div className="flex flex-col gap-2">
+            <p className="ds-section-label">{t("empList.invitations")}</p>
+            <ListCard>
+              {invitedHere.map((emp) => (
+                <ListRow
+                  key={emp.id}
+                  testId="invited-employee"
+                  onClick={() => navigate(`/admin/employees/${emp.id}`)}
+                  tile={
+                    <div
+                      className="size-11 rounded-full flex items-center justify-center font-bold text-16 shrink-0"
+                      style={{ background: "var(--surface-2)", color: "var(--text-secondary)" }}
+                    >
+                      {emp.name ? emp.name.charAt(0) : "?"}
+                    </div>
+                  }
+                  trailing={<ChevronRight size={16} style={{ color: "var(--text-secondary)" }} className="shrink-0" />}
+                >
+                  <div className="flex flex-col flex-1 min-w-0 gap-0.5">
+                    <p className="text-sm font-bold truncate" style={{ color: "var(--text-primary)" }}>{emp.name}</p>
+                    <p className="text-xs" style={{ color: "var(--text-secondary)" }}>{emp.phone}</p>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span
+                        className="text-10 font-bold px-2 py-0.5 rounded-full"
+                        style={{ background: "var(--warning-bg)", color: "var(--warning)" }}
+                      >
+                        {t("employees.invited")}
+                      </span>
+                    </div>
+                  </div>
+                </ListRow>
+              ))}
+            </ListCard>
+          </div>
         )}
 
-        {/* The list is fetched once per shell mount, so on a cold load this screen used
-            to sit blank and then fill. It now holds the shape it will become. */}
+        {/* The list is fetched once per shell mount, so on a cold load this screen
+            used to sit blank and then fill. It now holds the shape it will become. */}
         {loading && <SkeletonList rows={4} tile />}
-        {!loading && visibleEmployees.length === 0 && (
+        {!loading && visibleEmployees.length === 0 && invitedHere.length === 0 && (
           <div className="flex flex-col items-center py-20 gap-2">
             <Users size={28} className="mx-auto block" style={{ color: "var(--text-tertiary)" }} />
             <p className="text-sm" style={{ color: "var(--text-secondary)" }}>{t("empList.empty")}</p>
