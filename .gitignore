@@ -23,6 +23,14 @@ logs/
 /test-results/
 /dist-bundle/
 
+# Generated knowledge-graph artifacts (graphify). Each snapshot's graph.json is ~8 MB and the
+# repository carried two of them. Rebuild with `graphify .` when the graph is needed.
+/graphify-out/
+
+# Archives of source or assets. `Guide for App Development final.zip` (8.6 MB) sat in the root;
+# the source it wrapped was already in the repository.
+*.zip
+
 # Logical database dumps from scripts/backup-database.mjs. A dump holds every row of every table:
 # real customers, orders and phone numbers. It is machine output, never source.
 /backups/

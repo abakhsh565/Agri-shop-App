@@ -288,14 +288,14 @@ export default function CashPositionPage() {
                 </div>
                 <div className="flex items-center justify-between gap-3 mt-2">
                   <p className="text-11 truncate" style={{ color: "var(--text-secondary)" }}>
-                    <span className="inline-block size-1.5 rounded-full mr-1.5 align-middle" style={{ background: "var(--success)" }} />
+                    <span className="inline-block size-1.5 rounded-full me-1.5 align-middle" style={{ background: "var(--success)" }} />
                     {t("payments.moneyReceived")}{" "}
                     <span className="font-semibold tabular-nums" style={{ color: "var(--text-primary)" }}>
                       {row.received == null ? t("cashPosition.branchCashUnknown") : formatCurrency(row.received)}
                     </span>
                   </p>
                   <p className="text-11 truncate text-end" style={{ color: "var(--text-secondary)" }}>
-                    <span className="inline-block size-1.5 rounded-full mr-1.5 align-middle" style={{ background: "var(--error)" }} />
+                    <span className="inline-block size-1.5 rounded-full me-1.5 align-middle" style={{ background: "var(--error)" }} />
                     {t("payments.moneyPaid")}{" "}
                     <span className="font-semibold tabular-nums" style={{ color: "var(--text-primary)" }}>
                       {row.paid == null ? t("cashPosition.branchCashUnknown") : formatCurrency(row.paid)}
