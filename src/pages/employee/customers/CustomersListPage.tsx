@@ -4,7 +4,6 @@ import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
 import PullToRefresh from "@/components/ui/PullToRefresh";
 import { SkeletonList } from "@/components/ui/Skeleton";
-import CollectionPlate from "@/components/customers/CollectionPlate";
 import SearchBar from "@/components/ui/SearchBar";
 import { useCustomersStore } from "@/stores/customersStore";
 import { formatCurrency } from "@/lib/formatters";
@@ -24,12 +23,7 @@ import {
 } from "@/lib/customerCredit";
 
 type SortKey = "outstanding" | "name" | "recent";
-/**
- * This screen is the CREDIT book, not the address book (owner's correction, 2026-10-29): every
- * row here is an account that currently owes the branch something. "All" therefore means all
- * accounts with a balance, and the only narrower view worth a chip is the late ones.
- */
-type CreditFilter = "all" | "overdue";
+type CreditFilter = "all" | "outstanding" | "overdue" | "paid";
 
 const SORT_OPTIONS: { key: SortKey; labelKey: "customers.sortBalance" | "customers.sortName" | "customers.sortNewest" }[] = [
   { key: "outstanding", labelKey: "customers.sortBalance" },
@@ -89,7 +83,8 @@ export default function CustomersListPage() {
   const ready = useCustomersStore((s) => s.ready);
   const load = useCustomersStore((s) => s.load);
 
-  const initialFilter: CreditFilter = "all";
+  const initialFilter: CreditFilter =
+    state?.filter === "credit" ? "outstanding" : "all";
   const cropFilter = state?.cropFilter as string | undefined;
   const [creditFilter, setCreditFilter] = useState<CreditFilter>(initialFilter);
   // A search started on Customers & Credit arrives as `?q=` and lands here, where searching the
@@ -125,13 +120,14 @@ export default function CustomersListPage() {
   };
 
   const filtered = customers.filter((c) => {
-    // Only accounts that owe something. A settled customer is not a credit account, and listing
-    // every name ever added made the owner scroll past people who have no money on this book.
-    if (c.isArchived || c.outstandingBalance <= 0) return false;
     const term = search.trim().toLowerCase();
     const matchSearch = !term || c.name.toLowerCase().includes(term) || c.phone.includes(term);
-    const matchState = creditFilter === "all" || isCreditOverdue(c, todayISO);
-    return matchSearch && matchState &&
+    const matchState =
+      creditFilter === "all" ||
+      (creditFilter === "outstanding" && c.outstandingBalance > 0) ||
+      (creditFilter === "overdue" && isCreditOverdue(c, todayISO)) ||
+      (creditFilter === "paid" && c.outstandingBalance <= 0);
+    return matchSearch && !c.isArchived && matchState &&
       (!cropFilter || getCustomerCrops(c.id).includes(cropFilter));
   });
 
@@ -149,7 +145,9 @@ export default function CustomersListPage() {
 
   const filters: { key: CreditFilter; label: string }[] = [
     { key: "all", label: t("products.all") },
+    { key: "outstanding", label: t("customers.filterOutstanding") },
     { key: "overdue", label: t("receivable.overdue") },
+    { key: "paid", label: t("customers.filterPaid") },
   ];
 
   /** The chip that says which of the four states the card is in. */
@@ -189,20 +187,18 @@ export default function CustomersListPage() {
       >
         <StatusBar />
         <NavHeader
-          title={t("settings.menu.customers")}
+          title={t("customers.title")}
           backTo={returnTo}
         />
 
-        {/* The header is the collection plate (owner's reference, 2026-10-29): what the branch is
-            owed, how much of that has come back, and the three populations that make the figure
-            up. Every number here is the list's own rows, summarised by
-            `summariseCustomerCollection` — the same function the Customers & Credit screen uses —
-            so the plate can never describe a different population from the cards under it, and
-            "overdue" is the app's S1 rule rather than a second date comparison written here. */}
+        {/* Just the list (owner's correction, 2026-10-29): every account the app holds, and the
+            plain name of the screen. The money summary belongs to Customers & Credit, which is
+            the screen that reports on the book; repeating it here put three figures over a list
+            whose rows already carry the balance, and none of them could be acted on from here. */}
         <div className="px-4 pt-1">
-          <h1 className="text-22 font-bold leading-tight">{t("hub.customers.collectionTitle")}</h1>
+          <h1 className="text-22 font-bold leading-tight">{t("customers.title")}</h1>
           <p className="text-13 mt-1" style={{ color: "var(--text-secondary)" }}>
-            {t("hub.customers.collectionSubtitle")}
+            {t("customers.pageSubtitle")}
           </p>
         </div>
 
@@ -212,40 +208,6 @@ export default function CustomersListPage() {
             bar, no collection totals, no count tiles. The full collection plate stays on the
             Customers & Credit section, which is the screen that reports on the book. Unboxed so
             the two screens cannot be mistaken for one another. */}
-        <div className="px-4 pt-5 grid grid-cols-3 gap-3">
-          <div className="min-w-0">
-            <p className="text-11" style={{ color: "var(--text-secondary)" }}>
-              {t("receivable.totalOutstanding")}
-            </p>
-            <p
-              className="text-18 font-bold mt-1 tabular-nums break-words"
-              data-testid="customers-total-outstanding"
-            >
-              {ready ? formatCurrency(summary.due) : "—"}
-            </p>
-          </div>
-          <div className="min-w-0">
-            <p className="text-11" style={{ color: "var(--text-secondary)" }}>
-              {t("receivable.pending")}
-            </p>
-            <p className="text-18 font-bold mt-1 tabular-nums break-words" data-testid="customers-pending">
-              {ready ? formatCurrency(summary.due - summary.overdueDue) : "—"}
-            </p>
-          </div>
-          <div className="min-w-0">
-            <p className="text-11" style={{ color: "var(--text-secondary)" }}>
-              {t("receivable.overdue")}
-            </p>
-            <p
-              className="text-18 font-bold mt-1 tabular-nums break-words"
-              data-testid="customers-overdue"
-              style={{ color: summary.overdueDue > 0 ? "var(--error)" : "var(--text-primary)" }}
-            >
-              {ready ? formatCurrency(summary.overdueDue) : "—"}
-            </p>
-          </div>
-        </div>
-
         {/* Search + sort */}
 
         <div className="px-4 pt-3 pb-3 flex gap-2 items-center">
@@ -335,7 +297,7 @@ export default function CustomersListPage() {
           <div className="flex flex-col items-center px-6 py-16 gap-2">
             <UserRound size={28} style={{ color: "var(--text-tertiary)" }} />
             <p className="text-14 font-semibold text-center" style={{ color: "var(--text-primary)" }}>
-              {search ? t("sale.noCustomersMatch") : creditFilter === "overdue" ? t("customers.noneFound") : t("customers.noneOwing")}
+              {search || creditFilter !== "all" ? t("sale.noCustomersMatch") : t("customers.noneFound")}
             </p>
             {!search && creditFilter === "all" && (
               <p className="text-13 text-center" style={{ color: "var(--text-secondary)" }}>
