@@ -1,6 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Building2, ChevronRight } from "lucide-react";
+import { Bell, Building2, CalendarDays, ChevronRight, Download, Share2 } from "lucide-react";
+import BalanceDateSheet, { type BalancePeriod } from "@/components/ui/BalanceDateSheet";
+import PaymentReminderSheet from "@/components/ui/PaymentReminderSheet";
+import SectionActionsSheet, { SectionActionsButton } from "@/components/ui/SectionActionsSheet";
+import { csvFileName, exportCsv, exportText, toCsv } from "@/lib/exportData";
+import { useUIStore } from "@/stores/uiStore";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
 import SearchBar from "@/components/ui/SearchBar";
@@ -10,7 +15,7 @@ import { useT } from "@/lib/i18n";
 import { useShellBase } from "@/lib/useShellBase";
 import { useReturnTo } from "@/lib/useReturnTo";
 import { formatCurrency } from "@/lib/formatters";
-import { pkToday } from "@/lib/pkDate";
+import { pkDateFromISO, pkToday } from "@/lib/pkDate";
 import { daysUntilDue, isSupplierOverdue, summariseSupplierPayable } from "@/lib/supplierPayable";
 
 /**
@@ -26,6 +31,14 @@ import { daysUntilDue, isSupplierOverdue, summariseSupplierPayable } from "@/lib
  * left on them (0242), so the money paid is the difference and the total is the sum of the rows
  * below it. "Overdue" is a due date that has passed on a balance still owed — the same test the
  * signal engine raises for supplier payables.
+ *
+ * ONE CARD, THEN THE LIST (owner's correction, 2026-10-30). The heading and its line under the
+ * bar repeated the bar; the overdue figure beside the total was a second, unexplained number at
+ * the top; the three count tiles answered what the chips already answer; and “what we owe” sat
+ * outside the card while the bar inside it measured a different population. The card now holds
+ * the total, the progress and the two amounts the bar is drawn between, and the “…” menu exports
+ * or shares the list. This is the shape the owner drew for this screen, and the mirror of the
+ * customer receivable screen beside it.
  */
 type Filter = "all" | "outstanding" | "pending" | "overdue" | "paid";
 
@@ -41,6 +54,13 @@ export default function SupplierPayablePage() {
 
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [period, setPeriod] = useState<BalancePeriod>("all");
+  const [periodOpen, setPeriodOpen] = useState(false);
+  const [customFrom, setCustomFrom] = useState("");
+  const [customTo, setCustomTo] = useState("");
+  const [reminderOpen, setReminderOpen] = useState(false);
+  const { addToast } = useUIStore();
 
   useEffect(() => { if (!ready) void load(); }, [ready, load]);
 
@@ -76,10 +96,30 @@ export default function SupplierPayablePage() {
     };
   }, [companies, book, todayISO]);
 
+  // Six days back, so "this week" is the seven days ending today.
+  const weekStart = useMemo(() => {
+    const d = new Date(`${todayISO}T00:00:00Z`);
+    d.setUTCDate(d.getUTCDate() - 6);
+    return d.toISOString().slice(0, 10);
+  }, [todayISO]);
+  const windowFrom =
+    period === "custom" ? customFrom || todayISO
+    : period === "today" ? todayISO
+    : period === "week" ? weekStart
+    : period === "month" ? `${todayISO.slice(0, 7)}-01`
+    : `${todayISO.slice(0, 4)}-01-01`;
+  const windowTo = period === "custom" ? customTo || todayISO : todayISO;
+
   const rows = useMemo(() => {
     const term = search.trim().toLowerCase();
     return companies
       .filter((c) => {
+        // The same window the card is showing: a supplier whose balance falls due inside it.
+        if (period !== "all") {
+          if (!c.dueDate) return false;
+          const due = pkDateFromISO(c.dueDate);
+          if (due < windowFrom || due > windowTo) return false;
+        }
         if (term && !c.name.toLowerCase().includes(term)) return false;
         if (filter === "outstanding") return c.outstandingPayable > 0;
         if (filter === "pending") return c.outstandingPayable > 0 && !isSupplierOverdue(c, todayISO);
@@ -94,7 +134,7 @@ export default function SupplierPayablePage() {
         if (aOver !== bOver) return bOver - aOver;
         return b.outstandingPayable - a.outstandingPayable;
       });
-  }, [companies, search, filter, todayISO]);
+  }, [companies, search, filter, todayISO, period, windowFrom, windowTo]);
 
   const filters: { key: Filter; label: string }[] = [
     { key: "all", label: t("payable.all") },
@@ -104,6 +144,52 @@ export default function SupplierPayablePage() {
     { key: "paid", label: t("payable.paid") },
   ];
 
+  /** The rows on screen, as the spreadsheet and the shared text both describe them. */
+  function payableRows() {
+    return rows.map((c) => {
+      const billed = Math.max(0, c.totalPurchases);
+      const due = Math.max(0, c.outstandingPayable);
+      return {
+        supplier: c.name,
+        bill: formatCurrency(billed),
+        paid: formatCurrency(Math.max(0, billed - due)),
+        balance: formatCurrency(due),
+        state: due <= 0 ? t("payable.paid") : isSupplierOverdue(c, todayISO) ? t("payable.overdue") : t("payable.outstanding"),
+      };
+    });
+  }
+
+  async function exportPayable() {
+    setMenuOpen(false);
+    try {
+      const list = payableRows();
+      const csv = toCsv(
+        [
+          { label: t("payable.suppliers"), value: (r: (typeof list)[number]) => r.supplier },
+          { label: t("payable.totalBill"), value: (r: (typeof list)[number]) => r.bill },
+          { label: t("payable.paid"), value: (r: (typeof list)[number]) => r.paid },
+          { label: t("payable.balance"), value: (r: (typeof list)[number]) => r.balance },
+        ],
+        list,
+      );
+      const outcome = await exportCsv(csvFileName("supplier-payable"), csv, t("payable.title"));
+      addToast(outcome === "shared" ? t("data.exportedShared") : t("data.exported"), "success");
+    } catch {
+      addToast(t("data.exportFailed"), "error");
+    }
+  }
+
+  async function sharePayable() {
+    setMenuOpen(false);
+    const total = `${t("payable.totalOutstanding")}: ${formatCurrency(summary.due)}`;
+    const text = [total, ...payableRows().map((r) => `${r.supplier} · ${r.balance}`)].join("\n");
+    try {
+      const outcome = await exportText(text, t("payable.title"));
+      addToast(outcome === "shared" ? t("sales.reportShared") : t("sales.reportCopied"), "success");
+    } catch {
+      addToast(t("sales.shareFailed"), "error");
+    }
+  }
 
   return (
     <div
@@ -112,43 +198,83 @@ export default function SupplierPayablePage() {
       data-testid="supplier-payable-page"
     >
       <StatusBar />
-      <NavHeader title={t("payable.title")} backTo={returnTo} />
+      <NavHeader
+        title={t("payable.title")}
+        backTo={returnTo}
+        right={
+          <SectionActionsButton
+            onClick={() => setMenuOpen(true)}
+            label={t("data.moreActions")}
+            testId="payable-actions"
+          />
+        }
+      />
 
-      <div className="px-4 pt-2">
-        <h1 className="text-22 font-bold">{t("payable.subtitle")}</h1>
-        <p className="text-13 mt-1" style={{ color: "var(--text-secondary)" }}>{t("overall.youOwe")}</p>
-      </div>
+      <SectionActionsSheet
+        open={menuOpen}
+        onClose={() => setMenuOpen(false)}
+        title={t("payable.title")}
+        actions={[
+          {
+            id: "export",
+            icon: Download,
+            title: t("data.export"),
+            description: t("data.exportHint"),
+            onClick: () => { void exportPayable(); },
+          },
+          {
+            id: "share",
+            icon: Share2,
+            title: t("sales.shareReport"),
+            description: t("sales.shareReportHint"),
+            onClick: () => { void sharePayable(); },
+          },
+        ]}
+      />
 
-      {/* Two figures, then one card — the same head as Customers & Credit: what is owed on the
-          left, what is late on the right, each value under its own left-aligned label. This screen
-          used to bury the total inside the card and leave the counts outside it, the exact mirror
-          of the customer screen, so two lists of the same kind looked like two designs. */}
-      <div className="px-4 pt-5 flex items-start justify-between gap-4">
-        <div className="min-w-0 flex-1">
-          <p className="text-12" style={{ color: "var(--text-secondary)" }}>{t("payable.totalOutstanding")}</p>
-          <p className="text-26 font-bold mt-1 tabular-nums break-words" data-testid="payable-due">
-            {ready ? formatCurrency(summary.due) : "—"}
-          </p>
-        </div>
-        <div className="min-w-0 flex-1 text-end">
-          <p className="text-12" style={{ color: "var(--text-secondary)" }}>{t("payable.overdue")}</p>
-          <p
-            className="text-26 font-bold mt-1 tabular-nums break-words"
-            data-testid="payable-overdue"
-            style={{ color: summary.overdueDue > 0 ? "var(--error)" : "var(--text-primary)" }}
-          >
-            {ready ? formatCurrency(summary.overdueDue) : "—"}
-          </p>
-        </div>
-      </div>
-
-      <div className="px-4 pt-4">
+      <div className="px-4 pt-3">
         <div
           className="rounded-[var(--radius-card)] p-4"
           style={{ background: "var(--surface)" }}
           data-testid="payable-summary"
         >
-          <div className="flex items-baseline justify-between gap-3">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-11" style={{ color: "var(--text-secondary)" }}>
+                {period === "all" ? t("payable.totalOutstanding")
+                  : period === "today" ? t("receivable.dueToday")
+                  : period === "week" ? t("receivable.dueThisWeek")
+                  : period === "month" ? t("receivable.dueThisMonth")
+                  : period === "year" ? t("receivable.dueThisYear")
+                  : t("receivable.dueInRange")}
+              </p>
+              <p className="text-26 font-bold mt-1 tabular-nums break-words" data-testid="payable-due">
+                {ready ? formatCurrency(summary.due) : "—"}
+              </p>
+            </div>
+
+            {/* The same calendar chip its mirror screen wears, so the payable and receivable
+                books are narrowed by the same gesture (owner's instruction, 2026-10-30). */}
+            <button
+              type="button"
+              onClick={() => setPeriodOpen(true)}
+              aria-label={t("period.sheetTitle")}
+              aria-haspopup="dialog"
+              data-testid="payable-period"
+              className="flex items-center gap-1.5 shrink-0 h-8 px-3 rounded-full text-11 font-semibold active:opacity-60"
+              style={{ background: "var(--surface-2)", color: "var(--text-secondary)" }}
+            >
+              <CalendarDays size={13} />
+              {period === "all" ? t("period.allDates")
+                : period === "today" ? t("period.today")
+                : period === "week" ? t("period.week")
+                : period === "month" ? t("period.month")
+                : period === "year" ? t("period.year")
+                : `${customFrom.slice(5)} – ${customTo.slice(5)}`}
+            </button>
+          </div>
+
+          <div className="flex items-baseline justify-between gap-3 mt-4">
             <p className="text-11" style={{ color: "var(--text-secondary)" }}>{t("payable.progress")}</p>
             <p className="text-12 font-semibold tabular-nums" style={{ color: "var(--text-secondary)" }}>
               {summary.pct}%
@@ -177,45 +303,35 @@ export default function SupplierPayablePage() {
             </div>
           </div>
 
-          {/* The three counts live INSIDE the same card, on the pattern the customer list uses:
-              a small surface, the figure, then the population it counts. They are figures, not
-              doors — the chips under the search are the one control that filters the list, so a
-              count that also changed the view would be a second, silent way to do the same job. */}
-          <div className="grid grid-cols-3 gap-2 mt-4">
-            <div
-              className="rounded-[var(--radius-tile)] px-3 py-2 min-w-0"
-              style={{ background: "var(--surface-2)" }}
-              data-testid="payable-tile-suppliers"
-            >
-              <p className="text-10 truncate" style={{ color: "var(--text-secondary)" }}>{t("payable.suppliers")}</p>
-              <p className="text-16 font-bold mt-0.5 tabular-nums">{ready ? summary.suppliers : "—"}</p>
-              <p className="text-10 truncate" style={{ color: "var(--text-tertiary)" }}>{t("payable.withPayable")}</p>
-            </div>
-            <div
-              className="rounded-[var(--radius-tile)] px-3 py-2 min-w-0"
-              style={{ background: "var(--surface-2)" }}
-              data-testid="payable-tile-pending"
-            >
-              <p className="text-10 truncate" style={{ color: "var(--text-secondary)" }}>{t("payable.pending")}</p>
-              <p className="text-16 font-bold mt-0.5 tabular-nums">{ready ? summary.pending : "—"}</p>
-              <p className="text-10 truncate" style={{ color: "var(--text-tertiary)" }}>{t("payable.unpaid")}</p>
-            </div>
-            <div
-              className="rounded-[var(--radius-tile)] px-3 py-2 min-w-0"
-              style={{ background: "var(--surface-2)" }}
-              data-testid="payable-tile-overdue"
-            >
-              <p className="text-10 truncate" style={{ color: "var(--text-secondary)" }}>{t("payable.overdue")}</p>
-              <p
-                className="text-16 font-bold mt-0.5 tabular-nums"
-                style={{ color: summary.overdue > 0 ? "var(--error)" : "var(--text-primary)" }}
-              >
-                {ready ? summary.overdue : "—"}
-              </p>
-              <p className="text-10 truncate" style={{ color: "var(--text-tertiary)" }}>{t("payable.needsAction")}</p>
-            </div>
-          </div>
         </div>
+      </div>
+
+      {/* The reminder is a note the owner keeps for themselves, on the same sheet the cash screen
+          uses — the supplier book is where the bill is, so it is where the reminder belongs. */}
+      <div className="px-4 pt-3">
+        <button
+          type="button"
+          onClick={() => setReminderOpen(true)}
+          data-testid="payable-reminder"
+          className="w-full flex items-center gap-3 rounded-[var(--radius-card)] p-3 text-start active:opacity-70"
+          style={{ background: "var(--tone-card)" }}
+        >
+          <span
+            className="size-9 rounded-full flex items-center justify-center shrink-0"
+            style={{ background: "var(--tone-sunken)" }}
+          >
+            <Bell size={16} style={{ color: "var(--text-secondary)" }} />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-13 font-bold" style={{ color: "var(--text-primary)" }}>
+              {t("cashPosition.setReminder")}
+            </span>
+            <span className="block text-11 mt-0.5" style={{ color: "var(--text-secondary)" }}>
+              {t("payable.reminderHint")}
+            </span>
+          </span>
+          <ChevronRight size={14} className="shrink-0" style={{ color: "var(--text-secondary)" }} />
+        </button>
       </div>
 
       <div className="px-4 pt-3 pb-3">
@@ -355,6 +471,29 @@ export default function SupplierPayablePage() {
           })}
         </div>
       )}
+
+      <BalanceDateSheet
+        open={periodOpen}
+        onClose={() => setPeriodOpen(false)}
+        title={t("period.sheetTitle")}
+        value={period}
+        from={customFrom}
+        to={customTo}
+        max={todayISO}
+        onChange={(key, from, to) => {
+          setPeriod(key);
+          setCustomFrom(from);
+          setCustomTo(to);
+        }}
+        testIdPrefix="payable-period"
+      />
+
+      <PaymentReminderSheet
+        open={reminderOpen}
+        reminder={null}
+        onClose={() => setReminderOpen(false)}
+        onSaved={() => setReminderOpen(false)}
+      />
     </div>
   );
 }

@@ -257,27 +257,30 @@ export default function OutstandingCreditPage() {
                   </div>
                 </div>
 
-                {/* The two actions the reference puts on every row: look at who they are, or
-                    take the money. The second is drawn only for an account allowed to record a
-                    customer payment, so it is never a button that ends in a refusal. */}
-                <div className="flex gap-2 mt-3">
+                {/* The two actions, as text (owner, 2026-10-30): the filled pills turned every
+                    row into two competing buttons, and the row's subject is the balance, not
+                    the actions. Both stay full-height touch targets; only the paint is gone.
+                    The second is drawn only for an account allowed to record a customer
+                    payment, so it is never a button that ends in a refusal. */}
+                <div className="flex items-center justify-between gap-3 mt-2">
                   <button
                     type="button"
                     onClick={() => navigate(`${base}/customers/${c.id}`)}
-                    className="flex-1 h-10 rounded-full text-12 font-semibold flex items-center justify-center gap-1 active:opacity-70"
-                    style={{ background: "var(--surface-2)", color: "var(--text-primary)" }}
+                    className="min-h-11 flex items-center gap-1 text-13 font-semibold active:opacity-60"
+                    style={{ color: "var(--text-secondary)" }}
                   >
                     {t("outstanding.viewDetails")}
-                    <ChevronRight size={14} style={{ color: "var(--text-secondary)" }} />
+                    <ChevronRight size={14} />
                   </button>
                   {canRecordPayment && (
                     <button
                       type="button"
                       onClick={() => navigate(`${base}/customers/${c.id}/record-payment`)}
-                      className="flex-1 h-10 rounded-full text-12 font-semibold active:opacity-70"
-                      style={{ background: "var(--brand)", color: "#0a0a0a" }}
+                      className="min-h-11 flex items-center gap-1 text-13 font-semibold active:opacity-60"
+                      style={{ color: "var(--brand-dark)" }}
                     >
                       {t("customers.recordPayment")}
+                      <ChevronRight size={14} />
                     </button>
                   )}
                 </div>

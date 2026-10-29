@@ -10,6 +10,8 @@ import NavHeader from "@/components/ui/NavHeader";
 import { Plus, ChevronRight, Building2 } from "lucide-react";
 import SearchBar from "@/components/ui/SearchBar";
 import { SkeletonList } from "@/components/ui/Skeleton";
+import { useReturnTo } from "@/lib/useReturnTo";
+import { useShellBase } from "@/lib/useShellBase";
 
 // Simple hash color from company name
 function hashColor(name: string) {
@@ -21,6 +23,13 @@ function hashColor(name: string) {
 
 export default function CompaniesListPage() {
   const navigate = useNavigate();
+  const base = useShellBase();
+  // The list is a section child, not a root (owner's report, 2026-10-30). `/admin/companies`
+  // is only two path segments, so the journey tracker treats it as a tab root and clears the
+  // stack on arrival — which left the back arrow with nothing behind it and sent the reader
+  // Home. Its parent is the Purchases hub that lists it; a caller that knows better (Reports)
+  // passes its own path in router state.
+  const backTo = useReturnTo(`${base}/settings/hub/purchases`);
   const { language } = useThemeStore();
   const t = useT();
   const isUrdu = language === "ur";
@@ -44,7 +53,7 @@ export default function CompaniesListPage() {
       style={{ background: "var(--background)", direction: isUrdu ? "rtl" : "ltr" }}
     >
       <StatusBar />
-      <NavHeader title={t("admin.companies")} />
+      <NavHeader title={t("admin.companies")} backTo={backTo} />
 
       {/* Search */}
       <div className="px-4 pb-3">

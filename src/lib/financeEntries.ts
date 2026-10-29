@@ -24,6 +24,23 @@ export type FinanceEntryKind = "income" | "expense" | "drawing";
 
 export type FinanceMethod = "cash" | "bank" | "easypaisa" | "jazzcash";
 
+/**
+ * How often a recorded amount repeats. `none` is a one-off row and is the default everywhere.
+ *
+ * The cadence is deliberately small: day, week, month. A rent bill is monthly, a delivery every
+ * two weeks, a daily wage every day. Anything more expressive ("the last working day") would be a
+ * calendar rule the database could not post honestly without a holiday table it does not have.
+ */
+export type RepeatUnit = "none" | "day" | "week" | "month";
+
+/** The words for a cadence, for the picker and for a row's badge. */
+export const REPEAT_KEY: Record<RepeatUnit, I18nKey> = {
+  none: "finance.repeat.none",
+  day: "finance.repeat.day",
+  week: "finance.repeat.week",
+  month: "finance.repeat.month",
+};
+
 export interface FinanceTotals {
   income: number;
   expense: number;
@@ -188,6 +205,12 @@ export interface FinanceEntryRow {
   counterparty: string | null;
   note: string | null;
   createdAt: string;
+  /** Who wrote the row, from the database's own users table — null when the account is gone. */
+  createdByName: string | null;
+  /** The cadence this row was posted from, when it was not typed by hand. */
+  recurrenceId: string | null;
+  repeatEvery: number | null;
+  repeatUnit: RepeatUnit | null;
 }
 
 interface RawEntry {
@@ -200,6 +223,10 @@ interface RawEntry {
   counterparty: string | null;
   note: string | null;
   created_at: string;
+  created_by_name: string | null;
+  recurrence_id: string | null;
+  repeat_every: number | null;
+  repeat_unit: string | null;
 }
 
 /**
@@ -241,6 +268,10 @@ export function useFinanceEntries(from: string, to: string): {
             counterparty: row.counterparty,
             note: row.note,
             createdAt: row.created_at,
+            createdByName: row.created_by_name,
+            recurrenceId: row.recurrence_id,
+            repeatEvery: row.repeat_every,
+            repeatUnit: row.repeat_unit as RepeatUnit | null,
           })),
         );
       });
@@ -262,6 +293,9 @@ export interface RecordFinanceInput {
   occurredOn?: string;
   counterparty?: string;
   note?: string;
+  /** `none` (the default) writes one row; anything else also starts a cadence. */
+  repeatUnit?: RepeatUnit;
+  repeatEvery?: number;
 }
 
 /**
@@ -280,7 +314,106 @@ export async function recordFinanceEntry(input: RecordFinanceInput): Promise<str
     p_occurred_on: input.occurredOn ?? null,
     p_counterparty: input.counterparty?.trim() || null,
     p_note: input.note?.trim() || null,
+    p_repeat_every: input.repeatUnit && input.repeatUnit !== "none" ? input.repeatEvery ?? 1 : 1,
+    p_repeat_unit: input.repeatUnit && input.repeatUnit !== "none" ? input.repeatUnit : "none",
   });
   if (error) throw new Error(error.message);
   return data as string;
+}
+
+/**
+ * Writes every occurrence that has fallen due since the last time somebody looked.
+ *
+ * There is no scheduler behind this app, so "repeating" is a rule the database holds and this
+ * call is what makes it real: it runs when an owner opens the ledger, and the rows it writes are
+ * dated the day they fell due, not the day they were posted. Returns how many rows this call
+ * wrote, so a caller can refresh only when something changed.
+ *
+ * Owner-only at the database; an employee's call is refused and the caller treats that as zero.
+ */
+export async function postDueFinanceEntries(): Promise<number> {
+  const { data, error } = await supabase.rpc("post_due_finance_entries");
+  if (error) return 0;
+  return Number(data ?? 0);
+}
+
+export interface FinanceRecurrence {
+  id: string;
+  kind: FinanceEntryKind;
+  amount: number;
+  category: string;
+  method: string;
+  counterparty: string | null;
+  note: string | null;
+  repeatEvery: number;
+  repeatUnit: RepeatUnit;
+  nextOn: string;
+  endsOn: string | null;
+}
+
+interface RawRecurrence {
+  id: string;
+  kind: FinanceEntryKind;
+  amount: number | string | null;
+  category: string | null;
+  method: string | null;
+  counterparty: string | null;
+  note: string | null;
+  repeat_every: number | string | null;
+  repeat_unit: string;
+  next_on: string;
+  ends_on: string | null;
+}
+
+/** The active cadences of the branch on screen, beside the rows they post into. */
+export function useFinanceRecurrences(from: string, to: string): {
+  rows: FinanceRecurrence[] | null;
+  retry: () => void;
+} {
+  const [rows, setRows] = useState<FinanceRecurrence[] | null>(null);
+  const [attempt, setAttempt] = useState(0);
+
+  useEffect(() => {
+    let live = true;
+    void supabase
+      .rpc("get_finance_recurrences")
+      .then(({ data, error }) => {
+        if (!live) return;
+        if (error) {
+          // A database without 0255 draws no repeating strip rather than an error: the rows above
+          // are still the ledger, and nothing here is required to read them.
+          setRows([]);
+          return;
+        }
+        setRows(
+          ((data as RawRecurrence[] | null) ?? []).map((row) => ({
+            id: row.id,
+            kind: row.kind,
+            amount: Number(row.amount ?? 0),
+            category: row.category ?? "",
+            method: row.method ?? "",
+            counterparty: row.counterparty,
+            note: row.note,
+            repeatEvery: Number(row.repeat_every ?? 1),
+            repeatUnit: (row.repeat_unit ?? "month") as RepeatUnit,
+            nextOn: row.next_on,
+            endsOn: row.ends_on,
+          })),
+        );
+      });
+    return () => {
+      live = false;
+    };
+    // `from`/`to` are part of the read's identity on the screen; the function itself is not
+    // windowed, but keeping them here means the strip reloads with the list beside it.
+  }, [from, to, attempt]);
+
+  const retry = useCallback(() => setAttempt((value) => value + 1), []);
+  return { rows, retry };
+}
+
+/** Stops a cadence. Rows it already wrote stay, because stopping a plan is not un-spending money. */
+export async function stopFinanceRecurrence(id: string): Promise<void> {
+  const { error } = await supabase.rpc("stop_finance_recurrence", { p_id: id });
+  if (error) throw new Error(error.message);
 }

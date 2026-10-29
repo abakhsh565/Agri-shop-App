@@ -1,14 +1,20 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowDownLeft, ArrowUpRight, ReceiptText } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { ArrowDownLeft, ArrowUpRight, CalendarDays, ChevronRight, Plus, ReceiptText } from "lucide-react";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
 import SearchBar from "@/components/ui/SearchBar";
+import Sheet from "@/components/ui/Sheet";
+import ListRow from "@/components/ui/ListRow";
 import { SkeletonList } from "@/components/ui/Skeleton";
 import { useT } from "@/lib/i18n";
 import { useShellBase } from "@/lib/useShellBase";
-import { useShopStore } from "@/stores/shopStore";
+import { useCustomersStore } from "@/stores/customersStore";
+import { hasPermission } from "@/lib/tenantContext";
 import { formatCurrency, formatSmartDateTime } from "@/lib/formatters";
 import { loadPaymentLedger, type PaymentLedger } from "@/lib/paymentLedger";
+import BalanceDateSheet, { type BalancePeriod } from "@/components/ui/BalanceDateSheet";
+import { pkToday } from "@/lib/pkDate";
 
 type Direction = "all" | "in" | "out";
 
@@ -30,16 +36,50 @@ type Direction = "all" | "in" | "out";
  * narrower policy than customer payments, so "no row" and "not allowed to look" must not read
  * the same. `lib/paymentLedger` returns both the rows and what was readable.
  *
- * The rows are the ledger's own scope, which is the branch the session is working in; the
- * subtitle names that branch rather than offering a branch control that cannot widen the read.
+ * The rows are the ledger's own scope, which is the branch the session is working in.
+ *
+ * RECORDING A PAYMENT STARTS HERE (owner, 2026-10-30). Money coming back is the reason an owner
+ * opens this screen, and it used to be reachable only from a customer's row on another screen.
+ * The action opens a customer picker; choosing one lands on that customer's payment form, so the
+ * reader never has to know the route. The in-page heading, subtitle and branch line are gone:
+ * the app bar already says "Financial transactions", and the screen was repeating itself.
  */
 export default function AdminPaymentsPage() {
   const t = useT();
   const base = useShellBase();
-  const branch = useShopStore((s) => s.activeBranchName);
+  const navigate = useNavigate();
+  const customers = useCustomersStore((s) => s.customers);
+  const customersReady = useCustomersStore((s) => s.ready);
+  const loadCustomers = useCustomersStore((s) => s.load);
+  const canRecordPayment = hasPermission("customers.payments");
   const [ledger, setLedger] = useState<PaymentLedger | null>(null);
   const [search, setSearch] = useState("");
   const [direction, setDirection] = useState<Direction>("all");
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [customerQuery, setCustomerQuery] = useState("");
+
+  // The window the ledger is read over. `all` is the default: the screen is a timeline, and a
+  // reader who never opens the calendar sees every movement the branch has.
+  const [period, setPeriod] = useState<BalancePeriod>("all");
+  const [periodOpen, setPeriodOpen] = useState(false);
+  const [customFrom, setCustomFrom] = useState("");
+  const [customTo, setCustomTo] = useState("");
+
+  const todayISO = pkToday();
+  // Six days back, not seven: "this week" is the seven days that end today — the same window the
+  // other books use, so "This week" cannot mean two different sets of days in one app.
+  const weekStart = useMemo(() => {
+    const d = new Date(`${todayISO}T00:00:00Z`);
+    d.setUTCDate(d.getUTCDate() - 6);
+    return d.toISOString().slice(0, 10);
+  }, [todayISO]);
+  const windowFrom =
+    period === "custom" ? customFrom || todayISO
+    : period === "today" ? todayISO
+    : period === "week" ? weekStart
+    : period === "month" ? `${todayISO.slice(0, 7)}-01`
+    : `${todayISO.slice(0, 4)}-01-01`;
+  const windowTo = period === "custom" ? customTo || todayISO : todayISO;
 
   useEffect(() => {
     let live = true;
@@ -49,6 +89,18 @@ export default function AdminPaymentsPage() {
     return () => { live = false; };
   }, []);
 
+  useEffect(() => {
+    if (!customersReady) void loadCustomers();
+  }, [customersReady, loadCustomers]);
+
+  /** Whoever owes first: that is the payment a counter is most likely taking. */
+  const pickableCustomers = useMemo(() => {
+    const term = customerQuery.trim().toLowerCase();
+    return customers
+      .filter((c) => !term || c.name.toLowerCase().includes(term) || c.phone.includes(term))
+      .sort((a, b) => b.outstandingBalance - a.outstandingBalance);
+  }, [customers, customerQuery]);
+
   const filtered = useMemo(() => {
     if (!ledger) return [];
     const term = search.trim().toLowerCase();
@@ -56,9 +108,15 @@ export default function AdminPaymentsPage() {
       if (direction === "in" && entry.direction !== "in") return false;
       if (direction === "out" && entry.direction !== "out") return false;
       if (term && !entry.counterparty.toLowerCase().includes(term)) return false;
+      // The clock the row is dated on, not the shop's: a payment recorded at 23:59 belongs to the
+      // day it names, whatever timezone the reader's phone is in.
+      if (period !== "all") {
+        const day = entry.createdAt.slice(0, 10);
+        if (day < windowFrom || day > windowTo) return false;
+      }
       return true;
     });
-  }, [ledger, direction, search]);
+  }, [ledger, direction, search, period, windowFrom, windowTo]);
 
   const received = filtered
     .filter((e) => e.direction === "in")
@@ -113,17 +171,7 @@ export default function AdminPaymentsPage() {
       <StatusBar />
       <NavHeader title={t("hub.finance.transactions")} backTo={`${base}/settings/hub/finance`} />
 
-      <div className="px-4 pt-2">
-        <h1 className="text-22 font-bold">{t("hub.finance.transactions")}</h1>
-        <p className="text-13 mt-1" style={{ color: "var(--text-secondary)" }}>
-          {t("payments.subtitle")}
-        </p>
-        <p className="text-11 mt-1" style={{ color: "var(--text-tertiary)" }}>
-          {t("creditList.scope", { branch: branch ?? t("hub.inventory.selectedBranch") })}
-        </p>
-      </div>
-
-      <div className="grid grid-cols-2 gap-2 px-4 pt-4">
+      <div className="grid grid-cols-2 gap-2 px-4 pt-3">
         {figure(
           t("payments.moneyReceived"),
           t("payments.moneyReceivedHint"),
@@ -155,25 +203,81 @@ export default function AdminPaymentsPage() {
         />
       </div>
 
-      <div className="flex gap-2 px-4 pt-3 flex-wrap">
-        {filters.map((f) => (
-          <button
-            key={f.key}
-            type="button"
-            onClick={() => setDirection(f.key)}
-            aria-pressed={direction === f.key}
-            data-testid={`payments-filter-${f.key}`}
-            className="h-8 px-3.5 rounded-full text-12 font-semibold transition-colors"
-            style={
-              direction === f.key
-                ? { background: "var(--brand)", color: "#0a0a0a" }
-                : { background: "var(--tone-sunken)", color: "var(--text-secondary)" }
-            }
-          >
-            {f.label}
-          </button>
-        ))}
+      {/* The direction and the window are the same kind of control — a choice that narrows the
+          list — so they share one row, and the calendar sits at its end where the eye looks for
+          "what am I looking at". The month strip that used to sit here is gone: one window, named
+          on the chip, instead of twelve tabs and the window repeated above them. */}
+      <div className="flex items-center gap-2 px-4 pt-3">
+        <div className="flex gap-2 flex-1 min-w-0 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
+          {filters.map((f) => (
+            <button
+              key={f.key}
+              type="button"
+              onClick={() => setDirection(f.key)}
+              aria-pressed={direction === f.key}
+              data-testid={`payments-filter-${f.key}`}
+              className="shrink-0 h-8 px-3.5 rounded-full text-12 font-semibold transition-colors"
+              style={
+                direction === f.key
+                  ? { background: "var(--brand)", color: "#0a0a0a" }
+                  : { background: "var(--tone-sunken)", color: "var(--text-secondary)" }
+              }
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
+        <button
+          type="button"
+          onClick={() => setPeriodOpen(true)}
+          aria-haspopup="dialog"
+          aria-label={t("period.sheetTitle")}
+          data-testid="payments-period"
+          className="flex items-center gap-1.5 shrink-0 h-8 px-3 rounded-full text-11 font-semibold active:opacity-60"
+          style={{ background: "var(--tone-sunken)", color: "var(--text-secondary)" }}
+        >
+          <CalendarDays size={13} />
+          {period === "all" ? t("period.allDates")
+            : period === "today" ? t("period.today")
+            : period === "week" ? t("period.week")
+            : period === "month" ? t("period.month")
+            : period === "year" ? t("period.year")
+            : `${customFrom.slice(5)} – ${customTo.slice(5)}`}
+        </button>
       </div>
+
+      <BalanceDateSheet
+        open={periodOpen}
+        onClose={() => setPeriodOpen(false)}
+        title={t("period.sheetTitle")}
+        value={period}
+        from={customFrom}
+        to={customTo}
+        max={todayISO}
+        onChange={(key, from, to) => {
+          setPeriod(key);
+          setCustomFrom(from);
+          setCustomTo(to);
+        }}
+        testIdPrefix="payments-period"
+      />
+
+      {/* The screen's one action, as text: taking a payment is a job this ledger can start,
+          not the reason it exists. */}
+      {canRecordPayment && (
+        <div className="px-4 pt-4">
+          <button
+            type="button"
+            onClick={() => setPickerOpen(true)}
+            data-testid="payments-record"
+            className="min-h-11 flex items-center gap-1.5 text-13 font-semibold active:opacity-60"
+            style={{ color: "var(--brand-dark)" }}
+          >
+            <Plus size={15} />
+            {t("customers.recordPayment")}
+          </button>
+        </div>
+      )}
 
       <div className="flex items-baseline justify-between gap-3 px-4 pt-5 pb-2">
         <p className="text-15 font-bold">{t("payments.recorded")}</p>
@@ -181,6 +285,51 @@ export default function AdminPaymentsPage() {
           {ledger ? filtered.length : "—"}
         </p>
       </div>
+
+      <Sheet
+        open={pickerOpen}
+        onClose={() => setPickerOpen(false)}
+        title={t("customers.recordPayment")}
+        closeButton
+      >
+        <div className="px-4 pb-2">
+          <SearchBar
+            value={customerQuery}
+            onChange={(e) => setCustomerQuery(e.target.value)}
+            onClear={() => setCustomerQuery("")}
+            placeholder={t("customers.search")}
+          />
+        </div>
+        {pickableCustomers.length === 0 ? (
+          <p className="px-4 pt-4 text-12" style={{ color: "var(--text-secondary)" }}>
+            {t("outstanding.emptyFilter")}
+          </p>
+        ) : (
+          <div className="pb-4">
+            {pickableCustomers.map((c) => (
+              <ListRow
+                key={c.id}
+                testId={`payment-customer-${c.id}`}
+                title={c.name}
+                description={c.phone}
+                trailing={
+                  <span className="flex items-center gap-1 shrink-0">
+                    <span className="text-13 font-bold tabular-nums">
+                      {formatCurrency(c.outstandingBalance)}
+                    </span>
+                    <ChevronRight size={14} style={{ color: "var(--text-secondary)" }} />
+                  </span>
+                }
+                onClick={() => {
+                  setPickerOpen(false);
+                  setCustomerQuery("");
+                  navigate(`${base}/customers/${c.id}/record-payment`);
+                }}
+              />
+            ))}
+          </div>
+        )}
+      </Sheet>
 
       {!ledger ? (
         <SkeletonList rows={4} tile />

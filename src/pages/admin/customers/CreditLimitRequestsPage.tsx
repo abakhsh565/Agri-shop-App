@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { CreditCard, ShieldCheck } from "lucide-react";
+import { ShieldCheck } from "lucide-react";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
 import { SkeletonList } from "@/components/ui/Skeleton";
@@ -14,9 +14,11 @@ type RequestFilter = "all" | "pending" | "approved" | "rejected";
 /**
  * Credit limit requests: what employees have asked the owner to raise, and what was decided.
  *
- * SHAPE (owner's reference, 2026-10-28): pending and decided counts, the three state filters,
- * then one card per request carrying the customer, who asked, the limit on record, the limit
- * asked for, the difference, and the reason in the employee's own words.
+ * SHAPE (owner, 2026-10-30): the state filters, then one card per request carrying the customer,
+ * who asked, the limit on record, the limit asked for, the difference, and the reason in the
+ * employee's own words. The pending/decided counts and the closing hint are gone: the chips
+ * already say how many rows each state holds, and a screen with nothing to decide should say so
+ * once, not three times.
  *
  * THE ROWS ARE THE REQUESTS, NOT THE CUSTOMERS. The old screen listed every account with high
  * utilisation, so a line that said "review request" opened a customer profile that said nothing
@@ -54,11 +56,6 @@ export default function CreditLimitRequestsPage() {
 
   const rows = filter === "all" ? sorted : sorted.filter((r) => r.status === filter);
 
-  const counts = {
-    pending: requests?.filter((r) => r.status === "pending").length ?? 0,
-    decided: requests?.filter((r) => r.status !== "pending").length ?? 0,
-  };
-
   const filters: { key: RequestFilter; label: string }[] = [
     { key: "all", label: t("products.all") },
     { key: "pending", label: t("receivable.pending") },
@@ -91,26 +88,7 @@ export default function CreditLimitRequestsPage() {
       <StatusBar />
       <NavHeader title={t("hub.customers.creditRequests")} backTo={`${base}/settings/hub/customers`} />
 
-      <div className="px-4 pt-1 flex items-start gap-5">
-        <div className="min-w-0 flex-1">
-          <p className="text-12" style={{ color: "var(--text-secondary)" }}>
-            {t("creditRequests.pending")}
-          </p>
-          <p className="text-22 font-bold mt-1 leading-none tabular-nums" data-testid="credit-requests-pending">
-            {requests ? counts.pending : "—"}
-          </p>
-        </div>
-        <div className="min-w-0 flex-1">
-          <p className="text-12" style={{ color: "var(--text-secondary)" }}>
-            {t("creditRequests.decided")}
-          </p>
-          <p className="text-22 font-bold mt-1 leading-none tabular-nums">
-            {requests ? counts.decided : "—"}
-          </p>
-        </div>
-      </div>
-
-      <div className="flex gap-2 px-4 pt-4 pb-3 overflow-x-auto">
+      <div className="flex gap-2 px-4 pt-3 pb-3 overflow-x-auto">
         {filters.map((f) => (
           <button
             key={f.key}
@@ -236,15 +214,6 @@ export default function CreditLimitRequestsPage() {
             );
           })}
         </div>
-      )}
-
-      {/* One line for an empty inbox: a store with no requests is a healthy state, not a
-          broken screen. */}
-      {requests && requests.length === 0 && (
-        <p className="px-6 text-center text-10" style={{ color: "var(--text-tertiary)" }}>
-          <CreditCard size={14} className="inline me-1" />
-          {t("creditRequests.emptyHint")}
-        </p>
       )}
     </div>
   );

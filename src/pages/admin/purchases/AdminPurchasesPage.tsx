@@ -10,10 +10,15 @@ import type { Purchase } from "@/types";
 import { formatCurrency, formatDate } from "@/lib/formatters";
 import { useThemeStore } from "@/stores/themeStore";
 import { useT } from "@/lib/i18n";
+import { useReturnTo } from "@/lib/useReturnTo";
+import { useShellBase } from "@/lib/useShellBase";
 import { PackagePlus, Package } from "lucide-react";
 
 export default function AdminPurchasesPage() {
   const navigate = useNavigate();
+  const base = useShellBase();
+  // Two-segment path, so the journey stack is cleared on arrival; the parent has to be named.
+  const backTo = useReturnTo(`${base}/settings/hub/purchases`);
   const { language } = useThemeStore();
   const isUrdu = language === "ur";
   const t = useT();
@@ -57,7 +62,7 @@ export default function AdminPurchasesPage() {
       style={{ background: "var(--background)", direction: isUrdu ? "rtl" : "ltr" }}
     >
       <StatusBar />
-      <NavHeader title={t("purchases.listTitle")} />
+      <NavHeader title={t("purchases.listTitle")} backTo={backTo} />
 
       {/* Payable summary */}
       <div className="px-4 pt-3">
@@ -80,7 +85,15 @@ export default function AdminPurchasesPage() {
             )}
           </div>
           <button
-            onClick={() => navigate("/admin/payments")}
+            // Paying a supplier is a job for the payable book, where every supplier can be
+            // opened and paid; the payments ledger lists money already moved and cannot take a
+            // payment for a supplier the reader has not chosen. The state keeps back on
+            // Purchase history, the screen this button was pressed on.
+            onClick={() =>
+              navigate(`${base}/settings/overview/suppliers`, {
+                state: { from: `${base}/purchases` },
+              })
+            }
             className="text-xs font-bold px-3 py-1.5 rounded-full whitespace-nowrap shrink-0"
             style={{ background: "var(--tone-sunken)", color: "var(--text-primary)" }}
           >

@@ -9,17 +9,19 @@ import { useT } from "@/lib/i18n";
 import { useShellBase } from "@/lib/useShellBase";
 import { useProductsStore } from "@/stores/productsStore";
 import { useShopStore } from "@/stores/shopStore";
-import { hasPermission } from "@/lib/tenantContext";
 import { formatCurrency, getStockStatusColor, getStockStatusLabel } from "@/lib/formatters";
 import { stockItems, unitWord } from "@/lib/inventoryView";
 
 /**
- * Stock management: what the branch is holding, and what it is worth.
+ * Stock values: what the branch is holding, and what it is worth.
  *
- * SHAPE (owner's reference, 2026-10-28): the branch the figures belong to, the inventory value,
- * then one row per pack — the pack, how much of it is on the shelf, and whether that is healthy,
- * low or empty. A row opens the pack's own place: the adjust screen when this account may change
- * a quantity, otherwise the product, where the shelf's history is.
+ * SHAPE (owner's correction, 2026-10-30): the inventory value, then one row per pack — the pack,
+ * how much of it is on the shelf, and whether that is healthy, low or empty. The card used to
+ * repeat the screen's own name inside itself beside the branch (circled in the owner's
+ * screenshot); the bar already says which screen this is and the rows already say which branch
+ * they belong to, so that line only pushed the first figure down. A row now opens the product:
+ * looking at the shelf is a read, and the adjust screen is reached from the product, where the
+ * change is being made on purpose.
  *
  * WHY IT IS ITS OWN SCREEN. "What do I have and what is it worth" is asked on its own, not only
  * while reordering: the reorder list (`/inventory/reorder`) is the buying decision that follows
@@ -46,7 +48,6 @@ export default function StockManagementPage() {
   const activeBranch = branches.find((b) => b.id === activeBranchId) ?? null;
   const inventoryValue = branchesLoaded ? activeBranch?.inventoryValue ?? null : null;
   const valueIncomplete = branchesLoaded && activeBranch?.inventoryCostIncomplete === true;
-  const canAdjust = hasPermission("inventory.adjust");
 
   const items = stockItems(products);
   const valueLabel =
@@ -68,14 +69,7 @@ export default function StockManagementPage() {
           className="rounded-[var(--radius-card)] p-4"
           style={{ background: "var(--surface)", border: "1px solid var(--border-light)" }}
         >
-          <div className="flex items-baseline justify-between gap-3">
-            <p className="text-16 font-bold">{t("hub.inventory.stock")}</p>
-            <p className="text-12 shrink-0 text-end" style={{ color: "var(--text-secondary)" }}>
-              {branch ?? t("hub.inventory.selectedBranch")}
-            </p>
-          </div>
-
-          <div className="mt-3">
+          <div>
             <p className="ds-section-label" style={{ color: "var(--text-secondary)" }}>
               {t("overview.inventoryValue")}
             </p>
@@ -115,19 +109,10 @@ export default function StockManagementPage() {
                 note={branch ?? undefined}
                 statusLabel={getStockStatusLabel(item.status, t)}
                 statusColor={getStockStatusColor(item.status)}
-                onClick={() =>
-                  navigate(
-                    canAdjust ? `${base}/inventory/${item.productId}/adjust` : `${base}/products/${item.productId}`,
-                  )
-                }
+                onClick={() => navigate(`${base}/products/${item.productId}`)}
               />
             ))}
           </ListCard>
-          {!canAdjust && (
-            <p className="px-4 pt-3 text-11" style={{ color: "var(--text-tertiary)" }}>
-              {t("hub.inventory.adjustNotAllowed")}
-            </p>
-          )}
         </div>
       )}
     </div>

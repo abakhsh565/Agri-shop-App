@@ -30,12 +30,16 @@ export default function DateRangeSheet({ open, from, to, max, onClose, onApply, 
   const [draftTo, setDraftTo] = useState(to);
 
   // Reopening starts from what the screen is actually showing, not from the last abandoned draft.
+  // A default "To" past today is clamped rather than shown: the month's last day can be tomorrow
+  // (a screen opened on the 30th of a 31-day month), and a range that ends in the future fails the
+  // input's own validity with no explanation. The draft is the one thing Apply reads, so clamping
+  // here is what makes the button trustworthy.
   useEffect(() => {
     if (open) {
-      setDraftFrom(from);
-      setDraftTo(to);
+      setDraftFrom(from > max ? max : from);
+      setDraftTo(to > max ? max : to);
     }
-  }, [open, from, to]);
+  }, [open, from, to, max]);
 
   const fieldStyle = { background: "var(--field-bg)" };
 
@@ -94,7 +98,7 @@ export default function DateRangeSheet({ open, from, to, max, onClose, onApply, 
           <button
             type="button"
             onClick={() => onApply(draftFrom, draftTo)}
-            disabled={!draftFrom || !draftTo}
+            disabled={!draftFrom || !draftTo || draftFrom > max || draftTo > max || draftFrom > draftTo}
             data-testid="range-apply"
             className="flex-1 h-11 rounded-full text-13 font-bold ds-pressable disabled:opacity-45"
             style={{ background: "var(--brand)", color: "#0a0a0a" }}

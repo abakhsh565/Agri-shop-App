@@ -204,7 +204,7 @@ export default function AdminPurchasesSectionPage() {
           icon: ArrowLeftRight,
           title: t("hub.purchases.payments"),
           hint: t("purchasesHub.paymentsHint"),
-          to: `${base}/payments`,
+          to: `${base}/purchases/payments`,
         }]
       : []),
     ...(hasPermission("companies.view")
@@ -242,7 +242,7 @@ export default function AdminPurchasesSectionPage() {
       />
 
       <div className="px-4 pt-2">
-        <h1 className="text-22 font-bold leading-tight">{t("settings.menu.purchases")}</h1>
+        <h1 className="text-22 font-bold leading-tight">{t("purchasesHub.heading")}</h1>
         <p className="text-13 mt-1" style={{ color: "var(--text-secondary)" }}>
           {t("purchasesHub.subtitle")}
         </p>
@@ -320,7 +320,10 @@ export default function AdminPurchasesSectionPage() {
             title={job.title}
             description={job.hint}
             trailing={<ChevronRight size={14} style={{ color: "var(--text-secondary)" }} className="shrink-0" />}
-            onClick={() => navigate(job.to)}
+            // The reader's step is recorded in router state as well as the journey stack: the
+            // Suppliers list is a two-segment path that the tracker treats as a root, so the
+            // stack is cleared on arrival and this is what its back arrow can still read.
+            onClick={() => navigate(job.to, { state: { from: `${base}/settings/hub/purchases` } })}
           />
         ))}
       </div>

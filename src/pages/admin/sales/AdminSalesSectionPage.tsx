@@ -19,7 +19,6 @@ import NavHeader from "@/components/ui/NavHeader";
 import PeriodTabs from "@/components/ui/PeriodTabs";
 import DateRangeSheet from "@/components/ui/DateRangeSheet";
 import ListRow from "@/components/ui/ListRow";
-import Button from "@/components/ui/Button";
 import Sheet from "@/components/ui/Sheet";
 import { SectionActionsButton } from "@/components/ui/SectionActionsSheet";
 import { Skeleton } from "@/components/ui/Skeleton";
@@ -804,56 +803,10 @@ export default function AdminSalesSectionPage() {
         </div>
       </div>
 
-      {/* ── 5. What came back ──────────────────────────────────────────────────────── */}
-      <div className="px-4 pt-2">
-        <div
-          className="rounded-[var(--radius-card)] p-4"
-          style={{ background: "var(--tone-card)" }}
-          data-testid="sales-hub-returns"
-        >
-          <p className="text-14 font-bold">{t("hub.sales.returnsAnalysis")}</p>
-          <p className="text-11 mt-0.5" style={{ color: "var(--text-secondary)" }}>
-            {t("hub.sales.returnsAnalysisHint")}
-          </p>
-
-          <div className="grid grid-cols-2 gap-3 mt-3">
-            <div className="min-w-0">
-              <p className="text-11" style={{ color: "var(--text-secondary)" }}>
-                {t("sales.returnsValue")}
-              </p>
-              <p
-                className="text-16 font-bold mt-0.5 tabular-nums break-words"
-                style={{ color: returnsTotal > 0 ? "var(--error)" : "var(--text-primary)" }}
-              >
-                {money(returnsTotal)}
-              </p>
-            </div>
-            <div className="min-w-0">
-              <p className="text-11" style={{ color: "var(--text-secondary)" }}>
-                {t("hub.sales.returnRate")}
-              </p>
-              <p className="text-16 font-bold mt-0.5 tabular-nums">
-                {salesReady ? `${returnRate.toFixed(1)}%` : "—"}
-              </p>
-            </div>
-          </div>
-
-          <p className="text-10 mt-2" style={{ color: "var(--text-tertiary)" }}>
-            {t("hub.sales.returnRateNote")}
-          </p>
-
-          <Button
-            fullWidth
-            className="mt-3"
-            testId="sales-hub-view-returns"
-            onClick={() => setOpenSheet("returns")}
-          >
-            {t("hub.sales.viewAllReturns")}
-          </Button>
-        </div>
-      </div>
-
-      {/* ── 6. Where the ledgers live ──────────────────────────────────────────────── */}
+      {/* ── 5. Where the ledgers live ──────────────────────────────────────────────── */}
+      {/* The "Returns analysis" card that used to sit here is gone (owner, 2026-10-30): its two
+          figures are already in the KPI plate and its one action is the "View returns" row two
+          lines below. A card whose whole job is a link to the row under it is furniture. */}
       {/* Unboxed and line-free, like every section hub: each row is a different place. */}
       <div className="pt-3 pb-8">
         <ListRow

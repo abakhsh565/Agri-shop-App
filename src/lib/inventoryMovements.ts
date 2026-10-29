@@ -46,9 +46,18 @@ interface MovementRow {
   created_at: string;
 }
 
-/** Newest first, capped at the most recent 200 movements — the same window the other ledgers use. */
-export function useInventoryMovements(): { movements: InventoryMovement[]; ready: boolean } {
-  const { rows, ready } = useScopedRows<InventoryMovement>(async () => {
+/**
+ * Newest first, capped at the most recent 200 movements — the same window the other ledgers use.
+ *
+ * `refresh` re-reads the ledger for a screen whose refresh control the reader actually pressed
+ * (`useScopedRows` keeps the rows on screen until the new answer arrives).
+ */
+export function useInventoryMovements(): {
+  movements: InventoryMovement[];
+  ready: boolean;
+  refresh: () => void;
+} {
+  const { rows, ready, refresh } = useScopedRows<InventoryMovement>(async () => {
     const { data, error } = await supabase
       .from("inventory_movements")
       .select(
@@ -71,5 +80,5 @@ export function useInventoryMovements(): { movements: InventoryMovement[]; ready
       createdAt: r.created_at,
     }));
   });
-  return { movements: rows, ready };
+  return { movements: rows, ready, refresh };
 }

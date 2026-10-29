@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useLocation, useNavigationType } from "react-router-dom";
 import { recordNav, shouldSkipNext, isDashboardPath, clearNav } from "@/lib/navContext";
+import { isTopLevel } from "@/lib/navDepth";
 
 /**
  * Auto-tracks every route transition into the journey stack.
@@ -26,15 +27,23 @@ export default function NavTracker() {
     const curr = location.pathname;
     if (prev === curr) return;
 
-    // Reaching a dashboard starts a new journey — old frames are not behind it any more.
-    if (isDashboardPath(curr)) {
+    // Consumed FIRST, whatever the branch below does with it. The flag is one navigation wide,
+    // and a dashboard or top-level arrival used to return before reading it — leaving it set, so
+    // the reader's NEXT forward step was recorded as a back step and left no frame behind it.
+    // That missing frame is what made back fall through to a parent from another flow.
+    const cameFromBack = shouldSkipNext();
+
+    // A dashboard or a tab root starts a new journey — the frames of the one before it are not
+    // behind this screen. Only the dashboard used to clear, so a reader who tapped Settings after
+    // finishing something in Sales carried Sales' steps underneath Settings, and back from a
+    // Settings sub-screen could walk into a flow they had already left (owner's report,
+    // 2026-10-30). A top-level path is a root by definition (`lib/navDepth`).
+    if (isDashboardPath(curr) || isTopLevel(curr)) {
       clearNav();
-    } else if (shouldSkipNext()) {
+    } else if (cameFromBack || navigationType === "POP") {
       recordNav(curr, prev, "back");
     } else if (navigationType === "REPLACE") {
       recordNav(curr, prev, "replace");
-    } else if (navigationType === "POP") {
-      recordNav(curr, prev, "back");
     } else {
       recordNav(curr, prev, "push");
     }

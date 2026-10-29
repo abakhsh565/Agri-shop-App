@@ -161,7 +161,7 @@ export default function RecordCustomerPaymentPage() {
           <p className="ds-section-label" style={{ color: "rgba(0,0,0,0.55)" }}>
             {customer.name} · {t("recordPayment.outstanding")}
           </p>
-          <p className="text-32 font-bold mt-1" style={{ color: "#0a0a0a" }}>
+          <p className="text-32 font-bold mt-1 tabular-nums break-words" style={{ color: "#0a0a0a" }}>
             {formatCurrency(customer.outstandingBalance)}
           </p>
         </div>
@@ -223,13 +223,16 @@ export default function RecordCustomerPaymentPage() {
                   >
                     <Minus size={16} style={{ color: "var(--text-primary)" }} />
                   </button>
+                  {/* `min-w-0` is what keeps this row on a 320px phone (owner, 2026-10-30): an
+                      input's intrinsic width is its default character count, and without it the
+                      two step buttons pushed the plus past the edge of the screen. */}
                   <input
                     type="number"
                     inputMode="numeric"
                     value={amount}
                     onChange={(e) => setAmount(e.target.value)}
                     placeholder={t("recordPayment.amountHint")}
-                    className={`flex-1 h-12 rounded-[var(--radius-input)] px-4 text-sm font-bold text-center outline-none ${
+                    className={`flex-1 min-w-0 h-12 rounded-[var(--radius-input)] px-3 text-sm font-bold text-center outline-none ${
                       error ? "border-[#ef4444]" : ""
                     }`}
                     style={{ background: "var(--field-bg)", color: "var(--text-primary)" }}
@@ -254,7 +257,7 @@ export default function RecordCustomerPaymentPage() {
                     <button
                       key={m.key}
                       onClick={() => setMethod(m.key)}
-                      className="flex-1 h-11 rounded-full text-sm font-semibold transition-colors"
+                      className="flex-1 min-w-0 h-11 rounded-full text-sm font-semibold transition-colors truncate px-2"
                       style={{
                         background: method === m.key ? "var(--brand)" : "var(--surface-2)",
                         color: method === m.key ? "#0a0a0a" : "var(--text-secondary)",
@@ -315,7 +318,7 @@ export default function RecordCustomerPaymentPage() {
                       <button
                         key={m.key}
                         onClick={() => updateSplit(i, "method", m.key)}
-                        className="flex-1 h-9 rounded-full text-xs font-semibold transition-colors"
+                        className="flex-1 min-w-0 h-9 rounded-full text-xs font-semibold transition-colors truncate px-2"
                         style={{
                           background: split.method === m.key ? "var(--brand)" : "var(--background)",
                           color: split.method === m.key ? "#0a0a0a" : "var(--text-secondary)",

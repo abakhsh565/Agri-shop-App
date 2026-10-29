@@ -43,8 +43,16 @@ export default function NavHeader({ title, backTo, onBack, right, noBack, backIc
       return;
     }
 
-    // Nothing behind this screen (a deep link, a cold start): use the parent it names.
-    if (backTo) { navigate(backTo); return; }
+    // Nothing behind this screen (a deep link, a cold start, or a tab root): use the parent it
+    // names. It REPLACES the current entry rather than pushing a new one (owner's report,
+    // 2026-10-30): pushing left the screen behind, so the next back returned to it and the reader
+    // bounced between the two — five presses of "back" that never left the pair. A replace is a
+    // step up the tree, and the arrow keeps moving up from the parent's own parent.
+    if (backTo) {
+      setSkipNext();
+      navigate(backTo, { replace: true });
+      return;
+    }
 
     // On dashboard, back is handled by the hardware back button (the exit flow).
     if (isDashboardPath(location.pathname)) return;

@@ -1,6 +1,17 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowDownToLine, ArrowUpFromLine, Package, RefreshCw, Undo2, type LucideIcon } from "lucide-react";
+import {
+  ArrowDownToLine,
+  Download,
+  Package,
+  RefreshCw,
+  Share2,
+  Undo2,
+  type LucideIcon,
+} from "lucide-react";
+import SectionActionsSheet, { SectionActionsButton } from "@/components/ui/SectionActionsSheet";
+import { csvFileName, exportCsv, exportText, toCsv } from "@/lib/exportData";
+import { useUIStore } from "@/stores/uiStore";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
 import ListCard from "@/components/ui/ListCard";
@@ -10,7 +21,6 @@ import { useT } from "@/lib/i18n";
 import { useShellBase } from "@/lib/useShellBase";
 import { useProductsStore } from "@/stores/productsStore";
 import { useSalesStore } from "@/stores/salesStore";
-import { useShopStore } from "@/stores/shopStore";
 import { fetchPurchases } from "@/lib/db";
 import { useInventoryMovements, type MovementType } from "@/lib/inventoryMovements";
 import { signedQty, unitWord } from "@/lib/inventoryView";
@@ -19,7 +29,7 @@ import { useCurrentTime } from "@/lib/useCurrentTime";
 import type { BaseUnit } from "@/types";
 
 /**
- * Stock movements: everything that moved a quantity, in the order it moved.
+ * Stock movements: everything that moved a quantity on the shelf, in the order it moved.
  *
  * REBUILT ON THE LEDGER (owner's reference, 2026-10-28). This screen used to derive its rows
  * from the sales the app had loaded, which meant it could only ever show one of the four things
@@ -27,12 +37,22 @@ import type { BaseUnit } from "@/types";
  * missing — and only for sales still inside the loaded window. The database keeps every movement
  * (`inventory_movements`), so the screen reads that.
  *
+ * THE SHELF, NOT THE TILL (owner's correction, 2026-10-30). The ledger also records the stock a
+ * sale took out, and those rows drowned the ones this screen exists for: three "Sale completed"
+ * lines beside one counted adjustment. A sale already has its own record in Sales, with the
+ * receipt, the customer and the money; what a shopkeeper comes here to check is what arrived,
+ * what was counted and what was moved between branches. So sale rows (and their returns) are
+ * filtered out here, and the line under the title says so rather than leaving the reader to
+ * wonder where they went.
+ *
  * WHAT A ROW SAYS: what happened, which pack it happened to, when, and against which document —
- * a purchase, a sale, a return — so a figure can be traced back to the paper it came from. The
+ * a purchase, a transfer — so a figure can be traced back to the paper it came from. The
  * quantity carries its sign and its unit ("+20 liters", "−3 bottles") because the direction IS
  * the information.
  *
- * The per-type labels are translated, unlike the hardcoded English this screen used to print.
+ * THE REFRESH IS A CONTROL NOW. The green arrow used to be a picture of a refresh: it looked
+ * tappable and did nothing, which is worse than having no arrow at all. It re-reads the ledger,
+ * and the "…" menu exports or shares what is on screen.
  */
 const TYPE_LABEL_KEY: Record<string, string> = {
   purchase: "moves.purchase",
@@ -44,11 +64,17 @@ const TYPE_LABEL_KEY: Record<string, string> = {
 
 const TYPE_ICON: Record<string, LucideIcon> = {
   purchase: ArrowDownToLine,
-  sale: ArrowUpFromLine,
   adjustment: RefreshCw,
   return: Undo2,
   transfer: RefreshCw,
 };
+
+/**
+ * The movement types this screen leaves out: the till's own rows. A sale and a sale return are
+ * recorded in Sales with their receipt; keeping them here listed the same event twice and buried
+ * the stock-side movements the owner came to read.
+ */
+const HIDDEN_TYPES = new Set(["sale", "return"]);
 
 export default function StockMovementHistoryPage() {
   const t = useT();
@@ -57,13 +83,14 @@ export default function StockMovementHistoryPage() {
   const now = useCurrentTime();
   const products = useProductsStore((s) => s.products);
   const sales = useSalesStore((s) => s.sales);
-  const branch = useShopStore((s) => s.activeBranchName);
-  const { movements, ready } = useInventoryMovements();
+  const { movements: ledger, ready, refresh } = useInventoryMovements();
   // Spelled `loading`, because that is the gate the skeleton-coverage guard pins for this
   // screen: it waits for its own movement read before it says the shelf has never moved.
   const loading = !ready;
   /** Purchase numbers, so a goods-received row can name the purchase it came from. */
   const [purchaseNumbers, setPurchaseNumbers] = useState<Record<string, string>>({});
+  const [menuOpen, setMenuOpen] = useState(false);
+  const { addToast } = useUIStore();
 
   useEffect(() => {
     let active = true;
@@ -80,6 +107,12 @@ export default function StockMovementHistoryPage() {
       active = false;
     };
   }, []);
+
+  /** What this screen is about: the shelf's own movements, newest first. */
+  const movements = useMemo(
+    () => ledger.filter((movement) => !HIDDEN_TYPES.has(movement.type)),
+    [ledger],
+  );
 
   /** The pack a movement is about, from the catalogue the app already holds. */
   function packOf(movementType: MovementType, variantId: string, productId: string) {
@@ -106,6 +139,56 @@ export default function StockMovementHistoryPage() {
     return "";
   }
 
+  /** One row's words, shared by the list and the export so they can never say different things. */
+  function describe(movement: (typeof movements)[number]) {
+    const pack = packOf(movement.type, movement.variantId, movement.productId);
+    const unit = unitWord(pack.baseUnit, t);
+    return {
+      what: t(TYPE_LABEL_KEY[movement.type] ?? "moves.adjustment"),
+      item: `${pack.productName}${pack.variantName ? ` · ${pack.variantName}` : ""}`,
+      qty: signedQty(movement.qtyChange, unit),
+      when: formatSmartDateTime(movement.createdAt, now, t),
+      reference: referenceOf(movement.type, movement.referenceType, movement.referenceId),
+    };
+  }
+
+  /** The last time anything happened on this shelf — what the line under the title says. */
+  const lastActivity = movements[0] ? formatSmartDateTime(movements[0].createdAt, now, t) : null;
+
+  async function exportMovements() {
+    setMenuOpen(false);
+    try {
+      const rows = movements.map(describe);
+      const csv = toCsv(
+        [
+          { label: t("moves.columnWhat"), value: (r: (typeof rows)[number]) => r.what },
+          { label: t("moves.columnItem"), value: (r: (typeof rows)[number]) => r.item },
+          { label: t("moves.columnQty"), value: (r: (typeof rows)[number]) => r.qty },
+          { label: t("moves.columnWhen"), value: (r: (typeof rows)[number]) => r.when },
+        ],
+        rows,
+      );
+      const outcome = await exportCsv(csvFileName("stock-movements"), csv, t("hub.inventory.movements"));
+      addToast(outcome === "shared" ? t("data.exportedShared") : t("data.exported"), "success");
+    } catch {
+      addToast(t("data.exportFailed"), "error");
+    }
+  }
+
+  async function shareMovements() {
+    setMenuOpen(false);
+    const text = movements
+      .map(describe)
+      .map((r) => `${r.what} · ${r.item} · ${r.qty} · ${r.when}`)
+      .join("\n");
+    try {
+      const outcome = await exportText(text, t("hub.inventory.movements"));
+      addToast(outcome === "shared" ? t("sales.reportShared") : t("sales.reportCopied"), "success");
+    } catch {
+      addToast(t("sales.shareFailed"), "error");
+    }
+  }
+
   return (
     <div
       className="flex flex-col w-full min-h-full"
@@ -113,7 +196,39 @@ export default function StockMovementHistoryPage() {
       data-testid="stock-movements-page"
     >
       <StatusBar />
-      <NavHeader title={t("hub.inventory.movements")} backTo={`${base}/settings/hub/inventory`} />
+      <NavHeader
+        title={t("hub.inventory.movements")}
+        backTo={`${base}/settings/hub/inventory`}
+        right={
+          <SectionActionsButton
+            onClick={() => setMenuOpen(true)}
+            label={t("data.moreActions")}
+            testId="movements-actions"
+          />
+        }
+      />
+
+      <SectionActionsSheet
+        open={menuOpen}
+        onClose={() => setMenuOpen(false)}
+        title={t("hub.inventory.movements")}
+        actions={[
+          {
+            id: "export",
+            icon: Download,
+            title: t("data.export"),
+            description: t("moves.exportHint"),
+            onClick: () => { void exportMovements(); },
+          },
+          {
+            id: "share",
+            icon: Share2,
+            title: t("sales.shareReport"),
+            description: t("moves.shareHint"),
+            onClick: () => { void shareMovements(); },
+          },
+        ]}
+      />
 
       <div className="px-4 pt-1">
         <div
@@ -123,11 +238,24 @@ export default function StockMovementHistoryPage() {
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <p className="text-16 font-bold">{t("hub.inventory.movements")}</p>
+              {/* What happened last, and when — the line the owner asked for. The branch is the
+                  one the shell is already working in, so naming it here said what the bar and
+                  the rows already say. */}
               <p className="text-12 mt-1" style={{ color: "var(--text-secondary)" }}>
-                {t("moves.subtitle")}
+                {t("moves.recentActivity")}
+                {" · "}
+                {lastActivity ?? t("moves.noActivity")}
               </p>
             </div>
-            <RefreshCw size={20} style={{ color: "var(--brand-dark)" }} className="shrink-0" />
+            <button
+              type="button"
+              onClick={refresh}
+              aria-label={t("moves.refresh")}
+              data-testid="movements-refresh"
+              className="shrink-0 flex items-center justify-center w-9 h-9 -me-1 rounded-full active:opacity-60"
+            >
+              <RefreshCw size={20} style={{ color: "var(--brand-dark)" }} />
+            </button>
           </div>
         </div>
       </div>
@@ -191,9 +319,6 @@ export default function StockMovementHistoryPage() {
               );
             })}
           </ListCard>
-          <p className="px-4 pt-3 text-11" style={{ color: "var(--text-tertiary)" }}>
-            {t("moves.scopeNote", { branch: branch ?? t("hub.inventory.selectedBranch") })}
-          </p>
         </div>
       )}
     </div>

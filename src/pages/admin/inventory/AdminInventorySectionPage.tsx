@@ -10,7 +10,6 @@ import {
   Plus,
   RefreshCw,
   Share2,
-  Warehouse,
   type LucideIcon,
 } from "lucide-react";
 import SectionActionsSheet, { SectionActionsButton } from "@/components/ui/SectionActionsSheet";
@@ -131,13 +130,6 @@ export default function AdminInventorySectionPage() {
       title: rowLabel("products", "hub.inventory.products"),
       hint: t("hub.inventory.productsHint"),
       run: () => navigate(`${base}/products`),
-    },
-    {
-      id: "stock",
-      icon: Warehouse,
-      title: rowLabel("stock", "hub.inventory.stock"),
-      hint: t("hub.inventory.stockHint"),
-      run: () => navigate(`${base}/inventory/stock`),
     },
     {
       id: "movements",

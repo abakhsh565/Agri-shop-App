@@ -65,14 +65,17 @@ export const HUB_SECTIONS: HubSection[] = [
       // Like Sales, this section's screen is its own (`pages/admin/inventory/AdminInventorySectionPage`):
       // it carries a quick action, four counts and a search, and it reads these rows for its
       // labels. Each destination is now the screen that does that job:
-      //   - Stock management is its own screen (`/inventory/stock`): what the branch holds and
+      //   - Stock values is its own screen (`/inventory/stockvalues`): what the branch holds and
       //     what it is worth. It used to send the reader to Reorder suggestions, which answers
       //     the next question (what to buy) and keeps its own screen, still reachable from More.
+      //     It carries the section's other name — the inventory hub used to list it twice, once as
+      //     "Stock management" and once as the value row on the business overview — so the route
+      //     and the label now say what the screen actually shows (owner's correction, 2026-10-30).
       //   - Expiring products is its own screen (`/alerts/expiry`). It and Low stock both opened
       //     the same alerts screen, so one of the two rows always opened the wrong list.
       { id: "products", labelKey: "hub.inventory.products", to: "/products" },
       { id: "variants", labelKey: "hub.inventory.variants", to: "/products" },
-      { id: "stock", labelKey: "hub.inventory.stock", to: "/inventory/stock" },
+      { id: "stock", labelKey: "hub.inventory.stock", to: "/inventory/stockvalues" },
       { id: "movements", labelKey: "hub.inventory.movements", to: "/inventory/movements" },
       { id: "low-stock", labelKey: "hub.inventory.lowStock", to: "/alerts/inventory" },
       { id: "expiring", labelKey: "hub.inventory.expiring", to: "/alerts/expiry" },
@@ -97,7 +100,10 @@ export const HUB_SECTIONS: HubSection[] = [
       { id: "suppliers", labelKey: "hub.purchases.suppliers", to: "/companies" },
       { id: "history", labelKey: "hub.purchases.history", to: "/purchases" },
       { id: "new", labelKey: "hub.purchases.new", to: "/purchases/new" },
-      { id: "payments", labelKey: "hub.purchases.payments", to: "/payments" },
+      // The supplier payments book, not the general payments ledger: this section's rows are
+      // about suppliers, and that ledger also holds customer receipts and expenses
+      // (owner's instruction, 2026-10-30).
+      { id: "payments", labelKey: "hub.purchases.payments", to: "/purchases/payments" },
       { id: "payables", labelKey: "hub.purchases.payables", to: "/companies" },
     ],
   },

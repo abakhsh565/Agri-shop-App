@@ -8,7 +8,6 @@ import {
   ChevronRight,
   Download,
   HandCoins,
-  Plus,
   Share2,
   Receipt,
   ScrollText,
@@ -65,7 +64,6 @@ export default function AdminFinanceSectionPage() {
   const base = useShellBase();
   const navigate = useNavigate();
 
-  const [menuOpen, setMenuOpen] = useState(false);
 
   const day = pkToday();
   const window = useMemo(() => monthWindow(day), [day]);
@@ -260,26 +258,11 @@ export default function AdminFinanceSectionPage() {
         title={t("settings.menu.finance")}
         backTo={`${base}/settings`}
         right={
-          <div className="flex items-center gap-1">
-            <SectionActionsButton
-              onClick={() => setExportOpen(true)}
-              label={t("data.export")}
-              testId="finance-hub-actions"
-            />
-            {isOwner && (
-              <button
-                type="button"
-                onClick={() => setMenuOpen((open) => !open)}
-                aria-label={t("finance.add")}
-                aria-haspopup="dialog"
-                aria-expanded={menuOpen}
-                data-testid="finance-hub-add"
-                className="flex items-center justify-center size-8 rounded-full active:opacity-60"
-              >
-                <Plus size={18} style={{ color: "var(--text-primary)" }} />
-              </button>
-            )}
-          </div>
+          <SectionActionsButton
+            onClick={() => setExportOpen(true)}
+            label={t("data.moreActions")}
+            testId="finance-hub-actions"
+          />
         }
       />
 
@@ -288,37 +271,22 @@ export default function AdminFinanceSectionPage() {
         onClose={() => setExportOpen(false)}
         title={t("settings.menu.finance")}
         actions={[
+          // Recording money lives here, not as a plus in the app bar (owner, 2026-10-30): the icon
+          // sat on the header with no label, and the sheet already exists to hold this screen's
+          // jobs. One menu, one place.
+          ...(isOwner
+            ? addActions.map((action) => ({
+                id: `add-${action.kind}` as const,
+                icon: action.icon,
+                title: t(action.label),
+                description: t(addHints[action.kind]),
+                onClick: () => navigate(`${base}/settings/hub/finance/record?kind=${action.kind}`),
+              }))
+            : []),
           { id: "export", icon: Download, title: t("data.export"), description: t("data.exportHint"), onClick: () => { void exportFigures(); } },
           { id: "share", icon: Share2, title: t("sales.shareReport"), description: t("sales.shareReportHint"), onClick: () => { void shareFigures(); } },
         ]}
       />
-
-      {/* The overflow opens the app's own sheet, not a dropdown hanging off a corner (owner's
-          instruction, 2026-10-29). On a phone the sheet is where a short list of choices lives:
-          it arrives from the bottom edge within reach of the thumb, and every row can carry an
-          icon and a sentence saying what it records, which a 200px popover has no room for. */}
-      <Sheet
-        open={menuOpen}
-        title={t("finance.add")}
-        onClose={() => setMenuOpen(false)}
-        closeButton={false}
-      >
-        <div className="px-4 pt-1">
-          {addActions.map((action) => (
-            <ListRow
-              key={action.kind}
-              testId={`finance-hub-add-${action.kind}`}
-              icon={action.icon}
-              title={t(action.label)}
-              description={t(addHints[action.kind])}
-              onClick={() => {
-                setMenuOpen(false);
-                navigate(`${base}/settings/hub/finance/record?kind=${action.kind}`);
-              }}
-            />
-          ))}
-        </div>
-      </Sheet>
 
       <div className="px-4 pt-3">
         <h1 className="text-22 font-bold">{t("financeHub.financialOverview")}</h1>

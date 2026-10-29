@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  AlertTriangle, ArrowDownRight, ArrowUpRight, BarChart3, Building2, CalendarClock,
-  ChevronRight, GitBranch, Package, TrendingUp, Users,
+  AlertTriangle, ArrowDownRight, ArrowUpRight, BarChart3, CalendarClock,
+  ChevronRight, Package, TrendingUp,
 } from "lucide-react";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
@@ -637,7 +637,7 @@ export default function BusinessOverviewPage() {
             <ListRow
               icon={Package}
               title={t("overview.inventoryValue")}
-              onClick={() => navigate(`${base}/inventory/stock`)}
+              onClick={() => navigate(`${base}/inventory/stockvalues`)}
               testId="overall-inventory-value"
               trailing={<span className="ds-row-value shrink-0">{money(inventoryValue, inventoryIncomplete)}</span>}
             />
@@ -668,7 +668,7 @@ export default function BusinessOverviewPage() {
                 testId="report-sales"
                 title={t("overall.reportSales")}
                 meta={t("overall.reportSalesHint")}
-                onClick={() => navigate(`${base}/reports`)}
+                onClick={() => navigate(`${base}/settings/hub/sales`)}
                 trailing={<ChevronRight size={14} style={{ color: "var(--text-secondary)" }} className="shrink-0" />}
               />
               <ListRow
@@ -676,33 +676,14 @@ export default function BusinessOverviewPage() {
                 testId="report-profit"
                 title={t("overall.reportProfit")}
                 meta={t("overall.reportProfitHint")}
-                onClick={() => navigate(`${base}/reports`)}
+                onClick={() => navigate(`${base}/settings/hub/reports/profit`)}
                 trailing={<ChevronRight size={14} style={{ color: "var(--text-secondary)" }} className="shrink-0" />}
               />
-              <ListRow
-                icon={Users}
-                testId="report-customer-balances"
-                title={t("overall.reportCustomers")}
-                meta={t("overall.reportCustomersHint")}
-                onClick={() => navigate(`${base}/settings/overview/customers`)}
-                trailing={<ChevronRight size={14} style={{ color: "var(--text-secondary)" }} className="shrink-0" />}
-              />
-              <ListRow
-                icon={Building2}
-                testId="report-supplier-balances"
-                title={t("overall.reportSuppliers")}
-                meta={t("overall.reportSuppliersHint")}
-                onClick={() => navigate(`${base}/settings/overview/suppliers`)}
-                trailing={<ChevronRight size={14} style={{ color: "var(--text-secondary)" }} className="shrink-0" />}
-              />
-              <ListRow
-                icon={GitBranch}
-                testId="report-branches"
-                title={t("overall.reportBranches")}
-                meta={t("overall.reportBranchesHint")}
-                onClick={() => navigate(`${base}/reports`)}
-                trailing={<ChevronRight size={14} style={{ color: "var(--text-secondary)" }} className="shrink-0" />}
-              />
+              {/* Customer balances, Supplier balances and Branch report are gone from here
+                  (owner's instruction, 2026-10-30). All three already have a place on this screen
+                  — the two balance cards with their owed figures open the same two books, and
+                  Branch performance lists every branch — so they were a second way to the same
+                  place, sitting at the bottom of a list of reports. */}
             </div>
           </div>
         </div>

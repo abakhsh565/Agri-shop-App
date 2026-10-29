@@ -138,6 +138,9 @@ export default function CompanyDetailPage() {
       <StatusBar />
       <NavHeader
         title={supplier.name}
+        // Its parent is the list it was opened from; a cold start or a deep link has no step
+        // behind it, and Home is not where this screen belongs.
+        backTo="/admin/companies"
         right={
           <div className="relative">
             <button

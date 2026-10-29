@@ -74,6 +74,7 @@ import EmployeeAccessRequestsPage from "@/pages/admin/employees/EmployeeAccessRe
 import EmployeeAccessRequestDetailPage from "@/pages/admin/employees/EmployeeAccessRequestDetailPage";
 const AdminPurchasesPage = React.lazy(() => import("@/pages/admin/purchases/AdminPurchasesPage"));
 const RecordPurchasePage = React.lazy(() => import("@/pages/admin/purchases/RecordPurchasePage"));
+const SupplierPaymentsPage = React.lazy(() => import("@/pages/admin/purchases/SupplierPaymentsPage"));
 import AdminPaymentsPage from "@/pages/admin/payments/AdminPaymentsPage";
 import RecordSupplierPaymentPage from "@/pages/admin/payments/RecordSupplierPaymentPage";
 const AdminReportsPage = React.lazy(() => import("@/pages/admin/reports/AdminReportsPage"));
@@ -228,7 +229,10 @@ export const router = createBrowserRouter([
           { path: "inventory/new", element: <AddProductPage /> },
           { path: "inventory/:productId/edit", element: <AddProductPage /> },
           { path: "inventory/:productId/adjust", element: <InventoryAdjustPage /> },
-          { path: "inventory/stock", element: <StockManagementPage /> },
+          { path: "inventory/stockvalues", element: <StockManagementPage /> },
+          // The old address keeps working: a bookmark, a notification or a link already shared
+          // before the rename still lands on the screen it named.
+          { path: "inventory/stock", element: <Navigate to="/admin/inventory/stockvalues" replace /> },
           { path: "inventory/movements", element: <StockMovementHistoryPage /> },
           { path: "inventory/reorder", element: <ReorderSuggestionsPage /> },
           { path: "inventory/barcodes", element: <BarcodeGeneratePage /> },
@@ -254,6 +258,7 @@ export const router = createBrowserRouter([
         children: [
           { path: "purchases",  element: <AdminPurchasesPage /> },
           { path: "purchases/new", element: <RecordPurchasePage /> },
+          { path: "purchases/payments", element: <SupplierPaymentsPage /> },
           { path: "purchases/:purchaseId", element: <PurchaseDetailPage /> },
         ] },
 

@@ -82,7 +82,7 @@ export default function AddCompanyPage() {
     >
       <div>
         <StatusBar />
-        <NavHeader title={t("supplier.addCompany")} />
+        <NavHeader title={t("supplier.addCompany")} backTo="/admin/companies" />
 
         <div className="flex flex-col gap-5 p-4">
           <div className="flex justify-center pt-1">

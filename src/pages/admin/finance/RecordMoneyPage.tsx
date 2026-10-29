@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type InputHTMLAttributes } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Check, ChevronDown, X } from "lucide-react";
+import { Check, X } from "lucide-react";
 import StatusBar from "@/components/ui/StatusBar";
 import Button from "@/components/ui/Button";
+import InlineSelect from "@/components/ui/InlineSelect";
 import { useT, type I18nKey } from "@/lib/i18n";
 import { useShellBase } from "@/lib/useShellBase";
 import { useAuthStore } from "@/stores/authStore";
@@ -13,9 +14,11 @@ import { formatCurrency } from "@/lib/formatters";
 import {
   CATEGORY_KEY,
   METHOD_KEY,
+  REPEAT_KEY,
   recordFinanceEntry,
   type FinanceEntryKind,
   type FinanceMethod,
+  type RepeatUnit,
 } from "@/lib/financeEntries";
 
 /**
@@ -54,6 +57,23 @@ const CATEGORIES: Record<FinanceEntryKind, string[]> = {
 };
 
 const METHODS: FinanceMethod[] = ["cash", "bank", "easypaisa", "jazzcash"];
+
+/** The four cadences, in the order a reader thinks of them: once, then the calendar. */
+const REPEATS: RepeatUnit[] = ["none", "day", "week", "month"];
+
+/** How the every-n row names its unit; a cadence of 1 reads "day", not "days". */
+const REPEAT_UNIT_KEY = {
+  day: "finance.repeat.days",
+  week: "finance.repeat.weeks",
+  month: "finance.repeat.months",
+} as const;
+
+/** The singular, for the ordinary case of every one. */
+const REPEAT_UNIT_ONE_KEY = {
+  day: "finance.repeat.unitDay",
+  week: "finance.repeat.unitWeek",
+  month: "finance.repeat.unitMonth",
+} as const;
 
 /** The tab's own words: the same three the overflow menu offers. */
 const KIND_LABEL_KEY: Record<FinanceEntryKind, I18nKey> = {
@@ -104,106 +124,6 @@ function PlainField({
   );
 }
 
-/**
- * One choice, opened in place.
- *
- * The category and the payment method were sheets: a tap raised a full overlay to answer a
- * question whose answer is three words, then that overlay had to be dismissed before the form
- * could be finished. Both now open a panel under their own field (owner's instruction,
- * 2026-10-29), so the choice happens where the reader is looking and the form never leaves the
- * screen. The panel is `end-0`/`start-0`, so it aligns with the field in either reading direction.
- */
-function InlineSelect({
-  value,
-  options,
-  onChange,
-  label,
-  testId,
-}: {
-  value: string;
-  options: { value: string; label: string }[];
-  onChange: (value: string) => void;
-  label: string;
-  testId: string;
-}) {
-  const t = useT();
-  const [open, setOpen] = useState(false);
-  const selected = options.find((option) => option.value === value) ?? options[0];
-
-  return (
-    <div className="relative">
-      <button
-        type="button"
-        role="combobox"
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        aria-label={label}
-        data-testid={testId}
-        onClick={() => setOpen((value) => !value)}
-        className="ds-field w-full text-start ds-pressable"
-      >
-        <span className="flex-1 text-13 truncate" style={{ color: "var(--text-primary)" }}>
-          {selected?.label ?? ""}
-        </span>
-        <ChevronDown
-          size={16}
-          className="shrink-0"
-          style={{
-            color: "var(--text-secondary)",
-            transform: open ? "rotate(180deg)" : undefined,
-            transition: "transform 180ms ease",
-          }}
-        />
-      </button>
-
-      {open && (
-        <>
-          <button
-            type="button"
-            aria-label={t("common.close")}
-            onClick={() => setOpen(false)}
-            className="fixed inset-0 z-40 cursor-default"
-            style={{ background: "transparent" }}
-          />
-          <div
-            role="listbox"
-            aria-label={label}
-            className="absolute start-0 end-0 top-full mt-2 z-50 rounded-[var(--radius-card)] py-1 overflow-y-auto"
-            style={{
-              maxHeight: 260,
-              background: "var(--tone-sheet)",
-              border: "1px solid var(--divider)",
-              boxShadow: "0 16px 40px rgba(0,0,0,0.45)",
-            }}
-          >
-            {options.map((option) => {
-              const active = option.value === value;
-              return (
-                <button
-                  key={option.value}
-                  type="button"
-                  role="option"
-                  aria-selected={active}
-                  data-testid={`${testId}-option-${option.value}`}
-                  onClick={() => {
-                    onChange(option.value);
-                    setOpen(false);
-                  }}
-                  className="w-full flex items-center gap-3 px-4 py-2.5 text-start text-13 ds-pressable"
-                  style={{ color: active ? "var(--brand-dark)" : "var(--text-primary)" }}
-                >
-                  <span className="flex-1 truncate">{option.label}</span>
-                  {active && <Check size={15} className="shrink-0" />}
-                </button>
-              );
-            })}
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
-
 export default function RecordMoneyPage() {
   const t = useT();
   const base = useShellBase();
@@ -222,6 +142,8 @@ export default function RecordMoneyPage() {
   const [method, setMethod] = useState<FinanceMethod>("cash");
   const [counterparty, setCounterparty] = useState("");
   const [note, setNote] = useState("");
+  const [repeatUnit, setRepeatUnit] = useState<RepeatUnit>("none");
+  const [repeatEvery, setRepeatEvery] = useState("1");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const submittingRef = useRef(false);
@@ -291,6 +213,10 @@ export default function RecordMoneyPage() {
         occurredOn: day || undefined,
         counterparty,
         note,
+        repeatUnit,
+        // The server clamps a bad number to the range it accepts; the field is numeric and the
+        // input handler already refuses a blank, so this only ever normalises text to a number.
+        repeatEvery: Math.max(1, Number(repeatEvery) || 1),
       });
       addToast(t("finance.saved", { amount: formatCurrency(paid) }), "success");
       navigate(`${base}/settings/hub/finance`, { replace: true });
@@ -461,6 +387,51 @@ export default function RecordMoneyPage() {
                 data-testid="record-date"
                 className="w-full text-13"
               />
+            </div>
+
+            {/* Repeat (owner, 2026-10-30): the same money again on a cadence. The first row is the
+                one being saved; the rest are posted by the ledger when each falls due, which is
+                said under the field so "recurring" is not mistaken for "counted already". */}
+            <div className="flex flex-col gap-2">
+              <p className="text-12 font-semibold" style={labelStyle}>{t("finance.repeat")}</p>
+              <InlineSelect
+                value={repeatUnit}
+                options={REPEATS.map((value) => ({ value, label: t(REPEAT_KEY[value]) }))}
+                onChange={(value) => setRepeatUnit(value as RepeatUnit)}
+                label={t("finance.repeat")}
+                testId="record-repeat"
+              />
+
+              {repeatUnit !== "none" && (
+                <div className="flex items-center gap-2 pt-1" data-testid="record-repeat-every-row">
+                  <span className="text-12 shrink-0" style={labelStyle}>{t("finance.repeat.every")}</span>
+                  <div className="ds-field" style={{ width: 84 }}>
+                    <input
+                      value={repeatEvery}
+                      onChange={(e) => setRepeatEvery(e.target.value.replace(/[^0-9]/g, "").slice(0, 2))}
+                      onBlur={() => setRepeatEvery(String(Math.min(60, Math.max(1, Number(repeatEvery) || 1))))}
+                      inputMode="numeric"
+                      aria-label={t("finance.repeat.every")}
+                      data-testid="record-repeat-every"
+                      className="flex-1 min-w-0 h-full bg-transparent outline-none text-13 tabular-nums text-center"
+                      style={{ color: "var(--text-primary)" }}
+                    />
+                  </div>
+                  <span className="text-12" style={labelStyle}>
+                    {t(
+                      (Number(repeatEvery) || 1) <= 1
+                        ? REPEAT_UNIT_ONE_KEY[repeatUnit as "day" | "week" | "month"]
+                        : REPEAT_UNIT_KEY[repeatUnit as "day" | "week" | "month"],
+                    )}
+                  </span>
+                </div>
+              )}
+
+              {repeatUnit !== "none" && (
+                <p className="text-11" style={{ color: "var(--text-tertiary)" }}>
+                  {t("finance.repeat.hint")}
+                </p>
+              )}
             </div>
 
             <div className="flex flex-col gap-2">
