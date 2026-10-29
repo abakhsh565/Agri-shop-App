@@ -1,15 +1,21 @@
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   AlertTriangle,
   Barcode,
   CalendarClock,
   ChevronRight,
+  Download,
   Package,
   Plus,
   RefreshCw,
+  Share2,
   Warehouse,
   type LucideIcon,
 } from "lucide-react";
+import SectionActionsSheet, { SectionActionsButton } from "@/components/ui/SectionActionsSheet";
+import { csvFileName, exportCsv, exportText, toCsv } from "@/lib/exportData";
+import { useUIStore } from "@/stores/uiStore";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
 import ListRow from "@/components/ui/ListRow";
@@ -77,6 +83,46 @@ export default function AdminInventorySectionPage() {
     inventoryValue == null
       ? "—"
       : `${valueIncomplete ? "≥ " : ""}${formatCompactCurrency(inventoryValue)}`;
+
+  const [menuOpen, setMenuOpen] = useState(false);
+  const { addToast } = useUIStore();
+
+  /** The figures this screen is showing, as rows — the same numbers the owner can see. */
+  const figureRows = [
+    { label: t("hub.inventory.totalValue"), value: valueLabel, note: branchName ?? "" },
+    { label: t("hub.inventory.listedProducts"), value: ready ? String(counts.products) : "—", note: "" },
+    { label: t("hub.inventory.packsCount"), value: ready ? String(counts.packs) : "—", note: t("hub.inventory.packsCaption") },
+    { label: t("hub.inventory.lowStockCount"), value: ready ? String(counts.low) : "—", note: t("hub.inventory.lowStockCaption") },
+    { label: t("hub.inventory.outOfStockCount"), value: ready ? String(counts.out) : "—", note: t("hub.inventory.outOfStockCaption") },
+  ];
+
+  async function exportFigures() {
+    setMenuOpen(false);
+    try {
+      const csv = toCsv(
+        [
+          { label: t("hub.inventory.totalValue"), value: (r: (typeof figureRows)[number]) => r.label },
+          { label: t("common.total"), value: (r: (typeof figureRows)[number]) => r.value },
+        ],
+        figureRows,
+      );
+      const outcome = await exportCsv(csvFileName("inventory"), csv, t("settings.menu.inventory"));
+      addToast(outcome === "shared" ? t("data.exportedShared") : t("data.exported"), "success");
+    } catch {
+      addToast(t("data.exportFailed"), "error");
+    }
+  }
+
+  async function shareFigures() {
+    setMenuOpen(false);
+    const text = figureRows.map((r) => `${r.label}: ${r.value}`).join("\n");
+    try {
+      const outcome = await exportText(text, t("settings.menu.inventory"));
+      addToast(outcome === "shared" ? t("sales.reportShared") : t("sales.reportCopied"), "success");
+    } catch {
+      addToast(t("sales.shareFailed"), "error");
+    }
+  }
 
   const shortcuts: { id: string; icon: LucideIcon; title: string; hint: string; run: () => void }[] = [
     {
@@ -167,7 +213,21 @@ export default function AdminInventorySectionPage() {
       data-testid="inventory-hub-page"
     >
       <StatusBar />
-      <NavHeader title={t("settings.menu.inventory")} backTo={returnTo} />
+      <NavHeader
+        title={t("settings.menu.inventory")}
+        backTo={returnTo}
+        right={<SectionActionsButton onClick={() => setMenuOpen(true)} label={t("data.export")} testId="inventory-actions" />}
+      />
+
+      <SectionActionsSheet
+        open={menuOpen}
+        onClose={() => setMenuOpen(false)}
+        title={t("settings.menu.inventory")}
+        actions={[
+          { id: "export", icon: Download, title: t("data.export"), description: t("data.exportHint"), onClick: () => { void exportFigures(); } },
+          { id: "share", icon: Share2, title: t("sales.shareReport"), description: t("sales.shareReportHint"), onClick: () => { void shareFigures(); } },
+        ]}
+      />
 
       {/* The two headline figures, unboxed, as the reference draws them: what the shelf is
           worth and how many products are listed on it. */}

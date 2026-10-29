@@ -9,7 +9,6 @@ import {
   Download,
   FileSpreadsheet,
   FileText,
-  MoreHorizontal,
   ReceiptText,
   RotateCw,
   Share2,
@@ -22,6 +21,7 @@ import DateRangeSheet from "@/components/ui/DateRangeSheet";
 import ListRow from "@/components/ui/ListRow";
 import Button from "@/components/ui/Button";
 import Sheet from "@/components/ui/Sheet";
+import { SectionActionsButton } from "@/components/ui/SectionActionsSheet";
 import { Skeleton } from "@/components/ui/Skeleton";
 import SalesActivitySheet, { type SalesActivityKind } from "@/components/sales/SalesActivitySheet";
 import { useT } from "@/lib/i18n";
@@ -480,16 +480,11 @@ export default function AdminSalesSectionPage() {
         title={t("settings.menu.sales")}
         backTo={returnTo}
         right={
-          <button
-            type="button"
+          <SectionActionsButton
             onClick={() => setOptionsOpen(true)}
-            aria-label={t("sales.reportOptions")}
-            data-testid="sales-report-menu"
-            className="w-11 h-11 flex items-center justify-center rounded-full ds-pressable"
-            style={{ color: "var(--text-primary)" }}
-          >
-            <MoreHorizontal size={18} />
-          </button>
+            label={t("sales.reportOptions")}
+            testId="sales-report-menu"
+          />
         }
       />
 

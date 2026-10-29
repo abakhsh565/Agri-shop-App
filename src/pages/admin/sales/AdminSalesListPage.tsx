@@ -18,7 +18,6 @@ import {
   ChevronDown,
   ClipboardList,
   Download,
-  MoreHorizontal,
   Plus,
   Share2,
   SlidersHorizontal,
@@ -28,6 +27,7 @@ import { csvFileName, exportCsv, exportText, toCsv } from "@/lib/exportData";
 import { useUIStore } from "@/stores/uiStore";
 import NavHeader from "@/components/ui/NavHeader";
 import Sheet from "@/components/ui/Sheet";
+import { SectionActionsButton } from "@/components/ui/SectionActionsSheet";
 import SearchBar from "@/components/ui/SearchBar";
 import ListCard from "@/components/ui/ListCard";
 import ListRow from "@/components/ui/ListRow";
@@ -66,6 +66,11 @@ export default function AdminSalesListPage() {
   const [employeeFilter, setEmployeeFilter] = useState<string | null>(state?.employeeId ?? null);
   const [dateFilter, setDateFilter] = useState<DateFilter>(state?.dateFilter ?? "today");
   const [showDateModal, setShowDateModal] = useState(false);
+  // Which question the sheet is answering: a period, or one buyer. Opening it always starts on
+  // the period, because the period is what the pill in the header is showing.
+  const [sheetMode, setSheetMode] = useState<"date" | "customer">("date");
+  const [customerFilter, setCustomerFilter] = useState<string | null>(null);
+  const [customerQuery, setCustomerQuery] = useState("");
   const [customFrom, setCustomFrom] = useState("");
   const [customTo, setCustomTo] = useState("");
   // A search started on the Sales section's screen arrives as `?q=` and lands here, where the
@@ -135,6 +140,7 @@ export default function AdminSalesListPage() {
     .filter((s) => !s.isVoided && inDate(s))
     .filter(inTab)
     .filter(inQuery)
+    .filter((s) => !customerFilter || s.customerId === customerFilter)
     .filter((s) => !employeeFilter || s.employeeId === employeeFilter)
     .sort((a, b) => {
       if (sort === "newest") return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
@@ -235,17 +241,11 @@ export default function AdminSalesListPage() {
         title={t("admin.sales")}
         backTo="/admin/settings/hub/sales"
         right={
-          <button
-            type="button"
+          <SectionActionsButton
             onClick={() => setActionsOpen(true)}
-            aria-label={t("sales.actions")}
-            aria-haspopup="dialog"
-            data-testid="sales-actions"
-            className="flex items-center justify-center size-8 rounded-full active:opacity-60"
-            style={{ color: "var(--text-primary)" }}
-          >
-            <MoreHorizontal size={20} />
-          </button>
+            label={t("sales.actions")}
+            testId="sales-actions"
+          />
         }
       />
 
@@ -421,24 +421,54 @@ export default function AdminSalesListPage() {
         ))}
       </div>
 
-      {/* Employee filter badge */}
-
-
-      {employeeFilter && (
-        <div className="px-4 pt-2 flex items-center gap-2">
-          <span className="text-xs font-semibold px-3 py-1.5 rounded-full" style={{ background: "var(--brand)", color: "#0a0a0a" }}>
-            {mockEmployees.find((e) => e.id === employeeFilter)?.name ?? t("common.employee")}
-            <X size={12} className="inline-block" />
-          </span>
-          <button onClick={() => setEmployeeFilter(null)} className="text-xs" style={{ color: "var(--text-secondary)" }}>
-            {t("common.clearFilter")}
-          </button>
+      {/* The narrowed view, stated once, with the way out of it. A filter that is applied but
+          invisible is a list that looks wrong. */}
+      {(customerFilter || employeeFilter) && (
+        <div className="px-4 pb-2 flex flex-wrap items-center gap-2">
+          {customerFilter && (
+            <span
+              className="text-xs font-semibold ps-3 pe-2 py-1.5 rounded-full flex items-center gap-1.5"
+              style={{ background: "var(--surface-2)", color: "var(--text-primary)" }}
+              data-testid="sales-customer-chip"
+            >
+              {customers.find((c) => c.id === customerFilter)?.name ?? t("common.customer")}
+              <button
+                type="button"
+                onClick={() => setCustomerFilter(null)}
+                aria-label={t("common.clear")}
+                className="flex items-center justify-center"
+              >
+                <X size={12} />
+              </button>
+            </span>
+          )}
+          {employeeFilter && (
+            <span
+              className="text-xs font-semibold ps-3 pe-2 py-1.5 rounded-full flex items-center gap-1.5"
+              style={{ background: "var(--surface-2)", color: "var(--text-primary)" }}
+            >
+              {mockEmployees.find((e) => e.id === employeeFilter)?.name ?? t("common.employee")}
+              <button
+                type="button"
+                onClick={() => setEmployeeFilter(null)}
+                aria-label={t("common.clear")}
+                className="flex items-center justify-center"
+              >
+                <X size={12} />
+              </button>
+            </span>
+          )}
         </div>
       )}
 
       {/* Custom Date Range Modal — now carrying the five presets as well as the two dates, so the
           period pill in the header and the overflow's "Date range" are the only two doors and
           they open the same sheet. */}
+      {/* One sheet, two questions (owner's reference, 2026-10-29): which period, or which
+          customer. The five presets and the two dates used to be the only thing here, so narrowing
+          to one buyer meant scrolling the list. Choosing Customer swaps the From/To fields out —
+          they answer a different question and would only be in the way — and shows the accounts
+          themselves; choosing a day swaps them back. */}
       {showDateModal && (
         <div className="fixed inset-0 z-50 flex items-end justify-center" onClick={() => setShowDateModal(false)}>
           <div className="absolute inset-0 bg-black/40" />
@@ -448,9 +478,12 @@ export default function AdminSalesListPage() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-4">
-              <p className="text-15 font-bold" style={{ color: "var(--text-primary)" }}>{t("admin.selectDateRange")}</p>
+              <p className="text-15 font-bold" style={{ color: "var(--text-primary)" }}>
+                {sheetMode === "customer" ? t("common.customer") : t("admin.selectDateRange")}
+              </p>
               <button onClick={() => setShowDateModal(false)} className="text-xl" style={{ color: "var(--text-secondary)" }}>×</button>
             </div>
+
             <div className="flex flex-wrap gap-2 mb-4">
               {DATE_FILTERS.filter((f) => f.key !== "custom").map(({ key, label }) => (
                 <button
@@ -460,11 +493,11 @@ export default function AdminSalesListPage() {
                     setDateFilter(key);
                     setShowDateModal(false);
                   }}
-                  aria-pressed={dateFilter === key}
+                  aria-pressed={sheetMode === "date" && dateFilter === key}
                   data-testid={`sales-date-${key}`}
-                  className="h-8 px-3 rounded-full text-12 font-semibold"
+                  className="h-9 px-4 rounded-full text-12 font-semibold"
                   style={
-                    dateFilter === key
+                    sheetMode === "date" && dateFilter === key
                       ? { background: "var(--brand)", color: "var(--ink-fg)" }
                       : { background: "var(--surface-2)", color: "var(--text-secondary)" }
                   }
@@ -472,46 +505,110 @@ export default function AdminSalesListPage() {
                   {label}
                 </button>
               ))}
-            </div>
-            <div className="flex gap-3">
-              <div className="flex-1">
-                <label className="ds-section-label mb-1 block" style={{ color: "var(--text-secondary)" }}>{t("admin.from")}</label>
-                <input
-                  type="date"
-                  value={customFrom}
-                  onChange={(e) => setCustomFrom(e.target.value)}
-                  max={todayISO}
-                  className="w-full outline-none"
-                />
-              </div>
-              <div className="flex-1">
-                <label className="ds-section-label mb-1 block" style={{ color: "var(--text-secondary)" }}>{t("admin.to")}</label>
-                <input
-                  type="date"
-                  value={customTo}
-                  onChange={(e) => setCustomTo(e.target.value)}
-                  max={todayISO}
-                  min={customFrom || undefined}
-                  className="w-full outline-none"
-                />
-              </div>
-            </div>
-            <div className="flex gap-2 mt-4">
               <button
-                onClick={() => { setCustomFrom(""); setCustomTo(""); setDateFilter("custom"); setShowDateModal(false); }}
-                className="flex-1 h-10 rounded-[var(--radius-tile)] text-13 font-semibold"
-                style={{ background: "var(--surface-2)", color: "var(--text-secondary)" }}
+                type="button"
+                onClick={() => setSheetMode((mode) => (mode === "customer" ? "date" : "customer"))}
+                aria-pressed={sheetMode === "customer"}
+                data-testid="sales-filter-customer"
+                className="h-9 px-4 rounded-full text-12 font-semibold"
+                style={
+                  sheetMode === "customer"
+                    ? { background: "var(--brand)", color: "var(--ink-fg)" }
+                    : { background: "var(--surface-2)", color: "var(--text-secondary)" }
+                }
               >
-                {t("reports.clear")}
-              </button>
-              <button
-                onClick={applyCustomDates}
-                className="flex-1 h-10 rounded-[var(--radius-tile)] text-13 font-bold"
-                style={{ background: "var(--brand)", color: "#0a0a0a" }}
-              >
-                {t("reports.apply")}
+                {t("common.customer")}
               </button>
             </div>
+
+            {sheetMode === "customer" ? (
+              <>
+                <SearchBar
+                  value={customerQuery}
+                  onChange={(e) => setCustomerQuery(e.target.value)}
+                  onClear={() => setCustomerQuery("")}
+                  placeholder={t("customers.search")}
+                />
+                <div className="mt-3 max-h-[46vh] overflow-y-auto flex flex-col gap-1">
+                  {customers
+                    .filter((c) => {
+                      const term = customerQuery.trim().toLowerCase();
+                      return !term || c.name.toLowerCase().includes(term) || c.phone.includes(term);
+                    })
+                    .slice(0, 40)
+                    .map((c) => (
+                      <button
+                        key={c.id}
+                        type="button"
+                        onClick={() => {
+                          setCustomerFilter(c.id);
+                          setShowDateModal(false);
+                        }}
+                        data-testid={`sales-customer-${c.id}`}
+                        className="flex items-center justify-between gap-3 px-1 py-3 text-start active:opacity-70"
+                        style={{ borderBottom: "1px solid var(--divider)" }}
+                      >
+                        <span className="min-w-0">
+                          <span className="block text-14 font-semibold truncate" style={{ color: "var(--text-primary)" }}>
+                            {c.name}
+                          </span>
+                          <span className="block text-11 truncate" style={{ color: "var(--text-secondary)" }}>
+                            {c.phone}
+                          </span>
+                        </span>
+                        {customerFilter === c.id && <Check size={16} style={{ color: "var(--brand)" }} />}
+                      </button>
+                    ))}
+                  {customers.length === 0 && (
+                    <p className="text-13 py-6 text-center" style={{ color: "var(--text-secondary)" }}>
+                      {t("customers.noneFound")}
+                    </p>
+                  )}
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="flex gap-3">
+                  <div className="flex-1">
+                    <label className="ds-section-label mb-1 block" style={{ color: "var(--text-secondary)" }}>{t("admin.from")}</label>
+                    <input
+                      type="date"
+                      value={customFrom}
+                      onChange={(e) => setCustomFrom(e.target.value)}
+                      max={todayISO}
+                      className="w-full outline-none"
+                    />
+                  </div>
+                  <div className="flex-1">
+                    <label className="ds-section-label mb-1 block" style={{ color: "var(--text-secondary)" }}>{t("admin.to")}</label>
+                    <input
+                      type="date"
+                      value={customTo}
+                      onChange={(e) => setCustomTo(e.target.value)}
+                      max={todayISO}
+                      min={customFrom || undefined}
+                      className="w-full outline-none"
+                    />
+                  </div>
+                </div>
+                <div className="flex gap-2 mt-4">
+                  <button
+                    onClick={() => { setCustomFrom(""); setCustomTo(""); setDateFilter("custom"); setShowDateModal(false); }}
+                    className="flex-1 h-12 rounded-[var(--radius-field)] text-13 font-semibold"
+                    style={{ background: "var(--surface-2)", color: "var(--text-secondary)" }}
+                  >
+                    {t("reports.clear")}
+                  </button>
+                  <button
+                    onClick={applyCustomDates}
+                    className="flex-1 h-12 rounded-[var(--radius-field)] text-13 font-bold"
+                    style={{ background: "var(--brand)", color: "#0a0a0a" }}
+                  >
+                    {t("reports.apply")}
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}

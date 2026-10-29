@@ -6,8 +6,10 @@ import {
   Banknote,
   Building2,
   ChevronRight,
+  Download,
   HandCoins,
-  MoreHorizontal,
+  Plus,
+  Share2,
   Receipt,
   ScrollText,
   TrendingDown,
@@ -21,6 +23,9 @@ import NavHeader from "@/components/ui/NavHeader";
 import ListRow from "@/components/ui/ListRow";
 import Sheet from "@/components/ui/Sheet";
 import { Skeleton } from "@/components/ui/Skeleton";
+import SectionActionsSheet, { SectionActionsButton } from "@/components/ui/SectionActionsSheet";
+import { csvFileName, exportCsv, exportText, toCsv } from "@/lib/exportData";
+import { useUIStore } from "@/stores/uiStore";
 import { useT, type I18nKey } from "@/lib/i18n";
 import { useShellBase } from "@/lib/useShellBase";
 import { hubSection } from "@/lib/settingsHub";
@@ -200,6 +205,44 @@ export default function AdminFinanceSectionPage() {
       to: `${base}${row.to}`,
     }));
 
+  const [exportOpen, setExportOpen] = useState(false);
+  const { addToast } = useUIStore();
+
+  /** The figures on this screen, as rows — nothing is re-read, so an export matches the screen. */
+  const figureRows = [
+    { label: t("finance.netProfit"), value: money(netProfit), measure: t("finance.netProfitRule") },
+    ...metrics.map((m) => ({ label: m.label, value: m.value, measure: m.caption })),
+    ...performance.map((row) => ({ label: t(row.labelKey), value: money(row.value), measure: "" })),
+  ];
+
+  async function exportFigures() {
+    setExportOpen(false);
+    try {
+      const csv = toCsv(
+        [
+          { label: t("finance.netProfit"), value: (r: (typeof figureRows)[number]) => r.label },
+          { label: t("common.total"), value: (r: (typeof figureRows)[number]) => r.value },
+        ],
+        figureRows,
+      );
+      const outcome = await exportCsv(csvFileName("finance"), csv, t("settings.menu.finance"));
+      addToast(outcome === "shared" ? t("data.exportedShared") : t("data.exported"), "success");
+    } catch {
+      addToast(t("data.exportFailed"), "error");
+    }
+  }
+
+  async function shareFigures() {
+    setExportOpen(false);
+    const text = figureRows.map((r) => `${r.label}: ${r.value}`).join("\n");
+    try {
+      const outcome = await exportText(text, t("settings.menu.finance"));
+      addToast(outcome === "shared" ? t("sales.reportShared") : t("sales.reportCopied"), "success");
+    } catch {
+      addToast(t("sales.shareFailed"), "error");
+    }
+  }
+
   const addActions: { kind: "income" | "expense" | "drawing"; label: I18nKey; icon: LucideIcon }[] = [
     { kind: "income", label: "finance.addIncome", icon: HandCoins },
     { kind: "expense", label: "finance.addExpense", icon: Receipt },
@@ -217,20 +260,37 @@ export default function AdminFinanceSectionPage() {
         title={t("settings.menu.finance")}
         backTo={`${base}/settings`}
         right={
-          isOwner ? (
-            <button
-              type="button"
-              onClick={() => setMenuOpen((open) => !open)}
-              aria-label={t("finance.add")}
-              aria-haspopup="dialog"
-              aria-expanded={menuOpen}
-              data-testid="finance-hub-add"
-              className="flex items-center justify-center size-8 rounded-full active:opacity-60"
-            >
-              <MoreHorizontal size={20} style={{ color: "var(--text-primary)" }} />
-            </button>
-          ) : undefined
+          <div className="flex items-center gap-1">
+            <SectionActionsButton
+              onClick={() => setExportOpen(true)}
+              label={t("data.export")}
+              testId="finance-hub-actions"
+            />
+            {isOwner && (
+              <button
+                type="button"
+                onClick={() => setMenuOpen((open) => !open)}
+                aria-label={t("finance.add")}
+                aria-haspopup="dialog"
+                aria-expanded={menuOpen}
+                data-testid="finance-hub-add"
+                className="flex items-center justify-center size-8 rounded-full active:opacity-60"
+              >
+                <Plus size={18} style={{ color: "var(--text-primary)" }} />
+              </button>
+            )}
+          </div>
         }
+      />
+
+      <SectionActionsSheet
+        open={exportOpen}
+        onClose={() => setExportOpen(false)}
+        title={t("settings.menu.finance")}
+        actions={[
+          { id: "export", icon: Download, title: t("data.export"), description: t("data.exportHint"), onClick: () => { void exportFigures(); } },
+          { id: "share", icon: Share2, title: t("sales.shareReport"), description: t("sales.shareReportHint"), onClick: () => { void shareFigures(); } },
+        ]}
       />
 
       {/* The overflow opens the app's own sheet, not a dropdown hanging off a corner (owner's

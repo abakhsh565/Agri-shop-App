@@ -1,7 +1,10 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { BarChart3, Building2, ChevronRight, History, Package, TrendingUp, Users } from "lucide-react";
+import { BarChart3, Building2, ChevronRight, Download, History, Package, Share2, TrendingUp, Users } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import SectionActionsSheet, { SectionActionsButton } from "@/components/ui/SectionActionsSheet";
+import { csvFileName, exportCsv, exportText, toCsv } from "@/lib/exportData";
+import { useUIStore } from "@/stores/uiStore";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
 import ListRow from "@/components/ui/ListRow";
@@ -162,6 +165,44 @@ export default function AdminReportsHubPage() {
     .map((row) => ({ ...row, ...(ROW_META[row.id] ?? { icon: BarChart3 }) }))
     .filter((row) => !row.permission || hasPermission(row.permission));
 
+  const [menuOpen, setMenuOpen] = useState(false);
+  const { addToast } = useUIStore();
+
+  /** The figures this screen is showing — one row per report, with the label it wears on screen. */
+  const figureRows = visible
+    .map((row) => ({ row, figure: figureFor(row.id) }))
+    .filter((entry): entry is { row: (typeof visible)[number]; figure: { label: string; text: string } } => entry.figure !== null)
+    .map(({ row, figure }) => ({ report: t(row.labelKey), figure: figure.text, measure: figure.label }));
+
+  async function exportFigures() {
+    setMenuOpen(false);
+    try {
+      const csv = toCsv(
+        [
+          { label: t("settings.menu.reports"), value: (r: { report: string }) => r.report },
+          { label: t("sales.netSales"), value: (r: { figure: string }) => r.figure },
+          { label: t("finance.performance"), value: (r: { measure: string }) => r.measure },
+        ],
+        figureRows,
+      );
+      const outcome = await exportCsv(csvFileName("reports"), csv, t("settings.menu.reports"));
+      addToast(outcome === "shared" ? t("data.exportedShared") : t("data.exported"), "success");
+    } catch {
+      addToast(t("data.exportFailed"), "error");
+    }
+  }
+
+  async function shareFigures() {
+    setMenuOpen(false);
+    const text = figureRows.map((r) => `${r.report}: ${r.figure} (${r.measure})`).join("\n");
+    try {
+      const outcome = await exportText(text, t("settings.menu.reports"));
+      addToast(outcome === "shared" ? t("sales.reportShared") : t("sales.reportCopied"), "success");
+    } catch {
+      addToast(t("sales.shareFailed"), "error");
+    }
+  }
+
   return (
     <div
       className="flex flex-col w-full min-h-full"
@@ -169,7 +210,21 @@ export default function AdminReportsHubPage() {
       data-testid="reports-hub-page"
     >
       <StatusBar />
-      <NavHeader title={t("settings.menu.reports")} backTo={`${base}/settings`} />
+      <NavHeader
+        title={t("settings.menu.reports")}
+        backTo={`${base}/settings`}
+        right={<SectionActionsButton onClick={() => setMenuOpen(true)} label={t("data.export")} testId="reports-actions" />}
+      />
+
+      <SectionActionsSheet
+        open={menuOpen}
+        onClose={() => setMenuOpen(false)}
+        title={t("settings.menu.reports")}
+        actions={[
+          { id: "export", icon: Download, title: t("data.export"), description: t("data.exportHint"), onClick: () => { void exportFigures(); } },
+          { id: "share", icon: Share2, title: t("sales.shareReport"), description: t("sales.shareReportHint"), onClick: () => { void shareFigures(); } },
+        ]}
+      />
 
       <div className="pt-1 pb-6">
         {visible.map((row) => {

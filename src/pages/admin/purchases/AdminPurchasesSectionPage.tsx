@@ -4,12 +4,17 @@ import {
   ArrowLeftRight,
   Building2,
   ChevronRight,
+  Download,
   PackagePlus,
   Plus,
   ReceiptText,
+  Share2,
   Wallet,
   type LucideIcon,
 } from "lucide-react";
+import SectionActionsSheet, { SectionActionsButton } from "@/components/ui/SectionActionsSheet";
+import { csvFileName, exportCsv, exportText, toCsv } from "@/lib/exportData";
+import { useUIStore } from "@/stores/uiStore";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
 import ListRow from "@/components/ui/ListRow";
@@ -68,6 +73,46 @@ export default function AdminPurchasesSectionPage() {
   // The two ledgers this screen summarises. They are fetched here because no store holds them:
   // the purchases list and the payments ledger each read their own rows when opened.
   const [purchases, setPurchases] = useState<Purchase[]>([]);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const { addToast } = useUIStore();
+
+  /** The deliveries this screen lists, as a spreadsheet — read from the rows already in hand. */
+  async function exportPurchases() {
+    setMenuOpen(false);
+    try {
+      const csv = toCsv<Purchase>(
+        [
+          { label: t("receipt.date"), value: (p) => formatDate(p.createdAt) },
+          { label: t("sales.saleNumber"), value: (p) => p.purchaseNumber },
+          { label: t("common.supplier"), value: (p) => p.companyName },
+          { label: t("common.total"), value: (p) => p.totalAmount },
+          { label: t("common.paid"), value: (p) => p.amountPaid },
+          { label: t("common.outstanding"), value: (p) => Math.max(0, p.outstandingPayable) },
+        ],
+        purchases,
+      );
+      const outcome = await exportCsv(csvFileName("purchases"), csv, t("settings.menu.purchases"));
+      addToast(outcome === "shared" ? t("data.exportedShared") : t("data.exported"), "success");
+    } catch {
+      addToast(t("data.exportFailed"), "error");
+    }
+  }
+
+  async function sharePurchases() {
+    setMenuOpen(false);
+    const outstanding = purchases.reduce((sum, p) => sum + Math.max(0, p.outstandingPayable), 0);
+    const text =
+      `${t("settings.menu.purchases")}\n` +
+      `${t("common.total")}: ${formatCurrency(purchases.reduce((sum, p) => sum + p.totalAmount, 0))}\n` +
+      `${t("common.outstanding")}: ${formatCurrency(outstanding)}`;
+    try {
+      const outcome = await exportText(text, t("settings.menu.purchases"));
+      addToast(outcome === "shared" ? t("sales.reportShared") : t("sales.reportCopied"), "success");
+    } catch {
+      addToast(t("sales.shareFailed"), "error");
+    }
+  }
+
   const [payments, setPayments] = useState<SupplierPaymentEntry[]>([]);
   const [activityReady, setActivityReady] = useState(false);
   const [activityFailed, setActivityFailed] = useState(false);
@@ -180,7 +225,21 @@ export default function AdminPurchasesSectionPage() {
       data-testid="purchases-hub-page"
     >
       <StatusBar />
-      <NavHeader title={t("settings.menu.purchases")} backTo={`${base}/settings`} />
+      <NavHeader
+        title={t("settings.menu.purchases")}
+        backTo={`${base}/settings`}
+        right={<SectionActionsButton onClick={() => setMenuOpen(true)} label={t("data.export")} testId="purchases-actions" />}
+      />
+
+      <SectionActionsSheet
+        open={menuOpen}
+        onClose={() => setMenuOpen(false)}
+        title={t("settings.menu.purchases")}
+        actions={[
+          { id: "export", icon: Download, title: t("data.export"), description: t("data.exportHint"), onClick: () => { void exportPurchases(); } },
+          { id: "share", icon: Share2, title: t("sales.shareReport"), description: t("sales.shareReportHint"), onClick: () => { void sharePurchases(); } },
+        ]}
+      />
 
       <div className="px-4 pt-2">
         <h1 className="text-22 font-bold leading-tight">{t("settings.menu.purchases")}</h1>
