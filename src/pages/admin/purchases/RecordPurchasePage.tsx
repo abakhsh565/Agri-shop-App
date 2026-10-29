@@ -175,8 +175,7 @@ export default function RecordPurchasePage() {
   }
 
   const fieldStyle = {
-    background: "var(--surface-2)",
-    border: "1px solid var(--divider)",
+    background: "var(--field-bg)",
     color: "var(--text-primary)",
   } as const;
 

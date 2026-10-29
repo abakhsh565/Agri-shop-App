@@ -648,7 +648,7 @@ export default function CustomerProfilePage() {
                   value={editName}
                   onChange={(e) => setEditName(e.target.value)}
                   className="w-full h-12 rounded-[var(--radius-input)] px-4 text-sm outline-none"
-                  style={{ background: "var(--surface-2)", border: "1px solid var(--border-control)", color: "var(--text-primary)", borderRadius: "24px" }}
+                  style={{ background: "var(--field-bg)", color: "var(--text-primary)" }}
                 />
               </div>
               <div>
@@ -657,7 +657,7 @@ export default function CustomerProfilePage() {
                   value={editPhone}
                   onChange={(e) => setEditPhone(e.target.value)}
                   className="w-full h-12 rounded-[var(--radius-input)] px-4 text-sm outline-none"
-                  style={{ background: "var(--surface-2)", border: "1px solid var(--border-control)", color: "var(--text-primary)", borderRadius: "24px" }}
+                  style={{ background: "var(--field-bg)", color: "var(--text-primary)" }}
                 />
               </div>
               <div>
@@ -666,7 +666,7 @@ export default function CustomerProfilePage() {
                   value={editAddress}
                   onChange={(e) => setEditAddress(e.target.value)}
                   className="w-full h-12 rounded-[var(--radius-input)] px-4 text-sm outline-none"
-                  style={{ background: "var(--surface-2)", border: "1px solid var(--border-control)", color: "var(--text-primary)", borderRadius: "24px" }}
+                  style={{ background: "var(--field-bg)", color: "var(--text-primary)" }}
                 />
               </div>
               <div>

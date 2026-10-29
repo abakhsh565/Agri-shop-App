@@ -113,9 +113,18 @@ export const HUB_SECTIONS: HubSection[] = [
     titleKey: "settings.menu.finance",
     rows: [
       { id: "cash", labelKey: "hub.finance.cash", to: "/payments/cash-position" },
+      // The money form sits directly under cash (owner's instruction, 2026-10-29): the two are
+      // the same subject — money in the till — and the four balances that describe what is owed
+      // follow them. It opens the form; the screen's own "…" sheet opens a named kind.
+      { id: "money", labelKey: "finance.moneyRow", hintKey: "finance.moneyRowHint", to: "/settings/hub/finance/record" },
       { id: "receivables", labelKey: "hub.finance.receivables", to: "/settings/overview/customers" },
       { id: "payables", labelKey: "hub.finance.payables", to: "/settings/overview/suppliers" },
       { id: "transactions", labelKey: "hub.finance.transactions", to: "/payments" },
+      // The last row is the ledger behind the three totals: every row the form wrote, filterable
+      // by kind and exportable as a CSV. It is a read, so it is a different destination from the
+      // form above — the owner asked for the expenses to be visible and downloadable, not for a
+      // second way to type one.
+      { id: "ledger", labelKey: "finance.ledger.row", hintKey: "finance.ledger.rowHint", to: "/settings/hub/finance/entries" },
     ],
   },
   {

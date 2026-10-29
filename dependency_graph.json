@@ -261,11 +261,6 @@
         "layer": "lib"
       },
       {
-        "file": "src/lib/ownerRows.ts",
-        "evidence": "sql_reference",
-        "layer": "lib"
-      },
-      {
         "file": "src/lib/paymentLedger.ts",
         "evidence": "from_call",
         "layer": "lib"
@@ -289,11 +284,6 @@
         "file": "src/stores/useBootstrapData.ts",
         "evidence": "sql_reference",
         "layer": "store"
-      },
-      {
-        "file": "src/components/shop/OwnerSuiteSections.tsx",
-        "evidence": "sql_reference",
-        "layer": "component"
       },
       {
         "file": "src/pages/admin/purchases/AdminPurchasesSectionPage.tsx",
@@ -387,11 +377,6 @@
       },
       {
         "file": "tests/unit/localDevDatabaseOrdering.test.ts",
-        "evidence": "sql_reference",
-        "layer": "test"
-      },
-      {
-        "file": "tests/unit/ownerRows.test.ts",
         "evidence": "sql_reference",
         "layer": "test"
       },
@@ -523,11 +508,6 @@
         "file": "src/lib/settingsHub.ts",
         "evidence": "sql_reference",
         "layer": "lib"
-      },
-      {
-        "file": "src/components/shop/OwnerSuiteSections.tsx",
-        "evidence": "sql_reference",
-        "layer": "component"
       },
       {
         "file": "src/pages/admin/purchases/PurchaseDetailPage.tsx",
@@ -691,11 +671,6 @@
         "layer": "lib"
       },
       {
-        "file": "src/lib/observationBot.ts",
-        "evidence": "sql_reference",
-        "layer": "lib"
-      },
-      {
         "file": "src/lib/offlineQueue.ts",
         "evidence": "from_call",
         "layer": "lib"
@@ -726,11 +701,6 @@
         "layer": "store"
       },
       {
-        "file": "src/components/shop/OwnerSuiteSections.tsx",
-        "evidence": "sql_reference",
-        "layer": "component"
-      },
-      {
         "file": "src/components/ui/GroupReminderSheet.tsx",
         "evidence": "sql_reference",
         "layer": "component"
@@ -738,6 +708,11 @@
       {
         "file": "src/pages/admin/alerts/RemindersOverviewPage.tsx",
         "evidence": "from_call",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/reports/AdminReportsHubPage.tsx",
+        "evidence": "sql_reference",
         "layer": "page"
       },
       {
@@ -923,11 +898,6 @@
         "layer": "lib"
       },
       {
-        "file": "src/lib/observationBot.ts",
-        "evidence": "sql_reference",
-        "layer": "lib"
-      },
-      {
         "file": "src/lib/offlineQueue.ts",
         "evidence": "from_call",
         "layer": "lib"
@@ -959,6 +929,16 @@
       },
       {
         "file": "src/pages/admin/employees/EmployeeDetailPage.tsx",
+        "evidence": "sql_reference",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/finance/RecordMoneyPage.tsx",
+        "evidence": "sql_reference",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/reports/AdminReportsHubPage.tsx",
         "evidence": "sql_reference",
         "layer": "page"
       },
@@ -1518,11 +1498,6 @@
         "layer": "lib"
       },
       {
-        "file": "src/lib/ownerRows.ts",
-        "evidence": "sql_reference",
-        "layer": "lib"
-      },
-      {
         "file": "src/lib/permissionLabels.ts",
         "evidence": "sql_reference",
         "layer": "lib"
@@ -1568,11 +1543,6 @@
         "layer": "test"
       },
       {
-        "file": "tests/unit/ownerRows.test.ts",
-        "evidence": "sql_reference",
-        "layer": "test"
-      },
-      {
         "file": "tests/unit/productionDataPolicy.test.ts",
         "evidence": "sql_reference",
         "layer": "test"
@@ -1585,11 +1555,6 @@
     ],
     "employees": [
       {
-        "file": "src/lib/ownerRows.ts",
-        "evidence": "sql_reference",
-        "layer": "lib"
-      },
-      {
         "file": "src/lib/permissionLabels.ts",
         "evidence": "sql_reference",
         "layer": "lib"
@@ -1598,11 +1563,6 @@
         "file": "src/lib/settingsHub.ts",
         "evidence": "sql_reference",
         "layer": "lib"
-      },
-      {
-        "file": "src/components/shop/OwnerSuiteSections.tsx",
-        "evidence": "sql_reference",
-        "layer": "component"
       },
       {
         "file": "tests/e2e/dashboardScope.spec.ts",
@@ -1616,11 +1576,6 @@
       },
       {
         "file": "tests/unit/branchLateResponse.test.ts",
-        "evidence": "sql_reference",
-        "layer": "test"
-      },
-      {
-        "file": "tests/unit/ownerRows.test.ts",
         "evidence": "sql_reference",
         "layer": "test"
       }
@@ -2262,23 +2217,6 @@
         "layer": "test"
       }
     ],
-    "record_incident": [
-      {
-        "file": "src/lib/observationBot.ts",
-        "evidence": "rpc_call",
-        "layer": "lib"
-      },
-      {
-        "file": "tests/integration/incidentFoundation.test.ts",
-        "evidence": "rpc_call",
-        "layer": "test"
-      },
-      {
-        "file": "tests/integration/resolutionMemory.test.ts",
-        "evidence": "rpc_call",
-        "layer": "test"
-      }
-    ],
     "create_sale": [
       {
         "file": "src/lib/offlineQueue.ts",
@@ -2381,6 +2319,18 @@
         "layer": "test"
       }
     ],
+    "record_incident": [
+      {
+        "file": "tests/integration/incidentFoundation.test.ts",
+        "evidence": "rpc_call",
+        "layer": "test"
+      },
+      {
+        "file": "tests/integration/resolutionMemory.test.ts",
+        "evidence": "rpc_call",
+        "layer": "test"
+      }
+    ],
     "search_incident_by_fingerprint": [
       {
         "file": "tests/integration/incidentFoundation.test.ts",
@@ -2431,11 +2381,6 @@
       },
       {
         "file": "src/lib/notifications.ts",
-        "evidence": "direct_import",
-        "layer": "lib"
-      },
-      {
-        "file": "src/lib/ownerRows.ts",
         "evidence": "direct_import",
         "layer": "lib"
       },
@@ -2570,17 +2515,22 @@
         "layer": "page"
       },
       {
+        "file": "src/pages/admin/finance/AdminFinanceSectionPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/finance/RecordMoneyPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
         "file": "src/pages/admin/inventory/InventoryAdjustPage.tsx",
         "evidence": "direct_import",
         "layer": "page"
       },
       {
         "file": "src/pages/admin/more/BranchDetailPage.tsx",
-        "evidence": "direct_import",
-        "layer": "page"
-      },
-      {
-        "file": "src/pages/admin/more/MoreMenuPage.tsx",
         "evidence": "direct_import",
         "layer": "page"
       },
@@ -2691,11 +2641,6 @@
       },
       {
         "file": "src/pages/employee/sale/CartPage.tsx",
-        "evidence": "direct_import",
-        "layer": "page"
-      },
-      {
-        "file": "src/pages/employee/sale/SaleReviewPage.tsx",
         "evidence": "direct_import",
         "layer": "page"
       },
@@ -3034,11 +2979,6 @@
         "layer": "lib"
       },
       {
-        "file": "src/lib/ownerRows.ts",
-        "evidence": "direct_import",
-        "layer": "lib"
-      },
-      {
         "file": "src/stores/useBootstrapData.ts",
         "evidence": "direct_import",
         "layer": "store"
@@ -3139,6 +3079,11 @@
         "layer": "page"
       },
       {
+        "file": "src/pages/admin/finance/AdminFinanceSectionPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
         "file": "src/pages/admin/inventory/AddProductPage.tsx",
         "evidence": "direct_import",
         "layer": "page"
@@ -3164,12 +3109,12 @@
         "layer": "page"
       },
       {
-        "file": "src/pages/admin/more/MoreMenuPage.tsx",
+        "file": "src/pages/admin/notifications/AdminNotificationsPage.tsx",
         "evidence": "direct_import",
         "layer": "page"
       },
       {
-        "file": "src/pages/admin/notifications/AdminNotificationsPage.tsx",
+        "file": "src/pages/admin/payments/AdminPaymentsPage.tsx",
         "evidence": "direct_import",
         "layer": "page"
       },
@@ -3204,17 +3149,7 @@
         "layer": "page"
       },
       {
-        "file": "src/pages/admin/sales/AdminSalesSectionPage.tsx",
-        "evidence": "direct_import",
-        "layer": "page"
-      },
-      {
         "file": "src/pages/admin/settings/AdminSettingsPage.tsx",
-        "evidence": "direct_import",
-        "layer": "page"
-      },
-      {
-        "file": "src/pages/admin/settings/BranchDetailsOverviewPage.tsx",
         "evidence": "direct_import",
         "layer": "page"
       },
@@ -3282,13 +3217,6 @@
         "file": "tests/unit/shopSwitchReset.test.ts",
         "evidence": "direct_import",
         "layer": "test"
-      }
-    ],
-    "placementStore": [
-      {
-        "file": "src/lib/ownerRows.ts",
-        "evidence": "direct_import",
-        "layer": "lib"
       }
     ],
     "companiesStore": [
@@ -3373,12 +3301,12 @@
         "layer": "page"
       },
       {
-        "file": "src/pages/admin/reports/AdminReportsPage.tsx",
+        "file": "src/pages/admin/reports/AdminReportsHubPage.tsx",
         "evidence": "direct_import",
         "layer": "page"
       },
       {
-        "file": "src/pages/admin/settings/BranchDetailsOverviewPage.tsx",
+        "file": "src/pages/admin/reports/AdminReportsPage.tsx",
         "evidence": "direct_import",
         "layer": "page"
       },
@@ -3485,17 +3413,17 @@
         "layer": "page"
       },
       {
+        "file": "src/pages/admin/reports/AdminReportsHubPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
         "file": "src/pages/admin/reports/AdminReportsPage.tsx",
         "evidence": "direct_import",
         "layer": "page"
       },
       {
         "file": "src/pages/admin/sales/AdminSalesListPage.tsx",
-        "evidence": "direct_import",
-        "layer": "page"
-      },
-      {
-        "file": "src/pages/admin/settings/BranchDetailsOverviewPage.tsx",
         "evidence": "direct_import",
         "layer": "page"
       },
@@ -3712,11 +3640,6 @@
         "layer": "page"
       },
       {
-        "file": "src/pages/admin/settings/BranchDetailsOverviewPage.tsx",
-        "evidence": "direct_import",
-        "layer": "page"
-      },
-      {
         "file": "src/pages/admin/settings/BusinessOverviewPage.tsx",
         "evidence": "direct_import",
         "layer": "page"
@@ -3785,11 +3708,6 @@
       },
       {
         "file": "src/pages/employee/sale/CartPage.tsx",
-        "evidence": "direct_import",
-        "layer": "page"
-      },
-      {
-        "file": "src/pages/employee/sale/SaleReviewPage.tsx",
         "evidence": "direct_import",
         "layer": "page"
       },
@@ -4022,11 +3940,6 @@
         "layer": "page"
       },
       {
-        "file": "src/pages/admin/finance/AdminFinanceSectionPage.tsx",
-        "evidence": "direct_import",
-        "layer": "page"
-      },
-      {
         "file": "src/pages/admin/inventory/StockMovementHistoryPage.tsx",
         "evidence": "direct_import",
         "layer": "page"
@@ -4067,11 +3980,6 @@
         "layer": "page"
       },
       {
-        "file": "src/pages/admin/settings/BranchDetailsOverviewPage.tsx",
-        "evidence": "direct_import",
-        "layer": "page"
-      },
-      {
         "file": "src/pages/admin/settings/BusinessOverviewPage.tsx",
         "evidence": "direct_import",
         "layer": "page"
@@ -4108,11 +4016,6 @@
       },
       {
         "file": "src/pages/employee/sale/CartPage.tsx",
-        "evidence": "direct_import",
-        "layer": "page"
-      },
-      {
-        "file": "src/pages/employee/sale/SaleReviewPage.tsx",
         "evidence": "direct_import",
         "layer": "page"
       },
@@ -4225,6 +4128,11 @@
       },
       {
         "file": "src/pages/admin/employees/EmployeeDetailPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/finance/RecordMoneyPage.tsx",
         "evidence": "direct_import",
         "layer": "page"
       },
@@ -4461,48 +4369,6 @@
     ]
   },
   "routes": {
-    "/employees": [
-      {
-        "file": "src/lib/ownerRows.ts",
-        "evidence": "route_definition",
-        "layer": "lib"
-      }
-    ],
-    "/companies": [
-      {
-        "file": "src/lib/ownerRows.ts",
-        "evidence": "route_definition",
-        "layer": "lib"
-      }
-    ],
-    "/settings/roles": [
-      {
-        "file": "src/lib/ownerRows.ts",
-        "evidence": "route_definition",
-        "layer": "lib"
-      }
-    ],
-    "/products": [
-      {
-        "file": "src/lib/ownerRows.ts",
-        "evidence": "route_definition",
-        "layer": "lib"
-      }
-    ],
-    "/notifications": [
-      {
-        "file": "src/lib/ownerRows.ts",
-        "evidence": "route_definition",
-        "layer": "lib"
-      }
-    ],
-    "/activity": [
-      {
-        "file": "src/lib/ownerRows.ts",
-        "evidence": "route_definition",
-        "layer": "lib"
-      }
-    ],
     "/admin/dashboard": [
       {
         "file": "src/components/layout/AdminLayout.tsx",
@@ -4554,7 +4420,7 @@
         "layer": "test"
       }
     ],
-    "/admin/more": [
+    "/admin/settings": [
       {
         "file": "src/components/layout/AdminLayout.tsx",
         "evidence": "route_definition",
@@ -4597,76 +4463,6 @@
         "file": "src/pages/employee/more/MorePage.tsx",
         "evidence": "route_definition",
         "layer": "page"
-      }
-    ],
-    "/payments": [
-      {
-        "file": "src/components/shop/OwnerSuiteSections.tsx",
-        "evidence": "route_definition",
-        "layer": "component"
-      }
-    ],
-    "/payments/daily-cash": [
-      {
-        "file": "src/components/shop/OwnerSuiteSections.tsx",
-        "evidence": "route_definition",
-        "layer": "component"
-      }
-    ],
-    "/reports": [
-      {
-        "file": "src/components/shop/OwnerSuiteSections.tsx",
-        "evidence": "route_definition",
-        "layer": "component"
-      }
-    ],
-    "/purchases": [
-      {
-        "file": "src/components/shop/OwnerSuiteSections.tsx",
-        "evidence": "route_definition",
-        "layer": "component"
-      }
-    ],
-    "/inventory/movements": [
-      {
-        "file": "src/components/shop/OwnerSuiteSections.tsx",
-        "evidence": "route_definition",
-        "layer": "component"
-      }
-    ],
-    "/inventory/reorder": [
-      {
-        "file": "src/components/shop/OwnerSuiteSections.tsx",
-        "evidence": "route_definition",
-        "layer": "component"
-      }
-    ],
-    "/inventory/barcodes": [
-      {
-        "file": "src/components/shop/OwnerSuiteSections.tsx",
-        "evidence": "route_definition",
-        "layer": "component"
-      }
-    ],
-    "/customers": [
-      {
-        "file": "src/components/shop/OwnerSuiteSections.tsx",
-        "evidence": "route_definition",
-        "layer": "component"
-      }
-    ],
-    "/guide": [
-      {
-        "file": "src/components/shop/OwnerSuiteSections.tsx",
-        "evidence": "route_definition",
-        "layer": "component"
-      }
-    ],
-    "/settings": [
-      {
-        "file": "src/components/shop/OwnerSuiteSections.tsx",
-        "evidence": "route_definition",
-        "layer": "component"
       }
     ],
     "/employee/notifications": [
@@ -4728,7 +4524,7 @@
         "layer": "test"
       }
     ],
-    "/admin/settings": [
+    "/admin/more": [
       {
         "file": "tests/e2e/designLanguage.spec.ts",
         "evidence": "route_definition",
@@ -4828,7 +4624,6 @@
     "/register/status": "src/pages/register/RegisterStatusPage.tsx",
     "/admin/dashboard": "src/pages/admin/dashboard/AdminDashboardPage.tsx",
     "/admin/assistant": "src/pages/assistant/AssistantPage.tsx",
-    "/admin/more": "src/pages/admin/more/MoreMenuPage.tsx",
     "/admin/messages": "src/pages/admin/messages/AdminMessagesPage.tsx",
     "/admin/guide": "src/pages/shared/AppGuidePage.tsx",
     "/admin/search": "src/pages/employee/search/SearchPage.tsx",
@@ -4895,8 +4690,8 @@
     "/admin/settings/hub/customers": "src/pages/admin/customers/AdminCustomersSectionPage.tsx",
     "/admin/settings/hub/purchases": "src/pages/admin/purchases/AdminPurchasesSectionPage.tsx",
     "/admin/settings/hub/finance": "src/pages/admin/finance/AdminFinanceSectionPage.tsx",
+    "/admin/settings/hub/finance/record": "src/pages/admin/finance/RecordMoneyPage.tsx",
     "/admin/settings/hub/:sectionId": "src/pages/admin/settings/SectionHubPage.tsx",
-    "/admin/settings/overview": "src/pages/admin/settings/BusinessOverviewPage.tsx",
     "/admin/settings/overview/customers": "src/pages/admin/settings/CustomerReceivablePage.tsx",
     "/admin/settings/overview/customers/pending": "src/pages/admin/settings/CustomerCreditPage.tsx",
     "/admin/settings/overview/customers/overdue": "src/pages/admin/settings/CustomerCreditPage.tsx",
@@ -4904,7 +4699,6 @@
     "/admin/settings/overview/suppliers/pending": "src/pages/admin/settings/SupplierCreditPage.tsx",
     "/admin/settings/overview/suppliers/overdue": "src/pages/admin/settings/SupplierCreditPage.tsx",
     "/admin/settings/overview/suppliers/:companyId": "src/pages/admin/settings/SupplierDetailsPage.tsx",
-    "/admin/settings/branch-details": "src/pages/admin/settings/BranchDetailsOverviewPage.tsx",
     "/admin/settings/business": "src/pages/admin/settings/BusinessProfilePage.tsx",
     "/admin/settings/branches/:branchId": "src/pages/admin/more/BranchDetailPage.tsx",
     "/admin/activity": "src/pages/employee/activity/ActivityLogPage.tsx",
@@ -4948,6 +4742,6 @@
     "/employee/notifications": "src/pages/employee/notifications/EmployeeNotificationsPage.tsx",
     "/employee/guide": "src/pages/shared/AppGuidePage.tsx"
   },
-  "scannedAt": "2026-10-28T21:19:19.108Z",
-  "fileCount": 479
+  "scannedAt": "2026-10-29T12:26:27.123Z",
+  "fileCount": 472
 }

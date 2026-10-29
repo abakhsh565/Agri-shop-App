@@ -229,12 +229,10 @@ export default function RecordCustomerPaymentPage() {
                     value={amount}
                     onChange={(e) => setAmount(e.target.value)}
                     placeholder={t("recordPayment.amountHint")}
-                    className="flex-1 h-12 rounded-[var(--radius-input)] px-4 text-sm font-bold text-center outline-none"
-                    style={{
-                      background: "var(--surface-2)",
-                      border: `1px solid ${error ? "var(--error)" : "var(--divider)"}`,
-                      color: "var(--text-primary)",
-                    }}
+                    className={`flex-1 h-12 rounded-[var(--radius-input)] px-4 text-sm font-bold text-center outline-none ${
+                      error ? "border-[#ef4444]" : ""
+                    }`}
+                    style={{ background: "var(--field-bg)", color: "var(--text-primary)" }}
                   />
                   <button
                     onClick={() => setAmount(String(Math.min(customer!.outstandingBalance, (Number(amount) || 0) + 100)))}
@@ -309,8 +307,8 @@ export default function RecordCustomerPaymentPage() {
                     value={split.amount}
                     onChange={(e) => updateSplit(i, "amount", e.target.value)}
                     placeholder={t("common.amount")}
-                    className="w-full h-10 rounded-[var(--radius-tile)] px-3 text-sm font-bold outline-none"
-                    style={{ background: "var(--background)", border: "1px solid var(--divider)", color: "var(--text-primary)" }}
+                    className="w-full h-12 rounded-[var(--radius-tile)] px-3 text-sm font-bold outline-none"
+                    style={{ background: "var(--field-bg)", color: "var(--text-primary)" }}
                   />
                   <div className="flex gap-2">
                     {METHODS.map((m) => (
@@ -364,8 +362,7 @@ export default function RecordCustomerPaymentPage() {
               rows={3}
               className="w-full rounded-[var(--radius-tile)] p-3 text-sm outline-none resize-none"
               style={{
-                background: "var(--surface-2)",
-                border: "1px solid var(--divider)",
+                background: "var(--field-bg)",
                 color: "var(--text-primary)",
               }}
             />

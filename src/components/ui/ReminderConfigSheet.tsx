@@ -96,9 +96,8 @@ export default function ReminderConfigSheet({ config, onSave, onClose }: Props) 
   const escalationInvalid = local.repeat === "escalate" && !escalationIsOrdered(local.escalation);
 
   const fieldStyle = {
-    background: "var(--surface-2)",
+    background: "var(--field-bg)",
     color: "var(--text-primary)",
-    border: "1px solid var(--divider)",
     borderRadius: "24px",
   };
 
@@ -228,7 +227,7 @@ export default function ReminderConfigSheet({ config, onSave, onClose }: Props) 
                     value={step.day}
                     min={1}
                     onChange={(e) => updateEscDay(i, parseInt(e.target.value) || 0)}
-                    className="h-10 px-3 text-13 w-[64px] outline-none font-medium"
+                    className="h-12 px-3 text-13 w-[64px] outline-none font-medium"
                     style={fieldStyle}
                   />
                 </div>

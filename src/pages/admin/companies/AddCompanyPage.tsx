@@ -70,8 +70,7 @@ export default function AddCompanyPage() {
   }
 
   const fieldStyle = {
-    background: "var(--surface-2)",
-    border: "1px solid var(--divider)",
+    background: "var(--field-bg)",
     color: "var(--text-primary)",
   } as const;
   const labelCls = "ds-section-label mb-2";
@@ -93,8 +92,10 @@ export default function AddCompanyPage() {
           <div>
             <p className={labelCls} style={{ color: "var(--text-secondary)" }}>{t("company.name")}</p>
             <input value={name} onChange={(e) => setName(e.target.value)} placeholder={t("company.namePlaceholder")}
-              className="w-full h-12 rounded-[var(--radius-input)] px-4 text-sm outline-none"
-              style={{ ...fieldStyle, borderColor: error ? "var(--error)" : "var(--divider)" }} />
+              className={`w-full h-12 rounded-[var(--radius-input)] px-4 text-sm outline-none ${
+                error ? "border-[#ef4444]" : ""
+              }`}
+              style={fieldStyle} />
           </div>
           <div>
             <p className={labelCls} style={{ color: "var(--text-secondary)" }}>{t("common.contactPerson")} <span style={{ opacity: 0.6 }}>{t("common.optional")}</span></p>

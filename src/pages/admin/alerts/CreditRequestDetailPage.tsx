@@ -240,7 +240,7 @@ export default function CreditRequestDetailPage() {
               value={approvedAmount}
               onChange={(e) => setApprovedAmount(e.target.value)}
               data-testid="credit-request-approved-amount"
-              className="w-full h-12 rounded-[var(--radius-input)] border border-border px-4 text-sm text-foreground placeholder:text-caption outline-none"
+              className="w-full h-12 rounded-[var(--radius-input)] px-4 text-sm text-foreground placeholder:text-caption outline-none"
             />
             <div className="flex items-center justify-between gap-3">
               <p className="text-11" style={{ color: "var(--text-secondary)" }}>{t("creditRequest.amountHint")}</p>

@@ -3,9 +3,9 @@ import StockAlertsSheet from '@/components/ui/StockAlertsSheet';
 import { useLocation, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import {
-  AlertTriangle, BarChart3, BellRing, Building2, Check, ChevronRight, Cog, Fingerprint,
-  Gauge, GitBranch, Globe, Landmark, Loader2, Lock, LogOut, MessageSquare, Moon, Package,
-  ShoppingCart, SlidersHorizontal, Sun, Trash2, TrendingUp, Truck, UserCog, Users, X,
+  AlertTriangle, BarChart3, Bell, BellRing, Building2, Check, ChevronRight, ClipboardList,
+  Cog, Compass, Fingerprint, Gauge, GitBranch, Globe, Landmark, Loader2, Lock, LogOut,
+  MessageSquare, Moon, Package, ShoppingCart, Sun, Trash2, TrendingUp, Truck, UserCog, Users, X,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import StatusBar from "@/components/ui/StatusBar";
@@ -23,12 +23,12 @@ import { useShopStore } from "@/stores/shopStore";
 import { useUIStore } from "@/stores/uiStore";
 import { clearDeviceSession } from "@/lib/deviceSession";
 import { hasPin } from "@/lib/pinLock";
-import { useT } from "@/lib/i18n";
+import { useT, type I18nKey } from "@/lib/i18n";
+import { HUB_SECTIONS } from "@/lib/settingsHub";
 import { useShellBase } from "@/lib/useShellBase";
 import { deleteAccount } from "@/lib/auth";
 import { forgetLastProfile, forgetPhoneVerification } from "@/lib/loginWindow";
 import { entryDoor } from "@/lib/entryDoor";
-import { OWNER_ROWS, useOwnerRows } from "@/lib/ownerRows";
 import { APP_NAME, APP_VERSION } from "@/lib/brand";
 import {
   biometricUnavailableReason,
@@ -67,8 +67,52 @@ interface MenuRow {
   hint: string;
   /** The section's own screen, or the one route that is not a section (`/dashboard`). */
   to: string;
+  /** The guided tour's handle, rendered as `data-tour` on the real row. */
+  anchor?: string;
   testId?: string;
 }
+
+/**
+ * The two things the hub catalogue has no opinion about: which icon a section wears on this
+ * menu, and the one line under its name.
+ *
+ * EVERYTHING ELSE COMES FROM `lib/settingsHub` — the id, the name and the destination. This
+ * used to be a second hand-written list of the same ten sections, so a section could be added
+ * to the hub and silently missing from the menu, or renamed in one place and not the other.
+ * Now the menu is a *view* of the catalogue: `SECTION_GROUPS` only says which section belongs
+ * under which heading, which is a layout decision this screen owns.
+ */
+const SECTION_PRESENTATION: Record<string, { icon: LucideIcon; hintKey: I18nKey; anchor: string }> = {
+  sales: { icon: ShoppingCart, hintKey: "settings.menu.sales.hint", anchor: "settings:sales" },
+  inventory: { icon: Package, hintKey: "settings.menu.inventory.hint", anchor: "settings:inventory" },
+  customers: { icon: Users, hintKey: "settings.menu.customers.hint", anchor: "settings:customers" },
+  purchases: { icon: Truck, hintKey: "settings.menu.purchases.hint", anchor: "settings:purchases" },
+  finance: { icon: Landmark, hintKey: "settings.menu.finance.hint", anchor: "settings:finance" },
+  reports: { icon: BarChart3, hintKey: "settings.menu.reports.hint", anchor: "settings:reports" },
+  reminders: { icon: BellRing, hintKey: "settings.menu.reminders.hint", anchor: "settings:reminders" },
+  people: { icon: UserCog, hintKey: "settings.menu.people.hint", anchor: "settings:people" },
+  "business-profile": { icon: Building2, hintKey: "settings.menu.businessProfile.hint", anchor: "settings:business-profile" },
+  preferences: { icon: Cog, hintKey: "settings.menu.settings.hint", anchor: "settings:preferences" },
+};
+
+/** Which catalogue sections sit under each heading, in reading order. */
+const SECTION_GROUPS: Array<{ id: string; headingKey: I18nKey; sectionIds: string[] }> = [
+  {
+    id: "operations",
+    headingKey: "settings.menuGroup.operations",
+    sectionIds: ["sales", "inventory", "customers", "purchases"],
+  },
+  {
+    id: "finance",
+    headingKey: "settings.menuGroup.finance",
+    sectionIds: ["finance", "reports", "reminders"],
+  },
+  {
+    id: "people",
+    headingKey: "settings.menuGroup.people",
+    sectionIds: ["people", "business-profile", "preferences"],
+  },
+];
 
 export default function AdminSettingsPage() {
   const navigate = useNavigate();
@@ -118,8 +162,6 @@ export default function AdminSettingsPage() {
    * to be refused teaches the owner the app is broken rather than that the rule exists.
    */
   const canDeleteActiveBranch = user?.membershipRole === "owner" && !!activeBranch && !activeBranch.isMain && branches.length > 1;
-  // Which rows the owner has moved onto this screen, and the panel that moves them back.
-  const [customizing, setCustomizing] = useState(false);
   // The shop's own low-stock policy. It sits here rather than on the suite because it is a
   // notification preference, next to the one that decides where notifications go.
   const [showStockAlerts, setShowStockAlerts] = useState(false);
@@ -132,7 +174,6 @@ export default function AdminSettingsPage() {
   const [confirmFingerprintOff, setConfirmFingerprintOff] = useState(false);
   const isUrdu = language === "ur";
   const base = useShellBase();
-  const { where, rowsOn, move } = useOwnerRows();
   const location = useLocation();
 
   useEffect(() => { applyTheme(theme); }, []);
@@ -279,34 +320,27 @@ export default function AdminSettingsPage() {
         { id: "branches", icon: GitBranch, label: t("settings.menu.branches"), hint: t("settings.menu.branches.hint"), to: "/settings/hub/branches" },
       ],
     },
-    {
-      id: "operations",
-      heading: t("settings.menuGroup.operations"),
-      rows: [
-        { id: "sales", icon: ShoppingCart, label: t("settings.menu.sales"), hint: t("settings.menu.sales.hint"), to: "/settings/hub/sales" },
-        { id: "inventory", icon: Package, label: t("settings.menu.inventory"), hint: t("settings.menu.inventory.hint"), to: "/settings/hub/inventory" },
-        { id: "customers", icon: Users, label: t("settings.menu.customers"), hint: t("settings.menu.customers.hint"), to: "/settings/hub/customers" },
-        { id: "purchases", icon: Truck, label: t("settings.menu.purchases"), hint: t("settings.menu.purchases.hint"), to: "/settings/hub/purchases" },
-      ],
-    },
-    {
-      id: "finance",
-      heading: t("settings.menuGroup.finance"),
-      rows: [
-        { id: "money", icon: Landmark, label: t("settings.menu.finance"), hint: t("settings.menu.finance.hint"), to: "/settings/hub/finance" },
-        { id: "reports", icon: BarChart3, label: t("settings.menu.reports"), hint: t("settings.menu.reports.hint"), to: "/settings/hub/reports" },
-        { id: "reminders", icon: BellRing, label: t("settings.menu.reminders"), hint: t("settings.menu.reminders.hint"), to: "/settings/hub/reminders" },
-      ],
-    },
-    {
-      id: "people",
-      heading: t("settings.menuGroup.people"),
-      rows: [
-        { id: "people", icon: UserCog, label: t("settings.menu.people"), hint: t("settings.menu.people.hint"), to: "/settings/hub/people" },
-        { id: "business-profile", icon: Building2, label: t("settings.menu.businessProfile"), hint: t("settings.menu.businessProfile.hint"), to: "/settings/hub/business-profile" },
-        { id: "preferences", icon: Cog, label: t("settings.menu.settings"), hint: t("settings.menu.settings.hint"), to: "/settings/hub/preferences" },
-      ],
-    },
+    // The section groups are a view of the one catalogue (`lib/settingsHub`), so a section
+    // added to the hub appears here without a second edit, and one removed from the catalogue
+    // cannot linger on this menu. A catalogue id with no presentation entry is dropped rather
+    // than rendered half-built, which is the one failure the catalogue cannot see by itself.
+    ...SECTION_GROUPS.map((group) => ({
+      id: group.id,
+      heading: t(group.headingKey),
+      rows: group.sectionIds.flatMap((sectionId): MenuRow[] => {
+        const section = HUB_SECTIONS.find((candidate) => candidate.id === sectionId);
+        const look = SECTION_PRESENTATION[sectionId];
+        if (!section || !look) return [];
+        return [{
+          id: section.id,
+          icon: look.icon,
+          label: t(section.titleKey),
+          hint: t(look.hintKey),
+          anchor: look.anchor,
+          to: `/settings/hub/${section.id}`,
+        }];
+      }),
+    })),
   ];
 
   return (
@@ -365,6 +399,9 @@ export default function AdminSettingsPage() {
                   <ListRow
                     key={row.id}
                     testId={`settings-row-${row.id}`}
+                    // The guided tour rings the real row rather than a coordinate; the handle
+                    // is stable because it names the section, not its position on the screen.
+                    anchor={row.anchor}
                     icon={Icon}
                     title={row.label}
                     meta={row.hint}
@@ -404,34 +441,11 @@ export default function AdminSettingsPage() {
           </ListCard>
         </div>
 
-        {/* Rows the owner moved out of the suite.
-            The shop's own menu — Money, Stock, People and App — is no longer rendered on this
-            page: it lives on the More screen, the bar's fifth tab (`pages/admin/more`). So a row
-            appears here only because the owner moved it, through the control at the foot of this
-            page, and the block renders nothing at all when nothing was moved. Both screens still
-            read one catalogue (`lib/ownerRows`), so a row can never be listed twice. */}
-        {rowsOn("settings").some((row) => row.group !== "app") && (
-          <div className="px-4 pt-3.5 animate-fade-in-up delay-100">
-            <ListCard>
-              {rowsOn("settings")
-                .filter((row) => row.group !== "app")
-                .map((row) => {
-                  const Icon = row.icon;
-                  return (
-                    <ListRow
-                      key={row.id}
-                      anchor={row.anchor}
-                      onClick={() => (row.path ? navigate(`${base}${row.path}`) : setShowBusinessSettings(true))}
-                      icon={Icon}
-                      title={t(row.labelKey)}
-                      meta={row.metaKey ? t(row.metaKey) : undefined}
-                      trailing={<ChevronRight size={14} style={{ color: "var(--text-secondary)" }} className="shrink-0" />}
-                    />
-                  );
-                })}
-            </ListCard>
-          </div>
-        )}
+        {/* There is no second menu any more. Every part of the business opens from the four
+            groups above, and the fifth tab opens this screen rather than a suite of its own, so
+            the rows that used to be *moved* between two menus have nowhere else to live. The
+            three that are not sections — notifications, the activity log and the guide — sit
+            with the phone's preferences below, which is where a reader looks for them. */}
 
         {/* The phone and the person: comfort first, and no heading anywhere on this block.
             A heading earns its place only when a row could otherwise be misread; "Language"
@@ -507,26 +521,30 @@ export default function AdminSettingsPage() {
               }
             />
             {/* The shop's own records, and only the ones an owner reads without having to do
-                anything: everything that is *work* — people, stock, roles, crops — lives in the
-                owner suite. A row moved here is rendered by the catalogue below, so it is never
-                shown twice. */}
-            {rowsOn("settings")
-              .filter((row) => row.group === "app")
-              .map((row) => {
-                const Icon = row.icon;
-                return (
-                  <ListRow
-                    key={row.id}
-                    anchor={row.anchor}
-                    onClick={() => row.path && navigate(`${base}${row.path}`)}
-                    icon={Icon}
-                    title={t(row.labelKey)}
-                    trailing={
-                      <ChevronRight size={14} style={{ color: "var(--text-secondary)" }} className="shrink-0" />
-                    }
-                  />
-                );
-              })}
+                anything: everything that is *work* — people, stock, roles, crops — opens from
+                the four section groups above. These three are destinations rather than parts
+                of the business, so they sit with the phone's preferences. */}
+            <ListRow
+              anchor="settings:notifications"
+              onClick={() => navigate(`${base}/notifications`)}
+              icon={Bell}
+              title={t("settings.notifications")}
+              trailing={<ChevronRight size={14} style={{ color: "var(--text-secondary)" }} className="shrink-0" />}
+            />
+            <ListRow
+              anchor="settings:activity"
+              onClick={() => navigate(`${base}/activity`)}
+              icon={ClipboardList}
+              title={t("settings.activityLog")}
+              trailing={<ChevronRight size={14} style={{ color: "var(--text-secondary)" }} className="shrink-0" />}
+            />
+            <ListRow
+              anchor="settings:guide"
+              onClick={() => navigate(`${base}/guide`)}
+              icon={Compass}
+              title={t("edu.guide.title")}
+              trailing={<ChevronRight size={14} style={{ color: "var(--text-secondary)" }} className="shrink-0" />}
+            />
             {/* When the shop is warned about low stock, and how loudly. The number this
                 sets is the one a new product starts at; a product that has been given its
                 own number on the product form keeps it. */}
@@ -543,57 +561,6 @@ export default function AdminSettingsPage() {
 
         {showBusinessSettings && <BusinessSettingsSheet onClose={() => setShowBusinessSettings(false)} onSave={() => {}} />}
         {showStockAlerts && <StockAlertsSheet onClose={() => setShowStockAlerts(false)} />}
-
-        {/* Where each row lives.
-            The owner suite is the screen for the shop and this is the screen for the phone and
-            the person, but which one a shopkeeper reaches for is habit — so the arrangement is
-            theirs to change. One tap moves a row across; the choice is remembered per account,
-            in the shop it was made in, on this device only. */}
-        <div className="px-4 pt-3.5 animate-fade-in-up delay-150">
-          <ListCard>
-            <ListRow
-              onClick={() => setCustomizing((v) => !v)}
-              icon={SlidersHorizontal}
-              title={customizing ? t("settings.done") : t("settings.customize")}
-              meta={customizing ? undefined : t("settings.customizeHint")}
-              testId="settings-customize"
-              trailing={
-                <ChevronRight
-                  size={14}
-                  className="shrink-0 transition-transform"
-                  style={{ color: "var(--text-secondary)", transform: customizing ? "rotate(90deg)" : undefined }}
-                />
-              }
-            />
-            {customizing &&
-              OWNER_ROWS.map((row) => {
-                const Icon = row.icon;
-                const here = where(row.id) === "settings";
-                return (
-                  // Deliberately no row action while customizing: the only thing a tap can do
-                  // here is move the row, so the panel cannot close itself out from under the
-                  // next row the owner was about to move.
-                  <ListRow
-                    key={row.id}
-                    icon={Icon}
-                    title={t(row.labelKey)}
-                    description={here ? t("settings.livesHere") : t("settings.livesInSuite")}
-                    trailing={
-                      <button
-                        type="button"
-                        data-testid={`move-${row.id}`}
-                        onClick={() => move(row.id, here ? "suite" : "settings")}
-                        className="shrink-0 rounded-full px-3 h-8 text-12 font-bold"
-                        style={{ background: "var(--surface-2)", color: "var(--text-primary)" }}
-                      >
-                        {here ? t("settings.moveToSuite") : t("settings.moveHere")}
-                      </button>
-                    }
-                  />
-                );
-              })}
-          </ListCard>
-        </div>
 
       </div>
 

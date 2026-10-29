@@ -82,6 +82,32 @@ function reportUncaught(error: unknown): void {
 window.addEventListener('error', (event) => reportUncaught(event.error ?? event.message));
 window.addEventListener('unhandledrejection', (event) => reportUncaught(event.reason));
 
+// A 48px field pill is mostly padding: the input inside it is only as tall as its text line, so a
+// tap on the rest of the pill did nothing, and on a phone that reads as a dead control (the owner's
+// report: "if I click in the centre then it gets active"). One delegated listener gives every
+// screen the whole-pill target, instead of each form growing its own handler and the next form
+// forgetting it. Buttons inside a field (a picker trigger, a clear mark) keep their own behaviour.
+const FIELD_OWNERS = 'input, textarea, select, button, a, [role="button"], [role="switch"]';
+
+document.addEventListener('click', (event) => {
+  const target = event.target as HTMLElement | null;
+  if (!target || typeof target.closest !== 'function') return;
+  const shell = target.closest('.ds-field');
+  if (!shell || target.closest(FIELD_OWNERS)) return;
+  const field = shell.querySelector<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>(
+    'input:not([disabled]):not([type="hidden"]), textarea:not([disabled]), select:not([disabled])',
+  );
+  if (!field) return;
+  event.preventDefault();
+  field.focus({ preventScroll: true });
+  // A tap after a value is already there should put the caret where the person tapped, which is
+  // the end of what they typed — not select the whole value and make the next keystroke replace it.
+  if (field instanceof HTMLInputElement && field.type !== 'number' && field.type !== 'date') {
+    const end = field.value.length;
+    field.setSelectionRange?.(end, end);
+  }
+});
+
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <App />

@@ -87,10 +87,10 @@ const EVERYONE: EduRole[] = [...OWNER, ...EMPLOYEE];
  * not because ten is a round number.
  *
  * Steps 1–5 are on Home (the figures, the three daily actions, and three tabs the
- * bottom bar shows there). Steps 6–10 move to the More menu, whose rows are the
- * modules an owner manages. The overlay navigates to a step's route itself; it is
- * never the *tour* that leaves the user somewhere unexpected, and closing it
- * navigates nowhere.
+ * bottom bar shows there). Steps 6–10 move to Settings — the fifth tab and the one
+ * menu tree — whose section rows open the parts of the business an owner manages.
+ * The overlay navigates to a step's route itself; it is never the *tour* that leaves
+ * the user somewhere unexpected, and closing it navigates nowhere.
  */
 export const OWNER_TOUR: TourStep[] = [
   { id: "owner.kpis",     titleKey: "edu.step.kpis.title",        bodyKey: "edu.step.kpis.body",        anchor: "home:kpis",          route: "/dashboard", roles: OWNER, order: 10 },
@@ -98,11 +98,13 @@ export const OWNER_TOUR: TourStep[] = [
   { id: "owner.sales",    titleKey: "edu.step.sales.title",       bodyKey: "edu.step.sales.body",       anchor: "tab:admin.sales",    route: "/dashboard", roles: OWNER, order: 30, requires: "sales.view" },
   { id: "owner.stock",    titleKey: "edu.step.stock.title",       bodyKey: "edu.step.stock.body",       anchor: "tab:admin.inventory",route: "/dashboard", roles: OWNER, order: 40, requires: "products.view" },
   { id: "owner.scan",     titleKey: "edu.step.scan.title",        bodyKey: "edu.step.scan.body",        anchor: "tab:scan",           route: "/dashboard", roles: OWNER, order: 50 },
-  { id: "owner.customers",titleKey: "edu.step.customers.title",   bodyKey: "edu.step.customers.body",   anchor: "more:customers",     route: "/more",      roles: OWNER, order: 60, requires: "customers.view" },
-  { id: "owner.suppliers",titleKey: "edu.step.suppliers.title",   bodyKey: "edu.step.suppliers.body",   anchor: "more:companies",     route: "/more",      roles: OWNER, order: 70, requires: "companies.view" },
-  { id: "owner.purchases",titleKey: "edu.step.purchases.title",   bodyKey: "edu.step.purchases.body",   anchor: "more:purchases",     route: "/more",      roles: OWNER, order: 80, requires: "purchases.view" },
-  { id: "owner.payments", titleKey: "edu.step.payments.title",    bodyKey: "edu.step.payments.body",    anchor: "more:payments",      route: "/more",      roles: OWNER, order: 90, requires: "payments.view" },
-  { id: "owner.reports",  titleKey: "edu.step.reports.title",     bodyKey: "edu.step.reports.body",     anchor: "more:reports",       route: "/more",      roles: OWNER, order: 100, requires: "reports.view" },
+  // Business navigation lives on Settings now (the fifth tab), so the tour walks the menu there
+  // instead of the retired More screen. Each anchor names the section row it points at.
+  { id: "owner.customers",titleKey: "edu.step.customers.title",   bodyKey: "edu.step.customers.body",   anchor: "settings:customers", route: "/settings",  roles: OWNER, order: 60, requires: "customers.view" },
+  { id: "owner.suppliers",titleKey: "edu.step.suppliers.title",   bodyKey: "edu.step.suppliers.body",   anchor: "settings:purchases", route: "/settings",  roles: OWNER, order: 70, requires: "companies.view" },
+  { id: "owner.purchases",titleKey: "edu.step.purchases.title",   bodyKey: "edu.step.purchases.body",   anchor: "settings:purchases", route: "/settings",  roles: OWNER, order: 80, requires: "purchases.view" },
+  { id: "owner.payments", titleKey: "edu.step.payments.title",    bodyKey: "edu.step.payments.body",    anchor: "settings:finance",   route: "/settings",  roles: OWNER, order: 90, requires: "payments.view" },
+  { id: "owner.reports",  titleKey: "edu.step.reports.title",     bodyKey: "edu.step.reports.body",     anchor: "settings:reports",   route: "/settings",  roles: OWNER, order: 100, requires: "reports.view" },
 ];
 
 /**

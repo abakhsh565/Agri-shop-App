@@ -4,8 +4,8 @@
       "C:\\Program Files\\nodejs\\node.exe",
       "C:\\Users\\mg\\Downloads\\Agrishop Inventory management system - New\\node_modules\\@playwright\\test\\cli.js",
       "test",
-      "tests/e2e/rtlLtr.spec.ts",
-      "--workers=1"
+      "tests/e2e/roleDeleteSafety.spec.ts",
+      "tests/e2e/roleInUseDeletion.spec.ts"
     ],
     "configFile": "C:\\Users\\mg\\Downloads\\Agrishop Inventory management system - New\\playwright.config.ts",
     "rootDir": "C:/Users/mg/Downloads/Agrishop Inventory management system - New/tests/e2e",
@@ -64,8 +64,8 @@
     "version": "1.63.0",
     "workers": 1,
     "webServer": {
-      "command": "npx vite --mode qa --port 5188",
-      "url": "http://localhost:5188",
+      "command": "npx vite --mode qa --port 5173",
+      "url": "http://localhost:5173",
       "reuseExistingServer": true,
       "timeout": 60000,
       "env": {
@@ -79,20 +79,20 @@
   },
   "suites": [
     {
-      "title": "rtlLtr.spec.ts",
-      "file": "rtlLtr.spec.ts",
+      "title": "roleDeleteSafety.spec.ts",
+      "file": "roleDeleteSafety.spec.ts",
       "column": 0,
       "line": 0,
       "specs": [],
       "suites": [
         {
-          "title": "RTL/LTR + Urdu Support",
-          "file": "rtlLtr.spec.ts",
-          "line": 71,
+          "title": "Role delete safety",
+          "file": "roleDeleteSafety.spec.ts",
+          "line": 55,
           "column": 6,
           "specs": [
             {
-              "title": "1. Language switch sets document.dir correctly",
+              "title": "a double tap deletes the role once and does not report a failure",
               "ok": true,
               "tags": [],
               "tests": [
@@ -107,526 +107,16 @@
                       "workerIndex": 0,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 26317,
-                      "errors": [],
-                      "stdout": [],
-                      "stderr": [],
-                      "retry": 0,
-                      "startTime": "2026-10-27T21:56:37.160Z",
-                      "annotations": [],
-                      "attachments": []
-                    }
-                  ],
-                  "status": "expected"
-                }
-              ],
-              "id": "9ec77065fd6e7341f424-1ac3e05d8402e0822922",
-              "file": "rtlLtr.spec.ts",
-              "line": 81,
-              "column": 3
-            },
-            {
-              "title": "2. Dashboard LTR: English content, left-aligned elements",
-              "ok": true,
-              "tags": [],
-              "tests": [
-                {
-                  "timeout": 120000,
-                  "annotations": [],
-                  "expectedStatus": "passed",
-                  "projectId": "e2e",
-                  "projectName": "e2e",
-                  "results": [
-                    {
-                      "workerIndex": 0,
-                      "parallelIndex": 0,
-                      "status": "passed",
-                      "duration": 13127,
-                      "errors": [],
-                      "stdout": [],
-                      "stderr": [],
-                      "retry": 0,
-                      "startTime": "2026-10-27T21:57:05.366Z",
-                      "annotations": [],
-                      "attachments": []
-                    }
-                  ],
-                  "status": "expected"
-                }
-              ],
-              "id": "9ec77065fd6e7341f424-b68c648e8395c9159f66",
-              "file": "rtlLtr.spec.ts",
-              "line": 125,
-              "column": 3
-            },
-            {
-              "title": "3. Dashboard RTL: Urdu content, right-aligned elements",
-              "ok": true,
-              "tags": [],
-              "tests": [
-                {
-                  "timeout": 120000,
-                  "annotations": [],
-                  "expectedStatus": "passed",
-                  "projectId": "e2e",
-                  "projectName": "e2e",
-                  "results": [
-                    {
-                      "workerIndex": 0,
-                      "parallelIndex": 0,
-                      "status": "passed",
-                      "duration": 12088,
-                      "errors": [],
-                      "stdout": [],
-                      "stderr": [],
-                      "retry": 0,
-                      "startTime": "2026-10-27T21:57:18.520Z",
-                      "annotations": [],
-                      "attachments": []
-                    }
-                  ],
-                  "status": "expected"
-                }
-              ],
-              "id": "9ec77065fd6e7341f424-4d138ae384378af727f0",
-              "file": "rtlLtr.spec.ts",
-              "line": 145,
-              "column": 3
-            },
-            {
-              "title": "4. Customer list: LTR and RTL rendering",
-              "ok": true,
-              "tags": [],
-              "tests": [
-                {
-                  "timeout": 120000,
-                  "annotations": [],
-                  "expectedStatus": "passed",
-                  "projectId": "e2e",
-                  "projectName": "e2e",
-                  "results": [
-                    {
-                      "workerIndex": 0,
-                      "parallelIndex": 0,
-                      "status": "passed",
-                      "duration": 11398,
-                      "errors": [],
-                      "stdout": [],
-                      "stderr": [],
-                      "retry": 0,
-                      "startTime": "2026-10-27T21:57:30.626Z",
-                      "annotations": [],
-                      "attachments": []
-                    }
-                  ],
-                  "status": "expected"
-                }
-              ],
-              "id": "9ec77065fd6e7341f424-b72e6f8979616a6e83da",
-              "file": "rtlLtr.spec.ts",
-              "line": 165,
-              "column": 3
-            },
-            {
-              "title": "5. NavHeader: renders with correct direction",
-              "ok": true,
-              "tags": [],
-              "tests": [
-                {
-                  "timeout": 120000,
-                  "annotations": [],
-                  "expectedStatus": "passed",
-                  "projectId": "e2e",
-                  "projectName": "e2e",
-                  "results": [
-                    {
-                      "workerIndex": 0,
-                      "parallelIndex": 0,
-                      "status": "passed",
-                      "duration": 12109,
-                      "errors": [],
-                      "stdout": [],
-                      "stderr": [],
-                      "retry": 0,
-                      "startTime": "2026-10-27T21:57:42.047Z",
-                      "annotations": [],
-                      "attachments": []
-                    }
-                  ],
-                  "status": "expected"
-                }
-              ],
-              "id": "9ec77065fd6e7341f424-3ac22d2c81abd88f489f",
-              "file": "rtlLtr.spec.ts",
-              "line": 186,
-              "column": 3
-            },
-            {
-              "title": "6. SearchBar: renders in RTL mode",
-              "ok": true,
-              "tags": [],
-              "tests": [
-                {
-                  "timeout": 120000,
-                  "annotations": [],
-                  "expectedStatus": "passed",
-                  "projectId": "e2e",
-                  "projectName": "e2e",
-                  "results": [
-                    {
-                      "workerIndex": 0,
-                      "parallelIndex": 0,
-                      "status": "passed",
-                      "duration": 11400,
-                      "errors": [],
-                      "stdout": [],
-                      "stderr": [],
-                      "retry": 0,
-                      "startTime": "2026-10-27T21:57:54.173Z",
-                      "annotations": [],
-                      "attachments": []
-                    }
-                  ],
-                  "status": "expected"
-                }
-              ],
-              "id": "9ec77065fd6e7341f424-27279b983a7d247c96c3",
-              "file": "rtlLtr.spec.ts",
-              "line": 203,
-              "column": 3
-            },
-            {
-              "title": "7. Product list: LTR and RTL rendering",
-              "ok": true,
-              "tags": [],
-              "tests": [
-                {
-                  "timeout": 120000,
-                  "annotations": [],
-                  "expectedStatus": "passed",
-                  "projectId": "e2e",
-                  "projectName": "e2e",
-                  "results": [
-                    {
-                      "workerIndex": 0,
-                      "parallelIndex": 0,
-                      "status": "passed",
-                      "duration": 12035,
-                      "errors": [],
-                      "stdout": [],
-                      "stderr": [],
-                      "retry": 0,
-                      "startTime": "2026-10-27T21:58:05.602Z",
-                      "annotations": [],
-                      "attachments": []
-                    }
-                  ],
-                  "status": "expected"
-                }
-              ],
-              "id": "9ec77065fd6e7341f424-3075a64e7c3ea12d58b9",
-              "file": "rtlLtr.spec.ts",
-              "line": 224,
-              "column": 3
-            },
-            {
-              "title": "8. Admin dashboard: LTR and RTL rendering",
-              "ok": true,
-              "tags": [],
-              "tests": [
-                {
-                  "timeout": 120000,
-                  "annotations": [],
-                  "expectedStatus": "passed",
-                  "projectId": "e2e",
-                  "projectName": "e2e",
-                  "results": [
-                    {
-                      "workerIndex": 0,
-                      "parallelIndex": 0,
-                      "status": "passed",
-                      "duration": 13021,
-                      "errors": [],
-                      "stdout": [],
-                      "stderr": [],
-                      "retry": 0,
-                      "startTime": "2026-10-27T21:58:17.672Z",
-                      "annotations": [],
-                      "attachments": []
-                    }
-                  ],
-                  "status": "expected"
-                }
-              ],
-              "id": "9ec77065fd6e7341f424-58e8617abcbe9c27a6c7",
-              "file": "rtlLtr.spec.ts",
-              "line": 243,
-              "column": 3
-            },
-            {
-              "title": "9. Settings page: language toggle works",
-              "ok": true,
-              "tags": [],
-              "tests": [
-                {
-                  "timeout": 120000,
-                  "annotations": [],
-                  "expectedStatus": "passed",
-                  "projectId": "e2e",
-                  "projectName": "e2e",
-                  "results": [
-                    {
-                      "workerIndex": 0,
-                      "parallelIndex": 0,
-                      "status": "passed",
-                      "duration": 13097,
-                      "errors": [],
-                      "stdout": [],
-                      "stderr": [],
-                      "retry": 0,
-                      "startTime": "2026-10-27T21:58:30.717Z",
-                      "annotations": [],
-                      "attachments": []
-                    }
-                  ],
-                  "status": "expected"
-                }
-              ],
-              "id": "9ec77065fd6e7341f424-581eb1651509e09e8c96",
-              "file": "rtlLtr.spec.ts",
-              "line": 262,
-              "column": 3
-            },
-            {
-              "title": "10. No horizontal overflow in RTL mode",
-              "ok": true,
-              "tags": [],
-              "tests": [
-                {
-                  "timeout": 120000,
-                  "annotations": [],
-                  "expectedStatus": "passed",
-                  "projectId": "e2e",
-                  "projectName": "e2e",
-                  "results": [
-                    {
-                      "workerIndex": 0,
-                      "parallelIndex": 0,
-                      "status": "passed",
-                      "duration": 26265,
-                      "errors": [],
-                      "stdout": [],
-                      "stderr": [],
-                      "retry": 0,
-                      "startTime": "2026-10-27T21:58:43.843Z",
-                      "annotations": [],
-                      "attachments": []
-                    }
-                  ],
-                  "status": "expected"
-                }
-              ],
-              "id": "9ec77065fd6e7341f424-dc56c23b8deb2c1c330d",
-              "file": "rtlLtr.spec.ts",
-              "line": 283,
-              "column": 3
-            },
-            {
-              "title": "11. CSS: Tailwind logical padding (ps-4/pe-4) works in RTL",
-              "ok": true,
-              "tags": [],
-              "tests": [
-                {
-                  "timeout": 120000,
-                  "annotations": [],
-                  "expectedStatus": "passed",
-                  "projectId": "e2e",
-                  "projectName": "e2e",
-                  "results": [
-                    {
-                      "workerIndex": 0,
-                      "parallelIndex": 0,
-                      "status": "passed",
-                      "duration": 12733,
-                      "errors": [],
-                      "stdout": [],
-                      "stderr": [],
-                      "retry": 0,
-                      "startTime": "2026-10-27T21:59:10.137Z",
-                      "annotations": [],
-                      "attachments": []
-                    }
-                  ],
-                  "status": "expected"
-                }
-              ],
-              "id": "9ec77065fd6e7341f424-c40de753a0fbfcb3b778",
-              "file": "rtlLtr.spec.ts",
-              "line": 311,
-              "column": 3
-            },
-            {
-              "title": "12. ConfirmDialog: centered in both LTR and RTL",
-              "ok": true,
-              "tags": [],
-              "tests": [
-                {
-                  "timeout": 120000,
-                  "annotations": [],
-                  "expectedStatus": "passed",
-                  "projectId": "e2e",
-                  "projectName": "e2e",
-                  "results": [
-                    {
-                      "workerIndex": 0,
-                      "parallelIndex": 0,
-                      "status": "passed",
-                      "duration": 12483,
-                      "errors": [],
-                      "stdout": [],
-                      "stderr": [],
-                      "retry": 0,
-                      "startTime": "2026-10-27T21:59:22.892Z",
-                      "annotations": [],
-                      "attachments": []
-                    }
-                  ],
-                  "status": "expected"
-                }
-              ],
-              "id": "9ec77065fd6e7341f424-d636e4c3bc26649351da",
-              "file": "rtlLtr.spec.ts",
-              "line": 330,
-              "column": 3
-            },
-            {
-              "title": "13. Text alignment: text-start works in both directions",
-              "ok": true,
-              "tags": [],
-              "tests": [
-                {
-                  "timeout": 120000,
-                  "annotations": [],
-                  "expectedStatus": "passed",
-                  "projectId": "e2e",
-                  "projectName": "e2e",
-                  "results": [
-                    {
-                      "workerIndex": 0,
-                      "parallelIndex": 0,
-                      "status": "passed",
-                      "duration": 12514,
-                      "errors": [],
-                      "stdout": [],
-                      "stderr": [],
-                      "retry": 0,
-                      "startTime": "2026-10-27T21:59:35.404Z",
-                      "annotations": [],
-                      "attachments": []
-                    }
-                  ],
-                  "status": "expected"
-                }
-              ],
-              "id": "9ec77065fd6e7341f424-a6aed7b36c8318f24010",
-              "file": "rtlLtr.spec.ts",
-              "line": 349,
-              "column": 3
-            },
-            {
-              "title": "14. Padding: ps-* and pe-* work in RTL",
-              "ok": true,
-              "tags": [],
-              "tests": [
-                {
-                  "timeout": 120000,
-                  "annotations": [],
-                  "expectedStatus": "passed",
-                  "projectId": "e2e",
-                  "projectName": "e2e",
-                  "results": [
-                    {
-                      "workerIndex": 0,
-                      "parallelIndex": 0,
-                      "status": "passed",
-                      "duration": 12243,
-                      "errors": [],
-                      "stdout": [],
-                      "stderr": [],
-                      "retry": 0,
-                      "startTime": "2026-10-27T21:59:47.944Z",
-                      "annotations": [],
-                      "attachments": []
-                    }
-                  ],
-                  "status": "expected"
-                }
-              ],
-              "id": "9ec77065fd6e7341f424-7cb5f3d8f156c34059d4",
-              "file": "rtlLtr.spec.ts",
-              "line": 372,
-              "column": 3
-            },
-            {
-              "title": "15. FlexRow: direction attribute flips in RTL",
-              "ok": true,
-              "tags": [],
-              "tests": [
-                {
-                  "timeout": 120000,
-                  "annotations": [],
-                  "expectedStatus": "passed",
-                  "projectId": "e2e",
-                  "projectName": "e2e",
-                  "results": [
-                    {
-                      "workerIndex": 0,
-                      "parallelIndex": 0,
-                      "status": "passed",
-                      "duration": 10999,
-                      "errors": [],
-                      "stdout": [],
-                      "stderr": [],
-                      "retry": 0,
-                      "startTime": "2026-10-27T22:00:00.203Z",
-                      "annotations": [],
-                      "attachments": []
-                    }
-                  ],
-                  "status": "expected"
-                }
-              ],
-              "id": "9ec77065fd6e7341f424-19ba6d06a789bbb4c9be",
-              "file": "rtlLtr.spec.ts",
-              "line": 388,
-              "column": 3
-            },
-            {
-              "title": "16. Multiple pages render in RTL",
-              "ok": true,
-              "tags": [],
-              "tests": [
-                {
-                  "timeout": 120000,
-                  "annotations": [],
-                  "expectedStatus": "passed",
-                  "projectId": "e2e",
-                  "projectName": "e2e",
-                  "results": [
-                    {
-                      "workerIndex": 0,
-                      "parallelIndex": 0,
-                      "status": "passed",
-                      "duration": 35030,
+                      "duration": 40190,
                       "errors": [],
                       "stdout": [
                         {
-                          "text": "[QA CLEANUP] nothing owned by this run — no deletes issued. A lane that creates QA rows must register them with trackOwned(...).\n"
+                          "text": "[QA CLEANUP] removed everything this run owned (2 statement(s)).\n"
                         }
                       ],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-10-27T22:00:11.224Z",
+                      "startTime": "2026-10-28T21:32:21.810Z",
                       "annotations": [],
                       "attachments": []
                     }
@@ -634,9 +124,98 @@
                   "status": "expected"
                 }
               ],
-              "id": "9ec77065fd6e7341f424-9657005ebdd6c8e8857b",
-              "file": "rtlLtr.spec.ts",
-              "line": 413,
+              "id": "9a4a596b5bb2f3bde9c9-aeff9c4626175f19ce0d",
+              "file": "roleDeleteSafety.spec.ts",
+              "line": 74,
+              "column": 3
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "roleInUseDeletion.spec.ts",
+      "file": "roleInUseDeletion.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "Role deletion — assigned role revokes its access",
+          "file": "roleInUseDeletion.spec.ts",
+          "line": 54,
+          "column": 6,
+          "specs": [
+            {
+              "title": "the confirmation names the employees who lose the access, and confirming revokes it",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "e2e",
+                  "projectName": "e2e",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 13679,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-28T21:33:05.303Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "db8f2e17b2237807d34c-8a00e0b60a89a4134c75",
+              "file": "roleInUseDeletion.spec.ts",
+              "line": 130,
+              "column": 3
+            },
+            {
+              "title": "a repeated deletion from a signed-in client cannot revive the role",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "e2e",
+                  "projectName": "e2e",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 8133,
+                      "errors": [],
+                      "stdout": [
+                        {
+                          "text": "[QA CLEANUP] removed everything this run owned (5 statement(s)).\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-28T21:33:20.908Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "db8f2e17b2237807d34c-fdedbe458402d6dd1ff9",
+              "file": "roleInUseDeletion.spec.ts",
+              "line": 188,
               "column": 3
             }
           ]
@@ -646,9 +225,9 @@
   ],
   "errors": [],
   "stats": {
-    "startTime": "2026-10-27T21:56:20.566Z",
-    "duration": 267327.182,
-    "expected": 16,
+    "startTime": "2026-10-28T21:32:05.119Z",
+    "duration": 87105.308,
+    "expected": 3,
     "skipped": 0,
     "unexpected": 0,
     "flaky": 0

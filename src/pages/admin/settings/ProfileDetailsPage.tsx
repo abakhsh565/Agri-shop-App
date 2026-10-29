@@ -178,10 +178,8 @@ export default function ProfileDetailsPage() {
                 aria-label={t("common.name")}
                 className="w-full h-12 px-4 text-sm outline-none"
                 style={{
-                  background: "var(--surface-2)",
-                  border: "1px solid var(--border-control)",
+                  background: "var(--field-bg)",
                   color: "var(--text-primary)",
-                  borderRadius: "24px",
                 }}
               />
             </div>

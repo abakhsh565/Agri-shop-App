@@ -277,7 +277,7 @@ export default function EmployeeLayout() {
               onKeyDown={(e) => e.key === "Enter" && handleManualScanSubmit()}
               placeholder={t("common.barcodePlaceholder")}
               className="w-full h-12 rounded-full px-4 text-sm outline-none font-mono"
-              style={{ background: "var(--surface-2)", border: "1px solid var(--divider)", color: "var(--text-primary)" }}
+              style={{ background: "var(--field-bg)", color: "var(--text-primary)" }}
             />
             <button
               onClick={handleManualScanSubmit}

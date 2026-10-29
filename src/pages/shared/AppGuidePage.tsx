@@ -20,6 +20,7 @@ import {
   featureById,
   featurePath,
   guideForRole,
+  isOwnerRole,
   visibleTourSteps,
 } from "@/education/model";
 
@@ -68,7 +69,9 @@ export default function AppGuidePage() {
         right={
           <button
             type="button"
-            onClick={() => navigate(`${base}/more`)}
+            // Back to the screen that offered the guide: Settings for an owner (the fifth
+            // tab, and the only menu tree), More for an employee (their shell keeps it).
+            onClick={() => navigate(`${base}${isOwnerRole(role) ? "/settings" : "/more"}`)}
             aria-label={t("common.close")}
             data-testid="guide-close"
             className="ds-iconbtn"

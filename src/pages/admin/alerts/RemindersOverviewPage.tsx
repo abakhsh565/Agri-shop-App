@@ -819,7 +819,7 @@ export default function RemindersOverviewPage() {
               </div>
               <div>
                 <label className="ds-section-label block mb-2" style={{ color: "var(--text-secondary)" }}>{t("common.message")}</label>
-                <textarea value={editMessage} onChange={(e) => setEditMessage(e.target.value)} rows={5} className="w-full rounded-[var(--radius-card)] px-4 py-3 text-13 outline-none resize-none" style={{ background: "var(--surface-2)", color: "var(--text-primary)", border: "1px solid var(--border-control)" }} />
+                <textarea value={editMessage} onChange={(e) => setEditMessage(e.target.value)} rows={5} className="w-full rounded-[var(--radius-card)] px-4 py-3 text-13 outline-none resize-none" style={{ background: "var(--field-bg)", color: "var(--text-primary)" }} />
               </div>
               <div className="flex gap-3">
                 <button onClick={() => handleSend("whatsapp")} className="flex-1 h-12 rounded-full text-14 font-bold flex items-center justify-center gap-2" style={{ background: "#25D366", color: "#fff" }}>

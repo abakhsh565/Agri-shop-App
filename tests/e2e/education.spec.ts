@@ -142,10 +142,10 @@ async function startTourFromGuide(page: Page, base: '/admin' | '/employee') {
     await later.click();
     await page.waitForTimeout(500);
   }
-  await page.locator('[data-tour="more:guide"]').click();
+  await page.locator('[data-tour="settings:guide"]').click();
   await page.waitForTimeout(800);
   await expect(page).toHaveURL(new RegExp(`${base}/guide$`));
-  await page.locator('[data-tour="more:guide"]').count(); // no-op: keeps the locator honest above
+  await page.locator('[data-tour="settings:guide"]').count(); // no-op: keeps the locator honest above
   await page.locator('button:has-text("Show me around")').first().click();
   await expect(page.locator(CARD)).toBeVisible({ timeout: 10000 });
 }
@@ -254,10 +254,10 @@ test.describe('education — welcome, guided tour, app guide', () => {
     await expect(page.locator(CARD)).toHaveCount(0);
     expect(page.url()).toContain('/admin/dashboard');
     await expect(page.locator('[data-tour="home:actions"]')).toBeVisible();
-    // The fifth tab is the owner's menu; Messages moved to the account screen, so this checks
+    // The fifth tab is the account screen (Settings); Messages moved into it, so this checks
     // the bar still navigates after a tour is skipped rather than that Messages is a tab.
-    await page.locator('[data-tour="tab:admin.more"]').click();
-    await expect(page).toHaveURL(/\/admin\/more$/, { timeout: 8000 });
+    await page.locator('[data-tour="tab:admin.settings"]').click();
+    await expect(page).toHaveURL(/\/admin\/settings$/, { timeout: 8000 });
   });
 
   test('App guide reopens the tour, and closing it mid-way writes nothing', async ({ page }) => {
@@ -306,10 +306,10 @@ test.describe('education — welcome, guided tour, app guide', () => {
     expect(page.url(), 'closing the tour must not navigate').toBe(urlBefore);
 
     // The app is usable straight away, and setup status is untouched.
-    await page.goto('/admin/more');
+    await page.goto('/admin/settings');
     await page.waitForTimeout(1200);
-    await page.locator('[data-tour="more:customers"]').click();
-    await expect(page).toHaveURL(/\/admin\/customers$/, { timeout: 8000 });
+    await page.locator('[data-tour="settings:customers"]').click();
+    await expect(page).toHaveURL(/\/admin\/settings\/hub\/customers$/, { timeout: 8000 });
     const setupAfter = await setupState(page);
     expect(setupAfter, 'the tour must not move setup completion').toBe(setupBefore);
 
@@ -341,7 +341,7 @@ test.describe('education — welcome, guided tour, app guide', () => {
         localStorage.setItem(key, JSON.stringify(parsed));
       }
     });
-    await page.goto('/admin/more');
+    await page.goto('/admin/settings');
     await page.waitForTimeout(1800);
 
     const took = await page.evaluate(() => ({
@@ -351,7 +351,7 @@ test.describe('education — welcome, guided tour, app guide', () => {
     expect(took.dir, 'the language switch did not take, so the copy checks would be meaningless').toBe('rtl');
     expect(took.dark).toBe(true);
 
-    await page.locator('[data-tour="more:guide"]').click();
+    await page.locator('[data-tour="settings:guide"]').click();
     await page.waitForTimeout(800);
     await page.locator('button:has-text("ایک چکر لگائیں")').first().click();
     await expect(page.locator(CARD)).toBeVisible({ timeout: 10000 });
@@ -387,6 +387,8 @@ test.describe('education — welcome, guided tour, app guide', () => {
     await page.goto('/employee/more');
     await page.waitForTimeout(1600);
 
+    // The employee shell still has its own More screen, and its guide row keeps that anchor;
+    // only the admin shell moved its guide onto Settings.
     await page.locator('[data-tour="more:guide"]').click();
     await page.waitForTimeout(1000);
 
@@ -461,9 +463,9 @@ test.describe('education — welcome, guided tour, app guide', () => {
 
   test('the feature list explains the app and only offers what this person can open', async ({ page }) => {
     await loginAndDismissWelcome(page, OWNER_PHONE);
-    await page.goto('/admin/more');
+    await page.goto('/admin/settings');
     await page.waitForTimeout(1200);
-    await page.locator('[data-tour="more:guide"]').click();
+    await page.locator('[data-tour="settings:guide"]').click();
     await page.waitForTimeout(1000);
 
     await page.screenshot({ path: '.freebuff/interaction-shots/edu-guide-owner-en.png' });

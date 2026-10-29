@@ -26,8 +26,6 @@ this file exists so an impact map starts from a lookup instead of fresh reconnai
 | `/register/status` | RegisterStatusPage | `src/pages/register/RegisterStatusPage` | accessibility, crossScreenSync, imageSync, skeletonCoverage |
 | `/admin` | AdminLayout | `src/components/layout/AdminLayout` | accessibility, actionCenter, crossScreenSync, education, overlayAboveNav |
 | `dashboard` | AdminDashboardPage | `src/pages/admin/dashboard/AdminDashboardPage` | accessibility, actionCenter, adminMicrocopy, crossScreenSync, dashboardScope, dependencyContinuity, imageSync, setupCompletion, skeletonCoverage |
-| `assistant` | AssistantPage | `src/pages/assistant/AssistantPage` | accessibility, crossScreenSync, imageSync, skeletonCoverage |
-| `more` | MoreMenuPage | `src/pages/admin/more/MoreMenuPage` | accessibility, adminMicrocopy, crossScreenSync, education, imageSync, marketplaceListing, skeletonCoverage |
 | `messages` | AdminMessagesPage | `src/pages/admin/messages/AdminMessagesPage` | accessibility, adminMicrocopy, crossScreenSync, imageSync, skeletonCoverage |
 | `guide` | AppGuidePage | `src/pages/shared/AppGuidePage` | accessibility, crossScreenSync, imageSync, skeletonCoverage |
 | `search` | SearchPage | `src/pages/employee/search/SearchPage` | accessibility, crossScreenSync, employeeStatusSafety, imageSync, skeletonCoverage |
@@ -85,9 +83,7 @@ this file exists so an impact map starts from a lookup instead of fresh reconnai
 | `settings/hub/sales` | AdminSalesSectionPage | `src/pages/admin/sales/AdminSalesSectionPage` | accessibility, adminMicrocopy, crossScreenSync, imageSync, skeletonCoverage, voidSaleSafety |
 | `settings/hub/inventory` | AdminInventorySectionPage | `src/pages/admin/inventory/AdminInventorySectionPage` | accessibility, adminMicrocopy, crossScreenSync, imageSync, marketplaceListing, productOpeningStock, skeletonCoverage |
 | `settings/hub/customers` | AdminCustomersSectionPage | `src/pages/admin/customers/AdminCustomersSectionPage` | accessibility, adminMicrocopy, crossScreenSync, imageSync, skeletonCoverage |
-| `settings/hub/finance` | AdminFinanceSectionPage | `src/pages/admin/finance/AdminFinanceSectionPage` | accessibility, adminMicrocopy, crossScreenSync, imageSync, skeletonCoverage |
-| `settings/hub/:sectionId` | SectionHubPage | `src/pages/admin/settings/SectionHubPage` | accessibility, accessUx, adminFullAccess, adminMicrocopy, businessProfilePapers, crossScreenSync, imageSync, marketplaceListing, roleDeleteSafety, setupCompletion, skeletonCoverage, systemDrive |
-| `settings/overview` | BusinessOverviewPage | `src/pages/admin/settings/BusinessOverviewPage` | accessibility, accessUx, adminFullAccess, adminMicrocopy, businessProfilePapers, crossScreenSync, imageSync, marketplaceListing, roleDeleteSafety, setupCompletion, skeletonCoverage, systemDrive |
+| `settings/hub/finance/record` | RecordMoneyPage | `src/pages/admin/finance/RecordMoneyPage` | accessibility, adminMicrocopy, crossScreenSync, imageSync, skeletonCoverage |
 | `settings/overview/customers` | CustomerReceivablePage | `src/pages/admin/settings/CustomerReceivablePage` | accessibility, accessUx, adminFullAccess, adminMicrocopy, businessProfilePapers, crossScreenSync, imageSync, marketplaceListing, roleDeleteSafety, setupCompletion, skeletonCoverage, systemDrive |
 | `settings/overview/customers/pending` | CustomerCreditPage | `src/pages/admin/settings/CustomerCreditPage` | accessibility, accessUx, adminFullAccess, adminMicrocopy, businessProfilePapers, crossScreenSync, imageSync, marketplaceListing, roleDeleteSafety, setupCompletion, skeletonCoverage, systemDrive |
 | `settings/overview/customers/overdue` | CustomerCreditPage | `src/pages/admin/settings/CustomerCreditPage` | accessibility, accessUx, adminFullAccess, adminMicrocopy, businessProfilePapers, crossScreenSync, imageSync, marketplaceListing, roleDeleteSafety, setupCompletion, skeletonCoverage, systemDrive |
@@ -95,7 +91,6 @@ this file exists so an impact map starts from a lookup instead of fresh reconnai
 | `settings/overview/suppliers/pending` | SupplierCreditPage | `src/pages/admin/settings/SupplierCreditPage` | accessibility, accessUx, adminFullAccess, adminMicrocopy, businessProfilePapers, crossScreenSync, imageSync, marketplaceListing, roleDeleteSafety, setupCompletion, skeletonCoverage, systemDrive |
 | `settings/overview/suppliers/overdue` | SupplierCreditPage | `src/pages/admin/settings/SupplierCreditPage` | accessibility, accessUx, adminFullAccess, adminMicrocopy, businessProfilePapers, crossScreenSync, imageSync, marketplaceListing, roleDeleteSafety, setupCompletion, skeletonCoverage, systemDrive |
 | `settings/overview/suppliers/:companyId` | SupplierDetailsPage | `src/pages/admin/settings/SupplierDetailsPage` | accessibility, accessUx, adminFullAccess, adminMicrocopy, businessProfilePapers, crossScreenSync, imageSync, marketplaceListing, roleDeleteSafety, setupCompletion, skeletonCoverage, systemDrive |
-| `settings/branch-details` | BranchDetailsOverviewPage | `src/pages/admin/settings/BranchDetailsOverviewPage` | accessibility, accessUx, adminFullAccess, adminMicrocopy, businessProfilePapers, crossScreenSync, imageSync, marketplaceListing, roleDeleteSafety, setupCompletion, skeletonCoverage, systemDrive |
 | `settings/branches/:branchId` | BranchDetailPage | `src/pages/admin/more/BranchDetailPage` | accessibility, adminMicrocopy, crossScreenSync, education, imageSync, marketplaceListing, skeletonCoverage |
 | `activity` | ActivityLogPage | `src/pages/employee/activity/ActivityLogPage` | accessibility, crossScreenSync, employeeStatusSafety, imageSync, skeletonCoverage |
 | `notifications` | AdminNotificationsPage | `src/pages/admin/notifications/AdminNotificationsPage` | accessibility, adminMicrocopy, crossScreenSync, imageSync, notificationsBranchTabs, skeletonCoverage |
@@ -108,6 +103,7 @@ this file exists so an impact map starts from a lookup instead of fresh reconnai
 | `alerts/groups/:groupId` | GroupDetailPage | `src/pages/admin/alerts/GroupDetailPage` | accessibility, adminMicrocopy, crossScreenSync, imageSync, skeletonCoverage |
 | `/employee` | EmployeeLayout | `src/components/layout/EmployeeLayout` | accessibility, actionCenter, crossScreenSync, education, overlayAboveNav |
 | `dashboard` | DashboardPage | `src/pages/employee/dashboard/DashboardPage` | accessibility, actionCenter, crossScreenSync, dashboardScope, dependencyContinuity, employeeStatusSafety, imageSync, setupCompletion, skeletonCoverage |
+| `assistant` | AssistantPage | `src/pages/assistant/AssistantPage` | accessibility, crossScreenSync, imageSync, skeletonCoverage |
 | `sales` | SalesListPage | `src/pages/employee/sales/SalesListPage` | accessibility, crossScreenSync, employeeStatusSafety, imageSync, skeletonCoverage, voidSaleSafety |
 | `sales/:saleId/return` | ReturnSelectItemsPage | `src/pages/employee/returns/ReturnSelectItemsPage` | accessibility, crossScreenSync, employeeStatusSafety, imageSync, skeletonCoverage |
 | `sales/:saleId/return/confirm` | ReturnConfirmPage | `src/pages/employee/returns/ReturnConfirmPage` | accessibility, crossScreenSync, employeeStatusSafety, imageSync, skeletonCoverage |

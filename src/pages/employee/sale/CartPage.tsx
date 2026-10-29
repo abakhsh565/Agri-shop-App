@@ -420,7 +420,7 @@ export default function CartPage() {
             value={amountReceived}
             onChange={(e) => setAmountReceived(e.target.value)}
             placeholder={t("sale.enterAmount")}
-            className="w-full h-12 rounded-[var(--radius-input)] border border-border px-4 text-sm text-foreground placeholder:text-caption outline-none"
+            className="w-full h-12 rounded-[var(--radius-input)] px-4 text-sm text-foreground placeholder:text-caption outline-none"
             onFocus={() => setAmountTouched(true)}
           />
           <p className="ds-section-label text-foreground mb-2 mt-4">{t("sale.paymentDueDate")}</p>

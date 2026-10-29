@@ -639,7 +639,7 @@ export default function SaleDetailView() {
             placeholder={t("saleDetail.addNote")}
             rows={3}
             className="w-full rounded-[var(--radius-tile)] px-4 py-3 text-14 resize-none outline-none"
-            style={{ background: "var(--surface)", border: "1px solid var(--border-control)", color: "var(--text-primary)" }}
+            style={{ background: "var(--field-bg)", color: "var(--text-primary)" }}
           />
         </div>
 
@@ -715,8 +715,8 @@ export default function SaleDetailView() {
             value={voidReason}
             onChange={(e) => setVoidReason(e.target.value)}
             placeholder={t("sale.voidReasonPlaceholder")}
-            className="w-full h-11 rounded-full px-4 text-14 outline-none"
-            style={{ background: "var(--surface-2)", border: "1px solid var(--border-control)", color: "var(--text-primary)" }}
+            className="w-full h-12 rounded-full px-4 text-14 outline-none"
+            style={{ background: "var(--field-bg)", color: "var(--text-primary)" }}
           />
           <div className="flex gap-3">
             <Button variant="outline" size="md" className="flex-1" onClick={() => setShowVoidDialog(false)}>

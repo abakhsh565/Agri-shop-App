@@ -127,7 +127,7 @@ export default function DailyCashReconciliationPage() {
               onChange={(e) => { setCountedCash(e.target.value); setSaved(false); }}
               placeholder={t("payments.cashCountedPlaceholder")}
               className="w-full h-12 rounded-[var(--radius-input)] ps-10 pe-4 text-sm outline-none"
-              style={{ background: "var(--surface-2)", border: "1px solid var(--divider)", color: "var(--text-primary)" }}
+              style={{ background: "var(--field-bg)", color: "var(--text-primary)" }}
             />
           </div>
         </div>

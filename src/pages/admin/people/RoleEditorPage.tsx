@@ -208,8 +208,7 @@ export default function RoleEditorPage() {
   /** The two fields on this screen are the only things you type into, so their edge is the
    *  control token rather than the hairline a resting row uses. */
   const fieldStyle = {
-    background: "var(--surface-2)",
-    border: "1px solid var(--border-control)",
+    background: "var(--field-bg)",
     color: "var(--text-primary)",
   } as const;
 
@@ -331,7 +330,7 @@ export default function RoleEditorPage() {
                 disabled={permsState !== "ready"}
                 className="h-7 px-3 rounded-full text-11 font-semibold shrink-0 disabled:opacity-50"
                 style={{
-                  background: "var(--surface-2)",
+                  background: "var(--field-bg)",
                   border: "1px solid var(--border-control)",
                   color: "var(--text-primary)",
                 }}

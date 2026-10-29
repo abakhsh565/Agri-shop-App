@@ -54,6 +54,8 @@ export interface CustomerCollection {
   pending: number;
   /** Accounts past their due date — the S1 rule. */
   overdue: number;
+  /** The money in those overdue accounts, so a headline can state it without a second read. */
+  overdueDue: number;
 }
 
 /**
@@ -83,6 +85,11 @@ export function summariseCustomerCollection(
     accounts: customers.length,
     pending: customers.filter((c) => c.outstandingBalance > 0).length,
     overdue: customers.filter((c) => isCreditOverdue(c, todayISO)).length,
+    // The same population the count above describes, summed — one filter, two answers, so the
+    // headline "Overdue credit" can never include an account the Overdue chip would not list.
+    overdueDue: customers
+      .filter((c) => isCreditOverdue(c, todayISO))
+      .reduce((sum, c) => sum + Math.max(0, c.outstandingBalance), 0),
   };
 }
 

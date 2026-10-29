@@ -466,7 +466,7 @@ export default function SettingsPage() {
                 onChange={(e) => setNameValue(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter") handleSaveName(); }}
                 className="w-full h-12 px-4 rounded-full text-sm font-bold outline-none"
-                style={{ background: "var(--surface)", border: "1px solid var(--divider)", color: "var(--text-primary)" }}
+                style={{ background: "var(--field-bg)", color: "var(--text-primary)" }}
               />
             </div>
             <div className="flex gap-3">

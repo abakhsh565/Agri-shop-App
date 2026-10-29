@@ -5,7 +5,6 @@ import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
 import SearchBar from "@/components/ui/SearchBar";
 import { SkeletonList } from "@/components/ui/Skeleton";
-import { StatTile } from "@/components/credit/CreditListScreen";
 import { useCompaniesStore } from "@/stores/companiesStore";
 import { useT } from "@/lib/i18n";
 import { useShellBase } from "@/lib/useShellBase";
@@ -57,10 +56,17 @@ export default function SupplierPayablePage() {
     const due = companies.reduce((sum, c) => sum + Math.max(0, c.outstandingPayable), 0);
     const total = Math.max(billed, due);
     const paid = Math.max(0, total - due);
+    // What is late, in money rather than in suppliers: the headline's right-hand figure, so the
+    // two numbers at the top of the screen answer the same question the list below does.
+    const overdueDue = companies.reduce(
+      (sum, c) => sum + (isSupplierOverdue(c, todayISO) ? Math.max(0, c.outstandingPayable) : 0),
+      0,
+    );
     return {
       total,
       paid,
       due,
+      overdueDue,
       pct: total > 0 ? Math.round((paid / total) * 100) : 0,
       // A supplier is counted once it is actually owed money; the book holds the two date
       // slices the chips filter, so a tile and the list can never disagree.
@@ -68,7 +74,7 @@ export default function SupplierPayablePage() {
       pending: book.pending,
       overdue: book.overdue,
     };
-  }, [companies, book]);
+  }, [companies, book, todayISO]);
 
   const rows = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -113,24 +119,42 @@ export default function SupplierPayablePage() {
         <p className="text-13 mt-1" style={{ color: "var(--text-secondary)" }}>{t("overall.youOwe")}</p>
       </div>
 
+      {/* Two figures, then one card — the same head as Customers & Credit: what is owed on the
+          left, what is late on the right, each value under its own left-aligned label. This screen
+          used to bury the total inside the card and leave the counts outside it, the exact mirror
+          of the customer screen, so two lists of the same kind looked like two designs. */}
+      <div className="px-4 pt-5 flex items-start justify-between gap-4">
+        <div className="min-w-0 flex-1">
+          <p className="text-12" style={{ color: "var(--text-secondary)" }}>{t("payable.totalOutstanding")}</p>
+          <p className="text-26 font-bold mt-1 tabular-nums break-words" data-testid="payable-due">
+            {ready ? formatCurrency(summary.due) : "—"}
+          </p>
+        </div>
+        <div className="min-w-0 flex-1 text-end">
+          <p className="text-12" style={{ color: "var(--text-secondary)" }}>{t("payable.overdue")}</p>
+          <p
+            className="text-26 font-bold mt-1 tabular-nums break-words"
+            data-testid="payable-overdue"
+            style={{ color: summary.overdueDue > 0 ? "var(--error)" : "var(--text-primary)" }}
+          >
+            {ready ? formatCurrency(summary.overdueDue) : "—"}
+          </p>
+        </div>
+      </div>
+
       <div className="px-4 pt-4">
         <div
           className="rounded-[var(--radius-card)] p-4"
-          style={{ background: "var(--tone-card)" }}
+          style={{ background: "var(--surface)" }}
           data-testid="payable-summary"
         >
-          <p className="text-11" style={{ color: "var(--text-secondary)" }}>{t("payable.totalOutstanding")}</p>
-          <p className="text-22 font-bold mt-1 tabular-nums break-words" data-testid="payable-due">
-            {ready ? formatCurrency(summary.due) : "—"}
-          </p>
-
-          <div className="flex items-baseline justify-between gap-3 mt-4">
+          <div className="flex items-baseline justify-between gap-3">
             <p className="text-11" style={{ color: "var(--text-secondary)" }}>{t("payable.progress")}</p>
             <p className="text-12 font-semibold tabular-nums" style={{ color: "var(--text-secondary)" }}>
               {summary.pct}%
             </p>
           </div>
-          <div className="mt-2 h-1.5 rounded-full overflow-hidden" style={{ background: "var(--divider)" }}>
+          <div className="mt-2 h-1.5 rounded-full overflow-hidden" style={{ background: "var(--surface-2)" }}>
             <div
               className="h-full rounded-full"
               style={{ width: `${Math.max(0, Math.min(100, summary.pct))}%`, background: "var(--brand)" }}
@@ -153,35 +177,48 @@ export default function SupplierPayablePage() {
             </div>
           </div>
 
-        </div>
-
-        {/* The three counts sit out on the page as figures only: no arrow, no press state and no
-            tap handler. The chips under the search are the one control that filters the list, so
-            a card that also changed the view would be a second, silent way to do the same job. */}
-        <div className="grid grid-cols-3 gap-2 mt-2">
-          <StatTile
-            testId="payable-tile-suppliers"
-            label={t("payable.suppliers")}
-            value={summary.suppliers}
-            caption={t("payable.withPayable")}
-          />
-          <StatTile
-            testId="payable-tile-pending"
-            label={t("payable.pending")}
-            value={summary.pending}
-            caption={t("payable.unpaid")}
-          />
-          <StatTile
-            testId="payable-tile-overdue"
-            label={t("payable.overdue")}
-            value={summary.overdue}
-            caption={t("payable.needsAction")}
-            color={summary.overdue > 0 ? "var(--error)" : undefined}
-          />
+          {/* The three counts live INSIDE the same card, on the pattern the customer list uses:
+              a small surface, the figure, then the population it counts. They are figures, not
+              doors — the chips under the search are the one control that filters the list, so a
+              count that also changed the view would be a second, silent way to do the same job. */}
+          <div className="grid grid-cols-3 gap-2 mt-4">
+            <div
+              className="rounded-[var(--radius-tile)] px-3 py-2 min-w-0"
+              style={{ background: "var(--surface-2)" }}
+              data-testid="payable-tile-suppliers"
+            >
+              <p className="text-10 truncate" style={{ color: "var(--text-secondary)" }}>{t("payable.suppliers")}</p>
+              <p className="text-16 font-bold mt-0.5 tabular-nums">{ready ? summary.suppliers : "—"}</p>
+              <p className="text-10 truncate" style={{ color: "var(--text-tertiary)" }}>{t("payable.withPayable")}</p>
+            </div>
+            <div
+              className="rounded-[var(--radius-tile)] px-3 py-2 min-w-0"
+              style={{ background: "var(--surface-2)" }}
+              data-testid="payable-tile-pending"
+            >
+              <p className="text-10 truncate" style={{ color: "var(--text-secondary)" }}>{t("payable.pending")}</p>
+              <p className="text-16 font-bold mt-0.5 tabular-nums">{ready ? summary.pending : "—"}</p>
+              <p className="text-10 truncate" style={{ color: "var(--text-tertiary)" }}>{t("payable.unpaid")}</p>
+            </div>
+            <div
+              className="rounded-[var(--radius-tile)] px-3 py-2 min-w-0"
+              style={{ background: "var(--surface-2)" }}
+              data-testid="payable-tile-overdue"
+            >
+              <p className="text-10 truncate" style={{ color: "var(--text-secondary)" }}>{t("payable.overdue")}</p>
+              <p
+                className="text-16 font-bold mt-0.5 tabular-nums"
+                style={{ color: summary.overdue > 0 ? "var(--error)" : "var(--text-primary)" }}
+              >
+                {ready ? summary.overdue : "—"}
+              </p>
+              <p className="text-10 truncate" style={{ color: "var(--text-tertiary)" }}>{t("payable.needsAction")}</p>
+            </div>
+          </div>
         </div>
       </div>
 
-      <div className="px-4 pt-3">
+      <div className="px-4 pt-3 pb-3">
         <SearchBar
           value={search}
           onChange={(e) => setSearch(e.target.value)}
@@ -190,18 +227,21 @@ export default function SupplierPayablePage() {
         />
       </div>
 
-      <div className="flex gap-2 px-4 pt-3 flex-wrap">
+      {/* The four states, as the same chip row the customer list uses: one height, one radius,
+          one inset, and it scrolls sideways instead of wrapping so the row never grows a second
+          line on a narrow phone. */}
+      <div className="flex gap-2 px-4 pb-3 overflow-x-auto no-scrollbar">
         {filters.map((f) => (
           <button
             key={f.key}
             type="button"
             onClick={() => setFilter(f.key)}
             aria-pressed={filter === f.key}
-            className="h-8 px-3.5 rounded-full text-12 font-semibold transition-colors"
+            className="shrink-0 h-9 px-4 rounded-full text-12 font-semibold transition-colors active:opacity-70"
             style={
               filter === f.key
                 ? { background: "var(--brand)", color: "#0a0a0a" }
-                : { background: "var(--tone-sunken)", color: "var(--text-secondary)" }
+                : { background: "var(--surface-2)", color: "var(--text-secondary)" }
             }
           >
             {f.label}

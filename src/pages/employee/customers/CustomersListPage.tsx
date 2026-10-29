@@ -1,12 +1,12 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
 import PullToRefresh from "@/components/ui/PullToRefresh";
 import { SkeletonList } from "@/components/ui/Skeleton";
+import CollectionPlate from "@/components/customers/CollectionPlate";
 import SearchBar from "@/components/ui/SearchBar";
 import { useCustomersStore } from "@/stores/customersStore";
-import { useShopStore } from "@/stores/shopStore";
 import { formatCurrency } from "@/lib/formatters";
 import { useT } from "@/lib/i18n";
 import { useShellBase } from "@/lib/useShellBase";
@@ -16,10 +16,20 @@ import { Plus, ChevronRight, SlidersHorizontal, Check, UserRound } from "lucide-
 import type { Customer } from "@/types";
 import { isCreditOverdue } from "@/lib/signalEngine";
 import { pkToday } from "@/lib/pkDate";
-import { creditUsedPct, customerCreditState, type CustomerCreditState } from "@/lib/customerCredit";
+import {
+  creditUsedPct,
+  customerCreditState,
+  summariseCustomerCollection,
+  type CustomerCreditState,
+} from "@/lib/customerCredit";
 
 type SortKey = "outstanding" | "name" | "recent";
-type CreditFilter = "all" | "outstanding" | "overdue" | "paid";
+/**
+ * This screen is the CREDIT book, not the address book (owner's correction, 2026-10-29): every
+ * row here is an account that currently owes the branch something. "All" therefore means all
+ * accounts with a balance, and the only narrower view worth a chip is the late ones.
+ */
+type CreditFilter = "all" | "overdue";
 
 const SORT_OPTIONS: { key: SortKey; labelKey: "customers.sortBalance" | "customers.sortName" | "customers.sortNewest" }[] = [
   { key: "outstanding", labelKey: "customers.sortBalance" },
@@ -78,10 +88,8 @@ export default function CustomersListPage() {
   const customers = useCustomersStore((s) => s.customers);
   const ready = useCustomersStore((s) => s.ready);
   const load = useCustomersStore((s) => s.load);
-  const branchName = useShopStore((s) => s.activeBranchName);
 
-  const initialFilter: CreditFilter =
-    state?.filter === "credit" ? "outstanding" : "all";
+  const initialFilter: CreditFilter = "all";
   const cropFilter = state?.cropFilter as string | undefined;
   const [creditFilter, setCreditFilter] = useState<CreditFilter>(initialFilter);
   // A search started on Customers & Credit arrives as `?q=` and lands here, where searching the
@@ -117,19 +125,23 @@ export default function CustomersListPage() {
   };
 
   const filtered = customers.filter((c) => {
+    // Only accounts that owe something. A settled customer is not a credit account, and listing
+    // every name ever added made the owner scroll past people who have no money on this book.
+    if (c.isArchived || c.outstandingBalance <= 0) return false;
     const term = search.trim().toLowerCase();
     const matchSearch = !term || c.name.toLowerCase().includes(term) || c.phone.includes(term);
-    const matchState =
-      creditFilter === "all" ||
-      (creditFilter === "outstanding" && c.outstandingBalance > 0) ||
-      (creditFilter === "overdue" && isCreditOverdue(c, todayISO)) ||
-      (creditFilter === "paid" && c.outstandingBalance <= 0);
-    return matchSearch && !c.isArchived && matchState &&
+    const matchState = creditFilter === "all" || isCreditOverdue(c, todayISO);
+    return matchSearch && matchState &&
       (!cropFilter || getCustomerCrops(c.id).includes(cropFilter));
   });
 
   const sorted = sortCustomers(filtered, sort);
-  const creditCustomers = customers.filter((c) => c.outstandingBalance > 0).length;
+  // The headline is the branch's own rows, summarised by the same function the Customers &
+  // Credit screen uses — one rule for "owed" and one rule for "late" across both screens.
+  const summary = useMemo(
+    () => summariseCustomerCollection(customers, todayISO),
+    [customers, todayISO],
+  );
 
   async function handleRefresh() {
     await useCustomersStore.getState().load();
@@ -137,9 +149,7 @@ export default function CustomersListPage() {
 
   const filters: { key: CreditFilter; label: string }[] = [
     { key: "all", label: t("products.all") },
-    { key: "outstanding", label: t("customers.filterOutstanding") },
     { key: "overdue", label: t("receivable.overdue") },
-    { key: "paid", label: t("customers.filterPaid") },
   ];
 
   /** The chip that says which of the four states the card is in. */
@@ -179,37 +189,65 @@ export default function CustomersListPage() {
       >
         <StatusBar />
         <NavHeader
-          title={t("customers.title")}
+          title={t("settings.menu.customers")}
           backTo={returnTo}
         />
 
-        {/* Two headline counts, as the reference draws them. They are counts of the rows below,
-            not a second, wider read: the list is already the branch's. */}
-        <div className="px-4 pt-1 flex items-start gap-5">
-          <div className="min-w-0 flex-1">
-            <p className="text-12" style={{ color: "var(--text-secondary)" }}>
-              {t("customers.totalCustomers")}
+        {/* The header is the collection plate (owner's reference, 2026-10-29): what the branch is
+            owed, how much of that has come back, and the three populations that make the figure
+            up. Every number here is the list's own rows, summarised by
+            `summariseCustomerCollection` — the same function the Customers & Credit screen uses —
+            so the plate can never describe a different population from the cards under it, and
+            "overdue" is the app's S1 rule rather than a second date comparison written here. */}
+        <div className="px-4 pt-1">
+          <h1 className="text-22 font-bold leading-tight">{t("hub.customers.collectionTitle")}</h1>
+          <p className="text-13 mt-1" style={{ color: "var(--text-secondary)" }}>
+            {t("hub.customers.collectionSubtitle")}
+          </p>
+        </div>
+
+        {/* Three figures, unboxed, and nothing else (owner's correction, 2026-10-29): what these
+            accounts owe, what is not late yet, and what is. This is the screen the owner opens
+            after tapping Customers, so it answers the money question at a glance — no progress
+            bar, no collection totals, no count tiles. The full collection plate stays on the
+            Customers & Credit section, which is the screen that reports on the book. Unboxed so
+            the two screens cannot be mistaken for one another. */}
+        <div className="px-4 pt-5 grid grid-cols-3 gap-3">
+          <div className="min-w-0">
+            <p className="text-11" style={{ color: "var(--text-secondary)" }}>
+              {t("receivable.totalOutstanding")}
             </p>
-            <p className="text-22 font-bold mt-1 leading-none tabular-nums">
-              {ready ? customers.length : "—"}
+            <p
+              className="text-18 font-bold mt-1 tabular-nums break-words"
+              data-testid="customers-total-outstanding"
+            >
+              {ready ? formatCurrency(summary.due) : "—"}
             </p>
           </div>
-          <div className="min-w-0 flex-1">
-            <p className="text-12" style={{ color: "var(--text-secondary)" }}>
-              {t("customers.creditCustomers")}
+          <div className="min-w-0">
+            <p className="text-11" style={{ color: "var(--text-secondary)" }}>
+              {t("receivable.pending")}
             </p>
-            <p className="text-22 font-bold mt-1 leading-none tabular-nums">
-              {ready ? creditCustomers : "—"}
+            <p className="text-18 font-bold mt-1 tabular-nums break-words" data-testid="customers-pending">
+              {ready ? formatCurrency(summary.due - summary.overdueDue) : "—"}
+            </p>
+          </div>
+          <div className="min-w-0">
+            <p className="text-11" style={{ color: "var(--text-secondary)" }}>
+              {t("receivable.overdue")}
+            </p>
+            <p
+              className="text-18 font-bold mt-1 tabular-nums break-words"
+              data-testid="customers-overdue"
+              style={{ color: summary.overdueDue > 0 ? "var(--error)" : "var(--text-primary)" }}
+            >
+              {ready ? formatCurrency(summary.overdueDue) : "—"}
             </p>
           </div>
         </div>
-        {branchName && (
-          <p className="px-4 pt-2 text-10" style={{ color: "var(--text-tertiary)" }}>
-            {t("customers.branchBalances", { branch: branchName })}
-          </p>
-        )}
 
         {/* Search + sort */}
+
         <div className="px-4 pt-3 pb-3 flex gap-2 items-center">
           <SearchBar
             containerClass="flex-1 min-w-0"
@@ -258,9 +296,8 @@ export default function CustomersListPage() {
           </div>
         </div>
 
-        {/* The four states a customer's money can be in. One chip per state, so the list can be
-            narrowed without hunting for a row. */}
-        <div className="flex gap-2 px-4 pb-3 overflow-x-auto">
+        {/* Two views of the credit book: everyone who owes, or only the late ones. */}
+        <div className="flex gap-2 px-4 pb-3 overflow-x-auto no-scrollbar">
           {filters.map((f) => (
             <button
               key={f.key}
@@ -298,7 +335,7 @@ export default function CustomersListPage() {
           <div className="flex flex-col items-center px-6 py-16 gap-2">
             <UserRound size={28} style={{ color: "var(--text-tertiary)" }} />
             <p className="text-14 font-semibold text-center" style={{ color: "var(--text-primary)" }}>
-              {search || creditFilter !== "all" ? t("sale.noCustomersMatch") : t("customers.noneFound")}
+              {search ? t("sale.noCustomersMatch") : creditFilter === "overdue" ? t("customers.noneFound") : t("customers.noneOwing")}
             </p>
             {!search && creditFilter === "all" && (
               <p className="text-13 text-center" style={{ color: "var(--text-secondary)" }}>

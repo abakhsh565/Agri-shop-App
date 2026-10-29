@@ -15,9 +15,9 @@ import ListRow from "@/components/ui/ListRow";
 import { useT } from "@/lib/i18n";
 import { useShellBase } from "@/lib/useShellBase";
 import { useCustomersStore } from "@/stores/customersStore";
-import { formatCurrency } from "@/lib/formatters";
 import { pkToday } from "@/lib/pkDate";
 import { summariseCustomerCollection } from "@/lib/customerCredit";
+import CollectionPlate from "@/components/customers/CollectionPlate";
 import { hasPermission } from "@/lib/tenantContext";
 
 /**
@@ -122,97 +122,19 @@ export default function AdminCustomersSectionPage() {
         </p>
       </div>
 
+      {/* Three figures, unboxed — the one thing this section is for (owner's correction,
+          2026-10-29): what is owed, what is not late yet, and what is. It is deliberately NOT the
+          account list's plate: that screen is the credit book and needs the collection progress and
+          its three counts, while this screen is the door to the four jobs and only has to say how
+          much money is out there and how much of it is late. Same type, same spacing, different
+          job — so the two screens no longer look like one screen rendered twice. */}
       <div className="px-4 pt-4">
-        <div
-          className="rounded-[var(--radius-card)] p-4"
-          style={{ background: "var(--surface)" }}
-          data-testid="customers-hub-collection"
-        >
-          <p className="text-12" style={{ color: "var(--text-secondary)" }}>
-            {t("receivable.totalOutstanding")}
-          </p>
-          <p
-            className="text-22 font-bold mt-1 tabular-nums break-words"
-            data-testid="customers-hub-outstanding"
-          >
-            {ready ? formatCurrency(summary.due) : "—"}
-          </p>
-
-          <div className="flex items-baseline justify-between gap-3 mt-4">
-            <p className="text-12" style={{ color: "var(--text-secondary)" }}>
-              {t("receivable.progress")}
-            </p>
-            <p
-              className="text-12 font-bold tabular-nums"
-              style={{ color: summary.progressPct > 0 ? "var(--brand-dark)" : "var(--text-secondary)" }}
-            >
-              {ready ? `${summary.progressPct}%` : "—"}
-            </p>
-          </div>
-          <div
-            className="mt-2 h-1.5 rounded-full overflow-hidden"
-            style={{ background: "var(--surface-2)" }}
-            role="progressbar"
-            aria-valuenow={summary.progressPct}
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-label={t("receivable.progress")}
-          >
-            <div
-              className="h-full rounded-full"
-              style={{
-                width: `${Math.max(0, Math.min(100, summary.progressPct))}%`,
-                background: "var(--brand)",
-              }}
-            />
-          </div>
-          <div className="flex items-end justify-between gap-3 mt-2">
-            <div className="min-w-0">
-              <p className="text-10" style={{ color: "var(--text-secondary)" }}>
-                {t("overall.collected")}
-              </p>
-              <p className="text-13 font-bold tabular-nums mt-0.5 break-words">
-                {ready ? formatCurrency(summary.collected) : "—"}
-              </p>
-            </div>
-            <div className="min-w-0 text-end">
-              <p className="text-10" style={{ color: "var(--text-secondary)" }}>
-                {t("receivable.totalDue")}
-              </p>
-              <p className="text-13 font-bold tabular-nums mt-0.5 break-words">
-                {ready ? formatCurrency(summary.billed) : "—"}
-              </p>
-            </div>
-          </div>
-
-          {/* Three counts, each naming the population it counts — never a number the reader has
-              to guess the meaning of. */}
-          <div className="grid grid-cols-3 gap-2 mt-4">
-            <div className="rounded-[var(--radius-tile)] px-3 py-2" style={{ background: "var(--surface-2)" }}>
-              <p className="text-10" style={{ color: "var(--text-secondary)" }}>{t("receivable.customers")}</p>
-              <p className="text-16 font-bold mt-0.5 tabular-nums">{count(summary.accounts)}</p>
-              <p className="text-10 truncate" style={{ color: "var(--text-tertiary)" }}>{t("receivable.accounts")}</p>
-            </div>
-            <div className="rounded-[var(--radius-tile)] px-3 py-2" style={{ background: "var(--surface-2)" }}>
-              <p className="text-10" style={{ color: "var(--text-secondary)" }}>{t("receivable.pending")}</p>
-              <p className="text-16 font-bold mt-0.5 tabular-nums">{count(summary.pending)}</p>
-              <p className="text-10 truncate" style={{ color: "var(--text-tertiary)" }}>{t("receivable.haveBalance")}</p>
-            </div>
-            <div className="rounded-[var(--radius-tile)] px-3 py-2" style={{ background: "var(--surface-2)" }}>
-              <p className="text-10" style={{ color: "var(--text-secondary)" }}>{t("receivable.overdue")}</p>
-              <p
-                className="text-16 font-bold mt-0.5 tabular-nums"
-                style={{ color: summary.overdue > 0 ? "var(--error)" : "var(--text-primary)" }}
-              >
-                {count(summary.overdue)}
-              </p>
-              <p className="text-10 truncate" style={{ color: "var(--text-tertiary)" }}>{t("receivable.followUp")}</p>
-            </div>
-          </div>
-        </div>
+        <CollectionPlate summary={summary} ready={ready} testId="customers-hub-collection" />
       </div>
 
-      {/* The four jobs. UNBOXED, like every other section hub (owner's correction, 2026-10-28):
+      {/* The four jobs.
+
+ UNBOXED, like every other section hub (owner's correction, 2026-10-28):
           this was the one section screen drawing its rows on a card, so the same four-row list
           read as a different kind of control here than on Sales or Products & Inventory. Every
           row is a different place, so a card around them drew a second edge without grouping

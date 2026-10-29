@@ -1,5 +1,5 @@
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
-import { LayoutDashboard, ShoppingBag, Package, ScanLine, MoreHorizontal, X } from "lucide-react";
+import { LayoutDashboard, ShoppingBag, Package, ScanLine, Settings as SettingsIcon, X } from "lucide-react";
 import { useT, tNow } from "@/lib/i18n";
 import ToastContainer from "@/components/ui/Toast";
 import NavTracker from "@/components/ui/NavTracker";
@@ -30,11 +30,13 @@ const TAB_DEFS = [
   { key: "admin.sales"     as const, icon: ShoppingBag,     path: "/admin/sales"     },
   { key: "scan"            as const, icon: ScanLine,        path: "__scan__"         },
   { key: "admin.inventory" as const, icon: Package,         path: "/admin/products"    },
-  // The fifth slot is "More" again: the owner's menu — the shop this account is working in, then
-  // Money, Stock, People and App — which is what this slot answered before it briefly held
-  // Messages. Messages is a destination, not a menu, and it now ships as a row on Settings
-  // (`pages/admin/settings`), where the rest of the account's own screen already is.
-  { key: "admin.more"      as const, icon: MoreHorizontal,  path: "/admin/more"      },
+  // The fifth slot is the ACCOUNT screen, and it is Settings (`pages/admin/settings`): the shop
+  // this account is working in, one row per part of the business, then the phone's own
+  // preferences and the way out. It used to be "More", a second menu of Money / Stock / People
+  // rows whose destinations were the same screens the Settings hub already leads to — two menu
+  // trees for one app. Business navigation now lives only under Settings, and this tab opens it
+  // directly instead of through a menu that was duplicating the next one.
+  { key: "admin.settings"  as const, icon: SettingsIcon,    path: "/admin/settings", labelKey: "nav.account" },
 ];
 
 export default function AdminLayout() {
@@ -125,11 +127,15 @@ export default function AdminLayout() {
     if (path.startsWith("/admin/products"))  return "/admin/products";
     if (path.startsWith("/admin/inventory") || path.startsWith("/admin/inventory/movements") || path.startsWith("/admin/inventory/reorder")) return "/admin/products";
     if (path.startsWith("/admin/customers")) return "/admin/customers";
-    if (path.startsWith("/admin/more")) return "/admin/more";
-    // Messages is not a tab any more, so opening it lights nothing — the same answer the
-    // assistant screen gives, rather than pointing at a tab that does not own it. Employees,
-    // companies, purchases, reports, settings and payments are reached from More, but none of
-    // them IS More, so they light nothing either.
+    // Settings is a tab now, and every business section opens from it (`settings/hub/*`), so a
+    // section screen keeps the Settings tab lit — otherwise the bar would go dark the moment
+    // someone opened Sales from the menu that owns it. `/admin/more` is the retired address and
+    // redirects here, so it lights the same tab rather than nothing.
+    if (path.startsWith("/admin/settings") || path.startsWith("/admin/more")) return "/admin/settings";
+    // Messages is not a tab, so opening it lights nothing — the same answer the assistant
+    // screen gives, rather than pointing at a tab that does not own it. Employees, companies,
+    // purchases, reports and payments are reached from Settings, but none of them IS Settings,
+    // so they light nothing either.
     // `null` rather than a stand-in: the assistant is no longer a tab, so on that screen
     // NO tab is the current one, and lighting up "Dashboard" would send someone there
     // believing the assistant lives under it.
@@ -261,7 +267,7 @@ export default function AdminLayout() {
               onKeyDown={(e) => e.key === "Enter" && handleManualScanSubmit()}
               placeholder={t("common.barcodePlaceholder")}
               className="w-full h-12 rounded-full px-4 text-sm outline-none font-mono"
-              style={{ background: "var(--surface-2)", border: "1px solid var(--divider)", color: "var(--text-primary)" }}
+              style={{ background: "var(--field-bg)", color: "var(--text-primary)" }}
             />
             <button
               onClick={handleManualScanSubmit}
@@ -329,7 +335,7 @@ export default function AdminLayout() {
             assistant tab added, five sub-44px targets per route were counted (55 across the
             admin routes) and the frozen structural baseline − which may only shrink −
             refused the growth. The floor is the app's to meet, not the baseline's to record. */}
-        {TAB_DEFS.map(({ key, icon: Icon, path }) => {
+        {TAB_DEFS.map(({ key, icon: Icon, path, labelKey }) => {
           if (path === "__scan__") {
             return (
               <button
@@ -371,7 +377,7 @@ export default function AdminLayout() {
                   color: isActive ? "var(--brand)" : "var(--text-secondary)",
                 }}
               >
-                {t(key)}
+                {t(labelKey ?? key)}
               </span>
             </button>
           );

@@ -92,7 +92,7 @@ export default function CreditLimitSheet({
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           placeholder={t("sale.enterAmount")}
-          className="w-full h-12 rounded-[var(--radius-input)] border border-border px-4 text-sm text-foreground placeholder:text-caption outline-none"
+          className="w-full h-12 rounded-[var(--radius-input)] px-4 text-sm text-foreground placeholder:text-caption outline-none"
         />
 
         {requesting && (
@@ -106,7 +106,7 @@ export default function CreditLimitSheet({
               onChange={(e) => setReason(e.target.value)}
               placeholder={t("creditLimit.reasonPlaceholder")}
               rows={2}
-              className="w-full rounded-[var(--radius-input)] border border-border px-4 py-3 text-sm text-foreground placeholder:text-caption outline-none resize-none"
+              className="w-full rounded-[var(--radius-input)] px-4 py-3 text-sm text-foreground placeholder:text-caption outline-none resize-none"
             />
           </div>
         )}

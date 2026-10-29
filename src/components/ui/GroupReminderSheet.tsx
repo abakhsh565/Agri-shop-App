@@ -93,9 +93,8 @@ export default function GroupReminderSheet({ groupName: initGroupName, config: i
   const escalationInvalid = config.repeat === "escalate" && !escalationOrdered;
 
   const fieldStyle = {
-    background: "var(--surface-2)",
+    background: "var(--field-bg)",
     color: "var(--text-primary)",
-    border: "1px solid var(--divider)",
     borderRadius: "24px",
   };
   const labelCls = "ds-section-label mb-2 block";
@@ -277,7 +276,7 @@ export default function GroupReminderSheet({ groupName: initGroupName, config: i
                           esc[i] = { ...esc[i], day: parseInt(e.target.value) || 0 };
                           updateConfig("escalation", esc);
                         }}
-                        className="h-10 px-3 text-13 w-[64px] outline-none font-medium" style={fieldStyle} />
+                        className="h-12 px-3 text-13 w-[64px] outline-none font-medium" style={fieldStyle} />
                     </div>
                   ))}
                   {escalationInvalid && (

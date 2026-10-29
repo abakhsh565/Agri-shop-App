@@ -37,7 +37,7 @@ export default function DateRangeSheet({ open, from, to, max, onClose, onApply, 
     }
   }, [open, from, to]);
 
-  const fieldStyle = { background: "var(--surface-2)" };
+  const fieldStyle = { background: "var(--field-bg)" };
 
   // This sheet collects two values, so it keeps the visible close: the scrim and Escape dismiss
   // it, but neither is a thing the reader can see.

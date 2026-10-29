@@ -895,7 +895,6 @@
         "src/stores/customersStore.ts"
       ],
       "libs": [
-        "src/lib/ownerRows.ts",
         "src/lib/money.ts"
       ],
       "tables": [

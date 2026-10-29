@@ -713,8 +713,7 @@ export default function AddProductPage() {
   }
 
   const fieldStyle = {
-    background: "var(--surface-2)",
-    border: "1px solid var(--divider)",
+    background: "var(--field-bg)",
     color: "var(--text-primary)",
   } as const;
   // One label for every field on the screen. There used to be two — an uppercase section
@@ -988,7 +987,7 @@ export default function AddProductPage() {
                     min={0}
                     onChange={(e) => setPack(i, { sizeValue: unsigned(e.target.value) })}
                     data-testid={`product-pack-size-${i}`}
-                    className="flex-1 min-w-0 h-11 rounded-[var(--radius-card)] px-3 text-sm outline-none"
+                    className="flex-1 min-w-0 h-12 rounded-[var(--radius-card)] px-3 text-sm outline-none"
                     style={fieldStyle}
                   />
                   <button
@@ -1028,7 +1027,7 @@ export default function AddProductPage() {
                     min={0}
                     onChange={(e) => setPack(i, withMarkup({ ...p, costPrice: unsigned(e.target.value) }))}
                     data-testid={`product-pack-cost-${i}`}
-                    className="w-full h-11 rounded-[var(--radius-card)] px-3 text-sm outline-none"
+                    className="w-full h-12 rounded-[var(--radius-card)] px-3 text-sm outline-none"
                     style={fieldStyle}
                   />
                   {/* Left empty, this one field is what turns every profit figure in the app
@@ -1053,7 +1052,7 @@ export default function AddProductPage() {
                     min={0}
                     onChange={(e) => setPack(i, withMarkup({ ...p, sellingPrice: unsigned(e.target.value) }))}
                     data-testid={`product-pack-sell-${i}`}
-                    className="w-full h-11 rounded-[var(--radius-card)] px-3 text-sm outline-none"
+                    className="w-full h-12 rounded-[var(--radius-card)] px-3 text-sm outline-none"
                     style={fieldStyle}
                   />
                 </div>
@@ -1077,7 +1076,7 @@ export default function AddProductPage() {
                   onChange={(e) => setPack(i, withSellingFromMarkup(p, unsigned(e.target.value)))}
                   data-testid={`product-pack-markup-${i}`}
                   placeholder="%"
-                  className="w-full h-11 rounded-[var(--radius-card)] px-3 text-sm outline-none"
+                  className="w-full h-12 rounded-[var(--radius-card)] px-3 text-sm outline-none"
                   style={fieldStyle}
                 />
                 {/* A percentage of nothing is nothing: with no cost price entered the
@@ -1121,7 +1120,7 @@ export default function AddProductPage() {
                     min={0}
                     onChange={(e) => setPack(i, { stockQty: unsigned(e.target.value) })}
                     data-testid={`product-pack-stock-${i}`}
-                    className="w-full h-11 rounded-[var(--radius-card)] px-3 text-sm outline-none"
+                    className="w-full h-12 rounded-[var(--radius-card)] px-3 text-sm outline-none"
                     style={fieldStyle}
                   />
                 )}
@@ -1144,7 +1143,7 @@ export default function AddProductPage() {
                       data-testid={`product-pack-warn-${i}`}
                       /* Same type size as every other input on the screen: a number typed
                          here is the same kind of thing as a number typed above. */
-                      className="w-16 h-10 rounded-[var(--radius-tile)] px-2 text-sm text-center outline-none"
+                      className="w-16 h-12 rounded-[var(--radius-tile)] px-2 text-sm text-center outline-none"
                       style={fieldStyle}
                     />
                     <span className="text-12" style={{ color: "var(--text-secondary)" }}>{t("addProduct.itemsWord")}</span>
@@ -1179,7 +1178,7 @@ export default function AddProductPage() {
                   value={p.expiryDate}
                   onChange={(e) => setPack(i, { expiryDate: e.target.value })}
                   data-testid={`product-pack-expiry-${i}`}
-                  className="w-full h-11 rounded-[var(--radius-card)] px-3 text-sm outline-none"
+                  className="w-full h-12 rounded-[var(--radius-card)] px-3 text-sm outline-none"
                   style={fieldStyle}
                 />
               </div>

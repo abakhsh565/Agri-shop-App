@@ -83,8 +83,7 @@ export default function RecordSupplierPaymentPage() {
   }
 
   const fieldStyle = {
-    background: "var(--surface-2)",
-    border: "1px solid var(--divider)",
+    background: "var(--field-bg)",
     color: "var(--text-primary)",
   } as const;
 
@@ -115,8 +114,12 @@ export default function RecordSupplierPaymentPage() {
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
               placeholder={t("recordPayment.amountHint")}
-              className="w-full h-12 rounded-[var(--radius-input)] px-4 text-sm outline-none"
-              style={{ ...fieldStyle, borderColor: error ? "var(--error)" : "var(--divider)" }}
+              className={`w-full h-12 rounded-[var(--radius-input)] px-4 text-sm outline-none ${
+                error ? "border-[#ef4444]" : ""
+              }`}
+              /* The resting edge, its green focus and its disabled dimming come from the field
+                 contract; only the error state overrides the colour. */
+              style={fieldStyle}
             />
             {error && <p className="text-xs mt-1" style={{ color: "var(--error)" }}>{error}</p>}
           </div>

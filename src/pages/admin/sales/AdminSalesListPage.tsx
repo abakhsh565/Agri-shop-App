@@ -11,7 +11,23 @@ import { useProductsStore } from "@/stores/productsStore";
 import { summariseSales, profitDisplay } from "@/lib/profit";
 import { useCurrentTime } from "@/lib/useCurrentTime";
 import type { Sale } from "@/types";
-import { Calendar, SlidersHorizontal, Check, ClipboardList, X } from "lucide-react";
+import {
+  Calendar,
+  CalendarRange,
+  Check,
+  ChevronDown,
+  ClipboardList,
+  Download,
+  MoreHorizontal,
+  Plus,
+  Share2,
+  SlidersHorizontal,
+  X,
+} from "lucide-react";
+import { csvFileName, exportCsv, exportText, toCsv } from "@/lib/exportData";
+import { useUIStore } from "@/stores/uiStore";
+import NavHeader from "@/components/ui/NavHeader";
+import Sheet from "@/components/ui/Sheet";
 import SearchBar from "@/components/ui/SearchBar";
 import ListCard from "@/components/ui/ListCard";
 import ListRow from "@/components/ui/ListRow";
@@ -44,6 +60,7 @@ export default function AdminSalesListPage() {
   const { state, search } = useLocation();
   const t = useT();
   const { language } = useThemeStore();
+  const { addToast } = useUIStore();
   const isUrdu = language === "ur";
   const [tab, setTab] = useState<Tab>((state?.tab as Tab) ?? "all");
   const [employeeFilter, setEmployeeFilter] = useState<string | null>(state?.employeeId ?? null);
@@ -56,6 +73,8 @@ export default function AdminSalesListPage() {
   const [query, setQuery] = useState(() => new URLSearchParams(search).get("q") ?? "");
   const [sort, setSort] = useState<SortKey>("newest");
   const [showSortMenu, setShowSortMenu] = useState(false);
+  const [actionsOpen, setActionsOpen] = useState(false);
+  const searchWrapRef = useRef<HTMLDivElement>(null);
 
   // Live sales from Supabase (real-time) — loaded + subscribed globally by the layout.
   const allSales: Sale[] = useSalesStore((s) => s.sales);
@@ -124,7 +143,11 @@ export default function AdminSalesListPage() {
       return a.totalAmount - b.totalAmount;
     });
   // Sales less their own refunds — the same reading of "net sales" the Sales section shows.
-  const netSales  = netSalesOf(filtered, refundsBySale(returns));
+  const refundMap = refundsBySale(returns);
+  const netSales  = netSalesOf(filtered, refundMap);
+  // What came back on these same sales, stated rather than netted away, so a period with heavy
+  // returns is visible instead of only lowering the headline.
+  const returnsAmount = filtered.reduce((sum, sale) => sum + (refundMap.get(sale.id) ?? 0), 0);
   // Real cost of goods, from the same calculation Home, the sale record and Reports use.
   // This read `Math.round(total * 0.2)` — a flat fifth of whatever was sold, which was not
   // anybody's margin: it disagreed with Home and with every sale opened from this list, and
@@ -155,6 +178,50 @@ export default function AdminSalesListPage() {
     { key: "paid",   label: t("sales.paid") },
   ];
 
+  /**
+   * The list as shown, as a spreadsheet: the same rows, the same order, the same figures the
+   * reader can check against the screen. Nothing is re-fetched, so an export can never disagree
+   * with the card above it.
+   */
+  async function exportSales() {
+    setActionsOpen(false);
+    try {
+      const csv = toCsv<Sale>(
+        [
+          { label: t("receipt.date"), value: (s) => formatSmartDateTime(s.createdAt) },
+          { label: t("sales.saleNumber"), value: (s) => s.saleNumber },
+          { label: t("common.customer"), value: (s) => s.customerName },
+          { label: t("sales.soldBy"), value: (s) => s.employeeName },
+          { label: t("common.total"), value: (s) => s.totalAmount },
+          { label: t("common.paid"), value: (s) => s.amountPaid },
+          { label: t("common.outstanding"), value: (s) => Math.max(0, s.totalAmount - s.amountPaid) },
+        ],
+        filtered,
+      );
+      const outcome = await exportCsv(csvFileName("sales"), csv, t("admin.sales"));
+      addToast(outcome === "shared" ? t("data.exportedShared") : t("data.exported"), "success");
+    } catch {
+      addToast(t("data.exportFailed"), "error");
+    }
+  }
+
+  /** The same figures as a sentence, for a message to a partner or a supplier. */
+  async function shareSummary() {
+    setActionsOpen(false);
+    const text =
+      `${t("admin.sales")} · ${DATE_FILTERS.find((f) => f.key === dateFilter)?.label ?? ""}\n` +
+      `${t("sales.netSales")}: ${formatCurrency(netSales)}\n` +
+      `${t("inline.credit_sales")}: ${formatCurrency(creditSalesAmount)}\n` +
+      `${t("inline.paid_sales")}: ${formatCurrency(paidSalesAmount)}\n` +
+      `${t("hub.sales.salesReturns")}: ${formatCurrency(returnsAmount)}`;
+    try {
+      const outcome = await exportText(text, t("admin.sales"));
+      addToast(outcome === "shared" ? t("sales.reportShared") : t("sales.reportCopied"), "success");
+    } catch {
+      addToast(t("sales.shareFailed"), "error");
+    }
+  }
+
   return (
     <div
       className="flex flex-col w-full min-h-full"
@@ -162,90 +229,128 @@ export default function AdminSalesListPage() {
     >
       <StatusBar />
 
-      {/* Header */}
-      <div className="flex items-center justify-between px-4 h-11">
-        <div className="w-8" />
-        <p className="text-base font-bold" style={{ color: "var(--text-primary)" }}>{t("admin.sales")}</p>
-        <div className="w-8" />
-      </div>
+      {/* Back, the section's name, the overflow. No magnifier: the search field is always on the
+          screen, so a second door to it only took a slot the actions needed. */}
+      <NavHeader
+        title={t("admin.sales")}
+        backTo="/admin/settings/hub/sales"
+        right={
+          <button
+            type="button"
+            onClick={() => setActionsOpen(true)}
+            aria-label={t("sales.actions")}
+            aria-haspopup="dialog"
+            data-testid="sales-actions"
+            className="flex items-center justify-center size-8 rounded-full active:opacity-60"
+            style={{ color: "var(--text-primary)" }}
+          >
+            <MoreHorizontal size={20} />
+          </button>
+        }
+      />
 
-      {/* What this screen is, and the period its two figures are read over. */}
-      <div className="px-4 pt-2">
-        <div
-          className="rounded-[var(--radius-tile)] px-4 py-3"
-          style={{ background: "var(--surface-2)" }}
+      {/* The section's name, the period it is answering for, and the one control that changes
+          that period. The presets used to be a row of five chips over the list; they now live in
+          the date sheet behind this pill and behind the overflow's "Date range", so the period
+          is stated once instead of competing with the list for attention. */}
+      <div className="px-4 pt-1 flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="text-22 font-bold leading-tight">{t("admin.sales")}</h1>
+          <p className="text-13 mt-1" style={{ color: "var(--text-secondary)" }}>
+            {t("sales.pageSubtitle")}
+          </p>
+          <p className="text-11 mt-1" style={{ color: "var(--text-tertiary)" }}>
+            {filtered.length}{" "}
+            {t(filtered.length === 1 ? "sales.transactionOne" : "sales.transactions")}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setShowDateModal(true)}
+          aria-label={t("sales.dateRange")}
+          data-testid="sales-date-pill"
+          className="shrink-0 flex items-center gap-1.5 h-9 ps-3 pe-3 rounded-full text-12 font-semibold ds-pressable"
+          style={{ background: "var(--surface-2)", color: "var(--text-primary)" }}
         >
-          <div className="flex items-baseline justify-between gap-3">
-            <p className="text-15 font-bold" style={{ color: "var(--text-primary)" }}>
-              {t("sales.allSalesTitle")}
-            </p>
-            <p className="text-12 shrink-0" style={{ color: "var(--text-secondary)" }}>
-              {t("sales.selectedPeriod")}
-            </p>
-          </div>
-          <div className="flex gap-3 mt-3">
-            <div className="flex-1 min-w-0">
-              <p className="ds-section-label" style={{ color: "var(--text-secondary)" }}>
-                {t("sales.transactions")}
-              </p>
-              <p className="text-16 font-bold" style={{ color: "var(--text-primary)" }} data-testid="sales-transactions">
-                {filtered.length}
-              </p>
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="ds-section-label" style={{ color: "var(--text-secondary)" }}>
-                {t("sales.netSales")}
-              </p>
-              <p className="text-16 font-bold" style={{ color: "var(--brand-dark)" }} data-testid="sales-net">
-                {formatCurrency(netSales)}
-              </p>
-              <p className="text-11" style={{ color: "var(--text-secondary)" }}>
-                {t("sales.netSalesHint")}
-              </p>
-            </div>
-          </div>
-        </div>
+          <ChevronDown size={13} style={{ color: "var(--text-secondary)" }} />
+          {DATE_FILTERS.find((f) => f.key === dateFilter)?.label ?? t("sales.selectedPeriod")}
+          <Calendar size={13} style={{ color: "var(--text-secondary)" }} />
+        </button>
       </div>
 
-      {/* ── Paid Sales · Credit Sales · Gross Profit ── */}
-      <div className="px-4 pt-3 flex gap-2">
-        <div className="flex-1 rounded-[var(--radius-tile)] p-3 flex flex-col gap-1 items-start" style={{ background: "var(--surface)", border: "1px solid var(--border-light)" }}>
-          <p className="ds-section-label" style={{ color: "var(--text-secondary)" }}>
-            {t("inline.paid_sales")}
+      {/* The period's money first, as one flat card: every label starts at the same left edge as
+          the number beneath it and nothing is nested inside a second box. Net sales and the profit
+          behind it come first, then the four figures that explain it, two by two. */}
+      <div className="px-4 pt-4">
+        <div
+          className="rounded-[var(--radius-card)] p-4"
+          style={{ background: "var(--surface)" }}
+          data-testid="sales-summary"
+        >
+          <p className="text-11" style={{ color: "var(--text-secondary)" }}>
+            {t("sales.netSales")}
           </p>
-          <p className="text-16 font-bold" style={{ color: "var(--brand-dark)" }}>
-            {formatCurrency(paidSalesAmount)}
+          <p className="text-26 font-bold mt-1 tabular-nums break-words" data-testid="sales-net">
+            {formatCurrency(netSales)}
           </p>
-        </div>
-        <div className="flex-1 rounded-[var(--radius-tile)] p-3 flex flex-col gap-1 items-start" style={{ background: "var(--surface)", border: "1px solid var(--border-light)" }}>
-          <p className="ds-section-label" style={{ color: "var(--text-secondary)" }}>
-            {t("inline.credit_sales")}
-          </p>
-          <p className="text-16 font-bold" style={{ color: "#ef4444" }}>
-            {formatCurrency(creditSalesAmount)}
-          </p>
-        </div>
-        <div className="flex-1 rounded-[var(--radius-tile)] p-3 flex flex-col gap-1 items-start" style={{ background: "var(--surface)", border: "1px solid var(--border-light)" }}>
-          <p className="ds-section-label" style={{ color: "var(--text-secondary)" }}>
-            {t("admin.grossProfit")}
-          </p>
-          <p className="text-16 font-bold" style={{ color: "var(--brand-dark)" }} data-testid="sales-gross-profit">
+          <p
+            className="text-11 font-semibold mt-1"
+            data-testid="sales-gross-profit"
+            style={{
+              color:
+                profitDisplayState.kind === "unknown"
+                  ? "var(--text-secondary)"
+                  : gross.profit >= 0
+                    ? "var(--success)"
+                    : "var(--error)",
+            }}
+          >
             {profitDisplayState.kind === "unknown"
-              ? "—"
-              : `${profitDisplayState.kind === "atLeast" ? "≥ " : ""}${formatCurrency(Math.round(gross.profit))}`}
+              ? t("profit.addCostToSeeProfit")
+              : `${profitDisplayState.kind === "atLeast" ? "≥ " : ""}${formatCurrency(Math.round(gross.profit))} ${t("admin.grossProfit").toLowerCase()}`}
           </p>
-          {profitDisplayState.kind !== "exact" && (
-            <p className="text-11" style={{ color: "var(--warning)" }}>
-              {profitDisplayState.kind === "unknown"
-                ? t("profit.addCostToSeeProfit")
-                : t("profit.costMissingOn", { count: String(profitDisplayState.unknownLines) })}
-            </p>
-          )}
+
+          <div className="grid grid-cols-2 gap-x-4 gap-y-4 mt-4">
+            <div className="min-w-0">
+              <p className="text-11" style={{ color: "var(--text-secondary)" }}>
+                {t("inline.credit_sales")}
+              </p>
+              <p className="text-16 font-bold mt-1 tabular-nums break-words" data-testid="sales-credit">
+                {formatCurrency(creditSalesAmount)}
+              </p>
+            </div>
+            <div className="min-w-0">
+              <p className="text-11" style={{ color: "var(--text-secondary)" }}>
+                {t("inline.paid_sales")}
+              </p>
+              <p className="text-16 font-bold mt-1 tabular-nums break-words" data-testid="sales-paid">
+                {formatCurrency(paidSalesAmount)}
+              </p>
+            </div>
+            <div className="min-w-0">
+              <p className="text-11" style={{ color: "var(--text-secondary)" }}>
+                {t("hub.sales.salesReturns")}
+              </p>
+              <p className="text-16 font-bold mt-1 tabular-nums break-words" data-testid="sales-returns-total">
+                {formatCurrency(returnsAmount)}
+              </p>
+            </div>
+            <div className="min-w-0">
+              <p className="text-11" style={{ color: "var(--text-secondary)" }}>
+                {t("sales.outstandingCredit")}
+              </p>
+              <p className="text-16 font-bold mt-1 tabular-nums break-words">
+                {formatCurrency(creditSalesAmount)}
+              </p>
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Search + Sort */}
-      <div className="px-4 pt-3 flex gap-2 items-center">
+      {/* Search and the sort/filter control on one row under the card, then the three types on the
+          next row, inline. The field is always present — there is no search mode to enter and no
+          magnifier in the app bar opening a second one. */}
+      <div ref={searchWrapRef} className="px-4 pt-3 flex gap-2 items-center">
         <SearchBar
           containerClass="flex-1 min-w-0"
           value={query}
@@ -257,10 +362,12 @@ export default function AdminSalesListPage() {
           <button
             onClick={() => setShowSortMenu(!showSortMenu)}
             aria-label={t("common.sort")}
-            className="w-10 h-10 rounded-full flex items-center justify-center shrink-0"
-            style={{ background: "var(--surface-2)", border: "1px solid var(--divider)" }}
+            aria-expanded={showSortMenu}
+            data-testid="sales-sort"
+            className="size-10 rounded-full flex items-center justify-center shrink-0 active:opacity-70"
+            style={{ background: "var(--surface-2)", color: "var(--text-primary)" }}
           >
-            <SlidersHorizontal size={15} style={{ color: "var(--text-primary)" }} />
+            <SlidersHorizontal size={15} />
           </button>
           {showSortMenu && (
             <div
@@ -291,27 +398,32 @@ export default function AdminSalesListPage() {
         </div>
       </div>
 
-      {/* Tabs */}
-      <div
-        className="flex mt-3 mx-4 gap-6"
-        style={{ borderBottom: "1px solid var(--divider)" }}
-      >
+      {/* The three types, in one line under the search, on the same chip row the customer and
+          supplier lists use. It scrolls sideways rather than wrapping, so the row keeps its
+          height whatever the language. */}
+      <div className="flex gap-2 px-4 pt-3 pb-3 overflow-x-auto no-scrollbar">
         {TABS.map(({ key, label }) => (
           <button
             key={key}
+            type="button"
             onClick={() => setTab(key)}
-            className="pb-2 text-sm transition-colors"
-            style={{
-              fontWeight: tab === key ? 700 : 400,
-              color: tab === key ? "var(--brand-dark)" : "var(--text-secondary)",
-              borderBottom: tab === key ? "2px solid var(--brand)" : "2px solid transparent",
-            }}
+            aria-pressed={tab === key}
+            data-testid={`sales-tab-${key}`}
+            className="shrink-0 h-9 px-4 rounded-full text-12 font-semibold transition-colors active:opacity-70"
+            style={
+              tab === key
+                ? { background: "var(--brand)", color: "#0a0a0a" }
+                : { background: "var(--surface-2)", color: "var(--text-secondary)" }
+            }
           >
             {label}
           </button>
-        ))}      </div>
+        ))}
+      </div>
 
       {/* Employee filter badge */}
+
+
       {employeeFilter && (
         <div className="px-4 pt-2 flex items-center gap-2">
           <span className="text-xs font-semibold px-3 py-1.5 rounded-full" style={{ background: "var(--brand)", color: "#0a0a0a" }}>
@@ -324,56 +436,9 @@ export default function AdminSalesListPage() {
         </div>
       )}
 
-      {/* Date filters — horizontally scrollable with fade indicator */}
-      <div className="relative">
-        <div
-          ref={(el) => {
-            if (!el) return;
-            const update = () => {
-              const atEnd = el.scrollLeft + el.clientWidth >= el.scrollWidth - 4;
-              el.parentElement!.style.setProperty("--show-fade", atEnd ? "0" : "1");
-            };
-            el.addEventListener("scroll", update, { passive: true });
-            update();
-          }}
-          className="flex gap-2 px-4 py-3 overflow-x-auto"
-          style={{ scrollBehavior: "smooth", WebkitOverflowScrolling: "touch" }}
-        >
-          {DATE_FILTERS.map(({ key, label }) => (
-            <button
-              key={key}
-              onClick={() => {
-                if (key === "custom") {
-                  setShowDateModal(true);
-                } else {
-                  setDateFilter(key);
-                }
-              }}
-              className="h-8 px-4 rounded-full text-xs font-semibold whitespace-nowrap shrink-0 transition-colors flex items-center gap-1.5"
-              style={{
-                background: dateFilter === key ? "var(--brand)" : "var(--surface-2)",
-                color: dateFilter === key ? "#0a0a0a" : "var(--text-secondary)",
-              }}
-            >
-              {key === "custom" && <Calendar size={12} />}
-              {label}
-              {key === "custom" && customFrom && (
-                <span className="text-9 opacity-70">({customFrom} → {customTo || "..."})</span>
-              )}
-            </button>
-          ))}
-        </div>
-        {/* Fade indicator on right edge */}
-        <div
-          className="absolute end-0 top-0 bottom-0 w-8 pointer-events-none transition-opacity"
-          style={{
-            background: `linear-gradient(to right, transparent, var(--background))`,
-            opacity: "var(--show-fade, 1)",
-          }}
-        />
-      </div>
-
-      {/* Custom Date Range Modal */}
+      {/* Custom Date Range Modal — now carrying the five presets as well as the two dates, so the
+          period pill in the header and the overflow's "Date range" are the only two doors and
+          they open the same sheet. */}
       {showDateModal && (
         <div className="fixed inset-0 z-50 flex items-end justify-center" onClick={() => setShowDateModal(false)}>
           <div className="absolute inset-0 bg-black/40" />
@@ -385,6 +450,28 @@ export default function AdminSalesListPage() {
             <div className="flex items-center justify-between mb-4">
               <p className="text-15 font-bold" style={{ color: "var(--text-primary)" }}>{t("admin.selectDateRange")}</p>
               <button onClick={() => setShowDateModal(false)} className="text-xl" style={{ color: "var(--text-secondary)" }}>×</button>
+            </div>
+            <div className="flex flex-wrap gap-2 mb-4">
+              {DATE_FILTERS.filter((f) => f.key !== "custom").map(({ key, label }) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => {
+                    setDateFilter(key);
+                    setShowDateModal(false);
+                  }}
+                  aria-pressed={dateFilter === key}
+                  data-testid={`sales-date-${key}`}
+                  className="h-8 px-3 rounded-full text-12 font-semibold"
+                  style={
+                    dateFilter === key
+                      ? { background: "var(--brand)", color: "var(--ink-fg)" }
+                      : { background: "var(--surface-2)", color: "var(--text-secondary)" }
+                  }
+                >
+                  {label}
+                </button>
+              ))}
             </div>
             <div className="flex gap-3">
               <div className="flex-1">
@@ -428,6 +515,55 @@ export default function AdminSalesListPage() {
           </div>
         </div>
       )}
+
+      {/* The overflow (owner's correction, 2026-10-29). It used to repeat the type filter that is
+          already a visible chip row, which is the one thing a menu must never do. What is left is
+          what the screen cannot do in a tap: start a sale, move the period, and take the data out
+          — the spreadsheet is the list as shown, and sharing is the same figures as a sentence. */}
+      <Sheet
+        open={actionsOpen}
+        title={t("sales.actions")}
+        onClose={() => setActionsOpen(false)}
+        closeButton={false}
+      >
+        <div className="px-4 pt-1">
+          <ListRow
+            testId="sales-action-new"
+            icon={Plus}
+            title={t("hub.sales.new")}
+            description={t("hub.sales.newHint")}
+            onClick={() => {
+              setActionsOpen(false);
+              navigate("/admin/sale");
+            }}
+          />
+          <ListRow
+            testId="sales-action-date"
+            icon={CalendarRange}
+            title={t("sales.dateRange")}
+            description={t("sales.dateRangeHint")}
+            onClick={() => {
+              setActionsOpen(false);
+              setShowDateModal(true);
+            }}
+          />
+          <ListRow
+            testId="sales-action-export"
+            icon={Download}
+            title={t("data.export")}
+            description={t("data.exportHint")}
+            onClick={() => { void exportSales(); }}
+          />
+          <ListRow
+            testId="sales-action-share"
+            icon={Share2}
+            title={t("sales.shareReport")}
+            description={t("sales.shareReportHint")}
+            onClick={() => { void shareSummary(); }}
+          />
+        </div>
+      </Sheet>
+
 
       {/* Sales list with date sections */}
       {!ready ? (

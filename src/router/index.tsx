@@ -46,7 +46,6 @@ const StockManagementPage = React.lazy(() => import("@/pages/admin/inventory/Sto
 // is shared and the numbers it shows follow the signed-in role.
 const SaleDetailView = React.lazy(() => import("@/components/sales/SaleDetailView"));
 
-import MoreMenuPage from "@/pages/admin/more/MoreMenuPage";
 import AdminMessagesPage from "@/pages/admin/messages/AdminMessagesPage";
 import BranchDetailPage from "@/pages/admin/more/BranchDetailPage";
 const EmployeesListPage = React.lazy(() => import("@/pages/admin/employees/EmployeesListPage"));
@@ -68,8 +67,6 @@ import SupplierPayablePage from "@/pages/admin/settings/SupplierPayablePage";
 import CustomerCreditPage from "@/pages/admin/settings/CustomerCreditPage";
 import SupplierCreditPage from "@/pages/admin/settings/SupplierCreditPage";
 import SupplierDetailsPage from "@/pages/admin/settings/SupplierDetailsPage";
-// The Business Overview design as it stood before the redesign — what "Branch details" opens.
-import BranchDetailsOverviewPage from "@/pages/admin/settings/BranchDetailsOverviewPage";
 import RolesAccessPage from "@/pages/admin/settings/RolesAccessPage";
 import AdminNotificationsPage from "@/pages/admin/notifications/AdminNotificationsPage";
 import AddEmployeePage from "@/pages/admin/employees/AddEmployeePage";
@@ -145,6 +142,8 @@ import AdminCustomersSectionPage from "@/pages/admin/customers/AdminCustomersSec
 import AdminPurchasesSectionPage from "@/pages/admin/purchases/AdminPurchasesSectionPage";
 // Finance: recorded cash, the two balances and the section's four jobs on one screen.
 import AdminFinanceSectionPage from "@/pages/admin/finance/AdminFinanceSectionPage";
+import RecordMoneyPage from "@/pages/admin/finance/RecordMoneyPage";
+import FinanceLedgerPage from "@/pages/admin/finance/FinanceLedgerPage";
 import OutstandingCreditPage from "@/pages/admin/customers/OutstandingCreditPage";
 import CreditLimitRequestsPage from "@/pages/admin/customers/CreditLimitRequestsPage";
 import PaymentRemindersPage from "@/pages/admin/customers/PaymentRemindersPage";
@@ -189,7 +188,10 @@ export const router = createBrowserRouter([
       { index: true, element: <Navigate to="/admin/dashboard" replace /> },
       { path: "dashboard",  element: <AdminDashboardPage /> },
       { path: "assistant",  element: <AssistantPage /> },
-      { path: "more",       element: <MoreMenuPage /> },
+      // The fifth tab used to open this. It listed the same business destinations the Settings
+      // hub already owns, so the app had two menu trees; the tab now opens Settings itself and
+      // this address redirects there, which keeps old links and bookmarks working.
+      { path: "more",       element: <Navigate to="/admin/settings" replace /> },
       { path: "messages",   element: <AdminMessagesPage /> },
       { path: "guide",      element: <AppGuidePage /> },
       { path: "search", element: <SearchPage /> },
@@ -343,12 +345,24 @@ export const router = createBrowserRouter([
           { path: "settings/hub/inventory", element: <AdminInventorySectionPage /> },
           { path: "settings/hub/customers", element: <AdminCustomersSectionPage /> },
           { path: "settings/hub/purchases", element: <AdminPurchasesSectionPage /> },
-          // Finance is a screen as well (owner's reference, 2026-10-29): recorded cash, the two
-          // balances, the four jobs and the last payments. It sits before the generic route so
-          // `/settings/hub/finance` cannot fall into the plain row list.
+          // Finance is a screen as well (owner's reference, 2026-10-29): the period's net profit,
+          // the four balances, the performance arithmetic and the section's jobs. It sits before
+          // the generic route so `/settings/hub/finance` cannot fall into the plain row list.
           { path: "settings/hub/finance", element: <AdminFinanceSectionPage /> },
+          // Recording money that is not a sale — income, expense or a drawing (0254). The tab is
+          // a query parameter, so the overflow menu and the section row open the same screen on
+          // the kind they name, and a reload lands on the same tab.
+          { path: "settings/hub/finance/record", element: <RecordMoneyPage /> },
+          // The ledger behind the overview's three totals: every recorded row for the branch and
+          // period, filterable by kind and exportable as the CSV of exactly what is listed. It is
+          // declared before `/settings/hub/:sectionId`, like the two screens above it.
+          { path: "settings/hub/finance/entries", element: <FinanceLedgerPage /> },
           { path: "settings/hub/:sectionId", element: <SectionHubPage /> },
-          { path: "settings/overview", element: <BusinessOverviewPage /> },
+          // One screen, one address. Business Overview used to be mounted here as well as at
+          // `settings/hub/overview`, so the same dashboard answered to two URLs and a link could
+          // point at either. The hub address is the one the Settings menu opens; this one now
+          // redirects to it instead of drawing a second copy.
+          { path: "settings/overview", element: <Navigate to="/admin/settings/hub/overview" replace /> },
           { path: "settings/overview/customers", element: <CustomerReceivablePage /> },
           { path: "settings/overview/customers/pending", element: <CustomerCreditPage mode="pending" /> },
           { path: "settings/overview/customers/overdue", element: <CustomerCreditPage mode="overdue" /> },
@@ -356,7 +370,9 @@ export const router = createBrowserRouter([
           { path: "settings/overview/suppliers/pending", element: <SupplierCreditPage mode="pending" /> },
           { path: "settings/overview/suppliers/overdue", element: <SupplierCreditPage mode="overdue" /> },
           { path: "settings/overview/suppliers/:companyId", element: <SupplierDetailsPage /> },
-          { path: "settings/branch-details", element: <BranchDetailsOverviewPage /> },
+          // The old branch-details screen was superseded by the Branches section and one
+          // branch's own page; nothing links here, but the address survived in bookmarks.
+          { path: "settings/branch-details", element: <Navigate to="/admin/settings/hub/branches" replace /> },
           { path: "settings/business", element: <BusinessProfilePage /> },
           // One branch's own page. The card list that used to live at `/settings/branches` is
           // gone (owner's instruction, 2026-10-28): the Branches section already lists every

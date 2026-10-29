@@ -366,8 +366,7 @@ function EditSupplierSheet({
   const { language } = useThemeStore();
   const isUrdu = language === "ur";
   const fieldStyle = {
-    background: "var(--surface-2)",
-    border: "1px solid var(--divider)",
+    background: "var(--field-bg)",
     color: "var(--text-primary)",
   } as const;
   const labelCls = "ds-section-label mb-2";
