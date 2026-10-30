@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
+import DateField from "@/components/ui/DateField";
 import { formatCurrency, getStockStatus, productLowStockThreshold } from "@/lib/formatters";
 import { useThemeStore } from "@/stores/themeStore";
 import { useSalesStore } from "@/stores/salesStore";
@@ -463,20 +464,29 @@ export default function AdminReportsPage() {
             <div className="flex gap-3">
               <div className="flex-1">
                 <p className="ds-section-label mb-1" style={{ color: "var(--text-secondary)" }}>{t("admin.from")}</p>
-                <input type="date" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)}
-                  className="w-full outline-none" />
+                <DateField
+                  value={customFrom}
+                  max={customTo || todayISO}
+                  onChange={setCustomFrom}
+                  testId="reports-from"
+                />
               </div>
               <div className="flex-1">
                 <p className="ds-section-label mb-1" style={{ color: "var(--text-secondary)" }}>{t("admin.to")}</p>
-                <input type="date" value={customTo} max={todayISO} onChange={(e) => setCustomTo(e.target.value)}
-                  className="w-full outline-none" />
+                <DateField
+                  value={customTo}
+                  min={customFrom || undefined}
+                  max={todayISO}
+                  onChange={setCustomTo}
+                  testId="reports-to"
+                />
               </div>
             </div>
             <div className="flex gap-3">
               <button onClick={() => { setCustomFrom(""); setCustomTo(""); }}
                 className="flex-1 h-12 rounded-full text-sm font-bold" style={{ border: "1px solid var(--divider)", color: "var(--text-primary)" }}>{t("reports.clear")}</button>
               <button onClick={() => setShowDateModal(false)}
-                className="flex-1 h-12 rounded-full text-sm font-bold" style={{ background: "var(--brand)", color: "#0a0a0a" }}>{t("reports.apply")}</button>
+                className="flex-1 h-12 rounded-full text-sm font-bold" style={{ background: "var(--text-primary)", color: "var(--background)" }}>{t("reports.apply")}</button>
             </div>
           </div>
         </div>

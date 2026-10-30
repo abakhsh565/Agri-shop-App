@@ -21,6 +21,8 @@ import ListRow from "@/components/ui/ListRow";
 import { SkeletonList } from "@/components/ui/Skeleton";
 import type { ProductCategory } from "@/types";
 import { useShopStore } from "@/stores/shopStore";
+import { useCatalogueStore } from "@/stores/catalogueStore";
+import { categoryDisplayName } from "@/lib/catalogue";
 import { draftMissingFields, loadProductDrafts, type DraftMissingField } from "@/lib/productDraft";
 import { type I18nKey } from "@/lib/i18n";
 
@@ -69,6 +71,9 @@ export default function ProductsListPage() {
 
   const products = useProductsStore((s) => s.products);
   const ready = useProductsStore((s) => s.ready);
+  // The shop's own shelves (0259): a product filed on "Insect powder" says so on the shelf
+  // list, not only on its own page.
+  const categories = useCatalogueStore((s) => s.categories);
   // Half-finished products, read from this device and only for the branch being looked at —
   // a draft is not a product, so it cannot arrive from the products store with the rest.
   const activeShopId = useShopStore((s) => s.activeShopId);
@@ -87,8 +92,16 @@ export default function ProductsListPage() {
   ];
 
   const term = search.trim().toLowerCase();
-  const matchesSearch = (name: string, company: string) =>
-    !term || name.toLowerCase().includes(term) || company.toLowerCase().includes(term);
+  /** The row prints the shelf's name, so searching it has to find the row (0259). */
+  const shelfName = (categoryId?: string) => {
+    const shelf = categoryId ? categories.find((c) => c.id === categoryId) : undefined;
+    return shelf ? categoryDisplayName(shelf, t) : "";
+  };
+  const matchesSearch = (name: string, company: string, categoryId?: string) =>
+    !term ||
+    name.toLowerCase().includes(term) ||
+    company.toLowerCase().includes(term) ||
+    shelfName(categoryId).toLowerCase().includes(term);
 
   const filtered = products.filter((p) => {
     // The Draft chip is not a category: it hides the shelf and shows the local drafts below.
@@ -98,7 +111,7 @@ export default function ProductsListPage() {
         : filter === "all" ||
           p.category === filter ||
           (filter === "pesticide" && p.category === "spray");
-    return matchesSearch(p.name, p.company) && matchCat;
+    return matchesSearch(p.name, p.company, p.categoryId) && matchCat;
   });
 
   const visibleDrafts = drafts.filter((d) => matchesSearch(d.name, ""));
@@ -243,6 +256,7 @@ export default function ProductsListPage() {
                 const status = productStatus(p);
                 const totalVariants = p.variants.length;
                 const dotColor = CATEGORY_DOT[p.category] ?? "#888";
+                const shelf = p.categoryId ? categories.find((c) => c.id === p.categoryId) : undefined;
                 return (
                   <ListRow
                     key={p.id}
@@ -270,7 +284,9 @@ export default function ProductsListPage() {
                           className="text-10 font-semibold px-1.5 py-0.5 rounded-full"
                           style={{ background: dotColor + "20", color: dotColor }}
                         >
-                          {t(CATEGORY_KEYS[p.category] ?? "products.all")}
+                          {shelf
+                            ? categoryDisplayName(shelf, t)
+                            : t(CATEGORY_KEYS[p.category] ?? "products.all")}
                         </span>
                         <span className="text-10" style={{ color: "var(--text-secondary)" }}>
                           {totalVariants} {totalVariants > 1 ? t("products.variants") : t("products.variant")}

@@ -5,6 +5,7 @@ import { useDelayedDismiss } from "@/hooks/usePresence";
 const SHEET_MS = 280;
 import { X } from "lucide-react";
 import SelectorField from "./SelectorField";
+import DateField from "./DateField";
 import { useT } from "@/lib/i18n";
 import type { ReminderConfig, ReminderRepeat, ReminderEnds, ReminderAnchor } from "@/types";
 import { DEFAULT_ESCALATION, escalationIsOrdered } from "@/lib/reminderEngine";
@@ -260,11 +261,9 @@ export default function ReminderConfigSheet({ config, onSave, onClose }: Props) 
           {/* Ends date */}
           {local.ends === "date" && (
             <div>
-              <input
-                type="date"
+              <DateField
                 value={local.endsDate ?? ""}
-                onChange={(e) => update("endsDate", e.target.value || null)}
-                className="w-full outline-none font-medium"
+                onChange={(v) => update("endsDate", v || null)}
               />
             </div>
           )}

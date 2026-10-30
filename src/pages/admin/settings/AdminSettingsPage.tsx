@@ -371,17 +371,13 @@ export default function AdminSettingsPage() {
 
         {/* Profile card — the same card as the ones below it, and the same card the profile
             screen repeats at the top of itself (`shop/ProfileCard`, one implementation). It is
-            the way in: a chevron rather than a pill that said "Edit", because a row that opens a
-            screen says so with an arrow. The branches themselves live on that screen too. */}
+            the way in, always to the profile: the card answers "whose account is this", and that
+            answer does not change because the account happens to be standing in an added branch
+            (owner's correction, 2026-10-30). A branch is a destination of its own, in the
+            branches block below, not a second meaning for this card's tap. */}
         <ProfileCard
-          testId={inAddedBranch ? "settings-edit-branch" : "settings-open-profile"}
-          onOpen={() =>
-            navigate(
-              inAddedBranch && activeBranch
-                ? `${base}/settings/branches/${activeBranch.id}`
-                : `${base}/settings/profile`,
-            )
-          }
+          testId="settings-open-profile"
+          onOpen={() => navigate(`${base}/settings/profile`)}
         />
 
         {/* ── What the business runs on ────────────────────────────────────────────

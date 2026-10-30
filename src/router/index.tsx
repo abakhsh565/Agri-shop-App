@@ -52,7 +52,7 @@ const EmployeesListPage = React.lazy(() => import("@/pages/admin/employees/Emplo
 const EmployeeDetailPage = React.lazy(() => import("@/pages/admin/employees/EmployeeDetailPage"));
 import CompaniesListPage from "@/pages/admin/companies/CompaniesListPage";
 import AddCompanyPage from "@/pages/admin/companies/AddCompanyPage";
-import CompanyDetailPage from "@/pages/admin/companies/CompanyDetailPage";
+import CompanyDetailPage, { SupplierDetailRedirect } from "@/pages/admin/companies/CompanyDetailPage";
 import AdminSettingsPage from "@/pages/admin/settings/AdminSettingsPage";
 import ProfileDetailsPage from "@/pages/admin/settings/ProfileDetailsPage";
 import SectionHubPage from "@/pages/admin/settings/SectionHubPage";
@@ -66,7 +66,6 @@ import SupplierPayablePage from "@/pages/admin/settings/SupplierPayablePage";
 // The pending and overdue books behind the collection tiles, and one supplier's own payable page.
 import CustomerCreditPage from "@/pages/admin/settings/CustomerCreditPage";
 import SupplierCreditPage from "@/pages/admin/settings/SupplierCreditPage";
-import SupplierDetailsPage from "@/pages/admin/settings/SupplierDetailsPage";
 import RolesAccessPage from "@/pages/admin/settings/RolesAccessPage";
 import AdminNotificationsPage from "@/pages/admin/notifications/AdminNotificationsPage";
 import AddEmployeePage from "@/pages/admin/employees/AddEmployeePage";
@@ -93,6 +92,12 @@ import AdminEmployeeActivityPage from "@/pages/admin/people/AdminEmployeeActivit
 import AdminEmployeeActivityDetailPage from "@/pages/admin/people/AdminEmployeeActivityDetailPage";
 const InventoryAdjustPage = React.lazy(() => import("@/pages/admin/inventory/InventoryAdjustPage"));
 const AddProductPage = React.lazy(() => import("@/pages/admin/inventory/AddProductPage"));
+// The shop's own catalogue (0259): the Products menu, its shelves and its units.
+const InventoryCataloguePage = React.lazy(() => import("@/pages/admin/inventory/InventoryCataloguePage"));
+const CategoriesPage = React.lazy(() => import("@/pages/admin/inventory/CategoriesPage"));
+const CategoryFormPage = React.lazy(() => import("@/pages/admin/inventory/CategoryFormPage"));
+const UnitsPage = React.lazy(() => import("@/pages/admin/inventory/UnitsPage"));
+const UnitFormPage = React.lazy(() => import("@/pages/admin/inventory/UnitFormPage"));
 import PurchaseDetailPage from "@/pages/admin/purchases/PurchaseDetailPage";
 import StockMovementHistoryPage from "@/pages/admin/inventory/StockMovementHistoryPage";
 import ReorderSuggestionsPage from "@/pages/admin/inventory/ReorderSuggestionsPage";
@@ -144,10 +149,14 @@ import AdminPurchasesSectionPage from "@/pages/admin/purchases/AdminPurchasesSec
 // Finance: recorded cash, the two balances and the section's four jobs on one screen.
 import AdminFinanceSectionPage from "@/pages/admin/finance/AdminFinanceSectionPage";
 import RecordMoneyPage from "@/pages/admin/finance/RecordMoneyPage";
+import QuickAddPage from "@/pages/admin/finance/QuickAddPage";
 import FinanceLedgerPage from "@/pages/admin/finance/FinanceLedgerPage";
+import MoneyStatementPage from "@/pages/admin/finance/MoneyStatementPage";
 import OutstandingCreditPage from "@/pages/admin/customers/OutstandingCreditPage";
 import CreditLimitRequestsPage from "@/pages/admin/customers/CreditLimitRequestsPage";
+import CustomerPaymentsPage from "@/pages/admin/customers/CustomerPaymentsPage";
 import PaymentRemindersPage from "@/pages/admin/customers/PaymentRemindersPage";
+import PaymentRemindersBookPage from "@/pages/admin/finance/PaymentRemindersBookPage";
 import InventoryAlertsPage from "@/pages/admin/alerts/InventoryAlertsPage";
 import ExpiryAlertsPage from "@/pages/admin/alerts/ExpiryAlertsPage";
 import GroupDetailPage from "@/pages/admin/alerts/GroupDetailPage";
@@ -206,6 +215,12 @@ export const router = createBrowserRouter([
           // profile route: `customers/:customerId` would otherwise swallow `outstanding` and
           // open a customer called "outstanding".
           { path: "customers/outstanding", element: <OutstandingCreditPage /> },
+          // The hub's "Customer payments" row has its own book: customer receipts only, never the
+          // supplier side of the ledger. It keeps the grant money movement has always needed,
+          // falling back to the customer list for an account that may read customers but not
+          // payments.
+          { element: <PermissionGuard requires="payments.view" fallback="/admin/customers" />,
+            children: [{ path: "customers/payments", element: <CustomerPaymentsPage /> }] },
           // A credit request is a decision about money and a follow-up list is the Action
           // Center's work, so both keep the grant their old screens had (`alerts.view`)
           // instead of opening to anyone who may read customers.
@@ -227,6 +242,18 @@ export const router = createBrowserRouter([
           { path: "products",   element: <ProductsListPage /> },
           { path: "products/:productId", element: <ProductDetailPage /> },
           { path: "inventory/new", element: <AddProductPage /> },
+          // Products → All products / Categories / Units. The forms are the only routes that
+          // need write rights; the lists are readable by anyone who may see products.
+          { path: "inventory/catalogue", element: <InventoryCataloguePage /> },
+          { path: "inventory/categories", element: <CategoriesPage /> },
+          { path: "inventory/units", element: <UnitsPage /> },
+          { element: <PermissionGuard requires="products.edit" fallback="/admin/inventory/catalogue" />,
+            children: [
+              { path: "inventory/categories/new", element: <CategoryFormPage /> },
+              { path: "inventory/categories/:categoryId", element: <CategoryFormPage /> },
+              { path: "inventory/units/new", element: <UnitFormPage /> },
+              { path: "inventory/units/:unitId", element: <UnitFormPage /> },
+            ] },
           { path: "inventory/:productId/edit", element: <AddProductPage /> },
           { path: "inventory/:productId/adjust", element: <InventoryAdjustPage /> },
           { path: "inventory/stockvalues", element: <StockManagementPage /> },
@@ -358,10 +385,22 @@ export const router = createBrowserRouter([
           // a query parameter, so the overflow menu and the section row open the same screen on
           // the kind they name, and a reload lands on the same tab.
           { path: "settings/hub/finance/record", element: <RecordMoneyPage /> },
+          // One sentence, read back, then the same `record_finance_entry` RPC the form calls.
+          // Declared before `/settings/hub/:sectionId`, like the other finance screens.
+          { path: "settings/hub/finance/quick", element: <QuickAddPage /> },
           // The ledger behind the overview's three totals: every recorded row for the branch and
           // period, filterable by kind and exportable as the CSV of exactly what is listed. It is
           // declared before `/settings/hub/:sectionId`, like the two screens above it.
           { path: "settings/hub/finance/entries", element: <FinanceLedgerPage /> },
+          // One read-only statement of money actually moving, across every ledger (0262). It is
+          // not the ledger above: that lists what the owner typed, this lists every movement —
+          // sales, later receipts, refunds, supplier payments — for the same branch and window.
+          { path: "settings/hub/finance/money", element: <MoneyStatementPage /> },
+          // The owner's payment diary, all of it (0257): customer, supplier and general notes in
+          // one book, the way the cash screen's few reminders are one list. Its own screen checks
+          // `payments.view` and redirects, so the address stays one plain route the screen index
+          // can map.
+          { path: "settings/hub/finance/reminders", element: <PaymentRemindersBookPage /> },
           { path: "settings/hub/:sectionId", element: <SectionHubPage /> },
           // One screen, one address. Business Overview used to be mounted here as well as at
           // `settings/hub/overview`, so the same dashboard answered to two URLs and a link could
@@ -374,7 +413,10 @@ export const router = createBrowserRouter([
           { path: "settings/overview/suppliers", element: <SupplierPayablePage /> },
           { path: "settings/overview/suppliers/pending", element: <SupplierCreditPage mode="pending" /> },
           { path: "settings/overview/suppliers/overdue", element: <SupplierCreditPage mode="overdue" /> },
-          { path: "settings/overview/suppliers/:companyId", element: <SupplierDetailsPage /> },
+          // The payable book's supplier page and the directory's supplier page were the same
+          // supplier drawn twice (2026-10-30). The merged page is the supplier's own record; this
+          // address forwards to it so a bookmark still lands on the one page.
+          { path: "settings/overview/suppliers/:companyId", element: <SupplierDetailRedirect /> },
           // The old branch-details screen was superseded by the Branches section and one
           // branch's own page; nothing links here, but the address survived in bookmarks.
           { path: "settings/branch-details", element: <Navigate to="/admin/settings/hub/branches" replace /> },

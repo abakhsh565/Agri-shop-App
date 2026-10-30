@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
 import ListCard from "@/components/ui/ListCard";
+import DateField from "@/components/ui/DateField";
 import ListRow from "@/components/ui/ListRow";
 import PullToRefresh from "@/components/ui/PullToRefresh";
 import { formatCurrency, formatSmartDateTime } from "@/lib/formatters";
@@ -300,23 +301,21 @@ export default function SalesListPage() {
             <div className="flex gap-3">
               <div className="flex-1">
                 <label className="ds-section-label mb-1 block" style={{ color: "var(--text-secondary)" }}>{t("admin.from")}</label>
-                <input
-                  type="date"
+                <DateField
                   value={customFrom}
-                  onChange={(e) => setCustomFrom(e.target.value)}
-                  max={todayISO}
-                  className="w-full outline-none"
+                  max={customTo || todayISO}
+                  onChange={setCustomFrom}
+                  testId="sales-from"
                 />
               </div>
               <div className="flex-1">
                 <label className="ds-section-label mb-1 block" style={{ color: "var(--text-secondary)" }}>{t("admin.to")}</label>
-                <input
-                  type="date"
+                <DateField
                   value={customTo}
-                  onChange={(e) => setCustomTo(e.target.value)}
-                  max={todayISO}
                   min={customFrom || undefined}
-                  className="w-full outline-none"
+                  max={todayISO}
+                  onChange={setCustomTo}
+                  testId="sales-to"
                 />
               </div>
             </div>
@@ -331,7 +330,7 @@ export default function SalesListPage() {
               <button
                 onClick={applyCustomDates}
                 className="flex-1 h-10 rounded-[var(--radius-tile)] text-13 font-bold"
-                style={{ background: "var(--brand)", color: "#0a0a0a" }}
+                style={{ background: "var(--text-primary)", color: "var(--background)" }}
               >
                 {t("common.confirm")}
               </button>

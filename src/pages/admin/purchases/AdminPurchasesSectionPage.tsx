@@ -100,7 +100,10 @@ export default function AdminPurchasesSectionPage() {
 
   async function sharePurchases() {
     setMenuOpen(false);
-    const outstanding = purchases.reduce((sum, p) => sum + Math.max(0, p.outstandingPayable), 0);
+    // The suppliers' branch balance, not the sum of each bill's unpaid-at-delivery remainder. A
+    // later payment settles the supplier, not one bill, so the per-bill sum kept reporting money
+    // that had already been paid — the same defect the header figure was fixed for.
+    const outstanding = companies.reduce((sum, c) => sum + Math.max(0, c.outstandingPayable), 0);
     const text =
       `${t("settings.menu.purchases")}\n` +
       `${t("common.total")}: ${formatCurrency(purchases.reduce((sum, p) => sum + p.totalAmount, 0))}\n` +

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import Sheet from "@/components/ui/Sheet";
+import DateField from "@/components/ui/DateField";
 import { useT } from "@/lib/i18n";
 
 /**
@@ -41,48 +42,34 @@ export default function DateRangeSheet({ open, from, to, max, onClose, onApply, 
     }
   }, [open, from, to, max]);
 
-  const fieldStyle = { background: "var(--field-bg)" };
-
   // This sheet collects two values, so it keeps the visible close: the scrim and Escape dismiss
   // it, but neither is a thing the reader can see.
   return (
     <Sheet open={open} title={t("admin.selectDateRange")} onClose={onClose}>
       <div className="px-5 flex flex-col gap-4">
         <div className="flex gap-3">
-          <label className="flex-1 min-w-0">
+          <div className="flex-1 min-w-0">
             <span className="ds-section-label block mb-1">{t("admin.from")}</span>
-            <input
-              type="date"
+            <DateField
               value={draftFrom}
               max={draftTo || max}
-              onChange={(e) => {
-                const next = e.target.value;
-                if (next > max) return;
+              onChange={(next) => {
                 setDraftFrom(next);
                 if (next && draftTo && next > draftTo) setDraftTo(next);
               }}
-              data-testid="range-from"
-              className="w-full outline-none"
-              style={fieldStyle}
+              testId="range-from"
             />
-          </label>
-          <label className="flex-1 min-w-0">
+          </div>
+          <div className="flex-1 min-w-0">
             <span className="ds-section-label block mb-1">{t("admin.to")}</span>
-            <input
-              type="date"
+            <DateField
               value={draftTo}
               min={draftFrom || undefined}
               max={max}
-              onChange={(e) => {
-                const next = e.target.value;
-                if (next > max) return;
-                setDraftTo(next);
-              }}
-              data-testid="range-to"
-              className="w-full outline-none"
-              style={fieldStyle}
+              onChange={setDraftTo}
+              testId="range-to"
             />
-          </label>
+          </div>
         </div>
 
         <div className="flex gap-2">
@@ -101,7 +88,7 @@ export default function DateRangeSheet({ open, from, to, max, onClose, onApply, 
             disabled={!draftFrom || !draftTo || draftFrom > max || draftTo > max || draftFrom > draftTo}
             data-testid="range-apply"
             className="flex-1 h-11 rounded-full text-13 font-bold ds-pressable disabled:opacity-45"
-            style={{ background: "var(--brand)", color: "#0a0a0a" }}
+            style={{ background: "var(--text-primary)", color: "var(--background)" }}
           >
             {t("reports.apply")}
           </button>

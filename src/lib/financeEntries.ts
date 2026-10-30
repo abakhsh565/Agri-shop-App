@@ -73,6 +73,21 @@ export const CATEGORY_KEY: Record<string, I18nKey> = {
   other_drawing: "finance.cat.otherDrawing",
 };
 
+/**
+ * The categories each kind offers, in the order the form lists them.
+ *
+ * Shared by the form and the correction sheet: a category that can be recorded but not chosen
+ * when correcting a row would make the edit screen narrower than the write it repairs. The SQL's
+ * own validation is the authority on what a row may hold; this list is what the two screens draw.
+ */
+export const FINANCE_CATEGORIES: Record<FinanceEntryKind, string[]> = {
+  income: ["sales", "other_income", "investment", "loan_received"],
+  expense: ["stock_purchase", "rent", "utilities", "salaries", "transport", "maintenance", "other_expense"],
+  drawing: ["personal_use", "owner_pay", "other_drawing"],
+};
+
+export const FINANCE_METHODS: FinanceMethod[] = ["cash", "bank", "easypaisa", "jazzcash"];
+
 export const METHOD_KEY: Record<FinanceMethod, I18nKey> = {
   cash: "finance.method.cash",
   bank: "finance.method.bank",
@@ -211,6 +226,12 @@ export interface FinanceEntryRow {
   recurrenceId: string | null;
   repeatEvery: number | null;
   repeatUnit: RepeatUnit | null;
+  /** When the row was last corrected, and by whom. Null on a row that has not been edited. */
+  updatedAt: string | null;
+  updatedByName: string | null;
+  /** How many papers and voice notes the entry carries — the ledger draws the badge from these. */
+  photoCount: number;
+  voiceCount: number;
 }
 
 interface RawEntry {
@@ -227,6 +248,10 @@ interface RawEntry {
   recurrence_id: string | null;
   repeat_every: number | null;
   repeat_unit: string | null;
+  updated_at: string | null;
+  updated_by_name: string | null;
+  photo_count: number | string | null;
+  voice_count: number | string | null;
 }
 
 /**
@@ -272,6 +297,10 @@ export function useFinanceEntries(from: string, to: string): {
             recurrenceId: row.recurrence_id,
             repeatEvery: row.repeat_every,
             repeatUnit: row.repeat_unit as RepeatUnit | null,
+            updatedAt: row.updated_at,
+            updatedByName: row.updated_by_name,
+            photoCount: Number(row.photo_count ?? 0),
+            voiceCount: Number(row.voice_count ?? 0),
           })),
         );
       });
@@ -319,6 +348,208 @@ export async function recordFinanceEntry(input: RecordFinanceInput): Promise<str
   });
   if (error) throw new Error(error.message);
   return data as string;
+}
+
+/** One paper or voice note as the entry's detail read returns it. */
+export interface FinanceEntryMedia {
+  id: string;
+  kind: "photo" | "voice";
+  mime: string;
+  bytes: number;
+  durationMs: number | null;
+  path: string;
+  createdAt: string;
+}
+
+/** What a row looked like at one moment, so a change can be read field by field. */
+export interface FinanceEntrySnapshot {
+  kind: FinanceEntryKind | null;
+  amount: number | null;
+  occurredOn: string | null;
+  category: string | null;
+  method: string | null;
+  counterparty: string | null;
+  note: string | null;
+  deletedAt: string | null;
+}
+
+export interface FinanceEntryChange {
+  id: string;
+  action: "created" | "updated" | "deleted";
+  changedAt: string;
+  changedByName: string | null;
+  before: FinanceEntrySnapshot | null;
+  after: FinanceEntrySnapshot | null;
+}
+
+export interface FinanceEntryDetail extends FinanceEntryRow {
+  deletedAt: string | null;
+  media: FinanceEntryMedia[];
+  history: FinanceEntryChange[];
+}
+
+interface RawDetail {
+  id: string;
+  kind: FinanceEntryKind;
+  amount: number | string | null;
+  occurred_on: string;
+  category: string | null;
+  method: string | null;
+  counterparty: string | null;
+  note: string | null;
+  created_at: string;
+  created_by_name: string | null;
+  updated_at: string | null;
+  updated_by_name: string | null;
+  deleted_at: string | null;
+  recurrence_id: string | null;
+  repeat_every: number | null;
+  repeat_unit: string | null;
+  media: unknown;
+  history: unknown;
+}
+
+function snapshotOf(value: unknown): FinanceEntrySnapshot | null {
+  if (!value || typeof value !== "object") return null;
+  const row = value as Record<string, unknown>;
+  const text = (key: string) => {
+    const raw = row[key];
+    return raw == null ? null : String(raw);
+  };
+  return {
+    kind: (text("kind") as FinanceEntryKind | null) ?? null,
+    amount: row.amount == null ? null : Number(row.amount),
+    occurredOn: text("occurred_on"),
+    category: text("category"),
+    method: text("method"),
+    counterparty: text("counterparty"),
+    note: text("note"),
+    deletedAt: text("deleted_at"),
+  };
+}
+
+/**
+ * One entry in full: its papers, its voice notes and every change made to it.
+ *
+ * A different read from the ledger on purpose. The list needs counts; this needs the objects and
+ * the history, and loading either of those for every row of a month would be waste. `row` is null
+ * until the answer lands, so the sheet can draw a skeleton instead of "not found".
+ */
+export function useFinanceEntryDetail(id: string | null): {
+  row: FinanceEntryDetail | null;
+  failed: boolean;
+  loading: boolean;
+  retry: () => void;
+} {
+  const [row, setRow] = useState<FinanceEntryDetail | null>(null);
+  const [failed, setFailed] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [attempt, setAttempt] = useState(0);
+
+  useEffect(() => {
+    if (!id) {
+      setRow(null);
+      setFailed(false);
+      setLoading(false);
+      return;
+    }
+    let live = true;
+    setRow(null);
+    setFailed(false);
+    setLoading(true);
+    void supabase.rpc("get_finance_entry", { p_id: id }).then(({ data, error }) => {
+      if (!live) return;
+      setLoading(false);
+      if (error) {
+        setFailed(true);
+        return;
+      }
+      const raw = ((data as RawDetail[] | null) ?? [])[0];
+      if (!raw) {
+        setFailed(true);
+        return;
+      }
+      setRow({
+        id: raw.id,
+        kind: raw.kind,
+        amount: Number(raw.amount ?? 0),
+        occurredOn: raw.occurred_on,
+        category: raw.category ?? "",
+        method: raw.method ?? "",
+        counterparty: raw.counterparty,
+        note: raw.note,
+        createdAt: raw.created_at,
+        createdByName: raw.created_by_name,
+        recurrenceId: raw.recurrence_id,
+        repeatEvery: raw.repeat_every,
+        repeatUnit: raw.repeat_unit as RepeatUnit | null,
+        updatedAt: raw.updated_at,
+        updatedByName: raw.updated_by_name,
+        photoCount: ((raw.media as FinanceEntryMedia[] | undefined) ?? []).filter((m) => m.kind === "photo").length,
+        voiceCount: ((raw.media as FinanceEntryMedia[] | undefined) ?? []).filter((m) => m.kind === "voice").length,
+        deletedAt: raw.deleted_at,
+        media: ((raw.media as FinanceEntryMedia[] | null) ?? []).map((m) => ({
+          ...m,
+          durationMs: m.durationMs == null ? null : Number(m.durationMs),
+          bytes: Number(m.bytes),
+        })),
+        history: ((raw.history as (Omit<FinanceEntryChange, "before" | "after"> & {
+          before: unknown;
+          after: unknown;
+        })[] | null) ?? []).map((h) => ({
+          id: h.id,
+          action: h.action,
+          changedAt: h.changedAt,
+          changedByName: h.changedByName,
+          before: snapshotOf(h.before),
+          after: snapshotOf(h.after),
+        })),
+      });
+    });
+    return () => {
+      live = false;
+    };
+  }, [id, attempt]);
+
+  const retry = useCallback(() => setAttempt((value) => value + 1), []);
+  return { row, failed, loading, retry };
+}
+
+export interface UpdateFinanceInput {
+  id: string;
+  kind: FinanceEntryKind;
+  amount: number;
+  category: string;
+  method: FinanceMethod;
+  occurredOn: string;
+  counterparty?: string;
+  note?: string;
+}
+
+/**
+ * Corrects an existing row. Owner-only at the database, which keeps the before/after history.
+ *
+ * A posted recurrence row is corrected without touching the rule that posted it: this writes the
+ * row, never the cadence, because changing a past bill must not rewrite next month's rent.
+ */
+export async function updateFinanceEntry(input: UpdateFinanceInput): Promise<void> {
+  const { error } = await supabase.rpc("update_finance_entry", {
+    p_id: input.id,
+    p_kind: input.kind,
+    p_amount: input.amount,
+    p_category: input.category,
+    p_method: input.method,
+    p_occurred_on: input.occurredOn,
+    p_counterparty: input.counterparty?.trim() || null,
+    p_note: input.note?.trim() || null,
+  });
+  if (error) throw new Error(error.message);
+}
+
+/** Marks a row deleted. The history keeps the fact; the ledger and the totals stop counting it. */
+export async function deleteFinanceEntry(id: string): Promise<void> {
+  const { error } = await supabase.rpc("delete_finance_entry", { p_id: id });
+  if (error) throw new Error(error.message);
 }
 
 /**

@@ -129,6 +129,10 @@ export async function rpcCreateProduct(payload: {
   name: string;
   company: string;
   category: ProductCategory;
+  /** The shop's own shelf (0259). The server writes the kind from its root, not from here. */
+  categoryId?: string;
+  /** The shop's own unit (0259). The server writes `base_unit` from its family. */
+  unitId?: string;
   /**
    * The unit the shop sells this product in. Required, and stored: before 0158 the server
    * silently dropped it, so every product added through the app read back as `piece`.
@@ -163,6 +167,13 @@ export async function rpcUpdateProduct(payload: {
   name: string;
   company: string;
   category: ProductCategory;
+  /**
+   * The shelf this product is on. Sent even when empty: an empty id takes the product off the
+   * shelf, while leaving the key out would leave the stored shelf alone. `null` is that empty.
+   */
+  categoryId?: string | null;
+  /** The unit it is sold in; the same present/absent rule as the shelf above. */
+  unitId?: string | null;
   baseUnit?: string;
   imageUrl?: string;
   barcode?: string;
@@ -184,6 +195,73 @@ export async function rpcUpdateProduct(payload: {
   const { data, error } = await supabase.rpc("update_product", { payload: { ...payload, actorId } });
   if (error) throw new Error(friendly(error.message));
   return data as any;
+}
+
+/**
+ * The catalogue's own errors, said in a sentence.
+ *
+ * `save_product_category` and `save_product_unit` raise `CODE: sentence` — the code is for a
+ * developer, the sentence is for the person who typed the name. Permission failures keep the
+ * one translation the rest of the app uses, because "you are not allowed" is not something the
+ * server should phrase per table.
+ */
+function catalogueError(message: string): Error {
+  if (/NOT_AUTHORIZED|NOT_AUTHENTICATED|permission denied/i.test(message)) {
+    return new Error(friendly(message));
+  }
+  return new Error((message ?? "").replace(/^[A-Z_]+:\s*/, ""));
+}
+
+export interface SavedCategory {
+  id: string;
+  name: string;
+  parentId: string | null;
+  legacyCategory: ProductCategory | null;
+  isSystem: boolean;
+}
+
+/**
+ * Create or rename one of the shop's shelves.
+ *
+ * `parentId` is the shelf this one lives under, or null for a top-level shelf. The database
+ * refuses a third level, a duplicate name and a parent from another shop; those refusals are
+ * the point, so none of them is checked here first and hoped for there.
+ */
+export async function rpcSaveProductCategory(payload: {
+  id?: string;
+  name: string;
+  parentId?: string | null;
+}): Promise<SavedCategory> {
+  const { data, error } = await supabase.rpc("save_product_category", { payload });
+  if (error) throw catalogueError(error.message);
+  return data as SavedCategory;
+}
+
+export interface SavedUnit {
+  id: string;
+  name: string;
+  symbol: string;
+  baseUnit: "kg" | "liter" | "piece";
+  precision: number;
+  isSystem: boolean;
+}
+
+/**
+ * Create or edit one of the shop's units.
+ *
+ * The measurement family travels with it, because pack sizes and stock are arithmetic in that
+ * family; the database refuses a fourth one and a duplicate symbol.
+ */
+export async function rpcSaveProductUnit(payload: {
+  id?: string;
+  name: string;
+  symbol: string;
+  baseUnit: string;
+  precision: number;
+}): Promise<SavedUnit> {
+  const { data, error } = await supabase.rpc("save_product_unit", { payload });
+  if (error) throw catalogueError(error.message);
+  return data as SavedUnit;
 }
 
 /**
@@ -387,9 +465,13 @@ interface PurchaseRow {
   // a name that exists on `companies`, not on `purchases` — so every row mapped to
   // NaN and the screen called an unpaid delivery "PAID" with Rs. 0 owing.
   amount_due: number;
-  payment_method: PaymentMethod;
-  note: string | null;
-  created_by: string | null;
+  // The method the advance was handed over in. Added to the table by 0258 — before that the
+  // form sent it and the database dropped it, so every bill could only print "cash".
+  payment_method: PaymentMethod | null;
+  // The bill's note and the person who booked it. These were read as `note`/`created_by`, names
+  // that live on nothing: `purchases` carries `notes` and `recorded_by`, so both read as blank.
+  notes: string | null;
+  recorded_by: string | null;
   created_at: string;
   purchase_items?: {
     id: string; purchase_id: string; product_id: string | null; product_name: string;
@@ -425,10 +507,10 @@ export async function fetchPurchases(): Promise<Purchase[]> {
     totalAmount: Number(r.total_amount),
     amountPaid: Number(r.amount_paid),
     outstandingPayable: Number(r.amount_due),
-    paymentMethod: r.payment_method,
-    note: r.note ?? undefined,
+    paymentMethod: r.payment_method ?? "cash",
+    note: r.notes ?? undefined,
     createdAt: r.created_at,
-    createdBy: r.created_by ?? "",
+    createdBy: r.recorded_by ?? "",
   }));
 }
 
@@ -441,6 +523,12 @@ export interface SupplierPaymentEntry {
   notes: string | null;
   recordedByName: string | null;
   createdAt: string;
+  /**
+   * The bill this payment settled at order time (0258), or null for a payment recorded later
+   * against the running balance. A supplier's history holds both kinds — the advance used to be
+   * missing from it entirely, which is what made “paid” disagree with the payable.
+   */
+  purchaseId: string | null;
 }
 
 interface SupplierPaymentDbRow {
@@ -451,6 +539,7 @@ interface SupplierPaymentDbRow {
   notes: string | null;
   recorded_by_name: string | null;
   created_at: string;
+  purchase_id: string | null;
 }
 
 /**
@@ -478,6 +567,7 @@ export async function fetchSupplierPayments(companyId?: string): Promise<Supplie
     notes: r.notes,
     recordedByName: r.recorded_by_name,
     createdAt: r.created_at,
+    purchaseId: r.purchase_id ?? null,
   }));
 }
 

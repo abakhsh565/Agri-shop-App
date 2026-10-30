@@ -1299,11 +1299,12 @@ svg.ds-row-chevron {
   text-align: right;
 }
 
-/* ── Scroll Lock: prevent background scroll when any bottom sheet / modal is open ── */
-body:has(.fixed.inset-0.z-50) {
-  overflow: hidden !important;
-  position: fixed;
-  width: 100%;
+/* ── Scroll Lock ──
+   The page itself does not scroll; the shell's panel does, so this is the element to hold still.
+   `useOverlayScrollLock` does the same in script for the browsers whose WebView has no `:has()`;
+   this rule is the version for the ones that do. Locking <body> (the old rule) moved nothing. */
+body:has(.fixed.inset-0) [data-app-scroll] {
+  overflow: hidden;
 }
 
 /* ===========================================================================

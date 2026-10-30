@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { BellRing, ChevronRight } from "lucide-react";
+import { Bell, BellRing, ChevronRight } from "lucide-react";
+import PaymentReminderSheet, { type PaymentReminderDefaults } from "@/components/ui/PaymentReminderSheet";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
+import { useAuthStore } from "@/stores/authStore";
 import { SkeletonList } from "@/components/ui/Skeleton";
 import { useT } from "@/lib/i18n";
 import { useShellBase } from "@/lib/useShellBase";
@@ -58,6 +60,10 @@ export default function PaymentRemindersPage() {
   const [reminders, setReminders] = useState<GeneratedReminder[] | null>(null);
   const [logs, setLogs] = useState<ReminderLog[] | null>(null);
   const [view, setView] = useState<ReminderView>("ready");
+  // Writing a reminder is the owner's own note (0257), so the same bell the payable and
+  // receivable books carry is offered here too.
+  const [reminderDefaults, setReminderDefaults] = useState<PaymentReminderDefaults | null>(null);
+  const isOwner = useAuthStore((s) => s.user?.membershipRole === "owner");
 
   useEffect(() => {
     if (!customersReady) return;
@@ -226,24 +232,80 @@ export default function PaymentRemindersPage() {
       <StatusBar />
       <NavHeader title={t("hub.customers.reminders")} backTo={`${base}/settings/hub/customers`} />
 
-      <div className="px-4 pt-1 flex items-start gap-5">
-        <div className="min-w-0 flex-1">
-          <p className="text-12" style={{ color: "var(--text-secondary)" }}>
+      {/* The two figures in the card grammar the rest of the books use (owner's reference,
+          2026-10-31): a label, the number, and what it counts underneath. The bare numbers sat
+          on the background and read as a caption, not as the screen's two facts. */}
+      <div className="grid grid-cols-2 gap-2 px-4 pt-3">
+        {/* Each card is the door to the list it counts: tapping it selects that tab, so the
+            figure and the rows under it are never two different readings. */}
+        <button
+          type="button"
+          onClick={() => setView("ready")}
+          aria-pressed={view === "ready"}
+          data-testid="reminders-ready-card"
+          className="min-w-0 rounded-[var(--radius-card)] p-4 text-start active:opacity-70"
+          style={{ background: "var(--surface)" }}
+        >
+          <p className="text-10" style={{ color: "var(--text-secondary)" }}>
             {t("paymentReminders.readyCount")}
           </p>
           <p className="text-22 font-bold mt-1 leading-none tabular-nums" data-testid="reminders-ready-count">
             {reminders ? ready.length : "—"}
           </p>
-        </div>
-        <div className="min-w-0 flex-1">
-          <p className="text-12" style={{ color: "var(--text-secondary)" }}>
+          <p className="text-10 mt-1" style={{ color: "var(--text-tertiary)" }}>
+            {t("paymentReminders.readyHint")}
+          </p>
+        </button>
+        <button
+          type="button"
+          onClick={() => setView("sent")}
+          aria-pressed={view === "sent"}
+          data-testid="reminders-sent-card"
+          className="min-w-0 rounded-[var(--radius-card)] p-4 text-start active:opacity-70"
+          style={{ background: "var(--surface)" }}
+        >
+          <p className="text-10" style={{ color: "var(--text-secondary)" }}>
             {t("paymentReminders.sentCount")}
           </p>
           <p className="text-22 font-bold mt-1 leading-none tabular-nums">
             {logs ? logs.length : "—"}
           </p>
-        </div>
+          <p className="text-10 mt-1" style={{ color: "var(--text-tertiary)" }}>
+            {t("paymentReminders.sentHint")}
+          </p>
+        </button>
       </div>
+
+      {/* The same row the payable book carries, above the states rather than behind the list:
+          a reminder is a note the owner keeps for themselves, and this is the screen named after
+          them. The date, the party and the amount are the sheet's business, not this row's. */}
+      {isOwner && (
+        <div className="px-4 pt-3">
+          <button
+            type="button"
+            onClick={() => setReminderDefaults({ kind: "customer" })}
+            data-testid="reminders-set"
+            className="w-full flex items-center gap-3 rounded-[var(--radius-card)] p-3 text-start active:opacity-70"
+            style={{ background: "var(--tone-card)" }}
+          >
+            <span
+              className="size-9 rounded-full flex items-center justify-center shrink-0"
+              style={{ background: "var(--tone-sunken)" }}
+            >
+              <Bell size={16} style={{ color: "var(--text-secondary)" }} />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-13 font-bold" style={{ color: "var(--text-primary)" }}>
+                {t("cashPosition.setReminder")}
+              </span>
+              <span className="block text-11 mt-0.5" style={{ color: "var(--text-secondary)" }}>
+                {t("paymentReminders.setHint")}
+              </span>
+            </span>
+            <ChevronRight size={14} className="shrink-0" style={{ color: "var(--text-secondary)" }} />
+          </button>
+        </div>
+      )}
 
       {/* Line tabs, the same grammar as Sales: a label over one hairline, with the active one
           marked by weight and a 2px brand rule. Pills made these three read as filters beside
@@ -299,6 +361,14 @@ export default function PaymentRemindersPage() {
               )}
         </div>
       )}
+
+      <PaymentReminderSheet
+        open={reminderDefaults !== null}
+        reminder={null}
+        defaults={reminderDefaults ?? undefined}
+        onClose={() => setReminderDefaults(null)}
+        onSaved={() => setReminderDefaults(null)}
+      />
 
     </div>
   );

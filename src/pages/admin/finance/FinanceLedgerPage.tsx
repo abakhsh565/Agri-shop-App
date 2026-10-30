@@ -4,7 +4,9 @@ import {
   ArrowDownLeft,
   ArrowUpRight,
   CalendarDays,
+  Camera,
   Download,
+  Mic,
   Plus,
   Receipt,
   Repeat,
@@ -16,7 +18,6 @@ import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
 import ListRow from "@/components/ui/ListRow";
 import ListCard from "@/components/ui/ListCard";
-import PeriodTabs from "@/components/ui/PeriodTabs";
 import DateRangeSheet from "@/components/ui/DateRangeSheet";
 import SearchBar from "@/components/ui/SearchBar";
 import Button from "@/components/ui/Button";
@@ -43,6 +44,7 @@ import {
   type FinanceRecurrence,
   type RepeatUnit,
 } from "@/lib/financeEntries";
+import FinanceEntrySheet from "@/components/finance/FinanceEntrySheet";
 import { formatCurrency } from "@/lib/formatters";
 import { pkToday } from "@/lib/pkDate";
 import { downloadCsv } from "@/lib/csv";
@@ -53,8 +55,8 @@ import { downloadCsv } from "@/lib/csv";
  *
  * SHAPE (owner's instruction, 2026-10-30). The screen states its own name in the app bar and no
  * longer repeats it inside the page: the period, the arithmetic, the search and then the rows. The
- * calendar in the app bar picks a hand-entered window; the two presets beside it stay, and while a
- * custom window is showing neither preset claims to be the one in force.
+ * calendar in the app bar is the one period control; it starts on this month and a hand-entered
+ * window replaces it, so no tab can disagree with the dates the rows are actually read over.
  *
  * WHY THIS SCREEN EXISTS. The Finance overview can say "12,000 spent" on rent bills and salaries
  * together, and that figure is only trustworthy if the rows behind it can be seen. The form wrote
@@ -103,11 +105,13 @@ export default function FinanceLedgerPage() {
 
   const day = pkToday();
   const thisMonth = useMemo(() => monthWindow(day), [day]);
-  const [period, setPeriod] = useState<"month" | "previous">("month");
+  // One window, chosen on the calendar. The This/Last month strip that used to sit beside it
+  // named a second, competing control for the same question (owner, 2026-10-31); the month is
+  // only the starting point now, and any day range replaces it.
   const [custom, setCustom] = useState<{ from: string; to: string } | null>(null);
   const [rangeOpen, setRangeOpen] = useState(false);
 
-  const window = custom ?? (period === "month" ? thisMonth : { from: thisMonth.prevFrom, to: thisMonth.prevTo });
+  const window = custom ?? thisMonth;
 
   const { rows, failed, retry } = useFinanceEntries(window.from, window.to);
   const recurrences = useFinanceRecurrences(window.from, window.to);
@@ -115,6 +119,9 @@ export default function FinanceLedgerPage() {
   const [search, setSearch] = useState("");
   const [stopping, setStopping] = useState<FinanceRecurrence | null>(null);
   const [stoppingBusy, setStoppingBusy] = useState(false);
+  // The row whose sheet is open. The list behind it stays exactly as it was: an entry is a
+  // glance or a correction, not a screen with its own address.
+  const [openId, setOpenId] = useState<string | null>(null);
 
   const canRead = hasPermission("payments.view");
   const isOwner = role === "owner";
@@ -281,23 +288,6 @@ export default function FinanceLedgerPage() {
           </div>
         }
       />
-
-      <div className="px-4 pt-1">
-        <PeriodTabs
-          options={[
-            { key: "month", label: t("finance.ledger.thisMonth") },
-            { key: "previous", label: t("finance.ledger.lastMonth") },
-          ]}
-          value={custom ? null : period}
-          onChange={(key) => {
-            setCustom(null);
-            setPeriod(key);
-          }}
-          label={t("finance.ledger.period")}
-          filterLabel={t("finance.ledger.period")}
-          testIdPrefix="finance-ledger-period"
-        />
-      </div>
 
       {custom && (
         <div className="px-4 pt-2 flex items-center gap-2">
@@ -510,15 +500,34 @@ export default function FinanceLedgerPage() {
                       key={row.id}
                       testId={`finance-entry-${row.id}`}
                       icon={Icon}
+                      onClick={() => setOpenId(row.id)}
                       title={categoryLabel(row.category)}
                       badge={
-                        row.recurrenceId ? (
-                          <Repeat
-                            size={12}
-                            aria-label={repeatWords(row.repeatUnit ?? "none", row.repeatEvery ?? 1)}
-                            style={{ color: "var(--text-tertiary)" }}
-                          />
-                        ) : undefined
+                        // The marks that say what a row carries without opening it: a cadence it
+                        // was posted from, and the papers or voice note attached to it. The
+                        // counts are what the detail read would show, so the badge cannot promise
+                        // a receipt the sheet does not have.
+                        <span className="inline-flex items-center gap-1.5" data-testid={`finance-entry-marks-${row.id}`}>
+                          {row.recurrenceId && (
+                            <Repeat
+                              size={12}
+                              aria-label={repeatWords(row.repeatUnit ?? "none", row.repeatEvery ?? 1)}
+                              style={{ color: "var(--text-tertiary)" }}
+                            />
+                          )}
+                          {row.photoCount > 0 && (
+                            <span className="inline-flex items-center gap-0.5" style={{ color: "var(--text-tertiary)" }}>
+                              <Camera size={11} />
+                              <span className="text-9 tabular-nums">{row.photoCount}</span>
+                            </span>
+                          )}
+                          {row.voiceCount > 0 && (
+                            <span className="inline-flex items-center gap-0.5" style={{ color: "var(--text-tertiary)" }}>
+                              <Mic size={11} />
+                              <span className="text-9 tabular-nums">{row.voiceCount}</span>
+                            </span>
+                          )}
+                        </span>
                       }
                       meta={t("finance.ledger.addedBy", {
                         name: row.createdByName ?? t("finance.ledger.addedUnknown"),
@@ -547,6 +556,15 @@ export default function FinanceLedgerPage() {
           </div>
         </>
       )}
+
+      {/* One entry in full — its papers, its history, and the two corrections the owner can make.
+          It opens over this list so the period and the filter are still in place on close. */}
+      <FinanceEntrySheet
+        entryId={openId}
+        open={Boolean(openId)}
+        onClose={() => setOpenId(null)}
+        onChanged={retry}
+      />
 
       <DateRangeSheet
         open={rangeOpen}

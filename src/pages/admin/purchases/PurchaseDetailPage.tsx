@@ -50,10 +50,14 @@ export default function PurchaseDetailPage() {
             totalAmount: data.total_amount,
             amountPaid: data.amount_paid,
             outstandingPayable: data.amount_due,
-            paymentMethod: data.payment_method,
-            note: data.note,
+            // `payment_method` arrives with 0258; a bill booked before it really was cash-only
+            // as far as the record knows, so that is the honest default rather than blank.
+            paymentMethod: data.payment_method ?? "cash",
+            // The bill's columns are `notes` and `recorded_by`; reading `note`/`created_by`
+            // (names that exist on other tables) is why both always came back empty here.
+            note: data.notes ?? undefined,
             createdAt: data.created_at,
-            createdBy: data.created_by ?? "",
+            createdBy: data.recorded_by ?? "",
           });
         }
       } finally {

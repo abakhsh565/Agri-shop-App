@@ -99,7 +99,11 @@ export default function SupplierCreditPage({ mode }: { mode: "pending" | "overdu
       emptyLabel={overdue ? t("creditList.emptyOverdueSuppliers") : t("creditList.emptyPendingSuppliers")}
       viewLabel={t("creditList.viewSupplier")}
       testId={overdue ? "supplier-overdue-page" : "supplier-pending-page"}
-      onView={(id) => navigate(`${base}/settings/overview/suppliers/${id}`)}
+      // One supplier, one page: the record lives under Companies, and this list passes itself as
+      // the way back so the reader stays in the payable book.
+      onView={(id) => navigate(`${base}/companies/${id}`, {
+        state: { from: `${base}/settings/overview/suppliers/${overdue ? "overdue" : "pending"}` },
+      })}
       onPay={(id) => navigate(`${base}/payments/supplier/${id}`)}
     />
   );

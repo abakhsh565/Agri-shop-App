@@ -81,7 +81,10 @@ export default function AdminCustomersSectionPage() {
           icon: ArrowLeftRight,
           title: t("hub.customers.payments"),
           hint: t("hub.customers.paymentsHint"),
-          to: `${base}/payments`,
+          // The customer receipt book, not the general ledger: this row belongs to the customer
+          // section, and the payments screen states both directions for the whole business
+          // (owner's instruction, 2026-10-30).
+          to: `${base}/customers/payments`,
         }]
       : []),
     ...(hasPermission("alerts.view")

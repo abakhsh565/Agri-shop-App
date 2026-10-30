@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import Sheet from "@/components/ui/Sheet";
+import DateField from "@/components/ui/DateField";
 import { useT } from "@/lib/i18n";
 
 /**
@@ -80,10 +81,11 @@ export default function BalanceDateSheet({
       <div className="px-4 pb-4">
         {/* One row, scrolling sideways on a narrow phone rather than wrapping into a second line:
             the six windows are one choice, so they stay one row. */}
+        {/* Wrapped rather than scrolled: on a phone the six windows fit two lines, and the
+            default ("All dates") stays visible instead of being pushed off the start edge. */}
         <div
-          className="flex gap-2 overflow-x-auto pb-1"
+          className="flex flex-wrap gap-2 pb-1"
           data-testid={`${testIdPrefix}-options`}
-          style={{ scrollbarWidth: "none" }}
         >
           {options.map((option) => {
             const chosen = option.key === "custom" ? customChosen : value === option.key;
@@ -119,40 +121,28 @@ export default function BalanceDateSheet({
         {customChosen && (
           <div className="mt-3">
             <div className="flex items-end gap-2">
-              <label className="flex-1 min-w-0">
+              <div className="flex-1 min-w-0">
                 <span className="ds-section-label block mb-1">{t("admin.from")}</span>
-                <input
-                  type="date"
+                <DateField
                   value={draftFrom}
                   max={draftTo || max}
-                  onChange={(e) => {
-                    const next = e.target.value;
-                    if (next > max) return;
+                  onChange={(next) => {
                     setDraftFrom(next);
                     if (next && draftTo && next > draftTo) setDraftTo(next);
                   }}
-                  data-testid={`${testIdPrefix}-from`}
-                  className="w-full h-12 rounded-[var(--radius-tile)] px-2 outline-none text-13"
-                  style={{ background: "var(--field-bg)" }}
+                  testId={`${testIdPrefix}-from`}
                 />
-              </label>
-              <label className="flex-1 min-w-0">
+              </div>
+              <div className="flex-1 min-w-0">
                 <span className="ds-section-label block mb-1">{t("admin.to")}</span>
-                <input
-                  type="date"
+                <DateField
                   value={draftTo}
                   min={draftFrom || undefined}
                   max={max}
-                  onChange={(e) => {
-                    const next = e.target.value;
-                    if (next > max) return;
-                    setDraftTo(next);
-                  }}
-                  data-testid={`${testIdPrefix}-to`}
-                  className="w-full h-12 rounded-[var(--radius-tile)] px-2 outline-none text-13"
-                  style={{ background: "var(--field-bg)" }}
+                  onChange={setDraftTo}
+                  testId={`${testIdPrefix}-to`}
                 />
-              </label>
+              </div>
             </div>
             <button
               type="button"
@@ -163,7 +153,7 @@ export default function BalanceDateSheet({
               }}
               data-testid={`${testIdPrefix}-apply`}
               className="mt-2 w-full h-12 rounded-full text-14 font-bold ds-pressable disabled:opacity-45"
-              style={{ background: "var(--brand)", color: "#0a0a0a" }}
+              style={{ background: "var(--text-primary)", color: "var(--background)" }}
             >
               {t("reports.apply")}
             </button>

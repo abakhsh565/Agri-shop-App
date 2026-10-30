@@ -73,7 +73,9 @@ export const HUB_SECTIONS: HubSection[] = [
       //     and the label now say what the screen actually shows (owner's correction, 2026-10-30).
       //   - Expiring products is its own screen (`/alerts/expiry`). It and Low stock both opened
       //     the same alerts screen, so one of the two rows always opened the wrong list.
-      { id: "products", labelKey: "hub.inventory.products", to: "/products" },
+      // Products is a small menu now (0259): All products, the shop's shelves and its units.
+      // The row opens that menu, because the shelves and units have no other door.
+      { id: "products", labelKey: "hub.inventory.products", to: "/inventory/catalogue" },
       { id: "variants", labelKey: "hub.inventory.variants", to: "/products" },
       { id: "stock", labelKey: "hub.inventory.stock", to: "/inventory/stockvalues" },
       { id: "movements", labelKey: "hub.inventory.movements", to: "/inventory/movements" },
@@ -88,7 +90,10 @@ export const HUB_SECTIONS: HubSection[] = [
       { id: "all", labelKey: "hub.customers.all", to: "/customers" },
       { id: "details", labelKey: "hub.customers.details", to: "/customers" },
       { id: "outstanding", labelKey: "hub.customers.outstanding", to: "/customers/outstanding" },
-      { id: "payments", labelKey: "hub.customers.payments", to: "/payments" },
+      // The customer receipt book, not the general payments ledger: this section's rows are
+      // about customers, and that ledger also holds supplier money (owner's instruction,
+      // 2026-10-30).
+      { id: "payments", labelKey: "hub.customers.payments", to: "/customers/payments" },
       { id: "credit-requests", labelKey: "hub.customers.creditRequests", to: "/customers/credit-requests" },
       { id: "reminders", labelKey: "hub.customers.reminders", to: "/customers/reminders" },
     ],
@@ -123,14 +128,23 @@ export const HUB_SECTIONS: HubSection[] = [
       // the same subject — money in the till — and the four balances that describe what is owed
       // follow them. It opens the form; the screen's own "…" sheet opens a named kind.
       { id: "money", labelKey: "finance.moneyRow", hintKey: "finance.moneyRowHint", to: "/settings/hub/finance/record" },
+      { id: "quick", labelKey: "finance.quickAdd", hintKey: "finance.quickAddHint", to: "/settings/hub/finance/quick" },
       { id: "receivables", labelKey: "hub.finance.receivables", to: "/settings/overview/customers" },
       { id: "payables", labelKey: "hub.finance.payables", to: "/settings/overview/suppliers" },
       { id: "transactions", labelKey: "hub.finance.transactions", to: "/payments" },
+      // The owner's own payment diary (0257): customer, supplier and general notes in one book.
+      // It is a different job from the chasing reminders under Customers — those message a
+      // customer, these remind the owner.
+      { id: "reminders", labelKey: "hub.finance.reminders", hintKey: "hub.finance.remindersHint", to: "/settings/hub/finance/reminders" },
       // The last row is the ledger behind the three totals: every row the form wrote, filterable
       // by kind and exportable as a CSV. It is a read, so it is a different destination from the
       // form above — the owner asked for the expenses to be visible and downloadable, not for a
       // second way to type one.
       { id: "ledger", labelKey: "finance.ledger.row", hintKey: "finance.ledger.rowHint", to: "/settings/hub/finance/entries" },
+      // The read-only statement of movement (0262). Beside the ledger because the two answer
+      // neighbouring questions: the ledger is what the owner typed, the statement is every
+      // movement — the sale, the later receipt, the refund and the supplier payment as well.
+      { id: "statement", labelKey: "money.row", hintKey: "money.rowHint", to: "/settings/hub/finance/money" },
     ],
   },
   {

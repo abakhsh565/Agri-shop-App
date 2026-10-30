@@ -6,12 +6,10 @@ import {
   Bell,
   CalendarDays,
   Download,
-  Pencil,
   Plus,
   ReceiptText,
   RefreshCw,
   Share2,
-  Trash2,
   Wallet,
 } from "lucide-react";
 import StatusBar from "@/components/ui/StatusBar";
@@ -20,6 +18,7 @@ import SearchBar from "@/components/ui/SearchBar";
 import Sheet from "@/components/ui/Sheet";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import PaymentReminderSheet from "@/components/ui/PaymentReminderSheet";
+import PaymentReminderCard from "@/components/ui/PaymentReminderCard";
 import SectionActionsSheet, {
   SectionActionsButton,
   type SectionAction,
@@ -27,7 +26,6 @@ import SectionActionsSheet, {
 import { Skeleton, SkeletonList } from "@/components/ui/Skeleton";
 import { useT } from "@/lib/i18n";
 import { useShellBase } from "@/lib/useShellBase";
-import { useThemeStore } from "@/stores/themeStore";
 import { useUIStore } from "@/stores/uiStore";
 import { useAuthStore } from "@/stores/authStore";
 import { useSalesStore } from "@/stores/salesStore";
@@ -36,10 +34,9 @@ import { formatCurrency, formatSmartDateTime } from "@/lib/formatters";
 import { pkDateFromISO, pkToday } from "@/lib/pkDate";
 import { cashTakenInMonth, movementsInMonth } from "@/lib/financeSummary";
 import { downloadCsv } from "@/lib/csv";
-import { REPEAT_KEY, type RepeatUnit } from "@/lib/financeEntries";
 import {
   deletePaymentReminder,
-  reminderWhen,
+  setPaymentReminderStatus,
   sortReminders,
   usePaymentReminders,
   type PaymentReminder,
@@ -73,18 +70,10 @@ import {
  */
 type Direction = "all" | "in" | "out";
 
-/** "Every 2 weeks", "Monthly", "Once" — the same words on the card and in the email-length share. */
-const EVERY_KEY = {
-  day: "finance.repeat.everyDays",
-  week: "finance.repeat.everyWeeks",
-  month: "finance.repeat.everyMonths",
-} as const;
-
 export default function CashPositionPage() {
   const t = useT();
   const base = useShellBase();
   const navigate = useNavigate();
-  const language = useThemeStore((s) => s.language);
   const { addToast } = useUIStore();
   const role = useAuthStore((s) => s.user?.membershipRole);
   const isOwner = role === "owner";
@@ -168,22 +157,6 @@ export default function CashPositionPage() {
 
   const methodLabel = (method: string) =>
     method === "cash" ? t("sale.cash") : method === "bank_transfer" ? t("sale.bankTransfer") : method;
-
-  const dayLabel = (day: string) => {
-    if (day === today) return t("cashPosition.dueToday");
-    const tomorrow = new Date(new Date(`${today}T00:00:00Z`).getTime() + 86_400_000).toISOString().slice(0, 10);
-    if (day === tomorrow) return t("cashPosition.dueTomorrow");
-    return new Date(`${day}T00:00:00Z`).toLocaleDateString(language === "ur" ? "ur-PK" : "en-GB", {
-      day: "numeric",
-      month: "short",
-      timeZone: "UTC",
-    });
-  };
-
-  const repeatWords = (unit: RepeatUnit, every: number) => {
-    if (unit === "none") return t("finance.repeat.none");
-    return every <= 1 ? t(REPEAT_KEY[unit]) : t(EVERY_KEY[unit], { n: every });
-  };
 
   const filters: { key: Direction; label: string }[] = [
     { key: "all", label: t("cashPosition.filterAll") },
@@ -401,73 +374,25 @@ export default function CashPositionPage() {
             </p>
           ) : (
             <div className="flex flex-col gap-2 mt-2">
-              {reminderRows.map((reminder) => {
-                const when = reminderWhen(reminder, today);
-                return (
-                  <div
-                    key={reminder.id}
-                    className="rounded-[var(--radius-card)] p-3.5"
-                    style={{ background: "var(--tone-card)" }}
-                    data-testid={`cash-reminder-${reminder.id}`}
-                  >
-                    <div className="flex items-start gap-3">
-                      <span
-                        className="size-10 rounded-full flex items-center justify-center shrink-0"
-                        style={{ background: "var(--tone-sunken)", color: when.dueToday ? "var(--brand-dark)" : "var(--text-secondary)" }}
-                      >
-                        <Bell size={16} />
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-14 font-bold truncate">{reminder.title}</p>
-                        <p className="text-11 mt-0.5 truncate" style={{ color: "var(--text-secondary)" }}>
-                          {[reminder.person, reminder.amount == null ? null : formatCurrency(reminder.amount)]
-                            .filter(Boolean)
-                            .join(" · ") || t("cashPosition.reminderNoPerson")}
-                        </p>
-                      </div>
-                      {isOwner && (
-                        <div className="flex items-center gap-1 shrink-0">
-                          <button
-                            type="button"
-                            onClick={() => setReminderSheet({ open: true, reminder })}
-                            aria-label={t("cashPosition.editReminder")}
-                            data-testid={`cash-reminder-edit-${reminder.id}`}
-                            className="size-11 rounded-full flex items-center justify-center active:opacity-60"
-                            style={{ color: "var(--text-secondary)" }}
-                          >
-                            <Pencil size={15} />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setRemoving(reminder)}
-                            aria-label={t("cashPosition.reminderDelete")}
-                            data-testid={`cash-reminder-delete-${reminder.id}`}
-                            className="size-11 rounded-full flex items-center justify-center active:opacity-60"
-                            style={{ color: "var(--error)" }}
-                          >
-                            <Trash2 size={15} />
-                          </button>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="flex items-center justify-between gap-3 mt-2">
-                      <p
-                        className="text-10 truncate tabular-nums"
-                        style={{ color: when.dueToday || when.late ? "var(--brand-dark)" : "var(--text-tertiary)" }}
-                      >
-                        {dayLabel(when.on)} · {reminder.dueTime}
-                      </p>
-                      <span
-                        className="text-10 font-bold px-2 py-0.5 rounded-full shrink-0"
-                        style={{ background: "var(--surface-2)", color: "var(--text-secondary)" }}
-                      >
-                        {repeatWords(reminder.repeatUnit, reminder.repeatEvery)}
-                      </span>
-                    </div>
-                  </div>
-                );
-              })}
+              {reminderRows.map((reminder) => (
+                <PaymentReminderCard
+                  key={reminder.id}
+                  reminder={reminder}
+                  today={today}
+                  testId={`cash-reminder-${reminder.id}`}
+                  onEdit={isOwner ? () => setReminderSheet({ open: true, reminder }) : undefined}
+                  onDelete={isOwner ? () => setRemoving(reminder) : undefined}
+                  onStatus={
+                    isOwner
+                      ? (status) => {
+                          void setPaymentReminderStatus(reminder.id, status)
+                            .then(() => reminders.retry())
+                            .catch(() => addToast(t("paymentBook.statusFailed"), "error"));
+                        }
+                      : undefined
+                  }
+                />
+              ))}
             </div>
           )}
         </div>

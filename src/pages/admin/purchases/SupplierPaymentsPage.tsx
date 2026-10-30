@@ -147,19 +147,22 @@ export default function SupplierPaymentsPage() {
           onClick={() => setPickOpen(true)}
           data-testid="supplier-payments-record"
           className="w-full flex items-center gap-3 rounded-[var(--radius-card)] p-3 text-start active:opacity-70"
-          style={{ background: "var(--brand)" }}
+          // A row in the book's own grey, not a brand-coloured button (owner's correction,
+          // 2026-10-31): recording a payment is the usual next step here, not the screen's one
+          // call to action, and the bright fill made it shout over the history below it.
+          style={{ background: "var(--tone-sunken)" }}
         >
           <span
             className="size-9 rounded-full flex items-center justify-center shrink-0"
-            style={{ background: "rgba(0,0,0,0.12)", color: "#0a0a0a" }}
+            style={{ background: "var(--surface-2)", color: "var(--brand-dark)" }}
           >
             <Plus size={18} strokeWidth={2.5} />
           </span>
           <span className="min-w-0 flex-1">
-            <span className="block text-14 font-bold" style={{ color: "#0a0a0a" }}>
+            <span className="block text-14 font-bold" style={{ color: "var(--text-primary)" }}>
               {t("supplierPayments.record")}
             </span>
-            <span className="block text-11 mt-0.5" style={{ color: "rgba(0,0,0,0.65)" }}>
+            <span className="block text-11 mt-0.5" style={{ color: "var(--text-secondary)" }}>
               {t("supplierPayments.recordHint")}
             </span>
           </span>
@@ -203,9 +206,11 @@ export default function SupplierPaymentsPage() {
                   {formatCurrency(payment.amount)}
                 </p>
               </div>
-              {payment.notes && (
+              {(payment.purchaseId || payment.notes) && (
                 <p className="text-10 mt-2 truncate" style={{ color: "var(--text-tertiary)" }}>
-                  {payment.notes}
+                  {/* An advance carries no note, it carries the delivery it paid for. Saying so
+                      is what keeps this list from looking like it invented a payment. */}
+                  {payment.purchaseId ? t("supplierPayments.advance") : payment.notes}
                 </p>
               )}
             </div>

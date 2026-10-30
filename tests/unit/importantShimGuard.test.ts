@@ -67,10 +67,6 @@ const ALLOWED: Array<{ selector: string; why: string }> = [
     selector: ".dark textarea.bg-transparent",
     why: "a field that asks to be transparent inside a filled pill must stay transparent",
   },
-  {
-    selector: "body:has(.fixed.inset-0.z-50)",
-    why: "page scroll lock while a sheet or dialog is open",
-  },
 ];
 
 function sourceFiles(): Array<{ file: string; text: string }> {

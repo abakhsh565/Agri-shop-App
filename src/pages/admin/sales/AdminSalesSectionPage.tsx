@@ -1,8 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  ArrowDownRight,
-  ArrowUpRight,
   Ban,
   CalendarRange,
   ChevronRight,
@@ -26,9 +24,11 @@ import SalesActivitySheet, { type SalesActivityKind } from "@/components/sales/S
 import { useT } from "@/lib/i18n";
 import { useShellBase } from "@/lib/useShellBase";
 import { useReturnTo } from "@/lib/useReturnTo";
-import { formatCurrency } from "@/lib/formatters";
-import { pkDateFromISO, pkMonthStart, pkMonthStartOf, pkToday } from "@/lib/pkDate";
+import { formatCompactCurrency, formatCurrency } from "@/lib/formatters";
+import { pkDateFromISO, pkMonthStart, pkMonthStartOf, pkToday, pkWeekStart } from "@/lib/pkDate";
 import { useSalesStore } from "@/stores/salesStore";
+import { useShopStore } from "@/stores/shopStore";
+import type { Sale } from "@/types";
 import { useBranchPeriodReport } from "@/lib/branchReports";
 import { useThemeStore } from "@/stores/themeStore";
 import { useUIStore } from "@/stores/uiStore";
@@ -37,14 +37,19 @@ import { refundsBySale, useReturns } from "@/lib/salesActivity";
 /**
  * Sales, as one screen: the report the owner reads before deciding anything.
  *
- * SHAPE (owner's reference, 2026-10-28):
+ * SHAPE (owner's reference, 2026-10-31):
  *
- *   1. What the period is worth          → net sales, its two components
- *   2. How many sales made it            → completed sales, average sale
- *   3. Which way it is moving            → the trend, by week or by month
- *   4. Which branch contributed what     → branch performance
- *   5. What came back                    → the returns analysis
+ *   1. What the period is worth          → six figures, two to a row, flat on the page
+ *   2. How many sales made it            → completed sales and the average behind them
+ *   3. Which way it is moving            → the trend, by day, week or month
+ *   4. How today is going                → today beside the same weekday a week ago
+ *   5. Which branch contributed what     → branch performance
  *   6. Where the ledgers live            → all sales, returns, voided sales
+ *
+ * NO CARDS ON THIS SCREEN. The reference separates figures with a hairline and space, not with
+ * a box: six tiles in six rounded surfaces reads as six unrelated widgets, while one table of
+ * figures reads as the report it is. The trend, the branch comparison and the ledger rows are
+ * flat for the same reason (owner's instruction, 2026-10-31).
  *
  * EVERY FIGURE IS DERIVED FROM THE LEDGERS, never from a sample:
  *
@@ -53,7 +58,10 @@ import { refundsBySale, useReturns } from "@/lib/salesActivity";
  *     same per-sale attribution `netSalesOf` uses — so a refund of last month's sale reduces
  *     last month's net, not this month's.
  *   - Completed sales is the count behind that gross, and the average is gross ÷ that count.
- *   - Return rate is returns ÷ gross, stated in words under it.
+ *   - Outstanding credit is what those same sales still owe, stated as a share of their gross.
+ *   - Each change is against the window of the SAME LENGTH ending the day before this one
+ *     starts, so a month is never compared with a week.
+ *   - Return rate is returns ÷ gross, carried by the export even where the grid has no tile.
  *   - Branch performance is `get_branch_period_report` (0253): each branch's gross sales,
  *     refunds and net sales for the SAME window the strip above is showing. It was lifetime
  *     sales from `get_my_branches()` before, which made a report headed "this month" compare
@@ -72,11 +80,44 @@ import { refundsBySale, useReturns } from "@/lib/salesActivity";
  * carries.
  */
 
-/** The three presets in the reference, plus the hand-picked window the filter opens. */
-type Preset = "month" | "sixMonths" | "year";
+/**
+ * The report's five presets (the reference's 1D…1Y), plus the hand-picked window.
+ *
+ * `quarter` is three calendar months ending with this one — the same unit every ledger groups
+ * by — not 90 days, which would put a different set of sales under the tab tomorrow.
+ */
+type Preset = "day" | "week" | "month" | "quarter" | "year";
 type Period = Preset | "custom";
 /** Which series the trend card is drawing. */
 type TrendMetric = "net" | "returns";
+
+/** Which way a figure has to move before the movement is good news. */
+type GoodDirection = "up" | "down";
+
+/** Every figure the report's headline grid states, derived from one window of sales. */
+interface Totals {
+  gross: number;
+  refunds: number;
+  net: number;
+  count: number;
+  average: number;
+  /** Still unpaid on these sales — credit the shop is carrying, not money it kept. */
+  outstanding: number;
+}
+
+/**
+ * One change against the previous window, already written as the row shows it.
+ *
+ * A percentage needs a previous figure to be a percentage OF; when there was none, the absolute
+ * change is stated alone rather than printed as an infinite rise. A zero-to-zero move is not a
+ * jump in either direction, so it is labelled instead of coloured.
+ */
+interface DeltaLine {
+  text: string;
+  direction: "up" | "down" | "flat";
+  /** True when this direction is the good one for the figure in question. */
+  favourable: boolean;
+}
 
 /** A PK day, moved by whole days. Dates are plain `YYYY-MM-DD`, so this stays a date. */
 function shiftDays(iso: string, days: number): string {
@@ -98,6 +139,80 @@ function shortMonth(iso: string): string {
     month: "short",
     timeZone: "UTC",
   });
+}
+
+/** The same window of sales, summed the one way every screen sums it. */
+function totalsOf(list: Sale[], refunds: Map<string, number>): Totals {
+  let gross = 0;
+  let refunded = 0;
+  let outstanding = 0;
+  for (const sale of list) {
+    const refund = refunds.get(sale.id) ?? 0;
+    gross += sale.totalAmount;
+    refunded += refund;
+    outstanding += sale.outstandingBalance;
+  }
+  return {
+    gross,
+    refunds: refunded,
+    net: gross - refunded,
+    count: list.length,
+    average: list.length > 0 ? gross / list.length : 0,
+    outstanding,
+  };
+}
+
+/**
+ * The change between two windows, written as "+Rs. 168.35 (12.5%)".
+ *
+ * `format` is the figure's own formatter: money in rupees, a count in whole numbers. The sign
+ * always states the DIRECTION of the move; whether that direction is good is decided by the
+ * caller, because a rise in refunds is not the same news as a rise in sales.
+ */
+function deltaOf(
+  current: number,
+  previous: number,
+  format: (value: number) => string,
+  good: GoodDirection,
+): DeltaLine {
+  const diff = current - previous;
+  const direction: DeltaLine["direction"] = diff > 0 ? "up" : diff < 0 ? "down" : "flat";
+  const favourable = direction === "flat" ? true : good === "up" ? direction === "up" : direction === "down";
+  if (previous === 0) {
+    return { text: diff === 0 ? "" : `${diff > 0 ? "+" : "−"}${format(Math.abs(diff))}`, direction, favourable };
+  }
+  const percent = Math.abs((diff / previous) * 100);
+  const shown = percent >= 10 ? percent.toFixed(0) : percent.toFixed(1);
+  return {
+    text: `${diff > 0 ? "+" : diff < 0 ? "−" : ""}${format(Math.abs(diff))} (${shown}%)`,
+    direction,
+    favourable,
+  };
+}
+
+/** A PK day as a headline says it: "31 Oct". */
+function shortDay(iso: string): string {
+  return new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "short",
+    timeZone: "UTC",
+  });
+}
+
+/** A window as one line: a single day, a span inside a month, or two full dates. */
+function rangeLabel(from: string, to: string): string {
+  const start = new Date(`${from}T00:00:00Z`);
+  const end = new Date(`${to}T00:00:00Z`);
+  const startMonth = start.toLocaleDateString("en-GB", { month: "short", timeZone: "UTC" });
+  const endMonth = end.toLocaleDateString("en-GB", { month: "short", timeZone: "UTC" });
+  if (from === to) return `${start.getUTCDate()} ${startMonth} ${start.getUTCFullYear()}`;
+  if (from.slice(0, 7) === to.slice(0, 7)) {
+    return `${start.getUTCDate()} – ${end.getUTCDate()} ${endMonth} ${end.getUTCFullYear()}`;
+  }
+  if (from.slice(0, 4) === to.slice(0, 4)) {
+    return `${start.getUTCDate()} ${startMonth} – ${end.getUTCDate()} ${endMonth} ${end.getUTCFullYear()}`;
+  }
+  return `${start.getUTCDate()} ${startMonth} ${start.getUTCFullYear()} – ${end.getUTCDate()} ${endMonth} ${end.getUTCFullYear()}`;
 }
 
 /** One CSV field, quoted only when it has to be. */
@@ -141,9 +256,8 @@ export default function AdminSalesSectionPage() {
   const sales = useSalesStore((s) => s.sales);
   const salesReady = useSalesStore((s) => s.ready);
   const loadSales = useSalesStore((s) => s.load);
+  const branchName = useShopStore((s) => s.activeBranchName);
   const { returns, refresh: refreshReturns } = useReturns();
-
-
 
   const [period, setPeriod] = useState<Period>("month");
   const [customFrom, setCustomFrom] = useState("");
@@ -167,11 +281,15 @@ export default function AdminSalesSectionPage() {
   const rangeFrom =
     period === "custom"
       ? customFrom || pkMonthStart()
-      : period === "sixMonths"
-        ? pkMonthStartOf(todayISO, -5)
-        : period === "year"
-          ? `${todayISO.slice(0, 4)}-01-01`
-          : pkMonthStart();
+      : period === "day"
+        ? todayISO
+        : period === "week"
+          ? pkWeekStart()
+          : period === "quarter"
+            ? pkMonthStartOf(todayISO, -2)
+            : period === "year"
+              ? `${todayISO.slice(0, 4)}-01-01`
+              : pkMonthStart();
   const rangeTo = period === "custom" ? customTo || todayISO : todayISO;
   const windowDays = daysInclusive(rangeFrom, rangeTo);
 
@@ -193,12 +311,17 @@ export default function AdminSalesSectionPage() {
   );
 
   const buckets = useMemo<Bucket[]>(() => {
-    // Weeks for a month (and a short custom window), months for anything longer: a chart of
-    // thirty daily points on a phone is a texture, not a trend.
-    const byWeek = period === "month" || (period === "custom" && windowDays <= 35);
+    // Days for a single-day report (and a short custom window), weeks for a month, months for
+    // anything longer: thirty daily points on a phone is a texture, not a trend.
+    const byDay = period === "day" || (period === "custom" && windowDays <= 14);
+    const byWeek = !byDay && (period === "month" || (period === "custom" && windowDays <= 35));
     const spans: { label: string; from: string; to: string }[] = [];
 
-    if (byWeek) {
+    if (byDay) {
+      for (let start = rangeFrom; start <= rangeTo; start = shiftDays(start, 1)) {
+        spans.push({ label: String(Number(start.slice(8, 10))), from: start, to: start });
+      }
+    } else if (byWeek) {
       let index = 0;
       for (let start = rangeFrom; start <= rangeTo; start = shiftDays(start, 7)) {
         const weekEnd = shiftDays(start, 6);
@@ -235,27 +358,56 @@ export default function AdminSalesSectionPage() {
     return drawn;
   }, [period, windowDays, rangeFrom, rangeTo, periodSales, refunds, t]);
 
-  const grossTotal = buckets.reduce((sum, b) => sum + b.gross, 0);
-  const returnsTotal = buckets.reduce((sum, b) => sum + b.returns, 0);
-  const netTotal = buckets.reduce((sum, b) => sum + b.net, 0);
-  const completed = periodSales.length;
-  const average = completed > 0 ? grossTotal / completed : 0;
+  // The period's own figures, summed from the same rows the chart draws — the grid and the line
+  // can never disagree about what was sold.
+  const totals = useMemo(() => totalsOf(periodSales, refunds), [periodSales, refunds]);
+  const grossTotal = totals.gross;
+  const returnsTotal = totals.refunds;
+  const netTotal = totals.net;
+  const completed = totals.count;
+  const average = totals.average;
   const returnRate = grossTotal > 0 ? (returnsTotal / grossTotal) * 100 : 0;
 
-  // The previous window, by the same per-sale refund attribution.
-  const previous = useMemo(() => {
-    let net = 0;
-    let refunded = 0;
+  // The previous window of the same length, by the same per-sale refund attribution.
+  const previousTotals = useMemo(() => {
+    const list = sales.filter((sale) => {
+      if (sale.isVoided) return false;
+      const day = pkDateFromISO(sale.createdAt);
+      return day >= prevFrom && day <= prevTo;
+    });
+    return totalsOf(list, refunds);
+  }, [sales, refunds, prevFrom, prevTo]);
+
+  // Today beside the same weekday a week ago. Fixed to the calendar rather than to the selected
+  // window, so this line always answers "how is today going" whatever the tabs are showing.
+  const daily = useMemo(() => {
+    const lastWeekDay = shiftDays(todayISO, -7);
+    let todayGross = 0;
+    let lastWeekGross = 0;
     for (const sale of sales) {
       if (sale.isVoided) continue;
       const day = pkDateFromISO(sale.createdAt);
-      if (day < prevFrom || day > prevTo) continue;
-      const refund = refunds.get(sale.id) ?? 0;
-      net += sale.totalAmount - refund;
-      refunded += refund;
+      if (day === todayISO) todayGross += sale.totalAmount;
+      else if (day === lastWeekDay) lastWeekGross += sale.totalAmount;
     }
-    return { net, returns: refunded };
-  }, [sales, refunds, prevFrom, prevTo]);
+    return { todayGross, lastWeekGross };
+  }, [sales, todayISO]);
+
+  // The headline is a sentence about the window, so it reads in sentence case: a tab label
+  // ("This Month") is title-cased for a chip, a headline is not.
+  const periodTitle =
+    period === "day"
+      ? t("sales.todayDate", { date: shortDay(todayISO) })
+      : period === "week"
+        ? t("period.week")
+        : period === "month"
+          ? t("period.month")
+          : period === "quarter"
+            ? t("sales.lastThreeMonths")
+            : period === "year"
+              ? t("period.year")
+              : t("overall.custom");
+  const scopeLine = `${rangeLabel(rangeFrom, rangeTo)} · ${branchName ?? t("sales.thisBranch")} · ${t("overall.vsPrevious")}`;
 
   // ── Branch performance ──────────────────────────────────────────────────────────
   // The same window the report is showing, resolved per branch at the database (0253). The
@@ -291,10 +443,14 @@ export default function AdminSalesSectionPage() {
   }, [periodSales]);
 
   const money = (value: number) => (salesReady ? formatCurrency(value) : "—");
+  // The headline figures are read at a glance, so they use the short form (Rs. 139.5K). The
+  // detail sheets, the branch rows and the export keep the full rupee amount — a ledger is
+  // read number by number, not skimmed.
+  const compactMoney = (value: number) => (salesReady ? formatCompactCurrency(value) : "—");
   // The bucket whose exact figures the sheet states, or null when it is closed.
   const openBucket = bucketOpen != null ? buckets[bucketOpen] ?? null : null;
   const metricTotal = metric === "net" ? netTotal : returnsTotal;
-  const previousTotal = metric === "net" ? previous.net : previous.returns;
+  const previousTotal = metric === "net" ? previousTotals.net : previousTotals.refunds;
   const change =
     previousTotal > 0 ? ((metricTotal - previousTotal) / previousTotal) * 100 : null;
 
@@ -311,10 +467,13 @@ export default function AdminSalesSectionPage() {
   const line = points.map(([x, y], i) => `${i === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`).join(" ");
   const area = `${line} L${W},${H} L0,${H} Z`;
 
+  // The five presets, short enough to sit on one line at 320px: 1D · 1W · 1M · 3M · 1Y.
   const periodOptions: { key: Preset; label: string }[] = [
-    { key: "month", label: t("branchPage.thisMonth") },
-    { key: "sixMonths", label: t("branchPage.sixMonths") },
-    { key: "year", label: t("branchPage.thisYear") },
+    { key: "day", label: t("sales.rangeDay") },
+    { key: "week", label: t("sales.rangeWeek") },
+    { key: "month", label: t("sales.rangeMonth") },
+    { key: "quarter", label: t("sales.rangeQuarter") },
+    { key: "year", label: t("sales.rangeYear") },
   ];
 
   // ── The report's own actions ────────────────────────────────────────────────────
@@ -325,14 +484,21 @@ export default function AdminSalesSectionPage() {
     return [
       [t("hub.sales.reportTitle")],
       [periodLine],
+      [scopeLine],
       [t("sales.amountsInPkr")],
       [],
-      [t("sales.netSales"), netTotal],
+      [t("sales.overview")],
       [t("hub.sales.grossSales"), grossTotal],
-      [t("hub.sales.salesReturns"), returnsTotal],
-      [t("hub.sales.completedSales"), completed],
+      [t("sales.netSales"), netTotal],
+      [t("sales.title"), completed],
       [t("hub.sales.averageSale"), Math.round(average)],
+      [t("sales.refunds"), returnsTotal],
+      [t("sales.outstandingCredit"), totals.outstanding],
       [t("hub.sales.returnRate"), `${returnRate.toFixed(1)}%`],
+      [],
+      [t("sales.dailyGross")],
+      [t("sales.today"), daily.todayGross],
+      [t("sales.sameDayLastWeek"), daily.lastWeekGross],
       [],
       [
         t("overall.branchPerformance"),
@@ -381,12 +547,15 @@ export default function AdminSalesSectionPage() {
     }
     const direction = language === "ur" ? "rtl" : "ltr";
     const figures: [string, string][] = [
-      [t("sales.netSales"), money(netTotal)],
       [t("hub.sales.grossSales"), money(grossTotal)],
-      [t("hub.sales.salesReturns"), money(returnsTotal)],
-      [t("hub.sales.completedSales"), salesReady ? String(completed) : "—"],
+      [t("sales.netSales"), money(netTotal)],
+      [t("sales.title"), salesReady ? String(completed) : "—"],
       [t("hub.sales.averageSale"), money(average)],
+      [t("sales.refunds"), money(returnsTotal)],
+      [t("sales.outstandingCredit"), money(totals.outstanding)],
       [t("hub.sales.returnRate"), salesReady ? `${returnRate.toFixed(1)}%` : "—"],
+      [t("sales.today"), money(daily.todayGross)],
+      [t("sales.sameDayLastWeek"), money(daily.lastWeekGross)],
     ];
     const figureRows = figures
       .map(([label, value]) => `<tr><td>${escapeHtml(label)}</td><td>${escapeHtml(value)}</td></tr>`)
@@ -422,8 +591,9 @@ export default function AdminSalesSectionPage() {
 </style></head>
 <body>
   <h1>${escapeHtml(t("hub.sales.reportTitle"))}</h1>
+  <p>${escapeHtml(scopeLine)}</p>
   <p>${escapeHtml(periodLine)} · ${escapeHtml(t("sales.amountsInPkr"))}</p>
-  <h2>${escapeHtml(t("hub.sales.reportSubtitle"))}</h2>
+  <h2>${escapeHtml(t("sales.overview"))}</h2>
   <table>${figureRows}</table>
   ${branchRowsHtml ? `<h2>${escapeHtml(t("overall.branchPerformance"))}</h2><table>${branchRowsHtml}</table>` : ""}
   ${productRowsHtml ? `<h2>${escapeHtml(t("sales.topProductsTitle"))}</h2><table>${productRowsHtml}</table>` : ""}
@@ -437,8 +607,9 @@ export default function AdminSalesSectionPage() {
   async function shareReport() {
     const text =
       `${t("hub.sales.reportTitle")} (${periodLine})\n` +
+      `${t("hub.sales.grossSales")}: ${formatCurrency(grossTotal)}\n` +
       `${t("sales.netSales")}: ${formatCurrency(netTotal)}\n` +
-      `${t("hub.sales.salesReturns")}: ${formatCurrency(returnsTotal)}\n` +
+      `${t("sales.refunds")}: ${formatCurrency(returnsTotal)}\n` +
       `${t("hub.sales.completedSales")}: ${completed}`;
     setOptionsOpen(false);
     if (navigator.share) {
@@ -468,6 +639,73 @@ export default function AdminSalesSectionPage() {
     addToast(t("sales.reportRefreshed"), "success");
   }
 
+  /** A change line, in the colour of its own news: a rise in refunds is not a rise in sales. */
+  const noteOf = (delta: DeltaLine) =>
+    !salesReady
+      ? { text: "—", tone: "var(--text-tertiary)" }
+      : delta.direction === "flat"
+        ? { text: t("sales.noChange"), tone: "var(--text-tertiary)" }
+        : { text: delta.text, tone: delta.favourable ? "var(--brand-dark)" : "var(--error)" };
+
+  // The reference's plate, in its order: value, what it measures, and how it moved against the
+  // window of the same length just before this one. Outstanding credit is a balance rather than
+  // a flow, so it states its share of the period's gross instead of a change it cannot have.
+  const overviewRows = [
+    [
+      {
+        testId: "sales-hub-gross",
+        value: compactMoney(grossTotal),
+        label: t("hub.sales.grossSales"),
+        note: noteOf(deltaOf(grossTotal, previousTotals.gross, formatCompactCurrency, "up")),
+      },
+      {
+        testId: "sales-hub-net-sales",
+        value: compactMoney(netTotal),
+        label: t("sales.netSales"),
+        note: noteOf(deltaOf(netTotal, previousTotals.net, formatCompactCurrency, "up")),
+      },
+    ],
+    [
+      {
+        testId: "sales-hub-completed",
+        value: salesReady ? completed.toLocaleString("en-PK") : "—",
+        label: t("sales.title"),
+        note: noteOf(
+          deltaOf(completed, previousTotals.count, (value) => value.toLocaleString("en-PK"), "up"),
+        ),
+      },
+      {
+        testId: "sales-hub-average",
+        value: compactMoney(average),
+        label: t("hub.sales.averageSale"),
+        note: noteOf(deltaOf(average, previousTotals.average, formatCompactCurrency, "up")),
+      },
+    ],
+    [
+      {
+        testId: "sales-hub-refunds",
+        value: compactMoney(returnsTotal),
+        label: t("sales.refunds"),
+        note: noteOf(deltaOf(returnsTotal, previousTotals.refunds, formatCompactCurrency, "down")),
+      },
+      {
+        testId: "sales-hub-outstanding",
+        value: compactMoney(totals.outstanding),
+        label: t("sales.outstandingCredit"),
+        note: {
+          text: !salesReady
+            ? "—"
+            : grossTotal > 0
+              ? t("sales.ofGross", {
+                  pct: String(Math.round((totals.outstanding / grossTotal) * 100)),
+                })
+              : "—",
+          tone: "var(--text-tertiary)",
+        },
+      },
+    ],
+  ];
+
   return (
     <div
       className="flex flex-col w-full min-h-full"
@@ -476,7 +714,7 @@ export default function AdminSalesSectionPage() {
     >
       <StatusBar />
       <NavHeader
-        title={t("settings.menu.sales")}
+        title={t("hub.sales.reportTitle")}
         backTo={returnTo}
         right={
           <SectionActionsButton
@@ -488,14 +726,21 @@ export default function AdminSalesSectionPage() {
       />
 
       <div className="px-4 pt-1">
-        <h1 className="text-22 font-bold leading-tight">{t("hub.sales.reportTitle")}</h1>
-        <p className="text-13 mt-1" style={{ color: "var(--text-secondary)" }}>
-          {t("hub.sales.reportSubtitle")}
+        <h1 className="text-22 font-bold leading-tight" data-testid="sales-headline">
+          {periodTitle}
+        </h1>
+        <p
+          className="text-13 mt-1"
+          style={{ color: "var(--text-secondary)" }}
+          data-testid="sales-scope"
+        >
+          {scopeLine}
         </p>
       </div>
 
       <div className="px-4 pt-4">
         <PeriodTabs
+          variant="underline"
           options={periodOptions}
           value={period === "custom" ? null : period}
           onChange={(key) => setPeriod(key)}
@@ -507,88 +752,65 @@ export default function AdminSalesSectionPage() {
         />
       </div>
 
-      {/* ── 1. What the period is worth ────────────────────────────────────────────── */}
-      {/* The one tinted surface on the screen: net sales is the figure the rest of the report
-          explains, so it is separated by tone rather than by a border (DESIGN-SYSTEM §1). */}
-      <div className="px-4 pt-4">
-        <div
-          className="rounded-[var(--radius-card)] p-4"
-          style={{ background: "var(--brand-light)" }}
-          data-testid="sales-hub-net-sales"
-        >
-          <p className="text-12" style={{ color: "var(--text-secondary)" }}>{t("sales.netSales")}</p>
-          <p
-            className="text-26 font-bold mt-1 tabular-nums break-words"
-            style={{ color: "var(--brand-dark)" }}
-          >
-            {money(netTotal)}
-          </p>
-          <p className="text-10 mt-1" style={{ color: "var(--text-secondary)" }}>
-            {t("hub.sales.netSalesNote")}
-          </p>
-
-          <div className="grid grid-cols-2 gap-3 mt-4">
-            <div className="min-w-0">
-              <p className="text-10" style={{ color: "var(--text-secondary)" }}>
-                {t("hub.sales.grossSales")}
-              </p>
-              <p className="text-14 font-bold mt-0.5 tabular-nums break-words">
-                {money(grossTotal)}
-              </p>
+      {/* ── 1. What the period is worth, and which way it moved ─────────────────────── */}
+      {/* The reference's plate: no cards, two figures to a row, one hairline between rows. A
+          box around each figure would draw six boxes where the report is one table. */}
+      <div className="px-4 pt-6" data-testid="sales-hub-overview">
+        <p className="ds-section-label">{t("sales.overview")}</p>
+        <div className="mt-1">
+          {overviewRows.map((row, rowIndex) => (
+            <div
+              key={rowIndex}
+              className="grid grid-cols-2 gap-x-4 py-4"
+              style={rowIndex > 0 ? { borderTop: "1px solid var(--hairline)" } : undefined}
+            >
+              {row.map((tile) => (
+                <div key={tile.testId} className="min-w-0" data-testid={tile.testId}>
+                  <p className="text-18 font-semibold leading-none tabular-nums break-words">
+                    {tile.value}
+                  </p>
+                  <p className="text-13 mt-2" style={{ color: "var(--text-secondary)" }}>
+                    {tile.label}
+                  </p>
+                  <p
+                    className="text-12 mt-1 font-semibold tabular-nums break-words"
+                    style={{ color: tile.note.tone }}
+                    data-testid={`${tile.testId}-note`}
+                  >
+                    {tile.note.text}
+                  </p>
+                </div>
+              ))}
             </div>
-            <div className="min-w-0">
-              <p className="text-10" style={{ color: "var(--text-secondary)" }}>
-                {t("hub.sales.salesReturns")}
-              </p>
-              <p className="text-14 font-bold mt-0.5 tabular-nums break-words">
-                {money(returnsTotal)}
-              </p>
-            </div>
-          </div>
+          ))}
         </div>
+      </div>
 
-        {/* ── 2. How many sales made it ─────────────────────────────────────────────── */}
-        <div className="grid grid-cols-2 gap-2 mt-2">
-          <div
-            className="rounded-[var(--radius-card)] p-3.5"
-            style={{ background: "var(--tone-card)" }}
-            data-testid="sales-hub-completed"
-          >
-            <p className="text-11" style={{ color: "var(--text-secondary)" }}>
-              {t("hub.sales.completedSales")}
-            </p>
-            <p className="text-20 font-bold mt-1 tabular-nums">
-              {salesReady ? completed.toLocaleString("en-PK") : "—"}
-            </p>
-            <p className="text-10 mt-0.5" style={{ color: "var(--text-tertiary)" }}>
-              {t("sales.transactions")}
+      {/* ── 2. Today beside the same weekday a week ago ─────────────────────────────── */}
+      <div className="px-4 pt-2 pb-5" data-testid="sales-hub-daily">
+        <p className="ds-section-label">{t("sales.dailyGross")}</p>
+        <div className="grid grid-cols-2 gap-x-4 pt-3">
+          <div className="min-w-0">
+            <p className="text-13" style={{ color: "var(--text-secondary)" }}>{t("sales.today")}</p>
+            <p className="text-18 font-semibold mt-1 tabular-nums break-words">
+              {compactMoney(daily.todayGross)}
             </p>
           </div>
-          <div
-            className="rounded-[var(--radius-card)] p-3.5"
-            style={{ background: "var(--tone-card)" }}
-            data-testid="sales-hub-average"
-          >
-            <p className="text-11" style={{ color: "var(--text-secondary)" }}>
-              {t("hub.sales.averageSale")}
+          <div className="min-w-0">
+            <p className="text-13" style={{ color: "var(--text-secondary)" }}>
+              {t("sales.sameDayLastWeek")}
             </p>
-            <p className="text-20 font-bold mt-1 tabular-nums break-words">
-              {money(average)}
-            </p>
-            <p className="text-10 mt-0.5" style={{ color: "var(--text-tertiary)" }}>
-              {t("hub.sales.perSale")}
+            <p className="text-18 font-semibold mt-1 tabular-nums break-words">
+              {compactMoney(daily.lastWeekGross)}
             </p>
           </div>
         </div>
       </div>
 
       {/* ── 3. Which way it is moving ──────────────────────────────────────────────── */}
+      {/* Flat, like the plate above: the chart is drawn on the page, not inside a card. */}
       <div className="px-4 pt-2">
-        <div
-          className="rounded-[var(--radius-card)] p-4"
-          style={{ background: "var(--tone-card)" }}
-          data-testid="sales-hub-trend"
-        >
+        <div data-testid="sales-hub-trend">
           <p className="text-14 font-bold">{t("hub.sales.salesTrend")}</p>
           <p className="text-11 mt-0.5" style={{ color: "var(--text-secondary)" }}>
             {t("hub.sales.trendHint")}
@@ -625,8 +847,8 @@ export default function AdminSalesSectionPage() {
             })}
           </div>
 
-          <p className="text-22 font-bold mt-3 tabular-nums break-words">
-            {money(metricTotal)}
+          <p className="text-18 font-semibold mt-3 tabular-nums break-words">
+            {compactMoney(metricTotal)}
           </p>
           <p className="text-11 mt-0.5 flex items-center gap-1" style={{ color: "var(--text-secondary)" }}>
             {change != null && (
@@ -635,7 +857,7 @@ export default function AdminSalesSectionPage() {
                 style={{ color: change >= 0 ? "var(--brand-dark)" : "var(--error)" }}
                 data-testid="sales-trend-change"
               >
-                {change >= 0 ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />}
+                {change >= 0 ? "+" : "−"}
                 {Math.abs(Math.round(change))}% {t("overall.vsPrevious")}
               </span>
             )}
@@ -725,12 +947,9 @@ export default function AdminSalesSectionPage() {
       </div>
 
       {/* ── 4. Which branch contributed what ───────────────────────────────────────── */}
-      <div className="px-4 pt-2">
-        <div
-          className="rounded-[var(--radius-card)] p-4"
-          style={{ background: "var(--tone-card)" }}
-          data-testid="sales-hub-branches"
-        >
+      {/* Flat too: same rows, same bars, no card around them. */}
+      <div className="px-4 pt-6">
+        <div data-testid="sales-hub-branches">
           <p className="text-14 font-bold">{t("overall.branchPerformance")}</p>
           <p className="text-11 mt-0.5" style={{ color: "var(--text-secondary)" }}>
             {t("sales.branchCompareHint")}

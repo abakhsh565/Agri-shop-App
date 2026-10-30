@@ -5,6 +5,7 @@ import { useProductsStore } from "@/stores/productsStore";
 import { useCustomersStore } from "@/stores/customersStore";
 import { useSalesStore } from "@/stores/salesStore";
 import { useCompaniesStore } from "@/stores/companiesStore";
+import { useCatalogueStore } from "@/stores/catalogueStore";
 import { useEmployeesStore } from "@/stores/employeesStore";
 import { useRolesStore } from "@/stores/rolesStore";
 import { useNotificationStore } from "@/stores/notificationStore";
@@ -412,6 +413,7 @@ function resetShopScopedStores(): void {
   useCustomersStore.getState().reset();
   useSalesStore.getState().reset();
   useCompaniesStore.getState().reset();
+  useCatalogueStore.getState().reset();
   useEmployeesStore.getState().reset();
   useRolesStore.getState().reset();
   useNotificationStore.getState().reset();

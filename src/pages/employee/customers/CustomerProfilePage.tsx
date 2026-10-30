@@ -10,6 +10,7 @@ import { useUIStore } from "@/stores/uiStore";
 import { useAuthStore } from "@/stores/authStore";
 import { useSalesStore } from "@/stores/salesStore";
 import { fetchCustomerPayments, rpcArchiveCustomer } from "@/lib/db";
+import DateField from "@/components/ui/DateField";
 import type { CustomerPayment } from "@/types";
 import { formatCurrency, calculateCreditHealth, getCreditHealthStatusColor } from "@/lib/formatters";
 import { useThemeStore } from "@/stores/themeStore";
@@ -26,6 +27,7 @@ import CreditLimitSheet from "@/components/customers/CreditLimitSheet";
 import { hasPermission } from "@/lib/tenantContext";
 import type { LocalCreditRequest } from "@/lib/localGroupRegistry";
 import ReminderConfigSheet from "@/components/ui/ReminderConfigSheet";
+import { usePaymentReminderBook } from "@/lib/paymentReminders";
 import type { ReminderConfig, BusinessSettings, CropConfig } from "@/types";
 
 function initBgColor(name: string | null | undefined) {
@@ -76,6 +78,13 @@ export default function CustomerProfilePage() {
   const [payments, setPayments] = useState<CustomerPayment[]>([]);
   const sales = useSalesStore((s) => s.sales);
   const customersReady = useCustomersStore((s) => s.ready);
+  // The owner's diary holds the reminders written about this customer (0257). The same rows are
+  // read on the reminder history screen and in the payment book; this count is the door's badge,
+  // not a second list.
+  const reminderBook = usePaymentReminderBook();
+  const openCustomerReminders = (reminderBook.rows ?? []).filter(
+    (r) => r.kind === "customer" && r.customerId === customerId && r.status === "upcoming",
+  ).length;
   const [deleting, setDeleting] = useState(false);
   const [showReminderConfig, setShowReminderConfig] = useState(false);
   const [editingConfig, setEditingConfig] = useState<ReminderConfig | null>(null);
@@ -576,6 +585,9 @@ export default function CustomerProfilePage() {
             onClick={() => navigate(base + "/customers/" + customerId + "/reminders")}
             icon={Bell}
             title={t("customerProfile.reminderHistory")}
+            // The count sits where the app puts every right-hand secondary value. A bell in a
+            // pill beside it said "alert" for something that is only a number of notes.
+            value={openCustomerReminders > 0 ? String(openCustomerReminders) : undefined}
           />
           {/* Same row as its neighbours: it was the only one carrying a tinted background and a
               hardcoded dark green label, which read as a different kind of control and was
@@ -709,7 +721,12 @@ export default function CustomerProfilePage() {
             <p className="text-13" style={{ color: 'var(--text-secondary)' }}>{t('common.dueDateDescription')}</p>
             <div>
               <label className="ds-section-label block mb-1.5" style={{ color: 'var(--text-secondary)' }}>{t('common.dueDate')}</label>
-              <input type="date" value={editDueDate} min={new Date().toISOString().split('T')[0]} onChange={e => setEditDueDate(e.target.value)} className="w-full outline-none" />
+              <DateField
+                value={editDueDate}
+                min={new Date().toISOString().split("T")[0]}
+                onChange={setEditDueDate}
+                testId="customer-due-date"
+              />
             </div>
             <div className="flex gap-3 mt-1">
               <button onClick={() => setShowEditDueDate(false)} className="flex-1 h-11 rounded-full text-sm font-medium" style={{ background: 'var(--surface-2)', color: 'var(--text-secondary)' }}>{t('common.cancel')}</button>

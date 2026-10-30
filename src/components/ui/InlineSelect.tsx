@@ -20,6 +20,12 @@ import { useT } from "@/lib/i18n";
 export interface InlineSelectOption {
   value: string;
   label: string;
+  /**
+   * A grey second line, for an option that needs its family or its parent named —
+   * "Kilogram (kg)" over "Weight", or "Insect powder" over "Pesticide". The field
+   * itself still shows one line, because a closed control should not grow with its data.
+   */
+  meta?: string;
 }
 
 export default function InlineSelect({
@@ -104,7 +110,17 @@ export default function InlineSelect({
                   className="w-full flex items-center gap-3 px-4 py-2.5 text-start text-13 ds-pressable"
                   style={{ color: active ? "var(--brand-dark)" : "var(--text-primary)" }}
                 >
-                  <span className="flex-1 truncate">{option.label}</span>
+                  <span className="flex-1 min-w-0">
+                    <span className="block truncate">{option.label}</span>
+                    {option.meta && (
+                      <span
+                        className="block truncate text-11"
+                        style={{ color: "var(--text-secondary)" }}
+                      >
+                        {option.meta}
+                      </span>
+                    )}
+                  </span>
                   {active && <Check size={15} className="shrink-0" />}
                 </button>
               );

@@ -22,9 +22,9 @@ import { useShellBase } from "@/lib/useShellBase";
  * `BranchPerformance`), so the form begins where configuration begins and never repeats the
  * name and place it sits under.
  *
- * The name is NOT edited here. It has its own pencil on the identity block above, where
- * renaming asks before it writes: a branch's name is its identity in every other screen — the
- * switcher, the sales, the reports — not a line to be changed on the way to the map.
+ * The name is NOT edited here, and no longer anywhere on this screen (owner's correction,
+ * 2026-10-30): the branch an owner reads at the top is named after the business itself, so its
+ * name is the business's own record and not a line to be changed on the way to the map.
  *
  * The roles are a deliberate limit rather than a missing feature: a role belongs to the branch it
  * was created in, and this app's role screens — the list, the permission grid, the delete — are

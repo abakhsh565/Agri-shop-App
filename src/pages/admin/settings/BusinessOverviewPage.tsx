@@ -399,7 +399,9 @@ export default function BusinessOverviewPage() {
       {!ready ? (
         <SkeletonList rows={6} />
       ) : (
-        <div className="pb-8">
+        // The app's help button floats at the bottom-end corner; enough foot room keeps the last
+        // branch's outstanding credit from sitting underneath it (owner's screenshot, 2026-10-31).
+        <div className="pb-24">
           {/* ── The head of the screen, straight on the page ───────────────────────────── */}
           <div className="px-4 pt-2">
             <h1 className="text-22 font-bold">{t("overview.title")}</h1>
@@ -420,8 +422,16 @@ export default function BusinessOverviewPage() {
           </div>
 
           {/* ── 1. The two period figures, their change, and the trend ─────────────────── */}
-          <div className="px-4 pt-5" data-testid="overall-figures">
-            <div className="flex gap-5">
+          <div className="px-4 pt-4" data-testid="overall-figures">
+            {/* The two figures and the bars are one reading, so they sit on one surface: they
+                were the only section on this page floating straight on the background while
+                the balances below them had a card (owner's correction, 2026-10-31). */}
+            <div className="rounded-[var(--radius-card)] p-4" style={{ background: "var(--tone-card)" }}>
+              <div className="flex items-baseline justify-between gap-3">
+                <p className="text-14 font-bold">{t("overall.trends")}</p>
+                <span className="text-11 shrink-0" style={{ color: "var(--text-secondary)" }}>{periodLabel}</span>
+              </div>
+            <div className="flex gap-5 mt-3">
               <Figure
                 testId="overall-net-sales"
                 label={t("overall.netSales")}
@@ -481,6 +491,7 @@ export default function BusinessOverviewPage() {
             {barMax === 0 && (
               <p className="text-11 mt-2" style={{ color: "var(--text-tertiary)" }}>{t("overall.noSales")}</p>
             )}
+            </div>
           </div>
 
           {/* ── 2. The two standing balances, each opening its own collection screen ───── */}
@@ -589,15 +600,18 @@ export default function BusinessOverviewPage() {
           {/* ── 3. Branch performance ──────────────────────────────────────────────────── */}
           <SectionHead title={t("overall.branchPerformance")} hint={t("overall.branchHint")} />
 
-          <div className="px-4 flex flex-col gap-2.5" data-testid="overall-branches">
-            {branchRows.map((branch) => (
+          {/* One card holding the branches, split by a hairline — the list is one comparison,
+              and a card per branch made every branch a separate object on the page. */}
+          <div className="px-4" data-testid="overall-branches">
+            <div className="rounded-[var(--radius-card)] overflow-hidden" style={{ background: "var(--tone-card)" }}>
+            {branchRows.map((branch, index) => (
               <button
                 key={branch.id}
                 type="button"
                 onClick={() => navigate(`${base}/settings/branches/${branch.id}`)}
                 data-testid={`overall-branch-${branch.id}`}
-                className="text-start rounded-[var(--radius-card)] p-4 active:opacity-70"
-                style={{ background: "var(--tone-card)" }}
+                className="w-full text-start p-4 active:opacity-70"
+                style={index > 0 ? { borderTop: "1px solid var(--hairline)" } : undefined}
               >
                 <div className="flex items-center gap-2">
                   <span className="text-14 font-bold truncate min-w-0">{branch.name}</span>
@@ -622,8 +636,9 @@ export default function BusinessOverviewPage() {
               </button>
             ))}
             {branchRows.length === 0 && (
-              <p className="text-12" style={{ color: "var(--text-secondary)" }}>{t("overall.branchFooter")}</p>
+              <p className="text-12 p-4" style={{ color: "var(--text-secondary)" }}>{t("overall.branchFooter")}</p>
             )}
+            </div>
           </div>
 
           {/* ── 4. Inventory and stock ─────────────────────────────────────────────────── */}

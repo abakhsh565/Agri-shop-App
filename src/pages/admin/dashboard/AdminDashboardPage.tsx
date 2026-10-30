@@ -78,7 +78,7 @@ export default function AdminDashboardPage() {
   const isUrdu = language === "ur";
   const [dateFilter, setDateFilter] = useState<DateFilter>("all");
   const [showNotifs, setShowNotifs] = useState(false);
-  const { items: allNotifications, unread, load, subscribe, markAllRead, markOneRead, ready: notificationsReady } = useNotificationStore();
+  const { items: allNotifications, load, subscribe, markAllRead, markManyRead, markOneRead, ready: notificationsReady } = useNotificationStore();
   const mockSales = useSalesStore((s) => s.sales);
   const mockProducts = useProductsStore((s) => s.products);
   const mockCompanies = useCompaniesStore((s) => s.companies);
@@ -151,6 +151,7 @@ export default function AdminDashboardPage() {
   const activeBranchId = useShopStore((s) => s.activeBranchId);
   const activeBranch = branches.find((b) => b.id === activeBranchId) ?? null;
   const inAddedBranch = branchesLoaded && !!activeBranch && !activeBranch.isMain;
+  const mainBranch = branches.find((b) => b.isMain) ?? null;
   // The same sentence the Branches screen puts on a row, from the same derivation.
   const branchContext = activeBranch ? branchContextLabel(t, activeBranch) : null;
 
@@ -167,11 +168,24 @@ export default function AdminDashboardPage() {
    * Notifications screen and see them all), but this screen is about the branch you are
    * standing in — its sales, its staff, its bell. Mixing two branches into this list is
    * how a figure from Branch A ends up explained by an event from Branch B.
+   *
+   * `shop_id` is the BUSINESS, not the branch (owner's correction, 2026-10-30): filtering on it
+   * alone let the main branch's sales show up in an added branch's bell while this comment
+   * claimed otherwise. In an added branch the filter is `branch_id`; on the main branch it stays
+   * the business's rows, which is what "the main branch is the business" means here.
    */
   const notifications = useMemo(
-    () => allNotifications.filter((n) => !activeShopId || n.shop_id === activeShopId),
-    [allNotifications, activeShopId],
+    () => (inAddedBranch && activeBranch
+      ? allNotifications.filter((n) => n.branch_id === activeBranch.id)
+      : allNotifications.filter((n) => !activeShopId || n.shop_id === activeShopId)),
+    [allNotifications, activeShopId, inAddedBranch, activeBranch],
   );
+  const scopedUnread = notifications.filter((n) => !n.read);
+  /** Rows that came from a branch other than the one being read, named so they cannot be misread. */
+  const branchNameOf = (n: (typeof notifications)[number]) =>
+    inAddedBranch || !n.branch_id || n.branch_id === mainBranch?.id
+      ? null
+      : branches.find((b) => b.id === n.branch_id)?.name ?? null;
 
   // Date helpers — use Pakistan local time (Asia/Karachi, UTC+5) for all date comparisons.
   // en-CA locale produces YYYY-MM-DD format.
@@ -418,9 +432,9 @@ export default function AdminDashboardPage() {
                 counted another branch's events would send the owner looking here for
                 something that is not in this list. The Notifications screen is where
                 every branch is counted, and it says so with its own tabs. */}
-            {unread(activeShopId) > 0 && (
+            {scopedUnread.length > 0 && (
               <span className="absolute top-1 end-1 bg-red-500 text-white text-8 font-bold rounded-full min-w-[13px] h-[13px] flex items-center justify-center px-[2px]">
-                {unread(activeShopId)}
+                {scopedUnread.length}
               </span>
             )}
           </button>
@@ -445,12 +459,24 @@ export default function AdminDashboardPage() {
                 {t("dashboard.notifications")}
               </p>
               <div className="flex items-center gap-2">
-                {unread(activeShopId) > 0 && (
+                {scopedUnread.length > 0 && (
                   <span className="text-10 font-bold px-1.5 py-0.5 rounded-full" style={{ background: "var(--brand)", color: "#0a0a0a" }}>
-                    {unread(activeShopId)}
+                    {scopedUnread.length}
                   </span>
                 )}
-                <span className="text-10 font-semibold" style={{ color: "var(--brand-dark, #65a30d)" }} onClick={(e) => { e.stopPropagation(); markAllRead(); }}>{t("notifications.markAllRead")}</span>
+                <span
+                  className="text-10 font-semibold"
+                  style={{ color: "var(--brand-dark, #65a30d)" }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    // Marking read applies to what this bell is counting. In an added branch that
+                    // is that branch; on the main branch it is everything, as before.
+                    if (inAddedBranch) void markManyRead(scopedUnread.map((n) => n.id));
+                    else markAllRead();
+                  }}
+                >
+                  {t("notifications.markAllRead")}
+                </span>
               </div>
             </button>
 
@@ -509,6 +535,13 @@ export default function AdminDashboardPage() {
                               <div className="flex-1 min-w-0">
                                 <p className="text-13 font-semibold" style={{ color: "var(--text-primary)" }}>{n.title}</p>
                                 {n.body && <p className="text-12 mt-0.5" style={{ color: "var(--text-secondary)" }}>{n.body}</p>}
+                                {/* On the main branch this list carries other branches' events, so
+                                    a row says which branch it came from. */}
+                                {branchNameOf(n) && (
+                                  <p className="text-10 mt-0.5" style={{ color: "var(--text-tertiary)" }}>
+                                    {branchNameOf(n)}
+                                  </p>
+                                )}
                               </div>
                             </div>
                           </button>

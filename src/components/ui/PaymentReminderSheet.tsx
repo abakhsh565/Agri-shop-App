@@ -1,15 +1,20 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Bell, Check } from "lucide-react";
 import Sheet from "@/components/ui/Sheet";
+import DateField from "@/components/ui/DateField";
 import InlineSelect from "@/components/ui/InlineSelect";
+import SelectorField from "@/components/ui/SelectorField";
 import Button from "@/components/ui/Button";
 import { useT } from "@/lib/i18n";
 import { useUIStore } from "@/stores/uiStore";
+import { useCustomersStore } from "@/stores/customersStore";
+import { useCompaniesStore } from "@/stores/companiesStore";
 import { pkToday } from "@/lib/pkDate";
 import { REPEAT_KEY, type RepeatUnit } from "@/lib/financeEntries";
 import {
   savePaymentReminder,
   type PaymentReminder,
+  type PaymentReminderKind,
 } from "@/lib/paymentReminders";
 
 /**
@@ -19,18 +24,33 @@ import {
  * needs, and one save. It is a diary entry, not a message composer — there is no channel, no tone
  * and no recipient here, because this reminder is the owner's own.
  *
+ * WHAT IT IS ABOUT COMES FIRST (0257). Customer, supplier or neither. The choice decides which
+ * record the sheet asks for, and the record — not a typed name — is what the reminder is stored
+ * against, so "what am I chasing this supplier about" has an answer.
+ *
  * THE CADENCE IS OPTIONAL AND SMALL. Once, every day, week or month, and how many of those. An
  * alarm has a time and a repeat; so does this. A repeating reminder keeps the ORIGINAL day and
- * cadence in the database (0256) and the screen derives the next occurrence from them, so editing
- * a reminder never invents a table of shadow occurrences.
+ * cadence in the database and the screen derives the next occurrence from them, so editing a
+ * reminder never invents a table of shadow occurrences.
  *
- * The panel inside the sheet is `InlineSelect`, not a second sheet: two stacked overlays would be
- * two scrims and two Escape handlers for one answer.
+ * The panel inside the sheet is `InlineSelect` and the parties are `SelectorField` panels, not a
+ * second sheet: two stacked overlays would be two scrims and two Escape handlers for one answer.
  */
+export interface PaymentReminderDefaults {
+  kind?: PaymentReminderKind;
+  customerId?: string | null;
+  companyId?: string | null;
+  title?: string;
+  amount?: number | null;
+  person?: string;
+}
+
 interface PaymentReminderSheetProps {
   open: boolean;
   /** The reminder being edited; null creates a new one. */
   reminder: PaymentReminder | null;
+  /** Values a new reminder starts from — a row's party, name and balance. */
+  defaults?: PaymentReminderDefaults;
   onClose: () => void;
   /** Called after the database accepted the row, so the screen can re-read it. */
   onSaved: () => void;
@@ -50,10 +70,31 @@ const REPEAT_UNIT_ONE_KEY = {
   month: "finance.repeat.unitMonth",
 } as const;
 
-export default function PaymentReminderSheet({ open, reminder, onClose, onSaved }: PaymentReminderSheetProps) {
+const KINDS: { key: PaymentReminderKind; labelKey: "paymentBook.kindCustomer" | "paymentBook.kindSupplier" | "paymentBook.kindGeneral" }[] = [
+  { key: "customer", labelKey: "paymentBook.kindCustomer" },
+  { key: "supplier", labelKey: "paymentBook.kindSupplier" },
+  { key: "general", labelKey: "paymentBook.kindGeneral" },
+];
+
+export default function PaymentReminderSheet({
+  open,
+  reminder,
+  defaults,
+  onClose,
+  onSaved,
+}: PaymentReminderSheetProps) {
   const t = useT();
   const { addToast } = useUIStore();
+  const customers = useCustomersStore((s) => s.customers);
+  const customersReady = useCustomersStore((s) => s.ready);
+  const loadCustomers = useCustomersStore((s) => s.load);
+  const companies = useCompaniesStore((s) => s.companies);
+  const companiesReady = useCompaniesStore((s) => s.ready);
+  const loadCompanies = useCompaniesStore((s) => s.load);
 
+  const [kind, setKind] = useState<PaymentReminderKind>("general");
+  const [customerId, setCustomerId] = useState("");
+  const [companyId, setCompanyId] = useState("");
   const [title, setTitle] = useState("");
   const [person, setPerson] = useState("");
   const [amount, setAmount] = useState("");
@@ -61,29 +102,105 @@ export default function PaymentReminderSheet({ open, reminder, onClose, onSaved 
   const [dueTime, setDueTime] = useState("09:00");
   const [repeatUnit, setRepeatUnit] = useState<RepeatUnit>("none");
   const [repeatEvery, setRepeatEvery] = useState("1");
+  const [notes, setNotes] = useState("");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const submittingRef = useRef(false);
 
-  // Reopening starts from the reminder this sheet was opened for, never from an abandoned draft.
+  // The party lists are only needed when the sheet asks for one, but they are already cached by
+  // the screens that open it; loading here covers the book, which may be the first screen after
+  // sign-in.
   useEffect(() => {
     if (!open) return;
+    if (!customersReady) void loadCustomers();
+    if (!companiesReady) void loadCompanies();
+  }, [open, customersReady, loadCustomers, companiesReady, loadCompanies]);
+
+  // The prefill is read ONCE, when the sheet opens. Callers build `defaults` inline, so depending
+  // on the object itself would reset the form on every parent render — the owner's typing would
+  // vanish under the keyboard.
+  const defaultsRef = useRef(defaults);
+  defaultsRef.current = defaults;
+
+  // Reopening starts from the reminder this sheet was opened for, then from the row that opened
+  // it, never from an abandoned draft.
+  useEffect(() => {
+    if (!open) return;
+    const start = defaultsRef.current;
     setError("");
     setSaving(false);
     submittingRef.current = false;
-    setTitle(reminder?.title ?? "");
-    setPerson(reminder?.person ?? "");
-    setAmount(reminder?.amount == null ? "" : String(reminder.amount));
+    setKind(reminder?.kind ?? start?.kind ?? "general");
+    setCustomerId(reminder?.customerId ?? start?.customerId ?? "");
+    setCompanyId(reminder?.companyId ?? start?.companyId ?? "");
+    setTitle(reminder?.title ?? start?.title ?? "");
+    setPerson(reminder?.kind === "general" ? reminder.person ?? "" : start?.person ?? "");
+    setAmount(
+      reminder?.amount != null
+        ? String(reminder.amount)
+        : start?.amount != null
+          ? String(start.amount)
+          : "",
+    );
     setDueOn(reminder?.dueOn ?? pkToday());
     setDueTime(reminder?.dueTime ?? "09:00");
     setRepeatUnit(reminder?.repeatUnit ?? "none");
     setRepeatEvery(String(reminder?.repeatEvery ?? 1));
+    setNotes(reminder?.notes ?? "");
   }, [open, reminder]);
+
+  const customerOptions = useMemo(
+    () =>
+      [...customers]
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .map((c) => ({ value: c.id, label: c.name, meta: c.phone })),
+    [customers],
+  );
+
+  const supplierOptions = useMemo(
+    () =>
+      [...companies]
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .map((c) => ({ value: c.id, label: c.name, meta: c.phone })),
+    [companies],
+  );
+
+  /** Choosing the kind clears the party the new kind cannot use. */
+  function chooseKind(next: PaymentReminderKind) {
+    setKind(next);
+    setError("");
+    if (next !== "customer") setCustomerId("");
+    if (next !== "supplier") setCompanyId("");
+    if (next !== "general") setPerson("");
+  }
+
+  /** Picking the record names the reminder after it, until the owner writes their own name. */
+  function chooseCustomer(id: string) {
+    setCustomerId(id);
+    setError("");
+    const chosen = customers.find((c) => c.id === id);
+    if (chosen && !title.trim()) setTitle(t("paymentBook.titleFromCustomer", { name: chosen.name }));
+  }
+
+  function chooseSupplier(id: string) {
+    setCompanyId(id);
+    setError("");
+    const chosen = companies.find((c) => c.id === id);
+    if (chosen && !title.trim()) setTitle(t("paymentBook.titleToSupplier", { name: chosen.name }));
+  }
 
   async function handleSave() {
     if (submittingRef.current) return;
     if (!title.trim()) {
       setError(t("cashPosition.reminderNameRequired"));
+      return;
+    }
+    if (kind === "customer" && !customerId) {
+      setError(t("paymentBook.customerRequired"));
+      return;
+    }
+    if (kind === "supplier" && !companyId) {
+      setError(t("paymentBook.supplierRequired"));
       return;
     }
     if (!dueOn) {
@@ -103,12 +220,16 @@ export default function PaymentReminderSheet({ open, reminder, onClose, onSaved 
       await savePaymentReminder({
         id: reminder?.id ?? null,
         title,
+        kind,
+        customerId: kind === "customer" ? customerId : null,
+        companyId: kind === "supplier" ? companyId : null,
         person,
         amount: parsed,
         dueOn,
         dueTime,
         repeatEvery: Math.min(60, Math.max(1, Number(repeatEvery) || 1)),
         repeatUnit,
+        notes,
       });
       addToast(t("cashPosition.reminderSaved"), "success");
       onSaved();
@@ -132,6 +253,62 @@ export default function PaymentReminderSheet({ open, reminder, onClose, onSaved 
     >
       <div className="px-5 flex flex-col gap-4" data-testid="payment-reminder-sheet">
         <div className="flex flex-col gap-2">
+          <p className="text-12 font-semibold" style={labelStyle}>{t("paymentBook.about")}</p>
+          <div className="flex gap-2" role="group" aria-label={t("paymentBook.about")}>
+            {KINDS.map((option) => {
+              const selected = kind === option.key;
+              return (
+                <button
+                  key={option.key}
+                  type="button"
+                  onClick={() => chooseKind(option.key)}
+                  aria-pressed={selected}
+                  data-testid={`payment-reminder-kind-${option.key}`}
+                  className="flex-1 h-9 rounded-full text-12 font-semibold active:opacity-70"
+                  style={
+                    selected
+                      ? { background: "var(--brand)", color: "#0a0a0a" }
+                      : { background: "var(--tone-sunken)", color: "var(--text-secondary)" }
+                  }
+                >
+                  {t(option.labelKey)}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {kind === "customer" && (
+          <div className="flex flex-col gap-2">
+            <p className="text-12 font-semibold" style={labelStyle}>{t("paymentBook.customer")}</p>
+            <SelectorField
+              value={customerId}
+              options={customerOptions}
+              placeholder={t("paymentBook.chooseCustomer")}
+              title={t("paymentBook.customer")}
+              onChange={chooseCustomer}
+              searchable
+              emptyLabel={t("paymentBook.noCustomers")}
+            />
+          </div>
+        )}
+
+        {kind === "supplier" && (
+          <div className="flex flex-col gap-2">
+            <p className="text-12 font-semibold" style={labelStyle}>{t("paymentBook.supplier")}</p>
+            <SelectorField
+              value={companyId}
+              options={supplierOptions}
+              placeholder={t("paymentBook.chooseSupplier")}
+              title={t("paymentBook.supplier")}
+              onChange={chooseSupplier}
+              searchable
+              emptyLabel={t("paymentBook.noSuppliers")}
+            />
+          </div>
+        )}
+
+        <div className="flex flex-col gap-2">
           <p className="text-12 font-semibold" style={labelStyle}>{t("cashPosition.reminderName")}</p>
           <div className="ds-field">
             <Bell size={16} className="shrink-0" style={{ color: "var(--text-secondary)" }} />
@@ -151,24 +328,26 @@ export default function PaymentReminderSheet({ open, reminder, onClose, onSaved 
           </div>
         </div>
 
-        <div className="flex flex-col gap-2">
-          <div className="flex items-baseline justify-between gap-3">
-            <p className="text-12 font-semibold" style={labelStyle}>{t("cashPosition.reminderPerson")}</p>
-            <span className="text-11" style={optionalStyle}>{t("finance.optional")}</span>
+        {kind === "general" && (
+          <div className="flex flex-col gap-2">
+            <div className="flex items-baseline justify-between gap-3">
+              <p className="text-12 font-semibold" style={labelStyle}>{t("paymentBook.who")}</p>
+              <span className="text-11" style={optionalStyle}>{t("finance.optional")}</span>
+            </div>
+            <div className="ds-field">
+              <input
+                value={person}
+                onChange={(e) => setPerson(e.target.value)}
+                maxLength={120}
+                placeholder={t("cashPosition.reminderPersonPlaceholder")}
+                aria-label={t("paymentBook.who")}
+                data-testid="payment-reminder-person"
+                className="flex-1 min-w-0 h-full bg-transparent outline-none text-13"
+                style={{ color: "var(--text-primary)" }}
+              />
+            </div>
           </div>
-          <div className="ds-field">
-            <input
-              value={person}
-              onChange={(e) => setPerson(e.target.value)}
-              maxLength={120}
-              placeholder={t("cashPosition.reminderPersonPlaceholder")}
-              aria-label={t("cashPosition.reminderPerson")}
-              data-testid="payment-reminder-person"
-              className="flex-1 min-w-0 h-full bg-transparent outline-none text-13"
-              style={{ color: "var(--text-primary)" }}
-            />
-          </div>
-        </div>
+        )}
 
         <div className="flex flex-col gap-2">
           <div className="flex items-baseline justify-between gap-3">
@@ -193,13 +372,11 @@ export default function PaymentReminderSheet({ open, reminder, onClose, onSaved 
         <div className="flex gap-3">
           <label className="flex-1 min-w-0 flex flex-col gap-2">
             <span className="text-12 font-semibold" style={labelStyle}>{t("cashPosition.reminderDate")}</span>
-            <input
-              type="date"
+            <DateField
               value={dueOn}
-              onChange={(e) => setDueOn(e.target.value)}
-              aria-label={t("cashPosition.reminderDate")}
-              data-testid="payment-reminder-date"
-              className="w-full text-13"
+              onChange={setDueOn}
+              ariaLabel={t("cashPosition.reminderDate")}
+              testId="payment-reminder-date"
             />
           </label>
           <label className="flex-1 min-w-0 flex flex-col gap-2">
@@ -248,6 +425,25 @@ export default function PaymentReminderSheet({ open, reminder, onClose, onSaved 
               </span>
             </div>
           )}
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <div className="flex items-baseline justify-between gap-3">
+            <p className="text-12 font-semibold" style={labelStyle}>{t("paymentBook.notes")}</p>
+            <span className="text-11" style={optionalStyle}>{t("finance.optional")}</span>
+          </div>
+          <div className="ds-field" style={{ alignItems: "flex-start", paddingTop: 10, paddingBottom: 10 }}>
+            <input
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              maxLength={280}
+              placeholder={t("paymentBook.notesPlaceholder")}
+              aria-label={t("paymentBook.notes")}
+              data-testid="payment-reminder-notes"
+              className="flex-1 min-w-0 bg-transparent outline-none text-13"
+              style={{ color: "var(--text-primary)" }}
+            />
+          </div>
         </div>
 
         {error && (

@@ -8,6 +8,7 @@ import { useThemeStore, applyTheme } from "@/stores/themeStore";
 import { useT } from "@/lib/i18n";
 import { useShellBase } from "@/lib/useShellBase";
 import { uploadImage } from "@/lib/storage";
+import ImageCrop from "@/components/ui/ImageCrop";
 import { supabase } from "@/lib/supabase";
 import ProfileCard from "@/components/shop/ProfileCard";
 import BranchesSection from "@/components/shop/BranchesSection";
@@ -39,6 +40,7 @@ export default function ProfileDetailsPage() {
   const [editImageUrl, setEditImageUrl] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [pendingAvatar, setPendingAvatar] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { applyTheme(theme); }, []);
@@ -85,9 +87,16 @@ export default function ProfileDetailsPage() {
     }
   }
 
-  async function handleAvatarUpload(e: React.ChangeEvent<HTMLInputElement>) {
+  /** Choosing a picture only opens the frame; the upload happens once it is confirmed. */
+  function handleAvatarUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
+    if (fileInputRef.current) fileInputRef.current.value = "";
     if (!file) return;
+    setPendingAvatar(file);
+  }
+
+  async function uploadAvatar(file: File) {
+    setPendingAvatar(null);
     setUploading(true);
     try {
       setEditImageUrl(await uploadImage("employee-photos", file));
@@ -204,6 +213,17 @@ export default function ProfileDetailsPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* The picture is framed before it is stored, the same step every other image in the app
+          gets: the tile is a circle, so the frame is a square and what is saved is what is seen. */}
+      {pendingAvatar && (
+        <ImageCrop
+          file={pendingAvatar}
+          aspect={1}
+          onCancel={() => setPendingAvatar(null)}
+          onConfirm={(file) => void uploadAvatar(file)}
+        />
       )}
     </div>
   );

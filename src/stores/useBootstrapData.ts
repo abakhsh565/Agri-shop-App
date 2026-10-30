@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useProductsStore } from "@/stores/productsStore";
 import { useCustomersStore } from "@/stores/customersStore";
 import { useCompaniesStore } from "@/stores/companiesStore";
+import { useCatalogueStore } from "@/stores/catalogueStore";
 import { useEmployeesStore } from "@/stores/employeesStore";
 import { useSalesStore } from "@/stores/salesStore";
 import { useNotificationStore } from "@/stores/notificationStore";
@@ -48,6 +49,12 @@ export function useBootstrapData() {
 
     useEmployeesStore.getState().load();
     unsubs.push(useEmployeesStore.getState().subscribe());
+
+    // The shop's own shelves and units (0259). They are read by the Add Product form and by
+    // every product page, so they load with the shell rather than on whichever screen happened
+    // to ask first — a picker that fills a moment after the form opened looks empty.
+    useCatalogueStore.getState().load();
+    unsubs.push(useCatalogueStore.getState().subscribe());
 
     if (canUseCompanies) {
       useCompaniesStore.getState().load();

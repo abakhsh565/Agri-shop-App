@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
+import ImageCrop from "@/components/ui/ImageCrop";
 import ListCard from "@/components/ui/ListCard";
 import ListRow from "@/components/ui/ListRow";
 import { CategoryChip } from "@/components/ui/Badge";
@@ -24,6 +25,8 @@ import { barcodeToSvg } from "@/lib/barcode";
 import { uploadImage } from "@/lib/storage";
 import { supabase } from "@/lib/supabase";
 import { useT } from "@/lib/i18n";
+import { useCatalogueStore } from "@/stores/catalogueStore";
+import { categoryDisplayName } from "@/lib/catalogue";
 import { SkeletonList } from "@/components/ui/Skeleton";
 
 // Pesticide and spray are one shelf (0162): a row still stored under the old name reads as
@@ -64,6 +67,11 @@ export default function ProductDetailPage() {
   const productsReady = useProductsStore((s) => s.ready);
   const activeBranchName = useShopStore((s) => s.activeBranchName);
   const product = products.find((p) => p.id === productId);
+  // The shelf this product is filed on, when it has one (0259).
+  const categories = useCatalogueStore((s) => s.categories);
+  const shelf = product?.categoryId
+    ? categories.find((c) => c.id === product.categoryId) ?? null
+    : null;
   const { addToast } = useUIStore();
 
   const [toDelete, setToDelete] = useState(false);
@@ -81,6 +89,8 @@ export default function ProductDetailPage() {
   const [editImageUrl, setEditImageUrl] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  // The picture waiting behind the framing screen; nothing is uploaded until it is confirmed.
+  const [pendingImage, setPendingImage] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   function startEdit() {
@@ -89,9 +99,16 @@ export default function ProductDetailPage() {
     setEditing(true);
   }
 
-  async function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
+  /** Choosing a picture only opens the frame; the upload happens once it is confirmed. */
+  function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
+    if (fileInputRef.current) fileInputRef.current.value = "";
     if (!file) return;
+    setPendingImage(file);
+  }
+
+  async function uploadProductImage(file: File) {
+    setPendingImage(null);
     setUploading(true);
     try {
       const url = await uploadImage("product-images", file);
@@ -100,7 +117,6 @@ export default function ProductDetailPage() {
       addToast("Image upload failed", "error");
     } finally {
       setUploading(false);
-      if (fileInputRef.current) fileInputRef.current.value = "";
     }
   }
 
@@ -244,7 +260,15 @@ export default function ProductDetailPage() {
               {product.company}
             </p>
             <div className="flex items-center gap-2 mt-1 flex-wrap">
-              <CategoryChip label={t(CATEGORY_LABEL_KEY[product.category] as any)} />
+              {/* The shop's own shelf when the product is filed on one (0259); the fixed kind
+                  still answers for a row that predates it. */}
+              <CategoryChip
+                label={
+                  shelf
+                    ? categoryDisplayName(shelf, t)
+                    : t(CATEGORY_LABEL_KEY[product.category] as any)
+                }
+              />
               <span
                 className="text-10 font-bold px-2 py-0.5 rounded-full"
                 style={{ color: stockColor, background: stockColor + "22" }}
@@ -556,6 +580,17 @@ export default function ProductDetailPage() {
         onConfirm={confirmDeleteBarcode}
         onCancel={() => setBarcodeToDelete(false)}
       />
+
+      {/* The packet is framed before it is stored: the hero tile and the product rows all draw it
+          in a fixed square, so the owner chooses the part that survives the cut. */}
+      {pendingImage && (
+        <ImageCrop
+          file={pendingImage}
+          aspect={1}
+          onCancel={() => setPendingImage(null)}
+          onConfirm={(file) => void uploadProductImage(file)}
+        />
+      )}
     </div>
   );
 }

@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Bell, Building2, CalendarDays, ChevronRight, Download, Share2 } from "lucide-react";
+import { Bell, Building2, CalendarDays, ChevronRight, Download, Plus, Share2 } from "lucide-react";
 import BalanceDateSheet, { type BalancePeriod } from "@/components/ui/BalanceDateSheet";
-import PaymentReminderSheet from "@/components/ui/PaymentReminderSheet";
+import PaymentReminderSheet, { type PaymentReminderDefaults } from "@/components/ui/PaymentReminderSheet";
 import SectionActionsSheet, { SectionActionsButton } from "@/components/ui/SectionActionsSheet";
+import Sheet from "@/components/ui/Sheet";
+import ListRow from "@/components/ui/ListRow";
 import { csvFileName, exportCsv, exportText, toCsv } from "@/lib/exportData";
 import { useUIStore } from "@/stores/uiStore";
 import StatusBar from "@/components/ui/StatusBar";
@@ -11,6 +13,7 @@ import NavHeader from "@/components/ui/NavHeader";
 import SearchBar from "@/components/ui/SearchBar";
 import { SkeletonList } from "@/components/ui/Skeleton";
 import { useCompaniesStore } from "@/stores/companiesStore";
+import { useAuthStore } from "@/stores/authStore";
 import { useT } from "@/lib/i18n";
 import { useShellBase } from "@/lib/useShellBase";
 import { useReturnTo } from "@/lib/useReturnTo";
@@ -59,8 +62,16 @@ export default function SupplierPayablePage() {
   const [periodOpen, setPeriodOpen] = useState(false);
   const [customFrom, setCustomFrom] = useState("");
   const [customTo, setCustomTo] = useState("");
-  const [reminderOpen, setReminderOpen] = useState(false);
+  // `null` is closed; an object is the row (or the plate) this sheet was opened for, so the
+  // reminder is already about the right supplier and balance when the owner starts typing.
+  const [reminderDefaults, setReminderDefaults] = useState<PaymentReminderDefaults | null>(null);
+  // Recording a payment is the usual next step in this book, so it opens from the card, from
+  // the search row and from a supplier's own row — one picker, one destination, no second form.
+  const [payOpen, setPayOpen] = useState(false);
+  const [payQuery, setPayQuery] = useState("");
   const { addToast } = useUIStore();
+  // Writing a reminder is the owner's own note (0257), so only the owner is offered the bell.
+  const isOwner = useAuthStore((s) => s.user?.membershipRole === "owner");
 
   useEffect(() => { if (!ready) void load(); }, [ready, load]);
 
@@ -135,6 +146,15 @@ export default function SupplierPayablePage() {
         return b.outstandingPayable - a.outstandingPayable;
       });
   }, [companies, search, filter, todayISO, period, windowFrom, windowTo]);
+
+  /** Whoever is owed first, so the picker opens on the payment a counter is most likely taking. */
+  const payableSuppliers = useMemo(() => {
+    const term = payQuery.trim().toLowerCase();
+    return companies
+      .filter((c) => c.outstandingPayable > 0)
+      .filter((c) => !term || c.name.toLowerCase().includes(term))
+      .sort((a, b) => b.outstandingPayable - a.outstandingPayable);
+  }, [companies, payQuery]);
 
   const filters: { key: Filter; label: string }[] = [
     { key: "all", label: t("payable.all") },
@@ -303,6 +323,31 @@ export default function SupplierPayablePage() {
             </div>
           </div>
 
+          {/* The payment the card is about. It is one row in the book's own grey — the same
+              shape the supplier-payments screen uses — rather than a second bright button that
+              competes with the balance above it. */}
+          <button
+            type="button"
+            onClick={() => setPayOpen(true)}
+            data-testid="payable-record-payment"
+            className="w-full flex items-center gap-3 rounded-[var(--radius-card)] p-3 mt-4 text-start active:opacity-70"
+            style={{ background: "var(--tone-sunken)" }}
+          >
+            <span
+              className="size-9 rounded-full flex items-center justify-center shrink-0"
+              style={{ background: "var(--surface-2)", color: "var(--brand-dark)" }}
+            >
+              <Plus size={18} strokeWidth={2.5} />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-14 font-bold" style={{ color: "var(--text-primary)" }}>
+                {t("supplierPayments.record")}
+              </span>
+              <span className="block text-11 mt-0.5" style={{ color: "var(--text-secondary)" }}>
+                {t("supplierPayments.recordHint")}
+              </span>
+            </span>
+          </button>
         </div>
       </div>
 
@@ -311,7 +356,7 @@ export default function SupplierPayablePage() {
       <div className="px-4 pt-3">
         <button
           type="button"
-          onClick={() => setReminderOpen(true)}
+          onClick={() => setReminderDefaults({ kind: "supplier" })}
           data-testid="payable-reminder"
           className="w-full flex items-center gap-3 rounded-[var(--radius-card)] p-3 text-start active:opacity-70"
           style={{ background: "var(--tone-card)" }}
@@ -406,14 +451,23 @@ export default function SupplierPayablePage() {
               : "var(--text-secondary)";
 
             return (
-              <button
+              <div
                 key={c.id}
-                type="button"
-                onClick={() => navigate(`${base}/settings/overview/suppliers/${c.id}`)}
                 data-testid={`payable-row-${c.id}`}
-                className="rounded-[var(--radius-card)] p-3.5 text-start active:opacity-70"
+                className="rounded-[var(--radius-card)] p-3.5"
                 style={{ background: "var(--tone-card)" }}
               >
+                {/* The card opens the supplier; the bell below is its own control, so the two
+                    actions are siblings rather than one nested inside the other. */}
+                <button
+                  type="button"
+                  // The supplier's own page (identity, bills, payments, reminders), with this
+                  // book as the way back. It used to be a second address for the same supplier.
+                  onClick={() => navigate(`${base}/companies/${c.id}`, {
+                    state: { from: `${base}/settings/overview/suppliers` },
+                  })}
+                  className="w-full text-start active:opacity-70"
+                >
                 <div className="flex items-start gap-3">
                   <span
                     className="size-10 rounded-full flex items-center justify-center font-bold text-14 shrink-0"
@@ -454,6 +508,7 @@ export default function SupplierPayablePage() {
                     style={{ width: `${pct}%`, background: overdue ? "var(--warning)" : "var(--brand)" }}
                   />
                 </div>
+                </button>
                 <div className="flex items-center justify-between gap-3 mt-1.5">
                   <p className="text-10 truncate" style={{ color: "var(--text-tertiary)" }}>
                     {/* Only a bill can be a percentage of itself: with nothing billed the row
@@ -461,12 +516,43 @@ export default function SupplierPayablePage() {
                     {billed > 0 ? t("payable.paidPct", { pct }) : t("customers.noOutstanding")}
                     {timing ? ` · ${timing}` : ""}
                   </p>
-                  <span className="flex items-center gap-1 shrink-0 text-10" style={{ color: "var(--text-secondary)" }}>
-                    {t("payable.viewDetails")}
-                    <ChevronRight size={12} />
-                  </span>
+                  <div className="flex items-center gap-1 shrink-0">
+                    {isOwner && due > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setReminderDefaults({
+                          kind: "supplier",
+                          companyId: c.id,
+                          title: t("paymentBook.titleToSupplier", { name: c.name }),
+                          amount: due,
+                        })}
+                        aria-label={t("paymentBook.setForSupplier", { name: c.name })}
+                        data-testid={`payable-remind-${c.id}`}
+                        className="size-8 rounded-full flex items-center justify-center active:opacity-60"
+                        style={{ background: "var(--tone-sunken)", color: "var(--text-secondary)" }}
+                      >
+                        <Bell size={14} />
+                      </button>
+                    )}
+                    {due > 0 ? (
+                      <button
+                        type="button"
+                        onClick={() => navigate(`${base}/payments/supplier/${c.id}`)}
+                        data-testid={`payable-pay-${c.id}`}
+                        className="h-8 px-3 rounded-full text-10 font-bold active:opacity-60"
+                        style={{ background: "var(--tone-sunken)", color: "var(--text-primary)" }}
+                      >
+                        {t("supplierPayments.record")}
+                      </button>
+                    ) : (
+                      <span className="flex items-center gap-1 text-10" style={{ color: "var(--text-secondary)" }}>
+                        {t("payable.viewDetails")}
+                        <ChevronRight size={12} />
+                      </span>
+                    )}
+                  </div>
                 </div>
-              </button>
+              </div>
             );
           })}
         </div>
@@ -489,11 +575,53 @@ export default function SupplierPayablePage() {
       />
 
       <PaymentReminderSheet
-        open={reminderOpen}
+        open={reminderDefaults !== null}
         reminder={null}
-        onClose={() => setReminderOpen(false)}
-        onSaved={() => setReminderOpen(false)}
+        defaults={reminderDefaults ?? undefined}
+        onClose={() => setReminderDefaults(null)}
+        onSaved={() => setReminderDefaults(null)}
       />
+
+      {/* Which supplier? The search is the same one the screen already uses, and every row
+          states the balance it is about, so the payment form opens on the right amount. */}
+      <Sheet
+        open={payOpen}
+        onClose={() => {
+          setPayOpen(false);
+          setPayQuery("");
+        }}
+        title={t("supplierPayments.pickSupplier")}
+      >
+        <div className="px-4 pb-2">
+          <SearchBar
+            value={payQuery}
+            onChange={(e) => setPayQuery(e.target.value)}
+            onClear={() => setPayQuery("")}
+            placeholder={t("payable.search")}
+          />
+        </div>
+        <div className="px-4">
+          {payableSuppliers.map((company) => (
+            <ListRow
+              key={company.id}
+              testId={`payable-pick-${company.id}`}
+              icon={Building2}
+              title={company.name}
+              description={formatCurrency(Math.max(0, company.outstandingPayable))}
+              onClick={() => {
+                setPayOpen(false);
+                setPayQuery("");
+                navigate(`${base}/payments/supplier/${company.id}`);
+              }}
+            />
+          ))}
+          {payableSuppliers.length === 0 && (
+            <p className="px-4 py-6 text-13 text-center" style={{ color: "var(--text-secondary)" }}>
+              {t("payable.empty")}
+            </p>
+          )}
+        </div>
+      </Sheet>
     </div>
   );
 }

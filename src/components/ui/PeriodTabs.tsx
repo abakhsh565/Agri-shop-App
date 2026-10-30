@@ -22,6 +22,13 @@ interface PeriodTabsProps<K extends string> {
   options: readonly PeriodOption<K>[];
   value: K | null;
   onChange: (key: K) => void;
+  /**
+   * `pill` (the default) is the capsule every list screen wears. `underline` is the report
+   * variant from the owner's reference: the presets sit on one hairline and the chosen one is
+   * marked by a heavier rule under it, so a report reads as figures rather than as a filter.
+   * Only the treatment changes — the choices, the test ids and the behaviour are the same.
+   */
+  variant?: "pill" | "underline";
   /** Draws the filter button. Omit it on a screen with no range to pick. */
   onFilter?: () => void;
   /** Highlights the filter button — a custom range is what the screen is showing. */
@@ -38,17 +45,24 @@ export default function PeriodTabs<K extends string>({
   options,
   value,
   onChange,
+  variant = "pill",
   onFilter,
   filterActive = false,
   label,
   filterLabel,
   testIdPrefix = "period",
 }: PeriodTabsProps<K>) {
+  const underline = variant === "underline";
+
   return (
     <div className="flex items-center gap-2">
       <div
-        className="flex-1 flex items-center gap-1 p-1 rounded-full min-w-0"
-        style={{ background: "var(--tone-sunken)" }}
+        className={
+          underline
+            ? "flex-1 flex items-end gap-1 min-w-0 border-b"
+            : "flex-1 flex items-center gap-1 p-1 rounded-full min-w-0"
+        }
+        style={underline ? { borderColor: "var(--hairline)" } : { background: "var(--tone-sunken)" }}
         role="group"
         aria-label={label}
       >
@@ -61,11 +75,21 @@ export default function PeriodTabs<K extends string>({
               onClick={() => onChange(option.key)}
               aria-pressed={selected}
               data-testid={`${testIdPrefix}-${option.key}`}
-              className="flex-1 h-9 px-1 rounded-full text-13 font-semibold transition-colors truncate"
+              className={
+                underline
+                  ? "flex-1 h-10 px-1 text-13 font-semibold transition-colors truncate border-b-2 -mb-px"
+                  : "flex-1 h-9 px-1 rounded-full text-13 font-semibold transition-colors truncate"
+              }
               style={
-                selected
-                  ? { background: "var(--tone-card)", color: "var(--text-primary)" }
-                  : { background: "transparent", color: "var(--text-secondary)" }
+                underline
+                  ? {
+                      background: "transparent",
+                      color: selected ? "var(--text-primary)" : "var(--text-secondary)",
+                      borderColor: selected ? "var(--text-primary)" : "transparent",
+                    }
+                  : selected
+                    ? { background: "var(--tone-card)", color: "var(--text-primary)" }
+                    : { background: "transparent", color: "var(--text-secondary)" }
               }
             >
               {option.label}
@@ -81,7 +105,7 @@ export default function PeriodTabs<K extends string>({
           aria-label={filterLabel}
           aria-pressed={filterActive}
           data-testid={`${testIdPrefix}-filter`}
-          className="size-11 shrink-0 rounded-full flex items-center justify-center ds-pressable"
+          className={`${underline ? "size-10" : "size-11"} shrink-0 rounded-full flex items-center justify-center ds-pressable`}
           style={
             filterActive
               ? { background: "var(--brand-light)", color: "var(--brand-dark)" }

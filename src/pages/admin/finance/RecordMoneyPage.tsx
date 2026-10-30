@@ -3,16 +3,27 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { Check, X } from "lucide-react";
 import StatusBar from "@/components/ui/StatusBar";
 import Button from "@/components/ui/Button";
+import DateField from "@/components/ui/DateField";
 import InlineSelect from "@/components/ui/InlineSelect";
 import { useT, type I18nKey } from "@/lib/i18n";
 import { useShellBase } from "@/lib/useShellBase";
 import { useAuthStore } from "@/stores/authStore";
+import { useShopStore } from "@/stores/shopStore";
 import { useThemeStore } from "@/stores/themeStore";
 import { useUIStore } from "@/stores/uiStore";
 import { pkToday } from "@/lib/pkDate";
 import { formatCurrency } from "@/lib/formatters";
+import FinanceMediaField, { type FinanceMediaView } from "@/components/finance/FinanceMediaField";
+import {
+  MAX_MEDIA_BYTES,
+  mediaMime,
+  uploadFinanceMedia,
+  type FinanceMediaDraft,
+} from "@/lib/financeMedia";
 import {
   CATEGORY_KEY,
+  FINANCE_CATEGORIES,
+  FINANCE_METHODS,
   METHOD_KEY,
   REPEAT_KEY,
   recordFinanceEntry,
@@ -46,17 +57,22 @@ import {
  * THE SAVE IS GUARDED TWICE. `saving` disables the button after a re-render; `submittingRef` stops
  * the second tap synchronously, before React has drawn anything — the same reentrancy rule the
  * supplier-payment form follows, so one confirm cannot record two rows.
+ *
+ * PAPERS AND A VOICE NOTE ARRIVE LAST. The row is written first, then each file is uploaded against
+ * its id (0261). Uploading before the row would leave invisible storage when the write failed, and
+ * a bill photographed on a phone is the one thing on this form that must not be retyped. If an
+ * upload fails, the money row is already saved: the screen says so, keeps the failed drafts with
+ * their local previews, and turns the save button into "Retry attachments". Nothing is lost, and
+ * a second tap cannot write a second row.
  */
 
 const KINDS: FinanceEntryKind[] = ["income", "expense", "drawing"];
 
-const CATEGORIES: Record<FinanceEntryKind, string[]> = {
-  income: ["sales", "other_income", "investment", "loan_received"],
-  expense: ["stock_purchase", "rent", "utilities", "salaries", "transport", "maintenance", "other_expense"],
-  drawing: ["personal_use", "owner_pay", "other_drawing"],
-};
-
-const METHODS: FinanceMethod[] = ["cash", "bank", "easypaisa", "jazzcash"];
+// The categories and methods come from the ledger's own catalogue, because the correction sheet
+// on the other side of this screen draws the same lists. Two copies would let one screen offer a
+// category the other cannot display.
+const CATEGORIES = FINANCE_CATEGORIES;
+const METHODS = FINANCE_METHODS;
 
 /** The four cadences, in the order a reader thinks of them: once, then the calendar. */
 const REPEATS: RepeatUnit[] = ["none", "day", "week", "month"];
@@ -148,6 +164,120 @@ export default function RecordMoneyPage() {
   const [saving, setSaving] = useState(false);
   const submittingRef = useRef(false);
 
+  const activeShopId = useShopStore((s) => s.activeShopId);
+  const activeBranchId = useShopStore((s) => s.activeBranchId);
+
+  // The files chosen but not yet uploaded. The row does not exist for the first few seconds of
+  // their life, so they cannot carry an entry id yet; `savedId` below is what changes that.
+  const [drafts, setDrafts] = useState<FinanceMediaDraft[]>([]);
+  const draftUrls = useRef<Set<string>>(new Set());
+  const [mediaNote, setMediaNote] = useState("");
+  // Set when the row is written but at least one file is not. While it is set the money fields are
+  // closed: the retry is about the papers, and changing the amount under a saved row would be a
+  // correction this screen does not perform.
+  const [savedId, setSavedId] = useState<string | null>(null);
+  const [savedAmount, setSavedAmount] = useState(0);
+
+  useEffect(() => () => {
+    for (const url of draftUrls.current) URL.revokeObjectURL(url);
+  }, []);
+
+  /** Frees one preview and its object URL together — a leaked blob URL is memory the tab keeps. */
+  function dropDraft(key: string) {
+    setDrafts((current) => {
+      const found = current.find((draft) => draft.key === key);
+      if (found) {
+        URL.revokeObjectURL(found.url);
+        draftUrls.current.delete(found.url);
+      }
+      return current.filter((draft) => draft.key !== key);
+    });
+  }
+
+  function addPhotos(files: File[]) {
+    const room = files.filter((file) => file.size <= MAX_MEDIA_BYTES);
+    if (room.length < files.length) setMediaNote(t("finance.media.tooLarge"));
+    else setMediaNote("");
+    const next = room.map<FinanceMediaDraft>((file) => {
+      const url = URL.createObjectURL(file);
+      draftUrls.current.add(url);
+      return {
+        key: crypto.randomUUID(),
+        kind: "photo",
+        file,
+        url,
+        durationMs: null,
+        mime: mediaMime(file, "photo"),
+        uploaded: false,
+      };
+    });
+    if (next.length) setDrafts((current) => [...current, ...next]);
+  }
+
+  function addVoice(file: File, durationMs: number) {
+    if (file.size > MAX_MEDIA_BYTES) {
+      setMediaNote(t("finance.media.tooLarge"));
+      return;
+    }
+    const url = URL.createObjectURL(file);
+    draftUrls.current.add(url);
+    setMediaNote("");
+    setDrafts((current) => [
+      ...current,
+      {
+        key: crypto.randomUUID(),
+        kind: "voice",
+        file,
+        url,
+        durationMs,
+        mime: mediaMime(file, "voice"),
+        uploaded: false,
+      },
+    ]);
+  }
+
+  /**
+   * Uploads whatever is still a draft, in order, and returns whether everything landed.
+   *
+   * A failure is kept, not dropped: the draft stays in the list with its preview so the retry
+   * uploads exactly the file that failed. Successes are freed immediately, so a retry never
+   * writes the same receipt twice.
+   */
+  async function pushDrafts(entryId: string): Promise<boolean> {
+    if (!activeShopId || !activeBranchId) {
+      setMediaNote(t("finance.media.noBranch"));
+      return false;
+    }
+    const failed: FinanceMediaDraft[] = [];
+    for (const draft of drafts) {
+      if (draft.file.size > MAX_MEDIA_BYTES) {
+        failed.push(draft);
+        continue;
+      }
+      try {
+        await uploadFinanceMedia({
+          shopId: activeShopId,
+          branchId: activeBranchId,
+          entryId,
+          kind: draft.kind,
+          file: draft.file,
+          durationMs: draft.durationMs,
+        });
+        URL.revokeObjectURL(draft.url);
+        draftUrls.current.delete(draft.url);
+      } catch {
+        failed.push(draft);
+      }
+    }
+    setDrafts(failed);
+    if (failed.length) {
+      setMediaNote(t("finance.media.uploadFailed", { count: String(failed.length) }));
+      return false;
+    }
+    setMediaNote("");
+    return true;
+  }
+
   const today = pkToday();
 
   /**
@@ -205,7 +335,16 @@ export default function RecordMoneyPage() {
     submittingRef.current = true;
     setSaving(true);
     try {
-      await recordFinanceEntry({
+      // A previous attempt already wrote the row; this tap is only carrying its papers over.
+      if (savedId) {
+        if (await pushDrafts(savedId)) {
+          addToast(t("finance.saved", { amount: formatCurrency(savedAmount) }), "success");
+          navigate(`${base}/settings/hub/finance`, { replace: true });
+        }
+        return;
+      }
+
+      const id = await recordFinanceEntry({
         kind,
         amount: Math.round(paid * 100) / 100,
         category,
@@ -218,6 +357,17 @@ export default function RecordMoneyPage() {
         // input handler already refuses a blank, so this only ever normalises text to a number.
         repeatEvery: Math.max(1, Number(repeatEvery) || 1),
       });
+
+      if (drafts.length) {
+        setSavedAmount(paid);
+        setSavedId(id);
+        if (!(await pushDrafts(id))) {
+          // The money is recorded. Saying "saved" and leaving would hide the missing papers.
+          addToast(t("finance.media.entrySavedOnly", { amount: formatCurrency(paid) }), "info");
+          return;
+        }
+      }
+
       addToast(t("finance.saved", { amount: formatCurrency(paid) }), "success");
       navigate(`${base}/settings/hub/finance`, { replace: true });
     } catch (e) {
@@ -229,6 +379,24 @@ export default function RecordMoneyPage() {
       setSaving(false);
     }
   }
+
+  /**
+   * The drafts as the media control draws them.
+   *
+   * A draft is a `FinanceMediaDraft` because it has a `File` to upload; the control only needs
+   * what it paints, so the conversion happens here rather than teaching the control about upload
+   * state it does not own. Every view is a draft on this screen: nothing has an id yet.
+   */
+  const mediaViews = (wanted: "photo" | "voice"): FinanceMediaView[] =>
+    drafts
+      .filter((draft) => draft.kind === wanted)
+      .map((draft) => ({
+        key: draft.key,
+        kind: draft.kind,
+        url: draft.url,
+        durationMs: draft.durationMs,
+        draft: true,
+      }));
 
   const labelStyle = { color: "var(--text-secondary)" } as const;
   const optionalStyle = { color: "var(--text-tertiary)" } as const;
@@ -334,7 +502,21 @@ export default function RecordMoneyPage() {
         ) : (
           // `key` restarts the settle-in animation when the kind changes; the values themselves
           // live in this component, so nothing typed is lost with the element.
-          <div key={kind} className="ds-tab-swap flex flex-col gap-4 flex-1">
+          <div key={savedId ? "saved" : kind} className="ds-tab-swap flex flex-col gap-4 flex-1">
+            {savedId ? (
+              <div className="flex flex-col gap-1" data-testid="record-saved-note">
+                <p className="text-11" style={{ color: "var(--text-secondary)" }}>
+                  {t("finance.media.savedTitle")}
+                </p>
+                <p className="text-22 font-bold tabular-nums" style={{ color: "var(--brand-dark)" }}>
+                  {formatCurrency(savedAmount)}
+                </p>
+                <p className="text-12 mt-1" style={{ color: "var(--text-secondary)" }}>
+                  {mediaNote || t("finance.media.retryHint")}
+                </p>
+              </div>
+            ) : (
+            <>
             {/* Amount — the "Rs" sits in the field, so the number and its currency are one
                 control rather than a label and a guess. */}
             <div className="flex flex-col gap-2">
@@ -378,14 +560,12 @@ export default function RecordMoneyPage() {
               <p className="text-12 font-semibold" style={labelStyle}>{t("finance.date")}</p>
               {/* A date is its own field: the app's date rule draws the pill, the calendar glyph
                   and the same resting/focus edges, so it does not need a shell around it. */}
-              <input
-                type="date"
+              <DateField
                 value={day}
                 max={today}
-                onChange={(e) => setDay(e.target.value)}
-                aria-label={t("finance.date")}
-                data-testid="record-date"
-                className="w-full text-13"
+                onChange={setDay}
+                ariaLabel={t("finance.date")}
+                testId="record-date"
               />
             </div>
 
@@ -489,6 +669,30 @@ export default function RecordMoneyPage() {
                 aria-label={t("finance.description")}
               />
             </div>
+            </>
+            )}
+
+            {/* Receipts and a spoken explanation (0261). They belong to the row, not to the form:
+                the row is written first, so this block stays on the screen while its files finish
+                and can be retried without recording the money twice. */}
+            <div className="pt-2">
+              <FinanceMediaField
+                photos={mediaViews("photo")}
+                voices={mediaViews("voice")}
+                busy={saving}
+                onAddPhotos={addPhotos}
+                onRemove={(view) => dropDraft(view.key)}
+                onRecorded={addVoice}
+              />
+              <p className="text-10 mt-2" style={{ color: "var(--text-tertiary)" }}>
+                {t("finance.media.privateNote")}
+              </p>
+              {mediaNote && !savedId && (
+                <p className="text-11 mt-1" style={{ color: "var(--error)" }} data-testid="record-media-error">
+                  {mediaNote}
+                </p>
+              )}
+            </div>
           </div>
         )}
 
@@ -499,11 +703,11 @@ export default function RecordMoneyPage() {
               size="lg"
               onClick={handleSave}
               loading={saving}
-              disabled={!amount}
+              disabled={!savedId && !amount}
               testId="record-save"
             >
               <Check size={18} className="me-2" />
-              {t(SAVE_KEY[kind])}
+              {savedId ? t("finance.media.retryUploads") : t(SAVE_KEY[kind])}
             </Button>
           </div>
         )}

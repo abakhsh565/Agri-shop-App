@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
 import Button from "@/components/ui/Button";
+import DateField from "@/components/ui/DateField";
 import QuantityCounter from "@/components/ui/QuantityCounter";
 import { useCartStore } from "@/stores/cartStore";
 import { useSalesStore } from "@/stores/salesStore";
@@ -425,12 +426,11 @@ export default function CartPage() {
           />
           <p className="ds-section-label text-foreground mb-2 mt-4">{t("sale.paymentDueDate")}</p>
           <p className="text-12 text-caption mb-2">{hasCreditPortion ? t("sale.dueDateRequired") : t("sale.dueDateOptional")}</p>
-          <input
-            type="date"
+          <DateField
             value={dueDate}
-            min={new Date().toISOString().split('T')[0]}
-            onChange={(e) => setDueDate(e.target.value)}
-            className="w-full outline-none"
+            min={new Date().toISOString().split("T")[0]}
+            onChange={setDueDate}
+            testId="sale-due-date"
           />
 
         </div>

@@ -129,7 +129,9 @@ export default function AdminInventorySectionPage() {
       icon: Package,
       title: rowLabel("products", "hub.inventory.products"),
       hint: t("hub.inventory.productsHint"),
-      run: () => navigate(`${base}/products`),
+      // The Products menu, not the list: it is where the shop's own shelves and units are
+      // managed, and All products is one of its three rows (0259).
+      run: () => navigate(`${base}/inventory/catalogue`),
     },
     {
       id: "movements",

@@ -8,6 +8,7 @@ import ContextHelp from "@/components/education/ContextHelp";
 import { useBootstrapData } from "@/stores/useBootstrapData";
 import { isTopLevel } from "@/lib/navDepth";
 import { Suspense, useState, useEffect, useRef } from "react";
+import useOverlayScrollLock from "@/hooks/useOverlayScrollLock";
 import ScanButton from "@/components/ui/ScanButton";
 import { useProductsStore } from "@/stores/productsStore";
 import { useUIStore } from "@/stores/uiStore";
@@ -44,6 +45,8 @@ export default function AdminLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   useBootstrapData();
+  // One place for every sheet, dialog and cropper: while one is open the list behind it holds still.
+  useOverlayScrollLock();
   const noActiveShop = useNoActiveShop();
   const { user, isLocked, lock, unlock, logout } = useAuthStore();
   const { setOnline, syncQueue } = useOfflineStore();
@@ -283,6 +286,7 @@ export default function AdminLayout() {
 
       {/* ── Main content ── */}
       <div
+        data-app-scroll
         className="flex flex-col flex-1 overflow-y-auto"
         style={{ paddingBottom: showTabBar ? "var(--tabbar-height)" : "0px" }}
       >

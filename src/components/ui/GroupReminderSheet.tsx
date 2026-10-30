@@ -5,6 +5,7 @@ import { useDelayedDismiss } from "@/hooks/usePresence";
 const SHEET_MS = 280;
 import { X, Users } from "lucide-react";
 import SelectorField from "./SelectorField";
+import DateField from "./DateField";
 import { useT } from "@/lib/i18n";
 import CustomerSelector from "./CustomerSelector";
 import type { ReminderConfig, ReminderRepeat, ReminderEnds, ReminderAnchor } from "@/types";
@@ -304,9 +305,11 @@ export default function GroupReminderSheet({ groupName: initGroupName, config: i
               </div>
 
               {config.ends === "date" && (
-                <input type="date" value={config.endsDate ?? ""}
-                  onChange={(e) => updateConfig("endsDate", e.target.value || null)}
-                  className="w-full outline-none font-medium" />
+                <DateField
+                  value={config.endsDate ?? ""}
+                  onChange={(v) => updateConfig("endsDate", v || null)}
+                  testId="group-reminder-ends-date"
+                />
               )}
 
               {config.ends === "count" && (

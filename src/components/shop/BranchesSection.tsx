@@ -4,6 +4,7 @@ import { ChevronRight, Plus, Store } from "lucide-react";
 import ListCard from "@/components/ui/ListCard";
 import ListRow from "@/components/ui/ListRow";
 import Button from "@/components/ui/Button";
+import BranchKindChip from "@/components/ui/BranchKindChip";
 import { SkeletonList } from "@/components/ui/Skeleton";
 import { useAuthStore } from "@/stores/authStore";
 import { useT } from "@/lib/i18n";
@@ -106,11 +107,13 @@ export default function BranchesSection({ variant = "card" }: { variant?: "card"
                 </div>
               }
               title={branch.name}
-              // The KIND first, because it never changes: this is the branch the business
-              // started with, or one added later. Which row you are standing in is a second,
-              // temporary fact, so it follows the kind rather than replacing it.
-              qualifier={[branchKind(t, branch.isMain), isCurrent ? t("shop.current") : null]
-                .filter(Boolean).join(" · ")}
+              // The KIND is the row's badge — the same chip the branch's own header draws — and
+              // the session's branch is a word beside it, not a second tag. Joining them into
+              // "Main · Current" made two different facts read as one kind of branch.
+              badge={branchKind(t, branch.isMain)
+                ? <BranchKindChip isMain={branch.isMain} label={branchKind(t, branch.isMain)!} />
+                : undefined}
+              qualifier={isCurrent ? t("shop.current") : undefined}
               meta={branchContext(branch)} // branchContextLabel already treats unknown as neutral
               // The whole row is the way into the branch's detail page. Edit and delete are not
               // squeezed in beside it: a row that is both a destination and a set of controls is

@@ -1,4 +1,4 @@
-import type { BaseUnit, Product, StockStatus } from "@/types";
+import type { Product, StockStatus } from "@/types";
 import { getStockStatus, productLowStockThreshold } from "@/lib/formatters";
 import { EXPIRY_WARNING_DAYS } from "@/lib/signalEngine";
 import { pkDateFromISO, pkToday } from "@/lib/pkDate";
@@ -30,7 +30,8 @@ export interface StockItem {
   variantName: string;
   /** Branch stock of this pack, in the product's own base unit. */
   qty: number;
-  baseUnit: BaseUnit;
+  /** The measurement family, or the shop's own symbol for a legacy unit. */
+  baseUnit: string;
   threshold: number;
   status: StockStatus;
 }
@@ -148,7 +149,7 @@ export function expiryItems(products: Product[], todayISO: string = pkToday()): 
 }
 
 /** The pack's unit word, plural — quantities on these screens are never one. */
-export function unitWord(baseUnit: BaseUnit, t: (key: string) => string): string {
+export function unitWord(baseUnit: string, t: (key: string) => string): string {
   if (baseUnit === "kg") return t("products.unitKgs");
   if (baseUnit === "piece") return t("products.unitPieces");
   return t("products.unitLiters");

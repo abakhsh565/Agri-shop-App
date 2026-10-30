@@ -4,11 +4,13 @@ import {
   ArrowDownUp,
   ArrowLeftRight,
   Banknote,
+  BellRing,
   Building2,
   ChevronRight,
   Download,
   HandCoins,
   Share2,
+  Sparkles,
   Receipt,
   ScrollText,
   TrendingDown,
@@ -35,6 +37,7 @@ import { useShopStore } from "@/stores/shopStore";
 import { hasPermission } from "@/lib/tenantContext";
 import { useBranchCash, useBranchPeriodReport } from "@/lib/branchReports";
 import { useFinanceTotals, monthWindow, netProfitOf, trendPercent } from "@/lib/financeEntries";
+import { useMoneyTotals } from "@/lib/financeMoney";
 import { formatCurrency } from "@/lib/formatters";
 import { pkToday } from "@/lib/pkDate";
 
@@ -73,6 +76,9 @@ export default function AdminFinanceSectionPage() {
   const cashReports = useBranchCash(window.from, window.to);
   const totals = useFinanceTotals(window.from, window.to);
   const prevTotals = useFinanceTotals(window.prevFrom, window.prevTo);
+  // Money that actually moved, which is not the profit figure above it. Both are read for the
+  // same month so the card and the hero cannot describe different periods.
+  const movement = useMoneyTotals(window.from, window.to);
 
   const customers = useCustomersStore((s) => s.customers);
   const customersReady = useCustomersStore((s) => s.ready);
@@ -187,11 +193,16 @@ export default function AdminFinanceSectionPage() {
     receivables: { icon: HandCoins, hintKey: "financeHub.receivablesRowHint", allowed: canCustomers },
     payables: { icon: Building2, hintKey: "financeHub.payablesRowHint", allowed: canCompanies },
     transactions: { icon: ArrowLeftRight, hintKey: "financeHub.transactionsRowHint", allowed: canPayments },
+    reminders: { icon: BellRing, hintKey: "hub.finance.remindersHint", allowed: canPayments },
     money: { icon: ArrowDownUp, hintKey: "finance.moneyRowHint", allowed: isOwner },
+    // One sentence instead of the six-field form. It calls the same write, so it is offered to
+    // the same role rather than becoming a second way for someone else to record money.
+    quick: { icon: Sparkles, hintKey: "finance.quickAddHint", allowed: isOwner },
     // The ledger is a read of the same rows, so it asks for the same permission as the totals
     // rather than the owner-only write. The owner asked to see and export expenses; a role that
     // may already read recorded money loses nothing by seeing the rows behind it.
     ledger: { icon: ScrollText, hintKey: "finance.ledger.rowHint", allowed: canPayments },
+    statement: { icon: ArrowLeftRight, hintKey: "money.rowHint", allowed: canPayments },
   };
   const jobs = (hubSection("finance")?.rows ?? [])
     .filter((row) => JOB_LOOK[row.id]?.allowed)
@@ -275,6 +286,17 @@ export default function AdminFinanceSectionPage() {
           // sat on the header with no label, and the sheet already exists to hold this screen's
           // jobs. One menu, one place.
           ...(isOwner
+            ? [
+                {
+                  id: "quick-add" as const,
+                  icon: Sparkles,
+                  title: t("finance.quickAdd"),
+                  description: t("finance.quickAddHint"),
+                  onClick: () => navigate(`${base}/settings/hub/finance/quick`),
+                },
+              ]
+            : []),
+          ...(isOwner
             ? addActions.map((action) => ({
                 id: `add-${action.kind}` as const,
                 icon: action.icon,
@@ -339,6 +361,55 @@ export default function AdminFinanceSectionPage() {
           )}
           <p className="text-10 mt-2" style={{ color: "var(--text-tertiary)" }}>
             {t("finance.netProfitRule")}
+          </p>
+        </div>
+      </div>
+
+      {/* Money that moved, stated apart from profit. A reader who sees only "net profit" can
+          mistake a month of credit sales for a month of cash; these three figures say what
+          actually crossed the counter, and the line under them says it is not profit. */}
+      <div className="px-4 pt-3">
+        <div
+          className="rounded-[var(--radius-card)] p-4"
+          style={{ background: "var(--surface)", border: "1px solid var(--divider)" }}
+          data-testid="finance-hub-movement"
+        >
+          <div className="flex items-baseline justify-between gap-3">
+            <p className="text-13 font-bold">{t("finance.moneyMoved")}</p>
+            <button
+              type="button"
+              onClick={() => navigate(`${base}/settings/hub/finance/money`)}
+              className="text-11 font-semibold shrink-0 active:opacity-60"
+              style={{ color: "var(--brand-dark)" }}
+              data-testid="finance-hub-movement-link"
+            >
+              {t("finance.viewStatement")}
+            </button>
+          </div>
+          <div className="grid grid-cols-3 gap-2 mt-2">
+            {[
+              { id: "in", label: t("finance.moneyIn"), value: movement.totals?.moneyIn, tone: "var(--brand-dark)" },
+              { id: "out", label: t("finance.moneyOut"), value: movement.totals?.moneyOut, tone: "var(--text-primary)" },
+              { id: "net", label: t("money.net"), value: movement.totals?.net, tone: "var(--brand-dark)" },
+            ].map((figure) => (
+              <div key={figure.id} className="min-w-0">
+                <p className="text-10 truncate" style={{ color: "var(--text-secondary)" }}>
+                  {figure.label}
+                </p>
+                <p
+                  className="text-14 font-bold mt-0.5 tabular-nums break-words"
+                  style={{
+                    color: figure.id === "net" && (figure.value ?? 0) < 0 ? "var(--error)" : figure.tone,
+                  }}
+                  data-testid={`finance-hub-movement-${figure.id}`}
+                >
+                  {movement.totals === null ? "—" : money(figure.value)}
+                </p>
+              </div>
+            ))}
+          </div>
+          <p className="text-10 mt-2" style={{ color: "var(--text-tertiary)" }}>
+            {t("finance.moneyMovedRule")}
           </p>
         </div>
       </div>

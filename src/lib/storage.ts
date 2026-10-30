@@ -18,7 +18,14 @@ const MAX_DIMENSION = 1200;
 const JPEG_QUALITY = 0.82;
 const SKIP_BELOW_BYTES = 150 * 1024; // skip images already under 150 KB
 
-async function compressImage(file: File): Promise<File> {
+/**
+ * Resize and re-encode a raster image before it is uploaded.
+ *
+ * Exported for the private finance-receipts path (`lib/financeMedia`), which needs the same
+ * WhatsApp-quality compression as every product photo but cannot use `uploadImage`: that helper
+ * writes to a public bucket and returns a public URL, and a receipt must do neither.
+ */
+export async function compressImage(file: File): Promise<File> {
   // Skip if already small enough
   if (file.size <= SKIP_BELOW_BYTES && file.type === "image/jpeg") return file;
   // Only compress raster images

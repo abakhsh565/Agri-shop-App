@@ -16,6 +16,7 @@ import { useT } from "@/lib/i18n";
 import { useShellBase } from "@/lib/useShellBase";
 import { useShopStore } from "@/stores/shopStore";
 import { useEmployeesStore } from "@/stores/employeesStore";
+import { loadBusinessProfile } from "@/lib/businessProfile";
 import { supabase } from "@/lib/supabase";
 
 /**
@@ -28,9 +29,10 @@ import { supabase } from "@/lib/supabase";
  * every one of those screens is already in the menu, and a branch page that listed them again
  * read as a second Settings rather than as this branch's own record.
  *
- * Renaming is the one act the reference does not draw, and it is kept as a pencil beside the
- * name: dropping it would strand the only rename in the app. It asks before it writes, because
- * the name is this branch's identity on every other screen.
+ * The header carries the business's own picture (owner's correction, 2026-10-30): a branch is a
+ * place that business trades from, so the mark the owner uploaded on the business record is what
+ * belongs there. No rename control sits beside the name — the name is the business's own — and no
+ * "Current" word either; the screen is already the branch the account is standing in.
  *
  * Deleting lives at the bottom, where it has room to be the deliberate act it is; the main branch
  * has none, because the database refuses it and a control that exists only to be refused is a lie
@@ -49,8 +51,8 @@ export default function BranchDetailPage() {
   const [deleting, setDeleting] = useState(false);
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
-  const [renaming, setRenaming] = useState(false);
-  const [draftName, setDraftName] = useState("");
+  /** The business's picture, so the header shows the real mark rather than a stand-in letter. */
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const submitting = useRef(false);
   const isOwner = useAuthStore((s) => s.user?.membershipRole === "owner");
   const { addToast } = useUIStore();
@@ -87,24 +89,6 @@ export default function BranchDetailPage() {
       }
       addToast(t("branchFlow.archived"), "success");
       navigate(`${base}/settings`);
-    } finally { submitting.current = false; setBusy(false); }
-  }
-
-  async function rename() {
-    if (!branch || !draftName.trim() || submitting.current) return;
-    submitting.current = true;
-    setBusy(true);
-    try {
-      const result = await useShopStore.getState().renameBranch(branch.id, draftName);
-      if (!result.ok) {
-        addToast(
-          t(result.code === "name_taken" ? "branches.nameTaken" : "branches.saveFailed"),
-          "error",
-        );
-        return;
-      }
-      addToast(t("branches.saved", { branch: draftName.trim() }), "success");
-      setRenaming(false);
     } finally { submitting.current = false; setBusy(false); }
   }
 
@@ -147,6 +131,19 @@ export default function BranchDetailPage() {
     if (!branchesLoaded) void loadBranches();
   }, [branchesLoaded, loadBranches]);
 
+  // The picture lives on the business record, not on the branch row; a business with none keeps
+  // the branch's initial, which is derived from the name and so can never be stale.
+  useEffect(() => {
+    let live = true;
+    void loadBusinessProfile()
+      .then((profile) => {
+        if (!live) return;
+        setLogoUrl(profile?.shop?.logo_url ?? profile?.documents?.logo ?? null);
+      })
+      .catch(() => { if (live) setLogoUrl(null); });
+    return () => { live = false; };
+  }, []);
+
   useEffect(() => {
     void readResponsible();
     if (isOwner) void loadEmployees();
@@ -178,11 +175,13 @@ export default function BranchDetailPage() {
       <StatusBar />
       <NavHeader title={t("branchPage.title")} backTo={`${base}/settings/hub/branches`} />
 
-      <div className="px-4 pt-4">
-        <BranchIdentity
-          branch={branch}
-          onRename={isOwner ? () => { setDraftName(branch.name); setRenaming(true); } : undefined}
-        />
+      {/* The record's header, in the business screen's block: the tile, the name and its one tag,
+          the place under them, and the line the section below begins from. */}
+      <div
+        className="px-5 pt-6 pb-5"
+        style={{ borderBottom: "1px solid var(--divider)" }}
+      >
+        <BranchIdentity branch={branch} imageUrl={logoUrl} />
       </div>
 
       <div className="px-4 pt-4">
@@ -252,28 +251,6 @@ export default function BranchDetailPage() {
           data-testid="branch-archive-reason"
         />
       </ConfirmDialog>
-
-      {renaming && (
-        <ConfirmDialog
-          open
-          title={t("branches.rename")}
-          message={t("branches.renameBody")}
-          confirmLabel={t("branches.save")}
-          loading={busy}
-          confirmDisabled={!draftName.trim() || draftName.trim() === branch.name}
-          onConfirm={() => void rename()}
-          onCancel={() => { if (!busy) setRenaming(false); }}
-        >
-          <Input
-            value={draftName}
-            onChange={(e) => setDraftName(e.target.value)}
-            label={t("branches.nameLabel")}
-            maxLength={120}
-            autoFocus
-            data-testid="branch-rename-input"
-          />
-        </ConfirmDialog>
-      )}
 
       {/* Rendered only while open, deliberately. ConfirmDialog keeps itself mounted through its
           exit animation, so two always-rendered dialogs on one page put two `confirm-submit`

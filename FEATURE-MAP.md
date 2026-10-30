@@ -33,7 +33,7 @@ name, domain, status, screens, components, state/stores, libs, DB tables, RPC/AP
 permissions, business rules, direct dependencies, dependent features, tests, evidence
 (status + what it proves + where the log lives), last verified date, known risks.
 
-28 registered capabilities (`status` is `LIVE` unless noted):
+29 registered capabilities (`status` is `LIVE` unless noted):
 
 | Feature | Domain | Key screens | Depends on | Evidence |
 |---|---|---|---|---|
@@ -49,6 +49,8 @@ permissions, business rules, direct dependencies, dependent features, tests, evi
 | Low-stock thresholds and alert settings | Inventory | `alerts/inventory`, `settings` | products, inventory, notifications, settings | FIXED + REVERIFIED (0182) |
 | Purchases and supplier ordering | Purchasing | `purchases*` | companies, products | VALID |
 | Supplier payments and daily cash | Payments | `payments*` | purchases, companies | VALID |
+| Owner payment reminders (customer, supplier, general) | Finance | `settings/hub/finance/reminders`, `payments/cash-position` | customers, supplier payments | VALID (0257; local DB probe) |
+| Recorded money, receipts, corrections and the money statement | Finance | `settings/hub/finance/*` | sales, purchases, customers, branch scope | VALID (0261/0262; local DB + browser probe) |
 | Customers, credit limits and payments | Credit | `customers*` | branch scope | VALID |
 | Sales, cart and split payment | Sales | `sale*`, `sales*` | customers, products, employees, branch scope | VALID |
 | Void a sale | Sales | `sales/:saleId` | sales, audit | VALID |

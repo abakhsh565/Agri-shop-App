@@ -5,6 +5,7 @@ import { useOfflineStore } from "@/stores/offlineStore";
 import { getPendingCount } from "@/lib/offlineQueue";
 import PINInput from "@/components/ui/PINInput";
 import { Suspense, useState, useEffect, useRef } from "react";
+import useOverlayScrollLock from "@/hooks/useOverlayScrollLock";
 import { verifyPinDetailed } from "@/lib/pinLock";
 import { useUIStore } from "@/stores/uiStore";
 import { useProductsStore } from "@/stores/productsStore";
@@ -40,6 +41,8 @@ export default function EmployeeLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   useBootstrapData();
+  // The same lock the owner shell uses: a sheet over a list does not let the list move underneath.
+  useOverlayScrollLock();
   // Which shop this session works in is the server's answer, not this device's — the owner
   // shell asks the same question for its header. Here there is nothing to switch, but the
   // answer is still the difference between "this employee can work" and "this account is in
@@ -293,6 +296,7 @@ export default function EmployeeLayout() {
 
       {/* ── Main content ── */}
       <div
+        data-app-scroll
         className="flex flex-col flex-1 overflow-y-auto"
         style={{ paddingBottom: showTabBar ? "var(--tabbar-height)" : "0px" }}
       >

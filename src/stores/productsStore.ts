@@ -19,6 +19,9 @@ interface ProductRow {
   company: string | null;
   company_id: string | null;
   category: ProductCategory;
+  /** The owner's shelf (0259), absent on a row written before it. */
+  category_id: string | null;
+  unit_id: string | null;
   image_url: string | null;
   barcode: string | null;
   base_unit: string | null;
@@ -192,6 +195,8 @@ export const useProductsStore = create<ProductsState>((set, get) => ({
           name: p.name,
           company: companyName,
           category: p.category,
+          categoryId: p.category_id ?? undefined,
+          unitId: p.unit_id ?? undefined,
           imageUrl: p.image_url ?? undefined,
           barcode: p.barcode ?? undefined,
           baseUnit: (p.base_unit as BaseUnit) ?? "piece",

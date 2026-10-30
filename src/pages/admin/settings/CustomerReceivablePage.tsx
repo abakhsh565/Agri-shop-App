@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { CalendarDays, ChevronRight, Download, Share2, UserRound } from "lucide-react";
+import { Bell, CalendarDays, ChevronRight, Download, Plus, Share2, UserRound } from "lucide-react";
+import PaymentReminderSheet, { type PaymentReminderDefaults } from "@/components/ui/PaymentReminderSheet";
 import SectionActionsSheet, { SectionActionsButton } from "@/components/ui/SectionActionsSheet";
 import { csvFileName, exportCsv, exportText, toCsv } from "@/lib/exportData";
 import { useUIStore } from "@/stores/uiStore";
@@ -8,12 +9,17 @@ import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
 import SearchBar from "@/components/ui/SearchBar";
 import BalanceDateSheet from "@/components/ui/BalanceDateSheet";
+import Sheet from "@/components/ui/Sheet";
+import ListRow from "@/components/ui/ListRow";
 import { SkeletonList } from "@/components/ui/Skeleton";
 import { useCustomersStore } from "@/stores/customersStore";
+import { useAuthStore } from "@/stores/authStore";
 import { useT } from "@/lib/i18n";
 import { useShellBase } from "@/lib/useShellBase";
 import { formatCurrency } from "@/lib/formatters";
 import { isCreditOverdue } from "@/lib/signalEngine";
+import { reminderWhen, usePaymentReminderBook } from "@/lib/paymentReminders";
+import { hasPermission } from "@/lib/tenantContext";
 import { pkDateFromISO, pkToday } from "@/lib/pkDate";
 
 /**
@@ -67,6 +73,19 @@ export default function CustomerReceivablePage() {
   const [periodOpen, setPeriodOpen] = useState(false);
   const [customFrom, setCustomFrom] = useState("");
   const [customTo, setCustomTo] = useState("");
+  // Taking a payment is a customer-level job, so the picker starts here and the chosen account's
+  // own form does the rest — the reader never has to know its address (owner, 2026-10-31).
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [customerQuery, setCustomerQuery] = useState("");
+  const canRecordPayment = hasPermission("customers.payments");
+  // A reminder is the owner's own note (0257), so the bell is offered only to the owner — the
+  // database refuses the write from anyone else, and a control that exists to be refused is a
+  // lie about what the reader can do.
+  const isOwner = useAuthStore((s) => s.user?.membershipRole === "owner");
+  const [reminderDefaults, setReminderDefaults] = useState<PaymentReminderDefaults | null>(null);
+  // The diary's customer notes, so a row can say one already exists. Read-only here: the bell
+  // writes, this line reports. A role without payments.view reads nothing and draws no marker.
+  const customerReminders = usePaymentReminderBook();
   const { addToast } = useUIStore();
 
   useEffect(() => { if (!ready) void load(); }, [ready, load]);
@@ -91,6 +110,15 @@ export default function CustomerReceivablePage() {
     : period === "month" ? `${todayISO.slice(0, 7)}-01`
     : `${todayISO.slice(0, 4)}-01-01`;
   const windowTo = period === "custom" ? customTo || todayISO : todayISO;
+
+  /** Whoever owes first: that is the payment a counter is most likely taking. */
+  const pickable = useMemo(() => {
+    const term = customerQuery.trim().toLowerCase();
+    return customers
+      .filter((c) => c.outstandingBalance > 0)
+      .filter((c) => !term || c.name.toLowerCase().includes(term) || c.phone.includes(term))
+      .sort((a, b) => b.outstandingBalance - a.outstandingBalance);
+  }, [customers, customerQuery]);
 
   /** The credit book, narrowed to the days the money falls due in when a window is chosen. */
   const scoped = useMemo(() => {
@@ -123,6 +151,18 @@ export default function CustomerReceivablePage() {
       overdue: scoped.filter((c) => isCreditOverdue(c, todayISO)).length,
     };
   }, [scoped, todayISO]);
+
+  /** The earliest open reminder per customer, as a PK day — the next thing to chase. */
+  const nextReminderByCustomer = useMemo(() => {
+    const next = new Map<string, string>();
+    for (const reminder of customerReminders.rows ?? []) {
+      if (reminder.status !== "upcoming" || reminder.kind !== "customer" || !reminder.customerId) continue;
+      const when = reminderWhen(reminder, todayISO).on;
+      const known = next.get(reminder.customerId);
+      if (!known || when < known) next.set(reminder.customerId, when);
+    }
+    return next;
+  }, [customerReminders.rows, todayISO]);
 
   const rows = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -302,6 +342,38 @@ export default function CustomerReceivablePage() {
         </div>
       </div>
 
+      {/* RECORD A PAYMENT, ABOVE THE SEARCH (owner's instruction, 2026-10-31). The book states
+          what is still owed; this is the action that changes it. It sits in the book's own grey
+          rather than the brand colour: collecting money is routine here, not the screen's one
+          call to action, and it must not outshout the list it sits over. */}
+      {canRecordPayment && (
+        <div className="px-4 pt-3">
+          <button
+            type="button"
+            onClick={() => setPickerOpen(true)}
+            data-testid="receivable-record"
+            className="w-full flex items-center gap-3 rounded-[var(--radius-card)] p-3 text-start active:opacity-70"
+            style={{ background: "var(--tone-sunken)" }}
+          >
+            <span
+              className="size-9 rounded-full flex items-center justify-center shrink-0"
+              style={{ background: "var(--surface-2)", color: "var(--brand-dark)" }}
+            >
+              <Plus size={18} strokeWidth={2.5} />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-14 font-bold" style={{ color: "var(--text-primary)" }}>
+                {t("customers.recordPayment")}
+              </span>
+              <span className="block text-11 mt-0.5" style={{ color: "var(--text-secondary)" }}>
+                {t("receivable.recordHint")}
+              </span>
+            </span>
+            <ChevronRight size={14} className="shrink-0" style={{ color: "var(--text-secondary)" }} />
+          </button>
+        </div>
+      )}
+
       <div className="px-4 pt-3">
         <SearchBar
           value={search}
@@ -381,14 +453,17 @@ export default function CustomerReceivablePage() {
               ? "var(--error)"
               : due > 0 ? "var(--text-secondary)" : "var(--text-tertiary)";
             return (
-              <button
+              <div
                 key={c.id}
-                type="button"
-                onClick={() => navigate(`${base}/customers/${c.id}`)}
                 data-testid={`receivable-row-${c.id}`}
-                className="rounded-[var(--radius-card)] p-3.5 text-start active:opacity-70"
+                className="rounded-[var(--radius-card)] p-3.5"
                 style={{ background: "var(--tone-card)" }}
               >
+                <button
+                  type="button"
+                  onClick={() => navigate(`${base}/customers/${c.id}`)}
+                  className="w-full text-start active:opacity-70"
+                >
                 <div className="flex items-start gap-3">
                   <span
                     className="size-10 rounded-full flex items-center justify-center font-bold text-14 shrink-0"
@@ -429,6 +504,7 @@ export default function CustomerReceivablePage() {
                     style={{ width: `${pct}%`, background: overdue ? "var(--warning)" : "var(--brand)" }}
                   />
                 </div>
+                </button>
                 <div className="flex items-center justify-between gap-3 mt-1.5">
                   {/* Phone where the supplier row puts its timing note, then the share of the
                       bill that has come back — and the limit in use only when a limit is set, so
@@ -438,16 +514,102 @@ export default function CustomerReceivablePage() {
                     {billed > 0 ? ` · ${t("receivable.collectedPct", { pct })}` : ""}
                     {c.creditLimit > 0 ? ` · ${used}${t("credit.percentUsed")}` : ""}
                   </p>
-                  <span className="flex items-center gap-1 shrink-0 text-10" style={{ color: "var(--text-secondary)" }}>
-                    {t("payable.viewDetails")}
-                    <ChevronRight size={12} />
-                  </span>
+                  {nextReminderByCustomer.get(c.id) && (
+                    <span
+                      className="flex items-center gap-1 shrink-0 text-10 tabular-nums ms-1"
+                      style={{ color: "var(--brand-dark)" }}
+                      data-testid={`receivable-reminder-date-${c.id}`}
+                    >
+                      <Bell size={10} />
+                      {new Date(`${nextReminderByCustomer.get(c.id)}T00:00:00Z`).toLocaleDateString("en-GB", {
+                        day: "numeric",
+                        month: "short",
+                        timeZone: "UTC",
+                      })}
+                    </span>
+                  )}
+                  <div className="flex items-center gap-1 shrink-0">
+                    {isOwner && due > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setReminderDefaults({
+                          kind: "customer",
+                          customerId: c.id,
+                          title: t("paymentBook.titleFromCustomer", { name: c.name }),
+                          amount: due,
+                        })}
+                        aria-label={t("paymentBook.setForCustomer", { name: c.name })}
+                        data-testid={`receivable-remind-${c.id}`}
+                        className="size-8 rounded-full flex items-center justify-center active:opacity-60"
+                        style={{ background: "var(--tone-sunken)", color: "var(--text-secondary)" }}
+                      >
+                        <Bell size={14} />
+                      </button>
+                    )}
+                    <span className="flex items-center gap-1 text-10" style={{ color: "var(--text-secondary)" }}>
+                      {t("payable.viewDetails")}
+                      <ChevronRight size={12} />
+                    </span>
+                  </div>
                 </div>
-              </button>
+              </div>
             );
           })}
         </div>
       )}
+
+      <PaymentReminderSheet
+        open={reminderDefaults !== null}
+        reminder={null}
+        defaults={reminderDefaults ?? undefined}
+        onClose={() => setReminderDefaults(null)}
+        onSaved={() => { setReminderDefaults(null); customerReminders.retry(); }}
+      />
+
+      <Sheet
+        open={pickerOpen}
+        onClose={() => setPickerOpen(false)}
+        title={t("customers.recordPayment")}
+        closeButton
+      >
+        <div className="px-4 pb-2">
+          <SearchBar
+            value={customerQuery}
+            onChange={(e) => setCustomerQuery(e.target.value)}
+            onClear={() => setCustomerQuery("")}
+            placeholder={t("customers.search")}
+          />
+        </div>
+        {pickable.length === 0 ? (
+          <p className="px-4 pt-4 text-12" style={{ color: "var(--text-secondary)" }}>
+            {t("outstanding.emptyFilter")}
+          </p>
+        ) : (
+          <div className="pb-4">
+            {pickable.map((c) => (
+              <ListRow
+                key={c.id}
+                testId={`receivable-pick-${c.id}`}
+                title={c.name}
+                description={c.phone}
+                trailing={
+                  <span className="flex items-center gap-1 shrink-0">
+                    <span className="text-13 font-bold tabular-nums">
+                      {formatCurrency(c.outstandingBalance)}
+                    </span>
+                    <ChevronRight size={14} style={{ color: "var(--text-secondary)" }} />
+                  </span>
+                }
+                onClick={() => {
+                  setPickerOpen(false);
+                  setCustomerQuery("");
+                  navigate(`${base}/customers/${c.id}/record-payment`);
+                }}
+              />
+            ))}
+          </div>
+        )}
+      </Sheet>
     </div>
   );
 }

@@ -270,6 +270,38 @@ export interface Shop {
 
 export type BaseUnit = "kg" | "liter" | "piece";
 
+/**
+ * One of the shop's own shelves.
+ *
+ * The seven fixed kinds still exist (`legacyCategory`), because the recommendation engine
+ * reasons about them; a shelf is the name the owner files a product under. `isSystem` is true
+ * only while a seeded shelf still carries the name it was given, so the app can translate that
+ * seven and print the owner's own words for everything else.
+ */
+export interface ShopCategory {
+  id: string;
+  parentId: string | null;
+  name: string;
+  legacyCategory: ProductCategory | null;
+  isSystem: boolean;
+  sortOrder: number;
+}
+
+/**
+ * One of the shop's own units.
+ *
+ * `baseUnit` is the measurement family the arithmetic happens in — a "Bori" of pieces is still
+ * a piece — and `precision` is how many decimals it is written with.
+ */
+export interface ShopUnit {
+  id: string;
+  name: string;
+  symbol: string;
+  baseUnit: BaseUnit;
+  precision: number;
+  isSystem: boolean;
+}
+
 export interface ProductVariant {
   id: string;
   productId: string;
@@ -289,9 +321,17 @@ export interface Product {
   name: string;
   company: string;
   category: ProductCategory;
+  /** The shelf this product is filed on, when it has been filed since 0259. */
+  categoryId?: string;
+  /** The shop unit it is sold in, when one was chosen. */
+  unitId?: string;
   imageUrl?: string;
   barcode?: string;
-  baseUnit: BaseUnit;
+  /**
+   * The measurement family, or the shop's own symbol for a unit that predates the catalogue.
+   * Kept a plain string because a row stored before 0259 can carry any unit the shop used.
+   */
+  baseUnit: string;
   stockQty: number;
   variants: ProductVariant[];
   /**

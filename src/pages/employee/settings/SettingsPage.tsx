@@ -4,6 +4,7 @@ import NavHeader from "@/components/ui/NavHeader";
 import ListCard from "@/components/ui/ListCard";
 import ListRow from "@/components/ui/ListRow";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
+import ImageCrop from "@/components/ui/ImageCrop";
 import { useAuthStore } from "@/stores/authStore";
 import { useThemeStore, applyTheme } from "@/stores/themeStore";
 import { clearDeviceSession } from "@/lib/deviceSession";
@@ -62,6 +63,8 @@ export default function SettingsPage() {
   const [confirmFingerprintOff, setConfirmFingerprintOff] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(user?.photoUrl ?? null);
   const [uploading, setUploading] = useState(false);
+  // The picture waiting behind the framing screen; nothing is uploaded until it is confirmed.
+  const [pendingAvatar, setPendingAvatar] = useState<File | null>(null);
   const [editingName, setEditingName] = useState(false);
   const [nameValue, setNameValue] = useState(user?.name ?? "");
   const [savingName, setSavingName] = useState(false);
@@ -190,9 +193,17 @@ export default function SettingsPage() {
     setLanguage(language === "en" ? "ur" : "en");
   }
 
-  async function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
+  /** Choosing a picture only opens the frame; the upload happens once it is confirmed. */
+  function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
+    if (fileInputRef.current) fileInputRef.current.value = "";
     if (!file || !user) return;
+    setPendingAvatar(file);
+  }
+
+  async function uploadAvatar(file: File) {
+    if (!user) return;
+    setPendingAvatar(null);
     // Show instant preview
     const reader = new FileReader();
     reader.onload = (ev) => setAvatarUrl(ev.target?.result as string);
@@ -222,7 +233,6 @@ export default function SettingsPage() {
       setAvatarUrl(user.photoUrl ?? null);
     } finally {
       setUploading(false);
-      if (fileInputRef.current) fileInputRef.current.value = "";
     }
   }
 
@@ -540,6 +550,16 @@ export default function SettingsPage() {
         onConfirm={handleDeleteAccount}
         onCancel={() => setShowDeleteAccount(false)}
       />
+
+      {/* The avatar is framed before it is stored, like every other picture in the app. */}
+      {pendingAvatar && (
+        <ImageCrop
+          file={pendingAvatar}
+          aspect={1}
+          onCancel={() => setPendingAvatar(null)}
+          onConfirm={(file) => void uploadAvatar(file)}
+        />
+      )}
     </div>
   );
 }
