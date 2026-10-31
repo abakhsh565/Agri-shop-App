@@ -1,24 +1,31 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   ArrowDownLeft,
   ArrowUpRight,
   CalendarDays,
   Download,
+  Pencil,
+  Plus,
+  Repeat,
   Share2,
   X,
 } from "lucide-react";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
-import PeriodTabs from "@/components/ui/PeriodTabs";
-import DateRangeSheet from "@/components/ui/DateRangeSheet";
+import BalanceDateSheet, { type BalancePeriod } from "@/components/ui/BalanceDateSheet";
 import SearchBar from "@/components/ui/SearchBar";
 import Button from "@/components/ui/Button";
 import EmptyState from "@/components/ui/EmptyState";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
+import SectionActionsSheet, { SectionActionsButton } from "@/components/ui/SectionActionsSheet";
 import { Skeleton } from "@/components/ui/Skeleton";
+import FinanceEntrySheet from "@/components/finance/FinanceEntrySheet";
 import { useT, type I18nKey } from "@/lib/i18n";
 import { useShellBase } from "@/lib/useShellBase";
 import { useThemeStore } from "@/stores/themeStore";
 import { useUIStore } from "@/stores/uiStore";
+import { useAuthStore } from "@/stores/authStore";
 import { hasPermission } from "@/lib/tenantContext";
 import {
   MONEY_SOURCE_KEY,
@@ -26,64 +33,133 @@ import {
   useMoneyTotals,
   type MoneyMovement,
 } from "@/lib/financeMoney";
-import { CATEGORY_KEY, METHOD_KEY, monthWindow } from "@/lib/financeEntries";
+import {
+  CATEGORY_KEY,
+  METHOD_KEY,
+  REPEAT_KEY,
+  postDueFinanceEntries,
+  stopFinanceRecurrence,
+  useFinanceRecurrences,
+  type FinanceRecurrence,
+} from "@/lib/financeEntries";
 import { formatCurrency } from "@/lib/formatters";
 import { pkToday } from "@/lib/pkDate";
 import { csvFileName, exportCsv, exportText, toCsv } from "@/lib/exportData";
 
 /**
- * The money statement: every movement of money in this branch, in one read-only list (0262).
+ * Money — every movement in the branch, in one list.
  *
- * WHY IT IS SEPARATE FROM THE FINANCE HUB. The hub answers "what did the business earn" — net
- * sales, cost of goods, recorded expenses. This answers "what money actually moved": the paid
- * part of a sale, a customer settling credit, a refund, a supplier payment, rent, a drawing. They
- * are different questions, and printing one under the other's name is how a ledger starts lying.
- * The screen says so under its own figures rather than leaving the reader to assume.
+ * WHY ONE SCREEN. The owner had three lists that answered the same question: the
+ * recorded-entry ledger, the customer/supplier payment list, and the statement. Each showed a
+ * different slice of the same money, and a reader had to know which slice a movement fell into
+ * before they could find it. The statement already reads all of those ledgers in one query (0262),
+ * so this screen is that query with the controls the other two needed:
  *
- * WHY IT DOES NOT WRITE. A movement belongs to the ledger that owns it: a sale is corrected on the
- * sale, a supplier payment in the payments book, an expense in the recorded-money form. A second
- * writer here would create two versions of the same fact that could disagree. The screen is a read
- * and says "read-only" in words.
+ *   - the period, on the same Today / This week / This month / This year / Custom sheet as the
+ *     rest of the app;
+ *   - the direction and "Recorded" filters, over one list;
+ *   - recorded rows open the correction sheet, because those are the only movements this app
+ *     writes by hand; sales and payments stay read-only and are corrected in their own books;
+ *   - the repeating strip, so a cadence can still be seen and stopped where its rows appear.
  *
- * EVERY ROW IS A MOVEMENT, NOT A BALANCE. A credit sale's unpaid part appears nowhere here until
- * it is paid, a purchase on credit moves nothing until its advance or payment does, and a voided
- * sale never happened. The SQL decides that once; this file does not re-decide it.
+ * The three totals come from `get_money_totals`, an aggregate over the same statement rows, so the
+ * figures cannot describe a different set of movements from the list below them.
  *
- * THE LIST AND THE FIGURES READ THE SAME WINDOW. The totals come from `get_money_totals`, which
- * aggregates the same statement rows, so the three numbers on top cannot describe a different set
- * of movements from the list under them. The search narrows what the reader sees and what the
- * export contains; it never changes the totals, which describe the period.
+ * WHAT IT DOES NOT DO. It does not write a sale, a customer payment or a supplier payment. Those
+ * move stock and settle debts; they belong to the screen that owns them. The one write here is
+ * "Record money", the merged income/expense/drawing form, and it is owner-only at the database.
  */
+
+type Filter = "all" | "in" | "out" | "recorded";
+
+const EVERY_KEY = {
+  day: "finance.repeat.everyDays",
+  week: "finance.repeat.everyWeeks",
+  month: "finance.repeat.everyMonths",
+} as const;
 
 export default function MoneyStatementPage() {
   const t = useT();
   const base = useShellBase();
+  const navigate = useNavigate();
   const language = useThemeStore((s) => s.language);
+  const role = useAuthStore((s) => s.user?.membershipRole);
+  const isOwner = role === "owner";
   const { addToast } = useUIStore();
 
   const day = pkToday();
-  const thisMonth = useMemo(() => monthWindow(day), [day]);
-  const [period, setPeriod] = useState<"month" | "previous">("month");
-  const [custom, setCustom] = useState<{ from: string; to: string } | null>(null);
-  const [rangeOpen, setRangeOpen] = useState(false);
-  const [search, setSearch] = useState("");
+  const weekStart = useMemo(() => {
+    const d = new Date(`${day}T00:00:00Z`);
+    d.setUTCDate(d.getUTCDate() - 6);
+    return d.toISOString().slice(0, 10);
+  }, [day]);
 
-  const window = custom ?? (period === "month" ? thisMonth : { from: thisMonth.prevFrom, to: thisMonth.prevTo });
+  const [period, setPeriod] = useState<BalancePeriod>("month");
+  const [custom, setCustom] = useState({ from: "", to: "" });
+  const [periodOpen, setPeriodOpen] = useState(false);
+  const [filter, setFilter] = useState<Filter>("all");
+  const [search, setSearch] = useState("");
+  const [actionsOpen, setActionsOpen] = useState(false);
+  const [openEntryId, setOpenEntryId] = useState<string | null>(null);
+  const [stopping, setStopping] = useState<FinanceRecurrence | null>(null);
+  const [stoppingBusy, setStoppingBusy] = useState(false);
+
+  const window = useMemo(() => {
+    switch (period) {
+      case "all":
+        return { from: "2000-01-01", to: day };
+      case "today":
+        return { from: day, to: day };
+      case "week":
+        return { from: weekStart, to: day };
+      case "year":
+        return { from: `${day.slice(0, 4)}-01-01`, to: day };
+      case "custom":
+        return { from: custom.from || day, to: custom.to || day };
+      default:
+        return { from: `${day.slice(0, 7)}-01`, to: day };
+    }
+  }, [period, custom, day, weekStart]);
 
   const statement = useMoneyStatement(window.from, window.to);
   const totals = useMoneyTotals(window.from, window.to);
+  const recurrences = useFinanceRecurrences(window.from, window.to);
 
   const canRead = hasPermission("payments.view");
 
+  // Posting happens when the owner opens the book, because the app has no scheduler behind it.
+  // The rows are dated the day they fell due, and the reads below are retried only when this
+  // call actually wrote something.
+  const posted = useRef(false);
+  useEffect(() => {
+    if (!isOwner || posted.current) return;
+    posted.current = true;
+    void postDueFinanceEntries().then((count) => {
+      if (count > 0) {
+        statement.retry();
+        totals.retry();
+        recurrences.retry();
+      }
+    });
+  }, [isOwner, statement.retry, totals.retry, recurrences.retry]);
+
   const sourceLabel = (source: MoneyMovement["source"]) => t(MONEY_SOURCE_KEY[source]);
-  // A movement stores its category and method as codes; the screen prints the words the rest of
-  // the app uses for them, so a receipt does not read "other_income · bank" beside a translated
-  // source name. Unknown codes pass through rather than disappearing.
+
   const codeLabel = (value: string | null, map: Readonly<Partial<Record<string, string>>>) => {
     if (!value) return "";
     const key = map[value];
     return key ? t(key as I18nKey) : value;
   };
+
+  const methodLabel = (value: string | null) => {
+    if (!value) return "";
+    if (value === "bank_transfer") return t("sale.bankTransfer");
+    if (value === "cash") return t("sale.cash");
+    return codeLabel(value, METHOD_KEY);
+  };
+
+  const categoryLabel = (value: string) =>
+    CATEGORY_KEY[value] ? t(CATEGORY_KEY[value]) : value || t("finance.unknown");
 
   const shortDate = (iso: string) =>
     new Date(`${iso}T00:00:00Z`).toLocaleDateString(language === "ur" ? "ur-PK" : "en-GB", {
@@ -96,26 +172,35 @@ export default function MoneyStatementPage() {
   const money = (value: number | null | undefined) =>
     value == null ? "—" : formatCurrency(value);
 
-  /**
-   * The list, narrowed by one search box.
-   *
-   * The haystack is what a row PRINTS plus what it stores: a movement can be found by the
-   * customer's name, the sale number, the method, the note, the figure or the day. Searching the
-   * translated source name means typing "واپسی" finds a refund in Urdu.
-   */
+  const periodLabel =
+    period === "all"
+      ? t("period.allDates")
+      : period === "today"
+        ? t("period.today")
+        : period === "week"
+          ? t("period.week")
+          : period === "month"
+            ? t("period.month")
+            : period === "year"
+              ? t("period.year")
+              : `${shortDate(window.from)} – ${shortDate(window.to)}`;
+
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
-    if (!term) return statement.rows ?? [];
-    return (statement.rows ?? []).filter((row) =>
-      [
+    return (statement.rows ?? []).filter((row) => {
+      if (filter === "in" && row.direction !== "in") return false;
+      if (filter === "out" && row.direction !== "out") return false;
+      if (filter === "recorded" && !row.source.startsWith("finance_")) return false;
+      if (!term) return true;
+      return [
         sourceLabel(row.source),
         row.source,
         row.party ?? "",
         row.reference ?? "",
+        codeLabel(row.reference, CATEGORY_KEY),
         row.note ?? "",
         row.method ?? "",
-        codeLabel(row.method, METHOD_KEY),
-        codeLabel(row.reference, CATEGORY_KEY),
+        methodLabel(row.method),
         row.occurredOn,
         shortDate(row.occurredOn),
         String(row.amount),
@@ -123,13 +208,12 @@ export default function MoneyStatementPage() {
       ]
         .join(" ")
         .toLowerCase()
-        .includes(term),
-    );
-    // The label helpers close over `t` and `language`, both of which change the words searched.
+        .includes(term);
+    });
+    // The label helpers close over `t` and `language`; both change the words searched.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [statement.rows, search, language]);
+  }, [statement.rows, filter, search, language]);
 
-  /** The visible list, grouped by the day the money moved. */
   const groups = useMemo(() => {
     const map = new Map<string, MoneyMovement[]>();
     for (const row of filtered) {
@@ -143,6 +227,11 @@ export default function MoneyStatementPage() {
   const signed = (row: MoneyMovement) =>
     `${row.direction === "in" ? "+" : "−"}${formatCurrency(row.amount)}`;
 
+  const repeatWords = (rule: FinanceRecurrence) =>
+    rule.repeatEvery <= 1
+      ? t(REPEAT_KEY[rule.repeatUnit])
+      : t(EVERY_KEY[rule.repeatUnit as "day" | "week" | "month"], { n: rule.repeatEvery });
+
   async function download() {
     if (!filtered.length) {
       addToast(t("money.exportEmpty"), "info");
@@ -155,14 +244,14 @@ export default function MoneyStatementPage() {
         { label: t("money.source.sale"), value: (row: MoneyMovement) => sourceLabel(row.source) },
         { label: t("money.party"), value: (row: MoneyMovement) => row.party ?? "" },
         { label: t("money.reference"), value: (row: MoneyMovement) => row.reference ?? "" },
-        { label: t("money.method"), value: (row: MoneyMovement) => row.method ?? "" },
+        { label: t("money.method"), value: (row: MoneyMovement) => methodLabel(row.method) },
         { label: t("money.note"), value: (row: MoneyMovement) => row.note ?? "" },
-        { label: t("finance.amount"), value: (row: MoneyMovement) => row.direction === "in" ? row.amount : -row.amount },
+        { label: t("finance.amount"), value: (row: MoneyMovement) => (row.direction === "in" ? row.amount : -row.amount) },
       ],
       filtered,
     );
     try {
-      const outcome = await exportCsv(csvFileName("money-statement"), csv, t("money.title"));
+      const outcome = await exportCsv(csvFileName("money"), csv, t("money.title"));
       addToast(outcome === "shared" ? t("data.exportedShared") : t("money.exported"), "success");
     } catch {
       addToast(t("data.exportFailed"), "error");
@@ -192,6 +281,28 @@ export default function MoneyStatementPage() {
     }
   }
 
+  async function stopRepeating() {
+    if (!stopping || stoppingBusy) return;
+    setStoppingBusy(true);
+    try {
+      await stopFinanceRecurrence(stopping.id);
+      addToast(t("finance.ledger.repeatStopped"), "success");
+      setStopping(null);
+      recurrences.retry();
+    } catch {
+      addToast(t("finance.ledger.stopFailed"), "error");
+    } finally {
+      setStoppingBusy(false);
+    }
+  }
+
+  const filters: { key: Filter; label: string }[] = [
+    { key: "all", label: t("cashPosition.filterAll") },
+    { key: "in", label: t("cashPosition.received") },
+    { key: "out", label: t("cashPosition.paid") },
+    { key: "recorded", label: t("money.filter.recorded") },
+  ];
+
   return (
     <div
       className="flex flex-col w-full min-h-full"
@@ -206,7 +317,7 @@ export default function MoneyStatementPage() {
           <div className="flex items-center gap-1">
             <button
               type="button"
-              onClick={() => setRangeOpen(true)}
+              onClick={() => setPeriodOpen(true)}
               aria-label={t("money.choosePeriod")}
               data-testid="money-statement-calendar"
               className="flex items-center justify-center size-11 rounded-full active:opacity-60"
@@ -214,68 +325,24 @@ export default function MoneyStatementPage() {
             >
               <CalendarDays size={18} />
             </button>
-            <button
-              type="button"
-              onClick={share}
-              aria-label={t("money.share")}
-              data-testid="money-statement-share"
-              className="flex items-center justify-center size-11 rounded-full active:opacity-60"
-              style={{ color: "var(--text-primary)" }}
-            >
-              <Share2 size={18} />
-            </button>
-            <button
-              type="button"
-              onClick={download}
-              aria-label={t("money.export")}
-              data-testid="money-statement-download"
-              className="flex items-center justify-center size-11 rounded-full active:opacity-60"
-              style={{ color: "var(--text-primary)" }}
-            >
-              <Download size={18} />
-            </button>
+            <SectionActionsButton
+              onClick={() => setActionsOpen(true)}
+              label={t("data.moreActions")}
+              testId="money-statement-actions"
+            />
           </div>
         }
       />
 
-      <div className="px-4 pt-1">
-        <PeriodTabs
-          options={[
-            { key: "month", label: t("money.thisMonth") },
-            { key: "previous", label: t("money.lastMonth") },
-          ]}
-          value={custom ? null : period}
-          onChange={(key) => {
-            setCustom(null);
-            setPeriod(key);
-          }}
-          label={t("money.period")}
-          filterLabel={t("money.period")}
-          testIdPrefix="money-statement-period"
-        />
-      </div>
-
-      {custom && (
-        <div className="px-4 pt-2 flex items-center gap-2">
-          <span
-            className="text-11 px-3 py-1.5 rounded-full min-w-0 truncate"
-            style={{ background: "var(--tone-sunken)", color: "var(--text-secondary)" }}
-            data-testid="money-statement-range"
-          >
-            {t("money.customRange", { from: shortDate(custom.from), to: shortDate(custom.to) })}
-          </span>
-          <button
-            type="button"
-            onClick={() => setCustom(null)}
-            aria-label={t("common.clear")}
-            data-testid="money-statement-range-clear"
-            className="flex items-center justify-center size-8 rounded-full active:opacity-60"
-            style={{ color: "var(--text-secondary)" }}
-          >
-            <X size={14} />
-          </button>
-        </div>
-      )}
+      <SectionActionsSheet
+        open={actionsOpen}
+        onClose={() => setActionsOpen(false)}
+        title={t("money.title")}
+        actions={[
+          { id: "export", icon: Download, title: t("money.export"), description: t("data.exportHint"), onClick: () => { void download(); } },
+          { id: "share", icon: Share2, title: t("money.share"), description: t("sales.shareReportHint"), onClick: () => { void share(); } },
+        ]}
+      />
 
       {!canRead ? (
         <p className="px-4 pt-4 text-12" style={{ color: "var(--text-secondary)" }}>
@@ -283,7 +350,6 @@ export default function MoneyStatementPage() {
         </p>
       ) : (
         <>
-          {/* The three figures, then the sentence that keeps them from being read as profit. */}
           <div className="px-4 pt-3">
             <div
               className="rounded-[var(--radius-card)] p-4"
@@ -323,9 +389,58 @@ export default function MoneyStatementPage() {
             </div>
           </div>
 
-          <p className="px-4 pt-3 text-11" style={{ color: "var(--text-secondary)" }}>
+          {isOwner && (
+            <div className="px-4 pt-2">
+              <button
+                type="button"
+                onClick={() => navigate(`${base}/settings/hub/finance/record`)}
+                data-testid="money-record"
+                className="min-h-11 flex items-center gap-1.5 text-13 font-semibold active:opacity-60"
+                style={{ color: "var(--brand-dark)" }}
+              >
+                <Plus size={15} />
+                {t("money.recordAction")}
+              </button>
+            </div>
+          )}
+
+          <p className="px-4 pt-1 text-11" style={{ color: "var(--text-secondary)" }}>
             {t("money.readOnly")}
           </p>
+
+          <div className="flex items-center gap-2 px-4 pt-3">
+            <div className="flex gap-2 flex-1 min-w-0 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
+              {filters.map((entry) => (
+                <button
+                  key={entry.key}
+                  type="button"
+                  onClick={() => setFilter(entry.key)}
+                  aria-pressed={filter === entry.key}
+                  data-testid={`money-filter-${entry.key}`}
+                  className="shrink-0 h-8 px-3.5 rounded-full text-12 font-semibold transition-colors"
+                  style={
+                    filter === entry.key
+                      ? { background: "var(--brand)", color: "#0a0a0a" }
+                      : { background: "var(--tone-sunken)", color: "var(--text-secondary)" }
+                  }
+                >
+                  {entry.label}
+                </button>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={() => setPeriodOpen(true)}
+              aria-haspopup="dialog"
+              aria-label={t("period.sheetTitle")}
+              data-testid="money-statement-period"
+              className="flex items-center gap-1.5 shrink-0 h-8 px-2.5 rounded-full text-11 font-semibold active:opacity-60 max-w-[45%]"
+              style={{ background: "var(--tone-sunken)", color: "var(--text-secondary)" }}
+            >
+              <CalendarDays size={13} />
+              <span className="truncate">{periodLabel}</span>
+            </button>
+          </div>
 
           <div className="px-4 pt-3">
             <SearchBar
@@ -337,7 +452,49 @@ export default function MoneyStatementPage() {
             />
           </div>
 
-          <div className="flex items-center justify-between gap-3 px-4 pt-3 pb-1">
+          {recurrences.rows && recurrences.rows.length > 0 && (
+            <div className="px-4 pt-4" data-testid="money-repeating">
+              <p className="text-13 font-bold">{t("finance.ledger.repeating")}</p>
+              <p className="text-11 mt-0.5" style={{ color: "var(--text-secondary)" }}>
+                {t("finance.ledger.repeatingHint")}
+              </p>
+              <div className="flex flex-col gap-2 mt-2">
+                {recurrences.rows.map((rule) => (
+                  <div
+                    key={rule.id}
+                    className="rounded-[var(--radius-card)] p-3 flex items-center gap-3"
+                    style={{ background: "var(--tone-card)" }}
+                    data-testid={`money-recurrence-${rule.id}`}
+                  >
+                    <Repeat size={16} className="shrink-0" style={{ color: "var(--text-secondary)" }} />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-13 font-bold truncate">{categoryLabel(rule.category)}</p>
+                      <p className="text-10 mt-0.5 truncate" style={{ color: "var(--text-secondary)" }}>
+                        {repeatWords(rule)}
+                        {" · "}
+                        {t("finance.ledger.nextOn", { date: shortDate(rule.nextOn) })}
+                      </p>
+                    </div>
+                    <p className="text-13 font-bold tabular-nums shrink-0">{formatCurrency(rule.amount)}</p>
+                    {isOwner && (
+                      <button
+                        type="button"
+                        onClick={() => setStopping(rule)}
+                        aria-label={t("finance.ledger.stopRepeat")}
+                        data-testid={`money-recurrence-stop-${rule.id}`}
+                        className="size-11 rounded-full flex items-center justify-center shrink-0 active:opacity-60"
+                        style={{ color: "var(--error)" }}
+                      >
+                        <X size={15} />
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="flex items-baseline justify-between gap-3 px-4 pt-4 pb-1">
             <p className="text-12" style={{ color: "var(--text-secondary)" }}>
               {t("money.entries", { count: String(filtered.length) })}
             </p>
@@ -365,7 +522,7 @@ export default function MoneyStatementPage() {
             ) : filtered.length === 0 ? (
               <EmptyState
                 icon={ArrowDownLeft}
-                title={search.trim() ? t("money.emptyFiltered") : t("money.empty")}
+                title={search.trim() || filter !== "all" ? t("money.emptyFiltered") : t("money.empty")}
                 subtitle={t("money.emptyHint")}
               />
             ) : (
@@ -382,13 +539,9 @@ export default function MoneyStatementPage() {
                       {rows.map((row, index) => {
                         const incoming = row.direction === "in";
                         const Icon = incoming ? ArrowDownLeft : ArrowUpRight;
-                        return (
-                          <div
-                            key={row.id}
-                            className="flex items-center gap-3 py-2.5"
-                            style={{ borderTop: index === 0 ? "none" : "1px solid var(--divider)" }}
-                            data-testid={`money-movement-${row.id}`}
-                          >
+                        const recorded = row.source.startsWith("finance_");
+                        const content = (
+                          <>
                             <span
                               className="size-8 rounded-full flex items-center justify-center shrink-0"
                               style={{ background: "var(--tone-sunken)" }}
@@ -400,8 +553,8 @@ export default function MoneyStatementPage() {
                               <p className="text-10 truncate" style={{ color: "var(--text-secondary)" }}>
                                 {[
                                   row.party,
-                                  codeLabel(row.reference, CATEGORY_KEY),
-                                  codeLabel(row.method, METHOD_KEY),
+                                  row.source.startsWith("finance_") ? codeLabel(row.reference, CATEGORY_KEY) : row.reference,
+                                  methodLabel(row.method),
                                 ]
                                   .filter(Boolean)
                                   .join(" · ") || "—"}
@@ -412,12 +565,37 @@ export default function MoneyStatementPage() {
                                 </p>
                               )}
                             </div>
-                            <p
-                              className="text-12 font-bold tabular-nums shrink-0"
-                              style={{ color: incoming ? "var(--brand-dark)" : "var(--text-primary)" }}
-                            >
-                              {signed(row)}
-                            </p>
+                            <span className="flex items-center gap-1.5 shrink-0">
+                              <p
+                                className="text-12 font-bold tabular-nums"
+                                style={{ color: incoming ? "var(--brand-dark)" : "var(--text-primary)" }}
+                              >
+                                {signed(row)}
+                              </p>
+                              {recorded && (
+                                <Pencil size={12} style={{ color: "var(--text-tertiary)" }} aria-hidden />
+                              )}
+                            </span>
+                          </>
+                        );
+                        const shared = {
+                          className: "w-full flex items-center gap-3 py-2.5 text-start",
+                          style: { borderTop: index === 0 ? "none" : "1px solid var(--divider)" },
+                          "data-testid": `money-movement-${row.id}`,
+                        } as const;
+                        return recorded ? (
+                          <button
+                            key={row.id}
+                            type="button"
+                            onClick={() => setOpenEntryId(row.refId)}
+                            aria-label={t("finance.detail.edit")}
+                            {...shared}
+                          >
+                            {content}
+                          </button>
+                        ) : (
+                          <div key={row.id} {...shared}>
+                            {content}
                           </div>
                         );
                       })}
@@ -430,20 +608,43 @@ export default function MoneyStatementPage() {
         </>
       )}
 
-      <DateRangeSheet
-        open={rangeOpen}
-        from={custom?.from ?? window.from}
-        to={custom?.to ?? window.to}
+      <BalanceDateSheet
+        open={periodOpen}
+        onClose={() => setPeriodOpen(false)}
+        title={t("period.sheetTitle")}
+        value={period}
+        from={window.from}
+        to={window.to}
         max={day}
-        onClose={() => setRangeOpen(false)}
-        onApply={(from, to) => {
+        onChange={(key, from, to) => {
+          setPeriod(key);
           setCustom({ from, to });
-          setRangeOpen(false);
         }}
-        onClear={() => {
-          setCustom(null);
-          setRangeOpen(false);
+        testIdPrefix="money-statement-period-sheet"
+      />
+
+      <FinanceEntrySheet
+        entryId={openEntryId}
+        open={Boolean(openEntryId)}
+        onClose={() => setOpenEntryId(null)}
+        onChanged={() => {
+          statement.retry();
+          totals.retry();
+          recurrences.retry();
         }}
+      />
+
+      <ConfirmDialog
+        open={Boolean(stopping)}
+        title={t("finance.ledger.stopRepeatTitle")}
+        message={t("finance.ledger.stopRepeatMessage", {
+          category: stopping ? categoryLabel(stopping.category) : "",
+        })}
+        confirmLabel={t("finance.ledger.stopRepeat")}
+        destructive
+        loading={stoppingBusy}
+        onConfirm={stopRepeating}
+        onCancel={() => setStopping(null)}
       />
     </div>
   );

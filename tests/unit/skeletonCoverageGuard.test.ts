@@ -28,9 +28,9 @@ const GATED: Array<[file: string, gate: RegExp, howItWaits: string]> = [
   // ── Admin ────────────────────────────────────────────────────────────────
   ["src/pages/admin/sales/AdminSalesListPage.tsx", /\{!ready \? \(/, "waits for salesStore.ready"],
   ["src/components/sales/SaleDetailView.tsx", /if \(!salesReady\)/, "separates 'not arrived' from 'not found'"],
-  // Payments is the movement ledger now: it gates on its own read of the payments, not on the
-  // customer and supplier stores it no longer lists (2026-10-28).
-  ["src/pages/admin/payments/AdminPaymentsPage.tsx", /\{!ledger \? \(/, "waits for its own payments read"],
+  // Money is the one activity list now (2026-10-31): it gates on its own statement read, never
+  // on the customer and supplier stores, and draws shaped rows while that read is in flight.
+  ["src/pages/admin/finance/MoneyStatementPage.tsx", /statement\.rows === null/, "waits for its own money read"],
   ["src/pages/admin/companies/CompaniesListPage.tsx", /\{!ready && <SkeletonList/, "waits for companiesStore.ready"],
   ["src/pages/admin/companies/CompanyDetailPage.tsx", /companiesReady \? \(/, "waits before claiming 'not found'"],
   ["src/pages/admin/purchases/AdminPurchasesPage.tsx", /\{loading \? \(/, "waits for its own purchase query"],

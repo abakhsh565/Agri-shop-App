@@ -74,7 +74,6 @@ import EmployeeAccessRequestDetailPage from "@/pages/admin/employees/EmployeeAcc
 const AdminPurchasesPage = React.lazy(() => import("@/pages/admin/purchases/AdminPurchasesPage"));
 const RecordPurchasePage = React.lazy(() => import("@/pages/admin/purchases/RecordPurchasePage"));
 const SupplierPaymentsPage = React.lazy(() => import("@/pages/admin/purchases/SupplierPaymentsPage"));
-import AdminPaymentsPage from "@/pages/admin/payments/AdminPaymentsPage";
 import RecordSupplierPaymentPage from "@/pages/admin/payments/RecordSupplierPaymentPage";
 const AdminReportsPage = React.lazy(() => import("@/pages/admin/reports/AdminReportsPage"));
 // The Reports *hub* and its Profit screen are eager: both are entered from Settings, whose
@@ -149,8 +148,6 @@ import AdminPurchasesSectionPage from "@/pages/admin/purchases/AdminPurchasesSec
 // Finance: recorded cash, the two balances and the section's four jobs on one screen.
 import AdminFinanceSectionPage from "@/pages/admin/finance/AdminFinanceSectionPage";
 import RecordMoneyPage from "@/pages/admin/finance/RecordMoneyPage";
-import QuickAddPage from "@/pages/admin/finance/QuickAddPage";
-import FinanceLedgerPage from "@/pages/admin/finance/FinanceLedgerPage";
 import MoneyStatementPage from "@/pages/admin/finance/MoneyStatementPage";
 import OutstandingCreditPage from "@/pages/admin/customers/OutstandingCreditPage";
 import CreditLimitRequestsPage from "@/pages/admin/customers/CreditLimitRequestsPage";
@@ -292,7 +289,10 @@ export const router = createBrowserRouter([
       // ── Payments (requires payments.view) ────────────────────────────────
       { element: <PermissionGuard requires="payments.view" />,
         children: [
-          { path: "payments",   element: <AdminPaymentsPage /> },
+          // ONE money book (owner, 2026-10-31). The general payment list, the recorded-entry
+          // ledger and the statement were three views over the same movements; this route now
+          // opens the one screen, and the old settings routes are aliases to the same page.
+          { path: "payments",   element: <MoneyStatementPage /> },
           { path: "payments/supplier/:companyId", element: <RecordSupplierPaymentPage /> },
           { path: "payments/daily-cash", element: <DailyCashReconciliationPage /> },
           // Cash position is its own screen: the figure the Finance hub opens with, the money
@@ -385,16 +385,13 @@ export const router = createBrowserRouter([
           // a query parameter, so the overflow menu and the section row open the same screen on
           // the kind they name, and a reload lands on the same tab.
           { path: "settings/hub/finance/record", element: <RecordMoneyPage /> },
-          // One sentence, read back, then the same `record_finance_entry` RPC the form calls.
-          // Declared before `/settings/hub/:sectionId`, like the other finance screens.
-          { path: "settings/hub/finance/quick", element: <QuickAddPage /> },
-          // The ledger behind the overview's three totals: every recorded row for the branch and
-          // period, filterable by kind and exportable as the CSV of exactly what is listed. It is
-          // declared before `/settings/hub/:sectionId`, like the two screens above it.
-          { path: "settings/hub/finance/entries", element: <FinanceLedgerPage /> },
-          // One read-only statement of money actually moving, across every ledger (0262). It is
-          // not the ledger above: that lists what the owner typed, this lists every movement —
-          // sales, later receipts, refunds, supplier payments — for the same branch and window.
+          // The sentence and the form are one screen now (owner, 2026-10-31): typing a sentence
+          // fills the fields below it, and the save still goes through `record_finance_entry`.
+          // A saved quick link is forwarded to that one address rather than drawing a second copy.
+          { path: "settings/hub/finance/quick", element: <Navigate to="/admin/settings/hub/finance/record" replace /> },
+          // The recorded ledger and the statement are one list behind one screen. The visible
+          // destination is `/settings/hub/finance/money`; this old URL forwards to it.
+          { path: "settings/hub/finance/entries", element: <Navigate to="/admin/settings/hub/finance/money" replace /> },
           { path: "settings/hub/finance/money", element: <MoneyStatementPage /> },
           // The owner's payment diary, all of it (0257): customer, supplier and general notes in
           // one book, the way the cash screen's few reminders are one list. Its own screen checks

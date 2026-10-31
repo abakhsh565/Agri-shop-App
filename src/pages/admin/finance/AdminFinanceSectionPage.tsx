@@ -2,20 +2,17 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ArrowDownUp,
-  ArrowLeftRight,
   Banknote,
   BellRing,
   Building2,
   ChevronRight,
   Download,
   HandCoins,
+  Plus,
   Share2,
-  Sparkles,
   Receipt,
-  ScrollText,
   TrendingDown,
   TrendingUp,
-  Undo2,
   Wallet,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -126,12 +123,6 @@ export default function AdminFinanceSectionPage() {
   const money = (value: number | null | undefined) =>
     value == null ? "—" : formatCurrency(value);
 
-  const addHints: Record<"income" | "expense" | "drawing", I18nKey> = {
-    income: "finance.addIncomeHint",
-    expense: "finance.addExpenseHint",
-    drawing: "finance.addDrawingHint",
-  };
-
   // A failed read is not "still reading". The hero waits only for the sales report; when the
   // recorded-money read fails (an environment without 0254, or a transient error) expenses stay
   // unknown, so net profit prints "—" instead of a skeleton that never resolves or a zero that
@@ -184,25 +175,20 @@ export default function AdminFinanceSectionPage() {
   /**
    * The jobs inside the section, in the catalogue's order and with its destinations.
    *
-   * One row is a write, not a place: Income / Expense / Drawings opens the form. It is offered
-   * to the owner only, because the database refuses the write from anyone else — a row that
-   * exists only to be refused teaches the wrong lesson.
+   * There is one money row, not three. The statement, the recorded ledger and the payment list
+   * are the same movements, so they share one screen; recording is that screen's own action and
+   * appears in the header sheet for the owner only, because the database refuses the write from
+   * anyone else.
    */
   const JOB_LOOK: Record<string, { icon: LucideIcon; hintKey?: I18nKey; allowed: boolean }> = {
     cash: { icon: Banknote, hintKey: "financeHub.cashRowHint", allowed: canPayments },
     receivables: { icon: HandCoins, hintKey: "financeHub.receivablesRowHint", allowed: canCustomers },
     payables: { icon: Building2, hintKey: "financeHub.payablesRowHint", allowed: canCompanies },
-    transactions: { icon: ArrowLeftRight, hintKey: "financeHub.transactionsRowHint", allowed: canPayments },
     reminders: { icon: BellRing, hintKey: "hub.finance.remindersHint", allowed: canPayments },
-    money: { icon: ArrowDownUp, hintKey: "finance.moneyRowHint", allowed: isOwner },
-    // One sentence instead of the six-field form. It calls the same write, so it is offered to
-    // the same role rather than becoming a second way for someone else to record money.
-    quick: { icon: Sparkles, hintKey: "finance.quickAddHint", allowed: isOwner },
-    // The ledger is a read of the same rows, so it asks for the same permission as the totals
-    // rather than the owner-only write. The owner asked to see and export expenses; a role that
-    // may already read recorded money loses nothing by seeing the rows behind it.
-    ledger: { icon: ScrollText, hintKey: "finance.ledger.rowHint", allowed: canPayments },
-    statement: { icon: ArrowLeftRight, hintKey: "money.rowHint", allowed: canPayments },
+    // The one money destination (2026-10-31): the statement, the recorded-entry ledger and the
+    // payment list are one list behind this row. Recording is the screen's own action, not a
+    // second destination on this hub.
+    money: { icon: ArrowDownUp, hintKey: "money.rowHint", allowed: canPayments },
   };
   const jobs = (hubSection("finance")?.rows ?? [])
     .filter((row) => JOB_LOOK[row.id]?.allowed)
@@ -252,12 +238,6 @@ export default function AdminFinanceSectionPage() {
     }
   }
 
-  const addActions: { kind: "income" | "expense" | "drawing"; label: I18nKey; icon: LucideIcon }[] = [
-    { kind: "income", label: "finance.addIncome", icon: HandCoins },
-    { kind: "expense", label: "finance.addExpense", icon: Receipt },
-    { kind: "drawing", label: "finance.addDrawing", icon: Undo2 },
-  ];
-
   return (
     <div
       className="flex flex-col w-full min-h-full"
@@ -282,28 +262,18 @@ export default function AdminFinanceSectionPage() {
         onClose={() => setExportOpen(false)}
         title={t("settings.menu.finance")}
         actions={[
-          // Recording money lives here, not as a plus in the app bar (owner, 2026-10-30): the icon
-          // sat on the header with no label, and the sheet already exists to hold this screen's
-          // jobs. One menu, one place.
+          // One write action, not four (owner, 2026-10-31). Quick add and the three named kinds
+          // are the same form; the merged screen already offers them as tabs and a sentence.
           ...(isOwner
             ? [
                 {
-                  id: "quick-add" as const,
-                  icon: Sparkles,
-                  title: t("finance.quickAdd"),
-                  description: t("finance.quickAddHint"),
-                  onClick: () => navigate(`${base}/settings/hub/finance/quick`),
+                  id: "record" as const,
+                  icon: Plus,
+                  title: t("money.recordAction"),
+                  description: t("money.recordHint"),
+                  onClick: () => navigate(`${base}/settings/hub/finance/record`),
                 },
               ]
-            : []),
-          ...(isOwner
-            ? addActions.map((action) => ({
-                id: `add-${action.kind}` as const,
-                icon: action.icon,
-                title: t(action.label),
-                description: t(addHints[action.kind]),
-                onClick: () => navigate(`${base}/settings/hub/finance/record?kind=${action.kind}`),
-              }))
             : []),
           { id: "export", icon: Download, title: t("data.export"), description: t("data.exportHint"), onClick: () => { void exportFigures(); } },
           { id: "share", icon: Share2, title: t("sales.shareReport"), description: t("sales.shareReportHint"), onClick: () => { void shareFigures(); } },

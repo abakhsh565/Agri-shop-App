@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type InputHTMLAttributes } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type InputHTMLAttributes } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Check, X } from "lucide-react";
+import { Check, Mic, Square, X } from "lucide-react";
 import StatusBar from "@/components/ui/StatusBar";
 import Button from "@/components/ui/Button";
 import DateField from "@/components/ui/DateField";
@@ -13,6 +13,8 @@ import { useThemeStore } from "@/stores/themeStore";
 import { useUIStore } from "@/stores/uiStore";
 import { pkToday } from "@/lib/pkDate";
 import { formatCurrency } from "@/lib/formatters";
+import { listen } from "@/lib/assistant";
+import { parseQuickAdd } from "@/lib/quickAdd";
 import FinanceMediaField, { type FinanceMediaView } from "@/components/finance/FinanceMediaField";
 import {
   MAX_MEDIA_BYTES,
@@ -161,6 +163,10 @@ export default function RecordMoneyPage() {
   const [repeatUnit, setRepeatUnit] = useState<RepeatUnit>("none");
   const [repeatEvery, setRepeatEvery] = useState("1");
   const [error, setError] = useState("");
+  const [sentence, setSentence] = useState("");
+  const [listening, setListening] = useState(false);
+  const [voiceError, setVoiceError] = useState("");
+  const stopListeningRef = useRef<(() => void) | null>(null);
   const [saving, setSaving] = useState(false);
   const submittingRef = useRef(false);
 
@@ -180,7 +186,43 @@ export default function RecordMoneyPage() {
 
   useEffect(() => () => {
     for (const url of draftUrls.current) URL.revokeObjectURL(url);
+    stopListeningRef.current?.();
   }, []);
+
+  /**
+   * The sentence is the shortcut, not a second form. It fills the fields that follow it, and the
+   * owner can then correct any one of them before saving; editing a field does not change the
+   * sentence, so the same read is not applied again over the correction.
+   */
+  const parsed = useMemo(() => parseQuickAdd(sentence), [sentence]);
+
+  useEffect(() => {
+    if (!sentence.trim() || parsed.looksLikeSale) return;
+
+    if (parsed.amount != null) setAmount(String(parsed.amount));
+    if (parsed.party) setCounterparty(parsed.party);
+    if (parsed.note) setNote(parsed.note);
+    if (parsed.method) setMethod(parsed.method);
+
+    if (parsed.kind) {
+      const nextKind = parsed.kind;
+      if (nextKind !== kind) {
+        setParams(nextKind === "income" ? {} : { kind: nextKind }, { replace: true });
+      }
+      setCategory(
+        parsed.category && CATEGORIES[nextKind].includes(parsed.category)
+          ? parsed.category
+          : CATEGORIES[nextKind][0],
+      );
+    } else if (parsed.category && CATEGORIES[kind].includes(parsed.category)) {
+      setCategory(parsed.category);
+    }
+
+    setError("");
+    // The sentence is the only trigger: editing a field must not be overwritten by the same
+    // reading, and the current kind/category are already in scope for the tab it names.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [parsed]);
 
   /** Frees one preview and its object URL together — a leaked blob URL is memory the tab keeps. */
   function dropDraft(key: string) {
@@ -318,9 +360,47 @@ export default function RecordMoneyPage() {
     setParams(next === "income" ? {} : { kind: next }, { replace: true });
   }
 
+  function stopListening() {
+    stopListeningRef.current?.();
+    stopListeningRef.current = null;
+    setListening(false);
+  }
+
+  function toggleListening() {
+    if (listening) {
+      stopListening();
+      return;
+    }
+    setVoiceError("");
+    try {
+      const stop = listen(
+        (text) => setSentence(text),
+        () => {
+          stopListeningRef.current = null;
+          setListening(false);
+        },
+        language === "ur" ? "ur-PK" : "en-PK",
+      );
+      if (!stop) {
+        setVoiceError(t("finance.quickAdd.voiceUnsupported"));
+        return;
+      }
+      stopListeningRef.current = stop;
+      setListening(true);
+    } catch {
+      setVoiceError(t("finance.quickAdd.voiceFailed"));
+      setListening(false);
+    }
+  }
+
   async function handleSave() {
     if (submittingRef.current) return;
     setError("");
+
+    if (parsed.looksLikeSale) {
+      setError(t("finance.quickAdd.saleBody"));
+      return;
+    }
 
     const paid = Number(amount);
     if (!Number.isFinite(paid) || paid <= 0) {
@@ -517,6 +597,58 @@ export default function RecordMoneyPage() {
               </div>
             ) : (
             <>
+            {/* One compact sentence field, above the form it fills. It is the quick-add screen
+                folded into the form: no second save path, no second set of fields, and no extra
+                card around it. The microphone sits inside the field it writes into. */}
+            <div className="flex flex-col gap-1.5" data-testid="record-quick">
+              <div className="relative">
+                <textarea
+                  value={sentence}
+                  onChange={(e) => {
+                    setSentence(e.target.value);
+                    setError("");
+                  }}
+                  rows={2}
+                  disabled={saving}
+                  placeholder={
+                    listening
+                      ? t("finance.quickAdd.listening")
+                      : t("finance.quickAdd.placeholder")
+                  }
+                  aria-label={t("finance.quickAdd.sayIt")}
+                  data-testid="record-sentence"
+                  className="w-full outline-none text-15 resize-none ps-3 pe-14 py-3 rounded-[var(--radius)] focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_var(--brand-light)] disabled:opacity-45"
+                  style={{ color: "var(--text-primary)", minHeight: 68 }}
+                />
+                <button
+                  type="button"
+                  onClick={toggleListening}
+                  disabled={saving}
+                  aria-label={listening ? t("finance.quickAdd.stop") : t("finance.quickAdd.mic")}
+                  data-testid="record-mic"
+                  className={`absolute end-2.5 bottom-2.5 size-10 rounded-full flex items-center justify-center ds-pressable disabled:opacity-45 ${
+                    listening ? "animate-pulse-brand" : ""
+                  }`}
+                  style={{
+                    background: listening ? "var(--error)" : "var(--brand)",
+                    color: "#fff",
+                  }}
+                >
+                  {listening ? <Square size={16} /> : <Mic size={18} />}
+                </button>
+              </div>
+              {parsed.looksLikeSale && (
+                <p className="text-11" style={{ color: "var(--warning)" }} data-testid="record-sale-warning">
+                  {t("finance.quickAdd.saleBody")}
+                </p>
+              )}
+              {voiceError && (
+                <p className="text-11" style={{ color: "var(--error)" }} data-testid="record-voice-error">
+                  {voiceError}
+                </p>
+              )}
+            </div>
+
             {/* Amount — the "Rs" sits in the field, so the number and its currency are one
                 control rather than a label and a guess. */}
             <div className="flex flex-col gap-2">
@@ -703,7 +835,7 @@ export default function RecordMoneyPage() {
               size="lg"
               onClick={handleSave}
               loading={saving}
-              disabled={!savedId && !amount}
+              disabled={!savedId && (!amount || parsed.looksLikeSale)}
               testId="record-save"
             >
               <Check size={18} className="me-2" />
