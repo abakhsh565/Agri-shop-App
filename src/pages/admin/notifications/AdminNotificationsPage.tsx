@@ -15,34 +15,37 @@ import { useT } from "@/lib/i18n";
 import { branchKind } from "@/lib/branchKind";
 import { formatSmartDateTime, translateNotification } from "@/lib/formatters";
 import { pkDate, pkDateFromISO, pkToday, pkYesterday } from "@/lib/pkDate";
+import { useShellBase } from "@/lib/useShellBase";
+import { useReturnTo } from "@/lib/useReturnTo";
 import {
   Bell, ShoppingCart, CreditCard, RotateCcw, Package,
   AlertTriangle, Users, Truck, Info, UserPlus,
 } from "lucide-react";
 
-/** Map notification kind + entity_id → the correct admin route */
-function notificationRoute(n: AppNotification): string | null {
+/** Map notification kind + entity_id → the correct route in the active shell. */
+function notificationRoute(n: AppNotification, base: "/admin" | "/employee" | "/co-owner"): string | null {
+  const team = base === "/co-owner" ? `${base}/team` : `${base}/employees`;
   if (n.entity_id) {
     switch (n.kind) {
-      case "sale": return "/admin/sales/" + n.entity_id;
-      case "return": return "/admin/sales/" + n.entity_id;
-      case "purchase": return "/admin/purchases/" + n.entity_id;
-      case "employee": return "/admin/employees/" + n.entity_id;
-      case "employee_access_request": return "/admin/employees/requests/" + n.entity_id;
-      case "low_stock": return "/admin/products/" + n.entity_id;
-      case "stock_adjust": return "/admin/products";
-      case "payment": return "/admin/payments";
+      case "sale": return `${base}/sales/${n.entity_id}`;
+      case "return": return `${base}/sales/${n.entity_id}`;
+      case "purchase": return `${base}/purchases/${n.entity_id}`;
+      case "employee": return `${team}/${n.entity_id}`;
+      case "employee_access_request": return `${team}/requests/${n.entity_id}`;
+      case "low_stock": return `${base}/products/${n.entity_id}`;
+      case "stock_adjust": return `${base}/products`;
+      case "payment": return base === "/co-owner" ? `${base}/customers` : `${base}/payments`;
       default: return null;
     }
   }
   switch (n.kind) {
-    case "sale": return "/admin/sales";
-    case "return": return "/admin/sales";
-    case "payment": return "/admin/payments";
-    case "purchase": return "/admin/purchases";
-    case "low_stock": case "stock_adjust": return "/admin/products";
-    case "employee": return "/admin/employees";
-    case "employee_access_request": return "/admin/employees/requests";
+    case "sale": return `${base}/sales`;
+    case "return": return `${base}/sales`;
+    case "payment": return base === "/co-owner" ? `${base}/customers` : `${base}/payments`;
+    case "purchase": return `${base}/purchases`;
+    case "low_stock": case "stock_adjust": return `${base}/products`;
+    case "employee": return team;
+    case "employee_access_request": return `${team}/requests`;
     default: return null;
   }
 }
@@ -91,6 +94,10 @@ function groupByTime(items: AppNotification[], now: Date, t: any): TimeGroup[] {
 
 export default function AdminNotificationsPage() {
   const navigate = useNavigate();
+  const base = useShellBase();
+  // More and the dashboard both open this screen; direct links fall back to More. The named
+  // parent matters because `/notifications` is a two-segment path and has no history frame.
+  const returnTo = useReturnTo(`${base}/more`);
   const { items, loading, ready, load, subscribe, markAllRead, markManyRead, forBranch, unreadInBranch } =
     useNotificationStore();
   const { language } = useThemeStore();
@@ -177,7 +184,7 @@ export default function AdminNotificationsPage() {
       <StatusBar />
       <NavHeader
         title={t("notifications.title")}
-        
+        backTo={returnTo}
         right={
           unreadShown.length > 0 ? (
             <button
@@ -324,11 +331,11 @@ export default function AdminNotificationsPage() {
                       // depending on the words inside them — which are translated.
                       testId={`notification-${n.id}`}
                       onClick={() => {
-                        const route = notificationRoute(n);
+                        const route = notificationRoute(n, base);
                         if (route) navigate(route);
                         markAllRead();
                       }}
-                      style={{ opacity: n.read ? 0.6 : 1 }}
+                      style={{ opacity: n.read ? 0.72 : 1 }}
                       tile={
                         <div
                           className="w-9 h-9 rounded-full flex items-center justify-center shrink-0"
@@ -348,9 +355,9 @@ export default function AdminNotificationsPage() {
                           )}
                         </div>
                         {tr.body && (
-                          <p className="text-xs mt-0.5" style={{ color: "var(--text-secondary)" }}>{tr.body}</p>
+                          <p className="text-13 mt-1 leading-snug" style={{ color: "var(--text-primary)" }}>{tr.body}</p>
                         )}
-                        <p className="text-11 mt-1" style={{ color: "var(--text-secondary)" }}>
+                        <p className="text-11 mt-1" style={{ color: "var(--text-tertiary)" }}>
                           {/* On the main view the branch is the one fact the row is missing, so a
                               row from ANOTHER branch names it here and nowhere else. The main
                               branch's own rows need no label — they are the context — and rows

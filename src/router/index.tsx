@@ -50,10 +50,16 @@ import AdminMessagesPage from "@/pages/admin/messages/AdminMessagesPage";
 import BranchDetailPage from "@/pages/admin/more/BranchDetailPage";
 const EmployeesListPage = React.lazy(() => import("@/pages/admin/employees/EmployeesListPage"));
 const EmployeeDetailPage = React.lazy(() => import("@/pages/admin/employees/EmployeeDetailPage"));
+import EmployeeRolePage from "@/pages/admin/employees/EmployeeRolePage";
+import EmployeeBranchesPage from "@/pages/admin/employees/EmployeeBranchesPage";
+import EmployeePerformancePage from "@/pages/admin/employees/EmployeePerformancePage";
+import EmployeeInvitationPage from "@/pages/admin/employees/EmployeeInvitationPage";
 import CompaniesListPage from "@/pages/admin/companies/CompaniesListPage";
 import AddCompanyPage from "@/pages/admin/companies/AddCompanyPage";
 import CompanyDetailPage, { SupplierDetailRedirect } from "@/pages/admin/companies/CompanyDetailPage";
 import AdminSettingsPage from "@/pages/admin/settings/AdminSettingsPage";
+import SecuritySettingsPage from "@/pages/admin/settings/SecuritySettingsPage";
+import PreferencesPage from "@/pages/admin/settings/PreferencesPage";
 import ProfileDetailsPage from "@/pages/admin/settings/ProfileDetailsPage";
 import SectionHubPage from "@/pages/admin/settings/SectionHubPage";
 import AdminBranchesSectionPage from "@/pages/admin/settings/AdminBranchesSectionPage";
@@ -80,13 +86,24 @@ const AdminReportsPage = React.lazy(() => import("@/pages/admin/reports/AdminRep
 // section pages are already in the shell's first bundle, and one is the parent of the other.
 import AdminReportsHubPage from "@/pages/admin/reports/AdminReportsHubPage";
 import AdminProfitReportPage from "@/pages/admin/reports/AdminProfitReportPage";
+import AdminMorePage from "@/pages/admin/more/MorePage";
 // Employees & Access: the directory, its branch grouping, and the per-employee history. All
 // three are entered from Settings, and each one's back returns to the directory.
 import AdminPeopleHubPage from "@/pages/admin/people/AdminPeopleHubPage";
+import AdminEmployeesDirectoryPage from "@/pages/admin/people/AdminEmployeesDirectoryPage";
 // One role's own screen: what it is called and what it opens. Opened from the roles list, so it
 // stays eager with the rest of the Employees & Access group.
 import RoleEditorPage from "@/pages/admin/people/RoleEditorPage";
-import AdminBranchAssignmentsPage from "@/pages/admin/people/AdminBranchAssignmentsPage";
+import CoOwnersPage from "@/pages/admin/people/CoOwnersPage";
+import CoOwnerWizardPage from "@/pages/admin/people/CoOwnerWizardPage";
+import CoOwnerDetailPage from "@/pages/admin/people/CoOwnerDetailPage";
+import CoOwnerLayout from "@/components/layout/CoOwnerLayout";
+import CoOwnerDashboardPage from "@/pages/co-owner/CoOwnerDashboardPage";
+import CoOwnerApprovalsPage from "@/pages/co-owner/CoOwnerApprovalsPage";
+import CoOwnerSettingsPage from "@/pages/co-owner/CoOwnerSettingsPage";
+import CoOwnerTeamPage from "@/pages/co-owner/CoOwnerTeamPage";
+import CoOwnerMorePage from "@/pages/co-owner/CoOwnerMorePage";
+import CoOwnerAcceptPage from "@/pages/co-owner/CoOwnerAcceptPage";
 import AdminEmployeeActivityPage from "@/pages/admin/people/AdminEmployeeActivityPage";
 import AdminEmployeeActivityDetailPage from "@/pages/admin/people/AdminEmployeeActivityDetailPage";
 const InventoryAdjustPage = React.lazy(() => import("@/pages/admin/inventory/InventoryAdjustPage"));
@@ -132,6 +149,7 @@ import MyReportsPage from "@/pages/employee/reports/MyReportsPage";
 import ActivityLogPage from "@/pages/employee/activity/ActivityLogPage";
 import EmployeeNotificationsPage from "@/pages/employee/notifications/EmployeeNotificationsPage";
 import EmployeeMorePage from "@/pages/employee/more/MorePage";
+import EmployeeTeamPage from "@/pages/employee/team/TeamPage";
 const BarcodeGeneratePage = React.lazy(() => import("@/pages/admin/inventory/BarcodeGeneratePage"));
 import AdminReturnSelectItemsPage from "@/pages/admin/returns/AdminReturnSelectItemsPage";
 import AdminReturnConfirmPage from "@/pages/admin/returns/AdminReturnConfirmPage";
@@ -187,7 +205,7 @@ export const router = createBrowserRouter([
   { path: "/register/status", element: <RegisterStatusPage /> },
 
   {
-    element: <ProtectedRoute allowedRoles={["admin"]} />,
+    element: <ProtectedRoute allowedRoles={["admin"]} allowedExperiences={["owner"]} />,
     children: [{
     path: "/admin",
     element: <AdminLayout />,
@@ -195,10 +213,9 @@ export const router = createBrowserRouter([
       { index: true, element: <Navigate to="/admin/dashboard" replace /> },
       { path: "dashboard",  element: <AdminDashboardPage /> },
       { path: "assistant",  element: <AssistantPage /> },
-      // The fifth tab used to open this. It listed the same business destinations the Settings
-      // hub already owns, so the app had two menu trees; the tab now opens Settings itself and
-      // this address redirects there, which keeps old links and bookmarks working.
-      { path: "more",       element: <Navigate to="/admin/settings" replace /> },
+      // The fifth tab's canonical business hub. Settings is reached from here, not the other
+      // way round: a business module belongs one tap from the bar, not inside an account page.
+      { path: "more",       element: <AdminMorePage /> },
       { path: "messages",   element: <AdminMessagesPage /> },
       { path: "guide",      element: <AppGuidePage /> },
       { path: "search", element: <SearchPage /> },
@@ -325,12 +342,18 @@ export const router = createBrowserRouter([
           { path: "employees",  element: <EmployeesListPage /> },
           { path: "employees/new", element: <AddEmployeePage /> },
           { path: "employees/:employeeId", element: <EmployeeDetailPage /> },
+          { path: "employees/:employeeId/role", element: <EmployeeRolePage /> },
+          { path: "employees/:employeeId/branches", element: <EmployeeBranchesPage /> },
+          { path: "employees/:employeeId/performance", element: <EmployeePerformancePage /> },
+          { path: "employees/:employeeId/invitation", element: <EmployeeInvitationPage /> },
         ] },
 
       // ── Reports (requires reports.view) ──────────────────────────────────
       { element: <PermissionGuard requires="reports.view" />,
         children: [
           { path: "reports",    element: <AdminReportsPage /> },
+          { path: "reports/directory", element: <AdminReportsHubPage /> },
+          { path: "reports/profit", element: <AdminProfitReportPage /> },
         ] },
 
       // ── Settings (requires settings.view) ────────────────────────────────
@@ -338,6 +361,8 @@ export const router = createBrowserRouter([
         children: [
           { path: "settings",   element: <AdminSettingsPage /> },
           { path: "settings/profile", element: <ProfileDetailsPage /> },
+          { path: "settings/security", element: <SecuritySettingsPage /> },
+          { path: "settings/preferences", element: <PreferencesPage /> },
           // One hub per menu section: the jobs inside Sales, Finance, Branches and the rest,
           // listed from the same catalogue the menu itself reads (`lib/settingsHub`).
           //
@@ -350,10 +375,10 @@ export const router = createBrowserRouter([
           // branch with its headcount, plus the row that creates another — rather than on four
           // job rows whose first one opened this same list (owner's reference, 2026-10-28).
           { path: "settings/hub/branches", element: <AdminBranchesSectionPage /> },
-          // Reports is a screen of six destinations, not a list of jobs (owner's reference,
-          // 2026-10-29): Sales, Profit, Customers, Suppliers, Inventory and Activity. It sits
-          // before the generic `:sectionId` route so its own address cannot fall into it.
-          { path: "settings/hub/reports", element: <AdminReportsHubPage /> },
+          // Reports is a screen of six destinations. It is now a drill-down from the canonical
+          // `/reports` screen, and the old address forwards to the same hub rather than drawing
+          // a second copy.
+          { path: "settings/hub/reports", element: <Navigate to="/admin/reports/directory" replace /> },
           // Employees & Access is a directory, not a list of jobs (owner's reference,
           // 2026-10-29). The nested guard keeps the roster behind employees.view even though
           // the section itself lives in Settings; the old generic hub only needed settings.view
@@ -361,18 +386,25 @@ export const router = createBrowserRouter([
           { element: <PermissionGuard requires="employees.view" />,
             children: [
               { path: "settings/hub/people", element: <AdminPeopleHubPage /> },
-              { path: "settings/hub/people/branches", element: <AdminBranchAssignmentsPage /> },
+              { path: "settings/hub/people/employees", element: <AdminEmployeesDirectoryPage /> },
               { path: "settings/hub/people/activity", element: <AdminEmployeeActivityPage /> },
               { path: "settings/hub/people/activity/:employeeId", element: <AdminEmployeeActivityDetailPage /> },
-              // The roles list and one role's editor. `new` is declared before `:roleId` so a
-              // new role can never be read as a role whose id is the word "new".
+              { path: "settings/hub/people/co-owners", element: <CoOwnersPage /> },
+              { path: "settings/hub/people/co-owners/new", element: <CoOwnerWizardPage /> },
+              { path: "settings/hub/people/co-owners/:grantId", element: <CoOwnerDetailPage /> },
+              { path: "settings/hub/people/co-owners/:grantId/edit", element: <CoOwnerWizardPage /> },
+            ] },
+          // Role management is a write authority. It no longer leaks through the people hub's
+          // read guard: hiding the row without protecting the URL would only hide the door.
+          { element: <PermissionGuard requires="employees.manage" fallback="/admin/settings/hub/people" />,
+            children: [
               { path: "settings/roles", element: <RolesAccessPage /> },
               { path: "settings/roles/new", element: <RoleEditorPage /> },
               { path: "settings/roles/:roleId", element: <RoleEditorPage /> },
             ] },
-          // Profit used to share the general Reports page; it now has the screen the board gives
-          // it, on the one profit calculation the rest of the app uses.
-          { path: "settings/hub/reports/profit", element: <AdminProfitReportPage /> },
+          // Profit is a canonical report detail. The old settings address forwards to it so a
+          // bookmark still lands on the one screen, not a second implementation.
+          { path: "settings/hub/reports/profit", element: <Navigate to="/admin/reports/profit" replace /> },
           { path: "settings/hub/sales", element: <AdminSalesSectionPage /> },
           { path: "settings/hub/inventory", element: <AdminInventorySectionPage /> },
           { path: "settings/hub/customers", element: <AdminCustomersSectionPage /> },
@@ -435,6 +467,9 @@ export const router = createBrowserRouter([
           { path: "activity",   element: <ActivityLogPage /> },
         ] },
 
+      // Co-Owner decisions are owner-only. The RPC itself also refuses any non-owner.
+      { path: "co-owner-approvals", element: <CoOwnerApprovalsPage /> },
+
       // ── Notifications (requires notifications.view) ──────────────────────
       { element: <PermissionGuard requires="notifications.view" />,
         children: [
@@ -458,6 +493,110 @@ export const router = createBrowserRouter([
 
   {
     element: <ProtectedRoute />,
+    children: [{ path: "/co-owner/accept", element: <CoOwnerAcceptPage /> }],
+  },
+
+  {
+    element: <ProtectedRoute />,
+    children: [{
+    path: "/co-owner",
+    element: <CoOwnerLayout />,
+    children: [
+      { index: true, element: <Navigate to="/co-owner/dashboard" replace /> },
+      { path: "dashboard", element: <CoOwnerDashboardPage /> },
+      { path: "approvals", element: <CoOwnerApprovalsPage /> },
+      { path: "more", element: <CoOwnerMorePage /> },
+      { path: "settings", element: <CoOwnerSettingsPage /> },
+      { element: <PermissionGuard requires="employees.view" fallback="/co-owner/dashboard" />,
+        children: [
+          { path: "team", element: <CoOwnerTeamPage /> },
+          { path: "team/new", element: <AddEmployeePage /> },
+          { path: "team/:employeeId", element: <EmployeeDetailPage /> },
+        ] },
+      { element: <PermissionGuard requires="employees.manage" fallback="/co-owner/dashboard" />,
+        children: [
+          { path: "employees/requests", element: <EmployeeAccessRequestsPage /> },
+          { path: "employees/requests/:requestId", element: <EmployeeAccessRequestDetailPage /> },
+        ] },
+      { element: <PermissionGuard requires="sales.view" fallback="/co-owner/dashboard" />,
+        children: [
+          // Reading the sales book and starting a sale are different grants. Keep the sale flow
+          // behind sales.create even when the grant can read previous sales.
+          { element: <PermissionGuard requires="sales.create" fallback="/co-owner/sales" />,
+            children: [
+              { path: "sale", element: <SelectCustomerPage /> },
+              { path: "sale/products", element: <BrowseProductsPage /> },
+              { path: "sale/products/:productId", element: <VariantSelectorPage /> },
+              { path: "sale/cart", element: <CartPage /> },
+              { path: "sale/success", element: <SaleSuccessPage /> },
+            ] },
+          { path: "sales", element: <AdminSalesListPage /> },
+          { path: "sales/:saleId", element: <SaleDetailView /> },
+          { path: "sales/:saleId/return", element: <AdminReturnSelectItemsPage /> },
+          { path: "sales/:saleId/return/confirm", element: <AdminReturnConfirmPage /> },
+          { path: "sales/:saleId/return/success", element: <AdminReturnSuccessPage /> },
+        ] },
+      { element: <PermissionGuard requires="products.view" fallback="/co-owner/dashboard" />,
+        children: [
+          { path: "products", element: <ProductsListPage /> },
+          { path: "products/:productId", element: <ProductDetailPage /> },
+          { path: "inventory/stockvalues", element: <StockManagementPage /> },
+          { element: <PermissionGuard requires="products.create" fallback="/co-owner/products" />,
+            children: [{ path: "inventory/new", element: <AddProductPage /> }] },
+          { element: <PermissionGuard requires="products.edit" fallback="/co-owner/products" />,
+            children: [{ path: "inventory/:productId/edit", element: <AddProductPage /> }] },
+          { element: <PermissionGuard requires="inventory.adjust" fallback="/co-owner/products" />,
+            children: [{ path: "inventory/:productId/adjust", element: <InventoryAdjustPage /> }] },
+        ] },
+      { element: <PermissionGuard requires="customers.view" fallback="/co-owner/dashboard" />,
+        children: [
+          { path: "customers", element: <CustomersListPage /> },
+          { path: "customers/:customerId", element: <CustomerProfilePage /> },
+          { path: "customers/:customerId/purchases", element: <CustomerPurchaseHistoryPage /> },
+          { path: "customers/:customerId/reminders", element: <ReminderHistoryPage /> },
+          { element: <PermissionGuard requires="customers.create" fallback="/co-owner/customers" />,
+            children: [{ path: "customers/new", element: <AddCustomerPage /> }] },
+          { element: <PermissionGuard requires="customers.payments" fallback="/co-owner/customers" />,
+            children: [
+              { path: "customers/:customerId/payments", element: <CustomerPaymentHistoryPage /> },
+              { path: "customers/:customerId/record-payment", element: <RecordCustomerPaymentPage /> },
+            ] },
+        ] },
+      { element: <PermissionGuard requires="purchases.view" fallback="/co-owner/dashboard" />,
+        children: [
+          { path: "purchases", element: <AdminPurchasesPage /> },
+          { path: "purchases/:purchaseId", element: <PurchaseDetailPage /> },
+          { element: <PermissionGuard requires="purchases.create" fallback="/co-owner/purchases" />,
+            children: [{ path: "purchases/new", element: <RecordPurchasePage /> }] },
+        ] },
+      { element: <PermissionGuard requires="companies.view" fallback="/co-owner/dashboard" />,
+        children: [
+          { path: "companies", element: <CompaniesListPage /> },
+          { path: "companies/:companyId", element: <CompanyDetailPage /> },
+          { element: <PermissionGuard requires="companies.create" fallback="/co-owner/companies" />,
+            children: [{ path: "companies/new", element: <AddCompanyPage /> }] },
+        ] },
+      { element: <PermissionGuard requires="reports.view" fallback="/co-owner/dashboard" />,
+        children: [{ path: "reports", element: <AdminReportsPage /> }] },
+      { element: <PermissionGuard requires="payments.view" fallback="/co-owner/dashboard" />,
+        children: [{ path: "finance", element: <MoneyStatementPage /> }] },
+      { element: <PermissionGuard requires="activity.view" fallback="/co-owner/dashboard" />,
+        children: [{ path: "activity", element: <ActivityLogPage /> }] },
+      { element: <PermissionGuard requires="notifications.view" fallback="/co-owner/dashboard" />,
+        children: [{ path: "notifications", element: <AdminNotificationsPage /> }] },
+      { element: <PermissionGuard requires="employees.view" fallback="/co-owner/dashboard" />,
+        children: [
+          { path: "team/activity", element: <AdminEmployeeActivityPage /> },
+          { path: "team/activity/:employeeId", element: <AdminEmployeeActivityDetailPage /> },
+          { path: "settings/hub/people/activity/:employeeId", element: <AdminEmployeeActivityDetailPage /> },
+        ] },
+      { path: "search", element: <SearchPage /> },
+    ],
+  }],
+  },
+
+  {
+    element: <ProtectedRoute allowedExperiences={["employee"]} />,
     children: [{
     path: "/employee",
     element: <EmployeeLayout />,
@@ -502,6 +641,16 @@ export const router = createBrowserRouter([
         children: [
           { path: "inventory/:productId/adjust", element: <InventoryAdjustPage /> },
         ] },
+      { path: "finance", element: <MoneyStatementPage /> },
+      { path: "purchases", element: <AdminPurchasesPage /> },
+      { path: "purchases/new", element: <RecordPurchasePage /> },
+      { path: "purchases/payments", element: <SupplierPaymentsPage /> },
+      { path: "purchases/:purchaseId", element: <PurchaseDetailPage /> },
+      { path: "companies", element: <CompaniesListPage /> },
+      { path: "companies/new", element: <AddCompanyPage /> },
+      { path: "companies/:companyId", element: <CompanyDetailPage /> },
+      { path: "stock", element: <StockManagementPage /> },
+      { path: "team", element: <EmployeeTeamPage /> },
       { path: "search", element: <SearchPage /> },
       { path: "settings", element: <SettingsPage /> },
       { path: "reports", element: <MyReportsPage /> },

@@ -30,7 +30,7 @@ import { hasPermission } from "@/lib/tenantContext";
  */
 
 /** The two shells, exactly as `useShellBase()` returns them. */
-export type ShellBase = "/admin" | "/employee";
+export type ShellBase = "/admin" | "/employee" | "/co-owner";
 
 export type Dependency = "supplier" | "product" | "customer";
 

@@ -58,7 +58,11 @@ export default function NavHeader({ title, backTo, onBack, right, noBack, backIc
     if (isDashboardPath(location.pathname)) return;
 
     // Nothing behind it and no parent named: the dashboard is the floor for this shell.
-    const role = location.pathname.startsWith("/admin") ? "/admin" : "/employee";
+    const role = location.pathname.startsWith("/admin")
+      ? "/admin"
+      : location.pathname.startsWith("/co-owner")
+        ? "/co-owner"
+        : "/employee";
     setSkipNext();
     navigate(role + "/dashboard", { replace: true });
   }

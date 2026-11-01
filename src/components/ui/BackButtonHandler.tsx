@@ -87,7 +87,11 @@ export default function BackButtonHandler() {
 
     // Nothing behind this screen (a deep link or a cold start): the dashboard is the floor.
     clearNav();
-    const role = path.startsWith("/admin") ? "/admin" : "/employee";
+    const role = path.startsWith("/admin")
+      ? "/admin"
+      : path.startsWith("/co-owner")
+        ? "/co-owner"
+        : "/employee";
     navigate(role + "/dashboard", { replace: true });
   }, [navigate, addToast]);
 

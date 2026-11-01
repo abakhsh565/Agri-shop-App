@@ -111,6 +111,8 @@ interface EmployeesState {
     /** This employee's exceptions to the role's defaults (code → granted). */
     overrides?: Record<string, boolean>;
     branchScope?: string[] | null;
+    /** { branchId: roleId }. A branch without an entry uses the default role. */
+    branchRoles?: Record<string, string>;
     createdBy?: string | null;
   }) => Promise<User>;
   setActive: (id: string, active: boolean, byUserId?: string | null) => Promise<void>;
@@ -171,19 +173,28 @@ export const useEmployeesStore = create<EmployeesState>((set, get) => ({
     // screen at all.
     const { data: memberships } = await supabase
       .from("memberships")
-      .select("user_id, status, branch_scope, role_id");
+      .select("user_id, status, branch_scope, role_id, access_kind");
     if (!isDataContextCurrent(context)) return;
     const statusByUser = new Map<string, MembershipStatus>(
       (memberships ?? []).map((m) => [m.user_id as string, m.status as MembershipStatus])
     );
     const scopeByUser = new Map<string, string[]>();
     const roleIdByUser = new Map<string, string>();
+    // A Co-Owner keeps memberships.role = 'employee' by design, so the
+    // membership category — not the role — is what keeps them out of the
+    // ordinary Employee directory.
+    const coOwnerUserIds = new Set<string>();
     for (const m of (memberships ?? []) as Array<{
       user_id: string;
       branch_scope: unknown;
       role_id: string | null;
+      access_kind?: string | null;
     }>) {
       if (!m.user_id) continue;
+      if (m.access_kind === "co_owner") {
+        coOwnerUserIds.add(m.user_id);
+        continue;
+      }
       const scope = Array.isArray(m.branch_scope)
         ? (m.branch_scope as unknown[]).filter((id): id is string => typeof id === "string")
         : [];
@@ -207,7 +218,7 @@ export const useEmployeesStore = create<EmployeesState>((set, get) => ({
     }
 
     set({
-      employees: (data as UserRow[]).map((r) =>
+      employees: (data as UserRow[]).filter((r) => !coOwnerUserIds.has(r.id)).map((r) =>
         userFromRow(
           r,
           statusByUser.get(r.id),
@@ -248,6 +259,7 @@ export const useEmployeesStore = create<EmployeesState>((set, get) => ({
         photoUrl: input.photoUrl ?? null,
         overrides: input.overrides ?? null,
         branchScope: input.branchScope ?? null,
+        branchRoles: input.branchRoles ?? null,
         createdBy: input.createdBy ?? null,
       },
     });

@@ -1,339 +1,215 @@
-import { useState, useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { useThemeStore } from "@/stores/themeStore";
-import { useT } from "@/lib/i18n";
-import { branchKind } from "@/lib/branchKind";
-import { usePermissionLabels } from "@/lib/permissionLabels";
-import { applyOverrides, diffOverrides, overrideCount, overridesToStore } from "@/lib/accessModel";
-import EmployeeAccessEditor from "@/components/admin/EmployeeAccessEditor";
-import InviteLinkCard from "@/components/admin/InviteLinkCard";
-import SelectSheet from "@/components/ui/SelectSheet";
-import { useEmployeesStore, type EmployeePerformance } from "@/stores/employeesStore";
-import { SkeletonList } from "@/components/ui/Skeleton";
-import { usePermissionsStore } from "@/stores/permissionsStore";
-import { useRolesStore } from "@/stores/rolesStore";
-import { useAuthStore } from "@/stores/authStore";
-import { hasPermission } from "@/lib/tenantContext";
-import { useShellBase } from "@/lib/useShellBase";
-import { useUIStore } from "@/stores/uiStore";
-import { provisionMemberLogin } from "@/lib/auth";
-import { supabase } from "@/lib/supabase";
+import {
+  Calendar,
+  ChevronRight,
+  Copy,
+  Download,
+  History,
+  Mail,
+  Phone,
+  Search,
+  ShieldCheck,
+  ShoppingCart,
+  Store,
+  UserCheck,
+  UserX,
+  Users,
+} from "lucide-react";
 import StatusBar from "@/components/ui/StatusBar";
-import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import NavHeader from "@/components/ui/NavHeader";
 import ListCard from "@/components/ui/ListCard";
 import ListRow from "@/components/ui/ListRow";
-import { formatCurrency, formatSmartDateTime } from "@/lib/formatters";
-import { useCurrentTime } from "@/lib/useCurrentTime";
-import {
-  Phone, Hash, ShieldCheck, UserX, UserCheck, Clock,
-  TrendingUp, ShoppingCart, Users, Calendar, ChevronRight,
-  Eye, Search, History,
-} from "lucide-react";
+import Sheet from "@/components/ui/Sheet";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
+import { SkeletonList } from "@/components/ui/Skeleton";
+import { SectionActionsButton } from "@/components/ui/SectionActionsSheet";
+import { useT } from "@/lib/i18n";
+import { useThemeStore } from "@/stores/themeStore";
+import { useEmployeesStore, type EmployeePerformance } from "@/stores/employeesStore";
+import { useRolesStore } from "@/stores/rolesStore";
+import { useAuthStore } from "@/stores/authStore";
+import { useUIStore } from "@/stores/uiStore";
+import { hasPermission } from "@/lib/tenantContext";
+import { useShellBase } from "@/lib/useShellBase";
+import { formatCurrency } from "@/lib/formatters";
 import type { MembershipRole } from "@/types";
 
-function initBgColor(name: string | null | undefined) {
-  const colors = ["#84cc16","#3b82f6","#8b5cf6","#f59e0b","#06b6d4","#ec4899"];
-  let hash = 0;
-  if (!name) return colors[0];
-  for (const c of name) hash = (hash * 31 + c.charCodeAt(0)) & 0xffff;
-  return colors[hash % colors.length];
+interface EmployeeAccessSummary {
+  roleId: string | null;
+  membershipRole: MembershipRole;
+  branchScope: string[] | null;
 }
 
+function initialsOf(name: string): string {
+  return name.split(" ").filter(Boolean).map((part) => part[0]).join("").slice(0, 2).toUpperCase();
+}
+
+/**
+ * The employee's front page.
+ *
+ * The screen answers three questions before it offers a single write: who this person is, what
+ * their work has produced, and which scoped screen owns the rest of the detail. Access editing,
+ * branch assignment and invitation repair each live on their own screen now; the overflow sheet
+ * is the only place that needs to know all of them.
+ */
 export default function EmployeeDetailPage() {
   const { employeeId } = useParams<{ employeeId: string }>();
   const navigate = useNavigate();
   const base = useShellBase();
   const { language } = useThemeStore();
   const t = useT();
-  // The business history is an accountability read, not a profile field; a role that may not
-  // read the activity log is not offered the door either.
-  const canViewActivity = hasPermission("activity.view");
-  const { areaLabel } = usePermissionLabels();
   const { addToast } = useUIStore();
   const { user } = useAuthStore();
-  const isUrdu = language === "ur";
+  const canViewActivity = hasPermission("activity.view");
   const employees = useEmployeesStore((s) => s.employees);
-  const setActiveAction = useEmployeesStore((s) => s.setActive);
-  const updateAccess = useEmployeesStore((s) => s.updateAccess);
-  const setBranchRoles = useEmployeesStore((s) => s.setBranchRoles);
+  const employeesReady = useEmployeesStore((s) => s.ready);
   const getEmployeeAccess = useEmployeesStore((s) => s.getEmployeeAccess);
   const getEmployeePerformance = useEmployeesStore((s) => s.getEmployeePerformance);
-  const permissionsStore = usePermissionsStore();
-  const rolesStore = useRolesStore();
-  const now = useCurrentTime();
-
-  const emp = employees.find((e) => e.id === employeeId);
-  // Until the store has loaded, a missing employee means "not here yet" — rendering
-  // "not found" then is a false claim about data that has not arrived.
-  const employeesReady = useEmployeesStore((s) => s.ready);
-
-  // Access editing state
-  const [showPermEditor, setShowPermEditor] = useState(false);
-  const [editRoleId, setEditRoleId] = useState<string | null>(null);
-  const [roleDefaults, setRoleDefaults] = useState<Set<string>>(new Set());
-  const [editPerms, setEditPerms] = useState<Set<string>>(new Set());
-  // This employee's access is read after the employee itself, so the editor would otherwise
-  // render one frame of unticked boxes — read as "no access" for someone whose role grants
-  // plenty, and saveable. Unknown is drawn as unknown instead.
-  const [accessState, setAccessState] = useState<"loading" | "ready" | "error">("loading");
-  const [editBranchScope, setEditBranchScope] = useState<string[] | null>(null);
-  // The users list cannot carry the membership role, so the authoritative value
-  // comes from the employee's membership via get_employee_access.
-  const [empMembershipRole, setEmpMembershipRole] = useState<MembershipRole>("employee");
-  const [empPerms, setEmpPerms] = useState<string[]>([]);
-  // The employee's own exceptions, straight from user_permissions.
-  const [storedOverrides, setStoredOverrides] = useState<Record<string, boolean>>({});
-  const [branches, setBranches] = useState<{ id: string; name: string; is_default: boolean }[]>([]);
-  // { branchId: roleId }. A branch with no entry uses the default role above, which is how the
-  // database reads a missing row — it is not the same as "no access".
-  const [editBranchRoles, setEditBranchRoles] = useState<Record<string, string>>({});
-  // Only sent when the owner actually changed a branch's role. Saving an unrelated override must
-  // not turn "all branches" into a frozen list of today's branch ids.
-  const [branchRolesDirty, setBranchRolesDirty] = useState(false);
-  const [roleSheetBranch, setRoleSheetBranch] = useState<string | null>(null);
-  // The person's work in each branch, read from one authorized aggregate. The sales store is
-  // branch-scoped, so it cannot answer "all branches" on its own.
+  const setActiveAction = useEmployeesStore((s) => s.setActive);
+  const roles = useRolesStore((s) => s.roles);
+  const loadRoles = useRolesStore((s) => s.load);
+  const [access, setAccess] = useState<EmployeeAccessSummary | null>(null);
   const [performance, setPerformance] = useState<EmployeePerformance | null>(null);
-  const [perfTab, setPerfTab] = useState<string>("all");
-  const [saving, setSaving] = useState(false);
-  // Which consequential access change the owner is confirming, if any.
+  const [actionsOpen, setActionsOpen] = useState(false);
   const [confirmAction, setConfirmAction] = useState<null | "deactivate" | "cancelInvite" | "reactivate">(null);
   const [statusBusy, setStatusBusy] = useState(false);
   const statusBusyRef = useRef(false);
-  // The fix-sign-in action's own state. It lives with the other hooks, ABOVE the
-  // `if (!emp)` early return below, because a hook declared under that return runs only
-  // on the render where the employee has already loaded — React sees a changed hook
-  // count between the two renders and unmounts the page with "Rendered more hooks than
-  // during the previous render". A deep link to an employee (the store not ready on the
-  // first render) hit exactly that.
-  const [loginFixing, setLoginFixing] = useState(false);
-  const [loginFixed, setLoginFixed] = useState(false);
 
-  // Load permissions and branches on mount
+  const emp = employees.find((employee) => employee.id === employeeId);
+  const isUrdu = language === "ur";
+
+  useEffect(() => { void loadRoles(); }, [loadRoles]);
+
   useEffect(() => {
-    permissionsStore.load();
-    rolesStore.load();
-    supabase.from("branches").select("id, name, is_default").eq("is_active", true).then(({ data }) => {
-      setBranches((data as any[]) ?? []);
-    });
-  }, []);
+    if (!employeeId) return;
+    let cancelled = false;
+    setAccess(null);
+    getEmployeeAccess(employeeId)
+      .then((next) => {
+        if (!cancelled) {
+          setAccess({
+            roleId: next.roleId,
+            membershipRole: next.membershipRole,
+            branchScope: next.branchScope,
+          });
+        }
+      })
+      .catch(() => { if (!cancelled) setAccess(null); });
+    return () => { cancelled = true; };
+  }, [employeeId, getEmployeeAccess]);
 
-  /**
-   * Load the employee's access as configured: the role's defaults with their own
-   * exceptions applied (see lib/accessModel). That is the model the database
-   * documents, and the only form that is true in both membership states.
-   *
-   * get_employee_access also returns `effective` from the live permission
-   * resolver, which is correct for authorization and returns nothing while an
-   * invitation is still pending (every path requires status = 'active'). Showing
-   * that here reported "this role has no access" for an employee whose role
-   * carried 12 defaults.
-   */
-  function applyAccess(access: Awaited<ReturnType<typeof getEmployeeAccess>>) {
-    const configured = applyOverrides(access.defaults, access.overrides);
-    setRoleDefaults(new Set(access.defaults));
-    setStoredOverrides(access.overrides);
-    setEmpPerms([...configured]);
-    setEditPerms(new Set(configured));
-    setAccessState("ready");
-  }
-
-  // Load this employee's current access
   useEffect(() => {
-    if (emp && employeeId) {
-      getEmployeeAccess(employeeId)
-        .then((access) => {
-          setEmpMembershipRole(access.membershipRole);
-          setEditRoleId(access.roleId);
-          setEditBranchScope(access.branchScope);
-          setBranchRolesDirty(false);
-          setEditBranchRoles(Object.fromEntries(
-            Object.entries(access.branchRoles)
-              .filter(([, v]) => !!v.roleId)
-              .map(([branchId, v]) => [branchId, v.roleId as string]),
-          ));
-          applyAccess(access);
-        })
-        // A failed read must not leave a skeleton spinning forever, and must never fall
-        // through to an empty editor.
-        .catch(() => setAccessState("error"));
-    }
-  }, [emp?.id]);
-
-  // Performance is read through its own authorized aggregate because `sales` is branch-scoped:
-  // the owner's store only holds the branch they are standing in, so one view of a person who
-  // works two branches is impossible from the client alone.
-  useEffect(() => {
-    if (!emp || !employeeId) return;
+    if (!employeeId) return;
     let cancelled = false;
     setPerformance(null);
-    setPerfTab("all");
     getEmployeePerformance(employeeId)
       .then((next) => { if (!cancelled) setPerformance(next); })
       .catch(() => { if (!cancelled) setPerformance(null); });
     return () => { cancelled = true; };
-  }, [emp?.id, employeeId, getEmployeePerformance]);
+  }, [employeeId, getEmployeePerformance]);
 
-  if (!emp) return (
-    <div style={{ background: "var(--background)", color: "var(--text-primary)" }} className="flex flex-col min-h-full">
-      <StatusBar />
-      <NavHeader title={t("admin.employees")} />
-      {employeesReady ? (
-        <div className="flex flex-col items-center py-20 gap-2">
-          <Search size={28} className="mx-auto block" style={{ color: "var(--text-tertiary)" }} />
-          <p className="text-sm" style={{ color: "var(--text-secondary)" }}>{t("empDetail.notFound")}</p>
-        </div>
-      ) : (
-        <SkeletonList rows={4} />
-      )}
-    </div>
-  );
+  if (!emp) {
+    return (
+      <div style={{ background: "var(--background)", color: "var(--text-primary)" }} className="flex flex-col min-h-full">
+        <StatusBar />
+        <NavHeader title={t("admin.employees")} />
+        {employeesReady ? (
+          <div className="flex flex-col items-center py-20 gap-2">
+            <Search size={28} className="mx-auto block" style={{ color: "var(--text-tertiary)" }} />
+            <p className="text-sm" style={{ color: "var(--text-secondary)" }}>{t("empDetail.notFound")}</p>
+          </div>
+        ) : (
+          <SkeletonList rows={4} />
+        )}
+      </div>
+    );
+  }
 
-  // The figures come from the server, grouped the same way this screen tabs them: one aggregate
-  // for every branch and one per branch, so "All" and a branch tab can never disagree.
-  const perfLine = perfTab === "all"
-    ? performance?.totals ?? { salesCount: 0, revenue: 0, itemsSold: 0, customers: 0, todaySales: 0, todayRevenue: 0 }
-    : performance?.branches.find((b) => b.branchId === perfTab) ??
-      { salesCount: 0, revenue: 0, itemsSold: 0, customers: 0, todaySales: 0, todayRevenue: 0 };
-  const recentSales = (performance?.recent ?? []).filter((s) => perfTab === "all" || s.branchId === perfTab);
-  const performanceBranches = performance?.branches ?? [];
-  const scopeBranchIds = editBranchScope === null ? branches.map((b) => b.id) : editBranchScope;
-  const scopedBranches = branches.filter((b) => scopeBranchIds.includes(b.id));
-
-  const initials = emp.name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase();
+  const isOwner = access?.membershipRole === "owner" || emp.isOriginalOwner;
+  const isInvited = emp.membershipStatus === "pending" && emp.isActive;
   const isActive = emp.isActive;
-  // An invitation that has not been accepted yet: the person holds a membership
-  // but every authorization path denies it until they sign in for the first time.
-  const isInvited = emp.membershipStatus === "pending";
-
-  /** Re-run the authorized provisioner so an invited employee can actually sign in. */
-  async function handleFixSignIn() {
-    if (loginFixing || loginFixed || !emp) return;
-    setLoginFixing(true);
-    try {
-      const res = await provisionMemberLogin(emp.id);
-      if (!res.ok) throw new Error(res.error ?? "");
-      setLoginFixed(true);
-      addToast(t("empDetail.fixSignInDone", { name: emp.name }), "success");
-    } catch (err) {
-      addToast(err instanceof Error && err.message ? err.message : t("empDetail.fixSignInFailed"), "error");
-    } finally {
-      setLoginFixing(false);
-    }
-  }
-  const isOwner = empMembershipRole === "owner";
-  const roleTemplateName = editRoleId
-    ? rolesStore.roles.find((r) => r.id === editRoleId)?.name ?? t("empDetail.noRole")
-    : t("empDetail.noRole");
   const canEditAccess = user?.membershipRole === "owner" && !emp.isOriginalOwner && !isOwner;
+  const role = access?.roleId ? roles.find((candidate) => candidate.id === access.roleId) ?? null : null;
+  const roleName = isOwner
+    ? t("empDetail.ownerFull")
+    : role?.name ?? emp.roleName ?? t("empDetail.noRole");
+  const roleDescription = isOwner
+    ? t("empDetail.fullAccess")
+    : role?.description || t("empDetail.noRoleDescription");
+  const branchCount = access?.branchScope?.length ?? performance?.branches.length ?? 0;
+  const branchLabel = isOwner || access?.branchScope === null
+    ? t("addEmployee.allBranches")
+    : t("empDetail.branchCount", { count: branchCount });
+  const lastLogin = emp.lastLoginAt
+    ? new Date(emp.lastLoginAt).toLocaleString(isUrdu ? "ur-PK" : "en-GB", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    : t("empDetail.neverLoggedIn");
+  const memberSince = new Date(emp.createdAt).toLocaleDateString(isUrdu ? "ur-PK" : "en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+  const totals = performance?.totals ?? { salesCount: 0, revenue: 0, itemsSold: 0, customers: 0, todaySales: 0, todayRevenue: 0 };
+  const statusLabel = isInvited
+    ? t("employees.invited")
+    : isActive
+      ? t("employees.active")
+      : t("employees.deactivated");
 
-  // Access the employee actually has, in the shop owner's words.
-  const effectiveSet = new Set(empPerms);
-  const accessAreas = [...new Set(
-    permissionsStore.permissions.filter((p) => effectiveSet.has(p.code))
-      .map((p) => p.module),
-  )];
-  // "Changed" means the access above differs from the role — the current edit state
-  // while editing, otherwise the access as loaded. Diffing the LIVE permission set is
-  // deliberately not used: a pending membership is denied by authorization, which is
-  // not a change the owner made.
-  const storedCount = overrideCount(storedOverrides);
-  const changeCount = overrideCount(diffOverrides(editPerms, roleDefaults));
-  // Stored rows may include exceptions the role now covers on its own; they are kept
-  // (see lib/accessModel) but they do not change the access, so they do not turn the
-  // reset button into a lie either.
-  const hasOverridesToClear = changeCount > 0 || storedCount > 0;
-
-  function roleNameFor(branchId: string): string {
-    const roleId = editBranchRoles[branchId] ?? editRoleId;
-    return roleId ? rolesStore.roles.find((r) => r.id === roleId)?.name ?? t("empDetail.noRole") : t("empDetail.noRole");
+  function closeAndGo(path: string) {
+    setActionsOpen(false);
+    navigate(path);
   }
 
-  async function resetToRoleDefaults() {
-    if (!employeeId) return;
-    setSaving(true);
+  async function copyEmployeeNumber() {
     try {
-      await updateAccess(employeeId, { roleId: editRoleId, resetOverrides: true });
-      applyAccess(await getEmployeeAccess(employeeId));
-      addToast(t("empDetail.roleOnlyDone", { name: emp!.name }), "success");
-    } catch (e) {
-      addToast(e instanceof Error ? e.message : t("common.error"), "error");
-    } finally {
-      setSaving(false);
+      await navigator.clipboard.writeText(emp!.employeeNumber ?? emp!.phone);
+      addToast(t("empDetail.copied"), "success");
+    } catch {
+      addToast(t("common.error"), "error");
     }
   }
 
-  async function saveAccessChanges() {
-    if (!employeeId) return;
-    // Unticking the last branch leaves a member with nowhere to work — not "all branches", which
-    // is the explicit null above. Their records would be written without a branch and then be
-    // invisible to every branch-limited reader. Refused here in words, and by the database (0171).
-    if (!Array.isArray(editBranchScope) || editBranchScope.length === 0) {
-      addToast(t("addEmployee.errNoBranch"), "error");
-      return;
-    }
-    setSaving(true);
-    try {
-      // The employee's exceptions relative to the SELECTED role, plus any stored
-      // exception the role now covers on its own (a role change must not retire an
-      // earlier decision, which is how the database resolves access).
-      const overrides = overridesToStore(editPerms, roleDefaults, storedOverrides);
-      // Every branch in scope gets an explicit role when the owner has edited one. The database
-      // derives the branch scope from this map, and a branch left at the default keeps working
-      // because its entry is the default role.
-      const branchRoles = branchRolesDirty
-        ? Object.fromEntries(scopeBranchIds
-            .map((id) => [id, editBranchRoles[id] ?? editRoleId] as const)
-            .filter((entry): entry is readonly [string, string] => !!entry[1]))
-        : undefined;
-      await updateAccess(employeeId, {
-        roleId: editRoleId,
-        overrides,
-        branchScope: editBranchScope,
-      });
-      // The per-branch map is its own RPC: the access editor keeps the guards it already had, and
-      // this call cannot widen scope beyond the branches the owner selected above.
-      if (branchRoles && Object.keys(branchRoles).length > 0) {
-        await setBranchRoles(employeeId, { ...branchRoles });
-      }
-      setBranchRolesDirty(false);
-      addToast(t("empDetail.accessUpdated"), "success");
-      setShowPermEditor(false);
-      applyAccess(await getEmployeeAccess(employeeId));
-    } catch (e) {
-      addToast(e instanceof Error ? e.message : t("common.error"), "error");
-    } finally {
-      setSaving(false);
-    }
+  function exportDetails() {
+    const rows: Array<Array<string | number>> = [
+      [t("empDetail.name"), emp!.name],
+      [t("empDetail.phone"), emp!.phone],
+      [t("empDetail.number"), emp!.employeeNumber ?? ""],
+      [t("empDetail.rolePermissions"), roleName],
+      [t("empDetail.assignedBranches"), branchLabel],
+      [t("empDetail.accountStatus"), statusLabel],
+      [t("empDetail.lastLogin"), lastLogin],
+      [t("empDetail.memberSince"), memberSince],
+      [t("empDetail.totalRevenue"), totals.revenue],
+      [t("empDetail.totalSales"), totals.salesCount],
+      [t("employee.itemsSold"), totals.itemsSold],
+      [t("empDetail.customers"), totals.customers],
+    ];
+    const csv = rows
+      .map((row) => row.map((value) => `"${String(value).replace(/"/g, '""')}"`).join(","))
+      .join("\r\n");
+    const blob = new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${emp!.name.replace(/[^a-z0-9]+/gi, "-").toLowerCase() || "employee"}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    setActionsOpen(false);
+    addToast(t("empDetail.exported"), "success");
   }
 
-  /**
-   * One tap = one action.
-   *
-   * A REF, not the `statusBusy` state: React batches, so two clicks dispatched in the
-   * same task both read the pre-render value of a state variable and both go out. The
-   * ref is written synchronously, so the second click sees it. (The void confirmation
-   * needed the same treatment for the same reason.)
-   */
-  async function runStatusChange() {
-    if (statusBusyRef.current || !confirmAction) return;
-    statusBusyRef.current = true;
-    setStatusBusy(true);
-    try {
-      await setActive(confirmAction === "reactivate");
-      setConfirmAction(null);
-    } finally {
-      statusBusyRef.current = false;
-      setStatusBusy(false);
-    }
-  }
-
-  async function setActive(next: boolean) {
+  async function updateStatus(next: boolean) {
     try {
       await setActiveAction(emp!.id, next, user?.id);
-      // An invitation that has not been accepted is not an employment ending, so
-      // it must not be reported as one.
       addToast(
         next
           ? t("empDetail.reactivated", { name: emp!.name })
@@ -342,577 +218,293 @@ export default function EmployeeDetailPage() {
             : t("empDetail.deactivated", { name: emp!.name }),
         next ? "success" : "info",
       );
-    } catch (e) {
-      addToast(e instanceof Error ? e.message : t("common.error"), "error");
+    } catch (error) {
+      addToast(error instanceof Error ? error.message : t("common.error"), "error");
+    }
+  }
+
+  async function runStatusChange() {
+    if (statusBusyRef.current || !confirmAction) return;
+    statusBusyRef.current = true;
+    setStatusBusy(true);
+    try {
+      await updateStatus(confirmAction === "reactivate");
+      setConfirmAction(null);
+    } finally {
+      statusBusyRef.current = false;
+      setStatusBusy(false);
     }
   }
 
   return (
     <div
-      className="flex flex-col w-full min-h-full pb-20"
-      style={{ background: "var(--background)", direction: isUrdu ? "rtl" : "ltr" }}
+      dir={isUrdu ? "rtl" : "ltr"}
+      className="flex flex-col w-full min-h-full pb-10"
+      style={{ background: "var(--background)", color: "var(--text-primary)" }}
+      data-testid="employee-profile-page"
     >
       <StatusBar />
-      <NavHeader title={emp.name} />
+      <NavHeader
+        title={t("empDetail.profileTitle")}
+        right={
+          <SectionActionsButton
+            onClick={() => setActionsOpen(true)}
+            label={t("empDetail.actions")}
+            testId="employee-actions"
+          />
+        }
+      />
 
-      {/* Avatar + name card — the SAME card the owner's own profile is drawn with on Settings:
-          `--radius-card`, the grouped-list tone, no drawn edge, a 48px avatar, a `text-base`
-          name and one chip grammar. It was the only card in the app at `p-5` with a 64px
-          avatar, a 1px `--border-light` edge and a `--surface-2` fill, so opening an employee
-          from the list changed the shape of the page's first card. The deactivated chip also
-          carried light-mode literals (`#fee2e2` / `#dc2626`) that stayed pale in the dark
-          theme; it uses the error tokens now, which darken with everything else. */}
-      <div className="px-4 pt-3.5 animate-fade-in-up">
+      <div className="px-4 pt-1">
         <div
-          className="rounded-[var(--radius-card)] p-4 flex items-center gap-4"
-          style={{ background: "var(--tone-card)" }}
+          className="rounded-[var(--radius-card)] p-4"
+          style={{ background: "var(--tone-card)", border: "1px solid var(--border-control)" }}
         >
-          {emp.photoUrl ? (
-            <img src={emp.photoUrl} alt={emp.name} className="w-12 h-12 rounded-full object-cover shrink-0" />
-          ) : (
-            <div
-              className="w-12 h-12 rounded-full flex items-center justify-center text-base font-bold shrink-0"
-              style={{ background: initBgColor(emp.name), color: "#0a0a0a" }}
-            >
-              {initials}
-            </div>
-          )}
-          <div className="flex-1 min-w-0">
-            {/* Name and the two facts about the account, with the name taking the line —
-                exactly as on the Settings card. The phone is not repeated here: it sits in the
-                Contact card directly below, which the Settings card does not have. */}
-            <div className="flex items-center gap-2 min-w-0">
-              <p className="text-base font-bold truncate" style={{ color: "var(--text-primary)" }}>{emp.name}</p>
-              {isOwner && (
+          <div className="flex items-start gap-3">
+            {emp.photoUrl ? (
+              <img src={emp.photoUrl} alt={emp.name} className="size-14 rounded-[var(--radius-tile)] object-cover shrink-0" />
+            ) : (
+              <div
+                className="size-14 rounded-[var(--radius-tile)] flex items-center justify-center text-18 font-bold shrink-0"
+                style={{ background: "var(--tone-sunken)", color: "var(--text-primary)" }}
+              >
+                {initialsOf(emp.name)}
+              </div>
+            )}
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2 min-w-0">
+                <p className="text-16 font-bold truncate">{emp.name}</p>
                 <span
-                  className="text-11 font-bold px-2 py-0.5 rounded-full shrink-0"
-                  style={{ background: "var(--tone-sunken)", color: "var(--text-secondary)" }}
+                  className="text-9 font-bold px-2 py-0.5 rounded-full shrink-0"
+                  style={isActive
+                    ? { background: "var(--brand-light)", color: "var(--brand-dark)" }
+                    : { background: "var(--error-bg)", color: "var(--error)" }}
                 >
-                  {t("settings.owner")}
+                  {statusLabel}
                 </span>
-              )}
+              </div>
+              <div className="flex items-center gap-1.5 mt-1 min-w-0">
+                <p className="text-10 truncate" style={{ color: "var(--text-secondary)" }}>
+                  {roleName} · {emp.employeeNumber ?? "—"}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => void copyEmployeeNumber()}
+                  aria-label={t("empDetail.copy")}
+                  className="flex items-center gap-0.5 text-9 font-semibold shrink-0 active:opacity-60"
+                  style={{ color: "var(--text-secondary)" }}
+                >
+                  <Copy size={10} /> {t("empDetail.copy")}
+                </button>
+              </div>
+              <p className="text-12 mt-1.5 truncate" style={{ color: "var(--text-primary)" }}>{emp.phone}</p>
             </div>
-            <span
-              className="inline-block text-11 font-bold px-2 py-0.5 rounded-full mt-0.5"
-              style={isActive
-                ? { background: "var(--brand-light)", color: "var(--brand-dark)" }
-                : { background: "var(--error-bg)", color: "var(--error)" }
-              }
-            >
-              {isInvited && isActive ? t("employees.invited") : isActive ? t("employees.active") : t("employees.deactivated")}
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {/* Contact */}
-      <div className="px-4 pt-4 animate-fade-in-up delay-75">
-        <p className="ds-section-label mb-3" style={{ color: "var(--text-secondary)" }}>
-          {t("empDetail.contact")}
-        </p>
-        <ListCard>
-          {[
-            { icon: Phone, label: t("empDetail.phone"), value: emp.phone },
-            { icon: Hash, label: t("empDetail.number"), value: emp.employeeNumber ?? "—" },
-          ].map(({ icon: Icon, label, value }) => (
-            <ListRow
-              key={label}
-              icon={Icon}
-              trailing={<span className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>{value}</span>}
-            >
-              <span className="text-sm" style={{ color: "var(--text-secondary)" }}>{label}</span>
-            </ListRow>
-          ))}
-        </ListCard>
-      </div>
-
-      {/* Job & access — what the employee does, where, and with what access */}
-      <div className="px-4 pt-5 animate-fade-in-up delay-100">
-        <div className="flex items-center justify-between mb-3">
-          <p className="ds-section-label" style={{ color: "var(--text-secondary)" }}>
-            {t("empDetail.accessTitle")}
-          </p>
-          {canEditAccess && (
             <button
-              onClick={() => setShowPermEditor(!showPermEditor)}
-              className="text-xs font-semibold"
-              style={{ color: "var(--brand)" }}
+              type="button"
+              onClick={() => window.open(`tel:${emp.phone}`, "_self")}
+              className="h-9 px-3.5 rounded-full flex items-center gap-1.5 text-11 font-bold shrink-0 active:opacity-70"
+              style={{ border: "1px solid var(--border-control)", background: "transparent", color: "var(--text-primary)" }}
             >
-              {showPermEditor ? t("common.cancel") : t("empDetail.customize")}
+              <Phone size={13} />
+              {t("empDetail.call")}
             </button>
-          )}
+          </div>
         </div>
-
-        {showPermEditor && canEditAccess ? (
-          <div className="rounded-[var(--radius-tile)] overflow-hidden" style={{ border: "1px solid var(--border-light)" }}>
-            {/* Role */}
-            <div className="px-4 py-3" style={{ background: "var(--surface-2)" }}>
-              <p className="text-xs font-bold mb-2" style={{ color: "var(--text-secondary)" }}>
-                {t("empDetail.roleSection")}
-              </p>
-              <div className="flex flex-col gap-2">
-                {rolesStore.roles.map((r) => {
-                  const selected = editRoleId === r.id;
-                  return (
-                    <button
-                      key={r.id}
-                      onClick={async () => {
-                        setEditRoleId(r.id);
-                        setAccessState("loading");
-                        const { codes, error } = await rolesStore.loadRolePermissions(r.id);
-                        if (error) {
-                          setAccessState("error");
-                          return;
-                        }
-                        setRoleDefaults(new Set(codes));
-                        // A role supplies the defaults; it does not erase what the
-                        // owner set for this person. New defaults + their existing
-                        // exceptions, which is what the database resolves.
-                        setEditPerms(applyOverrides(codes, storedOverrides));
-                        setAccessState("ready");
-                      }}
-                      className="flex items-center gap-3 px-3 py-2.5 rounded-[var(--radius-tile)] text-start"
-                      style={{
-                        background: selected ? "var(--brand)" : "var(--surface)",
-                        color: selected ? "#0a0a0a" : "var(--text-primary)",
-                        border: `1px solid ${selected ? "var(--brand)" : "var(--divider)"}`,
-                      }}
-                    >
-                      <ShieldCheck size={14} />
-                      <span className="text-xs font-semibold">{r.name}</span>
-                    </button>
-                  );
-                })}
-              </div>
-              <p className="text-10 mt-2" style={{ color: "var(--text-secondary)" }}>{t("empDetail.roleHint")}</p>
-            </div>
-
-            {/* Where they can work */}
-            {branches.length > 0 && (
-              <div className="px-4 py-3" style={{ borderTop: "1px solid var(--divider)" }}>
-                <p className="text-xs font-bold mb-2" style={{ color: "var(--text-secondary)" }}>
-                  {t("empDetail.whereSection")}
-                </p>
-                <div className="flex gap-2 flex-wrap">
-                  <button
-                    onClick={() => setEditBranchScope(branches.map((b) => b.id))}
-                    className="px-3 py-1.5 rounded-[var(--radius-tile)] text-xs font-semibold"
-                    style={{
-                      background: editBranchScope === null ? "var(--brand)" : "var(--surface)",
-                      color: editBranchScope === null ? "#0a0a0a" : "var(--text-secondary)",
-                      border: `1px solid ${editBranchScope === null ? "var(--brand)" : "var(--divider)"}`,
-                    }}
-                  >
-                    {t("addEmployee.allBranches")}
-                  </button>
-                  {branches.map((b) => (
-                    <button
-                      key={b.id}
-                      onClick={() => {
-                        setEditBranchScope((prev) => {
-                          if (!prev) return [b.id];
-                          if (prev.includes(b.id)) return prev.filter((id) => id !== b.id);
-                          return [...prev, b.id];
-                        });
-                      }}
-                      className="px-3 py-1.5 rounded-[var(--radius-tile)] text-xs font-semibold"
-                      style={{
-                        background: editBranchScope?.includes(b.id) ? "var(--brand)" : "var(--surface)",
-                        color: editBranchScope?.includes(b.id) ? "#0a0a0a" : "var(--text-secondary)",
-                        border: `1px solid ${editBranchScope?.includes(b.id) ? "var(--brand)" : "var(--divider)"}`,
-                      }}
-                    >
-                      {b.name} · {branchKind(t, b.is_default)}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Who they are in each branch */}
-            {scopedBranches.length > 0 && (
-              <div className="px-4 py-3" style={{ borderTop: "1px solid var(--divider)" }}>
-                <p className="text-xs font-bold mb-2" style={{ color: "var(--text-secondary)" }}>
-                  {t("empDetail.roleByBranch")}
-                </p>
-                <div className="flex flex-col gap-2">
-                  {scopedBranches.map((b) => (
-                    <button
-                      key={b.id}
-                      type="button"
-                      onClick={() => setRoleSheetBranch(b.id)}
-                      className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-[var(--radius-tile)] text-start"
-                      style={{ background: "var(--surface)", border: "1px solid var(--divider)" }}
-                    >
-                      <span className="text-xs font-semibold truncate" style={{ color: "var(--text-primary)" }}>
-                        {b.name} · <span style={{ color: "var(--text-tertiary)" }}>{branchKind(t, b.is_default)}</span>
-                      </span>
-                      <span className="text-xs font-semibold flex items-center gap-1 shrink-0" style={{ color: "var(--text-secondary)" }}>
-                        {roleNameFor(b.id)}
-                        <ChevronRight size={12} />
-                      </span>
-                    </button>
-                  ))}
-                </div>
-                <p className="text-10 mt-2" style={{ color: "var(--text-secondary)" }}>{t("empDetail.roleByBranchHint")}</p>
-              </div>
-            )}
-
-            {/* Access */}
-            <div className="px-4 py-3" style={{ borderTop: "1px solid var(--divider)" }}>
-              <p className="text-xs font-bold mb-2" style={{ color: "var(--text-secondary)" }}>
-                {t("empDetail.access")}
-              </p>
-              <EmployeeAccessEditor
-                roleDefaults={roleDefaults}
-                value={editPerms}
-                onChange={setEditPerms}
-                state={accessState}
-              />
-              {accessState === "ready" && (
-                <p className="text-10 mt-2" style={{ color: "var(--text-secondary)" }}>
-                  {roleTemplateName}
-                  {changeCount > 0 ? ` · ${t("empDetail.changedFor", { name: emp.name })}` : ""}
-                </p>
-              )}
-            </div>
-
-            {/* Save */}
-            <div className="px-4 py-3 flex gap-2" style={{ borderTop: "1px solid var(--divider)" }}>
-              <button
-                onClick={resetToRoleDefaults}
-                disabled={saving || !hasOverridesToClear}
-                className="flex-1 h-10 rounded-[var(--radius-tile)] font-bold text-xs"
-                style={{
-                  background: "var(--surface-2)",
-                  border: "1px solid var(--divider)",
-                  color: !hasOverridesToClear ? "var(--text-secondary)" : "var(--text-primary)",
-                  opacity: saving || !hasOverridesToClear ? 0.6 : 1,
-                }}
-              >
-                {t("empDetail.roleOnly")}
-              </button>
-              <button
-                onClick={saveAccessChanges}
-                disabled={saving}
-                className="flex-1 h-10 rounded-[var(--radius-tile)] font-bold text-sm"
-                style={{ background: "var(--brand)", color: "#0a0a0a", opacity: saving ? 0.6 : 1 }}
-              >
-                {saving ? t("common.saving") : t("common.save")}
-              </button>
-            </div>
-          </div>
-        ) : (
-          <div className="rounded-[var(--radius-tile)] overflow-hidden" style={{ border: "1px solid var(--border-light)" }}>
-            <div className="px-4 py-3 flex items-center justify-between">
-              <span className="text-sm" style={{ color: "var(--text-secondary)" }}>{t("empDetail.role")}</span>
-              <span className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>
-                {isOwner ? t("empDetail.ownerFull") : roleTemplateName}
-              </span>
-            </div>
-            <div className="px-4 py-3 flex items-center justify-between" style={{ borderTop: "1px solid var(--divider)" }}>
-              <span className="text-sm" style={{ color: "var(--text-secondary)" }}>{t("empDetail.worksAt")}</span>
-              <span className="text-sm font-bold text-end max-w-[60%]" style={{ color: "var(--text-primary)" }}>
-                {scopeBranchIds.length === branches.length
-                  ? t("addEmployee.allBranches")
-                  : scopedBranches.map((b) => b.name).join(", ") || t("addEmployee.allBranches")}
-              </span>
-            </div>
-            <div className="px-4 py-3 flex items-start justify-between gap-3" style={{ borderTop: "1px solid var(--divider)" }}>
-              <span className="text-sm shrink-0" style={{ color: "var(--text-secondary)" }}>{t("empDetail.access")}</span>
-              <span className="text-sm font-bold text-end" style={{ color: "var(--text-primary)" }}>
-                {isOwner
-                  ? t("empDetail.fullAccess")
-                  : accessAreas.length > 0
-                    ? accessAreas.map(areaLabel).join(", ")
-                    : t("addEmployee.noRoleAccess")}
-              </span>
-            </div>
-            {changeCount > 0 && (
-              <div className="px-4 py-3" style={{ borderTop: "1px solid var(--divider)" }}>
-                <p className="text-11" style={{ color: "var(--text-secondary)" }}>
-                  {t("empDetail.changedFor", { name: emp.name })}
-                </p>
-              </div>
-            )}
-          </div>
-        )}
       </div>
 
-      {/* Which role each branch grants. A person can be a cashier in one branch and a
-          manager in another; the single "role" above is only the default for branches that
-          have no row of their own. */}
-      {branches.length > 0 && (
-        <div className="px-4 pt-5 animate-fade-in-up delay-[125ms]">
-          <p className="ds-section-label mb-3" style={{ color: "var(--text-secondary)" }}>
-            {t("empDetail.roleByBranch")}
-          </p>
-          <ListCard>
-            {scopedBranches.map((b) => (
-              <ListRow
-                key={b.id}
-                title={b.name}
-                trailing={<span className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>{roleNameFor(b.id)}</span>}
-              />
-            ))}
-          </ListCard>
-          <p className="text-10 mt-2" style={{ color: "var(--text-secondary)" }}>{t("empDetail.roleByBranchHint")}</p>
-        </div>
-      )}
-
-      {/* Invited: they have never signed in, so there is no work to report and
-          showing zeros as "performance" would read as a real result. */}
       {isInvited && (
-        <div className="px-4 pt-5 flex flex-col gap-3 animate-fade-in-up delay-[125ms]">
-          <div className="rounded-[var(--radius-tile)] p-4 flex items-start gap-3" style={{ background: "var(--surface-2)", border: "1px solid var(--border-light)" }}>
-            <Clock size={16} className="shrink-0 mt-0.5" style={{ color: "#f59e0b" }} />
-            <div>
-              <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>{t("empDetail.invitedTitle")}</p>
-              <p className="text-xs mt-1" style={{ color: "var(--text-secondary)" }}>{t("empDetail.invitedHint", { name: emp.name })}</p>
-            </div>
-          </div>
-          {/* The invitation itself lives here too: the owner often adds somebody
-              and only shares it later — or has to resend it because the person
-              never signed in. */}
-          <InviteLinkCard name={emp.name} phone={emp.phone} />
-
-          {/* Creating the invitation also creates the employee's login, and that step can fail
-              on its own (it is tolerated so a provisioning problem never loses the employee).
-              When it does, the employee has a valid invitation they cannot use, and re-inviting
-              is impossible because the number is already taken — so the repair is here, on the
-              one screen the owner already opens when the person says it does not work. */}
+        <div className="px-4 pt-3">
           <div
-            className="rounded-[var(--radius-tile)] p-4 flex items-start justify-between gap-3"
-            style={{ background: "var(--surface-2)", border: "1px solid var(--border-light)" }}
+            className="rounded-[var(--radius-tile)] px-4 py-3 flex items-center gap-3"
+            style={{ background: "var(--tone-card)", border: "1px solid var(--border-control)" }}
           >
-            <div className="min-w-0">
-              <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>
-                {t("empDetail.fixSignIn")}
-              </p>
-              <p className="text-xs mt-1" style={{ color: "var(--text-secondary)" }}>
-                {loginFixed ? t("empDetail.fixSignInDone", { name: emp.name }) : t("empDetail.fixSignInHint")}
+            <Mail size={15} className="shrink-0" style={{ color: "var(--warning, #f59e0b)" }} />
+            <div className="min-w-0 flex-1">
+              <p className="text-11 font-semibold">{t("empDetail.invitationPending")}</p>
+              <p className="text-10 mt-0.5" style={{ color: "var(--text-secondary)" }}>
+                {t("empDetail.invitationPendingHint", { name: emp.name })}
               </p>
             </div>
             <button
               type="button"
-              onClick={handleFixSignIn}
-              disabled={loginFixing || loginFixed}
-              data-testid="emp-fix-signin"
-              className="shrink-0 h-10 px-4 rounded-full text-xs font-bold disabled:opacity-50"
-              style={{ background: "var(--brand)", color: "#0a0a0a" }}
+              onClick={() => navigate(`${base}/employees/${emp.id}/invitation`)}
+              className="shrink-0 text-10 font-bold active:opacity-60"
+              style={{ color: "var(--text-primary)" }}
             >
-              {t("empDetail.fixSignInAction")}
+              {t("empDetail.viewInvitation")}
             </button>
           </div>
         </div>
       )}
 
-      {/* Performance — only once the person has actually completed onboarding */}
-      {!isInvited && (
-      <div className="px-4 pt-5 animate-fade-in-up delay-[125ms]">
-        <p className="ds-section-label mb-3" style={{ color: "var(--text-secondary)" }}>
-          {t("empDetail.performance")}
-        </p>
-        {/* One person, every branch. "All" is the sum the server computed across the branches this
-            employee may work in; a branch chip is that branch alone. One tab is not a choice, so
-            the row only appears when there is a second branch to compare. */}
-        {performanceBranches.length > 1 && (
-          <div className="flex gap-2 overflow-x-auto pb-3" role="tablist" aria-label={t("empDetail.performance")}>
-            {[{ id: "all", name: t("empDetail.allBranchesTab") }, ...performanceBranches.map((b) => ({ id: b.branchId ?? "", name: b.branchName ?? "" }))]
-              .filter((tab) => tab.id)
-              .map((tab) => {
-                const selected = perfTab === tab.id;
-                return (
-                  <button
-                    key={tab.id}
-                    type="button"
-                    role="tab"
-                    aria-selected={selected}
-                    data-testid={`emp-perf-tab-${tab.id}`}
-                    onClick={() => setPerfTab(tab.id)}
-                    className="shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold ds-pressable"
-                    style={{
-                      background: selected ? "var(--brand)" : "var(--surface-2)",
-                      color: selected ? "#0a0a0a" : "var(--text-secondary)",
-                      border: `1px solid ${selected ? "var(--brand)" : "var(--divider)"}`,
-                    }}
-                  >
-                    {tab.name}
-                  </button>
-                );
-              })}
-          </div>
-        )}
-        <div className="grid grid-cols-2 gap-3">
-          {[
-            { icon: TrendingUp, label: t("empDetail.totalRevenue"), value: formatCurrency(perfLine.revenue), color: "var(--brand)" },
-            { icon: ShoppingCart, label: t("empDetail.totalSales"), value: String(perfLine.salesCount), color: "#3b82f6" },
-            { icon: ShoppingCart, label: t("employee.itemsSold"), value: String(perfLine.itemsSold), color: "#8b5cf6" },
-            { icon: Users, label: t("empDetail.customers"), value: String(perfLine.customers), color: "#06b6d4" },
-            { icon: Calendar, label: t("empDetail.today"), value: `${perfLine.todaySales} · ${formatCurrency(perfLine.todayRevenue)}`, color: "#f59e0b" },
-          ].map(({ icon: Icon, label, value, color }) => (
-            <div
-              key={label}
-              className="rounded-[var(--radius-tile)] p-3.5"
-              style={{ background: "var(--surface-2)", border: "1px solid var(--border-light)" }}
-            >
-              <div className="flex items-center gap-2 mb-1.5">
-                <div className="w-6 h-6 rounded-full flex items-center justify-center" style={{ background: `${color}20` }}>
-                  <Icon size={12} style={{ color }} />
-                </div>
-                <span className="text-10 font-medium" style={{ color: "var(--text-secondary)" }}>{label}</span>
-              </div>
-              <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>{value}</p>
-            </div>
-          ))}
-        </div>
-      </div>
-      )}
-
-      {/* Recent sales */}
-      {!isInvited && (
-      <div className="px-4 pt-5 animate-fade-in-up delay-[150ms]">
-        <div className="flex items-center justify-between mb-3">
-          <p className="ds-section-label" style={{ color: "var(--text-secondary)" }}>
-            {t("empDetail.recentSales")}
-          </p>
-          {recentSales.length >= 5 && (
-            <button
-              onClick={() => navigate("/admin/sales", { state: { employeeId: emp.id } })}
-              className="text-xs font-semibold flex items-center gap-1"
-              style={{ color: "var(--brand)" }}
-            >
-              {t("common.viewAll")} <ChevronRight size={12} />
-            </button>
-          )}
-        </div>
-        {recentSales.length === 0 ? (
-          <div className="rounded-[var(--radius-tile)] p-6 text-center" style={{ background: "var(--surface-2)", border: "1px solid var(--border-light)" }}>
+      <div className="px-4 pt-5">
+        <p className="text-15 font-bold mb-2.5">{t("empDetail.overview")}</p>
+        {isInvited ? (
+          <div className="rounded-[var(--radius-card)] p-6 text-center" style={{ background: "var(--tone-card)" }}>
             <ShoppingCart size={20} className="mx-auto mb-2" style={{ color: "var(--text-secondary)" }} />
-            <p className="text-sm" style={{ color: "var(--text-secondary)" }}>{t("sales.noSales")}</p>
+            <p className="text-12" style={{ color: "var(--text-secondary)" }}>{t("empDetail.noPerformance")}</p>
           </div>
         ) : (
-          <ListCard>
-            {recentSales.map((sale) => (
-              <ListRow
-                key={sale.id}
-                onClick={() => navigate(`/admin/sales/${sale.id}`)}
-                trailing={
-                  <span className="text-13 font-bold shrink-0" style={{ color: "var(--text-primary)" }}>
-                    {formatCurrency(sale.totalAmount)}
-                  </span>
-                }
+          <div className="rounded-[var(--radius-card)] p-4" style={{ background: "var(--tone-card)" }}>
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-10" style={{ color: "var(--text-secondary)" }}>{t("empDetail.totalRevenue")}</p>
+                <p className="text-22 font-bold tabular-nums mt-0.5">{formatCurrency(totals.revenue)}</p>
+                <p className="text-10 mt-1" style={{ color: "var(--text-tertiary)" }}>
+                  {t("empDetail.allTimeBranches")}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => navigate(`${base}/employees/${emp.id}/performance`)}
+                className="shrink-0 h-8 px-3 rounded-full flex items-center gap-1.5 text-10 font-semibold active:opacity-70"
+                style={{ border: "1px solid var(--border-control)", color: "var(--text-primary)" }}
               >
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <p className="text-13 font-bold truncate" style={{ color: "var(--text-primary)" }}>{sale.customerName}</p>
-                    <span className="text-10 shrink-0" style={{ color: "var(--text-secondary)" }}>
-                      {formatSmartDateTime(sale.createdAt, now, t)}
-                    </span>
-                  </div>
-                  <p className="text-10 mt-0.5" style={{ color: "var(--text-secondary)", opacity: 0.7 }}>
-                    {perfTab === "all" && sale.branchName ? `${sale.branchName} · ` : ""}
-                    {sale.itemCount} · {sale.paymentType === "full" ? t("sales.paid") : t("sales.credit")}
-                  </p>
+                <Calendar size={12} /> {t("empDetail.performance")}
+              </button>
+            </div>
+            <div className="grid grid-cols-3 gap-2 mt-4 pt-3" style={{ borderTop: "1px solid var(--divider)" }}>
+              {[
+                { label: t("empDetail.totalSales"), value: totals.salesCount },
+                { label: t("employee.itemsSold"), value: totals.itemsSold },
+                { label: t("empDetail.customers"), value: totals.customers },
+              ].map((stat) => (
+                <div key={stat.label}>
+                  <p className="text-10" style={{ color: "var(--text-secondary)" }}>{stat.label}</p>
+                  <p className="text-15 font-bold tabular-nums mt-0.5">{stat.value}</p>
                 </div>
-              </ListRow>
-            ))}
-          </ListCard>
+              ))}
+            </div>
+          </div>
         )}
       </div>
-      )}
 
-      {/* Their business history, one screen away. The activity picker remains the front door,
-          but a person's page is where an owner looking at that person expects to find it; the
-          row says what the next screen leaves out, so "no activity" cannot be misread as "they
-          did nothing" when the rule is that minor profile edits are not listed. */}
-      {!isInvited && canViewActivity && (
-        <div className="px-4 pt-5 animate-fade-in-up delay-[150ms]">
-          <p className="ds-section-label mb-3" style={{ color: "var(--text-secondary)" }}>
-            {t("hub.people.activity")}
-          </p>
+      <div className="px-4 pt-5">
+        <p className="text-15 font-bold mb-2.5">{t("empDetail.access")}</p>
+        <ListCard>
+          <ListRow
+            icon={ShieldCheck}
+            title={t("empDetail.rolePermissions")}
+            meta={isOwner ? t("empDetail.ownerFull") : roleName}
+            description={roleDescription}
+            trailing={<ChevronRight size={14} className="shrink-0" style={{ color: "var(--text-secondary)" }} />}
+            onClick={() => navigate(`${base}/employees/${emp.id}/role`)}
+          />
+        </ListCard>
+      </div>
+
+      <div className="px-4 pt-5">
+        <p className="text-15 font-bold mb-2.5">{t("empDetail.workAssignment")}</p>
+        <ListCard>
+          <ListRow
+            icon={Store}
+            title={t("empDetail.assignedBranches")}
+            meta={branchLabel}
+            trailing={<ChevronRight size={14} className="shrink-0" style={{ color: "var(--text-secondary)" }} />}
+            onClick={() => navigate(`${base}/employees/${emp.id}/branches`)}
+          />
+        </ListCard>
+      </div>
+
+      {canViewActivity && (
+        <div className="px-4 pt-5">
+          <p className="text-15 font-bold mb-2.5">{t("empDetail.businessActivity")}</p>
           <ListCard>
             <ListRow
               icon={History}
               testId="emp-activity-link"
-              title={t("people.viewActivity")}
+              title={t("empDetail.recentActivity")}
               description={t("people.businessOnlyHint")}
-              trailing={
-                <ChevronRight
-                  size={14}
-                  className="shrink-0"
-                  style={{ color: "var(--text-secondary)" }}
-                />
-              }
+              trailing={<ChevronRight size={14} className="shrink-0" style={{ color: "var(--text-secondary)" }} />}
               onClick={() => navigate(`${base}/settings/hub/people/activity/${emp.id}`)}
             />
           </ListCard>
         </div>
       )}
 
-      {/* Actions */}
-      <div className="px-4 pt-5 animate-fade-in-up delay-[175ms]">
-        <div className="grid grid-cols-2 gap-3">
-          <button
-            onClick={() => navigate("/admin/sales", { state: { employeeId: emp.id } })}
-            className="h-11 rounded-[var(--radius-tile)] font-semibold text-sm flex items-center justify-center gap-2"
-            style={{ background: "var(--surface-2)", border: "1px solid var(--divider)", color: "var(--text-primary)" }}
-          >
-            <Eye size={14} />
-            {t("empDetail.viewAllSales")}
-          </button>
-          <button
-            onClick={() => window.open(`tel:${emp.phone}`, "_self")}
-            className="h-11 rounded-[var(--radius-tile)] font-semibold text-sm flex items-center justify-center gap-2"
-            style={{ background: "var(--surface-2)", border: "1px solid var(--divider)", color: "var(--text-primary)" }}
-          >
-            <Phone size={14} />
-            {t("empDetail.call")}
-          </button>
-        </div>
+      <div className="px-4 pt-5">
+        <p className="text-15 font-bold mb-2.5">{t("empDetail.accountSecurity")}</p>
+        <ListCard>
+          <ListRow
+            icon={Calendar}
+            title={t("empDetail.lastLogin")}
+            value={lastLogin}
+          />
+          <ListRow
+            icon={Users}
+            title={t("empDetail.memberSince")}
+            value={memberSince}
+          />
+        </ListCard>
       </div>
 
-      {/* Deactivate / reactivate */}
-      {!emp.isOriginalOwner && (
-        <div className="px-4 pt-5 pb-6 animate-fade-in-up delay-[200ms]">
-          {isActive ? (
-            <button
-              className="w-full h-12 rounded-full font-bold text-sm flex items-center justify-center gap-2"
-              style={{ border: "1.5px solid var(--error)", color: "var(--error)", background: "transparent" }}
-              onClick={() => setConfirmAction(isInvited ? "cancelInvite" : "deactivate")}
-            >
-              <UserX size={15} />
-              {t(isInvited ? "empDetail.cancelInvite" : "empDetail.deactivate")}
-            </button>
-          ) : (
-            <button
-              className="w-full h-12 rounded-full font-bold text-sm flex items-center justify-center gap-2"
-              style={{ background: "var(--brand)", color: "#0a0a0a" }}
-              onClick={() => setConfirmAction("reactivate")}
-            >
-              <UserCheck size={15} />
-              {t("empDetail.reactivate")}
-            </button>
+      <Sheet
+        open={actionsOpen}
+        title={t("empDetail.actions")}
+        onClose={() => setActionsOpen(false)}
+        closeButton={false}
+      >
+        <div className="px-4 pt-1">
+          <ListRow
+            icon={ShieldCheck}
+            title={t("empDetail.manageAccess")}
+            onClick={() => closeAndGo(`${base}/employees/${emp.id}/role`)}
+          />
+          <ListRow
+            icon={Store}
+            title={t("empDetail.manageBranches")}
+            onClick={() => closeAndGo(`${base}/employees/${emp.id}/branches`)}
+          />
+          {isInvited && (
+            <ListRow
+              icon={Mail}
+              title={t("empDetail.resendInvitation")}
+              onClick={() => closeAndGo(`${base}/employees/${emp.id}/invitation`)}
+            />
+          )}
+          {canViewActivity && (
+            <ListRow
+              icon={History}
+              title={t("empDetail.viewAccessHistory")}
+              onClick={() => closeAndGo(`${base}/settings/hub/people/activity/${emp.id}`)}
+            />
+          )}
+          <ListRow
+            icon={Download}
+            title={t("empDetail.exportDetails")}
+            onClick={exportDetails}
+          />
+          {!emp.isOriginalOwner && isActive && (
+            <ListRow
+              icon={UserX}
+              danger
+              title={isInvited ? t("empDetail.cancelInvite") : t("empDetail.deactivateShort")}
+              onClick={() => {
+                setActionsOpen(false);
+                setConfirmAction(isInvited ? "cancelInvite" : "deactivate");
+              }}
+            />
+          )}
+          {!emp.isOriginalOwner && !isActive && (
+            <ListRow
+              icon={UserCheck}
+              title={t("empDetail.reactivateShort")}
+              onClick={() => {
+                setActionsOpen(false);
+                setConfirmAction("reactivate");
+              }}
+            />
+          )}
+          {canEditAccess && (
+            <ListRow
+              icon={UserCheck}
+              title={t("empDetail.customize")}
+              onClick={() => closeAndGo(`${base}/employees/${emp.id}/role?customize=1`)}
+            />
           )}
         </div>
-      )}
+      </Sheet>
 
-      {/* Choosing the role a single branch grants. The list is the same role catalogue the
-          default-role control uses, so the two cannot drift apart. */}
-      <SelectSheet
-        open={roleSheetBranch !== null}
-        title={t("empDetail.rolePickerTitle")}
-        options={rolesStore.roles.map((r) => ({ value: r.id, label: r.name }))}
-        selected={roleSheetBranch ? editBranchRoles[roleSheetBranch] ?? editRoleId ?? undefined : undefined}
-        onSelect={(value) => {
-          if (!roleSheetBranch) return;
-          setEditBranchRoles((prev) => ({ ...prev, [roleSheetBranch]: value }));
-          setBranchRolesDirty(true);
-        }}
-        onClose={() => setRoleSheetBranch(null)}
-      />
-
-      {/* Contextual confirmation: names the employee and states what the change does. */}
       <ConfirmDialog
         open={confirmAction !== null}
         title={

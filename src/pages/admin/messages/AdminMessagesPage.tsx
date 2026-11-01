@@ -3,6 +3,8 @@ import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
 import EmptyState from "@/components/ui/EmptyState";
 import { useT } from "@/lib/i18n";
+import { useShellBase } from "@/lib/useShellBase";
+import { useReturnTo } from "@/lib/useReturnTo";
 
 /**
  * Messages — the bottom bar's fifth tab, in the slot the More tab used to hold.
@@ -22,13 +24,13 @@ import { useT } from "@/lib/i18n";
  */
 export default function AdminMessagesPage() {
   const t = useT();
+  const base = useShellBase();
+  const returnTo = useReturnTo(`${base}/more`);
 
   return (
     <div className="flex flex-col w-full min-h-full" style={{ background: "var(--background)" }}>
       <StatusBar />
-      {/* A tab destination: the header carries the title, and back leaves through the dashboard
-          the way every other top-level screen does — no back affordance is faked here. */}
-      <NavHeader title={t("admin.messages")} noBack />
+      <NavHeader title={t("admin.messages")} backTo={returnTo} />
 
       <EmptyState
         icon={MessageSquare}

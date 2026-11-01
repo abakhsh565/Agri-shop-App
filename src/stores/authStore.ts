@@ -159,13 +159,59 @@ export const useAuthStore = create<AuthState>()(
         const user = get().user;
         if (!user) return;
         try {
-          const { data, error } = await supabase.rpc("get_my_permissions");
+          // Permissions and visibility are read together (migration 0250): an owner who
+          // unticked a dashboard block, or moved a role into another department, meant
+          // nothing to the first read alone.
+          const [{ data, error }, { data: dash }, { data: access }] = await Promise.all([
+            supabase.rpc("get_my_permissions"),
+            supabase.rpc("get_my_dashboards"),
+            supabase.rpc("get_my_access_context"),
+          ]);
           if (error || !Array.isArray(data)) return;
           const next = data as string[];
+          const nextDash = Array.isArray(dash) ? (dash as string[]) : null;
           const current = user.permissions ?? [];
+          const currentDash = user.dashboards ?? [];
+          const samePerms =
+            next.length === current.length && next.every((code) => current.includes(code));
+          // `undefined` is "never read", not "nothing visible": a role that was given no
+          // dashboard blocks must still be stored, or the screen would fall back to showing
+          // everything for exactly the account the owner just restricted.
+          const sameDash =
+            nextDash === null ||
+            (user.dashboards !== undefined &&
+              nextDash.length === currentDash.length &&
+              nextDash.every((k) => currentDash.includes(k)));
+          const accessRow = access as {
+            experience?: "owner" | "co_owner" | "employee";
+            grantId?: string | null;
+            businessName?: string | null;
+          } | null;
+          const nextExperience = accessRow?.experience;
+          const nextGrantId = accessRow?.grantId ?? null;
+          const sameAccess =
+            !nextExperience ||
+            (user.experience === nextExperience &&
+              (user.coOwnerGrantId ?? null) === nextGrantId);
           // Nothing the owner did since sign-in means nothing to re-render.
-          if (next.length === current.length && next.every((code) => current.includes(code))) return;
-          set({ user: { ...user, permissions: next } });
+          if (samePerms && sameDash && sameAccess) return;
+          set({
+            user: {
+              ...user,
+              permissions: next,
+              ...(nextDash ? { dashboards: nextDash } : {}),
+              ...(nextExperience
+                ? {
+                    experience: nextExperience,
+                    coOwnerGrantId: nextGrantId,
+                    businessName: accessRow?.businessName ?? user.businessName ?? null,
+                    ...(nextExperience === "co_owner" || nextExperience === "owner"
+                      ? { pendingCoOwnerInvitation: null }
+                      : {}),
+                  }
+                : {}),
+            },
+          });
         } catch {
           // Unreachable server: keep the grants this device was last told about.
         }

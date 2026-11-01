@@ -36,6 +36,7 @@ import { SkeletonList } from "@/components/ui/Skeleton";
 import { groupSalesByDateSections } from "@/lib/salesGrouping";
 import { netSalesOf, refundsBySale, useReturns } from "@/lib/salesActivity";
 import { pkDate, pkDateFromISO, pkToday, pkYesterday, pkWeekStart, pkMonthStart } from "@/lib/pkDate";
+import { useShellBase } from "@/lib/useShellBase";
 
 function initBgColor(name: string | null | undefined) {
   const colors = ["#84cc16","#3b82f6","#8b5cf6","#f59e0b","#06b6d4","#ec4899"];
@@ -58,6 +59,7 @@ const SORT_OPTIONS: { key: SortKey; label: string }[] = [
 
 export default function AdminSalesListPage() {
   const navigate = useNavigate();
+  const base = useShellBase();
   const { state, search } = useLocation();
   const t = useT();
   const { language } = useThemeStore();
@@ -237,7 +239,7 @@ export default function AdminSalesListPage() {
           screen, so a second door to it only took a slot the actions needed. */}
       <NavHeader
         title={t("admin.sales")}
-        backTo="/admin/settings/hub/sales"
+        backTo={base === "/admin" ? "/admin/settings/hub/sales" : `${base}/dashboard`}
         right={
           <SectionActionsButton
             onClick={() => setActionsOpen(true)}
@@ -424,7 +426,7 @@ export default function AdminSalesListPage() {
       <div className="px-4 pt-2 pb-1">
         <button
           type="button"
-          onClick={() => navigate("/admin/sale")}
+          onClick={() => navigate(`${base}/sale`)}
           data-testid="sales-new"
           className="w-full h-12 rounded-full flex items-center justify-center gap-2 text-13 font-bold active:opacity-80"
           style={{ background: "var(--surface-2)", color: "var(--text-primary)" }}
@@ -580,7 +582,7 @@ export default function AdminSalesListPage() {
             description={t("hub.sales.newHint")}
             onClick={() => {
               setActionsOpen(false);
-              navigate("/admin/sale");
+              navigate(`${base}/sale`);
             }}
           />
           <ListRow
@@ -642,7 +644,7 @@ export default function AdminSalesListPage() {
                   return (
                   <ListRow
                     key={sale.id}
-                    onClick={() => navigate(`/admin/sales/${sale.id}`)}
+                    onClick={() => navigate(`${base}/sales/${sale.id}`)}
                     tile={cImg ? (
                       <img src={cImg} alt={sale.customerName} className="size-10 rounded-full object-cover shrink-0" />
                     ) : (

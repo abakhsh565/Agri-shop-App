@@ -1,5 +1,5 @@
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
-import { LayoutDashboard, ShoppingBag, Package, ScanLine, Settings as SettingsIcon, X } from "lucide-react";
+import { LayoutDashboard, ShoppingBag, Package, ScanLine, Menu, X } from "lucide-react";
 import { useT, tNow } from "@/lib/i18n";
 import ToastContainer from "@/components/ui/Toast";
 import NavTracker from "@/components/ui/NavTracker";
@@ -31,13 +31,11 @@ const TAB_DEFS = [
   { key: "admin.sales"     as const, icon: ShoppingBag,     path: "/admin/sales"     },
   { key: "scan"            as const, icon: ScanLine,        path: "__scan__"         },
   { key: "admin.inventory" as const, icon: Package,         path: "/admin/products"    },
-  // The fifth slot is the ACCOUNT screen, and it is Settings (`pages/admin/settings`): the shop
-  // this account is working in, one row per part of the business, then the phone's own
-  // preferences and the way out. It used to be "More", a second menu of Money / Stock / People
-  // rows whose destinations were the same screens the Settings hub already leads to — two menu
-  // trees for one app. Business navigation now lives only under Settings, and this tab opens it
-  // directly instead of through a menu that was duplicating the next one.
-  { key: "admin.settings"  as const, icon: SettingsIcon,    path: "/admin/settings", labelKey: "nav.account" },
+  // The fifth slot is the business hub, not Settings. Settings is configuration and account
+  // state; the work of the business belongs in More, where its groups are one tap from every
+  // shell screen instead of four levels inside an account page. `/admin/more` is the canonical
+  // address again, and Settings is reached from this hub.
+  { key: "admin.more"      as const, icon: Menu,            path: "/admin/more",     labelKey: "nav.more" },
 ];
 
 export default function AdminLayout() {
@@ -49,6 +47,7 @@ export default function AdminLayout() {
   useOverlayScrollLock();
   const noActiveShop = useNoActiveShop();
   const { user, isLocked, lock, unlock, logout } = useAuthStore();
+  const refreshPermissions = useAuthStore((s) => s.refreshPermissions);
   const { setOnline, syncQueue } = useOfflineStore();
   const [pin, setPin] = useState("");
   const [pinError, setPinError] = useState(false);
@@ -127,22 +126,11 @@ export default function AdminLayout() {
     // A tab that is the current screen and does not say so reads as a tab that did not work.
     if (path.startsWith("/admin/dashboard")) return "/admin/dashboard";
     if (path.startsWith("/admin/sales"))     return "/admin/sales";
-    if (path.startsWith("/admin/products"))  return "/admin/products";
-    if (path.startsWith("/admin/inventory") || path.startsWith("/admin/inventory/movements") || path.startsWith("/admin/inventory/reorder")) return "/admin/products";
-    if (path.startsWith("/admin/customers")) return "/admin/customers";
-    // Settings is a tab now, and every business section opens from it (`settings/hub/*`), so a
-    // section screen keeps the Settings tab lit — otherwise the bar would go dark the moment
-    // someone opened Sales from the menu that owns it. `/admin/more` is the retired address and
-    // redirects here, so it lights the same tab rather than nothing.
-    if (path.startsWith("/admin/settings") || path.startsWith("/admin/more")) return "/admin/settings";
-    // Messages is not a tab, so opening it lights nothing — the same answer the assistant
-    // screen gives, rather than pointing at a tab that does not own it. Employees, companies,
-    // purchases, reports and payments are reached from Settings, but none of them IS Settings,
-    // so they light nothing either.
-    // `null` rather than a stand-in: the assistant is no longer a tab, so on that screen
-    // NO tab is the current one, and lighting up "Dashboard" would send someone there
-    // believing the assistant lives under it.
-    return null;
+    if (path.startsWith("/admin/products") || path.startsWith("/admin/inventory")) return "/admin/products";
+    // Every other business screen is one of More's doors, including Settings and the
+    // `/settings/hub/*` sections. Keeping More lit is what makes it read as the menu that owns
+    // the screen, rather than a fifth tab that goes dark whenever it is used.
+    return "/admin/more";
   }
 
   const active = activeTab();
@@ -158,6 +146,13 @@ export default function AdminLayout() {
   useEffect(() => {
     if (userId) void loadShops();
   }, [loadShops, userId]);
+
+  // Re-read what this account may see when the shell mounts. The permissions carried on
+  // the stored user are a snapshot from sign-in; an owner editing a role — or unticking a
+  // dashboard block — hours later has to reach the phone that is already open.
+  useEffect(() => {
+    if (userId) void refreshPermissions();
+  }, [refreshPermissions, userId]);
 
   const resolveByCode = useProductsStore((s) => s.resolveByCode);
   const { addToast } = useUIStore();
@@ -318,7 +313,7 @@ export default function AdminLayout() {
       {/* The assistant, off the bar and within thumb reach of home. See AssistantFab. */}
       {location.pathname === "/admin/dashboard" && <AssistantFab path="/admin/assistant" />}
 
-      {/* ── Bottom tab bar (4 tabs) — only on top-level navigation screens ── */}
+      {/* ── Bottom tab bar (5 tabs) — only on top-level navigation screens ── */}
       {showTabBar && (
       <div
         className="fixed bottom-0 start-0 end-0 max-w-[480px] mx-auto flex items-start pt-2 border-t"

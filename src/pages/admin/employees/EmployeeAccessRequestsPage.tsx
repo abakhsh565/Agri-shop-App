@@ -9,6 +9,7 @@ import EmptyState from "@/components/ui/EmptyState";
 import { SkeletonList } from "@/components/ui/Skeleton";
 import { useT } from "@/lib/i18n";
 import { useThemeStore } from "@/stores/themeStore";
+import { useShellBase } from "@/lib/useShellBase";
 import { useCurrentTime } from "@/lib/useCurrentTime";
 import { formatPhone, formatSmartDateTime } from "@/lib/formatters";
 import {
@@ -27,6 +28,7 @@ export default function EmployeeAccessRequestsPage() {
   const navigate = useNavigate();
   const { language } = useThemeStore();
   const isUrdu = language === "ur";
+  const base = useShellBase();
   const now = useCurrentTime();
 
   const [items, setItems] = useState<EmployeeAccessRequest[]>([]);
@@ -53,7 +55,7 @@ export default function EmployeeAccessRequestsPage() {
       style={{ background: "var(--background)", direction: isUrdu ? "rtl" : "ltr" }}
     >
       <StatusBar />
-      <NavHeader title={t("accessRequests.title")} backTo="/admin/employees" />
+      <NavHeader title={t("accessRequests.title")} backTo={`${base}/settings/hub/people`} />
 
       <div className="flex flex-col px-4 gap-3 pb-24">
         <div className="flex flex-col gap-1 px-1 pt-1">
@@ -61,7 +63,7 @@ export default function EmployeeAccessRequestsPage() {
             {t("accessRequests.subtitle")}
           </p>
           {pendingCount > 0 && (
-            <p className="text-11 font-semibold" style={{ color: "var(--brand-dark)" }}>
+            <p className="text-11 font-semibold" style={{ color: "var(--text-secondary)" }}>
               {t("accessRequests.pendingCount", { count: pendingCount })}
             </p>
           )}
@@ -78,7 +80,7 @@ export default function EmployeeAccessRequestsPage() {
               type="button"
               onClick={() => void load()}
               className="ds-pill"
-              style={{ color: "var(--brand-dark)" }}
+              style={{ color: "var(--text-secondary)" }}
             >
               {t("accessRequests.retry")}
             </button>
@@ -102,13 +104,13 @@ export default function EmployeeAccessRequestsPage() {
                 <ListRow
                   key={request.id}
                   testId={`access-request-${request.id}`}
-                  onClick={() => navigate(`/admin/employees/requests/${request.id}`)}
+                  onClick={() => navigate(`${base}/employees/requests/${request.id}`)}
                   tile={
                     <div
                       className="size-11 rounded-full flex items-center justify-center shrink-0"
-                      style={{ background: "var(--surface-2)" }}
+                      style={{ background: "var(--tone-sunken)" }}
                     >
-                      <UserPlus size={18} style={{ color: "var(--brand)" }} />
+                      <UserPlus size={18} style={{ color: "var(--text-secondary)" }} />
                     </div>
                   }
                   trailing={<ChevronRight size={16} style={{ color: "var(--text-secondary)" }} className="shrink-0" />}

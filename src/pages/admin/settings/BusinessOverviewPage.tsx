@@ -691,7 +691,7 @@ export default function BusinessOverviewPage() {
                 testId="report-profit"
                 title={t("overall.reportProfit")}
                 meta={t("overall.reportProfitHint")}
-                onClick={() => navigate(`${base}/settings/hub/reports/profit`)}
+                onClick={() => navigate(`${base}/reports/profit`)}
                 trailing={<ChevronRight size={14} style={{ color: "var(--text-secondary)" }} className="shrink-0" />}
               />
               {/* Customer balances, Supplier balances and Branch report are gone from here

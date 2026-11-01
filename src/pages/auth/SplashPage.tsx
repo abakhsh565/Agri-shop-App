@@ -9,6 +9,7 @@ import { entryDoor } from "@/lib/entryDoor";
 import StatusBar from "@/components/ui/StatusBar";
 import { useT } from "@/lib/i18n";
 import { hasSeenIntro } from "@/education/introSeen";
+import { homePathForUser } from "@/lib/experience";
 
 export default function SplashPage() {
   const t = useT();
@@ -48,9 +49,7 @@ export default function SplashPage() {
           navigate("/login", { replace: true });
         } else {
           // No PIN set → prompt to create one (mandatory for all users)
-          const dest = (latestUser.role === "admin")
-            ? "/admin/dashboard"
-            : "/employee/dashboard";
+          const dest = homePathForUser(latestUser);
           navigate("/login/pin-set", { replace: true, state: { returnTo: dest } });
         }
       } else {

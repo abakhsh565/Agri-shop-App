@@ -24,6 +24,7 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import SectionActionsSheet, { SectionActionsButton } from "@/components/ui/SectionActionsSheet";
 import { csvFileName, exportCsv, exportText, toCsv } from "@/lib/exportData";
 import { useUIStore } from "@/stores/uiStore";
+import { useThemeStore } from "@/stores/themeStore";
 import { useT, type I18nKey } from "@/lib/i18n";
 import { useShellBase } from "@/lib/useShellBase";
 import { hubSection } from "@/lib/settingsHub";
@@ -68,14 +69,18 @@ export default function AdminFinanceSectionPage() {
   const day = pkToday();
   const window = useMemo(() => monthWindow(day), [day]);
 
+  const language = useThemeStore((s) => s.language);
+
   const reports = useBranchPeriodReport(window.from, window.to);
   const prevReports = useBranchPeriodReport(window.prevFrom, window.prevTo);
   const cashReports = useBranchCash(window.from, window.to);
+  const prevCashReports = useBranchCash(window.prevFrom, window.prevTo);
   const totals = useFinanceTotals(window.from, window.to);
   const prevTotals = useFinanceTotals(window.prevFrom, window.prevTo);
-  // Money that actually moved, which is not the profit figure above it. Both are read for the
-  // same month so the card and the hero cannot describe different periods.
+  // Money that actually moved, which is not the profit figure above it. Both months are read
+  // because the screen may need the previous one when the current month has no activity yet.
   const movement = useMoneyTotals(window.from, window.to);
+  const prevMovement = useMoneyTotals(window.prevFrom, window.prevTo);
 
   const customers = useCustomersStore((s) => s.customers);
   const customersReady = useCustomersStore((s) => s.ready);
@@ -100,15 +105,58 @@ export default function AdminFinanceSectionPage() {
   const current = reports.rows?.find((row) => row.isCurrent) ?? null;
   const previous = prevReports.rows?.find((row) => row.isCurrent) ?? null;
   const branchCash = cashReports.rows?.find((row) => row.isCurrent) ?? null;
+  const prevBranchCash = prevCashReports.rows?.find((row) => row.isCurrent) ?? null;
 
   const expenses = totals.totals?.expense ?? null;
   const previousExpenses = prevTotals.totals?.expense ?? null;
 
-  const netSales = current?.netSales ?? null;
-  const cogs = current?.cogs ?? null;
-  const netProfit = netProfitOf(netSales, cogs, expenses);
+  const hasActivity = (
+    report: typeof current,
+    cash: typeof branchCash,
+    expense: number | null,
+    moved: typeof movement.totals,
+  ) =>
+    (report?.netSales ?? 0) > 0 ||
+    (report?.returns ?? 0) > 0 ||
+    (cash?.cashTaken ?? 0) > 0 ||
+    (cash?.received ?? 0) > 0 ||
+    (cash?.paid ?? 0) > 0 ||
+    (expense ?? 0) > 0 ||
+    (moved?.entries ?? 0) > 0;
+
+  const currentHasActivity = hasActivity(current, branchCash, expenses, movement.totals);
+  const previousHasActivity = hasActivity(previous, prevBranchCash, previousExpenses, prevMovement.totals);
+  const reportingDataReady =
+    reports.rows !== null &&
+    prevReports.rows !== null &&
+    cashReports.rows !== null &&
+    prevCashReports.rows !== null &&
+    totals.totals !== null &&
+    prevTotals.totals !== null &&
+    movement.totals !== null &&
+    prevMovement.totals !== null;
+
+  // On the first day of a month a business legitimately has no rows yet. Printing a confident
+  // zero makes the whole page look disconnected from the October data one tap away. Show the
+  // latest month that actually has activity, and name it in the header; when the current month
+  // gets its first sale/expense/cash movement this naturally switches back to it.
+  const showingPreviousMonth = reportingDataReady && !currentHasActivity && previousHasActivity;
+  const selectedReport = showingPreviousMonth ? previous : current;
+  const selectedCash = showingPreviousMonth ? prevBranchCash : branchCash;
+  const selectedExpenses = showingPreviousMonth ? previousExpenses : expenses;
+  const selectedMovement = showingPreviousMonth ? prevMovement.totals : movement.totals;
+
+  const netSales = selectedReport?.netSales ?? null;
+  const cogs = selectedReport?.cogs ?? null;
+  const netProfit = netProfitOf(netSales, cogs, selectedExpenses);
   const previousProfit = netProfitOf(previous?.netSales ?? null, previous?.cogs ?? null, previousExpenses);
-  const trend = trendPercent(netProfit, previousProfit);
+  const trend = showingPreviousMonth ? null : trendPercent(netProfit, previousProfit);
+
+  const selectedFrom = showingPreviousMonth ? window.prevFrom : window.from;
+  const reportingMonth = new Date(`${selectedFrom}T00:00:00Z`).toLocaleDateString(
+    language === "ur" ? "ur-PK" : "en-PK",
+    { month: "long", year: "numeric", timeZone: "UTC" },
+  );
 
   const receivables = useMemo(
     () => customers.reduce((sum, c) => sum + Math.max(0, c.outstandingBalance), 0),
@@ -123,18 +171,25 @@ export default function AdminFinanceSectionPage() {
   const money = (value: number | null | undefined) =>
     value == null ? "—" : formatCurrency(value);
 
-  // A failed read is not "still reading". The hero waits only for the sales report; when the
-  // recorded-money read fails (an environment without 0254, or a transient error) expenses stay
-  // unknown, so net profit prints "—" instead of a skeleton that never resolves or a zero that
-  // would flatter the month.
-  const reportsReading = reports.rows === null && !reports.failed;
+  // A failed read is not "still reading". The hero waits for the two months it needs to choose
+  // the reporting month; when one fails, the figure stays unknown rather than silently falling
+  // back to a different period or drawing a zero that would flatter the month.
+  const reportingReading =
+    (reports.rows === null && !reports.failed) ||
+    (prevReports.rows === null && !prevReports.failed) ||
+    (cashReports.rows === null && !cashReports.failed) ||
+    (prevCashReports.rows === null && !prevCashReports.failed) ||
+    (totals.totals === null && !totals.failed) ||
+    (prevTotals.totals === null && !prevTotals.failed) ||
+    (movement.totals === null && !movement.failed) ||
+    (prevMovement.totals === null && !prevMovement.failed);
 
   const metrics: { id: string; icon: LucideIcon; label: string; value: string; caption: string }[] = [
     {
       id: "cash",
       icon: Wallet,
       label: t("finance.metric.cash"),
-      value: money(branchCash?.cashTaken),
+      value: money(selectedCash?.cashTaken),
       caption: t("finance.metric.cashCaption"),
     },
     {
@@ -167,7 +222,7 @@ export default function AdminFinanceSectionPage() {
   const performance: { id: string; labelKey: I18nKey; value: number | null; tone: "brand" | "muted" }[] = [
     { id: "net-sales", labelKey: "finance.metric.netSales", value: netSales, tone: "brand" },
     { id: "cogs", labelKey: "finance.cogs", value: cogs, tone: "muted" },
-    { id: "expenses", labelKey: "finance.operatingExpenses", value: expenses, tone: "muted" },
+    { id: "expenses", labelKey: "finance.operatingExpenses", value: selectedExpenses, tone: "muted" },
     { id: "net-profit", labelKey: "finance.netProfit", value: netProfit, tone: "brand" },
   ];
   const barBase = netSales != null && netSales > 0 ? netSales : null;
@@ -288,6 +343,14 @@ export default function AdminFinanceSectionPage() {
         <p className="text-11 mt-1" style={{ color: "var(--text-tertiary)" }}>
           {t("creditList.scope", { branch: branchName ?? t("hub.inventory.selectedBranch") })}
         </p>
+        <p className="text-11 mt-1" style={{ color: "var(--text-secondary)" }} data-testid="finance-hub-period">
+          {t("finance.periodLabel", { month: reportingMonth })}
+        </p>
+        {showingPreviousMonth && (
+          <p className="text-10 mt-0.5" style={{ color: "var(--text-tertiary)" }} data-testid="finance-hub-period-note">
+            {t("finance.latestActiveMonth")}
+          </p>
+        )}
       </div>
 
       {/* The one figure the screen opens with. */}
@@ -300,7 +363,7 @@ export default function AdminFinanceSectionPage() {
           <p className="text-11" style={{ color: "var(--text-secondary)" }}>
             {t("finance.netProfit")}
           </p>
-          {reportsReading ? (
+          {reportingReading ? (
             <Skeleton w="180px" h="32px" className="mt-1" />
           ) : (
             <p
@@ -323,7 +386,7 @@ export default function AdminFinanceSectionPage() {
           ) : (
             // "No previous period" is a fact about the ledger only when this period's figure is
             // known. An unread figure already prints "—" and needs no comparison sentence.
-            !reportsReading && netProfit != null && (
+            !reportingReading && netProfit != null && !showingPreviousMonth && (
               <p className="text-11 mt-1" style={{ color: "var(--text-tertiary)" }}>
                 {t("finance.firstPeriod")}
               </p>
@@ -348,7 +411,10 @@ export default function AdminFinanceSectionPage() {
             <p className="text-13 font-bold">{t("finance.moneyMoved")}</p>
             <button
               type="button"
-              onClick={() => navigate(`${base}/settings/hub/finance/money`)}
+              onClick={() => {
+                const to = showingPreviousMonth ? window.prevTo : window.to;
+                navigate(`${base}/settings/hub/finance/money?from=${selectedFrom}&to=${to}`);
+              }}
               className="text-11 font-semibold shrink-0 active:opacity-60"
               style={{ color: "var(--brand-dark)" }}
               data-testid="finance-hub-movement-link"
@@ -358,9 +424,9 @@ export default function AdminFinanceSectionPage() {
           </div>
           <div className="grid grid-cols-3 gap-2 mt-2">
             {[
-              { id: "in", label: t("finance.moneyIn"), value: movement.totals?.moneyIn, tone: "var(--brand-dark)" },
-              { id: "out", label: t("finance.moneyOut"), value: movement.totals?.moneyOut, tone: "var(--text-primary)" },
-              { id: "net", label: t("money.net"), value: movement.totals?.net, tone: "var(--brand-dark)" },
+              { id: "in", label: t("finance.moneyIn"), value: selectedMovement?.moneyIn, tone: "var(--brand-dark)" },
+              { id: "out", label: t("finance.moneyOut"), value: selectedMovement?.moneyOut, tone: "var(--text-primary)" },
+              { id: "net", label: t("money.net"), value: selectedMovement?.net, tone: "var(--brand-dark)" },
             ].map((figure) => (
               <div key={figure.id} className="min-w-0">
                 <p className="text-10 truncate" style={{ color: "var(--text-secondary)" }}>
@@ -373,7 +439,7 @@ export default function AdminFinanceSectionPage() {
                   }}
                   data-testid={`finance-hub-movement-${figure.id}`}
                 >
-                  {movement.totals === null ? "—" : money(figure.value)}
+                  {selectedMovement === null ? "—" : money(figure.value)}
                 </p>
               </div>
             ))}
@@ -399,7 +465,7 @@ export default function AdminFinanceSectionPage() {
               <p className="text-12 mt-2 truncate" style={{ color: "var(--text-secondary)" }}>
                 {metric.label}
               </p>
-              {reportsReading && metric.id === "net-sales" ? (
+              {reportingReading && metric.id === "net-sales" ? (
                 <Skeleton w="80%" h="20px" className="mt-1" />
               ) : (
                 <p className="text-16 font-bold mt-0.5 tabular-nums break-words">{metric.value}</p>
@@ -454,7 +520,7 @@ export default function AdminFinanceSectionPage() {
             })}
           </div>
           <p className="text-10 mt-3" style={{ color: "var(--text-tertiary)" }}>
-            {current != null && current.unknownLines > 0
+            {selectedReport != null && selectedReport.unknownLines > 0
               ? t("finance.unknownCost")
               : t("finance.performanceNote")}
           </p>

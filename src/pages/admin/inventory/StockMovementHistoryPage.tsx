@@ -198,7 +198,7 @@ export default function StockMovementHistoryPage() {
       <StatusBar />
       <NavHeader
         title={t("hub.inventory.movements")}
-        backTo={`${base}/settings/hub/inventory`}
+        backTo={base === "/admin" ? `${base}/settings/hub/inventory` : `${base}/more`}
         right={
           <SectionActionsButton
             onClick={() => setMenuOpen(true)}

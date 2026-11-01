@@ -4,6 +4,8 @@ import { ChevronRight, History } from "lucide-react";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
 import SearchBar from "@/components/ui/SearchBar";
+import ListCard from "@/components/ui/ListCard";
+import ListRow from "@/components/ui/ListRow";
 import { SkeletonList } from "@/components/ui/Skeleton";
 import EmptyState from "@/components/ui/EmptyState";
 import { useT } from "@/lib/i18n";
@@ -133,36 +135,31 @@ export default function AdminEmployeeActivityPage() {
           <EmptyState icon={History} title={t("people.noMatch")} />
         )}
 
-        {!loading &&
-          team.map((employee) => (
-            <button
-              key={employee.id}
-              type="button"
-              onClick={() => navigate(`${base}/settings/hub/people/activity/${employee.id}`)}
-              data-testid={`employee-activity-${employee.id}`}
-              className="w-full text-start rounded-[var(--radius-card)] p-3.5 flex items-center gap-3 ds-pressable"
-              style={{ background: "var(--tone-card)", color: "var(--text-primary)" }}
-            >
-              <div
-                className="size-9 rounded-full flex items-center justify-center text-12 font-bold shrink-0"
-                style={{ background: "var(--surface-2)", color: "var(--text-secondary)" }}
-                aria-hidden
-              >
-                {employee.name ? employee.name.charAt(0) : "?"}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-13 font-bold truncate">{employee.name}</p>
-                <p className="text-11 truncate" style={{ color: "var(--text-secondary)" }}>
-                  {roleLine(employee)}
-                </p>
-              </div>
-              <ChevronRight
-                size={14}
-                className="shrink-0"
-                style={{ color: "var(--text-secondary)" }}
+        {!loading && team.length > 0 && (
+          <ListCard>
+            {team.map((employee) => (
+              <ListRow
+                key={employee.id}
+                tile={
+                  <div
+                    className="size-9 rounded-full flex items-center justify-center text-12 font-bold shrink-0"
+                    style={{ background: "var(--tone-sunken)", color: "var(--text-secondary)" }}
+                    aria-hidden
+                  >
+                    {employee.name ? employee.name.charAt(0) : "?"}
+                  </div>
+                }
+                title={employee.name}
+                meta={roleLine(employee)}
+                trailing={
+                  <ChevronRight size={14} className="shrink-0" style={{ color: "var(--text-secondary)" }} />
+                }
+                onClick={() => navigate(`${base}/settings/hub/people/activity/${employee.id}`)}
+                testId={`employee-activity-${employee.id}`}
               />
-            </button>
-          ))}
+            ))}
+          </ListCard>
+        )}
       </div>
     </div>
   );

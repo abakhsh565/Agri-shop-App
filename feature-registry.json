@@ -275,7 +275,7 @@
         "settings/roles/new",
         "settings/roles/:roleId",
         "settings/hub/people",
-        "settings/hub/people/branches",
+        "settings/hub/people/employees",
         "settings/hub/people/activity",
         "settings/hub/people/activity/:employeeId",
         "employees/requests",
@@ -394,8 +394,8 @@
         },
         {
           "status": "VALID",
-          "proves": "Employees & Access is three connected screens rather than one list of jobs: the directory opens a person, the roles list opens that role's own full-screen editor (name, description, permission checklist, save/update, delete with its consequence), branch assignments group the working team by branch, and the activity picker opens one person's business-only history. Measured in the development build on 2026-10-29: the directory, roles list, role editor with the Sales Manager grants, branch assignments and one employee's business history all rendered from the local stack; Update role completed through update_role and returned to the list; tsc, the i18n/type-scale/list/skeleton/registry guards and the production build passed.",
-          "where": "src/pages/admin/people/AdminPeopleHubPage.tsx, RolesAccessPage.tsx, RoleEditorPage.tsx, AdminBranchAssignmentsPage.tsx, AdminEmployeeActivityDetailPage.tsx, src/lib/auditActions.ts, development preview 2026-10-29"
+          "proves": "Employees & Access is three connected screens rather than one list of jobs: the directory opens a person, the roles list opens that role's own full-screen editor (name, description, permission checklist, save/update, delete with its consequence), and the activity picker opens one person's business-only history. Measured in the development build on 2026-10-29: the directory, roles list, role editor with the Sales Manager grants and one employee's business history all rendered from the local stack; Update role completed through update_role and returned to the list; tsc, the i18n/type-scale/list/skeleton/registry guards and the production build passed.",
+          "where": "src/pages/admin/people/AdminPeopleHubPage.tsx, RolesAccessPage.tsx, RoleEditorPage.tsx, AdminEmployeeActivityDetailPage.tsx, src/lib/auditActions.ts, development preview 2026-10-29"
         }
       ],
       "lastVerified": "2026-10-29",

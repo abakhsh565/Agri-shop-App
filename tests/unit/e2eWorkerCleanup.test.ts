@@ -165,7 +165,11 @@ function fixtureAdoption(source: string): { usesBase: boolean; importsRunner: bo
 }
 
 describe('every E2E spec uses the worker-cleanup fixture', () => {
-  const specs = readdirSync(resolve(process.cwd(), 'tests/e2e')).filter((f) => f.endsWith('.spec.ts'));
+  // `*.local.spec.ts` is deliberately not a hosted-QA lane: it refuses any server that is not the
+  // local development stack and cleans its own controlled identity, so importing `./base` (which
+  // asserts the staging project) would be wrong. The hosted lanes remain covered by the rule.
+  const specs = readdirSync(resolve(process.cwd(), 'tests/e2e'))
+    .filter((f) => f.endsWith('.spec.ts') && !f.endsWith('.local.spec.ts'));
 
   test('the scan sees the suite, so the rules below are not vacuous', () => {
     expect(specs.length, 'no specs found — the scan would pass while checking nothing').toBeGreaterThan(20);

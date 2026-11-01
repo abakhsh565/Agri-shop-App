@@ -666,7 +666,8 @@ export default function CompanyDetailPage() {
 export function SupplierDetailRedirect() {
   const { companyId } = useParams();
   const location = useLocation();
-  return <Navigate to={`/admin/companies/${companyId}`} replace state={location.state} />;
+  const base = useShellBase();
+  return <Navigate to={`${base}/companies/${companyId}`} replace state={location.state} />;
 }
 
 function MenuItem({

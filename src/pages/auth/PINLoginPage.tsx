@@ -13,6 +13,7 @@ import { resumeSession } from "@/lib/auth";
 import { pinAllowedOnThisDevice, rememberLastProfile } from "@/lib/loginWindow";
 import type { User } from "@/types";
 import { useT } from "@/lib/i18n";
+import { homePathForUser } from "@/lib/experience";
 
 /**
  * Single-step PIN login screen.
@@ -134,8 +135,7 @@ export default function PINLoginPage() {
 
   /** Where each kind of account lands once it is in. */
   function destFor(who: User): string {
-    return who.role === "admin"
-      ? "/admin/dashboard" : "/employee/dashboard";
+    return homePathForUser(who);
   }
 
   async function runBiometricUnlock() {

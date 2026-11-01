@@ -9,6 +9,7 @@ import { hasPin } from "@/lib/pinLock";
 import { markPhoneVerified, rememberLastProfile } from "@/lib/loginWindow";
 import { useAuthStore } from "@/stores/authStore";
 import { useT } from "@/lib/i18n";
+import { homePathForUser } from "@/lib/experience";
 import { OTP_RESEND_DELAY_SECONDS, OTP_VALIDITY_SECONDS } from "@/lib/otpPolicy";
 
 // There is deliberately NO cap on tries and NO lockout. A shop owner or their
@@ -128,6 +129,10 @@ export default function OTPVerifyPage() {
       // keypad to draw.
       await markPhoneVerified(result.user.id);
       await rememberLastProfile(result.user);
+      if (result.user.pendingCoOwnerInvitation) {
+        navigate("/co-owner/accept", { replace: true });
+        return;
+      }
       //
       // Where the code lands depends on who this is, which is the difference the flow was
       // missing:
@@ -143,10 +148,7 @@ export default function OTPVerifyPage() {
       // The code itself is identity verification, used once per device: from then on the PIN is
       // the everyday way back in, which is why opening the app does not ask for another one.
       const isBrandNewAccount = !result.user.firstLoginAt;
-      const dest =
-        result.user.role === "admin"
-          ? "/admin/dashboard"
-          : "/employee/dashboard";
+      const dest = homePathForUser(result.user);
       if (!hasPin(result.user.id)) {
         // `returnTo` is what tells PINSetPage this is a like-for-like swap rather than a first
         // PIN: without it a returning user on a new phone was congratulated for creating nothing.

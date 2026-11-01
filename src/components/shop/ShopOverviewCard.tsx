@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useT } from "@/lib/i18n";
 import { useShopStore } from "@/stores/shopStore";
 import { hasPermission } from "@/lib/tenantContext";
+import { useShellBase } from "@/lib/useShellBase";
 
 /**
  * Figures only, no currency prefix (owner's decision, 2026-10-25). The labels already say what
@@ -65,6 +66,7 @@ function formatAmount(n: number) {
 export default function ShopOverviewCard() {
   const t = useT();
   const navigate = useNavigate();
+  const base = useShellBase();
   const activeShopId = useShopStore((s) => s.activeShopId);
   const activeBranchId = useShopStore((s) => s.activeBranchId);
 
@@ -111,7 +113,7 @@ export default function ShopOverviewCard() {
           {hasPermission("employees.view") && hasPermission("employees.manage") && (
             <button
               type="button"
-              onClick={() => navigate("/admin/employees/new")}
+              onClick={() => navigate(`${base}/employees/new`)}
               data-testid="shop-overview-invite"
               className="ds-pressable h-9 px-4 rounded-full text-13 font-semibold shrink-0"
               style={{ background: "var(--tone-card)", color: "var(--text-primary)" }}

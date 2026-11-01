@@ -254,10 +254,10 @@ test.describe('education — welcome, guided tour, app guide', () => {
     await expect(page.locator(CARD)).toHaveCount(0);
     expect(page.url()).toContain('/admin/dashboard');
     await expect(page.locator('[data-tour="home:actions"]')).toBeVisible();
-    // The fifth tab is the account screen (Settings); Messages moved into it, so this checks
-    // the bar still navigates after a tour is skipped rather than that Messages is a tab.
-    await page.locator('[data-tour="tab:admin.settings"]').click();
-    await expect(page).toHaveURL(/\/admin\/settings$/, { timeout: 8000 });
+    // The fifth tab is the business hub (More); this checks the bar still navigates after a
+    // tour is skipped rather than pinning the test to the retired Settings tab.
+    await page.locator('[data-tour="tab:admin.more"]').click();
+    await expect(page).toHaveURL(/\/admin\/more$/, { timeout: 8000 });
   });
 
   test('App guide reopens the tour, and closing it mid-way writes nothing', async ({ page }) => {

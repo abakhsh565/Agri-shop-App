@@ -13,6 +13,7 @@ import { useT } from "@/lib/i18n";
 import { rpcProcessReturn } from "@/lib/db";
 import { AlertTriangle } from "lucide-react";
 import { notifyReturnProcessed } from "@/lib/notifications";
+import { useShellBase } from "@/lib/useShellBase";
 
 interface EditableReturnItem extends ReturnItem {
   editedUnitPrice: number;
@@ -21,6 +22,7 @@ interface EditableReturnItem extends ReturnItem {
 export default function AdminReturnConfirmPage() {
   const { saleId } = useParams();
   const navigate = useNavigate();
+  const base = useShellBase();
   const { state } = useLocation();
   const { addToast } = useUIStore();
   const t = useT();
@@ -111,7 +113,7 @@ export default function AdminReturnConfirmPage() {
       notifyReturnProcessed(sale?.customerName ?? t("common.customer"), rpcResult.totalRefund, saleId ?? "");
       // Done: this attempt's key retires, so the next return is a new return.
       submissionKeyRef.current = null;
-      navigate(`/admin/sales/${saleId}/return/success`, { state: { result }, replace: true });
+      navigate(`${base}/sales/${saleId}/return/success`, { state: { result }, replace: true });
     } catch (e) {
       // The key is KEPT on failure: the return may have been recorded and only the
       // answer lost, so the retry must return that one, not process a second.

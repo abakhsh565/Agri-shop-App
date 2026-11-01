@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { captureDataContext, isDataContextCurrent, whenDataContextConfirmed } from "@/lib/localCache";
 import { supabase } from "@/lib/supabase";
 import { getCurrentTenantId } from "@/lib/tenantContext";
-import type { Role } from "@/types";
+import type { Role, RoleCategory, RoleDataScope, RoleLevel } from "@/types";
 
 interface RoleRow {
   id: string;
@@ -10,8 +10,13 @@ interface RoleRow {
   name: string;
   description: string | null;
   is_system: boolean;
+  department_id: string | null;
+  role_category: RoleCategory | null;
+  responsibility_level: RoleLevel | null;
   created_at: string;
   updated_at: string;
+  /** Embedded by PostgREST through roles.department_id (migration 0250). */
+  departments?: { code: string; name_en: string; name_ur: string } | null;
 }
 
 interface RolesState {
@@ -19,8 +24,41 @@ interface RolesState {
   loading: boolean;
   ready: boolean;
   load: () => Promise<void>;
-  createRole: (input: { name: string; description?: string; permissions: string[] }) => Promise<Role>;
-  updateRole: (roleId: string, input: { name?: string; description?: string; permissions?: string[] }) => Promise<void>;
+  createRole: (input: {
+    name: string;
+    description?: string;
+    permissions: string[];
+    departmentId?: string | null;
+    dataScope?: RoleDataScope;
+    roleCategory?: RoleCategory | null;
+    responsibilityLevel?: RoleLevel | null;
+    dashboards?: string[];
+  }) => Promise<Role>;
+  updateRole: (roleId: string, input: {
+    name?: string;
+    description?: string;
+    permissions?: string[];
+    departmentId?: string | null;
+    dataScope?: RoleDataScope;
+    roleCategory?: RoleCategory | null;
+    responsibilityLevel?: RoleLevel | null;
+    dashboards?: string[];
+  }) => Promise<void>;
+  /**
+   * Everything the role screen opens on: permissions, department and dashboard rows in
+   * one read (migration 0250's `get_role_access`). Reading them separately let the
+   * editor paint one answer while the other was still in flight.
+   */
+  loadRoleAccess: (roleId: string) => Promise<{
+    permissions: string[];
+    dashboards: string[];
+    departmentId: string | null;
+    departmentCode: string | null;
+    dataScope: RoleDataScope;
+    roleCategory: RoleCategory | null;
+    responsibilityLevel: RoleLevel | null;
+    error: string | null;
+  }>;
   deleteRole: (roleId: string) => Promise<void>;
   getRolePermissions: (roleId: string) => Promise<string[]>;
   /**
@@ -89,7 +127,7 @@ export const useRolesStore = create<RolesState>((set, get) => ({
     }
     const { data, error } = await supabase
       .from("roles")
-      .select("*")
+      .select("*, departments(code, name_en, name_ur)")
       .eq("tenant_id", tenantId)
       .order("name");
     if (!isDataContextCurrent(context)) return;
@@ -98,12 +136,18 @@ export const useRolesStore = create<RolesState>((set, get) => ({
       return;
     }
 
-    const roles: Role[] = (data as RoleRow[]).map((r) => ({
+    const roles: Role[] = (data as unknown as RoleRow[]).map((r) => ({
       id: r.id,
       tenantId: r.tenant_id,
       name: r.name,
       description: r.description,
       isSystem: r.is_system,
+      departmentId: r.department_id,
+      departmentCode: r.departments?.code ?? null,
+      roleCategory: r.role_category,
+      responsibilityLevel: r.responsibility_level,
+      departmentName: r.departments?.name_en ?? null,
+      departmentNameUr: r.departments?.name_ur ?? null,
       createdAt: r.created_at,
       updatedAt: r.updated_at,
     }));
@@ -123,7 +167,16 @@ export const useRolesStore = create<RolesState>((set, get) => ({
 
   createRole: async (input) => {
     const { data, error } = await supabase.rpc("create_role", {
-      payload: { name: input.name, description: input.description ?? null, permissions: input.permissions },
+      payload: {
+        name: input.name,
+        description: input.description ?? null,
+        permissions: input.permissions,
+        departmentId: input.departmentId ?? null,
+        dataScope: input.dataScope ?? "business",
+        roleCategory: input.roleCategory ?? "other",
+        responsibilityLevel: input.responsibilityLevel ?? "individual_contributor",
+        ...(input.dashboards !== undefined ? { dashboards: input.dashboards } : {}),
+      },
     });
     if (error) throw new Error(error.message);
     await get().load();
@@ -135,6 +188,11 @@ export const useRolesStore = create<RolesState>((set, get) => ({
     if (input.name !== undefined) payload.name = input.name;
     if (input.description !== undefined) payload.description = input.description;
     if (input.permissions !== undefined) payload.permissions = input.permissions;
+    if (input.departmentId !== undefined) payload.departmentId = input.departmentId;
+    if (input.dataScope !== undefined) payload.dataScope = input.dataScope;
+    if (input.roleCategory !== undefined) payload.roleCategory = input.roleCategory;
+    if (input.responsibilityLevel !== undefined) payload.responsibilityLevel = input.responsibilityLevel;
+    if (input.dashboards !== undefined) payload.dashboards = input.dashboards;
     const { error } = await supabase.rpc("update_role", { payload });
     if (error) throw new Error(error.message);
     await get().load();
@@ -153,6 +211,32 @@ export const useRolesStore = create<RolesState>((set, get) => ({
       .eq("role_id", roleId);
     if (!data) return [];
     return data.map((r: any) => r.permissions?.code).filter(Boolean);
+  },
+
+  loadRoleAccess: async (roleId) => {
+    const { data, error } = await supabase.rpc("get_role_access", { p_role_id: roleId });
+    if (error) {
+      return { permissions: [], dashboards: [], departmentId: null, departmentCode: null, dataScope: "business", roleCategory: null, responsibilityLevel: null, error: error.message };
+    }
+    const row = (data ?? {}) as {
+      permissions?: string[];
+      dashboards?: string[];
+      departmentId?: string | null;
+      departmentCode?: string | null;
+      dataScope?: RoleDataScope;
+      roleCategory?: RoleCategory | null;
+      responsibilityLevel?: RoleLevel | null;
+    };
+    return {
+      permissions: row.permissions ?? [],
+      dashboards: row.dashboards ?? [],
+      departmentId: row.departmentId ?? null,
+      departmentCode: row.departmentCode ?? null,
+      dataScope: row.dataScope ?? "business",
+      roleCategory: row.roleCategory ?? null,
+      responsibilityLevel: row.responsibilityLevel ?? null,
+      error: null,
+    };
   },
 
   loadRolePermissions: async (roleId) => {

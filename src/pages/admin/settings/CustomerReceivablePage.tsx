@@ -16,6 +16,7 @@ import { useCustomersStore } from "@/stores/customersStore";
 import { useAuthStore } from "@/stores/authStore";
 import { useT } from "@/lib/i18n";
 import { useShellBase } from "@/lib/useShellBase";
+import { useReturnTo } from "@/lib/useReturnTo";
 import { formatCurrency } from "@/lib/formatters";
 import { isCreditOverdue } from "@/lib/signalEngine";
 import { reminderWhen, usePaymentReminderBook } from "@/lib/paymentReminders";
@@ -62,6 +63,9 @@ export default function CustomerReceivablePage() {
   const t = useT();
   const navigate = useNavigate();
   const base = useShellBase();
+  // The Reports directory opens this ledger as one of its answers; Settings Overview is the
+  // default parent when the ledger is opened from its usual card.
+  const returnTo = useReturnTo(`${base}/settings/overview`);
   const customers = useCustomersStore((s) => s.customers);
   const ready = useCustomersStore((s) => s.ready);
   const load = useCustomersStore((s) => s.load);
@@ -234,7 +238,7 @@ export default function CustomerReceivablePage() {
       <StatusBar />
       <NavHeader
         title={t("receivable.title")}
-        backTo={`${base}/settings/overview`}
+        backTo={returnTo}
         right={
           <SectionActionsButton
             onClick={() => setMenuOpen(true)}

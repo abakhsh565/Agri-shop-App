@@ -9,6 +9,7 @@ import { useCustomersStore } from "@/stores/customersStore";
 import { formatSmartDateTime, translateNotification } from "@/lib/formatters";
 import { useT } from "@/lib/i18n";
 import { branchKind } from "@/lib/branchKind";
+import { canSeeDashboard, hasPermission } from "@/lib/tenantContext";
 import { generateReminders } from "@/lib/reminderEngine";
 import { useThemeStore } from "@/stores/themeStore";
 import { useCurrentTime } from "@/lib/useCurrentTime";
@@ -18,6 +19,7 @@ import StatusBar from "@/components/ui/StatusBar";
 import ListCard from "@/components/ui/ListCard";
 import ListRow from "@/components/ui/ListRow";
 import { SkeletonList } from "@/components/ui/Skeleton";
+import EmployeePersonaWidgets from "@/components/employee/dashboard/PersonaWidgets";
 
 function initBgColor(name: string | null | undefined) {
   const colors = ["#84cc16","#3b82f6","#8b5cf6","#f59e0b","#06b6d4","#ec4899"];
@@ -113,6 +115,11 @@ export default function DashboardPage() {
   const badgeCount   = unread();
   // Spec EMP-DASH-HOME: today's sales, transactions, customers served, paid/credit.
   const customersServed = new Set(salesToUse.map((s) => s.customerId).filter(Boolean)).size;
+  // Dashboard visibility is a per-role decision, not a side effect of holding a
+  // permission. Both answers must be true: the owner selected the block for the role,
+  // and the employee holds the permission the block needs. The database filters the
+  // same list again, so this is the rendering half of the rule, not the enforcement.
+  const showSales = canSeeDashboard("sales_overview") && hasPermission("sales.view");
 
   async function handleRefresh() {
     await useSalesStore.getState().load();
@@ -272,7 +279,7 @@ export default function DashboardPage() {
       {/* ── Metric card — brand lime ── */}
       {/* `data-tour` anchors for the employee's own tour: the two blocks it teaches.
           Additive attributes only. */}
-      <div className="px-4 animate-fade-in-up" data-tour="home:kpis">
+      {showSales && (<div className="px-4 animate-fade-in-up" data-tour="home:kpis">
         <div
           className="rounded-[var(--radius-card)] p-5 cursor-pointer transition-transform active:scale-[0.98]"
           style={{ background: "var(--brand)" }}
@@ -336,11 +343,11 @@ export default function DashboardPage() {
             </button>
           </div>
         </div>
-      </div>
+      </div>)}
 
 
       {/* ── Today's activity: Transactions · Customers served ── */}
-      <div className="px-4 pt-3 flex gap-2.5 animate-fade-in-up delay-75">
+      {showSales && (<div className="px-4 pt-3 flex gap-2.5 animate-fade-in-up delay-75">
         <div className="flex-1 rounded-[var(--radius-tile)] px-4 py-3" style={{ background: "var(--surface-2)" }}>
           <p className="ds-section-label" style={{ color: "var(--text-secondary)" }}>
             {t("admin.transactions")}
@@ -353,35 +360,39 @@ export default function DashboardPage() {
           </p>
           <p className="text-18 font-bold mt-0.5" style={{ color: "var(--text-primary)" }}>{customersServed}</p>
         </div>
-      </div>
+      </div>)}
+
+      {/* The persona blocks come before the quick actions for a non-sales workspace, so a
+          finance or stock role opens on its own numbers instead of on a sales-shaped page. */}
+      {!showSales && <EmployeePersonaWidgets salesOverviewVisible={false} />}
 
       {/* ── Quick Actions ── */}
-      <div className="px-4 pt-4 animate-fade-in-up delay-75" data-tour="home:actions">
+      {(hasPermission("sales.create") || hasPermission("customers.payments")) && (<div className="px-4 pt-4 animate-fade-in-up delay-75" data-tour="home:actions">
         <p className="ds-section-label mb-3" style={{ color: "var(--text-secondary)" }}>
           {t("dashboard.quickActions")}
         </p>
         <div className="flex gap-3">
-          <button
+          {hasPermission("sales.create") && (<button
             onClick={() => navigate("/employee/sale")}
             className="flex-1 h-12 rounded-full font-bold text-14 flex items-center justify-center gap-2 transition-transform active:scale-[0.97]"
             style={{ background: "var(--brand)", color: "#0a0a0a" }}
           >
             <ShoppingCart size={15} strokeWidth={2.5} />
             {t("dashboard.newSale")}
-          </button>
-          <button
+          </button>)}
+          {hasPermission("customers.payments") && (<button
             onClick={() => navigate("/employee/customers")}
             className="flex-1 h-12 rounded-full font-bold text-14 flex items-center justify-center gap-2 transition-transform active:scale-[0.97]"
             style={{ border: "1.5px solid var(--divider)", color: "var(--text-primary)", background: "transparent" }}
           >
             <CreditCard size={15} strokeWidth={2} />
             {t("dashboard.recordPayment")}
-          </button>
+          </button>)}
         </div>
-      </div>
+      </div>)}
 
       {/* ── Recent Sales ── */}
-      <div className="px-4 pt-5 pb-4 animate-fade-in-up delay-150">
+      {showSales && (<div className="px-4 pt-5 pb-4 animate-fade-in-up delay-150">
         <p className="ds-section-label mb-3" style={{ color: "var(--text-secondary)" }}>
           {t("dashboard.recentSales")}
         </p>
@@ -432,7 +443,9 @@ export default function DashboardPage() {
             );
           })}
         </ListCard>
-      </div>
+      </div>)}
+
+      {showSales && <EmployeePersonaWidgets salesOverviewVisible />}
     </div>
     </PullToRefresh>
   );

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { BarChart3, Building2, ChevronRight, Download, History, Package, Share2, TrendingUp, Users } from "lucide-react";
+import { BarChart3, Building2, ChevronRight, Download, FileText, History, Package, Share2, TrendingUp, Users } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import SectionActionsSheet, { SectionActionsButton } from "@/components/ui/SectionActionsSheet";
 import { csvFileName, exportCsv, exportText, toCsv } from "@/lib/exportData";
@@ -10,6 +10,7 @@ import NavHeader from "@/components/ui/NavHeader";
 import ListRow from "@/components/ui/ListRow";
 import { useT } from "@/lib/i18n";
 import { useShellBase } from "@/lib/useShellBase";
+import { useReturnTo } from "@/lib/useReturnTo";
 import { hasPermission } from "@/lib/tenantContext";
 import { hubSection } from "@/lib/settingsHub";
 import { useBranchPeriodReport } from "@/lib/branchReports";
@@ -43,7 +44,8 @@ import { pkToday } from "@/lib/pkDate";
  *
  * EVERY ROW OPENS A SCREEN THAT EXISTS:
  *
- *   Sales     → the branch's sales report (net, returns, trend, branch split)
+ *   Sales     → the sales section hub
+ *   Detailed  → the long-form sales report at `/reports`
  *   Profit    → the profit report, on the app's one profit calculation
  *   Customers → the credit ledger: balances, limits, overdue
  *   Suppliers → the payable ledger: how much of what was bought is still owed
@@ -65,6 +67,7 @@ interface RowMeta {
 
 const ROW_META: Record<string, RowMeta> = {
   sales: { icon: BarChart3, permission: "sales.view" },
+  detailed: { icon: FileText, permission: "reports.view" },
   profit: { icon: TrendingUp, permission: "reports.view" },
   customers: { icon: Users, permission: "customers.view" },
   suppliers: { icon: Building2, permission: "companies.view" },
@@ -84,6 +87,7 @@ export default function AdminReportsHubPage() {
   const t = useT();
   const base = useShellBase();
   const navigate = useNavigate();
+  const backTo = useReturnTo(`${base}/more`);
 
   const customers = useCustomersStore((s) => s.customers);
   const customersReady = useCustomersStore((s) => s.ready);
@@ -212,7 +216,7 @@ export default function AdminReportsHubPage() {
       <StatusBar />
       <NavHeader
         title={t("settings.menu.reports")}
-        backTo={`${base}/settings`}
+        backTo={backTo}
         right={<SectionActionsButton onClick={() => setMenuOpen(true)} label={t("data.export")} testId="reports-actions" />}
       />
 
@@ -236,7 +240,7 @@ export default function AdminReportsHubPage() {
               icon={row.icon}
               onClick={() =>
                 navigate(`${base}${row.to}`, {
-                  state: { from: `${base}/settings/hub/reports` },
+                  state: { from: `${base}/reports/directory` },
                 })
               }
               trailing={

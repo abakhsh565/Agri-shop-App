@@ -20,6 +20,7 @@ import { summariseSales, profitDisplay } from "@/lib/profit";
 import { summariseMoneyIn, loadCreditPayments, type CreditPaymentRow } from "@/lib/money";
 import { useT } from "@/lib/i18n";
 import { branchContextLabel } from "@/lib/branchContext";
+import { canSeeDashboard } from "@/lib/tenantContext";
 import { branchKind } from "@/lib/branchKind";
 import { AlertTriangle, TrendingUp, ChevronRight, ChevronDown, TrendingDown, ShoppingCart, Search, Bell, Wallet, CheckCircle2, HandCoins, PackagePlus, Store } from "lucide-react";
 import StatusBar from "@/components/ui/StatusBar";
@@ -451,7 +452,10 @@ export default function AdminDashboardPage() {
           >
             {/* Header — clickable → full notifications page */}
             <button
-              onClick={() => { navigate("/admin/notifications"); setShowNotifs(false); }}
+              onClick={() => {
+                navigate("/admin/notifications", { state: { from: "/admin/dashboard" } });
+                setShowNotifs(false);
+              }}
               className="px-4 py-3 flex items-center justify-between shrink-0 w-full active:opacity-70 transition-opacity"
               style={{ borderBottom: "1px solid var(--divider)" }}
             >
@@ -578,6 +582,10 @@ export default function AdminDashboardPage() {
           follows it on a shop that cannot trade yet, and is absent once the shop is set up. ── */}
       {/* `data-tour` anchors: the guided tour rings these two real blocks. Additive
           attributes only — nothing here looks or behaves differently because of them. */}
+      {/* Visibility is a per-role decision (migration 0250), not a side effect of holding
+          `sales.view`: a role can be shown the shop's takings without being able to void a
+          sale. An owner, and an account whose visibility has not been read yet, see it. */}
+      {canSeeDashboard("sales_overview") && (
       <div className="px-4 pt-3 animate-fade-in-up" data-tour="home:kpis">
         <button
           className="w-full rounded-[var(--radius-card)] p-5 text-start transition-transform active:scale-[0.98]"
@@ -629,6 +637,7 @@ export default function AdminDashboardPage() {
           </div>
         </button>
       </div>
+      )}
 
       {/* ── First-run guidance, directly under the sale card.
           On a shop that cannot trade yet this is what to do next, so it follows the figures
@@ -638,6 +647,7 @@ export default function AdminDashboardPage() {
       <SetupChecklist testId="setup-next-step" className="px-4 pt-4 animate-fade-in-up" />
 
       {/* ── Summary: Action needed · Follow-ups · Out of stock ── */}
+      {canSeeDashboard("quick_alerts") && (
       <div className="px-4 pt-4 flex gap-2 animate-fade-in-up">
         <button onClick={() => navigate('/admin/alerts/reminders', { state: { tab: 'action', subTab: 'critical' } })} className="flex-1 flex items-center gap-2.5 py-2.5 px-3 rounded-[var(--radius-tile)] active:opacity-70 transition-opacity" style={{ background: "var(--tone-card)" }}>
           <p className="text-16 font-bold" style={{ color: (highRiskCount + creditLimitReached) > 0 ? "var(--error)" : "var(--text-secondary)" }}>{highRiskCount + creditLimitReached}</p>
@@ -652,6 +662,7 @@ export default function AdminDashboardPage() {
           <p className="text-10 font-medium leading-tight" style={{ color: "var(--text-secondary)" }}>{t("signal.detailOutOfStock")}</p>
         </button>
       </div>
+      )}
 
       {/* ── Quick Actions ──
           One glyph, one word, one surface. The three actions used to be flat outlined boxes
@@ -684,6 +695,7 @@ export default function AdminDashboardPage() {
 
       {/* ── Quick Alerts: 3 summary rows with premium card design ── */}
       {(() => {
+        if (!canSeeDashboard("quick_alerts")) return null;
         const criticalCount = totalPayable > 0 ? 1 : 0;
         const followupCount = dueReminderCount + delayedCount;
         let harvestDays: number | null = null;
@@ -793,7 +805,7 @@ export default function AdminDashboardPage() {
       })()}
 
       {/* ── Employee Performance ── */}
-      {empStats.length > 0 && (
+      {canSeeDashboard("team_performance") && empStats.length > 0 && (
         <div className="px-4 pt-5">
           <p className="ds-section-label mb-3" style={{ color: "var(--text-secondary)" }}>
             {t("admin.employeePerformance")}
@@ -834,7 +846,7 @@ export default function AdminDashboardPage() {
           <SkeletonList rows={3} tile />
         </div>
       )}
-      {listsReady && recentSales.length > 0 && (
+      {canSeeDashboard("sales_overview") && listsReady && recentSales.length > 0 && (
         <div className="px-4 pt-5 pb-6">
           <div className="flex items-center justify-between mb-3">
             <p className="ds-section-label" style={{ color: "var(--text-secondary)" }}>

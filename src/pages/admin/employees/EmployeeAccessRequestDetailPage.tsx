@@ -15,6 +15,7 @@ import { useThemeStore } from "@/stores/themeStore";
 import { useUIStore } from "@/stores/uiStore";
 import { useCurrentTime } from "@/lib/useCurrentTime";
 import { formatPhone, formatSmartDateTime } from "@/lib/formatters";
+import { useShellBase } from "@/lib/useShellBase";
 import {
   dismissEmployeeAccessRequest,
   getEmployeeAccessRequest,
@@ -29,6 +30,7 @@ import {
 export default function EmployeeAccessRequestDetailPage() {
   const t = useT();
   const navigate = useNavigate();
+  const base = useShellBase();
   const { requestId } = useParams<{ requestId: string }>();
   const { language } = useThemeStore();
   const isUrdu = language === "ur";
@@ -75,7 +77,7 @@ export default function EmployeeAccessRequestDetailPage() {
     if (!request) return;
     const query = new URLSearchParams({ phone: request.phone, request: request.id });
     if (request.name) query.set("name", request.name);
-    navigate(`/admin/employees/new?${query.toString()}`);
+    navigate(`${base}/employees/new?${query.toString()}`);
   }
 
   const name = request?.name || t("accessRequests.unknownName");
@@ -89,7 +91,7 @@ export default function EmployeeAccessRequestDetailPage() {
       style={{ background: "var(--background)", direction: isUrdu ? "rtl" : "ltr" }}
     >
       <StatusBar />
-      <NavHeader title={t("accessRequests.detailTitle")} backTo="/admin/employees/requests" />
+      <NavHeader title={t("accessRequests.detailTitle")} backTo={`${base}/employees/requests`} />
 
       <div className="flex flex-col gap-4 px-4 pb-24">
         {state === "loading" && <SkeletonList rows={3} tile />}
@@ -108,9 +110,9 @@ export default function EmployeeAccessRequestDetailPage() {
             <div className="flex flex-col items-center text-center gap-2 pt-3">
               <div
                 className="size-14 rounded-full flex items-center justify-center"
-                style={{ background: "var(--brand-light)" }}
+                style={{ background: "var(--tone-sunken)" }}
               >
-                <UserPlus size={24} style={{ color: "var(--brand-dark)" }} />
+                <UserPlus size={24} style={{ color: "var(--text-primary)" }} />
               </div>
               <p className="text-xl font-bold" style={{ color: "var(--text-primary)" }}>{name}</p>
               <p className="text-sm" style={{ color: "var(--text-secondary)" }}>{formatPhone(request.phone)}</p>
@@ -147,7 +149,7 @@ export default function EmployeeAccessRequestDetailPage() {
               <ListRow
                 trailing={<span className="text-sm font-semibold text-end" style={{ color: "var(--text-primary)" }}>{formatSmartDateTime(request.createdAt, now, t)}</span>}
               >
-                <span className="text-sm" style={{ color: "var(--text-secondary)" }}>{t("accessRequests.status")}</span>
+                <span className="text-sm" style={{ color: "var(--text-secondary)" }}>{t("accessRequests.requestedAtLabel")}</span>
               </ListRow>
             </ListCard>
 
@@ -169,7 +171,8 @@ export default function EmployeeAccessRequestDetailPage() {
                   <Button
                     fullWidth
                     size="lg"
-                    onClick={() => navigate(`/admin/employees/${request.employeeId}`)}
+                    variant="cta"
+                    onClick={() => navigate(`${base}/employees/${request.employeeId}`)}
                     testId="access-request-open-employee"
                   >
                     {t("accessRequests.openEmployee")}
@@ -178,6 +181,7 @@ export default function EmployeeAccessRequestDetailPage() {
                   <Button
                     fullWidth
                     size="lg"
+                    variant="cta"
                     onClick={openAddEmployee}
                     testId="access-request-add-employee"
                   >
@@ -198,7 +202,7 @@ export default function EmployeeAccessRequestDetailPage() {
             {!isPending && request.employeeId && (
               <button
                 type="button"
-                onClick={() => navigate(`/admin/employees/${request.employeeId}`)}
+                onClick={() => navigate(`${base}/employees/${request.employeeId}`)}
                 className="flex items-center justify-between rounded-[var(--radius-tile)] px-4 py-3 ds-pressable"
                 style={{ background: "var(--surface)", border: "1px solid var(--divider)" }}
               >

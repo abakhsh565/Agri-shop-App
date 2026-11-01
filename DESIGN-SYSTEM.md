@@ -166,6 +166,11 @@ Three tokens exist because the deleted shims encoded an intent that no token nam
 | `--caption` | `var(--text-secondary)` | `var(--text-tertiary)` | hint/caption text. The two greys were never aligned, so one class cannot mean both |
 | `--border-control` | `#d7d5cc` | `#3a3a34` | a field's visible edge, as opposed to the near-invisible in-card hairline |
 
+`--cta` / `--cta-fg` is a fourth, separate intent: the owner's **quiet dark action** on the
+people screens (Figma 2081-921, 2087-1765). Light fills it `#1a1a1a`, dark `#1f1f1e`, so the
+primary action is a step above the page instead of the brand green. Reach it through
+`Button variant="cta"`; never hand-paint a button in a screen.
+
 `bg-white` and `text-white` are now Tailwind's real literals, and may be used where literal
 white *is* the intent (a barcode plate that has to scan, a switch knob, white type on a red
 badge) — the layer no longer silently re-tones them.

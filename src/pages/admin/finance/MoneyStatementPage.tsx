@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   ArrowDownLeft,
   ArrowUpRight,
@@ -85,6 +85,9 @@ export default function MoneyStatementPage() {
   const language = useThemeStore((s) => s.language);
   const role = useAuthStore((s) => s.user?.membershipRole);
   const isOwner = role === "owner";
+  // More is the parent hub on the employee and Co-Owner shells; only the owner shell keeps
+  // the Finance section as its parent.
+  const parent = base === "/admin" ? `${base}/settings/hub/finance` : `${base}/more`;
   const { addToast } = useUIStore();
 
   const day = pkToday();
@@ -94,8 +97,15 @@ export default function MoneyStatementPage() {
     return d.toISOString().slice(0, 10);
   }, [day]);
 
-  const [period, setPeriod] = useState<BalancePeriod>("month");
-  const [custom, setCustom] = useState({ from: "", to: "" });
+  // The Finance hub can link here for the month it is showing. Without this, "View statement"
+  // opened the current month and disagreed with the figures that sent the reader here.
+  const [searchParams] = useSearchParams();
+  const linkedFrom = searchParams.get("from") ?? "";
+  const linkedTo = searchParams.get("to") ?? "";
+  const hasLinkedPeriod =
+    /^\d{4}-\d{2}-\d{2}$/.test(linkedFrom) && /^\d{4}-\d{2}-\d{2}$/.test(linkedTo);
+  const [period, setPeriod] = useState<BalancePeriod>(hasLinkedPeriod ? "custom" : "month");
+  const [custom, setCustom] = useState({ from: hasLinkedPeriod ? linkedFrom : "", to: hasLinkedPeriod ? linkedTo : "" });
   const [periodOpen, setPeriodOpen] = useState(false);
   const [filter, setFilter] = useState<Filter>("all");
   const [search, setSearch] = useState("");
@@ -312,7 +322,7 @@ export default function MoneyStatementPage() {
       <StatusBar />
       <NavHeader
         title={t("money.title")}
-        backTo={`${base}/settings/hub/finance`}
+        backTo={parent}
         right={
           <div className="flex items-center gap-1">
             <button

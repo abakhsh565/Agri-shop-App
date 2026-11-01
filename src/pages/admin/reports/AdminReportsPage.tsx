@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
 import DateField from "@/components/ui/DateField";
@@ -8,11 +9,13 @@ import { useSalesStore } from "@/stores/salesStore";
 import { useProductsStore } from "@/stores/productsStore";
 import { useCustomersStore } from "@/stores/customersStore";
 import { useCompaniesStore } from "@/stores/companiesStore";
-import { AlertTriangle, Calendar, BarChart3 } from "lucide-react";
+import { AlertTriangle, Calendar, BarChart3, LayoutGrid } from "lucide-react";
 import { pkToday } from "@/lib/pkDate";
 import { summariseSales, profitDisplay } from "@/lib/profit";
 import { summariseMoneyIn, loadCreditPayments, type CreditPaymentRow } from "@/lib/money";
 import { useT } from "@/lib/i18n";
+import { useShellBase } from "@/lib/useShellBase";
+import { useReturnTo } from "@/lib/useReturnTo";
 import ListCard from "@/components/ui/ListCard";
 import ListRow from "@/components/ui/ListRow";
 import { SkeletonList } from "@/components/ui/Skeleton";
@@ -104,6 +107,11 @@ function buildBuckets(
 
 export default function AdminReportsPage() {
   const t = useT();
+  const navigate = useNavigate();
+  const base = useShellBase();
+  // The long-form report is a drill-down from the Reports directory, whether it was reached
+  // from the directory or by a direct link/reload that has no navigation history behind it.
+  const returnTo = useReturnTo(`${base}/reports/directory`);
   const { language } = useThemeStore();
   const isUrdu = language === "ur";
   const [period, setPeriod] = useState<Period>("month");
@@ -256,7 +264,26 @@ export default function AdminReportsPage() {
       style={{ background: "var(--background)", direction: isUrdu ? "rtl" : "ltr" }}
     >
       <StatusBar />
-      <NavHeader title={t("admin.reports")} />
+      <NavHeader
+        title={t("admin.reports")}
+        backTo={returnTo}
+        right={
+          base === "/admin" ? (
+            <button
+              type="button"
+              onClick={() =>
+                navigate(`${base}/reports/directory`, { state: { from: `${base}/reports` } })
+              }
+              aria-label={t("reports.directory")}
+              data-testid="reports-directory"
+              className="flex items-center justify-center size-11 rounded-full active:opacity-60"
+              style={{ color: "var(--text-primary)" }}
+            >
+              <LayoutGrid size={18} />
+            </button>
+          ) : undefined
+        }
+      />
 
       {/* Period filter — horizontal scroll */}
       <div

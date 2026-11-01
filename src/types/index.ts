@@ -164,6 +164,32 @@ export interface Membership {
 
 export type MembershipRole = 'owner' | 'admin' | 'employee';
 export type MembershipStatus = 'active' | 'suspended' | 'pending';
+/**
+ * The business experience the server resolved for the active business.
+ *
+ * A Co-Owner is deliberately NOT a MembershipRole: the database keeps
+ * memberships.role = 'employee' so the legacy users.role = 'admin' policies are
+ * never opened. The delegated authority lives in co_owner_grants and is resolved
+ * by get_my_access_context().
+ */
+export type Experience = 'owner' | 'co_owner' | 'employee';
+
+export interface PendingCoOwnerInvitation {
+  grantId: string;
+  status: string;
+  businessName: string;
+  invitedAt: string;
+  expiresAt: string | null;
+  invitedBy: string | null;
+  tenantId: string;
+  canInviteEmployees: boolean;
+  canDeactivateEmployees: boolean;
+  canManageBranches: boolean;
+  branches: Array<{ id: string; name: string }>;
+  permissions: Array<{ code: string; module: string; labelEn: string; labelUr: string }>;
+  dashboards: Array<{ key: string; labelEn: string; labelUr: string }>;
+  authorities: Array<{ code: string; module: string; labelEn: string; labelUr: string; mode: string }>;
+}
 
 // ── RBAC Permissions ─────────────────────────────────────────────────────────
 export interface Permission {
@@ -194,12 +220,56 @@ export type PermissionCode =
   | 'alerts.view' | 'alerts.manage';
 
 // ── RBAC Roles & Business Areas ──────────────────────────────────────────────
+/**
+ * The wireframe's "Data visibility" answer, stored on the role as a default.
+ *
+ * It is a template, not the enforcement: what a person may actually open is decided by
+ * their own branch scope and per-branch role. The invite screen pre-selects from this.
+ */
+export type RoleDataScope = "business" | "branches" | "department" | "records";
+
+/**
+ * How the work is classified. This is deliberately separate from `departmentId`: a
+ * department is the shop's own org unit, while the category is the system's stable
+ * recommendation grouping. Neither one grants anything.
+ */
+export type RoleCategory =
+  | "sales"
+  | "finance"
+  | "inventory"
+  | "procurement"
+  | "people_hr"
+  | "operations"
+  | "business_management"
+  | "other";
+
+export type RoleLevel =
+  | "individual_contributor"
+  | "supervisor"
+  | "manager"
+  | "department_head";
+
 export interface Role {
   id: string;
   tenantId: string;
   name: string;
   description: string | null;
   isSystem: boolean;
+  /**
+   * The department this role belongs to (migration 0250). The code is one of the
+   * business's own department codes; the names are read with the role so a list can
+   * say "Sales" without one query per row.
+   */
+  departmentId?: string | null;
+  departmentCode?: string | null;
+  departmentName?: string | null;
+  departmentNameUr?: string | null;
+  /** Default data visibility for the people this role is assigned to. */
+  dataScope?: RoleDataScope;
+  /** System classification used only for recommendations and grouping. */
+  roleCategory?: RoleCategory | null;
+  /** Organisational level; only used for recommendations, never as authority. */
+  responsibilityLevel?: RoleLevel | null;
   createdAt: string;
   updatedAt: string;
   // Computed from joins
@@ -216,6 +286,39 @@ export interface BusinessArea {
   nameUr: string;
   sortOrder: number;
   isActive: boolean;
+}
+
+/**
+ * One part of the business a role can belong to (migration 0250).
+ *
+ * The five a business starts with — Sales, Finance, Inventory, Operations, Management —
+ * are `isSystem`; an owner-added department is not. A role is filed under one, which is
+ * what lets the app say "the sales people" without guessing from the role's name.
+ */
+export interface Department {
+  id: string;
+  tenantId: string;
+  code: string;
+  nameEn: string;
+  nameUr: string;
+  sortOrder: number;
+  isSystem: boolean;
+}
+
+/**
+ * One dashboard block the app can draw, and the permission that shows it by default.
+ *
+ * Visibility is a separate question from the permission to act, which is why this is a
+ * catalogue of its own rather than a derived view over `permissions`.
+ */
+export interface DashboardWidget {
+  key: string;
+  module: string;
+  labelEn: string;
+  labelUr: string;
+  sortOrder: number;
+  /** The real permission that must also be held before this block is visible. */
+  defaultPermission: string | null;
 }
 
 export interface User {
@@ -238,8 +341,18 @@ export interface User {
   tenantId?: string;   // current active tenant
   membershipId?: string;
   membershipRole?: MembershipRole;  // owner/admin/employee via membership
+  /** Server-resolved business experience (owner / co_owner / employee). */
+  experience?: Experience;
+  /** Active delegation id when experience is co_owner. */
+  coOwnerGrantId?: string | null;
+  /** A pending Co-Owner grant that still needs explicit acceptance. */
+  pendingCoOwnerInvitation?: PendingCoOwnerInvitation | null;
+  /** Active business name resolved with the access context. */
+  businessName?: string | null;
   membershipStatus?: MembershipStatus;
   permissions?: string[];  // granted permission codes (owner gets all implicitly)
+  /** Dashboard widget keys this account may be shown (migration 0250). */
+  dashboards?: string[];
   branchScope?: string[] | null;
   /**
    * The membership's default role, by name. Read with the team so a directory can say what a

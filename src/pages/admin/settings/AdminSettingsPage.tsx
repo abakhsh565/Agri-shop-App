@@ -315,32 +315,14 @@ export default function AdminSettingsPage() {
       id: "business",
       heading: t("settings.menuGroup.business"),
       rows: [
-        { id: "home", icon: Gauge, label: t("settings.menu.home"), hint: t("settings.menu.home.hint"), to: "/dashboard" },
         { id: "overview", icon: TrendingUp, label: t("settings.menu.overview"), hint: t("settings.menu.overview.hint"), to: "/settings/hub/overview" },
         { id: "branches", icon: GitBranch, label: t("settings.menu.branches"), hint: t("settings.menu.branches.hint"), to: "/settings/hub/branches" },
+        { id: "business-profile", icon: Building2, label: t("settings.menu.businessProfile"), hint: t("settings.menu.businessProfile.hint"), to: "/settings/business" },
       ],
     },
-    // The section groups are a view of the one catalogue (`lib/settingsHub`), so a section
-    // added to the hub appears here without a second edit, and one removed from the catalogue
-    // cannot linger on this menu. A catalogue id with no presentation entry is dropped rather
-    // than rendered half-built, which is the one failure the catalogue cannot see by itself.
-    ...SECTION_GROUPS.map((group) => ({
-      id: group.id,
-      heading: t(group.headingKey),
-      rows: group.sectionIds.flatMap((sectionId): MenuRow[] => {
-        const section = HUB_SECTIONS.find((candidate) => candidate.id === sectionId);
-        const look = SECTION_PRESENTATION[sectionId];
-        if (!section || !look) return [];
-        return [{
-          id: section.id,
-          icon: look.icon,
-          label: t(section.titleKey),
-          hint: t(look.hintKey),
-          anchor: look.anchor,
-          to: `/settings/hub/${section.id}`,
-        }];
-      }),
-    })),
+    // Settings is not the business's table of contents. Sales, stock, money, people and reports
+    // are doors in More; what remains here is configuration and this account's own state. The
+    // business group above is deliberately short for the same reason.
   ];
 
   return (
@@ -419,29 +401,8 @@ export default function AdminSettingsPage() {
             this page's own section markup, so it reads as one of the existing sections. */}
         <SetupProgress className="px-4 pt-3.5 animate-fade-in-up delay-75" />
 
-        {/* The inbox.
-            Messages was the bar's fifth tab for a while, and the bar's fifth slot is the owner's
-            menu again — so the inbox ships here, one row away from the screen that already
-            answers "what is in this account". Its own card rather than a row inside the
-            preferences below: an unread conversation is not a device setting, and putting it
-            between "Language" and "Dark Mode" would have said it was. */}
-        <div className="px-4 pt-3.5 animate-fade-in-up delay-100">
-          <ListCard>
-            <ListRow
-              onClick={() => navigate(`${base}/messages`)}
-              icon={MessageSquare}
-              title={t("admin.messages")}
-              testId="settings-messages"
-              trailing={<ChevronRight size={14} style={{ color: "var(--text-secondary)" }} className="shrink-0" />}
-            />
-          </ListCard>
-        </div>
-
-        {/* There is no second menu any more. Every part of the business opens from the four
-            groups above, and the fifth tab opens this screen rather than a suite of its own, so
-            the rows that used to be *moved* between two menus have nowhere else to live. The
-            three that are not sections — notifications, the activity log and the guide — sit
-            with the phone's preferences below, which is where a reader looks for them. */}
+        {/* Conversations, alerts and the activity log are work, not configuration. They live
+            in More now; this page keeps only the shop's own configuration and this phone. */}
 
         {/* The phone and the person: comfort first, and no heading anywhere on this block.
             A heading earns its place only when a row could otherwise be misread; "Language"
@@ -520,27 +481,6 @@ export default function AdminSettingsPage() {
                 anything: everything that is *work* — people, stock, roles, crops — opens from
                 the four section groups above. These three are destinations rather than parts
                 of the business, so they sit with the phone's preferences. */}
-            <ListRow
-              anchor="settings:notifications"
-              onClick={() => navigate(`${base}/notifications`)}
-              icon={Bell}
-              title={t("settings.notifications")}
-              trailing={<ChevronRight size={14} style={{ color: "var(--text-secondary)" }} className="shrink-0" />}
-            />
-            <ListRow
-              anchor="settings:activity"
-              onClick={() => navigate(`${base}/activity`)}
-              icon={ClipboardList}
-              title={t("settings.activityLog")}
-              trailing={<ChevronRight size={14} style={{ color: "var(--text-secondary)" }} className="shrink-0" />}
-            />
-            <ListRow
-              anchor="settings:guide"
-              onClick={() => navigate(`${base}/guide`)}
-              icon={Compass}
-              title={t("edu.guide.title")}
-              trailing={<ChevronRight size={14} style={{ color: "var(--text-secondary)" }} className="shrink-0" />}
-            />
             {/* When the shop is warned about low stock, and how loudly. The number this
                 sets is the one a new product starts at; a product that has been given its
                 own number on the product form keeps it. */}

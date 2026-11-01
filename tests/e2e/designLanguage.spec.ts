@@ -37,9 +37,8 @@ const CUSTOMER_A = '20000000-0000-0000-0000-000000000001';
 const SCREENS = [
   { name: 'Products list', path: '/admin/products' },
   { name: 'Employees list', path: '/admin/employees' },
-  // The fifth tab is the account screen now: `/admin/more` is the retired address and
-  // redirects here, so the screen that answers it is Settings, not a menu of its own.
-  { name: 'Retired More address', path: '/admin/more' },
+  // The fifth tab is the business hub now, and `/admin/more` is its canonical address.
+  { name: 'More', path: '/admin/more' },
   { name: 'Settings', path: '/admin/settings' },
 ];
 

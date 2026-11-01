@@ -79,8 +79,8 @@ export default function InviteLinkCard({ name, phone }: { name: string; phone: s
 
   return (
     <div
-      className="rounded-[var(--radius-tile)] overflow-hidden"
-      style={{ background: "var(--surface)", border: "1px solid var(--divider)", direction: isUrdu ? "rtl" : "ltr" }}
+      className="rounded-[var(--radius-card)] overflow-hidden"
+      style={{ background: "var(--tone-card)", direction: isUrdu ? "rtl" : "ltr" }}
     >
       <div className="px-4 pt-4 pb-3">
         <p className="ds-section-label" style={{ color: "var(--text-secondary)" }}>
@@ -170,7 +170,7 @@ export default function InviteLinkCard({ name, phone }: { name: string; phone: s
           target="_blank"
           rel="noopener noreferrer"
           className="h-10 px-4 rounded-full text-xs font-bold flex items-center gap-2"
-          style={{ background: "var(--brand)", color: "#0a0a0a" }}
+          style={{ background: "var(--cta)", color: "var(--cta-fg)" }}
           data-testid="invite-whatsapp"
         >
           <MessageCircle size={14} />

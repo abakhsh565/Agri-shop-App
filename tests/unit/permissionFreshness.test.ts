@@ -38,7 +38,9 @@ describe('Permission freshness on an open device', () => {
     // The refusal must sit before the write. A guard that wrote an empty answer on a failed
     // call would revoke every permission the moment the device went offline.
     const refusal = store.indexOf('if (error || !Array.isArray(data)) return;');
-    const write = store.indexOf('set({ user: { ...user, permissions: next } })');
+    // The write also carries dashboards, experience and grant id; the property
+    // being guarded is that the permission assignment happens after the refusal.
+    const write = store.indexOf('permissions: next', refusal);
     expect(refusal).toBeGreaterThan(-1);
     expect(write).toBeGreaterThan(-1);
     expect(

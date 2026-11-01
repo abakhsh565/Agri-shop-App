@@ -11,6 +11,7 @@ import { savePin } from "@/lib/pinLock";
 import { useAuthStore } from "@/stores/authStore";
 import type { User } from "@/types";
 import { useT } from "@/lib/i18n";
+import { homePathForUser } from "@/lib/experience";
 
 type Step = "phone" | "otp" | "pin" | "confirm";
 
@@ -144,8 +145,7 @@ export default function ForgotPINPage() {
         }
       }
       setPendingFlow(null);
-      const dest = activeUser?.role === "admin"
-        ? "/admin/dashboard" : "/employee/dashboard";
+      const dest = activeUser ? homePathForUser(activeUser) : "/login";
       navigate(dest, { replace: true });
     }
   }

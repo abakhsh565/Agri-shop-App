@@ -66,7 +66,7 @@ export default function AdminProfitReportPage() {
   const base = useShellBase();
   const navigate = useNavigate();
   // The Reports hub is this screen's parent, and the hub passes itself when it opens the tile.
-  const returnTo = useReturnTo(`${base}/settings/hub/reports`);
+  const returnTo = useReturnTo(base === "/admin" ? `${base}/reports/directory` : `${base}/reports`);
 
   const sales = useSalesStore((s) => s.sales);
   const salesReady = useSalesStore((s) => s.ready);

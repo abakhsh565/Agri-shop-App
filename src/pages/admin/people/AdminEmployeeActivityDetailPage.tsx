@@ -161,17 +161,13 @@ export default function AdminEmployeeActivityDetailPage() {
       />
 
       <div className="px-4 pt-1 pb-3">
-        {roleLine && (
-          <p className="text-12 font-semibold">{roleLine}</p>
-        )}
+        <p className="text-12 font-semibold">
+          {roleLine}
+          {branchName ? ` · ${branchName}` : ""}
+        </p>
         <p className="text-11 mt-0.5" style={{ color: "var(--text-secondary)" }}>
           {t("people.businessOnlyHint")}
         </p>
-        {branchName && (
-          <p className="text-10 mt-1" style={{ color: "var(--text-tertiary)" }}>
-            {branchName}
-          </p>
-        )}
       </div>
 
       <div className="px-4 pb-10">
@@ -204,11 +200,8 @@ export default function AdminEmployeeActivityDetailPage() {
                 <ListRow
                   key={event.id}
                   testId={`employee-activity-event-${event.id}`}
-                  icon={History}
                   title={labelKey ? t(labelKey) : t("audit.otherAction")}
-                  meta={`${formatDateTime(event.created_at)}${
-                    event.branch_name ? ` · ${event.branch_name}` : ""
-                  }`}
+                  meta={formatDateTime(event.created_at)}
                 />
               );
             })}

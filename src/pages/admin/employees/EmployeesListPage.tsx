@@ -14,6 +14,7 @@ import { Plus, ChevronRight, Users, UserPlus } from "lucide-react";
 import ListCard from "@/components/ui/ListCard";
 import ListRow from "@/components/ui/ListRow";
 import { SkeletonList } from "@/components/ui/Skeleton";
+import { useShellBase } from "@/lib/useShellBase";
 
 /**
  * The chip's tone, in the theme's own tokens.
@@ -43,6 +44,8 @@ function statusLabel(emp: User, t: (key: string) => string) {
 
 export default function EmployeesListPage() {
   const navigate = useNavigate();
+  const base = useShellBase();
+  const teamBase = base === "/admin" ? `${base}/employees` : `${base}/team`;
   const { language } = useThemeStore();
   const t = useT();
   const isUrdu = language === "ur";
@@ -153,7 +156,7 @@ export default function EmployeesListPage() {
           <ListCard>
             <ListRow
               testId="employee-access-requests"
-              onClick={() => navigate("/admin/employees/requests")}
+              onClick={() => navigate(`${teamBase}/requests`)}
               tile={
                 <div
                   className="size-11 rounded-full flex items-center justify-center shrink-0"
@@ -194,7 +197,7 @@ export default function EmployeesListPage() {
                 <ListRow
                   key={emp.id}
                   testId="invited-employee"
-                  onClick={() => navigate(`/admin/employees/${emp.id}`)}
+                  onClick={() => navigate(`${teamBase}/${emp.id}`)}
                   tile={
                     <div
                       className="size-11 rounded-full flex items-center justify-center font-bold text-16 shrink-0"
@@ -239,7 +242,7 @@ export default function EmployeesListPage() {
           return (
             <ListRow
               key={emp.id}
-              onClick={() => navigate(`/admin/employees/${emp.id}`)}
+              onClick={() => navigate(`${teamBase}/${emp.id}`)}
               tile={
               <div
                 className="size-11 rounded-full flex items-center justify-center font-bold text-16 shrink-0"
@@ -287,7 +290,7 @@ export default function EmployeesListPage() {
       >
         <div className="flex px-4 justify-end">
           <button
-            onClick={() => navigate("/admin/employees/new")}
+            onClick={() => navigate(`${teamBase}/new`)}
             className="pointer-events-auto h-13 ps-4 pe-5 rounded-full flex items-center gap-2 text-sm font-bold shadow-lg active:scale-95 transition-transform"
             style={{ background: "var(--brand)", color: "#0a0a0a", height: "52px", boxShadow: "0 6px 20px rgba(0,0,0,0.25)" }}
           >

@@ -90,7 +90,7 @@ export default function SupplierPaymentsPage() {
       data-testid="supplier-payments-page"
     >
       <StatusBar />
-      <NavHeader title={t("hub.purchases.payments")} backTo={`${base}/settings/hub/purchases`} />
+      <NavHeader title={t("hub.purchases.payments")} backTo={base === "/admin" ? `${base}/settings/hub/purchases` : `${base}/more`} />
 
       <div className="px-4 pt-3">
         <div

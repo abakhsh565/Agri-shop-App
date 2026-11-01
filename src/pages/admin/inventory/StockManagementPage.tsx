@@ -62,7 +62,7 @@ export default function StockManagementPage() {
       data-testid="stock-management-page"
     >
       <StatusBar />
-      <NavHeader title={t("hub.inventory.stock")} backTo={`${base}/settings/hub/inventory`} />
+      <NavHeader title={t("hub.inventory.stock")} backTo={base === "/admin" ? `${base}/settings/hub/inventory` : `${base}/more`} />
 
       <div className="px-4 pt-1">
         <div

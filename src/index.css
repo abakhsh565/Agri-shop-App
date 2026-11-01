@@ -24,6 +24,8 @@
   --color-border-control: var(--border-control);
   --color-ink: var(--ink);
   --color-ink-fg: var(--ink-fg);
+  --color-cta: var(--cta);
+  --color-cta-fg: var(--cta-fg);
   --color-caption: var(--caption);
   --color-ring: var(--ring);
   --color-brand: var(--brand);
@@ -102,6 +104,12 @@
      also applied to text that was never on a black surface. */
   --ink: #000000;
   --ink-fg: #ffffff;
+  /* Quiet dark action — the owner's CTA (Figma 2081-921, 2087-1765). A dark-grey control
+     that sits a step above the page instead of the brand green: on the reference the primary
+     action is the darkest thing on the screen, not the brightest. Light fills it near-black,
+     dark fills it one step above the card so it still reads as a button on #0d0d0c. */
+  --cta: #1a1a1a;
+  --cta-fg: #ffffff;
   /* Caption/hint text. Light and dark greys were never aligned: light read
      `--text-secondary`, dark `--muted-foreground`. Same token, same relationship. */
   --caption: var(--text-secondary);
@@ -211,6 +219,7 @@
   --warning: #f59e0b;
   --error: #DC2626;
   --brand: #84cc16;
+  --brand-fg: #0a0a0a;
   --brand-dark: #3f6212;
   --brand-light: #d9f99d;
   --surface: var(--tone-card);
@@ -310,6 +319,8 @@
   --border-control: #3a3a34;
   --ink: var(--brand);
   --ink-fg: #0a0a0a;
+  --cta: #1f1f1e;
+  --cta-fg: #f6f6f4;
   --caption: var(--text-tertiary);
   --error-bg: rgba(239,68,68,0.15);
   --error-border: rgba(239,68,68,0.3);
@@ -1596,3 +1607,18 @@ svg.lucide {
   }
 }
 
+
+/* Roles & Access uses green only where the screen is telling the owner something:
+   primary action, progress, selection and focus. Everything else stays tonal. */
+.roles-neutral {
+  --roles-accent: var(--brand);
+  --roles-accent-fg: var(--brand-fg);
+  --roles-accent-text: var(--brand-dark);
+  --roles-accent-soft: var(--brand-light);
+  --roles-accent-border: var(--brand);
+}
+.roles-neutral .ds-field:focus-within,
+.roles-neutral .ds-field:focus-visible {
+  border-color: var(--roles-accent);
+  box-shadow: 0 0 0 3px var(--roles-accent-soft);
+}

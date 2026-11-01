@@ -138,22 +138,24 @@ export const HUB_SECTIONS: HubSection[] = [
     ],
   },
   {
-    // Reports is a screen of six tiles (`pages/admin/reports/AdminReportsHubPage`), not the
-    // generic row list. It reads this section for its destinations and labels, so the six names
-    // live in one place; the page owns only the icon, the tile shape and the permission each
-    // destination asks for.
+    // Reports is a screen of report destinations (`pages/admin/reports/AdminReportsHubPage`),
+    // not the generic row list. It reads this section for its destinations and labels, so the
+    // names live in one place; the page owns only the icon, the tile shape and the permission
+    // each destination asks for.
     //
     // EVERY ROW IS THE SCREEN THAT ANSWERS THE QUESTION. It used to send all seven at the same
     // general Reports page, which meant five of them opened something that was not what their
-    // label said. Profit now has its own report (`/settings/hub/reports/profit`); Customers and
-    // Suppliers open their ledgers; Inventory opens the stock hub; Activity opens the audit trail.
-    // The general Reports page is still reachable at `/reports` and stays the long-form screen.
+    // label said. Sales opens the sales section hub (`/settings/hub/sales`); Profit has its own
+    // report (`/reports/profit`); Customers and Suppliers open their ledgers; Inventory opens
+    // the stock hub; Activity opens the audit trail. The general Reports page is still reachable
+    // at `/reports` and stays the long-form screen.
     id: "reports",
     titleKey: "settings.menu.reports",
     rows: [
       { id: "sales", labelKey: "hub.reports.sales", hintKey: "reports.hub.salesHint", to: "/settings/hub/sales" },
-      { id: "profit", labelKey: "hub.reports.profit", hintKey: "reports.hub.profitHint", to: "/settings/hub/reports/profit" },
-      { id: "customers", labelKey: "hub.reports.customers", hintKey: "reports.hub.customersHint", to: "/customers" },
+      { id: "detailed", labelKey: "hub.reports.detailed", hintKey: "reports.hub.detailedHint", to: "/reports" },
+      { id: "profit", labelKey: "hub.reports.profit", hintKey: "reports.hub.profitHint", to: "/reports/profit" },
+      { id: "customers", labelKey: "hub.reports.customers", hintKey: "reports.hub.customersHint", to: "/settings/overview/customers" },
       { id: "suppliers", labelKey: "hub.reports.suppliers", hintKey: "reports.hub.suppliersHint", to: "/settings/overview/suppliers" },
       { id: "inventory", labelKey: "hub.reports.inventory", hintKey: "reports.hub.inventoryHint", to: "/settings/hub/inventory" },
       { id: "activity", labelKey: "hub.reports.activity", hintKey: "reports.hub.activityHint", to: "/activity" },
@@ -182,7 +184,6 @@ export const HUB_SECTIONS: HubSection[] = [
       { id: "employees", labelKey: "hub.people.employees", to: "/settings/hub/people" },
       { id: "invite", labelKey: "hub.people.invite", to: "/employees/new" },
       { id: "roles", labelKey: "hub.people.roles", hintKey: "people.rolesHint", to: "/settings/roles" },
-      { id: "branches", labelKey: "hub.people.branches", hintKey: "people.branchAssignmentsHint", to: "/settings/hub/people/branches" },
       { id: "activity", labelKey: "hub.people.activity", hintKey: "people.employeeActivityHint", to: "/settings/hub/people/activity" },
     ],
   },
