@@ -590,7 +590,7 @@ export default function AdminDashboardPage() {
         <button
           className="w-full rounded-[var(--radius-card)] p-5 text-start transition-transform active:scale-[0.98]"
           style={{ background: "var(--brand)" }}
-          onClick={() => navigate("/admin/sales")}
+          onClick={() => navigate("/admin/settings/hub/overview")}
         >
           <p className="ds-section-label mb-1" style={{ color: "rgba(0,0,0,0.55)" }}>
             {t("admin.totalSales")}
