@@ -7,11 +7,12 @@ import FirstRunGate from "@/components/education/FirstRunGate";
 import ContextHelp from "@/components/education/ContextHelp";
 import { useBootstrapData } from "@/stores/useBootstrapData";
 import { isTopLevel } from "@/lib/navDepth";
-import { Suspense, useState, useEffect, useRef } from "react";
+import { Suspense, useState, useEffect, useLayoutEffect, useRef, type CSSProperties } from "react";
 import useOverlayScrollLock from "@/hooks/useOverlayScrollLock";
 import ScanButton from "@/components/ui/ScanButton";
 import { useProductsStore } from "@/stores/productsStore";
 import { useUIStore } from "@/stores/uiStore";
+import { useThemeStore } from "@/stores/themeStore";
 import { clearNav } from "@/lib/navContext";
 import BackButtonHandler from "@/components/ui/BackButtonHandler";
 import AssistantFab from "@/components/layout/AssistantFab";
@@ -38,8 +39,12 @@ const TAB_DEFS = [
   { key: "admin.more"      as const, icon: Menu,            path: "/admin/more",     labelKey: "nav.more" },
 ];
 
+/** The four destinations in the floating pill. Scan is the separate circular action beside it. */
+const NAV_TABS = TAB_DEFS.filter((tab) => tab.path !== "__scan__");
+
 export default function AdminLayout() {
   const t = useT();
+  const language = useThemeStore((s) => s.language);
   const navigate = useNavigate();
   const location = useLocation();
   useBootstrapData();
@@ -53,6 +58,9 @@ export default function AdminLayout() {
   const [pinError, setPinError] = useState(false);
   const [pinShake, setPinShake] = useState(false);
   const lockTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const navRef = useRef<HTMLDivElement | null>(null);
+  const tabRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  const [indicator, setIndicator] = useState({ left: 0, width: 0, ready: false });
 
   // Online/offline detection + auto-sync
   useEffect(() => {
@@ -136,6 +144,33 @@ export default function AdminLayout() {
   const active = activeTab();
   const showTabBar = isTopLevel(location.pathname);
 
+  // The green pill is one element that travels between destinations instead of four
+  // backgrounds switching at once. Measure the active button's box inside the pill so the
+  // indicator lands on it in either language and after a resize.
+  useLayoutEffect(() => {
+    if (!showTabBar) return;
+    const nav = navRef.current;
+    if (!nav) return;
+    const measure = () => {
+      const tab = tabRefs.current[active];
+      if (!tab) return;
+      const navRect = nav.getBoundingClientRect();
+      const tabRect = tab.getBoundingClientRect();
+      setIndicator({
+        left: tabRect.left - navRect.left,
+        width: tabRect.width,
+        ready: true,
+      });
+    };
+    measure();
+    const frame = requestAnimationFrame(measure);
+    window.addEventListener("resize", measure);
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener("resize", measure);
+    };
+  }, [active, showTabBar, language]);
+
   // Scan button in nav triggers camera scan → lookup product or open Add Product
   // Which shop this session is working in is asked of the database when the shell mounts —
   // that is the whole of "restore the right shop after a reload": the answer comes from the
@@ -203,7 +238,12 @@ export default function AdminLayout() {
   return (
     <div
       className="flex flex-col min-h-full w-full relative"
-      style={{ background: "var(--background)" }}
+      style={{
+        background: "var(--background)",
+        // The admin shell's floating pill is taller than the legacy bar. Keep the page reserve,
+        // toasts and floating actions in step with it without changing the other shells.
+        "--tabbar-height": "calc(86px + var(--safe-bottom))",
+      } as CSSProperties}
     >
       <NavTracker />
       <BackButtonHandler />
@@ -313,75 +353,82 @@ export default function AdminLayout() {
       {/* The assistant, off the bar and within thumb reach of home. See AssistantFab. */}
       {location.pathname === "/admin/dashboard" && <AssistantFab path="/admin/assistant" />}
 
-      {/* ── Bottom tab bar (5 tabs) — only on top-level navigation screens ── */}
+      {/* ── Bottom navigation: four floating destinations + the scan action ── */}
       {showTabBar && (
-      <div
-        className="fixed bottom-0 start-0 end-0 max-w-[480px] mx-auto flex items-start pt-2 border-t"
-        style={{
-          background: "var(--surface)",
-          borderColor: "var(--divider)",
-          height: "var(--tabbar-height)",
-          // Explicit layering, so this can never drift into the overlay band again:
-          // below sheets/dialogs/toasts (z-50) and above ordinary page content.
-          zIndex: 30,
-          paddingBottom: "0px",
-          paddingLeft: "16px",
-          paddingRight: "16px",
-        }}
-      >
-        {/* Every tab carries an explicit 44px floor. The icon+label stack is only ~41px tall
-            on its own, and the accessibility lane measures real rendered boxes: with the
-            assistant tab added, five sub-44px targets per route were counted (55 across the
-            admin routes) and the frozen structural baseline − which may only shrink −
-            refused the growth. The floor is the app's to meet, not the baseline's to record. */}
-        {TAB_DEFS.map(({ key, icon: Icon, path, labelKey }) => {
-          if (path === "__scan__") {
-            return (
-              <button
-                key="scan"
-                onClick={handleNavScan}
-                disabled={scanning}
-                data-tour="tab:scan"
-                className="ds-pressable flex flex-col items-center justify-center flex-1 gap-1 cursor-pointer min-h-[44px]"
-              >
-                <div
-                  className="flex items-center justify-center rounded-full -mt-3"
-                  style={{ width: 44, height: 44, background: "var(--brand)" }}
-                >
-                  <ScanLine size={22} strokeWidth={2.5} color="#0a0a0a" />
-                </div>
-                <span className="text-10 font-bold" style={{ color: "var(--brand)" }}>
-                  {scanning ? "..." : t(key)}
-                </span>
-              </button>
-            );
-          }
-          const isActive = active === path;
-          return (
-            <button
-              key={path}
-              onClick={() => { clearNav(); navigate(path); }}
-              data-tour={`tab:${key}`}
-              className="ds-pressable flex flex-col items-center justify-center flex-1 gap-1 cursor-pointer min-h-[44px]"
+        <div
+          className="fixed bottom-0 start-0 end-0 z-30 mx-auto max-w-[480px]"
+          style={{
+            padding: "8px 16px calc(10px + var(--safe-bottom))",
+            background: "linear-gradient(to top, var(--background) 55%, transparent)",
+          }}
+        >
+          <div className="flex items-center gap-2">
+            <div
+              ref={navRef}
+              className="relative flex min-w-0 flex-1 items-center justify-between gap-1 rounded-full p-1.5"
+              style={{
+                background: "var(--surface)",
+                boxShadow: "0 10px 30px rgba(0, 0, 0, 0.16)",
+              }}
             >
-              <Icon
-                size={22}
-                strokeWidth={isActive ? 2.5 : 1.5}
-                style={{ color: isActive ? "var(--brand)" : "var(--text-secondary)" }}
+              {indicator.ready && (
+                <span
+                  aria-hidden
+                  className="pointer-events-none absolute bottom-1.5 top-1.5 rounded-full transition-[left,width] duration-300 ease-out motion-reduce:transition-none"
+                  style={{
+                    left: indicator.left,
+                    width: indicator.width,
+                    background: "var(--brand)",
+                  }}
+                />
+              )}
+              {NAV_TABS.map(({ key, icon: Icon, path, labelKey }) => {
+                const isActive = active === path;
+                return (
+                  <button
+                    key={path}
+                    type="button"
+                    onClick={() => { clearNav(); navigate(path); }}
+                    data-tour={`tab:${key}`}
+                    aria-current={isActive ? "page" : undefined}
+                    aria-label={isActive ? undefined : t(labelKey ?? key)}
+                    ref={(node) => { tabRefs.current[path] = node; }}
+                    className={
+                      isActive
+                        ? "relative z-10 flex h-12 min-w-0 max-w-[170px] flex-1 items-center justify-center gap-1.5 rounded-full px-3 text-12 font-bold"
+                        : "relative z-10 flex size-11 shrink-0 items-center justify-center rounded-full"
+                    }
+                    style={
+                      isActive
+                        ? { color: "#0a0a0a" }
+                        : { color: "var(--text-secondary)" }
+                    }
+                  >
+                    <Icon size={19} strokeWidth={isActive ? 2.5 : 1.5} className="shrink-0" />
+                    {isActive && <span className="truncate">{t(labelKey ?? key)}</span>}
+                  </button>
+                );
+              })}
+            </div>
+            <button
+              type="button"
+              onClick={handleNavScan}
+              disabled={scanning}
+              aria-label={t("scan")}
+              aria-busy={scanning}
+              data-tour="tab:scan"
+              className="flex size-14 shrink-0 items-center justify-center rounded-full ds-pressable disabled:opacity-60"
+              style={{ background: "var(--brand)", boxShadow: "0 8px 24px rgba(0, 0, 0, 0.2)" }}
+            >
+              <ScanLine
+                size={24}
+                strokeWidth={2.5}
+                color="#0a0a0a"
+                className={scanning ? "animate-pulse" : undefined}
               />
-              <span
-                className="text-10 transition-colors"
-                style={{
-                  fontWeight: isActive ? 700 : 500,
-                  color: isActive ? "var(--brand)" : "var(--text-secondary)",
-                }}
-              >
-                {t(labelKey ?? key)}
-              </span>
             </button>
-          );
-        })}
-      </div>
+          </div>
+        </div>
       )}
     </div>
   );

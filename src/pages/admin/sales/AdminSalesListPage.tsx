@@ -46,8 +46,42 @@ function initBgColor(name: string | null | undefined) {
   return colors[hash % colors.length];
 }
 
+function percentOf(part: number, whole: number): number {
+  if (!Number.isFinite(part) || !Number.isFinite(whole) || whole <= 0) return 0;
+  return Math.max(0, Math.min(100, Math.round((part / whole) * 100)));
+}
+
+/** The one progress line the three summary states share. */
+function SummaryProgress({ label, pct, testId }: { label: string; pct: number; testId: string }) {
+  return (
+    <div className="mt-4">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-11 font-medium" style={{ color: "var(--text-secondary)" }}>{label}</p>
+        <p className="text-11 font-semibold tabular-nums" data-testid={`${testId}-pct`} style={{ color: "var(--text-primary)" }}>
+          {pct}%
+        </p>
+      </div>
+      <div
+        className="mt-2 h-1 rounded-full overflow-hidden"
+        style={{ background: "var(--divider)" }}
+        role="progressbar"
+        aria-label={label}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={pct}
+        data-testid={testId}
+      >
+        <div
+          className="h-full rounded-full"
+          style={{ width: `${pct}%`, background: "var(--text-secondary)", transition: "width var(--dur-3) var(--ease-out)" }}
+        />
+      </div>
+    </div>
+  );
+}
+
 type Tab = "all" | "credit" | "paid";
-type DateFilter = "today" | "yesterday" | "this_week" | "this_month" | "custom";
+type DateFilter = "all" | "today" | "yesterday" | "this_week" | "this_month" | "custom";
 type SortKey = "newest" | "oldest" | "highest" | "lowest";
 
 const SORT_OPTIONS: { key: SortKey; label: string }[] = [
@@ -67,7 +101,7 @@ export default function AdminSalesListPage() {
   const isUrdu = language === "ur";
   const [tab, setTab] = useState<Tab>((state?.tab as Tab) ?? "all");
   const [employeeFilter, setEmployeeFilter] = useState<string | null>(state?.employeeId ?? null);
-  const [dateFilter, setDateFilter] = useState<DateFilter>(state?.dateFilter ?? "today");
+  const [dateFilter, setDateFilter] = useState<DateFilter>(state?.dateFilter ?? "all");
   const [showDateModal, setShowDateModal] = useState(false);
   // The two days are the rest of the "Custom" answer, so they appear only once it is chosen.
   const [customOpen, setCustomOpen] = useState(dateFilter === "custom");
@@ -107,6 +141,7 @@ export default function AdminSalesListPage() {
 
   function inDate(sale: Sale) {
     const d = pkDateFromISO(sale.createdAt);
+    if (dateFilter === "all")       return true;
     if (dateFilter === "today")     return d === todayStr;
     if (dateFilter === "yesterday") return d === yesterdayStr;
     if (dateFilter === "this_month") return d >= pkMonthStart();
@@ -136,33 +171,48 @@ export default function AdminSalesListPage() {
     );
   }
 
-  const filtered = allSales
-    .filter((s) => !s.isVoided && inDate(s))
-    .filter(inTab)
+  // The period is one scope: date, buyer and search. The three tabs are three readings of it,
+  // not three different periods. That is what lets Paid + Outstanding reconcile with Net sales.
+  const periodSales = allSales
+    .filter((sale) => !sale.isVoided && inDate(sale))
     .filter(inQuery)
-    .filter((s) => !employeeFilter || s.employeeId === employeeFilter)
+    .filter((sale) => !employeeFilter || sale.employeeId === employeeFilter);
+
+  const filtered = periodSales
+    .filter(inTab)
     .sort((a, b) => {
       if (sort === "newest") return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
       if (sort === "oldest") return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
       if (sort === "highest") return b.totalAmount - a.totalAmount;
       return a.totalAmount - b.totalAmount;
     });
+
   // Sales less their own refunds — the same reading of "net sales" the Sales section shows.
   const refundMap = refundsBySale(returns);
-  const netSales  = netSalesOf(filtered, refundMap);
+  const netSales = netSalesOf(periodSales, refundMap);
   // What came back on these same sales, stated rather than netted away, so a period with heavy
   // returns is visible instead of only lowering the headline.
-  const returnsAmount = filtered.reduce((sum, sale) => sum + (refundMap.get(sale.id) ?? 0), 0);
+  const returnsAmount = periodSales.reduce((sum, sale) => sum + (refundMap.get(sale.id) ?? 0), 0);
   // Real cost of goods, from the same calculation Home, the sale record and Reports use.
-  // This read `Math.round(total * 0.2)` — a flat fifth of whatever was sold, which was not
-  // anybody's margin: it disagreed with Home and with every sale opened from this list, and
-  // it was highest on the sales that cost the shop the most.
-  const gross     = summariseSales(filtered, liveCost);
+  const gross = summariseSales(periodSales, liveCost);
   const profitDisplayState = profitDisplay(gross);
-  const paidSalesAmount = filtered.filter(s => s.paymentType === "full").reduce((s, x) => s + x.totalAmount, 0);
-  const creditSalesAmount = filtered.reduce((s, x) => s + Math.max(0, x.totalAmount - x.amountPaid), 0);
+
+  const creditPeriodSales = periodSales.filter((sale) => sale.paymentType !== "full");
+  const fullPeriodSales = periodSales.filter((sale) => sale.paymentType === "full");
+  const money = (value: number | undefined) => Math.max(0, Number(value) || 0);
+  const totalCollected = periodSales.reduce((sum, sale) => sum + money(sale.amountPaid), 0);
+  const paidAtSale = fullPeriodSales.reduce((sum, sale) => sum + money(sale.amountPaid), 0);
+  const creditRecovered = creditPeriodSales.reduce((sum, sale) => sum + money(sale.amountPaid), 0);
+  const outstandingCredit = periodSales.reduce((sum, sale) => sum + money(sale.outstandingBalance), 0);
+  const creditSalesTotal = creditPeriodSales.reduce((sum, sale) => sum + money(sale.totalAmount), 0);
+  const cashCollected = periodSales.reduce((sum, sale) => sum + (sale.paymentMethod === "cash" ? money(sale.amountPaid) : 0), 0);
+  const onlineCollected = Math.max(0, totalCollected - cashCollected);
+  const creditCustomerCount = new Set(creditPeriodSales.map((sale) => sale.customerId || sale.customerName)).size;
+  const collectedPct = percentOf(totalCollected, netSales);
+  const creditRecoveredPct = percentOf(creditRecovered, creditSalesTotal);
 
   const DATE_FILTERS: { key: DateFilter; label: string }[] = [
+    { key: "all",         label: t("sales.allTime") },
     { key: "today",       label: t("sales.today") },
     { key: "yesterday",   label: t("sales.yesterday") },
     { key: "this_week",   label: t("sales.thisWeek") },
@@ -217,8 +267,8 @@ export default function AdminSalesListPage() {
     const text =
       `${t("admin.sales")} · ${DATE_FILTERS.find((f) => f.key === dateFilter)?.label ?? ""}\n` +
       `${t("sales.netSales")}: ${formatCurrency(netSales)}\n` +
-      `${t("inline.credit_sales")}: ${formatCurrency(creditSalesAmount)}\n` +
-      `${t("inline.paid_sales")}: ${formatCurrency(paidSalesAmount)}\n` +
+      `${t("inline.credit_sales")}: ${formatCurrency(creditSalesTotal)}\n` +
+      `${t("inline.paid_sales")}: ${formatCurrency(paidAtSale)}\n` +
       `${t("hub.sales.salesReturns")}: ${formatCurrency(returnsAmount)}`;
     try {
       const outcome = await exportText(text, t("admin.sales"));
@@ -228,6 +278,61 @@ export default function AdminSalesListPage() {
     }
   }
 
+  const summary = tab === "all"
+    ? {
+        label: t("sales.netSales"),
+        amount: netSales,
+        amountTestId: "sales-net",
+        subline: profitDisplayState.kind === "unknown"
+          ? t("profit.addCostToSeeProfit")
+          : `${profitDisplayState.kind === "atLeast" ? "≥ " : ""}${formatCurrency(Math.round(gross.profit))} ${t("admin.grossProfit").toLowerCase()}`,
+        subTestId: "sales-gross-profit",
+        progressLabel: t("sales.collectedSoFar"),
+        progressPct: collectedPct,
+        leftLabel: t("sales.paidSales"),
+        leftValue: paidAtSale,
+        leftTestId: "sales-paid",
+        rightLabel: t("sales.outstandingCredit"),
+        rightValue: outstandingCredit,
+        rightTestId: "sales-credit",
+      }
+    : tab === "credit"
+      ? {
+          label: t("sales.creditSales"),
+          amount: creditSalesTotal,
+          amountTestId: "sales-credit-sales",
+          subline: creditCustomerCount === 1
+            ? t("sales.creditCustomerOne")
+            : t("sales.creditCustomers", { count: String(creditCustomerCount) }),
+          subTestId: "sales-credit-count",
+          progressLabel: t("sales.recovered"),
+          progressPct: creditRecoveredPct,
+          leftLabel: t("sales.recovered"),
+          leftValue: creditRecovered,
+          leftTestId: "sales-recovered",
+          rightLabel: t("sales.outstandingCredit"),
+          rightValue: outstandingCredit,
+          rightTestId: "sales-credit",
+        }
+      : {
+          label: t("sales.totalPaid"),
+          amount: totalCollected,
+          amountTestId: "sales-total-paid",
+          subline: t("sales.paidMix", {
+            cash: formatCurrency(cashCollected),
+            online: formatCurrency(onlineCollected),
+          }),
+          subTestId: "sales-paid-mix",
+          progressLabel: t("sales.ofNetSalesCollected"),
+          progressPct: collectedPct,
+          leftLabel: t("sales.paidAtSale"),
+          leftValue: paidAtSale,
+          leftTestId: "sales-paid-at-sale",
+          rightLabel: t("sales.creditRecovered"),
+          rightValue: creditRecovered,
+          rightTestId: "sales-credit-recovered",
+        };
+
   return (
     <div
       className="flex flex-col w-full min-h-full"
@@ -235,8 +340,8 @@ export default function AdminSalesListPage() {
     >
       <StatusBar />
 
-      {/* Back, the section's name, the overflow. No magnifier: the search field is always on the
-          screen, so a second door to it only took a slot the actions needed. */}
+      {/* Back, the section's name, and the overflow on the title row. No magnifier: the search
+          field is always on the screen, so a second door to it only took a slot the actions needed. */}
       <NavHeader
         title={t("admin.sales")}
         backTo={base === "/admin" ? "/admin/settings/hub/sales" : `${base}/dashboard`}
@@ -249,18 +354,14 @@ export default function AdminSalesListPage() {
         }
       />
 
-      {/* The three views of this list — every sale, the credit ones, the paid ones — sit where
-          the filter pills used to, in the same dark-grey pill the period used. The period moved
-          into the card below, beside the figure it changes; the buyer filter is gone, because the
-          search field above the list already finds a person by name or phone. */}
-      {/* One segmented control on a sunken track, the chosen view filled with the brand green —
-          the owner reads green as "this is the list I am looking at", the same meaning it carries
-          on the selected chips elsewhere, so the three views stay legible at a glance. */}
+      {/* The tab row stays below the title. The control is 8px shorter than before, but the
+          labels keep the same 13px type step; only the track and pill heights come down. */}
       <div className="px-4 pt-2">
         <div
-          className="flex items-center gap-1 p-1 rounded-full"
+          className="flex items-center gap-1 p-0.5 h-10 rounded-full"
           style={{ background: "var(--surface-2)" }}
           role="group"
+          aria-label={t("sales.type")}
         >
           {TABS.map(({ key, label }) => {
             const selected = tab === key;
@@ -271,10 +372,10 @@ export default function AdminSalesListPage() {
                 onClick={() => setTab(key)}
                 aria-pressed={selected}
                 data-testid={`sales-tab-${key}`}
-                className="flex-1 min-w-0 h-9 rounded-full text-12 font-semibold truncate px-3 transition-colors active:opacity-70"
+                className="flex-1 min-w-0 h-9 rounded-full text-13 font-semibold truncate px-2 transition-colors active:opacity-70"
                 style={
                   selected
-                    ? { background: "var(--brand)", color: "var(--ink-fg)" }
+                    ? { background: "var(--text-primary)", color: "var(--background)" }
                     : { background: "transparent", color: "var(--text-secondary)" }
                 }
               >
@@ -285,10 +386,9 @@ export default function AdminSalesListPage() {
         </div>
       </div>
 
-      {/* The period's money first, as one flat card: every label starts at the same left edge as
-          the number beneath it and nothing is nested inside a second box. Net sales and the profit
-          behind it come first, then the four figures that explain it, two by two. */}
-      <div className="px-4 pt-4">
+      {/* One flat period card, with the reading chosen above: label, headline, the line that
+          qualifies it, one progress line, and the two amounts that make up the headline. */}
+      <div className="px-4 pt-3">
         <div
           className="rounded-[var(--radius-card)] p-4"
           style={{ background: "var(--surface)" }}
@@ -298,11 +398,21 @@ export default function AdminSalesListPage() {
               tap from the number to the window behind it, and no pill competing with the list. */}
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-11" style={{ color: "var(--text-secondary)" }}>
-                {t("sales.netSales")}
+              <p className="text-12" style={{ color: "var(--text-secondary)" }}>
+                {summary.label}
               </p>
-              <p className="text-26 font-bold mt-1 tabular-nums break-words" data-testid="sales-net">
-                {formatCurrency(netSales)}
+              <p
+                className="text-28 font-bold mt-1 tabular-nums break-words"
+                data-testid={summary.amountTestId}
+              >
+                {formatCurrency(summary.amount)}
+              </p>
+              <p
+                className="text-12 font-medium mt-1"
+                data-testid={summary.subTestId}
+                style={{ color: "var(--text-secondary)" }}
+              >
+                {summary.subline}
               </p>
             </div>
             <button
@@ -320,44 +430,29 @@ export default function AdminSalesListPage() {
               <ChevronDown size={12} className="shrink-0" style={{ color: "var(--text-secondary)" }} />
             </button>
           </div>
-          <p
-            className="text-11 font-semibold mt-1"
-            data-testid="sales-gross-profit"
-            style={{
-              color:
-                profitDisplayState.kind === "unknown"
-                  ? "var(--text-secondary)"
-                  : gross.profit >= 0
-                    ? "var(--success)"
-                    : "var(--error)",
-            }}
-          >
-            {profitDisplayState.kind === "unknown"
-              ? t("profit.addCostToSeeProfit")
-              : `${profitDisplayState.kind === "atLeast" ? "≥ " : ""}${formatCurrency(Math.round(gross.profit))} ${t("admin.grossProfit").toLowerCase()}`}
-          </p>
+          <SummaryProgress
+            label={summary.progressLabel}
+            pct={summary.progressPct}
+            testId="sales-progress"
+          />
 
-          {/* Money received and money still owed: the two figures an owner acts on. "Paid",
-              "credit" and "outstanding" were four labels for two amounts — the same credit figure
-              was drawn twice — and a row of noughts on a quiet day is not information. Returns are
-              stated only when there are any. */}
-          {/* Half the row each: money collected, money still owed. The two figures the owner
-              acts on, so neither is tucked under the other's label. */}
+          {/* The two amounts that make up the headline. Half the row each, so neither is tucked
+              under the other's label; the same pair in every tab state. */}
           <div className="grid grid-cols-2 gap-4 mt-4 pt-3" style={{ borderTop: "1px solid var(--divider)" }}>
             <div className="min-w-0">
-              <p className="text-10" style={{ color: "var(--text-secondary)" }}>
-                {t("inline.paid_sales")}
+              <p className="text-11" style={{ color: "var(--text-secondary)" }}>
+                {summary.leftLabel}
               </p>
-              <p className="text-16 font-bold mt-1 tabular-nums break-words" data-testid="sales-paid">
-                {formatCurrency(paidSalesAmount)}
+              <p className="text-17 font-bold mt-1 tabular-nums break-words" data-testid={summary.leftTestId}>
+                {formatCurrency(summary.leftValue)}
               </p>
             </div>
             <div className="min-w-0 text-end">
-              <p className="text-10" style={{ color: "var(--text-secondary)" }}>
-                {t("sales.outstandingCredit")}
+              <p className="text-11" style={{ color: "var(--text-secondary)" }}>
+                {summary.rightLabel}
               </p>
-              <p className="text-16 font-bold mt-1 tabular-nums break-words" data-testid="sales-credit">
-                {formatCurrency(creditSalesAmount)}
+              <p className="text-17 font-bold mt-1 tabular-nums break-words" data-testid={summary.rightTestId}>
+                {formatCurrency(summary.rightValue)}
               </p>
             </div>
           </div>

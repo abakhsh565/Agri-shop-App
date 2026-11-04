@@ -609,8 +609,8 @@ input[type="time"]:focus {
   height: 46px;
   padding: 0 24px;
   border-radius: 14px;
-  font-size: var(--fs-13);
-  font-weight: 600;
+  font-size: var(--fs-14);
+  font-weight: 500;
   background: #1a1a1a;
   color: #fff;
   transition: opacity 0.15s, transform 0.1s;
@@ -627,8 +627,8 @@ input[type="time"]:focus {
   height: 46px;
   padding: 0 24px;
   border-radius: 14px;
-  font-size: var(--fs-13);
-  font-weight: 600;
+  font-size: var(--fs-14);
+  font-weight: 500;
   background: var(--surface);
   color: var(--text-primary);
   border: 1px solid var(--divider);
@@ -646,10 +646,10 @@ input[type="time"]:focus {
   height: 46px;
   padding: 0 24px;
   border-radius: 14px;
-  font-size: var(--fs-13);
-  font-weight: 600;
-  background: var(--brand);
-  color: #0a0a0a;
+  font-size: var(--fs-14);
+  font-weight: 500;
+  background: #1a1a1a;
+  color: var(--brand);
   transition: opacity 0.15s, transform 0.1s;
 }
 .ds-btn-brand:active {
@@ -664,8 +664,8 @@ input[type="time"]:focus {
   height: 46px;
   padding: 0 24px;
   border-radius: 14px;
-  font-size: var(--fs-13);
-  font-weight: 600;
+  font-size: var(--fs-14);
+  font-weight: 500;
   background: var(--error);
   color: #fff;
   transition: opacity 0.15s, transform 0.1s;
@@ -682,8 +682,8 @@ input[type="time"]:focus {
   height: 42px;
   padding: 0 20px;
   border-radius: 100px;
-  font-size: var(--fs-13);
-  font-weight: 600;
+  font-size: var(--fs-14);
+  font-weight: 500;
   background: #1a1a1a;
   color: #fff;
   transition: opacity 0.15s, transform 0.1s;
@@ -700,8 +700,8 @@ input[type="time"]:focus {
   height: 42px;
   padding: 0 20px;
   border-radius: 100px;
-  font-size: var(--fs-13);
-  font-weight: 600;
+  font-size: var(--fs-14);
+  font-weight: 500;
   background: transparent;
   color: var(--text-primary);
   border: 1px solid var(--divider);
@@ -925,6 +925,23 @@ svg.ds-row-chevron {
 }
 
 /* ── Animations ── */
+/* Quick Alerts: the deck opens and closes on the grid row itself, so the collapsing
+   space is measured by the layout instead of a guessed max-height. */
+.ds-quick-alerts-body {
+  transition: grid-template-rows var(--dur-3) var(--ease-out), opacity var(--dur-3) var(--ease-out);
+}
+
+/* Quick Alerts: the rows settle in one after another, with a small overshoot at the end.
+   Transform and opacity only, so the dropdown stays on the compositor. */
+@keyframes quickAlertFloat {
+  0%   { opacity: 0; transform: translate3d(0, 14px, 0) scale(0.98); }
+  65%  { opacity: 1; transform: translate3d(0, -3px, 0) scale(1.005); }
+  100% { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+}
+.ds-quick-alert-in {
+  animation: quickAlertFloat 520ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
 @keyframes fadeInUp {
   from { opacity: 0; transform: translateY(16px); }
   to   { opacity: 1; transform: translateY(0); }
@@ -1165,6 +1182,8 @@ svg.ds-row-chevron {
      moving less. */
   .ds-confetti { display: none; }
   .ds-ring { display: none; }
+  .ds-quick-alert-in { animation: none; }
+  .ds-quick-alerts-body { transition: none; }
 
   *,
   *::before,

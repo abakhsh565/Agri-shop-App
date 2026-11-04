@@ -13,7 +13,7 @@ import SetupChecklist from "@/components/ui/SetupChecklist";
 import { useCustomersStore } from "@/stores/customersStore";
 import { useShopStore } from "@/stores/shopStore";
 import { supabase } from "@/lib/supabase";
-import { formatCurrency, formatSmartDateTime } from "@/lib/formatters";
+import { formatCurrency, formatDate, formatSmartDateTime } from "@/lib/formatters";
 import { generateReminders, calculatePaymentStatus, loadBusinessSettings } from "@/lib/reminderEngine";
 import { computeOverdueCreditTotal } from "@/lib/signalEngine";
 import { summariseSales, profitDisplay } from "@/lib/profit";
@@ -22,11 +22,14 @@ import { useT } from "@/lib/i18n";
 import { branchContextLabel } from "@/lib/branchContext";
 import { canSeeDashboard } from "@/lib/tenantContext";
 import { branchKind } from "@/lib/branchKind";
-import { AlertTriangle, TrendingUp, ChevronRight, ChevronDown, TrendingDown, ShoppingCart, Search, Bell, Wallet, CheckCircle2, HandCoins, PackagePlus, Store } from "lucide-react";
+import { AlertTriangle, CalendarDays, ChevronRight, ChevronDown, PackageX, ShoppingCart, Search, Bell, Truck, Wallet, CheckCircle2, HandCoins, PackagePlus, Store } from "lucide-react";
 import StatusBar from "@/components/ui/StatusBar";
 import ListCard from "@/components/ui/ListCard";
 import ListRow from "@/components/ui/ListRow";
 import { SkeletonList } from "@/components/ui/Skeleton";
+import QuickAlertsPanel, { type QuickAlertItem } from "@/components/dashboard/QuickAlertsPanel";
+import { getCreditRequestsDB, type LocalCreditRequest } from "@/lib/localGroupRegistry";
+import { latestRedCreditOverride, nextHarvestWindow, pkDayStartISO } from "@/lib/quickAlerts";
 
 function initBgColor(name: string | null | undefined) {
   const safeName = String(name ?? '');
@@ -274,15 +277,12 @@ export default function AdminDashboardPage() {
   const outOfStockCount = mockProducts.filter(p => p.stockQty <= 0).length;
   const totalPayable = mockCompanies.reduce((s, c) => s + c.outstandingPayable, 0);
   
-  const [pendingCreditRequests, setPendingCreditRequests] = useState(0);
+  const [creditRequests, setCreditRequests] = useState<LocalCreditRequest[]>([]);
+  const [sentToday, setSentToday] = useState(0);
   const [dueReminders, setDueReminders] = useState<any[]>([]);
   const [bizSettings, setBizSettings] = useState<{crops: any[]}>({crops: []});
   const [customerCropsMap, setCustomerCropsMap] = useState<Record<string, string[]>>({});
   useEffect(() => {
-    // Check for pending credit limit requests
-    supabase.from("credit_limit_requests").select("id", { count: "exact", head: true }).eq("status", "pending")
-      .then(({ count }) => setPendingCreditRequests(count || 0))
-      .then(() => {}, () => {});
     loadBusinessSettings().then(setBizSettings).catch(() => {});
     // Load all customer crops for harvest alert filtering
     import("@/lib/reminderEngine").then(async (m) => {
@@ -293,14 +293,184 @@ export default function AdminDashboardPage() {
       setCustomerCropsMap(map);
     }).catch(() => {});
   }, [customers.length]);
-  function customerCropsHas(customerId: string, cropName: string) {
-    return (customerCropsMap[customerId] || []).includes(cropName);
-  }
+  // Credit requests are decisions awaiting the owner; reminder logs are proof of work already
+  // done. Both live in their own tables and are only read here for the triage card.
+  useEffect(() => {
+    let alive = true;
+    if (!workingBranchId || switchingBranch) return;
+    getCreditRequestsDB()
+      .then((requests) => { if (alive) setCreditRequests(requests); })
+      .catch(() => {});
+    supabase
+      .from("reminder_logs")
+      .select("id", { count: "exact", head: true })
+      .gte("sent_at", pkDayStartISO())
+      .then(({ count }) => { if (alive) setSentToday(count ?? 0); }, () => {});
+    return () => { alive = false; };
+  }, [workingBranchId, switchingBranch]);
   useEffect(() => { generateReminders({ customers, sales: mockSales }).then(setDueReminders); }, [customers, mockSales]);
   const dueReminderCount = dueReminders.filter(r => new Date(r.triggerDate) <= new Date()).length;
   const creditLimitReached = customers.filter(c => c.outstandingBalance > 0 && c.creditLimit > 0 && c.outstandingBalance >= c.creditLimit).length;
   const delayedCount = customers.filter(c => c.outstandingBalance > 0 && calculatePaymentStatus(c, new Date()) === "delayed").length;
   const highRiskCount = customers.filter(c => c.outstandingBalance > 0 && calculatePaymentStatus(c, new Date()) === "high_risk").length;
+
+  const followupCount = dueReminderCount + delayedCount;
+  const pendingCredit = [...creditRequests]
+    .filter((request) => request.status === "pending")
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  const creditOverride = latestRedCreditOverride(creditRequests, customers, now);
+  const harvestWindow = nextHarvestWindow(
+    bizSettings.crops,
+    customers,
+    customerCropsMap,
+    now,
+  );
+  const quickAlertItems: QuickAlertItem[] = [];
+
+  if (pendingCredit.length === 1) {
+    const request = pendingCredit[0];
+    quickAlertItems.push({
+      id: `credit-request-${request.id}`,
+      tone: "critical",
+      icon: AlertTriangle,
+      title: t("quickAlerts.creditRequestTitle", { customer: request.customerName }),
+      body: t("quickAlerts.creditRequestBody", {
+        from: formatRs(request.currentLimit),
+        to: formatRs(request.requestedLimit),
+      }),
+      meta: formatSmartDateTime(request.createdAt, now, t),
+      action: t("admin.review"),
+      priority: 100,
+      onPress: () => navigate(`/admin/alerts/credit-requests/${request.id}`),
+    });
+  } else if (pendingCredit.length > 1) {
+    quickAlertItems.push({
+      id: "credit-requests",
+      tone: "critical",
+      icon: AlertTriangle,
+      title: t("quickAlerts.creditRequestsTitle", { count: String(pendingCredit.length) }),
+      body: t("quickAlerts.creditRequestsBody"),
+      meta: t("quickAlerts.awaitingDecision"),
+      action: t("admin.review"),
+      priority: 100,
+      onPress: () => navigate("/admin/alerts/reminders", { state: { tab: "action", subTab: "critical" } }),
+    });
+  } else if (creditOverride) {
+    quickAlertItems.push({
+      id: `credit-override-${creditOverride.request.id}`,
+      tone: "critical",
+      icon: AlertTriangle,
+      title: t("quickAlerts.creditOverrideTitle"),
+      body: t("quickAlerts.creditOverrideBody", {
+        approver: creditOverride.request.reviewedBy || t("common.owner"),
+        amount: formatRs(creditOverride.approvedAmount),
+        customer: creditOverride.customer.name,
+      }),
+      meta: formatSmartDateTime(creditOverride.request.reviewedAt ?? creditOverride.request.createdAt, now, t),
+      action: t("admin.review"),
+      priority: 95,
+      onPress: () => navigate(`/admin/alerts/credit-overrides/${creditOverride.customer.id}`),
+    });
+  } else if (highRiskCount + creditLimitReached > 0) {
+    const flagged = highRiskCount + creditLimitReached;
+    quickAlertItems.push({
+      id: "flagged-credit",
+      tone: "critical",
+      icon: AlertTriangle,
+      title: flagged === 1
+        ? t("quickAlerts.creditFlaggedTitleOne")
+        : t("quickAlerts.creditFlaggedTitle", { count: String(flagged) }),
+      body: t("quickAlerts.creditFlaggedBody"),
+      meta: t("quickAlerts.needsReview"),
+      action: t("admin.review"),
+      priority: 85,
+      onPress: () => navigate("/admin/alerts/credit-overrides"),
+    });
+  }
+
+  if (outOfStockCount > 0) {
+    quickAlertItems.push({
+      id: "out-of-stock",
+      tone: "warning",
+      icon: PackageX,
+      title: outOfStockCount === 1
+        ? t("quickAlerts.outOfStockTitleOne")
+        : t("quickAlerts.outOfStockTitle", { count: String(outOfStockCount) }),
+      body: t("quickAlerts.outOfStockBody"),
+      meta: t("quickAlerts.needsReview"),
+      action: t("admin.view"),
+      priority: 80,
+      onPress: () => navigate("/admin/alerts/inventory"),
+    });
+  }
+
+  if (totalPayable > 0) {
+    quickAlertItems.push({
+      id: "supplier-payable",
+      tone: "warning",
+      icon: Truck,
+      title: t("quickAlerts.supplierTitle", { amount: formatRs(totalPayable) }),
+      body: t("quickAlerts.supplierBody"),
+      meta: t("quickAlerts.needsReview"),
+      action: t("admin.review"),
+      priority: 75,
+      onPress: () => navigate("/admin/purchases/payments"),
+    });
+  }
+
+  if (followupCount > 0) {
+    quickAlertItems.push({
+      id: "followups-due",
+      tone: "warning",
+      icon: Bell,
+      title: followupCount === 1
+        ? t("quickAlerts.followupsDueTitleOne")
+        : t("quickAlerts.followupsDueTitle", { count: String(followupCount) }),
+      body: t("quickAlerts.followupsDueBody"),
+      meta: t("emp.today"),
+      action: t("admin.review"),
+      priority: 70,
+      onPress: () => navigate("/admin/alerts/reminders", { state: { tab: "followups", subTab: "ready" } }),
+    });
+  } else if (sentToday > 0) {
+    quickAlertItems.push({
+      id: "reminders-sent",
+      tone: "warning",
+      icon: Bell,
+      title: sentToday === 1
+        ? t("quickAlerts.remindersSentTitleOne")
+        : t("quickAlerts.remindersSentTitle", { count: String(sentToday) }),
+      body: t("quickAlerts.remindersSentBody"),
+      meta: t("emp.today"),
+      action: t("admin.view"),
+      priority: 60,
+      onPress: () => navigate("/admin/alerts/reminders", { state: { tab: "followups", subTab: "recently_sent" } }),
+    });
+  }
+
+  if (harvestWindow) {
+    quickAlertItems.push({
+      id: "harvest",
+      tone: "neutral",
+      icon: CalendarDays,
+      title: harvestWindow.days === 1
+        ? t("quickAlerts.harvestTitleOne", { crop: harvestWindow.crop.name })
+        : t("quickAlerts.harvestTitle", {
+          crop: harvestWindow.crop.name,
+          count: String(harvestWindow.days),
+        }),
+      body: harvestWindow.farmers.length === 0
+        ? t("quickAlerts.harvestBodyEmpty")
+        : harvestWindow.farmers.length === 1
+          ? t("quickAlerts.harvestBodyOne")
+          : t("quickAlerts.harvestBody", { count: String(harvestWindow.farmers.length) }),
+      meta: formatDate(harvestWindow.date),
+      action: t("quickAlerts.plan"),
+      priority: 50,
+      onPress: () => navigate("/admin/alerts/harvest", { state: { crop: harvestWindow.crop.name } }),
+    });
+  }
+  quickAlertItems.sort((a, b) => b.priority - a.priority);
 
   // Employee performance — filtered by selected date filter
   const empStats = mockEmployees.map((emp) => {
@@ -588,9 +758,10 @@ export default function AdminDashboardPage() {
       {canSeeDashboard("sales_overview") && (
       <div className="px-4 pt-3 animate-fade-in-up" data-tour="home:kpis">
         <button
-          className="w-full rounded-[var(--radius-card)] p-5 text-start transition-transform active:scale-[0.98]"
+          className="w-full rounded-[var(--radius-card)] p-5 text-start transition-transform hover:opacity-95 active:scale-[0.98]"
           style={{ background: "var(--brand)" }}
           onClick={() => navigate("/admin/settings/hub/overview")}
+          data-testid="dashboard-overview-card"
         >
           <p className="ds-section-label mb-1" style={{ color: "rgba(0,0,0,0.55)" }}>
             {t("admin.totalSales")}
@@ -693,116 +864,17 @@ export default function AdminDashboardPage() {
         </div>
       </div>
 
-      {/* ── Quick Alerts: 3 summary rows with premium card design ── */}
-      {(() => {
-        if (!canSeeDashboard("quick_alerts")) return null;
-        const criticalCount = totalPayable > 0 ? 1 : 0;
-        const followupCount = dueReminderCount + delayedCount;
-        let harvestDays: number | null = null;
-        let harvestCustomerCount = 0;
-        const nowRef = new Date();
-        for (const crop of bizSettings.crops) {
-          const harvest = new Date(nowRef.getFullYear(), crop.harvestMonth - 1, crop.harvestDay || 1);
-          if (harvest < nowRef) harvest.setFullYear(nowRef.getFullYear() + 1);
-          const d = Math.ceil((harvest.getTime() - nowRef.getTime()) / 86400000);
-          if (d > 0 && d <= 30 && (harvestDays === null || d < harvestDays)) {
-            harvestDays = d;
-            harvestCustomerCount = customers.filter(c => c.outstandingBalance > 0 && customerCropsHas(c.id, crop.name)).length;
-          }
-        }
-        const items: { key: string; icon: React.ReactNode; title: string; subtitle: string; action: string; actionColor: string; cardBg: string; onClick: () => void; count: number }[] = [];
-        const criticalTotal = highRiskCount + creditLimitReached + criticalCount + pendingCreditRequests;
-        if (criticalTotal > 0) {
-          const parts: string[] = [];
-          if (highRiskCount > 0) parts.push(highRiskCount + (t("inline.high_risk_x")));
-          if (creditLimitReached > 0) parts.push(creditLimitReached + (t("inline.credit_limit")));
-          if (criticalCount > 0) parts.push(t("inline.supplier"));
-          if (pendingCreditRequests > 0) parts.push(pendingCreditRequests + (t("inline.request") + (pendingCreditRequests > 1 ? "s" : "")));
-          const urgentTab = highRiskCount > 0 ? "critical" : creditLimitReached > 0 || pendingCreditRequests > 0 ? "warning" : "critical";
-          items.push({
-            key: "critical",
-            icon: <AlertTriangle size={18} />,
-            title: t(criticalTotal === 1 ? "dashboard.actionNeeded" : "dashboard.actionsNeeded", { count: criticalTotal }),
-            subtitle: parts.join(t("inline.text")),
-            action: t("admin.review"),
-            actionColor: "var(--error)",
-            cardBg: "var(--surface)",
-            onClick: () => navigate("/admin/alerts/reminders", { state: { tab: "action", subTab: urgentTab } }),
-            count: criticalTotal,
-          });
-        }
-        if (followupCount > 0) {
-          const parts: string[] = [];
-          if (dueReminderCount > 0) parts.push(dueReminderCount + (t("inline.reminder") + (dueReminderCount !== 1 ? "s" : "")));
-          if (delayedCount > 0) parts.push(delayedCount + (t("inline.delayed_x")));
-          items.push({
-            key: "followups",
-            icon: <Bell size={18} />,
-            title: t(followupCount === 1 ? "dashboard.followupReady" : "dashboard.followupsReady", { count: followupCount }),
-            subtitle: parts.join(t("inline.text_x")),
-            action: t("admin.view"),
-            actionColor: "var(--warning)",
-            cardBg: "var(--surface)",
-            onClick: () => navigate("/admin/alerts/reminders", { state: { tab: "followups", subTab: "ready" } }),
-            count: followupCount,
-          });
-        }
-        if (harvestDays !== null) {
-          items.push({
-            key: "harvest",
-            icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" ry="2" /><line x1="16" x2="16" y1="2" y2="6" /><line x1="8" x2="8" y1="2" y2="6" /><line x1="3" x2="21" y1="10" y2="10" /></svg>,
-            title: t(harvestDays === 1 ? "dashboard.harvestSoon" : "dashboard.harvestSoonPlural", { count: harvestDays }),
-            subtitle: harvestCustomerCount > 0 ? harvestCustomerCount + (t("inline.customers_pending")) : "",
-            action: "",
-            actionColor: "var(--text-secondary)",
-            cardBg: "var(--surface)",
-            onClick: () => navigate("/admin/alerts/reminders", { state: { tab: "followups", subTab: "ready" } }),
-            count: harvestDays,
-          });
-        }
-        if (items.length === 0) return null;
-        return (
-          <div className="px-4 pt-5">
-            {/* A label above one card of rows — the same shape as Recent Sales and every
-                other list in the app. It used to be a card wrapping a column of three more
-                cards, which is the double surface the rest of the app no longer uses. */}
-            <p className="ds-section-label mb-2 px-1" style={{ color: "var(--text-secondary)" }}>
-              {t("admin.quickAlerts")}
-            </p>
-            <ListCard>
-              {items.map((item) => (
-                <ListRow
-                  key={item.key}
-                  onClick={item.onClick}
-                  tile={
-                    <div
-                      className="size-9 rounded-full flex items-center justify-center shrink-0"
-                      style={{
-                        background: item.key === "critical" ? "var(--error-bg)" : item.key === "followups" ? "var(--warning-bg)" : "var(--surface-2)",
-                        color: item.key === "critical" ? "var(--error)" : item.key === "followups" ? "var(--warning)" : "var(--text-secondary)",
-                      }}
-                    >
-                      {item.icon}
-                    </div>
-                  }
-                  title={item.title}
-                  meta={item.subtitle || undefined}
-                  trailing={
-                    item.action ? (
-                      <div className="flex items-center gap-2 shrink-0">
-                        <span className="text-12 font-semibold" style={{ color: item.actionColor }}>
-                          {item.action}
-                        </span>
-                        <ChevronRight size={14} style={{ color: "var(--text-secondary)" }} />
-                      </div>
-                    ) : undefined
-                  }
-                />
-              ))}
-            </ListCard>
-          </div>
-        );
-      })()}
+      {/* ── Quick Alerts: ranked triage, three decisions at most ──
+          Home is a triage surface. Each row is a real record or count and opens the screen that
+          owns it; the complete list remains in the Action Center. ── */}
+      {canSeeDashboard("quick_alerts") && (
+        <QuickAlertsPanel
+          title={t("admin.quickAlerts")}
+          items={quickAlertItems.slice(0, 3)}
+          viewAllLabel={t("common.viewAll")}
+          onViewAll={() => navigate("/admin/alerts/reminders", { state: { tab: "action", subTab: "critical" } })}
+        />
+      )}
 
       {/* ── Employee Performance ── */}
       {canSeeDashboard("team_performance") && empStats.length > 0 && (

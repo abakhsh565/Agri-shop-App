@@ -191,6 +191,28 @@ export interface PendingCoOwnerInvitation {
   authorities: Array<{ code: string; module: string; labelEn: string; labelUr: string; mode: string }>;
 }
 
+/** One shop invitation waiting for this person's explicit decision. */
+export interface PendingInvitation {
+  membershipId: string;
+  shopId: string;
+  shopName: string;
+  membershipRole: MembershipRole;
+  roleName: string | null;
+  branchNames: string[];
+  inviterName: string | null;
+  invitedAt: string;
+  expiresAt: string;
+  expired: boolean;
+}
+
+/** The permanent identity and recovery state of the signed-in person. */
+export interface AgriIdentity {
+  agriId: string;
+  phone: string;
+  hasRecoveryKey: boolean;
+  recoveryKeyCreatedAt: string | null;
+}
+
 // ── RBAC Permissions ─────────────────────────────────────────────────────────
 export interface Permission {
   id: string;
@@ -319,12 +341,20 @@ export interface DashboardWidget {
   sortOrder: number;
   /** The real permission that must also be held before this block is visible. */
   defaultPermission: string | null;
+  /**
+   * Every permission the block needs (migration 0277). `defaultPermission` stays as the
+   * one-permission fallback for an older row; a block with two requirements lists both
+   * here and is shown only when all of them are effective for the signed-in member.
+   */
+  requiredPermissions?: string[];
 }
 
 export interface User {
   id: string;
   name: string;
   phone: string;
+  /** Permanent, user-facing identity. It locates an account; it never authenticates one. */
+  agriId?: string;
   role: UserRole;
   isOriginalOwner: boolean;
   isActive: boolean;
@@ -347,6 +377,8 @@ export interface User {
   coOwnerGrantId?: string | null;
   /** A pending Co-Owner grant that still needs explicit acceptance. */
   pendingCoOwnerInvitation?: PendingCoOwnerInvitation | null;
+  /** Pending memberships. Each one is accepted or declined on its own. */
+  pendingInvitations?: PendingInvitation[];
   /** Active business name resolved with the access context. */
   businessName?: string | null;
   membershipStatus?: MembershipStatus;
@@ -382,6 +414,50 @@ export interface Shop {
 // ─── Products ─────────────────────────────────────────────────────────────────
 
 export type BaseUnit = "kg" | "liter" | "piece";
+
+/** The measurement families the existing pack and stock arithmetic supports. */
+export type UnitGroup = "weight" | "volume" | "count";
+
+export type PhysicalFormCode =
+  | "liquid"
+  | "powder"
+  | "granular"
+  | "crystal"
+  | "seed"
+  | "solid"
+  | "unit";
+
+export type HandlingType = "standard" | "hazardous" | "cold_chain" | "fragile";
+
+export type ClassificationPreset =
+  | "crop_protection"
+  | "fertilizers"
+  | "seeds"
+  | "equipment"
+  | "irrigation"
+  | "plant_nutrition"
+  | "general";
+
+/** One physical form and the measurement families a product in that form may use. */
+export interface ClassificationForm {
+  code: PhysicalFormCode;
+  unitGroups: UnitGroup[];
+}
+
+/** The classification configuration explicitly stored on one category. */
+export interface CategoryClassification {
+  categoryId: string;
+  preset: ClassificationPreset;
+  physicalForms: ClassificationForm[];
+  handlingTypes: HandlingType[];
+}
+
+/** What the Add Product screen should use for a category, after inheritance is resolved. */
+export interface ResolvedClassification extends CategoryClassification {
+  /** The category whose explicit profile supplied these settings. */
+  sourceCategoryId: string;
+  inherited: boolean;
+}
 
 /**
  * One of the shop's own shelves.
@@ -438,6 +514,8 @@ export interface Product {
   categoryId?: string;
   /** The shop unit it is sold in, when one was chosen. */
   unitId?: string;
+  /** The physical form selected for this product, when its category defines forms. */
+  physicalForm?: PhysicalFormCode;
   imageUrl?: string;
   barcode?: string;
   /**
