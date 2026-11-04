@@ -60,6 +60,7 @@ import {
   MIGRATIONS_DIR,
   classifyReconciliation,
   compareWithLedger,
+  ledgerOnlyAudit,
   declaredObjects,
   orderHazards,
   readMigrationDirectory,
@@ -111,6 +112,9 @@ if (has('help') || args.includes('-h') || args.length === 0) {
       '  --apply            actually write (adopt/apply are dry runs without it)',
       '  --attest <ver>     required by adopt: the newest version being adopted',
       '  --json <file>      machine-readable report',
+      '  --ledger-only-allowlist <file>  verify only: QA-only versions this release has reviewed',
+      '                     (one version per line, # comments allowed). Every unlisted QA-only row and',
+      '                     every stale entry still fails.',
       '  --files <list>     production apply only: the batch to apply, in the verified order',
       '  --verification <f> production apply only: the PASS verify:baseline report for that batch',
       '  --backup <f>       production apply only: the manifest of the backup taken just before',
@@ -150,8 +154,31 @@ function writeReport(exitCode) {
 const jsonOut = flag('json');
 let reportResult = null;
 
+/**
+ * The reviewed QA-ahead list, when the release explicitly supplies one. It is read before the
+ * database so a missing or empty exception file cannot be mistaken for "no exceptions".
+ */
+const allowlistFile = flag('ledger-only-allowlist');
+let allowedLedgerOnly = null;
+if (allowlistFile) {
+  const allowlistPath = path.isAbsolute(allowlistFile) ? allowlistFile : path.join(ROOT, allowlistFile);
+  if (!fs.existsSync(allowlistPath)) {
+    refuse(`ledger-only allowlist not found: ${allowlistFile}. Nothing was read.`);
+  }
+  allowedLedgerOnly = fs
+    .readFileSync(allowlistPath, 'utf8')
+    .split(/\r?\n/)
+    .map((line) => line.replace(/#.*$/, '').trim().split(/\s+/)[0])
+    .filter(Boolean);
+  if (!allowedLedgerOnly.length) {
+    refuse(`ledger-only allowlist ${allowlistFile} is empty. Nothing was read.`);
+  }
+}
 const mode = args.find((a) => MODES.includes(a));
 if (!mode) refuse(`no mode given. One of: ${MODES.join(', ')}`, 2);
+if (allowedLedgerOnly && mode !== 'verify') {
+  refuse('--ledger-only-allowlist is only valid with verify. Nothing was read.');
+}
 if (mode === 'status' && has('apply')) refuse('status is read-only. Use `apply` to write.');
 
 // ── Target resolution, before anything is read ──────────────────────────────────────────────
@@ -659,6 +686,12 @@ result.ledger = {
 const comparison = compareWithLedger(directory, ledger.rows, ledger.divergences);
 const pendingVersions = comparison.pending.map((e) => e.version);
 const order = orderHazards(directory, ledger.rows, pendingVersions);
+const allowlistAudit = allowedLedgerOnly
+  ? ledgerOnlyAudit(comparison.ledgerOnly, allowedLedgerOnly)
+  : null;
+const ledgerOnlyForVerification = allowlistAudit
+  ? comparison.ledgerOnly.filter((row) => allowlistAudit.unlisted.includes(String(row.version)))
+  : comparison.ledgerOnly;
 
 const existsInFiles = new Set(ledger.rows.filter((r) => r.sha256 != null).map((r) => String(r.version)));
 const unattested = ledger.rows
@@ -668,6 +701,9 @@ const unattested = ledger.rows
 result.comparison = {
   pending: comparison.pending.map((e) => `${e.version} ${e.filename}`),
   ledgerOnly: comparison.ledgerOnly.map((r) => `${r.version} ${r.name ?? ''}`.trim()),
+  ledgerOnlyAllowed: allowlistAudit?.allowed ?? [],
+  ledgerOnlyUnlisted: allowlistAudit?.unlisted ?? [],
+  ledgerOnlyAllowlistStale: allowlistAudit?.stale ?? [],
   changed: comparison.changed.map((c) => `${c.version} ${c.filename}`),
   reconciled: comparison.reconciled.map((r) => `${r.recorded} -> ${r.satisfiedBy}`),
   diverged: comparison.diverged.map((d) => `${d.version} ${d.kind} ${d.filename}`),
@@ -690,7 +726,11 @@ if (directory.problems.length) {
 }
 const differences = [
   ['pending (in the directory, not recorded)', result.comparison.pending],
-  ['ledger-only (recorded, no file)', result.comparison.ledgerOnly],
+  [
+    allowlistAudit ? 'ledger-only (recorded, no file; NOT in the reviewed allowlist)' : 'ledger-only (recorded, no file)',
+    ledgerOnlyForVerification.map((r) => `${r.version} ${r.name ?? ''}`.trim()),
+  ],
+  ['allowlist entries that are no longer QA-only', allowlistAudit?.stale ?? []],
   ['changed after it was applied', result.comparison.changed],
   ['recorded without a hash', result.comparison.unattested],
   ['reconciled old version names', result.comparison.reconciled],
@@ -719,8 +759,12 @@ if (order.hazards.length) {
   console.log(`\n  ORDER HAZARD: ${order.hazards.length} pending file(s) sort before the newest recorded version (${order.highestRecorded}):`);
   for (const hazard of order.hazards.slice(0, 25)) console.log(`    ${hazard}`);
 }
+if (allowlistAudit) {
+  console.log(`\n  QA-AHEAD ALLOWLIST: ${allowlistAudit.allowed.length} reviewed ledger-only version(s) accepted; ${allowlistAudit.unlisted.length} unlisted, ${allowlistAudit.stale.length} stale.`);
+  if (allowlistAudit.allowed.length) console.log(`    ${allowlistAudit.allowed.join(', ')}`);
+}
 if (!directory.problems.length && !totalDifferences && !order.hazards.length) {
-  console.log('\n  Directory and ledger agree exactly: every file recorded, every record has a file, every hash matches.');
+  console.log('\n  Directory and ledger agree at every candidate file: every file recorded, every hash matches; QA-only rows are covered by the reviewed allowlist.');
 }
 
 let exitCode = 0;

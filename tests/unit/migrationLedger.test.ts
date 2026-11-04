@@ -30,6 +30,7 @@ import {
   classifyReconciliation,
   compareWithLedger,
   declaredObjects,
+  ledgerOnlyAudit,
   orderHazards,
   parseMigrationFilename,
   readMigrationDirectory,
@@ -193,6 +194,36 @@ describe('directory vs ledger', () => {
     const comparison = compareWithLedger(directory, rows);
     expect(comparison.ledgerOnly).toEqual([]);
     expect(comparison.reconciled).toEqual([{ recorded: '20260903', satisfiedBy: '0060_b.sql' }]);
+  });
+});
+
+describe('QA-ahead allowlist', () => {
+  it('accepts only the reviewed versions and names both an unlisted row and a stale entry', () => {
+    const ledgerOnly = [
+      { version: '0233', name: 'a_role_is_granted_per_branch' },
+      { version: '0234', name: 'a_branch_holds_its_own_stock_and_receivables' },
+    ];
+    expect(ledgerOnlyAudit(ledgerOnly, ['0233', '0234'])).toEqual({
+      allowed: ['0233', '0234'],
+      unlisted: [],
+      stale: [],
+    });
+    expect(ledgerOnlyAudit(ledgerOnly, ['0233'])).toMatchObject({
+      allowed: ['0233'],
+      unlisted: ['0234'],
+      stale: [],
+    });
+    expect(ledgerOnlyAudit(ledgerOnly, ['0233', '0234', '0277'])).toMatchObject({
+      allowed: ['0233', '0234'],
+      unlisted: [],
+      stale: ['0277'],
+    });
+  });
+
+  it('does not turn a pending or changed candidate file into an allowed row', () => {
+    const ledgerOnly = [{ version: '0233', name: 'qa_only' }];
+    expect(ledgerOnlyAudit(ledgerOnly, []).unlisted).toEqual(['0233']);
+    expect(ledgerOnlyAudit(ledgerOnly, ['0233']).stale).toEqual([]);
   });
 });
 

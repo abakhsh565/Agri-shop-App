@@ -356,6 +356,27 @@ export function classifyReconciliation({ recordedStatements, fileBody }) {
   };
 }
 
+/**
+ * Split ledger-only rows into the versions this release has explicitly accepted as QA-ahead and
+ * the ones that are still unexplained.
+ *
+ * QA and production are different histories: QA carries the branch/access migrations that were
+ * developed there, while a production hotfix starts from the production lineage. Exact equality
+ * with QA is therefore the wrong invariant for a release candidate. The safe invariant is:
+ * every file in the candidate is present in QA with the recorded hash, and every QA-only row is
+ * named in a reviewed allowlist. An unlisted row, or a listed row that no longer exists, fails
+ * the check — the exception cannot silently grow, and cannot silently become stale.
+ */
+export function ledgerOnlyAudit(ledgerOnly = [], allowedVersions = []) {
+  const actual = new Map(ledgerOnly.map((row) => [String(row.version), row]));
+  const allowed = new Set(allowedVersions.map((version) => String(version).trim()).filter(Boolean));
+  return {
+    allowed: [...allowed].filter((version) => actual.has(version)),
+    unlisted: [...actual.keys()].filter((version) => !allowed.has(version)),
+    stale: [...allowed].filter((version) => !actual.has(version)),
+  };
+}
+
 /** One line per difference class, for the human report. */
 export function describeComparisons(comparison) {
   return [
