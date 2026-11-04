@@ -368,6 +368,7 @@ from the ledger's server-only set — its list read from the ledger by
 across the batch: nothing widened; `0215`'s grant exists only between two files of one owner-run batch,
 never on an end state.
 
+| `0290_a_shop_request_has_a_phone_and_a_place.sql` | **Production signup repair — one-file batch.** Adds the five nullable `shop_requests` columns the registration RPC writes (`phone`, `latitude`, `longitude`, `location_label`, `location_source`), backfills `phone` from `owner_phone`, and installs the Pakistan place constraint. Additive and idempotent; the only table it may change is `shop_requests`. Apply only as a named, verified batch on production's own baseline, with the required fresh backup and restore verification. |
 
 ### 5.1 Measured after the apply (2026-10-17, 15:04–15:22Z) — the ledger is right, the data model is not
 
