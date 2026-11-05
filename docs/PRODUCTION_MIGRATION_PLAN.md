@@ -457,6 +457,22 @@ rows below `0017` are production's out-of-band setup and predate the tooling). T
 was found at all: the plan's old claim — "hashes match the files on disk" — was true on the machine
 that wrote them and false on any other checkout.
 
+### 5.5 The `0291`–`0299` base-fix batch, applied to QA (2026-11-05)
+
+Applied to QA (project `bpybjrjenwccowvtrevu`) on 2026-11-05 ~19:18 UTC, through the manual workflow
+`.github/workflows/apply-staging-migrations.yml` (`workflow_dispatch`, run 42093431814), which runs the
+repo's own `scripts/migrate.mjs apply --env staging --apply` on a GitHub runner with the repo's `QA_*`
+secrets. The workflow exists because a developer machine in this sandbox cannot reach the QA database
+directly (its egress proxy allows only port 443; Postgres needs 5432/6543), while a GitHub runner can.
+Each file applied and recorded: `0291` (4 statements), `0292` (22), `0293` (9), `0294` (10), `0295`
+(4), `0296` (4), `0297` (5), `0298` (4), `0299` (3). Ledger `268 → 277` rows; `verify` with the
+ledger-only allowlist: **PASS** (the 44 QA-only rows `0233`–`0276` accepted, 0 pending).
+
+Production status is unchanged: `0291`–`0299` remain production-pending and still go out only as a
+named, verified batch under §7(a), after the `0233`–`0276` batch. Hosted-QA proof of the fixes
+themselves — that the CI QA suites now pass against the corrected schema — awaits the CI QA run on
+PR #10; the apply above only proves the migrations record cleanly on QA.
+
 ## 6. Backward-compatibility rules (binding on every batch)
 
 1. **Additive only.** New columns are nullable or defaulted, added `if not exists`. No drops, no
