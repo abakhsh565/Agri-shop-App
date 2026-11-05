@@ -1,0 +1,45 @@
+---
+name: QA probe (read-only)
+
+# READ-ONLY diagnostic: runs a fixed set of SELECT queries against the QA
+# database through the same run_sql RPC the integration tests use, and prints
+# the results to the log. It can NEVER write: every query below is a SELECT,
+# there is no --apply flag, no migration step, and no production secret or
+# URL anywhere in this file. Manual dispatch only.
+on:
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run read-only QA probes
+        env:
+          QA_SUPABASE_URL: ${{ secrets.QA_SUPABASE_URL }}
+          QA_SUPABASE_SERVICE_ROLE: ${{ secrets.QA_SUPABASE_SERVICE_ROLE }}
+        run: |
+          node --input-type=module -e "
+            const url = process.env.QA_SUPABASE_URL + '/rest/v1/rpc/run_sql';
+            const headers = {
+              apikey: process.env.QA_SUPABASE_SERVICE_ROLE,
+              Authorization: 'Bearer ' + process.env.QA_SUPABASE_SERVICE_ROLE,
+              'Content-Type': 'application/json',
+              Prefer: 'return=representation',
+            };
+            const queries = {
+              membership_role: "SELECT m.role, m.role_id, r.name AS membership_role_name FROM memberships m LEFT JOIN roles r ON r.id = m.role_id WHERE m.user_id = 'd3000000-0000-0000-0000-0000000000e1'",
+              branch_rows: "SELECT mbr.branch_id, mbr.role_id, r.name FROM membership_branch_roles mbr LEFT JOIN roles r ON r.id = mbr.role_id WHERE mbr.membership_id = (SELECT id FROM memberships WHERE user_id='d3000000-0000-0000-0000-0000000000e1')",
+              clerk_role: "SELECT id, name FROM roles WHERE tenant_id='00000000-0000-0000-0000-000000000001' AND name='Inventory Clerk'",
+              permissions_count: 'SELECT count(*) FROM permissions',
+              clerk_grants: "SELECT count(*) FROM role_permissions WHERE role_id = (SELECT id FROM roles WHERE tenant_id='00000000-0000-0000-0000-000000000001' AND name='Inventory Clerk')",
+              store_manager_role: "SELECT id, name FROM roles WHERE tenant_id='00000000-0000-0000-0000-000000000001' AND name='Store Manager'",
+              store_manager_grants: "SELECT count(*) FROM role_permissions WHERE role_id = (SELECT id FROM roles WHERE tenant_id='00000000-0000-0000-0000-000000000001' AND name='Store Manager')",
+            };
+            for (const [name, sql] of Object.entries(queries)) {
+              const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify({ sql_query: sql }) });
+              const text = await res.text();
+              console.log('=== ' + name + ' (HTTP ' + res.status + ') ===');
+              console.log(text);
+            }
+          "
+---
