@@ -57,11 +57,52 @@ const QA_SERVICE_ROLE = process.env.QA_SUPABASE_SERVICE_ROLE || '';
 import { assertQaProject } from './env-guard';
 assertQaProject(QA_URL);
 
+/**
+ * QA clients are created LAZILY, on first use — never at module load.
+ *
+ * WHY. `createClient(url, '')` throws `supabaseKey is required` at construction.
+ * These two clients used to be built at import time, so a run without
+ * QA_SUPABASE_SERVICE_ROLE / QA_SUPABASE_ANON_KEY died while *importing* the
+ * module: the whole gates job failed with that one opaque line, and two unit
+ * guards (e2eCleanupOwnership, signalEngine) could not even load, although
+ * neither of them opens a connection. The failure also named no variable, so
+ * the reader could not tell which secret was missing. Deferring construction
+ * to first use keeps the import safe; the first call that actually needs the
+ * client throws an error naming the missing variable instead.
+ *
+ * The proxy forwards every property access to the real client created on first
+ * use, so every existing call site (`qaServiceClient.rpc(...)`,
+ * `qaServiceClient.auth.admin.createUser(...)`, `qaAnonClient.from(...)`)
+ * behaves exactly as before once the keys exist.
+ */
+function lazyQaClient(kind: 'service' | 'anon'): SupabaseClient {
+  let real: SupabaseClient | null = null;
+  const create = (): SupabaseClient => {
+    if (real) return real;
+    const key = kind === 'service' ? QA_SERVICE_ROLE : QA_ANON_KEY;
+    if (!key) {
+      throw new Error(
+        `QA_SUPABASE_${kind === 'service' ? 'SERVICE_ROLE' : 'ANON_KEY'} is not set — the QA client cannot be created. ` +
+          `In CI this comes from the repository secret; locally, set it in .env.qa or the environment.`,
+      );
+    }
+    real = createClient(QA_URL, key);
+    return real;
+  };
+  return new Proxy({} as SupabaseClient, {
+    get(_target, prop) {
+      const target = create();
+      const value = (target as unknown as Record<string | symbol, unknown>)[prop];
+      return typeof value === 'function' ? (value as (...args: unknown[]) => unknown).bind(target) : value;
+    },
+  });
+}
+
 /** Service-role client (bypasses RLS, for test setup/teardown) */
-export const qaServiceClient = createClient(QA_URL, QA_SERVICE_ROLE);
+export const qaServiceClient = lazyQaClient('service');
 
 /** Anon client (RLS-enforced, for testing RLS policies) */
-export const qaAnonClient = createClient(QA_URL, QA_ANON_KEY);
+export const qaAnonClient = lazyQaClient('anon');
 
 // ─── Direct PG Client (bypasses pooler for fixture setup/teardown) ──────
 

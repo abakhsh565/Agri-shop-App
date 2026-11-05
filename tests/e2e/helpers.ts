@@ -102,14 +102,35 @@ export const QA_IDS = {
   companyA: '50000000-0000-0000-0000-000000000001',
 } as const;
 
-const _svcClient = createClient(QA_URL, QA_SERVICE_ROLE);
+/**
+ * Service-role client, created LAZILY on first use — never at module load.
+ * `createClient(url, '')` throws `supabaseKey is required` at construction, and
+ * this module is imported by unit guards that never open a connection
+ * (e2eCleanupOwnership): building the client at import time killed the whole
+ * file with an opaque error whenever QA_SUPABASE_SERVICE_ROLE was absent.
+ * The first call that actually needs the client throws an error naming the
+ * missing variable instead.
+ */
+let _svcClient: ReturnType<typeof createClient> | null = null;
+function svcClient(): ReturnType<typeof createClient> {
+  if (!_svcClient) {
+    if (!QA_SERVICE_ROLE) {
+      throw new Error(
+        'QA_SUPABASE_SERVICE_ROLE is not set — the QA client cannot be created. ' +
+          'In CI this comes from the repository secret; locally, set it in .env.qa or the environment.',
+      );
+    }
+    _svcClient = createClient(QA_URL, QA_SERVICE_ROLE);
+  }
+  return _svcClient;
+}
 
 /**
  * Execute raw SQL against the QA database via run_sql HTTP API.
  * Uses service-role to bypass RLS.
  */
 export async function execSql(sql: string): Promise<any[]> {
-  const { data, error } = await _svcClient.rpc('run_sql', { sql_query: sql });
+  const { data, error } = await svcClient().rpc('run_sql', { sql_query: sql });
   if (error) throw new Error(`execSql: ${error.message}`);
   if (!data || data === 'ok') return [];
   let parsed: unknown = data;
@@ -617,7 +638,7 @@ export function ownedObjects(): OwnedObject[] {
 export { trackOwned, trackOwnedObject, ownedCount };
 
 async function removeStorageObject(object: OwnedObject): Promise<void> {
-  const { error } = await _svcClient.storage.from(object.bucket).remove([object.path]);
+  const { error } = await svcClient().storage.from(object.bucket).remove([object.path]);
   if (error) throw new Error(error.message);
 }
 

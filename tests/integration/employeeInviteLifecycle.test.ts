@@ -43,18 +43,68 @@ async function statusOf(userId: string): Promise<string> {
   return r.rows[0]?.status;
 }
 
+/**
+ * Cleanup that REPORTS instead of swallowing — the customerDeletionSecurity
+ * pattern. This suite shares the QA database with the other integration
+ * files and reuses fixed identities (its own phone namespace). A silent
+ * `.catch()` here used to leave rows in place, and the suite then failed
+ * deep inside a test with `NOT_AUTHORIZED: tenant access denied`, which
+ * reads like a security finding and is really leftover state. Failures are
+ * collected and the caller throws with their names.
+ */
+const cleanupFailures: string[] = [];
+async function trySql(label: string, q: string): Promise<void> {
+  try {
+    await sql(q);
+  } catch (error) {
+    cleanupFailures.push(`${label}: ${(error as Error).message}`);
+  }
+}
+function throwIfCleanupFailed(context: string): void {
+  if (cleanupFailures.length) {
+    throw new Error(
+      `${context}: cleanup failed — ${cleanupFailures.join(' | ')}. ` +
+        `Leftover rows from this suite's namespace will contaminate the next run; fix the leak here rather than re-running.`,
+    );
+  }
+}
+
 async function cleanup() {
-  await sql(`
+  cleanupFailures.length = 0;
+  await trySql(
+    'audit_events',
+    `
     DELETE FROM audit_events
     WHERE user_id IN (SELECT id FROM users WHERE phone IN (${PHONES.map((p) => `'${p}'`).join(',')}))
        OR entity_id IN (SELECT id FROM users WHERE phone IN (${PHONES.map((p) => `'${p}'`).join(',')}))
-  `).catch(() => undefined);
-  await sql(`DELETE FROM customers WHERE phone LIKE '92300966%'`).catch(() => undefined);
-  await sql(`DELETE FROM users WHERE phone IN (${PHONES.map((p) => `'${p}'`).join(',')})`).catch(() => undefined);
+  `,
+  );
+  await trySql('customers', `DELETE FROM customers WHERE phone LIKE '92300966%'`);
+  await trySql('users', `DELETE FROM users WHERE phone IN (${PHONES.map((p) => `'${p}'`).join(',')})`);
 }
 
 beforeAll(async () => {
   await cleanup();
+  throwIfCleanupFailed('employeeInviteLifecycle beforeAll cleanup');
+
+  // ── the namespace must be clean before anything is asserted ──────────
+  // A leftover membership or active-shop row changes which tenant
+  // `current_tenant_id()` resolves to, so refuse to start instead of
+  // failing deep inside a test with a misleading authorization error.
+  const stale = await sql(
+    `SELECT (SELECT count(*) FROM users WHERE phone IN (${PHONES.map((p) => `'${p}'`).join(',')})) AS users,
+            (SELECT count(*) FROM memberships WHERE user_id IN (SELECT id FROM users WHERE phone IN (${PHONES.map((p) => `'${p}'`).join(',')}))) AS memberships,
+            (SELECT count(*) FROM user_active_shops WHERE user_id IN (SELECT id FROM users WHERE phone IN (${PHONES.map((p) => `'${p}'`).join(',')}))) AS active_shops,
+            (SELECT count(*) FROM customers WHERE phone LIKE '92300966%') AS customers`,
+  );
+  const staleCounts = stale.rows[0] as Record<string, string>;
+  if (['users', 'memberships', 'active_shops', 'customers'].some((k) => Number(staleCounts[k]))) {
+    throw new Error(
+      `the employeeInviteLifecycle namespace is not clean, so this suite cannot run. ` +
+        `Leftover rows: ${JSON.stringify(staleCounts)}. A previous run leaked rows in this suite's phone namespace — fix the leak in that run's cleanup rather than re-running.`,
+    );
+  }
+
   await sql(`
     INSERT INTO users (id, name, phone, role, is_original_owner, is_active, shop_id)
     VALUES ('${OWNER}', 'QA Invite Owner', '${PHONES[0]}', 'admin', true, true, '${TENANT}')
@@ -79,6 +129,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await cleanup();
+  throwIfCleanupFailed('employeeInviteLifecycle afterAll cleanup');
 });
 
 describe('Employee invite lifecycle — an invitation is not access', () => {
@@ -285,20 +336,24 @@ describe('An invitation is usable: the invitee can actually sign in', () => {
   let inviteeId = '';
 
   beforeAll(async () => {
-    await sql(`DELETE FROM user_permissions WHERE user_id IN (SELECT id FROM users WHERE phone = '${PHONE}')`).catch(() => undefined);
-    await sql(`DELETE FROM memberships WHERE user_id IN (SELECT id FROM users WHERE phone = '${PHONE}')`).catch(() => undefined);
-    await sql(`DELETE FROM auth.identities WHERE user_id IN (SELECT id FROM users WHERE phone = '${PHONE}')`).catch(() => undefined);
-    await sql(`DELETE FROM auth.users WHERE id IN (SELECT id FROM users WHERE phone = '${PHONE}')`).catch(() => undefined);
-    await sql(`DELETE FROM users WHERE phone = '${PHONE}'`).catch(() => undefined);
+    cleanupFailures.length = 0;
+    await trySql('user_permissions', `DELETE FROM user_permissions WHERE user_id IN (SELECT id FROM users WHERE phone = '${PHONE}')`);
+    await trySql('memberships', `DELETE FROM memberships WHERE user_id IN (SELECT id FROM users WHERE phone = '${PHONE}')`);
+    await trySql('auth.identities', `DELETE FROM auth.identities WHERE user_id IN (SELECT id FROM users WHERE phone = '${PHONE}')`);
+    await trySql('auth.users', `DELETE FROM auth.users WHERE id IN (SELECT id FROM users WHERE phone = '${PHONE}')`);
+    await trySql('users', `DELETE FROM users WHERE phone = '${PHONE}'`);
+    throwIfCleanupFailed('usable-invite beforeAll cleanup');
   });
 
   afterAll(async () => {
-    await sql(`DELETE FROM user_permissions WHERE user_id = '${inviteeId}'`).catch(() => undefined);
-    await sql(`DELETE FROM memberships WHERE user_id = '${inviteeId}'`).catch(() => undefined);
-    await sql(`DELETE FROM audit_events WHERE entity_id = '${inviteeId}' OR user_id = '${inviteeId}'`).catch(() => undefined);
-    await sql(`DELETE FROM users WHERE id = '${inviteeId}'`).catch(() => undefined);
-    await sql(`DELETE FROM auth.identities WHERE user_id = '${inviteeId}'`).catch(() => undefined);
-    await sql(`DELETE FROM auth.users WHERE id = '${inviteeId}'`).catch(() => undefined);
+    cleanupFailures.length = 0;
+    await trySql('user_permissions', `DELETE FROM user_permissions WHERE user_id = '${inviteeId}'`);
+    await trySql('memberships', `DELETE FROM memberships WHERE user_id = '${inviteeId}'`);
+    await trySql('audit_events', `DELETE FROM audit_events WHERE entity_id = '${inviteeId}' OR user_id = '${inviteeId}'`);
+    await trySql('users', `DELETE FROM users WHERE id = '${inviteeId}'`);
+    await trySql('auth.identities', `DELETE FROM auth.identities WHERE user_id = '${inviteeId}'`);
+    await trySql('auth.users', `DELETE FROM auth.users WHERE id = '${inviteeId}'`);
+    throwIfCleanupFailed('usable-invite afterAll cleanup');
   });
 
   it('creates the login with the employee, so the invite can be accepted', async () => {
@@ -326,11 +381,13 @@ describe('An invitation is usable: the invitee can actually sign in', () => {
       payload: { name: 'QA Usable Invite 2', phone: '923009660006', roleId: ROLE_SALES_EMPLOYEE },
     });
     expect(perms.error).toBeNull();
-    await sql(`DELETE FROM user_permissions WHERE user_id = '${perms.data.id}'`).catch(() => undefined);
-    await sql(`DELETE FROM memberships WHERE user_id = '${perms.data.id}'`).catch(() => undefined);
-    await sql(`DELETE FROM auth.identities WHERE user_id = '${perms.data.id}'`).catch(() => undefined);
-    await sql(`DELETE FROM auth.users WHERE id = '${perms.data.id}'`).catch(() => undefined);
-    await sql(`DELETE FROM users WHERE id = '${perms.data.id}'`).catch(() => undefined);
+    cleanupFailures.length = 0;
+    await trySql('user_permissions', `DELETE FROM user_permissions WHERE user_id = '${perms.data.id}'`);
+    await trySql('memberships', `DELETE FROM memberships WHERE user_id = '${perms.data.id}'`);
+    await trySql('auth.identities', `DELETE FROM auth.identities WHERE user_id = '${perms.data.id}'`);
+    await trySql('auth.users', `DELETE FROM auth.users WHERE id = '${perms.data.id}'`);
+    await trySql('users', `DELETE FROM users WHERE id = '${perms.data.id}'`);
+    throwIfCleanupFailed('usable-invite second employee cleanup');
   });
 
   it('accepts the invitation with the app\'s own credential and no help from the tests', async () => {
