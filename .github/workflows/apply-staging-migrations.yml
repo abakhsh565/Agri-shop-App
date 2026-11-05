@@ -65,7 +65,8 @@ jobs:
             exit 1
           fi
 
-      - name: Ledger state before the apply (read-only)
+      - name: Ledger state before the apply (read-only; pending is expected here)
+              continue-on-error: true
         run: node scripts/migrate.mjs verify --env staging
 
       - name: Apply pending migrations to QA
