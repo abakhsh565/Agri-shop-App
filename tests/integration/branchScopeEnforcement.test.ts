@@ -243,9 +243,14 @@ beforeAll(async () => {
   // (stock_qty minus the active ledgers), so both branches can sell the 1 unit
   // each test needs. Fixed id + ON CONFLICT DO NOTHING so a re-run never
   // double-receives; cleanup() already deletes movements by product_id.
+  // movement_type is 'purchase', not 'opening': the repo's 0009 defines the enum
+  // WITH 'opening', but QA's live enum rejects it (proven by this suite's
+  // beforeAll failing on the value), while 'purchase' is what create_purchase
+  // writes and three purchase-driving suites pass on QA with it
+  // (createOnceSafety, priceTraceability, securityMatrix, run 42094756935).
   await sql(`
     INSERT INTO inventory_movements (id, variant_id, product_id, branch_id, movement_type, qty_before, qty_change, qty_after, reference_type, notes)
-    VALUES ('${RECEIPT}', '${VARIANT}', '${PRODUCT}', '${warehouseBranch}', 'opening', 0, 50, 50, 'opening', 'QA branchScopeEnforcement: opening stock for the warehouse branch')
+    VALUES ('${RECEIPT}', '${VARIANT}', '${PRODUCT}', '${warehouseBranch}', 'purchase', 0, 50, 50, 'opening', 'QA branchScopeEnforcement: opening stock for the warehouse branch')
     ON CONFLICT (id) DO NOTHING
   `);
 
