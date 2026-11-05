@@ -51,32 +51,57 @@ const OWNER_AUDIT_CLEANUP = `
      OR details->>'name' LIKE 'QA Enforcement %'
 `;
 
+/**
+ * Cleanup that REPORTS instead of swallowing — the customerDeletionSecurity /
+ * employeeInviteLifecycle pattern. This suite shares the QA database with the
+ * other integration files, so a silent catch here would leave rows in place
+ * and the next suite would fail deep inside a test with an authorization error
+ * that is really leftover state. Failures are collected and the caller throws
+ * with their names (throwIfCleanupFailed, wired in beforeAll/afterAll).
+ */
+const cleanupFailures: string[] = [];
+async function trySql(label: string, p: Promise<unknown>): Promise<void> {
+  try {
+    await p;
+  } catch (error) {
+    cleanupFailures.push(`${label}: ${(error as Error).message}`);
+  }
+}
+function throwIfCleanupFailed(context: string): void {
+  if (cleanupFailures.length) {
+    throw new Error(
+      `${context}: cleanup failed — ${cleanupFailures.join(' | ')}. ` +
+        `Leftover rows from this suite's namespace will contaminate the next run; fix the leak here rather than re-running.`,
+    );
+  }
+}
+
 async function cleanup() {
-  await sql(OWNER_AUDIT_CLEANUP).catch(() => undefined);
-  await sql(`DELETE FROM user_permissions WHERE user_id IN (SELECT id FROM users WHERE id IN ('${OWNER_A}','${OWNER_B}') OR phone IN ('923009770001','923009770002','923009770031','923009770032') OR name LIKE 'QA Enforce%')`).catch(() => undefined);
+  await trySql('OWNER_AUDIT_CLEANUP', sql(OWNER_AUDIT_CLEANUP));
+  await trySql('user_permissions', sql(`DELETE FROM user_permissions WHERE user_id IN (SELECT id FROM users WHERE id IN ('${OWNER_A}','${OWNER_B}') OR phone IN ('923009770001','923009770002','923009770031','923009770032') OR name LIKE 'QA Enforce%')`));
   // Order matters: rows that reference `users` (inventory movements record the
   // actor) and `roles` (memberships hold role_id) must be removed first.
-  await sql(`
+  await trySql('inventory_movements', sql(`
     DELETE FROM inventory_movements
     WHERE created_by IN (SELECT id FROM users WHERE phone IN ('923009770001','923009770002','923009770031','923009770032') OR name LIKE 'QA Enforce%')
        OR product_id IN (SELECT id FROM products WHERE name = 'QA Enforce Product')
-  `).catch(() => undefined);
-  await sql(`DELETE FROM stock_adjustments WHERE product_id IN (SELECT id FROM products WHERE name = 'QA Enforce Product')`).catch(() => undefined);
-  await sql(`DELETE FROM product_variants WHERE product_id IN (SELECT id FROM products WHERE name = 'QA Enforce Product')`).catch(() => undefined);
-  await sql(`DELETE FROM products WHERE name = 'QA Enforce Product'`).catch(() => undefined);
-  await sql(`DELETE FROM customers WHERE phone IN ('923009770088','923009770099')`).catch(() => undefined);
-  await sql(`
+  `));
+  await trySql('stock_adjustments', sql(`DELETE FROM stock_adjustments WHERE product_id IN (SELECT id FROM products WHERE name = 'QA Enforce Product')`));
+  await trySql('product_variants', sql(`DELETE FROM product_variants WHERE product_id IN (SELECT id FROM products WHERE name = 'QA Enforce Product')`));
+  await trySql('products', sql(`DELETE FROM products WHERE name = 'QA Enforce Product'`));
+  await trySql('customers', sql(`DELETE FROM customers WHERE phone IN ('923009770088','923009770099')`));
+  await trySql('users', sql(`
     DELETE FROM users
     WHERE id IN ('${OWNER_A}','${OWNER_B}')
        OR phone IN ('923009770001','923009770002','923009770031','923009770032')
        OR name LIKE 'QA Enforce%'
-  `).catch(() => undefined);
-  await sql(`
+  `));
+  await trySql('role_permissions', sql(`
     DELETE FROM role_permissions
     WHERE role_id IN (SELECT id FROM roles WHERE name LIKE 'QA Enforcement %' OR tenant_id = '${TENANT_B}')
-  `).catch(() => undefined);
-  await sql(`DELETE FROM roles WHERE name LIKE 'QA Enforcement %' OR tenant_id = '${TENANT_B}'`).catch(() => undefined);
-  await sql(`DELETE FROM shops WHERE id = '${TENANT_B}'`).catch(() => undefined);
+  `));
+  await trySql('roles', sql(`DELETE FROM roles WHERE name LIKE 'QA Enforcement %' OR tenant_id = '${TENANT_B}'`));
+  await trySql('shops', sql(`DELETE FROM shops WHERE id = '${TENANT_B}'`));
 }
 
 beforeAll(async () => {
@@ -111,10 +136,12 @@ beforeAll(async () => {
   const branchB = await ensureTenantBranch(TENANT_B, 'QA Tenant B Main');
   await setActiveBranchAsUser(OWNER_B, branchB);
   await setActiveBranchAsUser(OWNER_A, branchMain);
+  throwIfCleanupFailed('rbacEnforcement beforeAll cleanup');
 });
 
 afterAll(async () => {
   await cleanup();
+  throwIfCleanupFailed('rbacEnforcement afterAll cleanup');
 });
 
 describe('RBAC enforcement — User → Membership invariant', () => {

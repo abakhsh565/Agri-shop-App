@@ -206,9 +206,16 @@ describe('Employee invite lifecycle — an invitation is not access', () => {
     // work. The RPC is still best-effort here *by design* (its own semantics live in their lane) —
     // what matters is that the failure this test provokes is the membership status, not a missing
     // function (tests/unit/rpcContractGuard.test.ts now fails on either).
-    await execRpcAsUser(OWNER, 'deactivate_employee_v1', {
-      payload: { employeeId: invited },
-    }).catch(() => undefined);
+    // Best-effort by design (see the comment above): the SQL below enforces
+    // the state this test asserts on, so a failure of the RPC itself is not
+    // a failure of this test.
+    try {
+      await execRpcAsUser(OWNER, 'deactivate_employee_v1', {
+        payload: { employeeId: invited },
+      });
+    } catch {
+      /* best-effort by design: deactivation is enforced by the SQL below */
+    }
     // Deactivation is enforced through the same status field authorization reads.
     await sql(`UPDATE users SET is_active = false WHERE id = '${invited}'`);
     expect(await statusOf(invited)).toBe('suspended');

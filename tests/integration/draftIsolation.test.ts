@@ -25,10 +25,12 @@ async function q(sql: string) {
 describe('Draft QA Data Isolation', () => {
   beforeAll(async () => {
     // Clean — FK-safe order
-    for (const t of ['sale_items', 'sales', 'inventory_movements', 'stock_adjustments']) {
-      await q(`DELETE FROM ${t} WHERE product_id IN ('${PROD_A}','${PROD_B}')`).catch(() => {});
+    for (const t of ['sale_items', 'inventory_movements', 'stock_adjustments']) {
+      await trySql('cleanup', q(`DELETE FROM ${t} WHERE product_id IN ('${PROD_A}','${PROD_B}')`));
     }
-    await q(`DELETE FROM product_variants WHERE id IN ('${VAR_A}','${VAR_B}')`).catch(() => {});
+    // sales has no product_id column; this suite's sales are scoped by its customers.
+    await trySql('cleanup', q(`DELETE FROM sales WHERE customer_id IN ('${CUST_A}','${CUST_B}')`));
+    await trySql('product_variants', q(`DELETE FROM product_variants WHERE id IN ('${VAR_A}','${VAR_B}')`));
     await q(`DELETE FROM products WHERE id IN ('${PROD_A}','${PROD_B}')`);
     await q(`DELETE FROM companies WHERE id IN ('${CO_A}','${CO_B}')`);
     await q(`DELETE FROM customers WHERE id IN ('${CUST_A}','${CUST_B}')`);
@@ -64,17 +66,45 @@ describe('Draft QA Data Isolation', () => {
     await q(`INSERT INTO product_variants (id, product_id, name, selling_price, cost_price, unit_size, low_stock_threshold, stock_qty)
       VALUES ('${VAR_B}', '${PROD_B}', '1kg', 8000, 5000, 1, 10, 200)
       ON CONFLICT (id) DO UPDATE SET stock_qty = EXCLUDED.stock_qty`);
-  });
+      throwIfCleanupFailed('Draft QA Data Isolation beforeAll cleanup');
+});
 
-  afterAll(async () => {
-    for (const t of ['sale_items', 'sales', 'inventory_movements', 'stock_adjustments']) {
-      await q(`DELETE FROM ${t} WHERE product_id IN ('${PROD_A}','${PROD_B}')`).catch(() => {});
+  /**
+ * Cleanup that REPORTS instead of swallowing — the customerDeletionSecurity /
+ * employeeInviteLifecycle pattern. This suite shares the QA database with the
+ * other integration files, so a silent catch here would leave rows in place
+ * and the next suite would fail deep inside a test with an authorization error
+ * that is really leftover state. Failures are collected and the caller throws
+ * with their names (throwIfCleanupFailed, wired in beforeAll/afterAll).
+ */
+const cleanupFailures: string[] = [];
+async function trySql(label: string, p: Promise<unknown>): Promise<void> {
+  try {
+    await p;
+  } catch (error) {
+    cleanupFailures.push(`${label}: ${(error as Error).message}`);
+  }
+}
+function throwIfCleanupFailed(context: string): void {
+  if (cleanupFailures.length) {
+    throw new Error(
+      `${context}: cleanup failed — ${cleanupFailures.join(' | ')}. ` +
+        `Leftover rows from this suite's namespace will contaminate the next run; fix the leak here rather than re-running.`,
+    );
+  }
+}
+
+afterAll(async () => {
+    for (const t of ['sale_items', 'inventory_movements', 'stock_adjustments']) {
+      await trySql('cleanup-2', q(`DELETE FROM ${t} WHERE product_id IN ('${PROD_A}','${PROD_B}')`));
     }
-    await q(`DELETE FROM product_variants WHERE id IN ('${VAR_A}','${VAR_B}')`).catch(() => {});
+    await trySql('cleanup-2', q(`DELETE FROM sales WHERE customer_id IN ('${CUST_A}','${CUST_B}')`));
+    await trySql('product_variants-2', q(`DELETE FROM product_variants WHERE id IN ('${VAR_A}','${VAR_B}')`));
     await q(`DELETE FROM products WHERE id IN ('${PROD_A}','${PROD_B}')`);
     await q(`DELETE FROM companies WHERE id IN ('${CO_A}','${CO_B}')`);
     await q(`DELETE FROM customers WHERE id IN ('${CUST_A}','${CUST_B}')`);
-  });
+      throwIfCleanupFailed('Draft QA Data Isolation afterAll cleanup');
+});
 
   // ─── PART 1: Basic existence (shared QA DB, both drafts coexist) ───
 
@@ -164,9 +194,10 @@ describe('Draft QA Data Isolation', () => {
   // ─── PART 4: Cleanup isolation — removing one draft leaves the other intact ───
 
   it('Draft A cleanup: removes A customer+product+company+variant, B survives', async () => {
-    for (const t of ['sale_items', 'sales', 'inventory_movements', 'stock_adjustments']) {
-      await q(`DELETE FROM ${t} WHERE product_id = '${PROD_A}'`).catch(() => {});
+    for (const t of ['sale_items', 'inventory_movements', 'stock_adjustments']) {
+      await trySql('cleanup-3', q(`DELETE FROM ${t} WHERE product_id = '${PROD_A}'`));
     }
+    await trySql('cleanup-3', q(`DELETE FROM sales WHERE customer_id = '${CUST_A}'`));
     await q(`DELETE FROM product_variants WHERE id = '${VAR_A}'`);
     await q(`DELETE FROM products WHERE id = '${PROD_A}'`);
     await q(`DELETE FROM companies WHERE id = '${CO_A}'`);

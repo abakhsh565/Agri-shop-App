@@ -65,20 +65,45 @@ async function sql(query: string) {
   return execSqlAsAdmin(query);
 }
 
+/**
+ * Cleanup that REPORTS instead of swallowing — the customerDeletionSecurity /
+ * employeeInviteLifecycle pattern. This suite shares the QA database with the
+ * other integration files, so a silent catch here would leave rows in place
+ * and the next suite would fail deep inside a test with an authorization error
+ * that is really leftover state. Failures are collected and the caller throws
+ * with their names (throwIfCleanupFailed, wired in beforeAll/afterAll).
+ */
+const cleanupFailures: string[] = [];
+async function trySql(label: string, p: Promise<unknown>): Promise<void> {
+  try {
+    await p;
+  } catch (error) {
+    cleanupFailures.push(`${label}: ${(error as Error).message}`);
+  }
+}
+function throwIfCleanupFailed(context: string): void {
+  if (cleanupFailures.length) {
+    throw new Error(
+      `${context}: cleanup failed — ${cleanupFailures.join(' | ')}. ` +
+        `Leftover rows from this suite's namespace will contaminate the next run; fix the leak here rather than re-running.`,
+    );
+  }
+}
+
 async function cleanup() {
   // By key and by id, never by table: the seeded shop's own rows are only removed if this
   // suite wrote them (the RPC test does — QA's baseline has none, verified by recount).
-  await sql(`
+  await trySql('app_settings', sql(`
     DELETE FROM app_settings
      WHERE id IN ('${SET_A_ID}','${SET_B_ID}')
         OR (shop_id IN ('${SHOP_A}','${SHOP_B}') AND setting_key LIKE 'qa_appsettings%')
         OR (shop_id = '${SHOP_A}' AND setting_key IN ('low_stock_threshold_default','stock_alert_frequency'))
-  `).catch(() => undefined);
+  `));
   // Through the shared helper: these users may carry audit rows (`audit_events.user_id` is NO ACTION)
   // and one blocked row would leave the whole list behind. `placeLocation` is where that leak was
   // measured and fixed; this is the same fix applied where the same shape occurs.
   await deleteFixtureUsers([ADMIN_B_ID, EMPLOYEE_B_ID, EMPLOYEE_A_WITH_STOCK_ROLE]);
-  await sql(`DELETE FROM shops WHERE id = '${SHOP_B}'`).catch(() => undefined);
+  await trySql('shops', sql(`DELETE FROM shops WHERE id = '${SHOP_B}'`));
 }
 
 beforeAll(async () => {
@@ -121,10 +146,12 @@ beforeAll(async () => {
       ('${SET_B_ID}', '${SHOP_B}', '${KEY_OTHER}', '77', '${RUN} other')
     ON CONFLICT (id) DO NOTHING
   `);
+  throwIfCleanupFailed('appSettingsIsolation beforeAll cleanup');
 });
 
 afterAll(async () => {
   await cleanup();
+  throwIfCleanupFailed('appSettingsIsolation afterAll cleanup');
 });
 
 describe('app_settings isolation — configuration belongs to one shop', () => {

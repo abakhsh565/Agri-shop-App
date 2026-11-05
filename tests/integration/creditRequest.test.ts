@@ -39,14 +39,41 @@ describe('Credit Request Integration', () => {
         ('${CR_CUSTOMER_B}', 'QA Credit Customer B', '923006666002', 25000, 0, 40000, 14000, '${QA_IDS.shop}', 'QA')
       ON CONFLICT (id) DO UPDATE SET credit_limit = EXCLUDED.credit_limit, outstanding_balance = EXCLUDED.outstanding_balance
     `);
-  });
+      throwIfCleanupFailed('Credit Request Integration beforeAll cleanup');
+});
 
-  afterAll(async () => {
-    await execSqlAsAdmin(`DELETE FROM credit_limit_requests WHERE customer_id IN ('${CR_CUSTOMER_C}','${CR_CUSTOMER_B}')`).catch(() => {});
-    await execSqlAsAdmin(`DELETE FROM customers WHERE id IN ('${CR_CUSTOMER_C}','${CR_CUSTOMER_B}')`).catch(() => {});
+  /**
+ * Cleanup that REPORTS instead of swallowing — the customerDeletionSecurity /
+ * employeeInviteLifecycle pattern. This suite shares the QA database with the
+ * other integration files, so a silent catch here would leave rows in place
+ * and the next suite would fail deep inside a test with an authorization error
+ * that is really leftover state. Failures are collected and the caller throws
+ * with their names (throwIfCleanupFailed, wired in beforeAll/afterAll).
+ */
+const cleanupFailures: string[] = [];
+async function trySql(label: string, p: Promise<unknown>): Promise<void> {
+  try {
+    await p;
+  } catch (error) {
+    cleanupFailures.push(`${label}: ${(error as Error).message}`);
+  }
+}
+function throwIfCleanupFailed(context: string): void {
+  if (cleanupFailures.length) {
+    throw new Error(
+      `${context}: cleanup failed — ${cleanupFailures.join(' | ')}. ` +
+        `Leftover rows from this suite's namespace will contaminate the next run; fix the leak here rather than re-running.`,
+    );
+  }
+}
+
+afterAll(async () => {
+    await trySql('credit_limit_requests', execSqlAsAdmin(`DELETE FROM credit_limit_requests WHERE customer_id IN ('${CR_CUSTOMER_C}','${CR_CUSTOMER_B}')`));
+    await trySql('customers', execSqlAsAdmin(`DELETE FROM customers WHERE id IN ('${CR_CUSTOMER_C}','${CR_CUSTOMER_B}')`));
     await cleanupTestData();
     printReport();
-  });
+      throwIfCleanupFailed('Credit Request Integration afterAll cleanup');
+});
 
   describe('Create Credit Request', () => {
     let requestId: string;

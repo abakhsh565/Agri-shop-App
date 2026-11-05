@@ -78,38 +78,57 @@ async function count(query: string): Promise<number> {
   return rows[0]?.c ?? 0;
 }
 
+/**
+ * Cleanup that REPORTS instead of swallowing — the customerDeletionSecurity /
+ * employeeInviteLifecycle pattern. This suite shares the QA database with the
+ * other integration files, so a silent catch here would leave rows in place
+ * and the next suite would fail deep inside a test with an authorization error
+ * that is really leftover state. Failures are collected and the caller throws
+ * with their names (throwIfCleanupFailed, wired in beforeAll/afterAll).
+ */
+const cleanupFailures: string[] = [];
+async function trySql(label: string, p: Promise<unknown>): Promise<void> {
+  try {
+    await p;
+  } catch (error) {
+    cleanupFailures.push(`${label}: ${(error as Error).message}`);
+  }
+}
+function throwIfCleanupFailed(context: string): void {
+  if (cleanupFailures.length) {
+    throw new Error(
+      `${context}: cleanup failed — ${cleanupFailures.join(' | ')}. ` +
+        `Leftover rows from this suite's namespace will contaminate the next run; fix the leak here rather than re-running.`,
+    );
+  }
+}
+
 async function cleanup() {
   // Shops first (they cascade), then identities, then the request rows by number — the
   // request row is the one this lane exists to prove is gone, so it is also cleaned here
   // in case a run aborted between the delete and the assertion.
   // A shop the registration flow created and a failed run left orphaned. `purge_shop_data`
   // erases the shop's records AND the shop row, which is the same erasure the product does.
-  await sql(`SELECT public.purge_shop_data(id) FROM shops WHERE name LIKE 'QA Fresh Shop%'`).catch(() => undefined);
+  await trySql('select', sql(`SELECT public.purge_shop_data(id) FROM shops WHERE name LIKE 'QA Fresh Shop%'`));
   // Rows a failed run can leave behind: the customer this lane puts inside the fresh
   // account's shop, matched by name and by the number (the phone carries its own unique
   // index, so a survivor would make the next run fail for the wrong reason).
-  await sql(`DELETE FROM customers WHERE name LIKE 'QA Delete %' OR name = 'QA Fresh Customer'`).catch(() => undefined);
-  await sql(`DELETE FROM customers WHERE phone LIKE '%9630003'`).catch(() => undefined);
-  await sql(`DELETE FROM products WHERE name LIKE 'QA Fresh %'`).catch(() => undefined);
-  await sql(`DELETE FROM memberships WHERE tenant_id = '${MAIN_SHOP}'`).catch(() => undefined);
-  await sql(`DELETE FROM user_active_shops WHERE shop_id = '${MAIN_SHOP}'`).catch(() => undefined);
+  await trySql('customers', sql(`DELETE FROM customers WHERE name LIKE 'QA Delete %' OR name = 'QA Fresh Customer'`));
+  await trySql('customers-2', sql(`DELETE FROM customers WHERE phone LIKE '%9630003'`));
+  await trySql('products', sql(`DELETE FROM products WHERE name LIKE 'QA Fresh %'`));
+  await trySql('memberships', sql(`DELETE FROM memberships WHERE tenant_id = '${MAIN_SHOP}'`));
+  await trySql('user_active_shops', sql(`DELETE FROM user_active_shops WHERE shop_id = '${MAIN_SHOP}'`));
   // People BEFORE shops: `users.shop_id` references `shops(id)` with no cascade, so a shop cannot
   // be dropped while a profile still names it — the very FK the product's own deletion has to
   // sequence around, and doing it in the wrong order here left a QA shop behind after every run.
   for (const phone of TOUCHED_PHONES) {
     const digits = phone.replace(/\D/g, '');
-    await sql(
-      `DELETE FROM audit_events WHERE user_id IN (SELECT id FROM users WHERE phone LIKE '%${digits.slice(-10)}')`
-    ).catch(() => undefined);
-    await sql(`DELETE FROM users WHERE phone LIKE '%${digits.slice(-10)}'`).catch(() => undefined);
-    await sql(
-      `DELETE FROM shop_requests WHERE right(regexp_replace(owner_phone, '\\D', '', 'g'), 10) = '${digits.slice(-10)}'`
-    ).catch(() => undefined);
+    await trySql('audit_events', sql(`DELETE FROM audit_events WHERE user_id IN (SELECT id FROM users WHERE phone LIKE '%${digits.slice(-10)}')`));
+    await trySql('users', sql(`DELETE FROM users WHERE phone LIKE '%${digits.slice(-10)}'`));
+    await trySql('shop_requests', sql(`DELETE FROM shop_requests WHERE right(regexp_replace(owner_phone, '\\D', '', 'g'), 10) = '${digits.slice(-10)}'`));
   }
-  await sql(`DELETE FROM shops WHERE id = '${MAIN_SHOP}'`).catch(() => undefined);
-  await sql(
-    `DELETE FROM auth.users WHERE email LIKE '%${FRESH_PHONE_E164}%' OR email LIKE '%${ACTOR_PHONE}%' OR email LIKE '%${SIDE_EMPLOYEE_PHONE}%'`
-  ).catch(() => undefined);
+  await trySql('shops', sql(`DELETE FROM shops WHERE id = '${MAIN_SHOP}'`));
+  await trySql('auth.users', sql(`DELETE FROM auth.users WHERE email LIKE '%${FRESH_PHONE_E164}%' OR email LIKE '%${ACTOR_PHONE}%' OR email LIKE '%${SIDE_EMPLOYEE_PHONE}%'`));
 }
 
 beforeAll(async () => {
@@ -169,10 +188,12 @@ beforeAll(async () => {
   // The actor must be able to sign in for the RPCs below to authorize anything.
   const signingIn = await execRpcAsUser(ACTOR, 'get_my_permissions', {});
   expect(signingIn.error).toBeNull();
+  throwIfCleanupFailed('accountDeletion beforeAll cleanup');
 });
 
 afterAll(async () => {
   await cleanup();
+  throwIfCleanupFailed('accountDeletion afterAll cleanup');
 });
 
 describe('Archiving a branch hides it, keeps its history and never decides a login silently', () => {
