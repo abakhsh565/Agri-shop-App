@@ -105,18 +105,45 @@ beforeAll(async () => {
   `);
   await execSqlAsAdmin(`DELETE FROM purchases WHERE company_id = '${COMPANY}'`);
   await execSqlAsAdmin(`DELETE FROM users WHERE phone = '${EMPLOYEE_PHONE}'`);
+  throwIfCleanupFailed('createOnceSafety beforeAll cleanup');
 });
 
+/**
+ * Cleanup that REPORTS instead of swallowing — the customerDeletionSecurity /
+ * employeeInviteLifecycle pattern. This suite shares the QA database with the
+ * other integration files, so a silent catch here would leave rows in place
+ * and the next suite would fail deep inside a test with an authorization error
+ * that is really leftover state. Failures are collected and the caller throws
+ * with their names (throwIfCleanupFailed, wired in beforeAll/afterAll).
+ */
+const cleanupFailures: string[] = [];
+async function trySql(label: string, p: Promise<unknown>): Promise<void> {
+  try {
+    await p;
+  } catch (error) {
+    cleanupFailures.push(`${label}: ${(error as Error).message}`);
+  }
+}
+function throwIfCleanupFailed(context: string): void {
+  if (cleanupFailures.length) {
+    throw new Error(
+      `${context}: cleanup failed — ${cleanupFailures.join(' | ')}. ` +
+        `Leftover rows from this suite's namespace will contaminate the next run; fix the leak here rather than re-running.`,
+    );
+  }
+}
+
 afterAll(async () => {
-  await execSqlAsAdmin(`DELETE FROM purchase_items WHERE purchase_id IN (SELECT id FROM purchases WHERE company_id = '${COMPANY}')`).catch(() => undefined);
-  await execSqlAsAdmin(`DELETE FROM purchases WHERE company_id = '${COMPANY}'`).catch(() => undefined);
-  await execSqlAsAdmin(`DELETE FROM inventory_movements WHERE product_id = '${PRODUCT}'`).catch(() => undefined);
-  await execSqlAsAdmin(`DELETE FROM memberships WHERE user_id IN (SELECT id FROM users WHERE phone = '${EMPLOYEE_PHONE}')`).catch(() => undefined);
-  await execSqlAsAdmin(`DELETE FROM users WHERE phone = '${EMPLOYEE_PHONE}'`).catch(() => undefined);
-  await execSqlAsAdmin(`DELETE FROM product_variants WHERE id = '${VARIANT}'`).catch(() => undefined);
-  await execSqlAsAdmin(`DELETE FROM products WHERE id = '${PRODUCT}'`).catch(() => undefined);
-  await execSqlAsAdmin(`DELETE FROM companies WHERE id = '${COMPANY}'`).catch(() => undefined);
+  await trySql('purchase_items', execSqlAsAdmin(`DELETE FROM purchase_items WHERE purchase_id IN (SELECT id FROM purchases WHERE company_id = '${COMPANY}')`));
+  await trySql('purchases', execSqlAsAdmin(`DELETE FROM purchases WHERE company_id = '${COMPANY}'`));
+  await trySql('inventory_movements', execSqlAsAdmin(`DELETE FROM inventory_movements WHERE product_id = '${PRODUCT}'`));
+  await trySql('memberships', execSqlAsAdmin(`DELETE FROM memberships WHERE user_id IN (SELECT id FROM users WHERE phone = '${EMPLOYEE_PHONE}')`));
+  await trySql('users', execSqlAsAdmin(`DELETE FROM users WHERE phone = '${EMPLOYEE_PHONE}'`));
+  await trySql('product_variants', execSqlAsAdmin(`DELETE FROM product_variants WHERE id = '${VARIANT}'`));
+  await trySql('products', execSqlAsAdmin(`DELETE FROM products WHERE id = '${PRODUCT}'`));
+  await trySql('companies', execSqlAsAdmin(`DELETE FROM companies WHERE id = '${COMPANY}'`));
   await cleanupTestData();
+  throwIfCleanupFailed('createOnceSafety afterAll cleanup');
 });
 
 describe('Create once safety', () => {

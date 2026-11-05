@@ -40,7 +40,15 @@ beforeAll(async () => {
   await sql(`INSERT INTO users (id, name, phone, role, is_original_owner, is_active, shop_id)
     VALUES ('${admin}', 'QA RBAC Admin', '${adminPhone}', 'admin', true, true, '${tenant}')
     ON CONFLICT (id) DO UPDATE SET is_active = true, role = 'admin', shop_id = EXCLUDED.shop_id`);
-  await qaServiceClient.auth.admin.updateUserById(employee, { password: `QA-test-${employee}-2024!` }).catch(() => undefined);
+  // Best-effort by design: the employee row may not have an auth identity yet
+  // (the credential is provisioned on demand by execRpcAsUser), so a missing
+  // identity here is not a failure — the password is set when the credential
+  // is created.
+  try {
+    await qaServiceClient.auth.admin.updateUserById(employee, { password: `QA-test-${employee}-2024!` });
+  } catch {
+    /* best-effort: no auth identity exists for this employee yet */
+  }
   await sql(`DELETE FROM audit_events WHERE entity_id IN ('${employee}') OR details->>'name'='QA RBAC Employee'`);
   await sql(`DELETE FROM user_permissions WHERE user_id IN (SELECT id FROM users WHERE id='${employee}' OR phone='923008880001')`);
   await sql(`DELETE FROM memberships WHERE user_id IN (SELECT id FROM users WHERE id='${employee}' OR phone='923008880001')`);
@@ -57,7 +65,33 @@ beforeAll(async () => {
   mainBranch = branches.rows.find((b: { id: string }) => b.id !== WAREHOUSE)?.id;
   warehouseBranch = WAREHOUSE;
   expect(mainBranch, 'the seeded tenant needs a branch besides this file\'s warehouse').toBeTruthy();
+  throwIfCleanupFailed('rbacFoundation beforeAll cleanup');
 });
+
+/**
+ * Cleanup that REPORTS instead of swallowing — the customerDeletionSecurity /
+ * employeeInviteLifecycle pattern. This suite shares the QA database with the
+ * other integration files, so a silent catch here would leave rows in place
+ * and the next suite would fail deep inside a test with an authorization error
+ * that is really leftover state. Failures are collected and the caller throws
+ * with their names (throwIfCleanupFailed, wired in beforeAll/afterAll).
+ */
+const cleanupFailures: string[] = [];
+async function trySql(label: string, p: Promise<unknown>): Promise<void> {
+  try {
+    await p;
+  } catch (error) {
+    cleanupFailures.push(`${label}: ${(error as Error).message}`);
+  }
+}
+function throwIfCleanupFailed(context: string): void {
+  if (cleanupFailures.length) {
+    throw new Error(
+      `${context}: cleanup failed — ${cleanupFailures.join(' | ')}. ` +
+        `Leftover rows from this suite's namespace will contaminate the next run; fix the leak here rather than re-running.`,
+    );
+  }
+}
 
 afterAll(async () => {
   await sql(`DELETE FROM audit_events WHERE entity_id IN ('${employee}') OR details->>'name'='${roleName}'`);
@@ -74,13 +108,14 @@ afterAll(async () => {
   await sql(`DELETE FROM users WHERE id='${admin}'`);
   // This file's own rows, removed and read back: a cleanup that silently failed is what made the
   // NEXT run fail with a duplicate phone.
-  await sql(`DELETE FROM customers WHERE phone='${DENIED_CUSTOMER_PHONE}'`).catch(() => undefined);
-  await sql(`DELETE FROM branches WHERE id='${WAREHOUSE}'`).catch(() => undefined);
+  await trySql('customers', sql(`DELETE FROM customers WHERE phone='${DENIED_CUSTOMER_PHONE}'`));
+  await trySql('branches', sql(`DELETE FROM branches WHERE id='${WAREHOUSE}'`));
   const { rows: left } = await sql(
     `SELECT (SELECT count(*) FROM customers WHERE phone='${DENIED_CUSTOMER_PHONE}')
           + (SELECT count(*) FROM branches WHERE id='${WAREHOUSE}') AS n`
   );
   expect(Number(left[0]?.n ?? -1), 'this suite\'s own rows survived its cleanup').toBe(0);
+  throwIfCleanupFailed('rbacFoundation afterAll cleanup');
 });
 
 describe('Authoritative RBAC foundation', () => {

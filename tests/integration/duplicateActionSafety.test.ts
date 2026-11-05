@@ -117,18 +117,44 @@ beforeAll(async () => {
     ON CONFLICT (id) DO UPDATE SET outstanding_payable = 15000
   `);
   await setVariantStock(100);
+  throwIfCleanupFailed('duplicateActionSafety beforeAll cleanup');
 });
+
+/**
+ * Cleanup that REPORTS instead of swallowing — the customerDeletionSecurity /
+ * employeeInviteLifecycle pattern. This suite shares the QA database with the
+ * other integration files, so a silent catch here would leave rows in place
+ * and the next suite would fail deep inside a test with an authorization error
+ * that is really leftover state. Failures are collected and the caller throws
+ * with their names (throwIfCleanupFailed, wired in beforeAll/afterAll).
+ */
+const cleanupFailures: string[] = [];
+async function trySql(label: string, p: Promise<unknown>): Promise<void> {
+  try {
+    await p;
+  } catch (error) {
+    cleanupFailures.push(`${label}: ${(error as Error).message}`);
+  }
+}
+function throwIfCleanupFailed(context: string): void {
+  if (cleanupFailures.length) {
+    throw new Error(
+      `${context}: cleanup failed — ${cleanupFailures.join(' | ')}. ` +
+        `Leftover rows from this suite's namespace will contaminate the next run; fix the leak here rather than re-running.`,
+    );
+  }
+}
 
 afterAll(async () => {
   await execSqlAsAdmin(`DELETE FROM supplier_payments WHERE company_id = '${COMPANY}'`);
-  await execSqlAsAdmin(`DELETE FROM customer_payments WHERE customer_id = '${CUSTOMER}'`).catch(() => undefined);
+  await trySql('customer_payments', execSqlAsAdmin(`DELETE FROM customer_payments WHERE customer_id = '${CUSTOMER}'`));
 
   // THIS SUITE'S OWN SALES, children before parents — and the reason the baseline read `sales: 5,
   // declared 2` on 2026-10-14.
   //
   // `cleanupTestData()` only covers the SHARED fixtures (customerA/B/C), so nothing here removed the
   // sale test 4 records for this suite's OWN customer, and the customer delete below was wrapped in
-  // `.catch(() => undefined)` — it failed on `sales.customer_id` (NO ACTION) and said nothing. One
+  // a swallowed catch — it failed on `sales.customer_id` (NO ACTION) and said nothing. One
   // voided sale, its line and its void were left behind per run: three of them in QA, each with
   // `total_amount = 1000.00` and the reason 'QA duplicate-safety void'. Deleted by this suite's own
   // customer id, which no other file uses (`grep` over tests/ finds this file and the residue
@@ -136,16 +162,16 @@ afterAll(async () => {
   await execSqlAsAdmin(`DELETE FROM voids WHERE sale_id IN (SELECT id FROM sales WHERE customer_id = '${CUSTOMER}')`);
   await execSqlAsAdmin(`DELETE FROM sale_items WHERE sale_id IN (SELECT id FROM sales WHERE customer_id = '${CUSTOMER}')`);
   await execSqlAsAdmin(`DELETE FROM return_items WHERE return_id IN (SELECT id FROM returns WHERE customer_id = '${CUSTOMER}')`);
-  await execSqlAsAdmin(`DELETE FROM returns WHERE customer_id = '${CUSTOMER}'`).catch(() => undefined);
-  await execSqlAsAdmin(`DELETE FROM payments WHERE customer_id = '${CUSTOMER}'`).catch(() => undefined);
-  await execSqlAsAdmin(`DELETE FROM credit_limit_requests WHERE customer_id = '${CUSTOMER}'`).catch(() => undefined);
+  await trySql('returns', execSqlAsAdmin(`DELETE FROM returns WHERE customer_id = '${CUSTOMER}'`));
+  await trySql('payments', execSqlAsAdmin(`DELETE FROM payments WHERE customer_id = '${CUSTOMER}'`));
+  await trySql('credit_limit_requests', execSqlAsAdmin(`DELETE FROM credit_limit_requests WHERE customer_id = '${CUSTOMER}'`));
   await execSqlAsAdmin(`DELETE FROM sales WHERE customer_id = '${CUSTOMER}'`);
   await execSqlAsAdmin(`DELETE FROM customers WHERE id = '${CUSTOMER}'`);
-  await execSqlAsAdmin(`DELETE FROM companies WHERE id = '${COMPANY}'`).catch(() => undefined);
-  await execSqlAsAdmin(`DELETE FROM inventory_movements WHERE product_id = '${PRODUCT}'`).catch(() => undefined);
-  await execSqlAsAdmin(`DELETE FROM stock_adjustments WHERE product_id = '${PRODUCT}'`).catch(() => undefined);
-  await execSqlAsAdmin(`DELETE FROM product_variants WHERE id = '${VARIANT}'`).catch(() => undefined);
-  await execSqlAsAdmin(`DELETE FROM products WHERE id = '${PRODUCT}'`).catch(() => undefined);
+  await trySql('companies', execSqlAsAdmin(`DELETE FROM companies WHERE id = '${COMPANY}'`));
+  await trySql('inventory_movements', execSqlAsAdmin(`DELETE FROM inventory_movements WHERE product_id = '${PRODUCT}'`));
+  await trySql('stock_adjustments', execSqlAsAdmin(`DELETE FROM stock_adjustments WHERE product_id = '${PRODUCT}'`));
+  await trySql('product_variants', execSqlAsAdmin(`DELETE FROM product_variants WHERE id = '${VARIANT}'`));
+  await trySql('products', execSqlAsAdmin(`DELETE FROM products WHERE id = '${PRODUCT}'`));
   await execSqlAsAdmin(`DELETE FROM stock_adjustments WHERE idempotency_key LIKE 'qa-dupsafe-%'`);
   // Removes this suite's sales, voids, returns and movements for the shared
   // fixtures, without touching the baseline the other suites rely on.
@@ -170,6 +196,7 @@ afterAll(async () => {
         '— find the reference rather than widening a `.catch`.',
     );
   }
+  throwIfCleanupFailed('duplicateActionSafety afterAll cleanup');
 });
 
 describe('Duplicate action safety', () => {

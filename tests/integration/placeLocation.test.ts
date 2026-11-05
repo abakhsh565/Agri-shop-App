@@ -53,25 +53,48 @@ async function count(query: string): Promise<number> {
   return rows[0]?.c ?? 0;
 }
 
+/**
+ * Cleanup that REPORTS instead of swallowing — the customerDeletionSecurity /
+ * employeeInviteLifecycle pattern. This suite shares the QA database with the
+ * other integration files, so a silent catch here would leave rows in place
+ * and the next suite would fail deep inside a test with an authorization error
+ * that is really leftover state. Failures are collected and the caller throws
+ * with their names (throwIfCleanupFailed, wired in beforeAll/afterAll).
+ */
+const cleanupFailures: string[] = [];
+async function trySql(label: string, p: Promise<unknown>): Promise<void> {
+  try {
+    await p;
+  } catch (error) {
+    cleanupFailures.push(`${label}: ${(error as Error).message}`);
+  }
+}
+function throwIfCleanupFailed(context: string): void {
+  if (cleanupFailures.length) {
+    throw new Error(
+      `${context}: cleanup failed — ${cleanupFailures.join(' | ')}. ` +
+        `Leftover rows from this suite's namespace will contaminate the next run; fix the leak here rather than re-running.`,
+    );
+  }
+}
+
 async function cleanup() {
-  await sql(`DELETE FROM customers WHERE id IN ('${CUSTOMER}','${OTHER_CUSTOMER}')`).catch(() => undefined);
-  await sql(`DELETE FROM branches WHERE tenant_id IN ('${SHOP}','${OTHER_SHOP}')`).catch(() => undefined);
-  await sql(`DELETE FROM memberships WHERE tenant_id IN ('${SHOP}','${OTHER_SHOP}')`).catch(() => undefined);
+  await trySql('customers', sql(`DELETE FROM customers WHERE id IN ('${CUSTOMER}','${OTHER_CUSTOMER}')`));
+  await trySql('branches', sql(`DELETE FROM branches WHERE tenant_id IN ('${SHOP}','${OTHER_SHOP}')`));
+  await trySql('memberships', sql(`DELETE FROM memberships WHERE tenant_id IN ('${SHOP}','${OTHER_SHOP}')`));
   // Not a bare `DELETE FROM users`. `set_place` writes a `location_updated` audit row and
   // `audit_events.user_id` is NO ACTION, so the two owners were undeletable — and because one
   // blocked row makes the whole multi-row DELETE fail, BOTH stayed in the shared QA database and
   // were the entire cause of `rbacInvariants` invariant D's `expected 2 to be +0`. The helper
   // clears what account deletion clears, then proves the users are gone instead of assuming it.
   await deleteFixtureUsers([OWNER, OTHER_OWNER]);
-  await sql(`DELETE FROM shops WHERE id IN ('${SHOP}','${OTHER_SHOP}')`).catch(() => undefined);
-  await sql(`DELETE FROM shop_requests WHERE owner_phone LIKE '%9640001'`).catch(() => undefined);
+  await trySql('shops', sql(`DELETE FROM shops WHERE id IN ('${SHOP}','${OTHER_SHOP}')`));
+  await trySql('shop_requests', sql(`DELETE FROM shop_requests WHERE owner_phone LIKE '%9640001'`));
   // The auth identities these fixtures signed in with. An app user deleted without its auth row
   // leaves a login behind that nothing can use and every later run has to work around (the app's
   // own credential address is derived from the phone, so a stray holder blocks it) — the same
   // rule the QA baseline reset applies.
-  await sql(
-    `DELETE FROM auth.users a WHERE (a.email LIKE 'user-9230096400%' OR a.email LIKE 'user-92300964%') AND NOT EXISTS (SELECT 1 FROM users u WHERE u.id = a.id)`
-  ).catch(() => undefined);
+  await trySql('auth.users', sql(`DELETE FROM auth.users a WHERE (a.email LIKE 'user-9230096400%' OR a.email LIKE 'user-92300964%') AND NOT EXISTS (SELECT 1 FROM users u WHERE u.id = a.id)`));
 }
 
 beforeAll(async () => {
@@ -101,10 +124,12 @@ beforeAll(async () => {
   // rather than about the rule they exist to test.
   expect((await execRpcAsUser(OWNER, 'get_my_permissions', {})).error).toBeNull();
   expect((await execRpcAsUser(OTHER_OWNER, 'get_my_permissions', {})).error).toBeNull();
+  throwIfCleanupFailed('placeLocation beforeAll cleanup');
 });
 
 afterAll(async () => {
   await cleanup();
+  throwIfCleanupFailed('placeLocation afterAll cleanup');
 });
 
 describe('Locations are points in Pakistan, and only theirs', () => {
@@ -277,7 +302,7 @@ describe('Locations are points in Pakistan, and only theirs', () => {
 
     // The registration form is the only place a place is written before sign-in, so it is the
     // only one that cannot go through set_place — the table's own box is what holds it there.
-    await sql(`DELETE FROM shop_requests WHERE owner_phone = '${OWNER_PHONE}'`).catch(() => undefined);
+    await trySql('shop_requests-2', sql(`DELETE FROM shop_requests WHERE owner_phone = '${OWNER_PHONE}'`));
     const request = await execRpcAsUser(OWNER, 'insert_shop_request', {
       p_owner_name: 'QA Place Applicant',
       p_owner_phone: OWNER_PHONE,
@@ -306,7 +331,7 @@ describe('Locations are points in Pakistan, and only theirs', () => {
     }
     expect(refused).toBe(true);
 
-    await sql(`DELETE FROM customers WHERE id = '${newId}'`).catch(() => undefined);
-    await sql(`DELETE FROM shop_requests WHERE id = '${request.data.id}'`).catch(() => undefined);
+    await trySql('customers-2', sql(`DELETE FROM customers WHERE id = '${newId}'`));
+    await trySql('shop_requests-3', sql(`DELETE FROM shop_requests WHERE id = '${request.data.id}'`));
   });
 });

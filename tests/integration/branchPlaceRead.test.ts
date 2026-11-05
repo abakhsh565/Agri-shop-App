@@ -60,20 +60,43 @@ async function sql(query: string) {
   return execSqlAsAdmin(query);
 }
 
+/**
+ * Cleanup that REPORTS instead of swallowing — the customerDeletionSecurity /
+ * employeeInviteLifecycle pattern. This suite shares the QA database with the
+ * other integration files, so a silent catch here would leave rows in place
+ * and the next suite would fail deep inside a test with an authorization error
+ * that is really leftover state. Failures are collected and the caller throws
+ * with their names (throwIfCleanupFailed, wired in beforeAll/afterAll).
+ */
+const cleanupFailures: string[] = [];
+async function trySql(label: string, p: Promise<unknown>): Promise<void> {
+  try {
+    await p;
+  } catch (error) {
+    cleanupFailures.push(`${label}: ${(error as Error).message}`);
+  }
+}
+function throwIfCleanupFailed(context: string): void {
+  if (cleanupFailures.length) {
+    throw new Error(
+      `${context}: cleanup failed — ${cleanupFailures.join(' | ')}. ` +
+        `Leftover rows from this suite's namespace will contaminate the next run; fix the leak here rather than re-running.`,
+    );
+  }
+}
+
 async function cleanup() {
-  await sql(`DELETE FROM branches WHERE tenant_id IN ('${HOME_TENANT}','${STRANGER_TENANT}')`).catch(() => undefined);
-  await sql(`DELETE FROM memberships WHERE tenant_id IN ('${HOME_TENANT}','${STRANGER_TENANT}')`).catch(() => undefined);
+  await trySql('branches', sql(`DELETE FROM branches WHERE tenant_id IN ('${HOME_TENANT}','${STRANGER_TENANT}')`));
+  await trySql('memberships', sql(`DELETE FROM memberships WHERE tenant_id IN ('${HOME_TENANT}','${STRANGER_TENANT}')`));
   // Through the shared helper, not a bare DELETE: `set_place` writes a `location_updated` audit row
   // and `audit_events.user_id` is NO ACTION, so a bare delete is silently blocked and the users
   // survive. `placeLocation` is where that leak was measured; this is the same fix.
   await deleteFixtureUsers([OWNER, OTHER_OWNER]);
-  await sql(`DELETE FROM shops WHERE id IN ('${HOME_TENANT}','${STRANGER_TENANT}')`).catch(() => undefined);
+  await trySql('shops', sql(`DELETE FROM shops WHERE id IN ('${HOME_TENANT}','${STRANGER_TENANT}')`));
   // The auth identities these fixtures signed in with, for the same reason every other lane does
   // it: an app user deleted without its auth row leaves a login nothing can use, and the app's
   // credential address is derived from the phone, so a stray holder blocks the next run.
-  await sql(
-    `DELETE FROM auth.users a WHERE a.email LIKE 'user-92300965%' AND NOT EXISTS (SELECT 1 FROM users u WHERE u.id = a.id)`
-  ).catch(() => undefined);
+  await trySql('auth.users', sql(`DELETE FROM auth.users a WHERE a.email LIKE 'user-92300965%' AND NOT EXISTS (SELECT 1 FROM users u WHERE u.id = a.id)`));
 }
 
 beforeAll(async () => {
@@ -107,10 +130,12 @@ beforeAll(async () => {
   // rather than about the rule it exists to test.
   expect((await execRpcAsUser(OWNER, 'get_my_permissions', {})).error).toBeNull();
   expect((await execRpcAsUser(OTHER_OWNER, 'get_my_permissions', {})).error).toBeNull();
+  throwIfCleanupFailed('branchPlaceRead beforeAll cleanup');
 });
 
 afterAll(async () => {
   await cleanup();
+  throwIfCleanupFailed('branchPlaceRead afterAll cleanup');
 });
 
 describe('The pin travels with the branch, on the read that may see it', () => {
