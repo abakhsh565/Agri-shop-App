@@ -208,8 +208,12 @@ jobs:
       - name: QA database reachability
         run: node scripts/check-qa-connectivity.mjs
 
-      - name: Migration ledger must match the directory exactly
-        run: node scripts/migrate.mjs verify --env staging
+      - name: Migration ledger must contain every candidate migration
+        # QA is deliberately ahead of a production hotfix: the shared QA database carries branch
+        # and access migrations (0233–0276) that are not in the production lineage. The reviewed
+        # allowlist names those rows; every candidate file must still be recorded with its hash,
+        # and any unlisted or stale QA-only row still fails this step.
+        run: node scripts/migrate.mjs verify --env staging --ledger-only-allowlist .github/qa-ledger-only.txt
 
       - name: Provision QA Auth Sessions
         # Integration and browser suites sign in through the real phone/credential flow. This

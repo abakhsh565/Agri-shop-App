@@ -137,7 +137,7 @@ export default function LoginPage() {
               type="tel"
               placeholder={t("common.phonePlaceholder")}
               value={phone}
-              onChange={(e) => { setPhone(e.target.value); setError(""); }}
+              onChange={(e) => { setPhone(e.target.value.replace(/\D/g, "")); setError(""); }}
               error={error}
               hint={isDemoOtpMode ? t("auth.codeHintDemo") : t("auth.codeHint")}
               autoComplete="tel"
