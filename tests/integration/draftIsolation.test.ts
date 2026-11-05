@@ -25,9 +25,11 @@ async function q(sql: string) {
 describe('Draft QA Data Isolation', () => {
   beforeAll(async () => {
     // Clean — FK-safe order
-    for (const t of ['sale_items', 'sales', 'inventory_movements', 'stock_adjustments']) {
+    for (const t of ['sale_items', 'inventory_movements', 'stock_adjustments']) {
       await trySql('cleanup', q(`DELETE FROM ${t} WHERE product_id IN ('${PROD_A}','${PROD_B}')`));
     }
+    // sales has no product_id column; this suite's sales are scoped by its customers.
+    await trySql('cleanup', q(`DELETE FROM sales WHERE customer_id IN ('${CUST_A}','${CUST_B}')`));
     await trySql('product_variants', q(`DELETE FROM product_variants WHERE id IN ('${VAR_A}','${VAR_B}')`));
     await q(`DELETE FROM products WHERE id IN ('${PROD_A}','${PROD_B}')`);
     await q(`DELETE FROM companies WHERE id IN ('${CO_A}','${CO_B}')`);
@@ -93,9 +95,10 @@ function throwIfCleanupFailed(context: string): void {
 }
 
 afterAll(async () => {
-    for (const t of ['sale_items', 'sales', 'inventory_movements', 'stock_adjustments']) {
+    for (const t of ['sale_items', 'inventory_movements', 'stock_adjustments']) {
       await trySql('cleanup-2', q(`DELETE FROM ${t} WHERE product_id IN ('${PROD_A}','${PROD_B}')`));
     }
+    await trySql('cleanup-2', q(`DELETE FROM sales WHERE customer_id IN ('${CUST_A}','${CUST_B}')`));
     await trySql('product_variants-2', q(`DELETE FROM product_variants WHERE id IN ('${VAR_A}','${VAR_B}')`));
     await q(`DELETE FROM products WHERE id IN ('${PROD_A}','${PROD_B}')`);
     await q(`DELETE FROM companies WHERE id IN ('${CO_A}','${CO_B}')`);
@@ -191,9 +194,10 @@ afterAll(async () => {
   // ─── PART 4: Cleanup isolation — removing one draft leaves the other intact ───
 
   it('Draft A cleanup: removes A customer+product+company+variant, B survives', async () => {
-    for (const t of ['sale_items', 'sales', 'inventory_movements', 'stock_adjustments']) {
+    for (const t of ['sale_items', 'inventory_movements', 'stock_adjustments']) {
       await trySql('cleanup-3', q(`DELETE FROM ${t} WHERE product_id = '${PROD_A}'`));
     }
+    await trySql('cleanup-3', q(`DELETE FROM sales WHERE customer_id = '${CUST_A}'`));
     await q(`DELETE FROM product_variants WHERE id = '${VAR_A}'`);
     await q(`DELETE FROM products WHERE id = '${PROD_A}'`);
     await q(`DELETE FROM companies WHERE id = '${CO_A}'`);
