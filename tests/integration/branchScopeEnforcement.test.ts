@@ -55,6 +55,7 @@ const WAREHOUSE = 'd2000000-0000-0000-0000-00000000b001';
 const CUSTOMER = 'd2000000-0000-0000-0000-0000000000c1';
 const PRODUCT = 'd2000000-0000-0000-0000-0000000000d1';
 const VARIANT = 'd2000000-0000-0000-0000-0000000000d2';
+const RECEIPT = 'd2000000-0000-0000-0000-00000000d901';
 const PRICE = 100;
 const TAG = `QA-BRANCH-${Date.now()}`;
 
@@ -232,6 +233,25 @@ beforeAll(async () => {
     INSERT INTO product_variants (id, product_id, name, selling_price, cost_price, unit_size, qty_step, low_stock_threshold, stock_qty, is_active)
     VALUES ('${VARIANT}', '${PRODUCT}', '1kg', ${PRICE}, 50, 1, 1, 5, 100, true)
     ON CONFLICT (id) DO UPDATE SET stock_qty = 100, is_active = true, selling_price = ${PRICE}
+  `);
+
+  // Receive stock into the warehouse branch's own ledger. branch_variant_qty()
+  // (0252) gives a sub-branch ONLY its own ledger net, so without a receipt the
+  // warehouse holds 0 and every warehouse sale is correctly refused with
+  // INSUFFICIENT_STOCK. The 100 units are one pool: receiving 50 into the
+  // warehouse leaves the other 50 as the main branch's unclaimed remainder
+  // (stock_qty minus the active ledgers), so both branches can sell the 1 unit
+  // each test needs. Fixed id + ON CONFLICT DO NOTHING so a re-run never
+  // double-receives; cleanup() already deletes movements by product_id.
+  // movement_type is 'purchase', not 'opening': the repo's 0009 defines the enum
+  // WITH 'opening', but QA's live enum rejects it (proven by this suite's
+  // beforeAll failing on the value), while 'purchase' is what create_purchase
+  // writes and three purchase-driving suites pass on QA with it
+  // (createOnceSafety, priceTraceability, securityMatrix, run 42094756935).
+  await sql(`
+    INSERT INTO inventory_movements (id, variant_id, product_id, branch_id, movement_type, qty_before, qty_change, qty_after, reference_type, notes)
+    VALUES ('${RECEIPT}', '${VARIANT}', '${PRODUCT}', '${warehouseBranch}', 'purchase', 0, 50, 50, 'opening', 'QA branchScopeEnforcement: opening stock for the warehouse branch')
+    ON CONFLICT (id) DO NOTHING
   `);
 
   // All three actors must be able to reach the RPC, or every assertion below would be about

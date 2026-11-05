@@ -359,30 +359,84 @@ describe('Security Audit — RLS & Authorization', () => {
 
   // ─── Storage Security (documented) ─────────────────────────────────────────
 
-  it('Storage: no anonymous write, and exactly the two intended policies', async () => {
+  it('Storage: no anonymous write, and the per-bucket policy matrix holds', async () => {
     // This assertion used to require at least four `public_all_*` policies — i.e. it recorded the
     // demo-era state as the expected one. `0230` measured what that state meant (the publishable key
     // the browser bundle ships could delete or overwrite any image in all four buckets) and closed
     // it. The check is therefore rewritten to the property that now has to hold, and it is stronger:
     // it asserts an absence, the exact policy set, and that no client role can mutate an object.
+    //
+    // The exact-two-policies shape it used to assert is stale: `0250` deliberately added the
+    // business-documents policies and `0261` the finance-receipts policies, and `0263` asserts the
+    // finance-receipts read/write policies survive (it drops only the delete policy). The intended
+    // model is a PER-BUCKET matrix, so that is what this test now asserts — per bucket, the exact
+    // policies, the exact roles, and the exact scope. A policy added, removed, widened or
+    // unscoped anywhere in the matrix fails here.
     const policies = await execSqlAsAdmin(
-      `SELECT policyname, cmd, roles::text AS roles FROM pg_policies WHERE schemaname = 'storage' AND tablename = 'objects'`
+      `SELECT policyname, cmd, roles::text AS roles, qual, with_check FROM pg_policies WHERE schemaname = 'storage' AND tablename = 'objects'`
     );
+    type P = { policyname: string; cmd: string; roles: string; qual: string | null; with_check: string | null };
+    const rows = policies.rows as P[];
+    const byName = new Map(rows.map((p) => [`${p.policyname}/${p.cmd}`, p]));
 
-    const anonWrite = policies.rows.filter(
-      (p: { cmd: string; roles: string }) =>
-        ['INSERT', 'UPDATE', 'DELETE', 'ALL'].includes(p.cmd) && /(^|\{|,)\s*(public|anon)\s*(\}|,|$)/.test(p.roles),
+    const anonWrite = rows.filter(
+      (p) => ['INSERT', 'UPDATE', 'DELETE', 'ALL'].includes(p.cmd) && /(^|\{|,)\s*(public|anon)\s*(\}|,|$)/.test(p.roles),
     );
     expect(anonWrite, `an anonymous write policy survived: ${JSON.stringify(anonWrite)}`).toEqual([]);
 
-    const clientMutation = policies.rows.filter((p: { cmd: string }) => ['UPDATE', 'DELETE'].includes(p.cmd));
+    const clientMutation = rows.filter((p) => ['UPDATE', 'DELETE'].includes(p.cmd));
     expect(
       clientMutation,
       `an object can still be updated or deleted by a client role: ${JSON.stringify(clientMutation)}`,
     ).toEqual([]);
 
-    const names = policies.rows.map((p: { policyname: string; cmd: string }) => `${p.policyname}/${p.cmd}`).sort();
-    expect(names).toEqual(['images auth write/INSERT', 'images public read/SELECT']);
+    // Exact policy set: nothing added, nothing removed, nothing renamed.
+    const names = rows.map((p) => `${p.policyname}/${p.cmd}`).sort();
+    expect(names).toEqual([
+      'business documents read/SELECT',
+      'business documents write/INSERT',
+      'finance receipts read/SELECT',
+      'finance receipts write/INSERT',
+      'images auth write/INSERT',
+      'images public read/SELECT',
+    ]);
+
+    const IMAGE_BUCKETS = ['product-images', 'employee-photos', 'company-logos', 'customer-images'];
+    const isAuthenticatedOnly = (p: P) => p.roles.replace(/[\s{}]/g, '') === 'authenticated';
+
+    // Images: public read + authenticated upload, scoped to exactly the four image buckets.
+    const imgRead = byName.get('images public read/SELECT')!;
+    expect(imgRead.roles.replace(/[\s{}]/g, '')).toBe('public');
+    for (const b of IMAGE_BUCKETS) expect(imgRead.qual ?? '', `images public read lost bucket ${b}`).toContain(b);
+    const imgWrite = byName.get('images auth write/INSERT')!;
+    expect(isAuthenticatedOnly(imgWrite), 'images auth write must be authenticated-only').toBe(true);
+    for (const b of IMAGE_BUCKETS) expect(imgWrite.with_check ?? '', `images auth write lost bucket ${b}`).toContain(b);
+
+    // business-documents: authenticated SELECT + INSERT, scoped to the caller's shop prefix.
+    for (const key of ['business documents read/SELECT', 'business documents write/INSERT'] as const) {
+      const p = byName.get(key)!;
+      expect(isAuthenticatedOnly(p), `${key} must be authenticated-only`).toBe(true);
+      const scope = key.endsWith('/SELECT') ? p.qual ?? '' : p.with_check ?? '';
+      expect(scope, `${key} lost its bucket scope`).toContain('business-documents');
+      expect(scope, `${key} lost its shop scope`).toContain('current_shop_id');
+    }
+
+    // finance-receipts: authenticated SELECT + INSERT, scoped to the caller's shop AND branch.
+    for (const key of ['finance receipts read/SELECT', 'finance receipts write/INSERT'] as const) {
+      const p = byName.get(key)!;
+      expect(isAuthenticatedOnly(p), `${key} must be authenticated-only`).toBe(true);
+      const scope = key.endsWith('/SELECT') ? p.qual ?? '' : p.with_check ?? '';
+      expect(scope, `${key} lost its bucket scope`).toContain('finance-receipts');
+      expect(scope, `${key} lost its shop scope`).toContain('current_shop_id');
+      expect(scope, `${key} lost its branch scope`).toContain('current_branch_id');
+    }
+
+    // No policy is unscoped across all buckets: every SELECT carries bucket_id in its qual and
+    // every INSERT in its with_check, so a policy can never silently widen to every bucket.
+    for (const p of rows) {
+      const scope = p.cmd === 'SELECT' ? p.qual ?? '' : p.with_check ?? '';
+      expect(scope, `${p.policyname}/${p.cmd} has no bucket scope`).toContain('bucket_id');
+    }
   });
 
   // ─── Users table: UPDATE policy fixed ──────────────────────────────────────
