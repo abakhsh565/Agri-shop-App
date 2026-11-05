@@ -5,6 +5,12 @@ name: QA probe (read-only)
 # the results to the log. It can NEVER write: every query below is a SELECT,
 # there is no --apply flag, no migration step, and no production secret or
 # URL anywhere in this file. Manual dispatch only.
+#
+# The fixture-user queries take their phone numbers from the repo's own
+# declaration (scripts/dev/qa-baseline.json) at run time — no fixture phone
+# ever appears literally in this file, because the production-data-policy
+# guard forbids fixture identities on production surfaces (2026-11-06: the
+# literal phones in this file failed Gates on the PR merge run).
 on:
   workflow_dispatch:
 
@@ -12,12 +18,18 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
       - name: Run read-only QA probes
         env:
           QA_SUPABASE_URL: ${{ secrets.QA_SUPABASE_URL }}
           QA_SUPABASE_SERVICE_ROLE: ${{ secrets.QA_SUPABASE_SERVICE_ROLE }}
         run: |
           cat > /tmp/qa-probe.mjs <<'EOF'
+          import { readFileSync } from 'node:fs';
+          const baseline = JSON.parse(readFileSync('scripts/dev/qa-baseline.json', 'utf8'));
+          const phones = baseline.fixtures.users.map((u) => u.phone);
+          const phoneList = phones.map((p) => `'${p}'`).join(',');
+          const employeePhone = baseline.fixtures.workContext.employeePhones[0];
           const url = process.env.QA_SUPABASE_URL + '/rest/v1/rpc/run_sql';
           const headers = {
             apikey: process.env.QA_SUPABASE_SERVICE_ROLE,
@@ -33,9 +45,9 @@ jobs:
             clerk_grants: "SELECT count(*) FROM role_permissions WHERE role_id = (SELECT id FROM roles WHERE tenant_id='00000000-0000-0000-0000-000000000001' AND name='Inventory Clerk')",
             store_manager_role: "SELECT id, name FROM roles WHERE tenant_id='00000000-0000-0000-0000-000000000001' AND name='Store Manager'",
             store_manager_grants: "SELECT count(*) FROM role_permissions WHERE role_id = (SELECT id FROM roles WHERE tenant_id='00000000-0000-0000-0000-000000000001' AND name='Store Manager')",
-            fixture_users: "SELECT id, name, phone, role, is_active, shop_id FROM users WHERE phone IN ('923001234567','923001122334','923009999999','923008888888') ORDER BY phone",
-            fixture_memberships: "SELECT m.user_id, u.phone, m.tenant_id, m.role, m.status, m.role_id FROM memberships m JOIN users u ON u.id = m.user_id WHERE u.phone IN ('923001234567','923001122334','923009999999','923008888888') ORDER BY u.phone",
-            lookup_employee_rpc: "SELECT * FROM lookup_user_by_phone('923001122334')",
+            fixture_users: `SELECT id, name, phone, role, is_active, shop_id FROM users WHERE phone IN (${phoneList}) ORDER BY phone`,
+            fixture_memberships: `SELECT m.user_id, u.phone, m.tenant_id, m.role, m.status, m.role_id FROM memberships m JOIN users u ON u.id = m.user_id WHERE u.phone IN (${phoneList}) ORDER BY u.phone`,
+            lookup_employee_rpc: `SELECT * FROM lookup_user_by_phone('${employeePhone}')`,
           };
           for (const [name, sql] of Object.entries(queries)) {
             const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify({ sql_query: sql }) });
