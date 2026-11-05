@@ -1,0 +1,70 @@
+name: QA provision (fixture users + auth sessions)
+
+# Repairs the QA fixture identities the integration suites sign in with.
+# Two steps, in order: (1) restore the four declared fixture users
+# (scripts/dev/qa-restore-fixture-users.mjs), (2) create or repair their
+# Supabase Auth credentials (scripts/provision-auth-sessions.mjs).
+# Both scripts refuse any target that is not the QA project.
+# Default run is a PLAN only (dry run, nothing written). Only a dispatch
+# with apply=true performs the writes. Manual dispatch only. No production
+# secret or URL anywhere in this file.
+on:
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: 'Perform the writes (false = plan only)'
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  provision:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/product-gaps
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Plan fixture-user restore (dry run)
+        env:
+          QA_SUPABASE_URL: ${{ secrets.QA_SUPABASE_URL }}
+          QA_SUPABASE_ANON_KEY: ${{ secrets.QA_SUPABASE_ANON_KEY }}
+          QA_SUPABASE_SERVICE_ROLE: ${{ secrets.QA_SUPABASE_SERVICE_ROLE }}
+          QA_DB_HOST: ${{ secrets.QA_DB_HOST }}
+          QA_DB_USER: ${{ secrets.QA_DB_USER }}
+          QA_DB_PASS: ${{ secrets.QA_DB_PASS }}
+        run: node scripts/dev/qa-restore-fixture-users.mjs
+      - name: Plan auth-session provisioning (dry run)
+        env:
+          QA_SUPABASE_URL: ${{ secrets.QA_SUPABASE_URL }}
+          QA_SUPABASE_ANON_KEY: ${{ secrets.QA_SUPABASE_ANON_KEY }}
+          QA_SUPABASE_SERVICE_ROLE: ${{ secrets.QA_SUPABASE_SERVICE_ROLE }}
+          QA_DB_HOST: ${{ secrets.QA_DB_HOST }}
+          QA_DB_USER: ${{ secrets.QA_DB_USER }}
+          QA_DB_PASS: ${{ secrets.QA_DB_PASS }}
+        run: node scripts/provision-auth-sessions.mjs --dry-run
+      - name: Apply fixture-user restore
+        if: ${{ inputs.apply == true }}
+        env:
+          QA_SUPABASE_URL: ${{ secrets.QA_SUPABASE_URL }}
+          QA_SUPABASE_ANON_KEY: ${{ secrets.QA_SUPABASE_ANON_KEY }}
+          QA_SUPABASE_SERVICE_ROLE: ${{ secrets.QA_SUPABASE_SERVICE_ROLE }}
+          QA_DB_HOST: ${{ secrets.QA_DB_HOST }}
+          QA_DB_USER: ${{ secrets.QA_DB_USER }}
+          QA_DB_PASS: ${{ secrets.QA_DB_PASS }}
+        run: node scripts/dev/qa-restore-fixture-users.mjs --apply
+      - name: Apply auth-session provisioning
+        if: ${{ inputs.apply == true }}
+        env:
+          QA_SUPABASE_URL: ${{ secrets.QA_SUPABASE_URL }}
+          QA_SUPABASE_ANON_KEY: ${{ secrets.QA_SUPABASE_ANON_KEY }}
+          QA_SUPABASE_SERVICE_ROLE: ${{ secrets.QA_SUPABASE_SERVICE_ROLE }}
+          QA_DB_HOST: ${{ secrets.QA_DB_HOST }}
+          QA_DB_USER: ${{ secrets.QA_DB_USER }}
+          QA_DB_PASS: ${{ secrets.QA_DB_PASS }}
+        run: node scripts/provision-auth-sessions.mjs
