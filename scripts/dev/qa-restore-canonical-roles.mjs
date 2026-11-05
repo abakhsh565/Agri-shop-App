@@ -21,7 +21,15 @@
  *      overwrite it: it reports the collision and skips, because two roles cannot share an id and the
  *      existing one is not this tool's to replace.
  *   2. Grant the permission codes 0107 defines for that role (Store Manager: everything except three).
- *   3. With `--repair-fixtures`, re-point the memberships of the DECLARED fixture accounts that have
+ *   3. With `--reset-grants`, reset the grants of the built-in roles that ALREADY exist to exactly the
+ *      canonical set — nothing more, nothing less. WHY: on 2026-11-06 the QA probe found the
+ *      "Inventory Clerk" role holding 25 grants (canonical: 12), including `customers.create`, which
+ *      made the rbacLifecycleAndSessions revocation tests fail — a role change could never revoke a
+ *      permission the role itself grants. The drift is invisible from the repo: the role row exists, so
+ *      step 1 skips it, and the widened grants survive every CI run. The reset only ever touches a
+ *      canonical role BY NAME in a targeted tenant; a custom role is never touched, and the canonical
+ *      set is never widened — codes are only removed or restored to the reviewed definition.
+ *   4. With `--repair-fixtures`, re-point the memberships of the DECLARED fixture accounts that have
  *      `role_id = NULL`, because an active membership with no role authorizes nothing (0165 grants "all
  *      permissions" only to role `owner`). The fixture list comes from the reviewed declaration in
  *      `scripts/dev/qa-baseline.json`, not from a second copy maintained here.
@@ -43,12 +51,17 @@
  * WHAT IT NEVER TOUCHES
  *   Production (refused by name). Rows it cannot attribute: a NULL-role membership that is not a
  *   declared fixture is reported and preserved, never re-pointed. Existing role rows: only missing
- *   names are created, so a tenant that renamed or re-scoped a built-in role keeps its own version.
+ *   names are created, so a tenant that renamed or re-scoped a built-in role keeps its own version —
+ *   UNLESS `--reset-grants` is passed, in which case a canonical role's GRANTS are reset to the
+ *   canonical set (the role row itself, its name and its id are still never changed, and a custom
+ *   role's grants are never touched).
  *
  * USAGE
  *   node scripts/dev/qa-restore-canonical-roles.mjs                      # plan (dry run), demo tenant
  *   node scripts/dev/qa-restore-canonical-roles.mjs --tenant <uuid>      # target another tenant too
  *   node scripts/dev/qa-restore-canonical-roles.mjs --repair-fixtures --apply
+ *   node scripts/dev/qa-restore-canonical-roles.mjs --reset-grants --repair-fixtures --apply
+ *     # also reset existing canonical roles' grants to the reviewed set (fixes grant drift)
  */
 import pg from 'pg';
 import { QA_PROJECT_REF, qaDatabaseUrl } from './lib.mjs';
@@ -63,6 +76,7 @@ import {
 const PRODUCTION_PROJECT_REF = 'gkswcfljxlutkfdvvqng';
 const apply = process.argv.includes('--apply');
 const repairFixtures = process.argv.includes('--repair-fixtures');
+const resetGrants = process.argv.includes('--reset-grants');
 
 const tenantArgs = [];
 for (let i = 0; i < process.argv.length; i++) {
@@ -99,9 +113,31 @@ async function buildPlan() {
   const allCodes = (await client.query('select code from permissions order by code')).rows.map((r) => r.code);
   const idsTaken = new Set(roles.map((r) => r.id));
 
+  // Current grant set per role, so grant DRIFT on an existing canonical role is visible:
+  // a role row that exists is skipped by step 1, so a widened grant set survives forever
+  // unless --reset-grants is passed.
+  const grantRows = (await client.query(
+    'select rp.role_id, p.code from role_permissions rp join permissions p on p.id = rp.permission_id',
+  )).rows;
+  const grantsByRole = new Map();
+  for (const g of grantRows) {
+    if (!grantsByRole.has(g.role_id)) grantsByRole.set(g.role_id, new Set());
+    grantsByRole.get(g.role_id).add(g.code);
+  }
+
   const plan = [];
   for (const tenantId of targetTenants) {
     const missing = missingCanonicalRoles(tenantId, roles, CANONICAL_ROLE_DEFINITIONS);
+    const drift = [];
+    for (const definition of CANONICAL_ROLE_DEFINITIONS) {
+      const existing = roles.find((r) => r.tenant_id === tenantId && r.name === definition.name);
+      if (!existing) continue; // missing roles are handled by step 1, not here
+      const codes = permissionCodesFor(definition, allCodes);
+      const current = grantsByRole.get(existing.id) ?? new Set();
+      const canonical = new Set(codes);
+      const same = current.size === canonical.size && [...canonical].every((c) => current.has(c));
+      if (!same) drift.push({ definition, roleId: existing.id, current: [...current].sort(), codes });
+    }
     plan.push({
       tenantId,
       missing: missing.map((definition) => ({
@@ -109,6 +145,7 @@ async function buildPlan() {
         useCanonicalId: !idsTaken.has(definition.id),
         codes: permissionCodesFor(definition, allCodes),
       })),
+      drift,
     });
   }
   return { plan, allCodes };
@@ -201,6 +238,17 @@ async function main() {
   }
   if (!willCreate.length) console.log('\n  every targeted tenant already holds the built-in roles.');
 
+  const willReset = plan.flatMap((t) => t.drift.map((d) => ({ tenantId: t.tenantId, ...d })));
+  console.log(`\n  canonical roles whose grants DRIFT from the reviewed set: ${resetGrants ? willReset.length : `${willReset.length} (pass --reset-grants to act)`}`);
+  for (const d of willReset) {
+    const removed = d.current.filter((c) => !d.codes.includes(c));
+    const added = d.codes.filter((c) => !d.current.includes(c));
+    console.log(`     "${d.definition.name}" in ${d.tenantId} — ${d.current.length} grants now, ${d.codes.length} canonical`);
+    if (removed.length) console.log(`       would REMOVE: ${removed.join(', ')}`);
+    if (added.length) console.log(`       would ADD: ${added.join(', ')}`);
+  }
+  if (!willReset.length) console.log('  (none — every existing canonical role already holds exactly its canonical grants)');
+
   const toRepair = declared.filter((m) => targetTenants.includes(m.tenant_id));
   console.log(`\n  fixture memberships to re-point (role_id NULL, declared fixture, targeted tenant): ${repairFixtures ? toRepair.length : `${toRepair.length} (pass --repair-fixtures to act)`}`);
   for (const m of toRepair) console.log(`     ${m.user_name} (${m.phone}) in ${m.tenant_id} — active ${m.role}, role_id NULL`);
@@ -255,6 +303,22 @@ async function main() {
           [id, codes],
         );
         console.log(`  created "${definition.name}" (${id}) in ${tenantId} with ${codes.length} permission(s)`);
+      }
+    }
+
+    if (resetGrants) {
+      for (const tenantId of targetTenants) {
+        const entry = plan.find((t) => t.tenantId === tenantId);
+        for (const d of entry.drift) {
+          await client.query('delete from role_permissions where role_id = $1', [d.roleId]);
+          await client.query(
+            `insert into role_permissions (role_id, permission_id)
+             select $1::uuid, p.id from permissions p where p.code = any($2::text[])
+             on conflict do nothing`,
+            [d.roleId, d.codes],
+          );
+          console.log(`  reset grants for "${d.definition.name}" (${d.roleId}) in ${tenantId}: ${d.current.length} -> ${d.codes.length} permission(s)`);
+        }
       }
     }
 
