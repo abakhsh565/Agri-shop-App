@@ -1,6 +1,6 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ChevronRight, Clock3, Plus, ShieldCheck, UserCog, UserX } from "lucide-react";
+import { Archive, ChevronRight, Clock3, Crown, GitBranch, Plus, ShieldCheck, UserCog, UserX } from "lucide-react";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
 import { useT } from "@/lib/i18n";
@@ -39,6 +39,7 @@ export default function CoOwnersPage() {
   const owner = isCurrentUserOwner();
   const enabled = coOwnerEnabled();
   const { grants, loading, ready, load } = useCoOwnersStore();
+  const [tab, setTab] = useState<"active" | "archived">("active");
 
   useEffect(() => {
     if (owner && enabled) void load();
@@ -74,6 +75,11 @@ export default function CoOwnersPage() {
   const active = grants.filter((g) => g.status === "active").length;
   const pending = grants.filter((g) => g.status === "invited").length;
   const suspended = grants.filter((g) => g.status === "suspended").length;
+  const archivedGrants = grants.filter(
+    (g) => g.status === "revoked" && g.revocationReason !== "ownership_transferred",
+  );
+  const archived = archivedGrants.length;
+  const visible = tab === "archived" ? archivedGrants : grants.filter((g) => g.status !== "revoked");
 
   return (
     <div
@@ -123,6 +129,22 @@ export default function CoOwnersPage() {
         </button>
       </div>
 
+      <div className="px-4 pt-2">
+        <button
+          type="button"
+          onClick={() => navigate(`${base}/settings/hub/branches`)}
+          className="w-full h-11 rounded-[var(--radius-tile)] flex items-center justify-between px-4 text-13 font-semibold"
+          style={{ background: "var(--tone-sunken)", border: "1px solid var(--border-control)" }}
+          data-testid="co-owners-assign-branch"
+        >
+          <span className="flex items-center gap-2">
+            <GitBranch size={15} style={{ color: "var(--text-secondary)" }} />
+            {t("coOwners.assignBranch")}
+          </span>
+          <ChevronRight size={15} style={{ color: "var(--text-secondary)" }} />
+        </button>
+      </div>
+
       <div className="px-4 pt-3">
         <button
           type="button"
@@ -137,29 +159,72 @@ export default function CoOwnersPage() {
           </span>
           <ChevronRight size={15} style={{ color: "var(--text-secondary)" }} />
         </button>
+
+        <button
+          type="button"
+          onClick={() => navigate(`${base}/settings/hub/people/co-owners/transfer`)}
+          className="w-full h-11 mt-2 rounded-[var(--radius-tile)] flex items-center justify-between px-4 text-13 font-semibold"
+          style={{ background: "var(--tone-sunken)", border: "1px solid var(--border-control)" }}
+          data-testid="co-owners-transfer"
+        >
+          <span className="flex items-center gap-2">
+            <Crown size={15} style={{ color: "var(--text-secondary)" }} />
+            {t("coOwners.transferOwnership")}
+          </span>
+          <ChevronRight size={15} style={{ color: "var(--text-secondary)" }} />
+        </button>
       </div>
 
       <div className="px-4 pt-4 flex flex-col gap-2.5">
+        <div className="flex gap-1.5" data-testid="co-owners-tabs">
+          <button
+            type="button"
+            onClick={() => setTab("active")}
+            className="h-8 px-3 rounded-full text-11 font-semibold"
+            style={{
+              background: tab === "active" ? "var(--brand)" : "var(--tone-sunken)",
+              color: tab === "active" ? "#0a0a0a" : "var(--text-secondary)",
+            }}
+          >
+            {t("coOwners.tabActive")} · {active + pending + suspended}
+          </button>
+          <button
+            type="button"
+            onClick={() => setTab("archived")}
+            className="h-8 px-3 rounded-full text-11 font-semibold flex items-center gap-1.5"
+            style={{
+              background: tab === "archived" ? "var(--brand)" : "var(--tone-sunken)",
+              color: tab === "archived" ? "#0a0a0a" : "var(--text-secondary)",
+            }}
+            data-testid="co-owners-archived-tab"
+          >
+            <Archive size={12} />
+            {t("coOwners.tabArchived")} · {archived}
+          </button>
+        </div>
+
         {loading && !ready && (
           <p className="text-12 py-6 text-center" style={{ color: "var(--text-secondary)" }}>
             {t("common.loading")}
           </p>
         )}
 
-        {ready && grants.length === 0 && (
+        {ready && visible.length === 0 && (
           <div
             className="rounded-[var(--radius-tile)] p-5"
             style={{ background: "var(--tone-card)", border: "1px solid var(--border-control)" }}
             data-testid="co-owners-empty"
           >
-            <p className="text-15 font-bold">{t("coOwners.empty")}</p>
+            <p className="text-15 font-bold">
+              {tab === "archived" ? t("coOwners.emptyArchived") : t("coOwners.empty")}
+            </p>
             <p className="text-12 mt-1" style={{ color: "var(--text-secondary)" }}>
-              {t("coOwners.emptyHint")}
+              {tab === "archived" ? t("coOwners.emptyArchivedHint") : t("coOwners.emptyHint")}
             </p>
           </div>
         )}
 
-        {grants.map((grant) => {
+        {visible.map((grant) => {
           const tone = STATUS_TONE[grant.status] ?? STATUS_TONE.invited;
           return (
             <button

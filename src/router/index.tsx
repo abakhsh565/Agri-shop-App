@@ -5,7 +5,10 @@ import ProtectedRoute from "@/components/auth/ProtectedRoute";
 // Auth
 import SplashPage from "@/pages/auth/SplashPage";
 import LoginPage from "@/pages/auth/LoginPage";
-import RequestAccessPage from "@/pages/auth/RequestAccessPage";
+import AccountRecoveryPage from "@/pages/auth/AccountRecoveryPage";
+import InvitationsPage from "@/pages/auth/InvitationsPage";
+import BusinessSelectPage from "@/pages/auth/BusinessSelectPage";
+import IdentityPage from "@/pages/auth/IdentityPage";
 import OTPVerifyPage from "@/pages/auth/OTPVerifyPage";
 import AccountReadyPage from "@/pages/auth/AccountReadyPage";
 import PINSetPage from "@/pages/auth/PINSetPage";
@@ -75,11 +78,11 @@ import SupplierCreditPage from "@/pages/admin/settings/SupplierCreditPage";
 import RolesAccessPage from "@/pages/admin/settings/RolesAccessPage";
 import AdminNotificationsPage from "@/pages/admin/notifications/AdminNotificationsPage";
 import AddEmployeePage from "@/pages/admin/employees/AddEmployeePage";
-import EmployeeAccessRequestsPage from "@/pages/admin/employees/EmployeeAccessRequestsPage";
-import EmployeeAccessRequestDetailPage from "@/pages/admin/employees/EmployeeAccessRequestDetailPage";
+import EmployeeSalaryPage from "@/pages/admin/employees/EmployeeSalaryPage";
 const AdminPurchasesPage = React.lazy(() => import("@/pages/admin/purchases/AdminPurchasesPage"));
 const RecordPurchasePage = React.lazy(() => import("@/pages/admin/purchases/RecordPurchasePage"));
 const SupplierPaymentsPage = React.lazy(() => import("@/pages/admin/purchases/SupplierPaymentsPage"));
+const PurchasesPayablesPage = React.lazy(() => import("@/pages/admin/purchases/PurchasesPayablesPage"));
 import RecordSupplierPaymentPage from "@/pages/admin/payments/RecordSupplierPaymentPage";
 const AdminReportsPage = React.lazy(() => import("@/pages/admin/reports/AdminReportsPage"));
 // The Reports *hub* and its Profit screen are eager: both are entered from Settings, whose
@@ -95,11 +98,13 @@ import AdminEmployeesDirectoryPage from "@/pages/admin/people/AdminEmployeesDire
 // stays eager with the rest of the Employees & Access group.
 import RoleEditorPage from "@/pages/admin/people/RoleEditorPage";
 import CoOwnersPage from "@/pages/admin/people/CoOwnersPage";
+import OwnerOwnershipTransferPage from "@/pages/admin/people/OwnerOwnershipTransferPage";
 import CoOwnerWizardPage from "@/pages/admin/people/CoOwnerWizardPage";
 import CoOwnerDetailPage from "@/pages/admin/people/CoOwnerDetailPage";
 import CoOwnerLayout from "@/components/layout/CoOwnerLayout";
 import CoOwnerDashboardPage from "@/pages/co-owner/CoOwnerDashboardPage";
 import CoOwnerApprovalsPage from "@/pages/co-owner/CoOwnerApprovalsPage";
+import CoOwnerOwnershipTransferPage from "@/pages/co-owner/CoOwnerOwnershipTransferPage";
 import CoOwnerSettingsPage from "@/pages/co-owner/CoOwnerSettingsPage";
 import CoOwnerTeamPage from "@/pages/co-owner/CoOwnerTeamPage";
 import CoOwnerMorePage from "@/pages/co-owner/CoOwnerMorePage";
@@ -113,7 +118,6 @@ const InventoryCataloguePage = React.lazy(() => import("@/pages/admin/inventory/
 const CategoriesPage = React.lazy(() => import("@/pages/admin/inventory/CategoriesPage"));
 const CategoryFormPage = React.lazy(() => import("@/pages/admin/inventory/CategoryFormPage"));
 const UnitsPage = React.lazy(() => import("@/pages/admin/inventory/UnitsPage"));
-const UnitFormPage = React.lazy(() => import("@/pages/admin/inventory/UnitFormPage"));
 import PurchaseDetailPage from "@/pages/admin/purchases/PurchaseDetailPage";
 import StockMovementHistoryPage from "@/pages/admin/inventory/StockMovementHistoryPage";
 import ReorderSuggestionsPage from "@/pages/admin/inventory/ReorderSuggestionsPage";
@@ -158,6 +162,7 @@ import CreditOverridesPage from "@/pages/admin/alerts/CreditOverridesPage";
 import CreditOverrideDetailPage from "@/pages/admin/alerts/CreditOverrideDetailPage";
 import CreditRequestDetailPage from "@/pages/admin/alerts/CreditRequestDetailPage";
 import RemindersOverviewPage from "@/pages/admin/alerts/RemindersOverviewPage";
+import HarvestAlertPage from "@/pages/admin/alerts/HarvestAlertPage";
 // Customers & Credit: the section hub and the three ledgers its rows open. Payments is the
 // existing `/payments` screen, rebuilt as the ledger of money that actually moved.
 import AdminCustomersSectionPage from "@/pages/admin/customers/AdminCustomersSectionPage";
@@ -181,7 +186,10 @@ export const router = createBrowserRouter([
   // Shown once per device, before sign-in: what the app is for, in three screens.
   { path: "/welcome", element: <IntroPage /> },
   { path: "/login", element: <LoginPage /> },
-  { path: "/login/request-access", element: <RequestAccessPage /> },
+  { path: "/login/recover", element: <AccountRecoveryPage /> },
+  { path: "/login/invitations", element: <InvitationsPage /> },
+  { path: "/login/business", element: <BusinessSelectPage /> },
+  { element: <ProtectedRoute />, children: [{ path: "/identity", element: <IdentityPage /> }] },
   { path: "/login/otp", element: <OTPVerifyPage /> },
   // A brand-new account lands here instead of on the PIN keypad: signed in, told so, and
   // offered the PIN as the next small step rather than as the first thing the app says.
@@ -205,7 +213,10 @@ export const router = createBrowserRouter([
   { path: "/register/status", element: <RegisterStatusPage /> },
 
   {
-    element: <ProtectedRoute allowedRoles={["admin"]} allowedExperiences={["owner"]} />,
+    // The server decides which experience opens this shell. A Co-Owner uses the same Admin
+    // design and screens as the Owner; the permission, branch and authority checks continue
+    // to run inside those screens and on every server call.
+    element: <ProtectedRoute allowedExperiences={["owner", "co_owner"]} requirePin />,
     children: [{
     path: "/admin",
     element: <AdminLayout />,
@@ -265,8 +276,6 @@ export const router = createBrowserRouter([
             children: [
               { path: "inventory/categories/new", element: <CategoryFormPage /> },
               { path: "inventory/categories/:categoryId", element: <CategoryFormPage /> },
-              { path: "inventory/units/new", element: <UnitFormPage /> },
-              { path: "inventory/units/:unitId", element: <UnitFormPage /> },
             ] },
           { path: "inventory/:productId/edit", element: <AddProductPage /> },
           { path: "inventory/:productId/adjust", element: <InventoryAdjustPage /> },
@@ -324,19 +333,15 @@ export const router = createBrowserRouter([
           { path: "companies",  element: <CompaniesListPage /> },
           { path: "companies/new", element: <AddCompanyPage /> },
           { path: "companies/:companyId", element: <CompanyDetailPage /> },
-        ] },
-
-      // ── Access requests (requires employees.manage) ──────────────────────
-      // A request is a staffing decision, not a read of the staff list. Keeping
-      // these routes behind manage means a view-only role cannot see the
-      // requester's phone number or close the request.
-      { element: <PermissionGuard requires="employees.manage" />,
-        children: [
-          { path: "employees/requests", element: <EmployeeAccessRequestsPage /> },
-          { path: "employees/requests/:requestId", element: <EmployeeAccessRequestDetailPage /> },
+          // The Purchases hub's payable row lands here: only the suppliers still owed money.
+          { path: "purchases/payables", element: <PurchasesPayablesPage /> },
         ] },
 
       // ── Employees (requires employees.view) ──────────────────────────────
+      // The retired request-inbox address must not be mistaken for an employee id. A stale
+      // bookmark lands on the staff directory; there is no request screen behind this path.
+      { path: "employees/requests", element: <Navigate to="/admin/employees" replace /> },
+      { path: "employees/requests/:requestId", element: <Navigate to="/admin/employees" replace /> },
       { element: <PermissionGuard requires="employees.view" />,
         children: [
           { path: "employees",  element: <EmployeesListPage /> },
@@ -344,6 +349,7 @@ export const router = createBrowserRouter([
           { path: "employees/:employeeId", element: <EmployeeDetailPage /> },
           { path: "employees/:employeeId/role", element: <EmployeeRolePage /> },
           { path: "employees/:employeeId/branches", element: <EmployeeBranchesPage /> },
+          { path: "employees/:employeeId/salary", element: <EmployeeSalaryPage /> },
           { path: "employees/:employeeId/performance", element: <EmployeePerformancePage /> },
           { path: "employees/:employeeId/invitation", element: <EmployeeInvitationPage /> },
         ] },
@@ -391,6 +397,9 @@ export const router = createBrowserRouter([
               { path: "settings/hub/people/activity/:employeeId", element: <AdminEmployeeActivityDetailPage /> },
               { path: "settings/hub/people/co-owners", element: <CoOwnersPage /> },
               { path: "settings/hub/people/co-owners/new", element: <CoOwnerWizardPage /> },
+              // The static transfer address must stay ahead of `:grantId`; otherwise a grant id
+              // called "transfer" would be treated as the handover screen.
+              { path: "settings/hub/people/co-owners/transfer", element: <OwnerOwnershipTransferPage /> },
               { path: "settings/hub/people/co-owners/:grantId", element: <CoOwnerDetailPage /> },
               { path: "settings/hub/people/co-owners/:grantId/edit", element: <CoOwnerWizardPage /> },
             ] },
@@ -469,6 +478,10 @@ export const router = createBrowserRouter([
 
       // Co-Owner decisions are owner-only. The RPC itself also refuses any non-owner.
       { path: "co-owner-approvals", element: <CoOwnerApprovalsPage /> },
+      // The recipient side of a handover. A Co-Owner is placed in this shell after sign-in,
+      // so this is the address their More row opens; `/co-owner/ownership-transfer` remains
+      // available for the grant-scoped shell and existing links.
+      { path: "ownership-transfer", element: <CoOwnerOwnershipTransferPage /> },
 
       // ── Notifications (requires notifications.view) ──────────────────────
       { element: <PermissionGuard requires="notifications.view" />,
@@ -482,6 +495,7 @@ export const router = createBrowserRouter([
           { path: "alerts/credit-overrides", element: <CreditOverridesPage /> },
           { path: "alerts/credit-overrides/:customerId", element: <CreditOverrideDetailPage /> },
           { path: "alerts/reminders", element: <RemindersOverviewPage /> },
+          { path: "alerts/harvest", element: <HarvestAlertPage /> },
           { path: "alerts/inventory", element: <InventoryAlertsPage /> },
           { path: "alerts/expiry", element: <ExpiryAlertsPage /> },
           { path: "alerts/credit-requests/:requestId", element: <CreditRequestDetailPage /> },
@@ -497,7 +511,7 @@ export const router = createBrowserRouter([
   },
 
   {
-    element: <ProtectedRoute />,
+    element: <ProtectedRoute requirePin />,
     children: [{
     path: "/co-owner",
     element: <CoOwnerLayout />,
@@ -505,6 +519,7 @@ export const router = createBrowserRouter([
       { index: true, element: <Navigate to="/co-owner/dashboard" replace /> },
       { path: "dashboard", element: <CoOwnerDashboardPage /> },
       { path: "approvals", element: <CoOwnerApprovalsPage /> },
+      { path: "ownership-transfer", element: <CoOwnerOwnershipTransferPage /> },
       { path: "more", element: <CoOwnerMorePage /> },
       { path: "settings", element: <CoOwnerSettingsPage /> },
       { element: <PermissionGuard requires="employees.view" fallback="/co-owner/dashboard" />,
@@ -512,11 +527,6 @@ export const router = createBrowserRouter([
           { path: "team", element: <CoOwnerTeamPage /> },
           { path: "team/new", element: <AddEmployeePage /> },
           { path: "team/:employeeId", element: <EmployeeDetailPage /> },
-        ] },
-      { element: <PermissionGuard requires="employees.manage" fallback="/co-owner/dashboard" />,
-        children: [
-          { path: "employees/requests", element: <EmployeeAccessRequestsPage /> },
-          { path: "employees/requests/:requestId", element: <EmployeeAccessRequestDetailPage /> },
         ] },
       { element: <PermissionGuard requires="sales.view" fallback="/co-owner/dashboard" />,
         children: [
@@ -596,7 +606,7 @@ export const router = createBrowserRouter([
   },
 
   {
-    element: <ProtectedRoute allowedExperiences={["employee"]} />,
+    element: <ProtectedRoute allowedExperiences={["employee"]} requirePin />,
     children: [{
     path: "/employee",
     element: <EmployeeLayout />,

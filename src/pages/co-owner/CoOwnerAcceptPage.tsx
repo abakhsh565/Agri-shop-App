@@ -118,7 +118,7 @@ export default function CoOwnerAcceptPage() {
 
   if (!enabled) return <Navigate to="/login" replace />;
   if (user && !user.pendingCoOwnerInvitation && user.experience === "co_owner") {
-    return <Navigate to="/co-owner/dashboard" replace />;
+    return <Navigate to={homePathForUser(user)} replace />;
   }
 
   const label = (item: { labelEn: string; labelUr: string }) =>

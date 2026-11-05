@@ -36,7 +36,8 @@ export default function Button({
 }: ButtonProps) {
   // `ds-pressable` gives every button in the app the same press: a small scale
   // and dim on transform/opacity, which stay on the compositor.
-  const base = "inline-flex items-center justify-center rounded-full font-bold ds-pressable select-none";
+  // Every action button shares one label style: 14px medium, regardless of variant or size.
+  const base = "inline-flex items-center justify-center rounded-full text-14 font-medium ds-pressable select-none";
 
   const variants = {
     primary: "bg-ink text-ink-fg",
@@ -48,9 +49,9 @@ export default function Button({
   };
 
   const sizes = {
-    sm: "h-9 px-4 text-xs",
-    md: "h-12 px-6 text-sm",
-    lg: "h-[52px] px-6 text-sm",
+    sm: "h-9 px-4",
+    md: "h-12 px-6",
+    lg: "h-[52px] px-6",
   };
 
   return (

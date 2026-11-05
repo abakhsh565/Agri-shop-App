@@ -1,82 +1,72 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import {
   ArrowDownLeft,
   ArrowUpRight,
-  Bell,
-  CalendarDays,
   Download,
   Plus,
   ReceiptText,
   RefreshCw,
   Share2,
-  Wallet,
 } from "lucide-react";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
 import SearchBar from "@/components/ui/SearchBar";
 import Sheet from "@/components/ui/Sheet";
-import ConfirmDialog from "@/components/ui/ConfirmDialog";
-import PaymentReminderSheet from "@/components/ui/PaymentReminderSheet";
-import PaymentReminderCard from "@/components/ui/PaymentReminderCard";
 import SectionActionsSheet, {
   SectionActionsButton,
   type SectionAction,
 } from "@/components/ui/SectionActionsSheet";
+import DateField, { displayDate } from "@/components/ui/DateField";
 import { Skeleton, SkeletonList } from "@/components/ui/Skeleton";
 import { useT } from "@/lib/i18n";
 import { useShellBase } from "@/lib/useShellBase";
 import { useUIStore } from "@/stores/uiStore";
 import { useAuthStore } from "@/stores/authStore";
 import { useSalesStore } from "@/stores/salesStore";
+import { useShopStore } from "@/stores/shopStore";
 import { loadPaymentLedger, type LedgerPayment } from "@/lib/paymentLedger";
 import { formatCurrency, formatSmartDateTime } from "@/lib/formatters";
 import { pkDateFromISO, pkToday } from "@/lib/pkDate";
-import { cashTakenInMonth, movementsInMonth } from "@/lib/financeSummary";
 import { downloadCsv } from "@/lib/csv";
-import {
-  deletePaymentReminder,
-  setPaymentReminderStatus,
-  sortReminders,
-  usePaymentReminders,
-  type PaymentReminder,
-} from "@/lib/paymentReminders";
+import { supabase } from "@/lib/supabase";
 
 /**
- * The cash screen behind the Finance hub's "Cash position" row.
+ * Daily cash — one day at the till.
  *
- * SHAPE (owner's instruction, 2026-10-30). The screen used to open with its own title, then three
- * count tiles, then a per-branch split — three answers to questions nobody asked on the way to the
- * one figure they came for. All four are gone. What is left is the collection plate at the top,
- * one action to record money, the owner's payment reminders, then the movements themselves under a
- * search and the two direction chips. The app bar names the screen; repeating the name inside it
- * was decoration.
+ * WHAT THE OWNER ASKED FOR (2026-11-05): how much cash should be in the till on a day, how much
+ * was actually recorded, and a calendar above the data that changes both. The old screen answered
+ * a monthly question ("cash taken this month") and had no way to write down a count.
  *
- * EVERY FIGURE HAS ONE DEFINITION, SHARED WITH THE HUB:
- *   - Recorded cash is `cashTakenInMonth` (money taken on this month's sales), the same function
- *     the hub prints, so the two screens cannot disagree about the same words.
- *   - Money received and money paid are the two sides of the payments ledger
- *     (`movementsInMonth`) — never netted, because they are two different flows.
+ * THE TWO FIGURES:
+ *   - Expected cash is the cash the day should have produced: cash sales at the counter, plus the
+ *     customer payments received in cash, minus the supplier payments made in cash.
+ *   - Recorded cash is the count saved for that same day, read back from `cash_reconciliations`.
+ *     Saving goes through `record_cash_reconciliation_v1`, the existing owner-only RPC, so the
+ *     count survives a reload and is the same one the close-of-day check sees.
  *
- * THE OVERFLOW IS THE SCREEN'S SECOND HALF. Set a reminder, count the till, share the summary,
- * download the rows on screen, or refresh — each is a job this screen owns, and each is one row in
- * the one sheet every section screen uses (`SectionActionsSheet`) rather than a strip of loose
- * buttons under the list.
+ * EVERYTHING BELOW THE SEARCH IS THE SAME DAY. The movements list, the two direction filters and
+ * the export all read the date in the card, so the calendar never changes a title while leaving
+ * yesterday's rows underneath it.
  *
- * THE REMINDERS ARE THE OWNER'S DIARY, NOT THE CREDIT BOOK'S. `payment_reminders` (0256) holds one
- * payment each with an optional cadence; the chasing engine does not read it, so a private note
- * cannot become a message to a customer. The app has no background job, so the screen shows the
- * reminder and marks the one that is due — it never claims a notification was delivered.
+ * The list is cash only. A bank transfer did not pass through the till, so it cannot explain the
+ * counted notes; keeping it out of this list means the rows and the expected figure describe the
+ * same money. The full ledger lives in Finance → Money.
  */
 type Direction = "all" | "in" | "out";
+
+interface SavedCount {
+  counted: number;
+  expected: number;
+  variance: number;
+}
 
 export default function CashPositionPage() {
   const t = useT();
   const base = useShellBase();
-  const navigate = useNavigate();
   const { addToast } = useUIStore();
   const role = useAuthStore((s) => s.user?.membershipRole);
   const isOwner = role === "owner";
+  const activeShopId = useShopStore((s) => s.activeShopId);
 
   const sales = useSalesStore((s) => s.sales);
   const salesReady = useSalesStore((s) => s.ready);
@@ -89,27 +79,16 @@ export default function CashPositionPage() {
   const [search, setSearch] = useState("");
   const [direction, setDirection] = useState<Direction>("all");
   const [menuOpen, setMenuOpen] = useState(false);
-  const [period, setPeriod] = useState<"month" | "previous">("month");
-  const [periodOpen, setPeriodOpen] = useState(false);
-
-  const reminders = usePaymentReminders();
-  const [reminderSheet, setReminderSheet] = useState<{ open: boolean; reminder: PaymentReminder | null }>({
-    open: false,
-    reminder: null,
-  });
-  const [removing, setRemoving] = useState<PaymentReminder | null>(null);
-  const [deleting, setDeleting] = useState(false);
 
   const today = pkToday();
-  const thisMonth = today.slice(0, 7);
-  // A Pakistan calendar month, shifted one back: the same arithmetic the ledger's "Last month"
-  // tab uses, so the two screens call September the same month.
-  const previousMonth = useMemo(() => {
-    const year = Number(today.slice(0, 4));
-    const monthIndex = Number(today.slice(5, 7));
-    return new Date(Date.UTC(year, monthIndex - 2, 1)).toISOString().slice(0, 7);
-  }, [today]);
-  const month = period === "month" ? thisMonth : previousMonth;
+  const [date, setDate] = useState(today);
+
+  const [count, setCount] = useState<SavedCount | null>(null);
+  const [countLoading, setCountLoading] = useState(false);
+  const [countReloadKey, setCountReloadKey] = useState(0);
+  const [cashOpen, setCashOpen] = useState(false);
+  const [cashAmount, setCashAmount] = useState("");
+  const [savingCash, setSavingCash] = useState(false);
 
   useEffect(() => {
     if (!salesReady) void loadSales();
@@ -133,27 +112,91 @@ export default function CashPositionPage() {
     };
   }, [reloadKey]);
 
-  const cash = useMemo(() => cashTakenInMonth(sales, month), [sales, month]);
-  const monthEntries = useMemo(
-    () => (entries ?? []).filter((entry) => pkDateFromISO(entry.createdAt).startsWith(month)),
-    [entries, month],
+  // The saved count for the chosen day. A missing row is the honest "not counted yet", not zero.
+  useEffect(() => {
+    let live = true;
+    if (!activeShopId) {
+      setCount(null);
+      setCountLoading(false);
+      return;
+    }
+    setCount(null);
+    setCountLoading(true);
+    void (async () => {
+      const { data, error } = await supabase
+        .from("cash_reconciliations")
+        .select("counted_cash, expected_cash, variance")
+        .eq("shop_id", activeShopId)
+        .eq("reconciliation_date", date)
+        .maybeSingle();
+      if (!live) return;
+      if (!error && data) {
+        setCount({
+          counted: Number(data.counted_cash),
+          expected: Number(data.expected_cash),
+          variance: Number(data.variance),
+        });
+      } else {
+        setCount(null);
+      }
+      setCountLoading(false);
+    })();
+    return () => {
+      live = false;
+    };
+  }, [activeShopId, date, countReloadKey]);
+
+  const cashSales = useMemo(
+    () =>
+      sales
+        .filter(
+          (sale) =>
+            !sale.isVoided &&
+            sale.paymentMethod === "cash" &&
+            pkDateFromISO(sale.createdAt) === date,
+        )
+        .reduce(
+          (sum, sale) =>
+            sum + (sale.paymentType === "full" ? sale.totalAmount : Math.max(0, sale.amountPaid)),
+          0,
+        ),
+    [sales, date],
   );
-  const flows = useMemo(() => movementsInMonth(entries ?? [], month), [entries, month]);
+
+  const dayEntries = useMemo(
+    () => (entries ?? []).filter((entry) => pkDateFromISO(entry.createdAt) === date),
+    [entries, date],
+  );
+  const cashEntries = useMemo(
+    () => dayEntries.filter((entry) => entry.method === "cash"),
+    [dayEntries],
+  );
+  const flows = useMemo(
+    () =>
+      cashEntries.reduce(
+        (totals, entry) => {
+          if (entry.direction === "in") totals.received += Math.max(0, entry.amount);
+          else totals.paid += Math.max(0, entry.amount);
+          return totals;
+        },
+        { received: 0, paid: 0 },
+      ),
+    [cashEntries],
+  );
+
+  const expected = cashSales + flows.received - flows.paid;
+  const ready = salesReady && entries !== null;
+  const variance = count ? count.counted - expected : null;
 
   const rows = useMemo(() => {
     const term = search.trim().toLowerCase();
-    return monthEntries.filter((entry) => {
+    return cashEntries.filter((entry) => {
       if (direction === "in" && entry.direction !== "in") return false;
       if (direction === "out" && entry.direction !== "out") return false;
       if (term && !entry.counterparty.toLowerCase().includes(term)) return false;
       return true;
     });
-  }, [monthEntries, direction, search]);
-
-  const reminderRows = useMemo(
-    () => (reminders.rows ? sortReminders(reminders.rows, today) : []),
-    [reminders.rows, today],
-  );
+  }, [cashEntries, direction, search]);
 
   const methodLabel = (method: string) =>
     method === "cash" ? t("sale.cash") : method === "bank_transfer" ? t("sale.bankTransfer") : method;
@@ -167,9 +210,37 @@ export default function CashPositionPage() {
   const refresh = useCallback(() => {
     setRefreshing(true);
     setReloadKey((value) => value + 1);
-    reminders.retry();
+    setCountReloadKey((value) => value + 1);
     if (!salesReady) void loadSales();
-  }, [reminders, salesReady, loadSales]);
+  }, [salesReady, loadSales]);
+
+  function openCount() {
+    setCashAmount(count ? String(count.counted) : "");
+    setCashOpen(true);
+  }
+
+  async function saveCount() {
+    if (!isOwner || savingCash) return;
+    const amount = Number(cashAmount);
+    if (cashAmount.trim() === "" || !Number.isFinite(amount) || amount < 0) {
+      addToast(t("copy.enterCountedCash"), "warning");
+      return;
+    }
+    setSavingCash(true);
+    try {
+      const { error } = await supabase.rpc("record_cash_reconciliation_v1", {
+        payload: { date, expectedCash: expected, countedCash: amount, notes: null },
+      });
+      if (error) throw error;
+      setCount({ counted: amount, expected, variance: amount - expected });
+      setCashOpen(false);
+      addToast(t("cashPosition.saved"), "success");
+    } catch {
+      addToast(t("cashPosition.saveFailed"), "error");
+    } finally {
+      setSavingCash(false);
+    }
+  }
 
   function exportRows() {
     if (!rows.length) {
@@ -193,14 +264,14 @@ export default function CashPositionPage() {
         (incoming ? 1 : -1) * entry.amount,
       ];
     });
-    downloadCsv(`cash-position_${month}.csv`, [header, ...body]);
+    downloadCsv(`cash-position_${date}.csv`, [header, ...body]);
     addToast(t("cashPosition.exported"), "success");
   }
 
   async function shareSummary() {
     const text = t("cashPosition.shareText", {
-      month,
-      cash: formatCurrency(cash),
+      month: displayDate(date),
+      cash: ready ? formatCurrency(expected) : "—",
       received: entries ? formatCurrency(flows.received) : "—",
       paid: entries ? formatCurrency(flows.paid) : "—",
     });
@@ -222,50 +293,7 @@ export default function CashPositionPage() {
     }
   }
 
-  async function removeReminder() {
-    if (!removing || deleting) return;
-    setDeleting(true);
-    try {
-      await deletePaymentReminder(removing.id);
-      addToast(t("cashPosition.reminderDeleted"), "success");
-      setRemoving(null);
-      reminders.retry();
-    } catch {
-      addToast(t("cashPosition.reminderFailed"), "error");
-    } finally {
-      setDeleting(false);
-    }
-  }
-
   const actions: SectionAction[] = [
-    // Recording money is the first thing the owner reaches for, so it leads the sheet — but it is
-    // not the screen, so it is a row here rather than a button standing over the list or a plus
-    // in the app bar.
-    ...(isOwner
-      ? [
-          {
-            id: "record",
-            icon: Plus,
-            title: t("cashPosition.record"),
-            description: t("cashPosition.recordDesc"),
-            onClick: () => navigate(`${base}/settings/hub/finance/record?kind=income`),
-          },
-          {
-            id: "reminder",
-            icon: Bell,
-            title: t("cashPosition.setReminder"),
-            description: t("cashPosition.reminderDesc"),
-            onClick: () => setReminderSheet({ open: true, reminder: null }),
-          },
-        ]
-      : []),
-    {
-      id: "daily-cash",
-      icon: Wallet,
-      title: t("cashPosition.dailyCheck"),
-      description: t("cashPosition.dailyCheckDesc"),
-      onClick: () => navigate(`${base}/payments/daily-cash`),
-    },
     { id: "share", icon: Share2, title: t("cashPosition.share"), onClick: shareSummary },
     { id: "export", icon: Download, title: t("cashPosition.download"), onClick: exportRows },
     { id: "refresh", icon: RefreshCw, title: t("cashPosition.refresh"), onClick: refresh },
@@ -281,6 +309,7 @@ export default function CashPositionPage() {
       <NavHeader
         title={t("cashPosition.title")}
         backTo={`${base}/settings/hub/finance`}
+        historyBack
         right={
           <SectionActionsButton
             onClick={() => setMenuOpen(true)}
@@ -298,46 +327,68 @@ export default function CashPositionPage() {
         >
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
-              {salesReady ? (
+              <p className="text-10" style={{ color: "var(--text-secondary)" }}>
+                {t("cashPosition.expected")}
+              </p>
+              {ready ? (
                 <p
                   className="text-22 font-bold tabular-nums break-words"
                   style={{ color: "var(--brand-dark)" }}
-                  data-testid="cash-position-total"
+                  data-testid="cash-position-expected"
                 >
-                  {formatCurrency(cash)}
+                  {formatCurrency(expected)}
                 </p>
               ) : (
                 <Skeleton w="140px" h="26px" />
               )}
-              <p className="text-10 mt-1" style={{ color: "var(--text-tertiary)" }}>
-                {period === "month" ? t("financeHub.cashHint") : t("cashPosition.previousHint")}
-              </p>
             </div>
 
-            {/* The month, said once and changeable. The pill carries the icon and the words, so
-                the card no longer prints "This month" on the left and nothing on the right. */}
-            <button
-              type="button"
-              onClick={() => setPeriodOpen(true)}
-              aria-haspopup="dialog"
-              aria-label={t("cashPosition.choosePeriod")}
-              data-testid="cash-position-period"
+            <DateField
+              value={date}
+              onChange={setDate}
+              max={today}
+              ariaLabel={t("cashPosition.choosePeriod")}
+              testId="cash-position-date"
               className="flex items-center gap-1.5 shrink-0 h-8 px-3 rounded-full text-11 font-semibold active:opacity-60"
-              style={{ background: "var(--tone-sunken)", color: "var(--text-secondary)" }}
-            >
-              <CalendarDays size={13} />
-              {period === "month" ? t("cashPosition.thisMonth") : t("cashPosition.lastMonth")}
-            </button>
+            />
           </div>
 
-          {/* The two directions sit under the figure the way Paid and Total payable sit under the
-              supplier screen's — same card, same pair, no bar: cash has no percentage of itself
-              to draw, and a bar over two unrelated flows would measure nothing. */}
+          <div className="flex items-end justify-between gap-3 mt-4">
+            <div className="min-w-0">
+              <p className="text-10" style={{ color: "var(--text-secondary)" }}>
+                {t("cashPosition.recorded")}
+              </p>
+              {countLoading ? (
+                <Skeleton w="90px" h="20px" className="mt-1" />
+              ) : (
+                <p
+                  className="text-18 font-bold tabular-nums mt-0.5 break-words"
+                  data-testid="cash-position-recorded"
+                >
+                  {count ? formatCurrency(count.counted) : "—"}
+                </p>
+              )}
+            </div>
+            {variance != null && (
+              <p className="text-10 text-end" style={{ color: "var(--text-secondary)" }}>
+                {t("admin.variance")}{" "}
+                <span
+                  className="font-bold tabular-nums"
+                  style={{ color: variance === 0 ? "var(--success)" : "var(--error)" }}
+                  data-testid="cash-position-variance"
+                >
+                  {variance > 0 ? "+" : variance < 0 ? "−" : ""}
+                  {formatCurrency(Math.abs(variance))}
+                </span>
+              </p>
+            )}
+          </div>
+
           <div className="flex items-end justify-between gap-3 mt-4">
             <div className="min-w-0">
               <p className="text-10 flex items-center gap-1.5" style={{ color: "var(--text-secondary)" }}>
                 <span className="size-1.5 rounded-full shrink-0" style={{ background: "var(--success)" }} />
-                {t("payments.moneyReceived")}
+                {t("cashPosition.received")}
               </p>
               <p
                 className="text-13 font-bold tabular-nums mt-0.5 break-words"
@@ -350,7 +401,7 @@ export default function CashPositionPage() {
             <div className="min-w-0 text-end">
               <p className="text-10 flex items-center gap-1.5 justify-end" style={{ color: "var(--text-secondary)" }}>
                 <span className="size-1.5 rounded-full shrink-0" style={{ background: "var(--error)" }} />
-                {t("payments.moneyPaid")}
+                {t("cashPosition.paid")}
               </p>
               <p
                 className="text-13 font-bold tabular-nums mt-0.5 break-words"
@@ -364,40 +415,6 @@ export default function CashPositionPage() {
         </div>
       </div>
 
-      {/* The owner's diary. One card per payment, the next day it falls on, and its cadence. */}
-      {(reminderRows.length > 0 || reminders.failed) && (
-        <div className="px-4 pt-5" data-testid="cash-position-reminders">
-          <p className="text-15 font-bold">{t("cashPosition.reminders")}</p>
-          {reminders.failed ? (
-            <p className="text-11 mt-1" style={{ color: "var(--text-tertiary)" }}>
-              {t("cashPosition.remindersFailed")}
-            </p>
-          ) : (
-            <div className="flex flex-col gap-2 mt-2">
-              {reminderRows.map((reminder) => (
-                <PaymentReminderCard
-                  key={reminder.id}
-                  reminder={reminder}
-                  today={today}
-                  testId={`cash-reminder-${reminder.id}`}
-                  onEdit={isOwner ? () => setReminderSheet({ open: true, reminder }) : undefined}
-                  onDelete={isOwner ? () => setRemoving(reminder) : undefined}
-                  onStatus={
-                    isOwner
-                      ? (status) => {
-                          void setPaymentReminderStatus(reminder.id, status)
-                            .then(() => reminders.retry())
-                            .catch(() => addToast(t("paymentBook.statusFailed"), "error"));
-                        }
-                      : undefined
-                  }
-                />
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
       <div className="px-4 pt-4">
         <SearchBar
           value={search}
@@ -406,6 +423,22 @@ export default function CashPositionPage() {
           placeholder={t("cashPosition.search")}
         />
       </div>
+
+      {isOwner && (
+        <div className="px-4 pt-3">
+          <button
+            type="button"
+            onClick={openCount}
+            disabled={!ready}
+            data-testid="cash-position-add"
+            className="w-full h-12 rounded-[var(--radius-tile)] flex items-center justify-center gap-2 text-14 font-bold active:opacity-70 disabled:opacity-40"
+            style={{ background: "#2c2c2a", color: "var(--brand)" }}
+          >
+            <Plus size={16} />
+            {t("cashPosition.record")}
+          </button>
+        </div>
+      )}
 
       <div className="flex gap-2 px-4 pt-3 flex-wrap">
         {filters.map((f) => (
@@ -431,7 +464,6 @@ export default function CashPositionPage() {
           </span>
         )}
       </div>
-
 
       {!entries ? (
         ledgerFailed ? (
@@ -519,55 +551,55 @@ export default function CashPositionPage() {
         }))}
       />
 
-      {/* One month at a time, the two the figures are defined for. A range outside these would
-          need the per-day splits the helpers do not compute, so the picker does not offer one.
-          Two choices are two chips, not two list rows (owner, 2026-10-30): the same one-line
-          control the balance books use, so every date picker in the app looks and behaves alike. */}
-      <Sheet open={periodOpen} onClose={() => setPeriodOpen(false)} title={t("cashPosition.choosePeriod")} closeButton={false}>
-        <div className="flex gap-2 px-4 pb-4">
-          {(["month", "previous"] as const).map((key) => {
-            const chosen = period === key;
-            return (
-              <button
-                key={key}
-                type="button"
-                onClick={() => {
-                  setPeriod(key);
-                  setPeriodOpen(false);
-                }}
-                aria-pressed={chosen}
-                data-testid={`cash-position-period-${key}`}
-                className="h-10 px-4 rounded-full text-13 font-semibold active:opacity-70"
-                style={
-                  chosen
-                    ? { background: "var(--brand)", color: "#0a0a0a" }
-                    : { background: "var(--tone-sunken)", color: "var(--text-secondary)" }
-                }
-              >
-                {key === "month" ? t("cashPosition.thisMonth") : t("cashPosition.lastMonth")}
-              </button>
-            );
-          })}
+      <Sheet
+        open={cashOpen}
+        onClose={() => {
+          if (!savingCash) setCashOpen(false);
+        }}
+        title={t("cashPosition.record")}
+        closeButton={false}
+      >
+        <div className="px-4 pb-4">
+          <p className="ds-section-label mb-2" style={{ color: "var(--text-secondary)" }}>
+            {t("admin.countedCash")}
+          </p>
+          <input
+            autoFocus
+            type="number"
+            inputMode="decimal"
+            min="0"
+            step="0.01"
+            value={cashAmount}
+            onChange={(event) => setCashAmount(event.target.value)}
+            placeholder="0"
+            aria-label={t("admin.countedCash")}
+            data-testid="cash-position-count-input"
+            className="w-full h-12 rounded-[var(--radius-tile)] px-3 text-18 font-bold tabular-nums outline-none"
+            style={{ background: "var(--field-bg)", color: "var(--text-primary)" }}
+          />
+          <div className="flex gap-2 mt-4">
+            <button
+              type="button"
+              onClick={() => setCashOpen(false)}
+              disabled={savingCash}
+              className="flex-1 h-12 rounded-[var(--radius-tile)] text-13 font-bold active:opacity-70 disabled:opacity-50"
+              style={{ background: "var(--tone-sunken)", color: "var(--text-secondary)" }}
+            >
+              {t("common.cancel")}
+            </button>
+            <button
+              type="button"
+              onClick={() => void saveCount()}
+              disabled={savingCash}
+              data-testid="cash-position-save"
+              className="flex-1 h-12 rounded-[var(--radius-tile)] text-13 font-bold active:opacity-70 disabled:opacity-50"
+              style={{ background: "#2c2c2a", color: "var(--brand)" }}
+            >
+              {savingCash ? t("common.saving") : t("admin.saveReconciliation")}
+            </button>
+          </div>
         </div>
       </Sheet>
-
-      <PaymentReminderSheet
-        open={reminderSheet.open}
-        reminder={reminderSheet.reminder}
-        onClose={() => setReminderSheet({ open: false, reminder: null })}
-        onSaved={() => reminders.retry()}
-      />
-
-      <ConfirmDialog
-        open={Boolean(removing)}
-        title={t("cashPosition.deleteReminderTitle")}
-        message={t("cashPosition.deleteReminderMessage", { title: removing?.title ?? "" })}
-        confirmLabel={t("cashPosition.reminderDelete")}
-        destructive
-        loading={deleting}
-        onConfirm={removeReminder}
-        onCancel={() => setRemoving(null)}
-      />
     </div>
   );
 }

@@ -33,6 +33,7 @@ export default function InlineSelect({
   options,
   onChange,
   label,
+  placeholder,
   testId,
   disabled = false,
 }: {
@@ -40,12 +41,13 @@ export default function InlineSelect({
   options: InlineSelectOption[];
   onChange: (value: string) => void;
   label: string;
+  placeholder?: string;
   testId: string;
   disabled?: boolean;
 }) {
   const t = useT();
   const [open, setOpen] = useState(false);
-  const selected = options.find((option) => option.value === value) ?? options[0];
+  const selected = options.find((option) => option.value === value) ?? (value ? options[0] : undefined);
 
   return (
     <div className="relative">
@@ -61,7 +63,7 @@ export default function InlineSelect({
         className="ds-field w-full text-start ds-pressable disabled:opacity-50"
       >
         <span className="flex-1 text-13 truncate" style={{ color: "var(--text-primary)" }}>
-          {selected?.label ?? ""}
+          {selected?.label ?? placeholder ?? ""}
         </span>
         <ChevronDown
           size={16}

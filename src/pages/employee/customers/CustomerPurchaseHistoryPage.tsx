@@ -88,6 +88,7 @@ export default function CustomerPurchaseHistoryPage() {
       <StatusBar />
       <NavHeader
         title={t("customerProfile.purchaseHistory")}
+        historyBack
         
       />
 

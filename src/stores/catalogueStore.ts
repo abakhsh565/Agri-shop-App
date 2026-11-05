@@ -6,8 +6,23 @@ import {
   isDataContextCurrent,
   setCachedData,
 } from "@/lib/localCache";
-import { rpcSaveProductCategory, rpcSaveProductUnit } from "@/lib/db";
-import type { ProductCategory, ShopCategory, ShopUnit } from "@/types";
+import {
+  rpcDeleteProductCategory,
+  rpcDeleteProductUnit,
+  rpcSaveProductCategory,
+  rpcSaveProductUnit,
+  type CatalogueDeleteResult,
+  type CategoryClassificationInput,
+} from "@/lib/db";
+import type {
+  CategoryClassification,
+  ClassificationForm,
+  ClassificationPreset,
+  HandlingType,
+  ProductCategory,
+  ShopCategory,
+  ShopUnit,
+} from "@/types";
 
 /**
  * The shop's own shelves and units.
@@ -47,6 +62,13 @@ interface UnitRow {
   is_system: boolean;
 }
 
+interface ClassificationRow {
+  category_id: string;
+  preset: ClassificationPreset;
+  physical_forms: ClassificationForm[];
+  handling_types: HandlingType[];
+}
+
 function categoryFromRow(r: CategoryRow): ShopCategory {
   return {
     id: r.id,
@@ -69,16 +91,35 @@ function unitFromRow(r: UnitRow): ShopUnit {
   };
 }
 
+function classificationFromRow(r: ClassificationRow): CategoryClassification {
+  return {
+    categoryId: r.category_id,
+    preset: r.preset,
+    physicalForms: Array.isArray(r.physical_forms) ? r.physical_forms : [],
+    handlingTypes: Array.isArray(r.handling_types) ? r.handling_types : [],
+  };
+}
+
 interface CatalogueState {
   categories: ShopCategory[];
   units: ShopUnit[];
+  classifications: CategoryClassification[];
   loading: boolean;
   ready: boolean;
   error: string | null;
   load: () => Promise<void>;
   subscribe: () => () => void;
-  saveCategory: (input: { id?: string; name: string; parentId?: string | null }) => Promise<ShopCategory>;
+  saveCategory: (input: {
+    id?: string;
+    name: string;
+    parentId?: string | null;
+    classification?: CategoryClassificationInput | null;
+  }) => Promise<ShopCategory>;
   saveUnit: (input: { id?: string; name: string; symbol: string; baseUnit: string; precision: number }) => Promise<ShopUnit>;
+  /** Remove a shelf, or report the active products/subcategories still using it. */
+  deleteCategory: (id: string) => Promise<CatalogueDeleteResult>;
+  /** Remove a unit, or report the active products still using it. */
+  deleteUnit: (id: string) => Promise<CatalogueDeleteResult>;
   /** Drop every row: the app is about to read a different shop. */
   reset: () => void;
 }
@@ -88,11 +129,19 @@ let channel: ReturnType<typeof supabase.channel> | null = null;
 export const useCatalogueStore = create<CatalogueState>((set, get) => ({
   categories: [],
   units: [],
+  classifications: [],
   loading: false,
   ready: false,
   error: null,
 
-  reset: () => set({ categories: [], units: [], loading: false, ready: false, error: null }),
+  reset: () => set({
+    categories: [],
+    units: [],
+    classifications: [],
+    loading: false,
+    ready: false,
+    error: null,
+  }),
 
   load: async () => {
     const context = captureDataContext();
@@ -101,13 +150,22 @@ export const useCatalogueStore = create<CatalogueState>((set, get) => ({
     // The catalogue changes rarely, so a cached paint is right far more often than not — but it
     // is still only a hint: the reads below always run, or a shelf created on another phone
     // would never arrive on this one.
-    const cached = getCachedData<{ categories: ShopCategory[]; units: ShopUnit[] }>(CACHE_KEY);
+    const cached = getCachedData<{
+      categories: ShopCategory[];
+      units: ShopUnit[];
+      classifications?: CategoryClassification[];
+    }>(CACHE_KEY);
     if (cached) {
-      set({ categories: cached.categories ?? [], units: cached.units ?? [], ready: true });
+      set({
+        categories: cached.categories ?? [],
+        units: cached.units ?? [],
+        classifications: cached.classifications ?? [],
+        ready: true,
+      });
     }
 
     set({ loading: true, error: null });
-    const [categories, units] = await Promise.all([
+    const [categories, units, classifications] = await Promise.all([
       supabase
         .from("product_categories")
         .select("id,parent_id,name,legacy_category,is_system,sort_order")
@@ -120,17 +178,21 @@ export const useCatalogueStore = create<CatalogueState>((set, get) => ({
         .eq("is_active", true)
         .order("sort_order")
         .order("name"),
+      supabase
+        .from("product_classification_profiles")
+        .select("category_id,preset,physical_forms,handling_types")
+        .order("category_id"),
     ]);
 
     if (!isDataContextCurrent(context)) return;
 
-    if (categories.error || units.error) {
+    if (categories.error || units.error || classifications.error) {
       // A failed read keeps whatever the cache painted. Reporting the error without a list is
       // what makes an Add Product form look like the shop has no categories at all.
       set({
         loading: false,
         ready: true,
-        error: (categories.error ?? units.error)!.message,
+        error: (categories.error ?? units.error ?? classifications.error)!.message,
       });
       return;
     }
@@ -138,6 +200,9 @@ export const useCatalogueStore = create<CatalogueState>((set, get) => ({
     const next = {
       categories: ((categories.data as CategoryRow[] | null) ?? []).map(categoryFromRow),
       units: ((units.data as UnitRow[] | null) ?? []).map(unitFromRow),
+      classifications: ((classifications.data as ClassificationRow[] | null) ?? []).map(
+        classificationFromRow,
+      ),
     };
     setCachedData(CACHE_KEY, next);
     set({ ...next, loading: false, ready: true });
@@ -153,6 +218,13 @@ export const useCatalogueStore = create<CatalogueState>((set, get) => ({
       .on("postgres_changes", { event: "*", schema: "public", table: "product_units" }, async () => {
         await get().load();
       })
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "product_classification_profiles" },
+        async () => {
+          await get().load();
+        },
+      )
       .subscribe();
     return () => {
       if (channel) {
@@ -167,20 +239,28 @@ export const useCatalogueStore = create<CatalogueState>((set, get) => ({
       ...(input.id ? { id: input.id } : {}),
       name: input.name,
       parentId: input.parentId ?? null,
+      classification: input.classification,
     });
+    const row: ShopCategory = get().categories.find((c) => c.id === saved.id) ?? {
+      id: saved.id,
+      parentId: saved.parentId,
+      name: saved.name,
+      legacyCategory: saved.legacyCategory,
+      isSystem: saved.isSystem,
+      sortOrder: 0,
+    };
+    // Publish the row the server just confirmed BEFORE re-reading. The reload can be skipped or
+    // fail (it refuses to publish into a shop context that changed while the save was in flight),
+    // and that used to leave a shelf that was genuinely created invisible on the list the form
+    // had just navigated to — a "saved" toast over a missing row. The read below still runs so a
+    // rename's translated/system state comes from the server.
+    if (!get().categories.some((c) => c.id === saved.id)) {
+      set((state) => ({ categories: [...state.categories, row] }));
+    }
     // The server is the answer, and the list is rebuilt from it: a rename can change whether the
     // shelf is still a translated one, which no local patch knows on its own.
     await get().load();
-    return (
-      get().categories.find((c) => c.id === saved.id) ?? {
-        id: saved.id,
-        parentId: saved.parentId,
-        name: saved.name,
-        legacyCategory: saved.legacyCategory,
-        isSystem: saved.isSystem,
-        sortOrder: 0,
-      }
-    );
+    return get().categories.find((c) => c.id === saved.id) ?? row;
   },
 
   saveUnit: async (input) => {
@@ -191,16 +271,31 @@ export const useCatalogueStore = create<CatalogueState>((set, get) => ({
       baseUnit: input.baseUnit,
       precision: input.precision,
     });
+    const row: ShopUnit = get().units.find((u) => u.id === saved.id) ?? {
+      id: saved.id,
+      name: saved.name,
+      symbol: saved.symbol,
+      baseUnit: saved.baseUnit,
+      precision: saved.precision,
+      isSystem: saved.isSystem,
+    };
+    if (!get().units.some((u) => u.id === saved.id)) {
+      set((state) => ({ units: [...state.units, row] }));
+    }
     await get().load();
-    return (
-      get().units.find((u) => u.id === saved.id) ?? {
-        id: saved.id,
-        name: saved.name,
-        symbol: saved.symbol,
-        baseUnit: saved.baseUnit,
-        precision: saved.precision,
-        isSystem: saved.isSystem,
-      }
-    );
+    return get().units.find((u) => u.id === saved.id) ?? row;
+  },
+
+  deleteCategory: async (id) => {
+    const result = await rpcDeleteProductCategory(id);
+    // A refusal leaves the list untouched; only a real deletion needs the reload.
+    if (result.deleted) await get().load();
+    return result;
+  },
+
+  deleteUnit: async (id) => {
+    const result = await rpcDeleteProductUnit(id);
+    if (result.deleted) await get().load();
+    return result;
   },
 }));

@@ -1,3 +1,4 @@
+import { Capacitor, registerPlugin, type PluginListenerHandle } from "@capacitor/core";
 import { supabase } from "@/lib/supabase";
 
 /**
@@ -31,6 +32,14 @@ const TOOL_TITLE_KEYS: Record<string, string> = {
   sale_lookup: "assistant.tool.sale",
   supplier_dues: "assistant.tool.dues",
   employee_activity: "assistant.tool.activity",
+  branch_overview: "assistant.tool.branches",
+  employee_directory: "assistant.tool.employees",
+  employee_performance: "assistant.tool.performance",
+  purchases_overview: "assistant.tool.purchases",
+  finance_overview: "assistant.tool.finance",
+  inventory_overview: "assistant.tool.inventory",
+  customer_directory: "assistant.tool.customers",
+  product_catalogue: "assistant.tool.catalogue",
   my_abilities: "assistant.tool.abilities",
   help_topic: "assistant.tool.help",
 };
@@ -88,7 +97,7 @@ export interface AssistantAbilities {
  * A failure the screen can say in the reader's own language: the code is what gets translated, so
  * the copy lives in the dictionary with every other sentence the app shows.
  */
-export type AssistantErrorCode = "not_switched_on" | "signed_out" | "unreachable" | "server";
+export type AssistantErrorCode = "not_switched_on" | "signed_out" | "unreachable" | "timeout" | "server";
 
 export class AssistantError extends Error {
   code: AssistantErrorCode;
@@ -119,12 +128,25 @@ const devUrl = import.meta.env.DEV
 
 function codeFor(error: unknown): AssistantErrorCode {
   const raw = String((error as { message?: string })?.message ?? "");
+  const status = Number(
+    (error as { context?: { status?: number } })?.context?.status ??
+      (error as { status?: number })?.status ??
+      0,
+  );
+  if (status === 401) return "signed_out";
+  if (status >= 500) return "unreachable";
   if (/failed to send a request|not found|404/i.test(raw)) return "not_switched_on";
   if (/401|jwt|expired/i.test(raw)) return "signed_out";
-  return "unreachable";
+  if (/503|502|504|service temporarily unavailable|failed to fetch|network ?error/i.test(raw)) {
+    return "unreachable";
+  }
+  return "server";
 }
 
-async function post(body: Record<string, unknown>): Promise<any> {
+/** A question that never settles leaves the composer disabled forever; a bounded wait is kinder. */
+const REQUEST_TIMEOUT_MS = 60_000;
+
+async function invoke(body: Record<string, unknown>): Promise<any> {
   if (devUrl) {
     const { data } = await supabase.auth.getSession();
     const token = data.session?.access_token ?? "";
@@ -134,7 +156,10 @@ async function post(body: Record<string, unknown>): Promise<any> {
       body: JSON.stringify(body),
     });
     const json = await res.json().catch(() => ({}));
-    if (!res.ok) throw new AssistantError(res.status === 401 ? "signed_out" : "server", json?.error);
+    if (!res.ok) {
+      if (res.status === 401) throw new AssistantError("signed_out", json?.error);
+      throw new AssistantError(res.status >= 500 ? "unreachable" : "server", json?.error);
+    }
     return json;
   }
 
@@ -142,6 +167,18 @@ async function post(body: Record<string, unknown>): Promise<any> {
   if (error) throw new AssistantError(codeFor(error));
   if (data?.error) throw new AssistantError("server", data.error);
   return data;
+}
+
+async function post(body: Record<string, unknown>): Promise<any> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new AssistantError("timeout")), REQUEST_TIMEOUT_MS);
+  });
+  try {
+    return await Promise.race([invoke(body), timeout]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 }
 
 /** One question. `history` is the transcript this screen is holding, newest last. */
@@ -199,10 +236,20 @@ export function listen(
   onText: (text: string) => void,
   onEnd?: () => void,
   lang = "en-PK",
+  onError?: (code: "unsupported" | "permission" | "failed") => void,
 ): (() => void) | null {
+  // An installed Android app does not reliably expose the Web Speech API inside System WebView.
+  // Use the phone's own recognizer there; the browser path below remains for the web/PWA build.
+  if (Capacitor.getPlatform() === "android") {
+    return listenOnAndroid(onText, onEnd, lang, onError);
+  }
+
   const Recognition =
     (window as any).SpeechRecognition ?? (window as any).webkitSpeechRecognition ?? null;
-  if (!Recognition) return null;
+  if (!Recognition) {
+    onError?.("unsupported");
+    return null;
+  }
   const recognition = new Recognition();
   recognition.lang = lang;
   recognition.interimResults = true;
@@ -213,6 +260,92 @@ export function listen(
     onText(heard.trim());
   };
   recognition.onend = () => onEnd?.();
-  recognition.start();
+  recognition.onerror = (event: { error?: string }) => {
+    const reason = event?.error ?? "";
+    onError?.(
+      reason === "not-allowed" || reason === "service-not-allowed"
+        ? "permission"
+        : "failed",
+    );
+  };
+  try {
+    recognition.start();
+  } catch {
+    onError?.("failed");
+    return null;
+  }
   return () => recognition.stop();
+}
+
+/** The native plugin registered by MainActivity on Android. */
+interface NativeSpeechPlugin {
+  start(options: { lang: string }): Promise<void>;
+  stop(): Promise<void>;
+  addListener(event: string, callback: (data: any) => void): Promise<PluginListenerHandle>;
+}
+
+const NativeSpeech = registerPlugin<NativeSpeechPlugin>("SpeechRecognition");
+
+/**
+ * `listen()` with the same contract, backed by Android's SpeechRecognizer.
+ *
+ * The native start call is asynchronous, but callers already expect a synchronous stop handle.
+ * Every listener is removed on result, error, or stop so one utterance cannot leave a second
+ * recognizer listening in the background.
+ */
+function listenOnAndroid(
+  onText: (text: string) => void,
+  onEnd: (() => void) | undefined,
+  lang: string,
+  onError: ((code: "unsupported" | "permission" | "failed") => void) | undefined,
+): () => void {
+  let finished = false;
+  const listeners: Promise<PluginListenerHandle>[] = [];
+
+  const removeListeners = () => {
+    void Promise.all(listeners).then((handles) => {
+      for (const handle of handles) void handle.remove();
+    });
+  };
+  const finish = () => {
+    if (finished) return;
+    finished = true;
+    removeListeners();
+    onEnd?.();
+  };
+  const fail = (code: "unsupported" | "permission" | "failed") => {
+    if (finished) return;
+    onError?.(code);
+    finish();
+  };
+
+  listeners.push(
+    NativeSpeech.addListener("result", (event: { text?: string }) => {
+      if (!finished && event?.text) onText(event.text);
+    }),
+  );
+  listeners.push(NativeSpeech.addListener("end", finish));
+  listeners.push(
+    NativeSpeech.addListener("error", (event: { code?: string }) => {
+      fail(event?.code === "permission" ? "permission" : "failed");
+    }),
+  );
+
+  void NativeSpeech.start({ lang }).catch((error: unknown) => {
+    const message = String((error as { message?: string })?.message ?? error ?? "").toLowerCase();
+    fail(
+      message.includes("permission")
+        ? "permission"
+        : message.includes("unsupported")
+          ? "unsupported"
+          : "failed",
+    );
+  });
+
+  return () => {
+    if (finished) return;
+    finished = true;
+    removeListeners();
+    void NativeSpeech.stop().catch(() => {});
+  };
 }

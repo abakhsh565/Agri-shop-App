@@ -48,6 +48,36 @@ export interface CoOwnerActivity {
   details: Record<string, unknown> | null;
 }
 
+/** A Co-Owner as Branch Management sees them: one branch, one operator. */
+export interface BranchCoOwner {
+  grantId: string;
+  name: string;
+  phone: string;
+  status: Exclude<CoOwnerStatus, "revoked">;
+  invitedAt: string;
+  activatedAt: string | null;
+  suspendedAt: string | null;
+  lastLoginAt: string | null;
+  isOnlyBranch: boolean;
+}
+
+export interface BranchCoOwnerResult {
+  branchId: string;
+  branchName: string;
+  isMain: boolean;
+  coOwners: BranchCoOwner[];
+}
+
+export interface BranchCoOwnerConfig {
+  permissions: string[];
+  authorities: Record<string, AuthorityMode>;
+  dashboards: string[];
+  assignableRoleIds: string[];
+  canInviteEmployees: boolean;
+  canDeactivateEmployees: boolean;
+  canManageBranches: boolean;
+}
+
 export interface CoOwnerDetail extends CoOwnerSummary {
   membershipId: string;
   canInviteEmployees: boolean;
@@ -89,7 +119,15 @@ interface State {
   update: (grantId: string, input: Partial<InviteCoOwnerInput>) => Promise<void>;
   suspend: (grantId: string, reason?: string) => Promise<void>;
   reactivate: (grantId: string) => Promise<void>;
+  restore: (grantId: string) => Promise<void>;
   revoke: (grantId: string, reason: string) => Promise<void>;
+  getBranchCoOwners: (branchId: string) => Promise<BranchCoOwnerResult>;
+  assignBranchCoOwner: (
+    branchId: string,
+    name: string,
+    phone: string,
+    config: BranchCoOwnerConfig,
+  ) => Promise<{ grantId: string; branchName: string }>;
 }
 
 function normalizeError(error: { message?: string } | null): string {
@@ -174,6 +212,12 @@ export const useCoOwnersStore = create<State>((set, get) => ({
     await get().load();
   },
 
+  restore: async (grantId) => {
+    const { error } = await supabase.rpc("restore_co_owner", { p_grant_id: grantId });
+    if (error) throw new Error(error.message);
+    await get().load();
+  },
+
   revoke: async (grantId, reason) => {
     const { error } = await supabase.rpc("revoke_co_owner", {
       p_grant_id: grantId,
@@ -181,5 +225,24 @@ export const useCoOwnersStore = create<State>((set, get) => ({
     });
     if (error) throw new Error(error.message);
     await get().load();
+  },
+
+  getBranchCoOwners: async (branchId) => {
+    const { data, error } = await supabase.rpc("get_branch_co_owners", { p_branch_id: branchId });
+    if (error) throw new Error(error.message);
+    return data as BranchCoOwnerResult;
+  },
+
+  assignBranchCoOwner: async (branchId, name, phone, config) => {
+    const { data, error } = await supabase.rpc("assign_branch_co_owner", {
+      p_branch_id: branchId,
+      p_name: name.trim(),
+      p_phone: phone.trim(),
+      p_config: config,
+    });
+    if (error) throw new Error(error.message);
+    await get().load();
+    const result = data as { grantId: string; branchName: string };
+    return { grantId: result.grantId, branchName: result.branchName };
   },
 }));

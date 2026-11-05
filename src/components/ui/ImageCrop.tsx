@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Loader2, X } from "lucide-react";
 import { useT } from "@/lib/i18n";
+import { markImagePrepared } from "@/lib/imageCompression";
 
 /**
  * The picture the person just chose, framed before it is saved.
@@ -238,7 +239,10 @@ export default function ImageCrop({ file, aspect, onCancel, onConfirm }: ImageCr
       if (!blob) throw new Error("no picture");
 
       const name = file.name.replace(/\.[^.]*$/, "").trim() || "photo";
-      onConfirm(new File([blob], `${name}.jpg`, { type: "image/jpeg", lastModified: Date.now() }));
+      const prepared = new File([blob], `${name}.jpg`, { type: "image/jpeg", lastModified: Date.now() });
+      // The crop already capped the edge and encoded at 0.9. Mark it so upload does not spend a
+      // second JPEG generation on the same pixels.
+      onConfirm(markImagePrepared(prepared));
     } catch {
       // A browser that cannot produce the trimmed copy still gets the picture saved rather than
       // losing the owner's work to an editor that would not finish.

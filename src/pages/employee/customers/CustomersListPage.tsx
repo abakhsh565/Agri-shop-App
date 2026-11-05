@@ -189,6 +189,7 @@ export default function CustomersListPage() {
         <NavHeader
           title={t("customers.title")}
           backTo={returnTo}
+          historyBack
         />
 
         {/* Just the list (owner's correction, 2026-10-29): every account the app holds, and the

@@ -14,7 +14,7 @@ import type { Product } from "@/types";
 import { useT } from "@/lib/i18n";
 import { useShellBase } from "@/lib/useShellBase";
 import { hasPermission } from "@/lib/tenantContext";
-import { ChevronRight, Plus, Package, Pencil } from "lucide-react";
+import { ChevronRight, Layers, Plus, Package, Pencil } from "lucide-react";
 import SearchBar from "@/components/ui/SearchBar";
 import ListCard from "@/components/ui/ListCard";
 import ListRow from "@/components/ui/ListRow";
@@ -185,6 +185,18 @@ export default function ProductsListPage() {
         <NavHeader
           title={t("products.title")}
           backTo={base === "/admin" ? `${base}/settings/hub/inventory` : `${base}/dashboard`}
+          right={
+            <button
+              type="button"
+              onClick={() => navigate(`${base}/inventory/catalogue`)}
+              aria-label={t("catalogue.manage")}
+              data-testid="products-manage-catalogue"
+              className="size-9 rounded-full flex items-center justify-center active:opacity-70"
+              style={{ background: "var(--surface-2)", color: "var(--text-primary)" }}
+            >
+              <Layers size={18} />
+            </button>
+          }
         />
         {activeBranchName && (
           <p className="text-10 text-center pb-2" style={{ color: "var(--text-secondary)" }}>

@@ -86,7 +86,7 @@ export default function CreditLimitRequestsPage() {
       data-testid="credit-requests-page"
     >
       <StatusBar />
-      <NavHeader title={t("hub.customers.creditRequests")} backTo={`${base}/settings/hub/customers`} />
+      <NavHeader title={t("hub.customers.creditRequests")} backTo={`${base}/settings/hub/customers`} historyBack />
 
       <div className="flex gap-2 px-4 pt-3 pb-3 overflow-x-auto">
         {filters.map((f) => (

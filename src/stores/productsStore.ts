@@ -22,6 +22,7 @@ interface ProductRow {
   /** The owner's shelf (0259), absent on a row written before it. */
   category_id: string | null;
   unit_id: string | null;
+  physical_form: string | null;
   image_url: string | null;
   barcode: string | null;
   base_unit: string | null;
@@ -197,6 +198,7 @@ export const useProductsStore = create<ProductsState>((set, get) => ({
           category: p.category,
           categoryId: p.category_id ?? undefined,
           unitId: p.unit_id ?? undefined,
+          physicalForm: (p.physical_form as Product["physicalForm"]) ?? undefined,
           imageUrl: p.image_url ?? undefined,
           barcode: p.barcode ?? undefined,
           baseUnit: (p.base_unit as BaseUnit) ?? "piece",

@@ -1399,6 +1399,32 @@ svg.lucide {
     height: 1px;
     background: var(--hairline);
   }
+  /* A flat menu: the section label, the glyph and the context line already separate each
+     action, so the rule is deliberately absent. The opt-out is still ListCard's decision,
+     which keeps the hairline's single owner intact. */
+  .ds-listcard-unseparated > * + *::before {
+    display: none;
+  }
+  /* A grouped menu's section break: one band above the section label, not a rule under
+     every action. The reference separates settings groups with a thick rule, so this is
+     4px of tone drawn as a bar — a section, not one more hairline dressed as a border.
+     It belongs to the list primitive rather than to a screen's row markup. */
+  .ds-listcard-sectioned {
+    position: relative;
+    padding-top: 20px;
+  }
+  /* The band is the one part of a section that is NOT content: it runs edge to edge of the
+     page. The wrapper therefore stays at the page's full width and the LIST is inset below,
+     so the band reaches both edges without escaping its own box — a negative inset would
+     have added 32px of horizontal scroll to the phone shell. */
+  .ds-listcard-sectioned::before {
+    content: "";
+    position: absolute;
+    inset-block-start: 0;
+    inset-inline: 0;
+    height: 4px;
+    background: var(--divider);
+  }
 
   /* -- Rows -- */
   .ds-row {

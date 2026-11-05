@@ -25,6 +25,12 @@ interface PermissionChecklistProps {
   highlightModules?: string[];
   /** The role wizard uses collapsible groups; employee access keeps every row visible. */
   accordion?: boolean;
+  /**
+   * Restriction-only mode for one employee: only permissions inherited from the assigned
+   * role are shown, and a tick can be removed but never added. The database enforces the
+   * same rule; this mode makes the screen say it before the write is attempted.
+   */
+  restrictOnly?: boolean;
 }
 
 /**
@@ -43,6 +49,7 @@ export default function PermissionChecklist({
   priorityModules = [],
   highlightModules = [],
   accordion = false,
+  restrictOnly = false,
 }: PermissionChecklistProps) {
   const t = useT();
   const { areaLabel, actionLabel, areaIcon } = usePermissionLabels();
@@ -59,7 +66,10 @@ export default function PermissionChecklist({
    * module does not jump around while the owner ticks boxes.
    */
   const modules = useMemo(() => {
-    const seen = [...new Set(permissions.map((p) => p.module))];
+    const available = restrictOnly && roleDefaults
+      ? permissions.filter((p) => roleDefaults.has(p.code))
+      : permissions;
+    const seen = [...new Set(available.map((p) => p.module))];
     const rank = (module: string) => {
       const index = priorityModules.indexOf(module);
       return index === -1 ? Number.MAX_SAFE_INTEGER : index;
@@ -68,17 +78,19 @@ export default function PermissionChecklist({
       .map((module, index) => ({ module, index }))
       .sort((a, b) => rank(a.module) - rank(b.module) || a.index - b.index)
       .map((x) => x.module);
-  }, [permissions, priorityModules]);
+  }, [permissions, priorityModules, restrictOnly, roleDefaults]);
 
   const toggleCode = (code: string) => {
     const next = new Set(value);
     if (next.has(code)) next.delete(code);
-    else next.add(code);
+    else if (!restrictOnly) next.add(code);
     onChange(next);
   };
 
   const toggleModule = (module: string) => {
-    const areaPerms = getByModule(module);
+    const areaPerms = restrictOnly && roleDefaults
+      ? getByModule(module).filter((p) => roleDefaults.has(p.code))
+      : getByModule(module);
     const allSelected = areaPerms.every((p) => value.has(p.code));
     const next = new Set(value);
     for (const p of areaPerms) {
@@ -125,7 +137,9 @@ export default function PermissionChecklist({
   return (
     <div className="overflow-y-auto" style={{ maxHeight }}>
       {modules.map((mod) => {
-        const areaPerms = getByModule(mod);
+        const areaPerms = restrictOnly && roleDefaults
+          ? getByModule(mod).filter((p) => roleDefaults.has(p.code))
+          : getByModule(mod);
         if (areaPerms.length === 0) return null;
         const selectedCount = areaPerms.filter((p) => value.has(p.code)).length;
         const allSelected = selectedCount === areaPerms.length;
@@ -200,8 +214,10 @@ export default function PermissionChecklist({
                       role="checkbox"
                       aria-checked={on}
                       onClick={() => toggleCode(p.code)}
+                      aria-disabled={restrictOnly && !on}
                       data-testid={`${testIdPrefix}-${p.code}`}
-                      className="w-full flex items-center gap-2.5 px-3 py-2 text-start"
+                      className="w-full flex items-center gap-2.5 px-3 py-2 text-start disabled:opacity-60"
+                      disabled={restrictOnly && !on}
                     >
                       <Checkbox checked={on} size={14} />
                       <span

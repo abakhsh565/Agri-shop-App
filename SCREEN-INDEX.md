@@ -9,7 +9,10 @@ this file exists so an impact map starts from a lookup instead of fresh reconnai
 | `/` | SplashPage | `src/pages/auth/SplashPage` | accessibility, crossScreenSync, imageSync, otpResume, skeletonCoverage |
 | `/welcome` | IntroPage | `src/pages/onboarding/IntroPage` | accessibility, crossScreenSync, education, imageSync, skeletonCoverage |
 | `/login` | LoginPage | `src/pages/auth/LoginPage` | accessibility, crossScreenSync, imageSync, otpResume, skeletonCoverage |
-| `/login/request-access` | RequestAccessPage | `src/pages/auth/RequestAccessPage` | accessibility, crossScreenSync, imageSync, otpResume, skeletonCoverage |
+| `/login/recover` | AccountRecoveryPage | `src/pages/auth/AccountRecoveryPage` | accessibility, crossScreenSync, imageSync, otpResume, skeletonCoverage |
+| `/login/invitations` | InvitationsPage | `src/pages/auth/InvitationsPage` | accessibility, crossScreenSync, imageSync, otpResume, skeletonCoverage |
+| `/login/business` | BusinessSelectPage | `src/pages/auth/BusinessSelectPage` | accessibility, crossScreenSync, imageSync, otpResume, skeletonCoverage |
+| `/identity` | IdentityPage | `src/pages/auth/IdentityPage` | accessibility, crossScreenSync, imageSync, otpResume, skeletonCoverage |
 | `/login/otp` | OTPVerifyPage | `src/pages/auth/OTPVerifyPage` | accessibility, crossScreenSync, imageSync, otpResume, skeletonCoverage |
 | `/login/account-ready` | AccountReadyPage | `src/pages/auth/AccountReadyPage` | accessibility, crossScreenSync, imageSync, otpResume, skeletonCoverage |
 | `/login/pin-set` | PINSetPage | `src/pages/auth/PINSetPage` | accessibility, crossScreenSync, imageSync, otpResume, skeletonCoverage |
@@ -50,8 +53,6 @@ this file exists so an impact map starts from a lookup instead of fresh reconnai
 | `inventory/units` | UnitsPage | `src/pages/admin/inventory/UnitsPage` | accessibility, adminMicrocopy, crossScreenSync, imageSync, marketplaceListing, productOpeningStock, skeletonCoverage |
 | `inventory/categories/new` | CategoryFormPage | `src/pages/admin/inventory/CategoryFormPage` | accessibility, adminMicrocopy, crossScreenSync, imageSync, marketplaceListing, productOpeningStock, skeletonCoverage |
 | `inventory/categories/:categoryId` | CategoryFormPage | `src/pages/admin/inventory/CategoryFormPage` | accessibility, adminMicrocopy, crossScreenSync, imageSync, marketplaceListing, productOpeningStock, skeletonCoverage |
-| `inventory/units/new` | UnitFormPage | `src/pages/admin/inventory/UnitFormPage` | accessibility, adminMicrocopy, crossScreenSync, imageSync, marketplaceListing, productOpeningStock, skeletonCoverage |
-| `inventory/units/:unitId` | UnitFormPage | `src/pages/admin/inventory/UnitFormPage` | accessibility, adminMicrocopy, crossScreenSync, imageSync, marketplaceListing, productOpeningStock, skeletonCoverage |
 | `inventory/:productId/edit` | AddProductPage | `src/pages/admin/inventory/AddProductPage` | accessibility, adminMicrocopy, crossScreenSync, imageSync, marketplaceListing, productOpeningStock, skeletonCoverage |
 | `inventory/:productId/adjust` | InventoryAdjustPage | `src/pages/admin/inventory/InventoryAdjustPage` | accessibility, adminMicrocopy, crossScreenSync, imageSync, marketplaceListing, productOpeningStock, skeletonCoverage |
 | `inventory/stockvalues` | StockManagementPage | `src/pages/admin/inventory/StockManagementPage` | accessibility, adminMicrocopy, crossScreenSync, imageSync, marketplaceListing, productOpeningStock, skeletonCoverage |
@@ -79,13 +80,13 @@ this file exists so an impact map starts from a lookup instead of fresh reconnai
 | `companies` | CompaniesListPage | `src/pages/admin/companies/CompaniesListPage` | accessibility, adminFullAccess, adminMicrocopy, crossScreenSync, imageSync, skeletonCoverage |
 | `companies/new` | AddCompanyPage | `src/pages/admin/companies/AddCompanyPage` | accessibility, adminFullAccess, adminMicrocopy, crossScreenSync, imageSync, skeletonCoverage |
 | `companies/:companyId` | CompanyDetailPage | `src/pages/admin/companies/CompanyDetailPage` | accessibility, adminFullAccess, adminMicrocopy, crossScreenSync, imageSync, skeletonCoverage |
-| `employees/requests` | EmployeeAccessRequestsPage | `src/pages/admin/employees/EmployeeAccessRequestsPage` | accessibility, accessUx, adminMicrocopy, crossScreenSync, employeeStatusSafety, imageSync, roleDeleteSafety, skeletonCoverage |
-| `employees/requests/:requestId` | EmployeeAccessRequestDetailPage | `src/pages/admin/employees/EmployeeAccessRequestDetailPage` | accessibility, accessUx, adminMicrocopy, crossScreenSync, employeeStatusSafety, imageSync, roleDeleteSafety, skeletonCoverage |
+| `purchases/payables` | PurchasesPayablesPage | `src/pages/admin/purchases/PurchasesPayablesPage` | accessibility, adminMicrocopy, crossScreenSync, imageSync, skeletonCoverage |
 | `employees` | EmployeesListPage | `src/pages/admin/employees/EmployeesListPage` | accessibility, accessUx, adminMicrocopy, crossScreenSync, employeeStatusSafety, imageSync, roleDeleteSafety, skeletonCoverage |
 | `employees/new` | AddEmployeePage | `src/pages/admin/employees/AddEmployeePage` | accessibility, accessUx, adminMicrocopy, crossScreenSync, employeeStatusSafety, imageSync, roleDeleteSafety, skeletonCoverage |
 | `employees/:employeeId` | EmployeeDetailPage | `src/pages/admin/employees/EmployeeDetailPage` | accessibility, accessUx, adminMicrocopy, crossScreenSync, employeeStatusSafety, imageSync, roleDeleteSafety, skeletonCoverage |
 | `employees/:employeeId/role` | EmployeeRolePage | `src/pages/admin/employees/EmployeeRolePage` | accessibility, accessUx, adminMicrocopy, crossScreenSync, employeeStatusSafety, imageSync, roleDeleteSafety, skeletonCoverage |
 | `employees/:employeeId/branches` | EmployeeBranchesPage | `src/pages/admin/employees/EmployeeBranchesPage` | accessibility, accessUx, adminMicrocopy, crossScreenSync, employeeStatusSafety, imageSync, roleDeleteSafety, skeletonCoverage |
+| `employees/:employeeId/salary` | EmployeeSalaryPage | `src/pages/admin/employees/EmployeeSalaryPage` | accessibility, accessUx, adminMicrocopy, crossScreenSync, employeeStatusSafety, imageSync, roleDeleteSafety, skeletonCoverage |
 | `employees/:employeeId/performance` | EmployeePerformancePage | `src/pages/admin/employees/EmployeePerformancePage` | accessibility, accessUx, adminMicrocopy, crossScreenSync, employeeStatusSafety, imageSync, roleDeleteSafety, skeletonCoverage |
 | `employees/:employeeId/invitation` | EmployeeInvitationPage | `src/pages/admin/employees/EmployeeInvitationPage` | accessibility, accessUx, adminMicrocopy, crossScreenSync, employeeStatusSafety, imageSync, roleDeleteSafety, skeletonCoverage |
 | `reports` | AdminReportsPage | `src/pages/admin/reports/AdminReportsPage` | accessibility, adminMicrocopy, crossScreenSync, imageSync, skeletonCoverage |
@@ -103,6 +104,7 @@ this file exists so an impact map starts from a lookup instead of fresh reconnai
 | `settings/hub/people/activity/:employeeId` | AdminEmployeeActivityDetailPage | `src/pages/admin/people/AdminEmployeeActivityDetailPage` | accessibility, adminMicrocopy, crossScreenSync, imageSync, skeletonCoverage |
 | `settings/hub/people/co-owners` | CoOwnersPage | `src/pages/admin/people/CoOwnersPage` | accessibility, adminMicrocopy, crossScreenSync, imageSync, skeletonCoverage |
 | `settings/hub/people/co-owners/new` | CoOwnerWizardPage | `src/pages/admin/people/CoOwnerWizardPage` | accessibility, adminMicrocopy, crossScreenSync, imageSync, skeletonCoverage |
+| `settings/hub/people/co-owners/transfer` | OwnerOwnershipTransferPage | `src/pages/admin/people/OwnerOwnershipTransferPage` | accessibility, adminMicrocopy, crossScreenSync, imageSync, skeletonCoverage |
 | `settings/hub/people/co-owners/:grantId` | CoOwnerDetailPage | `src/pages/admin/people/CoOwnerDetailPage` | accessibility, adminMicrocopy, crossScreenSync, imageSync, skeletonCoverage |
 | `settings/hub/people/co-owners/:grantId/edit` | CoOwnerWizardPage | `src/pages/admin/people/CoOwnerWizardPage` | accessibility, adminMicrocopy, crossScreenSync, imageSync, skeletonCoverage |
 | `settings/roles` | RolesAccessPage | `src/pages/admin/settings/RolesAccessPage` | accessibility, accessUx, adminFullAccess, adminMicrocopy, businessProfilePapers, crossScreenSync, imageSync, marketplaceListing, roleDeleteSafety, setupCompletion, skeletonCoverage, systemDrive |
@@ -128,10 +130,12 @@ this file exists so an impact map starts from a lookup instead of fresh reconnai
 | `settings/branches/:branchId` | BranchDetailPage | `src/pages/admin/more/BranchDetailPage` | accessibility, adminMicrocopy, crossScreenSync, education, imageSync, marketplaceListing, skeletonCoverage |
 | `activity` | ActivityLogPage | `src/pages/employee/activity/ActivityLogPage` | accessibility, crossScreenSync, employeeStatusSafety, imageSync, skeletonCoverage |
 | `co-owner-approvals` | CoOwnerApprovalsPage | `src/pages/co-owner/CoOwnerApprovalsPage` | accessibility, crossScreenSync, imageSync, skeletonCoverage |
+| `ownership-transfer` | CoOwnerOwnershipTransferPage | `src/pages/co-owner/CoOwnerOwnershipTransferPage` | accessibility, crossScreenSync, imageSync, skeletonCoverage |
 | `notifications` | AdminNotificationsPage | `src/pages/admin/notifications/AdminNotificationsPage` | accessibility, adminMicrocopy, crossScreenSync, imageSync, notificationsBranchTabs, skeletonCoverage |
 | `alerts/credit-overrides` | CreditOverridesPage | `src/pages/admin/alerts/CreditOverridesPage` | accessibility, adminMicrocopy, crossScreenSync, imageSync, skeletonCoverage |
 | `alerts/credit-overrides/:customerId` | CreditOverrideDetailPage | `src/pages/admin/alerts/CreditOverrideDetailPage` | accessibility, adminMicrocopy, crossScreenSync, imageSync, skeletonCoverage |
 | `alerts/reminders` | RemindersOverviewPage | `src/pages/admin/alerts/RemindersOverviewPage` | accessibility, adminMicrocopy, crossScreenSync, imageSync, skeletonCoverage |
+| `alerts/harvest` | HarvestAlertPage | `src/pages/admin/alerts/HarvestAlertPage` | accessibility, adminMicrocopy, crossScreenSync, imageSync, skeletonCoverage |
 | `alerts/inventory` | InventoryAlertsPage | `src/pages/admin/alerts/InventoryAlertsPage` | accessibility, adminMicrocopy, crossScreenSync, imageSync, skeletonCoverage |
 | `alerts/expiry` | ExpiryAlertsPage | `src/pages/admin/alerts/ExpiryAlertsPage` | accessibility, adminMicrocopy, crossScreenSync, imageSync, skeletonCoverage |
 | `alerts/credit-requests/:requestId` | CreditRequestDetailPage | `src/pages/admin/alerts/CreditRequestDetailPage` | accessibility, adminMicrocopy, crossScreenSync, imageSync, skeletonCoverage |

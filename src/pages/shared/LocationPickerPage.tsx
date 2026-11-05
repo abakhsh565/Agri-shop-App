@@ -119,13 +119,13 @@ export default function LocationPickerPage() {
   /** Leaving without a choice is a normal outcome, so it is just going back. */
   function close() {
     if (from) navigate(from, { replace: true });
-    else navigate(-1);
+    else navigate("/", { replace: true });
   }
 
   /** The chosen point, handed back to the screen that opened this one. */
   function pick(place: PickedPlace) {
     if (from) navigate(from, { state: { pickedPlace: place }, replace: true });
-    else navigate(-1);
+    else navigate("/", { replace: true });
   }
 
   async function useCurrentLocation() {

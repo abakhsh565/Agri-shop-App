@@ -12,6 +12,10 @@ import type {
   PaymentType,
   AdjustmentType,
   ProductCategory,
+  PhysicalFormCode,
+  ClassificationPreset,
+  ClassificationForm,
+  HandlingType,
 } from "@/types";
 
 // Centralised data access for the flows that either (a) mutate several tables
@@ -138,6 +142,8 @@ export async function rpcCreateProduct(payload: {
    * silently dropped it, so every product added through the app read back as `piece`.
    */
   baseUnit: string;
+  /** The physical form selected from the category profile, when the category has one. */
+  physicalForm?: PhysicalFormCode | null;
   imageUrl?: string;
   /**
    * Optional. When it is absent the database mints one (`AGS-…`) and records it as this
@@ -157,7 +163,7 @@ export async function rpcCreateProduct(payload: {
   marketplaceListed?: boolean;
 }): Promise<{ id: string; name: string; barcode: string; marketplace_listed?: boolean }> {
   const actorId = useAuthStore.getState().user?.id;
-  const { data, error } = await supabase.rpc("create_product", { payload: { ...payload, actorId, userId: actorId } });
+  const { data, error } = await supabase.rpc("create_product_with_classification", { payload: { ...payload, actorId, userId: actorId } });
   if (error) throw new Error(friendly(error.message));
   return data as any;
 }
@@ -175,6 +181,8 @@ export async function rpcUpdateProduct(payload: {
   /** The unit it is sold in; the same present/absent rule as the shelf above. */
   unitId?: string | null;
   baseUnit?: string;
+  /** The chosen form; absent preserves an existing product's form. */
+  physicalForm?: PhysicalFormCode | null;
   imageUrl?: string;
   barcode?: string;
   /**
@@ -192,7 +200,7 @@ export async function rpcUpdateProduct(payload: {
   marketplaceListed?: boolean;
 }): Promise<{ id: string }> {
   const actorId = useAuthStore.getState().user?.id;
-  const { data, error } = await supabase.rpc("update_product", { payload: { ...payload, actorId } });
+  const { data, error } = await supabase.rpc("update_product_with_classification", { payload: { ...payload, actorId } });
   if (error) throw new Error(friendly(error.message));
   return data as any;
 }
@@ -209,6 +217,9 @@ function catalogueError(message: string): Error {
   if (/NOT_AUTHORIZED|NOT_AUTHENTICATED|permission denied/i.test(message)) {
     return new Error(friendly(message));
   }
+  if (/CLASSIFICATION_PROFILE_INVALID/.test(message ?? "")) {
+    return new Error(tNow("classification.saveError"));
+  }
   return new Error((message ?? "").replace(/^[A-Z_]+:\s*/, ""));
 }
 
@@ -218,6 +229,13 @@ export interface SavedCategory {
   parentId: string | null;
   legacyCategory: ProductCategory | null;
   isSystem: boolean;
+}
+
+/** The configuration the category form sends with its normal save. */
+export interface CategoryClassificationInput {
+  preset: ClassificationPreset;
+  physicalForms: ClassificationForm[];
+  handlingTypes: HandlingType[];
 }
 
 /**
@@ -231,8 +249,10 @@ export async function rpcSaveProductCategory(payload: {
   id?: string;
   name: string;
   parentId?: string | null;
+  /** Absent leaves an existing profile alone; null removes an override. */
+  classification?: CategoryClassificationInput | null;
 }): Promise<SavedCategory> {
-  const { data, error } = await supabase.rpc("save_product_category", { payload });
+  const { data, error } = await supabase.rpc("save_product_category_with_classification", { payload });
   if (error) throw catalogueError(error.message);
   return data as SavedCategory;
 }
@@ -262,6 +282,30 @@ export async function rpcSaveProductUnit(payload: {
   const { data, error } = await supabase.rpc("save_product_unit", { payload });
   if (error) throw catalogueError(error.message);
   return data as SavedUnit;
+}
+
+/** The answer from a catalogue delete: a dependency count, or the row that was removed. */
+export interface CatalogueDeleteResult {
+  deleted: boolean;
+  reason?: "has_products" | "has_children";
+  productCount?: number;
+  childCount?: number;
+  id?: string;
+  name?: string;
+}
+
+/** Delete a shelf only when no active product or subcategory still uses it. */
+export async function rpcDeleteProductCategory(id: string): Promise<CatalogueDeleteResult> {
+  const { data, error } = await supabase.rpc("delete_product_category", { p_category_id: id });
+  if (error) throw catalogueError(error.message);
+  return data as CatalogueDeleteResult;
+}
+
+/** Delete a unit only when no active product still uses it. */
+export async function rpcDeleteProductUnit(id: string): Promise<CatalogueDeleteResult> {
+  const { data, error } = await supabase.rpc("delete_product_unit", { p_unit_id: id });
+  if (error) throw catalogueError(error.message);
+  return data as CatalogueDeleteResult;
 }
 
 /**
@@ -430,6 +474,10 @@ function friendly(msg: string): string {
   if (/BARCODE_RETIRED/.test(m)) return tNow("errors.barcodeRetired");
   if (/BARCODE_NONE/.test(m)) return tNow("errors.barcodeNone");
   if (/INVALID_UNIT/.test(m)) return tNow("errors.badUnit");
+  if (/CLASSIFICATION_FORM_REQUIRED|CLASSIFICATION_FORM_INVALID/.test(m))
+    return tNow("classification.formRequiredError");
+  if (/CLASSIFICATION_UNIT/.test(m)) return tNow("classification.unitMismatchError");
+  if (/CLASSIFICATION_PROFILE_INVALID/.test(m)) return tNow("classification.saveError");
   if (/NOT_AUTHENTICATED|JWT|invalid claim/i.test(m)) return tNow("errors.loginAgain");
   if (/^VALIDATION|VALIDATION:/i.test(m) || /check constraint|invalid input syntax/i.test(m))
     return tNow("errors.checkEntry");

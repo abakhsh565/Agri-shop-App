@@ -112,9 +112,6 @@ export function translateNotification(
       const a = amt(body ?? '');
       return { title: t('notif.returnFrom', { customer }), body: t('notif.returnBody', { amount: a }) };
     }
-    case 'employee_access_request': {
-      return { title: t('notif.accessRequest'), body: t('notif.accessRequestBody') };
-    }
     case 'low_stock': {
       const product = title.replace(/^(Low stock|Out of stock):\s*/i, '').trim();
       if (/out of stock/i.test(title)) {

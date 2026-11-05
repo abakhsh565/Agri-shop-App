@@ -9,7 +9,6 @@ import { useUIStore } from "@/stores/uiStore";
 import { useT } from "@/lib/i18n";
 import { useThemeStore } from "@/stores/themeStore";
 import { useShellBase } from "@/lib/useShellBase";
-import { notifyPaymentReceived } from "@/lib/notifications";
 import { Plus, Minus, Layers } from "lucide-react";
 
 type SplitRow = { amount: string; method: "cash" | "bank_transfer" };
@@ -129,7 +128,9 @@ export default function RecordCustomerPaymentPage() {
         await useCustomersStore.getState().load();
       } catch {}
       addToast(`${formatCurrency(totalPaid)} recorded`, "success");
-      notifyPaymentReceived(customer!.name, totalPaid, customer!.id);
+      // The database trigger writes the owner's notification and the payment row's actor.
+      // Doing it here too produced two alerts for one payment and lost the actor when the
+      // employee's browser was the only place the notification was created.
       navigate(`${base}/customers/${customerId}`, { replace: true });
     } catch (e) {
       // The key is KEPT on failure: the attempt may have reached the database and
@@ -151,6 +152,7 @@ export default function RecordCustomerPaymentPage() {
         <NavHeader
           title={t("recordPayment.title")}
           backTo={`${base}/customers/${customerId}`}
+          historyBack
         />
 
         {/* Outstanding card */}

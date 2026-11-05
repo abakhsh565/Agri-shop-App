@@ -37,9 +37,9 @@ const STATE_GUARD_ALLOWED = new Map<string, string>([
 const REF_GUARDS: Record<string, string> = {
   'src/pages/admin/employees/AddEmployeePage.tsx': 'creatingRef',
   'src/pages/admin/employees/EmployeeDetailPage.tsx': 'statusBusyRef',
-  // Role deletion moved to the role editor when roles became a People-hub flow; the ref guard
-  // moved with it. RolesAccessPage no longer deletes anything, so it is not the anchor any more.
-  'src/pages/admin/people/RoleEditorPage.tsx': 'deletingRef',
+  // Role deletion lives on the role list; the ref guard belongs to the component that
+  // actually sends the delete, not to the editor that no longer owns that action.
+  'src/pages/admin/settings/RolesAccessPage.tsx': 'deletingRef',
   'src/components/sales/SaleDetailView.tsx': 'voidingRef',
   'src/pages/admin/inventory/AddProductPage.tsx': 'savingRef',
   'src/pages/admin/inventory/InventoryAdjustPage.tsx': 'submittingRef',

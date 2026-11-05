@@ -165,22 +165,50 @@ export default function AdminPurchasesSectionPage() {
     caption: string,
     testId: string,
     tone?: "error",
-  ) => (
-    <div
-      className="rounded-[var(--radius-card)] p-3.5"
-      style={{ background: "var(--tone-card)" }}
-      data-testid={testId}
-    >
-      <p className="text-11" style={{ color: "var(--text-secondary)" }}>{label}</p>
-      <p
-        className="text-18 font-bold mt-1 tabular-nums break-words"
-        style={tone === "error" ? { color: "var(--error)" } : undefined}
+    onClick?: () => void,
+  ) => {
+    const body = (
+      <>
+        <span className="flex items-center justify-between gap-2">
+          <span className="text-11" style={{ color: "var(--text-secondary)" }}>{label}</span>
+          {onClick && (
+            <ChevronRight size={12} className="shrink-0" style={{ color: "var(--text-tertiary)" }} />
+          )}
+        </span>
+        <span
+          className="block text-18 font-bold mt-1 tabular-nums break-words"
+          style={tone === "error" ? { color: "var(--error)" } : undefined}
+        >
+          {value}
+        </span>
+        <span className="block text-10 mt-0.5" style={{ color: "var(--text-tertiary)" }}>{caption}</span>
+      </>
+    );
+
+    if (onClick) {
+      return (
+        <button
+          type="button"
+          onClick={onClick}
+          data-testid={testId}
+          className="rounded-[var(--radius-card)] p-3.5 text-start active:opacity-70"
+          style={{ background: "var(--tone-card)" }}
+        >
+          {body}
+        </button>
+      );
+    }
+
+    return (
+      <div
+        className="rounded-[var(--radius-card)] p-3.5"
+        style={{ background: "var(--tone-card)" }}
+        data-testid={testId}
       >
-        {value}
-      </p>
-      <p className="text-10 mt-0.5" style={{ color: "var(--text-tertiary)" }}>{caption}</p>
-    </div>
-  );
+        {body}
+      </div>
+    );
+  };
 
   const jobs: { id: string; icon: LucideIcon; title: string; hint: string; to: string }[] = [
     ...(hasPermission("companies.view")
@@ -216,7 +244,7 @@ export default function AdminPurchasesSectionPage() {
           icon: Wallet,
           title: t("hub.purchases.payables"),
           hint: t("purchasesHub.payablesHint"),
-          to: `${base}/settings/overview/suppliers`,
+          to: `${base}/purchases/payables`,
         }]
       : []),
   ];
@@ -231,6 +259,7 @@ export default function AdminPurchasesSectionPage() {
       <NavHeader
         title={t("settings.menu.purchases")}
         backTo={`${base}/settings`}
+        historyBack
         right={<SectionActionsButton onClick={() => setMenuOpen(true)} label={t("data.export")} testId="purchases-actions" />}
       />
 
@@ -267,6 +296,9 @@ export default function AdminPurchasesSectionPage() {
           t("purchasesHub.remaining"),
           "purchases-hub-outstanding",
           book.outstanding > 0 ? "error" : undefined,
+          hasPermission("companies.view")
+            ? () => navigate(`${base}/purchases/payables`)
+            : undefined,
         )}
         {figure(
           t("payable.suppliers"),

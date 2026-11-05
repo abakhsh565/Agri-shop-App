@@ -249,12 +249,21 @@ export const useRolesStore = create<RolesState>((set, get) => ({
   },
 
   getRoleMemberCount: async (roleId) => {
-    const { count } = await supabase
+    // Pending invitations count too: deleting a role clears it from those memberships,
+    // so the confirmation must name every person whose access will be revoked.
+    const { data, count } = await supabase
       .from("memberships")
+      .select("id, role_id", { count: "exact" })
+      .eq("role_id", roleId);
+    if (!data) return count ?? 0;
+
+    // A per-branch role assignment is a real use of the role even when the membership's
+    // default role points somewhere else.
+    const { count: branchCount } = await supabase
+      .from("membership_branch_roles")
       .select("*", { count: "exact", head: true })
-      .eq("role_id", roleId)
-      .eq("status", "active");
-    return count ?? 0;
+      .eq("role_id", roleId);
+    return Math.max(count ?? 0, branchCount ?? 0);
   },
 
   getBranchRoleCounts: async (branchId, isMain) => {

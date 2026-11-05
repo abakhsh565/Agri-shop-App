@@ -339,7 +339,7 @@ export default function CustomerProfilePage() {
       style={{ background: "var(--background)", direction: isUrdu ? "rtl" : "ltr" }}
     >
       <StatusBar />
-      <NavHeader title={t("customerProfile.title")} />
+      <NavHeader title={t("customerProfile.title")} historyBack />
 
       <div className="flex flex-col gap-3.5 px-4 pt-3 pb-8">
 

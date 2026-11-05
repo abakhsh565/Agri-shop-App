@@ -8,8 +8,17 @@ import { useCustomersStore } from "@/stores/customersStore";
 import { useThemeStore } from "@/stores/themeStore";
 import { useT } from "@/lib/i18n";
 import { formatCurrency, formatSmartDateTime } from "@/lib/formatters";
+import { getCreditRequestsDB, type LocalCreditRequest } from "@/lib/localGroupRegistry";
 import { AlertTriangle, ChevronRight, CheckCircle2 } from "lucide-react";
 
+/**
+ * The audit view for a credit exception.
+ *
+ * The request row owns what was asked for, what the owner actually granted, who granted it and
+ * when. The customer row owns the current exposure. Both are shown; neither is reconstructed
+ * from the other. A customer flagged automatically (no approved request) still gets the screen,
+ * but it does not invent an approval that never happened.
+ */
 export default function CreditOverrideDetailPage() {
   const navigate = useNavigate();
   const { customerId } = useParams();
@@ -17,28 +26,35 @@ export default function CreditOverrideDetailPage() {
   const t = useT();
   const isUrdu = language === "ur";
   const customers = useCustomersStore((s) => s.customers);
-  const loadCreditLimitRequests = useCustomersStore((s) => s.loadCreditLimitRequests);
+  const [request, setRequest] = useState<LocalCreditRequest | null>(null);
   const [reviewed, setReviewed] = useState(false);
-  // Who actually approved this override. This screen used to print the literal name
-  // "Yaqoob Malik" for every customer, which told the owner a specific person had
-  // approved it when nobody had.
-  const [approvedBy, setApprovedBy] = useState<string | null>(null);
 
   useEffect(() => {
     let alive = true;
-    loadCreditLimitRequests()
+    getCreditRequestsDB()
       .then((requests) => {
         if (!alive) return;
-        const approved = requests.find(
-          (r) => r.customerId === customerId && r.status === "approved" && r.reviewedBy,
-        );
-        setApprovedBy(approved?.reviewedBy ?? null);
+        const approved = requests
+          .filter(
+            (item) =>
+              item.customerId === customerId &&
+              item.status === "approved" &&
+              item.reviewedAt,
+          )
+          .sort(
+            (a, b) =>
+              new Date(b.reviewedAt ?? 0).getTime() -
+              new Date(a.reviewedAt ?? 0).getTime(),
+          )[0];
+        setRequest(approved ?? null);
       })
-      .catch(() => undefined);
+      .catch(() => {
+        if (alive) setRequest(null);
+      });
     return () => {
       alive = false;
     };
-  }, [customerId, loadCreditLimitRequests]);
+  }, [customerId]);
 
   const customer = customers.find((c) => c.id === customerId);
   if (!customer) {
@@ -47,7 +63,9 @@ export default function CreditOverrideDetailPage() {
         <StatusBar />
         <NavHeader title={t("creditOverride.title")} />
         <div className="flex-1 flex items-center justify-center">
-          <p className="text-sm" style={{ color: "var(--text-secondary)" }}>{t("admin.customerNotFound")}</p>
+          <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
+            {t("admin.customerNotFound")}
+          </p>
         </div>
       </div>
     );
@@ -56,6 +74,61 @@ export default function CreditOverrideDetailPage() {
   const utilization = customer.creditLimit > 0
     ? Math.round((customer.outstandingBalance / customer.creditLimit) * 100)
     : 0;
+  const approvedAmount = request ? request.approvedLimit ?? request.requestedLimit : null;
+  const when = request?.reviewedAt ?? request?.createdAt ?? null;
+
+  const rows: { label: string; value: React.ReactNode }[] = [
+    ...(request
+      ? [
+          {
+            label: t("creditOverride.approvedBy"),
+            value: request.reviewedBy ?? "—",
+          },
+        ]
+      : []),
+    {
+      label: t("creditOverride.customer"),
+      value: (
+        <span className="flex items-center gap-2">
+          {customer.name}
+          <span
+            className="text-10 font-bold px-2 py-0.5 rounded-full"
+            style={{ background: "var(--error-bg)", color: "var(--error)" }}
+          >
+            {t("creditOverride.red")}
+          </span>
+        </span>
+      ),
+    },
+    ...(request && approvedAmount != null
+      ? [
+          {
+            label: t("creditOverride.approvedAmount"),
+            value: formatCurrency(approvedAmount),
+          },
+          {
+            label: t("creditOverride.requestedAmount"),
+            value: formatCurrency(request.requestedLimit),
+          },
+          {
+            label: t("creditOverride.previousLimit"),
+            value: formatCurrency(request.currentLimit),
+          },
+        ]
+      : []),
+    {
+      label: t("creditOverride.outstandingNow"),
+      value: formatCurrency(customer.outstandingBalance),
+    },
+    ...(when
+      ? [
+          {
+            label: t("common.when"),
+            value: formatSmartDateTime(when, undefined, t),
+          },
+        ]
+      : []),
+  ];
 
   return (
     <div
@@ -66,38 +139,18 @@ export default function CreditOverrideDetailPage() {
       <NavHeader title={t("creditOverride.title")} />
 
       <div className="flex flex-col gap-3 px-4 pt-4 pb-8">
-        {/* Warning banner */}
         <div
           className="flex items-start gap-3 rounded-[var(--radius-card)] p-4"
-          style={{ background: "#FCEBEB" }}
+          style={{ background: "var(--error-bg)" }}
         >
-          <AlertTriangle size={20} color="#A32D2D" className="mt-0.5 shrink-0" />
-          <p className="text-14 font-medium" style={{ color: "#791F1F", lineHeight: 1.5 }}>
-            {t("creditOverride.approvedForRed")}
+          <AlertTriangle size={20} className="mt-0.5 shrink-0" style={{ color: "var(--error)" }} />
+          <p className="text-14 font-medium leading-relaxed" style={{ color: "var(--error)" }}>
+            {request ? t("creditOverride.approvedForRed") : t("creditOverride.flaggedAuto")}
           </p>
         </div>
 
-        {/* Override details */}
         <ListCard>
-          {[
-            ...(approvedBy ? [{ label: t("creditOverride.approvedBy"), value: approvedBy }] : []),
-            {
-              label: t("creditOverride.customer"),
-              value: (
-                <span className="flex items-center gap-2">
-                  {customer.name}
-                  <span
-                    className="text-10 font-bold px-2 py-0.5 rounded-full"
-                    style={{ background: "#FEE2E2", color: "#DC2626" }}
-                  >
-                    {t("creditOverride.red")}
-                  </span>
-                </span>
-              ),
-            },
-            { label: t("common.amount"), value: formatCurrency(customer.outstandingBalance) },
-            { label: t("common.when"), value: formatSmartDateTime(customer.createdAt, undefined, t) },
-          ].map((row) => (
+          {rows.map((row) => (
             <ListRow
               key={row.label}
               trailing={
@@ -113,26 +166,36 @@ export default function CreditOverrideDetailPage() {
           ))}
         </ListCard>
 
-        {/* Why flagged */}
         <div
           className="rounded-[var(--radius-card)] p-4"
-          style={{ background: "var(--tone-card)" }}
+          style={{ background: "var(--surface)" }}
         >
           <p className="ds-section-label mb-2" style={{ color: "var(--text-secondary)" }}>
             {t("creditOverride.whyFlagged")}
           </p>
           <p className="text-14 leading-relaxed" style={{ color: "var(--text-primary)" }}>
             {utilization >= 100
-              ? t("creditOverride.reasonAtLimit", { name: customer.name, limit: formatCurrency(customer.creditLimit), outstanding: formatCurrency(customer.outstandingBalance), pct: String(utilization) })
-              : t("creditOverride.reasonApproaching", { name: customer.name, limit: formatCurrency(customer.creditLimit), outstanding: formatCurrency(customer.outstandingBalance), pct: String(utilization) })}
+              ? t("creditOverride.reasonAtLimit", {
+                  name: customer.name,
+                  limit: formatCurrency(customer.creditLimit),
+                  outstanding: formatCurrency(customer.outstandingBalance),
+                  pct: String(utilization),
+                })
+              : t("creditOverride.reasonApproaching", {
+                  name: customer.name,
+                  limit: formatCurrency(customer.creditLimit),
+                  outstanding: formatCurrency(customer.outstandingBalance),
+                  pct: String(utilization),
+                })}
           </p>
         </div>
 
-        {/* View customer profile */}
         <button
-          onClick={() => navigate(isUrdu ? `/employees/customers/${customer.id}` : `/admin/customers/${customer.id}`)}
+          onClick={() =>
+            navigate(isUrdu ? `/employees/customers/${customer.id}` : `/admin/customers/${customer.id}`)
+          }
           className="flex items-center justify-between px-4 py-3.5 rounded-[var(--radius-card)]"
-          style={{ background: "var(--tone-card)" }}
+          style={{ background: "var(--surface)" }}
         >
           <span className="text-14 font-medium" style={{ color: "var(--text-primary)" }}>
             {t("creditOverride.viewProfile")}
@@ -140,11 +203,10 @@ export default function CreditOverrideDetailPage() {
           <ChevronRight size={16} style={{ color: "var(--text-secondary)" }} />
         </button>
 
-        {/* Mark as reviewed */}
         {reviewed ? (
           <div className="flex items-center justify-center gap-2 py-3">
-            <CheckCircle2 size={18} style={{ color: "var(--brand-dark, #65a30d)" }} />
-            <span className="text-14 font-medium" style={{ color: "var(--brand-dark, #65a30d)" }}>
+            <CheckCircle2 size={18} style={{ color: "var(--brand-dark)" }} />
+            <span className="text-14 font-medium" style={{ color: "var(--brand-dark)" }}>
               {t("creditOverride.reviewed")}
             </span>
           </div>
@@ -153,7 +215,7 @@ export default function CreditOverrideDetailPage() {
             onClick={() => setReviewed(true)}
             className="w-full py-3 text-center"
           >
-            <span className="text-14 font-medium" style={{ color: "var(--brand-dark, #65a30d)" }}>
+            <span className="text-14 font-medium" style={{ color: "var(--brand-dark)" }}>
               {t("creditOverride.markReviewed")}
             </span>
           </button>

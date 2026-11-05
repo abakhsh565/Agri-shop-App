@@ -14,7 +14,7 @@ import { uploadImage } from "@/lib/storage";
 import { supabase } from "@/lib/supabase";
 import { useUIStore } from "@/stores/uiStore";
 import { useShopStore } from "@/stores/shopStore";
-import { BarChart3, Lock, Bell, Globe, ChevronRight, Moon, Sun, ClipboardList, Camera, Loader2, Save, LogOut, X, Trash2, Check, Fingerprint } from "lucide-react";
+import { BarChart3, Lock, Bell, Globe, ChevronRight, Moon, Sun, ClipboardList, Camera, Loader2, Save, LogOut, X, Trash2, Check, Fingerprint, Receipt, ShieldCheck } from "lucide-react";
 import {
   biometricUnavailableReason,
   BIOMETRIC_REASON_KEY,
@@ -374,6 +374,14 @@ export default function SettingsPage() {
               title={user && hasPin(user.id) ? (t("settings.changePin") || "Change PIN") : (t("settings.setupPin") || "Setup PIN")}
               trailing={<ChevronRight size={14} style={{ color: "var(--text-secondary)" }} className="shrink-0" />}
             />
+            <ListRow
+              onClick={() => navigate("/identity")}
+              icon={ShieldCheck}
+              title={t("identity.title")}
+              meta={t("identity.settingsMeta")}
+              testId="settings-identity"
+              trailing={<ChevronRight size={14} style={{ color: "var(--text-secondary)" }} className="shrink-0" />}
+            />
             {/* The same row the owner's Settings carries, with the same words — an employee
                 should not meet a differently-named feature depending on who they are. */}
             <ListRow
@@ -421,6 +429,15 @@ export default function SettingsPage() {
               onClick={() => navigate("/employee/activity")}
               icon={ClipboardList}
               title={t("settings.activityLog")}
+              trailing={<ChevronRight size={14} style={{ color: "var(--text-secondary)" }} className="shrink-0" />}
+            />
+            {/* The same audit feed, narrowed to money-moving actions. Payment rows carry the
+                employee, time and amount; the owner opens those actions from the owner side. */}
+            <ListRow
+              onClick={() => navigate("/employee/activity?view=transactions")}
+              icon={Receipt}
+              title={t("settings.transactionHistory")}
+              testId="settings-transaction-history"
               trailing={<ChevronRight size={14} style={{ color: "var(--text-secondary)" }} className="shrink-0" />}
             />
           </ListCard>

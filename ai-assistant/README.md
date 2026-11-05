@@ -47,6 +47,35 @@ Anything the caller may not see is a tool that does not exist for them. There is
 the model can be talked into reading a table directly, and no number in an answer that did not come
 out of one of those functions.
 
+### Owner, Co-Owner and employee
+
+The server reads the same `get_my_access_context()`, `current_branch_id()` and
+`allowed_branch_scope()` the app's own screens use.
+
+* **Owner** — every permission, no branch predicate. Tools read the whole shop the owner's token
+  can reach.
+* **Co-Owner** — the delegated permission list, the admin shell, and only the branch they are
+  working in. The membership row is deliberately `employee`; the Co-Owner experience is what
+  opens the Owner-side shell, never a widened membership.
+* **Employee** — only their granted tools and the active branch.
+
+Every sales, sale lookup and activity query carries `branch_id=eq.<active branch>` for a
+restricted account. If that branch cannot be read, the tool refuses rather than falling back to
+all branches. The database's branch policies remain the final authority; the predicate is the
+second lock.
+
+### Every picture is capped at 500 KB
+
+Product photos, customer and supplier pictures, profile photos, business documents, finance
+receipts and the assistant's bill photo all go through `src/lib/imageCompression.ts`. It classifies
+the picture as text, photo or graphic, keeps the higher resolution and quality floor for text,
+preserves transparency where WebP supports it, and steps the size down only until the result fits.
+A crop is marked so it is not encoded twice, but a cropped image still over the ceiling is
+re-encoded. The upload helpers refuse an image that could not be brought under 500 KB.
+
+Animated GIFs and SVGs are not rasterised because that would destroy the animation or the vector;
+they are the documented exceptions, not a silent pass-through.
+
 ### A finding about the app, not about the assistant
 
 Row-level security here scopes by **shop** (`shop_id = current_shop_id()`), not by permission. An
@@ -82,12 +111,15 @@ delivered.
 
 ```bash
 node ai-assistant/server/dev.mjs                       # http://localhost:64701
-VITE_ASSISTANT_DEV_URL=http://localhost:64701 npm run dev
+# in .env.local: VITE_ASSISTANT_DEV_URL=http://127.0.0.1:64701
+npm run dev
 ```
 
-Then sign in to the app normally and open the Assistant tab. No second login, no deployed function,
-and the code answering is the code that ships. Without a `GEMINI_API_KEY` the built-in answerer
-answers from the same tools — it cannot read a photo, and it says so.
+The runner reads `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` from `.env.local` first, so it talks
+to the same local stack as the app; `.env.qa` is the fallback. Then sign in to the app normally and
+open the Assistant tab. No second login, no deployed function, and the code answering is the code
+that ships. Without a `GEMINI_API_KEY` the built-in answerer answers from the same tools — it cannot
+read a photo, and it says so.
 
 ```bash
 npm run selftest                    # from ai-assistant/

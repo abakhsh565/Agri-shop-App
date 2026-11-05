@@ -4,6 +4,7 @@ import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
 import { useThemeStore } from "@/stores/themeStore";
 import { useT } from "@/lib/i18n";
+import { useAppBack } from "@/hooks/useAppBack";
 import { formatCurrency } from "@/lib/formatters";
 import { loadLocalGroups, deleteLocalGroup, updateLocalGroup } from "@/lib/localGroupRegistry";
 import { Users, Trash2, ChevronLeft, Bell, MoreVertical } from "lucide-react";
@@ -22,6 +23,7 @@ const TRIGGER_KEYS: Record<string, string> = {
 export default function GroupDetailPage() {
   const { groupId } = useParams<{ groupId: string }>();
   const navigate = useNavigate();
+  const back = useAppBack();
   const t = useT();
   const { language } = useThemeStore();
   const isUrdu = language === "ur";
@@ -44,7 +46,7 @@ export default function GroupDetailPage() {
     if (!groupId) return;
     setDeleting(true);
     await deleteLocalGroup(groupId);
-    navigate(-1);
+    back();
   }
 
   if (loading) {

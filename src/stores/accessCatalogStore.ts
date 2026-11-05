@@ -20,6 +20,7 @@ interface WidgetRow {
   label_ur: string;
   sort_order: number;
   default_permission: string | null;
+  required_permissions: string[] | null;
 }
 
 interface AccessCatalogState {
@@ -81,6 +82,7 @@ export const useAccessCatalogStore = create<AccessCatalogState>((set, get) => ({
         labelUr: w.label_ur,
         sortOrder: w.sort_order,
         defaultPermission: w.default_permission,
+        requiredPermissions: w.required_permissions ?? [],
       })),
       ready: true,
     });

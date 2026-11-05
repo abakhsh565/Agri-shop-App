@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Check, ChevronLeft, ChevronRight, Search } from "lucide-react";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
@@ -7,6 +7,7 @@ import { supabase } from "@/lib/supabase";
 import { getCurrentTenantId, isCurrentUserOwner } from "@/lib/tenantContext";
 import { coOwnerErrorCode, coOwnerEnabled } from "@/lib/experience";
 import { useT } from "@/lib/i18n";
+import { navigateBack } from "@/lib/navContext";
 import { useShellBase } from "@/lib/useShellBase";
 import {
   useCoOwnersStore,
@@ -15,12 +16,18 @@ import {
 } from "@/stores/coOwnersStore";
 
 type Mode = "all" | "selected" | "none";
-type Step = "identity" | "scope" | "permissions" | "authority" | "dashboard" | "team" | "review";
+type Step = "identity" | "scope" | "access" | "permissions" | "authority" | "dashboard" | "team" | "review";
+type AccessTab = "screens" | "dashboard";
 
 const STEPS: Step[] = ["identity", "scope", "permissions", "authority", "dashboard", "team", "review"];
+// Branch Management already fixed the branch, so the full seven-step delegation wizard is
+// unnecessarily long. This entry point asks only what it needs: the person, what they can open,
+// the decisions that must stay with the Owner, and a final review.
+const BRANCH_STEPS: Step[] = ["identity", "access", "authority", "review"];
 const STEP_KEY: Record<Step, Parameters<ReturnType<typeof useT>>[0]> = {
   identity: "coOwners.stepIdentity",
   scope: "coOwners.stepScope",
+  access: "coOwners.stepAccess",
   permissions: "coOwners.stepPermissions",
   authority: "coOwners.stepAuthority",
   dashboard: "coOwners.stepDashboard",
@@ -37,6 +44,15 @@ const AUTHORITY_KEYS: Record<AuthorityMode, Parameters<ReturnType<typeof useT>>[
   approval_required: "coOwners.authorityApproval",
   restricted: "coOwners.authorityRestricted",
 };
+
+// A Co-Owner is a trusted partner, not an employee. Everything is delegated by default except
+// the decisions that define legal ownership and the Owner's own account.
+const OWNER_ONLY_AUTHORITIES = new Set([
+  "ownership.transfer",
+  "co_owners.manage",
+  "business.delete",
+  "owner.security",
+]);
 
 interface BranchRow { id: string; name: string; is_default: boolean }
 interface CompanyRow { id: string; name: string }
@@ -133,13 +149,18 @@ export default function CoOwnerWizardPage() {
   const t = useT();
   const base = useShellBase();
   const navigate = useNavigate();
+  const location = useLocation();
   const { grantId } = useParams<{ grantId?: string }>();
+  const [searchParams] = useSearchParams();
+  const branchFromQuery = searchParams.get("branchId");
   const editing = Boolean(grantId);
+  const branchLocked = Boolean(branchFromQuery) && !editing;
   const owner = isCurrentUserOwner();
   const enabled = coOwnerEnabled();
-  const { invite, update, get } = useCoOwnersStore();
+  const { invite, update, get, assignBranchCoOwner } = useCoOwnersStore();
 
   const [step, setStep] = useState<Step>("identity");
+  const [accessTab, setAccessTab] = useState<AccessTab>("screens");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(false);
@@ -149,22 +170,22 @@ export default function CoOwnerWizardPage() {
   const [name, setName] = useState("");
   const [status, setStatus] = useState("invited");
 
-  const [branchMode, setBranchMode] = useState<Mode>("selected");
+  const [branchMode, setBranchMode] = useState<Mode>("all");
   const [branchIds, setBranchIds] = useState<string[]>([]);
-  const [supplierMode, setSupplierMode] = useState<Mode>("none");
+  const [supplierMode, setSupplierMode] = useState<Mode>("all");
   const [supplierIds, setSupplierIds] = useState<string[]>([]);
-  const [departmentMode, setDepartmentMode] = useState<Mode>("none");
+  const [departmentMode, setDepartmentMode] = useState<Mode>("all");
   const [departmentIds, setDepartmentIds] = useState<string[]>([]);
-  const [recordMode, setRecordMode] = useState<Mode>("none");
+  const [recordMode, setRecordMode] = useState<Mode>("all");
   const [customerIds, setCustomerIds] = useState<string[]>([]);
 
   const [permissions, setPermissions] = useState<Set<string>>(new Set());
   const [authorities, setAuthorities] = useState<Record<string, AuthorityMode>>({});
   const [dashboards, setDashboards] = useState<Set<string>>(new Set());
   const [assignableRoles, setAssignableRoles] = useState<Set<string>>(new Set());
-  const [canInviteEmployees, setCanInviteEmployees] = useState(false);
-  const [canDeactivateEmployees, setCanDeactivateEmployees] = useState(false);
-  const [canManageBranches, setCanManageBranches] = useState(false);
+  const [canInviteEmployees, setCanInviteEmployees] = useState(true);
+  const [canDeactivateEmployees, setCanDeactivateEmployees] = useState(true);
+  const [canManageBranches, setCanManageBranches] = useState(true);
 
   const [branches, setBranches] = useState<BranchRow[]>([]);
   const [companies, setCompanies] = useState<CompanyRow[]>([]);
@@ -175,6 +196,15 @@ export default function CoOwnerWizardPage() {
   const [roles, setRoles] = useState<RoleRow[]>([]);
   const [authorityRows, setAuthorityRows] = useState<AuthorityRow[]>([]);
   const [customerSearch, setCustomerSearch] = useState("");
+
+  // Branch Management opens this same wizard with one branch already fixed. The scope step is
+  // removed rather than shown as an editable choice, so the screen that assigns a branch cannot
+  // quietly assign all of them. The server still writes the same Co-Owner grant as before.
+  const steps = useMemo(
+    () => (branchLocked ? BRANCH_STEPS : STEPS),
+    [branchLocked],
+  );
+  const lockedBranch = branches.find((item) => item.id === branchFromQuery) ?? null;
 
   useEffect(() => {
     if (!owner || !enabled) {
@@ -200,7 +230,8 @@ export default function CoOwnerWizardPage() {
         supabase.from("co_owner_authority_catalog").select("code,module,label_en,label_ur").order("sort_order"),
       ]);
       if (!alive) return;
-      setBranches((b.data ?? []) as BranchRow[]);
+      const branchRows = (b.data ?? []) as BranchRow[];
+      setBranches(branchRows);
       setCompanies((c.data ?? []) as CompanyRow[]);
       setDepartments((d.data ?? []) as DepartmentRow[]);
       setCustomers((cu.data ?? []) as CustomerRow[]);
@@ -234,17 +265,30 @@ export default function CoOwnerWizardPage() {
           if (alive) setError(coOwnerErrorCode(e));
         }
       } else {
+        setPermissions(new Set((p.data ?? []).map((row) => row.code)));
+        setDashboards(new Set((w.data ?? []).map((row) => row.key)));
+        setAssignableRoles(new Set((r.data ?? []).map((row) => row.id)));
         const defaults: Record<string, AuthorityMode> = {};
         (a.data ?? []).forEach((row) => {
           const authority = row as AuthorityRow;
-          defaults[authority.code] = "restricted";
+          defaults[authority.code] = OWNER_ONLY_AUTHORITIES.has(authority.code)
+            ? "restricted"
+            : "allowed";
         });
         setAuthorities(defaults);
+      }
+      if (branchLocked && branchFromQuery) {
+        if (!branchRows.some((row) => row.id === branchFromQuery)) {
+          if (alive) setError(t("coOwners.branchNotAvailable"));
+        } else {
+          setBranchMode("selected");
+          setBranchIds([branchFromQuery]);
+        }
       }
       if (alive) setLoading(false);
     })();
     return () => { alive = false; };
-  }, [owner, enabled, grantId, get]);
+  }, [owner, enabled, grantId, get, branchLocked, branchFromQuery]);
 
   const groupedPermissions = useMemo(() => {
     const map = new Map<string, PermissionRow[]>();
@@ -285,23 +329,27 @@ export default function CoOwnerWizardPage() {
     );
   }
 
-  function stepIndex() { return STEPS.indexOf(step); }
+  function stepIndex() { return steps.indexOf(step); }
   function goNext() {
     setError("");
     if (step === "identity") {
-      if (!editing && !phone.trim()) { setError(t("coOwners.phone")); return; }
+      if (!editing && !/^\d{11}$/.test(phone)) { setError(t("coOwners.phoneInvalid")); return; }
+      if (!editing && !name.trim()) { setError(t("coOwners.nameRequired")); return; }
     }
     if (step === "scope" && branchMode === "selected" && branchIds.length === 0) {
       setError(t("coOwners.noBranches"));
       return;
     }
     const index = stepIndex();
-    if (index < STEPS.length - 1) setStep(STEPS[index + 1]);
+    if (index < steps.length - 1) setStep(steps[index + 1]);
   }
   function goBack() {
     const index = stepIndex();
-    if (index <= 0) navigate(`${base}/settings/hub/people/co-owners`);
-    else setStep(STEPS[index - 1]);
+    if (index <= 0) {
+      navigateBack(location, navigate, branchLocked && branchFromQuery
+        ? `${base}/settings/branches/${branchFromQuery}`
+        : `${base}/settings/hub/people/co-owners`);
+    } else setStep(steps[index - 1]);
   }
 
   async function save() {
@@ -338,6 +386,18 @@ export default function CoOwnerWizardPage() {
           canDeactivateEmployees,
           canManageBranches,
         });
+      } else if (branchLocked && branchFromQuery) {
+        await assignBranchCoOwner(branchFromQuery, name.trim(), phone.trim(), {
+          permissions: [...permissions],
+          authorities,
+          dashboards: [...dashboards],
+          assignableRoleIds: [...assignableRoles],
+          canInviteEmployees,
+          canDeactivateEmployees,
+          // A branch Co-Owner runs their branch; branch creation, removal and ownership stay
+          // with the Owner. The hidden defaults never grant more than the screen explains.
+          canManageBranches: false,
+        });
       } else {
         await invite({
           phone: phone.trim(),
@@ -352,7 +412,9 @@ export default function CoOwnerWizardPage() {
           canManageBranches,
         });
       }
-      navigate(`${base}/settings/hub/people/co-owners`, { replace: true });
+      navigate(branchLocked && branchFromQuery
+        ? `${base}/settings/branches/${branchFromQuery}`
+        : `${base}/settings/hub/people/co-owners`, { replace: true });
     } catch (e) {
       setError(`${t("coOwners.failed")} (${coOwnerErrorCode(e)})`);
     } finally {
@@ -375,14 +437,20 @@ export default function CoOwnerWizardPage() {
     <div className="flex flex-col w-full min-h-full pb-8" style={{ background: "var(--background)", color: "var(--text-primary)" }} data-testid="co-owner-wizard">
       <StatusBar />
       <NavHeader
-        title={editing ? t("coOwners.editTitle") : t("coOwners.newTitle")}
-        backTo={`${base}/settings/hub/people/co-owners`}
+        title={editing
+          ? t("coOwners.editTitle")
+          : branchLocked
+            ? t("coOwners.assignBranchTitle")
+            : t("coOwners.newTitle")}
+        backTo={branchLocked && branchFromQuery
+          ? `${base}/settings/branches/${branchFromQuery}`
+          : `${base}/settings/hub/people/co-owners`}
         onBack={goBack}
       />
 
       <div className="px-4 pt-1 flex items-center justify-between">
         <p className="text-11 tabular-nums" style={{ color: "var(--text-secondary)" }}>
-          {stepIndex() + 1} / {STEPS.length}
+          {stepIndex() + 1} / {steps.length}
         </p>
         <p className="text-11 font-semibold" style={{ color: "var(--brand-dark)" }}>
           {t(STEP_KEY[step])}
@@ -393,7 +461,7 @@ export default function CoOwnerWizardPage() {
         <div className="h-1.5 rounded-full overflow-hidden" style={{ background: "var(--tone-sunken)" }}>
           <div
             className="h-full rounded-full transition-all"
-            style={{ width: `${((stepIndex() + 1) / STEPS.length) * 100}%`, background: "var(--brand)" }}
+            style={{ width: `${((stepIndex() + 1) / steps.length) * 100}%`, background: "var(--brand)" }}
           />
         </div>
       </div>
@@ -409,9 +477,11 @@ export default function CoOwnerWizardPage() {
                   {t("coOwners.phone")}
                   <input
                     value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
+                    onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 11))}
                     disabled={editing}
                     inputMode="tel"
+                    maxLength={11}
+                    autoComplete="tel"
                     dir="ltr"
                     placeholder="03xx xxxxxxx"
                     className="mt-1.5 w-full h-12 rounded-[var(--radius-input)] px-3 text-14 outline-none disabled:opacity-60"
@@ -438,6 +508,20 @@ export default function CoOwnerWizardPage() {
                   <p className="text-11" style={{ color: "var(--text-secondary)" }}>
                     {t("coOwners.statusActive")}: {status}
                   </p>
+                )}
+                {branchLocked && (
+                  <div
+                    className="rounded-[var(--radius-tile)] p-3"
+                    style={{ background: "var(--tone-sunken)", border: "1px solid var(--border-control)" }}
+                  >
+                    <p className="text-10 font-bold" style={{ color: "var(--text-secondary)" }}>
+                      {t("coOwners.lockedBranch")}
+                    </p>
+                    <p className="text-13 font-bold mt-0.5">{lockedBranch?.name ?? t("common.loading")}</p>
+                    <p className="text-10 mt-1" style={{ color: "var(--text-secondary)" }}>
+                      {t("coOwners.lockedBranchBody")}
+                    </p>
+                  </div>
                 )}
               </div>
             )}
@@ -541,7 +625,35 @@ export default function CoOwnerWizardPage() {
               </>
             )}
 
-            {step === "permissions" && (
+            {step === "access" && (
+              <>
+                <p className="text-11" style={{ color: "var(--text-secondary)" }}>{t("coOwners.accessHint")}</p>
+                <div className="flex gap-1.5" data-testid="co-owner-access-tabs">
+                  {(["screens", "dashboard"] as AccessTab[]).map((tab) => {
+                    const on = accessTab === tab;
+                    const count = tab === "screens" ? permissions.size : dashboards.size;
+                    return (
+                      <button
+                        key={tab}
+                        type="button"
+                        onClick={() => setAccessTab(tab)}
+                        className="h-9 px-3 rounded-full text-11 font-semibold"
+                        style={{
+                          background: on ? "var(--brand)" : "var(--field-bg)",
+                          color: on ? "#0a0a0a" : "var(--text-secondary)",
+                          border: `1px solid ${on ? "var(--brand)" : "var(--border-control)"}`,
+                        }}
+                        data-testid={`co-owner-access-${tab}`}
+                      >
+                        {tab === "screens" ? t("coOwners.screens") : t("coOwners.stepDashboard")} · {count}
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+
+            {(step === "permissions" || (step === "access" && accessTab === "screens")) && (
               <>
                 <p className="text-11" style={{ color: "var(--text-secondary)" }}>{t("coOwners.permissionsHint")}</p>
                 {groupedPermissions.map(([module, rows]) => {
@@ -622,7 +734,7 @@ export default function CoOwnerWizardPage() {
               </>
             )}
 
-            {step === "dashboard" && (
+            {(step === "dashboard" || (step === "access" && accessTab === "dashboard")) && (
               <>
                 <p className="text-11" style={{ color: "var(--text-secondary)" }}>{t("coOwners.dashboardHint")}</p>
                 <div className="rounded-[var(--radius-tile)] overflow-hidden" style={cardStyle}>
@@ -706,10 +818,17 @@ export default function CoOwnerWizardPage() {
                     <p className="text-11 font-semibold" style={{ color: "var(--text-secondary)" }}>{t("coOwners.stepDashboard")}</p>
                     <p className="text-13 mt-0.5">{dashboards.size}</p>
                   </div>
-                  <div>
-                    <p className="text-11 font-semibold" style={{ color: "var(--text-secondary)" }}>{t("coOwners.assignableRoles")}</p>
-                    <p className="text-13 mt-0.5">{assignableRoles.size}</p>
-                  </div>
+                  {branchLocked ? (
+                    <div>
+                      <p className="text-11 font-semibold" style={{ color: "var(--text-secondary)" }}>{t("coOwners.stepTeam")}</p>
+                      <p className="text-13 mt-0.5">{t("coOwners.branchTeamDefaults")}</p>
+                    </div>
+                  ) : (
+                    <div>
+                      <p className="text-11 font-semibold" style={{ color: "var(--text-secondary)" }}>{t("coOwners.assignableRoles")}</p>
+                      <p className="text-13 mt-0.5">{assignableRoles.size}</p>
+                    </div>
+                  )}
                 </div>
               </>
             )}

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ChevronRight,
@@ -19,7 +19,6 @@ import { isCurrentUserOwner } from "@/lib/tenantContext";
 import { coOwnerEnabled } from "@/lib/experience";
 import { useEmployeesStore } from "@/stores/employeesStore";
 import { useAuthStore } from "@/stores/authStore";
-import { listEmployeeAccessRequests } from "@/lib/employeeAccessRequests";
 
 /**
  * Employees & access — the people control centre.
@@ -33,11 +32,12 @@ import { listEmployeeAccessRequests } from "@/lib/employeeAccessRequests";
  *
  * The counts are the loaded team, not a second server read, so the number here and the list one
  * tap away cannot disagree. "Pending invitations" counts memberships still waiting, which is a
- * different question from the access requests below it: a request is somebody asking to join, an
- * invitation is somebody already invited. Both are shown because both need the owner's action.
+ * different question from an invitation: a request is somebody asking to join, an invitation is
+ * somebody already invited. Only invitations remain actionable now that self-request access has
+ * been retired.
  *
- * THE DOORS ARE THE SYSTEM'S OWN SCREENS. Employees opens the directory, Access request opens the
- * approvals inbox, Roles and permission opens the access catalogue, Activity opens the per-person
+ * THE DOORS ARE THE SYSTEM'S OWN SCREENS. Employees opens the directory, Roles and permission
+ * opens the access catalogue, Activity opens the per-person
  * history the audit trail already serves. No switch here claims an authority the database does
  * not enforce — this page only routes, and each destination checks its own permission.
  */
@@ -50,36 +50,17 @@ export default function AdminPeopleHubPage() {
   const ready = useEmployeesStore((s) => s.ready);
   const load = useEmployeesStore((s) => s.load);
   const currentUserId = useAuthStore((s) => s.user?.id);
-  // The owner/admin's own account is not a team member in this directory. Keep the visible
-  // total and the pending count on the same set the roster below shows.
-  const team = employees.filter((employee) => employee.id !== currentUserId);
+  // The owner/admin's own account is not a team member in this directory. The store also
+  // removes the original owner and Co-Owners, so these numbers describe employees only.
+  const team = employees.filter((employee) => employee.id !== currentUserId && !employee.isOriginalOwner);
 
   const canManage = hasPermission("employees.manage");
   const canSeeActivity = hasPermission("activity.view");
   const canManageCoOwners = isCurrentUserOwner() && coOwnerEnabled();
 
-  // Access requests are only read for a role that may act on them; a null count means "not
-  // asked", which is why it renders as a dash rather than a confident zero.
-  const [waiting, setWaiting] = useState<number | null>(null);
-
   useEffect(() => {
     if (!ready) void load();
   }, [ready, load]);
-
-  useEffect(() => {
-    if (!canManage) return;
-    let alive = true;
-    void listEmployeeAccessRequests("pending")
-      .then((rows) => {
-        if (alive) setWaiting(rows.length);
-      })
-      .catch(() => {
-        if (alive) setWaiting(null);
-      });
-    return () => {
-      alive = false;
-    };
-  }, [canManage]);
 
   const pendingInvitations = team.filter(
     (employee) => employee.isActive && employee.membershipStatus === "pending",
@@ -131,7 +112,7 @@ export default function AdminPeopleHubPage() {
             type="button"
             onClick={() => navigate(`${base}/employees/new`)}
             data-testid="people-add-employee"
-            className="w-full h-12 rounded-full flex items-center justify-center gap-2 font-bold text-13 active:scale-[0.99] transition-transform"
+            className="w-full h-12 rounded-full flex items-center justify-center gap-2 text-14 font-medium active:scale-[0.99] transition-transform"
             style={{ background: "var(--cta)", color: "var(--cta-fg)" }}
           >
             <UserPlus size={16} />
@@ -150,23 +131,6 @@ export default function AdminPeopleHubPage() {
             onClick={() => navigate(`${base}/settings/hub/people/employees`)}
             testId="people-open-employees"
           />
-
-          {canManage && (
-            <ListRow
-              icon={UserPlus}
-              title={t("accessRequests.title")}
-              meta={
-                waiting === null
-                  ? t("people.noneWaiting")
-                  : waiting > 0
-                    ? t("people.waitingCount", { count: waiting })
-                    : t("people.noneWaiting")
-              }
-              trailing={chevron}
-              onClick={() => navigate(`${base}/employees/requests`)}
-              testId="people-access-requests"
-            />
-          )}
 
           {canManage && (
             <ListRow

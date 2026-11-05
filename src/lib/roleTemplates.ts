@@ -422,3 +422,84 @@ export const DASHBOARD_WIDGET_HINTS: Record<string, { hintKey: string; scope: "b
   money_movements: { hintKey: "roles.widget.moneyMovementsHint", scope: "branch" },
   quick_alerts: { hintKey: "roles.widget.quickAlertsHint", scope: "branch" },
 };
+
+/**
+ * Optional starting configurations for the new role builder. They are templates, not
+ * rows: choosing one copies real permission codes into the shop's own role, which can
+ * then be edited without changing any other shop. Finance Manager reuses the existing
+ * finance-manager template list rather than duplicating its permissions here.
+ */
+export interface StartingRoleTemplate {
+  id: "staff" | "manager" | "finance_manager";
+  nameKey: string;
+  descriptionKey: string;
+  departmentCode: string;
+  category: RoleCategory;
+  level: RoleLevel;
+  permissions: string[];
+}
+
+export const STARTING_ROLES: StartingRoleTemplate[] = [
+  {
+    id: "staff",
+    nameKey: "roles.starter.staff",
+    descriptionKey: "roles.starter.staffHint",
+    departmentCode: "sales",
+    category: "sales",
+    level: "individual_contributor",
+    permissions: [
+      "sales.view",
+      "sales.create",
+      "customers.view",
+      "customers.create",
+      "products.view",
+      "inventory.view",
+    ],
+  },
+  {
+    id: "manager",
+    nameKey: "roles.starter.manager",
+    descriptionKey: "roles.starter.managerHint",
+    departmentCode: "management",
+    category: "business_management",
+    level: "manager",
+    permissions: [
+      "sales.view",
+      "sales.create",
+      "sales.void",
+      "customers.view",
+      "customers.create",
+      "customers.edit",
+      "customers.payments",
+      "customers.credit_limit",
+      "products.view",
+      "inventory.view",
+      "inventory.adjust",
+      "purchases.view",
+      "purchases.create",
+      "companies.view",
+      "payments.view",
+      "payments.supplier",
+      "returns.view",
+      "returns.create",
+      "reports.view",
+      "employees.view",
+      "alerts.view",
+    ],
+  },
+  {
+    id: "finance_manager",
+    nameKey: "roles.template.financeManager",
+    descriptionKey: "roles.template.financeManagerHint",
+    departmentCode: "finance",
+    category: "finance",
+    level: "manager",
+    permissions: [...ROLE_TEMPLATES.find((template) => template.id === "tpl-finance-manager")!.permissions],
+  },
+];
+
+/** The owner is an account identity, never an assignable employee role. */
+export function isOwnerRoleName(name: string | null | undefined): boolean {
+  const normal = (name ?? "").trim().toLowerCase();
+  return normal === "owner" || normal === "business owner" || normal === "shop owner";
+}

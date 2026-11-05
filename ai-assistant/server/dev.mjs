@@ -14,10 +14,10 @@
  *   node ai-assistant/server/dev.mjs                     # http://localhost:64701
  *   VITE_ASSISTANT_DEV_URL=http://localhost:64701 npm run dev
  *
- * Uses QA_SUPABASE_URL / QA_SUPABASE_ANON_KEY from the repository's `.env.qa`, and
- * GEMINI_API_KEY from `ai-assistant/.env` when one is present. With no model key the built-in
- * answerer answers instead, from the same tools — which is how the permission checks are run
- * without spending anything.
+ * Uses VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY from `.env.local` first — the same local stack
+ * the development app uses — with QA_* from `.env.qa` as the fallback. GEMINI_API_KEY comes from
+ * `ai-assistant/.env` when present. With no model key the built-in answerer answers instead, from
+ * the same tools — which is how the permission checks are run without spending anything.
  */
 import http from "node:http";
 import fs from "node:fs";
@@ -41,8 +41,11 @@ for (const file of [path.join(ROOT, "ai-assistant", ".env"), path.join(ROOT, ".e
 }
 
 const env = {
-  supabaseUrl: process.env.QA_SUPABASE_URL || process.env.VITE_SUPABASE_URL || "",
-  anonKey: process.env.QA_SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || "",
+  // The app in development talks to the LOCAL stack in `.env.local`; the harness must carry the
+  // same token to the same project, or every local question is a 401 that looks like a model
+  // failure. QA remains the fallback for a checkout with no local stack.
+  supabaseUrl: process.env.VITE_SUPABASE_URL || process.env.QA_SUPABASE_URL || "",
+  anonKey: process.env.VITE_SUPABASE_ANON_KEY || process.env.QA_SUPABASE_ANON_KEY || "",
   geminiKey: process.env.GEMINI_API_KEY || "",
   geminiModel: process.env.GEMINI_MODEL || "gemini-2.5-flash",
   geminiFallbackModel: process.env.GEMINI_FALLBACK_MODEL || "",

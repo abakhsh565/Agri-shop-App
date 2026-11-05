@@ -150,7 +150,7 @@ export default function CoOwnerDashboardPage() {
           <p className="text-13 font-bold">{t("coOwners.failed")}</p>
           <p className="text-11 mt-1" style={{ color: "var(--text-secondary)" }}>{error}</p>
         </Card>
-      ) : data?.empty === "no_branches" || access.branches.length === 0 ? (
+      ) : data?.empty === "no_branches" && access.branches.length === 0 ? (
         <Card className="mt-4">
           <p className="text-13 font-bold">{t("coOwner.noBranches")}</p>
           <p className="text-11 mt-1" style={{ color: "var(--text-secondary)" }}>{t("coOwners.scopeHint")}</p>

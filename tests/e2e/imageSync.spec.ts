@@ -412,20 +412,19 @@ test.describe('Image Synchronization — All Entities', () => {
 
   // ─── IMAGE COMPRESSION ────────────────────────────────────────────────────
 
-  test('Image compression: compressImage function exists in storage.ts', async () => {
-    // Verify the compression infrastructure exists
-    // compressImage() in src/lib/storage.ts:
-    // - Resizes to max 1200px on longest edge
-    // - Converts to JPEG at quality 0.82
-    // - Skips images already under 150KB
-    // This is already implemented and active for all uploads.
-    const storageContent = await import('fs').then(fs =>
+  test('Image compression: every upload uses the adaptive 500 KB-capped path', async () => {
+    const storageContent = await import('fs').then((fs) =>
       fs.readFileSync('src/lib/storage.ts', 'utf-8')
     );
+    const compressionContent = await import('fs').then((fs) =>
+      fs.readFileSync('src/lib/imageCompression.ts', 'utf-8')
+    );
+    expect(storageContent).toContain('prepareImage');
     expect(storageContent).toContain('compressImage');
-    expect(storageContent).toContain('MAX_DIMENSION');
-    expect(storageContent).toContain('JPEG_QUALITY');
-    expect(storageContent).toContain('canvas');
-    expect(storageContent).toContain('toBlob');
+    expect(storageContent).not.toContain('MAX_DIMENSION');
+    expect(compressionContent).toContain('HARD_MAX_IMAGE_BYTES = 500 * 1024');
+    expect(compressionContent).toContain('classifyImageSurface');
+    expect(compressionContent).toContain('toBlob');
+    expect(compressionContent).toContain('markImagePrepared');
   });
 });

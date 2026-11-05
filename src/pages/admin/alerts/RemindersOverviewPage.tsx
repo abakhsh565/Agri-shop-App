@@ -17,6 +17,10 @@ import { MessageCircle, Smartphone, X, ChevronDown, ChevronUp, Bell, CheckCircle
 import GroupReminderSheet from "@/components/ui/GroupReminderSheet";
 import ListCard from "@/components/ui/ListCard";
 import ListRow from "@/components/ui/ListRow";
+import PaymentReminderCard from "@/components/ui/PaymentReminderCard";
+import { sortReminders, usePaymentReminderBook } from "@/lib/paymentReminders";
+import { pkDateFromISO, pkToday } from "@/lib/pkDate";
+import { summariseSentToday } from "@/lib/quickAlerts";
 import {
   saveLocalGroup,
   loadLocalGroups,
@@ -63,7 +67,7 @@ async function loadAllReminderLogs(): Promise<ReminderLogEntry[]> {
     const { supabase } = await import("@/lib/supabase");
     // Live reminder_logs shape: subject is entity_id (entity_type = 'customer');
     // the customer's name/image come from the customer row itself.
-    const { data } = await supabase.from("reminder_logs").select("*").order("sent_at", { ascending: false }).limit(50);
+    const { data } = await supabase.from("reminder_logs").select("*").order("sent_at", { ascending: false }).limit(200);
     if (!data) return [];
     const customerIds = [...new Set(data.map((r: any) => r.entity_id).filter(Boolean))];
     let customerMap: Record<string, { name?: string; image?: string }> = {};
@@ -296,6 +300,19 @@ export default function RemindersOverviewPage() {
   const sales = useSalesStore((s) => s.sales);
   const products = useProductsStore((s) => s.products);
   const companies = useCompaniesStore((s) => s.companies);
+  // A reminder written in the Finance book is the same customer fact this Action Center
+  // shows. Reading it here closes the "I added it but Follow-ups says zero" gap without
+  // making the private supplier/general notes visible to an employee.
+  const paymentBook = usePaymentReminderBook();
+  const today = pkToday();
+  const savedPaymentReminders = useMemo(
+    () =>
+      sortReminders(
+        (paymentBook.rows ?? []).filter((reminder) => reminder.status === "upcoming"),
+        today,
+      ),
+    [paymentBook.rows, today],
+  );
 
   /* ── Data ── */
   const [allReminders, setAllReminders] = useState<any[]>([]);
@@ -438,6 +455,7 @@ export default function RemindersOverviewPage() {
   }, [allReminders, sentOccurrenceKeys, now]);
 
   const sentLogs = useMemo(() => allLogs, [allLogs]);
+  const todaySent = useMemo(() => summariseSentToday(allLogs), [allLogs]);
 
 
   /* ── Sub-tabs using live signals ── */
@@ -614,7 +632,33 @@ export default function RemindersOverviewPage() {
         return sentLogs.length === 0 ? (
           <EmptyState icon={<CheckCircle2 size={24} style={{ color: "var(--text-secondary)" }} />} title={t("inline.nothing_sent_yet")} subtitle={t("inline.sent_reminders_will_appear_here_after_you_se")} />
         ) : (
-          <div>
+          <div className="flex flex-col gap-3">
+            {todaySent.total > 0 && (
+              <div
+                className="mx-4 rounded-[var(--radius-card)] p-4"
+                style={{ background: "var(--warning-bg)" }}
+                data-testid="reminders-sent-today"
+              >
+                <div className="flex items-start gap-3">
+                  <Bell size={18} className="mt-0.5 shrink-0" style={{ color: "var(--warning)" }} />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-14 font-semibold" style={{ color: "var(--text-primary)" }}>
+                      {t("reminders.sentToday")}
+                    </p>
+                    <p className="text-12 mt-1" style={{ color: "var(--text-secondary)" }}>
+                      {t("reminders.sentTodayChannels", {
+                        whatsapp: String(todaySent.whatsapp),
+                        sms: String(todaySent.sms),
+                        customers: String(todaySent.customers),
+                      })}
+                    </p>
+                  </div>
+                  <span className="shrink-0 text-11 font-semibold" style={{ color: "var(--warning)" }}>
+                    {t("reminders.sentTodayCount", { count: String(todaySent.total) })}
+                  </span>
+                </div>
+              </div>
+            )}
             {(() => {
               const tenDaysAgo = new Date();
               tenDaysAgo.setDate(tenDaysAgo.getDate() - 10);
@@ -781,6 +825,38 @@ export default function RemindersOverviewPage() {
         )}
 
         {/* Tab content */}
+        {mainTab === "followups" && savedPaymentReminders.length > 0 && (
+          <section className="flex flex-col gap-2" data-testid="saved-payment-reminders">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-13 font-bold" style={{ color: "var(--text-primary)" }}>
+                {t("paymentBook.title")} · {savedPaymentReminders.length}
+              </p>
+              <button
+                type="button"
+                onClick={() => navigate("/admin/settings/hub/finance/reminders")}
+                className="text-11 font-semibold active:opacity-70"
+                style={{ color: "var(--brand-dark)" }}
+              >
+                {t("paymentBook.openBook")}
+              </button>
+            </div>
+            <div className="flex flex-col gap-2">
+              {savedPaymentReminders.map((reminder) => (
+                <PaymentReminderCard
+                  key={reminder.id}
+                  reminder={reminder}
+                  today={today}
+                  testId={`action-saved-reminder-${reminder.id}`}
+                  onOpenParty={
+                    reminder.customerId
+                      ? () => navigate(`/admin/customers/${reminder.customerId}`)
+                      : undefined
+                  }
+                />
+              ))}
+            </div>
+          </section>
+        )}
         {renderTabContent()}
       </div>
 

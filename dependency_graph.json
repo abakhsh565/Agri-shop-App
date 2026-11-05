@@ -8,7 +8,7 @@
       },
       {
         "file": "src/stores/employeesStore.ts",
-        "evidence": "from_call",
+        "evidence": "sql_reference",
         "layer": "store"
       },
       {
@@ -261,6 +261,11 @@
         "layer": "lib"
       },
       {
+        "file": "src/lib/navigation.ts",
+        "evidence": "sql_reference",
+        "layer": "lib"
+      },
+      {
         "file": "src/lib/paymentLedger.ts",
         "evidence": "from_call",
         "layer": "lib"
@@ -289,11 +294,6 @@
         "file": "src/stores/useBootstrapData.ts",
         "evidence": "sql_reference",
         "layer": "store"
-      },
-      {
-        "file": "src/components/layout/CoOwnerLayout.tsx",
-        "evidence": "sql_reference",
-        "layer": "component"
       },
       {
         "file": "src/pages/admin/people/CoOwnerWizardPage.tsx",
@@ -535,6 +535,11 @@
         "layer": "lib"
       },
       {
+        "file": "src/lib/navigation.ts",
+        "evidence": "sql_reference",
+        "layer": "lib"
+      },
+      {
         "file": "src/lib/permissionLabels.ts",
         "evidence": "sql_reference",
         "layer": "lib"
@@ -552,11 +557,6 @@
       {
         "file": "src/components/employee/dashboard/PersonaWidgets.tsx",
         "evidence": "from_call",
-        "layer": "component"
-      },
-      {
-        "file": "src/components/layout/CoOwnerLayout.tsx",
-        "evidence": "sql_reference",
         "layer": "component"
       },
       {
@@ -596,6 +596,11 @@
       },
       {
         "file": "tests/integration/rbacInvariants.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/unit/assistantCrossModule.test.ts",
         "evidence": "sql_reference",
         "layer": "test"
       },
@@ -751,6 +756,11 @@
         "layer": "lib"
       },
       {
+        "file": "src/lib/navigation.ts",
+        "evidence": "sql_reference",
+        "layer": "lib"
+      },
+      {
         "file": "src/lib/offlineQueue.ts",
         "evidence": "from_call",
         "layer": "lib"
@@ -787,11 +797,6 @@
       },
       {
         "file": "src/components/employee/dashboard/PersonaWidgets.tsx",
-        "evidence": "sql_reference",
-        "layer": "component"
-      },
-      {
-        "file": "src/components/layout/CoOwnerLayout.tsx",
         "evidence": "sql_reference",
         "layer": "component"
       },
@@ -1033,6 +1038,11 @@
         "layer": "lib"
       },
       {
+        "file": "src/lib/navigation.ts",
+        "evidence": "sql_reference",
+        "layer": "lib"
+      },
+      {
         "file": "src/lib/offlineQueue.ts",
         "evidence": "from_call",
         "layer": "lib"
@@ -1064,11 +1074,6 @@
       },
       {
         "file": "src/components/employee/dashboard/PersonaWidgets.tsx",
-        "evidence": "sql_reference",
-        "layer": "component"
-      },
-      {
-        "file": "src/components/layout/CoOwnerLayout.tsx",
         "evidence": "sql_reference",
         "layer": "component"
       },
@@ -1233,6 +1238,16 @@
         "layer": "test"
       },
       {
+        "file": "tests/unit/assistantCrossModule.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/unit/assistantScope.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
         "file": "tests/unit/branchIdentityBoundary.test.ts",
         "evidence": "sql_reference",
         "layer": "test"
@@ -1310,6 +1325,11 @@
         "layer": "lib"
       },
       {
+        "file": "src/lib/navigation.ts",
+        "evidence": "sql_reference",
+        "layer": "lib"
+      },
+      {
         "file": "src/lib/permissionLabels.ts",
         "evidence": "sql_reference",
         "layer": "lib"
@@ -1336,11 +1356,6 @@
       },
       {
         "file": "src/components/employee/dashboard/PersonaWidgets.tsx",
-        "evidence": "sql_reference",
-        "layer": "component"
-      },
-      {
-        "file": "src/components/layout/CoOwnerLayout.tsx",
         "evidence": "sql_reference",
         "layer": "component"
       },
@@ -1614,11 +1629,6 @@
         "layer": "lib"
       },
       {
-        "file": "src/pages/admin/dashboard/AdminDashboardPage.tsx",
-        "evidence": "from_call",
-        "layer": "page"
-      },
-      {
         "file": "tests/e2e/actionCenter.spec.ts",
         "evidence": "sql_reference",
         "layer": "test"
@@ -1706,7 +1716,54 @@
         "layer": "test"
       }
     ],
+    "employees": [
+      {
+        "file": "src/lib/navigation.ts",
+        "evidence": "sql_reference",
+        "layer": "lib"
+      },
+      {
+        "file": "src/lib/permissionLabels.ts",
+        "evidence": "sql_reference",
+        "layer": "lib"
+      },
+      {
+        "file": "src/lib/roleTemplates.ts",
+        "evidence": "sql_reference",
+        "layer": "lib"
+      },
+      {
+        "file": "src/lib/settingsHub.ts",
+        "evidence": "sql_reference",
+        "layer": "lib"
+      },
+      {
+        "file": "src/pages/admin/more/MorePage.tsx",
+        "evidence": "sql_reference",
+        "layer": "page"
+      },
+      {
+        "file": "tests/e2e/dashboardScope.spec.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/unit/branchIdentityBoundary.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
+        "file": "tests/unit/branchLateResponse.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      }
+    ],
     "notifications": [
+      {
+        "file": "src/lib/navigation.ts",
+        "evidence": "sql_reference",
+        "layer": "lib"
+      },
       {
         "file": "src/lib/notifications.ts",
         "evidence": "from_call",
@@ -1783,43 +1840,6 @@
         "layer": "test"
       }
     ],
-    "employees": [
-      {
-        "file": "src/lib/permissionLabels.ts",
-        "evidence": "sql_reference",
-        "layer": "lib"
-      },
-      {
-        "file": "src/lib/roleTemplates.ts",
-        "evidence": "sql_reference",
-        "layer": "lib"
-      },
-      {
-        "file": "src/lib/settingsHub.ts",
-        "evidence": "sql_reference",
-        "layer": "lib"
-      },
-      {
-        "file": "src/pages/admin/more/MorePage.tsx",
-        "evidence": "sql_reference",
-        "layer": "page"
-      },
-      {
-        "file": "tests/e2e/dashboardScope.spec.ts",
-        "evidence": "sql_reference",
-        "layer": "test"
-      },
-      {
-        "file": "tests/unit/branchIdentityBoundary.test.ts",
-        "evidence": "sql_reference",
-        "layer": "test"
-      },
-      {
-        "file": "tests/unit/branchLateResponse.test.ts",
-        "evidence": "sql_reference",
-        "layer": "test"
-      }
-    ],
     "customer_crops": [
       {
         "file": "src/lib/recommendationEngine.ts",
@@ -1830,6 +1850,11 @@
         "file": "src/lib/reminderEngine.ts",
         "evidence": "from_call",
         "layer": "lib"
+      },
+      {
+        "file": "src/pages/admin/alerts/HarvestAlertPage.tsx",
+        "evidence": "from_call",
+        "layer": "page"
       },
       {
         "file": "tests/e2e/cleanupOwnership.ts",
@@ -1856,6 +1881,11 @@
       {
         "file": "src/pages/admin/customers/PaymentRemindersPage.tsx",
         "evidence": "sql_reference",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/dashboard/AdminDashboardPage.tsx",
+        "evidence": "from_call",
         "layer": "page"
       },
       {
@@ -2368,6 +2398,11 @@
         "layer": "test"
       },
       {
+        "file": "tests/unit/assistantScope.test.ts",
+        "evidence": "sql_reference",
+        "layer": "test"
+      },
+      {
         "file": "tests/unit/productionDataPolicy.test.ts",
         "evidence": "sql_reference",
         "layer": "test"
@@ -2700,11 +2735,6 @@
         "layer": "component"
       },
       {
-        "file": "src/components/layout/CoOwnerLayout.tsx",
-        "evidence": "direct_import",
-        "layer": "component"
-      },
-      {
         "file": "src/components/layout/EmployeeLayout.tsx",
         "evidence": "direct_import",
         "layer": "component"
@@ -2785,6 +2815,11 @@
         "layer": "page"
       },
       {
+        "file": "src/pages/admin/employees/EmployeeSalaryPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
         "file": "src/pages/admin/finance/AdminFinanceSectionPage.tsx",
         "evidence": "direct_import",
         "layer": "page"
@@ -2840,6 +2875,11 @@
         "layer": "page"
       },
       {
+        "file": "src/pages/admin/people/CoOwnerDetailPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
         "file": "src/pages/admin/returns/AdminReturnConfirmPage.tsx",
         "evidence": "direct_import",
         "layer": "page"
@@ -2880,7 +2920,27 @@
         "layer": "page"
       },
       {
+        "file": "src/pages/auth/AccountRecoveryPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/auth/BusinessSelectPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
         "file": "src/pages/auth/ForgotPINPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/auth/IdentityPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/auth/InvitationsPage.tsx",
         "evidence": "direct_import",
         "layer": "page"
       },
@@ -3027,6 +3087,11 @@
         "layer": "lib"
       },
       {
+        "file": "src/components/admin/DashboardEligibility.tsx",
+        "evidence": "direct_import",
+        "layer": "component"
+      },
+      {
         "file": "src/components/admin/DashboardVisibilityChecklist.tsx",
         "evidence": "direct_import",
         "layer": "component"
@@ -3048,6 +3113,11 @@
       },
       {
         "file": "src/components/finance/FinanceEntrySheet.tsx",
+        "evidence": "direct_import",
+        "layer": "component"
+      },
+      {
+        "file": "src/components/layout/AdminLayout.tsx",
         "evidence": "direct_import",
         "layer": "component"
       },
@@ -3107,6 +3177,11 @@
         "layer": "page"
       },
       {
+        "file": "src/pages/admin/alerts/HarvestAlertPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
         "file": "src/pages/admin/alerts/RemindersOverviewPage.tsx",
         "evidence": "direct_import",
         "layer": "page"
@@ -3137,16 +3212,6 @@
         "layer": "page"
       },
       {
-        "file": "src/pages/admin/employees/EmployeeAccessRequestDetailPage.tsx",
-        "evidence": "direct_import",
-        "layer": "page"
-      },
-      {
-        "file": "src/pages/admin/employees/EmployeeAccessRequestsPage.tsx",
-        "evidence": "direct_import",
-        "layer": "page"
-      },
-      {
         "file": "src/pages/admin/employees/EmployeeBranchesPage.tsx",
         "evidence": "direct_import",
         "layer": "page"
@@ -3168,6 +3233,11 @@
       },
       {
         "file": "src/pages/admin/employees/EmployeeRolePage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/employees/EmployeeSalaryPage.tsx",
         "evidence": "direct_import",
         "layer": "page"
       },
@@ -3218,6 +3288,11 @@
       },
       {
         "file": "src/pages/admin/payments/RecordSupplierPaymentPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/people/AdminEmployeesDirectoryPage.tsx",
         "evidence": "direct_import",
         "layer": "page"
       },
@@ -3394,11 +3469,6 @@
         "layer": "component"
       },
       {
-        "file": "src/components/layout/CoOwnerLayout.tsx",
-        "evidence": "direct_import",
-        "layer": "component"
-      },
-      {
         "file": "src/components/layout/EmployeeLayout.tsx",
         "evidence": "direct_import",
         "layer": "component"
@@ -3479,6 +3549,16 @@
         "layer": "page"
       },
       {
+        "file": "src/pages/admin/employees/EmployeeDetailPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/employees/EmployeeSalaryPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
         "file": "src/pages/admin/employees/EmployeesListPage.tsx",
         "evidence": "direct_import",
         "layer": "page"
@@ -3529,6 +3609,11 @@
         "layer": "page"
       },
       {
+        "file": "src/pages/admin/people/AdminEmployeesDirectoryPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
         "file": "src/pages/admin/purchases/AdminPurchasesSectionPage.tsx",
         "evidence": "direct_import",
         "layer": "page"
@@ -3559,7 +3644,7 @@
         "layer": "page"
       },
       {
-        "file": "src/pages/admin/settings/RolesAccessPage.tsx",
+        "file": "src/pages/admin/settings/ProfileDetailsPage.tsx",
         "evidence": "direct_import",
         "layer": "page"
       },
@@ -3696,6 +3781,11 @@
         "layer": "page"
       },
       {
+        "file": "src/pages/admin/purchases/PurchasesPayablesPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
         "file": "src/pages/admin/purchases/RecordPurchasePage.tsx",
         "evidence": "direct_import",
         "layer": "page"
@@ -3793,6 +3883,11 @@
         "layer": "page"
       },
       {
+        "file": "src/pages/admin/alerts/HarvestAlertPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
         "file": "src/pages/admin/alerts/RemindersOverviewPage.tsx",
         "evidence": "direct_import",
         "layer": "page"
@@ -3824,6 +3919,11 @@
       },
       {
         "file": "src/pages/admin/finance/AdminFinanceSectionPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/finance/RecordMoneyPage.tsx",
         "evidence": "direct_import",
         "layer": "page"
       },
@@ -4020,12 +4120,17 @@
         "layer": "page"
       },
       {
-        "file": "src/pages/admin/inventory/CategoriesPage.tsx",
+        "file": "src/pages/admin/inventory/CategoryFormPage.tsx",
         "evidence": "direct_import",
         "layer": "page"
       },
       {
         "file": "src/pages/admin/inventory/InventoryAdjustPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/inventory/InventoryCataloguePage.tsx",
         "evidence": "direct_import",
         "layer": "page"
       },
@@ -4147,6 +4252,11 @@
         "layer": "page"
       },
       {
+        "file": "tests/unit/cartAccountScope.test.ts",
+        "evidence": "direct_import",
+        "layer": "test"
+      },
+      {
         "file": "tests/unit/shopSwitchReset.test.ts",
         "evidence": "direct_import",
         "layer": "test"
@@ -4169,22 +4279,12 @@
         "layer": "page"
       },
       {
-        "file": "src/pages/admin/inventory/CategoriesPage.tsx",
-        "evidence": "direct_import",
-        "layer": "page"
-      },
-      {
         "file": "src/pages/admin/inventory/CategoryFormPage.tsx",
         "evidence": "direct_import",
         "layer": "page"
       },
       {
-        "file": "src/pages/admin/inventory/UnitFormPage.tsx",
-        "evidence": "direct_import",
-        "layer": "page"
-      },
-      {
-        "file": "src/pages/admin/inventory/UnitsPage.tsx",
+        "file": "src/pages/admin/inventory/InventoryCataloguePage.tsx",
         "evidence": "direct_import",
         "layer": "page"
       },
@@ -4251,6 +4351,11 @@
         "layer": "page"
       },
       {
+        "file": "src/pages/admin/employees/EmployeeSalaryPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
         "file": "src/pages/admin/employees/EmployeesListPage.tsx",
         "evidence": "direct_import",
         "layer": "page"
@@ -4282,6 +4387,11 @@
       },
       {
         "file": "src/pages/admin/sales/AdminSalesListPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/settings/ProfileDetailsPage.tsx",
         "evidence": "direct_import",
         "layer": "page"
       },
@@ -4569,12 +4679,27 @@
     ],
     "accessCatalogStore": [
       {
+        "file": "src/components/admin/DashboardEligibility.tsx",
+        "evidence": "direct_import",
+        "layer": "component"
+      },
+      {
         "file": "src/components/admin/DashboardVisibilityChecklist.tsx",
         "evidence": "direct_import",
         "layer": "component"
       },
       {
+        "file": "src/pages/admin/employees/AddEmployeePage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
         "file": "src/pages/admin/people/RoleEditorPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/settings/RolesAccessPage.tsx",
         "evidence": "direct_import",
         "layer": "page"
       }
@@ -4703,11 +4828,6 @@
         "layer": "page"
       },
       {
-        "file": "src/pages/admin/employees/EmployeeAccessRequestDetailPage.tsx",
-        "evidence": "direct_import",
-        "layer": "page"
-      },
-      {
         "file": "src/pages/admin/employees/EmployeeDetailPage.tsx",
         "evidence": "direct_import",
         "layer": "page"
@@ -4719,6 +4839,11 @@
       },
       {
         "file": "src/pages/admin/employees/EmployeeRolePage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/employees/EmployeeSalaryPage.tsx",
         "evidence": "direct_import",
         "layer": "page"
       },
@@ -4769,11 +4894,6 @@
       },
       {
         "file": "src/pages/admin/inventory/StockMovementHistoryPage.tsx",
-        "evidence": "direct_import",
-        "layer": "page"
-      },
-      {
-        "file": "src/pages/admin/inventory/UnitFormPage.tsx",
         "evidence": "direct_import",
         "layer": "page"
       },
@@ -4854,6 +4974,11 @@
       },
       {
         "file": "src/pages/admin/settings/ProfileDetailsPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/settings/RolesAccessPage.tsx",
         "evidence": "direct_import",
         "layer": "page"
       },
@@ -4984,17 +5109,17 @@
         "layer": "component"
       },
       {
-        "file": "src/components/layout/CoOwnerLayout.tsx",
-        "evidence": "direct_import",
-        "layer": "component"
-      },
-      {
         "file": "src/components/layout/EmployeeLayout.tsx",
         "evidence": "direct_import",
         "layer": "component"
       }
     ],
     "coOwnersStore": [
+      {
+        "file": "src/pages/admin/more/BranchDetailPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
       {
         "file": "src/pages/admin/people/CoOwnerDetailPage.tsx",
         "evidence": "direct_import",
@@ -5007,6 +5132,11 @@
       },
       {
         "file": "src/pages/admin/people/CoOwnerWizardPage.tsx",
+        "evidence": "direct_import",
+        "layer": "page"
+      },
+      {
+        "file": "src/pages/admin/people/OwnerOwnershipTransferPage.tsx",
         "evidence": "direct_import",
         "layer": "page"
       }
@@ -5086,128 +5216,6 @@
         "file": "tests/e2e/designLanguage.spec.ts",
         "evidence": "route_definition",
         "layer": "test"
-      }
-    ],
-    "/co-owner/sales": [
-      {
-        "file": "src/components/layout/CoOwnerLayout.tsx",
-        "evidence": "route_definition",
-        "layer": "component"
-      },
-      {
-        "file": "src/pages/co-owner/CoOwnerMorePage.tsx",
-        "evidence": "route_definition",
-        "layer": "page"
-      }
-    ],
-    "/co-owner/products": [
-      {
-        "file": "src/components/layout/CoOwnerLayout.tsx",
-        "evidence": "route_definition",
-        "layer": "component"
-      },
-      {
-        "file": "src/pages/co-owner/CoOwnerMorePage.tsx",
-        "evidence": "route_definition",
-        "layer": "page"
-      }
-    ],
-    "/co-owner/customers": [
-      {
-        "file": "src/components/layout/CoOwnerLayout.tsx",
-        "evidence": "route_definition",
-        "layer": "component"
-      },
-      {
-        "file": "src/pages/co-owner/CoOwnerMorePage.tsx",
-        "evidence": "route_definition",
-        "layer": "page"
-      }
-    ],
-    "/co-owner/purchases": [
-      {
-        "file": "src/components/layout/CoOwnerLayout.tsx",
-        "evidence": "route_definition",
-        "layer": "component"
-      },
-      {
-        "file": "src/pages/co-owner/CoOwnerMorePage.tsx",
-        "evidence": "route_definition",
-        "layer": "page"
-      }
-    ],
-    "/co-owner/companies": [
-      {
-        "file": "src/components/layout/CoOwnerLayout.tsx",
-        "evidence": "route_definition",
-        "layer": "component"
-      },
-      {
-        "file": "src/pages/co-owner/CoOwnerMorePage.tsx",
-        "evidence": "route_definition",
-        "layer": "page"
-      }
-    ],
-    "/co-owner/finance": [
-      {
-        "file": "src/components/layout/CoOwnerLayout.tsx",
-        "evidence": "route_definition",
-        "layer": "component"
-      },
-      {
-        "file": "src/pages/co-owner/CoOwnerMorePage.tsx",
-        "evidence": "route_definition",
-        "layer": "page"
-      }
-    ],
-    "/co-owner/reports": [
-      {
-        "file": "src/components/layout/CoOwnerLayout.tsx",
-        "evidence": "route_definition",
-        "layer": "component"
-      },
-      {
-        "file": "src/pages/co-owner/CoOwnerMorePage.tsx",
-        "evidence": "route_definition",
-        "layer": "page"
-      }
-    ],
-    "/co-owner/dashboard": [
-      {
-        "file": "src/components/layout/CoOwnerLayout.tsx",
-        "evidence": "route_definition",
-        "layer": "component"
-      }
-    ],
-    "/co-owner/approvals": [
-      {
-        "file": "src/components/layout/CoOwnerLayout.tsx",
-        "evidence": "route_definition",
-        "layer": "component"
-      },
-      {
-        "file": "src/pages/co-owner/CoOwnerMorePage.tsx",
-        "evidence": "route_definition",
-        "layer": "page"
-      }
-    ],
-    "/co-owner/more": [
-      {
-        "file": "src/components/layout/CoOwnerLayout.tsx",
-        "evidence": "route_definition",
-        "layer": "component"
-      }
-    ],
-    "/co-owner/settings": [
-      {
-        "file": "src/components/layout/CoOwnerLayout.tsx",
-        "evidence": "route_definition",
-        "layer": "component"
-      },
-      {
-        "file": "src/pages/co-owner/CoOwnerMorePage.tsx",
-        "evidence": "route_definition",
-        "layer": "page"
       }
     ],
     "/employee/dashboard": [
@@ -5296,6 +5304,55 @@
         "layer": "page"
       }
     ],
+    "/co-owner/sales": [
+      {
+        "file": "src/pages/co-owner/CoOwnerMorePage.tsx",
+        "evidence": "route_definition",
+        "layer": "page"
+      }
+    ],
+    "/co-owner/products": [
+      {
+        "file": "src/pages/co-owner/CoOwnerMorePage.tsx",
+        "evidence": "route_definition",
+        "layer": "page"
+      }
+    ],
+    "/co-owner/customers": [
+      {
+        "file": "src/pages/co-owner/CoOwnerMorePage.tsx",
+        "evidence": "route_definition",
+        "layer": "page"
+      }
+    ],
+    "/co-owner/purchases": [
+      {
+        "file": "src/pages/co-owner/CoOwnerMorePage.tsx",
+        "evidence": "route_definition",
+        "layer": "page"
+      }
+    ],
+    "/co-owner/companies": [
+      {
+        "file": "src/pages/co-owner/CoOwnerMorePage.tsx",
+        "evidence": "route_definition",
+        "layer": "page"
+      }
+    ],
+    "/co-owner/finance": [
+      {
+        "file": "src/pages/co-owner/CoOwnerMorePage.tsx",
+        "evidence": "route_definition",
+        "layer": "page"
+      }
+    ],
+    "/co-owner/reports": [
+      {
+        "file": "src/pages/co-owner/CoOwnerMorePage.tsx",
+        "evidence": "route_definition",
+        "layer": "page"
+      }
+    ],
     "/co-owner/notifications": [
       {
         "file": "src/pages/co-owner/CoOwnerMorePage.tsx",
@@ -5310,7 +5367,14 @@
         "layer": "page"
       }
     ],
-    "/co-owner/employees/requests": [
+    "/co-owner/approvals": [
+      {
+        "file": "src/pages/co-owner/CoOwnerMorePage.tsx",
+        "evidence": "route_definition",
+        "layer": "page"
+      }
+    ],
+    "/co-owner/ownership-transfer": [
       {
         "file": "src/pages/co-owner/CoOwnerMorePage.tsx",
         "evidence": "route_definition",
@@ -5318,6 +5382,13 @@
       }
     ],
     "/co-owner/activity": [
+      {
+        "file": "src/pages/co-owner/CoOwnerMorePage.tsx",
+        "evidence": "route_definition",
+        "layer": "page"
+      }
+    ],
+    "/co-owner/settings": [
       {
         "file": "src/pages/co-owner/CoOwnerMorePage.tsx",
         "evidence": "route_definition",
@@ -5470,7 +5541,10 @@
     "/": "src/pages/auth/SplashPage.tsx",
     "/welcome": "src/pages/onboarding/IntroPage.tsx",
     "/login": "src/pages/auth/LoginPage.tsx",
-    "/login/request-access": "src/pages/auth/RequestAccessPage.tsx",
+    "/login/recover": "src/pages/auth/AccountRecoveryPage.tsx",
+    "/login/invitations": "src/pages/auth/InvitationsPage.tsx",
+    "/login/business": "src/pages/auth/BusinessSelectPage.tsx",
+    "/identity": "src/pages/auth/IdentityPage.tsx",
     "/login/otp": "src/pages/auth/OTPVerifyPage.tsx",
     "/login/account-ready": "src/pages/auth/AccountReadyPage.tsx",
     "/login/pin-set": "src/pages/auth/PINSetPage.tsx",
@@ -5509,8 +5583,6 @@
     "/admin/inventory/units": "src/pages/admin/inventory/UnitsPage.tsx",
     "/admin/inventory/categories/new": "src/pages/admin/inventory/CategoryFormPage.tsx",
     "/admin/inventory/categories/:categoryId": "src/pages/admin/inventory/CategoryFormPage.tsx",
-    "/admin/inventory/units/new": "src/pages/admin/inventory/UnitFormPage.tsx",
-    "/admin/inventory/units/:unitId": "src/pages/admin/inventory/UnitFormPage.tsx",
     "/admin/inventory/:productId/edit": "src/pages/admin/inventory/AddProductPage.tsx",
     "/admin/inventory/:productId/adjust": "src/pages/admin/inventory/InventoryAdjustPage.tsx",
     "/admin/inventory/stockvalues": "src/pages/admin/inventory/StockManagementPage.tsx",
@@ -5538,13 +5610,13 @@
     "/admin/companies": "src/pages/admin/companies/CompaniesListPage.tsx",
     "/admin/companies/new": "src/pages/admin/companies/AddCompanyPage.tsx",
     "/admin/companies/:companyId": "src/pages/admin/companies/CompanyDetailPage.tsx",
-    "/admin/employees/requests": "src/pages/admin/employees/EmployeeAccessRequestsPage.tsx",
-    "/admin/employees/requests/:requestId": "src/pages/admin/employees/EmployeeAccessRequestDetailPage.tsx",
+    "/admin/purchases/payables": "src/pages/admin/purchases/PurchasesPayablesPage.tsx",
     "/admin/employees": "src/pages/admin/employees/EmployeesListPage.tsx",
     "/admin/employees/new": "src/pages/admin/employees/AddEmployeePage.tsx",
     "/admin/employees/:employeeId": "src/pages/admin/employees/EmployeeDetailPage.tsx",
     "/admin/employees/:employeeId/role": "src/pages/admin/employees/EmployeeRolePage.tsx",
     "/admin/employees/:employeeId/branches": "src/pages/admin/employees/EmployeeBranchesPage.tsx",
+    "/admin/employees/:employeeId/salary": "src/pages/admin/employees/EmployeeSalaryPage.tsx",
     "/admin/employees/:employeeId/performance": "src/pages/admin/employees/EmployeePerformancePage.tsx",
     "/admin/employees/:employeeId/invitation": "src/pages/admin/employees/EmployeeInvitationPage.tsx",
     "/admin/reports": "src/pages/admin/reports/AdminReportsPage.tsx",
@@ -5562,6 +5634,7 @@
     "/admin/settings/hub/people/activity/:employeeId": "src/pages/admin/people/AdminEmployeeActivityDetailPage.tsx",
     "/admin/settings/hub/people/co-owners": "src/pages/admin/people/CoOwnersPage.tsx",
     "/admin/settings/hub/people/co-owners/new": "src/pages/admin/people/CoOwnerWizardPage.tsx",
+    "/admin/settings/hub/people/co-owners/transfer": "src/pages/admin/people/OwnerOwnershipTransferPage.tsx",
     "/admin/settings/hub/people/co-owners/:grantId": "src/pages/admin/people/CoOwnerDetailPage.tsx",
     "/admin/settings/hub/people/co-owners/:grantId/edit": "src/pages/admin/people/CoOwnerWizardPage.tsx",
     "/admin/settings/roles": "src/pages/admin/settings/RolesAccessPage.tsx",
@@ -5586,10 +5659,12 @@
     "/admin/settings/branches/:branchId": "src/pages/admin/more/BranchDetailPage.tsx",
     "/admin/activity": "src/pages/employee/activity/ActivityLogPage.tsx",
     "/admin/co-owner-approvals": "src/pages/co-owner/CoOwnerApprovalsPage.tsx",
+    "/admin/ownership-transfer": "src/pages/co-owner/CoOwnerOwnershipTransferPage.tsx",
     "/admin/notifications": "src/pages/admin/notifications/AdminNotificationsPage.tsx",
     "/admin/alerts/credit-overrides": "src/pages/admin/alerts/CreditOverridesPage.tsx",
     "/admin/alerts/credit-overrides/:customerId": "src/pages/admin/alerts/CreditOverrideDetailPage.tsx",
     "/admin/alerts/reminders": "src/pages/admin/alerts/RemindersOverviewPage.tsx",
+    "/admin/alerts/harvest": "src/pages/admin/alerts/HarvestAlertPage.tsx",
     "/admin/alerts/inventory": "src/pages/admin/alerts/InventoryAlertsPage.tsx",
     "/admin/alerts/expiry": "src/pages/admin/alerts/ExpiryAlertsPage.tsx",
     "/admin/alerts/credit-requests/:requestId": "src/pages/admin/alerts/CreditRequestDetailPage.tsx",
@@ -5597,13 +5672,12 @@
     "/co-owner/accept": "src/pages/co-owner/CoOwnerAcceptPage.tsx",
     "/co-owner/dashboard": "src/pages/co-owner/CoOwnerDashboardPage.tsx",
     "/co-owner/approvals": "src/pages/co-owner/CoOwnerApprovalsPage.tsx",
+    "/co-owner/ownership-transfer": "src/pages/co-owner/CoOwnerOwnershipTransferPage.tsx",
     "/co-owner/more": "src/pages/co-owner/CoOwnerMorePage.tsx",
     "/co-owner/settings": "src/pages/co-owner/CoOwnerSettingsPage.tsx",
     "/co-owner/team": "src/pages/co-owner/CoOwnerTeamPage.tsx",
     "/co-owner/team/new": "src/pages/admin/employees/AddEmployeePage.tsx",
     "/co-owner/team/:employeeId": "src/pages/admin/employees/EmployeeDetailPage.tsx",
-    "/co-owner/employees/requests": "src/pages/admin/employees/EmployeeAccessRequestsPage.tsx",
-    "/co-owner/employees/requests/:requestId": "src/pages/admin/employees/EmployeeAccessRequestDetailPage.tsx",
     "/co-owner/sale": "src/pages/employee/sale/SelectCustomerPage.tsx",
     "/co-owner/sale/products": "src/pages/employee/sale/BrowseProductsPage.tsx",
     "/co-owner/sale/products/:productId": "src/pages/employee/sale/VariantSelectorPage.tsx",
@@ -5682,6 +5756,6 @@
     "/employee/notifications": "src/pages/employee/notifications/EmployeeNotificationsPage.tsx",
     "/employee/guide": "src/pages/shared/AppGuidePage.tsx"
   },
-  "scannedAt": "2026-11-01T04:27:40.584Z",
-  "fileCount": 531
+  "scannedAt": "2026-11-05T22:21:27.782Z",
+  "fileCount": 554
 }

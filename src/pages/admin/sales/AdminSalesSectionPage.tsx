@@ -46,10 +46,10 @@ import { refundsBySale, useReturns } from "@/lib/salesActivity";
  *   5. Which branch contributed what     → branch performance
  *   6. Where the ledgers live            → all sales, returns, voided sales
  *
- * NO CARDS ON THIS SCREEN. The reference separates figures with a hairline and space, not with
- * a box: six tiles in six rounded surfaces reads as six unrelated widgets, while one table of
- * figures reads as the report it is. The trend, the branch comparison and the ledger rows are
- * flat for the same reason (owner's instruction, 2026-10-31).
+ * THE HEADLINE GRID AND LEDGER ROWS STAY FLAT. The owner reads the period figures as one table,
+ * not six unrelated widgets, and the ledger rows are destinations rather than data. The trend
+ * and branch comparison are carded because the owner reads each as a distinct panel (owner's
+ * instruction, 2026-11-03).
  *
  * EVERY FIGURE IS DERIVED FROM THE LEDGERS, never from a sample:
  *
@@ -808,9 +808,14 @@ export default function AdminSalesSectionPage() {
       </div>
 
       {/* ── 3. Which way it is moving ──────────────────────────────────────────────── */}
-      {/* Flat, like the plate above: the chart is drawn on the page, not inside a card. */}
-      <div className="px-4 pt-2">
-        <div data-testid="sales-hub-trend">
+      {/* The trend is its own panel: the chart, its metric switch and its bucket targets read as
+          one object, separate from the headline grid above. */}
+      <div className="px-4 pt-4">
+        <div
+          data-testid="sales-hub-trend"
+          className="rounded-[var(--radius-card)] p-4"
+          style={{ background: "var(--tone-card)" }}
+        >
           <p className="text-14 font-bold">{t("hub.sales.salesTrend")}</p>
           <p className="text-11 mt-0.5" style={{ color: "var(--text-secondary)" }}>
             {t("hub.sales.trendHint")}
@@ -947,9 +952,13 @@ export default function AdminSalesSectionPage() {
       </div>
 
       {/* ── 4. Which branch contributed what ───────────────────────────────────────── */}
-      {/* Flat too: same rows, same bars, no card around them. */}
-      <div className="px-4 pt-6">
-        <div data-testid="sales-hub-branches">
+      {/* The branch comparison is its own panel, matching the trend above. */}
+      <div className="px-4 pt-4">
+        <div
+          data-testid="sales-hub-branches"
+          className="rounded-[var(--radius-card)] p-4"
+          style={{ background: "var(--tone-card)" }}
+        >
           <p className="text-14 font-bold">{t("overall.branchPerformance")}</p>
           <p className="text-11 mt-0.5" style={{ color: "var(--text-secondary)" }}>
             {t("sales.branchCompareHint")}

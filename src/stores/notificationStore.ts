@@ -4,7 +4,6 @@ import type { RealtimeChannel } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/stores/authStore";
 import { shopRoleOf } from "@/lib/shopRoles";
-import { hasPermission } from "@/lib/tenantContext";
 
 // One shared Realtime channel across all subscribers (see `subscribe` below).
 let sharedChannel: RealtimeChannel | null = null;
@@ -23,11 +22,11 @@ const EMPLOYEE_KINDS = new Set(["sale", "payment", "return", "stock_adjust", "lo
 const PERSONAL_KINDS = new Set(["sale", "payment", "return"]);
 
 /**
- * Staffing requests belong to whoever can act on them, not to the whole shop.
- * `employees.manage` is the same permission the request RPC and its routes use,
- * so a custom Store Manager sees the nudge without being made an owner.
+ * Kinds whose screens no longer exist. Historical rows stay in the table, but showing one would
+ * open a dead notification that points at a removed route; hiding it is the difference between
+ * preserving history and presenting a broken door.
  */
-const MANAGER_KINDS = new Set(["employee_access_request"]);
+const RETIRED_KINDS = new Set(["employee_access_request"]);
 
 /**
  * Kinds that are an account's own private activity. An owner sees their own and never
@@ -79,12 +78,7 @@ export function visibleToCurrentUser(
   ) ?? accountRole;
   const isOwnerHere = roleHere === "admin" || roleHere === "owner";
 
-  // A manager is not a membership role in this schema; it is a role that carries
-  // `employees.manage`. The notification is generic and points at a protected
-  // request row, so showing the nudge is safe even when the reader is not an owner.
-  if (MANAGER_KINDS.has(row.kind)) {
-    return isOwnerHere || hasPermission("employees.manage");
-  }
+  if (RETIRED_KINDS.has(row.kind)) return false;
 
   if (!isOwnerHere) {
     if (!EMPLOYEE_KINDS.has(row.kind)) return false;

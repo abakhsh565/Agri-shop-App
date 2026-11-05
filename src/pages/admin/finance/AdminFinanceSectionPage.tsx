@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ArrowDownUp,
@@ -9,6 +9,7 @@ import {
   Download,
   HandCoins,
   Plus,
+  Repeat,
   Share2,
   Receipt,
   TrendingDown,
@@ -34,10 +35,29 @@ import { useAuthStore } from "@/stores/authStore";
 import { useShopStore } from "@/stores/shopStore";
 import { hasPermission } from "@/lib/tenantContext";
 import { useBranchCash, useBranchPeriodReport } from "@/lib/branchReports";
-import { useFinanceTotals, monthWindow, netProfitOf, trendPercent } from "@/lib/financeEntries";
+import {
+  CATEGORY_KEY,
+  monthWindow,
+  netProfitOf,
+  postDueFinanceEntries,
+  trendPercent,
+  useFinanceRecurrences,
+  useFinanceTotals,
+} from "@/lib/financeEntries";
 import { useMoneyTotals } from "@/lib/financeMoney";
 import { formatCurrency } from "@/lib/formatters";
 import { pkToday } from "@/lib/pkDate";
+
+/** A cadence's monthly cost, used only for the summary beside the actual due dates. */
+function monthlyRuleAmount(rule: { amount: number; repeatEvery: number; repeatUnit: string }): number {
+  const every = Math.max(1, rule.repeatEvery);
+  const perMonth =
+    rule.repeatUnit === "month" ? 1 :
+    rule.repeatUnit === "year" ? 1 / 12 :
+    rule.repeatUnit === "week" ? 52 / 12 :
+    365.25 / 12;
+  return Math.round((rule.amount * perMonth) / every * 100) / 100;
+}
 
 /**
  * Finance, drawn as the owner's reference (2026-10-29): the period's net profit as the one
@@ -81,6 +101,7 @@ export default function AdminFinanceSectionPage() {
   // because the screen may need the previous one when the current month has no activity yet.
   const movement = useMoneyTotals(window.from, window.to);
   const prevMovement = useMoneyTotals(window.prevFrom, window.prevTo);
+  const recurring = useFinanceRecurrences(window.from, window.to);
 
   const customers = useCustomersStore((s) => s.customers);
   const customersReady = useCustomersStore((s) => s.ready);
@@ -92,6 +113,22 @@ export default function AdminFinanceSectionPage() {
   const role = useAuthStore((s) => s.user?.membershipRole);
   const isOwner = role === "owner";
   const branchName = useShopStore((s) => s.activeBranchName);
+
+  // Opening the book is what posts its due rows, because the app has no scheduler. The
+  // finance widget is a book too: it must not say "next 5 Nov" while a 5 Nov expense is
+  // still missing from the totals underneath it.
+  const recurringPosted = useRef(false);
+  useEffect(() => {
+    if (!isOwner || recurringPosted.current) return;
+    recurringPosted.current = true;
+    void postDueFinanceEntries().then((count) => {
+      if (count > 0) {
+        recurring.retry();
+        totals.retry();
+        prevTotals.retry();
+      }
+    });
+  }, [isOwner, recurring.retry, totals.retry, prevTotals.retry]);
 
   useEffect(() => {
     if (!customersReady) void loadCustomers();
@@ -170,6 +207,24 @@ export default function AdminFinanceSectionPage() {
   /** A figure, or the honest mark for one that could not be read. */
   const money = (value: number | null | undefined) =>
     value == null ? "—" : formatCurrency(value);
+
+  const shortDay = (iso: string | null | undefined) =>
+    iso
+      ? new Date(`${iso}T00:00:00Z`).toLocaleDateString(language === "ur" ? "ur-PK" : "en-GB", {
+          day: "numeric",
+          month: "short",
+          year: "numeric",
+          timeZone: "UTC",
+        })
+      : t("finance.recurring.noNext");
+
+  const activeRecurrences = recurring.rows ?? [];
+  const recurringMonthly = activeRecurrences.reduce((sum, rule) => sum + monthlyRuleAmount(rule), 0);
+  const nextRecurrence = activeRecurrences.reduce<string | null>(
+    (next, rule) => (!next || rule.nextOn < next ? rule.nextOn : next),
+    null,
+  );
+  const salarySchedules = activeRecurrences.filter((rule) => rule.category === "salaries").length;
 
   // A failed read is not "still reading". The hero waits for the two months it needs to choose
   // the reporting month; when one fails, the figure stays unknown rather than silently falling
@@ -303,6 +358,7 @@ export default function AdminFinanceSectionPage() {
       <NavHeader
         title={t("settings.menu.finance")}
         backTo={`${base}/settings`}
+        historyBack
         right={
           <SectionActionsButton
             onClick={() => setExportOpen(true)}
@@ -447,6 +503,74 @@ export default function AdminFinanceSectionPage() {
           <p className="text-10 mt-2" style={{ color: "var(--text-tertiary)" }}>
             {t("finance.moneyMovedRule")}
           </p>
+        </div>
+      </div>
+
+      {/* The four balances, two by two, as the reference lays them out. */}
+      <div className="px-4 pt-3">
+        <div
+          className="rounded-[var(--radius-card)] p-4"
+          style={{ background: "var(--surface)", border: "1px solid var(--divider)" }}
+          data-testid="finance-hub-recurring"
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-start gap-2.5 min-w-0">
+              <span className="size-8 rounded-[var(--radius-tile)] grid place-items-center shrink-0" style={{ background: "var(--brand-light)", color: "var(--brand-dark)" }}>
+                <Repeat size={15} />
+              </span>
+              <div className="min-w-0">
+                <p className="text-13 font-bold">{t("finance.recurring.title")}</p>
+                <p className="text-10 mt-0.5" style={{ color: "var(--text-secondary)" }}>
+                  {t("finance.recurring.hint")}
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => navigate(`${base}/settings/hub/finance/money`)}
+              className="text-10 font-bold shrink-0 active:opacity-60"
+              style={{ color: "var(--brand-dark)" }}
+              data-testid="finance-hub-recurring-manage"
+            >
+              {t("finance.recurring.manage")}
+            </button>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2 mt-3">
+            <div className="rounded-[var(--radius-tile)] p-2.5" style={{ background: "var(--tone-sunken)" }}>
+              <p className="text-9" style={{ color: "var(--text-secondary)" }}>{t("finance.recurring.monthly")}</p>
+              <p className="text-14 font-bold tabular-nums mt-0.5">
+                {activeRecurrences.length ? money(recurringMonthly) : "—"}
+              </p>
+            </div>
+            <div className="rounded-[var(--radius-tile)] p-2.5" style={{ background: "var(--tone-sunken)" }}>
+              <p className="text-9" style={{ color: "var(--text-secondary)" }}>{t("finance.recurring.activeCount", { count: String(activeRecurrences.length) })}</p>
+              <p className="text-11 font-semibold mt-0.5 truncate">{shortDay(nextRecurrence)}</p>
+            </div>
+          </div>
+
+          {salarySchedules > 0 && (
+            <p className="text-10 mt-2" style={{ color: "var(--brand-dark)" }} data-testid="finance-hub-salary-count">
+              {t("finance.recurring.salaryCount", { count: String(salarySchedules) })}
+            </p>
+          )}
+
+          {activeRecurrences.length === 0 ? (
+            <p className="text-11 mt-3" style={{ color: "var(--text-tertiary)" }}>{t("finance.recurring.none")}</p>
+          ) : (
+            <div className="flex flex-col gap-1.5 mt-3">
+              {activeRecurrences.slice(0, 3).map((rule) => (
+                <div key={rule.id} className="flex items-center gap-2" data-testid={`finance-hub-recurring-${rule.id}`}>
+                  <span className="text-10 min-w-0 truncate flex-1" style={{ color: "var(--text-secondary)" }}>
+                    {CATEGORY_KEY[rule.category] ? t(CATEGORY_KEY[rule.category]) : rule.category}
+                    {rule.category === "salaries" ? ` · ${t("finance.recurring.salary")}` : ""}
+                  </span>
+                  <span className="text-10 font-semibold tabular-nums shrink-0">{money(rule.amount)}</span>
+                  <span className="text-9 shrink-0" style={{ color: "var(--text-tertiary)" }}>{shortDay(rule.nextOn)}</span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 

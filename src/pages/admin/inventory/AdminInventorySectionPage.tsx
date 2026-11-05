@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   AlertTriangle,
@@ -27,7 +27,7 @@ import { hasPermission } from "@/lib/tenantContext";
 import { inventoryCounts } from "@/lib/inventoryView";
 import { hubSection } from "@/lib/settingsHub";
 import { EXPIRY_WARNING_DAYS } from "@/lib/signalEngine";
-import { formatCompactCurrency } from "@/lib/formatters";
+import { formatCurrency } from "@/lib/formatters";
 
 /**
  * Products & Inventory, as one screen: what the shelf is worth, four figures about it, one way
@@ -56,15 +56,23 @@ export default function AdminInventorySectionPage() {
   const t = useT();
   const base = useShellBase();
   const navigate = useNavigate();
-  // Settings when opened from the menu, the Reports hub when opened from its Inventory tile.
-  const returnTo = useReturnTo(`${base}/settings`);
+  // The configured parent is only a deep-link fallback; the journey stack wins when the reader
+  // arrived through the app.
+  const returnTo = useReturnTo(`${base}/more`);
   const products = useProductsStore((s) => s.products);
   const ready = useProductsStore((s) => s.ready);
   const branchName = useShopStore((s) => s.activeBranchName);
   const branches = useShopStore((s) => s.branches);
   const activeBranchId = useShopStore((s) => s.activeBranchId);
   const branchesLoaded = useShopStore((s) => s.branchesLoaded);
+  const loadBranches = useShopStore((s) => s.loadBranches);
   const activeBranch = branches.find((b) => b.id === activeBranchId) ?? null;
+
+  // The figure is a server-derived branch total, so this screen owns a fresh read when it
+  // opens. Without it, a cold entry showed "—" and a later stock change kept yesterday's value.
+  useEffect(() => {
+    void loadBranches();
+  }, [loadBranches]);
 
   const catalogue = hubSection("inventory")?.rows ?? [];
   const rowLabel = (id: string, fallbackKey: string) => {
@@ -81,7 +89,7 @@ export default function AdminInventorySectionPage() {
   const valueLabel =
     inventoryValue == null
       ? "—"
-      : `${valueIncomplete ? "≥ " : ""}${formatCompactCurrency(inventoryValue)}`;
+      : `${valueIncomplete ? "≥ " : ""}${formatCurrency(inventoryValue)}`;
 
   const [menuOpen, setMenuOpen] = useState(false);
   const { addToast } = useUIStore();
@@ -129,9 +137,9 @@ export default function AdminInventorySectionPage() {
       icon: Package,
       title: rowLabel("products", "hub.inventory.products"),
       hint: t("hub.inventory.productsHint"),
-      // The Products menu, not the list: it is where the shop's own shelves and units are
-      // managed, and All products is one of its three rows (0259).
-      run: () => navigate(`${base}/inventory/catalogue`),
+      // The list is the working surface. The catalogue's two management doors live behind
+      // the manage control on that screen, so this shortcut no longer adds a stop.
+      run: () => navigate(`${base}/products`),
     },
     {
       id: "movements",

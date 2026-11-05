@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   Calendar,
@@ -15,10 +15,10 @@ import {
   UserCheck,
   UserX,
   Users,
+  Wallet,
 } from "lucide-react";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
-import ListCard from "@/components/ui/ListCard";
 import ListRow from "@/components/ui/ListRow";
 import Sheet from "@/components/ui/Sheet";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
@@ -26,7 +26,12 @@ import { SkeletonList } from "@/components/ui/Skeleton";
 import { SectionActionsButton } from "@/components/ui/SectionActionsSheet";
 import { useT } from "@/lib/i18n";
 import { useThemeStore } from "@/stores/themeStore";
-import { useEmployeesStore, type EmployeePerformance } from "@/stores/employeesStore";
+import {
+  useEmployeesStore,
+  type EmployeeBranchRole,
+  type EmployeePerformance,
+} from "@/stores/employeesStore";
+import { useShopStore } from "@/stores/shopStore";
 import { useRolesStore } from "@/stores/rolesStore";
 import { useAuthStore } from "@/stores/authStore";
 import { useUIStore } from "@/stores/uiStore";
@@ -39,6 +44,7 @@ interface EmployeeAccessSummary {
   roleId: string | null;
   membershipRole: MembershipRole;
   branchScope: string[] | null;
+  branchRoles: Record<string, EmployeeBranchRole>;
 }
 
 function initialsOf(name: string): string {
@@ -69,17 +75,26 @@ export default function EmployeeDetailPage() {
   const setActiveAction = useEmployeesStore((s) => s.setActive);
   const roles = useRolesStore((s) => s.roles);
   const loadRoles = useRolesStore((s) => s.load);
+  const branches = useShopStore((s) => s.branches);
+  const branchesLoaded = useShopStore((s) => s.branchesLoaded);
+  const loadBranches = useShopStore((s) => s.loadBranches);
   const [access, setAccess] = useState<EmployeeAccessSummary | null>(null);
   const [performance, setPerformance] = useState<EmployeePerformance | null>(null);
   const [actionsOpen, setActionsOpen] = useState(false);
+  const [branchesOpen, setBranchesOpen] = useState(false);
+  const [period, setPeriod] = useState<"all" | "today">("all");
   const [confirmAction, setConfirmAction] = useState<null | "deactivate" | "cancelInvite" | "reactivate">(null);
   const [statusBusy, setStatusBusy] = useState(false);
   const statusBusyRef = useRef(false);
 
   const emp = employees.find((employee) => employee.id === employeeId);
   const isUrdu = language === "ur";
+  const employeesParent = base === "/co-owner" ? `${base}/team` : `${base}/employees`;
 
   useEffect(() => { void loadRoles(); }, [loadRoles]);
+  useEffect(() => {
+    if (!branchesLoaded) void loadBranches();
+  }, [branchesLoaded, loadBranches]);
 
   useEffect(() => {
     if (!employeeId) return;
@@ -92,6 +107,7 @@ export default function EmployeeDetailPage() {
             roleId: next.roleId,
             membershipRole: next.membershipRole,
             branchScope: next.branchScope,
+            branchRoles: next.branchRoles,
           });
         }
       })
@@ -109,11 +125,40 @@ export default function EmployeeDetailPage() {
     return () => { cancelled = true; };
   }, [employeeId, getEmployeePerformance]);
 
+  const assignedBranches = useMemo(() => {
+    if (!access) return [];
+    return access.branchScope === null
+      ? branches
+      : branches.filter((branch) => access.branchScope?.includes(branch.id));
+  }, [access, branches]);
+
+  const chartRows = useMemo(() => {
+    const lineByBranch = new Map(
+      (performance?.branches ?? []).map((line) => [line.branchId, line]),
+    );
+    const rows = assignedBranches.length > 0
+      ? assignedBranches.map((branch) => {
+          const line = lineByBranch.get(branch.id);
+          return {
+            id: branch.id,
+            name: branch.name,
+            value: (period === "today" ? line?.todayRevenue : line?.revenue) ?? 0,
+          };
+        })
+      : (performance?.branches ?? []).map((line) => ({
+          id: line.branchId ?? line.branchName ?? "branch",
+          name: line.branchName ?? "—",
+          value: period === "today" ? line.todayRevenue : line.revenue,
+        }));
+    return rows.sort((left, right) => right.value - left.value);
+  }, [assignedBranches, performance, period]);
+  const hasChart = chartRows.some((row) => row.value > 0);
+
   if (!emp) {
     return (
       <div style={{ background: "var(--background)", color: "var(--text-primary)" }} className="flex flex-col min-h-full">
         <StatusBar />
-        <NavHeader title={t("admin.employees")} />
+        <NavHeader title={t("admin.employees")} backTo={employeesParent} />
         {employeesReady ? (
           <div className="flex flex-col items-center py-20 gap-2">
             <Search size={28} className="mx-auto block" style={{ color: "var(--text-tertiary)" }} />
@@ -130,14 +175,14 @@ export default function EmployeeDetailPage() {
   const isInvited = emp.membershipStatus === "pending" && emp.isActive;
   const isActive = emp.isActive;
   const canEditAccess = user?.membershipRole === "owner" && !emp.isOriginalOwner && !isOwner;
+  const canSeeSalary = user?.membershipRole === "owner" && !emp.isOriginalOwner;
   const role = access?.roleId ? roles.find((candidate) => candidate.id === access.roleId) ?? null : null;
   const roleName = isOwner
     ? t("empDetail.ownerFull")
     : role?.name ?? emp.roleName ?? t("empDetail.noRole");
-  const roleDescription = isOwner
-    ? t("empDetail.fullAccess")
-    : role?.description || t("empDetail.noRoleDescription");
-  const branchCount = access?.branchScope?.length ?? performance?.branches.length ?? 0;
+  const branchCount = access?.branchScope === null
+    ? branches.length
+    : assignedBranches.length || performance?.branches.length || 0;
   const branchLabel = isOwner || access?.branchScope === null
     ? t("addEmployee.allBranches")
     : t("empDetail.branchCount", { count: branchCount });
@@ -156,6 +201,17 @@ export default function EmployeeDetailPage() {
     year: "numeric",
   });
   const totals = performance?.totals ?? { salesCount: 0, revenue: 0, itemsSold: 0, customers: 0, todaySales: 0, todayRevenue: 0 };
+  const shownRevenue = period === "today" ? totals.todayRevenue : totals.revenue;
+  const maxBranchValue = Math.max(1, ...chartRows.map((row) => row.value));
+  const branchRoleName = (branchId: string) => {
+    if (isOwner) return t("empDetail.ownerFull");
+    const branchRole = access?.branchRoles?.[branchId];
+    if (branchRole?.roleName) return branchRole.roleName;
+    if (branchRole?.roleId) {
+      return roles.find((candidate) => candidate.id === branchRole.roleId)?.name ?? roleName;
+    }
+    return roleName;
+  };
   const statusLabel = isInvited
     ? t("employees.invited")
     : isActive
@@ -246,6 +302,7 @@ export default function EmployeeDetailPage() {
       <StatusBar />
       <NavHeader
         title={t("empDetail.profileTitle")}
+        backTo={employeesParent}
         right={
           <SectionActionsButton
             onClick={() => setActionsOpen(true)}
@@ -255,11 +312,8 @@ export default function EmployeeDetailPage() {
         }
       />
 
-      <div className="px-4 pt-1">
-        <div
-          className="rounded-[var(--radius-card)] p-4"
-          style={{ background: "var(--tone-card)", border: "1px solid var(--border-control)" }}
-        >
+      <div className="px-4 pt-1 pb-4" style={{ borderBottom: "1px solid var(--divider)" }}>
+        <div>
           <div className="flex items-start gap-3">
             {emp.photoUrl ? (
               <img src={emp.photoUrl} alt={emp.name} className="size-14 rounded-[var(--radius-tile)] object-cover shrink-0" />
@@ -313,11 +367,7 @@ export default function EmployeeDetailPage() {
       </div>
 
       {isInvited && (
-        <div className="px-4 pt-3">
-          <div
-            className="rounded-[var(--radius-tile)] px-4 py-3 flex items-center gap-3"
-            style={{ background: "var(--tone-card)", border: "1px solid var(--border-control)" }}
-          >
+        <div className="px-4 py-3 flex items-center gap-3" style={{ borderBottom: "1px solid var(--divider)" }}>
             <Mail size={15} className="shrink-0" style={{ color: "var(--warning, #f59e0b)" }} />
             <div className="min-w-0 flex-1">
               <p className="text-11 font-semibold">{t("empDetail.invitationPending")}</p>
@@ -333,41 +383,73 @@ export default function EmployeeDetailPage() {
             >
               {t("empDetail.viewInvitation")}
             </button>
-          </div>
         </div>
       )}
 
       <div className="px-4 pt-5">
-        <p className="text-15 font-bold mb-2.5">{t("empDetail.overview")}</p>
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-14 font-semibold" style={{ color: "var(--text-secondary)" }}>
+            {t("empDetail.overview")}
+          </p>
+          {!isInvited && (
+            <button
+              type="button"
+              onClick={() => navigate(`${base}/employees/${emp.id}/performance`)}
+              className="text-11 font-semibold flex items-center gap-0.5 active:opacity-60"
+              style={{ color: "var(--text-secondary)" }}
+            >
+              {t("empPerformance.detailed")} <ChevronRight size={12} />
+            </button>
+          )}
+        </div>
         {isInvited ? (
-          <div className="rounded-[var(--radius-card)] p-6 text-center" style={{ background: "var(--tone-card)" }}>
-            <ShoppingCart size={20} className="mx-auto mb-2" style={{ color: "var(--text-secondary)" }} />
+          <div className="flex items-start gap-3 py-4" style={{ borderBottom: "1px solid var(--divider)" }}>
+            <ShoppingCart size={18} className="shrink-0 mt-0.5" style={{ color: "var(--text-secondary)" }} />
             <p className="text-12" style={{ color: "var(--text-secondary)" }}>{t("empDetail.noPerformance")}</p>
           </div>
         ) : (
-          <div className="rounded-[var(--radius-card)] p-4" style={{ background: "var(--tone-card)" }}>
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <p className="text-10" style={{ color: "var(--text-secondary)" }}>{t("empDetail.totalRevenue")}</p>
-                <p className="text-22 font-bold tabular-nums mt-0.5">{formatCurrency(totals.revenue)}</p>
-                <p className="text-10 mt-1" style={{ color: "var(--text-tertiary)" }}>
-                  {t("empDetail.allTimeBranches")}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => navigate(`${base}/employees/${emp.id}/performance`)}
-                className="shrink-0 h-8 px-3 rounded-full flex items-center gap-1.5 text-10 font-semibold active:opacity-70"
-                style={{ border: "1px solid var(--border-control)", color: "var(--text-primary)" }}
-              >
-                <Calendar size={12} /> {t("empDetail.performance")}
-              </button>
+          <div className="pt-3" data-testid="employee-performance-overview">
+            <div className="flex items-center gap-5" role="tablist" aria-label={t("empDetail.overview")}>
+              {(["all", "today"] as const).map((key) => (
+                <button
+                  key={key}
+                  type="button"
+                  role="tab"
+                  aria-selected={period === key}
+                  onClick={() => setPeriod(key)}
+                  className="pb-1 text-12 font-semibold active:opacity-60"
+                  style={{
+                    color: period === key ? "var(--text-primary)" : "var(--text-secondary)",
+                    borderBottom: period === key ? "2px solid var(--brand)" : "2px solid transparent",
+                  }}
+                >
+                  {key === "all" ? t("empDetail.allTime") : t("empDetail.today")}
+                </button>
+              ))}
             </div>
-            <div className="grid grid-cols-3 gap-2 mt-4 pt-3" style={{ borderTop: "1px solid var(--divider)" }}>
+
+            <p className="text-10 mt-4" style={{ color: "var(--text-secondary)" }}>
+              {t("empDetail.totalRevenue")}
+            </p>
+            <p className="text-28 font-bold tabular-nums mt-0.5" data-testid="employee-revenue">
+              {formatCurrency(shownRevenue)}
+            </p>
+
+            <div
+              className={`grid ${period === "all" ? "grid-cols-3" : "grid-cols-1"} gap-3 mt-4 pt-3`}
+              style={{ borderTop: "1px solid var(--divider)" }}
+            >
               {[
-                { label: t("empDetail.totalSales"), value: totals.salesCount },
-                { label: t("employee.itemsSold"), value: totals.itemsSold },
-                { label: t("empDetail.customers"), value: totals.customers },
+                {
+                  label: t("empDetail.totalSales"),
+                  value: period === "today" ? totals.todaySales : totals.salesCount,
+                },
+                ...(period === "all"
+                  ? [
+                      { label: t("employee.itemsSold"), value: totals.itemsSold },
+                      { label: t("empDetail.customers"), value: totals.customers },
+                    ]
+                  : []),
               ].map((stat) => (
                 <div key={stat.label}>
                   <p className="text-10" style={{ color: "var(--text-secondary)" }}>{stat.label}</p>
@@ -375,68 +457,132 @@ export default function EmployeeDetailPage() {
                 </div>
               ))}
             </div>
+
+            <div className="mt-5 pt-4" style={{ borderTop: "1px solid var(--divider)" }} data-testid="employee-branch-performance">
+              <p className="text-12 font-semibold" style={{ color: "var(--text-secondary)" }}>
+                {t("overall.branchPerformance")}
+              </p>
+              {chartRows.length === 0 || !hasChart ? (
+                <p className="text-11 mt-2" style={{ color: "var(--text-tertiary)" }}>
+                  {t("empDetail.branchPerformanceEmpty")}
+                </p>
+              ) : (
+                <div className="mt-3 flex flex-col gap-3">
+                  {chartRows.map((row) => (
+                    <div key={row.id}>
+                      <div className="flex items-baseline justify-between gap-3">
+                        <span className="text-11 truncate" style={{ color: "var(--text-primary)" }}>{row.name}</span>
+                        <span className="text-11 font-semibold tabular-nums shrink-0">{formatCurrency(row.value)}</span>
+                      </div>
+                      <div className="mt-2 h-2 rounded-full overflow-hidden" style={{ background: "var(--muted)" }}>
+                        <div
+                          className="h-full rounded-full"
+                          style={{
+                            width: `${row.value > 0 ? Math.max(4, (row.value / maxBranchValue) * 100) : 0}%`,
+                            background: "var(--brand)",
+                          }}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>
 
       <div className="px-4 pt-5">
-        <p className="text-15 font-bold mb-2.5">{t("empDetail.access")}</p>
-        <ListCard>
-          <ListRow
-            icon={ShieldCheck}
-            title={t("empDetail.rolePermissions")}
-            meta={isOwner ? t("empDetail.ownerFull") : roleName}
-            description={roleDescription}
-            trailing={<ChevronRight size={14} className="shrink-0" style={{ color: "var(--text-secondary)" }} />}
-            onClick={() => navigate(`${base}/employees/${emp.id}/role`)}
-          />
-        </ListCard>
+        <p className="text-14 font-semibold" style={{ color: "var(--text-secondary)" }}>{t("empDetail.access")}</p>
+        <ListRow
+          icon={ShieldCheck}
+          title={t("empDetail.rolePermissions")}
+          meta={isOwner ? t("empDetail.ownerFull") : roleName}
+          trailing={<ChevronRight size={14} className="shrink-0" style={{ color: "var(--text-secondary)" }} />}
+          onClick={() => navigate(`${base}/employees/${emp.id}/role`)}
+          style={{ borderBottom: "1px solid var(--divider)" }}
+        />
       </div>
 
       <div className="px-4 pt-5">
-        <p className="text-15 font-bold mb-2.5">{t("empDetail.workAssignment")}</p>
-        <ListCard>
-          <ListRow
-            icon={Store}
-            title={t("empDetail.assignedBranches")}
-            meta={branchLabel}
-            trailing={<ChevronRight size={14} className="shrink-0" style={{ color: "var(--text-secondary)" }} />}
-            onClick={() => navigate(`${base}/employees/${emp.id}/branches`)}
-          />
-        </ListCard>
+        <p className="text-14 font-semibold" style={{ color: "var(--text-secondary)" }}>{t("empDetail.workAssignment")}</p>
+        <ListRow
+          icon={Store}
+          title={t("empDetail.assignedBranches")}
+          meta={branchLabel}
+          trailing={<ChevronRight size={14} className="shrink-0" style={{ color: "var(--text-secondary)" }} />}
+          onClick={() => setBranchesOpen(true)}
+          style={{ borderBottom: "1px solid var(--divider)" }}
+        />
       </div>
+
+      {canSeeSalary && (
+        <div className="px-4 pt-5">
+          <p className="text-14 font-semibold" style={{ color: "var(--text-secondary)" }}>{t("empDetail.salary")}</p>
+          <ListRow
+            icon={Wallet}
+            title={t("employeeSalary.title")}
+            description={t("empDetail.salaryHint")}
+            trailing={<ChevronRight size={14} className="shrink-0" style={{ color: "var(--text-secondary)" }} />}
+            onClick={() => navigate(`${base}/employees/${emp.id}/salary`)}
+            style={{ borderBottom: "1px solid var(--divider)" }}
+          />
+        </div>
+      )}
 
       {canViewActivity && (
         <div className="px-4 pt-5">
-          <p className="text-15 font-bold mb-2.5">{t("empDetail.businessActivity")}</p>
-          <ListCard>
-            <ListRow
-              icon={History}
-              testId="emp-activity-link"
-              title={t("empDetail.recentActivity")}
-              description={t("people.businessOnlyHint")}
-              trailing={<ChevronRight size={14} className="shrink-0" style={{ color: "var(--text-secondary)" }} />}
-              onClick={() => navigate(`${base}/settings/hub/people/activity/${emp.id}`)}
-            />
-          </ListCard>
+          <p className="text-14 font-semibold" style={{ color: "var(--text-secondary)" }}>{t("empDetail.businessActivity")}</p>
+          <ListRow
+            icon={History}
+            testId="emp-activity-link"
+            title={t("empDetail.recentActivity")}
+            trailing={<ChevronRight size={14} className="shrink-0" style={{ color: "var(--text-secondary)" }} />}
+            onClick={() => navigate(`${base}/settings/hub/people/activity/${emp.id}`)}
+            style={{ borderBottom: "1px solid var(--divider)" }}
+          />
         </div>
       )}
 
       <div className="px-4 pt-5">
-        <p className="text-15 font-bold mb-2.5">{t("empDetail.accountSecurity")}</p>
-        <ListCard>
-          <ListRow
-            icon={Calendar}
-            title={t("empDetail.lastLogin")}
-            value={lastLogin}
-          />
-          <ListRow
-            icon={Users}
-            title={t("empDetail.memberSince")}
-            value={memberSince}
-          />
-        </ListCard>
+        <p className="text-14 font-semibold" style={{ color: "var(--text-secondary)" }}>{t("empDetail.accountSecurity")}</p>
+        <ListRow
+          icon={Calendar}
+          title={t("empDetail.lastLogin")}
+          value={lastLogin}
+          style={{ borderBottom: "1px solid var(--divider)" }}
+        />
+        <ListRow
+          icon={Users}
+          title={t("empDetail.memberSince")}
+          value={memberSince}
+        />
       </div>
+
+      <Sheet
+        open={branchesOpen}
+        title={t("empDetail.assignedBranches")}
+        onClose={() => setBranchesOpen(false)}
+        closeButton={false}
+      >
+        <div className="px-4">
+          {assignedBranches.length === 0 ? (
+            <p className="text-12 py-6 text-center" style={{ color: "var(--text-secondary)" }}>
+              {t("empBranches.empty")}
+            </p>
+          ) : (
+            assignedBranches.map((branch, index) => (
+              <ListRow
+                key={branch.id}
+                icon={Store}
+                title={branch.name}
+                meta={branchRoleName(branch.id)}
+                style={index < assignedBranches.length - 1 ? { borderBottom: "1px solid var(--divider)" } : undefined}
+              />
+            ))
+          )}
+        </div>
+      </Sheet>
 
       <Sheet
         open={actionsOpen}
@@ -455,6 +601,13 @@ export default function EmployeeDetailPage() {
             title={t("empDetail.manageBranches")}
             onClick={() => closeAndGo(`${base}/employees/${emp.id}/branches`)}
           />
+          {canSeeSalary && (
+            <ListRow
+              icon={Wallet}
+              title={t("employeeSalary.title")}
+              onClick={() => closeAndGo(`${base}/employees/${emp.id}/salary`)}
+            />
+          )}
           {isInvited && (
             <ListRow
               icon={Mail}

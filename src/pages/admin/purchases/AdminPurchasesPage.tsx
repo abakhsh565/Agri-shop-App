@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
 import EmptyState from "@/components/ui/EmptyState";
@@ -67,7 +67,7 @@ export default function AdminPurchasesPage() {
       style={{ background: "var(--background)", direction: isUrdu ? "rtl" : "ltr" }}
     >
       <StatusBar />
-      <NavHeader title={t("purchases.listTitle")} backTo={backTo} />
+      <NavHeader title={t("purchases.listTitle")} backTo={backTo} historyBack />
 
       {/* Payable summary */}
       <div className="px-4 pt-3">
@@ -95,7 +95,7 @@ export default function AdminPurchasesPage() {
             // payment for a supplier the reader has not chosen. The state keeps back on
             // Purchase history, the screen this button was pressed on.
             onClick={() =>
-              navigate(base === "/admin" ? `${base}/settings/overview/suppliers` : `${base}/companies`, {
+              navigate(base === "/admin" ? `${base}/purchases/payables` : `${base}/companies`, {
                 state: { from: `${base}/purchases` },
               })
             }
@@ -122,6 +122,11 @@ export default function AdminPurchasesPage() {
                 className="rounded-[var(--radius-card)] p-4"
                 style={{ background: "var(--tone-card)" }}
               >
+                <Link
+                  to={`${base}/purchases/${p.id}`}
+                  className="block active:opacity-70"
+                  data-testid={`purchase-card-${p.id}`}
+                >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3 min-w-0">
                     <div
@@ -160,6 +165,24 @@ export default function AdminPurchasesPage() {
                     )}
                   </div>
                 </div>
+                </Link>
+                {base === "/admin" && unpaid && canPay && (
+                  <div className="mt-3 flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        navigate(`${base}/payments/supplier/${p.companyId}`, {
+                          state: { from: `${base}/purchases` },
+                        })
+                      }
+                      data-testid={`purchase-pay-${p.id}`}
+                      className="h-9 px-4 rounded-full text-11 font-bold active:opacity-70"
+                      style={{ background: "#2c2c2a", color: "var(--brand)" }}
+                    >
+                      {t("supplierPayments.record")}
+                    </button>
+                  </div>
+                )}
               </div>
             );
           })}

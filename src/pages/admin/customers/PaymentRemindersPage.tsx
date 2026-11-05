@@ -2,12 +2,15 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Bell, BellRing, ChevronRight } from "lucide-react";
 import PaymentReminderSheet, { type PaymentReminderDefaults } from "@/components/ui/PaymentReminderSheet";
+import PaymentReminderCard from "@/components/ui/PaymentReminderCard";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
 import { useAuthStore } from "@/stores/authStore";
 import { SkeletonList } from "@/components/ui/Skeleton";
 import { useT } from "@/lib/i18n";
 import { useShellBase } from "@/lib/useShellBase";
+import { usePaymentReminderBook, sortReminders } from "@/lib/paymentReminders";
+import { pkToday } from "@/lib/pkDate";
 import { useCustomersStore } from "@/stores/customersStore";
 import { useSalesStore } from "@/stores/salesStore";
 import { useShopStore } from "@/stores/shopStore";
@@ -64,6 +67,20 @@ export default function PaymentRemindersPage() {
   // receivable books carry is offered here too.
   const [reminderDefaults, setReminderDefaults] = useState<PaymentReminderDefaults | null>(null);
   const isOwner = useAuthStore((s) => s.user?.membershipRole === "owner");
+  // This is the CUSTOMER reminder screen. The finance book is the whole diary, including
+  // supplier and general notes; only the customer kind belongs in this context.
+  const book = usePaymentReminderBook();
+  const today = pkToday();
+  const savedReminders = useMemo(
+    () =>
+      sortReminders(
+        (book.rows ?? []).filter(
+          (row) => row.kind === "customer" && row.status === "upcoming",
+        ),
+        today,
+      ),
+    [book.rows, today],
+  );
 
   useEffect(() => {
     if (!customersReady) return;
@@ -230,7 +247,7 @@ export default function PaymentRemindersPage() {
       data-testid="payment-reminders-page"
     >
       <StatusBar />
-      <NavHeader title={t("hub.customers.reminders")} backTo={`${base}/settings/hub/customers`} />
+      <NavHeader title={t("hub.customers.reminders")} backTo={`${base}/settings/hub/customers`} historyBack />
 
       {/* The two figures in the card grammar the rest of the books use (owner's reference,
           2026-10-31): a label, the number, and what it counts underneath. The bare numbers sat
@@ -305,6 +322,32 @@ export default function PaymentRemindersPage() {
             <ChevronRight size={14} className="shrink-0" style={{ color: "var(--text-secondary)" }} />
           </button>
         </div>
+      )}
+
+      {/* Saved customer reminders (0257). Only rows tied to a customer belong here; supplier
+          and general notes stay in the Finance book, which this screen deliberately does not
+          link to because it is a different context. */}
+      {savedReminders.length > 0 && (
+        <section className="px-4 pt-3" data-testid="saved-payment-reminders">
+          <p className="text-13 font-bold mb-2" style={{ color: "var(--text-primary)" }}>
+            {t("paymentBook.title")} · {savedReminders.length}
+          </p>
+          <div className="flex flex-col gap-2">
+            {savedReminders.map((reminder) => (
+              <PaymentReminderCard
+                key={reminder.id}
+                reminder={reminder}
+                today={today}
+                testId={`customer-reminders-saved-${reminder.id}`}
+                onOpenParty={
+                  reminder.customerId
+                    ? () => navigate(`${base}/customers/${reminder.customerId}`)
+                    : undefined
+                }
+              />
+            ))}
+          </div>
+        </section>
       )}
 
       {/* Line tabs, the same grammar as Sales: a label over one hairline, with the active one

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowDownLeft, CalendarDays, ReceiptText } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { ArrowDownLeft, CalendarDays, ChevronRight, ReceiptText } from "lucide-react";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
 import SearchBar from "@/components/ui/SearchBar";
@@ -34,6 +35,7 @@ import { summariseCustomerCollection } from "@/lib/customerCredit";
 export default function CustomerPaymentsPage() {
   const t = useT();
   const base = useShellBase();
+  const navigate = useNavigate();
 
   const customers = useCustomersStore((s) => s.customers);
   const customersReady = useCustomersStore((s) => s.ready);
@@ -91,8 +93,12 @@ export default function CustomerPaymentsPage() {
         ? t("sale.bankTransfer")
         : method;
 
+  // Receipts from customers only. The ledger also carries supplier money; a row without a
+  // customer is not a customer payment and has no place in this book.
   const receipts = useMemo(
-    () => (ledger ? ledger.entries.filter((entry) => entry.direction === "in") : []),
+    () => (ledger
+      ? ledger.entries.filter((entry) => entry.direction === "in" && Boolean(entry.customerId))
+      : []),
     [ledger],
   );
 
@@ -116,24 +122,20 @@ export default function CustomerPaymentsPage() {
   const received = filtered.reduce((sum, entry) => sum + entry.amount, 0);
   const readCustomers = ledger?.readable.customers ?? false;
 
-  const figure = (
-    label: string,
-    hint: string,
-    value: string,
-    color: string,
-  ) => (
+  // Two facts, stated plainly: what customers have paid and what they still owe. No caption
+  // under either figure — the label and the amount are the whole card.
+  const figure = (label: string, value: string, color: string) => (
     <div
       className="min-w-0 rounded-[var(--radius-card)] p-4"
       style={{ background: "var(--surface)" }}
     >
-      <p className="text-10" style={{ color: "var(--text-secondary)" }}>{label}</p>
+      <p className="text-11" style={{ color: "var(--text-secondary)" }}>{label}</p>
       <p
-        className="text-16 font-bold mt-1 tabular-nums break-words"
+        className="text-18 font-bold mt-1 tabular-nums break-words"
         style={{ color }}
       >
         {value}
       </p>
-      <p className="text-10 mt-1" style={{ color: "var(--text-tertiary)" }}>{hint}</p>
     </div>
   );
 
@@ -146,18 +148,16 @@ export default function CustomerPaymentsPage() {
       <StatusBar />
       {/* Back belongs to the customer book, which is the screen that opened it. The journey stack
           still wins when the reader arrived from somewhere else. */}
-      <NavHeader title={t("hub.customers.payments")} backTo={`${base}/settings/hub/customers`} />
+      <NavHeader title={t("hub.customers.payments")} backTo={`${base}/settings/hub/customers`} historyBack />
 
       <div className="grid grid-cols-2 gap-2 px-4 pt-3">
         {figure(
           t("payments.moneyReceived"),
-          t("customerPayments.receivedHint"),
           !ledger ? "—" : readCustomers ? formatCurrency(received) : "—",
           readCustomers && received > 0 ? "var(--success)" : "var(--text-secondary)",
         )}
         {figure(
           t("customerPayments.pending"),
-          t("customerPayments.pendingHint"),
           customersReady ? formatCurrency(pending) : "—",
           pending > 0 ? "var(--warning)" : "var(--text-secondary)",
         )}
@@ -231,38 +231,50 @@ export default function CustomerPaymentsPage() {
       ) : (
         <div className="flex flex-col gap-2 px-4 pt-1 pb-8">
           {filtered.map((entry) => (
-            <div
+            <button
               key={entry.id}
-              className="rounded-[var(--radius-card)] p-3.5"
+              type="button"
+              onClick={() => {
+                if (entry.customerId) navigate(`${base}/customers/${entry.customerId}`);
+              }}
+              className="w-full text-start rounded-[var(--radius-card)] p-3.5 active:opacity-80"
               style={{ background: "var(--tone-card)" }}
               data-testid={`customer-payment-row-${entry.id}`}
             >
-              <div className="flex items-start gap-3">
+              <span className="flex items-start gap-3">
                 <span
                   className="size-10 rounded-full flex items-center justify-center shrink-0"
                   style={{ background: "var(--tone-sunken)" }}
                 >
                   <ArrowDownLeft size={16} style={{ color: "var(--success)" }} />
                 </span>
-                <div className="min-w-0 flex-1">
-                  <p className="text-14 font-bold truncate">{entry.counterparty || "—"}</p>
-                  <p className="text-11 mt-0.5 truncate" style={{ color: "var(--text-secondary)" }}>
+                <span className="min-w-0 flex-1 block">
+                  <span className="block text-14 font-bold truncate">
+                    {entry.counterparty || "—"}
+                  </span>
+                  <span
+                    className="block text-11 mt-0.5 truncate"
+                    style={{ color: "var(--text-secondary)" }}
+                  >
                     {methodLabel(entry.method)}
                     {entry.note ? ` · ${entry.note}` : ""}
-                  </p>
-                </div>
-                <p
-                  className="text-13 font-bold tabular-nums shrink-0"
-                  style={{ color: "var(--success)" }}
-                >
-                  + {formatCurrency(entry.amount)}
-                </p>
-              </div>
+                  </span>
+                </span>
+                <span className="flex items-center gap-1 shrink-0">
+                  <span
+                    className="text-13 font-bold tabular-nums"
+                    style={{ color: "var(--success)" }}
+                  >
+                    + {formatCurrency(entry.amount)}
+                  </span>
+                  <ChevronRight size={14} style={{ color: "var(--text-tertiary)" }} />
+                </span>
+              </span>
 
-              <p className="text-10 mt-2 truncate" style={{ color: "var(--text-tertiary)" }}>
+              <span className="block text-10 mt-2 truncate" style={{ color: "var(--text-tertiary)" }}>
                 {formatSmartDateTime(entry.createdAt, undefined, t)}
-              </p>
-            </div>
+              </span>
+            </button>
           ))}
         </div>
       )}

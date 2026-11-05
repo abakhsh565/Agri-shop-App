@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Camera, Mic, Send, ShieldCheck, Sparkles, Volume2, X } from "lucide-react";
+import { Camera, Loader2, Mic, Send, ShieldCheck, Sparkles, Volume2, X } from "lucide-react";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
 import AssistantWidget from "@/components/assistant/AssistantWidget";
@@ -9,6 +9,7 @@ import {
 } from "@/lib/assistant";
 import { useT } from "@/lib/i18n";
 import { useAuthStore } from "@/stores/authStore";
+import { HARD_MAX_IMAGE_BYTES, prepareImage } from "@/lib/imageCompression";
 
 /**
  * The assistant, inside the app.
@@ -29,6 +30,18 @@ type Entry =
   | { kind: "reply"; reply: AssistantReply }
   | { kind: "error"; text: string };
 
+/** The same 500 KB ceiling every other picture in the app uses. */
+const MAX_ASSISTANT_PHOTO_BYTES = HARD_MAX_IMAGE_BYTES;
+
+function readAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result ?? ""));
+    reader.onerror = () => reject(reader.error ?? new Error("read failed"));
+    reader.readAsDataURL(file);
+  });
+}
+
 /** A tool's name, read in the language this screen is in — never the server's English one. */
 function toolName(t: (key: string) => string, tool: { name: string; title: string }): string {
   const key = toolTitleKey(tool.name);
@@ -42,6 +55,8 @@ export default function AssistantPage() {
   const [history, setHistory] = useState<AssistantTurn[]>([]);
   const [draft, setDraft] = useState("");
   const [photo, setPhoto] = useState<{ data: string; mimeType: string; name: string } | null>(null);
+  const [preparingPhoto, setPreparingPhoto] = useState(false);
+  const [photoError, setPhotoError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [voiceMode, setVoiceMode] = useState(false);
   const [listening, setListening] = useState(false);
@@ -105,13 +120,14 @@ export default function AssistantPage() {
       if (error.code === "not_switched_on") return t("assistant.off");
       if (error.code === "signed_out") return t("assistant.signedOut");
       if (error.code === "unreachable") return t("assistant.unreachable");
+      if (error.code === "timeout") return t("assistant.timeout");
     }
     return t("assistant.failed");
   }
 
   async function send(text: string) {
     const question = text.trim();
-    if (sendingRef.current) return;
+    if (sendingRef.current || preparingPhoto) return;
     if (!question && !photo) return;
     sendingRef.current = true;
     setEntries((prev) => [...prev, { kind: "user", text: question || t("assistant.photoOnly") }]);
@@ -141,12 +157,34 @@ export default function AssistantPage() {
     }
   }
 
-  function onPickPhoto(file: File | undefined) {
+  async function onPickPhoto(file: File | undefined) {
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () =>
-      setPhoto({ data: String(reader.result), mimeType: file.type || "image/jpeg", name: file.name });
-    reader.readAsDataURL(file);
+    setPhotoError(null);
+    if (!file.type.startsWith("image/")) {
+      setPhotoError(t("assistant.photoNotImage"));
+      return;
+    }
+    setPreparingPhoto(true);
+    try {
+      // A phone camera bill is often 4–10 MB. Prepare it before it becomes base64 in the request:
+      // the text stays readable, the request stays small, and the server's size guard is not a
+      // surprise after the person has already pressed send.
+      const prepared = await prepareImage(file);
+      if (prepared.file.size > MAX_ASSISTANT_PHOTO_BYTES) {
+        setPhotoError(t("assistant.photoTooLarge"));
+        return;
+      }
+      const data = await readAsDataUrl(prepared.file);
+      setPhoto({
+        data,
+        mimeType: prepared.file.type || "image/jpeg",
+        name: prepared.file.name,
+      });
+    } catch {
+      setPhotoError(t("assistant.photoFailed"));
+    } finally {
+      setPreparingPhoto(false);
+    }
   }
 
   const suggestions = [t("assistant.ask.sales"), t("assistant.ask.reorder"), t("assistant.ask.help")];
@@ -273,17 +311,27 @@ export default function AssistantPage() {
           field primitive, so the voice and photo buttons sit inside it instead of squeezing the
           room a question is written in. */}
       <div className="shrink-0 px-4 pt-3" style={{ background: "var(--tone-page)", borderTop: "1px solid var(--divider)" }}>
-        {photo && (
-          <div className="flex items-center gap-2 pb-2">
-            <span
-              className="inline-flex items-center gap-2 px-3 py-1 rounded-full ds-meta"
-              style={{ background: "var(--surface-2)" }}
-            >
-              {t("assistant.photoAttached")}
-              <button type="button" onClick={() => setPhoto(null)} aria-label={t("common.remove")}>
-                <X size={12} />
-              </button>
-            </span>
+        {(photo || preparingPhoto || photoError) && (
+          <div className="flex flex-col gap-1 pb-2">
+            {(photo || preparingPhoto) && (
+              <span
+                className="inline-flex items-center gap-2 px-3 py-1 rounded-full ds-meta"
+                style={{ background: "var(--surface-2)" }}
+              >
+                {preparingPhoto && <Loader2 size={12} className="animate-spin" />}
+                {preparingPhoto ? t("assistant.preparingPhoto") : t("assistant.photoAttached")}
+                {photo && !preparingPhoto && (
+                  <button type="button" onClick={() => setPhoto(null)} aria-label={t("common.remove")}>
+                    <X size={12} />
+                  </button>
+                )}
+              </span>
+            )}
+            {photoError && (
+              <p role="alert" className="ds-meta" style={{ color: "var(--danger, #b42318)" }}>
+                {photoError}
+              </p>
+            )}
           </div>
         )}
         <div className="flex items-end gap-2">
@@ -335,14 +383,18 @@ export default function AssistantPage() {
               accept="image/*"
               capture="environment"
               className="hidden"
-              onChange={(event) => onPickPhoto(event.target.files?.[0])}
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                event.currentTarget.value = "";
+                void onPickPhoto(file);
+              }}
             />
           </div>
 
           <button
             type="button"
             onClick={() => void send(draft)}
-            disabled={busy || (!draft.trim() && !photo)}
+            disabled={busy || preparingPhoto || (!draft.trim() && !photo)}
             aria-label={t("assistant.send")}
             className="ds-pressable flex items-center justify-center shrink-0 disabled:opacity-45"
             style={{

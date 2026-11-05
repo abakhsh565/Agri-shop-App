@@ -250,6 +250,12 @@ jobs:
           # the app's own scheme is injected — invitation links still open the app.
           APP_LINK_HOST: ${{ vars.APP_LINK_HOST }}
 
+      # The generated android/ project does not contain the app's own microphone plugin. System
+      # WebView does not reliably expose the Web Speech API, so the APK needs Android's
+      # SpeechRecognizer bridge; otherwise the voice field always reports "unsupported".
+      - name: Inject native microphone plugin
+        run: node .github/inject-native-speech.cjs
+
       # ─── Stable release signing ────────────────────────────────────────────
       # A debug keystore is generated fresh on every runner, so its fingerprint changes from
       # one build to the next and no published assetlinks.json could ever match it — Android

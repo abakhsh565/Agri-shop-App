@@ -18,9 +18,15 @@ import { useUIStore } from "@/stores/uiStore";
 import { useThemeStore } from "@/stores/themeStore";
 import { useT } from "@/lib/i18n";
 import { clearNav } from "@/lib/navContext";
-import type { ProductCategory } from "@/types";
+import type { PhysicalFormCode, ProductCategory } from "@/types";
 import { useCatalogueStore } from "@/stores/catalogueStore";
 import { categoryDisplayName, categoryForKind, orderedCategories, unitLabel } from "@/lib/catalogue";
+import {
+  defaultUnitForForm,
+  physicalFormLabelKey,
+  resolveClassification,
+  unitGroupForBaseUnit,
+} from "@/lib/classification";
 import { Plus, Trash2, Lock, RefreshCw } from "lucide-react";
 import ScanButton from "@/components/ui/ScanButton";
 import { DEFAULT_STOCK_ALERT_SETTINGS, loadStockAlertSettings, type StockAlertSettings } from "@/lib/stockAlerts";
@@ -66,10 +72,10 @@ import {
  *     The figure is shown read-only beside the one action that does change it, because a box
  *     that accepts typing and discards it is what made this screen untrustworthy.
  *
- * The unit chips decide what every number on the page means, so they come *before* the pack
- * cards rather than beside a quantity: the database stores a pack size in the product's own
- * unit, and 0.5 is five hundred gram of a product sold by weight and five hundred millilitres
- * of one sold by volume. A shop only sells those two things, so those are the two chips.
+ * The physical form decides what every number on the page means, so it comes before the pack
+ * cards. The category supplies the possible forms, the chosen form supplies the unit family,
+ * and the unit itself is selected automatically: the owner only chooses how the product arrives,
+ * never a measurement system as a second, related question.
  */
 
 /**
@@ -162,6 +168,7 @@ export default function AddProductPage() {
   const categories = useCatalogueStore((s) => s.categories);
   // Named `shopUnits`: `units` is already the pack's own unit list further down this screen.
   const shopUnits = useCatalogueStore((s) => s.units);
+  const classifications = useCatalogueStore((s) => s.classifications);
   const catalogueReady = useCatalogueStore((s) => s.ready);
   const existing = useProductsStore((s) => s.products.find((p) => p.id === productId));
   const isEdit = Boolean(productId);
@@ -204,6 +211,10 @@ export default function AddProductPage() {
     resumed?.baseUnit ?? existing?.baseUnit ?? "kg"
   );
   const [unitId, setUnitId] = useState(resumed?.unitId ?? existing?.unitId ?? "");
+  const [physicalForm, setPhysicalForm] = useState<PhysicalFormCode | "">(
+    resumed?.physicalForm ?? existing?.physicalForm ?? "",
+  );
+  const classificationTouched = useRef(false);
   /**
    * The code the shop scans. It stopped being a field whose typing was thrown away in 0158:
    * `create_product` writes it into `product_barcodes` (unique per shop, one primary per
@@ -275,6 +286,7 @@ export default function AddProductPage() {
     );
     setCategoryId((v) => (v === "" ? existing.categoryId ?? "" : v));
     setUnitId((v) => (v === "" ? existing.unitId ?? "" : v));
+    setPhysicalForm((v) => (v === "" ? existing.physicalForm ?? "" : v));
     if (!marketplaceTouched.current) setMarketplaceListed(existing.marketplaceListed === true);
   }, [isEdit, resumed, existing]);
 
@@ -376,6 +388,7 @@ export default function AddProductPage() {
       categoryId: categoryId || undefined,
       baseUnit,
       unitId: unitId || undefined,
+      physicalForm: selectedForm?.code,
       barcode,
       imageUrl,
       packs,
@@ -678,6 +691,7 @@ export default function AddProductPage() {
           categoryId: categoryId || null,
           baseUnit,
           unitId: unitId || null,
+          physicalForm: formForSave,
           imageUrl: imageUrl ?? undefined,
           // Only sent when the switch moved. `update_product` distinguishes "not mentioned"
           // from false on purpose, and this is that distinction being used honestly: a save
@@ -701,6 +715,7 @@ export default function AddProductPage() {
           categoryId: categoryId || undefined,
           baseUnit,
           unitId: unitId || undefined,
+          physicalForm: formForSave,
           imageUrl: imageUrl ?? undefined,
           // Absent, not empty, when the field was left alone — and absent now means the product
           // has no barcode. `create_product` used to mint one for exactly this case (0246).
@@ -760,20 +775,81 @@ export default function AddProductPage() {
     [categories, t],
   );
 
-  const unitOptions = useMemo(
-    () =>
-      shopUnits.map((unit) => ({
-        value: unit.id,
-        label: unitLabel(unit),
-        meta:
-          unit.baseUnit === "kg"
-            ? t("units.weight")
-            : unit.baseUnit === "liter"
-              ? t("units.volume")
-              : t("units.count"),
-      })),
-    [shopUnits, t],
+  const classification = useMemo(
+    () => resolveClassification(categoryId, categories, classifications),
+    [categoryId, categories, classifications],
   );
+
+  /**
+   * The form to use, including the single-form automatic choice and a stored form that is no
+   * longer in the profile. The latter keeps an existing product editable without reclassifying it.
+   */
+  const selectedForm = useMemo(() => {
+    if (!classification) return null;
+    if (physicalForm) {
+      return classification.physicalForms.find((form) => form.code === physicalForm) ?? {
+        code: physicalForm,
+        unitGroups: [],
+      };
+    }
+    // A new product opens on the category's first form, so the field always has one value.
+    // An untouched legacy edit keeps its null form so an unrelated save cannot reclassify it.
+    return !isEdit || classificationTouched.current
+      ? classification.physicalForms[0] ?? null
+      : null;
+  }, [classification, physicalForm, isEdit]);
+
+  /**
+   * A legacy edit with no stored form sends null unless the owner actually touches the
+   * classification. This keeps an unrelated edit from being refused after a profile changes.
+   */
+  const formForSave =
+    isEdit && !classificationTouched.current
+      ? physicalForm || null
+      : selectedForm?.code ?? null;
+
+  const formOptions = useMemo(() => {
+    if (!classification) return [];
+    const options = [...classification.physicalForms];
+    if (physicalForm && !options.some((form) => form.code === physicalForm)) {
+      options.push({ code: physicalForm, unitGroups: [] });
+    }
+    return options.map((form) => {
+      const formLabel = t(physicalFormLabelKey(form.code));
+      const unit = form.unitGroups.length > 0 ? defaultUnitForForm(form, shopUnits) : undefined;
+      return {
+        value: form.code,
+        // The unit is part of the answer, not a second question. A closed field still shows
+        // the one line the owner needs: "Liquid · Liter".
+        label: unit ? `${formLabel} · ${unitLabel(unit)}` : formLabel,
+      };
+    });
+    // `t` is stable for a language; the options follow the selected shelf.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [classification, physicalForm, shopUnits]);
+
+  const automaticUnit = selectedForm ? defaultUnitForForm(selectedForm, shopUnits) : undefined;
+
+  // One form means one family. Move the unit (and every pack's display unit) when the category
+  // or form makes the current unit incompatible. An untouched edit keeps the stored unit.
+  const classificationUnitKey = useRef("");
+  useEffect(() => {
+    if (!selectedForm || shopUnits.length === 0) return;
+    const key = `${categoryId}:${selectedForm.code}`;
+    if (classificationUnitKey.current === key) return;
+    classificationUnitKey.current = key;
+    if (isEdit && !classificationTouched.current) return;
+    const current = shopUnits.find((unit) => unit.id === unitId);
+    const group = current ? unitGroupForBaseUnit(current.baseUnit) : null;
+    if (current && group && selectedForm.unitGroups.includes(group)) return;
+    const next = defaultUnitForForm(selectedForm, shopUnits);
+    if (next) chooseUnit(next.id);
+  }, [selectedForm, categoryId, shopUnits, unitId, isEdit]);
+
+  function choosePhysicalForm(next: string) {
+    classificationTouched.current = true;
+    setPhysicalForm(next as PhysicalFormCode);
+  }
 
   /**
    * Move every pack onto the family the product is now measured in.
@@ -937,7 +1013,9 @@ export default function AddProductPage() {
                 label={t("inline.category")}
                 testId="product-category"
                 onChange={(id) => {
+                  classificationTouched.current = true;
                   setCategoryId(id);
+                  setPhysicalForm("");
                   // Keep the stored kind in step with the shelf, for the draft and for a client
                   // that predates `categoryId`: the kind comes from the shelf's root.
                   const shelf = categories.find((c) => c.id === id);
@@ -949,18 +1027,26 @@ export default function AddProductPage() {
               />
             </div>
 
-            {/* The unit decides what every number below it means, so it is asked here, with
-                the product, rather than beside a quantity further down. */}
-            <div>
-              <p className={labelCls} style={{ color: "var(--text-secondary)" }}>{t("addProduct.unitLabel")}</p>
-              <InlineSelect
-                value={unitId}
-                options={unitOptions}
-                label={t("addProduct.unitLabel")}
-                testId="product-unit"
-                onChange={chooseUnit}
-              />
-            </div>
+            {formOptions.length > 0 && (
+              <div>
+                <p className={labelCls} style={{ color: "var(--text-secondary)" }}>
+                  {t("classification.physicalForm")}
+                </p>
+                <InlineSelect
+                  value={selectedForm?.code ?? ""}
+                  options={formOptions}
+                  label={t("classification.physicalForm")}
+                  placeholder={t("classification.chooseForm")}
+                  testId="product-form"
+                  onChange={choosePhysicalForm}
+                />
+                {selectedForm && !automaticUnit && (
+                  <p className="text-11 mt-1.5" style={{ color: "var(--text-secondary)" }}>
+                    {t("classification.noUnits")}
+                  </p>
+                )}
+              </div>
+            )}
           </div>
 
           {/* ── The packs, in one box ─────────────────────────────────────────────

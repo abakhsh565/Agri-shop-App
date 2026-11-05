@@ -323,6 +323,7 @@ export default function MoneyStatementPage() {
       <NavHeader
         title={t("money.title")}
         backTo={parent}
+        historyBack
         right={
           <div className="flex items-center gap-1">
             <button
@@ -349,8 +350,8 @@ export default function MoneyStatementPage() {
         onClose={() => setActionsOpen(false)}
         title={t("money.title")}
         actions={[
-          { id: "export", icon: Download, title: t("money.export"), description: t("data.exportHint"), onClick: () => { void download(); } },
-          { id: "share", icon: Share2, title: t("money.share"), description: t("sales.shareReportHint"), onClick: () => { void share(); } },
+          { id: "export", icon: Download, title: t("money.export"), onClick: () => { void download(); } },
+          { id: "share", icon: Share2, title: t("money.share"), onClick: () => { void share(); } },
         ]}
       />
 
@@ -393,9 +394,6 @@ export default function MoneyStatementPage() {
                   </div>
                 ))}
               </div>
-              <p className="text-10 mt-3" style={{ color: "var(--text-tertiary)" }}>
-                {t("money.rule")}
-              </p>
             </div>
           </div>
 
@@ -414,42 +412,24 @@ export default function MoneyStatementPage() {
             </div>
           )}
 
-          <p className="px-4 pt-1 text-11" style={{ color: "var(--text-secondary)" }}>
-            {t("money.readOnly")}
-          </p>
-
-          <div className="flex items-center gap-2 px-4 pt-3">
-            <div className="flex gap-2 flex-1 min-w-0 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
-              {filters.map((entry) => (
-                <button
-                  key={entry.key}
-                  type="button"
-                  onClick={() => setFilter(entry.key)}
-                  aria-pressed={filter === entry.key}
-                  data-testid={`money-filter-${entry.key}`}
-                  className="shrink-0 h-8 px-3.5 rounded-full text-12 font-semibold transition-colors"
-                  style={
-                    filter === entry.key
-                      ? { background: "var(--brand)", color: "#0a0a0a" }
-                      : { background: "var(--tone-sunken)", color: "var(--text-secondary)" }
-                  }
-                >
-                  {entry.label}
-                </button>
-              ))}
-            </div>
-            <button
-              type="button"
-              onClick={() => setPeriodOpen(true)}
-              aria-haspopup="dialog"
-              aria-label={t("period.sheetTitle")}
-              data-testid="money-statement-period"
-              className="flex items-center gap-1.5 shrink-0 h-8 px-2.5 rounded-full text-11 font-semibold active:opacity-60 max-w-[45%]"
-              style={{ background: "var(--tone-sunken)", color: "var(--text-secondary)" }}
-            >
-              <CalendarDays size={13} />
-              <span className="truncate">{periodLabel}</span>
-            </button>
+          <div className="flex gap-2 px-4 pt-3 flex-wrap">
+            {filters.map((entry) => (
+              <button
+                key={entry.key}
+                type="button"
+                onClick={() => setFilter(entry.key)}
+                aria-pressed={filter === entry.key}
+                data-testid={`money-filter-${entry.key}`}
+                className="h-8 px-3.5 rounded-full text-12 font-semibold transition-colors"
+                style={
+                  filter === entry.key
+                    ? { background: "var(--brand)", color: "#0a0a0a" }
+                    : { background: "var(--tone-sunken)", color: "var(--text-secondary)" }
+                }
+              >
+                {entry.label}
+              </button>
+            ))}
           </div>
 
           <div className="px-4 pt-3">
@@ -465,9 +445,6 @@ export default function MoneyStatementPage() {
           {recurrences.rows && recurrences.rows.length > 0 && (
             <div className="px-4 pt-4" data-testid="money-repeating">
               <p className="text-13 font-bold">{t("finance.ledger.repeating")}</p>
-              <p className="text-11 mt-0.5" style={{ color: "var(--text-secondary)" }}>
-                {t("finance.ledger.repeatingHint")}
-              </p>
               <div className="flex flex-col gap-2 mt-2">
                 {recurrences.rows.map((rule) => (
                   <div
@@ -504,12 +481,9 @@ export default function MoneyStatementPage() {
             </div>
           )}
 
-          <div className="flex items-baseline justify-between gap-3 px-4 pt-4 pb-1">
+          <div className="px-4 pt-4 pb-1">
             <p className="text-12" style={{ color: "var(--text-secondary)" }}>
-              {t("money.entries", { count: String(filtered.length) })}
-            </p>
-            <p className="text-10" style={{ color: "var(--text-tertiary)" }}>
-              {t("money.subtitle")}
+              {periodLabel} · {t("money.entries", { count: String(filtered.length) })}
             </p>
           </div>
 
@@ -533,7 +507,6 @@ export default function MoneyStatementPage() {
               <EmptyState
                 icon={ArrowDownLeft}
                 title={search.trim() || filter !== "all" ? t("money.emptyFiltered") : t("money.empty")}
-                subtitle={t("money.emptyHint")}
               />
             ) : (
               <div className="flex flex-col gap-4">

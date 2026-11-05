@@ -1,59 +1,67 @@
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ChevronRight, Layers, Package, Ruler } from "lucide-react";
+import { ChevronRight, Layers, Plus } from "lucide-react";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
+import SearchBar from "@/components/ui/SearchBar";
 import ListCard from "@/components/ui/ListCard";
 import ListRow from "@/components/ui/ListRow";
 import { useT } from "@/lib/i18n";
 import { useShellBase } from "@/lib/useShellBase";
 import { useReturnTo } from "@/lib/useReturnTo";
+import { useCatalogueStore } from "@/stores/catalogueStore";
+import { useProductsStore } from "@/stores/productsStore";
+import { hasPermission } from "@/lib/tenantContext";
+import { categoryDisplayName, categoryItemCount, orderedCategories } from "@/lib/catalogue";
+import { MEASUREMENT_FAMILIES } from "@/lib/classification";
 
 /**
- * Products, as the shop keeps them: every product, the shelves they sit on, and the units they
- * are sold in.
+ * The catalogue: the shop's shelves, and the three measures every product is sold in.
  *
- * WHY THIS SCREEN EXISTS. The inventory hub used to have one door called "Products" that opened
- * the product list. The owner's reference draws that door as a small menu of its own — All
- * items, Categories, Units — because those three are the same subject and each answers a
- * different question: what do I sell, how is it grouped, and how is it measured. This is that
- * menu, and nothing else: no figure is repeated from the hub, and no row does two things.
+ * UNITS ARE NOT A SHOP SETTING. Weight, volume and count are the whole set the app can do
+ * arithmetic in — pack sizes, stock and bills are all written in one of them — so a fourth unit
+ * could never convert, and naming one "Bori" did not change what it measured. The three rows
+ * here are therefore fixed and read-only: no name, no symbol, no add, no delete. A shelf says
+ * which of the three it uses, and Add Product takes the unit from that answer.
  *
- * ALL PRODUCTS IS THE LIST THAT ALREADY EXISTS. It opens the product screen rather than a
- * second rendering of the same rows, so there is one place where a product is edited and one
- * place where a search is written.
+ * CATEGORIES ARE THE ONLY THING TO MANAGE. They are the owner's own words, one level deep, and
+ * each one carries the measure its products use. The add row and each row's door live here.
+ *
+ * THE OLD ADDRESSES STILL WORK. `/inventory/categories` and `/inventory/units` render this same
+ * screen (their page modules re-export it), so a bookmark, a form's back arrow or a deep link
+ * lands on the one place that now owns the catalogue. Nothing was deleted; the lists were merged.
  */
 export default function InventoryCataloguePage() {
   const t = useT();
   const base = useShellBase();
   const navigate = useNavigate();
-  // Settings when opened from the menu, the Reports hub when opened from its Inventory tile.
   const returnTo = useReturnTo(`${base}/settings/hub/inventory`);
+  const categories = useCatalogueStore((s) => s.categories);
+  const ready = useCatalogueStore((s) => s.ready);
+  const products = useProductsStore((s) => s.products);
+  const canEdit = hasPermission("products.edit");
 
-  // No counts on these rows. "7" at the end of a line, with no noun, read as a stray number
-  // rather than as information, and the number is already on the screen behind each door.
-  const rows = [
-    {
-      id: "all-products",
-      icon: Package,
-      title: t("catalogue.allProducts"),
-      hint: t("catalogue.allProductsHint"),
-      to: `${base}/products`,
-    },
-    {
-      id: "categories",
-      icon: Layers,
-      title: t("catalogue.categories"),
-      hint: t("catalogue.categoriesHint"),
-      to: `${base}/inventory/categories`,
-    },
-    {
-      id: "units",
-      icon: Ruler,
-      title: t("catalogue.units"),
-      hint: t("catalogue.unitsHint"),
-      to: `${base}/inventory/units`,
-    },
-  ];
+  const [query, setQuery] = useState("");
+  const needle = query.trim().toLowerCase();
+
+  const visible = useMemo(() => {
+    const lines = orderedCategories(categories);
+    if (!needle) return lines;
+    return lines.filter(({ category, parent }) => {
+      const name = categoryDisplayName(category, t).toLowerCase();
+      const parentName = parent ? categoryDisplayName(parent, t).toLowerCase() : "";
+      return name.includes(needle) || parentName.includes(needle);
+    });
+    // `t` is stable for a language; the list is rebuilt when the shop's shelves change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [categories, needle]);
+
+  const itemsLabel = (count: number) =>
+    count === 1 ? t("categories.itemOne") : t("categories.items", { count: String(count) });
+
+  const chevron = (
+    <ChevronRight size={16} style={{ color: "var(--text-secondary)" }} className="shrink-0" />
+  );
 
   return (
     <div
@@ -65,31 +73,70 @@ export default function InventoryCataloguePage() {
       <NavHeader title={t("catalogue.title")} backTo={returnTo} />
 
       <div className="px-4 pt-2">
-        <p className="text-13" style={{ color: "var(--text-secondary)" }}>
-          {t("catalogue.hint")}
-        </p>
+        <SearchBar
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onClear={() => setQuery("")}
+          placeholder={t("categories.searchHint")}
+          aria-label={t("categories.searchHint")}
+          data-testid="catalogue-search"
+        />
       </div>
 
-      <div className="pt-5 pb-6">
-        {/* The rows are separated by their hairline, not wrapped in a card: three doors on an
-            otherwise empty page read better on the page itself than inside a box drawn around
-            them (owner's correction, 2026-10-31). */}
-        <ListCard variant="plain">
-          {rows.map((row) => (
+      {canEdit && (
+        <div className="px-4 pt-3">
+          <button
+            type="button"
+            onClick={() => navigate(`${base}/inventory/categories/new`)}
+            data-testid="catalogue-add-category"
+            className="ds-pressable w-full h-12 rounded-full flex items-center justify-center gap-2 text-14 font-bold"
+            style={{ background: "#2c2c2a", color: "var(--brand)" }}
+          >
+            <Plus size={17} />
+            {t("categories.add")}
+          </button>
+        </div>
+      )}
+
+      <div className="pb-6">
+        <ListCard section={t("catalogue.categories")} variant="plain" separated={false} className="mt-4">
+          {visible.map(({ category, parent }) => {
+            const count = categoryItemCount(category, categories, products);
+            return (
+              <ListRow
+                key={category.id}
+                testId={`catalogue-category-${category.id}`}
+                title={categoryDisplayName(category, t)}
+                meta={parent ? t("categories.under", { name: categoryDisplayName(parent, t) }) : undefined}
+                value={count > 0 ? itemsLabel(count) : undefined}
+                trailing={canEdit ? chevron : undefined}
+                onClick={canEdit ? () => navigate(`${base}/inventory/categories/${category.id}`) : undefined}
+                className={parent ? "ps-8" : ""}
+              />
+            );
+          })}
+          {ready && categories.length === 0 && !needle && (
             <ListRow
-              key={row.id}
-              testId={`catalogue-row-${row.id}`}
-              icon={row.icon}
-              title={row.title}
-              description={row.hint}
-              trailing={
-                <ChevronRight
-                  size={16}
-                  style={{ color: "var(--text-secondary)" }}
-                  className="shrink-0"
-                />
-              }
-              onClick={() => navigate(row.to)}
+              icon={Layers}
+              title={t("categories.emptyTitle")}
+              description={t("categories.emptyBody")}
+            />
+          )}
+        </ListCard>
+
+        {needle && visible.length === 0 ? (
+          <p className="px-4 pt-6 text-center text-13" style={{ color: "var(--text-secondary)" }}>
+            {t("categories.noMatch", { query: query.trim() })}
+          </p>
+        ) : null}
+
+        <ListCard section={t("catalogue.units")} variant="plain" separated={false} className="mt-2">
+          {MEASUREMENT_FAMILIES.map((option) => (
+            <ListRow
+              key={option.family}
+              testId={`catalogue-unit-${option.family}`}
+              title={t(option.labelKey)}
+              description={t(option.hintKey)}
             />
           ))}
         </ListCard>

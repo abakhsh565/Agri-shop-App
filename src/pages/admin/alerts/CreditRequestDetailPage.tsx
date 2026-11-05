@@ -7,6 +7,7 @@ import { useAuthStore } from "@/stores/authStore";
 import { useThemeStore } from "@/stores/themeStore";
 import { formatCurrency } from "@/lib/formatters";
 import { useT } from "@/lib/i18n";
+import { useAppBack } from "@/hooks/useAppBack";
 import { ArrowLeft, AlertTriangle, ChevronRight, CheckCircle2, XCircle } from "lucide-react";
 import {
   getCreditRequestsDB,
@@ -19,6 +20,7 @@ import { calculatePaymentStatus, getPaymentStatusLabel, getPaymentStatusColor } 
 export default function CreditRequestDetailPage() {
   const { requestId } = useParams<{ requestId: string }>();
   const navigate = useNavigate();
+  const back = useAppBack();
   const t = useT();
   const { user } = useAuthStore();
   const { language } = useThemeStore();
@@ -117,7 +119,7 @@ export default function CreditRequestDetailPage() {
 
       {/* Header */}
       <div className="flex items-center gap-3 px-4 py-3">
-        <button onClick={() => navigate(-1)} className="size-9 rounded-full flex items-center justify-center" style={{ background: "var(--surface-2)" }}>
+        <button onClick={back} className="size-9 rounded-full flex items-center justify-center" style={{ background: "var(--surface-2)" }}>
           <ArrowLeft size={18} style={{ color: "var(--text-primary)", transform: isUrdu ? "rotate(180deg)" : "none" }} />
         </button>
         <p className="text-16 font-semibold flex-1" style={{ color: "var(--text-primary)" }}>
@@ -282,7 +284,7 @@ export default function CreditRequestDetailPage() {
         {/* Mark as reviewed */}
         {!isPending && (
           <button
-            onClick={() => navigate(-1)}
+            onClick={back}
             className="w-full h-11 rounded-full text-13 font-semibold flex items-center justify-center"
             style={{ color: "var(--brand-dark, #65a30d)" }}
           >

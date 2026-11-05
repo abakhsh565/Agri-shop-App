@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import {
   AlertTriangle, BarChart3, Bell, BellRing, Building2, Check, ChevronRight, ClipboardList,
   Cog, Compass, Fingerprint, Gauge, GitBranch, Globe, Landmark, Loader2, Lock, LogOut,
-  MessageSquare, Moon, Package, ShoppingCart, Sun, Trash2, TrendingUp, Truck, UserCog, Users, X,
+  MessageSquare, Moon, Package, ShieldCheck, ShoppingCart, Sun, Trash2, TrendingUp, Truck, UserCog, Users, X,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import StatusBar from "@/components/ui/StatusBar";
@@ -67,6 +67,8 @@ interface MenuRow {
   hint: string;
   /** The section's own screen, or the one route that is not a section (`/dashboard`). */
   to: string;
+  /** Where this row's screen returns when it has its own back arrow. */
+  state?: { from: string };
   /** The guided tour's handle, rendered as `data-tour` on the real row. */
   anchor?: string;
   testId?: string;
@@ -320,6 +322,13 @@ export default function AdminSettingsPage() {
         { id: "business-profile", icon: Building2, label: t("settings.menu.businessProfile"), hint: t("settings.menu.businessProfile.hint"), to: "/settings/business" },
       ],
     },
+    {
+      id: "operations",
+      heading: t("settings.menuGroup.operations"),
+      rows: [
+        { id: "inventory", icon: Package, label: t("settings.menu.inventory"), hint: t("settings.menu.inventory.hint"), to: "/settings/hub/inventory", state: { from: `${base}/settings` } },
+      ],
+    },
     // Settings is not the business's table of contents. Sales, stock, money, people and reports
     // are doors in More; what remains here is configuration and this account's own state. The
     // business group above is deliberately short for the same reason.
@@ -383,7 +392,7 @@ export default function AdminSettingsPage() {
                     icon={Icon}
                     title={row.label}
                     meta={row.hint}
-                    onClick={() => navigate(`${base}${row.to}`)}
+                    onClick={() => navigate(`${base}${row.to}`, { state: row.state })}
                     trailing={<ChevronRight size={14} style={{ color: "var(--text-secondary)" }} className="shrink-0" />}
                   />
                 );
@@ -446,6 +455,14 @@ export default function AdminSettingsPage() {
               onClick={() => navigate("/login/pin-set", { state: { returnTo: "/admin/settings" } })}
               icon={Lock}
               title={user && hasPin(user.id) ? t("settings.changePin") : t("settings.setupPin")}
+              trailing={<ChevronRight size={14} style={{ color: "var(--text-secondary)" }} className="shrink-0" />}
+            />
+            <ListRow
+              onClick={() => navigate("/identity")}
+              icon={ShieldCheck}
+              title={t("identity.title")}
+              meta={t("identity.settingsMeta")}
+              testId="settings-identity"
               trailing={<ChevronRight size={14} style={{ color: "var(--text-secondary)" }} className="shrink-0" />}
             />
             {/* Fingerprint login — the second way into a phone that already belongs to

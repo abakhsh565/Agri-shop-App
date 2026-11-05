@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
-import { Loader2 } from "lucide-react";
+import { Navigate, useNavigate, useParams } from "react-router-dom";
+import { Loader2, ShieldCheck } from "lucide-react";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
 import BranchEditor from "@/components/shop/BranchEditor";
@@ -16,6 +16,7 @@ import { useT } from "@/lib/i18n";
 import { useShellBase } from "@/lib/useShellBase";
 import { useShopStore } from "@/stores/shopStore";
 import { useEmployeesStore } from "@/stores/employeesStore";
+import { useCoOwnersStore, type BranchCoOwner } from "@/stores/coOwnersStore";
 import { loadBusinessProfile } from "@/lib/businessProfile";
 import { supabase } from "@/lib/supabase";
 
@@ -61,7 +62,9 @@ export default function BranchDetailPage() {
   const assign = useShopStore((s) => s.assignBranchResponsibility);
   const transfer = useShopStore((s) => s.transferBranchResponsibility);
   const revoke = useShopStore((s) => s.revokeBranchResponsibility);
+  const getBranchCoOwners = useCoOwnersStore((s) => s.getBranchCoOwners);
   const [responsible, setResponsible] = useState<{ user_id: string; name: string | null } | null>(null);
+  const [coOwners, setCoOwners] = useState<BranchCoOwner[]>([]);
   const [handingOver, setHandingOver] = useState(false);
   const [revoking, setRevoking] = useState(false);
   const [revokeReason, setRevokeReason] = useState("");
@@ -76,6 +79,16 @@ export default function BranchDetailPage() {
     const { data } = await supabase.rpc("branch_responsible_person", { p_branch_id: branchId });
     const person = data as { user_id?: string; name?: string | null } | null;
     setResponsible(person?.user_id ? { user_id: person.user_id, name: person.name ?? null } : null);
+  }
+
+  async function readCoOwners() {
+    if (!branchId || !isOwner) return;
+    try {
+      const result = await getBranchCoOwners(branchId);
+      setCoOwners(result.coOwners ?? []);
+    } catch {
+      setCoOwners([]);
+    }
   }
   async function archive() {
     if (!branchId || !reason.trim() || submitting.current) return;
@@ -146,6 +159,7 @@ export default function BranchDetailPage() {
 
   useEffect(() => {
     void readResponsible();
+    void readCoOwners();
     if (isOwner) void loadEmployees();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- readResponsible closes over branchId only
   }, [branchId, isOwner, loadEmployees]);
@@ -157,6 +171,10 @@ export default function BranchDetailPage() {
   useEffect(() => {
     if (branchesLoaded && !branch) navigate(`${base}/settings/hub/branches`, { replace: true });
   }, [branchesLoaded, branch, base, navigate]);
+
+  // A Co-Owner can read the branch through their own screens but cannot manage its lifecycle.
+  // This direct address must not become a second way into the Owner's branch editor.
+  if (!isOwner) return <Navigate to={`${base}/more`} replace />;
 
   if (!branch) {
     return (
@@ -217,6 +235,46 @@ export default function BranchDetailPage() {
           )}
         </ListCard>
       </div>
+
+      {isOwner && (
+        <div className="px-4 pt-5" data-testid={`branch-co-owner-card-${branch.id}`}>
+          <p className="ds-section-label px-1 mb-2">{t("branchFlow.coOwner")}</p>
+          <ListCard>
+            {branch.isMain ? (
+              <ListRow
+                title={t("branchFlow.mainOwnerOnly")}
+                meta={t("branchFlow.mainOwnerOnlyHint")}
+              />
+            ) : (
+              <>
+                {coOwners.length > 0 ? (
+                  coOwners.map((person) => (
+                    <ListRow
+                      key={person.grantId}
+                      title={person.name}
+                      meta={`${person.phone} · ${t(person.status === "active" ? "coOwners.statusActive" : person.status === "invited" ? "coOwners.statusInvited" : "coOwners.statusSuspended")}`}
+                      testId={`branch-co-owner-${person.grantId}`}
+                      onClick={() => navigate(`${base}/settings/hub/people/co-owners/${person.grantId}`)}
+                    />
+                  ))
+                ) : (
+                  <ListRow
+                    title={t("branchFlow.noCoOwner")}
+                    meta={t("branchFlow.noCoOwnerHint")}
+                  />
+                )}
+                <ListRow
+                  icon={ShieldCheck}
+                  title={t("branchFlow.assignCoOwner")}
+                  meta={t("branchFlow.coOwnerOnlyBranch")}
+                  testId={`branch-assign-co-owner-${branch.id}`}
+                  onClick={() => navigate(`${base}/settings/hub/people/co-owners/new?branchId=${branch.id}`)}
+                />
+              </>
+            )}
+          </ListCard>
+        </div>
+      )}
 
       {!branch.isMain && isOwner && (
         <div className="px-4 pt-5 pb-8">

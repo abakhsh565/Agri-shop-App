@@ -24,7 +24,10 @@ export function homePathForUser(user: User | null | undefined): string {
     case "owner":
       return "/admin/dashboard";
     case "co_owner":
-      return "/co-owner/dashboard";
+      // A Co-Owner is a separate phone profile, not a separate product. It opens the same
+      // Owner shell and screens; permissions, branch scope and major-action rules remain the
+      // server's checks inside that shell.
+      return "/admin/dashboard";
     default:
       return "/employee/dashboard";
   }
@@ -68,6 +71,24 @@ export function coOwnerErrorCode(error: unknown): string {
     "APPROVAL_NOT_REQUIRED",
     "UNSUPPORTED_APPROVAL_ACTION",
     "VALIDATION",
+    "REAUTH_REQUIRED",
+    "TRANSFER_ALREADY_PENDING",
+    "TRANSFER_NOT_FOUND",
+    "TRANSFER_NOT_PENDING",
+    "TRANSFER_NOT_ACCEPTED",
+    "TRANSFER_EXPIRED",
+    "RECIPIENT_NOT_FOUND",
+    "RECIPIENT_IS_OWNER",
+    "RECIPIENT_NOT_IN_THIS_BUSINESS",
+    "RECIPIENT_PHONE_MISMATCH",
+    "RECIPIENT_NOT_ACTIVE_CO_OWNER",
+    "RECIPIENT_GRANT_ENDED",
+    "GRANT_NOT_ARCHIVED",
+    "GRANT_BELONGS_TO_OWNER",
+    "BRANCH_NOT_FOUND",
+    "MAIN_BRANCH_OWNER_ONLY",
+    "BRANCH_ALREADY_HAS_CO_OWNER",
+    "CO_OWNER_CANNOT_DELETE_BRANCH",
   ];
   return known.find((code) => raw.includes(code)) ?? "UNKNOWN";
 }

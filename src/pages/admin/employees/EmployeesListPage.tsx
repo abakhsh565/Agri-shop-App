@@ -6,11 +6,10 @@ import { useEmployeesStore } from "@/stores/employeesStore";
 import { useShopStore } from "@/stores/shopStore";
 import { supabase } from "@/lib/supabase";
 import { hasPermission } from "@/lib/tenantContext";
-import { listEmployeeAccessRequests } from "@/lib/employeeAccessRequests";
 import type { User } from "@/types";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
-import { Plus, ChevronRight, Users, UserPlus } from "lucide-react";
+import { Plus, ChevronRight, Users } from "lucide-react";
 import ListCard from "@/components/ui/ListCard";
 import ListRow from "@/components/ui/ListRow";
 import { SkeletonList } from "@/components/ui/Skeleton";
@@ -54,19 +53,6 @@ export default function EmployeesListPage() {
   const activeBranchId = useShopStore((s) => s.activeBranchId);
   const activeBranchName = useShopStore((s) => s.activeBranchName);
   const canManage = hasPermission("employees.manage");
-
-  // A request remains actionable even after its notification is marked read, so
-  // the staff list carries its own small door to the inbox. A view-only role
-  // never calls the RPC and never sees the row.
-  const [pendingRequests, setPendingRequests] = useState(0);
-  useEffect(() => {
-    if (!canManage) return;
-    let alive = true;
-    void listEmployeeAccessRequests("pending")
-      .then((rows) => { if (alive) setPendingRequests(rows.length); })
-      .catch(() => { if (alive) setPendingRequests(0); });
-    return () => { alive = false; };
-  }, [canManage]);
 
   /**
    * The roster that belongs to the branch being worked in.
@@ -152,42 +138,7 @@ export default function EmployeesListPage() {
       )}
 
       <div className="flex flex-col px-4 gap-3 pb-24">
-        {canManage && pendingRequests > 0 && (
-          <ListCard>
-            <ListRow
-              testId="employee-access-requests"
-              onClick={() => navigate(`${teamBase}/requests`)}
-              tile={
-                <div
-                  className="size-11 rounded-full flex items-center justify-center shrink-0"
-                  style={{ background: "var(--brand-light)" }}
-                >
-                  <UserPlus size={18} style={{ color: "var(--brand-dark)" }} />
-                </div>
-              }
-              trailing={
-                <div className="flex items-center gap-2 shrink-0">
-                  <span
-                    className="text-10 font-bold px-2 py-0.5 rounded-full"
-                    style={{ background: "var(--brand)", color: "#0a0a0a" }}
-                  >
-                    {pendingRequests}
-                  </span>
-                  <ChevronRight size={16} style={{ color: "var(--text-secondary)" }} />
-                </div>
-              }
-            >
-              <div className="flex flex-col min-w-0">
-                <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>
-                  {t("accessRequests.title")}
-                </p>
-                <p className="text-xs mt-0.5" style={{ color: "var(--text-secondary)" }}>
-                  {t("accessRequests.pendingCount", { count: pendingRequests })}
-                </p>
-              </div>
-            </ListRow>
-          </ListCard>
-        )}        {/* Invitations, above the team rather than inside it: the number beside the
+        {/* Invitations, above the team rather than inside it: the number beside the
             branch is the people who work there, and an invitation is not one yet. */}
         {!loading && invitedHere.length > 0 && (
           <div className="flex flex-col gap-2">

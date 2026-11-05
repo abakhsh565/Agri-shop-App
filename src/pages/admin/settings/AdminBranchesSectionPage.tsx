@@ -1,8 +1,10 @@
+import { Navigate } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
 import BranchesSection from "@/components/shop/BranchesSection";
 import { useT } from "@/lib/i18n";
 import { useShellBase } from "@/lib/useShellBase";
+import { isCurrentUserOwner } from "@/lib/tenantContext";
 
 /**
  * Branches, as the Settings section opens it.
@@ -25,6 +27,10 @@ import { useShellBase } from "@/lib/useShellBase";
 export default function AdminBranchesSectionPage() {
   const t = useT();
   const base = useShellBase();
+  const owner = isCurrentUserOwner();
+
+  // A branch Co-Owner can work in their branch but branch lifecycle stays with the Owner.
+  if (!owner) return <Navigate to={`${base}/more`} replace />;
 
   return (
     <div

@@ -9,6 +9,7 @@ import { Capacitor } from "@capacitor/core";
 import { parseInviteLink, inviteSearchParams } from "@/lib/deepLink";
 import { logEnvironmentInfo } from "@/lib/envGuard";
 import { useAuthStore } from "@/stores/authStore";
+import { useCartStore } from "@/stores/cartStore";
 
 const isNative = Capacitor.isNativePlatform();
 
@@ -46,6 +47,30 @@ export default function App() {
     };
     document.addEventListener("visibilitychange", onVisible);
     return () => document.removeEventListener("visibilitychange", onVisible);
+  }, []);
+
+  /**
+   * An unfinished sale belongs to the account that started it, not to the phone.
+   *
+   * The cart used to be one persisted object, so an owner's half-filled cart was still there
+   * when an employee signed in and picked the same customer. The key separates accounts; the
+   * subscription also runs on sign-out, which drops that account's saved cart from the device.
+   */
+  useEffect(() => {
+    const apply = (user: ReturnType<typeof useAuthStore.getState>["user"]) => {
+      useCartStore
+        .getState()
+        .setScope(user ? `${user.tenantId ?? "none"}:${user.id}` : null);
+    };
+    apply(useAuthStore.getState().user);
+    return useAuthStore.subscribe((state, previous) => {
+      if (
+        state.user?.id !== previous.user?.id ||
+        state.user?.tenantId !== previous.user?.tenantId
+      ) {
+        apply(state.user);
+      }
+    });
   }, []);
 
   /**

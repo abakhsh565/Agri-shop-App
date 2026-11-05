@@ -8,9 +8,11 @@ import { formatCurrency, formatDate } from "@/lib/formatters";
 import { useUIStore } from "@/stores/uiStore";
 import { Calculator, CheckCircle, AlertTriangle } from "lucide-react";
 import { useT } from "@/lib/i18n";
+import { useShellBase } from "@/lib/useShellBase";
 
 export default function DailyCashReconciliationPage() {
   const t = useT();
+  const base = useShellBase();
   const { language } = useThemeStore();
   const isUrdu = language === "ur";
   const sales = useSalesStore((s) => s.sales);
@@ -72,7 +74,7 @@ export default function DailyCashReconciliationPage() {
       style={{ background: "var(--background)", direction: isUrdu ? "rtl" : "ltr" }}
     >
       <StatusBar />
-      <NavHeader title={t("payments.dailyReconciliation")} />
+      <NavHeader title={t("payments.dailyReconciliation")} backTo={`${base}/settings/hub/finance`} historyBack />
 
       <div className="flex flex-col gap-4 p-4">
         {/* Date selector */}

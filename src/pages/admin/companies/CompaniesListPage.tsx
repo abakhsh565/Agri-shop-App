@@ -10,7 +10,6 @@ import NavHeader from "@/components/ui/NavHeader";
 import { Plus, ChevronRight, Building2 } from "lucide-react";
 import SearchBar from "@/components/ui/SearchBar";
 import { SkeletonList } from "@/components/ui/Skeleton";
-import { useReturnTo } from "@/lib/useReturnTo";
 import { hasPermission } from "@/lib/tenantContext";
 import { useShellBase } from "@/lib/useShellBase";
 
@@ -25,10 +24,6 @@ function hashColor(name: string) {
 export default function CompaniesListPage() {
   const navigate = useNavigate();
   const base = useShellBase();
-  // The list can be opened from Reports, More or a direct link. Its default parent is Settings;
-  // a caller that knows a closer parent (Reports, for example) passes its own path in router
-  // state, and the journey tracker still wins when there is a real previous screen.
-  const backTo = useReturnTo(base === "/admin" ? `${base}/settings` : `${base}/more`);
   const { language } = useThemeStore();
   const t = useT();
   const canCreate = hasPermission("companies.create");
@@ -53,7 +48,7 @@ export default function CompaniesListPage() {
       style={{ background: "var(--background)", direction: isUrdu ? "rtl" : "ltr" }}
     >
       <StatusBar />
-      <NavHeader title={t("admin.companies")} backTo={backTo} />
+      <NavHeader title={t("admin.companies")} />
 
       {/* Search */}
       <div className="px-4 pb-3">

@@ -116,7 +116,7 @@ export default function AdminCustomersSectionPage() {
       data-testid="customers-hub-page"
     >
       <StatusBar />
-      <NavHeader title={t("settings.menu.customers")} backTo={`${base}/settings`} />
+      <NavHeader title={t("settings.menu.customers")} backTo={`${base}/settings`} historyBack />
 
       <div className="px-4 pt-2">
         <h1 className="text-22 font-bold leading-tight">{t("hub.customers.collectionTitle")}</h1>

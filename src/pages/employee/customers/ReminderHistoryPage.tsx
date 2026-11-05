@@ -121,7 +121,7 @@ export default function ReminderHistoryPage() {
       style={{ background: "var(--background)", direction: isUrdu ? "rtl" : "ltr" }}
     >
       <StatusBar />
-      <NavHeader title={t("customerProfile.reminderHistory")} />
+      <NavHeader title={t("customerProfile.reminderHistory")} historyBack />
 
       <div className="flex flex-col gap-6 px-4 pt-4 pb-8">
         {/* ── The owner's payment diary, for this customer ───────────────────── */}
@@ -130,18 +130,22 @@ export default function ReminderHistoryPage() {
             <p className="text-13 font-bold" style={{ color: "var(--text-primary)" }}>
               {t("paymentBook.title")}
             </p>
-            {/* The same note, listed in full where it is managed. Without this the two screens
-                each looked like the only place a reminder existed. */}
-            <button
-              type="button"
-              onClick={() => navigate(`${base}/settings/hub/finance/reminders`)}
-              data-testid="customer-reminders-open-book"
-              className="flex items-center gap-1 text-11 font-semibold shrink-0 active:opacity-70"
-              style={{ color: "var(--brand-dark)" }}
-            >
-              {t("paymentBook.openBook")}
-              <ChevronRight size={12} />
-            </button>
+            {/* The Finance book is owner-only. An employee's "Open" used to leave this screen
+                for an owner route, where the route guard ended the employee session instead of
+                showing the reminders already listed here. The rows on this page are the
+                employee's view; only the owner gets the door to the full book. */}
+            {isOwner && (
+              <button
+                type="button"
+                onClick={() => navigate(`${base}/settings/hub/finance/reminders`)}
+                data-testid="customer-reminders-open-book"
+                className="flex items-center gap-1 text-11 font-semibold shrink-0 active:opacity-70"
+                style={{ color: "var(--brand-dark)" }}
+              >
+                {t("paymentBook.openBook")}
+                <ChevronRight size={12} />
+              </button>
+            )}
           </div>
 
           {isOwner && (

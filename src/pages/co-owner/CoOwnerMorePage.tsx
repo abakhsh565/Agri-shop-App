@@ -5,12 +5,12 @@ import {
   Building2,
   CheckSquare,
   ClipboardList,
+  Crown,
   Landmark,
   Package,
   Settings,
   ShoppingBag,
   Truck,
-  UserPlus,
   Users,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -55,8 +55,8 @@ export default function CoOwnerMorePage() {
       headingKey: "more.group.people",
       rows: [
         { labelKey: "nav.team", path: "/co-owner/team", icon: Users, show: permissions.has("employees.view") },
-        { labelKey: "accessRequests.title", path: "/co-owner/employees/requests", icon: UserPlus, show: permissions.has("employees.manage") },
         { labelKey: "coOwner.approvalsTitle", path: "/co-owner/approvals", icon: CheckSquare, show: true },
+        { labelKey: "coOwner.ownershipTransfer", path: "/co-owner/ownership-transfer", icon: Crown, show: true },
         { labelKey: "settings.activityLog", path: "/co-owner/activity", icon: ClipboardList, show: permissions.has("activity.view") },
       ],
     },

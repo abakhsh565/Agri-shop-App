@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Ban, CheckCircle2, Pencil, RotateCcw, ShieldAlert, ShieldCheck } from "lucide-react";
+import { ArchiveRestore, Ban, CheckCircle2, Pencil, RotateCcw, ShieldAlert, ShieldCheck } from "lucide-react";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
 import { useT } from "@/lib/i18n";
 import { useShellBase } from "@/lib/useShellBase";
 import { isCurrentUserOwner } from "@/lib/tenantContext";
+import { useAuthStore } from "@/stores/authStore";
 import { coOwnerEnabled, coOwnerErrorCode } from "@/lib/experience";
 import {
   useCoOwnersStore,
@@ -18,7 +19,7 @@ const STATUS_LABEL: Record<CoOwnerStatus, string> = {
   active: "coOwners.statusActive",
   invited: "coOwners.statusInvited",
   suspended: "coOwners.statusSuspended",
-  revoked: "coOwners.statusRevoked",
+  revoked: "coOwners.archived",
 };
 
 const AUTHORITY_LABEL: Record<AuthorityMode, string> = {
@@ -51,8 +52,9 @@ export default function CoOwnerDetailPage() {
   const navigate = useNavigate();
   const { grantId } = useParams<{ grantId: string }>();
   const owner = isCurrentUserOwner();
+  const currentUserId = useAuthStore((s) => s.user?.id);
   const enabled = coOwnerEnabled();
-  const { get, suspend, reactivate, revoke } = useCoOwnersStore();
+  const { get, suspend, reactivate, restore, revoke } = useCoOwnersStore();
 
   const [grant, setGrant] = useState<CoOwnerDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -79,7 +81,7 @@ export default function CoOwnerDetailPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [grantId, owner, enabled]);
 
-  async function act(action: "suspend" | "reactivate" | "revoke") {
+  async function act(action: "suspend" | "reactivate" | "restore" | "revoke") {
     if (!grantId || busy) return;
     setBusy(true);
     setError("");
@@ -89,6 +91,9 @@ export default function CoOwnerDetailPage() {
         await load();
       } else if (action === "reactivate") {
         await reactivate(grantId);
+        await load();
+      } else if (action === "restore") {
+        await restore(grantId);
         await load();
       } else {
         await revoke(grantId, reason.trim() || t("coOwners.revokeDefaultReason"));
@@ -322,6 +327,32 @@ export default function CoOwnerDetailPage() {
                     </>
                   )}
                 </div>
+              </Card>
+            )}
+
+            {grant.status === "revoked" && (
+              <Card>
+                <div className="flex items-center gap-2">
+                  <ArchiveRestore size={17} style={{ color: "var(--brand-dark)" }} />
+                  <p className="text-12 font-bold">{t("coOwners.archivedTitle")}</p>
+                </div>
+                <p className="text-11 mt-2" style={{ color: "var(--text-secondary)" }}>
+                  {grant.revocationReason === "ownership_transferred"
+                    ? t("coOwners.promotedOwnerHint")
+                    : t("coOwners.archiveHint")}
+                </p>
+                {grant.revocationReason !== "ownership_transferred" && grant.userId !== currentUserId && (
+                  <button
+                    type="button"
+                    onClick={() => act("restore")}
+                    disabled={busy}
+                    className="mt-3 w-full h-10 rounded-full text-12 font-bold disabled:opacity-50"
+                    style={{ background: "var(--cta)", color: "var(--cta-fg)" }}
+                    data-testid="co-owner-restore"
+                  >
+                    {busy ? t("coOwners.saving") : t("coOwners.restore")}
+                  </button>
+                )}
               </Card>
             )}
 

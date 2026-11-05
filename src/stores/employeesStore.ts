@@ -22,6 +22,11 @@ interface UserRow {
   deactivated_by: string | null;
   created_by: string | null;
   created_at: string;
+  /** Present when the row came from get_shop_members(). */
+  membership_status?: MembershipStatus;
+  branch_scope?: string[] | null;
+  role_id?: string | null;
+  access_kind?: string | null;
 }
 
 // `membershipStatus` comes from the memberships table, not from `users` — that
@@ -156,50 +161,19 @@ export const useEmployeesStore = create<EmployeesState>((set, get) => ({
     const context = captureDataContext();
     if (!isDataContextCurrent(context)) return;
     set({ loading: true, error: null });
-    const { data, error } = await supabase
-      .from("users")
-      .select("*")
-      .order("created_at", { ascending: true });
+    // Authorization, not RLS row visibility, decides this directory. A person whose home shop
+    // is another shop still has a membership here, and get_shop_members() returns exactly this
+    // shop's memberships so their invitation is visible to the inviter.
+    const { data, error } = await supabase.rpc("get_shop_members");
     if (!isDataContextCurrent(context)) return;
     if (error) {
       set({ loading: false, ready: true, error: error.message });
       return;
     }
-    // Read the membership status alongside, so the list can distinguish an
-    // invitation that has not been accepted from an employee who works here — and
-    // the branch placement, because an invitation that is still pending is not in
-    // `get_branch_employee_ids()` (that read is the ACTIVE team of a branch), so
-    // without its placement the person the owner just invited would belong to no
-    // screen at all.
-    const { data: memberships } = await supabase
-      .from("memberships")
-      .select("user_id, status, branch_scope, role_id, access_kind");
-    if (!isDataContextCurrent(context)) return;
-    const statusByUser = new Map<string, MembershipStatus>(
-      (memberships ?? []).map((m) => [m.user_id as string, m.status as MembershipStatus])
-    );
-    const scopeByUser = new Map<string, string[]>();
+    const rows = (data ?? []) as UserRow[];
     const roleIdByUser = new Map<string, string>();
-    // A Co-Owner keeps memberships.role = 'employee' by design, so the
-    // membership category — not the role — is what keeps them out of the
-    // ordinary Employee directory.
-    const coOwnerUserIds = new Set<string>();
-    for (const m of (memberships ?? []) as Array<{
-      user_id: string;
-      branch_scope: unknown;
-      role_id: string | null;
-      access_kind?: string | null;
-    }>) {
-      if (!m.user_id) continue;
-      if (m.access_kind === "co_owner") {
-        coOwnerUserIds.add(m.user_id);
-        continue;
-      }
-      const scope = Array.isArray(m.branch_scope)
-        ? (m.branch_scope as unknown[]).filter((id): id is string => typeof id === "string")
-        : [];
-      if (scope.length > 0) scopeByUser.set(m.user_id, scope);
-      if (m.role_id) roleIdByUser.set(m.user_id, m.role_id);
+    for (const row of rows) {
+      if (row.role_id) roleIdByUser.set(row.id, row.role_id);
     }
 
     // The name behind each default role, in ONE read. The alternative — asking
@@ -218,11 +192,16 @@ export const useEmployeesStore = create<EmployeesState>((set, get) => ({
     }
 
     set({
-      employees: (data as UserRow[]).filter((r) => !coOwnerUserIds.has(r.id)).map((r) =>
+      // The original owner has a dedicated owner workspace. Co-Owners have their own
+      // delegation screens. Neither is an employee row, even though both have a
+      // membership in the same business.
+      employees: rows
+        .filter((r) => !r.is_original_owner && r.access_kind !== "co_owner")
+        .map((r) =>
         userFromRow(
           r,
-          statusByUser.get(r.id),
-          scopeByUser.get(r.id),
+          r.membership_status,
+          r.branch_scope ?? null,
           roleIdByUser.has(r.id) ? roleNameById.get(roleIdByUser.get(r.id) as string) ?? null : null
         )
       ),
@@ -259,7 +238,10 @@ export const useEmployeesStore = create<EmployeesState>((set, get) => ({
         photoUrl: input.photoUrl ?? null,
         overrides: input.overrides ?? null,
         branchScope: input.branchScope ?? null,
-        branchRoles: input.branchRoles ?? null,
+        // Only send this key when the caller actually selected per-branch roles. Sending
+        // JSON null makes `payload->'branchRoles'` a JSON null value (not SQL NULL), which
+        // create_employee_core correctly refuses because it is not an object.
+        ...(input.branchRoles ? { branchRoles: input.branchRoles } : {}),
         createdBy: input.createdBy ?? null,
       },
     });

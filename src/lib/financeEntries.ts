@@ -31,7 +31,7 @@ export type FinanceMethod = "cash" | "bank" | "easypaisa" | "jazzcash";
  * two weeks, a daily wage every day. Anything more expressive ("the last working day") would be a
  * calendar rule the database could not post honestly without a holiday table it does not have.
  */
-export type RepeatUnit = "none" | "day" | "week" | "month";
+export type RepeatUnit = "none" | "day" | "week" | "month" | "year";
 
 /** The words for a cadence, for the picker and for a row's badge. */
 export const REPEAT_KEY: Record<RepeatUnit, I18nKey> = {
@@ -39,6 +39,7 @@ export const REPEAT_KEY: Record<RepeatUnit, I18nKey> = {
   day: "finance.repeat.day",
   week: "finance.repeat.week",
   month: "finance.repeat.month",
+  year: "finance.repeat.year",
 };
 
 export interface FinanceTotals {

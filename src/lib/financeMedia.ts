@@ -1,5 +1,6 @@
 import { supabase } from "@/lib/supabase";
 import { compressImage } from "@/lib/storage";
+import { HARD_MAX_IMAGE_BYTES } from "@/lib/imageCompression";
 
 /**
  * The papers and voice notes attached to recorded money.
@@ -88,9 +89,10 @@ export function mediaMime(file: File, kind: FinanceMediaKind): string {
 /**
  * Upload one draft and record it against the entry.
  *
- * The photo is compressed first (the same 1200px / JPEG 0.82 rule every other image in the app
- * follows), because a modern phone camera's receipt is 4–8 MB and the bucket allows 10: one bill
- * photographed twice would fill the allowance. A voice note is sent as recorded.
+ * The photo is prepared first by the app's adaptive, 500 KB-capped path, because a modern phone
+ * camera's receipt is 4–8 MB and the bucket allows 10: one bill photographed twice would fill the
+ * allowance. A receipt is text-like, so that path keeps more resolution than a product photo. A
+ * voice note is sent as recorded.
  */
 export async function uploadFinanceMedia(input: {
   shopId: string;
@@ -105,6 +107,9 @@ export async function uploadFinanceMedia(input: {
   }
   const prepared =
     input.kind === "photo" ? await compressImage(input.file) : input.file;
+  if (input.kind === "photo" && prepared.size > HARD_MAX_IMAGE_BYTES) {
+    throw new Error("TOO_LARGE");
+  }
   const mime = mediaMime(prepared, input.kind);
   const path =
     `${input.shopId}/${input.branchId}/${input.entryId}/` +

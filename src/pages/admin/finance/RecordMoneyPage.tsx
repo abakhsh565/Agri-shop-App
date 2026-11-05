@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type InputHTMLAttributes } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Check, Mic, Square, X } from "lucide-react";
+import { Check, ContactRound, Mic, Square, X } from "lucide-react";
 import StatusBar from "@/components/ui/StatusBar";
 import Button from "@/components/ui/Button";
 import DateField from "@/components/ui/DateField";
@@ -11,6 +11,8 @@ import { useAuthStore } from "@/stores/authStore";
 import { useShopStore } from "@/stores/shopStore";
 import { useThemeStore } from "@/stores/themeStore";
 import { useUIStore } from "@/stores/uiStore";
+import { useCustomersStore } from "@/stores/customersStore";
+import { canPickContact, pickContact } from "@/lib/contacts";
 import { pkToday } from "@/lib/pkDate";
 import { formatCurrency } from "@/lib/formatters";
 import { listen } from "@/lib/assistant";
@@ -77,13 +79,14 @@ const CATEGORIES = FINANCE_CATEGORIES;
 const METHODS = FINANCE_METHODS;
 
 /** The four cadences, in the order a reader thinks of them: once, then the calendar. */
-const REPEATS: RepeatUnit[] = ["none", "day", "week", "month"];
+const REPEATS: RepeatUnit[] = ["none", "day", "week", "month", "year"];
 
 /** How the every-n row names its unit; a cadence of 1 reads "day", not "days". */
 const REPEAT_UNIT_KEY = {
   day: "finance.repeat.days",
   week: "finance.repeat.weeks",
   month: "finance.repeat.months",
+  year: "finance.repeat.years",
 } as const;
 
 /** The singular, for the ordinary case of every one. */
@@ -91,6 +94,7 @@ const REPEAT_UNIT_ONE_KEY = {
   day: "finance.repeat.unitDay",
   week: "finance.repeat.unitWeek",
   month: "finance.repeat.unitMonth",
+  year: "finance.repeat.unitYear",
 } as const;
 
 /** The tab's own words: the same three the overflow menu offers. */
@@ -148,6 +152,7 @@ export default function RecordMoneyPage() {
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const { addToast } = useUIStore();
+  const customers = useCustomersStore((s) => s.customers);
   const role = useAuthStore((s) => s.user?.membershipRole);
   const language = useThemeStore((s) => s.language);
 
@@ -380,6 +385,16 @@ export default function RecordMoneyPage() {
           setListening(false);
         },
         language === "ur" ? "ur-PK" : "en-PK",
+        (code) => {
+          setListening(false);
+          setVoiceError(
+            code === "unsupported"
+              ? t("finance.quickAdd.voiceUnsupported")
+              : code === "permission"
+                ? t("finance.quickAdd.voicePermission")
+                : t("finance.quickAdd.voiceFailed"),
+          );
+        },
       );
       if (!stop) {
         setVoiceError(t("finance.quickAdd.voiceUnsupported"));
@@ -779,13 +794,53 @@ export default function RecordMoneyPage() {
                 <p className="text-12 font-semibold" style={labelStyle}>{t("finance.counterparty")}</p>
                 <span className="text-11" style={optionalStyle}>{t("finance.optional")}</span>
               </div>
-              <PlainField
-                testId="record-counterparty"
-                value={counterparty}
-                onChange={(e) => setCounterparty(e.target.value)}
-                placeholder={t("finance.counterpartyPlaceholder")}
-                aria-label={t("finance.counterparty")}
-              />
+              <div className="flex items-stretch gap-2">
+                <div className="flex-1 min-w-0">
+                  <PlainField
+                    testId="record-counterparty"
+                    list="record-counterparty-options"
+                    value={counterparty}
+                    onChange={(e) => setCounterparty(e.target.value)}
+                    placeholder={t("finance.counterpartyPlaceholder")}
+                    aria-label={t("finance.counterparty")}
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (!canPickContact()) {
+                      addToast(t("contacts.notSupported"), "info");
+                      return;
+                    }
+                    try {
+                      const contact = await pickContact();
+                      if (contact?.name) setCounterparty(contact.name);
+                    } catch {
+                      addToast(t("contacts.permissionDenied"), "error");
+                    }
+                  }}
+                  disabled={saving}
+                  aria-label={t("contacts.pick")}
+                  title={t("contacts.pick")}
+                  data-testid="record-counterparty-contact"
+                  className="size-12 rounded-full flex items-center justify-center shrink-0 active:opacity-70 disabled:opacity-45"
+                  style={{ background: "var(--surface-2)", color: "var(--text-secondary)", border: "1px solid var(--divider)" }}
+                >
+                  <ContactRound size={17} />
+                </button>
+              </div>
+              {/* A saved customer is a suggestion, not a lock: the field still accepts a name
+                  typed by hand. The contact button is the same native picker the customer form
+                  uses, so the phone's address book is available without a second sign-in. */}
+              <datalist id="record-counterparty-options">
+                {customers
+                  .filter((customer) => !customer.isArchived)
+                  .slice()
+                  .sort((a, b) => a.name.localeCompare(b.name))
+                  .map((customer) => (
+                    <option key={customer.id} value={customer.name} />
+                  ))}
+              </datalist>
             </div>
 
             <div className="flex flex-col gap-2">

@@ -73,10 +73,9 @@ export const HUB_SECTIONS: HubSection[] = [
       //     and the label now say what the screen actually shows (owner's correction, 2026-10-30).
       //   - Expiring products is its own screen (`/alerts/expiry`). It and Low stock both opened
       //     the same alerts screen, so one of the two rows always opened the wrong list.
-      // Products is a small menu now (0259): All products, the shop's shelves and its units.
-      // The row opens that menu, because the shelves and units have no other door.
-      { id: "products", labelKey: "hub.inventory.products", to: "/inventory/catalogue" },
-      { id: "variants", labelKey: "hub.inventory.variants", to: "/products" },
+      // Products is the list itself. Its manage control opens the shelves and units, so this
+      // menu does not repeat the same destination as a separate “variants” row.
+      { id: "products", labelKey: "hub.inventory.products", to: "/products" },
       { id: "stock", labelKey: "hub.inventory.stock", to: "/inventory/stockvalues" },
       { id: "movements", labelKey: "hub.inventory.movements", to: "/inventory/movements" },
       { id: "low-stock", labelKey: "hub.inventory.lowStock", to: "/alerts/inventory" },
@@ -165,7 +164,6 @@ export const HUB_SECTIONS: HubSection[] = [
     id: "reminders",
     titleKey: "settings.menu.reminders",
     rows: [
-      { id: "approvals", labelKey: "hub.reminders.approvals", to: "/employees/requests" },
       { id: "credit-requests", labelKey: "hub.reminders.creditRequests", to: "/alerts/credit-overrides" },
       { id: "overdue", labelKey: "hub.reminders.overdue", to: "/customers" },
       { id: "stock", labelKey: "hub.reminders.stock", to: "/alerts/inventory" },

@@ -144,13 +144,14 @@ describe("every door asks the same question", () => {
     expect(read("src/pages/auth/PINLoginPage.tsx")).toMatch(/pinAllowedOnThisDevice/);
   });
 
-  it("a code is the only thing that starts the clock", () => {
-    // If a second place started (or restarted) the window, the month would mean nothing.
+  it("only a verified code starts the clock, at sign-in or recovery", () => {
+    // The recovery door confirms a replacement number with a new code before it writes the
+    // phone, so it is a legitimate second anchor. Nothing else may start the window.
     const callers = fs
       .readdirSync(path.join(process.cwd(), "src/pages/auth"))
       .filter((f) => f.endsWith(".tsx"))
       .filter((f) => /markPhoneVerified/.test(read(`src/pages/auth/${f}`)));
-    expect(callers).toEqual(["OTPVerifyPage.tsx"]);
+    expect(callers.sort()).toEqual(["AccountRecoveryPage.tsx", "OTPVerifyPage.tsx"]);
   });
 
   it("the launch knows the account it last served, so a PIN door can be drawn", () => {

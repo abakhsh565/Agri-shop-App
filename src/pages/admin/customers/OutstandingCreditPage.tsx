@@ -115,7 +115,7 @@ export default function OutstandingCreditPage() {
       data-testid="outstanding-credit-page"
     >
       <StatusBar />
-      <NavHeader title={t("outstanding.title")} backTo={`${base}/settings/hub/customers`} />
+      <NavHeader title={t("outstanding.title")} backTo={`${base}/settings/hub/customers`} historyBack />
 
       {/* Aging, as text tabs rather than pills: these narrow one list by how late it is, and the
           reference sets them apart from the state chips below. */}

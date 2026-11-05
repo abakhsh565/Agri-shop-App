@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ChevronRight, Plus, Users } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Users } from "lucide-react";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
 import SearchBar from "@/components/ui/SearchBar";
@@ -11,19 +11,16 @@ import { useShellBase } from "@/lib/useShellBase";
 import { hasPermission } from "@/lib/tenantContext";
 import { useEmployeesStore } from "@/stores/employeesStore";
 import { useAuthStore } from "@/stores/authStore";
+import { useShopStore } from "@/stores/shopStore";
+import { useThemeStore } from "@/stores/themeStore";
 import type { User } from "@/types";
 
 /**
  * The roster — who works here, what they do, and where.
  *
- * This is the screen the People hub's first door opens. It carries the one thing a directory
- * needs and nothing else: a search, a status filter and one line per person. The counts, the
- * invite action and the way back to roles/activity stay on the hub, so this screen is only about
- * the people themselves.
- *
- * THE PEOPLE ARE THE BUSINESS'S, NOT ONE BRANCH'S. The branch each person belongs to is on the
- * employee's own page. The signed-in account itself is not listed: this is a directory of the
- * other people in the business, not a way to open your own profile.
+ * The original owner is never a row in this directory: ownership is its own account and
+ * workspace, not an employee assignment. Co-Owners are filtered by the employee store for
+ * the same reason. This screen shows the people who can be managed as employees.
  */
 type StatusFilter = "all" | "active" | "pending" | "deactivated";
 
@@ -31,12 +28,6 @@ function statusOf(employee: User): Exclude<StatusFilter, "all"> {
   if (!employee.isActive) return "deactivated";
   if (employee.membershipStatus === "pending") return "pending";
   return "active";
-}
-
-function statusColor(status: Exclude<StatusFilter, "all">) {
-  if (status === "deactivated") return { bg: "var(--error-bg)", color: "var(--error)" };
-  if (status === "pending") return { bg: "var(--warning-bg)", color: "var(--warning)" };
-  return { bg: "var(--brand-light)", color: "var(--brand-dark)" };
 }
 
 export default function AdminEmployeesDirectoryPage() {
@@ -48,6 +39,11 @@ export default function AdminEmployeesDirectoryPage() {
   const ready = useEmployeesStore((s) => s.ready);
   const load = useEmployeesStore((s) => s.load);
   const currentUserId = useAuthStore((s) => s.user?.id);
+  const branches = useShopStore((s) => s.branches);
+  const branchesLoaded = useShopStore((s) => s.branchesLoaded);
+  const loadBranches = useShopStore((s) => s.loadBranches);
+  const isRtl = useThemeStore((s) => s.language) === "ur";
+  const ForwardChevron = isRtl ? ChevronLeft : ChevronRight;
 
   const canManage = hasPermission("employees.manage");
   const [query, setQuery] = useState("");
@@ -57,26 +53,61 @@ export default function AdminEmployeesDirectoryPage() {
     if (!ready) void load();
   }, [ready, load]);
 
-  const visible = useMemo(() => {
-    const needle = query.trim().toLowerCase();
-    return employees.filter((employee) => {
-      // This is a directory of other people. The signed-in owner, admin or Co-Admin does not
-      // get their own profile row; everyone else, including other Co-Admins, stays visible.
-      if (employee.id === currentUserId) return false;
-      if (filter !== "all" && statusOf(employee) !== filter) return false;
-      if (!needle) return true;
-      return (
-        employee.name.toLowerCase().includes(needle) ||
-        employee.phone.toLowerCase().includes(needle)
-      );
-    });
-  }, [employees, query, filter, currentUserId]);
+  useEffect(() => {
+    if (!branchesLoaded) void loadBranches();
+  }, [branchesLoaded, loadBranches]);
 
-  /** What they do: the role name the store reads with the team, or the free-text job title. */
+  const branchById = useMemo(
+    () => new Map(branches.map((branch) => [branch.id, branch])),
+    [branches],
+  );
+
   function roleLine(employee: User): string {
-    if (employee.isOriginalOwner) return t("settings.owner");
     return employee.roleName || employee.jobTitle || t("empDetail.noRole");
   }
+
+  function branchLine(employee: User): string {
+    const scope = employee.branchScope ?? [];
+    if (scope.length === 0) return t("people.allBranches");
+    if (scope.length === 1) {
+      return branchById.get(scope[0])?.name ?? t("people.noBranch");
+    }
+    return t("people.branchCount", { count: String(scope.length) });
+  }
+
+  function statusMeta(status: Exclude<StatusFilter, "all">) {
+    if (status === "active") {
+      return {
+        label: t("employees.active"),
+        bg: "var(--brand-light)",
+        color: "var(--brand-dark)",
+      };
+    }
+    if (status === "pending") {
+      return {
+        label: t("employees.invited"),
+        bg: "var(--warning-bg)",
+        color: "var(--warning)",
+      };
+    }
+    return {
+      label: t("employees.deactivated"),
+      bg: "var(--tone-sunken)",
+      color: "var(--text-secondary)",
+    };
+  }
+
+  const visible = employees.filter((employee) => {
+    // The signed-in account and the original owner are not employees in this directory.
+    if (employee.id === currentUserId || employee.isOriginalOwner) return false;
+    if (filter !== "all" && statusOf(employee) !== filter) return false;
+    const needle = query.trim().toLowerCase();
+    if (!needle) return true;
+    return [employee.name, employee.phone, roleLine(employee), branchLine(employee)]
+      .join(" ")
+      .toLowerCase()
+      .includes(needle);
+  });
 
   const filters: { key: StatusFilter; label: string }[] = [
     { key: "all", label: t("people.filterAll") },
@@ -92,24 +123,7 @@ export default function AdminEmployeesDirectoryPage() {
       data-testid="employees-directory-page"
     >
       <StatusBar />
-      <NavHeader
-        title={t("hub.people.employees")}
-        backTo={`${base}/settings/hub/people`}
-        right={
-          canManage ? (
-            <button
-              type="button"
-              onClick={() => navigate(`${base}/employees/new`)}
-              aria-label={t("people.addEmployee")}
-              data-testid="employees-add"
-              className="w-11 h-11 flex items-center justify-center rounded-full ds-pressable"
-              style={{ color: "var(--text-primary)" }}
-            >
-              <Plus size={18} />
-            </button>
-          ) : undefined
-        }
-      />
+      <NavHeader title={t("hub.people.employees")} backTo={`${base}/settings/hub/people`} />
 
       <div className="px-4 pt-1">
         <SearchBar
@@ -121,8 +135,21 @@ export default function AdminEmployeesDirectoryPage() {
           data-testid="employees-search"
         />
 
+        {canManage && (
+          <button
+            type="button"
+            onClick={() => navigate(`${base}/employees/new`)}
+            data-testid="employees-add"
+            className="mt-3 h-12 w-full rounded-full flex items-center justify-center gap-2 text-14 font-medium ds-pressable"
+            style={{ background: "var(--surface-2)", color: "var(--brand)" }}
+          >
+            <Plus size={16} />
+            {t("people.addEmployee")}
+          </button>
+        )}
+
         <div
-          className="flex items-center gap-2 mt-3 overflow-x-auto"
+          className="flex items-center gap-2 mt-5 overflow-x-auto"
           role="group"
           aria-label={t("people.filterAll")}
         >
@@ -135,11 +162,11 @@ export default function AdminEmployeesDirectoryPage() {
                 aria-pressed={selected}
                 onClick={() => setFilter(option.key)}
                 data-testid={`employees-filter-${option.key}`}
-                className="h-8 px-3.5 rounded-full text-12 font-semibold shrink-0 transition-colors"
+                className="h-10 px-4 rounded-full text-12 font-semibold shrink-0 transition-colors ds-pressable"
                 style={
                   selected
                     ? { background: "var(--brand)", color: "#0a0a0a" }
-                    : { background: "var(--tone-card)", color: "var(--text-secondary)" }
+                    : { background: "var(--surface-2)", color: "var(--text-secondary)" }
                 }
               >
                 {option.label}
@@ -149,7 +176,16 @@ export default function AdminEmployeesDirectoryPage() {
         </div>
       </div>
 
-      <div className="px-4 pt-4 pb-10 flex flex-col gap-2">
+      <div className="px-4 pt-5 pb-10">
+        {ready && visible.length > 0 && (
+          <p
+            className="text-10 font-semibold uppercase tracking-[0.18em] mb-3"
+            style={{ color: "var(--text-secondary)" }}
+          >
+            {t("hub.people.employees")}
+          </p>
+        )}
+
         {!ready && <SkeletonList rows={5} tile />}
 
         {ready && visible.length === 0 && (
@@ -159,57 +195,67 @@ export default function AdminEmployeesDirectoryPage() {
           />
         )}
 
-        {ready &&
-          visible.map((employee) => {
-            const status = statusOf(employee);
-            const { bg, color } = statusColor(status);
-            return (
-              <button
-                key={employee.id}
-                type="button"
-                onClick={() => navigate(`${base}/employees/${employee.id}`)}
-                data-testid={`people-employee-${employee.id}`}
-                className="w-full text-start rounded-[var(--radius-card)] p-3.5 flex items-center gap-3 ds-pressable"
-                style={{ background: "var(--tone-card)", color: "var(--text-primary)" }}
-              >
-                <div
-                  className="size-10 rounded-full flex items-center justify-center font-bold text-14 shrink-0"
+        {ready && visible.length > 0 && (
+          <div className="flex flex-col gap-3">
+            {visible.map((employee) => {
+              const status = statusOf(employee);
+              const meta = statusMeta(status);
+              const isActive = status === "active";
+              return (
+                <button
+                  key={employee.id}
+                  type="button"
+                  onClick={() => navigate(`${base}/employees/${employee.id}`)}
+                  data-testid={`people-employee-${employee.id}`}
+                  className="w-full text-start rounded-[var(--radius-card)] p-4 ds-pressable"
                   style={{
-                    background: status === "active" ? "var(--brand)" : "var(--surface-2)",
-                    color: status === "active" ? "#0a0a0a" : "var(--text-secondary)",
+                    background: "var(--tone-card)",
+                    border: "1px solid var(--divider)",
+                    color: "var(--text-primary)",
                   }}
-                  aria-hidden
                 >
-                  {employee.name ? employee.name.charAt(0) : "?"}
-                </div>
-
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <p className="text-14 font-bold truncate min-w-0">{employee.name}</p>
-                    <span
-                      className="shrink-0 text-9 font-bold px-2 py-0.5 rounded-full"
-                      style={{ background: bg, color }}
+                  <div className="flex items-start gap-3">
+                    <div
+                      className="size-11 rounded-full flex items-center justify-center font-bold text-15 shrink-0"
+                      style={{
+                        background: isActive ? "var(--brand)" : "var(--surface-2)",
+                        color: isActive ? "#0a0a0a" : "var(--text-secondary)",
+                      }}
+                      aria-hidden
                     >
-                      {status === "active"
-                        ? t("employees.active")
-                        : status === "pending"
-                          ? t("employees.invited")
-                          : t("employees.deactivated")}
+                      {employee.name ? employee.name.charAt(0) : "?"}
+                    </div>
+
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between gap-3">
+                        <p className="text-15 font-bold truncate min-w-0">{employee.name}</p>
+                        <span
+                          className="shrink-0 text-9 font-bold px-2 py-0.5 rounded-full"
+                          style={{ background: meta.bg, color: meta.color }}
+                        >
+                          {meta.label}
+                        </span>
+                      </div>
+                      <p className="text-11 mt-1 leading-snug" style={{ color: "var(--text-secondary)" }}>
+                        {roleLine(employee)} · {branchLine(employee)}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 flex justify-end">
+                    <span
+                      className="inline-flex items-center gap-1 text-11 font-semibold"
+                      style={{ color: "var(--text-secondary)" }}
+                    >
+                      {t("people.viewEmployee")}
+                      <ForwardChevron size={13} />
                     </span>
                   </div>
-                  <p className="text-11 mt-0.5 truncate" style={{ color: "var(--text-secondary)" }}>
-                    {roleLine(employee)}
-                  </p>
-                </div>
-
-                <ChevronRight
-                  size={14}
-                  className="shrink-0"
-                  style={{ color: "var(--text-secondary)" }}
-                />
-              </button>
-            );
-          })}
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
     </div>
   );

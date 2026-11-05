@@ -1,5 +1,8 @@
 import { supabase } from "@/lib/supabase";
-import type { User, UserRole, MembershipRole, MembershipStatus, PendingCoOwnerInvitation } from "@/types";
+import type {
+  User, UserRole, MembershipRole, MembershipStatus, PendingCoOwnerInvitation,
+  PendingInvitation, AgriIdentity,
+} from "@/types";
 import {
   DEMO_OTP_CODE,
   assertDemoOtpAllowed,
@@ -48,6 +51,7 @@ interface UserRow {
   membership_status?: string | null;
   branch_scope?: string[] | null;
   access_kind?: string | null;
+  agri_id?: string | null;
 }
 
 function userFromRow(r: UserRow): User {
@@ -77,6 +81,7 @@ function userFromRow(r: UserRow): User {
     createdAt: r.created_at,
     createdBy: r.created_by,
     photoUrl: r.photo_url ?? undefined,
+    agriId: r.agri_id ?? undefined,
     // Membership / tenant context
     tenantId,
     membershipId: r.membership_id ?? undefined,
@@ -141,6 +146,33 @@ async function loadPendingCoOwnerInvitation(): Promise<PendingCoOwnerInvitation 
   } catch {
     return null;
   }
+}
+
+/** Invitations returned by the server for the signed-in person only. */
+async function loadMyInvitations(): Promise<PendingInvitation[]> {
+  try {
+    const { data, error } = await supabase.rpc("get_my_invitations");
+    if (error || !Array.isArray(data)) return [];
+    return (data as Array<Record<string, unknown>>).map((r) => ({
+      membershipId: String(r.membership_id),
+      shopId: String(r.shop_id),
+      shopName: String(r.shop_name ?? ""),
+      membershipRole: r.membership_role as MembershipRole,
+      roleName: (r.role_name as string | null) ?? null,
+      branchNames: Array.isArray(r.branch_names) ? (r.branch_names as string[]) : [],
+      inviterName: (r.inviter_name as string | null) ?? null,
+      invitedAt: String(r.invited_at ?? ""),
+      expiresAt: String(r.expires_at ?? ""),
+      expired: r.expired === true,
+    }));
+  } catch {
+    return [];
+  }
+}
+
+async function withInvitations(user: User): Promise<User> {
+  const pendingInvitations = await loadMyInvitations();
+  return pendingInvitations.length ? { ...user, pendingInvitations } : user;
 }
 
 // Best-effort login-timestamp write. Never throws: if the column is somehow
@@ -218,6 +250,81 @@ export async function verifyConfirmOTP(phone: string, token: string): Promise<bo
   return !error;
 }
 
+// ─── Change the signed-in person's own number ────────────────────────────────
+// The types deliberately separate "the code was wrong" from "the number is taken" and from
+// "the server could not be reached": the profile sheet says a different sentence for each,
+// and a transport failure must never tell someone their new number is already registered.
+export type PhoneChangeResult =
+  | { status: "ok"; phone: string }
+  | { status: "wrong_code" }
+  | { status: "taken" }
+  | { status: "invalid" }
+  | { status: "unchanged" }
+  | { status: "not_verified" }
+  | { status: "error"; message: string };
+
+/**
+ * Ask Supabase Auth to send a code to the NEW number, without replacing the current session.
+ *
+ * Live phone auth uses `updateUser({ phone })`; the matching verify step is `phone_change`, not
+ * the `sms` sign-in type (which would try to open a session for the new number). In demo mode
+ * there is no SMS provider, so the shared code is the accepted proof, exactly as it is on the
+ * sign-in screen. Nothing is written to either identity until `completePhoneChange` succeeds.
+ */
+export async function requestPhoneChange(phone: string): Promise<{ success: boolean; error?: string }> {
+  if (isDemoOtpMode) {
+    assertDemoOtpAllowed();
+    return { success: true };
+  }
+
+  const { error } = await supabase.auth.updateUser({ phone: normalizePhone(phone) });
+  if (error) {
+    console.warn("Supabase Auth phone-change code failed:", error.message);
+    return { success: false, error: error.message };
+  }
+  return { success: true };
+}
+
+/** Verify the code for the new number, then move the app row and auth credential together. */
+export async function completePhoneChange(
+  phone: string,
+  token: string,
+): Promise<PhoneChangeResult> {
+  const e164 = normalizePhone(phone);
+  const code = token.replace(/\D/g, "");
+  if (code.length !== 6) return { status: "wrong_code" };
+
+  if (isDemoOtpMode) {
+    assertDemoOtpAllowed();
+    if (!demoCodeAccepted(code)) return { status: "wrong_code" };
+  } else {
+    const { error } = await supabase.auth.verifyOtp({
+      phone: e164,
+      token: code,
+      type: "phone_change",
+    });
+    if (error) return { status: "wrong_code" };
+  }
+
+  const { data, error } = await supabase.rpc("change_my_phone", { p_new_phone: e164 });
+  if (error) {
+    const message = error.message;
+    if (/PHONE_ALREADY_IN_USE|duplicate key/i.test(message)) return { status: "taken" };
+    if (/PHONE_INVALID/i.test(message)) return { status: "invalid" };
+    if (/PHONE_UNCHANGED/i.test(message)) return { status: "unchanged" };
+    if (/PHONE_NOT_VERIFIED/i.test(message)) return { status: "not_verified" };
+    return { status: "error", message };
+  }
+
+  // The JWT carries the same sub, but a live phone change also changes its phone claim. Refresh
+  // after the server has committed; a refresh failure must not turn a successful write into a
+  // failed-looking profile update.
+  try { await supabase.auth.refreshSession(); } catch { /* session remains valid by sub */ }
+
+  const row = data as { phone?: string } | null;
+  return { status: "ok", phone: row?.phone ?? e164 };
+}
+
 /**
  * Which stage does this phone belong at? Asked BEFORE a code is sent, so an
  * unregistered number is told to create an account instead of being sent a code
@@ -244,7 +351,17 @@ export async function checkPhoneRegistration(phone: string): Promise<PhoneCheck>
   if (error) return { status: "error", message: error.message };
   if (data) {
     const row = data as UserRow;
-    return row.is_active ? { status: "registered", role: row.role } : { status: "inactive" };
+    if (!row.is_active) return { status: "inactive" };
+    // A Co-Owner keeps role='employee' at the table because treating that account as an admin
+    // would open legacy admin RLS. The sign-in door is different from the database role: an
+    // invited or active Co-Owner uses the Owner door (number only, no shop code), exactly like
+    // the owner-style workspace they receive after acceptance.
+    let role = row.role;
+    if (role !== "admin") {
+      const { data: coOwnerDoor } = await supabase.rpc("co_owner_login_is_owner", { p_phone: e164 });
+      if (coOwnerDoor === true) role = "admin";
+    }
+    return { status: "registered", role };
   }
 
   // No app profile. An owner whose shop application is still open has a record of
@@ -257,6 +374,38 @@ export async function checkPhoneRegistration(phone: string): Promise<PhoneCheck>
   if (status === "rejected") return { status: "rejected" };
   if (status === "approved") return { status: "pending" };
   return { status: "unregistered" };
+}
+
+// ─── Unified identifier ──────────────────────────────────────────────────────
+export type LoginIdentifier =
+  | { status: "found"; phone: string; role: UserRole; agriId?: string; active: boolean }
+  | { status: "not_found" }
+  | { status: "error"; message: string };
+
+/**
+ * Resolve either a registered phone or an Agri ID to the phone the OTP is sent to.
+ * Agri ID is an identifier, not a credential: this resolves it for a code, and grants nothing.
+ */
+export async function resolveLoginIdentifier(identifier: string): Promise<LoginIdentifier> {
+  const value = identifier.trim();
+  if (!value) return { status: "not_found" };
+  try {
+    const { data, error } = await supabase.rpc("resolve_login_identifier", { p_identifier: value });
+    if (error) return { status: "error", message: error.message };
+    const row = (typeof data === "string" ? JSON.parse(data) : data) as {
+      found?: boolean; phone?: string; role?: UserRole; agri_id?: string; active?: boolean;
+    } | null;
+    if (!row?.found || !row.phone) return { status: "not_found" };
+    return {
+      status: "found",
+      phone: row.phone,
+      role: row.role ?? "employee",
+      agriId: row.agri_id,
+      active: row.active !== false,
+    };
+  } catch {
+    return { status: "error", message: "NETWORK" };
+  }
 }
 
 /**
@@ -405,7 +554,8 @@ async function completeOnboardingIfInvited(user: User): Promise<string | null> {
   if (user.membershipStatus !== "pending") return null;
   const { error } = await supabase.rpc("complete_member_onboarding");
   if (error) return error.message;
-  user.membershipStatus = "active";
+  // The server no longer activates anything on first sign-in. A pending membership stays
+  // pending until the person accepts that exact invitation.
   return null;
 }
 
@@ -624,8 +774,8 @@ export async function verifyOTPAndResolveUser(
         ? { status: "login_not_ready" }
         : { status: "error", message: onboardError };
     }
-    // Load permissions after the membership is active and the session is established
-    return { status: "ok", user: await hydrateBusinessAccess(user) };
+    // Load permissions after the membership state is known and the session is established.
+    return { status: "ok", user: await hydrateBusinessAccess(await withInvitations(user)) };
   }
 
   // No user profile found — check for an open shop registration. shop_requests is
@@ -748,7 +898,136 @@ export async function resumeSession(known: User): Promise<ResumeResult> {
       ? { status: "login_not_ready" }
       : { status: "error", message: onboardError };
   }
-  return { status: "ok", user: await hydrateBusinessAccess(user) };
+  return { status: "ok", user: await hydrateBusinessAccess(await withInvitations(user)) };
+}
+
+// ─── Permanent identity and recovery ─────────────────────────────────────────
+export async function getMyIdentity(): Promise<AgriIdentity | null> {
+  const { data, error } = await supabase.rpc("get_my_identity");
+  if (error || !data) return null;
+  const row = data as { agri_id?: string; phone?: string; has_recovery_key?: boolean; recovery_key_created_at?: string | null };
+  if (!row.agri_id) return null;
+  return {
+    agriId: row.agri_id,
+    phone: row.phone ?? "",
+    hasRecoveryKey: row.has_recovery_key === true,
+    recoveryKeyCreatedAt: row.recovery_key_created_at ?? null,
+  };
+}
+
+export async function rotateMyRecoveryKey(): Promise<{ status: "ok"; key: string; agriId: string } | { status: "error"; message: string }> {
+  const { data, error } = await supabase.rpc("rotate_my_recovery_key");
+  if (error || !data) return { status: "error", message: error?.message ?? "NO_KEY" };
+  const row = data as { recovery_key?: string; agri_id?: string };
+  if (!row.recovery_key) return { status: "error", message: "NO_KEY" };
+  return { status: "ok", key: row.recovery_key, agriId: row.agri_id ?? "" };
+}
+
+export type RecoveryCheck =
+  | { status: "ok"; user: User; agriId: string; oldPhone: string }
+  | { status: "invalid" }
+  | { status: "inactive" }
+  | { status: "locked" }
+  | { status: "login_not_ready" }
+  | { status: "unsupported" }
+  | { status: "error"; message: string };
+
+/**
+ * Verify the recovery key server-side, then reopen the SAME identity's normal session.
+ *
+ * The phone OTP bridge is the credential path this build uses for every account, so it is
+ * reused only after the separate key hash has been checked by the database. In a live build
+ * with an SMS/email recovery provider this function is the one place that changes; the
+ * identity, membership and authorization rules below do not.
+ */
+export async function recoverWithKey(agriId: string, recoveryKey: string): Promise<RecoveryCheck> {
+  const key = recoveryKey.trim().toUpperCase();
+  if (!isDemoOtpMode) return { status: "unsupported" };
+  try {
+    const { data, error } = await supabase.rpc("verify_recovery_identity", {
+      p_agri_id: agriId.trim() || null,
+      p_recovery_key: key,
+    });
+    if (error) return { status: "error", message: error.message };
+    const row = (typeof data === "string" ? JSON.parse(data) : data) as {
+      status?: string; phone?: string; agri_id?: string;
+    } | null;
+    if (!row || row.status !== "ok" || !row.phone) {
+      const status = row?.status;
+      if (status === "locked" || status === "inactive" || status === "login_not_ready") {
+        return { status };
+      }
+      return { status: "invalid" };
+    }
+
+    const session = await ensureAuthSession(row.phone);
+    if (!session.ok) {
+      return session.error === LOGIN_NOT_READY
+        ? { status: "login_not_ready" }
+        : { status: "error", message: session.error ?? SESSION_SETUP_FAILED };
+    }
+
+    const { data: profile, error: profileError } = await supabase.rpc("lookup_user_by_phone", {
+      p_phone: normalizePhone(row.phone),
+    });
+    if (profileError) return { status: "error", message: profileError.message };
+    const profileRow = profile as UserRow | null;
+    if (!profileRow || !profileRow.is_active) return { status: "inactive" };
+    const user = await withInvitations(userFromRow(profileRow));
+    return {
+      status: "ok",
+      user: await hydrateBusinessAccess(user),
+      agriId: row.agri_id ?? user.agriId ?? "",
+      oldPhone: row.phone,
+    };
+  } catch {
+    return { status: "error", message: "NETWORK" };
+  }
+}
+
+// ─── Invitations and business choice ─────────────────────────────────────────
+export async function getMyInvitations(): Promise<PendingInvitation[]> {
+  return loadMyInvitations();
+}
+
+export async function acceptMyInvitation(membershipId: string): Promise<{ ok: boolean; error?: string }> {
+  const { error } = await supabase.rpc("accept_my_invitation", { p_membership_id: membershipId });
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+export async function declineMyInvitation(membershipId: string): Promise<{ ok: boolean; error?: string }> {
+  const { error } = await supabase.rpc("decline_my_invitation", { p_membership_id: membershipId });
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+export interface BusinessChoice {
+  shopId: string;
+  name: string;
+  membershipRole: MembershipRole;
+  membershipStatus: MembershipStatus;
+  isCurrent: boolean;
+}
+
+export async function getMyBusinesses(): Promise<BusinessChoice[]> {
+  const { data, error } = await supabase.rpc("get_my_shops");
+  if (error || !Array.isArray(data)) return [];
+  return (data as Array<Record<string, unknown>>).map((r) => ({
+    shopId: String(r.shop_id),
+    name: String(r.name ?? ""),
+    membershipRole: r.membership_role as MembershipRole,
+    membershipStatus: r.membership_status as MembershipStatus,
+    isCurrent: r.is_current === true,
+  }));
+}
+
+export async function chooseBusiness(shopId: string): Promise<{ ok: boolean; error?: string }> {
+  const { data, error } = await supabase.rpc("set_active_shop", { p_shop_id: shopId });
+  if (error) return { ok: false, error: error.message };
+  const row = data as { success?: boolean } | null;
+  if (row && row.success === false) return { ok: false, error: "SHOP_NOT_AVAILABLE" };
+  return { ok: true };
 }
 
 /** The identity this device last persisted, or null if there is none (or it is unreadable). */

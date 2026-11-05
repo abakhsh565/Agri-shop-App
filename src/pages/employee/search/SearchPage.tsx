@@ -10,6 +10,7 @@ import { useAuthStore } from "@/stores/authStore";
 import { useThemeStore } from "@/stores/themeStore";
 import { useShellBase } from "@/lib/useShellBase";
 import { useT } from "@/lib/i18n";
+import { useAppBack } from "@/hooks/useAppBack";
 import { formatCurrency } from "@/lib/formatters";
 import { Search, Package, Users, ShoppingCart, Building2, UserCog, ChevronLeft } from "lucide-react";
 import SearchBar from "@/components/ui/SearchBar";
@@ -49,6 +50,7 @@ const ADMIN_EXTRA_FILTERS_BASE = [
 
 export default function SearchPage() {
   const navigate = useNavigate();
+  const back = useAppBack();
   const base = useShellBase();
   // Co-Owners get the wider catalogue too; every route they open has its own permission gate.
   const isAdmin = base !== "/employee";
@@ -220,7 +222,7 @@ export default function SearchPage() {
       {/* Search bar */}
       <div className="flex items-center gap-3 px-4 pt-3 pb-3">
         <button
-          onClick={() => navigate(-1)}
+          onClick={back}
           className="size-9 rounded-full flex items-center justify-center shrink-0 active:opacity-70"
           style={{ background: "var(--surface-2)" }}
         >

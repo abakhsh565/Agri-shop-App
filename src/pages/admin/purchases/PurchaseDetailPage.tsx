@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
 import { SkeletonList } from "@/components/ui/Skeleton";
@@ -11,9 +11,13 @@ import { supabase } from "@/lib/supabase";
 
 import type { Purchase } from "@/types";
 import { useT } from "@/lib/i18n";
+import { useShellBase } from "@/lib/useShellBase";
+import { hasPermission } from "@/lib/tenantContext";
 
 export default function PurchaseDetailPage() {
   const t = useT();
+  const base = useShellBase();
+  const navigate = useNavigate();
   const { purchaseId } = useParams();
   const { language } = useThemeStore();
   const isUrdu = language === "ur";
@@ -70,7 +74,7 @@ export default function PurchaseDetailPage() {
     return (
       <div className="flex flex-col w-full min-h-full" style={{ background: "var(--background)" }}>
         <StatusBar />
-        <NavHeader title={t("purchases.detailTitle")} />
+        <NavHeader title={t("purchases.detailTitle")} historyBack />
         <div className="flex-1 pt-4">
           <SkeletonList rows={3} tile={false} />
         </div>
@@ -82,7 +86,7 @@ export default function PurchaseDetailPage() {
     return (
       <div className="flex flex-col w-full min-h-full" style={{ background: "var(--background)" }}>
         <StatusBar />
-        <NavHeader title={t("purchases.detailTitle")} />
+        <NavHeader title={t("purchases.detailTitle")} historyBack />
         <div className="flex-1 flex items-center justify-center">
           <p className="text-sm" style={{ color: "var(--text-secondary)" }}>{t("purchase.notFound")}</p>
         </div>
@@ -96,7 +100,7 @@ export default function PurchaseDetailPage() {
       style={{ background: "var(--background)", direction: isUrdu ? "rtl" : "ltr" }}
     >
       <StatusBar />
-      <NavHeader title={t("purchases.detailTitle")} />
+      <NavHeader title={t("purchases.detailTitle")} historyBack />
 
       <div className="flex flex-col gap-4 p-4">
         {/* Header card */}
@@ -154,6 +158,24 @@ export default function PurchaseDetailPage() {
             </div>
           </div>
         </div>
+
+        {/* The bill is the record of buying from this supplier; paying it is the one action its
+            reader needs next. It opens the supplier's payment form on the balance the RPC uses. */}
+        {base === "/admin" && purchase.outstandingPayable > 0 && hasPermission("payments.view") && (
+          <button
+            type="button"
+            onClick={() =>
+              navigate(`${base}/payments/supplier/${purchase.companyId}`, {
+                state: { from: `${base}/purchases/${purchase.id}` },
+              })
+            }
+            data-testid="purchase-record-payment"
+            className="w-full h-12 rounded-full font-bold text-sm active:scale-[0.98] transition-transform"
+            style={{ background: "#2c2c2a", color: "var(--brand)" }}
+          >
+            {t("supplierPayments.record")}
+          </button>
+        )}
       </div>
     </div>
   );

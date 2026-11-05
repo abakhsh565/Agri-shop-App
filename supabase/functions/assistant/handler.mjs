@@ -33,7 +33,8 @@ function json(body, status = 200) {
 }
 
 /** The same shell prefixes the app's own routes use, so a card's screen name lands where the app lands. */
-function shellFor(role, permissions) {
+function shellFor(role, permissions, experience) {
+  if (experience === "owner" || experience === "co_owner") return "admin";
   const ownerSide = role === "owner" || role === "admin" || permissions.includes("employees.manage");
   return ownerSide ? "admin" : "employee";
 }
@@ -106,8 +107,48 @@ export async function handle(req, env) {
     }
   }
 
-  const shell = shellFor(role, permissions);
-  const ctx = { client, permissions, shell, role, userId };
+  // The membership's branch scope is the authority the app's own screens use. A Co-Owner is not
+  // an admin in the membership table: their delegated experience and branch list live here, and
+  // the database's branch policies already use the same scope. Read it before building tools.
+  let access = null;
+  let activeBranchId = null;
+  let allowedBranchIds = null;
+  // One failed context read must not throw away the other two. If the branch read fails, the
+  // tools still fail closed; if only the allowed-list read fails, the active branch is enough.
+  const [accessResult, branchResult, allowedResult] = await Promise.allSettled([
+    client.rpc("get_my_access_context"),
+    client.rpc("current_branch_id"),
+    client.rpc("allowed_branch_scope"),
+  ]);
+  if (accessResult.status === "fulfilled" && accessResult.value && typeof accessResult.value === "object") {
+    access = accessResult.value;
+  }
+  if (branchResult.status === "fulfilled" && typeof branchResult.value === "string" && branchResult.value) {
+    activeBranchId = branchResult.value;
+  }
+  if (allowedResult.status === "fulfilled" && Array.isArray(allowedResult.value)) {
+    allowedBranchIds = allowedResult.value.filter((id) => typeof id === "string" && id);
+  }
+
+  const experience =
+    access?.experience === "owner" || access?.experience === "co_owner" || access?.experience === "employee"
+      ? access.experience
+      : role === "owner"
+        ? "owner"
+        : "employee";
+  const seesAllBranches = experience === "owner";
+  const shell = shellFor(role, permissions, experience);
+  const ctx = {
+    client,
+    permissions,
+    shell,
+    role,
+    userId,
+    experience,
+    branchId: activeBranchId,
+    branchScope: seesAllBranches ? null : allowedBranchIds,
+    seeAllBranches: seesAllBranches,
+  };
 
   let body = {};
   try {
@@ -121,9 +162,10 @@ export async function handle(req, env) {
   if (body.action === "tools") {
     const offered = new Set(toolsFor(permissions).map((t) => t.name));
     return json({
-      user: { name, role: role ?? (shell === "admin" ? "owner" : "employee") },
+      user: { name, role: experience === "co_owner" ? "co-owner" : experience, experience },
       shell,
       permissions,
+      scope: { experience, branchId: activeBranchId, allBranches: seesAllBranches },
       tools: toolsFor(permissions).map((t) => ({ name: t.name, title: t.title, permission: t.permission })),
       withheld: [...TOOLS_BY_NAME.values()]
         .filter((t) => !offered.has(t.name))

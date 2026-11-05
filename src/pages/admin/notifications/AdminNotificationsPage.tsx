@@ -19,7 +19,7 @@ import { useShellBase } from "@/lib/useShellBase";
 import { useReturnTo } from "@/lib/useReturnTo";
 import {
   Bell, ShoppingCart, CreditCard, RotateCcw, Package,
-  AlertTriangle, Users, Truck, Info, UserPlus,
+  AlertTriangle, Users, Truck, Info,
 } from "lucide-react";
 
 /** Map notification kind + entity_id → the correct route in the active shell. */
@@ -31,7 +31,6 @@ function notificationRoute(n: AppNotification, base: "/admin" | "/employee" | "/
       case "return": return `${base}/sales/${n.entity_id}`;
       case "purchase": return `${base}/purchases/${n.entity_id}`;
       case "employee": return `${team}/${n.entity_id}`;
-      case "employee_access_request": return `${team}/requests/${n.entity_id}`;
       case "low_stock": return `${base}/products/${n.entity_id}`;
       case "stock_adjust": return `${base}/products`;
       case "payment": return base === "/co-owner" ? `${base}/customers` : `${base}/payments`;
@@ -45,7 +44,6 @@ function notificationRoute(n: AppNotification, base: "/admin" | "/employee" | "/
     case "purchase": return `${base}/purchases`;
     case "low_stock": case "stock_adjust": return `${base}/products`;
     case "employee": return team;
-    case "employee_access_request": return `${team}/requests`;
     default: return null;
   }
 }
@@ -57,7 +55,6 @@ const KIND_ICON: Record<string, any> = {
   stock_adjust: Package,
   low_stock: AlertTriangle,
   employee: Users,
-  employee_access_request: UserPlus,
   purchase: Truck,
   system: Info,
 };

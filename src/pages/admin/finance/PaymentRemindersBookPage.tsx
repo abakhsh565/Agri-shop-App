@@ -128,7 +128,7 @@ export default function PaymentRemindersBookPage() {
       data-testid="payment-reminders-book"
     >
       <StatusBar />
-      <NavHeader title={t("paymentBook.title")} backTo={`${base}/settings/hub/finance`} />
+      <NavHeader title={t("paymentBook.title")} backTo={`${base}/settings/hub/finance`} historyBack />
 
       {isOwner && (
       <div className="px-4 pt-3">

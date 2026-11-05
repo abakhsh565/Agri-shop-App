@@ -43,6 +43,7 @@ const EVERY_KEY = {
   day: "finance.repeat.everyDays",
   week: "finance.repeat.everyWeeks",
   month: "finance.repeat.everyMonths",
+  year: "finance.repeat.everyYears",
 } as const;
 
 function dayLabel(day: string, today: string, locale: "ur-PK" | "en-GB", t: ReturnType<typeof useT>) {
