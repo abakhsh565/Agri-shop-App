@@ -33,6 +33,11 @@
  *   row that is not one of the four declared fixtures — reported, never
  *   touched. A row whose phone belongs to a DIFFERENT id is reported as a
  *   collision and left alone (two users cannot share a phone).
+ *   And a note for anyone copying these identities elsewhere: fixture
+ *   phones must never appear literally in a workflow file — the
+ *   production-data-policy guard (rule 3) fails Gates on them (2026-11-06:
+ *   the probe file's literal phones blocked the PR #10 merge run). Read
+ *   them from the declaration at run time instead.
  *
  * USAGE
  *   node scripts/dev/qa-restore-fixture-users.mjs            # plan (dry run), nothing written
