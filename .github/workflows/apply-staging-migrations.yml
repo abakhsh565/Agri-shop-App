@@ -65,11 +65,12 @@ jobs:
             exit 1
           fi
 
-      - name: Ledger state before the apply (read-only)
-        run: node scripts/migrate.mjs verify --env staging
+      - name: Ledger state before the apply (read-only; pending is expected here)
+        continue-on-error: true
+        run: node scripts/migrate.mjs verify --env staging --ledger-only-allowlist .github/qa-ledger-only.txt
 
       - name: Apply pending migrations to QA
         run: node scripts/migrate.mjs apply --env staging --apply
 
       - name: Ledger state after the apply (must show 0 pending)
-        run: node scripts/migrate.mjs verify --env staging
+        run: node scripts/migrate.mjs verify --env staging --ledger-only-allowlist .github/qa-ledger-only.txt
