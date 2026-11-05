@@ -708,12 +708,17 @@ describe('a fixture account and its membership are one row\'s worth of cleanup',
   test('the guard names every foreign key that would refuse the delete, and nothing else', () => {
     // The list is a contract, not a convenience: `rbacInvariants` (Invariant F) reads the live schema
     // and fails when a NO ACTION/RESTRICT key on `users(id)` is missing here.
+    // The two co_owner_* keys are defined by 0266 (on origin/release/merge, applied on hosted QA
+    // and staging) as REFERENCES public.users(id) ON DELETE RESTRICT; this list mirrors the live
+    // schema the cleanup runs against, not main's migrations, which do not carry 0233-0276 yet.
     expect([...USER_DELETE_GUARDS].map((r) => `${r.table}.${r.column}`).sort()).toEqual(
       [
         'activity_log.user_id',
         'audit_events.user_id',
         'branch_responsibility.user_id',
         'cash_reconciliations.reconciled_by',
+        'co_owner_approval_requests.requested_by',
+        'co_owner_grants.granted_by',
         'daily_cash_reconciliations.reconciled_by',
         'inventory_movements.created_by',
         'returns.processed_by',
