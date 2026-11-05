@@ -58,6 +58,8 @@ export interface LocalCreditRequest {
   requestedBy: string;
   currentLimit: number;
   requestedLimit: number;
+  /** What the owner actually granted — can differ from `requestedLimit` (0251). */
+  approvedLimit: number | null;
   status: "pending" | "approved" | "rejected";
   reviewedBy: string | null;
   reviewedAt: string | null;
@@ -307,6 +309,7 @@ function rowToRequest(r: any): LocalCreditRequest {
     requestedBy: r.requested_by,
     currentLimit: Number(r.current_limit),
     requestedLimit: Number(r.requested_limit),
+    approvedLimit: r.approved_limit == null ? null : Number(r.approved_limit),
     status: r.status,
     reviewedBy: r.reviewed_by ?? null,
     reviewedAt: r.reviewed_at ?? null,
@@ -343,6 +346,7 @@ export async function createCreditRequest(params: {
       const req: LocalCreditRequest = {
         id: data.id,
         ...params,
+        approvedLimit: null,
         status: 'pending',
         reviewedBy: null,
         reviewedAt: null,
@@ -370,6 +374,7 @@ export async function createCreditRequest(params: {
   const newRequest: LocalCreditRequest = {
     id: 'cr-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8),
     ...params,
+    approvedLimit: null,
     status: 'pending',
     reviewedBy: null,
     reviewedAt: null,
@@ -381,7 +386,15 @@ export async function createCreditRequest(params: {
   return newRequest;
 }
 
-/** Get all credit requests — DB primary, localStorage fallback */
+/**
+ * Get all credit requests — DB primary, localStorage fallback.
+ *
+ * An answer with NO rows is an answer: the cache is replaced with it. Treating "the database has
+ * none" as a failure and serving the cached list instead made a request that had been approved,
+ * rejected or removed elsewhere stay on screen as pending — the customer card then told the shop
+ * a decision was waiting on a request that no longer existed. The fallback is for the case where
+ * the database could not be asked at all.
+ */
 export async function getCreditRequestsDB(): Promise<LocalCreditRequest[]> {
   try {
     const { data, error } = await supabase
@@ -389,15 +402,13 @@ export async function getCreditRequestsDB(): Promise<LocalCreditRequest[]> {
       .select('*')
       .order('created_at', { ascending: false });
     if (error) throw error;
-    if (data && data.length > 0) {
-      const requests = data.map(rowToRequest);
-      writeLocalCache(requests); // sync cache
-      return requests;
-    }
+    const requests = (data ?? []).map(rowToRequest);
+    writeLocalCache(requests); // sync cache
+    return requests;
   } catch {
-    // Fall through to localStorage
+    // Could not ask: the last list this device was told about is the honest answer.
+    return readLocalCache();
   }
-  return readLocalCache();
 }
 
 /** Synchronous getter — reads from localStorage cache only.
@@ -409,24 +420,35 @@ export function getCreditRequests(status?: 'pending' | 'approved' | 'rejected'):
   return requests;
 }
 
-/** Approve a credit limit request — DB authoritative, updates cache */
+/** Approve a credit limit request — DB authoritative, updates cache.
+ *
+ *  `approvedLimit` is the owner's own figure (0251): the owner may grant less — or more — than
+ *  the employee asked for. Omitting it approves exactly what was requested, which is what the
+ *  one-tap paths do.
+ */
 export async function approveCreditRequest(
   requestId: string,
-  reviewedBy: string
+  reviewedBy: string,
+  approvedLimit?: number | null,
 ): Promise<void> {
-  // Try DB RPC first
+  const requested = approvedLimit == null ? null : Number(approvedLimit);
+  // Try DB RPC first — v3 carries the owner's amount.
   try {
-    const { error } = await supabase.rpc('approve_credit_limit_request_v2', {
+    const { data, error } = await supabase.rpc('approve_credit_limit_request_v3', {
       p_request_id: requestId,
       p_reviewed_by: reviewedBy,
-      p_actor_id: useAuthStore.getState().user?.id ?? null,
+      p_approved_limit: requested,
     });
     if (error) throw error;
+    const applied = data && typeof data === 'object' && (data as any).approvedLimit != null
+      ? Number((data as any).approvedLimit)
+      : null;
     // Update local cache
     const cache = readLocalCache();
     const req = cache.find((r) => r.id === requestId);
     if (req) {
       req.status = 'approved';
+      req.approvedLimit = applied ?? req.requestedLimit;
       req.reviewedBy = reviewedBy;
       req.reviewedAt = new Date().toISOString();
       writeLocalCache(cache);
@@ -440,12 +462,14 @@ export async function approveCreditRequest(
   const requests = readLocalCache();
   const req = requests.find((r) => r.id === requestId && r.status === 'pending');
   if (!req) throw new Error('Request not found or already processed.');
+  const effective = requested ?? req.requestedLimit;
   const { error } = await supabase
     .from('customers')
-    .update({ credit_limit: req.requestedLimit, updated_at: new Date().toISOString() })
+    .update({ credit_limit: effective, updated_at: new Date().toISOString() })
     .eq('id', req.customerId);
   if (error) throw error;
   req.status = 'approved';
+  req.approvedLimit = effective;
   req.reviewedBy = reviewedBy;
   req.reviewedAt = new Date().toISOString();
   req.rejectionReason = null;

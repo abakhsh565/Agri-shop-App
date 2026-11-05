@@ -3,28 +3,26 @@ import { useBlocker, useNavigate, useParams, useSearchParams } from "react-route
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
 import ImageUpload from "@/components/ui/ImageUpload";
+import DateField from "@/components/ui/DateField";
 import SelectorField from "@/components/ui/SelectorField";
-import Sheet from "@/components/ui/Sheet";
+import InlineSelect from "@/components/ui/InlineSelect";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
-import ListCard from "@/components/ui/ListCard";
-import ListRow from "@/components/ui/ListRow";
 import LogoTile from "@/components/ui/LogoTile";
 import Checkbox from "@/components/ui/Checkbox";
 import { backToSelf, dependencyHint, readReturnTo } from "@/lib/dependencyGraph";
+import { useShellBase } from "@/lib/useShellBase";
 import { useCompaniesStore } from "@/stores/companiesStore";
 import { useProductsStore } from "@/stores/productsStore";
-import {
-  rpcCreateProduct, rpcUpdateProduct, rpcPreviewProductBarcode, rpcProductBarcodes,
-  type BarcodeHistoryEntry,
-} from "@/lib/db";
+import { rpcCreateProduct, rpcUpdateProduct, rpcPreviewProductBarcode } from "@/lib/db";
 import { useUIStore } from "@/stores/uiStore";
 import { useThemeStore } from "@/stores/themeStore";
-import { useT, type I18nKey } from "@/lib/i18n";
+import { useT } from "@/lib/i18n";
 import { clearNav } from "@/lib/navContext";
-import type { ProductCategory, BaseUnit } from "@/types";
-import { Plus, Trash2, Lock, Check, ChevronDown, RefreshCw } from "lucide-react";
+import type { ProductCategory } from "@/types";
+import { useCatalogueStore } from "@/stores/catalogueStore";
+import { categoryDisplayName, categoryForKind, orderedCategories, unitLabel } from "@/lib/catalogue";
+import { Plus, Trash2, Lock, RefreshCw } from "lucide-react";
 import ScanButton from "@/components/ui/ScanButton";
-import { formatDate } from "@/lib/formatters";
 import { DEFAULT_STOCK_ALERT_SETTINGS, loadStockAlertSettings, type StockAlertSettings } from "@/lib/stockAlerts";
 import { markupPercent, sellingFromMarkup } from "@/lib/profit";
 import { useShopStore } from "@/stores/shopStore";
@@ -74,21 +72,18 @@ import {
  * of one sold by volume. A shop only sells those two things, so those are the two chips.
  */
 
-/** The units a NEW product may be created in. The database enforces the same two (0158). */
-const FORM_UNITS: BaseUnit[] = ["kg", "liter"];
-
 /**
- * The three categories the form offers.
+ * The shelf and the unit are the shop's own (0259).
  *
- * The database enum has seven, and the form deliberately does not. "Spray" and "Pesticide"
- * are the same thing bought for the same reason, "Equipment" is not sold by weight at all,
- * and a shop that files a product under "Other" can never find it again — so the four ways
- * to lose a product are gone rather than offered. Nothing is deleted: a product already
- * stored under one of them keeps it (see `categoryChoices`).
+ * The form used to offer three of the seven categories and two units, both compiled in — which
+ * meant a shelf the owner created on the Categories screen could never hold a product. Both
+ * pickers now read `catalogueStore`, the same rows those screens manage, so creating a
+ * "Wheat seed" shelf and then opening this form offers it without a reload.
+ *
+ * Nothing is lost by the change: every seeded shelf is offered (not just the three), and a
+ * product filed under a kind whose shelf no longer exists still keeps its kind through the
+ * fallback below.
  */
-const QUICK_CATEGORIES: ProductCategory[] = ["pesticide", "seed", "fertilizer"];
-
-const categoryKey = (c: ProductCategory) => `products.category.${c}` as I18nKey;
 
 /**
  * One pack, as the form holds it while it is being typed.
@@ -132,7 +127,6 @@ interface PackDraft {
 }
 
 /** The one sheet this screen still opens. */
-type SheetTarget = { kind: "unit"; pack: number } | null;
 
 /** A price moved: restate the markup from the prices, which stay the source of truth. */
 function withMarkup(p: PackDraft): PackDraft {
@@ -153,12 +147,22 @@ function withSellingFromMarkup(p: PackDraft, markup: string): PackDraft {
 
 export default function AddProductPage() {
   const navigate = useNavigate();
+  // This screen answers under both shells: the owner habitually opens it from /admin, and an
+  // employee who was granted `products.create` opens the same screen from /employee. Every
+  // path it writes back to follows the shell it was opened in.
+  const base = useShellBase();
   const { productId } = useParams();
   const { addToast } = useUIStore();
   const { language } = useThemeStore();
   const isUrdu = language === "ur";
   const t = useT();
   const companies = useCompaniesStore((s) => s.companies);
+  // The shop's own shelves and units (0259). Read here rather than fetched by this screen: the
+  // shell loads them once, and the Categories/Units screens keep the same store current.
+  const categories = useCatalogueStore((s) => s.categories);
+  // Named `shopUnits`: `units` is already the pack's own unit list further down this screen.
+  const shopUnits = useCatalogueStore((s) => s.units);
+  const catalogueReady = useCatalogueStore((s) => s.ready);
   const existing = useProductsStore((s) => s.products.find((p) => p.id === productId));
   const isEdit = Boolean(productId);
 
@@ -167,7 +171,7 @@ export default function AddProductPage() {
   // is shown, not asked, and the product is linked to that company.
   const [searchParams] = useSearchParams();
   const presetCompanyId = searchParams.get("companyId") || "";
-  const returnTo = readReturnTo(searchParams, "/admin/products");
+  const returnTo = readReturnTo(searchParams, `${base}/products`);
   const presetCompany = companies.find((c) => c.id === presetCompanyId);
   const companyLocked = Boolean(presetCompany) && !isEdit;
 
@@ -181,7 +185,6 @@ export default function AddProductPage() {
   const activeShopId = useShopStore((s) => s.activeShopId);
   const draftParam = searchParams.get("draft") || "";
   const [resumed] = useState(() => (draftParam ? getProductDraft(activeShopId, draftParam) : null));
-  const [sheet, setSheet] = useState<SheetTarget>(null);
   const [imageUrl, setImageUrl] = useState<string | null>(
     resumed ? resumed.imageUrl : existing?.imageUrl ?? null
   );
@@ -194,21 +197,19 @@ export default function AddProductPage() {
     resumed?.category ??
       (existing?.category && existing.category !== "spray" ? existing.category : "pesticide")
   );
-  const [baseUnit, setBaseUnit] = useState<BaseUnit>(
-    resumed?.baseUnit ?? (existing?.baseUnit as BaseUnit) ?? "kg"
+  // The shelf's own id. `category` above stays because the seven fixed kinds are what the
+  // database stores for every report and recommendation; this is the name the shop filed it on.
+  const [categoryId, setCategoryId] = useState(resumed?.categoryId ?? existing?.categoryId ?? "");
+  const [baseUnit, setBaseUnit] = useState<string>(
+    resumed?.baseUnit ?? existing?.baseUnit ?? "kg"
   );
+  const [unitId, setUnitId] = useState(resumed?.unitId ?? existing?.unitId ?? "");
   /**
    * The code the shop scans. It stopped being a field whose typing was thrown away in 0158:
    * `create_product` writes it into `product_barcodes` (unique per shop, one primary per
    * product) and refuses a code already in use, and it mints one when this is left empty.
    */
   const [barcode, setBarcode] = useState(resumed?.barcode ?? existing?.barcode ?? "");
-  /**
-   * Codes this product used to have. Kept apart from the field above on purpose: a replaced or
-   * deleted code is no longer this product's barcode, but it is still a fact about it — and it
-   * is still spent, so the trail is also how an owner sees why a code cannot be reused.
-   */
-  const [barcodeTrail, setBarcodeTrail] = useState<BarcodeHistoryEntry[]>([]);
   const [barcodeBusy, setBarcodeBusy] = useState(false);
   // A ref, not `barcodeBusy`: React batches, so two taps in one task both read the pre-render
   // `false`, and a second generate would race the first.
@@ -270,10 +271,52 @@ export default function AddProductPage() {
       v === "pesticide" && existing.category && existing.category !== "spray" ? existing.category : v
     );
     setBaseUnit((v) =>
-      v === "kg" && existing.baseUnit && existing.baseUnit !== "kg" ? (existing.baseUnit as BaseUnit) : v
+      v === "kg" && existing.baseUnit && existing.baseUnit !== "kg" ? existing.baseUnit : v
     );
+    setCategoryId((v) => (v === "" ? existing.categoryId ?? "" : v));
+    setUnitId((v) => (v === "" ? existing.unitId ?? "" : v));
     if (!marketplaceTouched.current) setMarketplaceListed(existing.marketplaceListed === true);
   }, [isEdit, resumed, existing]);
+
+  /**
+   * Open on the shelf and unit the product already implies, once the catalogue arrives.
+   *
+   * A new product used to start on Pesticide/Kilogram because those were the first chips. Those
+   * shelves still exist and still answer to those kinds, so `categoryForKind` finds them — and a
+   * product whose row predates 0259 (a kind, no shelf) is opened on the shelf that kind already
+   * belongs to rather than being left unfiled by a save that only touched something else.
+   */
+  const catalogueDefaultsRef = useRef(false);
+  useEffect(() => {
+    if (catalogueDefaultsRef.current || !catalogueReady) return;
+    if (categories.length === 0 && shopUnits.length === 0) return;
+    catalogueDefaultsRef.current = true;
+
+    if (!categoryId) {
+      const shelf = categoryForKind(category, categories);
+      if (shelf) {
+        setCategoryId(shelf.id);
+        if (shelf.legacyCategory && !isEdit) setCategory(shelf.legacyCategory);
+      }
+    }
+    if (!unitId && shopUnits.length > 0) {
+      const match = shopUnits.find((u) => u.symbol.toLowerCase() === baseUnit.toLowerCase());
+      if (match) {
+        setUnitId(match.id);
+        setBaseUnit(match.baseUnit);
+        adoptUnitFamily(match.baseUnit);
+      } else if (!isEdit) {
+        // No match and nothing stored: a new product starts on the shop's first unit. An EDIT
+        // keeps the unit it already has — a legacy "ton" must not become a kilogram because the
+        // catalogue does not name it.
+        setUnitId(shopUnits[0].id);
+        setBaseUnit(shopUnits[0].baseUnit);
+        adoptUnitFamily(shopUnits[0].baseUnit);
+      }
+    }
+    // One read of the catalogue; the fields it fills are the person's to change afterwards.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [catalogueReady, categories, shopUnits]);
   /**
    * What the switch reads as the stored decision. On an edit, only a move away from this is
    * sent: the RPC treats an absent value as "unchanged", so a save that did not touch the
@@ -330,7 +373,9 @@ export default function AddProductPage() {
       name,
       company,
       category,
+      categoryId: categoryId || undefined,
       baseUnit,
+      unitId: unitId || undefined,
       barcode,
       imageUrl,
       packs,
@@ -352,7 +397,7 @@ export default function AddProductPage() {
     leavingRef.current = true;
     if (blocker.state === "blocked") blocker.reset();
     clearNav();
-    navigate("/admin/products", { replace: true });
+    navigate(`${base}/products`, { replace: true });
   }
 
   /** Throw the work away and go. The draft, if this screen was finishing one, goes too. */
@@ -367,18 +412,6 @@ export default function AddProductPage() {
     setAskAboutDraft(false);
     if (blocker.state === "blocked") blocker.reset();
   }
-
-  /**
-   * A product that predates the two-unit rule keeps the unit it already has.
-   *
-   * It is offered as a third chip rather than dropped, because an edit must never silently
-   * re-denominate a product: opening an old row and pressing Save would otherwise move it
-   * from "1 piece" to "1 kg" without anyone deciding that.
-   */
-  const unitChoices = useMemo<BaseUnit[]>(() => {
-    const stored = (existing?.baseUnit ?? "kg") as BaseUnit;
-    return FORM_UNITS.includes(stored) ? FORM_UNITS : [stored, ...FORM_UNITS];
-  }, [existing?.baseUnit]);
 
   /** A pack that has never existed, starting from the shop's own alert number. */
   function blankPack(threshold: number): PackDraft {
@@ -450,26 +483,6 @@ export default function AddProductPage() {
     if (!presetCompany) return;
     if (companyLocked || isEdit) setCompany(presetCompany.name);
   }, [companyLocked, presetCompany, isEdit]);
-
-  /**
-   * The codes this product used to have. Read from the database rather than remembered from
-   * this session, so a code replaced from another phone is still accounted for — the whole
-   * point of keeping the history is that no device has to remember it.
-   */
-  useEffect(() => {
-    if (!isEdit || !productId) return;
-    let alive = true;
-    rpcProductBarcodes(productId)
-      .then(({ history }) => {
-        if (alive) setBarcodeTrail(history);
-      })
-      .catch(() => {
-        /* The form still works without the trail; an empty history must not block an edit. */
-      });
-    return () => {
-      alive = false;
-    };
-  }, [isEdit, productId]);
 
   /**
    * Make a code for this shop. The database does this, not the phone: only the shop knows
@@ -592,6 +605,18 @@ export default function AddProductPage() {
     return Number.isFinite(n) && n >= 0 ? n : fallback;
   }
 
+  /**
+   * A quantity or an amount is never negative, and the field says so as it is typed.
+   *
+   * `numeric` above already refuses a negative at save time — but it refuses it by turning it
+   * into 0, which means a `-5` typed into opening stock looked accepted, was stored as 0, and
+   * the number on the screen was never the number that got saved. A field that cannot hold a
+   * value it will not store is the honest version: the minus never lands.
+   */
+  function unsigned(raw: string): string {
+    return raw.replace(/-/g, "");
+  }
+
   async function handleSave() {
     setError("");
     if (!name.trim()) {
@@ -648,7 +673,11 @@ export default function AddProductPage() {
           name: name.trim(),
           company: company.trim(),
           category,
+          // Sent even when empty: this form shows the shelf, so an empty picker is a decision to
+          // take the product off the shelf. `update_product` distinguishes the two cases.
+          categoryId: categoryId || null,
           baseUnit,
+          unitId: unitId || null,
           imageUrl: imageUrl ?? undefined,
           // Only sent when the switch moved. `update_product` distinguishes "not mentioned"
           // from false on purpose, and this is that distinction being used honestly: a save
@@ -657,8 +686,8 @@ export default function AddProductPage() {
           ...(marketplaceChanged ? { marketplaceListed } : {}),
           // Sent even when empty, because on an edit an empty field is a fact about the
           // product — it has no barcode — and not an omission. The database retires the code
-          // it replaces. On create the same empty value means the opposite (mint one), which
-          // is why this is not shared with the branch below.
+          // it replaces. The create branch below sends nothing at all rather than an empty
+          // string; since 0246 that means the same thing in both places: no code.
           barcode: barcode.trim(),
           variants,
         });
@@ -669,8 +698,12 @@ export default function AddProductPage() {
           name: name.trim(),
           company: company.trim(),
           category,
+          categoryId: categoryId || undefined,
           baseUnit,
+          unitId: unitId || undefined,
           imageUrl: imageUrl ?? undefined,
+          // Absent, not empty, when the field was left alone — and absent now means the product
+          // has no barcode. `create_product` used to mint one for exactly this case (0246).
           barcode: barcode.trim() || undefined,
           // Sent on create unconditionally, including as false: there is no stored value to
           // preserve yet, so this screen's switch IS the first decision about the product.
@@ -694,8 +727,7 @@ export default function AddProductPage() {
   }
 
   const fieldStyle = {
-    background: "var(--surface-2)",
-    border: "1px solid var(--divider)",
+    background: "var(--field-bg)",
     color: "var(--text-primary)",
   } as const;
   // One label for every field on the screen. There used to be two — an uppercase section
@@ -703,34 +735,72 @@ export default function AddProductPage() {
   // announced in two different sizes, and the smaller one read as an afterthought.
   const labelCls = "text-11 font-medium mb-1.5";
   const cellLabel = labelCls;
-  /**
-   * The category chips on the Products screen, exactly: same height, same type, same two
-   * tones. A second chip style that is nearly the same is how a design system drifts.
-   */
-  const chipCls = "shrink-0 h-8 px-4 rounded-full text-xs font-medium transition-colors";
-  const chip = (active: boolean) =>
-    ({
-      background: active ? "var(--brand)" : "var(--surface-2)",
-      color: active ? "#0a0a0a" : "var(--text-secondary)",
-    }) as const;
-
-  const herePath = isEdit ? `/admin/inventory/${productId}/edit` : "/admin/inventory/new";
+  const herePath = isEdit ? `${base}/inventory/${productId}/edit` : `${base}/inventory/new`;
   const supplierHint = dependencyHint("supplier", t, {
-    base: "/admin",
-    returnTo: backToSelf(herePath, returnTo, "/admin/products"),
+    base,
+    returnTo: backToSelf(herePath, returnTo, `${base}/products`),
   });
 
   /**
-   * The three chips, plus one more when this product is already filed somewhere the form does
-   * not offer — herbicide, equipment or other. Re-filing an old product just because someone
-   * opened it and pressed Save would be a silent change, so its own category is shown as a
-   * fourth chip rather than hidden. "Spray" is not one of those cases any more: it is the same
-   * shelf as Pesticide, and the state above has already read it as such.
+   * The shelves and units, as the pickers offer them.
+   *
+   * A subcategory reads as "Pesticide › Insect powder": the parent's name first, because that is
+   * the shelf the shopkeeper actually thinks in, and the child alone is ambiguous once a shop
+   * has a few of them. The units carry their family as the second line for the same reason the
+   * Units screen does.
    */
-  const categoryChoices = useMemo(() => {
-    const set = new Set<ProductCategory>([...QUICK_CATEGORIES, category]);
-    return [...QUICK_CATEGORIES, ...[...set].filter((c) => !QUICK_CATEGORIES.includes(c))];
-  }, [category]);
+  const categoryOptions = useMemo(
+    () =>
+      orderedCategories(categories).map(({ category: shelf, parent }) => ({
+        value: shelf.id,
+        label: parent
+          ? `${categoryDisplayName(parent, t)} › ${categoryDisplayName(shelf, t)}`
+          : categoryDisplayName(shelf, t),
+      })),
+    [categories, t],
+  );
+
+  const unitOptions = useMemo(
+    () =>
+      shopUnits.map((unit) => ({
+        value: unit.id,
+        label: unitLabel(unit),
+        meta:
+          unit.baseUnit === "kg"
+            ? t("units.weight")
+            : unit.baseUnit === "liter"
+              ? t("units.volume")
+              : t("units.count"),
+      })),
+    [shopUnits, t],
+  );
+
+  /**
+   * Move every pack onto the family the product is now measured in.
+   *
+   * A pack's size is stored in the product's own unit, so the unit chip is what its number
+   * means. Changing the product from Kilogram to Bori left the pack still labelled "KG" while
+   * the stored unit was pieces — the bill then said "10 KG" for ten pieces. The typed number is
+   * kept (there is no honest conversion between families); only its unit is moved.
+   */
+  function adoptUnitFamily(family: string) {
+    const familyUnits = packUnitsFor(family);
+    setPacks((list) =>
+      list.map((p) =>
+        familyUnits.includes(p.sizeUnit) ? p : { ...p, sizeUnit: familyUnits[0] },
+      ),
+    );
+  }
+
+  /** Choosing a unit also chooses the family its pack sizes are written in. */
+  function chooseUnit(nextId: string) {
+    setUnitId(nextId);
+    const unit = shopUnits.find((u) => u.id === nextId);
+    if (unit) {
+      setBaseUnit(unit.baseUnit);
+      adoptUnitFamily(unit.baseUnit);
+    }
+  }
 
   return (
     <div
@@ -743,10 +813,14 @@ export default function AddProductPage() {
 
         <div className="flex flex-col gap-3.5 p-4">
           {/* ── What it is, and how it is sold ────────────────────────────────────
-              One card, not three. Every field that describes the product rather than a pack
+              One block, not three. Every field that describes the product rather than a pack
               lives here, because a box per question made a short form look like a long one:
-              the eye had to re-enter a new surface to answer "what kind of thing is it?". */}
-          <div className="rounded-[var(--radius-card)] p-3.5 flex flex-col gap-4" style={{ background: "var(--tone-card)" }}>
+              the eye had to re-enter a new surface to answer "what kind of thing is it?".
+
+              The block has no surface of its own: the fields sit on the page, and the rules
+              below separate the subjects (the product, each pack, the listing) rather than
+              drawing boxes around them (owner's correction, 2026-10-31). */}
+          <div className="flex flex-col gap-4">
             {/* The app's one upload block, at its normal size: the 150 it used to be asked
                 for pushed the only optional field on the screen to the whole top of it. */}
             <div className="flex justify-center pt-1">
@@ -847,94 +921,64 @@ export default function AddProductPage() {
               <p className="text-11 mt-1.5" style={{ color: "var(--text-secondary)" }}>
                 {t("addProduct.barcodeRules")}
               </p>
-
-              {barcodeTrail.length > 0 && (
-                <div className="mt-2 rounded-[var(--radius-tile)] overflow-hidden" style={{ border: "1px solid var(--divider)" }}>
-                  <p
-                    className="px-3 py-2 text-11 font-semibold"
-                    style={{ background: "var(--tone-sunken)", color: "var(--text-secondary)" }}
-                  >
-                    {t("addProduct.barcodeHistory")}
-                  </p>
-                  <div data-testid="product-barcode-history">
-                    {barcodeTrail.map((h, i) => (
-                      <div
-                        key={`${h.code}-${h.changedAt}-${i}`}
-                        className="px-3 py-2 flex items-center justify-between gap-2"
-                        style={{ borderTop: "1px solid var(--divider)" }}
-                      >
-                        <div className="min-w-0">
-                          <p className="text-12 font-mono truncate" style={{ color: "var(--text-secondary)" }} dir="ltr">
-                            {h.code}
-                          </p>
-                          <p className="text-11" style={{ color: "var(--text-secondary)" }}>
-                            {t(
-                              h.action === "deleted" ? "barcode.historyDeleted"
-                              : h.action === "replaced" ? "barcode.historyReplaced"
-                              : "barcode.historyAdded",
-                            )}
-                            {h.previousCode ? ` · ${t("barcode.historyWas", { code: h.previousCode })}` : ""}
-                          </p>
-                        </div>
-                        <div className="text-end shrink-0">
-                          <p className="text-11" style={{ color: "var(--text-secondary)" }}>
-                            {formatDate(h.changedAt)}
-                          </p>
-                          {h.retired && (
-                            <p className="text-11 font-semibold" style={{ color: "var(--warning)" }}>
-                              {t("barcode.historyRetired")}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
             </div>
 
+            {/* The shelves are the shop's own (0259), created on Categories. A shop with a few
+                of them needs a picker, not a row of chips that overflows; the parent is named
+                in the row so "Insect powder" cannot be mistaken for a top-level shelf. */}
             <div>
               <p className={labelCls} style={{ color: "var(--text-secondary)" }}>{t("inline.category")}</p>
-              <div className="flex flex-wrap gap-2">
-                {categoryChoices.map((c) => (
-                  <button
-                    key={c}
-                    type="button"
-                    onClick={() => setCategory(c)}
-                    data-testid={`product-category-${c}`}
-                    className={chipCls}
-                    style={chip(category === c)}
-                  >
-                    {t(categoryKey(c))}
-                  </button>
-                ))}
-              </div>
+              {/* A panel under the field, not a sheet: a shelf is one word, and raising a
+                  full overlay to answer one word cost the reader their place in the form
+                  (owner's correction, 2026-10-31). */}
+              <InlineSelect
+                value={categoryId}
+                options={categoryOptions}
+                label={t("inline.category")}
+                testId="product-category"
+                onChange={(id) => {
+                  setCategoryId(id);
+                  // Keep the stored kind in step with the shelf, for the draft and for a client
+                  // that predates `categoryId`: the kind comes from the shelf's root.
+                  const shelf = categories.find((c) => c.id === id);
+                  const root = shelf?.parentId
+                    ? categories.find((c) => c.id === shelf.parentId) ?? shelf
+                    : shelf;
+                  if (root?.legacyCategory) setCategory(root.legacyCategory);
+                }}
+              />
             </div>
 
             {/* The unit decides what every number below it means, so it is asked here, with
                 the product, rather than beside a quantity further down. */}
             <div>
               <p className={labelCls} style={{ color: "var(--text-secondary)" }}>{t("addProduct.unitLabel")}</p>
-              <div className="flex flex-wrap gap-2">
-                {unitChoices.map((u) => (
-                  <button
-                    key={u}
-                    type="button"
-                    onClick={() => setBaseUnit(u)}
-                    data-testid={`product-unit-${u}`}
-                    className={chipCls}
-                    style={chip(baseUnit === u)}
-                  >
-                    {t(packUnitLabelKey(u as PackDisplayUnit))}
-                  </button>
-                ))}
-              </div>
+              <InlineSelect
+                value={unitId}
+                options={unitOptions}
+                label={t("addProduct.unitLabel")}
+                testId="product-unit"
+                onChange={chooseUnit}
+              />
             </div>
           </div>
 
-          {/* ── One card per pack ────────────────────────────────────────────────── */}
+          {/* ── The packs, in one box ─────────────────────────────────────────────
+              One surface for the whole shelf, not one per pack. A pack is a part of the
+              product, and a card around each one broke a two-pack product into what looked
+              like two separate forms; leaving them loose on the page lost the grouping
+              altogether. Inside this box the packs are still told apart by a rule, and
+              "add another" stays in the same block (owner's correction, 2026-10-31). */}
+          <div
+            className="rounded-[var(--radius-card)] p-3.5 flex flex-col gap-3"
+            style={{ background: "var(--tone-card)" }}
+          >
           {packs.map((p, i) => (
-            <div key={p.id ?? `new-${i}`} className="rounded-[var(--radius-card)] p-3.5 flex flex-col gap-2.5" style={{ background: "var(--tone-card)" }}>
+            <div
+              key={p.id ?? `new-${i}`}
+              className={`flex flex-col gap-2.5${i > 0 ? " pt-3" : ""}`}
+              style={i > 0 ? { borderTop: "1px solid var(--hairline)" } : undefined}
+            >
               <div className="flex items-center justify-between gap-2">
                 <p className="text-13 font-semibold" style={{ color: "var(--text-primary)" }}>
                   {t("addProduct.variantTitle", { n: String(i + 1) })}
@@ -966,24 +1010,25 @@ export default function AddProductPage() {
                     type="number"
                     inputMode="decimal"
                     value={p.sizeValue}
-                    onChange={(e) => setPack(i, { sizeValue: e.target.value })}
+                    min={0}
+                    onChange={(e) => setPack(i, { sizeValue: unsigned(e.target.value) })}
                     data-testid={`product-pack-size-${i}`}
-                    className="flex-1 min-w-0 h-11 rounded-[var(--radius-card)] px-3 text-sm outline-none"
+                    className="flex-1 min-w-0 h-12 rounded-[var(--radius-card)] px-3 text-sm outline-none"
                     style={fieldStyle}
                   />
-                  <button
-                    type="button"
-                    onClick={() => setSheet({ kind: "unit", pack: i })}
-                    disabled={units.length < 2}
-                    data-testid={`product-pack-unit-${i}`}
-                    className="h-11 px-3 min-w-0 max-w-[45%] rounded-[var(--radius-card)] flex items-center gap-1.5 text-13 font-semibold disabled:opacity-100"
-                    style={fieldStyle}
-                  >
-                    <span className="truncate">{unitLabelFor(p.sizeUnit)}</span>
-                    {units.length > 1 && (
-                      <ChevronDown size={14} className="shrink-0" style={{ color: "var(--text-secondary)" }} />
-                    )}
-                  </button>
+                  {/* A dropdown in the row, not a sheet: the answer is one word from a list of
+                      three, and raising an overlay for it hid the pack being measured (owner's
+                      correction, 2026-10-31). */}
+                  <div className="w-[45%] shrink-0 min-w-0">
+                    <InlineSelect
+                      value={p.sizeUnit}
+                      options={units.map((u) => ({ value: u, label: unitLabelFor(u) }))}
+                      onChange={(u) => setPack(i, { sizeUnit: u as typeof p.sizeUnit })}
+                      label={t("addProduct.packUnitTitle")}
+                      testId={`product-pack-unit-${i}`}
+                      disabled={units.length < 2}
+                    />
+                  </div>
                 </div>
                 {/* The pack that is wrong is the one that says so, where its size is, rather
                     than one line at the foot of a form the owner would have to search. */}
@@ -1005,15 +1050,20 @@ export default function AddProductPage() {
                     type="number"
                     inputMode="decimal"
                     value={p.costPrice}
-                    onChange={(e) => setPack(i, withMarkup({ ...p, costPrice: e.target.value }))}
+                    min={0}
+                    onChange={(e) => setPack(i, withMarkup({ ...p, costPrice: unsigned(e.target.value) }))}
                     data-testid={`product-pack-cost-${i}`}
-                    className="w-full h-11 rounded-[var(--radius-card)] px-3 text-sm outline-none"
+                    className="w-full h-12 rounded-[var(--radius-card)] px-3 text-sm outline-none"
                     style={fieldStyle}
                   />
                   {/* Left empty, this one field is what turns every profit figure in the app
                       into the sale price. Said here, once, at the moment it is entered —
-                      not months later on a report nobody can explain. */}
-                  {!(Number(p.costPrice) > 0) && (
+                      not months later on a report nobody can explain.
+
+                      Only once a price has been quoted: on a blank pack there is nothing wrong
+                      yet, and three warnings on an untouched form are the noise that teaches
+                      people to ignore the fourth (owner's review, 2026-10-31). */}
+                  {Number(p.sellingPrice) > 0 && !(Number(p.costPrice) > 0) && (
                     <p
                       className="text-11 mt-1"
                       style={{ color: "var(--warning)" }}
@@ -1029,9 +1079,10 @@ export default function AddProductPage() {
                     type="number"
                     inputMode="decimal"
                     value={p.sellingPrice}
-                    onChange={(e) => setPack(i, withMarkup({ ...p, sellingPrice: e.target.value }))}
+                    min={0}
+                    onChange={(e) => setPack(i, withMarkup({ ...p, sellingPrice: unsigned(e.target.value) }))}
                     data-testid={`product-pack-sell-${i}`}
-                    className="w-full h-11 rounded-[var(--radius-card)] px-3 text-sm outline-none"
+                    className="w-full h-12 rounded-[var(--radius-card)] px-3 text-sm outline-none"
                     style={fieldStyle}
                   />
                 </div>
@@ -1051,10 +1102,11 @@ export default function AddProductPage() {
                   type="number"
                   inputMode="decimal"
                   value={p.markup}
-                  onChange={(e) => setPack(i, withSellingFromMarkup(p, e.target.value))}
+                  min={0}
+                  onChange={(e) => setPack(i, withSellingFromMarkup(p, unsigned(e.target.value)))}
                   data-testid={`product-pack-markup-${i}`}
                   placeholder="%"
-                  className="w-full h-11 rounded-[var(--radius-card)] px-3 text-sm outline-none"
+                  className="w-full h-12 rounded-[var(--radius-card)] px-3 text-sm outline-none"
                   style={fieldStyle}
                 />
                 {/* A percentage of nothing is nothing: with no cost price entered the
@@ -1083,7 +1135,7 @@ export default function AddProductPage() {
                     </span>
                     <button
                       type="button"
-                      onClick={() => navigate(`/admin/inventory/${productId}/adjust`)}
+                      onClick={() => navigate(`${base}/inventory/${productId}/adjust`)}
                       className="text-xs font-semibold underline underline-offset-2 shrink-0"
                       style={{ color: "var(--brand-dark)" }}
                     >
@@ -1095,9 +1147,10 @@ export default function AddProductPage() {
                     type="number"
                     inputMode="numeric"
                     value={p.stockQty}
-                    onChange={(e) => setPack(i, { stockQty: e.target.value })}
+                    min={0}
+                    onChange={(e) => setPack(i, { stockQty: unsigned(e.target.value) })}
                     data-testid={`product-pack-stock-${i}`}
-                    className="w-full h-11 rounded-[var(--radius-card)] px-3 text-sm outline-none"
+                    className="w-full h-12 rounded-[var(--radius-card)] px-3 text-sm outline-none"
                     style={fieldStyle}
                   />
                 )}
@@ -1115,11 +1168,12 @@ export default function AddProductPage() {
                       type="number"
                       inputMode="numeric"
                       value={p.lowStockThreshold}
-                      onChange={(e) => setPack(i, { lowStockThreshold: e.target.value })}
+                      min={0}
+                      onChange={(e) => setPack(i, { lowStockThreshold: unsigned(e.target.value) })}
                       data-testid={`product-pack-warn-${i}`}
                       /* Same type size as every other input on the screen: a number typed
                          here is the same kind of thing as a number typed above. */
-                      className="w-16 h-10 rounded-[var(--radius-tile)] px-2 text-sm text-center outline-none"
+                      className="w-16 h-12 rounded-[var(--radius-tile)] px-2 text-sm text-center outline-none"
                       style={fieldStyle}
                     />
                     <span className="text-12" style={{ color: "var(--text-secondary)" }}>{t("addProduct.itemsWord")}</span>
@@ -1149,13 +1203,10 @@ export default function AddProductPage() {
                     </button>
                   )}
                 </div>
-                <input
-                  type="date"
+                <DateField
                   value={p.expiryDate}
-                  onChange={(e) => setPack(i, { expiryDate: e.target.value })}
-                  data-testid={`product-pack-expiry-${i}`}
-                  className="w-full h-11 rounded-[var(--radius-card)] px-3 text-sm outline-none"
-                  style={fieldStyle}
+                  onChange={(v) => setPack(i, { expiryDate: v })}
+                  testId={`product-pack-expiry-${i}`}
                 />
               </div>
             </div>
@@ -1170,6 +1221,7 @@ export default function AddProductPage() {
           >
             <Plus size={15} /> {t("addProduct.addAnotherVariant")}
           </button>
+          </div>
 
           {/* ── Listing on the farmer marketplace ────────────────────────────────
               A checkbox row, not a switch: it is the same control the permission and branch
@@ -1182,8 +1234,8 @@ export default function AddProductPage() {
               No separate save: the switch travels with the product on the same button, so
               there is no second write to forget and no half-listed state. */}
           <div
-            className="rounded-[var(--radius-card)] p-3.5 flex items-start gap-3"
-            style={{ background: "var(--tone-card)" }}
+            className="pt-4 flex items-start gap-3"
+            style={{ borderTop: "1px solid var(--hairline)" }}
           >
             <button
               type="button"
@@ -1225,56 +1277,23 @@ export default function AddProductPage() {
       {/* ── Leaving with unsaved work ──────────────────────────────────────────── */}
       {/* An alert, not a sheet. A sheet is a container you browse — a supplier list, a pack
           unit — and this is a decision about the screen you are on, which is what a centered
-          alert is for. Three answers, because there are three: keep it, leave it, stay. Two
-          buttons would silently pick one of them for the person.
-          Dismissing it by backdrop or Escape means keep editing, never discard: the one answer
-          that cannot be undone must not be reachable by a stray tap. */}
+          alert is for.
+
+          TWO ANSWERS: keep the work as a draft, or throw it away. There used to be a third
+          button for staying on the screen, which is what closing the alert already does, so it
+          asked the reader to choose between three things when only two were decisions
+          (owner's correction, 2026-10-31). Backdrop and Escape still mean keep editing, never
+          discard: the one answer that cannot be undone must not be reachable by a stray tap. */}
       <ConfirmDialog
         open={askAboutDraft}
         title={t("draft.promptTitle")}
         message={t("draft.promptBody")}
         confirmLabel={t("draft.saveDraft")}
-        cancelLabel={t("draft.keepEditing")}
-        tertiaryLabel={t("draft.discard")}
+        secondaryDestructive={{ label: t("draft.discard"), onClick: handleDiscardDraft }}
         onConfirm={handleSaveDraft}
         onCancel={handleKeepEditing}
-        onTertiary={handleDiscardDraft}
       />
 
-      {/* ── The pack-size unit ─────────────────────────────────────────────────── */}
-      <Sheet
-        open={sheet?.kind === "unit"}
-        title={t("addProduct.packUnitTitle")}
-        onClose={() => setSheet(null)}
-        closeButton={false}
-      >
-        <div className="px-4">
-          <ListCard>
-            {sheet?.kind === "unit" &&
-              packUnitsFor(baseUnit).map((u) => (
-                <ListRow
-                  key={u}
-                  title={unitLabelFor(u)}
-                  emphasis
-                  selected={packs[sheet.pack]?.sizeUnit === u}
-                  testId={`product-pack-unit-option-${u}`}
-                  onClick={() => {
-                    // The number is kept exactly as typed and only its meaning changes: the
-                    // owner is choosing what the number says. Re-scaling it here would turn
-                    // "500" → Gram into a five-hundred-kilo pack while he was still deciding.
-                    setPack(sheet.pack, { sizeUnit: u });
-                    setSheet(null);
-                  }}
-                  trailing={
-                    packs[sheet.pack]?.sizeUnit === u ? (
-                      <Check size={20} style={{ color: "var(--brand-dark)" }} className="shrink-0" />
-                    ) : undefined
-                  }
-                />
-              ))}
-          </ListCard>
-        </div>
-      </Sheet>
     </div>
   );
 }

@@ -3,7 +3,7 @@ import { type ReactNode } from "react";
 interface ButtonProps {
   children: ReactNode;
   onClick?: () => void;
-  variant?: "primary" | "outline" | "ghost" | "danger";
+  variant?: "primary" | "outline" | "ghost" | "danger" | "cta";
   size?: "sm" | "md" | "lg";
   disabled?: boolean;
   loading?: boolean;
@@ -43,6 +43,8 @@ export default function Button({
     outline: "bg-card border border-border-control text-foreground",
     ghost: "bg-transparent text-foreground",
     danger: "bg-[#ef4444] text-white",
+    // The quiet dark action from the people frames: a step above the page, not the brand.
+    cta: "bg-cta text-cta-fg",
   };
 
   const sizes = {

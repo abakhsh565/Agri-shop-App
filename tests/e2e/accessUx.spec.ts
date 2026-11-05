@@ -15,7 +15,8 @@
  *
  * QA database only; every record this spec creates is deleted again.
  */
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect } from './base';
+import type { Page } from '@playwright/test';
 import {
   QA_IDS,
   execSql,
@@ -248,7 +249,21 @@ test.describe('Employee job & access — simple for the owner, exact underneath'
     // Step 3 asks where they work and confirms — the only screen that collects
     // the details, and the only one that commits.
     const step3 = await bodyText(page);
-    expect(step3).toContain('Where can UX work?');
+    // Which form this step takes depends on the shop, so the expectation follows the data instead
+    // of assuming a multi-branch shop: ONE branch has nothing to decide and the screen states it
+    // ("Works at <branch>"), while several branches are a real choice. Scoped to the QA shop — the
+    // screen is RLS-scoped to the caller's current shop, and an unscoped `is_active` count answers
+    // with another tenant's branch (measured 2026-10-14; see the branch query in test 2).
+    const [branchCount] = await execSql(
+      `SELECT count(*)::int AS n FROM branches WHERE is_active AND tenant_id = '${QA_IDS.shop}'`
+    );
+    expect(branchCount, 'the active-branch count was not returned — the query itself failed').toBeTruthy();
+    const activeBranches = Number(branchCount.n);
+    if (activeBranches > 1) {
+      expect(step3).toContain('Where can UX work?');
+    } else {
+      expect(step3, 'the confirmation does not say where they will work').toContain('Works at ');
+    }
     for (const label of ['Check the details', 'Name', 'Phone', 'Role', 'Branch', 'Access']) {
       expect(step3, `the confirmation step is missing "${label}"`).toContain(label);
     }
@@ -256,6 +271,34 @@ test.describe('Employee job & access — simple for the owner, exact underneath'
     expect(step3).toContain('Send invitation');
     expect(step3, 'the flow does not say what happens after the invite').toContain('sets their own PIN');
     expect(step3, 'step 3 exposes RBAC vocabulary').not.toMatch(JARGON);
+
+    // The Settings overview's invite shortcut (moved there from Home on 2026-10-25) must enter
+    // this exact wizard, and the result must still be an invitation for the employee just
+    // created — not an unrelated generic share link.
+    await page.goto(`${BASE}/admin/settings`);
+    await page.getByTestId('shop-overview-invite').click();
+    await expect(page).toHaveURL(/\/admin\/employees\/new$/);
+    await page.getByPlaceholder('e.g. Bilal Ahmed').fill(NEW_NAME);
+    await page.getByPlaceholder('03001234567').fill(NEW_PHONE_LOCAL);
+    await page.getByRole('button', { name: 'Next' }).click();
+    await page.getByRole('button', { name: /Sales Manager/ }).first().click();
+    await page.getByRole('button', { name: 'Next' }).click();
+    await page.getByRole('button', { name: 'Send invitation' }).click();
+    await expect(page.getByTestId('invite-sent-title')).toContainText(NEW_NAME);
+    await expect(page.getByTestId('invite-flow-hint')).toContainText('employee you just added');
+    const invitation = new URL(await page.getByTestId('invite-link').innerText());
+    expect(invitation.searchParams.get('phone')).toBe(NEW_PHONE_DB);
+    const [createdMembership] = await execSql(`
+      SELECT s.id AS shop_id, s.join_code
+        FROM users u
+        JOIN memberships m ON m.user_id = u.id AND m.status = 'pending'
+        JOIN shops s ON s.id = m.tenant_id
+       WHERE u.phone = '${NEW_PHONE_DB}'`);
+    expect(createdMembership, 'the invited employee has no pending shop membership').toBeTruthy();
+    // While the short-code read is still loading the link safely carries the shop UUID;
+    // once available it carries the code. Both are accepted by the existing sign-in flow.
+    expect([createdMembership.shop_id, createdMembership.join_code]).toContain(invitation.searchParams.get('shop'));
+    await releaseEmployeeByPhone(NEW_PHONE_DB);
   });
 
   test('2. Creating from the simplified screen writes the right membership, then the list shows it', async ({ page }) => {
@@ -417,16 +460,18 @@ test.describe('Employee job & access — simple for the owner, exact underneath'
         .forEach((k) => localStorage.removeItem(k));
     });
     await page.goto(inviteLink);
-    await page.waitForTimeout(1500);
+    // The invitation is its own screen: the shop, the invited number and one Continue. The tabs
+    // and both editable fields that used to stand between the person and their code are gone.
+    await expect(page.getByTestId('invite-join')).toBeVisible({ timeout: 30000 });
+    await expect(page.getByTestId('invite-join-title')).toContainText('invited');
     await expect(
-      page.getByPlaceholder('e.g. 03001234567'),
-      'the invitation link does not fill in the employee\u2019s number'
-    ).toHaveValue(NEW_PHONE_DB);
-    // The link carries the shop now, so the line names it: "You were invited to {shop}."
-    expect(
-      await bodyText(page),
-      'the invited person is not told why the number is already filled in'
-    ).toContain('You were invited to');
+      page.getByTestId('invite-join-phone'),
+      'the invitation screen does not state the invited number'
+    ).toContainText(NEW_PHONE_DB.slice(-4));
+    // Continue is shown only after the server confirms the (shop, phone) pair.
+    await expect(page.getByTestId('invite-join-continue')).toBeVisible({ timeout: 30000 });
+    await expect(page.getByPlaceholder('e.g. 03001234567')).toHaveCount(0);
+    await expect(page.getByTestId('auth-tab-employee')).toHaveCount(0);
   });
 
   test('3. The same flow in Urdu: RTL, translated, no English copy leaking', async ({ page }) => {
@@ -484,7 +529,21 @@ test.describe('Employee job & access — simple for the owner, exact underneath'
     await page.waitForTimeout(900);
 
     const step3 = await bodyText(page);
-    expect(step3).toContain('بلال کہاں کام کر سکتا ہے؟');
+    // Same data-shaped expectation as test 1, in Urdu. The branch question only exists when there is a
+    // real choice (`branches.length > 1` in AddEmployeePage); with one active branch the screen states
+    // where the person will work instead of asking. Asserting the question unconditionally made this
+    // lane fail on the correct behaviour — measured by the full E2E run 2026-10-18, when the QA shop
+    // held one active branch (the warehouse was archived on 2026-10-18T00:07Z and no fixture declares
+    // a second active branch).
+    const [branchCount] = await execSql(
+      `SELECT count(*)::int AS n FROM branches WHERE is_active AND tenant_id = '${QA_IDS.shop}'`
+    );
+    const activeBranches = Number(branchCount?.n ?? 0);
+    if (activeBranches > 1) {
+      expect(step3).toContain('بلال کہاں کام کر سکتا ہے؟');
+    } else {
+      expect(step3, 'the Urdu confirmation does not say where they will work').toContain('کام کی جگہ');
+    }
     expect(step3).toContain('دعوت بھیجیں');
     expect(step3, 'English copy leaked into the Urdu confirmation step').not.toContain('Send invitation');
     const overflowStep3 = await page.evaluate(() => document.body.scrollWidth > document.body.clientWidth);

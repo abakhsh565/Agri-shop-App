@@ -5,6 +5,7 @@ import { useProductsStore } from "@/stores/productsStore";
 import { useCustomersStore } from "@/stores/customersStore";
 import { useSalesStore } from "@/stores/salesStore";
 import { useCompaniesStore } from "@/stores/companiesStore";
+import { useCatalogueStore } from "@/stores/catalogueStore";
 import { useEmployeesStore } from "@/stores/employeesStore";
 import { useRolesStore } from "@/stores/rolesStore";
 import { useNotificationStore } from "@/stores/notificationStore";
@@ -55,6 +56,15 @@ export interface BranchSummary {
   name: string;
   membershipRole: MembershipRole;
   membershipStatus: MembershipStatus;
+  /**
+   * The role this person holds IN THIS BRANCH.
+   *
+   * Not a copy of `membershipRole`: one membership can be a cashier in one branch and a manager
+   * in another (migration 0233), and this is the field that tells them apart. `null` means the
+   * branch has no explicit row and the membership's default role applies.
+   */
+  roleId: string | null;
+  roleName: string | null;
   isCurrent: boolean;
   /**
    * The branch this account registered with. It can be renamed, never deleted — there
@@ -68,6 +78,28 @@ export interface BranchSummary {
   salesCount: number | null;
   salesTotal: number | null;
   /**
+   * What this branch's own stock is worth, at today's cost.
+   *
+   * Its own, not the business's: the value of what this branch received and has not sold,
+   * derived from the branch-stamped movement ledger (migration 0234). The main branch also
+   * carries whatever the ledger cannot attribute, so the branches always add up to the
+   * business total. `null` means the caller may not see inventory, never that it is zero.
+   */
+  inventoryValue: number | null;
+  /**
+   * Some of this branch's stock has no cost recorded, so `inventoryValue` is a floor (`≥`)
+   * rather than a smaller — wrong — number.
+   */
+  inventoryCostIncomplete: boolean;
+  /**
+   * What this branch billed and has not collected at this branch.
+   *
+   * Never negative: a collection taken here against another branch's bill cannot pull this
+   * figure below zero — the main branch reconciles the difference, so the branches still add
+   * up to the business total. `null` means the caller may not see customers.
+   */
+  creditOutstanding: number | null;
+  /**
    * Where this branch is, as a point on a map — or `null` when it has never been pinned.
    *
    * It arrives with the rest of the branch rather than from a second read, and that is a rule and
@@ -78,6 +110,15 @@ export interface BranchSummary {
    * member of, so it is the read that carries the place.
    */
   place: PickedPlace | null;
+  /**
+   * The address typed into the branch's location field, whether or not it was ever pinned.
+   *
+   * `place` is null until the branch has coordinates, because a map marker and a marketplace
+   * listing need a point — but the address is a fact about the branch on its own, and a list
+   * that showed "no location" for a branch whose address is on file would be describing the
+   * map, not the branch.
+   */
+  address: string | null;
   /**
    * Whether this branch offers its listed products to the farmer marketplace.
    *
@@ -182,6 +223,14 @@ interface BranchRow {
   location_label: string | null;
   location_source: string | null;
   marketplace_enabled: boolean | null;
+  role_id: string | null;
+  role_name: string | null;
+  /** This branch's own stock value (0234). NULL when the caller may not see inventory. */
+  inventory_value: number | string | null;
+  /** True when some of this branch's stock has no cost recorded, so its value is a floor. */
+  inventory_cost_incomplete: boolean | null;
+  /** What this branch billed and has not collected there (0234). NULL without customers.view. */
+  credit_outstanding: number | string | null;
 }
 
 /**
@@ -364,6 +413,7 @@ function resetShopScopedStores(): void {
   useCustomersStore.getState().reset();
   useSalesStore.getState().reset();
   useCompaniesStore.getState().reset();
+  useCatalogueStore.getState().reset();
   useEmployeesStore.getState().reset();
   useRolesStore.getState().reset();
   useNotificationStore.getState().reset();
@@ -478,6 +528,8 @@ export const useShopStore = create<ShopState>((set, get) => ({
         name: r.name,
         membershipRole: r.membership_role,
         membershipStatus: r.membership_status,
+        roleId: r.role_id ?? null,
+        roleName: r.role_name ?? null,
         isCurrent: r.is_current,
         isMain: r.is_main,
         createdAt: r.created_at,
@@ -487,7 +539,11 @@ export const useShopStore = create<ShopState>((set, get) => ({
         salesCount: r.sales_count != null ? Number(r.sales_count) : null,
         salesTotal: r.sales_total != null ? Number(r.sales_total) : null,
         place: branchPlaceFrom(r),
+        address: r.address ?? null,
         marketplaceEnabled: r.marketplace_enabled === true,
+        inventoryValue: r.inventory_value != null ? Number(r.inventory_value) : null,
+        inventoryCostIncomplete: r.inventory_cost_incomplete === true,
+        creditOutstanding: r.credit_outstanding != null ? Number(r.credit_outstanding) : null,
       })),
       branchesLoading: false,
       branchesLoaded: true,

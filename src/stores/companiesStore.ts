@@ -18,6 +18,14 @@ interface CompanyRow {
   created_at: string;
 }
 
+/** What this supplier is owed for the branch being worked in (0242). */
+interface BranchCompanyBalanceRow {
+  company_id: string;
+  total_purchases: number | string;
+  total_paid: number | string;
+  outstanding_payable: number | string;
+}
+
 function companyFromRow(r: CompanyRow): Company {
   return {
     id: r.id,
@@ -86,8 +94,35 @@ export const useCompaniesStore = create<CompaniesState>((set, get) => ({
       set({ loading: false, ready: true, error: error.message });
       return;
     }
+    const mapped = (data as CompanyRow[]).map(companyFromRow);
+
+    // Payables are branch money too. The supplier row's shop-wide column answers a
+    // different question, and using it here put another branch's debt on this one.
+    // A failed read falls back to zero, never to the shop total.
+    const { data: branchBalances, error: balanceError } = await supabase.rpc(
+      "get_branch_company_balances"
+    );
+    if (!isDataContextCurrent(context)) return;
+    const balanceById = new Map<string, BranchCompanyBalanceRow>(
+      balanceError
+        ? []
+        : ((branchBalances as BranchCompanyBalanceRow[] | null) ?? []).map((row) => [
+            row.company_id,
+            row,
+          ])
+    );
     set({
-      companies: (data as CompanyRow[]).map(companyFromRow),
+      companies: mapped.map((company) => {
+        const balance = balanceById.get(company.id);
+        if (!balance) {
+          return { ...company, totalPurchases: 0, outstandingPayable: 0 };
+        }
+        return {
+          ...company,
+          totalPurchases: Number(balance.total_purchases),
+          outstandingPayable: Number(balance.outstanding_payable),
+        };
+      }),
       loading: false,
       ready: true,
     });

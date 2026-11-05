@@ -189,13 +189,22 @@ export function speak(text: string): boolean {
   return true;
 }
 
-/** Listening, when the browser supports it. `onText` fires with what was heard. */
-export function listen(onText: (text: string) => void, onEnd?: () => void): (() => void) | null {
+/**
+ * Listening, when the browser supports it. `onText` fires with what was heard.
+ *
+ * `lang` is a parameter because the finance quick-add form reads the owner's sentence in the
+ * language the app is already in; the assistant keeps its own default.
+ */
+export function listen(
+  onText: (text: string) => void,
+  onEnd?: () => void,
+  lang = "en-PK",
+): (() => void) | null {
   const Recognition =
     (window as any).SpeechRecognition ?? (window as any).webkitSpeechRecognition ?? null;
   if (!Recognition) return null;
   const recognition = new Recognition();
-  recognition.lang = "en-PK";
+  recognition.lang = lang;
   recognition.interimResults = true;
   recognition.continuous = false;
   recognition.onresult = (event: any) => {

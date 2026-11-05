@@ -69,6 +69,14 @@ const PHONE = {
 
 const RUN = `QA SecurityMatrix ${Date.now()}`;
 const ROLE_PREFIX = 'QA Security Matrix';
+/**
+ * This file's OWN second branch, created in `beforeAll` and removed by `cleanup`.
+ *
+ * It replaces the seeded shop's second active branch (`branches.rows[1] ?? branchMain`): the
+ * positional read the ownership audit flags, whose fallback silently collapsed the two-branch
+ * contrast to one branch. The id is a literal, so a killed run leaves a row the next run can name.
+ */
+const WAREHOUSE = 'fe200000-0000-0000-0000-00000000f001';
 
 let roleAdmin = '';
 let roleManager = '';
@@ -121,6 +129,7 @@ async function cleanup() {
     `DELETE FROM role_permissions WHERE role_id IN (SELECT id FROM roles WHERE ${roles})`,
     `DELETE FROM roles WHERE ${roles}`,
     `DELETE FROM users WHERE id IN (${users}) OR phone IN (${phones})`,
+    `DELETE FROM branches WHERE id = '${WAREHOUSE}'`,
   ];
 
   const failures: string[] = [];
@@ -141,10 +150,14 @@ beforeAll(async () => {
   // The branches the tenant works in. `ensureTenantBranch` is the app's own registration path;
   // a tenant with no branch cannot operate at all (0188), so this is setup, not a shortcut.
   branchMain = await ensureTenantBranch(TENANT, 'Main Branch');
-  const branches = await sql(
-    `SELECT id FROM branches WHERE tenant_id = '${TENANT}' AND is_active = true ORDER BY is_default DESC, created_at`
-  );
-  branchWarehouse = branches.rows[1]?.id ?? branchMain;
+  // The second branch is this file's own row — created here, deleted by `cleanup` — instead of the
+  // tenant's second list entry with the main branch as fallback.
+  await sql(`
+    INSERT INTO branches (id, tenant_id, name, is_default, is_active)
+    VALUES ('${WAREHOUSE}', '${TENANT}', '${RUN} Warehouse', false, true)
+    ON CONFLICT (id) DO UPDATE SET tenant_id = '${TENANT}', is_active = true, is_default = false
+  `);
+  branchWarehouse = WAREHOUSE;
 
   // Personas. The 0113 trigger gives each one its membership; role and scope are set below the way
   // the product's own invitation path writes them, because a membership with no scope is refused

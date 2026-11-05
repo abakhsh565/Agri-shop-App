@@ -6,7 +6,9 @@
  *
  * Uses the QA database (never production).
  */
-import { test, expect } from '@playwright/test';
+// `./base` adds the worker-scoped ownership cleanup, which covers the rows this lane registers even
+// when a failing test restarts the worker before its `afterAll` runs.
+import { test, expect } from './base';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
 import {
@@ -320,21 +322,25 @@ test.describe('Image Synchronization — All Entities', () => {
     for (const b of buckets) expect(b.public).toBe(true);
   });
 
-  test('Storage: RLS policies exist for all CRUD operations', async () => {
+  test('Storage: the only policies are the public read and authenticated upload 0230 defines', async () => {
     const policies = await execSql(`SELECT cmd, count(*) as cnt FROM pg_policies WHERE schemaname = 'storage' AND tablename = 'objects' GROUP BY cmd`);
     const cmds = policies.map((p: any) => p.cmd);
-    expect(cmds).toContain('INSERT');
     expect(cmds).toContain('SELECT');
-    expect(cmds).toContain('UPDATE');
-    expect(cmds).toContain('DELETE');
+    expect(cmds).toContain('INSERT');
+    // 0230 removed every client UPDATE/DELETE policy on purpose: bucket-wide writes let any
+    // authenticated member — and any anonymous holder of the key the browser bundle ships —
+    // overwrite or delete another shop's images. The app only uploads a fresh unique path and
+    // reads a public URL, so their return is a security regression, not a missing feature.
+    expect(cmds, 'a client UPDATE policy is back on storage.objects').not.toContain('UPDATE');
+    expect(cmds, 'a client DELETE policy is back on storage.objects').not.toContain('DELETE');
   });
 
   test('Storage: no per-user ownership restriction — any authenticated user can modify any image', async () => {
-    // Document the security posture:
-    // All storage policies restrict to image buckets but NOT by user/owner.
-    // This means any authenticated user can upload, replace, or delete images
-    // belonging to any other entity. The business layer (DB references) provides
-    // ownership control, not the storage layer.
+    // Document the security posture after 0230:
+    // The policies restrict to the four image buckets but NOT by user/owner, so any authenticated
+    // member can UPLOAD into any of them. They can neither replace nor delete an object: 0230
+    // dropped every client UPDATE/DELETE policy, so RLS denies those and only the service role can
+    // remove one. Which row points at an image is the business layer's control, not storage's.
     const policies = await execSql(`SELECT policyname, cmd, qual FROM pg_policies WHERE schemaname = 'storage' AND tablename = 'objects'`);
     const imageBuckets = ['product-images', 'employee-photos', 'company-logos', 'customer-images'];
 

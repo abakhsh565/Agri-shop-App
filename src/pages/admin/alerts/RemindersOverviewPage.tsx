@@ -25,10 +25,24 @@ import {
 } from "@/lib/localGroupRegistry";
 import {
   getCreditRequestsDB,
-  approveCreditRequest,
-  rejectCreditRequest,
   type LocalCreditRequest,
 } from "@/lib/localGroupRegistry";
+
+/**
+ * The id a pending credit-limit request carries into the signal list.
+ *
+ * The signal type has no field for the request, and the request is what the owner has to act on:
+ * a credit request is answered with an amount, not by looking at a customer. The prefix is named
+ * once so the mapping that builds the signal and the card that opens it cannot drift apart.
+ */
+const CREDIT_REQUEST_SIGNAL_PREFIX = "credit-request-";
+
+/** The request id inside a signal id, or null when this is not a credit request. */
+function creditRequestIdOf(signalId: string): string | null {
+  return signalId.startsWith(CREDIT_REQUEST_SIGNAL_PREFIX)
+    ? signalId.slice(CREDIT_REQUEST_SIGNAL_PREFIX.length)
+    : null;
+}
 
 /* ── Types ── */
 interface ReminderLogEntry {
@@ -326,8 +340,6 @@ export default function RemindersOverviewPage() {
   const [editMessage, setEditMessage] = useState("");
   const [sentOccurrenceKeys, setSentOccurrenceKeys] = useState<Set<string>>(new Set());
   const [allLogs, setAllLogs] = useState<ReminderLogEntry[]>([]);
-  const [creditAction, setCreditAction] = useState<{ request: LocalCreditRequest; action: "approve" | "reject" } | null>(null);
-
   useEffect(() => { loadAllReminderLogs().then(setAllLogs); }, []);
   useEffect(() => {
     const timer = setInterval(() => loadAllReminderLogs().then(setAllLogs), 10000);
@@ -356,7 +368,7 @@ export default function RemindersOverviewPage() {
     creditRequests
       .filter(r => r.status === "pending")
       .map(r => ({
-        id: `credit-request-${r.id}`,
+        id: `${CREDIT_REQUEST_SIGNAL_PREFIX}${r.id}`,
         category: "credit_limit" as SignalCategory,
         severity: "critical" as SignalSeverity,
         priority: 85,
@@ -499,22 +511,6 @@ export default function RemindersOverviewPage() {
     setEditingReminder(null);
   }, [editingReminder, editMessage]);
 
-  /* ── Credit request actions ── */
-  const handleCreditAction = useCallback(async () => {
-    if (!creditAction) return;
-    try {
-      if (creditAction.action === "approve") {
-        await approveCreditRequest(creditAction.request.id, "Admin");
-      } else {
-        await rejectCreditRequest(creditAction.request.id, "Admin");
-      }
-      getCreditRequestsDB().then(setCreditRequests);
-      setCreditAction(null);
-    } catch (err) {
-      console.error("Credit action failed:", err);
-    }
-  }, [creditAction]);
-
   /* ── Render action needed (signal-based) ── */
   function renderSignalCard(signal: LiveSignal) {
     const severityConfig: Record<string, { cardBg: string; iconBg: string; iconColor: string; icon: React.ReactNode }> = {
@@ -525,6 +521,16 @@ export default function RemindersOverviewPage() {
     const config = severityConfig[signal.severity] || severityConfig.info;
 
     const onClick = () => {
+      // A pending credit-limit request is answered with an AMOUNT, so it does not open the
+      // customer profile: that page shows the limit on record and says nothing about the
+      // request waiting on the owner, which made "Review" a dead end — the one screen where the
+      // owner can approve a different figure than the employee asked for (0251) was unreachable
+      // from the app. The request detail is that screen.
+      const requestId = creditRequestIdOf(signal.id);
+      if (requestId) {
+        navigate(`/admin/alerts/credit-requests/${requestId}`);
+        return;
+      }
       if (signal.entity_type === "customer") navigateToCustomer(signal.entity_id);
       else if (signal.entity_type === "product") navigate(`/admin/products/${signal.entity_id}`);
       else if (signal.entity_type === "company") navigate("/admin/companies");
@@ -661,8 +667,8 @@ export default function RemindersOverviewPage() {
             />
             <button
               onClick={() => setShowGroupSheet(true)}
-              className="flex items-center justify-center gap-2 h-11 rounded-full text-13 font-bold transition-transform active:scale-[0.97]"
-              style={{ background: "var(--brand)", color: "#0a0a0a" }}
+              className="mx-5 flex items-center justify-center gap-2 h-11 rounded-full text-13 font-bold transition-transform active:scale-[0.97]"
+              style={{ width: "calc(100% - 2.5rem)", background: "var(--brand)", color: "#0a0a0a" }}
             >
               <Plus size={15} /> {t("inline.create_group_reminder_x")}
             </button>
@@ -813,7 +819,7 @@ export default function RemindersOverviewPage() {
               </div>
               <div>
                 <label className="ds-section-label block mb-2" style={{ color: "var(--text-secondary)" }}>{t("common.message")}</label>
-                <textarea value={editMessage} onChange={(e) => setEditMessage(e.target.value)} rows={5} className="w-full rounded-[var(--radius-card)] px-4 py-3 text-13 outline-none resize-none" style={{ background: "var(--surface-2)", color: "var(--text-primary)", border: "1px solid var(--border-control)" }} />
+                <textarea value={editMessage} onChange={(e) => setEditMessage(e.target.value)} rows={5} className="w-full rounded-[var(--radius-card)] px-4 py-3 text-13 outline-none resize-none" style={{ background: "var(--field-bg)", color: "var(--text-primary)" }} />
               </div>
               <div className="flex gap-3">
                 <button onClick={() => handleSend("whatsapp")} className="flex-1 h-12 rounded-full text-14 font-bold flex items-center justify-center gap-2" style={{ background: "#25D366", color: "#fff" }}>
@@ -845,46 +851,6 @@ export default function RemindersOverviewPage() {
         />
       )}
 
-      {/* Credit Request Action Sheet */}
-      {creditAction && (
-        <div className="fixed inset-0 z-50 flex items-end" style={{ background: "var(--scrim)" }} onClick={() => setCreditAction(null)}>
-          <div className="w-full max-w-[390px] mx-auto rounded-t-[24px] flex flex-col p-5 gap-4" style={{ background: "var(--tone-sheet)" }} onClick={(e) => e.stopPropagation()}>
-            <div className="flex justify-center pb-1">
-              <div className="w-10 h-1 rounded-full" style={{ background: "var(--divider)" }} />
-            </div>
-            <p className="text-16 font-semibold" style={{ color: "var(--text-primary)" }}>
-              {creditAction.action === "approve" ? (t("inline.approve_request")) : (t("superAdmin.rejectRequest"))}
-            </p>
-            <div className="rounded-[var(--radius-tile)] p-3 text-13" style={{ background: "var(--surface-2)" }}>
-              <p style={{ color: "var(--text-primary)" }} className="font-semibold">{creditAction.request.customerName}</p>
-              <p className="mt-1" style={{ color: "var(--text-secondary)" }}>
-                {t("inline.current")}: {formatCurrency(creditAction.request.currentLimit)} → {t("inline.new")}: {formatCurrency(creditAction.request.requestedLimit)}
-              </p>
-              <p style={{ color: "var(--text-secondary)" }}>
-                {t("inline.by")}: {creditAction.request.requestedBy}
-              </p>
-              {creditAction.request.reason && (
-                <p className="mt-1" style={{ color: "var(--text-secondary)" }}>
-                  {t("admin.reason")}: {creditAction.request.reason}
-                </p>
-              )}
-            </div>
-            <div className="flex gap-3">
-              {creditAction.action === "reject" && (
-                <button onClick={handleCreditAction} className="flex-1 h-12 rounded-full text-14 font-bold" style={{ background: "#dc2626", color: "#fff" }}>
-                  {t("superAdmin.reject")}
-                </button>
-              )}
-              <button onClick={handleCreditAction} className="flex-1 h-12 rounded-full text-14 font-bold" style={{ background: creditAction.action === "approve" ? "var(--brand)" : "var(--surface-2)", color: creditAction.action === "approve" ? "#0a0a0a" : "var(--text-primary)" }}>
-                {creditAction.action === "approve" ? (t("superAdmin.approve")) : (t("superAdmin.reject"))}
-              </button>
-              <button onClick={() => setCreditAction(null)} className="flex-1 h-12 rounded-full text-14 font-bold" style={{ background: "var(--surface-2)", color: "var(--text-secondary)" }}>
-                {t("common.cancel")}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

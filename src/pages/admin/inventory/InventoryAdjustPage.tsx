@@ -10,6 +10,7 @@ import { useUIStore } from "@/stores/uiStore";
 import { useThemeStore } from "@/stores/themeStore";
 import type { AdjustmentType } from "@/types";
 import { useT } from "@/lib/i18n";
+import { useShellBase } from "@/lib/useShellBase";
 import { Search } from "lucide-react";
 
 const TYPES: { key: AdjustmentType; label: string; hint: string }[] = [
@@ -26,6 +27,9 @@ const REASONS: Record<AdjustmentType, string[]> = {
 
 export default function InventoryAdjustPage() {
   const t = useT();
+  // Reached from /admin and from /employee (where `inventory.adjust` was granted), so the
+  // way back is the shell this screen was opened in.
+  const base = useShellBase();
   const { productId } = useParams();
   const navigate = useNavigate();
   const { addToast } = useUIStore();
@@ -108,7 +112,7 @@ export default function InventoryAdjustPage() {
           shop_id: user?.tenantId ?? null,
         });
       } catch { /* notification is best-effort */ }
-      navigate("/admin/products", { replace: true });
+      navigate(`${base}/products`, { replace: true });
     } catch (err) {
       // The key is KEPT on failure: the adjustment may have been applied and only
       // the answer lost, so the retry must return that one, not apply a second.
@@ -120,8 +124,7 @@ export default function InventoryAdjustPage() {
   }
 
   const fieldStyle = {
-    background: "var(--surface-2)",
-    border: "1px solid var(--divider)",
+    background: "var(--field-bg)",
     color: "var(--text-primary)",
   } as const;
   const labelCls = "ds-section-label mb-2";
@@ -217,7 +220,7 @@ export default function InventoryAdjustPage() {
               ))}
             </div>
             <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder={t("inventory.adjustNotePlaceholder")}
-              className="w-full h-11 rounded-[var(--radius-input)] px-4 text-sm outline-none" style={fieldStyle} />
+              className="w-full h-12 rounded-[var(--radius-input)] px-4 text-sm outline-none" style={fieldStyle} />
           </div>
 
           {/* Preview */}

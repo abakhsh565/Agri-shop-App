@@ -60,7 +60,9 @@ export default function SaleDetailView() {
   const { addToast } = useUIStore();
 
   const isManager = user?.role === "admin";
-  const canVoid = isManager && hasPermission("sales.void");
+  // `sales.void` is the owner's grant, not a job title: an employee trusted with voiding must
+  // be able to, and the database checks the same code either way.
+  const canVoid = hasPermission("sales.void");
 
   const [note, setNote] = useState("");
   const [savingNote, setSavingNote] = useState(false);
@@ -137,8 +139,9 @@ export default function SaleDetailView() {
   const withinReturnWindow = sale
     ? Date.now() - new Date(sale.createdAt).getTime() <= 30 * 24 * 60 * 60 * 1000
     : false;
-  // An employee may return what they sold; the shop's own sales are open to its owner.
-  const canReturn = !!sale && (isManager || sale.employeeId === user?.id) && withinReturnWindow;
+  // An employee may return what they sold — and only when the owner granted `returns.create`,
+  // which is the code the return RPC checks. The shop's own sales are open to its owner.
+  const canReturn = !!sale && hasPermission("returns.create") && (isManager || sale.employeeId === user?.id) && withinReturnWindow;
 
   // Cost is the snapshot taken when the sale was made, never today's price — editing a
   // product must not silently rewrite the profit of every sale already made. The live
@@ -636,7 +639,7 @@ export default function SaleDetailView() {
             placeholder={t("saleDetail.addNote")}
             rows={3}
             className="w-full rounded-[var(--radius-tile)] px-4 py-3 text-14 resize-none outline-none"
-            style={{ background: "var(--surface)", border: "1px solid var(--border-control)", color: "var(--text-primary)" }}
+            style={{ background: "var(--field-bg)", color: "var(--text-primary)" }}
           />
         </div>
 
@@ -712,8 +715,8 @@ export default function SaleDetailView() {
             value={voidReason}
             onChange={(e) => setVoidReason(e.target.value)}
             placeholder={t("sale.voidReasonPlaceholder")}
-            className="w-full h-11 rounded-full px-4 text-14 outline-none"
-            style={{ background: "var(--surface-2)", border: "1px solid var(--border-control)", color: "var(--text-primary)" }}
+            className="w-full h-12 rounded-full px-4 text-14 outline-none"
+            style={{ background: "var(--field-bg)", color: "var(--text-primary)" }}
           />
           <div className="flex gap-3">
             <Button variant="outline" size="md" className="flex-1" onClick={() => setShowVoidDialog(false)}>

@@ -73,24 +73,46 @@ async function rpc(name: string, params: Record<string, any>): Promise<any> {
   return data;
 }
 
-// Clean up all test data before and after
-async function cleanupTestData() {
-  await sql(`DELETE FROM agent_tasks WHERE description LIKE '%QA Test%'`);
+// Track exactly the tasks this file creates. Never delete by description: that could match another
+// suite's/user's telemetry rows and destroy data this file does not own.
+const ownedTaskIds = new Set<string>();
+
+async function startOwnedTask(params: Parameters<typeof rpc>[1]): Promise<string> {
+  const taskId = await rpc('start_agent_task', params);
+  if (typeof taskId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(taskId)) {
+    throw new Error('start_agent_task returned an invalid task id; refusing an unscoped cleanup');
+  }
+  ownedTaskIds.add(taskId);
+  return taskId;
+}
+
+async function cleanupOwnedTasks(): Promise<void> {
+  const taskIds = [...ownedTaskIds];
+  if (!taskIds.length) return;
+
+  // IDs were validated at registration, then quoted independently; no wildcard or task description
+  // can broaden the delete beyond rows created through this file's startOwnedTask helper.
+  await sql(`DELETE FROM agent_tasks WHERE id IN (${taskIds.map((id) => `'${id}'`).join(', ')})`);
+  const left = await sql(`SELECT id FROM agent_tasks WHERE id IN (${taskIds.map((id) => `'${id}'`).join(', ')})`);
+  if (left.length) {
+    throw new Error(`[QA FIXTURE] ${left.length} agent task(s) survived owned cleanup: ${left.map((row) => row.id).join(', ')}`);
+  }
+  for (const id of taskIds) ownedTaskIds.delete(id);
 }
 
 describe('Agent Telemetry + Loop Detection', () => {
   beforeAll(async () => {
-    await cleanupTestData();
+    await cleanupOwnedTasks();
   });
 
   afterAll(async () => {
-    await cleanupTestData();
+    await cleanupOwnedTasks();
   });
 
   describe('Scenario A — Healthy task with progress', () => {
     it('should create a task and track attempts with progress', async () => {
       // Create task
-      const taskId = await rpc('start_agent_task', {
+      const taskId = await startOwnedTask({
         p_description: 'QA Test: Fix customer payment calculation',
         p_module: 'payments',
         p_entity_type: 'customer',
@@ -161,7 +183,7 @@ describe('Agent Telemetry + Loop Detection', () => {
 
   describe('Scenario B — Same strategy repeated (loop detection)', () => {
     it('should detect same strategy loop', async () => {
-      const taskId = await rpc('start_agent_task', {
+      const taskId = await startOwnedTask({
         p_description: 'QA Test: Fix login error (loop test)',
         p_module: 'auth',
         p_entity_type: 'user',
@@ -222,7 +244,7 @@ describe('Agent Telemetry + Loop Detection', () => {
 
   describe('Scenario C — Different strategy makes progress', () => {
     it('should not detect loop when strategy changes and progress is made', async () => {
-      const taskId = await rpc('start_agent_task', {
+      const taskId = await startOwnedTask({
         p_description: 'QA Test: Fix database persistence issue',
         p_module: 'sales',
         p_entity_type: 'sale',
@@ -261,7 +283,7 @@ describe('Agent Telemetry + Loop Detection', () => {
 
   describe('Scenario D — Same failure repeated (failure loop)', () => {
     it('should detect same failure loop', async () => {
-      const taskId = await rpc('start_agent_task', {
+      const taskId = await startOwnedTask({
         p_description: 'QA Test: Fix schema mismatch (failure loop)',
         p_module: 'inventory',
         p_entity_type: 'product',
@@ -290,7 +312,7 @@ describe('Agent Telemetry + Loop Detection', () => {
 
   describe('Scenario E — Persistent failure escalation', () => {
     it('should escalate after many attempts with no progress', async () => {
-      const taskId = await rpc('start_agent_task', {
+      const taskId = await startOwnedTask({
         p_description: 'QA Test: Complex issue requiring escalation',
         p_module: 'auth',
       });
@@ -333,7 +355,7 @@ describe('Agent Telemetry + Loop Detection', () => {
 
   describe('Scenario F — Sensitive data protection', () => {
     it('should not store extra sensitive data in task records', async () => {
-      const taskId = await rpc('start_agent_task', {
+      const taskId = await startOwnedTask({
         p_description: 'QA Test: Fix auth with sensitive data in description',
         p_module: 'auth',
       });
@@ -371,7 +393,7 @@ describe('Agent Telemetry + Loop Detection', () => {
   describe('Scenario G — Memory integration', () => {
     it('should link tasks to incidents and resolutions', async () => {
       // Create a task linked to a known resolution
-      const taskId = await rpc('start_agent_task', {
+      const taskId = await startOwnedTask({
         p_description: 'QA Test: Fix issue with known resolution',
         p_module: 'payments',
         p_resolution_id: '00000000-0000-0000-0000-000000000001', // dummy
@@ -390,7 +412,7 @@ describe('Agent Telemetry + Loop Detection', () => {
 
   describe('Scenario H — Abandon task', () => {
     it('should abandon a task that cannot be resolved', async () => {
-      const taskId = await rpc('start_agent_task', {
+      const taskId = await startOwnedTask({
         p_description: 'QA Test: Cannot fix this issue',
         p_module: 'infrastructure',
       });
@@ -422,7 +444,7 @@ describe('Agent Telemetry + Loop Detection', () => {
   describe('Scenario I — Invalid inputs', () => {
     it('should reject empty task description', async () => {
       try {
-        await rpc('start_agent_task', { p_description: '' });
+        await startOwnedTask({ p_description: '' });
         fail('Should have thrown');
       } catch (e: any) {
         expect(e.message).toContain('required');
@@ -430,7 +452,7 @@ describe('Agent Telemetry + Loop Detection', () => {
     });
 
     it('should reject invalid failure category', async () => {
-      const taskId = await rpc('start_agent_task', {
+      const taskId = await startOwnedTask({
         p_description: 'QA Test: Validation test',
       });
 
@@ -492,7 +514,7 @@ describe('Agent Telemetry + Loop Detection', () => {
   describe('Scenario K — Search functionality', () => {
     it('should search tasks by status', async () => {
       // Create a task
-      const taskId = await rpc('start_agent_task', {
+      const taskId = await startOwnedTask({
         p_description: 'QA Test: Searchable task',
         p_module: 'customers',
       });
@@ -514,7 +536,7 @@ describe('Agent Telemetry + Loop Detection', () => {
 
   describe('Scenario L — No-evidence loop detection', () => {
     it('should detect no-evidence loop after 5 consecutive no-progress attempts', async () => {
-      const taskId = await rpc('start_agent_task', {
+      const taskId = await startOwnedTask({
         p_description: 'QA Test: No evidence loop detection',
         p_module: 'returns',
       });

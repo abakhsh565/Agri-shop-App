@@ -4,6 +4,7 @@ import NavHeader from "@/components/ui/NavHeader";
 import ListCard from "@/components/ui/ListCard";
 import ListRow from "@/components/ui/ListRow";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
+import ImageCrop from "@/components/ui/ImageCrop";
 import { useAuthStore } from "@/stores/authStore";
 import { useThemeStore, applyTheme } from "@/stores/themeStore";
 import { clearDeviceSession } from "@/lib/deviceSession";
@@ -12,7 +13,8 @@ import { useT } from "@/lib/i18n";
 import { uploadImage } from "@/lib/storage";
 import { supabase } from "@/lib/supabase";
 import { useUIStore } from "@/stores/uiStore";
-import { Lock, Bell, Globe, ChevronRight, Moon, Sun, ClipboardList, Camera, Loader2, Save, LogOut, X, Trash2, Check, Fingerprint } from "lucide-react";
+import { useShopStore } from "@/stores/shopStore";
+import { BarChart3, Lock, Bell, Globe, ChevronRight, Moon, Sun, ClipboardList, Camera, Loader2, Save, LogOut, X, Trash2, Check, Fingerprint } from "lucide-react";
 import {
   biometricUnavailableReason,
   BIOMETRIC_REASON_KEY,
@@ -36,6 +38,15 @@ export default function SettingsPage() {
   const t = useT();
   const { user, logout } = useAuthStore();
   const { theme, toggleTheme, language, setLanguage } = useThemeStore();
+  const activeBranchName = useShopStore((s) => s.activeBranchName);
+  // Reports are only worth a row when this branch actually grants something to report on.
+  // The report itself is branch-scoped, so the row tells the employee which branch it opens.
+  const reportPermissions = user?.membershipRole === "owner" ? ["*"] : user?.permissions ?? [];
+  const canSeeReports =
+    reportPermissions.includes("*") ||
+    ["sales.view", "returns.view", "products.view", "inventory.view"].some((code) =>
+      reportPermissions.includes(code),
+    );
   /**
    * Fingerprint login, on the employee's own screen.
    *
@@ -52,6 +63,8 @@ export default function SettingsPage() {
   const [confirmFingerprintOff, setConfirmFingerprintOff] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(user?.photoUrl ?? null);
   const [uploading, setUploading] = useState(false);
+  // The picture waiting behind the framing screen; nothing is uploaded until it is confirmed.
+  const [pendingAvatar, setPendingAvatar] = useState<File | null>(null);
   const [editingName, setEditingName] = useState(false);
   const [nameValue, setNameValue] = useState(user?.name ?? "");
   const [savingName, setSavingName] = useState(false);
@@ -180,9 +193,17 @@ export default function SettingsPage() {
     setLanguage(language === "en" ? "ur" : "en");
   }
 
-  async function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
+  /** Choosing a picture only opens the frame; the upload happens once it is confirmed. */
+  function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
+    if (fileInputRef.current) fileInputRef.current.value = "";
     if (!file || !user) return;
+    setPendingAvatar(file);
+  }
+
+  async function uploadAvatar(file: File) {
+    if (!user) return;
+    setPendingAvatar(null);
     // Show instant preview
     const reader = new FileReader();
     reader.onload = (ev) => setAvatarUrl(ev.target?.result as string);
@@ -212,7 +233,6 @@ export default function SettingsPage() {
       setAvatarUrl(user.photoUrl ?? null);
     } finally {
       setUploading(false);
-      if (fileInputRef.current) fileInputRef.current.value = "";
     }
   }
 
@@ -306,6 +326,19 @@ export default function SettingsPage() {
             shop-management group, so this screen needs no section label at all. */}
         <div className="px-4 pt-3.5 animate-fade-in-up delay-75">
           <ListCard>
+            {/* One row, one destination: the report is a screen of its own, not a second
+                copy of the figures on Home. The branch under the label says which slice of
+                the business the report will describe. */}
+            {canSeeReports && (
+              <ListRow
+                onClick={() => navigate("/employee/reports")}
+                icon={BarChart3}
+                title={t("reports.mine")}
+                meta={activeBranchName ?? t("reports.thisBranch")}
+                testId="settings-my-reports"
+                trailing={<ChevronRight size={14} style={{ color: "var(--text-secondary)" }} className="shrink-0" />}
+              />
+            )}
             {/* Comfort first, and state under the label — the reference's grammar, the
                 same as the admin twin. An employee has no shop block, so this screen has
                 no headings at all. */}
@@ -443,7 +476,7 @@ export default function SettingsPage() {
                 onChange={(e) => setNameValue(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter") handleSaveName(); }}
                 className="w-full h-12 px-4 rounded-full text-sm font-bold outline-none"
-                style={{ background: "var(--surface)", border: "1px solid var(--divider)", color: "var(--text-primary)" }}
+                style={{ background: "var(--field-bg)", color: "var(--text-primary)" }}
               />
             </div>
             <div className="flex gap-3">
@@ -517,6 +550,16 @@ export default function SettingsPage() {
         onConfirm={handleDeleteAccount}
         onCancel={() => setShowDeleteAccount(false)}
       />
+
+      {/* The avatar is framed before it is stored, like every other picture in the app. */}
+      {pendingAvatar && (
+        <ImageCrop
+          file={pendingAvatar}
+          aspect={1}
+          onCancel={() => setPendingAvatar(null)}
+          onConfirm={(file) => void uploadAvatar(file)}
+        />
+      )}
     </div>
   );
 }

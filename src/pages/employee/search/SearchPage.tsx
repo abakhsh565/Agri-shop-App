@@ -50,7 +50,9 @@ const ADMIN_EXTRA_FILTERS_BASE = [
 export default function SearchPage() {
   const navigate = useNavigate();
   const base = useShellBase();
-  const isAdmin = base === "/admin";
+  // Co-Owners get the wider catalogue too; every route they open has its own permission gate.
+  const isAdmin = base !== "/employee";
+  const teamBase = base === "/co-owner" ? `${base}/team` : `${base}/employees`;
   const { language } = useThemeStore();
   const isUrdu = language === "ur";
   const t = useT();
@@ -92,7 +94,7 @@ export default function SearchPage() {
             title: p.name,
             subtitle: `${p.company || t('search.unknownSupplier')} · ${p.variants.length} ${t('products.variants')}`,
             badge: `${totalStock} ${t('common.units')}`,
-            path: isAdmin ? `/admin/products/${p.id}` : `${base}/products/${p.id}`,
+            path: `${base}/products/${p.id}`,
           });
         });
     }
@@ -146,7 +148,7 @@ export default function SearchPage() {
             title: e.name,
             subtitle: e.jobTitle || t("search.employee"),
             badge: e.isActive ? undefined : t("search.inactive"),
-            path: `/admin/employees/${e.id}`,
+            path: `${teamBase}/${e.id}`,
           });
         });
     }
@@ -162,7 +164,7 @@ export default function SearchPage() {
             title: c.name,
             subtitle: c.contactPerson || t("search.supplier"),
             badge: c.outstandingPayable > 0 ? formatCurrency(c.outstandingPayable) : undefined,
-            path: `/admin/companies/${c.id}`,
+            path: `${base}/companies/${c.id}`,
           });
         });
     }
@@ -183,11 +185,11 @@ export default function SearchPage() {
 
   const QUICK_ACCESS = isAdmin
     ? [
-        { label: t("search.products"),  path: "/admin/products",  icon: Package },
-        { label: t("search.customers"), path: "/admin/customers", icon: Users },
-        { label: t("search.sales"),     path: "/admin/sales",     icon: ShoppingCart },
-        { label: t("search.employees"), path: "/admin/employees", icon: UserCog },
-        { label: t("search.companies"), path: "/admin/companies", icon: Building2 },
+        { label: t("search.products"),  path: `${base}/products`,  icon: Package },
+        { label: t("search.customers"), path: `${base}/customers`, icon: Users },
+        { label: t("search.sales"),     path: `${base}/sales`,     icon: ShoppingCart },
+        { label: t("search.employees"), path: teamBase,            icon: UserCog },
+        { label: t("search.companies"), path: `${base}/companies`, icon: Building2 },
       ]
     : [
         { label: t("search.products"),  path: `${base}/products`,  icon: Package },

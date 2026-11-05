@@ -1,4 +1,5 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test } from './base';
+import type { Page } from "@playwright/test";
 
 /**
  * Fingerprint unlock, against a real browser and a real authenticator.

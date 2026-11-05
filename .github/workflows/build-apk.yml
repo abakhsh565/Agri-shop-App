@@ -1,13 +1,30 @@
 name: Build Android APK
 
+# TRIGGER: dispatch only. It used to run on every push to `main` as well, and that was the single
+# largest source of waiting in this repository: a push started BOTH this workflow's `test` job and
+# `ci.yml`'s `qa` job, and both take the one `qa-database` concurrency group. This job is slower, so
+# it usually won, and the CI run the production deploy waits on sat pending behind it — measured
+# 2026-10-18: push 22:32:26, gates green 22:33:54, QA job started 22:55:27. The integration suite ran
+# twice for one commit, and the gate finished ~22 minutes later than the work required.
+#
+# Nothing is lost by removing the push: an APK is an artefact, not the gate, `AGENTS.md` §7 says no
+# APK during development or QA loops, and the release path is a deliberate dispatch from a verified
+# commit (`docs/APK_SIGNING_HANDOVER_2026-10-15.md`). The web release still deploys automatically
+# from a gated `main` commit through `deploy-production.yml`.
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 jobs:
   test:
     name: Run Tests
+    concurrency:
+      # The same repository-wide group ci.yml's `qa` and `e2e` jobs use: this job provisions QA
+      # auth sessions, runs the integration suites and drives Playwright against the one QA
+      # database, so it must never run beside another QA writer. A newer run waits here; it does not
+      # cancel this job. `cancel-in-progress: false` is load-bearing — a cancelled suite leaves its
+      # run-owned rows behind and can strand the QA advisory lock until its socket dies.
+      group: qa-database
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     timeout-minutes: 60
     env:
@@ -86,8 +103,10 @@ jobs:
           QA_DB_USER: ${{ secrets.QA_DB_USER }}
           QA_DB_PASS: ${{ secrets.QA_DB_PASS }}
 
-      - name: Run integration tests (one file at a time — they share the QA database)
-        run: npx vitest run tests/integration --fileParallelism=false --reporter=verbose
+      - name: Run integration tests (measured shard, then serial remainder)
+        # The shared runner enforces the exact partition and runs both ordered projects in one
+        # Vitest process, so the QA lock stays held across the measured shard and serial remainder.
+        run: node scripts/dev/run-integration.mjs --reporter=verbose
 
       # ─── Browser E2E Tests (Playwright) ─────────────────────────────
       - name: Install Playwright Browsers
@@ -109,6 +128,27 @@ jobs:
           name: playwright-report
           path: tests/e2e/results.json
           retention-days: 7
+
+      # Same seed as ci.yml: whichever test step failed, the run leaves the five fields behind.
+      # Last in the job on purpose — a failing E2E run is prompted too, and this job's only failure
+      # artifact is the Playwright report, which does not exist when unit or integration fails first.
+      - name: Failure record — required when this job fails
+        if: failure()
+        continue-on-error: true
+        run: |
+          {
+            echo "### CI failure — the five fields are required"
+            echo ""
+            echo "- commit: \`${{ github.sha }}\`"
+            echo "- run: \`${{ github.run_id }}\` — ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            echo "- job: \`${{ github.job }}\`"
+            echo "- observed: the failing step above; its log is the evidence"
+            echo "- root cause: **not yet confirmed**"
+            echo "- prevention: pending"
+            echo "- regression: name the test that must pass, and its result"
+            echo ""
+            echo "Add a reviewed entry to \`docs/FAILURE-LOG.md\` before this failure is closed."
+          } >> "$GITHUB_STEP_SUMMARY"
 
       # ─── What used to be here, and why it must not come back ────────
       #
@@ -280,3 +320,25 @@ jobs:
           # Only the APK. assetlinks.json is a separate artifact — see the step above.
           files: android/app/build/outputs/apk/release/app-release.apk
           make_latest: true
+
+      # The last job in either workflow that could fail and leave nothing behind. A signing or
+      # gradle failure stops the release before any test report exists, and this job's only
+      # artefact is produced at the end — so the failing run itself is the evidence. Same
+      # non-blocking seed as the test job: failure-only, and it cannot rescue a red build.
+      - name: Failure record — required when this job fails
+        if: failure()
+        continue-on-error: true
+        run: |
+          {
+            echo "### CI failure — the five fields are required"
+            echo ""
+            echo "- commit: \`${{ github.sha }}\`"
+            echo "- run: \`${{ github.run_id }}\` — ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            echo "- job: \`${{ github.job }}\`"
+            echo "- observed: the failing step above; its log is the evidence"
+            echo "- root cause: **not yet confirmed**"
+            echo "- prevention: pending"
+            echo "- regression: name the test that must pass, and its result"
+            echo ""
+            echo "Add a reviewed entry to \`docs/FAILURE-LOG.md\` before this failure is closed."
+          } >> "$GITHUB_STEP_SUMMARY"

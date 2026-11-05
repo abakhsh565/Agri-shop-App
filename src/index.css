@@ -24,6 +24,8 @@
   --color-border-control: var(--border-control);
   --color-ink: var(--ink);
   --color-ink-fg: var(--ink-fg);
+  --color-cta: var(--cta);
+  --color-cta-fg: var(--cta-fg);
   --color-caption: var(--caption);
   --color-ring: var(--ring);
   --color-brand: var(--brand);
@@ -102,6 +104,12 @@
      also applied to text that was never on a black surface. */
   --ink: #000000;
   --ink-fg: #ffffff;
+  /* Quiet dark action — the owner's CTA (Figma 2081-921, 2087-1765). A dark-grey control
+     that sits a step above the page instead of the brand green: on the reference the primary
+     action is the darkest thing on the screen, not the brightest. Light fills it near-black,
+     dark fills it one step above the card so it still reads as a button on #0d0d0c. */
+  --cta: #1a1a1a;
+  --cta-fg: #ffffff;
   /* Caption/hint text. Light and dark greys were never aligned: light read
      `--text-secondary`, dark `--muted-foreground`. Same token, same relationship. */
   --caption: var(--text-secondary);
@@ -119,7 +127,11 @@
   --radius-field: 999px;        /* fields are fully rounded */
   --radius: 14px;               /* legacy family */
   --radius-pill: 100px;
-  --radius-input: 24px;
+  /* The older field radius. It is the same fully rounded shape as `--radius-field` now that
+     every text field in the app shares one silhouette; the name stays because a score of
+     screens round their inputs with it, and re-pointing the token is what keeps them from
+     needing a sweep of class edits. */
+  --radius-input: 999px;
 
   /* ── Spacing: 8pt scale + the measured 16pt screen gutter ───────────────── */
   --space-2: 8px;
@@ -158,6 +170,16 @@
      app's row size, not a Settings-only override: every list — More, Employees,
      Companies, Products — reads at the same size as the screen it was approved on. */
   --text-row: 14px;
+  /* A row's second line — "Your team and their access". One size below the label instead of
+     level with it (owner's request, 2026-10-26): at 13 the pair read as one block, and the
+     line that exists to explain the row competed with the row's own name. It has its own
+     token because `--text-meta` also sizes group labels and help paragraphs, which are not
+     subheadings and stay where they are. */
+  --text-row-meta: 12px;
+  /* A group label — MONEY, STOCK, PEOPLE, APP, BRANCHES. 12px like the row's second line
+     (owner's request, 2026-10-26): the uppercase and the letter-spacing already separate a
+     group from the rows under it, so it does not also need to be a step larger. */
+  --text-section: 12px;
   --text-body: 15px;
   --text-meta: 13px;
   --weight-body: 400;
@@ -197,11 +219,26 @@
   --warning: #f59e0b;
   --error: #DC2626;
   --brand: #84cc16;
+  --brand-fg: #0a0a0a;
   --brand-dark: #3f6212;
   --brand-light: #d9f99d;
   --surface: var(--tone-card);
   --surface-2: var(--tone-sunken);
   --surface-3: var(--tone-sunken);
+  /* A field's fill and edge.
+
+     The fill is a translucent WASH, not a fixed tone. That is the whole point: a field inside a
+     card, a sheet, a dialog or a gradient panel has to follow the surface it actually sits on,
+     and no container class can be trusted to be present on all of them — there are twenty-odd
+     hand-rolled sheets in this app and any one of them would be the odd one out. A wash of the
+     theme's ink over whatever is behind it lands one step off the local surface everywhere: it
+     darkens slightly on light, lightens slightly on dark, and never paints a hole or a glow.
+
+     `--field-border` is the resting edge; focus paints it brand, an error paints it red, a
+     disabled field dims. Nothing else about a field is a per-screen decision. */
+  --field-wash: rgba(13, 13, 12, 0.045);
+  --field-bg: var(--field-wash);
+  --field-border: var(--border-control);
   /*
    * The modal layer — sheets, dialogs, pickers.
    *
@@ -273,11 +310,17 @@
   --surface-2: var(--tone-sunken);
   --surface-3: var(--tone-sunken);
   --divider: #242422;
-  /* Same job as in light, tuned for the dark ramp: #171716 field tone → #3a3a34
-     is ~35/255, so a field still has an edge without becoming a bright outline. */
+  /* The same wash, inverted: white ink at the same weight lands one step off #0d0d0c, #171716 and
+     #232322 alike, so a field on the page and a field on a sheet are the same relationship. */
+  --field-wash: rgba(255, 255, 255, 0.04);
+  /* Same job as in light, tuned for the dark ramp: a washed field lands near #171716, and
+     #3a3a34 is ~35/255 off it, so the field still has an edge without becoming a bright
+     outline. It reads the same on a sheet, because the edge does not follow the container. */
   --border-control: #3a3a34;
   --ink: var(--brand);
   --ink-fg: #0a0a0a;
+  --cta: #1f1f1e;
+  --cta-fg: #f6f6f4;
   --caption: var(--text-tertiary);
   --error-bg: rgba(239,68,68,0.15);
   --error-border: rgba(239,68,68,0.3);
@@ -330,30 +373,84 @@ textarea,
    that is what used to force 46px-tall inputs into 40px search shells and paint a
    second box inside the pill. */
 @layer base {
+  /*
+   * ONE FIELD CONTRACT, for every text-entry element in the app.
+   *
+   * A field is 48px tall, fully rounded, filled with the local `--field-bg`, and edged with
+   * `--field-border` at rest; focus turns that edge brand green and adds a soft ring; disabled
+   * dims the whole control. The fill and edge are variables rather than fixed tones so the
+   * same input behaves correctly on a page, on a card and on a raised panel — the container
+   * is a wash, so the container does not have to do anything for it to be right. Screens may
+   * still override deliberately, which is why this lives in the base layer.
+   */
   :where(
     input[type="text"],
     input[type="number"],
     input[type="tel"],
     input[type="email"],
     input[type="password"],
+    input[type="search"],
+    input[type="url"],
     input[type="date"],
     input[type="time"],
     input:not([type])
   ) {
-    border-radius: 14px;
-    height: 46px;
+    border-radius: var(--radius-field);
+    height: var(--field-h);
     font-size: var(--fs-13);
-    /* Every standalone field gets a visible edge by default, from the control
-       token. In a `@layer base`, so a screen can still override it deliberately
-       (and `.ds-field input` above already opts the in-shell case out). */
-    border: 1px solid var(--border-control);
+    border: 1px solid var(--field-border);
+    background-color: var(--field-bg);
     transition: border-color 0.15s, box-shadow 0.15s;
   }
   :where(select) {
-    border-radius: 14px;
-    height: 46px;
+    border-radius: var(--radius-field);
+    height: var(--field-h);
     font-size: var(--fs-13);
-    border: 1px solid var(--border-control);
+    border: 1px solid var(--field-border);
+    background-color: var(--field-bg);
+  }
+  :where(textarea) {
+    border-radius: var(--radius-field);
+    min-height: var(--field-h);
+    font-size: var(--fs-13);
+    border: 1px solid var(--field-border);
+    background-color: var(--field-bg);
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  :where(
+    input[type="text"],
+    input[type="number"],
+    input[type="tel"],
+    input[type="email"],
+    input[type="password"],
+    input[type="search"],
+    input[type="url"],
+    input[type="date"],
+    input[type="time"],
+    input:not([type]),
+    textarea,
+    select
+  ):focus {
+    outline: none;
+    border-color: var(--brand);
+    box-shadow: 0 0 0 3px var(--brand-light);
+  }
+  :where(
+    input[type="text"],
+    input[type="number"],
+    input[type="tel"],
+    input[type="email"],
+    input[type="password"],
+    input[type="search"],
+    input[type="url"],
+    input[type="date"],
+    input[type="time"],
+    input:not([type]),
+    textarea,
+    select
+  ):disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
   }
 }
 
@@ -384,9 +481,9 @@ input[type="time"] {
   position: relative;
   height: var(--field-h);
   min-height: var(--field-h);
-  border: 1px solid var(--border-control);
+  border: 1px solid var(--field-border);
   border-radius: var(--radius-field);
-  background-color: var(--tone-card);
+  background-color: var(--field-bg);
   background-image: var(--date-icon);
   background-repeat: no-repeat;
   background-position: right var(--space-4) center;
@@ -421,6 +518,13 @@ input[type="time"]::-webkit-datetime-edit {
 input[type="date"]:disabled,
 input[type="time"]:disabled {
   opacity: 0.45;
+  cursor: not-allowed;
+}
+input[type="date"]:focus,
+input[type="time"]:focus {
+  outline: none;
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px var(--brand-light);
 }
 
 /* ── Skeleton: the shape of the row that is coming, not a blank screen ──
@@ -505,8 +609,8 @@ input[type="time"]:disabled {
   height: 46px;
   padding: 0 24px;
   border-radius: 14px;
-  font-size: var(--fs-13);
-  font-weight: 600;
+  font-size: var(--fs-14);
+  font-weight: 500;
   background: #1a1a1a;
   color: #fff;
   transition: opacity 0.15s, transform 0.1s;
@@ -523,8 +627,8 @@ input[type="time"]:disabled {
   height: 46px;
   padding: 0 24px;
   border-radius: 14px;
-  font-size: var(--fs-13);
-  font-weight: 600;
+  font-size: var(--fs-14);
+  font-weight: 500;
   background: var(--surface);
   color: var(--text-primary);
   border: 1px solid var(--divider);
@@ -542,10 +646,10 @@ input[type="time"]:disabled {
   height: 46px;
   padding: 0 24px;
   border-radius: 14px;
-  font-size: var(--fs-13);
-  font-weight: 600;
-  background: var(--brand);
-  color: #0a0a0a;
+  font-size: var(--fs-14);
+  font-weight: 500;
+  background: #1a1a1a;
+  color: var(--brand);
   transition: opacity 0.15s, transform 0.1s;
 }
 .ds-btn-brand:active {
@@ -560,8 +664,8 @@ input[type="time"]:disabled {
   height: 46px;
   padding: 0 24px;
   border-radius: 14px;
-  font-size: var(--fs-13);
-  font-weight: 600;
+  font-size: var(--fs-14);
+  font-weight: 500;
   background: var(--error);
   color: #fff;
   transition: opacity 0.15s, transform 0.1s;
@@ -578,8 +682,8 @@ input[type="time"]:disabled {
   height: 42px;
   padding: 0 20px;
   border-radius: 100px;
-  font-size: var(--fs-13);
-  font-weight: 600;
+  font-size: var(--fs-14);
+  font-weight: 500;
   background: #1a1a1a;
   color: #fff;
   transition: opacity 0.15s, transform 0.1s;
@@ -596,8 +700,8 @@ input[type="time"]:disabled {
   height: 42px;
   padding: 0 20px;
   border-radius: 100px;
-  font-size: var(--fs-13);
-  font-weight: 600;
+  font-size: var(--fs-14);
+  font-weight: 500;
   background: transparent;
   color: var(--text-primary);
   border: 1px solid var(--divider);
@@ -821,6 +925,23 @@ svg.ds-row-chevron {
 }
 
 /* ── Animations ── */
+/* Quick Alerts: the deck opens and closes on the grid row itself, so the collapsing
+   space is measured by the layout instead of a guessed max-height. */
+.ds-quick-alerts-body {
+  transition: grid-template-rows var(--dur-3) var(--ease-out), opacity var(--dur-3) var(--ease-out);
+}
+
+/* Quick Alerts: the rows settle in one after another, with a small overshoot at the end.
+   Transform and opacity only, so the dropdown stays on the compositor. */
+@keyframes quickAlertFloat {
+  0%   { opacity: 0; transform: translate3d(0, 14px, 0) scale(0.98); }
+  65%  { opacity: 1; transform: translate3d(0, -3px, 0) scale(1.005); }
+  100% { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+}
+.ds-quick-alert-in {
+  animation: quickAlertFloat 520ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
 @keyframes fadeInUp {
   from { opacity: 0; transform: translateY(16px); }
   to   { opacity: 1; transform: translateY(0); }
@@ -1003,6 +1124,15 @@ svg.ds-row-chevron {
 .animate-slide-up     { animation: slideUp    0.28s cubic-bezier(0.32, 0.72, 0, 1) both; }
 .animate-pulse-brand  { animation: pulse-brand 2s infinite; }
 
+/* A tab swap in the record-money form: the panel's content settles six pixels up and in.
+   Short on purpose — it should read as the same panel answering, not a new screen arriving —
+   and the reduced-motion block above collapses it with every other animation. */
+@keyframes tabSwap {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.ds-tab-swap { animation: tabSwap 0.22s cubic-bezier(0.32, 0.72, 0, 1) both; }
+
 /* ── Interaction layer ───────────────────────────────────────────────────────
    Enter AND exit for every overlay, on transform/opacity only. A panel that
    only fades in and then vanishes is the thing that reads as cheap; the exit is
@@ -1052,6 +1182,8 @@ svg.ds-row-chevron {
      moving less. */
   .ds-confetti { display: none; }
   .ds-ring { display: none; }
+  .ds-quick-alert-in { animation: none; }
+  .ds-quick-alerts-body { transition: none; }
 
   *,
   *::before,
@@ -1104,19 +1236,21 @@ svg.ds-row-chevron {
 .dark input,
 .dark textarea,
 .dark select {
-  background-color: var(--surface-2) !important;
+  /* The fill is a wash, so it follows whatever surface the field sits on without this rule
+     knowing which one that is. */
+  background-color: var(--field-bg) !important;
   color: var(--foreground) !important;
-  /* The control-outline token, NOT the in-card hairline. This shim carries
-     `!important`, so it outranks the base-layer field rule AND the Input
-     component's own class: pointing it at `--divider` (#242422 in dark, 13/255
-     from the field tone) is what kept every dark-mode field edge invisible even
-     after the token itself was fixed. Measured before: 67/765 from the page;
-     after: 130/765. */
-  border-color: var(--border-control) !important;
+  /* No border here. The edge, its resting colour and its focus/disabled states belong to the
+     field contract in the base layer — an !important border on every dark input outranked that
+     contract, which is why focus could never paint the edge brand green. */
 }
-.dark input::placeholder,
-.dark textarea::placeholder {
-  color: var(--muted-foreground) !important;
+/* One placeholder tone, both themes, no `!important` and no theme-specific copy: the token
+   already inverts with the ramp. It used to be the browser default in light — a blue-grey that
+   belongs to no theme — and a forced `--muted-foreground` in dark, so the same hint read two
+   different greys depending on which theme the person happened to be in. */
+:where(input, textarea)::placeholder {
+  color: var(--text-tertiary);
+  opacity: 1;
 }
 /* A field that asks to be transparent (a search box sitting inside an already
    filled pill) must stay transparent — otherwise this shim fills it and the
@@ -1195,11 +1329,12 @@ svg.ds-row-chevron {
   text-align: right;
 }
 
-/* ── Scroll Lock: prevent background scroll when any bottom sheet / modal is open ── */
-body:has(.fixed.inset-0.z-50) {
-  overflow: hidden !important;
-  position: fixed;
-  width: 100%;
+/* ── Scroll Lock ──
+   The page itself does not scroll; the shell's panel does, so this is the element to hold still.
+   `useOverlayScrollLock` does the same in script for the browsers whose WebView has no `:has()`;
+   this rule is the version for the ones that do. Locking <body> (the old rule) moved nothing. */
+body:has(.fixed.inset-0) [data-app-scroll] {
+  overflow: hidden;
 }
 
 /* ===========================================================================
@@ -1221,12 +1356,12 @@ svg.lucide {
   /* -- Type -- */
   .ds-title-page    { font-size: var(--text-page-title); font-weight: var(--weight-strong); color: var(--text-primary); line-height: 1.15; }
   .ds-title-sheet   { font-size: var(--text-sheet-title); font-weight: var(--weight-strong); color: var(--text-primary); }
-  .ds-section       { font-size: var(--text-meta); font-weight: var(--weight-strong); color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.06em; }
+  .ds-section       { font-size: var(--text-section); font-weight: var(--weight-strong); color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.06em; }
   .ds-row-label     { font-size: var(--text-row); font-weight: var(--weight-body); color: var(--text-primary); }
   .ds-row-strong    { font-size: var(--text-row); font-weight: var(--weight-strong); color: var(--text-primary); }
   .ds-row-qualifier { font-size: var(--text-row); font-weight: var(--weight-body); color: var(--text-tertiary); }
   .ds-row-value     { font-size: var(--text-row); font-weight: var(--weight-body); color: var(--text-secondary); }
-  .ds-row-meta      { font-size: var(--text-meta); font-weight: var(--weight-body); color: var(--text-tertiary); }
+  .ds-row-meta      { font-size: var(--text-row-meta); font-weight: var(--weight-body); color: var(--text-tertiary); }
   .ds-row-desc      { font-size: var(--text-body); font-weight: var(--weight-body); color: var(--text-secondary); line-height: 1.4; }
   .ds-body          { font-size: var(--text-body); font-weight: var(--weight-body); color: var(--text-primary); }
   .ds-meta          { font-size: var(--text-meta); font-weight: var(--weight-body); color: var(--text-secondary); }
@@ -1240,6 +1375,12 @@ svg.lucide {
     background: var(--tone-card);
     border-radius: var(--radius-card);
     overflow: hidden;
+  }
+  /* A list inside a card that is already drawn: same rows, same full-bleed hairlines below,
+     no second surface. Only the surface is dropped — the grammar stays one implementation. */
+  .ds-listcard-plain {
+    background: transparent;
+    border-radius: 0;
   }
   .ds-listcard > * + * {
     position: relative;
@@ -1331,7 +1472,7 @@ svg.lucide {
     box-shadow: inset 0 0 0 1px var(--hairline);
   }
 
-  /* -- Field: fully rounded, tone filled, no border -- */
+  /* -- Field: fully rounded, field-washed, edged at rest, green while focused -- */
   .ds-field {
     display: flex;
     align-items: center;
@@ -1340,12 +1481,27 @@ svg.lucide {
     min-height: var(--field-h);
     padding-inline: var(--space-4);
     border-radius: var(--radius-field);
-    background: var(--tone-card);
-    /* The field's edge, from the control-outline token — not the in-card hairline,
-       which is 2/255 away from this background and therefore invisible. */
-    border: 1px solid var(--border-control);
+    background: var(--field-bg);
+    /* The resting edge. It is a light line on purpose: a filled control with no edge does not
+       read as something you can type into, and "give the amount box no border" is how one form
+       ended up looking like text floating on the panel. */
+    border: 1px solid var(--field-border);
     color: var(--text-primary);
     text-align: start;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  .ds-field:focus-within,
+  .ds-field:focus-visible {
+    border-color: var(--brand);
+    box-shadow: 0 0 0 3px var(--brand-light);
+  }
+  /* Every way a field can be inert: a disabled input, textarea or select, all dimmed the same
+     amount, so "read only" never looks like "broken" on one screen and "fine" on another. */
+  .ds-field:has(input:disabled),
+  .ds-field:has(textarea:disabled),
+  .ds-field:has(select:disabled) {
+    opacity: 0.45;
+    cursor: not-allowed;
   }
 
   /* An input INSIDE a field shell defers to the shell: it must never draw a second
@@ -1355,12 +1511,41 @@ svg.lucide {
     border: 0;
     background: transparent;
   }
+  /* ...including while focused. The base contract puts a brand border and a 3px ring on a focused
+     input, which inside a shell drew a SECOND green rectangle inside an already-green pill — the
+     "light green box" that appeared in every field on every screen. The shell owns the focus
+     state; the input inside it owns nothing. */
+  .ds-field input:focus,
+  .ds-field input:focus-visible,
+  .ds-field textarea:focus,
+  .ds-field textarea:focus-visible,
+  .ds-field select:focus,
+  .ds-field select:focus-visible {
+    border: 0;
+    box-shadow: none;
+    outline: none;
+  }
+  /* The whole pill is the control. A text cursor over the padding says so before the tap. */
+  .ds-field:has(input, textarea) {
+    cursor: text;
+  }
+  .ds-field:has(input:disabled, textarea:disabled, select:disabled) {
+    cursor: not-allowed;
+  }
 
-  /* -- Modal sheet -- */
+  /* -- Modal sheet --
+     No field tokens are re-pointed here on purpose: `--field-bg` is a wash, so a field follows
+     the sheet's tone by itself and a new sheet cannot forget to opt in. */
   .ds-sheet {
     background: var(--tone-sheet);
     border-start-start-radius: var(--radius-sheet);
     border-start-end-radius: var(--radius-sheet);
+  }
+  /* Any full-bleed panel used as a form surface (the money record screen draws one with a
+     gradient instead of a modal sheet). It does not re-point the field tokens: the wash already
+     lands a step off this panel too, and a field here is the same relationship as anywhere else. */
+  .ds-panel {
+    color: var(--text-primary);
   }
   .ds-grabber {
     width: 36px;
@@ -1415,9 +1600,10 @@ svg.lucide {
      Group headings used to restate their own size, weight, tracking and casing at each
      call site, which is how an app ends up with six versions of the same label. They are
      all this class now: one sentence-case line in the secondary tone, no uppercase, no
-     letter-spacing. Retune the whole app's headings by editing the four values below. */
+     letter-spacing. Its size is the group-label token the uppercase variant uses too, one step
+     under the rows it heads. */
   .ds-section-label {
-    font-size: var(--fs-13);
+    font-size: var(--text-section);
     font-weight: 600;
     letter-spacing: 0;
     text-transform: none;
@@ -1440,3 +1626,18 @@ svg.lucide {
   }
 }
 
+
+/* Roles & Access uses green only where the screen is telling the owner something:
+   primary action, progress, selection and focus. Everything else stays tonal. */
+.roles-neutral {
+  --roles-accent: var(--brand);
+  --roles-accent-fg: var(--brand-fg);
+  --roles-accent-text: var(--brand-dark);
+  --roles-accent-soft: var(--brand-light);
+  --roles-accent-border: var(--brand);
+}
+.roles-neutral .ds-field:focus-within,
+.roles-neutral .ds-field:focus-visible {
+  border-color: var(--roles-accent);
+  box-shadow: 0 0 0 3px var(--roles-accent-soft);
+}

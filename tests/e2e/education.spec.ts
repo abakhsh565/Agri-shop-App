@@ -18,11 +18,21 @@
  *      never presented to them as available.
  *   7. A target that is not there is skipped, not pointed at.
  */
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect } from './base';
+import type { Page } from '@playwright/test';
 import { cleanupFixtures, execSql, loginViaUi, setupFixtures } from './helpers';
 
 const OWNER_PHONE = '03009999999';   // 923009999999
 const EMPLOYEE_PHONE = '03008888888'; // 923008888888
+
+/**
+ * The two SHARED accounts this lane states are brand new. They are the keep-list users every lane
+ * signs in with, so whatever `first_login_at` held before this run is restored in the teardown.
+ */
+const FIRST_LOGIN_PHONES = ['923009999999', '923008888888'] as const;
+
+/** The pre-run values, read before the lane writes NULL over them. */
+let firstLoginBefore: Array<{ phone: string; first_login_at: string | null }> = [];
 
 const CARD = '[data-testid="tour-card"]';
 
@@ -132,10 +142,10 @@ async function startTourFromGuide(page: Page, base: '/admin' | '/employee') {
     await later.click();
     await page.waitForTimeout(500);
   }
-  await page.locator('[data-tour="more:guide"]').click();
+  await page.locator('[data-tour="settings:guide"]').click();
   await page.waitForTimeout(800);
   await expect(page).toHaveURL(new RegExp(`${base}/guide$`));
-  await page.locator('[data-tour="more:guide"]').count(); // no-op: keeps the locator honest above
+  await page.locator('[data-tour="settings:guide"]').count(); // no-op: keeps the locator honest above
   await page.locator('button:has-text("Show me around")').first().click();
   await expect(page.locator(CARD)).toBeVisible({ timeout: 10000 });
 }
@@ -143,13 +153,60 @@ async function startTourFromGuide(page: Page, base: '/admin' | '/employee') {
 test.describe('education — welcome, guided tour, app guide', () => {
   test.beforeAll(async () => {
     await setupFixtures();
+
+    // READ BEFORE WRITING. `first_login_at` lives on shared rows, and the NULL below destroys the
+    // previous value; capturing it first is what makes the teardown able to put the row back exactly
+    // as it was found — including when a test fails before reaching its own steps.
+    const phones = FIRST_LOGIN_PHONES.map((phone) => `'${phone}'`).join(', ');
+    firstLoginBefore = (await execSql(
+      `SELECT phone, first_login_at::text AS first_login_at FROM users WHERE phone IN (${phones}) ORDER BY phone`,
+    )) as typeof firstLoginBefore;
+
     // "Brand-new owner" is a server fact, so the fixture states it rather than
     // hoping the database has not seen this phone before.
-    await execSql("UPDATE users SET first_login_at = NULL WHERE phone IN ('923009999999','923008888888')");
+    await execSql(`UPDATE users SET first_login_at = NULL WHERE phone IN (${phones})`);
   });
 
   test.afterAll(async () => {
-    await cleanupFixtures();
+    // THE SHARED ROWS GO BACK EVEN WHEN A TEST FAILED.
+    //
+    // This teardown used to be `cleanupFixtures()` alone, which deletes what the run CREATED and
+    // touches nothing else — so the NULL written above (and again by `forgetFirstLogin` mid-test)
+    // survived every run, passed or failed. `first_login_at` is a column on the two accounts every
+    // lane signs in with, so that is a shared premise changed by whichever lane ran last.
+    //
+    // Both steps are attempted and both failures are reported. A teardown problem must fail the run,
+    // but it must not replace the failure that made the run red — Playwright reports the test and this
+    // hook separately, and the message below names exactly which row or step did not come back.
+    const problems: string[] = [];
+
+    for (const row of firstLoginBefore) {
+      const value =
+        row.first_login_at === null
+          ? 'NULL'
+          : `'${String(row.first_login_at).replace(/'/g, "''")}'::timestamptz`;
+      try {
+        await execSql(
+          `UPDATE users SET first_login_at = ${value} WHERE phone = '${String(row.phone).replace(/'/g, "''")}'`,
+        );
+      } catch (error) {
+        problems.push(
+          `restore users.first_login_at for ${row.phone}: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+    }
+
+    try {
+      await cleanupFixtures();
+    } catch (error) {
+      problems.push(`cleanup: ${error instanceof Error ? error.message : String(error)}`);
+    }
+
+    if (problems.length) {
+      throw new Error(
+        `[education] teardown failed — this run left shared rows changed:\n  - ${problems.join('\n  - ')}`,
+      );
+    }
   });
 
   test('a new owner is welcomed once, and the tour it launches rings the real blocks', async ({ page }) => {
@@ -197,6 +254,8 @@ test.describe('education — welcome, guided tour, app guide', () => {
     await expect(page.locator(CARD)).toHaveCount(0);
     expect(page.url()).toContain('/admin/dashboard');
     await expect(page.locator('[data-tour="home:actions"]')).toBeVisible();
+    // The fifth tab is the business hub (More); this checks the bar still navigates after a
+    // tour is skipped rather than pinning the test to the retired Settings tab.
     await page.locator('[data-tour="tab:admin.more"]').click();
     await expect(page).toHaveURL(/\/admin\/more$/, { timeout: 8000 });
   });
@@ -247,10 +306,10 @@ test.describe('education — welcome, guided tour, app guide', () => {
     expect(page.url(), 'closing the tour must not navigate').toBe(urlBefore);
 
     // The app is usable straight away, and setup status is untouched.
-    await page.goto('/admin/more');
+    await page.goto('/admin/settings');
     await page.waitForTimeout(1200);
-    await page.locator('[data-tour="more:customers"]').click();
-    await expect(page).toHaveURL(/\/admin\/customers$/, { timeout: 8000 });
+    await page.locator('[data-tour="settings:customers"]').click();
+    await expect(page).toHaveURL(/\/admin\/settings\/hub\/customers$/, { timeout: 8000 });
     const setupAfter = await setupState(page);
     expect(setupAfter, 'the tour must not move setup completion').toBe(setupBefore);
 
@@ -282,7 +341,7 @@ test.describe('education — welcome, guided tour, app guide', () => {
         localStorage.setItem(key, JSON.stringify(parsed));
       }
     });
-    await page.goto('/admin/more');
+    await page.goto('/admin/settings');
     await page.waitForTimeout(1800);
 
     const took = await page.evaluate(() => ({
@@ -292,7 +351,7 @@ test.describe('education — welcome, guided tour, app guide', () => {
     expect(took.dir, 'the language switch did not take, so the copy checks would be meaningless').toBe('rtl');
     expect(took.dark).toBe(true);
 
-    await page.locator('[data-tour="more:guide"]').click();
+    await page.locator('[data-tour="settings:guide"]').click();
     await page.waitForTimeout(800);
     await page.locator('button:has-text("ایک چکر لگائیں")').first().click();
     await expect(page.locator(CARD)).toBeVisible({ timeout: 10000 });
@@ -328,6 +387,8 @@ test.describe('education — welcome, guided tour, app guide', () => {
     await page.goto('/employee/more');
     await page.waitForTimeout(1600);
 
+    // The employee shell still has its own More screen, and its guide row keeps that anchor;
+    // only the admin shell moved its guide onto Settings.
     await page.locator('[data-tour="more:guide"]').click();
     await page.waitForTimeout(1000);
 
@@ -402,9 +463,9 @@ test.describe('education — welcome, guided tour, app guide', () => {
 
   test('the feature list explains the app and only offers what this person can open', async ({ page }) => {
     await loginAndDismissWelcome(page, OWNER_PHONE);
-    await page.goto('/admin/more');
+    await page.goto('/admin/settings');
     await page.waitForTimeout(1200);
-    await page.locator('[data-tour="more:guide"]').click();
+    await page.locator('[data-tour="settings:guide"]').click();
     await page.waitForTimeout(1000);
 
     await page.screenshot({ path: '.freebuff/interaction-shots/edu-guide-owner-en.png' });

@@ -60,8 +60,8 @@ export default function CustomerSelector({ selectedIds, onChange, filterFn, maxS
         <Search size={16} className="absolute start-3 top-1/2 -translate-y-1/2" style={{ color: "var(--text-secondary)" }} />
         <input type="text" value={search} onChange={(e) => setSearch(e.target.value)}
           placeholder={t("inline.search_customers")}
-          className="w-full h-10 rounded-[var(--radius-tile)] ps-10 pe-10 text-13 outline-none"
-          style={{ background: "var(--surface-2)", color: "var(--text-primary)", border: "1px solid var(--border-control)" }} />
+          className="w-full h-12 rounded-[var(--radius-tile)] ps-10 pe-10 text-13 outline-none"
+          style={{ background: "var(--field-bg)", color: "var(--text-primary)" }} />
         {search && <button onClick={() => setSearch("")} className="absolute end-3 top-1/2 -translate-y-1/2"><X size={14} style={{ color: "var(--text-secondary)" }} /></button>}
       </div>
       <div className="flex items-center justify-between px-1">

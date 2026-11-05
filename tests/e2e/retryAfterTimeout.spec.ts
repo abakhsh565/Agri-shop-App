@@ -14,7 +14,7 @@
  *
  * QA database only.
  */
-import { test, expect } from '@playwright/test';
+import { test, expect } from './base';
 import {
   QA_IDS,
   execSql,
@@ -24,12 +24,36 @@ import {
   snapshotIds,
   injectAdminAuth,
 } from './helpers';
+import {
+  captureSharedCells,
+  restorationStatements,
+  sharedCellLabel,
+  type CapturedSharedCell,
+} from './sharedRowRestore';
+import { runCleanupStatements, runTeardownSteps } from '../setup/ownedCleanup';
 
 const BASE_URL = process.env.QA_APP_URL || 'http://localhost:5173';
+
+/** The shared cells this lane writes, with the value each had BEFORE it wrote. Filled in beforeAll. */
+const sharedCells: CapturedSharedCell[] = [];
 
 test.describe('Browser retry after a timed-out write', () => {
   test.beforeAll(async () => {
     await setupFixtures();
+
+    // CAPTURE BEFORE THE FIRST WRITE. The two statements below (and the sale this lane records) move
+    // shared rows — the variant's stock and the customer's money columns — and nothing put them back:
+    // the lane ended with QA Variant A at 99 and QA Customer A's totals raised, which the NEXT run
+    // read as the fixture. The values are read here, before anything writes, and restored in afterAll.
+    sharedCells.push(
+      ...(await captureSharedCells(execSql, [
+        { table: 'product_variants', column: 'stock_qty', id: QA_IDS.variantA },
+        { table: 'customers', column: 'outstanding_balance', id: QA_IDS.customerA },
+        { table: 'customers', column: 'total_purchases', id: QA_IDS.customerA },
+        { table: 'customers', column: 'total_paid', id: QA_IDS.customerA },
+      ])),
+    );
+
     await execSql(`UPDATE product_variants SET stock_qty = 100 WHERE id = '${QA_IDS.variantA}'`);
     await execSql(
       `UPDATE customers SET outstanding_balance = 30000, total_purchases = 80000, total_paid = 50000 WHERE id = '${QA_IDS.customerA}'`
@@ -46,8 +70,17 @@ test.describe('Browser retry after a timed-out write', () => {
   });
 
   test.afterAll(async () => {
-    // The sale this lane creates is claimed by id; its items and submission follow by FK.
-    await cleanupFixtures();
+    // The sale this lane creates is claimed by id; its items and submission follow by FK. The shared
+    // cells it moved go back to their captured values in the same guaranteed path, before/with it, and
+    // every failure is reported instead of swallowed.
+    await runTeardownSteps([
+      {
+        label: `restore ${sharedCells.map(sharedCellLabel).join(', ') || 'the shared cells this lane mutates'}`,
+        run: () =>
+          runCleanupStatements(execSql, restorationStatements(sharedCells), 'retryAfterTimeout shared-row restore'),
+      },
+      { label: 'remove the rows this lane owns', run: () => cleanupFixtures() },
+    ]);
   });
 
   test('one sale — the timed-out attempt is reused on retry, never repeated', async ({ page }) => {

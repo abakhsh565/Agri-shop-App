@@ -32,7 +32,7 @@
 
 import { describe, it, beforeAll, afterAll, expect } from 'vitest';
 import { randomUUID } from 'crypto';
-import { execRpcAsUser, execSqlAsAdmin } from '../setup/qa-client';
+import { execRpcAsUser, execSqlAsAdmin, ensureTenantBranch } from '../setup/qa-client';
 
 const TENANT = '00000000-0000-0000-0000-000000000001';
 const OWNER = 'f7000000-0000-0000-0000-00000000000a';
@@ -198,10 +198,10 @@ beforeAll(async () => {
     ON CONFLICT (id) DO UPDATE SET stock_qty = 100, is_active = true
   `);
 
-  const branches = await sql(
-    `SELECT id FROM branches WHERE tenant_id = '${TENANT}' AND is_active = true ORDER BY is_default DESC, created_at`
-  );
-  mainBranch = branches.rows[0]?.id;
+  // The tenant's own default branch, resolved through the app's registration helper instead of by
+  // list position: this file only needs A branch to scope its employee to, and indexing the seeded
+  // shop's list is the borrowed-state shape `npm run audit:fixtures` names.
+  mainBranch = await ensureTenantBranch(TENANT, 'Main Branch');
   expect(mainBranch, 'the QA shop must have an active branch').toBeTruthy();
 
   saleForGrant = randomUUID();

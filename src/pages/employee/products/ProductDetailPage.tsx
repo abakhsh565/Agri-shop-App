@@ -3,14 +3,18 @@ import { useNavigate, useParams } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
+import ImageCrop from "@/components/ui/ImageCrop";
 import ListCard from "@/components/ui/ListCard";
 import ListRow from "@/components/ui/ListRow";
 import { CategoryChip } from "@/components/ui/Badge";
+import { unitWord } from "@/lib/inventoryView";
 import { useProductsStore } from "@/stores/productsStore";
+import { useShopStore } from "@/stores/shopStore";
 import { useUIStore } from "@/stores/uiStore";
 import { formatCurrency, getStockStatusColor } from "@/lib/formatters";
 import { useShellBase } from "@/lib/useShellBase";
-import { rpcDeleteProduct, rpcDeleteProductBarcode } from "@/lib/db";
+import { hasPermission } from "@/lib/tenantContext";
+import { rpcDeleteProduct, rpcDeleteProductBarcode, rpcPreviewProductBarcode, rpcSetProductBarcode } from "@/lib/db";
 import { Pencil, TrendingUp, Barcode, Trash2, Copy, Download, Package, Camera, Loader2, Bell } from "lucide-react";
 import { getRecommendationsForProduct, type CustomerCropRecord } from "@/lib/recommendationEngine";
 import { loadCustomerCropRows } from "@/lib/reminderEngine";
@@ -21,6 +25,8 @@ import { barcodeToSvg } from "@/lib/barcode";
 import { uploadImage } from "@/lib/storage";
 import { supabase } from "@/lib/supabase";
 import { useT } from "@/lib/i18n";
+import { useCatalogueStore } from "@/stores/catalogueStore";
+import { categoryDisplayName } from "@/lib/catalogue";
 import { SkeletonList } from "@/components/ui/Skeleton";
 
 // Pesticide and spray are one shelf (0162): a row still stored under the old name reads as
@@ -49,14 +55,23 @@ export default function ProductDetailPage() {
   const navigate = useNavigate();
   const base = useShellBase();
   const t = useT();
-  const isAdmin = base === "/admin";
-  const unitLabel = (unit: string) => {
-    const map: Record<string, string> = { liter: t("products.unitLiter"), kg: t("products.unitKg"), piece: t("products.unitPiece") };
-    return map[unit] ?? unit;
-  };
+  // Which actions this person may take is the owner's grants, not which shell they are in:
+  // a granted `products.create`/`products.edit` must show up as a working control on the
+  // employee side too, and an ungranted one must not be offered at all.
+  const canEditProduct = hasPermission("products.edit");
+  const canAdjustStock = hasPermission("inventory.adjust");
+  const canDeleteProduct = hasPermission("products.delete");
+  // The pack's unit word comes from `lib/inventoryView`, the same one the stock screens say a
+  // quantity in — so a pack reads the same here as it does on the shelf it sits on.
   const products = useProductsStore((s) => s.products);
   const productsReady = useProductsStore((s) => s.ready);
+  const activeBranchName = useShopStore((s) => s.activeBranchName);
   const product = products.find((p) => p.id === productId);
+  // The shelf this product is filed on, when it has one (0259).
+  const categories = useCatalogueStore((s) => s.categories);
+  const shelf = product?.categoryId
+    ? categories.find((c) => c.id === product.categoryId) ?? null
+    : null;
   const { addToast } = useUIStore();
 
   const [toDelete, setToDelete] = useState(false);
@@ -66,11 +81,16 @@ export default function ProductDetailPage() {
   // A ref, not the state flag: React batches, so two taps in one task both read the pre-render
   // `false` and the same code would be retired twice.
   const barcodeDeletingRef = useRef(false);
+  /** A code being made for this product, and the guard that stops a second tap making two. */
+  const [barcodeMinting, setBarcodeMinting] = useState(false);
+  const barcodeMintingRef = useRef(false);
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState("");
   const [editImageUrl, setEditImageUrl] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  // The picture waiting behind the framing screen; nothing is uploaded until it is confirmed.
+  const [pendingImage, setPendingImage] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   function startEdit() {
@@ -79,9 +99,16 @@ export default function ProductDetailPage() {
     setEditing(true);
   }
 
-  async function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
+  /** Choosing a picture only opens the frame; the upload happens once it is confirmed. */
+  function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
+    if (fileInputRef.current) fileInputRef.current.value = "";
     if (!file) return;
+    setPendingImage(file);
+  }
+
+  async function uploadProductImage(file: File) {
+    setPendingImage(null);
     setUploading(true);
     try {
       const url = await uploadImage("product-images", file);
@@ -90,7 +117,6 @@ export default function ProductDetailPage() {
       addToast("Image upload failed", "error");
     } finally {
       setUploading(false);
-      if (fileInputRef.current) fileInputRef.current.value = "";
     }
   }
 
@@ -135,6 +161,34 @@ export default function ProductDetailPage() {
     }
   }
 
+  /**
+   * Making a code for a product that has none — here, and not on another screen.
+   *
+   * This button used to open the print-labels page with the product named in the query, which
+   * prefilled nothing and selected nothing: the owner arrived at a list with "0 selected", and
+   * nothing was made or shown (owner's report, 2026-10-26, after removing a barcode). Making a
+   * code is a decision about THIS product, so it happens on this screen: the shop's own
+   * generator picks a free code, `set_product_barcode` attaches it, and the plate appears
+   * because the product is reloaded. The print page is still one tap away — via this same row
+   * once a code exists, which is when printing labels is the thing left to do.
+   */
+  async function handleGenerateBarcode() {
+    if (!product || barcodeMintingRef.current) return;
+    barcodeMintingRef.current = true;
+    setBarcodeMinting(true);
+    try {
+      const code = await rpcPreviewProductBarcode(product.name);
+      await rpcSetProductBarcode(product.id, code, "generated");
+      await useProductsStore.getState().load();
+      addToast(t("products.barcodeGenerated", { code }), "success");
+    } catch (err) {
+      addToast(err instanceof Error ? err.message : t("errors.barcodeMintFailed"), "error");
+    } finally {
+      barcodeMintingRef.current = false;
+      setBarcodeMinting(false);
+    }
+  }
+
   async function confirmDelete() {
     if (!product) return;
     setDeleting(true);
@@ -166,7 +220,7 @@ export default function ProductDetailPage() {
     ? Math.min(...product.variants.map((v) => v.lowStockThreshold))
     : 5;
   const stockStatus =
-    totalStock === 0 ? "out_of_stock" : totalStock <= minThreshold ? "low_stock" : "in_stock";
+    totalStock <= 0 ? "out_of_stock" : totalStock <= minThreshold ? "low_stock" : "in_stock";
   const stockColor = getStockStatusColor(stockStatus);
 
   // Price range
@@ -200,9 +254,21 @@ export default function ProductDetailPage() {
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-base font-bold truncate" style={{ color: "var(--text-primary)" }}>{product.name}</p>
-            <p className="text-xs truncate" style={{ color: "var(--text-secondary)" }}>{product.company}</p>
+            {/* The supplier alone. The category already has its own chip on the line below,
+                so naming it here too read as the same fact stated twice on one card. */}
+            <p className="text-xs truncate" style={{ color: "var(--text-secondary)" }}>
+              {product.company}
+            </p>
             <div className="flex items-center gap-2 mt-1 flex-wrap">
-              <CategoryChip label={t(CATEGORY_LABEL_KEY[product.category] as any)} />
+              {/* The shop's own shelf when the product is filed on one (0259); the fixed kind
+                  still answers for a row that predates it. */}
+              <CategoryChip
+                label={
+                  shelf
+                    ? categoryDisplayName(shelf, t)
+                    : t(CATEGORY_LABEL_KEY[product.category] as any)
+                }
+              />
               <span
                 className="text-10 font-bold px-2 py-0.5 rounded-full"
                 style={{ color: stockColor, background: stockColor + "22" }}
@@ -227,7 +293,11 @@ export default function ProductDetailPage() {
             </p>
           </div>
           <div className="text-center" style={{ borderLeft: "1px solid var(--divider)", borderRight: "1px solid var(--divider)" }}>
-            <p className="ds-section-label" style={{ color: "var(--text-secondary)" }}>{t("products.stock")}</p>
+            <p className="ds-section-label" style={{ color: "var(--text-secondary)" }}>
+              {activeBranchName
+                ? t("products.stockInBranch", { branch: activeBranchName })
+                : t("products.stock")}
+            </p>
             <p className="text-sm font-bold mt-0.5" style={{ color: "var(--text-primary)" }}>
               {t("common.itemsCount", { count: String(totalStock) })}
             </p>
@@ -287,10 +357,9 @@ export default function ProductDetailPage() {
                   in the app takes one off a product, so a wrong code had no way out except
                   clearing the field inside an edit form nobody thinks to open. It sits with
                   the other two — copy and download — because that is where the code is.
-                  Admin-only, like every other control that changes the catalogue: the database
-                  refuses a caller without `products.edit`, and a button that can only fail is
-                  not a control. */}
-              {isAdmin && (
+                  Follows `products.edit`, the grant its RPC checks: the database refuses a
+                  caller without it, and a button that can only fail is not a control. */}
+              {canEditProduct && (
                 <button
                   onClick={() => setBarcodeToDelete(true)}
                   data-testid="product-barcode-delete"
@@ -306,46 +375,62 @@ export default function ProductDetailPage() {
           </div>
         )}
 
-        {/* ── PACK SIZES: Variant details ── */}
+        {/* ── VARIANTS: one row per pack, saying what it costs and what this branch holds ──
+            Reshaped to the owner's reference: the pack's own name leads, then the two facts a
+            shopkeeper reads before anything else about it — the price it sells at and how much
+            of it is on the shelf. The quantity is coloured by its own state, so "0 bottles"
+            cannot be read as healthy, and the row opens the pack where a quantity is adjusted. */}
         <div>
-          <p className="ds-section-label mb-2" style={{ color: "var(--text-secondary)" }}>{t("products.packSizesTitle")}</p>
-          <div
-            className="rounded-[var(--radius-card)] overflow-hidden"
-            style={{ border: "1px solid var(--divider)" }}
-          >
-
-          {/* Variants list */}
-          {product.variants.map((v, i) => {
-            const available = v.stockQty ?? 0;
-            const vStatus = available === 0 ? "out_of_stock" : available <= v.lowStockThreshold ? "low_stock" : "in_stock";
-            const vColor = getStockStatusColor(vStatus);
-            return (
-              <div
-                key={v.id}
-                className="flex items-center justify-between px-4 py-3.5"
-                style={{ borderTop: "1px solid var(--divider)" }}
-              >
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-bold truncate" style={{ color: "var(--text-primary)" }}>{v.name}</p>
-                  <p className="text-11" style={{ color: "var(--text-secondary)" }}>
-                    {v.unitSize} {unitLabel(product.baseUnit)} · {formatCurrency(v.sellingPrice)}
-                  </p>
-                </div>
-                <div className="flex items-center gap-2.5 shrink-0">
-                  <p className="text-xs font-bold" style={{ color: "var(--text-primary)" }}>
-                    {available}
-                  </p>
-                  <span
-                    className="text-10 font-bold px-2 py-0.5 rounded-full"
-                    style={{ color: vColor, background: vColor + "22" }}
+          {/* "Pack sizes", not "Variants": the tile above already counts the variants, and two
+              headings with the same word on one screen read as two different lists. */}
+          {/* The same muted group label the customers card below uses, not a second heading
+              style on one screen. */}
+          <p className="ds-section-label mb-2" style={{ color: "var(--text-secondary)" }}>
+            {t("products.packSizesTitle")}
+          </p>
+          {product.variants.length === 0 ? (
+            <p className="text-12" style={{ color: "var(--text-secondary)" }}>{t("products.noVariants")}</p>
+          ) : (
+            <ListCard>
+              {product.variants.map((v) => {
+                const available = v.stockQty ?? 0;
+                const vStatus = available <= 0 ? "out_of_stock" : available <= v.lowStockThreshold ? "low_stock" : "in_stock";
+                const vColor = getStockStatusColor(vStatus);
+                return (
+                  <ListRow
+                    key={v.id}
+                    testId={`variant-${v.id}`}
+                    onClick={
+                      canAdjustStock ? () => navigate(`${base}/inventory/${product.id}/adjust`) : undefined
+                    }
+                    trailing={
+                      /* What the pack holds and whether that is healthy, on the row's own line:
+                         a bare number cannot say whether "0" means empty shelf or full one. */
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="text-13 font-bold" style={{ color: "var(--text-primary)" }}>
+                          {available}
+                        </span>
+                        <span
+                          className="text-10 font-bold px-2 py-0.5 rounded-full"
+                          style={{ color: vColor, background: vColor + "22" }}
+                        >
+                          {stockStatusLabel(vStatus, t)}
+                        </span>
+                      </div>
+                    }
                   >
-                    {stockStatusLabel(vStatus, t)}
-                  </span>
-                </div>
-              </div>
-            );
-          })}
-          </div>
+                    <div className="flex flex-col min-w-0">
+                      <p className="text-13 font-bold truncate" style={{ color: "var(--text-primary)" }}>{v.name}</p>
+                      {/* Size · price — the two facts a shopkeeper reads before the quantity. */}
+                      <p className="text-12 mt-1 truncate" style={{ color: "var(--text-secondary)" }}>
+                        {v.unitSize} {unitWord(product.baseUnit, t)} · {formatCurrency(v.sellingPrice)}
+                      </p>
+                    </div>
+                  </ListRow>
+                );
+              })}
+            </ListCard>
+          )}
         </div>
 
         {/* ── CUSTOMERS LIKELY TO WANT THIS ── */}
@@ -356,9 +441,9 @@ export default function ProductDetailPage() {
           className="rounded-[var(--radius-card)] overflow-hidden"
           style={{ border: "1px solid var(--divider)" }}
         >
-          {isAdmin && (
+          {canEditProduct && (
             <button
-              onClick={() => navigate(`/admin/inventory/${product.id}/edit`)}
+              onClick={() => navigate(`${base}/inventory/${product.id}/edit`)}
               className="flex items-center gap-3 w-full px-4 py-3.5 text-start text-13 font-medium active:opacity-70"
               style={{ color: "var(--text-primary)" }}
             >
@@ -366,9 +451,9 @@ export default function ProductDetailPage() {
               {t("products.editProduct")}
             </button>
           )}
-          {isAdmin && (
+          {canAdjustStock && (
             <button
-              onClick={() => navigate(`/admin/inventory/${product.id}/adjust`)}
+              onClick={() => navigate(`${base}/inventory/${product.id}/adjust`)}
               className="flex items-center gap-3 w-full px-4 py-3.5 text-start text-13 font-medium active:opacity-70"
               style={{ color: "var(--text-primary)", borderTop: "1px solid var(--divider)" }}
             >
@@ -376,17 +461,25 @@ export default function ProductDetailPage() {
               {t("products.adjustStock")}
             </button>
           )}
-          {isAdmin && (
+          {canEditProduct && (
             <button
-              onClick={() => navigate(`/admin/inventory/barcodes?product=${product.id}`)}
-              className="flex items-center gap-3 w-full px-4 py-3.5 text-start text-13 font-medium active:opacity-70"
+              onClick={() =>
+                product.barcode
+                  ? navigate(`${base}/inventory/barcodes?product=${product.id}`)
+                  : void handleGenerateBarcode()
+              }
+              disabled={barcodeMinting}
+              data-testid="product-barcode-generate"
+              className="flex items-center gap-3 w-full px-4 py-3.5 text-start text-13 font-medium active:opacity-70 disabled:opacity-60"
               style={{ color: "var(--text-primary)", borderTop: "1px solid var(--divider)" }}
             >
-              <Barcode size={16} style={{ color: "var(--brand)" }} />
+              {barcodeMinting
+                ? <Loader2 size={16} className="animate-spin" style={{ color: "var(--brand)" }} />
+                : <Barcode size={16} style={{ color: "var(--brand)" }} />}
               {t("products.generateBarcode")}
             </button>
           )}
-          {isAdmin && (
+          {canDeleteProduct && (
             <button
               onClick={() => setToDelete(true)}
               className="flex items-center gap-3 w-full px-4 py-3.5 text-start text-13 font-medium active:opacity-70"
@@ -443,7 +536,7 @@ export default function ProductDetailPage() {
                 onChange={(e) => setEditName(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter") saveEdit(); }}
                 className="w-full h-12 px-4 rounded-full text-sm font-bold outline-none"
-                style={{ background: "var(--surface)", border: "1px solid var(--divider)", color: "var(--text-primary)" }}
+                style={{ background: "var(--field-bg)", color: "var(--text-primary)" }}
               />
             </div>
             <div className="flex gap-3">
@@ -487,6 +580,17 @@ export default function ProductDetailPage() {
         onConfirm={confirmDeleteBarcode}
         onCancel={() => setBarcodeToDelete(false)}
       />
+
+      {/* The packet is framed before it is stored: the hero tile and the product rows all draw it
+          in a fixed square, so the owner chooses the part that survives the cut. */}
+      {pendingImage && (
+        <ImageCrop
+          file={pendingImage}
+          aspect={1}
+          onCancel={() => setPendingImage(null)}
+          onConfirm={(file) => void uploadProductImage(file)}
+        />
+      )}
     </div>
   );
 }

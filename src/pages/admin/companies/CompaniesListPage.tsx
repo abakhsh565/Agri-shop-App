@@ -10,6 +10,9 @@ import NavHeader from "@/components/ui/NavHeader";
 import { Plus, ChevronRight, Building2 } from "lucide-react";
 import SearchBar from "@/components/ui/SearchBar";
 import { SkeletonList } from "@/components/ui/Skeleton";
+import { useReturnTo } from "@/lib/useReturnTo";
+import { hasPermission } from "@/lib/tenantContext";
+import { useShellBase } from "@/lib/useShellBase";
 
 // Simple hash color from company name
 function hashColor(name: string) {
@@ -21,8 +24,14 @@ function hashColor(name: string) {
 
 export default function CompaniesListPage() {
   const navigate = useNavigate();
+  const base = useShellBase();
+  // The list can be opened from Reports, More or a direct link. Its default parent is Settings;
+  // a caller that knows a closer parent (Reports, for example) passes its own path in router
+  // state, and the journey tracker still wins when there is a real previous screen.
+  const backTo = useReturnTo(base === "/admin" ? `${base}/settings` : `${base}/more`);
   const { language } = useThemeStore();
   const t = useT();
+  const canCreate = hasPermission("companies.create");
   const isUrdu = language === "ur";
   const [search, setSearch] = useState("");
 
@@ -44,7 +53,7 @@ export default function CompaniesListPage() {
       style={{ background: "var(--background)", direction: isUrdu ? "rtl" : "ltr" }}
     >
       <StatusBar />
-      <NavHeader title={t("admin.companies")} />
+      <NavHeader title={t("admin.companies")} backTo={backTo} />
 
       {/* Search */}
       <div className="px-4 pb-3">
@@ -75,7 +84,7 @@ export default function CompaniesListPage() {
           return (
             <button
               key={company.id}
-              onClick={() => navigate(`/admin/companies/${company.id}`)}
+              onClick={() => navigate(`${base}/companies/${company.id}`)}
               className="flex items-center gap-3 rounded-[var(--radius-card)] p-4 text-start transition-opacity active:opacity-70"
               style={{ background: "var(--tone-card)" }}
             >
@@ -121,20 +130,20 @@ export default function CompaniesListPage() {
       </div>
 
       {/* Floating Add Company */}
-      <div
+      {canCreate && <div
         className="fixed start-0 end-0 max-w-[480px] mx-auto pointer-events-none z-40"
         style={{ bottom: "calc(var(--tabbar-height) + 16px)" }}
       >
         <div className={`flex px-4 ${isUrdu ? "justify-start" : "justify-end"}`}>
           <button
-            onClick={() => navigate("/admin/companies/new")}
+            onClick={() => navigate(`${base}/companies/new`)}
             className="pointer-events-auto ps-4 pe-5 rounded-full flex items-center gap-2 text-sm font-bold active:scale-95 transition-transform"
             style={{ background: "var(--brand)", color: "#0a0a0a", height: "52px", boxShadow: "0 6px 20px rgba(0,0,0,0.25)" }}
           >
             <Plus size={20} strokeWidth={2.5} /> {t("admin.addCompany")}
           </button>
         </div>
-      </div>
+      </div>}
     </div>
   );
 }

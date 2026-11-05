@@ -14,10 +14,12 @@ import { useThemeStore } from "@/stores/themeStore";
 import type { PaymentMethod } from "@/types";
 import { ChevronDown, AlertTriangle } from "lucide-react";
 import { useT } from "@/lib/i18n";
+import { useShellBase } from "@/lib/useShellBase";
 
 export default function RecordPurchasePage() {
   const t = useT();
   const navigate = useNavigate();
+  const base = useShellBase();
   const { addToast } = useUIStore();
   const { language } = useThemeStore();
   const isUrdu = language === "ur";
@@ -29,8 +31,8 @@ export default function RecordPurchasePage() {
   const presetCompanyId = searchParams.get("companyId") || "";
   // Creating the missing supplier from this form must come back to this form.
   const supplierHint = dependencyHint("supplier", t, {
-    base: "/admin",
-    returnTo: "/admin/purchases/new",
+    base,
+    returnTo: `${base}/purchases/new`,
   });
   const [companyId, setCompanyId] = useState("");
   const [productId, setProductId] = useState("");
@@ -164,7 +166,8 @@ export default function RecordPurchasePage() {
       await useCompaniesStore.getState().load();
 
       addToast(t("copy.stockedPurchase", { qty: String(qtyNum), variant: variant.name, amount: formatCurrency(total) }), "success");
-      navigate("/admin/purchases", { replace: true });
+      if (base === "/admin") navigate("/admin/purchases", { replace: true });
+      else navigate(`${base}/purchases`, { replace: true });
     } catch (e) {
       // The key is KEPT on failure: the retry must not be treated as a new delivery.
       setError(e instanceof Error ? e.message : t("errors.recordPurchaseFailed"));
@@ -175,8 +178,7 @@ export default function RecordPurchasePage() {
   }
 
   const fieldStyle = {
-    background: "var(--surface-2)",
-    border: "1px solid var(--divider)",
+    background: "var(--field-bg)",
     color: "var(--text-primary)",
   } as const;
 

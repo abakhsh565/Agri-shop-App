@@ -46,6 +46,26 @@ export function digitsOnlyPhone(raw: string): string {
 }
 
 /**
+ * The local spelling of a stored number.
+ *
+ * The database holds the canonical `92…` form (see `lib/auth.ts`), while every
+ * hand-typed phone field in the app asks for `03…`. Screens that receive a
+ * canonical number from a link or a request must show the form the field accepts,
+ * or the first edit turns the value into a different number.
+ */
+export function localPhone(raw: string): string {
+  const digits = String(raw ?? "").replace(/\D/g, "");
+  if (digits.startsWith("92") && digits.length === 12) return "0" + digits.slice(2);
+  return digits.slice(0, PHONE_MAX_DIGITS);
+}
+
+/** Is this a complete Pakistani number in either the local or international form? */
+export function isValidPhone(raw: string): boolean {
+  const digits = String(raw ?? "").replace(/\D/g, "");
+  return /^0\d{9,10}$/.test(digits) || /^92\d{10,11}$/.test(digits);
+}
+
+/**
  * The attributes a hand-drawn phone field needs: the phone keypad, and the browser's own hint
  * that this is a number. The digits-only rule itself is applied on change, by `digitsOnlyPhone`
  * (or automatically by `Input`), because `maxLength` counts characters — with it, pasting

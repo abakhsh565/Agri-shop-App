@@ -128,7 +128,12 @@ describe("Access reads", () => {
           if (!src.includes(token)) offenders.push(`${file}  missing ${token}`);
         }
       } else if (src.includes("<PermissionChecklist")) {
-        for (const token of ["loadRolePermissions", "access.loadingRole", "access.roleUnavailable"]) {
+        // `get_role_access` is the newer reporting read: it returns permissions,
+        // dashboards and the department together, and reports an error instead of
+        // collapsing a failed read into an empty grant. Accept either reporting read.
+        const reportingRead = src.includes("loadRolePermissions") || src.includes("loadRoleAccess");
+        if (!reportingRead) offenders.push(`${file}  missing loadRolePermissions`);
+        for (const token of ["access.loadingRole", "access.roleUnavailable"]) {
           if (!src.includes(token)) offenders.push(`${file}  missing ${token}`);
         }
       }

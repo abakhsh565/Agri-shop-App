@@ -34,6 +34,44 @@ export function shouldSkipNext() {
   return false;
 }
 
+/** How the reader arrived: a fresh step, an overwritten step, or a step back. */
+export type NavMove = "push" | "replace" | "back";
+
+/**
+ * Record one navigation with the move that caused it.
+ *
+ * WHY THE MOVE MATTERS. This stack is what the back button walks, so it has to describe the
+ * journey the reader can actually retrace. A screen that finishes a form and `replace`s itself
+ * with the saved record is ONE step, not two: recording it as a push left the completed form
+ * behind the record, and back then re-opened a form the reader had just submitted — one of the
+ * ways this button used to go somewhere the reader had never been.
+ *
+ *   - `push`    — a new step; the screen it came from is behind it.
+ *   - `replace` — the reader's current entry is gone; the new screen inherits its place.
+ *   - `back`    — the step is being undone; the frame being left is dropped.
+ */
+export function recordNav(to: string, from: string, move: NavMove) {
+  if (move === "back") {
+    popNav(from);
+    return;
+  }
+  if (move === "replace") {
+    // The new screen takes the place of the one it replaced, so whatever was behind the form
+    // is still what is behind the saved record. Only the TOP frame can be replaced: the screen
+    // being left is the reader's current step, and a frame with the same path from an earlier
+    // visit is not it. Searching the whole stack for `from` was how an old visit's frame got
+    // rewritten while the current screen went unrecorded — back from it then had no step of its
+    // own and fell through to a parent that belonged to the other visit.
+    const top = stack[stack.length - 1];
+    if (top && top.path === from) {
+      stack[stack.length - 1] = { path: to, from: top.from };
+      lastPushed = "";
+      return;
+    }
+  }
+  pushNav(to, from);
+}
+
 /** Call this when the user navigates to a new page */
 export function pushNav(to: string, from: string) {
   // Deduplicate: don't push if we just pushed this exact frame
@@ -50,27 +88,26 @@ export function pushNav(to: string, from: string) {
 /**
  * Pop the current frame and return where back should go.
  * Returns null if the stack is empty (use browser back as fallback).
+ *
+ * ONLY THE TOP FRAME COUNTS (owner's report, 2026-10-30). The stack used to be searched for a
+ * frame whose path matched, anywhere inside it. On a screen the reader had visited before — the
+ * settings menu, a hub, a report opened twice — that found the frame of the EARLIER visit and
+ * threw away everything after it, so back left the current journey and landed on the screen the
+ * previous one had come from. A path is not a step: the reader's place is the last frame, and if
+ * that frame is not this screen then this screen was never a step in this journey (a tab root, a
+ * redirect, a deep link) and back must use the parent the screen itself names.
  */
 export function popNav(currentPath: string): string | null {
-  // Find and remove the frame for the current path
-  for (let i = stack.length - 1; i >= 0; i--) {
-    if (stack[i].path === currentPath) {
-      const frame = stack[i];
-      stack = stack.slice(0, i);
-      return frame.from;
-    }
-  }
-  return null;
+  const top = stack[stack.length - 1];
+  if (!top || top.path !== currentPath) return null;
+  stack = stack.slice(0, -1);
+  return top.from;
 }
 
 /** Peek at where back would go without popping */
 export function peekBack(currentPath: string): string | null {
-  for (let i = stack.length - 1; i >= 0; i--) {
-    if (stack[i].path === currentPath) {
-      return stack[i].from;
-    }
-  }
-  return null;
+  const top = stack[stack.length - 1];
+  return top && top.path === currentPath ? top.from : null;
 }
 
 /** Check if a path is a dashboard/home screen */

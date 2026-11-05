@@ -28,6 +28,24 @@ export default function App() {
   // if they were current.
   useEffect(() => {
     void useAuthStore.getState().verifySession();
+    // The stored user also carries the permissions it was signed in with. An owner who
+    // changed an employee's access since then is a fact the server has and this device does
+    // not, so ask again on launch — otherwise the employee's screen keeps offering work the
+    // server has stopped accepting (and hides what was just granted) until a full relaunch.
+    void useAuthStore.getState().refreshPermissions();
+  }, []);
+
+  // Coming back to the app is the other moment the answer can have changed: a shop phone
+  // stays open on the counter all day, so launch alone would never notice a permission the
+  // owner granted (or took away) mid-shift.
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === "visible") {
+        void useAuthStore.getState().refreshPermissions();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
   }, []);
 
   /**

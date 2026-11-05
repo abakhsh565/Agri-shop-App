@@ -1,5 +1,5 @@
 import { supabase } from "@/lib/supabase";
-import type { User, UserRole, MembershipRole, MembershipStatus } from "@/types";
+import type { User, UserRole, MembershipRole, MembershipStatus, PendingCoOwnerInvitation } from "@/types";
 import {
   DEMO_OTP_CODE,
   assertDemoOtpAllowed,
@@ -7,6 +7,7 @@ import {
   isDemoOtpMode,
 } from "@/lib/authMode";
 import { clearAllCachedData } from "@/lib/localCache";
+import type { Experience } from "@/types";
 
 // ─── Phone normalization ─────────────────────────────────────────────────────
 // The UI collects local Pakistani numbers ("03001234567"); Supabase Auth needs
@@ -46,6 +47,7 @@ interface UserRow {
   membership_role?: string | null;
   membership_status?: string | null;
   branch_scope?: string[] | null;
+  access_kind?: string | null;
 }
 
 function userFromRow(r: UserRow): User {
@@ -93,6 +95,51 @@ async function loadPermissions(): Promise<string[]> {
     return Array.isArray(data) ? data : [];
   } catch {
     return [];
+  }
+}
+
+/**
+ * The server is the only authority on which experience this business opens.
+ * A Co-Owner is not inferred from a permission count or a membership role.
+ */
+async function loadAccessContext(): Promise<{
+  experience: Experience;
+  coOwnerGrantId: string | null;
+  businessName: string | null;
+}> {
+  try {
+    const { data, error } = await supabase.rpc("get_my_access_context");
+    if (error || !data) return { experience: "employee", coOwnerGrantId: null, businessName: null };
+    const row = data as { experience?: Experience; grantId?: string | null; businessName?: string | null };
+    return {
+      experience: row.experience === "owner" || row.experience === "co_owner" ? row.experience : "employee",
+      coOwnerGrantId: row.grantId ?? null,
+      businessName: row.businessName ?? null,
+    };
+  } catch {
+    return { experience: "employee", coOwnerGrantId: null, businessName: null };
+  }
+}
+
+async function hydrateBusinessAccess(user: User): Promise<User> {
+  const [permissions, access] = await Promise.all([loadPermissions(), loadAccessContext()]);
+  return {
+    ...user,
+    permissions,
+    experience: access.experience,
+    coOwnerGrantId: access.coOwnerGrantId,
+    businessName: access.businessName,
+  };
+}
+
+/** The invitee-only summary. An employee/owner simply gets null. */
+async function loadPendingCoOwnerInvitation(): Promise<PendingCoOwnerInvitation | null> {
+  try {
+    const { data, error } = await supabase.rpc("get_my_pending_co_owner_invitation");
+    if (error || !data) return null;
+    return data as PendingCoOwnerInvitation;
+  } catch {
+    return null;
   }
 }
 
@@ -354,6 +401,7 @@ function confirmIdentity(actual: string | undefined, expected: string): { ok: bo
  * OWN membership from 'pending' to 'active', and never revives a suspended one.
  */
 async function completeOnboardingIfInvited(user: User): Promise<string | null> {
+  if (user.pendingCoOwnerInvitation) return null;
   if (user.membershipStatus !== "pending") return null;
   const { error } = await supabase.rpc("complete_member_onboarding");
   if (error) return error.message;
@@ -558,6 +606,11 @@ export async function verifyOTPAndResolveUser(
 
     void touchLogin(row.id, !row.first_login_at);
     const user = userFromRow(row);
+    const pendingCoOwner = await loadPendingCoOwnerInvitation();
+    if (pendingCoOwner) {
+      user.pendingCoOwnerInvitation = pendingCoOwner;
+      return { status: "ok", user };
+    }
     // First verified sign-in of an invited employee IS the onboarding step.
     // A failure here must be surfaced: continuing would land the user in an app
     // where every read and write is denied, looking inexplicably empty.
@@ -572,8 +625,7 @@ export async function verifyOTPAndResolveUser(
         : { status: "error", message: onboardError };
     }
     // Load permissions after the membership is active and the session is established
-    user.permissions = await loadPermissions();
-    return { status: "ok", user };
+    return { status: "ok", user: await hydrateBusinessAccess(user) };
   }
 
   // No user profile found — check for an open shop registration. shop_requests is
@@ -683,6 +735,11 @@ export async function resumeSession(known: User): Promise<ResumeResult> {
   if (!row || !row.is_active) return { status: "signed_out" };
 
   const user = userFromRow(row);
+  const pendingCoOwner = await loadPendingCoOwnerInvitation();
+  if (pendingCoOwner) {
+    user.pendingCoOwnerInvitation = pendingCoOwner;
+    return { status: "ok", user };
+  }
   // Best-effort: if the invite was accepted on another device the membership is already
   // active and this is a no-op, so returning must never be blocked by it.
   const onboardError = await completeOnboardingIfInvited(user);
@@ -691,8 +748,7 @@ export async function resumeSession(known: User): Promise<ResumeResult> {
       ? { status: "login_not_ready" }
       : { status: "error", message: onboardError };
   }
-  user.permissions = await loadPermissions();
-  return { status: "ok", user };
+  return { status: "ok", user: await hydrateBusinessAccess(user) };
 }
 
 /** The identity this device last persisted, or null if there is none (or it is unreadable). */

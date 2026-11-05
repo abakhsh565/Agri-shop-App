@@ -21,7 +21,8 @@
  * A failure here means a future "make the headings smaller" / "make the icons smaller"
  * request would fall back to a hand sweep, which is the outcome this guards.
  */
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect } from './base';
+import type { Page } from '@playwright/test';
 import * as fs from 'fs';
 import * as path from 'path';
 import { cleanupFixtures, loginViaUi, setupFixtures } from './helpers';

@@ -37,7 +37,7 @@ export const BUSINESS_AREAS: { code: string; Icon: LucideIcon }[] = [
 ];
 
 const AREA_CODES = new Set(BUSINESS_AREAS.map((a) => a.code));
-const ACTION_CODES = new Set(["view", "create", "edit", "delete", "void", "payments", "supplier", "adjust", "manage"]);
+const ACTION_CODES = new Set(["view", "create", "edit", "delete", "void", "payments", "supplier", "adjust", "manage", "credit_limit"]);
 
 /** Translated business-area label, falling back to the raw module name if unknown. */
 export function usePermissionLabels() {

@@ -9,6 +9,9 @@ const ORIGIN = process.env.QA_APP_URL || `http://localhost:${PORT}`;
 
 export default defineConfig({
   testDir: './tests/e2e',
+  // The Co-Owner local lane writes to the local stack and is run with playwright.coowner.config.ts.
+  // Never let the staging suite pick it up by accident.
+  testIgnore: /coOwner\.local\.spec\.ts/,
   // Reusing a running server is safe only when it is THIS app's QA-mode server on the port. The
   // setup below reads that server's own environment block and fails the run closed otherwise, so a
   // foreign application can never be driven silently (see tests/e2e/global-setup.ts).

@@ -5,7 +5,8 @@
  * Verifies: tabs, signals, credit request flow, suppression, cleanup.
  */
 
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect } from './base';
+import type { Page } from '@playwright/test';
 import {
   QA_IDS,
   injectAdminAuth,
@@ -19,20 +20,49 @@ import {
   type TestEvidence,
 } from './helpers';
 import { qaServiceClient } from '../../tests/setup/qa-client';
+import {
+  captureSharedCells,
+  restorationStatements,
+  sharedCellLabel,
+  type CapturedSharedCell,
+} from './sharedRowRestore';
+import { runCleanupStatements, runTeardownSteps } from '../setup/ownedCleanup';
 
 const BASE_URL = process.env.QA_APP_URL || 'http://localhost:5173';
 const ADMIN_ALERTS = `${BASE_URL}/admin/alerts/reminders`;
 const ADMIN_DASHBOARD = `${BASE_URL}/admin/dashboard`;
+
+/**
+ * The shared cells this lane writes, with the value each had BEFORE it wrote. Filled in beforeAll.
+ *
+ * Test 10 approves a credit request for the shared QA Customer C, which moves `credit_limit`. The
+ * restore used to be the LAST LINE of that test — so a failing signal assertion (the step that fails
+ * when the engine is off, i.e. exactly when this lane is red) skipped it and left the shared customer
+ * at 25000. Captured here, restored in afterAll.
+ */
+const sharedCells: CapturedSharedCell[] = [];
 
 // ─── Setup / Teardown ────────────────────────────────────────────────────
 
 test.beforeAll(async () => {
   await cleanupFixtures();
   await setupFixtures();
+  sharedCells.push(
+    ...(await captureSharedCells(execSql, [
+      { table: 'customers', column: 'credit_limit', id: QA_IDS.customerC },
+    ])),
+  );
 }, { timeout: 60000 });
 
 test.afterAll(async () => {
-  await cleanupFixtures();
+  await runTeardownSteps([
+    {
+      label: `restore ${sharedCells.map(sharedCellLabel).join(', ') || 'the shared cells this lane mutates'}`,
+      run: () =>
+        runCleanupStatements(execSql, restorationStatements(sharedCells), 'actionCenter shared-row restore'),
+    },
+    { label: 'remove the rows this lane owns', run: () => cleanupFixtures() },
+  ]);
 }, { timeout: 60000 });
 
 // ─── Helper: login as admin ──────────────────────────────────────────────
@@ -489,10 +519,8 @@ test('10. Credit request E2E: create → critical signal → approve → signal 
     'browser → reload → signal engine → DB (no pending requests) → no signal'
   ));
 
-  // Cleanup: restore credit limit
-  await execSql(
-    `UPDATE customers SET credit_limit = 10000 WHERE id = '${QA_IDS.customerC}'`
-  );
+  // No inline restore here any more: QA Customer C's credit limit is put back to the value captured
+  // before this lane ran, in afterAll — a restore that a failing step above cannot skip.
 
   writeEvidenceReport(evidence, test.info());
 });

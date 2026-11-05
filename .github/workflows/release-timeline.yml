@@ -1,0 +1,120 @@
+name: Release timeline — record a verified release
+
+# WHY THIS IS A SEPARATE WORKFLOW, AND NOT A STEP IN deploy-production.yml
+#
+#   The deploy workflow's conclusion has to mean one thing: the release shipped and was verified. A
+#   marker for the error reporter is not part of that verdict — it is book-keeping that lets an
+#   operator read "since when?" against a deploy boundary — and a monitoring vendor being briefly
+#   unavailable must not be able to colour the verdict either way. Hard-failing the deploy on it
+#   would turn a vendor outage into a red release; soft-failing the step would be exactly the
+#   silent-degradation shape `tests/unit/productionDeployGate.test.ts` forbids. A separate workflow
+#   can simply be red and say why, which is the same structure the backup watchdog already uses.
+#
+# WHAT IT RECORDS
+#
+#   `scripts/deploy/mark-release.mjs` names the release `agrishop-app@<commit>` — the same name
+#   `vite.config.ts` gives its source-map upload and `src/lib/errorReporting.ts` stamps on every
+#   event — and records a deploy for the production environment. Re-running it is safe: a release
+#   that already exists is accepted, and a deploy already named for this commit is skipped.
+#
+# ONLY A RUN THAT DEPLOYED. `deploy-production.yml` also accepts a manual dispatch, and that
+# dispatch defaults to `dry_run: true`, which asks Vercel for nothing and creates no deployment id.
+# Such a run concludes `success`, so without the `workflow_run.event == 'workflow_run'` condition
+# below a rehearsal would put a deploy boundary on the timeline for a commit that was never
+# released — a timeline that lies. A manual *real* deploy is recorded by dispatching this workflow
+# with the same sha (see docs/MONITORING.md §4), which is the one path where a person asserts
+# "this commit is live".
+#
+# WHAT IT NEEDS (see docs/MONITORING.md §2)
+#
+#   secret   SENTRY_AUTH_TOKEN   an org token with project:releases
+#   variable SENTRY_ORG          organization slug
+#   variable SENTRY_PROJECT      project slug
+#
+#   Unset is not silent and not a failure of this workflow's own making: the guard step below says
+#   which name is missing and stops before touching the network, so an unconfigured repository shows
+#   a clear "not configured" outcome rather than a mystery red.
+
+on:
+  workflow_run:
+    workflows: ['Deploy production — only a gated commit']
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: 'Commit to record (must already be live in production)'
+        required: true
+        type: string
+      dry_run:
+        description: 'Decide and print only — do not call the error reporter'
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  # One marker at a time per commit: two overlapping runs could each decide the other's deploy was
+  # not recorded yet, which is how a timeline gets duplicates.
+  group: release-timeline-${{ github.event.workflow_run.head_sha || inputs.sha }}
+  cancel-in-progress: false
+
+jobs:
+  record:
+    name: Record the deployed release
+    # Only a deploy that concluded `success` may be recorded. A failed or cancelled deploy must not
+    # put a boundary on the timeline, because that boundary is what an operator reads errors against.
+    #
+    # `event == 'workflow_run'` is the difference between "deployed" and "rehearsed": a dispatch of
+    # the deploy workflow defaults to dry_run and creates no deployment, yet still concludes success.
+    if: >-
+      (github.event_name == 'workflow_run' &&
+        github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.head_branch == 'main' &&
+        github.event.workflow_run.event == 'workflow_run') ||
+      github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout the recorded commit
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || inputs.sha }}
+          fetch-depth: 1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: The error reporter must be configured — a missing name is said out loud
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ vars.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT }}
+        run: |
+          missing=""
+          [ -n "${SENTRY_AUTH_TOKEN:-}" ] || missing="$missing SENTRY_AUTH_TOKEN(secret)"
+          [ -n "${SENTRY_ORG:-}" ] || missing="$missing SENTRY_ORG(variable)"
+          [ -n "${SENTRY_PROJECT:-}" ] || missing="$missing SENTRY_PROJECT(variable)"
+          if [ -n "$missing" ]; then
+            echo "::error::Release timeline NOT recorded — missing:$missing"
+            echo "The release is live and verified, and error events still name it; only the deploy"
+            echo "boundary is absent. Configure the values in docs/MONITORING.md §2 and re-run this"
+            echo "workflow for the commit (dispatch with dry_run=false)."
+            exit 1
+          fi
+
+      - name: Record the release
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ vars.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT }}
+          SENTRY_ENVIRONMENT: production
+          GATED_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || inputs.sha }}
+          # The production domain, recorded as the deploy's URL. Nothing customer-shaped is sent.
+          SMOKE_URL: https://hisaabkitaab.dpdns.org
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && '1' || '0' }}
+        run: node scripts/deploy/mark-release.mjs

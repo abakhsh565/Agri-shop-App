@@ -1,4 +1,4 @@
-import { ArrowLeft, ArrowRight } from "lucide-react";
+import { ArrowLeft, ArrowRight, X } from "lucide-react";
 import { useThemeStore } from "@/stores/themeStore";
 import { useNavigate } from "react-router-dom";
 import { type ReactNode } from "react";
@@ -13,9 +13,15 @@ interface NavHeaderProps {
   onBack?: () => void;
   right?: ReactNode;
   noBack?: boolean;
+  /**
+   * What the leading control looks like. A screen opened as a panel over another one closes, so
+   * it wears a cross; a step in a journey goes back, so it keeps the arrow. The behaviour is the
+   * same either way — this only changes the glyph and the name a screen reader announces.
+   */
+  backIcon?: "arrow" | "close";
 }
 
-export default function NavHeader({ title, backTo, onBack, right, noBack }: NavHeaderProps) {
+export default function NavHeader({ title, backTo, onBack, right, noBack, backIcon = "arrow" }: NavHeaderProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const { language } = useThemeStore();
@@ -23,30 +29,42 @@ export default function NavHeader({ title, backTo, onBack, right, noBack }: NavH
 
   function handleBack() {
     if (onBack) { onBack(); return; }
-    if (backTo) { navigate(backTo); return; }
 
-    // On dashboard, back is handled by hardware back button (exit flow)
-    if (isDashboardPath(location.pathname)) return;
-
-    // On a top-level screen (tab destination), go to dashboard
-    if (isTopLevel(location.pathname)) {
-      const role = location.pathname.startsWith("/admin") ? "/admin" : "/employee";
+    // Where the reader actually came from wins over the parent a screen assumes for itself.
+    // The same screen is opened from several places (the Finance hub, the overview, a report),
+    // and `backTo` can only name one of them — the journey stack knows which one they used. It
+    // is also right about replaced screens: a form that saved itself with `replace` is not
+    // behind the screen it opened, so back cannot reopen a form the reader already completed.
+    const from = popNav(location.pathname);
+    if (from && from !== location.pathname) {
+      // The tracker must not record this back step as a new forward frame.
       setSkipNext();
-      navigate(role + "/dashboard", { replace: true });
+      navigate(from, { replace: true });
       return;
     }
 
-    // Nested screen: pop from journey stack
-    const from = popNav(location.pathname);
-    if (from) {
+    // Nothing behind this screen (a deep link, a cold start, or a tab root): use the parent it
+    // names. It REPLACES the current entry rather than pushing a new one (owner's report,
+    // 2026-10-30): pushing left the screen behind, so the next back returned to it and the reader
+    // bounced between the two — five presses of "back" that never left the pair. A replace is a
+    // step up the tree, and the arrow keeps moving up from the parent's own parent.
+    if (backTo) {
       setSkipNext();
-      navigate(from, { replace: true });
-    } else {
-      // Fallback: go to dashboard of current role
-      const role = location.pathname.startsWith("/admin") ? "/admin" : "/employee";
-      setSkipNext();
-      navigate(role + "/dashboard", { replace: true });
+      navigate(backTo, { replace: true });
+      return;
     }
+
+    // On dashboard, back is handled by the hardware back button (the exit flow).
+    if (isDashboardPath(location.pathname)) return;
+
+    // Nothing behind it and no parent named: the dashboard is the floor for this shell.
+    const role = location.pathname.startsWith("/admin")
+      ? "/admin"
+      : location.pathname.startsWith("/co-owner")
+        ? "/co-owner"
+        : "/employee";
+    setSkipNext();
+    navigate(role + "/dashboard", { replace: true });
   }
 
   return (
@@ -59,7 +77,7 @@ export default function NavHeader({ title, backTo, onBack, right, noBack }: NavH
           onClick={handleBack}
           // Icon-only, and it is on every sub-screen: without a name a screen reader
           // announces nothing at all here.
-          aria-label={tNow("common.back")}
+          aria-label={backIcon === "close" ? tNow("common.close") : tNow("common.back")}
           data-testid="nav-back"
           // 44px of TARGET around an 18px arrow. The box was the icon's own size, so the tappable
           // area was 18×18 — under the touch floor, on every sub-screen in the app, and invisible
@@ -76,7 +94,9 @@ export default function NavHeader({ title, backTo, onBack, right, noBack }: NavH
           // pixels inward of the header it belongs to, and of the language switch above it.
           style={{ color: "var(--text-primary)", insetInlineStart: 20 }}
         >
-          {isRtl ? <ArrowRight size={18} /> : <ArrowLeft size={18} />}
+          {backIcon === "close"
+            ? <X size={18} />
+            : isRtl ? <ArrowRight size={18} /> : <ArrowLeft size={18} />}
         </button>
       )}
       <p

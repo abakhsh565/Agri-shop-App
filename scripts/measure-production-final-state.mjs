@@ -249,17 +249,48 @@ try {
   check('no operational row is missing its branch', Object.values(branchGaps).every((n) => n === 0), branchGaps);
 
   // ── 6. The unauthenticated caller ──────────────────────────────────────────────────────────
-  const anonGrants = await one(
-    `select count(*)::int n
-       from information_schema.role_table_grants
-      where table_schema = 'public' and grantee = 'anon'`,
+  // `0223` narrowed `anon` to nothing; `0232` restored exactly one door — `SELECT` on the curated
+  // marketplace view — because that projection is readable without a session by design (`0185`).
+  // The invariant is therefore not "anon holds nothing": it is "anon holds SELECT on
+  // marketplace_listings and no other privilege anywhere in public, and cannot write it". Counting
+  // zero grants would now fail while the contract holds, and counting alone would pass if the single
+  // grant were a write — so the grant is named, and both halves are asserted.
+  const anonGrantList = (
+    await client.query(
+      `select table_name, privilege_type
+         from information_schema.role_table_grants
+        where table_schema = 'public' and grantee = 'anon'
+        order by table_name, privilege_type`,
+    )
+  ).rows;
+  const unexpectedAnonGrants = anonGrantList.filter(
+    (g) => !(g.table_name === 'marketplace_listings' && g.privilege_type === 'SELECT'),
   );
   const anonPolicies = await one(
     `select count(*)::int n from pg_policies
       where schemaname = 'public' and (roles::text ilike '%anon%' or roles::text ilike '%public%')`,
   );
-  check('anon holds no privilege on any public table', anonGrants.n === 0, { grants: anonGrants.n });
+  check(
+    'anon holds SELECT on the curated marketplace view and no other privilege in public',
+    anonGrantList.length === 1 && unexpectedAnonGrants.length === 0,
+    { grants: anonGrantList },
+  );
   check('no policy in public is addressed to anon or public', anonPolicies.n === 0, { policies: anonPolicies.n });
+
+  // The door itself has to open, not merely be granted: a DB-level `has_table_privilege` is not the
+  // same fact as a query that runs. `anon` attempts the curated read and a business-table read, and
+  // the two outcomes are the contract.
+  await client.query('savepoint public_door');
+  let anonViewRead = null;
+  try {
+    await client.query('set local role anon');
+    await client.query('select 1 from public.marketplace_listings limit 1');
+  } catch (error) {
+    anonViewRead = error.message;
+  } finally {
+    await client.query('rollback to savepoint public_door');
+  }
+  check('anon can read the curated marketplace view (0232)', anonViewRead === null, { error: anonViewRead });
 
   await client.query('savepoint attempt');
   let anonRead = null;

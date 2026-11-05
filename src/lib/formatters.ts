@@ -3,6 +3,21 @@ export function formatCurrency(amount: number | null | undefined): string {
   return `Rs. ${safe.toLocaleString("en-PK")}`;
 }
 
+/**
+ * A large rupee amount in the shortest form a phone screen reads it in — `Rs. 2.45M`,
+ * `Rs. 940K` — for a headline figure where the full number would wrap or cross the column.
+ * Trailing zeros are dropped, so 20,000,000 reads `Rs. 20M`, and anything under a thousand is
+ * stated in full (`Rs. 850`) because abbreviating it would save nothing and lose precision.
+ */
+export function formatCompactCurrency(amount: number | null | undefined): string {
+  const safe = typeof amount === 'number' && !isNaN(amount) ? amount : 0;
+  const trim = (value: number) => value.toFixed(2).replace(/0+$/, "").replace(/[.]$/, "");
+  const abs = Math.abs(safe);
+  if (abs >= 1_000_000) return `Rs. ${trim(safe / 1_000_000)}M`;
+  if (abs >= 1_000) return `Rs. ${trim(safe / 1_000)}K`;
+  return formatCurrency(safe);
+}
+
 export function formatDate(iso: string): string {
   const d = new Date(iso);
   return d.toLocaleDateString("en-PK", { day: "numeric", month: "short", year: "numeric" });
@@ -97,6 +112,9 @@ export function translateNotification(
       const a = amt(body ?? '');
       return { title: t('notif.returnFrom', { customer }), body: t('notif.returnBody', { amount: a }) };
     }
+    case 'employee_access_request': {
+      return { title: t('notif.accessRequest'), body: t('notif.accessRequestBody') };
+    }
     case 'low_stock': {
       const product = title.replace(/^(Low stock|Out of stock):\s*/i, '').trim();
       if (/out of stock/i.test(title)) {
@@ -113,6 +131,22 @@ export function translateNotification(
 
 export function formatPhone(phone: string): string {
   return phone.replace(/(\+92|0)(\d{3})(\d{7})/, "+92 $2 $3");
+}
+
+/**
+ * A stored number, however it happens to be written, in the form the app prints.
+ *
+ * The database holds the canonical `92…` form (see `canonical_phone`), while `formatPhone` was
+ * written for a leading `+92` or `0` — fed a canonical number it returned the digits untouched,
+ * so a screen showed `923001234567`. One helper so every screen that prints a stored number
+ * prints the same thing, and a number that is not a Pakistani mobile is passed through rather
+ * than mangled into one.
+ */
+export function formatPhoneDisplay(phone: string | null | undefined): string | null {
+  if (!phone || !phone.trim()) return null;
+  const digits = phone.replace(/\D/g, "");
+  if (/^92\d{10}$/.test(digits)) return formatPhone(`+${digits}`);
+  return formatPhone(phone);
 }
 
 import type { TranslateFn } from "@/lib/i18n";

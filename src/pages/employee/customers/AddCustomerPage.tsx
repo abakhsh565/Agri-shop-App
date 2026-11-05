@@ -170,12 +170,10 @@ export default function AddCustomerPage() {
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder={t("inline.enter_customer_name")}
-              className="w-full h-12 rounded-[var(--radius-input)] px-4 text-sm outline-none"
-              style={{
-                background: "var(--surface-2)",
-                border: `1px solid ${errors.name ? "var(--error)" : "var(--divider)"}`,
-                color: "var(--text-primary)",
-              }}
+              className={`w-full h-12 rounded-[var(--radius-input)] px-4 text-sm outline-none ${
+                errors.name ? "border-[#ef4444]" : ""
+              }`}
+              style={{ background: "var(--field-bg)", color: "var(--text-primary)" }}
             />
             {errors.name && <p className="text-xs mt-1" style={{ color: "var(--error)" }}>{errors.name}</p>}
           </div>
@@ -190,12 +188,10 @@ export default function AddCustomerPage() {
               value={phone}
               onChange={(e) => setPhone(digitsOnlyPhone(e.target.value))}
               placeholder="03001234567"
-              className="w-full h-12 rounded-[var(--radius-input)] px-4 text-sm outline-none"
-              style={{
-                background: "var(--surface-2)",
-                border: `1px solid ${errors.phone ? "var(--error)" : "var(--divider)"}`,
-                color: "var(--text-primary)",
-              }}
+              className={`w-full h-12 rounded-[var(--radius-input)] px-4 text-sm outline-none ${
+                errors.phone ? "border-[#ef4444]" : ""
+              }`}
+              style={{ background: "var(--field-bg)", color: "var(--text-primary)" }}
             />
             {errors.phone && (
               <div className="flex items-center gap-1 mt-1">
@@ -279,8 +275,7 @@ export default function AddCustomerPage() {
               min="0"
               className="w-full h-12 rounded-[var(--radius-input)] px-4 text-sm outline-none"
               style={{
-                background: "var(--surface-2)",
-                border: "1px solid var(--divider)",
+                background: "var(--field-bg)",
                 color: "var(--text-primary)",
               }}
             />

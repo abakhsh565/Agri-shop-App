@@ -2,7 +2,7 @@ import { useEffect, useRef, useCallback } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Capacitor } from "@capacitor/core";
 import { App } from "@capacitor/app";
-import { isDashboardPath, clearNav } from "@/lib/navContext";
+import { isDashboardPath, clearNav, popNav, setSkipNext } from "@/lib/navContext";
 import { tNow } from "@/lib/i18n";
 import { useUIStore } from "@/stores/uiStore";
 
@@ -74,9 +74,24 @@ export default function BackButtonHandler() {
       return;
     }
 
-    // Not on dashboard — navigate to the dashboard (clear flow)
+    // Signed in and inside the app: the hardware back retraces the reader's own path, one
+    // step at a time — the same rule the header's arrow follows (owner's instruction,
+    // 2026-10-29). Jumping straight to the dashboard threw away every step in between and
+    // dropped the reader out of whatever sub-screen they were working in.
+    const from = popNav(path);
+    if (from && from !== path) {
+      setSkipNext();
+      navigate(from, { replace: true });
+      return;
+    }
+
+    // Nothing behind this screen (a deep link or a cold start): the dashboard is the floor.
     clearNav();
-    const role = path.startsWith("/admin") ? "/admin" : "/employee";
+    const role = path.startsWith("/admin")
+      ? "/admin"
+      : path.startsWith("/co-owner")
+        ? "/co-owner"
+        : "/employee";
     navigate(role + "/dashboard", { replace: true });
   }, [navigate, addToast]);
 

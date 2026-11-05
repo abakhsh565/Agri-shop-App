@@ -1,0 +1,553 @@
+[33m(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vite.config.ts:29:27). Use `import.meta.dirname` instead
+  - JSON import "./.figma/make/site.json" without import attributes (vite.config.ts:6:31). Add `with { type: 'json' }`
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.[39m
+[33mPort 5175 is in use on a wildcard address, but localhost:5175 is available. There may be another server running on a wildcard IP on port 5175.[39m
+[2m12:10:43 AM[22m [31m[1m[vite][22m[39m [31mInternal server error: Transform failed with 2 errors:
+
+[31m[PARSE_ERROR] [0mExpected corresponding JSX closing tag for 'div'.
+     [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0m src/pages/admin/dashboard/AdminDashboardPage.tsx:656:21 [38;5;246m][0m
+     [38;5;246m│[0m
+ [38;5;246m645 │[0m [38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m<[0mdiv[38;5;249m [0m[38;5;249mc[0m[38;5;249ml[0m[38;5;249ma[0m[38;5;249ms[0m[38;5;249ms[0m[38;5;249mN[0m[38;5;249ma[0m[38;5;249mm[0m[38;5;249me[0m[38;5;249m=[0m[38;5;249m"[0m[38;5;249ms[0m[38;5;249mi[0m[38;5;249mz[0m[38;5;249me[0m[38;5;249m-[0m[38;5;249m9[0m[38;5;249m [0m[38;5;249mr[0m[38;5;249mo[0m[38;5;249mu[0m[38;5;249mn[0m[38;5;249md[0m[38;5;249me[0m[38;5;249md[0m[38;5;249m-[0m[38;5;249mf[0m[38;5;249mu[0m[38;5;249ml[0m[38;5;249ml[0m[38;5;249m [0m[38;5;249mf[0m[38;5;249ml[0m[38;5;249me[0m[38;5;249mx[0m[38;5;249m [0m[38;5;249mi[0m[38;5;249mt[0m[38;5;249me[0m[38;5;249mm[0m[38;5;249ms[0m[38;5;249m-[0m[38;5;249mc[0m[38;5;249me[0m[38;5;249mn[0m[38;5;249mt[0m[38;5;249me[0m[38;5;249mr[0m[38;5;249m [0m[38;5;249mj[0m[38;5;249mu[0m[38;5;249ms[0m[38;5;249mt[0m[38;5;249mi[0m[38;5;249mf[0m[38;5;249my[0m[38;5;249m-[0m[38;5;249mc[0m[38;5;249me[0m[38;5;249mn[0m[38;5;249mt[0m[38;5;249me[0m[38;5;249mr[0m[38;5;249m [0m[38;5;249ms[0m[38;5;249mh[0m[38;5;249mr[0m[38;5;249mi[0m[38;5;249mn[0m[38;5;249mk[0m[38;5;249m-[0m[38;5;249m0[0m[38;5;249m"[0m[38;5;249m [0m[38;5;249ms[0m[38;5;249mt[0m[38;5;249my[0m[38;5;249ml[0m[38;5;249me[0m[38;5;249m=[0m[38;5;249m{[0m[38;5;249m{[0m[38;5;249m [0m[38;5;249mb[0m[38;5;249ma[0m[38;5;249mc[0m[38;5;249mk[0m[38;5;249mg[0m[38;5;249mr[0m[38;5;249mo[0m[38;5;249mu[0m[38;5;249mn[0m[38;5;249md[0m[38;5;249m:[0m[38;5;249m [0m[38;5;249m"[0m[38;5;249mr[0m[38;5;249mg[0m[38;5;249mb[0m[38;5;249ma[0m[38;5;249m([0m[38;5;249m9[0m[38;5;249m5[0m[38;5;249m,[0m[38;5;249m9[0m[38;5;249m4[0m[38;5;249m,[0m[38;5;249m9[0m[38;5;249m0[0m[38;5;249m,[0m[38;5;249m0[0m[38;5;249m.[0m[38;5;249m1[0m[38;5;249m2[0m[38;5;249m)[0m[38;5;249m"[0m[38;5;249m [0m[38;5;249m}[0m[38;5;249m}[0m[38;5;249m>[0m
+ [38;5;240m    │[0m                      ─┬─  
+ [38;5;240m    │[0m                       ╰─── Opened here
+ [38;5;240m    │[0m 
+ [38;5;246m656 │[0m [38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m<[0m[38;5;249m/[0mbutton[38;5;249m>[0m
+ [38;5;240m    │[0m                     ───┬──  
+ [38;5;240m    │[0m                        ╰──── Expected `</div>`
+[38;5;246m─────╯[0m
+
+[31m[PARSE_ERROR] [0mUnexpected token. Did you mean `{'}'}` or `&rbrace;`?
+     [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0m src/pages/admin/dashboard/AdminDashboardPage.tsx:658:15 [38;5;246m][0m
+     [38;5;246m│[0m
+ [38;5;246m658 │[0m [38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m}[0m
+ [38;5;240m    │[0m               │ 
+ [38;5;240m    │[0m               ╰─ 
+[38;5;246m─────╯[0m
+[39m
+  Plugin: [35mvite:oxc[39m
+  File: [36mC:/Users/mg/Downloads/Agrishop Inventory management system - New/src/pages/admin/dashboard/AdminDashboardPage.tsx[39m
+      at transformWithOxc (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:4103:19)
+      at TransformPluginContext.transform (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:4174:26)
+      at EnvironmentPluginContainer.transform (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:30932:51)
+      at async loadAndTransform (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:20671:26)
+      at async viteTransformMiddleware (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:25205:20)
+[2m12:10:52 AM[22m [31m[1m[vite][22m[39m [31mInternal server error: Transform failed with 2 errors:
+
+[31m[PARSE_ERROR] [0mExpected corresponding JSX closing tag for 'div'.
+     [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0m src/pages/admin/dashboard/AdminDashboardPage.tsx:656:21 [38;5;246m][0m
+     [38;5;246m│[0m
+ [38;5;246m645 │[0m [38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m<[0mdiv[38;5;249m [0m[38;5;249mc[0m[38;5;249ml[0m[38;5;249ma[0m[38;5;249ms[0m[38;5;249ms[0m[38;5;249mN[0m[38;5;249ma[0m[38;5;249mm[0m[38;5;249me[0m[38;5;249m=[0m[38;5;249m"[0m[38;5;249ms[0m[38;5;249mi[0m[38;5;249mz[0m[38;5;249me[0m[38;5;249m-[0m[38;5;249m9[0m[38;5;249m [0m[38;5;249mr[0m[38;5;249mo[0m[38;5;249mu[0m[38;5;249mn[0m[38;5;249md[0m[38;5;249me[0m[38;5;249md[0m[38;5;249m-[0m[38;5;249mf[0m[38;5;249mu[0m[38;5;249ml[0m[38;5;249ml[0m[38;5;249m [0m[38;5;249mf[0m[38;5;249ml[0m[38;5;249me[0m[38;5;249mx[0m[38;5;249m [0m[38;5;249mi[0m[38;5;249mt[0m[38;5;249me[0m[38;5;249mm[0m[38;5;249ms[0m[38;5;249m-[0m[38;5;249mc[0m[38;5;249me[0m[38;5;249mn[0m[38;5;249mt[0m[38;5;249me[0m[38;5;249mr[0m[38;5;249m [0m[38;5;249mj[0m[38;5;249mu[0m[38;5;249ms[0m[38;5;249mt[0m[38;5;249mi[0m[38;5;249mf[0m[38;5;249my[0m[38;5;249m-[0m[38;5;249mc[0m[38;5;249me[0m[38;5;249mn[0m[38;5;249mt[0m[38;5;249me[0m[38;5;249mr[0m[38;5;249m [0m[38;5;249ms[0m[38;5;249mh[0m[38;5;249mr[0m[38;5;249mi[0m[38;5;249mn[0m[38;5;249mk[0m[38;5;249m-[0m[38;5;249m0[0m[38;5;249m"[0m[38;5;249m [0m[38;5;249ms[0m[38;5;249mt[0m[38;5;249my[0m[38;5;249ml[0m[38;5;249me[0m[38;5;249m=[0m[38;5;249m{[0m[38;5;249m{[0m[38;5;249m [0m[38;5;249mb[0m[38;5;249ma[0m[38;5;249mc[0m[38;5;249mk[0m[38;5;249mg[0m[38;5;249mr[0m[38;5;249mo[0m[38;5;249mu[0m[38;5;249mn[0m[38;5;249md[0m[38;5;249m:[0m[38;5;249m [0m[38;5;249m"[0m[38;5;249mr[0m[38;5;249mg[0m[38;5;249mb[0m[38;5;249ma[0m[38;5;249m([0m[38;5;249m9[0m[38;5;249m5[0m[38;5;249m,[0m[38;5;249m9[0m[38;5;249m4[0m[38;5;249m,[0m[38;5;249m9[0m[38;5;249m0[0m[38;5;249m,[0m[38;5;249m0[0m[38;5;249m.[0m[38;5;249m1[0m[38;5;249m2[0m[38;5;249m)[0m[38;5;249m"[0m[38;5;249m [0m[38;5;249m}[0m[38;5;249m}[0m[38;5;249m>[0m
+ [38;5;240m    │[0m                      ─┬─  
+ [38;5;240m    │[0m                       ╰─── Opened here
+ [38;5;240m    │[0m 
+ [38;5;246m656 │[0m [38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m<[0m[38;5;249m/[0mbutton[38;5;249m>[0m
+ [38;5;240m    │[0m                     ───┬──  
+ [38;5;240m    │[0m                        ╰──── Expected `</div>`
+[38;5;246m─────╯[0m
+
+[31m[PARSE_ERROR] [0mUnexpected token. Did you mean `{'}'}` or `&rbrace;`?
+     [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0m src/pages/admin/dashboard/AdminDashboardPage.tsx:658:15 [38;5;246m][0m
+     [38;5;246m│[0m
+ [38;5;246m658 │[0m [38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m}[0m
+ [38;5;240m    │[0m               │ 
+ [38;5;240m    │[0m               ╰─ 
+[38;5;246m─────╯[0m
+[39m
+  Plugin: [35mvite:oxc[39m
+  File: [36mC:/Users/mg/Downloads/Agrishop Inventory management system - New/src/pages/admin/dashboard/AdminDashboardPage.tsx[39m
+      at transformWithOxc (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:4103:19)
+      at TransformPluginContext.transform (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:4174:26)
+      at EnvironmentPluginContainer.transform (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:30932:51)
+      at async loadAndTransform (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:20671:26)
+      at async viteTransformMiddleware (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:25205:20)
+[2m12:11:02 AM[22m [31m[1m[vite][22m[39m [31mInternal server error: Transform failed with 2 errors:
+
+[31m[PARSE_ERROR] [0mExpected corresponding JSX closing tag for 'div'.
+     [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0m src/pages/admin/dashboard/AdminDashboardPage.tsx:656:21 [38;5;246m][0m
+     [38;5;246m│[0m
+ [38;5;246m645 │[0m [38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m<[0mdiv[38;5;249m [0m[38;5;249mc[0m[38;5;249ml[0m[38;5;249ma[0m[38;5;249ms[0m[38;5;249ms[0m[38;5;249mN[0m[38;5;249ma[0m[38;5;249mm[0m[38;5;249me[0m[38;5;249m=[0m[38;5;249m"[0m[38;5;249ms[0m[38;5;249mi[0m[38;5;249mz[0m[38;5;249me[0m[38;5;249m-[0m[38;5;249m9[0m[38;5;249m [0m[38;5;249mr[0m[38;5;249mo[0m[38;5;249mu[0m[38;5;249mn[0m[38;5;249md[0m[38;5;249me[0m[38;5;249md[0m[38;5;249m-[0m[38;5;249mf[0m[38;5;249mu[0m[38;5;249ml[0m[38;5;249ml[0m[38;5;249m [0m[38;5;249mf[0m[38;5;249ml[0m[38;5;249me[0m[38;5;249mx[0m[38;5;249m [0m[38;5;249mi[0m[38;5;249mt[0m[38;5;249me[0m[38;5;249mm[0m[38;5;249ms[0m[38;5;249m-[0m[38;5;249mc[0m[38;5;249me[0m[38;5;249mn[0m[38;5;249mt[0m[38;5;249me[0m[38;5;249mr[0m[38;5;249m [0m[38;5;249mj[0m[38;5;249mu[0m[38;5;249ms[0m[38;5;249mt[0m[38;5;249mi[0m[38;5;249mf[0m[38;5;249my[0m[38;5;249m-[0m[38;5;249mc[0m[38;5;249me[0m[38;5;249mn[0m[38;5;249mt[0m[38;5;249me[0m[38;5;249mr[0m[38;5;249m [0m[38;5;249ms[0m[38;5;249mh[0m[38;5;249mr[0m[38;5;249mi[0m[38;5;249mn[0m[38;5;249mk[0m[38;5;249m-[0m[38;5;249m0[0m[38;5;249m"[0m[38;5;249m [0m[38;5;249ms[0m[38;5;249mt[0m[38;5;249my[0m[38;5;249ml[0m[38;5;249me[0m[38;5;249m=[0m[38;5;249m{[0m[38;5;249m{[0m[38;5;249m [0m[38;5;249mb[0m[38;5;249ma[0m[38;5;249mc[0m[38;5;249mk[0m[38;5;249mg[0m[38;5;249mr[0m[38;5;249mo[0m[38;5;249mu[0m[38;5;249mn[0m[38;5;249md[0m[38;5;249m:[0m[38;5;249m [0m[38;5;249m"[0m[38;5;249mr[0m[38;5;249mg[0m[38;5;249mb[0m[38;5;249ma[0m[38;5;249m([0m[38;5;249m9[0m[38;5;249m5[0m[38;5;249m,[0m[38;5;249m9[0m[38;5;249m4[0m[38;5;249m,[0m[38;5;249m9[0m[38;5;249m0[0m[38;5;249m,[0m[38;5;249m0[0m[38;5;249m.[0m[38;5;249m1[0m[38;5;249m2[0m[38;5;249m)[0m[38;5;249m"[0m[38;5;249m [0m[38;5;249m}[0m[38;5;249m}[0m[38;5;249m>[0m
+ [38;5;240m    │[0m                      ─┬─  
+ [38;5;240m    │[0m                       ╰─── Opened here
+ [38;5;240m    │[0m 
+ [38;5;246m656 │[0m [38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m<[0m[38;5;249m/[0mbutton[38;5;249m>[0m
+ [38;5;240m    │[0m                     ───┬──  
+ [38;5;240m    │[0m                        ╰──── Expected `</div>`
+[38;5;246m─────╯[0m
+
+[31m[PARSE_ERROR] [0mUnexpected token. Did you mean `{'}'}` or `&rbrace;`?
+     [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0m src/pages/admin/dashboard/AdminDashboardPage.tsx:658:15 [38;5;246m][0m
+     [38;5;246m│[0m
+ [38;5;246m658 │[0m [38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m}[0m
+ [38;5;240m    │[0m               │ 
+ [38;5;240m    │[0m               ╰─ 
+[38;5;246m─────╯[0m
+[39m
+  Plugin: [35mvite:oxc[39m
+  File: [36mC:/Users/mg/Downloads/Agrishop Inventory management system - New/src/pages/admin/dashboard/AdminDashboardPage.tsx[39m
+      at transformWithOxc (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:4103:19)
+      at TransformPluginContext.transform (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:4174:26)
+      at EnvironmentPluginContainer.transform (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:30932:51)
+      at async loadAndTransform (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:20671:26)
+      at async viteTransformMiddleware (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:25205:20)
+[2m12:11:12 AM[22m [31m[1m[vite][22m[39m [31mInternal server error: Transform failed with 2 errors:
+
+[31m[PARSE_ERROR] [0mExpected corresponding JSX closing tag for 'div'.
+     [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0m src/pages/admin/dashboard/AdminDashboardPage.tsx:656:21 [38;5;246m][0m
+     [38;5;246m│[0m
+ [38;5;246m645 │[0m [38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m<[0mdiv[38;5;249m [0m[38;5;249mc[0m[38;5;249ml[0m[38;5;249ma[0m[38;5;249ms[0m[38;5;249ms[0m[38;5;249mN[0m[38;5;249ma[0m[38;5;249mm[0m[38;5;249me[0m[38;5;249m=[0m[38;5;249m"[0m[38;5;249ms[0m[38;5;249mi[0m[38;5;249mz[0m[38;5;249me[0m[38;5;249m-[0m[38;5;249m9[0m[38;5;249m [0m[38;5;249mr[0m[38;5;249mo[0m[38;5;249mu[0m[38;5;249mn[0m[38;5;249md[0m[38;5;249me[0m[38;5;249md[0m[38;5;249m-[0m[38;5;249mf[0m[38;5;249mu[0m[38;5;249ml[0m[38;5;249ml[0m[38;5;249m [0m[38;5;249mf[0m[38;5;249ml[0m[38;5;249me[0m[38;5;249mx[0m[38;5;249m [0m[38;5;249mi[0m[38;5;249mt[0m[38;5;249me[0m[38;5;249mm[0m[38;5;249ms[0m[38;5;249m-[0m[38;5;249mc[0m[38;5;249me[0m[38;5;249mn[0m[38;5;249mt[0m[38;5;249me[0m[38;5;249mr[0m[38;5;249m [0m[38;5;249mj[0m[38;5;249mu[0m[38;5;249ms[0m[38;5;249mt[0m[38;5;249mi[0m[38;5;249mf[0m[38;5;249my[0m[38;5;249m-[0m[38;5;249mc[0m[38;5;249me[0m[38;5;249mn[0m[38;5;249mt[0m[38;5;249me[0m[38;5;249mr[0m[38;5;249m [0m[38;5;249ms[0m[38;5;249mh[0m[38;5;249mr[0m[38;5;249mi[0m[38;5;249mn[0m[38;5;249mk[0m[38;5;249m-[0m[38;5;249m0[0m[38;5;249m"[0m[38;5;249m [0m[38;5;249ms[0m[38;5;249mt[0m[38;5;249my[0m[38;5;249ml[0m[38;5;249me[0m[38;5;249m=[0m[38;5;249m{[0m[38;5;249m{[0m[38;5;249m [0m[38;5;249mb[0m[38;5;249ma[0m[38;5;249mc[0m[38;5;249mk[0m[38;5;249mg[0m[38;5;249mr[0m[38;5;249mo[0m[38;5;249mu[0m[38;5;249mn[0m[38;5;249md[0m[38;5;249m:[0m[38;5;249m [0m[38;5;249m"[0m[38;5;249mr[0m[38;5;249mg[0m[38;5;249mb[0m[38;5;249ma[0m[38;5;249m([0m[38;5;249m9[0m[38;5;249m5[0m[38;5;249m,[0m[38;5;249m9[0m[38;5;249m4[0m[38;5;249m,[0m[38;5;249m9[0m[38;5;249m0[0m[38;5;249m,[0m[38;5;249m0[0m[38;5;249m.[0m[38;5;249m1[0m[38;5;249m2[0m[38;5;249m)[0m[38;5;249m"[0m[38;5;249m [0m[38;5;249m}[0m[38;5;249m}[0m[38;5;249m>[0m
+ [38;5;240m    │[0m                      ─┬─  
+ [38;5;240m    │[0m                       ╰─── Opened here
+ [38;5;240m    │[0m 
+ [38;5;246m656 │[0m [38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m<[0m[38;5;249m/[0mbutton[38;5;249m>[0m
+ [38;5;240m    │[0m                     ───┬──  
+ [38;5;240m    │[0m                        ╰──── Expected `</div>`
+[38;5;246m─────╯[0m
+
+[31m[PARSE_ERROR] [0mUnexpected token. Did you mean `{'}'}` or `&rbrace;`?
+     [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0m src/pages/admin/dashboard/AdminDashboardPage.tsx:658:15 [38;5;246m][0m
+     [38;5;246m│[0m
+ [38;5;246m658 │[0m [38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m}[0m
+ [38;5;240m    │[0m               │ 
+ [38;5;240m    │[0m               ╰─ 
+[38;5;246m─────╯[0m
+[39m
+  Plugin: [35mvite:oxc[39m
+  File: [36mC:/Users/mg/Downloads/Agrishop Inventory management system - New/src/pages/admin/dashboard/AdminDashboardPage.tsx[39m
+      at transformWithOxc (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:4103:19)
+      at TransformPluginContext.transform (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:4174:26)
+      at EnvironmentPluginContainer.transform (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:30932:51)
+      at async loadAndTransform (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:20671:26)
+      at async viteTransformMiddleware (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:25205:20)
+[2m12:49:04 PM[22m [31m[1m[vite][22m[39m [31mInternal server error: Transform failed with 1 error:
+
+[31m[PARSE_ERROR] [0mUnexpected token
+     [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0m src/components/ui/CustomerSelector.tsx:153:26 [38;5;246m][0m
+     [38;5;246m│[0m
+ [38;5;246m153 │[0m [38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249mo[0m[38;5;249mn[0m[38;5;249mC[0m[38;5;249ml[0m[38;5;249mi[0m[38;5;249mc[0m[38;5;249mk[0m[38;5;249m=[0m[38;5;249m{[0m([38;5;249m)[0m[38;5;249m [0m[38;5;249m=[0m[38;5;249m>[0m[38;5;249m [0m[38;5;249mt[0m[38;5;249mo[0m[38;5;249mg[0m[38;5;249mg[0m[38;5;249ml[0m[38;5;249me[0m[38;5;249m([0m[38;5;249mc[0m[38;5;249m.[0m[38;5;249mi[0m[38;5;249md[0m[38;5;249m)[0m[38;5;249m}[0m
+ [38;5;240m    │[0m                          ┬  
+ [38;5;240m    │[0m                          ╰── 
+[38;5;246m─────╯[0m
+[39m
+  Plugin: [35mvite:oxc[39m
+  File: [36mC:/Users/mg/Downloads/Agrishop Inventory management system - New/src/components/ui/CustomerSelector.tsx[39m
+      at transformWithOxc (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:4103:19)
+      at TransformPluginContext.transform (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:4174:26)
+      at EnvironmentPluginContainer.transform (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:30932:51)
+      at async loadAndTransform (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:20671:26)
+      at async viteTransformMiddleware (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:25205:20)
+[2m12:49:04 PM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m Pre-transform error: Transform failed with 1 error:
+
+[31m[PARSE_ERROR] [0mUnexpected token
+     [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0m src/components/ui/CustomerSelector.tsx:153:26 [38;5;246m][0m
+     [38;5;246m│[0m
+ [38;5;246m153 │[0m [38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249mo[0m[38;5;249mn[0m[38;5;249mC[0m[38;5;249ml[0m[38;5;249mi[0m[38;5;249mc[0m[38;5;249mk[0m[38;5;249m=[0m[38;5;249m{[0m([38;5;249m)[0m[38;5;249m [0m[38;5;249m=[0m[38;5;249m>[0m[38;5;249m [0m[38;5;249mt[0m[38;5;249mo[0m[38;5;249mg[0m[38;5;249mg[0m[38;5;249ml[0m[38;5;249me[0m[38;5;249m([0m[38;5;249mc[0m[38;5;249m.[0m[38;5;249mi[0m[38;5;249md[0m[38;5;249m)[0m[38;5;249m}[0m
+ [38;5;240m    │[0m                          ┬  
+ [38;5;240m    │[0m                          ╰── 
+[38;5;246m─────╯[0m
+
+  Plugin: [35mvite:oxc[39m
+  File: [36mC:/Users/mg/Downloads/Agrishop Inventory management system - New/src/components/ui/CustomerSelector.tsx[39m
+[2m12:49:06 PM[22m [31m[1m[vite][22m[39m [31mInternal server error: Transform failed with 1 error:
+
+[31m[PARSE_ERROR] [0mUnexpected token
+     [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0m src/components/ui/CustomerSelector.tsx:153:26 [38;5;246m][0m
+     [38;5;246m│[0m
+ [38;5;246m153 │[0m [38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249mo[0m[38;5;249mn[0m[38;5;249mC[0m[38;5;249ml[0m[38;5;249mi[0m[38;5;249mc[0m[38;5;249mk[0m[38;5;249m=[0m[38;5;249m{[0m([38;5;249m)[0m[38;5;249m [0m[38;5;249m=[0m[38;5;249m>[0m[38;5;249m [0m[38;5;249mt[0m[38;5;249mo[0m[38;5;249mg[0m[38;5;249mg[0m[38;5;249ml[0m[38;5;249me[0m[38;5;249m([0m[38;5;249mc[0m[38;5;249m.[0m[38;5;249mi[0m[38;5;249md[0m[38;5;249m)[0m[38;5;249m}[0m
+ [38;5;240m    │[0m                          ┬  
+ [38;5;240m    │[0m                          ╰── 
+[38;5;246m─────╯[0m
+[39m
+  Plugin: [35mvite:oxc[39m
+  File: [36mC:/Users/mg/Downloads/Agrishop Inventory management system - New/src/components/ui/CustomerSelector.tsx[39m
+      at transformWithOxc (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:4103:19)
+      at TransformPluginContext.transform (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:4174:26)
+      at EnvironmentPluginContainer.transform (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:30932:51)
+      at async loadAndTransform (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:20671:26)
+      at async viteTransformMiddleware (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:25205:20)
+[2m12:49:14 PM[22m [31m[1m[vite][22m[39m [31mInternal server error: Transform failed with 1 error:
+
+[31m[PARSE_ERROR] [0mUnexpected token
+     [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0m src/components/ui/CustomerSelector.tsx:153:26 [38;5;246m][0m
+     [38;5;246m│[0m
+ [38;5;246m153 │[0m [38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249mo[0m[38;5;249mn[0m[38;5;249mC[0m[38;5;249ml[0m[38;5;249mi[0m[38;5;249mc[0m[38;5;249mk[0m[38;5;249m=[0m[38;5;249m{[0m([38;5;249m)[0m[38;5;249m [0m[38;5;249m=[0m[38;5;249m>[0m[38;5;249m [0m[38;5;249mt[0m[38;5;249mo[0m[38;5;249mg[0m[38;5;249mg[0m[38;5;249ml[0m[38;5;249me[0m[38;5;249m([0m[38;5;249mc[0m[38;5;249m.[0m[38;5;249mi[0m[38;5;249md[0m[38;5;249m)[0m[38;5;249m}[0m
+ [38;5;240m    │[0m                          ┬  
+ [38;5;240m    │[0m                          ╰── 
+[38;5;246m─────╯[0m
+[39m
+  Plugin: [35mvite:oxc[39m
+  File: [36mC:/Users/mg/Downloads/Agrishop Inventory management system - New/src/components/ui/CustomerSelector.tsx[39m
+      at transformWithOxc (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:4103:19)
+      at TransformPluginContext.transform (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:4174:26)
+      at EnvironmentPluginContainer.transform (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:30932:51)
+      at async loadAndTransform (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:20671:26)
+      at async viteTransformMiddleware (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:25205:20)
+[2m12:49:25 PM[22m [31m[1m[vite][22m[39m [31mInternal server error: Transform failed with 1 error:
+
+[31m[PARSE_ERROR] [0mUnexpected token
+     [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0m src/components/ui/CustomerSelector.tsx:153:26 [38;5;246m][0m
+     [38;5;246m│[0m
+ [38;5;246m153 │[0m [38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249mo[0m[38;5;249mn[0m[38;5;249mC[0m[38;5;249ml[0m[38;5;249mi[0m[38;5;249mc[0m[38;5;249mk[0m[38;5;249m=[0m[38;5;249m{[0m([38;5;249m)[0m[38;5;249m [0m[38;5;249m=[0m[38;5;249m>[0m[38;5;249m [0m[38;5;249mt[0m[38;5;249mo[0m[38;5;249mg[0m[38;5;249mg[0m[38;5;249ml[0m[38;5;249me[0m[38;5;249m([0m[38;5;249mc[0m[38;5;249m.[0m[38;5;249mi[0m[38;5;249md[0m[38;5;249m)[0m[38;5;249m}[0m
+ [38;5;240m    │[0m                          ┬  
+ [38;5;240m    │[0m                          ╰── 
+[38;5;246m─────╯[0m
+[39m
+  Plugin: [35mvite:oxc[39m
+  File: [36mC:/Users/mg/Downloads/Agrishop Inventory management system - New/src/components/ui/CustomerSelector.tsx[39m
+      at transformWithOxc (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:4103:19)
+      at TransformPluginContext.transform (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:4174:26)
+      at EnvironmentPluginContainer.transform (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:30932:51)
+      at async loadAndTransform (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:20671:26)
+      at async viteTransformMiddleware (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:25205:20)
+[2m12:49:33 PM[22m [31m[1m[vite][22m[39m [31mInternal server error: Transform failed with 1 error:
+
+[31m[PARSE_ERROR] [0mUnexpected token
+     [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0m src/components/ui/CustomerSelector.tsx:153:26 [38;5;246m][0m
+     [38;5;246m│[0m
+ [38;5;246m153 │[0m [38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249mo[0m[38;5;249mn[0m[38;5;249mC[0m[38;5;249ml[0m[38;5;249mi[0m[38;5;249mc[0m[38;5;249mk[0m[38;5;249m=[0m[38;5;249m{[0m([38;5;249m)[0m[38;5;249m [0m[38;5;249m=[0m[38;5;249m>[0m[38;5;249m [0m[38;5;249mt[0m[38;5;249mo[0m[38;5;249mg[0m[38;5;249mg[0m[38;5;249ml[0m[38;5;249me[0m[38;5;249m([0m[38;5;249mc[0m[38;5;249m.[0m[38;5;249mi[0m[38;5;249md[0m[38;5;249m)[0m[38;5;249m}[0m
+ [38;5;240m    │[0m                          ┬  
+ [38;5;240m    │[0m                          ╰── 
+[38;5;246m─────╯[0m
+[39m
+  Plugin: [35mvite:oxc[39m
+  File: [36mC:/Users/mg/Downloads/Agrishop Inventory management system - New/src/components/ui/CustomerSelector.tsx[39m
+      at transformWithOxc (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:4103:19)
+      at TransformPluginContext.transform (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:4174:26)
+      at EnvironmentPluginContainer.transform (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:30932:51)
+      at async loadAndTransform (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:20671:26)
+      at async viteTransformMiddleware (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:25205:20)
+[2m12:49:45 PM[22m [31m[1m[vite][22m[39m [31mInternal server error: Transform failed with 1 error:
+
+[31m[PARSE_ERROR] [0mUnexpected token
+     [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0m src/components/ui/CustomerSelector.tsx:153:26 [38;5;246m][0m
+     [38;5;246m│[0m
+ [38;5;246m153 │[0m [38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249mo[0m[38;5;249mn[0m[38;5;249mC[0m[38;5;249ml[0m[38;5;249mi[0m[38;5;249mc[0m[38;5;249mk[0m[38;5;249m=[0m[38;5;249m{[0m([38;5;249m)[0m[38;5;249m [0m[38;5;249m=[0m[38;5;249m>[0m[38;5;249m [0m[38;5;249mt[0m[38;5;249mo[0m[38;5;249mg[0m[38;5;249mg[0m[38;5;249ml[0m[38;5;249me[0m[38;5;249m([0m[38;5;249mc[0m[38;5;249m.[0m[38;5;249mi[0m[38;5;249md[0m[38;5;249m)[0m[38;5;249m}[0m
+ [38;5;240m    │[0m                          ┬  
+ [38;5;240m    │[0m                          ╰── 
+[38;5;246m─────╯[0m
+[39m
+  Plugin: [35mvite:oxc[39m
+  File: [36mC:/Users/mg/Downloads/Agrishop Inventory management system - New/src/components/ui/CustomerSelector.tsx[39m
+      at transformWithOxc (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:4103:19)
+      at TransformPluginContext.transform (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:4174:26)
+      at EnvironmentPluginContainer.transform (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:30932:51)
+      at async loadAndTransform (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:20671:26)
+      at async viteTransformMiddleware (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:25205:20)
+[2m12:49:54 PM[22m [31m[1m[vite][22m[39m [31mInternal server error: Transform failed with 1 error:
+
+[31m[PARSE_ERROR] [0mUnexpected token
+     [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0m src/components/ui/CustomerSelector.tsx:153:26 [38;5;246m][0m
+     [38;5;246m│[0m
+ [38;5;246m153 │[0m [38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249mo[0m[38;5;249mn[0m[38;5;249mC[0m[38;5;249ml[0m[38;5;249mi[0m[38;5;249mc[0m[38;5;249mk[0m[38;5;249m=[0m[38;5;249m{[0m([38;5;249m)[0m[38;5;249m [0m[38;5;249m=[0m[38;5;249m>[0m[38;5;249m [0m[38;5;249mt[0m[38;5;249mo[0m[38;5;249mg[0m[38;5;249mg[0m[38;5;249ml[0m[38;5;249me[0m[38;5;249m([0m[38;5;249mc[0m[38;5;249m.[0m[38;5;249mi[0m[38;5;249md[0m[38;5;249m)[0m[38;5;249m}[0m
+ [38;5;240m    │[0m                          ┬  
+ [38;5;240m    │[0m                          ╰── 
+[38;5;246m─────╯[0m
+[39m
+  Plugin: [35mvite:oxc[39m
+  File: [36mC:/Users/mg/Downloads/Agrishop Inventory management system - New/src/components/ui/CustomerSelector.tsx[39m
+      at transformWithOxc (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:4103:19)
+      at TransformPluginContext.transform (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:4174:26)
+      at EnvironmentPluginContainer.transform (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:30932:51)
+      at async loadAndTransform (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:20671:26)
+      at async viteTransformMiddleware (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:25205:20)
+[2m12:50:04 PM[22m [31m[1m[vite][22m[39m [31mInternal server error: Transform failed with 1 error:
+
+[31m[PARSE_ERROR] [0mUnexpected token
+     [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0m src/components/ui/CustomerSelector.tsx:153:26 [38;5;246m][0m
+     [38;5;246m│[0m
+ [38;5;246m153 │[0m [38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249mo[0m[38;5;249mn[0m[38;5;249mC[0m[38;5;249ml[0m[38;5;249mi[0m[38;5;249mc[0m[38;5;249mk[0m[38;5;249m=[0m[38;5;249m{[0m([38;5;249m)[0m[38;5;249m [0m[38;5;249m=[0m[38;5;249m>[0m[38;5;249m [0m[38;5;249mt[0m[38;5;249mo[0m[38;5;249mg[0m[38;5;249mg[0m[38;5;249ml[0m[38;5;249me[0m[38;5;249m([0m[38;5;249mc[0m[38;5;249m.[0m[38;5;249mi[0m[38;5;249md[0m[38;5;249m)[0m[38;5;249m}[0m
+ [38;5;240m    │[0m                          ┬  
+ [38;5;240m    │[0m                          ╰── 
+[38;5;246m─────╯[0m
+[39m
+  Plugin: [35mvite:oxc[39m
+  File: [36mC:/Users/mg/Downloads/Agrishop Inventory management system - New/src/components/ui/CustomerSelector.tsx[39m
+      at transformWithOxc (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:4103:19)
+      at TransformPluginContext.transform (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:4174:26)
+      at EnvironmentPluginContainer.transform (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:30932:51)
+      at async loadAndTransform (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:20671:26)
+      at async viteTransformMiddleware (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:25205:20)
+[2m12:50:15 PM[22m [31m[1m[vite][22m[39m [31mInternal server error: Transform failed with 1 error:
+
+[31m[PARSE_ERROR] [0mUnexpected token
+     [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0m src/components/ui/CustomerSelector.tsx:153:26 [38;5;246m][0m
+     [38;5;246m│[0m
+ [38;5;246m153 │[0m [38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249mo[0m[38;5;249mn[0m[38;5;249mC[0m[38;5;249ml[0m[38;5;249mi[0m[38;5;249mc[0m[38;5;249mk[0m[38;5;249m=[0m[38;5;249m{[0m([38;5;249m)[0m[38;5;249m [0m[38;5;249m=[0m[38;5;249m>[0m[38;5;249m [0m[38;5;249mt[0m[38;5;249mo[0m[38;5;249mg[0m[38;5;249mg[0m[38;5;249ml[0m[38;5;249me[0m[38;5;249m([0m[38;5;249mc[0m[38;5;249m.[0m[38;5;249mi[0m[38;5;249md[0m[38;5;249m)[0m[38;5;249m}[0m
+ [38;5;240m    │[0m                          ┬  
+ [38;5;240m    │[0m                          ╰── 
+[38;5;246m─────╯[0m
+[39m
+  Plugin: [35mvite:oxc[39m
+  File: [36mC:/Users/mg/Downloads/Agrishop Inventory management system - New/src/components/ui/CustomerSelector.tsx[39m
+      at transformWithOxc (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:4103:19)
+      at TransformPluginContext.transform (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:4174:26)
+      at EnvironmentPluginContainer.transform (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:30932:51)
+      at async loadAndTransform (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:20671:26)
+      at async viteTransformMiddleware (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:25205:20)
+[2m12:50:25 PM[22m [31m[1m[vite][22m[39m [31mInternal server error: Transform failed with 1 error:
+
+[31m[PARSE_ERROR] [0mUnexpected token
+     [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0m src/components/ui/CustomerSelector.tsx:153:26 [38;5;246m][0m
+     [38;5;246m│[0m
+ [38;5;246m153 │[0m [38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249mo[0m[38;5;249mn[0m[38;5;249mC[0m[38;5;249ml[0m[38;5;249mi[0m[38;5;249mc[0m[38;5;249mk[0m[38;5;249m=[0m[38;5;249m{[0m([38;5;249m)[0m[38;5;249m [0m[38;5;249m=[0m[38;5;249m>[0m[38;5;249m [0m[38;5;249mt[0m[38;5;249mo[0m[38;5;249mg[0m[38;5;249mg[0m[38;5;249ml[0m[38;5;249me[0m[38;5;249m([0m[38;5;249mc[0m[38;5;249m.[0m[38;5;249mi[0m[38;5;249md[0m[38;5;249m)[0m[38;5;249m}[0m
+ [38;5;240m    │[0m                          ┬  
+ [38;5;240m    │[0m                          ╰── 
+[38;5;246m─────╯[0m
+[39m
+  Plugin: [35mvite:oxc[39m
+  File: [36mC:/Users/mg/Downloads/Agrishop Inventory management system - New/src/components/ui/CustomerSelector.tsx[39m
+      at transformWithOxc (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:4103:19)
+      at TransformPluginContext.transform (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:4174:26)
+      at EnvironmentPluginContainer.transform (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:30932:51)
+      at async loadAndTransform (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:20671:26)
+      at async viteTransformMiddleware (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:25205:20)
+[2m12:50:34 PM[22m [31m[1m[vite][22m[39m [31mInternal server error: Transform failed with 1 error:
+
+[31m[PARSE_ERROR] [0mUnexpected token
+     [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0m src/components/ui/CustomerSelector.tsx:153:26 [38;5;246m][0m
+     [38;5;246m│[0m
+ [38;5;246m153 │[0m [38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249mo[0m[38;5;249mn[0m[38;5;249mC[0m[38;5;249ml[0m[38;5;249mi[0m[38;5;249mc[0m[38;5;249mk[0m[38;5;249m=[0m[38;5;249m{[0m([38;5;249m)[0m[38;5;249m [0m[38;5;249m=[0m[38;5;249m>[0m[38;5;249m [0m[38;5;249mt[0m[38;5;249mo[0m[38;5;249mg[0m[38;5;249mg[0m[38;5;249ml[0m[38;5;249me[0m[38;5;249m([0m[38;5;249mc[0m[38;5;249m.[0m[38;5;249mi[0m[38;5;249md[0m[38;5;249m)[0m[38;5;249m}[0m
+ [38;5;240m    │[0m                          ┬  
+ [38;5;240m    │[0m                          ╰── 
+[38;5;246m─────╯[0m
+[39m
+  Plugin: [35mvite:oxc[39m
+  File: [36mC:/Users/mg/Downloads/Agrishop Inventory management system - New/src/components/ui/CustomerSelector.tsx[39m
+      at transformWithOxc (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:4103:19)
+      at TransformPluginContext.transform (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:4174:26)
+      at EnvironmentPluginContainer.transform (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:30932:51)
+      at async loadAndTransform (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:20671:26)
+      at async viteTransformMiddleware (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:25205:20)
+[2m12:50:45 PM[22m [31m[1m[vite][22m[39m [31mInternal server error: Transform failed with 1 error:
+
+[31m[PARSE_ERROR] [0mUnexpected token
+     [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0m src/components/ui/CustomerSelector.tsx:153:26 [38;5;246m][0m
+     [38;5;246m│[0m
+ [38;5;246m153 │[0m [38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249mo[0m[38;5;249mn[0m[38;5;249mC[0m[38;5;249ml[0m[38;5;249mi[0m[38;5;249mc[0m[38;5;249mk[0m[38;5;249m=[0m[38;5;249m{[0m([38;5;249m)[0m[38;5;249m [0m[38;5;249m=[0m[38;5;249m>[0m[38;5;249m [0m[38;5;249mt[0m[38;5;249mo[0m[38;5;249mg[0m[38;5;249mg[0m[38;5;249ml[0m[38;5;249me[0m[38;5;249m([0m[38;5;249mc[0m[38;5;249m.[0m[38;5;249mi[0m[38;5;249md[0m[38;5;249m)[0m[38;5;249m}[0m
+ [38;5;240m    │[0m                          ┬  
+ [38;5;240m    │[0m                          ╰── 
+[38;5;246m─────╯[0m
+[39m
+  Plugin: [35mvite:oxc[39m
+  File: [36mC:/Users/mg/Downloads/Agrishop Inventory management system - New/src/components/ui/CustomerSelector.tsx[39m
+      at transformWithOxc (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:4103:19)
+      at TransformPluginContext.transform (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:4174:26)
+      at EnvironmentPluginContainer.transform (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:30932:51)
+      at async loadAndTransform (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:20671:26)
+      at async viteTransformMiddleware (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:25205:20)
+[2m12:50:54 PM[22m [31m[1m[vite][22m[39m [31mInternal server error: Transform failed with 1 error:
+
+[31m[PARSE_ERROR] [0mUnexpected token
+     [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0m src/components/ui/CustomerSelector.tsx:153:26 [38;5;246m][0m
+     [38;5;246m│[0m
+ [38;5;246m153 │[0m [38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249mo[0m[38;5;249mn[0m[38;5;249mC[0m[38;5;249ml[0m[38;5;249mi[0m[38;5;249mc[0m[38;5;249mk[0m[38;5;249m=[0m[38;5;249m{[0m([38;5;249m)[0m[38;5;249m [0m[38;5;249m=[0m[38;5;249m>[0m[38;5;249m [0m[38;5;249mt[0m[38;5;249mo[0m[38;5;249mg[0m[38;5;249mg[0m[38;5;249ml[0m[38;5;249me[0m[38;5;249m([0m[38;5;249mc[0m[38;5;249m.[0m[38;5;249mi[0m[38;5;249md[0m[38;5;249m)[0m[38;5;249m}[0m
+ [38;5;240m    │[0m                          ┬  
+ [38;5;240m    │[0m                          ╰── 
+[38;5;246m─────╯[0m
+[39m
+  Plugin: [35mvite:oxc[39m
+  File: [36mC:/Users/mg/Downloads/Agrishop Inventory management system - New/src/components/ui/CustomerSelector.tsx[39m
+      at transformWithOxc (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:4103:19)
+      at TransformPluginContext.transform (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:4174:26)
+      at EnvironmentPluginContainer.transform (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:30932:51)
+      at async loadAndTransform (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:20671:26)
+      at async viteTransformMiddleware (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:25205:20)
+[2m12:51:06 PM[22m [31m[1m[vite][22m[39m [31mInternal server error: Transform failed with 1 error:
+
+[31m[PARSE_ERROR] [0mUnexpected token
+     [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0m src/components/ui/CustomerSelector.tsx:153:26 [38;5;246m][0m
+     [38;5;246m│[0m
+ [38;5;246m153 │[0m [38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249mo[0m[38;5;249mn[0m[38;5;249mC[0m[38;5;249ml[0m[38;5;249mi[0m[38;5;249mc[0m[38;5;249mk[0m[38;5;249m=[0m[38;5;249m{[0m([38;5;249m)[0m[38;5;249m [0m[38;5;249m=[0m[38;5;249m>[0m[38;5;249m [0m[38;5;249mt[0m[38;5;249mo[0m[38;5;249mg[0m[38;5;249mg[0m[38;5;249ml[0m[38;5;249me[0m[38;5;249m([0m[38;5;249mc[0m[38;5;249m.[0m[38;5;249mi[0m[38;5;249md[0m[38;5;249m)[0m[38;5;249m}[0m
+ [38;5;240m    │[0m                          ┬  
+ [38;5;240m    │[0m                          ╰── 
+[38;5;246m─────╯[0m
+[39m
+  Plugin: [35mvite:oxc[39m
+  File: [36mC:/Users/mg/Downloads/Agrishop Inventory management system - New/src/components/ui/CustomerSelector.tsx[39m
+      at transformWithOxc (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:4103:19)
+      at TransformPluginContext.transform (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:4174:26)
+      at EnvironmentPluginContainer.transform (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:30932:51)
+      at async loadAndTransform (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:20671:26)
+      at async viteTransformMiddleware (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:25205:20)
+[2m12:51:14 PM[22m [31m[1m[vite][22m[39m [31mInternal server error: Transform failed with 1 error:
+
+[31m[PARSE_ERROR] [0mUnexpected token
+     [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0m src/components/ui/CustomerSelector.tsx:153:26 [38;5;246m][0m
+     [38;5;246m│[0m
+ [38;5;246m153 │[0m [38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249mo[0m[38;5;249mn[0m[38;5;249mC[0m[38;5;249ml[0m[38;5;249mi[0m[38;5;249mc[0m[38;5;249mk[0m[38;5;249m=[0m[38;5;249m{[0m([38;5;249m)[0m[38;5;249m [0m[38;5;249m=[0m[38;5;249m>[0m[38;5;249m [0m[38;5;249mt[0m[38;5;249mo[0m[38;5;249mg[0m[38;5;249mg[0m[38;5;249ml[0m[38;5;249me[0m[38;5;249m([0m[38;5;249mc[0m[38;5;249m.[0m[38;5;249mi[0m[38;5;249md[0m[38;5;249m)[0m[38;5;249m}[0m
+ [38;5;240m    │[0m                          ┬  
+ [38;5;240m    │[0m                          ╰── 
+[38;5;246m─────╯[0m
+[39m
+  Plugin: [35mvite:oxc[39m
+  File: [36mC:/Users/mg/Downloads/Agrishop Inventory management system - New/src/components/ui/CustomerSelector.tsx[39m
+      at transformWithOxc (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:4103:19)
+      at TransformPluginContext.transform (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:4174:26)
+      at EnvironmentPluginContainer.transform (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:30932:51)
+      at async loadAndTransform (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:20671:26)
+      at async viteTransformMiddleware (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:25205:20)
+[2m12:51:25 PM[22m [31m[1m[vite][22m[39m [31mInternal server error: Transform failed with 1 error:
+
+[31m[PARSE_ERROR] [0mUnexpected token
+     [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0m src/components/ui/CustomerSelector.tsx:153:26 [38;5;246m][0m
+     [38;5;246m│[0m
+ [38;5;246m153 │[0m [38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249mo[0m[38;5;249mn[0m[38;5;249mC[0m[38;5;249ml[0m[38;5;249mi[0m[38;5;249mc[0m[38;5;249mk[0m[38;5;249m=[0m[38;5;249m{[0m([38;5;249m)[0m[38;5;249m [0m[38;5;249m=[0m[38;5;249m>[0m[38;5;249m [0m[38;5;249mt[0m[38;5;249mo[0m[38;5;249mg[0m[38;5;249mg[0m[38;5;249ml[0m[38;5;249me[0m[38;5;249m([0m[38;5;249mc[0m[38;5;249m.[0m[38;5;249mi[0m[38;5;249md[0m[38;5;249m)[0m[38;5;249m}[0m
+ [38;5;240m    │[0m                          ┬  
+ [38;5;240m    │[0m                          ╰── 
+[38;5;246m─────╯[0m
+[39m
+  Plugin: [35mvite:oxc[39m
+  File: [36mC:/Users/mg/Downloads/Agrishop Inventory management system - New/src/components/ui/CustomerSelector.tsx[39m
+      at transformWithOxc (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:4103:19)
+      at TransformPluginContext.transform (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:4174:26)
+      at EnvironmentPluginContainer.transform (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:30932:51)
+      at async loadAndTransform (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:20671:26)
+      at async viteTransformMiddleware (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:25205:20)
+[2m12:51:33 PM[22m [31m[1m[vite][22m[39m [31mInternal server error: Transform failed with 1 error:
+
+[31m[PARSE_ERROR] [0mUnexpected token
+     [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0m src/components/ui/CustomerSelector.tsx:153:26 [38;5;246m][0m
+     [38;5;246m│[0m
+ [38;5;246m153 │[0m [38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249mo[0m[38;5;249mn[0m[38;5;249mC[0m[38;5;249ml[0m[38;5;249mi[0m[38;5;249mc[0m[38;5;249mk[0m[38;5;249m=[0m[38;5;249m{[0m([38;5;249m)[0m[38;5;249m [0m[38;5;249m=[0m[38;5;249m>[0m[38;5;249m [0m[38;5;249mt[0m[38;5;249mo[0m[38;5;249mg[0m[38;5;249mg[0m[38;5;249ml[0m[38;5;249me[0m[38;5;249m([0m[38;5;249mc[0m[38;5;249m.[0m[38;5;249mi[0m[38;5;249md[0m[38;5;249m)[0m[38;5;249m}[0m
+ [38;5;240m    │[0m                          ┬  
+ [38;5;240m    │[0m                          ╰── 
+[38;5;246m─────╯[0m
+[39m
+  Plugin: [35mvite:oxc[39m
+  File: [36mC:/Users/mg/Downloads/Agrishop Inventory management system - New/src/components/ui/CustomerSelector.tsx[39m
+      at transformWithOxc (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:4103:19)
+      at TransformPluginContext.transform (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:4174:26)
+      at EnvironmentPluginContainer.transform (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:30932:51)
+      at async loadAndTransform (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:20671:26)
+      at async viteTransformMiddleware (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:25205:20)
+[2m12:51:45 PM[22m [31m[1m[vite][22m[39m [31mInternal server error: Transform failed with 1 error:
+
+[31m[PARSE_ERROR] [0mUnexpected token
+     [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0m src/components/ui/CustomerSelector.tsx:153:26 [38;5;246m][0m
+     [38;5;246m│[0m
+ [38;5;246m153 │[0m [38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249mo[0m[38;5;249mn[0m[38;5;249mC[0m[38;5;249ml[0m[38;5;249mi[0m[38;5;249mc[0m[38;5;249mk[0m[38;5;249m=[0m[38;5;249m{[0m([38;5;249m)[0m[38;5;249m [0m[38;5;249m=[0m[38;5;249m>[0m[38;5;249m [0m[38;5;249mt[0m[38;5;249mo[0m[38;5;249mg[0m[38;5;249mg[0m[38;5;249ml[0m[38;5;249me[0m[38;5;249m([0m[38;5;249mc[0m[38;5;249m.[0m[38;5;249mi[0m[38;5;249md[0m[38;5;249m)[0m[38;5;249m}[0m
+ [38;5;240m    │[0m                          ┬  
+ [38;5;240m    │[0m                          ╰── 
+[38;5;246m─────╯[0m
+[39m
+  Plugin: [35mvite:oxc[39m
+  File: [36mC:/Users/mg/Downloads/Agrishop Inventory management system - New/src/components/ui/CustomerSelector.tsx[39m
+      at transformWithOxc (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:4103:19)
+      at TransformPluginContext.transform (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:4174:26)
+      at EnvironmentPluginContainer.transform (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:30932:51)
+      at async loadAndTransform (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:20671:26)
+      at async viteTransformMiddleware (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:25205:20)
+[2m12:51:55 PM[22m [31m[1m[vite][22m[39m [31mInternal server error: Transform failed with 1 error:
+
+[31m[PARSE_ERROR] [0mUnexpected token
+     [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0m src/components/ui/CustomerSelector.tsx:153:26 [38;5;246m][0m
+     [38;5;246m│[0m
+ [38;5;246m153 │[0m [38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249mo[0m[38;5;249mn[0m[38;5;249mC[0m[38;5;249ml[0m[38;5;249mi[0m[38;5;249mc[0m[38;5;249mk[0m[38;5;249m=[0m[38;5;249m{[0m([38;5;249m)[0m[38;5;249m [0m[38;5;249m=[0m[38;5;249m>[0m[38;5;249m [0m[38;5;249mt[0m[38;5;249mo[0m[38;5;249mg[0m[38;5;249mg[0m[38;5;249ml[0m[38;5;249me[0m[38;5;249m([0m[38;5;249mc[0m[38;5;249m.[0m[38;5;249mi[0m[38;5;249md[0m[38;5;249m)[0m[38;5;249m}[0m
+ [38;5;240m    │[0m                          ┬  
+ [38;5;240m    │[0m                          ╰── 
+[38;5;246m─────╯[0m
+[39m
+  Plugin: [35mvite:oxc[39m
+  File: [36mC:/Users/mg/Downloads/Agrishop Inventory management system - New/src/components/ui/CustomerSelector.tsx[39m
+      at transformWithOxc (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:4103:19)
+      at TransformPluginContext.transform (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:4174:26)
+      at EnvironmentPluginContainer.transform (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:30932:51)
+      at async loadAndTransform (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:20671:26)
+      at async viteTransformMiddleware (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:25205:20)
+[2m12:52:05 PM[22m [31m[1m[vite][22m[39m [31mInternal server error: Transform failed with 1 error:
+
+[31m[PARSE_ERROR] [0mUnexpected token
+     [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0m src/components/ui/CustomerSelector.tsx:153:26 [38;5;246m][0m
+     [38;5;246m│[0m
+ [38;5;246m153 │[0m [38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249mo[0m[38;5;249mn[0m[38;5;249mC[0m[38;5;249ml[0m[38;5;249mi[0m[38;5;249mc[0m[38;5;249mk[0m[38;5;249m=[0m[38;5;249m{[0m([38;5;249m)[0m[38;5;249m [0m[38;5;249m=[0m[38;5;249m>[0m[38;5;249m [0m[38;5;249mt[0m[38;5;249mo[0m[38;5;249mg[0m[38;5;249mg[0m[38;5;249ml[0m[38;5;249me[0m[38;5;249m([0m[38;5;249mc[0m[38;5;249m.[0m[38;5;249mi[0m[38;5;249md[0m[38;5;249m)[0m[38;5;249m}[0m
+ [38;5;240m    │[0m                          ┬  
+ [38;5;240m    │[0m                          ╰── 
+[38;5;246m─────╯[0m
+[39m
+  Plugin: [35mvite:oxc[39m
+  File: [36mC:/Users/mg/Downloads/Agrishop Inventory management system - New/src/components/ui/CustomerSelector.tsx[39m
+      at transformWithOxc (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:4103:19)
+      at TransformPluginContext.transform (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:4174:26)
+      at EnvironmentPluginContainer.transform (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:30932:51)
+      at async loadAndTransform (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:20671:26)
+      at async viteTransformMiddleware (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:25205:20)
+[2m7:47:51 PM[22m [31m[1m[vite][22m[39m [31mInternal server error: Transform failed with 1 error:
+
+[31m[PARSE_ERROR] [0mExpected `}` but found `;`
+     [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0m src/pages/admin/alerts/RemindersOverviewPage.tsx:550:10 [38;5;246m][0m
+     [38;5;246m│[0m
+ [38;5;246m550 │[0m [38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m)[0m;
+ [38;5;240m    │[0m          ┬  
+ [38;5;240m    │[0m          ╰── `}` expected
+[38;5;246m─────╯[0m
+[39m
+  Plugin: [35mvite:oxc[39m
+  File: [36mC:/Users/mg/Downloads/Agrishop Inventory management system - New/src/pages/admin/alerts/RemindersOverviewPage.tsx[39m
+      at transformWithOxc (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:4103:19)
+      at TransformPluginContext.transform (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:4174:26)
+      at EnvironmentPluginContainer.transform (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:30932:51)
+      at async loadAndTransform (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:20671:26)
+      at async viteTransformMiddleware (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:25205:20)
+[2m7:47:54 PM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m Pre-transform error: Transform failed with 1 error:
+
+[31m[PARSE_ERROR] [0mExpected `}` but found `;`
+     [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0m src/pages/admin/alerts/RemindersOverviewPage.tsx:550:10 [38;5;246m][0m
+     [38;5;246m│[0m
+ [38;5;246m550 │[0m [38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m)[0m;
+ [38;5;240m    │[0m          ┬  
+ [38;5;240m    │[0m          ╰── `}` expected
+[38;5;246m─────╯[0m
+
+  Plugin: [35mvite:oxc[39m
+  File: [36mC:/Users/mg/Downloads/Agrishop Inventory management system - New/src/pages/admin/alerts/RemindersOverviewPage.tsx[39m
+[2m7:47:54 PM[22m [31m[1m[vite][22m[39m [31mInternal server error: Transform failed with 1 error:
+
+[31m[PARSE_ERROR] [0mExpected `}` but found `;`
+     [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0m src/pages/admin/alerts/RemindersOverviewPage.tsx:550:10 [38;5;246m][0m
+     [38;5;246m│[0m
+ [38;5;246m550 │[0m [38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m)[0m;
+ [38;5;240m    │[0m          ┬  
+ [38;5;240m    │[0m          ╰── `}` expected
+[38;5;246m─────╯[0m
+[39m
+  Plugin: [35mvite:oxc[39m
+  File: [36mC:/Users/mg/Downloads/Agrishop Inventory management system - New/src/pages/admin/alerts/RemindersOverviewPage.tsx[39m
+      at transformWithOxc (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:4103:19)
+      at TransformPluginContext.transform (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:4174:26)
+      at EnvironmentPluginContainer.transform (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:30932:51)
+      at async loadAndTransform (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:20671:26)
+      at async viteTransformMiddleware (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:25205:20)
+[2m7:48:04 PM[22m [31m[1m[vite][22m[39m [31mInternal server error: Transform failed with 1 error:
+
+[31m[PARSE_ERROR] [0mExpected `}` but found `;`
+     [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0m src/pages/admin/alerts/RemindersOverviewPage.tsx:550:10 [38;5;246m][0m
+     [38;5;246m│[0m
+ [38;5;246m550 │[0m [38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m)[0m;
+ [38;5;240m    │[0m          ┬  
+ [38;5;240m    │[0m          ╰── `}` expected
+[38;5;246m─────╯[0m
+[39m
+  Plugin: [35mvite:oxc[39m
+  File: [36mC:/Users/mg/Downloads/Agrishop Inventory management system - New/src/pages/admin/alerts/RemindersOverviewPage.tsx[39m
+      at transformWithOxc (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:4103:19)
+      at TransformPluginContext.transform (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:4174:26)
+      at EnvironmentPluginContainer.transform (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:30932:51)
+      at async loadAndTransform (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:20671:26)
+      at async viteTransformMiddleware (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:25205:20)
+[2m7:48:14 PM[22m [31m[1m[vite][22m[39m [31mInternal server error: Transform failed with 1 error:
+
+[31m[PARSE_ERROR] [0mExpected `}` but found `;`
+     [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0m src/pages/admin/alerts/RemindersOverviewPage.tsx:550:10 [38;5;246m][0m
+     [38;5;246m│[0m
+ [38;5;246m550 │[0m [38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m)[0m;
+ [38;5;240m    │[0m          ┬  
+ [38;5;240m    │[0m          ╰── `}` expected
+[38;5;246m─────╯[0m
+[39m
+  Plugin: [35mvite:oxc[39m
+  File: [36mC:/Users/mg/Downloads/Agrishop Inventory management system - New/src/pages/admin/alerts/RemindersOverviewPage.tsx[39m
+      at transformWithOxc (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:4103:19)
+      at TransformPluginContext.transform (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:4174:26)
+      at EnvironmentPluginContainer.transform (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:30932:51)
+      at async loadAndTransform (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:20671:26)
+      at async viteTransformMiddleware (file:///C:/Users/mg/Downloads/Agrishop%20Inventory%20management%20system%20-%20New/node_modules/vite/dist/node/chunks/node.js:25205:20)

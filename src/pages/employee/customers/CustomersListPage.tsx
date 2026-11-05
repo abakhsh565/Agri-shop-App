@@ -1,29 +1,38 @@
-import { useState, useRef, useEffect } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
+import NavHeader from "@/components/ui/NavHeader";
 import PullToRefresh from "@/components/ui/PullToRefresh";
 import { SkeletonList } from "@/components/ui/Skeleton";
+import SearchBar from "@/components/ui/SearchBar";
 import { useCustomersStore } from "@/stores/customersStore";
 import { formatCurrency } from "@/lib/formatters";
 import { useT } from "@/lib/i18n";
-import { useThemeStore } from "@/stores/themeStore";
 import { useShellBase } from "@/lib/useShellBase";
+import { useReturnTo } from "@/lib/useReturnTo";
+import { hasPermission } from "@/lib/tenantContext";
 import { Plus, ChevronRight, SlidersHorizontal, Check, UserRound } from "lucide-react";
-import SearchBar from "@/components/ui/SearchBar";
-import { getCreditHealth, calculateCreditHealth, getCreditHealthStatusColor } from "@/lib/formatters";
 import type { Customer } from "@/types";
-import { useSalesStore } from "@/stores/salesStore";
+import { isCreditOverdue } from "@/lib/signalEngine";
+import { pkToday } from "@/lib/pkDate";
+import {
+  creditUsedPct,
+  customerCreditState,
+  summariseCustomerCollection,
+  type CustomerCreditState,
+} from "@/lib/customerCredit";
 
 type SortKey = "outstanding" | "name" | "recent";
+type CreditFilter = "all" | "outstanding" | "overdue" | "paid";
 
-const SORT_OPTIONS: { key: SortKey; labelKey: string }[] = [
-  { key: "outstanding", labelKey: "sale.highestAmount" },
-  { key: "name", labelKey: "sale.recentlyAdded" },
-  { key: "recent", labelKey: "sale.recentlyAdded" },
+const SORT_OPTIONS: { key: SortKey; labelKey: "customers.sortBalance" | "customers.sortName" | "customers.sortNewest" }[] = [
+  { key: "outstanding", labelKey: "customers.sortBalance" },
+  { key: "name", labelKey: "customers.sortName" },
+  { key: "recent", labelKey: "customers.sortNewest" },
 ];
 
 function initBgColor(name: string | null | undefined) {
-  const colors = ["#84cc16","#3b82f6","#8b5cf6","#f59e0b","#06b6d4","#ec4899","#ef4444","#10b981"];
+  const colors = ["#84cc16", "#3b82f6", "#8b5cf6", "#f59e0b", "#06b6d4", "#ec4899", "#ef4444", "#10b981"];
   let hash = 0;
   if (!name) return colors[0];
   for (const c of name) hash = (hash * 31 + c.charCodeAt(0)) & 0xffff;
@@ -42,23 +51,54 @@ function sortCustomers(list: Customer[], sort: SortKey): Customer[] {
   return sorted;
 }
 
+/**
+ * The account list: who buys from this branch, what they owe it, and whether that debt is late.
+ *
+ * SHAPE (owner's reference, 2026-10-28): two headline counts, the search with its sort control,
+ * four filters — All, Outstanding, Overdue, Paid — and one card per customer carrying the
+ * figure, the limit it is measured against, and the state a reader would otherwise have to
+ * work out from the date.
+ *
+ * THE FOUR FILTERS ARE THE APP'S OWN STATES. Outstanding is a balance above zero; Overdue is
+ * the S1 rule (`isCreditOverdue`), the same test Reminders and Home use; Paid is the absence of
+ * a balance. A customer with no credit limit keeps saying "cash customer" rather than showing a
+ * usage bar measured against zero.
+ *
+ * THE COUNTS ARE THE LIST'S OWN ROWS, so the figures at the top can never describe a different
+ * population from the cards below. Balances are the working branch's (`get_branch_customer_balances`,
+ * 0242), not the shop-wide running columns.
+ */
 export default function CustomersListPage() {
   const navigate = useNavigate();
-  const { state } = useLocation();
+  const { state, search: addressQuery } = useLocation();
   const base = useShellBase();
   const t = useT();
-  const { language } = useThemeStore();
-  const isUrdu = language === "ur";
+  // The customer ledger opens from the Customers section, and from the Reports hub's tile.
+  const returnTo = useReturnTo(
+    base === "/admin" ? `${base}/settings/hub/customers` : `${base}/dashboard`,
+  );
+  const todayISO = pkToday();
+
   const customers = useCustomersStore((s) => s.customers);
   const ready = useCustomersStore((s) => s.ready);
+  const load = useCustomersStore((s) => s.load);
 
-  const initialFilter = state?.filter === "credit" ? "credit" : "all";
+  const initialFilter: CreditFilter =
+    state?.filter === "credit" ? "outstanding" : "all";
   const cropFilter = state?.cropFilter as string | undefined;
-  const [creditFilter, setCreditFilter] = useState<"all" | "credit">(initialFilter);
-  const [search, setSearch] = useState("");
+  const [creditFilter, setCreditFilter] = useState<CreditFilter>(initialFilter);
+  // A search started on Customers & Credit arrives as `?q=` and lands here, where searching the
+  // account list actually happens — one search field, one implementation.
+  const [search, setSearch] = useState(
+    () => new URLSearchParams(addressQuery).get("q") ?? "",
+  );
   const [sort, setSort] = useState<SortKey>("outstanding");
   const [showSortMenu, setShowSortMenu] = useState(false);
   const sortMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!ready) void load();
+  }, [ready, load]);
 
   // Close sort menu on outside click
   useEffect(() => {
@@ -79,259 +119,310 @@ export default function CustomersListPage() {
     } catch { return []; }
   };
 
-  const filtered = customers.filter((c) =>
-    (c.name.toLowerCase().includes(search.toLowerCase()) || c.phone.includes(search)) &&
-    !c.isArchived &&
-    (creditFilter === "all" || c.outstandingBalance > 0) &&
-    (!cropFilter || getCustomerCrops(c.id).includes(cropFilter))
-  );
+  const filtered = customers.filter((c) => {
+    const term = search.trim().toLowerCase();
+    const matchSearch = !term || c.name.toLowerCase().includes(term) || c.phone.includes(term);
+    const matchState =
+      creditFilter === "all" ||
+      (creditFilter === "outstanding" && c.outstandingBalance > 0) ||
+      (creditFilter === "overdue" && isCreditOverdue(c, todayISO)) ||
+      (creditFilter === "paid" && c.outstandingBalance <= 0);
+    return matchSearch && !c.isArchived && matchState &&
+      (!cropFilter || getCustomerCrops(c.id).includes(cropFilter));
+  });
 
   const sorted = sortCustomers(filtered, sort);
-  const totalOutstanding = customers.reduce((s, c) => s + c.outstandingBalance, 0);
-  const onCredit = customers.filter((c) => c.outstandingBalance > 0).length;
+  // The headline is the branch's own rows, summarised by the same function the Customers &
+  // Credit screen uses — one rule for "owed" and one rule for "late" across both screens.
+  const summary = useMemo(
+    () => summariseCustomerCollection(customers, todayISO),
+    [customers, todayISO],
+  );
 
   async function handleRefresh() {
     await useCustomersStore.getState().load();
   }
 
+  const filters: { key: CreditFilter; label: string }[] = [
+    { key: "all", label: t("products.all") },
+    { key: "outstanding", label: t("customers.filterOutstanding") },
+    { key: "overdue", label: t("receivable.overdue") },
+    { key: "paid", label: t("customers.filterPaid") },
+  ];
+
+  /** The chip that says which of the four states the card is in. */
+  const stateChip = (status: CustomerCreditState) => {
+    const label =
+      status === "overdue"
+        ? t("receivable.overdue")
+        : status === "not_due"
+          ? t("customers.notYetDue")
+          : status === "no_due_date"
+            ? t("reminder.statusNoDueDate")
+            : t("reminder.statusPaid");
+    const color =
+      status === "overdue"
+        ? "var(--error)"
+        : status === "not_due"
+          ? "var(--text-secondary)"
+          : status === "no_due_date"
+            ? "var(--text-tertiary)"
+            : "var(--brand-dark)";
+    return (
+      <span
+        className="text-10 font-bold px-2 py-0.5 rounded-full whitespace-nowrap"
+        style={{ color, background: "var(--surface-2)" }}
+      >
+        {label}
+      </span>
+    );
+  };
+
   return (
     <PullToRefresh onRefresh={handleRefresh}>
-    <div
-      className="flex flex-col w-full min-h-full"
-      style={{ background: "var(--background)", direction: isUrdu ? "rtl" : "ltr" }}
-    >
-      <StatusBar />
-
-      {/* Header */}
-      <div className="flex items-center px-4 pt-1 pb-2">
-        <p className="text-20 font-bold" style={{ color: "var(--text-primary)" }}>
-          {t("customers.title")}
-        </p>
-      </div>
-
-      {/* Summary strip */}
-      <div className="px-4 pb-3">
-        <div
-          className="rounded-[var(--radius-tile)] px-4 py-3 flex items-center justify-between"
-          style={{ background: "var(--surface-2)" }}
-        >
-          <div>
-            <p className="ds-section-label" style={{ color: "var(--text-secondary)" }}>
-              {t("common.outstanding")}
-            </p>
-            <p className="text-20 font-bold mt-0.5" style={{ color: "#d97706" }}>
-              {formatCurrency(totalOutstanding)}
-            </p>
-          </div>
-          <div className="text-end">
-            <p className="ds-section-label" style={{ color: "var(--text-secondary)" }}>
-              {t("sale.onCredit")}
-            </p>
-            <p className="text-20 font-bold mt-0.5" style={{ color: "var(--text-primary)" }}>
-              {onCredit} / {customers.length}
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* Search + Sort */}
-      <div className="px-4 pb-3 flex gap-2 items-center">
-        <SearchBar
-          containerClass="flex-1 min-w-0"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          onClear={() => setSearch("")}
-          placeholder={t("customers.search")}
+      <div
+        className="flex flex-col w-full min-h-full"
+        style={{ background: "var(--background)" }}
+        data-testid="customers-list-page"
+      >
+        <StatusBar />
+        <NavHeader
+          title={t("customers.title")}
+          backTo={returnTo}
         />
 
-        {/* Sort button */}
-        <div className="relative" ref={sortMenuRef}>
-          <button
-            onClick={() => setShowSortMenu(!showSortMenu)}
-            aria-label={t("common.sort")}
-            className="w-10 h-10 rounded-full flex items-center justify-center shrink-0"
-            style={{ background: "var(--surface-2)", border: "1px solid var(--divider)" }}
-          >
-            <SlidersHorizontal size={15} style={{ color: "var(--text-primary)" }} />
-          </button>
-
-          {/* Sort dropdown */}
-          {showSortMenu && (
-            <div
-              className="absolute end-0 top-12 w-52 rounded-[var(--radius-card)] shadow-xl overflow-hidden z-50 animate-scale-in"
-              style={{ background: "var(--tone-card)" }}
-            >
-              {SORT_OPTIONS.map((opt) => (
-                <button
-                  key={opt.key}
-                  onClick={() => { setSort(opt.key); setShowSortMenu(false); }}
-                  className="flex items-center justify-between w-full px-4 py-3.5 text-start transition-colors active:bg-black/5"
-                  style={{ borderBottom: "1px solid var(--divider)" }}
-                >
-                  <span
-                    className="text-13 font-medium"
-                    style={{ color: sort === opt.key ? "var(--brand-dark)" : "var(--text-primary)" }}
-                  >
-                    {t(opt.labelKey as any)}
-                  </span>
-                  {sort === opt.key && <Check size={16} style={{ color: "var(--brand)" }} />}
-                </button>
-              ))}
-            </div>
-          )}
+        {/* Just the list (owner's correction, 2026-10-29): every account the app holds, and the
+            plain name of the screen. The money summary belongs to Customers & Credit, which is
+            the screen that reports on the book; repeating it here put three figures over a list
+            whose rows already carry the balance, and none of them could be acted on from here. */}
+        <div className="px-4 pt-1">
+          <h1 className="text-22 font-bold leading-tight">{t("customers.title")}</h1>
+          <p className="text-13 mt-1" style={{ color: "var(--text-secondary)" }}>
+            {t("customers.pageSubtitle")}
+          </p>
         </div>
-      </div>
 
-      {/* Filter chips */}
-      <div className="flex gap-2 px-4 pb-3 flex-wrap">
+        {/* Three figures, unboxed, and nothing else (owner's correction, 2026-10-29): what these
+            accounts owe, what is not late yet, and what is. This is the screen the owner opens
+            after tapping Customers, so it answers the money question at a glance — no progress
+            bar, no collection totals, no count tiles. The full collection plate stays on the
+            Customers & Credit section, which is the screen that reports on the book. Unboxed so
+            the two screens cannot be mistaken for one another. */}
+        {/* Search + sort */}
+
+        <div className="px-4 pt-3 pb-3 flex gap-2 items-center">
+          <SearchBar
+            containerClass="flex-1 min-w-0"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            onClear={() => setSearch("")}
+            placeholder={t("customers.search")}
+          />
+
+          <div className="relative" ref={sortMenuRef}>
+            <button
+              type="button"
+              onClick={() => setShowSortMenu(!showSortMenu)}
+              aria-label={t("common.sort")}
+              aria-expanded={showSortMenu}
+              className="size-10 rounded-full flex items-center justify-center shrink-0 active:opacity-70"
+              style={{ background: "var(--surface-2)", color: "var(--text-primary)" }}
+            >
+              <SlidersHorizontal size={16} />
+            </button>
+
+            {showSortMenu && (
+              <div
+                className="absolute end-0 top-12 w-52 rounded-[var(--radius-card)] shadow-xl overflow-hidden z-50"
+                style={{ background: "var(--surface)" }}
+              >
+                {SORT_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.key}
+                    type="button"
+                    onClick={() => { setSort(opt.key); setShowSortMenu(false); }}
+                    className="flex items-center justify-between w-full px-4 py-3 text-start active:opacity-70"
+                    style={{ borderBottom: "1px solid var(--divider)" }}
+                  >
+                    <span
+                      className="text-13 font-semibold"
+                      style={{ color: sort === opt.key ? "var(--brand-dark)" : "var(--text-primary)" }}
+                    >
+                      {t(opt.labelKey)}
+                    </span>
+                    {sort === opt.key && <Check size={16} style={{ color: "var(--brand)" }} />}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Two views of the credit book: everyone who owes, or only the late ones. */}
+        <div className="flex gap-2 px-4 pb-3 overflow-x-auto no-scrollbar">
+          {filters.map((f) => (
+            <button
+              key={f.key}
+              type="button"
+              onClick={() => setCreditFilter(f.key)}
+              aria-pressed={creditFilter === f.key}
+              className="shrink-0 h-9 px-4 rounded-full text-12 font-semibold transition-colors active:opacity-70"
+              style={{
+                background: creditFilter === f.key ? "var(--brand)" : "var(--surface-2)",
+                color: creditFilter === f.key ? "#0a0a0a" : "var(--text-secondary)",
+              }}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
+
         {cropFilter && (
-          <div
-            className="h-8 px-3 rounded-full text-xs font-semibold flex items-center gap-1.5"
-            style={{ background: "var(--brand-light, #d9f99d)", color: "var(--brand-dark, #65a30d)" }}
-          >
-            {cropFilter}
-            <button onClick={() => navigate(".", { state: { ...state, cropFilter: undefined } })} className="ms-0.5">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          <div className="px-4 pb-3">
+            <button
+              type="button"
+              onClick={() => navigate(".", { state: { ...state, cropFilter: undefined } })}
+              className="h-8 px-3 rounded-full text-12 font-semibold flex items-center gap-2"
+              style={{ background: "var(--surface-2)", color: "var(--text-secondary)" }}
+            >
+              {cropFilter}
+              <span aria-hidden>×</span>
             </button>
           </div>
         )}
-        {[{ key: "all", labelKey: "sale.allCustomers" }, { key: "credit", labelKey: "sale.onCredit" }].map((f) => (
-          <button
-            key={f.key}
-            onClick={() => setCreditFilter(f.key as "all" | "credit")}
-            className="h-8 px-4 rounded-full text-xs font-semibold transition-colors"
-            style={{
-              background: creditFilter === f.key ? "var(--brand)" : "var(--surface-2)",
-              color: creditFilter === f.key ? "#0a0a0a" : "var(--text-secondary)",
-            }}
-          >
-            {t(f.labelKey as any)}
-          </button>
-        ))}
+
+        {!ready ? (
+          <SkeletonList rows={5} tile />
+        ) : sorted.length === 0 ? (
+          <div className="flex flex-col items-center px-6 py-16 gap-2">
+            <UserRound size={28} style={{ color: "var(--text-tertiary)" }} />
+            <p className="text-14 font-semibold text-center" style={{ color: "var(--text-primary)" }}>
+              {search || creditFilter !== "all" ? t("sale.noCustomersMatch") : t("customers.noneFound")}
+            </p>
+            {!search && creditFilter === "all" && (
+              <p className="text-13 text-center" style={{ color: "var(--text-secondary)" }}>
+                {t("customers.addNew")}
+              </p>
+            )}
+          </div>
+        ) : (
+          <div className="flex flex-col gap-2 px-4 pb-24">
+            {sorted.map((c) => {
+              const bg = initBgColor(c.name);
+              const hasDebt = c.outstandingBalance > 0;
+              const used = creditUsedPct(c);
+              const status = customerCreditState(c, todayISO);
+
+              return (
+                <button
+                  key={c.id}
+                  type="button"
+                  onClick={() => navigate(`${base}/customers/${c.id}`)}
+                  data-testid={`customer-row-${c.id}`}
+                  className="rounded-[var(--radius-card)] p-3.5 text-start active:opacity-70"
+                  style={{ background: "var(--surface)" }}
+                >
+                  <div className="flex items-start gap-3">
+                    {c.imageUrl ? (
+                      <img
+                        src={c.imageUrl}
+                        alt=""
+                        className="rounded-full shrink-0 size-11 object-cover"
+                      />
+                    ) : (
+                      <div
+                        className="flex items-center justify-center rounded-full shrink-0 size-11 text-16 font-bold"
+                        style={{ background: bg, color: "#fff" }}
+                      >
+                        {c.name.charAt(0).toUpperCase()}
+                      </div>
+                    )}
+
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-15 font-semibold truncate" style={{ color: "var(--text-primary)" }}>
+                            {c.name}
+                          </p>
+                          <p className="text-12 mt-0.5 truncate" style={{ color: "var(--text-secondary)" }}>
+                            {c.phone}
+                          </p>
+                        </div>
+                        <div className="shrink-0 text-end">
+                          <p
+                            className="text-13 font-bold tabular-nums"
+                            style={{ color: hasDebt ? "var(--text-primary)" : "var(--text-secondary)" }}
+                          >
+                            {hasDebt ? formatCurrency(c.outstandingBalance) : t("customers.noOutstanding")}
+                          </p>
+                          <ChevronRight size={14} className="ms-auto mt-1" style={{ color: "var(--text-secondary)" }} />
+                        </div>
+                      </div>
+
+                      {/* How much of the limit is used. A limit of zero is not a bar measured at
+                          full width, it is no limit at all — the row says so instead. */}
+                      {used != null ? (
+                        <div className="mt-2">
+                          <div className="h-1.5 rounded-full overflow-hidden" style={{ background: "var(--surface-2)" }}>
+                            <div
+                              className="h-full rounded-full"
+                              style={{
+                                width: `${used}%`,
+                                background:
+                                  status === "overdue"
+                                    ? "var(--error)"
+                                    : used >= 80
+                                      ? "var(--warning)"
+                                      : "var(--brand)",
+                              }}
+                            />
+                          </div>
+                          <div className="flex items-center justify-between gap-2 mt-1.5">
+                            <p className="text-10" style={{ color: "var(--text-secondary)" }}>
+                              {used}{t("credit.percentUsed")}
+                            </p>
+                            {stateChip(status)}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-between gap-2 mt-2">
+                          <p className="text-10" style={{ color: "var(--text-tertiary)" }}>
+                            {t("customers.creditLimit")} — {t("customers.noLimitSet")}
+                          </p>
+                          <span
+                            className="text-10 font-bold px-2 py-0.5 rounded-full whitespace-nowrap"
+                            style={{ background: "var(--surface-2)", color: "var(--text-secondary)" }}
+                          >
+                            {t("credit.cashCustomer")}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
-      {/* Customer list */}
-      {!ready ? (
-        <SkeletonList rows={5} tile />
-      ) : sorted.length === 0 ? (
-        <div className="flex flex-col items-center py-16 gap-3">
-          <UserRound size={32} className="mx-auto block" style={{ color: "var(--text-tertiary)" }} />
-          <p className="text-15 font-semibold" style={{ color: "var(--text-primary)" }}>
-            {search ? t("sale.noCustomersMatch") : t("sale.noCustomersYet")}
-          </p>
-          {!search && (
-            <p className="text-13" style={{ color: "var(--text-secondary)" }}>
-              {t("customers.addNew")}
-            </p>
-          )}
-        </div>
-      ) : (
-        <div className="flex flex-col px-4 gap-2 pb-24">
-          {sorted.map((c) => {
-            const bg = initBgColor(c.name);
-            const hasDebt = c.outstandingBalance > 0;
-            const creditUsed = c.creditLimit > 0
-              ? Math.min(100, Math.round((c.outstandingBalance / c.creditLimit) * 100))
-              : 0;
-
-            return (
-              <button
-                key={c.id}
-                onClick={() => navigate(`${base}/customers/${c.id}`)}
-                className="flex items-center gap-3 p-3 rounded-[var(--radius-card)] text-start transition-all active:scale-[0.98]"
-                style={{ background: "var(--surface)", border: "1px solid var(--border-light)" }}
-              >
-                {/* Avatar */}
-                {c.imageUrl ? (
-                  <img
-                    src={c.imageUrl}
-                    alt={c.name}
-                    className="rounded-full shrink-0 size-[46px] object-cover"
-                  />
-                ) : (
-                  <div
-                    className="flex items-center justify-center rounded-full shrink-0 size-[46px] text-16 font-bold"
-                    style={{ background: bg, color: "#fff" }}
-                  >
-                    {c.name.charAt(0).toUpperCase()}
-                  </div>
-                )}
-
-                {/* Info */}
-                <div className="flex-1 min-w-0">
-                  <p className="text-14 font-bold truncate" style={{ color: "var(--text-primary)" }}>
-                    {c.name}
-                  </p>
-                  <p className="text-12" style={{ color: "var(--text-secondary)" }}>{c.phone}</p>
-                  {/* Credit usage bar + status */}
-                  {c.creditLimit > 0 ? (
-                    <div className="mt-1.5">
-                      <div className="w-full h-1.5 rounded-full" style={{ background: "var(--divider)" }}>
-                        <div
-                          className="h-full rounded-full transition-all"
-                          style={{
-                            width: `${creditUsed}%`,
-                            background: creditUsed >= 90 ? "#ef4444" : creditUsed >= 70 ? "#f59e0b" : "#22c55e",
-                          }}
-                        />
-                      </div>
-                      <div className="flex items-center justify-between mt-0.5">
-                        <p className="text-10" style={{ color: "var(--text-secondary)" }}>
-                          {creditUsed}{t("credit.percentUsed")}
-                        </p>
-                        {(() => { const sc = useSalesStore.getState().sales.filter((s) => s.customerId === c.id); const scCount = sc.length; const fullTotal = sc.filter((s) => s.paymentType === "full").reduce((a, s) => a + s.totalAmount, 0); const ep = c.totalPaid + fullTotal; const hasCredit = sc.some((s) => s.paymentType !== "full"); const ch = calculateCreditHealth(c, scCount, null, ep, hasCredit); const chColor = getCreditHealthStatusColor(ch.status); const hlKey = ch.status === 'green' ? 'credit.reliable' : ch.status === 'yellow' ? 'credit.caution' : ch.status === 'red' ? 'credit.risk' : ch.status === 'cash_customer' ? 'credit.cashCustomer' : 'credit.notEnoughHistory'; return (<span className="text-9 font-bold px-1.5 py-0.5 rounded-full" style={{ color: chColor, background: chColor + "22" }}>{t(hlKey as any)}</span>); })()}
-                      </div>
-                    </div>
-                  ) : (
-                    <p className="text-10 mt-1" style={{ color: "var(--text-secondary)" }}>
-                      {t("customers.creditLimit")} — {"—"}
-                    </p>
-                  )}
-                </div>
-
-                {/* Right side */}
-                <div className="flex flex-col items-end gap-1 shrink-0">
-                  {hasDebt ? (
-                    <>
-                      <span className="text-13 font-bold" style={{ color: "var(--text-primary)" }}>
-                        {formatCurrency(c.outstandingBalance)}
-                      </span>
-                      <span
-                        className="text-10 font-semibold"
-                        style={{ color: "#22c55e" }}
-                      >
-                        {t("customers.outstanding")}
-                      </span>
-                    </>
-                  ) : (
-                    <span className="text-11 font-medium" style={{ color: "var(--text-secondary)" }}>
-                      {t("customers.noOutstanding")}
-                    </span>
-                  )}
-                  <ChevronRight size={14} style={{ color: "var(--text-secondary)" }} />
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      )}
-
-      {/* Floating Add Customer */}
-      <div
-        className="fixed start-0 end-0 max-w-[480px] mx-auto pointer-events-none z-40"
-        style={{ bottom: "calc(var(--tabbar-height) + 16px)" }}
-      >
-        <div className={`flex px-4 ${isUrdu ? "justify-start" : "justify-end"}`}>
+      {/* Floating Add Customer — shown to whoever holds `customers.create`, the grant the create
+          RPC checks, rather than to the admin shell alone. */}
+      {hasPermission("customers.create") && (
+        <div
+          className="fixed start-0 end-0 max-w-[480px] mx-auto pointer-events-none z-40 px-4 flex justify-end"
+          style={{ bottom: "calc(var(--tabbar-height) + 16px)" }}
+        >
           <button
+            type="button"
             onClick={() => navigate(`${base}/customers/new`)}
-            className="pointer-events-auto ps-4 pe-5 rounded-full flex items-center gap-2 text-sm font-bold active:scale-95 transition-transform"
+            className="pointer-events-auto ps-4 pe-5 rounded-full flex items-center gap-2 text-14 font-bold active:scale-95 transition-transform"
             style={{ background: "var(--brand)", color: "#0a0a0a", height: "52px", boxShadow: "0 6px 20px rgba(0,0,0,0.25)" }}
           >
             <Plus size={20} strokeWidth={2.5} /> {t("customers.addNew")}
           </button>
         </div>
-      </div>
-    </div>
+      )}
     </PullToRefresh>
   );
 }

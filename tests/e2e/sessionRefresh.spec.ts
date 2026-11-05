@@ -24,9 +24,11 @@
  * Everything it writes lives in the dedicated tenant (its branch), and it removes it in `afterAll`.
  * QA database only.
  */
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect } from './base';
+import type { Page } from '@playwright/test';
 import { randomUUID } from 'node:crypto';
 import { execSql, loginViaUi, settle, cleanupFixtures, QA_IDS, WRITE_TENANT } from './helpers';
+import { runCleanupStatements, runTeardownSteps } from '../setup/ownedCleanup';
 
 const BASE = process.env.QA_APP_URL || 'http://localhost:5173';
 const OWNER_PHONE = '03001234567'; // the QA shop's own owner (real business rows)
@@ -35,6 +37,16 @@ const ISO_OWNER = WRITE_TENANT.owner;
 
 const extraBranchId = randomUUID();
 const EXTRA_BRANCH = `Session Branch ${extraBranchId.slice(0, 8)}`;
+
+/**
+ * `user_active_shops` for the isolated tenant's owner — CAPTURED BEFORE THIS LANE WRITES IT.
+ *
+ * The row is keyed by user, and the SERVER's own writer (`set_active_branch`, 0188) creates it, so it
+ * may not exist when the lane starts. Both states are captured here: a branch id, or `null` meaning
+ * "the lane must take the row away again". Without this, the lane's UPSERT overwrote whatever branch
+ * that owner was on (and its afterAll wrote a hard-coded default rather than the captured value).
+ */
+let originalActiveBranch: string | null = null;
 
 async function activeBranchInDb(userId: string): Promise<string | null> {
   const rows = await execSql(`SELECT branch_id FROM user_active_shops WHERE user_id = '${userId}'`);
@@ -72,22 +84,63 @@ async function openBranchSwitcher(page: Page): Promise<void> {
 }
 
 test.describe('Session refresh', () => {
-  test.afterAll(async () => {
-    // `branches` has no step in the run-ownership graph (`tests/e2e/cleanupOwnership.ts`), so this
-    // lane removes its own branch by id and READS BACK that it is gone — a cleanup that cannot report
-    // its own result is the failure mode that graph exists to prevent.
-    const [defaults] = await execSql(
-      `SELECT id FROM branches WHERE tenant_id = '${TENANT}' AND is_default AND is_active LIMIT 1`,
+  test.beforeAll(async () => {
+    const rows = await execSql(
+      `SELECT branch_id FROM user_active_shops WHERE user_id = '${ISO_OWNER.id}'`,
     );
-    if (defaults?.id) {
-      await execSql(
-        `UPDATE user_active_shops SET branch_id = '${defaults.id}' WHERE user_id = '${ISO_OWNER.id}'`,
-      ).catch(() => undefined);
-    }
-    await execSql(`DELETE FROM branches WHERE id = '${extraBranchId}'`).catch(() => undefined);
-    const left = await execSql(`SELECT count(*)::int AS n FROM branches WHERE id = '${extraBranchId}'`);
-    console.log(`[sessionRefresh] extra branch rows left behind: ${left[0]?.n ?? 'unknown'}`);
-    await cleanupFixtures();
+    originalActiveBranch = rows[0]?.branch_id ? String(rows[0].branch_id) : null;
+  });
+
+  test.afterAll(async () => {
+    // Three steps, in this order, each reporting its own failure:
+    //
+    //   1. put the OWNER'S ACTIVE BRANCH back to the value captured before this lane wrote it — or
+    //      remove the row this lane inserted, when there was none;
+    //   2. delete the throwaway branch, and READ BACK that it is gone (a `console.log` of the count
+    //      is not a report: a leftover branch is invisible to the run that left it, and the next lane
+    //      inherits it);
+    //   3. remove the rows this run registered, by id.
+    //
+    // `branches` has no step in the run-ownership graph (`tests/e2e/cleanupOwnership.ts`), so (2) is
+    // this lane's own responsibility. Steps 1 and 2 are ordered: `user_active_shops.branch_id`
+    // references the branch, so the row has to stop pointing at it before the branch can go.
+    // Nothing is `.catch(() => undefined)` any more — a restore or delete that failed left a shared
+    // row modified or a branch behind, silently.
+    await runTeardownSteps([
+      {
+        label: `restore user_active_shops.branch_id for ${ISO_OWNER.id} (captured ${originalActiveBranch ?? 'absent'})`,
+        run: () =>
+          runCleanupStatements(
+            execSql,
+            [
+              originalActiveBranch
+                ? `UPDATE user_active_shops SET branch_id = '${originalActiveBranch}', updated_at = now() WHERE user_id = '${ISO_OWNER.id}'`
+                : `DELETE FROM user_active_shops WHERE user_id = '${ISO_OWNER.id}'`,
+            ],
+            'sessionRefresh active-branch restore',
+          ),
+      },
+      {
+        label: 'remove the throwaway branch and read the row back',
+        run: async () => {
+          await runCleanupStatements(
+            execSql,
+            [`DELETE FROM branches WHERE id = '${extraBranchId}'`],
+            'sessionRefresh branch cleanup',
+          );
+          const [left] = await execSql(
+            `SELECT count(*)::int AS n FROM branches WHERE id = '${extraBranchId}'`,
+          );
+          if (Number(left?.n ?? 0) > 0) {
+            throw new Error(
+              `[QA FIXTURE] sessionRefresh left branch ${extraBranchId} behind: the isolated tenant's\n` +
+                'branch list is what the next lane switches between.',
+            );
+          }
+        },
+      },
+      { label: 'remove the rows this run owns', run: () => cleanupFixtures() },
+    ]);
   });
 
   test('owner data and permissions are the same after a reload and after a reopen', async ({ page }) => {

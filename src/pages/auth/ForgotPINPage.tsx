@@ -11,6 +11,7 @@ import { savePin } from "@/lib/pinLock";
 import { useAuthStore } from "@/stores/authStore";
 import type { User } from "@/types";
 import { useT } from "@/lib/i18n";
+import { homePathForUser } from "@/lib/experience";
 
 type Step = "phone" | "otp" | "pin" | "confirm";
 
@@ -57,7 +58,13 @@ export default function ForgotPINPage() {
     setError("");
     try {
       setPendingPhone(phone.trim());
-      await sendOTP(phone.trim());
+      // The result decides whether this is the code screen or the phone screen with a reason on
+      // it: advancing on a refused send asks for a code that was never sent.
+      const result = await sendOTP(phone.trim());
+      if (!result.success) {
+        setError(t("auth.errSendCode"));
+        return;
+      }
       setStep("otp");
     } catch {
       setError(t("copy.sendCodeFailed"));
@@ -138,8 +145,7 @@ export default function ForgotPINPage() {
         }
       }
       setPendingFlow(null);
-      const dest = activeUser?.role === "admin"
-        ? "/admin/dashboard" : "/employee/dashboard";
+      const dest = activeUser ? homePathForUser(activeUser) : "/login";
       navigate(dest, { replace: true });
     }
   }

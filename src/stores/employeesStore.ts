@@ -27,7 +27,12 @@ interface UserRow {
 // `membershipStatus` comes from the memberships table, not from `users` — that
 // table has no status column, and memberships is what authorization reads. It is
 // the authoritative invite/active state the owner sees.
-function userFromRow(r: UserRow, membershipStatus?: MembershipStatus): User {
+function userFromRow(
+  r: UserRow,
+  membershipStatus?: MembershipStatus,
+  branchScope?: string[] | null,
+  roleName?: string | null
+): User {
   return {
     id: r.id,
     name: r.name,
@@ -36,6 +41,11 @@ function userFromRow(r: UserRow, membershipStatus?: MembershipStatus): User {
     isOriginalOwner: r.is_original_owner,
     isActive: r.is_active,
     membershipStatus,
+    // Which branch(es) the membership is placed in. An invitation that has not been
+    // accepted yet is placed in exactly the branches chosen when it was sent, and that
+    // placement is the only thing that says which branch's team screen it belongs on.
+    branchScope: branchScope ?? null,
+    roleName: roleName ?? null,
     employeeNumber: r.employee_number ?? undefined,
     jobTitle: r.job_title ?? undefined,
     photoUrl: r.photo_url ?? undefined,
@@ -48,6 +58,41 @@ function userFromRow(r: UserRow, membershipStatus?: MembershipStatus): User {
   };
 }
 
+/** One branch's role for this person. `roleId` null means the membership default applies. */
+export interface EmployeeBranchRole {
+  roleId: string | null;
+  roleName: string | null;
+}
+
+/** One row of an employee's performance, for one branch or for the whole business. */
+export interface EmployeePerformanceLine {
+  branchId: string | null;
+  branchName: string | null;
+  roleId: string | null;
+  roleName: string | null;
+  salesCount: number;
+  revenue: number;
+  itemsSold: number;
+  customers: number;
+  todaySales: number;
+  todayRevenue: number;
+}
+
+/** What the owner's employee sheet reads: one person, every branch, and the recent sales. */
+export interface EmployeePerformance {
+  totals: Omit<EmployeePerformanceLine, "branchId" | "branchName" | "roleId" | "roleName">;
+  branches: EmployeePerformanceLine[];
+  recent: Array<{
+    id: string;
+    customerName: string;
+    totalAmount: number;
+    paymentType: string;
+    createdAt: string;
+    branchId: string | null;
+    branchName: string | null;
+    itemCount: number;
+  }>;
+}
 
 interface EmployeesState {
   employees: User[];
@@ -66,9 +111,10 @@ interface EmployeesState {
     /** This employee's exceptions to the role's defaults (code → granted). */
     overrides?: Record<string, boolean>;
     branchScope?: string[] | null;
+    /** { branchId: roleId }. A branch without an entry uses the default role. */
+    branchRoles?: Record<string, string>;
     createdBy?: string | null;
   }) => Promise<User>;
-  assignBranch: (employeeId: string, branchId: string, action: "add" | "move") => Promise<void>;
   setActive: (id: string, active: boolean, byUserId?: string | null) => Promise<void>;
   updateAccess: (employeeId: string, input: {
     roleId?: string | null;
@@ -77,8 +123,20 @@ interface EmployeesState {
     resetOverrides?: boolean;
     branchScope?: string[] | null;
   }) => Promise<void>;
+  /** { branchId: roleId }. Its keys become the member's branch scope. */
+  setBranchRoles: (employeeId: string, branchRoles: Record<string, string>) => Promise<void>;
   loadEmployeePermissions: (employeeId: string) => Promise<string[]>;
-  getEmployeeAccess: (employeeId: string) => Promise<{ roleId: string | null; membershipRole: MembershipRole; branchScope: string[] | null; defaults: string[]; overrides: Record<string, boolean>; effective: string[] }>;
+  getEmployeeAccess: (employeeId: string) => Promise<{
+    roleId: string | null;
+    membershipRole: MembershipRole;
+    branchScope: string[] | null;
+    defaults: string[];
+    overrides: Record<string, boolean>;
+    effective: string[];
+    branchRoles: Record<string, EmployeeBranchRole>;
+  }>;
+  /** One employee's sales, grouped by branch plus a total. Owner/admin only, enforced by the RPC. */
+  getEmployeePerformance: (employeeId: string) => Promise<EmployeePerformance>;
   /** Drop every row: the app is about to read a different shop. */
   reset: () => void;
 }
@@ -108,16 +166,66 @@ export const useEmployeesStore = create<EmployeesState>((set, get) => ({
       return;
     }
     // Read the membership status alongside, so the list can distinguish an
-    // invitation that has not been accepted from an employee who works here.
+    // invitation that has not been accepted from an employee who works here — and
+    // the branch placement, because an invitation that is still pending is not in
+    // `get_branch_employee_ids()` (that read is the ACTIVE team of a branch), so
+    // without its placement the person the owner just invited would belong to no
+    // screen at all.
     const { data: memberships } = await supabase
       .from("memberships")
-      .select("user_id, status");
+      .select("user_id, status, branch_scope, role_id, access_kind");
     if (!isDataContextCurrent(context)) return;
     const statusByUser = new Map<string, MembershipStatus>(
       (memberships ?? []).map((m) => [m.user_id as string, m.status as MembershipStatus])
     );
+    const scopeByUser = new Map<string, string[]>();
+    const roleIdByUser = new Map<string, string>();
+    // A Co-Owner keeps memberships.role = 'employee' by design, so the
+    // membership category — not the role — is what keeps them out of the
+    // ordinary Employee directory.
+    const coOwnerUserIds = new Set<string>();
+    for (const m of (memberships ?? []) as Array<{
+      user_id: string;
+      branch_scope: unknown;
+      role_id: string | null;
+      access_kind?: string | null;
+    }>) {
+      if (!m.user_id) continue;
+      if (m.access_kind === "co_owner") {
+        coOwnerUserIds.add(m.user_id);
+        continue;
+      }
+      const scope = Array.isArray(m.branch_scope)
+        ? (m.branch_scope as unknown[]).filter((id): id is string => typeof id === "string")
+        : [];
+      if (scope.length > 0) scopeByUser.set(m.user_id, scope);
+      if (m.role_id) roleIdByUser.set(m.user_id, m.role_id);
+    }
+
+    // The name behind each default role, in ONE read. The alternative — asking
+    // `get_employee_access` once per row — is an RPC per employee just to print a directory, and
+    // it fails for a viewer who may see the team but not inspect each person's access. A failed
+    // read leaves the name null, and the screen falls back to the job title rather than inventing
+    // one.
+    const roleNameById = new Map<string, string>();
+    const roleIds = [...new Set(roleIdByUser.values())];
+    if (roleIds.length > 0) {
+      const { data: roleRows } = await supabase.from("roles").select("id, name").in("id", roleIds);
+      if (!isDataContextCurrent(context)) return;
+      for (const role of (roleRows ?? []) as Array<{ id: string; name: string }>) {
+        roleNameById.set(role.id, role.name);
+      }
+    }
+
     set({
-      employees: (data as UserRow[]).map((r) => userFromRow(r, statusByUser.get(r.id))),
+      employees: (data as UserRow[]).filter((r) => !coOwnerUserIds.has(r.id)).map((r) =>
+        userFromRow(
+          r,
+          statusByUser.get(r.id),
+          scopeByUser.get(r.id),
+          roleIdByUser.has(r.id) ? roleNameById.get(roleIdByUser.get(r.id) as string) ?? null : null
+        )
+      ),
       loading: false,
       ready: true,
     });
@@ -138,14 +246,6 @@ export const useEmployeesStore = create<EmployeesState>((set, get) => ({
     };
   },
 
-  assignBranch: async (employeeId, branchId, action) => {
-    const { error } = await supabase.rpc("assign_employee_branch", {
-      p_employee_id: employeeId, p_branch_id: branchId, p_action: action,
-    });
-    if (error) throw new Error(error.message);
-    await get().load();
-  },
-
   createEmployee: async (input) => {
     const { data, error } = await supabase.rpc("create_employee", {
       payload: {
@@ -159,6 +259,7 @@ export const useEmployeesStore = create<EmployeesState>((set, get) => ({
         photoUrl: input.photoUrl ?? null,
         overrides: input.overrides ?? null,
         branchScope: input.branchScope ?? null,
+        branchRoles: input.branchRoles ?? null,
         createdBy: input.createdBy ?? null,
       },
     });
@@ -183,6 +284,15 @@ export const useEmployeesStore = create<EmployeesState>((set, get) => ({
     await get().load();
   },
 
+  setBranchRoles: async (employeeId, branchRoles) => {
+    const { error } = await supabase.rpc("set_employee_branch_roles", {
+      p_employee_id: employeeId,
+      p_branch_roles: branchRoles,
+    });
+    if (error) throw new Error(error.message);
+    await get().load();
+  },
+
   getEmployeeAccess: async (employeeId) => {
     const { data, error } = await supabase.rpc("get_employee_access", { p_employee_id: employeeId });
     if (error) throw new Error(error.message);
@@ -193,6 +303,49 @@ export const useEmployeesStore = create<EmployeesState>((set, get) => ({
       defaults: Array.isArray(data?.defaults) ? data.defaults : [],
       overrides: data?.overrides && typeof data.overrides === "object" ? data.overrides : {},
       effective: Array.isArray(data?.effective) ? data.effective : [],
+      branchRoles: data?.branchRoles && typeof data.branchRoles === "object" ? data.branchRoles : {},
+    };
+  },
+
+  getEmployeePerformance: async (employeeId) => {
+    const { data, error } = await supabase.rpc("get_employee_performance", { p_employee_id: employeeId });
+    if (error) throw new Error(error.message);
+    const number = (v: unknown) => Number(v ?? 0);
+    return {
+      totals: {
+        salesCount: number(data?.totals?.salesCount),
+        revenue: number(data?.totals?.revenue),
+        itemsSold: number(data?.totals?.itemsSold),
+        customers: number(data?.totals?.customers),
+        todaySales: number(data?.totals?.todaySales),
+        todayRevenue: number(data?.totals?.todayRevenue),
+      },
+      branches: Array.isArray(data?.branches)
+        ? data.branches.map((b: any) => ({
+            branchId: b.branchId ?? null,
+            branchName: b.branchName ?? null,
+            roleId: b.roleId ?? null,
+            roleName: b.roleName ?? null,
+            salesCount: number(b.salesCount),
+            revenue: number(b.revenue),
+            itemsSold: number(b.itemsSold),
+            customers: number(b.customers),
+            todaySales: number(b.todaySales),
+            todayRevenue: number(b.todayRevenue),
+          }))
+        : [],
+      recent: Array.isArray(data?.recent)
+        ? data.recent.map((s: any) => ({
+            id: s.id,
+            customerName: s.customerName ?? "",
+            totalAmount: number(s.totalAmount),
+            paymentType: s.paymentType ?? "full",
+            createdAt: s.createdAt ?? "",
+            branchId: s.branchId ?? null,
+            branchName: s.branchName ?? null,
+            itemCount: number(s.itemCount),
+          }))
+        : [],
     };
   },
 

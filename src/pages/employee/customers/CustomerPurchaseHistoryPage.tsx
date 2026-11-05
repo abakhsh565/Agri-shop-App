@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
+import DateField from "@/components/ui/DateField";
 import { PaymentBadge, CreditHealthBadge } from "@/components/ui/Badge";
 import ListCard from "@/components/ui/ListCard";
 import ListRow from "@/components/ui/ListRow";
@@ -168,16 +169,27 @@ export default function CustomerPurchaseHistoryPage() {
             <div className="flex gap-3">
               <div className="flex-1">
                 <label className="ds-section-label mb-1 block" style={{ color: "var(--text-secondary)" }}>{t("admin.from")}</label>
-                <input type="date" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} max={todayISO} className="w-full outline-none" />
+                <DateField
+                  value={customFrom}
+                  max={customTo || todayISO}
+                  onChange={setCustomFrom}
+                  testId="history-from"
+                />
               </div>
               <div className="flex-1">
                 <label className="ds-section-label mb-1 block" style={{ color: "var(--text-secondary)" }}>{t("admin.to")}</label>
-                <input type="date" value={customTo} onChange={(e) => setCustomTo(e.target.value)} max={todayISO} min={customFrom || undefined} className="w-full outline-none" />
+                <DateField
+                  value={customTo}
+                  min={customFrom || undefined}
+                  max={todayISO}
+                  onChange={setCustomTo}
+                  testId="history-to"
+                />
               </div>
             </div>
             <div className="flex gap-2 mt-4">
               <button onClick={() => { setCustomFrom(""); setCustomTo(""); setFilter("custom"); setShowDateModal(false); }} className="flex-1 h-10 rounded-[var(--radius-tile)] text-13 font-semibold" style={{ background: "var(--surface-2)", color: "var(--text-secondary)" }}>{t("reports.clear")}</button>
-              <button onClick={() => { setShowDateModal(false); setFilter("custom"); }} className="flex-1 h-10 rounded-[var(--radius-tile)] text-13 font-bold" style={{ background: "var(--brand)", color: "#0a0a0a" }}>{t("reports.apply")}</button>
+              <button onClick={() => { setShowDateModal(false); setFilter("custom"); }} className="flex-1 h-10 rounded-[var(--radius-tile)] text-13 font-bold" style={{ background: "var(--text-primary)", color: "var(--background)" }}>{t("reports.apply")}</button>
             </div>
           </div>
         </div>

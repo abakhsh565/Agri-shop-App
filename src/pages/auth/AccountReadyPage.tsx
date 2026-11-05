@@ -4,6 +4,7 @@ import AuthLayout from "@/components/layout/AuthLayout";
 import StatusBar from "@/components/ui/StatusBar";
 import { useAuthStore } from "@/stores/authStore";
 import { useT } from "@/lib/i18n";
+import { homePathForUser } from "@/lib/experience";
 
 /**
  * The screen a **new** account lands on straight after the OTP: signed in, and one small thing
@@ -22,9 +23,7 @@ export default function AccountReadyPage() {
   const navigate = useNavigate();
   const { user } = useAuthStore();
 
-  const dest = user?.role === "admin"
-    ? "/admin/dashboard"
-    : "/employee/dashboard";
+  const dest = homePathForUser(user);
 
   return (
     <AuthLayout>

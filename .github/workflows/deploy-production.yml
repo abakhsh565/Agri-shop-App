@@ -18,18 +18,30 @@ name: Deploy production — only a gated commit
 # missing the script refuses and nothing is deployed: a missing credential is never a reason to fall
 # back to the git integration.
 #
+# THE RELEASE IS NOT THE REQUEST. Vercel's answer means the build was queued, not that production
+# serves it — measured 2026-10-18, this workflow reported `success` 16s after the POST while the build
+# was still running. So a second step waits for the deployment, checks the production URL actually
+# serves the app (`scripts/deploy/verify-production.mjs`), and returns production to the previous
+# promoted deployment if the page is wrong. A failed build leaves the previous deployment serving and
+# is reported as a failure, not a release.
+#
 # Required configuration (repository secrets — the names are the ones already configured):
 #   secret   VERCEL_TOKEN        a Vercel token that may create deployments for this project
 #   secret   VERCEL_PROJECTID    prj_tWZoyuctxYUj6RiA60q1d3ZACK52
 #   secret   VERCEL_TEAMID       team_pNyiPYZgdGx5L8CvqMaPL3ai
 #
-# A dispatch exists for a re-deploy or a manual gate check. It is not an override: the script reads the
-# CI run for the named commit and refuses unless that run concluded `success`.
+# DEPLOYMENT IS A HUMAN DECISION (owner's environment policy, 2026-10-26).
+#
+# Merging to `main` used to deploy on its own once CI concluded `success`: nobody was asked. A green
+# run is evidence, not authorization — the owner's workflow is Development → Staging (approved) →
+# Production (approved, after staging verification). So this workflow has ONE trigger, a dispatch.
+# A push to any branch runs CI checks and nothing else; `vercel.json` keeps the git integration off.
+#
+# The dispatch is not an override: the script still reads the CI run for the named commit and refuses
+# unless that run concluded `success` while that commit is `main`'s head. `dry_run` defaults to true,
+# so asking for a decision is the safe default and deploying takes a deliberate `dry_run: false`.
 
 on:
-  workflow_run:
-    workflows: ['CI — gates for a candidate commit']
-    types: [completed]
   workflow_dispatch:
     inputs:
       sha:
@@ -53,20 +65,17 @@ concurrency:
 jobs:
   deploy:
     name: Deploy the gated commit
-    # The failed-gate behaviour is this line: a CI run that did not conclude `success` never enters
-    # the job at all. A dispatch enters it, and the script applies the same rule to the named commit.
-    if: >
-      (github.event_name == 'workflow_run' &&
-        github.event.workflow_run.conclusion == 'success' &&
-        github.event.workflow_run.head_branch == 'main') ||
-      github.event_name == 'workflow_dispatch'
+    # Only a human can start this job. The script then applies the same rule a merge used to:
+    # the named commit must be `main`'s head and its CI run must have concluded `success`.
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # 15 was enough for a POST. Waiting for the build (600s) plus the smoke check needs headroom.
+    timeout-minutes: 25
     steps:
       - name: Checkout the gated commit
         uses: actions/checkout@v7
         with:
-          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || inputs.sha }}
+          ref: ${{ inputs.sha }}
           fetch-depth: 1
 
       - name: Setup Node.js
@@ -75,14 +84,16 @@ jobs:
           node-version: 22
 
       - name: Decide, and deploy only if the gate passes
+        id: trigger
         # No soft-fail flag and no fallback to the git integration: a refusal here is the intended
         # outcome for a red, stale or unattributed candidate.
         env:
           DEPLOY_EVENT: ${{ github.event_name }}
-          CI_CONCLUSION: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.conclusion || '' }}
+          # No CI_CONCLUSION is passed: with a dispatch there is no triggering run, so the script
+          # reads the named commit's CI run itself and refuses unless it concluded `success`.
           GATED_BRANCH: main
-          GATED_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || inputs.sha }}
-          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && '1' || '0' }}
+          GATED_SHA: ${{ inputs.sha }}
+          DRY_RUN: ${{ inputs.dry_run && '1' || '0' }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
@@ -91,3 +102,34 @@ jobs:
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECTID }}
           VERCEL_TEAM_ID: ${{ secrets.VERCEL_TEAMID }}
         run: node scripts/deploy/trigger-production.mjs
+
+      - name: Wait for the build, verify production serves it, roll back if not
+        # Runs only when the trigger actually created a deployment (a dry run creates none). The
+        # step fails closed: a timeout or an unreadable page is a failure, never "probably fine".
+        if: steps.trigger.outputs.deployment_id != ''
+        env:
+          DEPLOYMENT_ID: ${{ steps.trigger.outputs.deployment_id }}
+          # The deployment's own immutable URL, from the POST response. The single-deployment GET
+          # does not document `url`, so this is what the entry-bundle comparison uses as its
+          # reference when the GET omits it.
+          DEPLOYMENT_URL: ${{ steps.trigger.outputs.deployment_url }}
+          GATED_SHA: ${{ inputs.sha }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECTID }}
+          VERCEL_TEAM_ID: ${{ secrets.VERCEL_TEAMID }}
+          # The domain customers use, not the project's generated hostname.
+          SMOKE_URL: https://hisaabkitaab.dpdns.org
+          VERCEL_PROJECT_NAME: agri-shop-app
+          TIMEOUT_SECONDS: '600'
+          POLL_SECONDS: '10'
+          ROLLBACK_TIMEOUT_SECONDS: '300'
+        run: node scripts/deploy/verify-production.mjs
+
+# THE RELEASE TIMELINE IS NOT A STEP HERE, ON PURPOSE.
+#
+# Recording this release in the error reporter's timeline happens in `release-timeline.yml`, which is
+# triggered by this workflow finishing successfully. Two reasons, both of them rules this file already
+# keeps: (1) a marker is not a gate, and this job's conclusion must mean exactly one thing — the
+# release shipped and was verified — so nothing about monitoring may colour it; (2) the alternative
+# (a soft-failed step here) is the failure mode `tests/unit/productionDeployGate.test.ts` exists to
+# forbid. A separate workflow can be red honestly, which is what the backup watchdog already does.

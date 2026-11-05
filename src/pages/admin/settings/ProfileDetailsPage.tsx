@@ -8,6 +8,7 @@ import { useThemeStore, applyTheme } from "@/stores/themeStore";
 import { useT } from "@/lib/i18n";
 import { useShellBase } from "@/lib/useShellBase";
 import { uploadImage } from "@/lib/storage";
+import ImageCrop from "@/components/ui/ImageCrop";
 import { supabase } from "@/lib/supabase";
 import ProfileCard from "@/components/shop/ProfileCard";
 import BranchesSection from "@/components/shop/BranchesSection";
@@ -15,11 +16,16 @@ import BranchesSection from "@/components/shop/BranchesSection";
 /**
  * The account itself, as a page: who this person is, and every branch they run.
  *
- * Settings shows the card and the phone's own preferences; this is the other half. It used to
- * carry the edit form as a panel of its own, which pushed the branches — the thing most owners
- * came here for — off the bottom of the screen. The form is a bottom sheet again, opened by the
- * card's own Edit button, exactly as it was before the card became a row: it is a two-field
- * form, and a form is what a sheet is for. The page itself is now only facts.
+ * Settings shows the card, the shop's figures and the shop's own menu; this is the other half.
+ * It used to carry the edit form as a panel of its own, which pushed the branches — the thing
+ * most owners came here for — off the bottom of the screen. The form is a bottom sheet again,
+ * opened by the card's own Edit button, exactly as it was before the card became a row: it is a
+ * two-field form, and a form is what a sheet is for. The page itself is now only facts.
+ *
+ * The shop's menu (Money, Stock, People, App) was rendered here until 2026-10-26. It moved back
+ * to Settings, so reaching Purchases or Reports no longer means opening your own profile first;
+ * this page is left with the two things that are genuinely about the account: the person and
+ * their branches.
  */
 export default function ProfileDetailsPage() {
   const t = useT();
@@ -34,6 +40,7 @@ export default function ProfileDetailsPage() {
   const [editImageUrl, setEditImageUrl] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [pendingAvatar, setPendingAvatar] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { applyTheme(theme); }, []);
@@ -80,9 +87,16 @@ export default function ProfileDetailsPage() {
     }
   }
 
-  async function handleAvatarUpload(e: React.ChangeEvent<HTMLInputElement>) {
+  /** Choosing a picture only opens the frame; the upload happens once it is confirmed. */
+  function handleAvatarUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
+    if (fileInputRef.current) fileInputRef.current.value = "";
     if (!file) return;
+    setPendingAvatar(file);
+  }
+
+  async function uploadAvatar(file: File) {
+    setPendingAvatar(null);
     setUploading(true);
     try {
       setEditImageUrl(await uploadImage("employee-photos", file));
@@ -173,10 +187,8 @@ export default function ProfileDetailsPage() {
                 aria-label={t("common.name")}
                 className="w-full h-12 px-4 text-sm outline-none"
                 style={{
-                  background: "var(--surface-2)",
-                  border: "1px solid var(--border-control)",
+                  background: "var(--field-bg)",
                   color: "var(--text-primary)",
-                  borderRadius: "24px",
                 }}
               />
             </div>
@@ -201,6 +213,17 @@ export default function ProfileDetailsPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* The picture is framed before it is stored, the same step every other image in the app
+          gets: the tile is a circle, so the frame is a square and what is saved is what is seen. */}
+      {pendingAvatar && (
+        <ImageCrop
+          file={pendingAvatar}
+          aspect={1}
+          onCancel={() => setPendingAvatar(null)}
+          onConfirm={(file) => void uploadAvatar(file)}
+        />
       )}
     </div>
   );
