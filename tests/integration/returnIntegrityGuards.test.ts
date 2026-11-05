@@ -75,20 +75,45 @@ function payload(overrides: Record<string, unknown> = {}) {
   };
 }
 
+/**
+ * Cleanup that REPORTS instead of swallowing — the customerDeletionSecurity /
+ * employeeInviteLifecycle pattern. This suite shares the QA database with the
+ * other integration files, so a silent catch here would leave rows in place
+ * and the next suite would fail deep inside a test with an authorization error
+ * that is really leftover state. Failures are collected and the caller throws
+ * with their names (throwIfCleanupFailed, wired in beforeAll/afterAll).
+ */
+const cleanupFailures: string[] = [];
+async function trySql(label: string, p: Promise<unknown>): Promise<void> {
+  try {
+    await p;
+  } catch (error) {
+    cleanupFailures.push(`${label}: ${(error as Error).message}`);
+  }
+}
+function throwIfCleanupFailed(context: string): void {
+  if (cleanupFailures.length) {
+    throw new Error(
+      `${context}: cleanup failed — ${cleanupFailures.join(' | ')}. ` +
+        `Leftover rows from this suite's namespace will contaminate the next run; fix the leak here rather than re-running.`,
+    );
+  }
+}
+
 async function cleanup() {
   // Scoped to this suite's own customer, not the whole tenant: the previous shape was a table-wide
   // delete for the shared QA shop, so it could remove a sibling suite's return rows while they were
   // being asserted on (and did — see `returnRowCount`).
-  await sql(`DELETE FROM audit_events WHERE entity_id IN (${OWN_RETURNS})`).catch(() => undefined);
-  await sql(`DELETE FROM return_items WHERE return_id IN (${OWN_RETURNS})`).catch(() => undefined);
-  await sql(`DELETE FROM returns WHERE shop_id = '${TENANT}' AND customer_id = '${CUSTOMER}'`).catch(() => undefined);
-  await sql(`DELETE FROM sale_items WHERE sale_id IN ('${SALE}','${SALE_VOIDED}','${SALE_OTHER}')`).catch(() => undefined);
-  await sql(`DELETE FROM inventory_movements WHERE reference_id IN ('${SALE}','${SALE_VOIDED}','${SALE_OTHER}') OR product_id = '${PRODUCT}'`).catch(() => undefined);
-  await sql(`DELETE FROM sales WHERE id IN ('${SALE}','${SALE_VOIDED}','${SALE_OTHER}')`).catch(() => undefined);
-  await sql(`DELETE FROM product_variants WHERE id = '${VARIANT}'`).catch(() => undefined);
-  await sql(`DELETE FROM products WHERE id = '${PRODUCT}'`).catch(() => undefined);
-  await sql(`DELETE FROM customers WHERE id = '${CUSTOMER}'`).catch(() => undefined);
-  await sql(`DELETE FROM users WHERE phone = '${PHONE}'`).catch(() => undefined);
+  await trySql('audit_events', sql(`DELETE FROM audit_events WHERE entity_id IN (${OWN_RETURNS})`));
+  await trySql('return_items', sql(`DELETE FROM return_items WHERE return_id IN (${OWN_RETURNS})`));
+  await trySql('returns', sql(`DELETE FROM returns WHERE shop_id = '${TENANT}' AND customer_id = '${CUSTOMER}'`));
+  await trySql('sale_items', sql(`DELETE FROM sale_items WHERE sale_id IN ('${SALE}','${SALE_VOIDED}','${SALE_OTHER}')`));
+  await trySql('inventory_movements', sql(`DELETE FROM inventory_movements WHERE reference_id IN ('${SALE}','${SALE_VOIDED}','${SALE_OTHER}') OR product_id = '${PRODUCT}'`));
+  await trySql('sales', sql(`DELETE FROM sales WHERE id IN ('${SALE}','${SALE_VOIDED}','${SALE_OTHER}')`));
+  await trySql('product_variants', sql(`DELETE FROM product_variants WHERE id = '${VARIANT}'`));
+  await trySql('products', sql(`DELETE FROM products WHERE id = '${PRODUCT}'`));
+  await trySql('customers', sql(`DELETE FROM customers WHERE id = '${CUSTOMER}'`));
+  await trySql('users', sql(`DELETE FROM users WHERE phone = '${PHONE}'`));
 }
 
 beforeAll(async () => {
@@ -136,10 +161,12 @@ beforeAll(async () => {
       ('${SALE_ITEM_VOIDED}', '${SALE_VOIDED}', '${PRODUCT}', 'QA Return Product', '${VARIANT}', '10kg', 5, ${SALE_PRICE}, 10, 500)
     ON CONFLICT (id) DO NOTHING
   `);
+  throwIfCleanupFailed('returnIntegrityGuards beforeAll cleanup');
 });
 
 afterAll(async () => {
   await cleanup();
+  throwIfCleanupFailed('returnIntegrityGuards afterAll cleanup');
 });
 
 describe('Return integrity guards — restored and enforced by the database', () => {

@@ -35,13 +35,38 @@ async function sql(query: string) {
   return execSqlAsAdmin(query);
 }
 
+/**
+ * Cleanup that REPORTS instead of swallowing — the customerDeletionSecurity /
+ * employeeInviteLifecycle pattern. This suite shares the QA database with the
+ * other integration files, so a silent catch here would leave rows in place
+ * and the next suite would fail deep inside a test with an authorization error
+ * that is really leftover state. Failures are collected and the caller throws
+ * with their names (throwIfCleanupFailed, wired in beforeAll/afterAll).
+ */
+const cleanupFailures: string[] = [];
+async function trySql(label: string, p: Promise<unknown>): Promise<void> {
+  try {
+    await p;
+  } catch (error) {
+    cleanupFailures.push(`${label}: ${(error as Error).message}`);
+  }
+}
+function throwIfCleanupFailed(context: string): void {
+  if (cleanupFailures.length) {
+    throw new Error(
+      `${context}: cleanup failed — ${cleanupFailures.join(' | ')}. ` +
+        `Leftover rows from this suite's namespace will contaminate the next run; fix the leak here rather than re-running.`,
+    );
+  }
+}
+
 async function cleanup() {
-  await sql(`DELETE FROM customers WHERE phone IN ('923009795001','923009795002','923009795004','923009795005')`).catch(() => undefined);
-  await sql(`DELETE FROM audit_events WHERE user_id IN ('${OWNER}','${EMP}','${VICTIM}')`).catch(() => undefined);
-  await sql(`DELETE FROM user_permissions WHERE user_id IN ('${OWNER}','${EMP}','${VICTIM}')`).catch(() => undefined);
-  await sql(`DELETE FROM role_permissions WHERE role_id IN (SELECT id FROM roles WHERE name LIKE '${RUN}%')`).catch(() => undefined);
-  await sql(`DELETE FROM roles WHERE name LIKE '${RUN}%'`).catch(() => undefined);
-  await sql(`DELETE FROM users WHERE id IN ('${OWNER}','${EMP}','${VICTIM}')`).catch(() => undefined);
+  await trySql('customers', sql(`DELETE FROM customers WHERE phone IN ('923009795001','923009795002','923009795004','923009795005')`));
+  await trySql('audit_events', sql(`DELETE FROM audit_events WHERE user_id IN ('${OWNER}','${EMP}','${VICTIM}')`));
+  await trySql('user_permissions', sql(`DELETE FROM user_permissions WHERE user_id IN ('${OWNER}','${EMP}','${VICTIM}')`));
+  await trySql('role_permissions', sql(`DELETE FROM role_permissions WHERE role_id IN (SELECT id FROM roles WHERE name LIKE '${RUN}%')`));
+  await trySql('roles', sql(`DELETE FROM roles WHERE name LIKE '${RUN}%'`));
+  await trySql('users', sql(`DELETE FROM users WHERE id IN ('${OWNER}','${EMP}','${VICTIM}')`));
 }
 
 beforeAll(async () => {
@@ -71,10 +96,12 @@ beforeAll(async () => {
   expect(branchId).toBeTruthy();
   await setMembershipBranchScope(EMP, TENANT_A, [branchId]);
   await setMembershipBranchScope(VICTIM, TENANT_A, [branchId]);
+  throwIfCleanupFailed('rbacLifecycleAndSessions beforeAll cleanup');
 });
 
 afterAll(async () => {
   await cleanup();
+  throwIfCleanupFailed('rbacLifecycleAndSessions afterAll cleanup');
 });
 
 const customerCall = (n: number) => ({

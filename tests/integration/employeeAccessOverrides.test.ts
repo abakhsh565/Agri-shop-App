@@ -72,14 +72,39 @@ async function createEmployee(payload: Record<string, unknown>) {
   return r;
 }
 
+/**
+ * Cleanup that REPORTS instead of swallowing — the customerDeletionSecurity /
+ * employeeInviteLifecycle pattern. This suite shares the QA database with the
+ * other integration files, so a silent catch here would leave rows in place
+ * and the next suite would fail deep inside a test with an authorization error
+ * that is really leftover state. Failures are collected and the caller throws
+ * with their names (throwIfCleanupFailed, wired in beforeAll/afterAll).
+ */
+const cleanupFailures: string[] = [];
+async function trySql(label: string, p: Promise<unknown>): Promise<void> {
+  try {
+    await p;
+  } catch (error) {
+    cleanupFailures.push(`${label}: ${(error as Error).message}`);
+  }
+}
+function throwIfCleanupFailed(context: string): void {
+  if (cleanupFailures.length) {
+    throw new Error(
+      `${context}: cleanup failed — ${cleanupFailures.join(' | ')}. ` +
+        `Leftover rows from this suite's namespace will contaminate the next run; fix the leak here rather than re-running.`,
+    );
+  }
+}
+
 async function cleanup() {
-  await sql(`
+  await trySql('audit_events', sql(`
     DELETE FROM audit_events
     WHERE user_id IN (SELECT id FROM users WHERE phone = '${EMP_PHONE}')
        OR entity_id IN (SELECT id FROM users WHERE phone = '${EMP_PHONE}')
-  `).catch(() => undefined);
-  await sql(`DELETE FROM user_permissions WHERE user_id IN (SELECT id FROM users WHERE phone = '${EMP_PHONE}')`).catch(() => undefined);
-  await sql(`DELETE FROM users WHERE phone = '${EMP_PHONE}'`).catch(() => undefined);
+  `));
+  await trySql('user_permissions', sql(`DELETE FROM user_permissions WHERE user_id IN (SELECT id FROM users WHERE phone = '${EMP_PHONE}')`));
+  await trySql('users', sql(`DELETE FROM users WHERE phone = '${EMP_PHONE}'`));
 }
 
 async function overridesInDb(): Promise<{ code: string; is_granted: boolean }[]> {
@@ -146,12 +171,14 @@ beforeAll(async () => {
   ).toBe('active');
   const perms = await execRpcAsUser(OWNER, 'get_my_permissions', {});
   expect(perms.error, 'the owner must be authorized through the real JWT path').toBeNull();
+  throwIfCleanupFailed('employeeAccessOverrides beforeAll cleanup');
 });
 
 afterAll(async () => {
   await cleanup();
-  await sql(`DELETE FROM audit_events WHERE user_id = '${OWNER}'`).catch(() => undefined);
-  await sql(`DELETE FROM users WHERE id = '${OWNER}'`).catch(() => undefined);
+  await trySql('audit_events-2', sql(`DELETE FROM audit_events WHERE user_id = '${OWNER}'`));
+  await trySql('users-2', sql(`DELETE FROM users WHERE id = '${OWNER}'`));
+  throwIfCleanupFailed('employeeAccessOverrides afterAll cleanup');
 });
 
 describe('Employee access = role defaults + this employee\'s exceptions', () => {

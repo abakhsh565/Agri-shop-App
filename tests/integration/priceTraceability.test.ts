@@ -36,6 +36,31 @@ const rpc = async (name: string, payload: Record<string, any>) => {
 const variantRow = async () =>
   (await sql(`SELECT stock_qty, cost_price, selling_price FROM product_variants WHERE id = '${variantId}'`))[0];
 
+/**
+ * Cleanup that REPORTS instead of swallowing — the customerDeletionSecurity /
+ * employeeInviteLifecycle pattern. This suite shares the QA database with the
+ * other integration files, so a silent catch here would leave rows in place
+ * and the next suite would fail deep inside a test with an authorization error
+ * that is really leftover state. Failures are collected and the caller throws
+ * with their names (throwIfCleanupFailed, wired in beforeAll/afterAll).
+ */
+const cleanupFailures: string[] = [];
+async function trySql(label: string, p: Promise<unknown>): Promise<void> {
+  try {
+    await p;
+  } catch (error) {
+    cleanupFailures.push(`${label}: ${(error as Error).message}`);
+  }
+}
+function throwIfCleanupFailed(context: string): void {
+  if (cleanupFailures.length) {
+    throw new Error(
+      `${context}: cleanup failed — ${cleanupFailures.join(' | ')}. ` +
+        `Leftover rows from this suite's namespace will contaminate the next run; fix the leak here rather than re-running.`,
+    );
+  }
+}
+
 async function clean() {
   const like = `'${NAME}%'`;
   const steps = [
@@ -49,7 +74,7 @@ async function clean() {
     `DELETE FROM products WHERE name LIKE ${like}`,
     `DELETE FROM companies WHERE name LIKE ${like}`,
   ];
-  for (const s of steps) await execSqlAsAdmin(s).catch(() => undefined);
+  for (const s of steps) await trySql('s', execSqlAsAdmin(s));
 }
 
 beforeAll(async () => {
@@ -91,10 +116,12 @@ beforeAll(async () => {
     items: [{ productId: product.id, productName: `${NAME} Fertilizer`, variantId, variantName: 'bag', qty: 20, unitPrice: 300, unitSize: 1, baseUnit: 'kg' }],
   });
   sale1Id = sale.id;
+  throwIfCleanupFailed('priceTraceability beforeAll cleanup');
 });
 
 afterAll(async () => {
   await clean();
+  throwIfCleanupFailed('priceTraceability afterAll cleanup');
 });
 
 describe('a purchase sets the product current price', () => {

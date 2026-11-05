@@ -33,15 +33,40 @@ async function sql(query: string) {
   return execSqlAsAdmin(query);
 }
 
+/**
+ * Cleanup that REPORTS instead of swallowing — the customerDeletionSecurity /
+ * employeeInviteLifecycle pattern. This suite shares the QA database with the
+ * other integration files, so a silent catch here would leave rows in place
+ * and the next suite would fail deep inside a test with an authorization error
+ * that is really leftover state. Failures are collected and the caller throws
+ * with their names (throwIfCleanupFailed, wired in beforeAll/afterAll).
+ */
+const cleanupFailures: string[] = [];
+async function trySql(label: string, p: Promise<unknown>): Promise<void> {
+  try {
+    await p;
+  } catch (error) {
+    cleanupFailures.push(`${label}: ${(error as Error).message}`);
+  }
+}
+function throwIfCleanupFailed(context: string): void {
+  if (cleanupFailures.length) {
+    throw new Error(
+      `${context}: cleanup failed — ${cleanupFailures.join(' | ')}. ` +
+        `Leftover rows from this suite's namespace will contaminate the next run; fix the leak here rather than re-running.`,
+    );
+  }
+}
+
 async function cleanup() {
-  await sql(`DELETE FROM reminder_occurrences WHERE config_id IN ('${CFG_A}') OR shop_id = '${TENANT_B}'`).catch(() => undefined);
+  await trySql('reminder_occurrences', sql(`DELETE FROM reminder_occurrences WHERE config_id IN ('${CFG_A}') OR shop_id = '${TENANT_B}'`));
   // Only this suite's configuration — never the live tenant's own rows.
-  await sql(`DELETE FROM reminder_configs WHERE id = '${CFG_A}' OR name LIKE '${RUN}%' OR shop_id = '${TENANT_B}'`).catch(() => undefined);
-  await sql(`DELETE FROM reminder_logs WHERE shop_id = '${TENANT_B}'`).catch(() => undefined);
-  await sql(`DELETE FROM audit_events WHERE user_id IN ('${OWNER_A}','${OWNER_B}','${EMP_A}')`).catch(() => undefined);
-  await sql(`DELETE FROM customers WHERE id = '${CUST_A}'`).catch(() => undefined);
-  await sql(`DELETE FROM users WHERE id IN ('${OWNER_A}','${OWNER_B}','${EMP_A}')`).catch(() => undefined);
-  await sql(`DELETE FROM shops WHERE id = '${TENANT_B}'`).catch(() => undefined);
+  await trySql('reminder_configs', sql(`DELETE FROM reminder_configs WHERE id = '${CFG_A}' OR name LIKE '${RUN}%' OR shop_id = '${TENANT_B}'`));
+  await trySql('reminder_logs', sql(`DELETE FROM reminder_logs WHERE shop_id = '${TENANT_B}'`));
+  await trySql('audit_events', sql(`DELETE FROM audit_events WHERE user_id IN ('${OWNER_A}','${OWNER_B}','${EMP_A}')`));
+  await trySql('customers', sql(`DELETE FROM customers WHERE id = '${CUST_A}'`));
+  await trySql('users', sql(`DELETE FROM users WHERE id IN ('${OWNER_A}','${OWNER_B}','${EMP_A}')`));
+  await trySql('shops', sql(`DELETE FROM shops WHERE id = '${TENANT_B}'`));
 }
 
 beforeAll(async () => {
@@ -76,10 +101,12 @@ beforeAll(async () => {
     VALUES ('${CUST_A}', '${RUN} Customer A', '923009780010', 100000, 0, 0, 0, '${TENANT_A}', 'QA')
     ON CONFLICT (id) DO NOTHING
   `);
+  throwIfCleanupFailed('tenantIsolationOps beforeAll cleanup');
 });
 
 afterAll(async () => {
   await cleanup();
+  throwIfCleanupFailed('tenantIsolationOps afterAll cleanup');
 });
 
 describe('Tenant isolation — tenant-scoped reads', () => {

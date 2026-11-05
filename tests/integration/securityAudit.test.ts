@@ -33,13 +33,40 @@ describe('Security Audit — RLS & Authorization', () => {
       VALUES ('${CUST_ID}', 'Security Test Customer', '${CUST_PHONE}', 10000, 0, 0, 0, '${QA_IDS.shop}', 'QA')
       ON CONFLICT (id) DO NOTHING
     `);
-  });
+      throwIfCleanupFailed('Security Audit — RLS & Authorization beforeAll cleanup');
+});
 
-  afterAll(async () => {
-    await execSqlAsAdmin(`DELETE FROM credit_limit_requests WHERE customer_id = '${CUST_ID}'`).catch(() => {});
-    await execSqlAsAdmin(`DELETE FROM customers WHERE id = '${CUST_ID}'`).catch(() => {});
-    await execSqlAsAdmin(`DELETE FROM users WHERE id = '${EMP_ID}'`).catch(() => {});
-  });
+  /**
+ * Cleanup that REPORTS instead of swallowing — the customerDeletionSecurity /
+ * employeeInviteLifecycle pattern. This suite shares the QA database with the
+ * other integration files, so a silent catch here would leave rows in place
+ * and the next suite would fail deep inside a test with an authorization error
+ * that is really leftover state. Failures are collected and the caller throws
+ * with their names (throwIfCleanupFailed, wired in beforeAll/afterAll).
+ */
+const cleanupFailures: string[] = [];
+async function trySql(label: string, p: Promise<unknown>): Promise<void> {
+  try {
+    await p;
+  } catch (error) {
+    cleanupFailures.push(`${label}: ${(error as Error).message}`);
+  }
+}
+function throwIfCleanupFailed(context: string): void {
+  if (cleanupFailures.length) {
+    throw new Error(
+      `${context}: cleanup failed — ${cleanupFailures.join(' | ')}. ` +
+        `Leftover rows from this suite's namespace will contaminate the next run; fix the leak here rather than re-running.`,
+    );
+  }
+}
+
+afterAll(async () => {
+    await trySql('credit_limit_requests', execSqlAsAdmin(`DELETE FROM credit_limit_requests WHERE customer_id = '${CUST_ID}'`));
+    await trySql('customers', execSqlAsAdmin(`DELETE FROM customers WHERE id = '${CUST_ID}'`));
+    await trySql('users', execSqlAsAdmin(`DELETE FROM users WHERE id = '${EMP_ID}'`));
+      throwIfCleanupFailed('Security Audit — RLS & Authorization afterAll cleanup');
+});
 
   // ─── RLS: All critical tables have RLS enabled ────────────────────────────
 

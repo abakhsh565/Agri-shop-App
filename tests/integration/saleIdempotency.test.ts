@@ -112,18 +112,45 @@ beforeAll(async () => {
     VALUES ('${VARIANT}', '${PRODUCT}', '1kg', ${PRICE}, 300, 1, 1, 5, 100, true)
     ON CONFLICT (id) DO UPDATE SET stock_qty = 100, is_active = true, selling_price = ${PRICE}
   `);
+  throwIfCleanupFailed('saleIdempotency beforeAll cleanup');
 });
 
+/**
+ * Cleanup that REPORTS instead of swallowing — the customerDeletionSecurity /
+ * employeeInviteLifecycle pattern. This suite shares the QA database with the
+ * other integration files, so a silent catch here would leave rows in place
+ * and the next suite would fail deep inside a test with an authorization error
+ * that is really leftover state. Failures are collected and the caller throws
+ * with their names (throwIfCleanupFailed, wired in beforeAll/afterAll).
+ */
+const cleanupFailures: string[] = [];
+async function trySql(label: string, p: Promise<unknown>): Promise<void> {
+  try {
+    await p;
+  } catch (error) {
+    cleanupFailures.push(`${label}: ${(error as Error).message}`);
+  }
+}
+function throwIfCleanupFailed(context: string): void {
+  if (cleanupFailures.length) {
+    throw new Error(
+      `${context}: cleanup failed — ${cleanupFailures.join(' | ')}. ` +
+        `Leftover rows from this suite's namespace will contaminate the next run; fix the leak here rather than re-running.`,
+    );
+  }
+}
+
 afterAll(async () => {
-  await execSqlAsAdmin(`DELETE FROM sale_submissions WHERE idempotency_key LIKE 'qa-saleidem-%'`).catch(() => undefined);
-  await execSqlAsAdmin(`DELETE FROM sale_items WHERE sale_id IN (SELECT id FROM sales WHERE customer_id = '${CUSTOMER}')`).catch(() => undefined);
-  await execSqlAsAdmin(`DELETE FROM sales WHERE customer_id = '${CUSTOMER}'`).catch(() => undefined);
-  await execSqlAsAdmin(`DELETE FROM inventory_movements WHERE product_id = '${PRODUCT}'`).catch(() => undefined);
-  await execSqlAsAdmin(`DELETE FROM stock_adjustments WHERE product_id = '${PRODUCT}'`).catch(() => undefined);
-  await execSqlAsAdmin(`DELETE FROM product_variants WHERE id = '${VARIANT}'`).catch(() => undefined);
-  await execSqlAsAdmin(`DELETE FROM products WHERE id = '${PRODUCT}'`).catch(() => undefined);
-  await execSqlAsAdmin(`DELETE FROM customers WHERE id = '${CUSTOMER}'`).catch(() => undefined);
+  await trySql('sale_submissions', execSqlAsAdmin(`DELETE FROM sale_submissions WHERE idempotency_key LIKE 'qa-saleidem-%'`));
+  await trySql('sale_items', execSqlAsAdmin(`DELETE FROM sale_items WHERE sale_id IN (SELECT id FROM sales WHERE customer_id = '${CUSTOMER}')`));
+  await trySql('sales', execSqlAsAdmin(`DELETE FROM sales WHERE customer_id = '${CUSTOMER}'`));
+  await trySql('inventory_movements', execSqlAsAdmin(`DELETE FROM inventory_movements WHERE product_id = '${PRODUCT}'`));
+  await trySql('stock_adjustments', execSqlAsAdmin(`DELETE FROM stock_adjustments WHERE product_id = '${PRODUCT}'`));
+  await trySql('product_variants', execSqlAsAdmin(`DELETE FROM product_variants WHERE id = '${VARIANT}'`));
+  await trySql('products', execSqlAsAdmin(`DELETE FROM products WHERE id = '${PRODUCT}'`));
+  await trySql('customers', execSqlAsAdmin(`DELETE FROM customers WHERE id = '${CUSTOMER}'`));
   await cleanupTestData();
+  throwIfCleanupFailed('saleIdempotency afterAll cleanup');
 });
 
 describe('sale idempotency', () => {

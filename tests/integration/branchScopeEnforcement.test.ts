@@ -71,16 +71,41 @@ async function count(query: string): Promise<number> {
   return Number(rows[0]?.c ?? 0);
 }
 
+/**
+ * Cleanup that REPORTS instead of swallowing — the customerDeletionSecurity /
+ * employeeInviteLifecycle pattern. This suite shares the QA database with the
+ * other integration files, so a silent catch here would leave rows in place
+ * and the next suite would fail deep inside a test with an authorization error
+ * that is really leftover state. Failures are collected and the caller throws
+ * with their names (throwIfCleanupFailed, wired in beforeAll/afterAll).
+ */
+const cleanupFailures: string[] = [];
+async function trySql(label: string, p: Promise<unknown>): Promise<void> {
+  try {
+    await p;
+  } catch (error) {
+    cleanupFailures.push(`${label}: ${(error as Error).message}`);
+  }
+}
+function throwIfCleanupFailed(context: string): void {
+  if (cleanupFailures.length) {
+    throw new Error(
+      `${context}: cleanup failed — ${cleanupFailures.join(' | ')}. ` +
+        `Leftover rows from this suite's namespace will contaminate the next run; fix the leak here rather than re-running.`,
+    );
+  }
+}
+
 async function cleanup() {
-  await sql(`DELETE FROM sale_items WHERE sale_id IN (SELECT id FROM sales WHERE customer_id = '${CUSTOMER}')`).catch(() => undefined);
-  await sql(`DELETE FROM sales WHERE customer_id = '${CUSTOMER}'`).catch(() => undefined);
-  await sql(`DELETE FROM inventory_movements WHERE product_id = '${PRODUCT}'`).catch(() => undefined);
-  await sql(`DELETE FROM stock_adjustments WHERE product_id = '${PRODUCT}'`).catch(() => undefined);
-  await sql(`DELETE FROM product_variants WHERE id = '${VARIANT}'`).catch(() => undefined);
-  await sql(`DELETE FROM products WHERE id = '${PRODUCT}'`).catch(() => undefined);
-  await sql(`DELETE FROM customers WHERE id = '${CUSTOMER}'`).catch(() => undefined);
-  await sql(`DELETE FROM branches WHERE tenant_id = '${TENANT_B}'`).catch(() => undefined);
-  await sql(`DELETE FROM memberships WHERE tenant_id = '${TENANT_B}'`).catch(() => undefined);
+  await trySql('sale_items', sql(`DELETE FROM sale_items WHERE sale_id IN (SELECT id FROM sales WHERE customer_id = '${CUSTOMER}')`));
+  await trySql('sales', sql(`DELETE FROM sales WHERE customer_id = '${CUSTOMER}'`));
+  await trySql('inventory_movements', sql(`DELETE FROM inventory_movements WHERE product_id = '${PRODUCT}'`));
+  await trySql('stock_adjustments', sql(`DELETE FROM stock_adjustments WHERE product_id = '${PRODUCT}'`));
+  await trySql('product_variants', sql(`DELETE FROM product_variants WHERE id = '${VARIANT}'`));
+  await trySql('products', sql(`DELETE FROM products WHERE id = '${PRODUCT}'`));
+  await trySql('customers', sql(`DELETE FROM customers WHERE id = '${CUSTOMER}'`));
+  await trySql('branches', sql(`DELETE FROM branches WHERE tenant_id = '${TENANT_B}'`));
+  await trySql('memberships', sql(`DELETE FROM memberships WHERE tenant_id = '${TENANT_B}'`));
   // Through the shared helper: `create_sale` writes a `sale_created` audit row and
   // `audit_events.user_id` is NO ACTION, so a bare DELETE is silently blocked (and one blocked row
   // takes the whole list with it). `placeLocation` is where that leak was measured.
@@ -88,15 +113,13 @@ async function cleanup() {
   // The suite's own branch, removed only after the rows that point at it are gone (sales first, then
   // the users whose active branch it may have been). Read back, because a cleanup that silently
   // failed is how a fixture becomes another suite's inherited state.
-  await sql(`DELETE FROM branches WHERE id = '${WAREHOUSE}'`).catch(() => undefined);
+  await trySql('branches-2', sql(`DELETE FROM branches WHERE id = '${WAREHOUSE}'`));
   expect(
     await count(`SELECT count(*)::int AS c FROM branches WHERE id = '${WAREHOUSE}'`),
     'this suite\'s branch survived its own cleanup',
   ).toBe(0);
-  await sql(`DELETE FROM shops WHERE id = '${TENANT_B}'`).catch(() => undefined);
-  await sql(
-    `DELETE FROM auth.users a WHERE a.email LIKE 'user-92300979%' AND NOT EXISTS (SELECT 1 FROM users u WHERE u.id = a.id)`
-  ).catch(() => undefined);
+  await trySql('shops', sql(`DELETE FROM shops WHERE id = '${TENANT_B}'`));
+  await trySql('auth.users', sql(`DELETE FROM auth.users a WHERE a.email LIKE 'user-92300979%' AND NOT EXISTS (SELECT 1 FROM users u WHERE u.id = a.id)`));
 }
 
 /**
@@ -240,10 +263,12 @@ beforeAll(async () => {
     const probe = await execRpcAsUser(who, 'get_my_permissions', {});
     expect(probe.error, `${label} must be able to sign in`).toBeNull();
   }
+  throwIfCleanupFailed('branchScopeEnforcement beforeAll cleanup');
 });
 
 afterAll(async () => {
   await cleanup();
+  throwIfCleanupFailed('branchScopeEnforcement afterAll cleanup');
 });
 
 describe('Branch ownership — records are stamped with a branch', () => {

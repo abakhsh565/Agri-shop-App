@@ -75,12 +75,39 @@ describe('Payment Idempotency', () => {
     await execSqlAsAdmin(`INSERT INTO customers (id, name, phone, credit_limit, outstanding_balance, total_purchases, total_paid, shop_id, created_by)
       VALUES ('${TEST.customer}', 'Idempotency Test Customer', '923000000001', 50000, ${TEST.initialBalance}, 0, 0, '${TEST.shop}', 'QA')
       ON CONFLICT (id) DO UPDATE SET outstanding_balance = ${TEST.initialBalance}, total_paid = 0`);
-  });
+      throwIfCleanupFailed('Payment Idempotency beforeAll cleanup');
+});
 
-  afterAll(async () => {
-    await execSqlAsAdmin(`DELETE FROM customer_payments WHERE customer_id = '${TEST.customer}'`).catch(() => {});
-    await execSqlAsAdmin(`DELETE FROM customers WHERE id = '${TEST.customer}'`).catch(() => {});
-  });
+  /**
+ * Cleanup that REPORTS instead of swallowing — the customerDeletionSecurity /
+ * employeeInviteLifecycle pattern. This suite shares the QA database with the
+ * other integration files, so a silent catch here would leave rows in place
+ * and the next suite would fail deep inside a test with an authorization error
+ * that is really leftover state. Failures are collected and the caller throws
+ * with their names (throwIfCleanupFailed, wired in beforeAll/afterAll).
+ */
+const cleanupFailures: string[] = [];
+async function trySql(label: string, p: Promise<unknown>): Promise<void> {
+  try {
+    await p;
+  } catch (error) {
+    cleanupFailures.push(`${label}: ${(error as Error).message}`);
+  }
+}
+function throwIfCleanupFailed(context: string): void {
+  if (cleanupFailures.length) {
+    throw new Error(
+      `${context}: cleanup failed — ${cleanupFailures.join(' | ')}. ` +
+        `Leftover rows from this suite's namespace will contaminate the next run; fix the leak here rather than re-running.`,
+    );
+  }
+}
+
+afterAll(async () => {
+    await trySql('customer_payments', execSqlAsAdmin(`DELETE FROM customer_payments WHERE customer_id = '${TEST.customer}'`));
+    await trySql('customers', execSqlAsAdmin(`DELETE FROM customers WHERE id = '${TEST.customer}'`));
+      throwIfCleanupFailed('Payment Idempotency afterAll cleanup');
+});
 
   it('1. Normal single payment', async () => {
     const { result } = await recordPayment(1000, 'cash');
