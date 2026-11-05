@@ -1,0 +1,75 @@
+name: Apply migrations to QA (staging)
+
+# WHY THIS FILE EXISTS
+#
+# The QA database is the one place migrations are applied from a branch, and the
+# only tool that may record them in the ledger is `scripts/migrate.mjs` — the
+# same tool CI uses to verify the ledger. A developer machine cannot always
+# reach the QA database directly (this sandbox's egress proxy only allows
+# port 443, and Postgres needs 5432/6543), so this workflow runs the apply
+# where the database IS reachable: on a GitHub runner, with the repo's own
+# QA_* secrets, exactly as CI already does for verification.
+#
+# What this workflow does, and what it deliberately does not:
+#
+#   * It applies ONLY pending migrations to staging (`--env staging`). It can
+#     never reach production: the command names staging, and `migrate.mjs`
+#     refuses a production apply without a named batch plus verification,
+#     backup and restore evidence. No step here passes `--env production`.
+#   * It is manual only (`workflow_dispatch`). Nothing pushes, merges or
+#     schedules it. Every run is a deliberate owner act, and the run log is
+#     the record of what was applied.
+#   * It verifies before AND after the apply, so a run that applies nothing
+#     (0 pending) still proves the ledger matches the directory.
+#   * It never touches QA business data: no cleanup, no delete, no fixture
+#     seeding. It only runs the pending migration files, in canonical order.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  apply:
+    name: Apply pending migrations to QA
+    runs-on: ubuntu-latest
+    env:
+      QA_SUPABASE_URL: ${{ secrets.QA_SUPABASE_URL }}
+      QA_SUPABASE_ANON_KEY: ${{ secrets.QA_SUPABASE_ANON_KEY }}
+      QA_SUPABASE_SERVICE_ROLE: ${{ secrets.QA_SUPABASE_SERVICE_ROLE }}
+      QA_DB_HOST: ${{ secrets.QA_DB_HOST }}
+      QA_DB_USER: ${{ secrets.QA_DB_USER }}
+      QA_DB_PASS: ${{ secrets.QA_DB_PASS }}
+    steps:
+      - name: Check out the branch this run was dispatched on
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: QA credentials are required — an apply that did not run is not a pass
+        run: |
+          missing=""
+          for key in QA_SUPABASE_URL QA_SUPABASE_ANON_KEY QA_SUPABASE_SERVICE_ROLE QA_DB_HOST QA_DB_USER QA_DB_PASS; do
+            if [ -z "${!key:-}" ]; then missing="$missing $key"; fi
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::QA apply is BLOCKED, not passed — missing:$missing"
+            exit 1
+          fi
+
+      - name: Ledger state before the apply (read-only)
+        run: node scripts/migrate.mjs verify --env staging
+
+      - name: Apply pending migrations to QA
+        run: node scripts/migrate.mjs apply --env staging --apply
+
+      - name: Ledger state after the apply (must show 0 pending)
+        run: node scripts/migrate.mjs verify --env staging
