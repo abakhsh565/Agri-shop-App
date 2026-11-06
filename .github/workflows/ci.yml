@@ -175,19 +175,19 @@ jobs:
         # and any unlisted or stale QA-only row still fails this step.
         run: node scripts/migrate.mjs verify --env staging --ledger-only-allowlist .github/qa-ledger-only.txt
 
-            - name: Provision QA Auth Sessions
-              # Integration and browser suites sign in through the real phone/credential flow. This
-              # idempotent repair prevents a missing auth credential from surfacing as an app failure.
-              run: node scripts/provision-auth-sessions.mjs
-              env:
-                QA_SUPABASE_URL: ${{ secrets.QA_SUPABASE_URL }}
-                QA_SUPABASE_ANON_KEY: ${{ secrets.QA_SUPABASE_ANON_KEY }}
-                QA_SUPABASE_SERVICE_ROLE: ${{ secrets.QA_SUPABASE_SERVICE_ROLE }}
-                QA_DB_HOST: ${{ secrets.QA_DB_HOST }}
-                QA_DB_USER: ${{ secrets.QA_DB_USER }}
-                QA_DB_PASS: ${{ secrets.QA_DB_PASS }}
+      - name: Provision QA Auth Sessions
+        # Integration and browser suites sign in through the real phone/credential flow. This
+        # idempotent repair prevents a missing auth credential from surfacing as an app failure.
+        run: node scripts/provision-auth-sessions.mjs
+        env:
+          QA_SUPABASE_URL: ${{ secrets.QA_SUPABASE_URL }}
+          QA_SUPABASE_ANON_KEY: ${{ secrets.QA_SUPABASE_ANON_KEY }}
+          QA_SUPABASE_SERVICE_ROLE: ${{ secrets.QA_SUPABASE_SERVICE_ROLE }}
+          QA_DB_HOST: ${{ secrets.QA_DB_HOST }}
+          QA_DB_USER: ${{ secrets.QA_DB_USER }}
+          QA_DB_PASS: ${{ secrets.QA_DB_PASS }}
 
-                  - name: Integration suites (one file at a time — they share the QA database)
+      - name: Integration suites (one file at a time — they share the QA database)
         # Each suite creates and removes its own controlled tenants. QA's own shops and history
         # are never the fixture, and nothing here deletes them afterwards.
         run: npx vitest run tests/integration --fileParallelism=false --reporter=verbose
