@@ -48,6 +48,8 @@ jobs:
             fixture_users: `SELECT id, name, phone, role, is_active, shop_id FROM users WHERE phone IN (${phoneList}) ORDER BY phone`,
             fixture_memberships: `SELECT m.user_id, u.phone, m.tenant_id, m.role, m.status, m.role_id FROM memberships m JOIN users u ON u.id = m.user_id WHERE u.phone IN (${phoneList}) ORDER BY u.phone`,
             lookup_employee_rpc: `SELECT * FROM lookup_user_by_phone('${employeePhone}')`,
+            duplicate_active_owners: "SELECT m.tenant_id, count(*) AS n, string_agg(u.phone || ' ' || COALESCE(u.name, ''), ', ') AS owners FROM memberships m JOIN users u ON u.id = m.user_id WHERE m.role = 'owner' AND m.access_kind = 'standard' AND m.status = 'active' GROUP BY m.tenant_id HAVING count(*) > 1",
+            all_active_standard_owners: "SELECT m.tenant_id, m.user_id, u.phone, u.name, m.role, m.access_kind, m.status FROM memberships m JOIN users u ON u.id = m.user_id WHERE m.role = 'owner' AND m.access_kind = 'standard' AND m.status = 'active' ORDER BY m.tenant_id, m.user_id",
           };
           for (const [name, sql] of Object.entries(queries)) {
             const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify({ sql_query: sql }) });
