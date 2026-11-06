@@ -42,6 +42,7 @@
 
 import { describe, it, beforeAll, afterAll, expect } from 'vitest';
 import { execRpcAsUser, execSqlAsAdmin } from '../setup/qa-client';
+import { QA_IDS } from '../setup/fixtures';
 
 // This suite's own fixture identities. Fresh UUIDs: two files must never share one, or one
 // suite's cleanup deletes the other's rows mid-run (tests/unit/fixtureIdCollision.test.ts).
@@ -60,7 +61,7 @@ const FRESH_PHONE_LOCAL = '03009630003';
 const FRESH_PHONE_E164 = '923009630003';
 
 /** The seeded QA owner, used only as the platform admin who approves a registration. */
-const SEEDED_OWNER = '10000000-0000-0000-0000-000000000003';
+const SEEDED_OWNER = QA_IDS.owner;
 
 const TOUCHED_PHONES = [ACTOR_PHONE, SIDE_EMPLOYEE_PHONE, FRESH_PHONE_E164, FRESH_PHONE_LOCAL];
 

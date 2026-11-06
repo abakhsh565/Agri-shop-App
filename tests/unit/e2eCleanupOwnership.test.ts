@@ -647,7 +647,10 @@ describe('a fixture account and its membership are one row\'s worth of cleanup',
     expect(
       db.executed.join('\n'),
       'no statement may delete a membership on its own — that is how an orphan is made',
-    ).not.toMatch(/FROM memberships/);
+      // The guard's NOT EXISTS subqueries may NAME memberships (memberships.invited_by
+      // and the ownership_transfers keys refuse a delete), but no statement may
+      // DELETE FROM it: that is the distinction this assertion pins.
+    ).not.toMatch(/DELETE FROM memberships/);
   });
 
   test('an owned account the database still references is preserved WITH its membership', async () => {
@@ -708,9 +711,9 @@ describe('a fixture account and its membership are one row\'s worth of cleanup',
   test('the guard names every foreign key that would refuse the delete, and nothing else', () => {
     // The list is a contract, not a convenience: `rbacInvariants` (Invariant F) reads the live schema
     // and fails when a NO ACTION/RESTRICT key on `users(id)` is missing here.
-    // The two co_owner_* keys are defined by 0266 (on origin/release/merge, applied on hosted QA
-    // and staging) as REFERENCES public.users(id) ON DELETE RESTRICT; this list mirrors the live
-    // schema the cleanup runs against, not main's migrations, which do not carry 0233-0276 yet.
+    // The two co_owner_* keys are defined by 0266 as REFERENCES public.users(id) ON DELETE RESTRICT;
+    // memberships.invited_by comes from 0286 and the two ownership_transfers keys from 0280. This
+    // list mirrors the live schema the cleanup runs against, including the Phase 2 import.
     expect([...USER_DELETE_GUARDS].map((r) => `${r.table}.${r.column}`).sort()).toEqual(
       [
         'activity_log.user_id',
@@ -721,6 +724,9 @@ describe('a fixture account and its membership are one row\'s worth of cleanup',
         'co_owner_grants.granted_by',
         'daily_cash_reconciliations.reconciled_by',
         'inventory_movements.created_by',
+        'memberships.invited_by',
+        'ownership_transfers.initiated_by',
+        'ownership_transfers.recipient_user_id',
         'returns.processed_by',
         'sales.employee_id',
         'user_permissions.granted_by',
