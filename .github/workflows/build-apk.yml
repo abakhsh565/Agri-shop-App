@@ -10,6 +10,14 @@ jobs:
     name: Run Tests
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    concurrency:
+      # One QA database is shared by every workflow and every branch. Two
+      # QA-touching jobs running at once corrupt each other's fixtures
+      # (proven 2026-11-06: a main push ran CI and the APK workflow together
+      # and both failed). This group serializes them; cancel is off on      
+      # purpose, because a cancelled QA job leaves fixture rows behind.      
+      group: qa-database      
+      cancel-in-progress: false      
     env:
       # Prefer IPv4 for DNS. Supabase's direct host (db.<ref>.supabase.co) publishes
       # an AAAA record but no A record, and GitHub-hosted runners have no IPv6
