@@ -25,6 +25,13 @@
  * suite has one), so a fresh setup or a re-created user cannot bring the
  * duplicates back.
  *
+ * One subtlety the dry run caught: migration 0188's `validate_member_branch_scope`
+ * trigger refuses a role change away from 'owner' unless the membership also
+ * gains an explicit branch_scope (owners are exempt; a NULL scope is only allowed
+ * on INSERT). So the demoted memberships are scoped to every active branch of
+ * the fixture tenant — the same reach they had as owners, only the permission
+ * set changes (owner-everything becomes the Store Manager's canonical 30).
+ *
  * SAFETY. QA ONLY — it refuses any connection string naming the production
  * project, and requires the QA project ref. One transaction, rolled back on any
  * error. Dry run by default; `--apply` writes. After the updates it asserts,
@@ -94,6 +101,10 @@ async function main() {
       )
     ).rows[0];
     if (!storeManager) throw new Error(`Store Manager system role missing in tenant ${FIXTURE_TENANT} — restore it first (qa-restore-canonical-roles.mjs).`);
+    const activeBranches = (
+      await client.query(`select id from branches where tenant_id = $1 and is_active order by created_at, id`, [FIXTURE_TENANT])
+    ).rows.map((r) => r.id);
+    if (!activeBranches.length) throw new Error(`tenant ${FIXTURE_TENANT} has no active branch to scope the demoted memberships to.`);
 
     const usersToFix = (
       await client.query(
@@ -112,14 +123,15 @@ async function main() {
     for (const u of usersToFix) console.log(`     ${u.name} (${u.phone})`);
     console.log(`  memberships to re-point (owner -> admin, role_id = Store Manager ${storeManager.id}): ${membershipsToFix.length}`);
     for (const m of membershipsToFix) console.log(`     ${m.name} (${m.phone})`);
+    console.log(`  branch scope for the demoted memberships (${activeBranches.length} active branch(es)): ${activeBranches.join(', ')}`);
 
     // The updates run inside the transaction either way; dry-run rolls back at
     // the end, so the verification below proves the WOULD-BE state too.
     await client.query(`update users set is_original_owner = false where id = any($1) and is_original_owner is true`, [DEMOTE_USER_IDS]);
     await client.query(
-      `update memberships set role = 'admin', role_id = $2, updated_at = now()
-        where user_id = any($1) and tenant_id = $3 and role = 'owner' and status = 'active'`,
-      [DEMOTE_USER_IDS, storeManager.id, FIXTURE_TENANT],
+      `update memberships set role = 'admin', role_id = $2, branch_scope = $3, updated_at = now()
+        where user_id = any($1) and tenant_id = $4 and role = 'owner' and status = 'active'`,
+      [DEMOTE_USER_IDS, storeManager.id, activeBranches, FIXTURE_TENANT],
     );
 
     const duplicates = await duplicateOwners();
@@ -128,6 +140,15 @@ async function main() {
         `still ${duplicates.length} tenant(s) with more than one active standard owner: ${duplicates.map((d) => `${d.tenant_id} (${d.n})`).join(', ')}`,
       );
     }
+    const unscoped = (
+      await client.query(
+        `select count(*)::int as n from memberships
+          where user_id = any($1) and tenant_id = $2 and role = 'admin' and status = 'active'
+            and (branch_scope is null or cardinality(branch_scope) = 0)`,
+        [DEMOTE_USER_IDS, FIXTURE_TENANT],
+      )
+    ).rows[0].n;
+    if (unscoped) throw new Error(`${unscoped} demoted membership(s) still have no branch scope.`);
     const fixtureOwner = (
       await client.query(
         `select u.phone, u.name from memberships m join users u on u.id = m.user_id
