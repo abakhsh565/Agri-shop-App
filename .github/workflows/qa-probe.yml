@@ -47,6 +47,8 @@ jobs:
             store_manager_grants: "SELECT count(*) FROM role_permissions WHERE role_id = (SELECT id FROM roles WHERE tenant_id='00000000-0000-0000-0000-000000000001' AND name='Store Manager')",
             fixture_users: `SELECT id, name, phone, role, is_active, shop_id FROM users WHERE phone IN (${phoneList}) ORDER BY phone`,
             fixture_memberships: `SELECT m.user_id, u.phone, m.tenant_id, m.role, m.status, m.role_id FROM memberships m JOIN users u ON u.id = m.user_id WHERE u.phone IN (${phoneList}) ORDER BY u.phone`,
+            orphan_users: "SELECT u.id, u.phone, u.name, u.role, u.shop_id, u.created_at FROM users u WHERE u.shop_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM memberships m WHERE m.user_id = u.id) ORDER BY u.created_at",
+            orphan_membership_check: "SELECT count(*) AS c FROM users u WHERE u.shop_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM memberships m WHERE m.user_id = u.id)",
             lookup_employee_rpc: `SELECT * FROM lookup_user_by_phone('${employeePhone}')`,
           };
           for (const [name, sql] of Object.entries(queries)) {
