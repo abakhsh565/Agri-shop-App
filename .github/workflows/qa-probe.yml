@@ -6,14 +6,6 @@ name: QA probe (read-only)
 # there is no --apply flag, no migration step, and no production secret or
 # URL anywhere in this file. Manual dispatch only.
 #
-# TEMPORARY (2026-11-06): the `run_fix` / `fix_apply` inputs run the one-time
-# 0280 duplicate-owner fix script (scripts/dev/qa-fix-0280-duplicate-owners.mjs).
-# That step is the ONLY write in this file, it runs only when run_fix=true, and
-# it goes away with the inputs once the fix is applied and the 0280 apply has
-# passed. A workflow that only exists on a branch cannot be dispatched at all
-# (GitHub registers workflows from main), which is why the fix rides on this
-# already-registered workflow instead of its own one.
-#
 # The fixture-user queries take their phone numbers from the repo's own
 # declaration (scripts/dev/qa-baseline.json) at run time — no fixture phone
 # ever appears literally in this file, because the production-data-policy
@@ -21,32 +13,12 @@ name: QA probe (read-only)
 # literal phones in this file failed Gates on the PR merge run).
 on:
   workflow_dispatch:
-    inputs:
-      run_fix:
-        description: 'Run the one-time 0280 duplicate-owner fix script (false = probes only)'
-        type: boolean
-        default: false
-      fix_apply:
-        description: 'Write the fix (false = dry-run plan only)'
-        type: boolean
-        default: false
 
 jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Set up Node (only for the fix step)
-        if: ${{ inputs.run_fix }}
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-
-      - name: Install dependencies (only for the fix step)
-        if: ${{ inputs.run_fix }}
-        run: npm ci --legacy-peer-deps
-
       - name: Run read-only QA probes
         env:
           QA_SUPABASE_URL: ${{ secrets.QA_SUPABASE_URL }}
@@ -85,14 +57,3 @@ jobs:
           }
           EOF
           node /tmp/qa-probe.mjs
-
-      - name: One-time 0280 duplicate-owner fix (only when run_fix=true)
-        if: ${{ inputs.run_fix }}
-        env:
-          QA_SUPABASE_URL: ${{ secrets.QA_SUPABASE_URL }}
-          QA_SUPABASE_ANON_KEY: ${{ secrets.QA_SUPABASE_ANON_KEY }}
-          QA_SUPABASE_SERVICE_ROLE: ${{ secrets.QA_SUPABASE_SERVICE_ROLE }}
-          QA_DB_HOST: ${{ secrets.QA_DB_HOST }}
-          QA_DB_USER: ${{ secrets.QA_DB_USER }}
-          QA_DB_PASS: ${{ secrets.QA_DB_PASS }}
-        run: node scripts/dev/qa-fix-0280-duplicate-owners.mjs ${{ inputs.fix_apply && '--apply' || '' }}
