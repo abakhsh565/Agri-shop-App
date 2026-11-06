@@ -486,6 +486,22 @@ named, verified batch under §7(a), after the `0233`–`0276` batch. Hosted-QA p
 themselves — that the CI QA suites now pass against the corrected schema — awaits the CI QA run on
 PR #10; the apply above only proves the migrations record cleanly on QA.
 
+### 5.6 The `0277`–`0289` QA apply and the one-time out-of-order override (2026-11-06)
+
+The Phase 2 branch adds `0277`–`0289` to the directory, but the QA ledger already holds `0299`
+(from §5.5), so the thirteen files sort before the newest recorded version and
+`scripts/migrate.mjs` refused the apply — correctly, by default — with an order hazard
+(run 42205248029). There is no override in the tool, and the branch CI fails at the ledger step
+until they are applied, so the owner authorised a narrow, one-time exception:
+`--allow-out-of-order "<reason>"`, valid only for `verify`/`apply` on staging (or pglite),
+never for production, with the reason printed in the run log and recorded in the report
+(`tests/unit/migrationOutOfOrderOverride.test.ts` asserts every side of it, including that the
+refusal still fires without the flag). The hazard is a numbering artifact, not a rewrite: the
+`0291`–`0299` batch does not depend on `0277`–`0289`, and §7(a) puts `0277`–`0289` last anyway,
+so applying them after `0299` matches the intended order. The workflow
+`.github/workflows/apply-staging-migrations.yml` takes the override as dispatch inputs
+(`allow_out_of_order`, `override_reason`).
+
 ## 6. Backward-compatibility rules (binding on every batch)
 
 1. **Additive only.** New columns are nullable or defaulted, added `if not exists`. No drops, no
