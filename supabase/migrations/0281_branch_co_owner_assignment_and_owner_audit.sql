@@ -351,3 +351,35 @@ END;
 $$;
 REVOKE ALL ON FUNCTION public.get_effective_permissions(uuid) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.get_effective_permissions(uuid) TO authenticated;
+
+-- 0281: name the retired function(s) in the server-only set the ACL guard
+-- unions across migrations, and prove the closure rather than assume it.
+DO $server_only$
+DECLARE
+  v_server_only constant text[] := array['guard_co_owner_branch_lifecycle'];
+  v_name text;
+  v_sig text;
+  v_open int;
+BEGIN
+  FOREACH v_name IN ARRAY v_server_only LOOP
+    FOR v_sig IN
+      SELECT p.oid::regprocedure::text
+        FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+       WHERE n.nspname = 'public' AND p.proname = v_name
+    LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC, anon, authenticated', v_sig);
+    END LOOP;
+  END LOOP;
+  SELECT count(*) INTO v_open
+    FROM pg_proc p
+    JOIN pg_namespace n ON n.oid = p.pronamespace
+   WHERE n.nspname = 'public'
+     AND p.proname = ANY (v_server_only)
+     AND (has_function_privilege('anon', p.oid, 'EXECUTE')
+       OR has_function_privilege('authenticated', p.oid, 'EXECUTE'));
+  IF v_open > 0 THEN
+    RAISE EXCEPTION '0281: % server-only function(s) are still executable by an API role', v_open;
+  END IF;
+  RAISE NOTICE '0281: the server-only functions are closed';
+END
+$server_only$;
