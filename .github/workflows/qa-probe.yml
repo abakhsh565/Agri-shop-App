@@ -47,6 +47,10 @@ jobs:
             store_manager_grants: "SELECT count(*) FROM role_permissions WHERE role_id = (SELECT id FROM roles WHERE tenant_id='00000000-0000-0000-0000-000000000001' AND name='Store Manager')",
             fixture_users: `SELECT id, name, phone, role, is_active, shop_id FROM users WHERE phone IN (${phoneList}) ORDER BY phone`,
             fixture_memberships: `SELECT m.user_id, u.phone, m.tenant_id, m.role, m.status, m.role_id FROM memberships m JOIN users u ON u.id = m.user_id WHERE u.phone IN (${phoneList}) ORDER BY u.phone`,
+            khalid_memberships: "SELECT m.tenant_id, s.name AS shop_name, m.role, m.status, m.role_id, m.branch_scope, m.created_at FROM memberships m LEFT JOIN shops s ON s.id = m.tenant_id WHERE m.user_id = '10000000-0000-0000-0000-000000000003' ORDER BY m.created_at",
+            other_shop: "SELECT id, name, owner_id FROM shops WHERE id = '88415b7c-975a-41fa-8158-23b63d0cd779'",
+            khalid_active_shop: "SELECT user_id, shop_id, branch_id FROM user_active_shops WHERE user_id = '10000000-0000-0000-0000-000000000003'",
+            demoted_memberships: "SELECT m.user_id, u.phone, m.tenant_id, m.role, m.status, m.role_id, m.branch_scope FROM memberships m JOIN users u ON u.id = m.user_id WHERE m.user_id IN ('10000000-0000-0000-0000-000000000001','d1000000-0000-0000-0000-000000000099','e1000000-0000-0000-0000-000000000001','f0000000-0000-0000-0000-000000000001','f1000000-0000-0000-0000-000000000030','c3000000-0000-0000-0000-000000000001') ORDER BY u.phone",
             lookup_employee_rpc: `SELECT * FROM lookup_user_by_phone('${employeePhone}')`,
           };
           for (const [name, sql] of Object.entries(queries)) {
