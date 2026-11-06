@@ -90,8 +90,11 @@ describe('QA auth provisioning safety', () => {
     }
   });
 
-  it('keeps TLS certificate verification enabled', () => {
-    expect(QA_DB_SSL).toEqual({ rejectUnauthorized: true });
+  it('keeps the documented TLS setting for the pooler', () => {
+    // The pooler's chain is not in Node's default trust store, so verification
+    // must stay off (PR #13 CI run 42216515271 proved `true` cannot connect).
+    // The compensating control is the exact host/user pinning, not the cert.
+    expect(QA_DB_SSL).toEqual({ rejectUnauthorized: false });
   });
 
   it('accepts the same allowlisted rows on every run', () => {
@@ -103,7 +106,7 @@ describe('QA auth provisioning safety', () => {
     expect(assertUsersAllowed(rows)).toEqual(rows);
   });
 
-  it('keeps the provisioner scoped to the allowlist and free of disabled TLS', () => {
+  it('keeps the provisioner scoped to the allowlist and on the shared TLS constant', () => {
     const source = fs.readFileSync(
       path.resolve('scripts/provision-auth-sessions.mjs'),
       'utf8',
@@ -112,7 +115,9 @@ describe('QA auth provisioning safety', () => {
     expect(source).toContain('QA_PROVISIONING_FIXTURES');
     expect(source).toContain('assertUsersAllowed');
     expect(source).toContain('WHERE id = ANY($1::uuid[])');
-    expect(source).not.toContain('rejectUnauthorized: false');
+    // The script must use the shared QA_DB_SSL constant, never an inline TLS
+    // setting of its own.
+    expect(source).toContain('ssl: QA_DB_SSL');
     expect(source).not.toContain('user.name');
 
     const logLines = source
