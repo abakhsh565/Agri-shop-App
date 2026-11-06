@@ -523,13 +523,18 @@ test.describe('Employee job & access — simple for the owner, exact underneath'
     await page.getByRole('button', { name: 'Customize access' }).click();
     await page.waitForTimeout(900);
 
-    // Suppliers is not part of this employee's role, so turning it on is a real override.
-    // Located by its business label: the area mark is an icon now, not an emoji
-    // prefix, so matching on the glyph was asserting on decoration rather than
-    // on the row the owner actually reads.
-    const suppliersRow = page.locator('button').filter({ hasText: /^\s*Suppliers/ }).first();
-    await expect(suppliersRow).toBeVisible();
-    await suppliersRow.click();
+    // DENY-ONLY (0277): an employee setting can only remove a permission the
+    // role grants, never add one. 'Create Sales' is part of this employee's
+    // role, so turning it off is a real deny override — the grant this test
+    // used to make (Suppliers) is refused by the 0277 trigger and stores
+    // nothing. Addressed by its stable testid, not its label.
+    const createSalesRow = page.getByTestId('emp-perm-sales.create');
+    await expect(createSalesRow).toBeVisible();
+    await expect(
+      createSalesRow,
+      'Create Sales is already off for the shared employee (leftover deny from an earlier run)',
+    ).toHaveAttribute('aria-checked', 'true');
+    await createSalesRow.click();
 
     // The override rows this save will create for the SHARED QA employee, credited to this run by
     // a before/after diff — the employee itself stays protected and is never registered.
@@ -543,9 +548,10 @@ test.describe('Employee job & access — simple for the owner, exact underneath'
     const overrides = await execSql(`
       SELECT p.code, up.is_granted
         FROM user_permissions up JOIN permissions p ON p.id = up.permission_id
-       WHERE up.user_id = '${QA_EMPLOYEE_ID}' AND up.is_override = true AND p.module = 'companies'`);
+       WHERE up.user_id = '${QA_EMPLOYEE_ID}' AND up.is_override = true AND p.module = 'sales'`);
     expect(overrides.length, 'no override row was stored for the customized area').toBeGreaterThan(0);
-    expect(overrides.every((o) => o.is_granted === true)).toBe(true);
+    expect(overrides.every((o) => o.is_granted === false)).toBe(true);
+    expect(overrides.map((o) => o.code)).toContain('sales.create');
     await claimNew(
       'user_permissions',
       `SELECT id FROM user_permissions WHERE user_id = '${QA_EMPLOYEE_ID}' AND is_override = true`,
@@ -589,9 +595,17 @@ test.describe('Employee job & access — simple for the owner, exact underneath'
     await expect(page.locator('[data-testid="emp-access-context"]')).toBeVisible();
     expect(await bodyText(page)).toContain("Uses the role's access as it is");
 
-    // Suppliers is outside a Sales Employee's role, so granting it is a real
-    // exception and must be visible as one.
-    await page.locator('[data-testid="emp-perm-area-companies"]').click();
+    // DENY-ONLY (0277): the only exception the database stores is a removal.
+    // 'View Products' is part of a Sales Employee's role, so turning it off
+    // is a real deny — and it is the one action whose whole area leaves the
+    // confirmation below, so the summary can still show the customization.
+    const viewProductsRow = page.getByTestId('emp-perm-products.view');
+    await expect(viewProductsRow).toBeVisible();
+    await expect(
+      viewProductsRow,
+      'View Products is already off for the fresh invite (the editor did not start from the role)',
+    ).toHaveAttribute('aria-checked', 'true');
+    await viewProductsRow.click();
     await page.waitForTimeout(500);
     expect(await bodyText(page), 'a customization is not reported to the owner').toMatch(/\d+ changes? from Sales Employee/);
     await page.locator('[data-testid="role-modify-done"]').click();
@@ -601,7 +615,15 @@ test.describe('Employee job & access — simple for the owner, exact underneath'
     await page.getByRole('button', { name: 'Next' }).click();
     await page.waitForTimeout(800);
     const summary = await bodyText(page);
-    expect(summary, 'the confirmation omits the customized area').toContain('Suppliers');
+    // A deny takes one action out of an area, so the area itself stays in the
+    // access list — the customization shows in the changes line instead, and
+    // the stored row below is the judge. 'Products' leaves the access list
+    // entirely (View Products was the role's only action there), so the
+    // confirmation's own Access row must not list it. Scoped to that row:
+    // the app chrome carries a Products tab, so the whole body always
+    // contains the word.
+    const summaryAccessRow = await page.getByText('Access', { exact: true }).first().locator('xpath=..').innerText();
+    expect(summaryAccessRow, 'the confirmation still lists the removed area').not.toContain('Products');
     expect(summary, 'the confirmation does not say access was customized').toContain('changes from Sales Employee');
 
     await page.getByRole('button', { name: 'Send invitation' }).click();
@@ -622,7 +644,8 @@ test.describe('Employee job & access — simple for the owner, exact underneath'
         FROM user_permissions up JOIN permissions p ON p.id = up.permission_id
        WHERE up.user_id = '${ovr.id}' AND up.is_override = true ORDER BY p.code`);
     expect(stored.length, 'the customization made during onboarding was not stored').toBeGreaterThan(0);
-    expect(stored.every((s: { is_granted: boolean }) => s.is_granted === true)).toBe(true);
+    expect(stored.every((s: { is_granted: boolean }) => s.is_granted === false)).toBe(true);
+    expect(stored.map((s: { code: string }) => s.code)).toContain('products.view');
     const [membership] = await execSql(`SELECT status FROM memberships WHERE user_id = '${ovr.id}'`);
     expect(membership.status, 'customizing an employee made them active').toBe('pending');
 
@@ -637,22 +660,31 @@ test.describe('Employee job & access — simple for the owner, exact underneath'
     await page.getByRole('button', { name: 'Save', exact: true }).click();
     await page.waitForTimeout(2500);
 
-    // Store Manager happens to grant Suppliers on its own, so the exception is now
-    // redundant for ACCESS — but it is still the owner's recorded decision and must
-    // survive, exactly as the database resolves it (update_employee_access does not
-    // touch user_permissions when the role changes).
+    // Store Manager grants View Products too, so the deny is still in force
+    // after the role change — it is not redundant the way a grant would be.
+    // The exception survives exactly as the database resolves it
+    // (update_employee_access does not touch user_permissions when the role
+    // changes; the editor re-applies the stored exceptions to the new role).
     const after = await execSql(`
       SELECT p.code FROM user_permissions up JOIN permissions p ON p.id = up.permission_id
-       WHERE up.user_id = '${ovr.id}' AND up.is_override = true AND up.is_granted = true ORDER BY p.code`);
+       WHERE up.user_id = '${ovr.id}' AND up.is_override = true AND up.is_granted = false ORDER BY p.code`);
     expect(after.length, 'changing the role silently discarded the employee\'s exceptions').toBe(stored.length);
+    expect(after.map((a: { code: string }) => a.code)).toContain('products.view');
     const [roleNow] = await execSql(`
       SELECT r.name FROM memberships m JOIN roles r ON r.id = m.role_id WHERE m.user_id = '${ovr.id}'`);
     expect(roleNow.name).toBe('Store Manager');
-    // And the screen stops claiming a difference, because the access now equals the
-    // role — the exception is on file, not in force.
-    expect(await bodyText(page), 'the screen claims a difference the role already provides').not.toContain('changed for');
-    const accessRow = await page.getByText('Access', { exact: true }).first().locator('xpath=..').innerText();
-    expect(accessRow, 'the newly granted area is missing from the access line').toContain('Suppliers');
+    // And the screen keeps claiming a difference, because the deny still
+    // changes the access — the exception is on file AND in force.
+    expect(await bodyText(page), 'the screen stopped reporting a difference the deny still makes').toContain('changed for');
+    // The access line is area-level, so one denied action inside Products
+    // does not remove the area (Store Manager still grants the rest of it).
+    // The editor is the screen that shows the exception itself: reopen it
+    // and the denied box stays off, marked Removed.
+    await page.getByRole('button', { name: 'Customize access' }).click();
+    await page.waitForTimeout(900);
+    const deniedRow = page.getByTestId('emp-perm-products.view');
+    await expect(deniedRow, 'the denied action came back after the role change').toHaveAttribute('aria-checked', 'false');
+    await expect(deniedRow, 'the denied action is not marked as removed').toContainText('Removed');
   });
 
   test('7. A partly typed code says so instead of waiting in silence', async ({ page }) => {
