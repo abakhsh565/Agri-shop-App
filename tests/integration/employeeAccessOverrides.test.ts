@@ -1,9 +1,12 @@
 /**
  * Employee access model regression suite
  *
- * The database is authoritative (0108 `get_effective_permissions`):
+ * The database is authoritative (0108 `get_effective_permissions`, 0277 deny-only):
  *
- *     effective = (role defaults ∪ granted overrides) ∖ denied overrides
+ *     effective = role defaults ∖ denied overrides
+ *
+ * An employee-level override can only DENY a permission the assigned role
+ * holds; it can never grant one (0277 `employee_overrides_restrict_only`).
  *
  * This suite proves, with a real JWT → PostgREST → RPC → database path, the three
  * properties the owner-facing screens depend on:
@@ -14,14 +17,14 @@
  *      it does not erase what the owner decided for this person. (The screens used
  *      to discard them — see the engineering memory entry — so this is the rule,
  *      not the UI's assumption.)
- *   3. Grants and denials both reach AUTHORIZATION, not just the screen, and
+ *   3. Denials reach AUTHORIZATION, not just the screen, and
  *      resetting to "role access only" clears every exception.
  *
  * Self-contained: creates its own owner + employee and removes them.
  */
 
 import { describe, it, beforeAll, afterAll, expect } from 'vitest';
-import { execRpcAsUser, execSqlAsAdmin, checkAuthAsUser, roleIdByName } from '../setup/qa-client';
+import { acceptInvitationAsUser, execRpcAsUser, execSqlAsAdmin, checkAuthAsUser, roleIdByName } from '../setup/qa-client';
 import { QA_IDS } from '../setup/fixtures';
 
 const TENANT = '00000000-0000-0000-0000-000000000001';
@@ -167,16 +170,16 @@ describe('Employee access = role defaults + this employee\'s exceptions', () => 
       phone: EMP_PHONE,
       roleId: ROLE_SALES_EMPLOYEE,
       branchScope: [branchId],
-      overrides: { 'companies.view': true, 'sales.create': false, 'not.a.real.code': true },
+      overrides: { 'sales.create': false, 'not.a.real.code': true },
     });
     expect(created.error).toBeNull();
     employeeId = created.data.id;
     // The unknown code is skipped rather than failing the whole creation.
-    expect(created.data.overrides).toBe(2);
+    // Only the denial is stored: 0277 allows no granted override at all.
+    expect(created.data.overrides).toBe(1);
 
     const rows = await overridesInDb();
     expect(rows).toEqual([
-      { code: 'companies.view', is_granted: true },
       { code: 'sales.create', is_granted: false },
     ]);
 
@@ -185,14 +188,11 @@ describe('Employee access = role defaults + this employee\'s exceptions', () => 
     expect(await execRpcAsUser(employeeId, 'get_my_permissions', {})).toMatchObject({ data: [] });
   });
 
-  it('applies both the grant and the denial to authorization once they are active', async () => {
-    await execRpcAsUser(employeeId, 'complete_member_onboarding', {});
+  it('applies the denial to authorization once they are active', async () => {
+    await acceptInvitationAsUser(employeeId);
     const perms = await myPermissions();
     const defaults = await roleDefaults(ROLE_SALES_EMPLOYEE);
 
-    // Granted exception: not part of the role, present anyway.
-    expect(defaults).not.toContain('companies.view');
-    expect(perms).toContain('companies.view');
     // Denied exception: part of the role, honestly removed for this employee.
     expect(defaults).toContain('sales.create');
     expect(perms).not.toContain('sales.create');
@@ -209,7 +209,6 @@ describe('Employee access = role defaults + this employee\'s exceptions', () => 
 
     // The stored exceptions are still there — a role change is not a reset.
     expect(await overridesInDb()).toEqual([
-      { code: 'companies.view', is_granted: true },
       { code: 'sales.create', is_granted: false },
     ]);
 
@@ -219,7 +218,6 @@ describe('Employee access = role defaults + this employee\'s exceptions', () => 
     expect(perms).toContain('reports.view');   // came with the new role
     expect(storeDefaults).toContain('sales.create');
     expect(perms).not.toContain('sales.create'); // the old denial still means something
-    expect(perms).toContain('companies.view');   // the old grant still applies
   });
 
   it('reset to role access only clears every exception', async () => {

@@ -158,18 +158,22 @@ describe('tenant boundary — tables the app reaches with admin-only policies', 
     expect((seen.data ?? []).length, 'tenant A read tenant B’s cash reconciliation').toBe(0);
   });
 
-  it('user_permissions: tenant A cannot grant a permission to tenant B’s employee', async () => {
+  it('user_permissions: tenant A cannot write a permission row for tenant B’s employee', async () => {
     await trySql('user_permissions-2', sql(`DELETE FROM user_permissions WHERE user_id = '${VICTIM_B}'`));
     const permId = (await sql(`SELECT id FROM permissions LIMIT 1`)).rows[0]?.id;
     if (!permId) return;
+    // A deny, not a grant: 0277's trigger refuses a granted override before RLS
+    // is even reached, so only a deny proves the boundary itself refuses the write.
+    // 0218 rewrote user_permissions_insert to require a membership in the
+    // caller's current shop, so a cross-tenant deny IS refused by RLS.
     const { error } = await insertAsUser(OWNER_A, 'user_permissions', {
-      user_id: VICTIM_B, permission_id: permId, is_override: true, is_granted: true,
+      user_id: VICTIM_B, permission_id: permId, is_override: true, is_granted: false,
     });
     const written = await sql(`SELECT 1 FROM user_permissions WHERE user_id = '${VICTIM_B}'`);
     await trySql('user_permissions-3', sql(`DELETE FROM user_permissions WHERE user_id = '${VICTIM_B}'`));
     expect(
       written.rows.length,
-      `a cross-tenant permission grant was written (insert error: ${error ?? 'none'})`,
+      `a cross-tenant permission row was written (insert error: ${error ?? 'none'})`,
     ).toBe(0);
     // The refusal has to come from the boundary, not from an incidental constraint: a grant
     // that fails for a foreign key would look identical to one the policy refused.

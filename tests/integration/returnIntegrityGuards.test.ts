@@ -16,7 +16,7 @@
  */
 
 import { describe, it, beforeAll, afterAll, expect } from 'vitest';
-import { execRpcAsUser, execSqlAsAdmin } from '../setup/qa-client';
+import { execRpcAsUser, execSqlAsAdmin, setMembershipBranchScope } from '../setup/qa-client';
 
 const TENANT = '00000000-0000-0000-0000-000000000001';
 const OWNER = 'c3000000-0000-0000-0000-000000000001';
@@ -128,6 +128,15 @@ beforeAll(async () => {
     ON CONFLICT (id) DO UPDATE SET is_active = true, is_original_owner = false,
       shop_id = EXCLUDED.shop_id, phone = EXCLUDED.phone
   `);
+
+  // The wave-1 demotion left this admin with a NULL branch_scope, and 0188
+  // refuses a non-owner every branch-scoped call when no branch is in scope.
+  // Scope the membership to the tenant's active branches — the scope the
+  // product's own invitation path writes.
+  const branches = await sql(
+    `SELECT id FROM branches WHERE tenant_id = '${TENANT}' AND is_active = true ORDER BY is_default DESC, created_at`
+  );
+  await setMembershipBranchScope(OWNER, TENANT, branches.rows.map((r: { id: string }) => r.id));
   await sql(`
     INSERT INTO customers (id, name, phone, credit_limit, outstanding_balance, total_purchases, total_paid, shop_id, created_by)
     VALUES ('${CUSTOMER}', 'QA Return Customer', '923009550101', 100000, 0, 0, 0, '${TENANT}', 'QA')

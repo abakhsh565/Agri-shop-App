@@ -581,6 +581,43 @@ export async function execRpcAsUser(
 }
 
 /**
+ * Accept a pending invitation the way the app does since 0286.
+ *
+ * 0286 made `complete_member_onboarding()` a deliberate no-op (it returns
+ * `activated: 0` always) and replaced it with `accept_my_invitation
+ * (p_membership_id)` — one invitation, accepted by its own invitee. The
+ * invitation id is the invitation itself; the app reads it from
+ * `get_my_invitations()`, the test reads the same pending row directly.
+ * Returns the accepted membership id, so a caller can prove a second accept
+ * finds no pending invitation (INVITATION_NOT_FOUND).
+ */
+export async function acceptInvitationAsUser(userId: string): Promise<string> {
+  const pending = await execSqlAsAdmin(
+    `SELECT id FROM memberships WHERE user_id = '${userId}' AND status = 'pending'`
+  );
+  const membershipId = pending.rows[0]?.id as string | undefined;
+  if (!membershipId) {
+    throw new Error(`acceptInvitationAsUser: no pending invitation for ${userId}`);
+  }
+  const res = await execRpcAsUser(userId, 'accept_my_invitation', { p_membership_id: membershipId });
+  if (res.error) {
+    throw new Error(`acceptInvitationAsUser(${userId}): ${res.error}`);
+  }
+  if (res.data?.ok !== true) {
+    throw new Error(`acceptInvitationAsUser(${userId}): accept_my_invitation did not return ok`);
+  }
+  const after = await execSqlAsAdmin(
+    `SELECT status FROM memberships WHERE id = '${membershipId}'`
+  );
+  if (after.rows[0]?.status !== 'active') {
+    throw new Error(
+      `acceptInvitationAsUser(${userId}): membership ${membershipId} is ${after.rows[0]?.status ?? 'missing'}, not active`
+    );
+  }
+  return membershipId;
+}
+
+/**
  * Read a table as a specific user through PostgREST + RLS.
  * Used to prove tenant isolation at the real client path (not service-role SQL).
  */

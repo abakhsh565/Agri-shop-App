@@ -16,6 +16,7 @@
 
 import { describe, it, beforeAll, afterAll, expect } from 'vitest';
 import {
+  acceptInvitationAsUser,
   execRpcAsUser,
   execSqlAsAdmin,
   selectAsUser,
@@ -213,7 +214,7 @@ describe('RBAC enforcement — role defaults propagate to employees', () => {
     expect(overrides.rows[0].c).toBe(0);
 
     // Adding an employee ISSUES AN INVITATION. The membership is pending, so the
-    // invitee holds no access at all until they complete onboarding — and a role
+    // invitee holds no access at all until they accept their own invitation — and a role
     // assignment alone must never be what grants it.
     const invited = await sql(
       `SELECT status FROM memberships WHERE user_id IN ('${empAhmed}','${empBilal}')`
@@ -222,21 +223,18 @@ describe('RBAC enforcement — role defaults propagate to employees', () => {
     const invitedPerms = await execRpcAsUser(empAhmed, 'get_my_permissions', {});
     expect(invitedPerms.data ?? []).toEqual([]);
 
-    // Onboarding completes with the invitee's own verified sign-in.
-    const onboard = await execRpcAsUser(empAhmed, 'complete_member_onboarding', {});
-    expect(onboard.error).toBeNull();
-    expect(onboard.data.activated).toBe(1);
-    const onboardBilal = await execRpcAsUser(empBilal, 'complete_member_onboarding', {});
-    expect(onboardBilal.error).toBeNull();
+    // Acceptance completes with the invitee's own verified sign-in (0286:
+    // complete_member_onboarding() is a no-op; accept_my_invitation() is the acceptance).
+    const midAhmed = await acceptInvitationAsUser(empAhmed);
+    await acceptInvitationAsUser(empBilal);
     const accepted = await sql(
       `SELECT status FROM memberships WHERE user_id IN ('${empAhmed}','${empBilal}')`
     );
     expect(accepted.rows.map((r) => r.status)).toEqual(['active', 'active']);
 
-    // Onboarding is idempotent: a second call activates nothing (no double-login effect).
-    const again = await execRpcAsUser(empAhmed, 'complete_member_onboarding', {});
-    expect(again.error).toBeNull();
-    expect(again.data.activated).toBe(0);
+    // Accepting is idempotent in effect: a second accept finds no pending invitation.
+    const again = await execRpcAsUser(empAhmed, 'accept_my_invitation', { p_membership_id: midAhmed });
+    expect(again.error).toContain('INVITATION_NOT_FOUND');
   });
 
   it('propagates an added permission to every employee on the role', async () => {
@@ -357,12 +355,12 @@ describe('RBAC enforcement — backend business authorization', () => {
 });
 
 describe('RBAC enforcement — employee overrides and reset', () => {
-  it('applies an explicit deny plus an explicit grant on top of the role', async () => {
+  it('applies an explicit deny on top of the role', async () => {
     const updated = await execRpcAsUser(OWNER_A, 'update_employee_access', {
       payload: {
         employeeId: empAhmed,
         roleId,
-        overrides: { 'sales.view': false, 'settings.view': true },
+        overrides: { 'sales.view': false },
         branchScope: [branchMain],
       },
     });
@@ -372,9 +370,7 @@ describe('RBAC enforcement — employee overrides and reset', () => {
     expect(access.error).toBeNull();
     expect(access.data.defaults).toContain('sales.view');
     expect(access.data.effective).not.toContain('sales.view');
-    expect(access.data.effective).toContain('settings.view');
     expect(access.data.overrides['sales.view']).toBe(false);
-    expect(access.data.overrides['settings.view']).toBe(true);
   });
 
   it('resets the employee back to role defaults', async () => {
@@ -425,7 +421,8 @@ describe('RBAC enforcement — tenant isolation', () => {
   it('assigns owner B to tenant B and keeps owner A in tenant A', async () => {
     const rows = await sql(`
       SELECT user_id, tenant_id, role FROM memberships
-      WHERE user_id IN ('${OWNER_A}','${OWNER_B}') ORDER BY user_id
+      WHERE user_id IN ('${OWNER_A}','${OWNER_B}')
+        AND tenant_id IN ('${TENANT_A}','${TENANT_B}') ORDER BY user_id
     `);
     const map = Object.fromEntries(rows.rows.map((r: any) => [r.user_id, r.tenant_id]));
     expect(map[OWNER_A]).toBe(TENANT_A);

@@ -228,7 +228,7 @@ beforeAll(async () => {
   for (const userId of [OWNER, ADMIN, MANAGER, EMPLOYEE, ADMIN_NO_RIGHTS]) {
     const row = await sql(
       `SELECT (SELECT count(*)::int FROM user_active_shops WHERE user_id = '${userId}' AND branch_id = '${branchMain}') AS shops,
-              (SELECT count(*)::int FROM memberships WHERE user_id = '${userId}' AND status = 'active') AS memberships`
+              (SELECT count(*)::int FROM memberships WHERE user_id = '${userId}' AND status = 'active' AND tenant_id = '${TENANT}') AS memberships`
     );
     expect(row.rows[0], `${userId} has no active shop/branch context`).toEqual({ shops: 1, memberships: 1 });
   }

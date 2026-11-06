@@ -2,23 +2,25 @@
  * Employee Invite Lifecycle Regression Suite
  *
  * Locked product intent: adding an employee ISSUES AN INVITATION, and the
- * employee becomes active only when they complete onboarding with their own
- * verified sign-in. Role assignment is not access.
+ * employee becomes active only when they accept their own invitation with
+ * their own verified sign-in (0286: complete_member_onboarding() is a
+ * deliberate no-op; accept_my_invitation() is the acceptance). Role
+ * assignment is not access.
  *
  * Proves, with a real JWT + PostgREST + database evidence:
  *   1. A newly added employee's membership is `pending`, and every authorization
  *      path denies them — including a real business write, not just a UI state.
- *   2. complete_member_onboarding() activates the caller's own membership, once.
- *   3. Onboarding NEVER revives a suspended membership (deactivation must not be
- *      undone by the deactivated person signing in).
+ *   2. accept_my_invitation() activates the caller's own pending invitation, once.
+ *   3. Accepting an invitation NEVER revives a suspended membership (deactivation
+ *      must not be undone by the deactivated person signing in).
  *   4. Reactivating an invited employee does not promote the invitation.
- *   5. Onboarding cannot activate somebody else's invitation.
+ *   5. Accepting cannot activate somebody else's invitation.
  *
  * Self-contained: creates its own owner + employees and removes them.
  */
 
 import { describe, it, beforeAll, afterAll, expect } from 'vitest';
-import { execRpcAsUser, execSqlAsAdmin, qaAnonClient, roleIdByName } from '../setup/qa-client';
+import { acceptInvitationAsUser, execRpcAsUser, execSqlAsAdmin, qaAnonClient, roleIdByName } from '../setup/qa-client';
 import { QA_IDS } from '../setup/fixtures';
 
 const TENANT = '00000000-0000-0000-0000-000000000001';
@@ -169,15 +171,13 @@ describe('Employee invite lifecycle — an invitation is not access', () => {
   });
 
   it('activates the invitee on their own verified sign-in, exactly once', async () => {
-    const onboard = await execRpcAsUser(invited, 'complete_member_onboarding', {});
-    expect(onboard.error).toBeNull();
-    expect(onboard.data.activated).toBe(1);
+    const mid = await acceptInvitationAsUser(invited);
     expect(await statusOf(invited)).toBe('active');
 
-    // Idempotent: a second sign-in activates nothing and cannot re-grant access.
-    const again = await execRpcAsUser(invited, 'complete_member_onboarding', {});
-    expect(again.error).toBeNull();
-    expect(again.data.activated).toBe(0);
+    // Idempotent in effect: a second accept finds no pending invitation (0286).
+    const again = await execRpcAsUser(invited, 'accept_my_invitation', { p_membership_id: mid });
+    expect(again.error).toContain('INVITATION_NOT_FOUND');
+    expect(await statusOf(invited)).toBe('active');
 
     // Now the role's defaults are in force — and only now.
     const perms = await execRpcAsUser(invited, 'get_my_permissions', {});
@@ -185,8 +185,10 @@ describe('Employee invite lifecycle — an invitation is not access', () => {
   });
 
   it('cannot activate somebody else\'s invitation', async () => {
-    // `invited` is now active and calls onboarding on its own behalf only.
-    await execRpcAsUser(invited, 'complete_member_onboarding', {});
+    // `invited` is now active and accepts on its own behalf only.
+    const mid = await sql(`SELECT id FROM memberships WHERE user_id = '${colleague}' AND status = 'pending'`);
+    const attempt = await execRpcAsUser(invited, 'accept_my_invitation', { p_membership_id: mid.rows[0]?.id });
+    expect(attempt.error).toContain('INVITATION_NOT_FOUND');
     expect(await statusOf(colleague)).toBe('pending');
   });
 
@@ -210,9 +212,11 @@ describe('Employee invite lifecycle — an invitation is not access', () => {
     await sql(`UPDATE users SET is_active = false WHERE id = '${invited}'`);
     expect(await statusOf(invited)).toBe('suspended');
 
-    // The deactivated person signing in must not restore their own access.
-    const attempt = await execRpcAsUser(invited, 'complete_member_onboarding', {});
-    expect(attempt.error).toBeTruthy();
+    // The deactivated person accepting must not restore their own access: a
+    // suspended membership is not a pending invitation (0286).
+    const mid = await sql(`SELECT id FROM memberships WHERE user_id = '${invited}'`);
+    const attempt = await execRpcAsUser(invited, 'accept_my_invitation', { p_membership_id: mid.rows[0]?.id });
+    expect(attempt.error).toContain('INVITATION_NOT_FOUND');
     expect(await statusOf(invited)).toBe('suspended');
   });
 
@@ -224,11 +228,10 @@ describe('Employee invite lifecycle — an invitation is not access', () => {
     await sql(`UPDATE users SET is_active = true WHERE id = '${colleague}'`);
     expect(await statusOf(colleague)).toBe('pending');
 
-    // And it still needs onboarding to actually work here.
+    // And it still needs its invitation accepted to actually work here.
     const perms = await execRpcAsUser(colleague, 'get_my_permissions', {});
     expect(perms.data ?? []).toEqual([]);
-    const onboard = await execRpcAsUser(colleague, 'complete_member_onboarding', {});
-    expect(onboard.data.activated).toBe(1);
+    await acceptInvitationAsUser(colleague);
     expect(await statusOf(colleague)).toBe('active');
   });
 });
@@ -399,9 +402,13 @@ describe('An invitation is usable: the invitee can actually sign in', () => {
     // The identity is the app user: authorization resolves for them, not for a stranger.
     expect(signIn.data.user?.id).toBe(inviteeId);
 
-    const onboard = await qaAnonClient.rpc('complete_member_onboarding');
+    // 0286: onboarding is a no-op; the invitee accepts their own invitation.
+    // The membership id is the invitation itself — the app reads it from
+    // get_my_invitations(); the test reads the same pending row directly.
+    const mid = await sql(`SELECT id FROM memberships WHERE user_id = '${inviteeId}' AND status = 'pending'`);
+    const onboard = await qaAnonClient.rpc('accept_my_invitation', { p_membership_id: mid.rows[0]?.id });
     expect(onboard.error).toBeNull();
-    expect(onboard.data.activated).toBe(1);
+    expect(onboard.data?.ok).toBe(true);
     expect(await statusOf(inviteeId)).toBe('active');
 
     await qaAnonClient.auth.signOut();

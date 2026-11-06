@@ -15,7 +15,7 @@
  */
 
 import { describe, it, beforeAll, afterAll, expect } from 'vitest';
-import { execRpcAsUser, execSqlAsAdmin, insertAsUser, selectAsUser } from '../setup/qa-client';
+import { execRpcAsUser, execSqlAsAdmin, insertAsUser, selectAsUser, setMembershipBranchScope } from '../setup/qa-client';
 
 const TENANT_A = '00000000-0000-0000-0000-000000000001';
 const TENANT_B = '00000000-0000-0000-0000-00000000c0c0';
@@ -89,6 +89,17 @@ beforeAll(async () => {
      WHERE user_id = '${EMP_A}'
   `);
   await sql(`DELETE FROM user_permissions WHERE user_id = '${EMP_A}'`);
+
+  // The wave-1 demotion left these admins with a NULL branch_scope, and 0188
+  // refuses a non-owner every branch-scoped call when no branch is in scope.
+  // Scope both memberships to the tenant's active branches (OWNER_B is a true
+  // owner and exempt).
+  const branches = await sql(
+    `SELECT id FROM branches WHERE tenant_id = '${TENANT_A}' AND is_active = true ORDER BY is_default DESC, created_at`
+  );
+  const branchIds = branches.rows.map((r: { id: string }) => r.id);
+  await setMembershipBranchScope(OWNER_A, TENANT_A, branchIds);
+  await setMembershipBranchScope(EMP_A, TENANT_A, branchIds);
 
   // Deterministic fixtures for the reminder tests below (idempotent).
   await sql(`

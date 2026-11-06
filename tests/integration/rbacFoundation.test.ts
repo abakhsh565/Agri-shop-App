@@ -1,5 +1,5 @@
 import { describe, it, beforeAll, afterAll, expect } from 'vitest';
-import { execRpcAsUser, execSqlAsAdmin, qaServiceClient } from '../setup/qa-client';
+import { acceptInvitationAsUser, execRpcAsUser, execSqlAsAdmin, qaServiceClient } from '../setup/qa-client';
 import { QA_IDS } from '../setup/fixtures';
 
 const tenant = '00000000-0000-0000-0000-000000000001';
@@ -120,7 +120,10 @@ describe('Authoritative RBAC foundation', () => {
     // Owner access inspection is valid; role defaults are empty for owner.
     expect(access.error).toBeNull();
     const roleRows = await sql(`SELECT count(*)::int AS count FROM role_permissions WHERE role_id='${roleId}'`);
-    expect(roleRows.rows[0].count).toBe(2);
+    // 0285 grants every role customers.create/edit/payments at insert time (and
+    // create_role dedupes the requested customers.create), so the stored set is
+    // the two requested codes plus the two trigger-added customer codes.
+    expect(roleRows.rows[0].count).toBe(4);
   });
 
   it('creates an employee linked to the role without copying defaults', async () => {
@@ -136,10 +139,9 @@ describe('Authoritative RBAC foundation', () => {
     // A newly added employee is INVITED, not working: role assignment is not access.
     expect(rows.rows[0].status).toBe('pending');
 
-    // The invite is accepted by the employee's own first verified sign-in.
-    const onboard = await execRpcAsUser(employee, 'complete_member_onboarding', {});
-    expect(onboard.error).toBeNull();
-    expect(onboard.data.activated).toBe(1);
+    // The invite is accepted by the employee's own verified sign-in (0286:
+    // complete_member_onboarding() is a no-op; accept_my_invitation() is the acceptance).
+    await acceptInvitationAsUser(employee);
     const after = await sql(`SELECT status FROM memberships WHERE user_id='${employee}'`);
     expect(after.rows[0].status).toBe('active');
   });
@@ -158,13 +160,12 @@ describe('Authoritative RBAC foundation', () => {
 
   it('applies an explicit deny override without destroying role inheritance', async () => {
     const updated = await execRpcAsUser(admin, 'update_employee_access', {
-      payload: { employeeId: employee, roleId, overrides: { 'sales.create': false, 'inventory.view': true }, branchScope: [mainBranch] },
+      payload: { employeeId: employee, roleId, overrides: { 'sales.create': false }, branchScope: [mainBranch] },
     });
     expect(updated.error).toBeNull();
     const effective = await execRpcAsUser(employee, 'get_my_permissions', {});
     expect(effective.error).toBeNull();
     expect(effective.data).not.toContain('sales.create');
     expect(effective.data).toContain('customers.create');
-    expect(effective.data).toContain('inventory.view');
   });
 });
