@@ -43,7 +43,12 @@ beforeAll(async () => {
   } catch {
     /* best-effort: no auth identity exists for this employee yet */
   }
-  await sql(`DELETE FROM audit_events WHERE entity_id IN ('${employee}') OR details->>'name'='QA RBAC Employee'`);
+  // 0286: accept_my_invitation writes 'membership_invitation_accepted' with user_id = the
+  // invitee and entity_id = the MEMBERSHIP id, so the old entity_id-only sweep misses it
+  // and the users delete below then trips on audit_events_user_id_fkey. Clear rows the user
+  // ACTED (by user id, resolved by phone so a rerun also clears the previous run's
+  // employee) as well as rows ABOUT the user and its memberships.
+  await sql(`DELETE FROM audit_events WHERE user_id IN (SELECT id FROM users WHERE id='${employee}' OR phone='923008880001') OR entity_id IN (SELECT id FROM users WHERE id='${employee}' OR phone='923008880001') OR entity_id IN (SELECT id FROM memberships WHERE user_id IN (SELECT id FROM users WHERE id='${employee}' OR phone='923008880001')) OR details->>'name'='QA RBAC Employee'`);
   await sql(`DELETE FROM user_permissions WHERE user_id IN (SELECT id FROM users WHERE id='${employee}' OR phone='923008880001')`);
   await sql(`DELETE FROM memberships WHERE user_id IN (SELECT id FROM users WHERE id='${employee}' OR phone='923008880001')`);
   await sql(`DELETE FROM users WHERE id='${employee}' OR phone='923008880001'`);
@@ -88,7 +93,9 @@ function throwIfCleanupFailed(context: string): void {
 }
 
 afterAll(async () => {
-  await sql(`DELETE FROM audit_events WHERE entity_id IN ('${employee}') OR details->>'name'='${roleName}'`);
+  // Same 0286 gap as beforeAll: the invitation-accepted event is stamped with
+  // user_id = the employee and entity_id = the membership id.
+  await sql(`DELETE FROM audit_events WHERE user_id='${employee}' OR entity_id IN ('${employee}') OR entity_id IN (SELECT id FROM memberships WHERE user_id='${employee}') OR details->>'name'='${roleName}'`);
   await sql(`DELETE FROM user_permissions WHERE user_id='${employee}'`);
   await sql(`DELETE FROM memberships WHERE user_id='${employee}'`);
   if (roleId) {

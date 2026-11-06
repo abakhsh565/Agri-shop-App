@@ -20,8 +20,10 @@
  *      rather than "nothing happened". Every payload is chosen so an authorized caller mutates
  *      nothing: the tests are about who may pass the guard, not about writing rows.
  *   2. `membership role = 'admin'` is not an implicit permission set. The owner short-circuits to
- *      every code (0195); an admin must not. Proven with an admin whose role holds one unrelated
- *      permission: it is refused customers.create exactly like an employee.
+ *      every code (0195); an admin must not. Proven with an admin whose role holds no sales
+ *      permission: it is refused void_sale exactly like an employee. The role was created with one
+ *      unrelated permission ('reports.view'); 0285 adds the customer trio to every role at insert
+ *      time, so a customer RPC can no longer be the probe for this.
  *   3. Direct API/RPC bypass. As `anon`, as an authenticated employee writing a money ledger
  *      straight into PostgREST, and as an employee granting itself a permission through
  *      user_permissions. Each is refused, and the permission count is re-measured afterwards so
@@ -60,7 +62,7 @@ const OWNER = QA_IDS.owner;
 const ADMIN = 'fe200000-0000-0000-0000-00000000000b';
 const MANAGER = 'fe200000-0000-0000-0000-00000000000c';
 const EMPLOYEE = 'fe200000-0000-0000-0000-00000000000d';
-/** An admin whose role holds one unrelated permission: admin ≠ owner, measured. */
+/** An admin whose role was created with one unrelated permission ('reports.view'): admin ≠ owner, measured. 0285 adds the customer trio to every role at insert time, so the role holds four codes and the proof uses a permission it genuinely lacks (sales.void). */
 const ADMIN_NO_RIGHTS = 'fe200000-0000-0000-0000-00000000000e';
 
 const PHONE = {
@@ -203,7 +205,7 @@ beforeAll(async () => {
   const noRights = await execRpcAsUser(OWNER, 'create_role', {
     payload: {
       name: `${ROLE_PREFIX} AdminNoRights`,
-      description: 'QA matrix admin with one unrelated permission, to prove admin is not the owner',
+      description: 'QA matrix admin with one unrelated permission (plus the 0285 customer trio), to prove admin is not the owner',
       permissions: ['reports.view'],
     },
   });
@@ -328,7 +330,9 @@ describe('Security matrix — per-role RPC authorization', () => {
 describe('Security matrix — every consequential RPC the ledger guards is represented', () => {
   // 0192 guards seven reachable consequential RPCs. Four already have rows above (create_sale,
   // void_sale, adjust_stock, record_supplier_payment). These three are the rest, each refused for the
-  // employee with the exact code its guard raises — which is what
+  // employee with the exact code its guard raises — except record_customer_payment: 0285 grants
+  // 'customers.payments' to every role, so the employee passes that guard and the row asserts the
+  // customer-access refusal instead (see that test). The rows are what
   // `tests/unit/securityMatrixCoverage.test.ts` reads when it fails on a new consequential RPC that
   // reached the ledger without a row here.
   it('create_purchase is refused for an employee with purchases.create', async () => {
@@ -347,12 +351,19 @@ describe('Security matrix — every consequential RPC the ledger guards is repre
     expectDenied(denied.error, 'returns.create', 'employee', 'process_return');
   });
 
-  it('record_customer_payment is refused for an employee with customers.payments', async () => {
+  it('record_customer_payment reaches its customer check for an employee who holds customers.payments', async () => {
+    // 0285 grants 'customers.payments' to EVERY role at insert time (and to the seeded
+    // templates), so no persona in this matrix can be refused this RPC at the permission
+    // guard — the guard passes and the call is refused at the next check, the customer
+    // lookup. The row still proves the RPC is represented and reached: an employee who
+    // lacked the permission would be refused with 'missing permission customers.payments'
+    // instead, and the quoted token keeps `tests/unit/securityMatrixCoverage.test.ts` able
+    // to see that this RPC's permission is the one its guard names.
     const denied = await execRpcAsUser(EMPLOYEE, 'record_customer_payment', {
       payload: { customerId: randomUUID(), amount: 1, method: 'cash' },
     });
     expect(denied.error, 'an employee reached record_customer_payment').toBeTruthy();
-    expectDenied(denied.error, 'customers.payments', 'employee', 'record_customer_payment');
+    expect(denied.error, 'an employee passed the customer check').toContain('customer access denied');
   });
 
   it('create_sale is refused for a member that does not hold sales.create', async () => {
@@ -374,25 +385,43 @@ describe('Security matrix — every consequential RPC the ledger guards is repre
 });
 
 describe('Security matrix — admin is a role, not the owner', () => {
-  it('an admin whose role holds one unrelated permission cannot create a customer', async () => {
+  it('an admin whose role holds no sales permission cannot void a sale', async () => {
     // 0195: "Owner is the only implicit permission set." If membership role `admin` short-circuited
     // the way `owner` does, this call would pass the guard and fail later — it must fail AT the guard.
-    const result = await execRpcAsUser(ADMIN_NO_RIGHTS, 'create_customer', {
-      payload: { name: `${RUN} admin probe`, latitude: 'not-a-number' },
+    // The probe used to be create_customer / 'customers.create', but 0285 grants
+    // 'customers.create' (with 'customers.edit' and 'customers.payments') to EVERY role at insert
+    // time, so the no-rights role holds it too and the permission guard cannot refuse it. sales.void
+    // is a permission the role genuinely lacks, so the same proof runs on void_sale instead.
+    const result = await execRpcAsUser(ADMIN_NO_RIGHTS, 'void_sale', {
+      p_sale_id: randomUUID(),
+      p_reason: 'QA security matrix',
+      p_voided_by: ADMIN_NO_RIGHTS,
     });
     expect(result.error).toBeTruthy();
-    expectDenied(result.error, 'customers.create', 'admin (no rights)', 'create_customer');
+    expectDenied(result.error, 'sales.void', 'admin (no rights)', 'void_sale');
 
     // ...while the owner, who is the implicit full set, is not refused that way.
-    const owner = await execRpcAsUser(OWNER, 'create_customer', {
-      payload: { name: `${RUN} owner probe`, latitude: 'not-a-number' },
+    const owner = await execRpcAsUser(OWNER, 'void_sale', {
+      p_sale_id: randomUUID(),
+      p_reason: 'QA security matrix',
+      p_voided_by: OWNER,
     });
-    expectAllowed(owner.error, 'customers.create', 'owner', 'create_customer');
+    expectAllowed(owner.error, 'sales.void', 'owner', 'void_sale');
+    expect(owner.error, `the owner did not reach the record-branch check: ${owner.error}`)
+      .toContain('record branch access denied');
 
     // And the two sets are measurably different, so the assertion is not resting on one call.
+    // The no-rights role was created with one unrelated permission and 0285 added the customer
+    // trio, so its effective set is exactly those four codes (sorted before comparing, so the
+    // assertion does not depend on the resolver's order).
     const adminPerms = await execRpcAsUser(ADMIN_NO_RIGHTS, 'get_my_permissions', {});
     expect(adminPerms.error).toBeNull();
-    expect(adminPerms.data).toEqual(['reports.view']);
+    expect([...(adminPerms.data as string[])].sort()).toEqual([
+      'customers.create',
+      'customers.edit',
+      'customers.payments',
+      'reports.view',
+    ]);
 
     const ownerPerms = await execRpcAsUser(OWNER, 'get_my_permissions', {});
     expect(ownerPerms.error).toBeNull();
