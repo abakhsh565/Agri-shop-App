@@ -26,6 +26,15 @@ name: Apply migrations to QA (staging)
 
 on:
   workflow_dispatch:
+    inputs:
+      allow_out_of_order:
+        description: 'Apply pending migrations that sort before the newest recorded version (one-time override; needs override_reason)'
+        type: boolean
+        default: false
+      override_reason:
+        description: 'Reason for the out-of-order override (required when allow_out_of_order is true)'
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -67,10 +76,28 @@ jobs:
 
       - name: Ledger state before the apply (read-only; pending is expected here)
         continue-on-error: true
-        run: node scripts/migrate.mjs verify --env staging --ledger-only-allowlist .github/qa-ledger-only.txt
+        env:
+          OVERRIDE_REASON: ${{ inputs.override_reason }}
+          ALLOW_OUT_OF_ORDER: ${{ inputs.allow_out_of_order }}
+        run: |
+          ARGS=()
+          if [ "$ALLOW_OUT_OF_ORDER" = "true" ]; then ARGS=(--allow-out-of-order "$OVERRIDE_REASON"); fi
+          node scripts/migrate.mjs verify --env staging "${ARGS[@]}"
 
       - name: Apply pending migrations to QA
-        run: node scripts/migrate.mjs apply --env staging --apply
+        env:
+          OVERRIDE_REASON: ${{ inputs.override_reason }}
+          ALLOW_OUT_OF_ORDER: ${{ inputs.allow_out_of_order }}
+        run: |
+          ARGS=()
+          if [ "$ALLOW_OUT_OF_ORDER" = "true" ]; then ARGS=(--allow-out-of-order "$OVERRIDE_REASON"); fi
+          node scripts/migrate.mjs apply --env staging --apply "${ARGS[@]}"
 
       - name: Ledger state after the apply (must show 0 pending)
-        run: node scripts/migrate.mjs verify --env staging --ledger-only-allowlist .github/qa-ledger-only.txt
+        env:
+          OVERRIDE_REASON: ${{ inputs.override_reason }}
+          ALLOW_OUT_OF_ORDER: ${{ inputs.allow_out_of_order }}
+        run: |
+          ARGS=()
+          if [ "$ALLOW_OUT_OF_ORDER" = "true" ]; then ARGS=(--allow-out-of-order "$OVERRIDE_REASON"); fi
+          node scripts/migrate.mjs verify --env staging "${ARGS[@]}"

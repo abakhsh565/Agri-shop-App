@@ -15,9 +15,13 @@
 
 import { describe, it, beforeAll, afterAll, expect } from 'vitest';
 import { execRpcAsUser, execSqlAsAdmin, roleIdByName, setMembershipBranchScope } from '../setup/qa-client';
+import { QA_IDS } from '../setup/fixtures';
 
 const TENANT_A = '00000000-0000-0000-0000-000000000001';
-const OWNER = 'd3000000-0000-0000-0000-00000000000a';
+// The fixture shop's sole owner (Khalid Khan). 0280 allows one active owner
+// per shop, so this suite uses him instead of creating its own owner — and
+// never inserts, updates or deletes his user row.
+const OWNER = QA_IDS.owner;
 const EMP = 'd3000000-0000-0000-0000-0000000000e1';
 const VICTIM = 'd3000000-0000-0000-0000-00000000000b';
 // Built-in roles, resolved by NAME in beforeAll rather than by the id 0107 seeded. A built-in role is
@@ -25,9 +29,19 @@ const VICTIM = 'd3000000-0000-0000-0000-00000000000b';
 // fixed id can be gone, or held by another tenant's role, while the NAME is what the product
 // guarantees. QA lost "Sales Employee" in this tenant on 2026-10-04 while this id stayed in use
 // elsewhere: { revokedFrom: 2, wasSystemRole: true }.
-let ROLE_EMPLOYEE = '';  // Sales Employee (has customers.create)
-let ROLE_CLERK = '';     // Inventory Clerk (no customers.create)
+let ROLE_EMPLOYEE = '';  // Sales Employee (holds sales.create)
+let ROLE_CLERK = '';     // Inventory Clerk (no sales.create; 0285 gave every role the customer trio)
 const RUN = `QA Life ${Date.now()}`;
+
+// The sales.create probe (R3): a sale needs a real customer, product and
+// variant with stock — the saleIdempotency fixture shape, in this suite's
+// own id namespace.
+const SALE_CUSTOMER = 'd3000000-0000-0000-0000-0000000000c1';
+const SALE_PRODUCT = 'd3000000-0000-0000-0000-0000000000d1';
+const SALE_VARIANT = 'd3000000-0000-0000-0000-0000000000d2';
+const SALE_PRICE = 500;
+const SALE_QTY = 2;
+const SALE_TOTAL = SALE_PRICE * SALE_QTY;
 
 let roleId = '';
 
@@ -61,12 +75,18 @@ function throwIfCleanupFailed(context: string): void {
 }
 
 async function cleanup() {
-  await trySql('customers', sql(`DELETE FROM customers WHERE phone IN ('923009795001','923009795002','923009795004','923009795005')`));
+  await trySql('sale_items', sql(`DELETE FROM sale_items WHERE sale_id IN (SELECT id FROM sales WHERE customer_id = '${SALE_CUSTOMER}')`));
+  await trySql('sales', sql(`DELETE FROM sales WHERE customer_id = '${SALE_CUSTOMER}'`));
+  await trySql('inventory_movements', sql(`DELETE FROM inventory_movements WHERE product_id = '${SALE_PRODUCT}'`));
+  await trySql('stock_adjustments', sql(`DELETE FROM stock_adjustments WHERE product_id = '${SALE_PRODUCT}'`));
+  await trySql('product_variants', sql(`DELETE FROM product_variants WHERE id = '${SALE_VARIANT}'`));
+  await trySql('products', sql(`DELETE FROM products WHERE id = '${SALE_PRODUCT}'`));
+  await trySql('customers', sql(`DELETE FROM customers WHERE phone IN ('923009795001','923009795002','923009795004','923009795005','923009795101')`));
   await trySql('audit_events', sql(`DELETE FROM audit_events WHERE user_id IN ('${OWNER}','${EMP}','${VICTIM}')`));
   await trySql('user_permissions', sql(`DELETE FROM user_permissions WHERE user_id IN ('${OWNER}','${EMP}','${VICTIM}')`));
   await trySql('role_permissions', sql(`DELETE FROM role_permissions WHERE role_id IN (SELECT id FROM roles WHERE name LIKE '${RUN}%')`));
   await trySql('roles', sql(`DELETE FROM roles WHERE name LIKE '${RUN}%'`));
-  await trySql('users', sql(`DELETE FROM users WHERE id IN ('${OWNER}','${EMP}','${VICTIM}')`));
+  await trySql('users', sql(`DELETE FROM users WHERE id IN ('${EMP}','${VICTIM}')`));
 }
 
 beforeAll(async () => {
@@ -75,7 +95,6 @@ beforeAll(async () => {
   await sql(`
     INSERT INTO users (id, name, phone, role, is_original_owner, is_active, shop_id)
     VALUES
-      ('${OWNER}',  '${RUN} Owner',  '923009795001', 'admin',    true,  true, '${TENANT_A}'),
       ('${EMP}',    '${RUN} Emp',    '923009795002', 'employee', false, true, '${TENANT_A}'),
       ('${VICTIM}', '${RUN} Victim', '923009795003', 'employee', false, true, '${TENANT_A}')
     ON CONFLICT (id) DO NOTHING
@@ -96,10 +115,34 @@ beforeAll(async () => {
   expect(branchId).toBeTruthy();
   await setMembershipBranchScope(EMP, TENANT_A, [branchId]);
   await setMembershipBranchScope(VICTIM, TENANT_A, [branchId]);
+
+  // Sale fixture for the sales.create probe (see the 'grants access' test):
+  // 0285 gave every role the customer trio, so only a sale tells these two
+  // roles apart. Same shape as saleIdempotency's fixture, own ids.
+  await sql(`
+    INSERT INTO customers (id, name, phone, credit_limit, outstanding_balance, total_purchases, total_paid, shop_id, created_by)
+    VALUES ('${SALE_CUSTOMER}', '${RUN} sale customer', '923009795101', 100000, 0, 0, 0, '${TENANT_A}', 'QA')
+    ON CONFLICT (id) DO UPDATE SET outstanding_balance = 0, total_purchases = 0, total_paid = 0
+  `);
+  await sql(`
+    INSERT INTO products (id, name, category, base_unit, stock_qty, shop_id, is_active, created_at, updated_at)
+    VALUES ('${SALE_PRODUCT}', '${RUN} sale product', 'other', 'kg', 100, '${TENANT_A}', true, now(), now())
+    ON CONFLICT (id) DO UPDATE SET is_active = true, base_unit = 'kg'
+  `);
+  await sql(`
+    INSERT INTO product_variants (id, product_id, name, selling_price, cost_price, unit_size, qty_step, low_stock_threshold, stock_qty, is_active)
+    VALUES ('${SALE_VARIANT}', '${SALE_PRODUCT}', '1kg', ${SALE_PRICE}, 300, 1, 1, 5, 100, true)
+    ON CONFLICT (id) DO UPDATE SET stock_qty = 100, is_active = true, selling_price = ${SALE_PRICE}
+  `);
   throwIfCleanupFailed('rbacLifecycleAndSessions beforeAll cleanup');
 });
 
 afterAll(async () => {
+  // The profile tests rename the fixture owner (Khalid Khan) to prove
+  // update_admin_profile ignores a foreign userId; the rename is the
+  // assertion's evidence, not a new name. Restore him so the next suite
+  // sees the fixture it expects.
+  await trySql('owner-name', sql(`UPDATE users SET name = 'Khalid Khan' WHERE id = '${OWNER}'`));
   await cleanup();
   throwIfCleanupFailed('rbacLifecycleAndSessions afterAll cleanup');
 });
@@ -108,26 +151,55 @@ const customerCall = (n: number) => ({
   payload: { name: `${RUN} customer ${n}`, phone: `92300979${5000 + n}` },
 });
 
+// The access probe: 0285 gave every role customers.create/edit/payments, so
+// a customer write can no longer tell the Sales Employee from the Inventory
+// Clerk. A sale can — the Employee holds sales.create and the Clerk does not
+// (0107). Same payload shape as saleIdempotency's.
+const saleCall = () => ({
+  payload: {
+    customerId: SALE_CUSTOMER,
+    customerName: `${RUN} sale customer`,
+    employeeId: EMP,
+    employeeName: `${RUN} Emp`,
+    paymentType: 'full',
+    paymentMethod: 'cash',
+    amountPaid: SALE_TOTAL,
+    items: [
+      {
+        productId: SALE_PRODUCT,
+        productName: `${RUN} sale product`,
+        variantId: SALE_VARIANT,
+        variantName: '1kg',
+        qty: SALE_QTY,
+        unitPrice: SALE_PRICE,
+        unitSize: 1,
+        baseUnit: 'kg',
+      },
+    ],
+  },
+});
+
 describe('Live session — access changes apply at the next authorization boundary', () => {
   it('grants access from the assigned role', async () => {
     await sql(`UPDATE memberships SET role_id = '${ROLE_EMPLOYEE}', role = 'employee', status = 'active' WHERE user_id = '${EMP}'`);
 
-    const res = await execRpcAsUser(EMP, 'create_customer', customerCall(1));
+    const res = await execRpcAsUser(EMP, 'create_sale', saleCall());
     expect(res.error).toBeNull();
 
-    const persisted = await sql(`SELECT count(*)::int AS c FROM customers WHERE phone = '923009795001'`);
+    const persisted = await sql(`SELECT count(*)::int AS c FROM sales WHERE customer_id = '${SALE_CUSTOMER}'`);
     expect(persisted.rows[0].c).toBe(1);
   });
 
   it('revokes access on the next call after the role changes', async () => {
     await sql(`UPDATE memberships SET role_id = '${ROLE_CLERK}' WHERE user_id = '${EMP}'`);
 
-    const res = await execRpcAsUser(EMP, 'create_customer', customerCall(2));
+    const before = await sql(`SELECT count(*)::int AS c FROM sales WHERE customer_id = '${SALE_CUSTOMER}'`);
+    const res = await execRpcAsUser(EMP, 'create_sale', saleCall());
     expect(res.error).toContain('NOT_AUTHORIZED');
 
     // Nothing was written by the rejected call.
-    const persisted = await sql(`SELECT count(*)::int AS c FROM customers WHERE phone = '923009795002'`);
-    expect(persisted.rows[0].c).toBe(0);
+    const after = await sql(`SELECT count(*)::int AS c FROM sales WHERE customer_id = '${SALE_CUSTOMER}'`);
+    expect(after.rows[0].c).toBe(before.rows[0].c);
   });
 
   it('restores access when the role is changed back', async () => {
@@ -150,7 +222,9 @@ describe('Live session — access changes apply at the next authorization bounda
     const codes: string[] = Array.isArray(effective.data)
       ? effective.data
       : (effective.data?.permissions ?? []);
-    expect(codes).not.toContain('customers.create');
+    // 0285 gave every role customers.create, so it can no longer be the
+    // revocation probe; sales.create is the permission these roles differ on.
+    expect(codes).not.toContain('sales.create');
     await sql(`UPDATE memberships SET role_id = '${ROLE_EMPLOYEE}' WHERE user_id = '${EMP}'`);
   });
 });

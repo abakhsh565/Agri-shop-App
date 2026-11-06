@@ -169,11 +169,22 @@ jobs:
         run: node scripts/check-qa-connectivity.mjs
 
       - name: Migration ledger must contain every candidate migration
-        # QA is deliberately ahead of a production hotfix: the shared QA database carries branch
-        # and access migrations (0233–0276) that are not in the production lineage. The reviewed
-        # allowlist names those rows; every candidate file must still be recorded with its hash,
-        # and any unlisted or stale QA-only row still fails this step.
-        run: node scripts/migrate.mjs verify --env staging --ledger-only-allowlist .github/qa-ledger-only.txt
+        # Phase 2 imported the branch/access migrations (0233–0289) into the repo and
+        # applied them to QA, so the old QA-only allowlist is closed: every ledger row
+        # now has a file, and any ledger-only row still fails this step.
+        run: node scripts/migrate.mjs verify --env staging
+
+      - name: Provision QA Auth Sessions
+        # Integration and browser suites sign in through the real phone/credential flow. This
+        # idempotent repair prevents a missing auth credential from surfacing as an app failure.
+        run: node scripts/provision-auth-sessions.mjs
+        env:
+          QA_SUPABASE_URL: ${{ secrets.QA_SUPABASE_URL }}
+          QA_SUPABASE_ANON_KEY: ${{ secrets.QA_SUPABASE_ANON_KEY }}
+          QA_SUPABASE_SERVICE_ROLE: ${{ secrets.QA_SUPABASE_SERVICE_ROLE }}
+          QA_DB_HOST: ${{ secrets.QA_DB_HOST }}
+          QA_DB_USER: ${{ secrets.QA_DB_USER }}
+          QA_DB_PASS: ${{ secrets.QA_DB_PASS }}
 
       - name: Integration suites (one file at a time — they share the QA database)
         # Each suite creates and removes its own controlled tenants. QA's own shops and history

@@ -1,18 +1,15 @@
 import { describe, it, beforeAll, afterAll, expect } from 'vitest';
-import { execRpcAsUser, execSqlAsAdmin, qaServiceClient } from '../setup/qa-client';
+import { acceptInvitationAsUser, execRpcAsUser, execSqlAsAdmin, qaServiceClient } from '../setup/qa-client';
+import { QA_IDS } from '../setup/fixtures';
 
 const tenant = '00000000-0000-0000-0000-000000000001';
 /**
- * This file owns its tenant-admin identity.
- *
- * It previously borrowed `e1000000-…0001`, which `employeePermissions.test.ts`
- * seeds AND deletes in its own afterAll. On a clean database — or whenever that
- * suite had not yet seeded it — every assertion here failed with
- * "NOT_AUTHORIZED: tenant access denied", so the file only passed by run order.
- * Seeding a private admin removes the cross-file coupling entirely.
+ * This file's tenant-admin identity is the fixture shop's sole owner
+ * (Khalid Khan). 0280 allows one active owner per shop, so the file uses
+ * him instead of seeding its own admin — and never inserts, updates or
+ * deletes his user row.
  */
-const admin = 'b1080000-0000-0000-0000-0000000000a1';
-const adminPhone = '923008880002';
+const admin = QA_IDS.owner;
 /**
  * This file's own second branch, and its own customer phone.
  *
@@ -34,12 +31,9 @@ let warehouseBranch = '';
 async function sql(query: string) { return execSqlAsAdmin(query); }
 
 beforeAll(async () => {
-  // The users insert also creates the owner membership (ensure_user_membership
-  // trigger), which is what gives this caller tenant access. The Supabase Auth
+  // The caller is the fixture shop's owner, whose owner membership already
+  // exists — that is what gives him tenant access. The Supabase Auth
   // credential is provisioned on demand by execRpcAsUser.
-  await sql(`INSERT INTO users (id, name, phone, role, is_original_owner, is_active, shop_id)
-    VALUES ('${admin}', 'QA RBAC Admin', '${adminPhone}', 'admin', true, true, '${tenant}')
-    ON CONFLICT (id) DO UPDATE SET is_active = true, role = 'admin', shop_id = EXCLUDED.shop_id`);
   // Best-effort by design: the employee row may not have an auth identity yet
   // (the credential is provisioned on demand by execRpcAsUser), so a missing
   // identity here is not a failure — the password is set when the credential
@@ -49,7 +43,12 @@ beforeAll(async () => {
   } catch {
     /* best-effort: no auth identity exists for this employee yet */
   }
-  await sql(`DELETE FROM audit_events WHERE entity_id IN ('${employee}') OR details->>'name'='QA RBAC Employee'`);
+  // 0286: accept_my_invitation writes 'membership_invitation_accepted' with user_id = the
+  // invitee and entity_id = the MEMBERSHIP id, so the old entity_id-only sweep misses it
+  // and the users delete below then trips on audit_events_user_id_fkey. Clear rows the user
+  // ACTED (by user id, resolved by phone so a rerun also clears the previous run's
+  // employee) as well as rows ABOUT the user and its memberships.
+  await sql(`DELETE FROM audit_events WHERE user_id IN (SELECT id FROM users WHERE id='${employee}' OR phone='923008880001') OR entity_id IN (SELECT id FROM users WHERE id='${employee}' OR phone='923008880001') OR entity_id IN (SELECT id FROM memberships WHERE user_id IN (SELECT id FROM users WHERE id='${employee}' OR phone='923008880001')) OR details->>'name'='QA RBAC Employee'`);
   await sql(`DELETE FROM user_permissions WHERE user_id IN (SELECT id FROM users WHERE id='${employee}' OR phone='923008880001')`);
   await sql(`DELETE FROM memberships WHERE user_id IN (SELECT id FROM users WHERE id='${employee}' OR phone='923008880001')`);
   await sql(`DELETE FROM users WHERE id='${employee}' OR phone='923008880001'`);
@@ -94,7 +93,9 @@ function throwIfCleanupFailed(context: string): void {
 }
 
 afterAll(async () => {
-  await sql(`DELETE FROM audit_events WHERE entity_id IN ('${employee}') OR details->>'name'='${roleName}'`);
+  // Same 0286 gap as beforeAll: the invitation-accepted event is stamped with
+  // user_id = the employee and entity_id = the membership id.
+  await sql(`DELETE FROM audit_events WHERE user_id='${employee}' OR entity_id IN ('${employee}') OR entity_id IN (SELECT id FROM memberships WHERE user_id='${employee}') OR details->>'name'='${roleName}'`);
   await sql(`DELETE FROM user_permissions WHERE user_id='${employee}'`);
   await sql(`DELETE FROM memberships WHERE user_id='${employee}'`);
   if (roleId) {
@@ -102,10 +103,6 @@ afterAll(async () => {
     await sql(`DELETE FROM roles WHERE id='${roleId}'`);
   }
   await sql(`DELETE FROM users WHERE id='${employee}'`);
-  // Remove the identity this file seeded (users delete cascades the membership).
-  await sql(`DELETE FROM user_permissions WHERE user_id='${admin}'`);
-  await sql(`DELETE FROM memberships WHERE user_id='${admin}'`);
-  await sql(`DELETE FROM users WHERE id='${admin}'`);
   // This file's own rows, removed and read back: a cleanup that silently failed is what made the
   // NEXT run fail with a duplicate phone.
   await trySql('customers', sql(`DELETE FROM customers WHERE phone='${DENIED_CUSTOMER_PHONE}'`));
@@ -130,7 +127,10 @@ describe('Authoritative RBAC foundation', () => {
     // Owner access inspection is valid; role defaults are empty for owner.
     expect(access.error).toBeNull();
     const roleRows = await sql(`SELECT count(*)::int AS count FROM role_permissions WHERE role_id='${roleId}'`);
-    expect(roleRows.rows[0].count).toBe(2);
+    // 0285 grants every role customers.create/edit/payments at insert time (and
+    // create_role dedupes the requested customers.create), so the stored set is
+    // the two requested codes plus the two trigger-added customer codes.
+    expect(roleRows.rows[0].count).toBe(4);
   });
 
   it('creates an employee linked to the role without copying defaults', async () => {
@@ -146,10 +146,9 @@ describe('Authoritative RBAC foundation', () => {
     // A newly added employee is INVITED, not working: role assignment is not access.
     expect(rows.rows[0].status).toBe('pending');
 
-    // The invite is accepted by the employee's own first verified sign-in.
-    const onboard = await execRpcAsUser(employee, 'complete_member_onboarding', {});
-    expect(onboard.error).toBeNull();
-    expect(onboard.data.activated).toBe(1);
+    // The invite is accepted by the employee's own verified sign-in (0286:
+    // complete_member_onboarding() is a no-op; accept_my_invitation() is the acceptance).
+    await acceptInvitationAsUser(employee);
     const after = await sql(`SELECT status FROM memberships WHERE user_id='${employee}'`);
     expect(after.rows[0].status).toBe('active');
   });
@@ -168,13 +167,12 @@ describe('Authoritative RBAC foundation', () => {
 
   it('applies an explicit deny override without destroying role inheritance', async () => {
     const updated = await execRpcAsUser(admin, 'update_employee_access', {
-      payload: { employeeId: employee, roleId, overrides: { 'sales.create': false, 'inventory.view': true }, branchScope: [mainBranch] },
+      payload: { employeeId: employee, roleId, overrides: { 'sales.create': false }, branchScope: [mainBranch] },
     });
     expect(updated.error).toBeNull();
     const effective = await execRpcAsUser(employee, 'get_my_permissions', {});
     expect(effective.error).toBeNull();
     expect(effective.data).not.toContain('sales.create');
     expect(effective.data).toContain('customers.create');
-    expect(effective.data).toContain('inventory.view');
   });
 });

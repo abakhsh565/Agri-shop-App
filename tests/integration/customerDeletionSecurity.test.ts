@@ -181,11 +181,13 @@ beforeAll(async () => {
     INSERT INTO role_permissions (role_id, permission_id)
     SELECT r.id, p.id FROM roles r JOIN permissions p ON p.code IN ('customers.view','customers.edit')
      WHERE r.name = '${ROLE_EDIT}'
+    ON CONFLICT DO NOTHING
   `);
   await sql(`
     INSERT INTO role_permissions (role_id, permission_id)
     SELECT r.id, p.id FROM roles r JOIN permissions p ON p.code IN ('customers.view','customers.delete')
      WHERE r.name = '${ROLE_DELETE}'
+    ON CONFLICT DO NOTHING
   `);
 
   // ── memberships, with the branch in scope so a denial can only be about the permission ───

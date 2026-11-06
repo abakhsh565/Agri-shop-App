@@ -69,8 +69,8 @@ import { DECLARATION_FILE, readDeclaration } from './qa-baseline.mjs';
 import {
   CANONICAL_ROLE_DEFINITIONS,
   CANONICAL_TENANT,
+  livePermissionCodesFor,
   missingCanonicalRoles,
-  permissionCodesFor,
 } from './canonical-roles.mjs';
 
 const PRODUCTION_PROJECT_REF = 'gkswcfljxlutkfdvvqng';
@@ -132,7 +132,7 @@ async function buildPlan() {
     for (const definition of CANONICAL_ROLE_DEFINITIONS) {
       const existing = roles.find((r) => r.tenant_id === tenantId && r.name === definition.name);
       if (!existing) continue; // missing roles are handled by step 1, not here
-      const codes = permissionCodesFor(definition, allCodes);
+      const codes = livePermissionCodesFor(definition, allCodes);
       const current = grantsByRole.get(existing.id) ?? new Set();
       const canonical = new Set(codes);
       const same = current.size === canonical.size && [...canonical].every((c) => current.has(c));
@@ -143,7 +143,7 @@ async function buildPlan() {
       missing: missing.map((definition) => ({
         definition,
         useCanonicalId: !idsTaken.has(definition.id),
-        codes: permissionCodesFor(definition, allCodes),
+        codes: livePermissionCodesFor(definition, allCodes),
       })),
       drift,
     });
@@ -295,7 +295,7 @@ async function main() {
            on conflict (tenant_id, name) do nothing`,
           [id, tenantId, definition.name, definition.description],
         );
-        const codes = permissionCodesFor(definition, allCodes);
+        const codes = livePermissionCodesFor(definition, allCodes);
         await client.query(
           `insert into role_permissions (role_id, permission_id)
            select $1::uuid, p.id from permissions p where p.code = any($2::text[])

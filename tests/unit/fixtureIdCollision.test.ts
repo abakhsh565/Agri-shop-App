@@ -52,6 +52,7 @@ const SHARED_ON_PURPOSE = new Map<string, string>([
   ['00000000-0000-0000-0000-000000000001', 'the QA tenant (seeded baseline)'],
   ['10000000-0000-0000-0000-000000000001', 'QA Admin (seeded baseline)'],
   ['10000000-0000-0000-0000-000000000002', 'QA Employee (seeded baseline)'],
+  ['10000000-0000-0000-0000-000000000003', 'QA Owner (seeded baseline)'],
   ['20000000-0000-0000-0000-000000000001', 'QA Customer A (seeded baseline)'],
   ['20000000-0000-0000-0000-000000000002', 'QA Customer B (seeded baseline)'],
   ['20000000-0000-0000-0000-000000000003', 'QA Customer C (seeded baseline)'],

@@ -38,7 +38,7 @@
 
 import { describe, it, beforeAll, afterAll, expect } from 'vitest';
 import { execSqlAsAdmin, execRpcAsUser, insertAsUser, selectAsUser } from '../setup/qa-client';
-import { deleteFixtureUsers } from '../setup/fixtures';
+import { deleteFixtureUsers, QA_IDS } from '../setup/fixtures';
 
 const TENANT_A = '00000000-0000-0000-0000-000000000001';
 // A tenant of this suite's own. It used to borrow '00000000-…-c0c0', which
@@ -46,7 +46,7 @@ const TENANT_A = '00000000-0000-0000-0000-000000000001';
 // "another tenant" this suite asserts against could vanish underneath it.
 // tests/unit/fixtureIdCollision.test.ts now fails on a shared row-creating id.
 const TENANT_B = 'd2000000-0000-0000-0000-00000000b0b0';
-const OWNER_A = 'd2000000-0000-0000-0000-00000000000a';
+const OWNER_A = QA_IDS.owner;
 const EMP_MAIN = 'd2000000-0000-0000-0000-0000000000e1';
 const EMP_BOTH = 'd2000000-0000-0000-0000-0000000000e2';
 // This suite's own second branch. It used to take the seeded shop's second branch instead, which
@@ -110,7 +110,7 @@ async function cleanup() {
   // Through the shared helper: `create_sale` writes a `sale_created` audit row and
   // `audit_events.user_id` is NO ACTION, so a bare DELETE is silently blocked (and one blocked row
   // takes the whole list with it). `placeLocation` is where that leak was measured.
-  await deleteFixtureUsers([OWNER_A, EMP_MAIN, EMP_BOTH]);
+  await deleteFixtureUsers([EMP_MAIN, EMP_BOTH]);
   // The suite's own branch, removed only after the rows that point at it are gone (sales first, then
   // the users whose active branch it may have been). Read back, because a cleanup that silently
   // failed is how a fixture becomes another suite's inherited state.
@@ -202,7 +202,6 @@ beforeAll(async () => {
   await sql(`
     INSERT INTO users (id, name, phone, role, is_original_owner, is_active, shop_id)
     VALUES
-      ('${OWNER_A}',  '${TAG} Owner',    '923009790001', 'admin',    true,  true, '${TENANT_A}'),
       ('${EMP_MAIN}', '${TAG} WhOnly',   '923009790002', 'employee', false, true, '${TENANT_A}'),
       ('${EMP_BOTH}', '${TAG} TwoBranch','923009790003', 'employee', false, true, '${TENANT_A}')
     ON CONFLICT (id) DO NOTHING

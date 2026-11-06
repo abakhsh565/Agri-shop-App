@@ -351,6 +351,21 @@ appear here exactly once, so a newly added migration cannot exist without a prod
 | `0274_co_owner_invitation_normalizes_phone.sql` | **A Co-Owner invitation stores the phone form login resolves — applied locally; production pending with the Co-Owner batch.** Replaces the invitation function additively: local `03…` and ten-digit input become `92…` before the user lookup, insert and login provisioning, fixing the invited person being unable to receive a code. Existing rows are untouched; invitee acceptance and revocation do not change. |
 | `0275_roles_remember_category_and_level.sql` | **Role category and responsibility level are metadata, not authority — applied locally; production pending with the Co-Owner batch.** Adds nullable columns, backfills existing rows from their current department and name, and replaces `get_role_access`/`create_role`/`update_role` to carry the two fields with validation. No permission, dashboard grant, RLS policy or employee scope is changed by the migration. |
 | `0276_branch_roles_and_dashboard_permission_rules.sql` | **A branch can carry its own saved role at invitation time, and a selected widget still needs its permission — applied locally; production pending with the Co-Owner batch.** Extends `create_employee_core` with an optional `branchRoles` object written into `membership_branch_roles` in the invitation transaction, and makes `get_my_dashboards` return only selected widgets whose `default_permission` is effective. Existing invitations without the object keep the single-role behaviour; the widget filter can only narrow visibility, never grant it. |
+| `0277_role_permissions_drive_the_dashboard.sql` | **A role's permissions decide its widgets, and an employee setting can only reduce that role — applied locally; production pending with the Co-Owner batch, after `0265`/`0276`.** Removes the manual dashboard tick-list at role creation; a widget may need more than one permission; an individual employee setting may take access away but never add any; a role people hold cannot be deleted. |
+| `0278_salary_is_a_recurring_expense.sql` | **Salary is a recurring expense owned by the employee it pays — applied locally; production pending, after `0254`/`0255`.** Reuses `finance_recurrences` so a salary writes a real expense row on each due date instead of a second payroll ledger that could drift from the Money statement. |
+| `0279_owner_can_remove_any_role.sql` | **The owner can remove any role, including a built-in one — applied locally; production pending with the Co-Owner batch.** Deleting a role takes away the access it provided; it never deletes an employee or their history. |
+| `0280_ownership_transfer_and_co_owner_archive.sql` | **Ownership transfer and Co-Owner archive/restore — applied locally; production pending with the Co-Owner batch, after `0266`–`0274`.** Adds the separate legal-ownership transfer workflow and the missing archive/restore lifecycle, without turning a Co-Owner into an employee or creating a second ownership model. |
+| `0281_branch_co_owner_assignment_and_owner_audit.sql` | **Branch-scoped Co-Owner assignment and the Owner's cross-branch audit — applied locally; production pending with the Co-Owner batch, after `0266`.** The Owner selects a sub-branch and the Co-Owner delegation is created with exactly that branch in scope; the Owner gets the all-branch read the two-sided audit rule needs, the Co-Owner keeps the single-branch read. |
+| `0282_co_owner_branch_management_is_enforced.sql` | **The branch-management flag is a real check, not stored decoration — applied locally; production pending with the Co-Owner batch, after `0281`.** Enforces `co_owner_grants.can_manage_branches = false` with a trigger on every branch write path, so a Co-Owner with `settings.edit` can no longer rename, relocate or archive a branch through the Owner screens. |
+| `0283_profile_phone_change.sql` | **A person can move their own login number without splitting their identity — applied locally; production pending, needs a gated batch.** Moves the app row and the Supabase Auth credential in one transaction, caller-own-row only (actor from the JWT, never a client-supplied user id). |
+| `0284_catalogue_deletion_is_guarded.sql` | **A shelf or unit can only be deleted when nothing active still uses it — applied locally; production pending, after `0259`.** Adds the server delete functions with an explicit dependency rule (a category with products is refused with the count still on it) instead of leaving it to the `ON DELETE SET NULL` foreign key. |
+| `0285_employees_serve_customers_and_owner_hears_about_payments.sql` | **Employees can manage customers and record payments; customer reminders travel with the customer — applied locally; production pending, needs a gated batch.** Widens counter payment-taking and customer add/edit to branch employees while customer deletion stays with the Store Manager role. |
+| `0286_one_identity_agri_id_recovery_and_explicit_invitations.sql` | **One person, one identity: Agri ID, recovery, and explicit invitations — applied locally; production pending, needs a gated batch.** Adds `users.agri_id` (backfilled for every existing row, default for new rows) and the recovery/invitation flows around the single identity. |
+| `0287_branch_roles_absent_is_not_invalid.sql` | **An absent `branchRoles` is absent, not invalid — applied locally; production pending, after `0276`.** Fixes the invitation validator so a missing `branchRoles` (JSON null from the client) no longer returns `INVALID_BRANCH_ROLES` for a valid invitation. |
+| `0288_retire_employee_self_request.sql` | **Self-request access is retired; history stays — applied locally; production pending, needs a gated batch.** Revokes execution of the anonymous request RPC (the last public write in the onboarding story); the table and every historical row stay exactly where they are. |
+| `0289_a_category_says_what_it_sells.sql` | **A category says what it sells and how it is measured — applied locally; production pending, after `0259`.** Adds one optional profile per category listing physical forms and units, so the Add Product screen offers only the units that fit the category. |
+| `0300_policies_and_guards_for_0280_0289.sql` | **Policies and guards for the tables and RPCs 0280–0289 introduced — applied locally; production pending with the Co-Owner batch.** Closes the two gaps PR #13's QA run caught: one tenant-scoped SELECT policy each for `employee_compensations` (also requires `employees.manage`) and `ownership_transfers`, and the recognized `authorize_tenant_membership()` guard, first in the body, on `create_product_with_classification`, `update_product_with_classification`, `reject_ownership_transfer` and `restore_co_owner` (restated byte-for-byte, caller sets unchanged). |
+| `0301_shop_creation_survives_customer_defaults.sql` | **New-shop creation survives the customer-defaults trigger — applied locally; production pending with the Co-Owner batch.** Restates `create_shop_internal` (0166) byte-for-byte with `ON CONFLICT DO NOTHING` on both grant-copy INSERTs: 0285's role-INSERT trigger pre-grants the customer defaults, so the plain template copy collided and every new-shop creation (registration and approved shop request) rolled back. The result is the intended union, no pair inserted twice. |
 
 **The defect that made closure 3 necessary — a closure that widened while it narrowed.** `0215`'s first
 form revoked `PUBLIC, anon` from the whole write surface — and then granted `authenticated`
@@ -472,6 +487,45 @@ Production status is unchanged: `0291`–`0299` remain production-pending and st
 named, verified batch under §7(a), after the `0233`–`0276` batch. Hosted-QA proof of the fixes
 themselves — that the CI QA suites now pass against the corrected schema — awaits the CI QA run on
 PR #10; the apply above only proves the migrations record cleanly on QA.
+
+### 5.6 The `0277`–`0289` QA apply and the one-time out-of-order override (2026-11-06)
+
+The Phase 2 branch adds `0277`–`0289` to the directory, but the QA ledger already holds `0299`
+(from §5.5), so the thirteen files sort before the newest recorded version and
+`scripts/migrate.mjs` refused the apply — correctly, by default — with an order hazard
+(run 42205248029). There is no override in the tool, and the branch CI fails at the ledger step
+until they are applied, so the owner authorised a narrow, one-time exception:
+`--allow-out-of-order "<reason>"`, valid only for `verify`/`apply` on staging (or pglite),
+never for production, with the reason printed in the run log and recorded in the report
+(`tests/unit/migrationOutOfOrderOverride.test.ts` asserts every side of it, including that the
+refusal still fires without the flag). The hazard is a numbering artifact, not a rewrite: the
+`0291`–`0299` batch does not depend on `0277`–`0289`, and §7(a) puts `0277`–`0289` last anyway,
+so applying them after `0299` matches the intended order. The workflow
+`.github/workflows/apply-staging-migrations.yml` takes the override as dispatch inputs
+(`allow_out_of_order`, `override_reason`).
+
+Follow-up (2026-11-06, same day): the apply stopped at `0280` (run 42206458716) because the
+fixture shop held six active standard owners, which `0280`'s unique index refuses. Root cause:
+migration `0113`'s trigger gives an owner membership to every user inserted with
+`is_original_owner = true`, and five test identities were seeded that way although they are
+admins. The fix, at the root: `is_original_owner` is now false in the five seed sites
+(`tests/setup/fixtures.ts` and the four lane suites), and the one-time script
+`scripts/dev/qa-fix-0280-duplicate-owners.mjs` demoted exactly those five to the Store Manager
+role (QA Admin, Destruct/Perm/Fin/Inv test users) with an explicit branch scope, because
+migration `0188`'s trigger refuses a role change away from owner on a NULL scope; the
+designated fixture owner, Khalid Khan (923001234567), was untouched. The script was dry-run
+first (run 42212212138, PASS) then applied (run 42212500959, APPLIED and committed). A
+branch-only workflow cannot be dispatched — GitHub registers workflows from main — so the
+one-time workflow file was dropped and the fix rode on the registered `qa-probe.yml` instead;
+the temporary `run_fix`/`fix_apply` inputs and the `pg` install step stay on the branch until
+the Phase 2 PR merges, then they go away with the probe revert. The re-dispatched apply
+(run 42214806581) then recorded all ten files, `0280`–`0289`, and the QA ledger stands at 290
+rows with 0 pending. The same run's post-apply verify failed only on the QA-only allowlist:
+its 44 entries (`0233`–`0276`) went stale the moment Phase 2 imported those files, which is
+the closure the file was designed for. The allowlist is therefore retired — the flag is removed
+from `ci.yml`, `build-apk.yml` and `apply-staging-migrations.yml`, and
+`.github/qa-ledger-only.txt` is deleted; verify now fails closed on any ledger-only row, and
+there are none.
 
 ## 6. Backward-compatibility rules (binding on every batch)
 
