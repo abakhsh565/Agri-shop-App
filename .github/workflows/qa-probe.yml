@@ -36,6 +36,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Set up Node (only for the fix step)
+        if: ${{ inputs.run_fix }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies (only for the fix step)
+        if: ${{ inputs.run_fix }}
+        run: npm ci --legacy-peer-deps
+
       - name: Run read-only QA probes
         env:
           QA_SUPABASE_URL: ${{ secrets.QA_SUPABASE_URL }}
