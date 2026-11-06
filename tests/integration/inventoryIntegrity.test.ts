@@ -81,7 +81,7 @@ beforeAll(async () => {
   }
 
   // Create fixtures
-  await client.query(`INSERT INTO users (id, name, phone, role, is_original_owner, is_active, shop_id) VALUES ('${TEST.customerA}', 'Inv Test User', '92300INV1001', 'admin', true, true, '${TEST.shop}') ON CONFLICT (id) DO NOTHING`);
+  await client.query(`INSERT INTO users (id, name, phone, role, is_original_owner, is_active, shop_id) VALUES ('${TEST.customerA}', 'Inv Test User', '92300INV1001', 'admin', false, true, '${TEST.shop}') ON CONFLICT (id) DO NOTHING`);
   await client.query(`INSERT INTO companies (id, name, outstanding_payable, total_purchases, shop_id) VALUES ('${TEST.companyA}', 'Inv Test Supplier', 0, 0, '${TEST.shop}') ON CONFLICT (id) DO NOTHING`);
   await client.query(`INSERT INTO customers (id, name, phone, credit_limit, outstanding_balance, total_purchases, total_paid, shop_id, created_by) VALUES ('${TEST.customerA}', 'Inv Customer A', '92300INV1001', 100000, 0, 0, 0, '${TEST.shop}', 'QA') ON CONFLICT (id) DO NOTHING`);
   await client.query(`INSERT INTO products (id, name, company_id, category, stock_qty, shop_id) VALUES ('${TEST.productA}', 'Inv Test Product A', '${TEST.companyA}', 'seed', 100, '${TEST.shop}'), ('${TEST.productB}', 'Inv Test Product B', '${TEST.companyA}', 'fertilizer', 50, '${TEST.shop}') ON CONFLICT (id) DO NOTHING`);

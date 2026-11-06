@@ -33,10 +33,10 @@ export async function setupUsers() {
   await execSqlAsAdmin(`
     INSERT INTO users (id, name, phone, role, is_original_owner, is_active, shop_id)
     VALUES
-      ('${QA_IDS.admin}', 'QA Admin', '923009999999', 'admin', true, true, '${QA_IDS.shop}'),
+      ('${QA_IDS.admin}', 'QA Admin', '923009999999', 'admin', false, true, '${QA_IDS.shop}'),
       ('${QA_IDS.employee}', 'QA Employee', '923008888888', 'employee', false, true, '${QA_IDS.shop}'),
       ('10000000-0000-0000-0000-000000000004', 'Sales Employee', '923001122334', 'employee', false, true, '${QA_IDS.shop}')
-    ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, phone = EXCLUDED.phone, role = EXCLUDED.role, is_active = EXCLUDED.is_active;
+    ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, phone = EXCLUDED.phone, role = EXCLUDED.role, is_original_owner = EXCLUDED.is_original_owner, is_active = EXCLUDED.is_active;
   `);
 }
 

@@ -84,7 +84,7 @@ beforeAll(async () => {
   await cleanup();
 
   // Create fixtures using execSqlAsAdmin (bypasses RLS)
-  await admin(`INSERT INTO users (id, name, phone, role, is_original_owner, is_active, shop_id) VALUES ('${T.adminUser}', 'Destruct Test Admin', '92300DST0000', 'admin', true, true, '${T.shop}') ON CONFLICT (id) DO UPDATE SET is_active = true, role = 'admin'`);
+  await admin(`INSERT INTO users (id, name, phone, role, is_original_owner, is_active, shop_id) VALUES ('${T.adminUser}', 'Destruct Test Admin', '92300DST0000', 'admin', false, true, '${T.shop}') ON CONFLICT (id) DO UPDATE SET is_active = true, role = 'admin', is_original_owner = false`);
   await admin(`INSERT INTO users (id, name, phone, role, is_original_owner, is_active, shop_id) VALUES ('${T.employeeA}', 'Destruct Test Employee', '92300DST0001', 'employee', false, true, '${T.shop}') ON CONFLICT (id) DO UPDATE SET is_active = true, role = 'employee'`);
   await admin(`INSERT INTO companies (id, name, outstanding_payable, total_purchases, shop_id) VALUES ('${T.companyA}', 'Destruct Test Supplier', 0, 0, '${T.shop}') ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name`);
   await admin(`INSERT INTO customers (id, name, phone, credit_limit, outstanding_balance, total_purchases, total_paid, shop_id, created_by, is_archived) VALUES ('${T.customerA}', 'Destruct Customer A', '92300DST1001', 50000, 0, 0, 0, '${T.shop}', 'QA', false), ('${T.customerB}', 'Destruct Customer B', '92300DST1002', 50000, 0, 0, 0, '${T.shop}', 'QA', false) ON CONFLICT (id) DO UPDATE SET is_archived = false, name = EXCLUDED.name`);
