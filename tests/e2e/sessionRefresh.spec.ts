@@ -102,6 +102,13 @@ test.describe('Session refresh', () => {
     await page.goto(`${BASE}/admin/customers`);
     await settle(page);
 
+    // settle() only requires ANY rendered text, so the customer list can still
+    // be loading when this runs — wait for the balance itself to be visible
+    // before counting it, instead of reading a 0 from an un-hydrated list.
+    await expect(
+      page.getByText(shownBalance, { exact: false }).first(),
+      `the customers screen does not show ${shownBalance} (before the reload)`,
+    ).toBeVisible({ timeout: 15000 });
     const balanceBefore = await page.getByText(shownBalance, { exact: false }).count();
     expect(balanceBefore, `the customers screen does not show ${shownBalance} (before the reload)`).toBeGreaterThan(0);
 

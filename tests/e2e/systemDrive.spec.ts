@@ -74,7 +74,15 @@ interface Measurement {
 
 async function measure(page: Page, route: string, needType = true): Promise<Measurement> {
   await page.goto(route);
-  await page.waitForTimeout(1500);
+  // Wait for the rows to actually render instead of a fixed sleep: on
+  // /admin/reports the labels appear only after report data loads, so a
+  // stopwatch read measures an empty screen. Either a row label or a row glyph
+  // proves the list mounted; the baseline assertions below still enforce which
+  // of the two each screen must have.
+  await page
+    .locator('.ds-row-label, svg.ds-row-glyph')
+    .first()
+    .waitFor({ state: 'visible', timeout: 15000 });
   return page.evaluate((wantsType: boolean) => {
     const label = document.querySelector('.ds-row-label') as HTMLElement | null;
     // The row's own glyph — the mark every list row leads with, sized by `--icon-row`.

@@ -115,7 +115,30 @@ async function loginAndDismissWelcome(page: Page, phone: string) {
  */
 async function setupState(page: Page): Promise<string> {
   await page.goto('/admin/settings');
-  await page.waitForTimeout(2000);
+  // Wait for READINESS, not a stopwatch: the SetupChecklist renders its block
+  // while `ready` is false and shows progress "–" until ready, and returns
+  // null only when ready && complete. A fixed sleep reads the "–" state and
+  // reports setup as less done than it is. Poll until the card is absent
+  // (ready+complete → null) or the progress is a real done/total.
+  await expect
+    .poll(
+      async () => {
+        try {
+          const card = page.locator('[data-testid="setup-checklist"]');
+          if ((await card.count()) === 0) return 'ready';
+          const progress = (await page
+            .locator('[data-testid="setup-progress"]')
+            .first()
+            .innerText({ timeout: 2000 }))
+            .trim();
+          return progress === '–' ? 'loading' : 'ready';
+        } catch {
+          return 'loading';
+        }
+      },
+      { timeout: 15000 },
+    )
+    .toBe('ready');
   const card = page.locator('[data-testid="setup-checklist"]');
   if ((await card.count()) === 0) return 'no block: nothing left to set up';
   const progress = (await page.locator('[data-testid="setup-progress"]').first().innerText()).trim();

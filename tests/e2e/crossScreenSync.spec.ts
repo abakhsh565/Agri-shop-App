@@ -21,6 +21,7 @@ import * as path from 'path';
 import { fileURLToPath } from 'url';
 import {
   injectAdminAuth,
+  injectOwnerAuth,
   setupFixtures,
   cleanupFixtures,
   execSql,
@@ -340,10 +341,24 @@ test.describe('Cross-Screen Synchronization', () => {
   test('Employee: active status change propagates', async ({ page }) => {
     await page.goto(BASE_URL);
     await settle(page);
-    await injectAdminAuth(page);
+    // Deactivation needs employees.manage, which the demoted admin no longer
+    // holds — act as the owner. The raw UPDATE this test used to run via
+    // run_sql fires the guard_user_privileged_columns trigger (no app session),
+    // so the status change goes through the app's own deactivate/reactivate
+    // flow instead — the same flow employeeStatusSafety exercises. The RPCs
+    // need no membership row: their membership UPDATEs touch 0 rows when
+    // there is none, and only the users row changes.
+    await injectOwnerAuth(page);
 
-    // Deactivate
-    await execSql(`UPDATE users SET is_active = false WHERE id = '${EMP_ID}'`);
+    // Deactivate through the employee detail, the way the owner does it.
+    await page.goto(`${BASE_URL}/admin/employees/${EMP_ID}`);
+    await page.waitForLoadState('networkidle');
+    await page.getByRole('button', { name: /^turn off this employee's account$/i }).first().click();
+    await expect(page.getByText(`Turn off Sync Employee's account?`)).toBeVisible({ timeout: 10000 });
+    // The dialog's confirm is the LAST button with this name in the DOM; the
+    // detail button behind it matches too.
+    await page.getByRole('button', { name: /^turn off this employee's account$/i }).last().click();
+    await expect(page.getByText(/account is off/i)).toBeVisible({ timeout: 15000 });
 
     // Navigate
     await page.goto(`${BASE_URL}/admin/employees`);
@@ -353,8 +368,14 @@ test.describe('Cross-Screen Synchronization', () => {
     const db = await execSql(`SELECT is_active FROM users WHERE id = '${EMP_ID}'`);
     expect(db[0].is_active).toBe(false);
 
-    // Reactivate
-    await execSql(`UPDATE users SET is_active = true WHERE id = '${EMP_ID}'`);
+    // Reactivate through the same detail flow.
+    await page.goto(`${BASE_URL}/admin/employees/${EMP_ID}`);
+    await page.waitForLoadState('networkidle');
+    await page.getByRole('button', { name: /^turn the account back on$/i }).first().click();
+    await page.getByRole('button', { name: /^turn the account back on$/i }).last().click();
+    await expect(page.getByRole('button', { name: /^turn off this employee's account$/i }).first()).toBeVisible({
+      timeout: 15000,
+    });
     const db2 = await execSql(`SELECT is_active FROM users WHERE id = '${EMP_ID}'`);
     expect(db2[0].is_active).toBe(true);
   });

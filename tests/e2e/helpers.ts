@@ -426,9 +426,76 @@ export async function loginViaUi(
   }
 
   if (page.url().includes('pin-set')) {
-    for (const d of PIN) await page.getByRole('button', { name: d, exact: true }).first().click();
-    await page.waitForTimeout(400);
-    for (const d of PIN) await page.getByRole('button', { name: d, exact: true }).first().click();
+    // The PIN keypad is a controlled input like the OTP boxes above: a tap can
+    // land one digit short when React has not re-rendered yet, and a short PIN
+    // submits nothing and reports nothing — the login then dies on the 30s
+    // dashboard wait below. Verify what landed after each entry (the OTP
+    // pattern in this same function) and retry the entry once if it did not take.
+    const pinPad = page.locator('div.ds-pin-pad');
+    const filledDots = async () =>
+      await pinPad.locator('xpath=..').locator('div.rounded-full.bg-ink').count();
+    const clearPin = async () => {
+      for (let i = 0; i < 4 && (await filledDots()) > 0; i++) {
+        await page.getByRole('button', { name: '⌫', exact: true }).first().click();
+        await page.waitForTimeout(150);
+      }
+    };
+    const enterPinDigits = async () => {
+      // Digits 1–3 are verified by the filled-dot count before the next tap,
+      // so a tap can never land on a stale render. The 4th digit completes
+      // the entry, which resets the dots, so it is verified by the caller.
+      for (let i = 0; i < PIN.length - 1; i++) {
+        await page.getByRole('button', { name: PIN[i], exact: true }).first().click();
+        try {
+          await expect.poll(filledDots, { timeout: 5000 }).toBe(i + 1);
+        } catch {
+          // Re-click only if the dot count never advanced — a slow render is
+          // not a lost tap, and re-clicking it would append a wrong digit.
+          if ((await filledDots()) === i) {
+            await page.getByRole('button', { name: PIN[i], exact: true }).first().click();
+            await expect.poll(filledDots, { timeout: 5000 }).toBe(i + 1);
+          } else {
+            throw new Error(`PIN digit ${i + 1} did not land`);
+          }
+        }
+      }
+      await page.getByRole('button', { name: PIN[PIN.length - 1], exact: true }).first().click();
+    };
+    const pinDoneVisible = async () => (await page.getByTestId('pin-done-open').count()) > 0;
+    const leftPinSet = async () => !page.url().includes('pin-set') || (await pinDoneVisible());
+
+    // SET: the 4th digit flips to the confirm step, which empties the dots.
+    await clearPin();
+    await enterPinDigits();
+    try {
+      await expect.poll(filledDots, { timeout: 5000 }).toBe(0);
+    } catch {
+      await clearPin();
+      await enterPinDigits();
+      await expect.poll(filledDots, { timeout: 5000 }).toBe(0);
+    }
+
+    // CONFIRM: the 4th digit saves the PIN and either navigates away or shows
+    // the success screen.
+    await enterPinDigits();
+    try {
+      await expect.poll(leftPinSet, { timeout: 5000 }).toBe(true);
+    } catch {
+      if (page.url().includes('pin-set') && (await pinPad.count()) > 0) {
+        await clearPin();
+        try {
+          await enterPinDigits();
+          await expect.poll(leftPinSet, { timeout: 5000 }).toBe(true);
+        } catch (retryErr) {
+          // A slow save from the first attempt may have finished while
+          // retrying; only fail if the page is still on the pin-set form.
+          if (page.url().includes('pin-set') && !(await pinDoneVisible())) throw retryErr;
+        }
+      } else {
+        throw new Error('PIN entry did not reach the dashboard or success screen');
+      }
+    }
+
     await page.waitForTimeout(600);
     // Standing a PIN up for the first time ends on a success screen; a like-for-like swap from
     // Settings goes straight back. Both are real, so follow whichever one appeared.

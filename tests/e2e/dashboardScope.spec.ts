@@ -132,7 +132,7 @@ test.describe('Locked dashboard scope: figures reconcile with the database', () 
     // dashboard must converge on the figure the database actually holds. A blank, stale or wrong
     // dashboard still fails here, and it fails naming the DB value instead of timing out.
     const [gateSales] = await execSql(
-      `SELECT coalesce(sum(total_amount),0)::text AS total FROM sales WHERE is_voided = false`,
+      `SELECT coalesce(sum(total_amount),0)::text AS total FROM sales WHERE is_voided = false AND shop_id = '${QA_IDS.shop}'`,
     );
     await expect
       .poll(async () => (await page.textContent('body')) ?? '', {
@@ -161,7 +161,12 @@ test.describe('Locked dashboard scope: figures reconcile with the database', () 
     // The Quick Alerts headline count is data-dependent copy ("1 action needed" vs
     // "2 actions needed"), so assert the authoritative thing instead: any pending
     // credit request in the DB must be surfaced, with its real count.
-    const [pending] = await execSql(`SELECT count(*)::text AS n FROM credit_limit_requests WHERE status = 'pending'`);
+    // credit_limit_requests carries no shop_id of its own, so the pending count
+    // is scoped through the customer it names — otherwise other tenants' pending
+    // requests inflate the figure Home (which shows this shop only) must match.
+    const [pending] = await execSql(
+      `SELECT count(*)::text AS n FROM credit_limit_requests clr JOIN customers c ON c.id = clr.customer_id WHERE clr.status = 'pending' AND c.shop_id = '${QA_IDS.shop}'`,
+    );
     const pendingCount = Number(pending.n);
     if (pendingCount > 0) {
       expect(body, 'pending credit requests are not surfaced in Quick Alerts').toContain(`${pendingCount} request`);
@@ -173,14 +178,14 @@ test.describe('Locked dashboard scope: figures reconcile with the database', () 
              coalesce(sum(amount_paid),0)::text AS paid,
              coalesce(sum(amount_due),0)::text AS credit,
              count(*)::text AS tx
-        FROM sales WHERE is_voided = false`);
+        FROM sales WHERE is_voided = false AND shop_id = '${QA_IDS.shop}'`);
     // COGS on its own, so the expected profit is revenue - COGS on the SAME
     // authoritative revenue Home uses (the sale's stored total), which is also
     // what Reports uses. Deriving it from line totals instead would let the two
     // screens disagree by rounding.
     const [cogs] = await execSql(`
       SELECT coalesce(sum(coalesce(si.cogs_amount,0)),0)::text AS v
-        FROM sale_items si JOIN sales s ON s.id = si.sale_id WHERE s.is_voided = false`);
+        FROM sale_items si JOIN sales s ON s.id = si.sale_id WHERE s.is_voided = false AND s.shop_id = '${QA_IDS.shop}'`);
     // Overdue is the system-wide business metric: the REMAINING balance of every
     // credit whose due date has already passed in Pakistan time — not the shop's
     // total customer outstanding. Computed here from the database with the same
@@ -190,11 +195,12 @@ test.describe('Locked dashboard scope: figures reconcile with the database', () 
              count(*)::text AS n
         FROM customers
        WHERE is_archived = false
+         AND customers.shop_id = '${QA_IDS.shop}'
          AND outstanding_balance > 0
          AND due_date IS NOT NULL
          AND due_date < (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Karachi')::date`);
     const [allOutstanding] = await execSql(
-      `SELECT coalesce(sum(outstanding_balance),0)::text AS v FROM customers WHERE is_archived = false`,
+      `SELECT coalesce(sum(outstanding_balance),0)::text AS v FROM customers WHERE is_archived = false AND customers.shop_id = '${QA_IDS.shop}'`,
     );
 
     const total = Number(sales.total), gp = total - Number(cogs.v);

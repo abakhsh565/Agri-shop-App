@@ -58,6 +58,10 @@ test.describe('Browser retry after a timed-out write', () => {
     // The real flow: customer → product → variant → cart.
     await page.goto(`${BASE_URL}/employee/sale`);
     await page.waitForLoadState('networkidle');
+    // networkidle does not mean the customers store hydrated — wait for the
+    // customer to actually render before clicking it (same pattern as the
+    // Complete Sale button below).
+    await expect(page.getByText('QA Customer A').first()).toBeVisible({ timeout: 15000 });
     await page.getByText('QA Customer A').first().click();
     await page.waitForURL(/\/sale\/products/, { timeout: 15000 });
     await page.getByText('QA Product A').first().click();

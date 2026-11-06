@@ -338,16 +338,20 @@ test.describe('Image Synchronization — All Entities', () => {
     const policies = await execSql(`SELECT policyname, cmd, qual FROM pg_policies WHERE schemaname = 'storage' AND tablename = 'objects'`);
     const imageBuckets = ['product-images', 'employee-photos', 'company-logos', 'customer-images'];
 
-    for (const p of policies) {
-      // All policies should reference the image buckets
-      if (p.qual) {
-        for (const bucket of imageBuckets) {
-          expect(p.qual).toContain(bucket);
-        }
-        // None should have user/owner restrictions (no auth.uid() or similar)
-        expect(p.qual).not.toContain('auth.uid()');
-        expect(p.qual).not.toContain('owner');
-      }
+    // Scope to image-bucket policies FIRST: PR #10 added per-bucket policies
+    // (business-documents, finance-receipts) whose qual mentions only its own
+    // bucket, so demanding every policy's qual contain every image bucket fails
+    // on policies that have nothing to do with images. The posture asserted
+    // below — no per-user restriction on the image buckets — is unchanged.
+    const imagePolicies = policies.filter(
+      (p: any) => p.qual && imageBuckets.some((b) => (p.qual as string).includes(b)),
+    );
+    expect(imagePolicies.length, 'no image-bucket storage policies found').toBeGreaterThan(0);
+
+    for (const p of imagePolicies) {
+      // None should have user/owner restrictions (no auth.uid() or similar)
+      expect(p.qual).not.toContain('auth.uid()');
+      expect(p.qual).not.toContain('owner');
       // qual=null on INSERT means no restriction at all — any user can upload anywhere
     }
   });
