@@ -21,7 +21,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import { cleanupFixtures, execSql, loginViaUi, setupFixtures } from './helpers';
 
-const OWNER_PHONE = '03009999999';   // 923009999999
+const OWNER_PHONE = '03001234567';   // 923001234567
 const EMPLOYEE_PHONE = '03008888888'; // 923008888888
 
 const CARD = '[data-testid="tour-card"]';

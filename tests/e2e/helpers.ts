@@ -87,9 +87,13 @@ const BASE_URL = process.env.QA_APP_URL || 'http://localhost:5173';
 /** Local (dialable) form of the QA admin phone used by the real login flow */
 const ADMIN_LOGIN_PHONE = '03009999999'; // 923009999999 -> 03009999999
 
+/** Local (dialable) form of the fixture owner's phone used by the real login flow */
+const OWNER_LOGIN_PHONE = '03001234567'; // 923001234567 -> 03001234567
+
 /** Test user IDs */
 export const QA_IDS = {
   shop: '00000000-0000-0000-0000-000000000001',
+  owner: '10000000-0000-0000-0000-000000000003',
   admin: '10000000-0000-0000-0000-000000000001',
   employee: '10000000-0000-0000-0000-000000000002',
   customerA: '20000000-0000-0000-0000-000000000001',
@@ -474,6 +478,52 @@ export async function injectAdminAuth(page: Page) {
     localStorage.removeItem('signal_suppression');
     localStorage.removeItem('signal_reviewed');
   }, adminUser);
+}
+
+/**
+ * Inject owner auth state into the page's localStorage.
+ *
+ * Mirrors injectAdminAuth, but as Khalid Khan — the fixture shop's sole active
+ * owner since the 0280 fix (one active owner per shop). QA Admin is a Store
+ * Manager admin since that fix and no longer holds employees.manage,
+ * settings.edit or employees.view, so lanes that exercise owner powers (role
+ * deletion, employee deactivation) must act as the owner; acting as the admin
+ * makes the product correctly refuse with NOT_AUTHORIZED. The injected
+ * identity mirrors the authoritative membership row, as injectAdminAuth does.
+ */
+export async function injectOwnerAuth(page: Page) {
+  const ownerUser = {
+    id: QA_IDS.owner,
+    name: 'Khalid Khan',
+    phone: '923001234567',
+    role: 'admin',
+    tenantId: QA_IDS.shop,
+    membershipRole: 'owner',
+    permissions: ['*'],
+    isOriginalOwner: true,
+    isActive: true,
+    firstLoginAt: new Date().toISOString(),
+    lastLoginAt: new Date().toISOString(),
+    deactivatedAt: null,
+    deactivatedBy: null,
+    createdAt: new Date().toISOString(),
+    createdBy: null,
+  };
+
+  // A real session is required before the injected identity is useful, because
+  // the backend authorizes from the JWT rather than from client state.
+  await loginViaUi(page, OWNER_LOGIN_PHONE);
+
+  await page.evaluate((user) => {
+    // Set Zustand persist auth state
+    localStorage.setItem('agri_auth', JSON.stringify({
+      state: { user },
+      version: 0,
+    }));
+    // Clear any signal suppression state
+    localStorage.removeItem('signal_suppression');
+    localStorage.removeItem('signal_reviewed');
+  }, ownerUser);
 }
 
 /**

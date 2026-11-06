@@ -20,7 +20,7 @@ import {
   cleanupFixtures,
   ownership,
   trackOwned,
-  injectAdminAuth,
+  injectOwnerAuth,
 } from './helpers';
 
 const BASE_URL = process.env.QA_APP_URL || 'http://localhost:5173';
@@ -71,7 +71,7 @@ test.describe('Role delete safety', () => {
   });
 
   test('a double tap deletes the role once and does not report a failure', async ({ page }) => {
-    await injectAdminAuth(page);
+    await injectOwnerAuth(page);
 
     const deletions: string[] = [];
     page.on('request', (req) => {

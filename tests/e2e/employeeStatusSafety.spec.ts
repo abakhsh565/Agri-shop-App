@@ -38,6 +38,7 @@ import {
   snapshotIds,
   trackOwned,
   injectAdminAuth,
+  injectOwnerAuth,
 } from './helpers';
 
 const BASE_URL = process.env.QA_APP_URL || 'http://localhost:5173';
@@ -170,7 +171,7 @@ test.describe('Employee status safety', () => {
 
   test('deactivating: a double tap revokes access once and reports success, not failure', async ({ page }) => {
     await setActiveState(true);
-    await injectAdminAuth(page);
+    await injectOwnerAuth(page);
 
     const deactivations = trackRpc(page, 'deactivate_employee_v1');
     const activations = trackRpc(page, 'activate_employee_v1');
@@ -255,7 +256,7 @@ test.describe('Employee status safety', () => {
     const deactivationsOnRecord = await auditCount('employee_deactivated');
     const activationsOnRecord = await auditCount('employee_activated');
 
-    await injectAdminAuth(page);
+    await injectOwnerAuth(page);
 
     const deactivations = trackRpc(page, 'deactivate_employee_v1');
     const activations = trackRpc(page, 'activate_employee_v1');
