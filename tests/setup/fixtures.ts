@@ -15,6 +15,11 @@ import { execSqlAsAdmin, qaServiceClient } from './qa-client';
 
 export const QA_IDS = {
   shop: '00000000-0000-0000-0000-000000000001',
+  // The fixture shop's sole active standard owner (Khalid Khan, 923001234567).
+  // 0280 allows exactly one active owner per shop, so suites that need owner
+  // power use this id — they must never INSERT/UPDATE this user row and never
+  // delete it in cleanup.
+  owner: '10000000-0000-0000-0000-000000000003',
   admin: '10000000-0000-0000-0000-000000000001',
   employee: '10000000-0000-0000-0000-000000000002',
   customerA: '20000000-0000-0000-0000-000000000001',
