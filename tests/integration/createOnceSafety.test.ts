@@ -23,7 +23,7 @@ import { execRpcAsUser, execSqlAsAdmin, roleIdByName } from '../setup/qa-client'
 import { QA_IDS, setupAllFixtures, cleanupTestData } from '../setup/fixtures';
 
 const TENANT = QA_IDS.shop;
-const OWNER = QA_IDS.admin;
+const OWNER = QA_IDS.owner;
 
 // This suite's own supplier, product and variant: the shared QA baseline is cleaned by
 // every other suite that calls cleanupTestData(), so a purchase built on it can vanish

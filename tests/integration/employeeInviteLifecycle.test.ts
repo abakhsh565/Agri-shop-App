@@ -19,9 +19,13 @@
 
 import { describe, it, beforeAll, afterAll, expect } from 'vitest';
 import { execRpcAsUser, execSqlAsAdmin, qaAnonClient, roleIdByName } from '../setup/qa-client';
+import { QA_IDS } from '../setup/fixtures';
 
 const TENANT = '00000000-0000-0000-0000-000000000001';
-const OWNER = 'c2000000-0000-0000-0000-000000000001';
+// The fixture shop's sole owner (Khalid Khan). 0280 allows one active owner
+// per shop, so this suite uses him instead of creating its own owner — and
+// never inserts, updates or deletes his user row.
+const OWNER = QA_IDS.owner;
 // The built-in shop-floor role, so "role defaults apply" is provable rather than assumed.
 // Resolved by NAME in beforeAll, not hard-coded: the id is per-role, a built-in role can be deleted
 // through the app (roles.deleteHintBuiltIn), and `roles.id` is one global key — so the id 0107 used
@@ -80,7 +84,7 @@ async function cleanup() {
   `,
   );
   await trySql('customers', `DELETE FROM customers WHERE phone LIKE '92300966%'`);
-  await trySql('users', `DELETE FROM users WHERE phone IN (${PHONES.map((p) => `'${p}'`).join(',')})`);
+  await trySql('users', `DELETE FROM users WHERE phone IN (${PHONES.slice(1).map((p) => `'${p}'`).join(',')})`);
 }
 
 beforeAll(async () => {
@@ -105,20 +109,6 @@ beforeAll(async () => {
     );
   }
 
-  await sql(`
-    INSERT INTO users (id, name, phone, role, is_original_owner, is_active, shop_id)
-    VALUES ('${OWNER}', 'QA Invite Owner', '${PHONES[0]}', 'admin', true, true, '${TENANT}')
-    ON CONFLICT (id) DO UPDATE SET is_active = true, is_original_owner = true, shop_id = EXCLUDED.shop_id
-  `);
-  // Same reason as employeeAccessOverrides: the User→Membership trigger (0113)
-  // fires on INSERT only, so a surviving owner row from an earlier run would
-  // otherwise have no membership and every RPC would answer NOT_AUTHORIZED.
-  await sql(`
-    INSERT INTO memberships (user_id, tenant_id, role, status)
-    VALUES ('${OWNER}', '${TENANT}', 'owner', 'active')
-    ON CONFLICT (user_id, tenant_id) DO UPDATE
-      SET role = 'owner', status = 'active', updated_at = now()
-  `);
   ROLE_SALES_EMPLOYEE = await roleIdByName(TENANT, 'Sales Employee');
   const b = await sql(
     `SELECT id FROM branches WHERE tenant_id = '${TENANT}' AND is_active = true ORDER BY is_default DESC, created_at LIMIT 1`

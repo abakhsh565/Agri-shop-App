@@ -33,11 +33,14 @@
 import { describe, it, beforeAll, afterAll, expect } from 'vitest';
 import { randomUUID } from 'crypto';
 import { execRpcAsUser, execSqlAsAdmin } from '../setup/qa-client';
+import { QA_IDS } from '../setup/fixtures';
 
 const TENANT = '00000000-0000-0000-0000-000000000001';
-const OWNER = 'f7000000-0000-0000-0000-00000000000a';
+// The fixture shop's sole owner (Khalid Khan). 0280 allows one active owner
+// per shop, so this suite uses him instead of creating its own owner — and
+// never inserts, updates or deletes his user row.
+const OWNER = QA_IDS.owner;
 const EMP = 'f7000000-0000-0000-0000-0000000000e1';
-const OWNER_PHONE = '923009730001';
 const EMP_PHONE = '923009730002';
 const CUSTOMER = 'f7000000-0000-0000-0000-0000000000c1';
 const PRODUCT = 'f7000000-0000-0000-0000-0000000000f1';
@@ -156,14 +159,14 @@ async function cleanup() {
         OR entity_id IN (SELECT id FROM roles WHERE ${TEST_ROLES})
         OR details->>'name' LIKE 'QA VoidRole %'`);
   await q(`DELETE FROM user_permissions WHERE user_id IN ('${OWNER}','${EMP}')`);
-  await q(`DELETE FROM memberships WHERE user_id IN ('${OWNER}','${EMP}')`);
+  await q(`DELETE FROM memberships WHERE user_id IN ('${EMP}')`);
   await q(`DELETE FROM role_permissions WHERE role_id IN (SELECT id FROM roles WHERE ${TEST_ROLES})`);
   await q(`DELETE FROM roles WHERE ${TEST_ROLES}`);
   await q(`DELETE FROM inventory_movements WHERE product_id = '${PRODUCT}'`);
   await q(`DELETE FROM product_variants WHERE id = '${VARIANT}'`);
   await q(`DELETE FROM products WHERE id = '${PRODUCT}'`);
   await q(`DELETE FROM customers WHERE id = '${CUSTOMER}'`);
-  await q(`DELETE FROM users WHERE id IN ('${OWNER}','${EMP}')`);
+  await q(`DELETE FROM users WHERE id IN ('${EMP}')`);
 
   expect(failures, `cleanup left rows behind: ${failures.join(' | ')}`).toEqual([]);
 }
@@ -177,7 +180,6 @@ beforeAll(async () => {
   await sql(`
     INSERT INTO users (id, name, phone, role, is_original_owner, is_active, shop_id)
     VALUES
-      ('${OWNER}', '${RUN} Owner', '${OWNER_PHONE}', 'admin', true, true, '${TENANT}'),
       ('${EMP}',   '${RUN} Emp',   '${EMP_PHONE}',   'employee', false, true, '${TENANT}')
     ON CONFLICT (id) DO UPDATE SET is_active = true, shop_id = EXCLUDED.shop_id
   `);

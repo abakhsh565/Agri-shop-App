@@ -50,9 +50,13 @@ import {
   setMembershipBranchScope,
   qaAnonClient,
 } from '../setup/qa-client';
+import { QA_IDS } from '../setup/fixtures';
 
 const TENANT = '00000000-0000-0000-0000-000000000001';
-const OWNER = 'fe200000-0000-0000-0000-00000000000a';
+// The fixture shop's sole owner (Khalid Khan). 0280 allows one active owner
+// per shop, so this suite uses him instead of creating its own owner — and
+// never inserts, updates or deletes his user row.
+const OWNER = QA_IDS.owner;
 const ADMIN = 'fe200000-0000-0000-0000-00000000000b';
 const MANAGER = 'fe200000-0000-0000-0000-00000000000c';
 const EMPLOYEE = 'fe200000-0000-0000-0000-00000000000d';
@@ -60,7 +64,6 @@ const EMPLOYEE = 'fe200000-0000-0000-0000-00000000000d';
 const ADMIN_NO_RIGHTS = 'fe200000-0000-0000-0000-00000000000e';
 
 const PHONE = {
-  owner: '923009990001',
   admin: '923009990002',
   manager: '923009990003',
   employee: '923009990004',
@@ -106,7 +109,7 @@ const expectDenied = (error: string | null, code: string, who: string, action: s
  * `memberships.role_id` an FK to `roles`, so both ledgers must be cleared before their parents.
  */
 async function cleanup() {
-  const users = `'${OWNER}','${ADMIN}','${MANAGER}','${EMPLOYEE}','${ADMIN_NO_RIGHTS}'`;
+  const users = `'${ADMIN}','${MANAGER}','${EMPLOYEE}','${ADMIN_NO_RIGHTS}'`;
   const phones = Object.values(PHONE).map((p) => `'${p}'`).join(',');
   const roles = `name LIKE '${ROLE_PREFIX} %'`;
 
@@ -152,7 +155,6 @@ beforeAll(async () => {
   await sql(`
     INSERT INTO users (id, name, phone, role, is_original_owner, is_active, shop_id)
     VALUES
-      ('${OWNER}',          '${RUN} Owner',           '${PHONE.owner}',         'admin',    true,  true, '${TENANT}'),
       ('${ADMIN}',          '${RUN} Admin',           '${PHONE.admin}',         'admin',    false, true, '${TENANT}'),
       ('${MANAGER}',        '${RUN} Manager',         '${PHONE.manager}',       'employee', false, true, '${TENANT}'),
       ('${EMPLOYEE}',       '${RUN} Employee',        '${PHONE.employee}',      'employee', false, true, '${TENANT}'),

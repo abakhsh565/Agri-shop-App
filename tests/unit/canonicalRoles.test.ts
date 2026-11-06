@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   CANONICAL_ROLE_DEFINITIONS,
   CANONICAL_TENANT,
+  livePermissionCodesFor,
   missingCanonicalRoles,
   parse0107Seed,
   permissionCodesFor,
@@ -70,6 +71,21 @@ describe('the canonical role data agrees with migration 0107', () => {
     // An included code that the catalogue lacks is dropped rather than inserted as nothing.
     expect(permissionCodesFor(employee, catalogue)).toEqual([]);
     expect(permissionCodesFor(manager, catalogue)).toEqual(['a.view', 'a.edit']);
+  });
+
+  it('withholds the permissions a later migration revoked from every role', () => {
+    // 0285 deleted customers.delete from every role's grants (only the owner's
+    // implicit authority reaches it now). The 0107 seed still lists it, and
+    // the pin above keeps the definition honest about that — so the live set
+    // the restore tool writes must drop it, or a --reset-grants pass would
+    // silently re-add a revoked permission.
+    const catalogue = ['customers.view', 'customers.create', 'customers.delete', 'sales.view'];
+    const manager = CANONICAL_ROLE_DEFINITIONS.find((d) => d.name === 'Store Manager')!;
+    expect(permissionCodesFor(manager, catalogue)).toContain('customers.delete');
+    expect(livePermissionCodesFor(manager, catalogue)).not.toContain('customers.delete');
+    expect(livePermissionCodesFor(manager, catalogue).sort()).toEqual(
+      ['customers.create', 'customers.view', 'sales.view'],
+    );
   });
 });
 

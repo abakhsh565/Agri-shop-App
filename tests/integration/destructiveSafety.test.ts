@@ -21,6 +21,7 @@
 
 import { describe, it, beforeAll, afterAll } from 'vitest';
 import { execSqlAsAdmin, execRpcAsUser, qaServiceClient } from '../setup/qa-client';
+import { QA_IDS } from '../setup/fixtures';
 
 
 const T = {
@@ -117,7 +118,9 @@ afterAll(async () => {
 
 describe('Destructive Safety — Customer Archive/Restore', () => {
   it('should archive a customer with no dependencies', async () => {
-    const result = await rpc(T.adminUser, 'archive_customer', { p_customer_id: T.customerA });
+    // Archive/restore need customers.delete, which 0285 deleted from every
+    // role — only the fixture owner passes (implicit owner permission set).
+    const result = await rpc(QA_IDS.owner, 'archive_customer', { p_customer_id: T.customerA });
     if (result.error) {
       // Try direct SQL call as fallback
       try {
@@ -137,7 +140,7 @@ describe('Destructive Safety — Customer Archive/Restore', () => {
   });
 
   it('should restore an archived customer', async () => {
-    const result = await rpc(T.adminUser, 'restore_customer', { p_customer_id: T.customerA });
+    const result = await rpc(QA_IDS.owner, 'restore_customer', { p_customer_id: T.customerA });
     if (result.error) {
       try {
         await admin(`SELECT restore_customer('${T.customerA}')`);
@@ -162,7 +165,7 @@ describe('Destructive Safety — Customer Archive/Restore', () => {
     await admin(`INSERT INTO sales (id, sale_number, customer_id, employee_id, total_amount, status, payment_type, payment_method, amount_paid, amount_due, discount, is_voided, shop_id, created_at, updated_at) VALUES ('${T.saleA}', 'DST-SALE-001', '${T.customerB}', '${T.employeeA}', 10000, 'completed', 'credit', 'cash', 0, 10000, 0, false, '${T.shop}', NOW(), NOW())`);
     await admin(`INSERT INTO sale_items (id, sale_id, product_id, product_name, variant_id, variant_name, qty, unit_price, line_total) VALUES ('${T.saleItemA}', '${T.saleA}', '${T.productA}', 'Destruct Test Product', '${T.variantA}', '1kg', 2, 5000, 10000) ON CONFLICT (id) DO UPDATE SET qty = EXCLUDED.qty, line_total = EXCLUDED.line_total`);
 
-    const result = await rpc(T.adminUser, 'archive_customer', { p_customer_id: T.customerB });
+    const result = await rpc(QA_IDS.owner, 'archive_customer', { p_customer_id: T.customerB });
     if (result.error) {
       try {
         await admin(`SELECT archive_customer('${T.customerB}')`);
@@ -179,7 +182,7 @@ describe('Destructive Safety — Customer Archive/Restore', () => {
     rec('Archived customer — sales preserved', '1', String(sales.rows[0]?.cnt), Number(sales.rows[0]?.cnt) === 1 ? 'PASS' : 'FAIL');
 
     // Restore
-    await rpc(T.adminUser, 'restore_customer', { p_customer_id: T.customerB });
+    await rpc(QA_IDS.owner, 'restore_customer', { p_customer_id: T.customerB });
     const r2 = await admin(`SELECT is_archived FROM customers WHERE id = '${T.customerB}'`);
     rec('Restore customer with sales — is_archived', 'false', String(r2.rows[0]?.is_archived), r2.rows[0]?.is_archived === false ? 'PASS' : 'FAIL');
   });
@@ -224,7 +227,9 @@ describe('Destructive Safety — Product Delete', () => {
 
 describe('Destructive Safety — Employee Deactivate', () => {
   it('should deactivate an employee', async () => {
-    const result = await rpc(T.adminUser, 'deactivate_employee_v1', { payload: { employeeId: T.employeeA } });
+    // Deactivate needs employees.manage, which no seeded role holds — only
+    // the fixture owner passes (implicit owner permission set).
+    const result = await rpc(QA_IDS.owner, 'deactivate_employee_v1', { payload: { employeeId: T.employeeA } });
     if (result.error?.includes('NOT_AUTHORIZED')) {
       rec('Deactivate employee — NOT_AUTHORIZED', 'NOT_AUTHORIZED', 'NOT_AUTHORIZED', 'FAIL');
       return;

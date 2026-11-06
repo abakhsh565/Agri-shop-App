@@ -15,9 +15,13 @@
 
 import { describe, it, beforeAll, afterAll, expect } from 'vitest';
 import { execRpcAsUser, execSqlAsAdmin, roleIdByName, setMembershipBranchScope } from '../setup/qa-client';
+import { QA_IDS } from '../setup/fixtures';
 
 const TENANT_A = '00000000-0000-0000-0000-000000000001';
-const OWNER = 'd3000000-0000-0000-0000-00000000000a';
+// The fixture shop's sole owner (Khalid Khan). 0280 allows one active owner
+// per shop, so this suite uses him instead of creating its own owner — and
+// never inserts, updates or deletes his user row.
+const OWNER = QA_IDS.owner;
 const EMP = 'd3000000-0000-0000-0000-0000000000e1';
 const VICTIM = 'd3000000-0000-0000-0000-00000000000b';
 // Built-in roles, resolved by NAME in beforeAll rather than by the id 0107 seeded. A built-in role is
@@ -66,7 +70,7 @@ async function cleanup() {
   await trySql('user_permissions', sql(`DELETE FROM user_permissions WHERE user_id IN ('${OWNER}','${EMP}','${VICTIM}')`));
   await trySql('role_permissions', sql(`DELETE FROM role_permissions WHERE role_id IN (SELECT id FROM roles WHERE name LIKE '${RUN}%')`));
   await trySql('roles', sql(`DELETE FROM roles WHERE name LIKE '${RUN}%'`));
-  await trySql('users', sql(`DELETE FROM users WHERE id IN ('${OWNER}','${EMP}','${VICTIM}')`));
+  await trySql('users', sql(`DELETE FROM users WHERE id IN ('${EMP}','${VICTIM}')`));
 }
 
 beforeAll(async () => {
@@ -75,7 +79,6 @@ beforeAll(async () => {
   await sql(`
     INSERT INTO users (id, name, phone, role, is_original_owner, is_active, shop_id)
     VALUES
-      ('${OWNER}',  '${RUN} Owner',  '923009795001', 'admin',    true,  true, '${TENANT_A}'),
       ('${EMP}',    '${RUN} Emp',    '923009795002', 'employee', false, true, '${TENANT_A}'),
       ('${VICTIM}', '${RUN} Victim', '923009795003', 'employee', false, true, '${TENANT_A}')
     ON CONFLICT (id) DO NOTHING

@@ -77,7 +77,7 @@ beforeAll(async () => {
   await sql(`
     INSERT INTO users (id, name, phone, role, is_original_owner, is_active, shop_id)
     VALUES
-      ('${OWNER_A}', '${RUN} Owner A', '923009780001', 'admin',  true, true, '${TENANT_A}'),
+      ('${OWNER_A}', '${RUN} Owner A', '923009780001', 'admin',  false, true, '${TENANT_A}'),
       ('${OWNER_B}', '${RUN} Owner B', '923009780002', 'admin',  true, true, '${TENANT_B}'),
       ('${EMP_A}',   '${RUN} Employee A', '923009780003', 'employee', false, true, '${TENANT_A}')
     ON CONFLICT (id) DO NOTHING

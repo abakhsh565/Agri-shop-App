@@ -26,7 +26,7 @@
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { randomUUID } from 'crypto';
-import { execRpcAsUser, execSqlAsAdmin, updateAsUser } from '../setup/qa-client';
+import { execRpcAsUser, execSqlAsAdmin, roleIdByName, updateAsUser } from '../setup/qa-client';
 import { QA_IDS, setupAllFixtures, cleanupTestData } from '../setup/fixtures';
 
 const TENANT = QA_IDS.shop;
@@ -91,11 +91,14 @@ beforeAll(async () => {
   await setupAllFixtures();
 
   // 0113 guarantees a membership for every user, but only on INSERT; a fixture re-inserted with
-  // ON CONFLICT DO UPDATE keeps its old membership. Assert it, as the other authorized suites do.
+  // ON CONFLICT DO UPDATE keeps its old membership. Assert it, as the other authorized suites do —
+  // as an admin on the Store Manager template, never as owner: 0280 allows one
+  // active owner per shop and the fixture shop's owner is Khalid Khan.
+  const storeManagerRoleId = await roleIdByName(TENANT, 'Store Manager');
   await execSqlAsAdmin(`
-    INSERT INTO memberships (user_id, tenant_id, role, status)
-    VALUES ('${OWNER}', '${TENANT}', 'owner', 'active')
-    ON CONFLICT (user_id, tenant_id) DO UPDATE SET role = 'owner', status = 'active', updated_at = now()
+    INSERT INTO memberships (user_id, tenant_id, role, role_id, status)
+    VALUES ('${OWNER}', '${TENANT}', 'admin', '${storeManagerRoleId}', 'active')
+    ON CONFLICT (user_id, tenant_id) DO UPDATE SET role = 'admin', role_id = '${storeManagerRoleId}', status = 'active', updated_at = now()
   `);
   await execSqlAsAdmin(`
     INSERT INTO customers (id, name, phone, credit_limit, outstanding_balance, total_purchases, total_paid, shop_id, created_by)

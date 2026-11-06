@@ -22,12 +22,15 @@ import {
   ensureTenantBranch,
   setActiveBranchAsUser,
 } from '../setup/qa-client';
+import { QA_IDS } from '../setup/fixtures';
 
 const TENANT_A = '00000000-0000-0000-0000-000000000001';
 const TENANT_B = '00000000-0000-0000-0000-00000000b0b0';
-const OWNER_A = 'c1000000-0000-0000-0000-00000000000a';
+// The fixture shop's sole owner (Khalid Khan). 0280 allows one active owner
+// per shop, so this suite uses him instead of creating its own owner — and
+// never inserts, updates or deletes his user row.
+const OWNER_A = QA_IDS.owner;
 const OWNER_B = 'c1000000-0000-0000-0000-00000000000b';
-const PHONE_A = '923009770001';
 const PHONE_B = '923009770002';
 const ROLE_NAME = `QA Enforcement ${Date.now()}`;
 
@@ -92,7 +95,7 @@ async function cleanup() {
   await trySql('customers', sql(`DELETE FROM customers WHERE phone IN ('923009770088','923009770099')`));
   await trySql('users', sql(`
     DELETE FROM users
-    WHERE id IN ('${OWNER_A}','${OWNER_B}')
+    WHERE id IN ('${OWNER_B}')
        OR phone IN ('923009770001','923009770002','923009770031','923009770032')
        OR name LIKE 'QA Enforce%'
   `));
@@ -113,11 +116,10 @@ beforeAll(async () => {
     ON CONFLICT (id) DO NOTHING
   `);
 
-  // Owners. The 0113 trigger creates their owner membership.
+  // Owner B. The 0113 trigger creates its owner membership.
   await sql(`
     INSERT INTO users (id, name, phone, role, is_original_owner, is_active, shop_id)
     VALUES
-      ('${OWNER_A}', 'QA Enforcement Owner A', '${PHONE_A}', 'admin', true, true, '${TENANT_A}'),
       ('${OWNER_B}', 'QA Enforcement Owner B', '${PHONE_B}', 'admin', true, true, '${TENANT_B}')
     ON CONFLICT (id) DO UPDATE SET is_active = true, is_original_owner = true, shop_id = EXCLUDED.shop_id
   `);

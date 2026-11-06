@@ -22,15 +22,13 @@
 
 import { describe, it, beforeAll, afterAll, expect } from 'vitest';
 import { execRpcAsUser, execSqlAsAdmin, checkAuthAsUser, roleIdByName } from '../setup/qa-client';
+import { QA_IDS } from '../setup/fixtures';
 
 const TENANT = '00000000-0000-0000-0000-000000000001';
-// Must not be shared with another suite. It was 'c3000000-…-0001', which
-// returnIntegrityGuards also claims for a different owner: whichever suite cleaned
-// up first deleted the row the other was mid-run using, and the surviving suite then
-// answered "NOT_AUTHORIZED: tenant access denied" for an owner it had just
-// authorized. tests/unit/fixtureIdCollision.test.ts now fails if that ever happens
-// again.
-const OWNER = 'c3000000-0000-0000-0000-000000000009';
+// The fixture shop's sole owner (Khalid Khan). 0280 allows one active owner
+// per shop, so this suite uses him instead of creating its own owner — and
+// never inserts, updates or deletes his user row.
+const OWNER = QA_IDS.owner;
 // Built-in roles, resolved by NAME in beforeAll. Hard-coding `a0000000-…-0001` assumed a global id
 // that a built-in role keeps forever; it does not. The role can be deleted through the app, and
 // `roles.id` is ONE key across tenants, so the id 0107 seeded for this tenant can be held by another
@@ -132,23 +130,6 @@ async function roleDefaults(roleId: string): Promise<string[]> {
 
 beforeAll(async () => {
   await cleanup();
-  await sql(`
-    INSERT INTO users (id, name, phone, role, is_original_owner, is_active, shop_id)
-    VALUES ('${OWNER}', 'QA Override Owner', '923009670099', 'admin', true, true, '${TENANT}')
-    ON CONFLICT (id) DO UPDATE SET is_active = true, is_original_owner = true,
-      shop_id = EXCLUDED.shop_id, phone = EXCLUDED.phone
-  `);
-  // The User→Membership trigger (0113) is AFTER INSERT only, so an owner row
-  // that already exists — a previous run's leftovers, because cleanup() removes
-  // only this suite's employee — never gets a membership, and then every
-  // authorized RPC fails with NOT_AUTHORIZED while the suite looks broken.
-  // Ensure it explicitly, which is exactly the invariant 0113 guarantees.
-  await sql(`
-    INSERT INTO memberships (user_id, tenant_id, role, status)
-    VALUES ('${OWNER}', '${TENANT}', 'owner', 'active')
-    ON CONFLICT (user_id, tenant_id) DO UPDATE
-      SET role = 'owner', status = 'active', updated_at = now()
-  `);
   ROLE_SALES_EMPLOYEE = await roleIdByName(TENANT, 'Sales Employee');
   ROLE_STORE_MANAGER = await roleIdByName(TENANT, 'Store Manager');
   const b = await sql(
@@ -176,8 +157,6 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await cleanup();
-  await trySql('audit_events-2', sql(`DELETE FROM audit_events WHERE user_id = '${OWNER}'`));
-  await trySql('users-2', sql(`DELETE FROM users WHERE id = '${OWNER}'`));
   throwIfCleanupFailed('employeeAccessOverrides afterAll cleanup');
 });
 

@@ -17,6 +17,7 @@
 
 import { describe, it, beforeAll, afterAll } from 'vitest';
 import { getDbClient, execSqlAsAdmin, execRpcAsUser, checkAuthAsUser, asPostgres } from '../setup/qa-client';
+import { QA_IDS } from '../setup/fixtures';
 
 let client: any;
 
@@ -265,7 +266,9 @@ describe('Permissions — RPC Authorization (Admin Only)', () => {
   });
 
   it('should allow admin to deactivate employee', async () => {
-    const result = await execRpcAsUser(T.adminUser, 'deactivate_employee_v1', {
+    // Deactivate needs employees.manage, which no seeded role holds — only
+    // the fixture owner passes (implicit owner permission set).
+    const result = await execRpcAsUser(QA_IDS.owner, 'deactivate_employee_v1', {
       payload: JSON.stringify({ employeeId: T.employeeUser }),
     });
     rec('Admin deactivate_employee — no NOT_AUTHORIZED', 'no NOT_AUTHORIZED', result.error?.includes('NOT_AUTHORIZED') ? 'NOT_AUTHORIZED' : 'ok', result.error?.includes('NOT_AUTHORIZED') ? 'FAIL' : 'PASS');

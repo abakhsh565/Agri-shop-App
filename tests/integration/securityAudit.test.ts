@@ -176,7 +176,7 @@ afterAll(async () => {
 
   // ─── RPC: Missing auth checks (documented findings) ───────────────────────
 
-  it('RPC: archive_customer requires the customers.delete permission', async () => {
+  it('RPC: archive_customer is owner-only since 0285 (no role holds customers.delete)', async () => {
     // Employee (no membership / no customers.delete) must be rejected.
     // NOTE: this assertion was inverted when migration 0112 added the
     // authoritative permission guard — archive was previously unprotected.
@@ -193,23 +193,24 @@ afterAll(async () => {
     );
     expect(afterDenied.rows[0]?.is_archived).toBe(false);
 
-    // Owner/admin still holds the permission and can archive.
-    const allowed = await execRpcAsUser(QA_IDS.admin, 'archive_customer', {
+    // The owner passes via the implicit owner permission set (0285 deleted
+    // customers.delete from every role, so no role holds it anymore).
+    const allowed = await execRpcAsUser(QA_IDS.owner, 'archive_customer', {
       p_customer_id: CUST_ID,
-      p_archived_by: QA_IDS.admin,
+      p_archived_by: QA_IDS.owner,
     });
     expect(allowed.error).toBeNull();
 
-    await execRpcAsUser(QA_IDS.admin, 'restore_customer', {
+    await execRpcAsUser(QA_IDS.owner, 'restore_customer', {
       p_customer_id: CUST_ID,
     });
   });
 
-  it('RPC: restore_customer requires the customers.delete permission', async () => {
+  it('RPC: restore_customer is owner-only since 0285 (no role holds customers.delete)', async () => {
     // First archive
-    await execRpcAsUser(QA_IDS.admin, 'archive_customer', {
+    await execRpcAsUser(QA_IDS.owner, 'archive_customer', {
       p_customer_id: CUST_ID,
-      p_archived_by: QA_IDS.admin,
+      p_archived_by: QA_IDS.owner,
     });
 
     // Employee must be rejected (was previously unprotected).
@@ -224,8 +225,8 @@ afterAll(async () => {
     );
     expect(stillArchived.rows[0]?.is_archived).toBe(true);
 
-    // Admin can restore.
-    const allowed = await execRpcAsUser(QA_IDS.admin, 'restore_customer', {
+    // Owner can restore.
+    const allowed = await execRpcAsUser(QA_IDS.owner, 'restore_customer', {
       p_customer_id: CUST_ID,
     });
     expect(allowed.error).toBeNull();
@@ -235,7 +236,7 @@ afterAll(async () => {
     // Ensure admin user exists with phone for JWT
     await execSqlAsAdmin(`
       INSERT INTO users (id, name, phone, role, is_original_owner, is_active, shop_id)
-      VALUES ('${QA_IDS.admin}', 'QA Admin', '923009999999', 'admin', true, true, '${QA_IDS.shop}')
+      VALUES ('${QA_IDS.admin}', 'QA Admin', '923009999999', 'admin', false, true, '${QA_IDS.shop}')
       ON CONFLICT (id) DO UPDATE SET is_active = true, phone = '923009999999'
     `);
 
@@ -262,7 +263,7 @@ afterAll(async () => {
       // Ensure admin exists right before delete (other tests may have cleaned up)
       await execSqlAsAdmin(`
         INSERT INTO users (id, name, phone, role, is_original_owner, is_active, shop_id)
-        VALUES ('${QA_IDS.admin}', 'QA Admin', '923009999999', 'admin', true, true, '${QA_IDS.shop}')
+        VALUES ('${QA_IDS.admin}', 'QA Admin', '923009999999', 'admin', false, true, '${QA_IDS.shop}')
         ON CONFLICT (id) DO UPDATE SET is_active = true, phone = '923009999999'
       `);
 
@@ -307,7 +308,7 @@ afterAll(async () => {
     // Ensure admin user exists with phone for JWT
     await execSqlAsAdmin(`
       INSERT INTO users (id, name, phone, role, is_original_owner, is_active, shop_id)
-      VALUES ('${QA_IDS.admin}', 'QA Admin', '923009999999', 'admin', true, true, '${QA_IDS.shop}')
+      VALUES ('${QA_IDS.admin}', 'QA Admin', '923009999999', 'admin', false, true, '${QA_IDS.shop}')
       ON CONFLICT (id) DO UPDATE SET is_active = true, phone = '923009999999'
     `);
 
@@ -539,15 +540,16 @@ afterAll(async () => {
     // Ensure admin exists with correct state (other tests delete it via cleanupTestData)
     await execSqlAsAdmin(`
       INSERT INTO users (id, name, phone, role, is_original_owner, is_active, shop_id)
-      VALUES ('${QA_IDS.admin}', 'QA Admin', '923009999999', 'admin', true, true, '${QA_IDS.shop}')
+      VALUES ('${QA_IDS.admin}', 'QA Admin', '923009999999', 'admin', false, true, '${QA_IDS.shop}')
       ON CONFLICT (id) DO UPDATE SET phone = '923009999999', role = 'admin', is_active = true
     `);
     await execSqlAsAdmin(`UPDATE auth.users SET phone = '923009999999' WHERE id = '${QA_IDS.admin}'`);
 
-    // Archive the customer
-    const archiveResult = await execRpcAsUser(QA_IDS.admin, 'archive_customer', {
+    // Archive the customer (as the owner: 0285 deleted customers.delete from
+    // every role, so only the owner's implicit permission set passes).
+    const archiveResult = await execRpcAsUser(QA_IDS.owner, 'archive_customer', {
       p_customer_id: CUST_ID,
-      p_archived_by: QA_IDS.admin,
+      p_archived_by: QA_IDS.owner,
     });
     if (archiveResult.error) {
       console.error('[archive_customer error]', archiveResult.error);
@@ -569,8 +571,8 @@ afterAll(async () => {
     );
     // Sales count should not have changed
 
-    // Restore
-    await execRpcAsUser(QA_IDS.admin, 'restore_customer', {
+    // Restore (as the owner, same as the archive above)
+    await execRpcAsUser(QA_IDS.owner, 'restore_customer', {
       p_customer_id: CUST_ID,
     });
 
