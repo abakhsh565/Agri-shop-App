@@ -502,6 +502,29 @@ so applying them after `0299` matches the intended order. The workflow
 `.github/workflows/apply-staging-migrations.yml` takes the override as dispatch inputs
 (`allow_out_of_order`, `override_reason`).
 
+Follow-up (2026-11-06, same day): the apply stopped at `0280` (run 42206458716) because the
+fixture shop held six active standard owners, which `0280`'s unique index refuses. Root cause:
+migration `0113`'s trigger gives an owner membership to every user inserted with
+`is_original_owner = true`, and five test identities were seeded that way although they are
+admins. The fix, at the root: `is_original_owner` is now false in the five seed sites
+(`tests/setup/fixtures.ts` and the four lane suites), and the one-time script
+`scripts/dev/qa-fix-0280-duplicate-owners.mjs` demoted exactly those five to the Store Manager
+role (QA Admin, Destruct/Perm/Fin/Inv test users) with an explicit branch scope, because
+migration `0188`'s trigger refuses a role change away from owner on a NULL scope; the
+designated fixture owner, Khalid Khan (923001234567), was untouched. The script was dry-run
+first (run 42212212138, PASS) then applied (run 42212500959, APPLIED and committed). A
+branch-only workflow cannot be dispatched — GitHub registers workflows from main — so the
+one-time workflow file was dropped and the fix rode on the registered `qa-probe.yml` instead;
+the temporary `run_fix`/`fix_apply` inputs and the `pg` install step stay on the branch until
+the Phase 2 PR merges, then they go away with the probe revert. The re-dispatched apply
+(run 42214806581) then recorded all ten files, `0280`–`0289`, and the QA ledger stands at 290
+rows with 0 pending. The same run's post-apply verify failed only on the QA-only allowlist:
+its 44 entries (`0233`–`0276`) went stale the moment Phase 2 imported those files, which is
+the closure the file was designed for. The allowlist is therefore retired — the flag is removed
+from `ci.yml`, `build-apk.yml` and `apply-staging-migrations.yml`, and
+`.github/qa-ledger-only.txt` is deleted; verify now fails closed on any ledger-only row, and
+there are none.
+
 ## 6. Backward-compatibility rules (binding on every batch)
 
 1. **Additive only.** New columns are nullable or defaulted, added `if not exists`. No drops, no
