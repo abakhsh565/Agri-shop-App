@@ -6,10 +6,12 @@ import {
   execSql,
   loginViaUi,
   ownership,
+  QA_IDS,
   setupFixtures,
   snapshotIds,
   trackOwned,
 } from './helpers';
+import { setActiveBranchAsUser } from '../../tests/setup/qa-client';
 
 const OWNER_PHONE = '03009999999';       // 923009999999
 const ADMIN_ID_PHONE = '923009999999';   // the stored e164 form
@@ -42,6 +44,17 @@ test.describe('admin full access + the account-deletion gate', () => {
   test.beforeAll(async () => {
     await setupFixtures();
     await ensureAuthSession(OWNER_PHONE);
+
+    // The profile card is `settings-open-profile` only on the main branch; on
+    // an added branch the same card is `settings-edit-branch` and opens the
+    // branch editor instead. The active branch is server-owned and another lane
+    // can leave it on an added branch, so resolve the main branch and switch to
+    // it here, through the app's own `set_active_branch` RPC.
+    const [mainBranch] = await execSql(
+      `SELECT id FROM branches WHERE tenant_id = '${QA_IDS.shop}' AND is_default = true`,
+    );
+    expect(mainBranch?.id, 'the QA shop has no main branch to switch to').toBeTruthy();
+    await setActiveBranchAsUser(QA_IDS.admin, String(mainBranch.id));
   });
 
   test.afterAll(async () => {
@@ -157,7 +170,9 @@ test.describe('admin full access + the account-deletion gate', () => {
 
     // The profile card is a row on Settings: it carries a chevron and opens the profile screen.
     // The edit itself is still a sheet — two fields, so a sheet — opened by that screen's own
-    // Edit button next to the name and number.
+    // Edit button next to the name and number. The card renders only once the branches load, so
+    // wait for it by testId instead of clicking into an un-hydrated screen.
+    await expect(page.locator('[data-testid="settings-open-profile"]')).toBeVisible({ timeout: 10000 });
     await page.locator('[data-testid="settings-open-profile"]').click();
     await expect(page).toHaveURL(/\/admin\/settings\/profile$/, { timeout: 8000 });
     await page.locator('[data-testid="settings-edit-profile"]').click();

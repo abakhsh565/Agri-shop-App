@@ -21,6 +21,7 @@ import * as path from 'path';
 import { fileURLToPath } from 'url';
 import {
   injectAdminAuth,
+  injectOwnerAuth,
   setupFixtures,
   cleanupFixtures,
   execSql,
@@ -180,7 +181,11 @@ test.describe('Cross-Screen Synchronization', () => {
     // Verify original
     await page.goto(`${BASE_URL}/employee/products`);
     await settle(page);
-    await expect(page.locator('text=Sync Product').first()).toBeVisible();
+    // The products fetch is the heaviest list fetch (products + variants +
+    // companies, plus a lazy page chunk) and the bare 5s default expect is
+    // too short on a slow lane (round-5: the row existed in the DB, the list
+    // just had not rendered it yet). Give it a convergence timeout.
+    await expect(page.locator('text=Sync Product').first()).toBeVisible({ timeout: 30_000 });
 
     // Update name
     await execSql(`UPDATE products SET name = 'Sync Product UPDATED' WHERE id = '${PROD_ID}'`);
@@ -190,12 +195,12 @@ test.describe('Cross-Screen Synchronization', () => {
     await settle(page);
     await page.goto(`${BASE_URL}/employee/products`);
     await settle(page);
-    await expect(page.locator('text=Sync Product UPDATED').first()).toBeVisible();
+    await expect(page.locator('text=Sync Product UPDATED').first()).toBeVisible({ timeout: 30_000 });
 
     // Hard reload
     await page.reload();
     await settle(page);
-    await expect(page.locator('text=Sync Product UPDATED').first()).toBeVisible();
+    await expect(page.locator('text=Sync Product UPDATED').first()).toBeVisible({ timeout: 30_000 });
 
     // Verify DB
     const db = await execSql(`SELECT name FROM products WHERE id = '${PROD_ID}'`);
@@ -340,10 +345,25 @@ test.describe('Cross-Screen Synchronization', () => {
   test('Employee: active status change propagates', async ({ page }) => {
     await page.goto(BASE_URL);
     await settle(page);
-    await injectAdminAuth(page);
+    // Deactivation needs employees.manage, which the demoted admin no longer
+    // holds — act as the owner. The raw UPDATE this test used to run via
+    // run_sql fires the guard_user_privileged_columns trigger (no app session),
+    // so the status change goes through the app's own deactivate/reactivate
+    // flow instead — the same flow employeeStatusSafety exercises. The RPCs
+    // need no membership row: their membership UPDATEs touch 0 rows when
+    // there is none, and only the users row changes.
+    await injectOwnerAuth(page);
 
-    // Deactivate
-    await execSql(`UPDATE users SET is_active = false WHERE id = '${EMP_ID}'`);
+    // Deactivate through the employee detail, the way the owner does it.
+    await page.goto(`${BASE_URL}/admin/employees/${EMP_ID}`);
+    await page.waitForLoadState('networkidle');
+    await page.getByRole('button', { name: /^turn off this employee's account$/i }).first().click();
+    await expect(page.getByText(`Turn off Sync Employee's account?`)).toBeVisible({ timeout: 10000 });
+    // The dialog's confirm is `confirm-submit`, not the LAST button with this
+    // name: `.last()` is resolved before the dialog mounts, so Playwright locks
+    // onto the detail button behind the dialog backdrop and the click times out.
+    await page.getByTestId('confirm-submit').click();
+    await expect(page.getByText(/account is off/i)).toBeVisible({ timeout: 15000 });
 
     // Navigate
     await page.goto(`${BASE_URL}/admin/employees`);
@@ -353,8 +373,17 @@ test.describe('Cross-Screen Synchronization', () => {
     const db = await execSql(`SELECT is_active FROM users WHERE id = '${EMP_ID}'`);
     expect(db[0].is_active).toBe(false);
 
-    // Reactivate
-    await execSql(`UPDATE users SET is_active = true WHERE id = '${EMP_ID}'`);
+    // Reactivate through the same detail flow.
+    await page.goto(`${BASE_URL}/admin/employees/${EMP_ID}`);
+    await page.waitForLoadState('networkidle');
+    await page.getByRole('button', { name: /^turn the account back on$/i }).first().click();
+    // Wait for the dialog first, mirroring the deactivate flow: without it the
+    // confirm click races the dialog mount and the backdrop eats it.
+    await expect(page.getByText(`Turn access back on for Sync Employee?`)).toBeVisible({ timeout: 10000 });
+    await page.getByTestId('confirm-submit').click();
+    await expect(page.getByRole('button', { name: /^turn off this employee's account$/i }).first()).toBeVisible({
+      timeout: 15000,
+    });
     const db2 = await execSql(`SELECT is_active FROM users WHERE id = '${EMP_ID}'`);
     expect(db2[0].is_active).toBe(true);
   });

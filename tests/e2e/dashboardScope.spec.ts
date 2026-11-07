@@ -117,6 +117,20 @@ test.describe('Locked dashboard scope: figures reconcile with the database', () 
     await login(page, OWNER_PHONE);
     expect(page.url()).toContain('/admin/dashboard');
 
+    // The branch the dashboard's sales figures cover, resolved from the DB
+    // rather than a literal id (the fixture-id guard forbids two files from
+    // declaring the same UUID). The sales store is branch-scoped by RLS
+    // (sales_branch_select: branch_id = ANY (current_branch_scope())), and
+    // current_branch_scope() reads this same user_active_shops row, so the
+    // gate must sum this branch, not the whole shop. Round-2 probe (run
+    // 42321215789): this branch holds the 2 Perm sales (Rs. 10,000); the
+    // added branch holds the other 5 (Rs. 24,600).
+    const [activeBranch] = await execSql(
+      `SELECT branch_id FROM user_active_shops WHERE user_id = '${QA_IDS.owner}'`,
+    );
+    const branchId = activeBranch.branch_id as string;
+    expect(branchId, 'the owner fixture has no active branch').toBeTruthy();
+
     // WAIT FOR THE SCREEN TO HYDRATE — data-driven, not a stopwatch.
     //
     // WHY (reproduced 2026-10-15, full-suite run: `145 passed · 2 failed · 2 did not run`). `login()`
@@ -131,8 +145,12 @@ test.describe('Locked dashboard scope: figures reconcile with the database', () 
     // The gate removes the stopwatch and keeps — strengthens — the requirement: the rendered
     // dashboard must converge on the figure the database actually holds. A blank, stale or wrong
     // dashboard still fails here, and it fails naming the DB value instead of timing out.
+    // Branch-scoped as well as shop-scoped: the dashboard's sales figures come from the
+    // sales store, whose RLS (sales_branch_select) returns only the current branch's
+    // sales. The gate must sum the same branch, or it counts the added branch's sales
+    // too (round-2 probe run 42321215789: added branch 6253561f holds Rs. 24,600).
     const [gateSales] = await execSql(
-      `SELECT coalesce(sum(total_amount),0)::text AS total FROM sales WHERE is_voided = false`,
+      `SELECT coalesce(sum(total_amount),0)::text AS total FROM sales WHERE is_voided = false AND shop_id = '${QA_IDS.shop}' AND branch_id = '${branchId}'`,
     );
     await expect
       .poll(async () => (await page.textContent('body')) ?? '', {
@@ -158,29 +176,54 @@ test.describe('Locked dashboard scope: figures reconcile with the database', () 
       ).toHaveCount(0);
     }
 
+    // The UI count is fetched ONCE at mount and never refetched, so reload
+    // the dashboard here so the mount-time count reflects the final DB state
+    // instead of whatever it was when the page first loaded (round-5: the
+    // gate counted 2, the UI still showed the stale mount-time 1). The
+    // expect.poll below then converges on the re-fetched count.
+    await page.reload();
+    await page.waitForLoadState('networkidle');
+
     // The Quick Alerts headline count is data-dependent copy ("1 action needed" vs
     // "2 actions needed"), so assert the authoritative thing instead: any pending
     // credit request in the DB must be surfaced, with its real count.
-    const [pending] = await execSql(`SELECT count(*)::text AS n FROM credit_limit_requests WHERE status = 'pending'`);
+    // credit_limit_requests carries no shop_id of its own, so the pending count
+    // is scoped through the customer it names — otherwise other tenants' pending
+    // requests inflate the figure Home (which shows this shop only) must match.
+    const [pending] = await execSql(
+      `SELECT count(*)::text AS n FROM credit_limit_requests clr JOIN customers c ON c.id = clr.customer_id WHERE clr.status = 'pending' AND c.shop_id = '${QA_IDS.shop}'`,
+    );
     const pendingCount = Number(pending.n);
     if (pendingCount > 0) {
-      expect(body, 'pending credit requests are not surfaced in Quick Alerts').toContain(`${pendingCount} request`);
+      // The count is a separate async round-trip with no convergence wait: the
+      // sales poll above can resolve the instant the total appears, before the
+      // count's setState + re-render lands. Poll for the rendered count instead
+      // of reading the body once (round-3 failure: gate counted 1, body showed 0).
+      await expect
+        .poll(async () => (await page.textContent('body')) ?? '', {
+          timeout: 30_000,
+          message: `pending credit requests are not surfaced in Quick Alerts — expected ${pendingCount} request`,
+        })
+        .toContain(`${pendingCount} request`);
     }
 
     // ── Authoritative expectations, recomputed from the QA database ──
+    // Sales figures are branch-scoped (same RLS as the gate above); customer
+    // figures stay shop-scoped only, because the customers store has no branch
+    // filter (its RLS is shop_id = current_shop_id()).
     const [sales] = await execSql(`
       SELECT coalesce(sum(total_amount),0)::text AS total,
              coalesce(sum(amount_paid),0)::text AS paid,
              coalesce(sum(amount_due),0)::text AS credit,
              count(*)::text AS tx
-        FROM sales WHERE is_voided = false`);
+        FROM sales WHERE is_voided = false AND shop_id = '${QA_IDS.shop}' AND branch_id = '${branchId}'`);
     // COGS on its own, so the expected profit is revenue - COGS on the SAME
     // authoritative revenue Home uses (the sale's stored total), which is also
     // what Reports uses. Deriving it from line totals instead would let the two
     // screens disagree by rounding.
     const [cogs] = await execSql(`
       SELECT coalesce(sum(coalesce(si.cogs_amount,0)),0)::text AS v
-        FROM sale_items si JOIN sales s ON s.id = si.sale_id WHERE s.is_voided = false`);
+        FROM sale_items si JOIN sales s ON s.id = si.sale_id WHERE s.is_voided = false AND s.shop_id = '${QA_IDS.shop}' AND s.branch_id = '${branchId}'`);
     // Overdue is the system-wide business metric: the REMAINING balance of every
     // credit whose due date has already passed in Pakistan time — not the shop's
     // total customer outstanding. Computed here from the database with the same
@@ -190,11 +233,12 @@ test.describe('Locked dashboard scope: figures reconcile with the database', () 
              count(*)::text AS n
         FROM customers
        WHERE is_archived = false
+         AND customers.shop_id = '${QA_IDS.shop}'
          AND outstanding_balance > 0
          AND due_date IS NOT NULL
          AND due_date < (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Karachi')::date`);
     const [allOutstanding] = await execSql(
-      `SELECT coalesce(sum(outstanding_balance),0)::text AS v FROM customers WHERE is_archived = false`,
+      `SELECT coalesce(sum(outstanding_balance),0)::text AS v FROM customers WHERE is_archived = false AND customers.shop_id = '${QA_IDS.shop}'`,
     );
 
     const total = Number(sales.total), gp = total - Number(cogs.v);
