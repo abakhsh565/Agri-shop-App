@@ -35,6 +35,16 @@ test.describe('Browser retry after a timed-out write', () => {
       `UPDATE customers SET outstanding_balance = 30000, total_purchases = 80000, total_paid = 50000 WHERE id = '${QA_IDS.customerA}'`
     );
 
+    // The customers screen filters archived / other-shop rows out, so a drifted
+    // fixture fails here at setup instead of as a 15s 'element not found' later.
+    const [customerA] = await execSql(
+      `SELECT is_archived, shop_id FROM customers WHERE id = '${QA_IDS.customerA}'`,
+    );
+    expect(customerA?.is_archived, 'QA Customer A is archived, so the customers screen filters it out').toBe(false);
+    expect(customerA?.shop_id, 'QA Customer A is not in the QA shop, so the customers screen filters it out').toBe(
+      QA_IDS.shop,
+    );
+
     // OWNERSHIP: the three deletes that used to run here removed every sale of the shared fixture
     // customer and every sale submission of the shared shop — other runs' rows. The premise this
     // lane needs ("this fixture has no sale yet") is asserted instead, so a dirty database makes

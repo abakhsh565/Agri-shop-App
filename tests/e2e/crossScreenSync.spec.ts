@@ -355,9 +355,10 @@ test.describe('Cross-Screen Synchronization', () => {
     await page.waitForLoadState('networkidle');
     await page.getByRole('button', { name: /^turn off this employee's account$/i }).first().click();
     await expect(page.getByText(`Turn off Sync Employee's account?`)).toBeVisible({ timeout: 10000 });
-    // The dialog's confirm is the LAST button with this name in the DOM; the
-    // detail button behind it matches too.
-    await page.getByRole('button', { name: /^turn off this employee's account$/i }).last().click();
+    // The dialog's confirm is `confirm-submit`, not the LAST button with this
+    // name: `.last()` is resolved before the dialog mounts, so Playwright locks
+    // onto the detail button behind the dialog backdrop and the click times out.
+    await page.getByTestId('confirm-submit').click();
     await expect(page.getByText(/account is off/i)).toBeVisible({ timeout: 15000 });
 
     // Navigate
@@ -372,7 +373,10 @@ test.describe('Cross-Screen Synchronization', () => {
     await page.goto(`${BASE_URL}/admin/employees/${EMP_ID}`);
     await page.waitForLoadState('networkidle');
     await page.getByRole('button', { name: /^turn the account back on$/i }).first().click();
-    await page.getByRole('button', { name: /^turn the account back on$/i }).last().click();
+    // Wait for the dialog first, mirroring the deactivate flow: without it the
+    // confirm click races the dialog mount and the backdrop eats it.
+    await expect(page.getByText(`Turn access back on for Sync Employee?`)).toBeVisible({ timeout: 10000 });
+    await page.getByTestId('confirm-submit').click();
     await expect(page.getByRole('button', { name: /^turn off this employee's account$/i }).first()).toBeVisible({
       timeout: 15000,
     });

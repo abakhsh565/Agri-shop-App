@@ -683,22 +683,27 @@ export async function setupFixtures() {
     VALUES
       ('${QA_IDS.admin}', 'QA Admin', '923009999999', 'admin', true, true, '${QA_IDS.shop}'),
       ('${QA_IDS.employee}', 'QA Employee', '923008888888', 'employee', false, true, '${QA_IDS.shop}')
-    ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, is_active = true;
+    ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, is_active = true, shop_id = EXCLUDED.shop_id;
   `);
 
   await execSql(`
     INSERT INTO companies (id, name, outstanding_payable, total_purchases, shop_id)
     VALUES ('${QA_IDS.companyA}', 'QA Supplier A', 15000, 50000, '${QA_IDS.shop}')
-    ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name;
+    ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, shop_id = EXCLUDED.shop_id;
   `);
 
+  // The conflict repair restores the WHOLE declared fixture, not just the name:
+  // a fixture customer archived (or moved to another shop) by an earlier lane
+  // stays archived forever under a name-only repair, and the screens filter it
+  // out — the row exists in the database yet never renders, which reads as a
+  // 15s 'element not found' instead of a setup failure.
   await execSql(`
     INSERT INTO customers (id, name, phone, credit_limit, outstanding_balance, total_purchases, total_paid, shop_id, created_by)
     VALUES
       ('${QA_IDS.customerA}', 'QA Customer A', '923001111111', 50000, 30000, 80000, 50000, '${QA_IDS.shop}', 'QA'),
       ('${QA_IDS.customerB}', 'QA Customer B', '923002222222', 25000, 26000, 40000, 14000, '${QA_IDS.shop}', 'QA'),
       ('${QA_IDS.customerC}', 'QA Customer C', '923003333333', 10000, 0, 15000, 15000, '${QA_IDS.shop}', 'QA')
-    ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name;
+    ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, is_archived = false, shop_id = EXCLUDED.shop_id;
   `);
 
   // STOCK IS PART OF THE FLOOR, NOT ONLY OF THE FIRST INSERT.
@@ -714,7 +719,7 @@ export async function setupFixtures() {
     VALUES
       ('${QA_IDS.productA}', 'QA Product A', '${QA_IDS.companyA}', 'seed', 100, '${QA_IDS.shop}'),
       ('${QA_IDS.productB}', 'QA Product B', '${QA_IDS.companyA}', 'fertilizer', 0, '${QA_IDS.shop}')
-    ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, stock_qty = EXCLUDED.stock_qty;
+    ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, stock_qty = EXCLUDED.stock_qty, shop_id = EXCLUDED.shop_id;
 
     INSERT INTO product_variants (id, product_id, name, selling_price, cost_price, unit_size, low_stock_threshold, stock_qty)
     VALUES
