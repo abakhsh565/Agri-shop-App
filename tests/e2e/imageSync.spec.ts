@@ -6,7 +6,7 @@
  *
  * Uses the QA database (never production).
  */
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
 import {
@@ -35,6 +35,30 @@ const COMP_ID = randomUUID();
 const EMP_ID = randomUUID();
 const CUST_PHONE = `923${RUN.slice(-8).padStart(8, '0')}`;
 const EMP_PHONE = `923${(RUN + '1').slice(-8).padStart(8, '0')}`;
+
+// Wait for an image upload to finish before the test clicks Save.
+// ImageUpload clears its file input only after the upload resolves (success
+// or failure), so a cleared input means the upload is done and onChange has
+// fired with the URL (or null on failure). A fixed 3000ms wait is not
+// enough: on a slow lane the upload takes longer, the test clicks Save
+// before the URL reaches the form, and the DB write stores null (round-6:
+// the Orphan test failed at its first image_url read). The DB assertions
+// after each save then verify the upload actually succeeded.
+async function waitForUpload(page: Page): Promise<void> {
+  await expect
+    .poll(
+      async () =>
+        page
+          .locator('input[type="file"]')
+          .first()
+          .evaluate((el: HTMLInputElement) => el.value),
+      {
+        timeout: 30_000,
+        message: 'the image upload never finished — the file input was never cleared',
+      },
+    )
+    .toBe('');
+}
 
 test.describe('Image Synchronization — All Entities', () => {
   test.beforeAll(async () => {
@@ -73,12 +97,20 @@ test.describe('Image Synchronization — All Entities', () => {
     await page.locator('button').filter({ hasText: /Edit|edit/ }).first().click();
     await page.waitForTimeout(500);
     await page.locator('input[type="file"]').first().setInputFiles(IMG_A);
-    await page.waitForTimeout(3000);
+    await waitForUpload(page);
     await page.locator('button').filter({ hasText: /Save|save/ }).last().click();
-    await page.waitForTimeout(2000);
 
+    // The save writes via RPC; poll the DB for the new URL instead of a fixed wait.
+    await expect
+      .poll(
+        async () => {
+          const rows = await execSql(`SELECT image_url FROM customers WHERE id = '${CUST_ID}'`);
+          return rows[0]?.image_url as string | null;
+        },
+        { timeout: 30_000 },
+      )
+      .toContain('supabase.co/storage');
     let db = await execSql(`SELECT image_url FROM customers WHERE id = '${CUST_ID}'`);
-    expect(db[0].image_url).toContain('supabase.co/storage');
     const urlA = db[0].image_url;
     trackUploadedObject(urlA);
 
@@ -92,12 +124,19 @@ test.describe('Image Synchronization — All Entities', () => {
     await page.locator('button').filter({ hasText: /Edit|edit/ }).first().click();
     await page.waitForTimeout(500);
     await page.locator('input[type="file"]').first().setInputFiles(IMG_B);
-    await page.waitForTimeout(3000);
+    await waitForUpload(page);
     await page.locator('button').filter({ hasText: /Save|save/ }).last().click();
-    await page.waitForTimeout(2000);
 
+    await expect
+      .poll(
+        async () => {
+          const rows = await execSql(`SELECT image_url FROM customers WHERE id = '${CUST_ID}'`);
+          return rows[0]?.image_url as string | null;
+        },
+        { timeout: 30_000 },
+      )
+      .not.toBe(urlA);
     db = await execSql(`SELECT image_url FROM customers WHERE id = '${CUST_ID}'`);
-    expect(db[0].image_url).not.toBe(urlA);
     const urlB = db[0].image_url;
     trackUploadedObject(urlB);
 
@@ -147,7 +186,7 @@ test.describe('Image Synchronization — All Entities', () => {
     await page.waitForLoadState('networkidle');
 
     await page.locator('input[type="file"]').first().setInputFiles(IMG_A);
-    await page.waitForTimeout(3000);
+    await waitForUpload(page);
     const img = page.locator('img[alt]').first();
     const src = await img.getAttribute('src');
     expect(src).toContain('supabase.co/storage');
@@ -200,7 +239,7 @@ test.describe('Image Synchronization — All Entities', () => {
     await page.waitForLoadState('networkidle');
 
     await page.locator('input[type="file"]').first().setInputFiles(IMG_A);
-    await page.waitForTimeout(3000);
+    await waitForUpload(page);
     const img = page.locator('img[alt]').first();
     const src = await img.getAttribute('src');
     expect(src).toContain('supabase.co/storage');
@@ -253,7 +292,7 @@ test.describe('Image Synchronization — All Entities', () => {
     await page.waitForLoadState('networkidle');
 
     await page.locator('input[type="file"]').first().setInputFiles(IMG_A);
-    await page.waitForTimeout(3000);
+    await waitForUpload(page);
     const img = page.locator('img[alt]').first();
     const src = await img.getAttribute('src');
     expect(src).toContain('supabase.co/storage');
@@ -380,12 +419,19 @@ test.describe('Image Synchronization — All Entities', () => {
     await page.locator('button').filter({ hasText: /Edit|edit/ }).first().click();
     await page.waitForTimeout(500);
     await page.locator('input[type="file"]').first().setInputFiles(IMG_A);
-    await page.waitForTimeout(3000);
+    await waitForUpload(page);
     await page.locator('button').filter({ hasText: /Save|save/ }).last().click();
-    await page.waitForTimeout(2000);
 
+    await expect
+      .poll(
+        async () => {
+          const rows = await execSql(`SELECT image_url FROM customers WHERE id = '${CUST_ID}'`);
+          return rows[0]?.image_url as string | null;
+        },
+        { timeout: 30_000 },
+      )
+      .toBeTruthy();
     let db = await execSql(`SELECT image_url FROM customers WHERE id = '${CUST_ID}'`);
-    expect(db[0].image_url).toBeTruthy();
     const urlA = db[0].image_url;
     trackUploadedObject(urlA);
 
@@ -393,12 +439,19 @@ test.describe('Image Synchronization — All Entities', () => {
     await page.locator('button').filter({ hasText: /Edit|edit/ }).first().click();
     await page.waitForTimeout(500);
     await page.locator('input[type="file"]').first().setInputFiles(IMG_B);
-    await page.waitForTimeout(3000);
+    await waitForUpload(page);
     await page.locator('button').filter({ hasText: /Save|save/ }).last().click();
-    await page.waitForTimeout(2000);
 
+    await expect
+      .poll(
+        async () => {
+          const rows = await execSql(`SELECT image_url FROM customers WHERE id = '${CUST_ID}'`);
+          return rows[0]?.image_url as string | null;
+        },
+        { timeout: 30_000 },
+      )
+      .not.toBe(urlA);
     db = await execSql(`SELECT image_url FROM customers WHERE id = '${CUST_ID}'`);
-    expect(db[0].image_url).not.toBe(urlA);
     const urlB = db[0].image_url;
     trackUploadedObject(urlB);
 
