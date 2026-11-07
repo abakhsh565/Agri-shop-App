@@ -13,16 +13,6 @@ name: QA probe (read-only)
 # literal phones in this file failed Gates on the PR merge run).
 on:
   workflow_dispatch:
-    inputs:
-      # TEMPORARY (one-time QA repair, 2026-11-07): restores the two missing
-      # storage.objects policies (public_all_storage_update/delete) that
-      # imageSync:323 expects. Revert this input and the policy-fix job after
-      # the repair is verified. The script is the record; the workflow change
-      # is NOT part of the product.
-      run_policy_fix:
-        description: 'One-time QA repair: run qa-fix-storage-policies.mjs --apply'
-        type: boolean
-        default: false
 
 jobs:
   probe:
@@ -58,8 +48,6 @@ jobs:
             fixture_users: `SELECT id, name, phone, role, is_active, shop_id FROM users WHERE phone IN (${phoneList}) ORDER BY phone`,
             fixture_memberships: `SELECT m.user_id, u.phone, m.tenant_id, m.role, m.status, m.role_id FROM memberships m JOIN users u ON u.id = m.user_id WHERE u.phone IN (${phoneList}) ORDER BY u.phone`,
             lookup_employee_rpc: `SELECT * FROM lookup_user_by_phone('${employeePhone}')`,
-            storage_policies: "SELECT policyname, cmd, qual, with_check FROM pg_policies WHERE schemaname = 'storage' AND tablename = 'objects' ORDER BY cmd, policyname",
-            storage_policy_cmds: "SELECT cmd, count(*)::int AS cnt FROM pg_policies WHERE schemaname = 'storage' AND tablename = 'objects' GROUP BY cmd ORDER BY cmd",
           };
           for (const [name, sql] of Object.entries(queries)) {
             const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify({ sql_query: sql }) });
@@ -69,23 +57,3 @@ jobs:
           }
           EOF
           node /tmp/qa-probe.mjs
-
-  # TEMPORARY (one-time QA repair, 2026-11-07): runs only when dispatched with
-  # run_policy_fix=true. Revert this job after the repair is verified.
-  policy-fix:
-    if: ${{ inputs.run_policy_fix }}
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: npm
-      - name: Install dependencies
-        run: npm ci --no-audit --no-fund
-      - name: Repair storage policies (QA only, --apply)
-        env:
-          QA_DB_HOST: ${{ secrets.QA_DB_HOST }}
-          QA_DB_USER: ${{ secrets.QA_DB_USER }}
-          QA_DB_PASS: ${{ secrets.QA_DB_PASS }}
-        run: node scripts/dev/qa-fix-storage-policies.mjs --apply
