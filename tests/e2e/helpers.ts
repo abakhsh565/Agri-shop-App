@@ -426,9 +426,76 @@ export async function loginViaUi(
   }
 
   if (page.url().includes('pin-set')) {
-    for (const d of PIN) await page.getByRole('button', { name: d, exact: true }).first().click();
-    await page.waitForTimeout(400);
-    for (const d of PIN) await page.getByRole('button', { name: d, exact: true }).first().click();
+    // The PIN keypad is a controlled input like the OTP boxes above: a tap can
+    // land one digit short when React has not re-rendered yet, and a short PIN
+    // submits nothing and reports nothing — the login then dies on the 30s
+    // dashboard wait below. Verify what landed after each entry (the OTP
+    // pattern in this same function) and retry the entry once if it did not take.
+    const pinPad = page.locator('div.ds-pin-pad');
+    const filledDots = async () =>
+      await pinPad.locator('xpath=..').locator('div.rounded-full.bg-ink').count();
+    const clearPin = async () => {
+      for (let i = 0; i < 4 && (await filledDots()) > 0; i++) {
+        await page.getByRole('button', { name: '⌫', exact: true }).first().click();
+        await page.waitForTimeout(150);
+      }
+    };
+    const enterPinDigits = async () => {
+      // Digits 1–3 are verified by the filled-dot count before the next tap,
+      // so a tap can never land on a stale render. The 4th digit completes
+      // the entry, which resets the dots, so it is verified by the caller.
+      for (let i = 0; i < PIN.length - 1; i++) {
+        await page.getByRole('button', { name: PIN[i], exact: true }).first().click();
+        try {
+          await expect.poll(filledDots, { timeout: 5000 }).toBe(i + 1);
+        } catch {
+          // Re-click only if the dot count never advanced — a slow render is
+          // not a lost tap, and re-clicking it would append a wrong digit.
+          if ((await filledDots()) === i) {
+            await page.getByRole('button', { name: PIN[i], exact: true }).first().click();
+            await expect.poll(filledDots, { timeout: 5000 }).toBe(i + 1);
+          } else {
+            throw new Error(`PIN digit ${i + 1} did not land`);
+          }
+        }
+      }
+      await page.getByRole('button', { name: PIN[PIN.length - 1], exact: true }).first().click();
+    };
+    const pinDoneVisible = async () => (await page.getByTestId('pin-done-open').count()) > 0;
+    const leftPinSet = async () => !page.url().includes('pin-set') || (await pinDoneVisible());
+
+    // SET: the 4th digit flips to the confirm step, which empties the dots.
+    await clearPin();
+    await enterPinDigits();
+    try {
+      await expect.poll(filledDots, { timeout: 5000 }).toBe(0);
+    } catch {
+      await clearPin();
+      await enterPinDigits();
+      await expect.poll(filledDots, { timeout: 5000 }).toBe(0);
+    }
+
+    // CONFIRM: the 4th digit saves the PIN and either navigates away or shows
+    // the success screen.
+    await enterPinDigits();
+    try {
+      await expect.poll(leftPinSet, { timeout: 5000 }).toBe(true);
+    } catch {
+      if (page.url().includes('pin-set') && (await pinPad.count()) > 0) {
+        await clearPin();
+        try {
+          await enterPinDigits();
+          await expect.poll(leftPinSet, { timeout: 5000 }).toBe(true);
+        } catch (retryErr) {
+          // A slow save from the first attempt may have finished while
+          // retrying; only fail if the page is still on the pin-set form.
+          if (page.url().includes('pin-set') && !(await pinDoneVisible())) throw retryErr;
+        }
+      } else {
+        throw new Error('PIN entry did not reach the dashboard or success screen');
+      }
+    }
+
     await page.waitForTimeout(600);
     // Standing a PIN up for the first time ends on a success screen; a like-for-like swap from
     // Settings goes straight back. Both are real, so follow whichever one appeared.
@@ -616,23 +683,52 @@ export async function setupFixtures() {
     VALUES
       ('${QA_IDS.admin}', 'QA Admin', '923009999999', 'admin', true, true, '${QA_IDS.shop}'),
       ('${QA_IDS.employee}', 'QA Employee', '923008888888', 'employee', false, true, '${QA_IDS.shop}')
-    ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, is_active = true;
+    ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, is_active = true, shop_id = EXCLUDED.shop_id;
   `);
 
   await execSql(`
     INSERT INTO companies (id, name, outstanding_payable, total_purchases, shop_id)
     VALUES ('${QA_IDS.companyA}', 'QA Supplier A', 15000, 50000, '${QA_IDS.shop}')
-    ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name;
+    ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, shop_id = EXCLUDED.shop_id;
   `);
 
+  // The conflict repair restores the WHOLE declared fixture, not just the name:
+  // a fixture customer archived (or moved to another shop) by an earlier lane
+  // stays archived forever under a name-only repair, and the screens filter it
+  // out — the row exists in the database yet never renders, which reads as a
+  // 15s 'element not found' instead of a setup failure.
   await execSql(`
     INSERT INTO customers (id, name, phone, credit_limit, outstanding_balance, total_purchases, total_paid, shop_id, created_by)
     VALUES
       ('${QA_IDS.customerA}', 'QA Customer A', '923001111111', 50000, 30000, 80000, 50000, '${QA_IDS.shop}', 'QA'),
       ('${QA_IDS.customerB}', 'QA Customer B', '923002222222', 25000, 26000, 40000, 14000, '${QA_IDS.shop}', 'QA'),
       ('${QA_IDS.customerC}', 'QA Customer C', '923003333333', 10000, 0, 15000, 15000, '${QA_IDS.shop}', 'QA')
-    ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name;
+    ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, is_archived = false, shop_id = EXCLUDED.shop_id;
   `);
+
+  // QUICK ALERTS NEEDS ONE KNOWN PENDING REQUEST.
+  //
+  // dashboardScope test 1 asserts that a pending credit-limit request in the DB
+  // is surfaced in Quick Alerts with its real count. The row it counted was
+  // ambient leftover state no test seeded, so the premise was whatever a
+  // previous lane left behind. Seed exactly one pending row for QA Customer B
+  // (over its limit, so a request is realistic) and delete any other pending
+  // rows for the fixture shop first, so the count is a controlled value (1).
+  // The delete is scoped to the WHOLE shop, not just customers A/B/C: a probe
+  // (run 42371381906) proved a stale row from 2026-10-31 for "Testing
+  // customer" (requested_by "Kamran 422") survived every A/B/C-only delete
+  // and made the gate count 2 while the seeded row was the only controlled
+  // one. The isolation tenant is untouched — the delete is shop-scoped, and
+  // its customers belong to a different shop.
+  await execSql(`
+    DELETE FROM credit_limit_requests WHERE customer_id IN (SELECT id FROM customers WHERE shop_id = '${QA_IDS.shop}') AND status = 'pending';
+  `);
+  const [seededRequest] = await execSql(`
+    INSERT INTO credit_limit_requests (customer_id, customer_name, requested_by, current_limit, requested_limit, status)
+    VALUES ('${QA_IDS.customerB}', 'QA Customer B', 'QA', 25000, 40000, 'pending')
+    RETURNING id;
+  `);
+  if (seededRequest?.id) trackOwned(runOwnership, 'credit_limit_requests', seededRequest.id);
 
   // STOCK IS PART OF THE FLOOR, NOT ONLY OF THE FIRST INSERT.
   //
@@ -647,7 +743,7 @@ export async function setupFixtures() {
     VALUES
       ('${QA_IDS.productA}', 'QA Product A', '${QA_IDS.companyA}', 'seed', 100, '${QA_IDS.shop}'),
       ('${QA_IDS.productB}', 'QA Product B', '${QA_IDS.companyA}', 'fertilizer', 0, '${QA_IDS.shop}')
-    ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, stock_qty = EXCLUDED.stock_qty;
+    ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, stock_qty = EXCLUDED.stock_qty, shop_id = EXCLUDED.shop_id;
 
     INSERT INTO product_variants (id, product_id, name, selling_price, cost_price, unit_size, low_stock_threshold, stock_qty)
     VALUES

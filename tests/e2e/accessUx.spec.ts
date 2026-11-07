@@ -496,6 +496,10 @@ test.describe('Employee job & access — simple for the owner, exact underneath'
     await page.goto(`${BASE}/admin/employees/${QA_EMPLOYEE_ID}`);
     await page.waitForTimeout(1600);
 
+    // The detail renders after its stores hydrate; reading the body immediately
+    // can catch the loading shell ("EmployeesLoading…") instead of the detail.
+    await expect(page.getByText('Job & access')).toBeVisible({ timeout: 15000 });
+
     const body = await bodyText(page);
     for (const label of ['Job & access', 'Role', 'Can work at', 'Access', 'Customize access']) {
       expect(body, `employee detail is missing "${label}"`).toContain(label);

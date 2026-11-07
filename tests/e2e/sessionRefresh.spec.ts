@@ -26,7 +26,7 @@
  */
 import { test, expect, type Page } from '@playwright/test';
 import { randomUUID } from 'node:crypto';
-import { execSql, loginViaUi, settle, cleanupFixtures, QA_IDS, WRITE_TENANT } from './helpers';
+import { execSql, loginViaUi, settle, cleanupFixtures, QA_IDS, setupFixtures, WRITE_TENANT } from './helpers';
 
 const BASE = process.env.QA_APP_URL || 'http://localhost:5173';
 const OWNER_PHONE = '03001234567'; // the QA shop's own owner (real business rows)
@@ -72,6 +72,20 @@ async function openBranchSwitcher(page: Page): Promise<void> {
 }
 
 test.describe('Session refresh', () => {
+  test.beforeAll(async () => {
+    await setupFixtures();
+
+    // The customers screen filters archived / other-shop rows out, so a drifted
+    // fixture fails here at setup instead of as a 15s 'element not found' later.
+    const [customerA] = await execSql(
+      `SELECT is_archived, shop_id FROM customers WHERE id = '${QA_IDS.customerA}'`,
+    );
+    expect(customerA?.is_archived, 'QA Customer A is archived, so the customers screen filters it out').toBe(false);
+    expect(customerA?.shop_id, 'QA Customer A is not in the QA shop, so the customers screen filters it out').toBe(
+      QA_IDS.shop,
+    );
+  });
+
   test.afterAll(async () => {
     // `branches` has no step in the run-ownership graph (`tests/e2e/cleanupOwnership.ts`), so this
     // lane removes its own branch by id and READS BACK that it is gone — a cleanup that cannot report
@@ -102,6 +116,13 @@ test.describe('Session refresh', () => {
     await page.goto(`${BASE}/admin/customers`);
     await settle(page);
 
+    // settle() only requires ANY rendered text, so the customer list can still
+    // be loading when this runs — wait for the balance itself to be visible
+    // before counting it, instead of reading a 0 from an un-hydrated list.
+    await expect(
+      page.getByText(shownBalance, { exact: false }).first(),
+      `the customers screen does not show ${shownBalance} (before the reload)`,
+    ).toBeVisible({ timeout: 15000 });
     const balanceBefore = await page.getByText(shownBalance, { exact: false }).count();
     expect(balanceBefore, `the customers screen does not show ${shownBalance} (before the reload)`).toBeGreaterThan(0);
 
