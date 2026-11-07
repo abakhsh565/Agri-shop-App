@@ -320,21 +320,32 @@ test.describe('Image Synchronization — All Entities', () => {
     for (const b of buckets) expect(b.public).toBe(true);
   });
 
-  test('Storage: RLS policies exist for all CRUD operations', async () => {
+  test('Storage: only INSERT + SELECT exist for clients — no client UPDATE/DELETE', async () => {
+    // 0230 deliberately removed every client UPDATE/DELETE policy on
+    // storage.objects: the publishable key the browser bundle ships could
+    // delete or overwrite any image in all four buckets. The app never
+    // updates or deletes storage objects from the client (storage.ts only
+    // uploads and reads public URLs). So the CRUD check this test used to
+    // assert is stale — the security model is INSERT + SELECT only, and any
+    // UPDATE or DELETE policy is a failure, not a requirement (an ad-hoc
+    // repair that recreated them broke the securityAudit test on the
+    // round-4 CI run; migration 0302 drops them).
     const policies = await execSql(`SELECT cmd, count(*) as cnt FROM pg_policies WHERE schemaname = 'storage' AND tablename = 'objects' GROUP BY cmd`);
     const cmds = policies.map((p: any) => p.cmd);
     expect(cmds).toContain('INSERT');
     expect(cmds).toContain('SELECT');
-    expect(cmds).toContain('UPDATE');
-    expect(cmds).toContain('DELETE');
+    expect(cmds).not.toContain('UPDATE');
+    expect(cmds).not.toContain('DELETE');
   });
 
-  test('Storage: no per-user ownership restriction — any authenticated user can modify any image', async () => {
+  test('Storage: no per-user ownership restriction — any authenticated user can upload any image', async () => {
     // Document the security posture:
     // All storage policies restrict to image buckets but NOT by user/owner.
-    // This means any authenticated user can upload, replace, or delete images
-    // belonging to any other entity. The business layer (DB references) provides
-    // ownership control, not the storage layer.
+    // This means any authenticated user can upload images belonging to any
+    // other entity. Replace and delete are NOT possible from the client at
+    // all — 0230 removed every UPDATE/DELETE policy on storage.objects, so
+    // the business layer (DB references) provides ownership control, not the
+    // storage layer.
     const policies = await execSql(`SELECT policyname, cmd, qual FROM pg_policies WHERE schemaname = 'storage' AND tablename = 'objects'`);
     const imageBuckets = ['product-images', 'employee-photos', 'company-logos', 'customer-images'];
 
