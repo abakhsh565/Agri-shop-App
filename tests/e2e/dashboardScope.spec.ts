@@ -117,6 +117,20 @@ test.describe('Locked dashboard scope: figures reconcile with the database', () 
     await login(page, OWNER_PHONE);
     expect(page.url()).toContain('/admin/dashboard');
 
+    // The branch the dashboard's sales figures cover, resolved from the DB
+    // rather than a literal id (the fixture-id guard forbids two files from
+    // declaring the same UUID). The sales store is branch-scoped by RLS
+    // (sales_branch_select: branch_id = ANY (current_branch_scope())), and
+    // current_branch_scope() reads this same user_active_shops row, so the
+    // gate must sum this branch, not the whole shop. Round-2 probe (run
+    // 42321215789): this branch holds the 2 Perm sales (Rs. 10,000); the
+    // added branch holds the other 5 (Rs. 24,600).
+    const [activeBranch] = await execSql(
+      `SELECT branch_id FROM user_active_shops WHERE user_id = '${QA_IDS.owner}'`,
+    );
+    const branchId = activeBranch.branch_id as string;
+    expect(branchId, 'the owner fixture has no active branch').toBeTruthy();
+
     // WAIT FOR THE SCREEN TO HYDRATE — data-driven, not a stopwatch.
     //
     // WHY (reproduced 2026-10-15, full-suite run: `145 passed · 2 failed · 2 did not run`). `login()`
@@ -131,8 +145,12 @@ test.describe('Locked dashboard scope: figures reconcile with the database', () 
     // The gate removes the stopwatch and keeps — strengthens — the requirement: the rendered
     // dashboard must converge on the figure the database actually holds. A blank, stale or wrong
     // dashboard still fails here, and it fails naming the DB value instead of timing out.
+    // Branch-scoped as well as shop-scoped: the dashboard's sales figures come from the
+    // sales store, whose RLS (sales_branch_select) returns only the current branch's
+    // sales. The gate must sum the same branch, or it counts the added branch's sales
+    // too (round-2 probe run 42321215789: added branch 6253561f holds Rs. 24,600).
     const [gateSales] = await execSql(
-      `SELECT coalesce(sum(total_amount),0)::text AS total FROM sales WHERE is_voided = false AND shop_id = '${QA_IDS.shop}'`,
+      `SELECT coalesce(sum(total_amount),0)::text AS total FROM sales WHERE is_voided = false AND shop_id = '${QA_IDS.shop}' AND branch_id = '${branchId}'`,
     );
     await expect
       .poll(async () => (await page.textContent('body')) ?? '', {
@@ -173,19 +191,22 @@ test.describe('Locked dashboard scope: figures reconcile with the database', () 
     }
 
     // ── Authoritative expectations, recomputed from the QA database ──
+    // Sales figures are branch-scoped (same RLS as the gate above); customer
+    // figures stay shop-scoped only, because the customers store has no branch
+    // filter (its RLS is shop_id = current_shop_id()).
     const [sales] = await execSql(`
       SELECT coalesce(sum(total_amount),0)::text AS total,
              coalesce(sum(amount_paid),0)::text AS paid,
              coalesce(sum(amount_due),0)::text AS credit,
              count(*)::text AS tx
-        FROM sales WHERE is_voided = false AND shop_id = '${QA_IDS.shop}'`);
+        FROM sales WHERE is_voided = false AND shop_id = '${QA_IDS.shop}' AND branch_id = '${branchId}'`);
     // COGS on its own, so the expected profit is revenue - COGS on the SAME
     // authoritative revenue Home uses (the sale's stored total), which is also
     // what Reports uses. Deriving it from line totals instead would let the two
     // screens disagree by rounding.
     const [cogs] = await execSql(`
       SELECT coalesce(sum(coalesce(si.cogs_amount,0)),0)::text AS v
-        FROM sale_items si JOIN sales s ON s.id = si.sale_id WHERE s.is_voided = false AND s.shop_id = '${QA_IDS.shop}'`);
+        FROM sale_items si JOIN sales s ON s.id = si.sale_id WHERE s.is_voided = false AND s.shop_id = '${QA_IDS.shop}' AND s.branch_id = '${branchId}'`);
     // Overdue is the system-wide business metric: the REMAINING balance of every
     // credit whose due date has already passed in Pakistan time — not the shop's
     // total customer outstanding. Computed here from the database with the same

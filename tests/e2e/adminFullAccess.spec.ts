@@ -51,7 +51,7 @@ test.describe('admin full access + the account-deletion gate', () => {
     // can leave it on an added branch, so resolve the main branch and switch to
     // it here, through the app's own `set_active_branch` RPC.
     const [mainBranch] = await execSql(
-      `SELECT id FROM branches WHERE tenant_id = '${QA_IDS.shop}' AND is_main = true`,
+      `SELECT id FROM branches WHERE tenant_id = '${QA_IDS.shop}' AND is_default = true`,
     );
     expect(mainBranch?.id, 'the QA shop has no main branch to switch to').toBeTruthy();
     await setActiveBranchAsUser(QA_IDS.admin, String(mainBranch.id));
