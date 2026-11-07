@@ -706,6 +706,24 @@ export async function setupFixtures() {
     ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, is_archived = false, shop_id = EXCLUDED.shop_id;
   `);
 
+  // QUICK ALERTS NEEDS ONE KNOWN PENDING REQUEST.
+  //
+  // dashboardScope test 1 asserts that a pending credit-limit request in the DB
+  // is surfaced in Quick Alerts with its real count. The row it counted was
+  // ambient leftover state no test seeded, so the premise was whatever a
+  // previous lane left behind. Seed exactly one pending row for QA Customer B
+  // (over its limit, so a request is realistic) and delete any other pending
+  // rows for the fixture customers first, so the count is a controlled value (1).
+  await execSql(`
+    DELETE FROM credit_limit_requests WHERE customer_id IN ('${QA_IDS.customerA}', '${QA_IDS.customerB}', '${QA_IDS.customerC}') AND status = 'pending';
+  `);
+  const [seededRequest] = await execSql(`
+    INSERT INTO credit_limit_requests (customer_id, customer_name, requested_by, current_limit, requested_limit, status)
+    VALUES ('${QA_IDS.customerB}', 'QA Customer B', 'QA', 25000, 40000, 'pending')
+    RETURNING id;
+  `);
+  if (seededRequest?.id) trackOwned(runOwnership, 'credit_limit_requests', seededRequest.id);
+
   // STOCK IS PART OF THE FLOOR, NOT ONLY OF THE FIRST INSERT.
   //
   // These two rows used to be restored by name alone (`DO UPDATE SET name`), so the numbers above

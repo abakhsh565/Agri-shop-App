@@ -517,7 +517,13 @@ test.describe('education — welcome, guided tour, app guide', () => {
 
     // And the ones they cannot open are lines of text, not buttons.
     await page.goto('/employee/guide');
-    await page.waitForTimeout(1400);
+    // Convergence, not a stopwatch: the guide renders each capability as a
+    // button only once the employee's permissions have loaded. A fixed wait
+    // can evaluate while permissions are still [] (round-3 failure: the
+    // Customers row rendered as a locked <div>). Wait for the open control
+    // to exist, then read the rows. If permissions never load this fails
+    // loudly naming the missing button instead of the misleading div mismatch.
+    await expect(page.locator('button:has-text("Customers & credit")')).toBeVisible({ timeout: 10_000 });
     const rows = await page.evaluate(() => {
       const all = [...document.querySelectorAll('.ds-row')];
       const describe = (r: Element) => ({

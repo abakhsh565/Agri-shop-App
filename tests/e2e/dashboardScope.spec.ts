@@ -187,7 +187,16 @@ test.describe('Locked dashboard scope: figures reconcile with the database', () 
     );
     const pendingCount = Number(pending.n);
     if (pendingCount > 0) {
-      expect(body, 'pending credit requests are not surfaced in Quick Alerts').toContain(`${pendingCount} request`);
+      // The count is a separate async round-trip with no convergence wait: the
+      // sales poll above can resolve the instant the total appears, before the
+      // count's setState + re-render lands. Poll for the rendered count instead
+      // of reading the body once (round-3 failure: gate counted 1, body showed 0).
+      await expect
+        .poll(async () => (await page.textContent('body')) ?? '', {
+          timeout: 30_000,
+          message: `pending credit requests are not surfaced in Quick Alerts — expected ${pendingCount} request`,
+        })
+        .toContain(`${pendingCount} request`);
     }
 
     // ── Authoritative expectations, recomputed from the QA database ──
