@@ -713,9 +713,15 @@ export async function setupFixtures() {
   // ambient leftover state no test seeded, so the premise was whatever a
   // previous lane left behind. Seed exactly one pending row for QA Customer B
   // (over its limit, so a request is realistic) and delete any other pending
-  // rows for the fixture customers first, so the count is a controlled value (1).
+  // rows for the fixture shop first, so the count is a controlled value (1).
+  // The delete is scoped to the WHOLE shop, not just customers A/B/C: a probe
+  // (run 42371381906) proved a stale row from 2026-10-31 for "Testing
+  // customer" (requested_by "Kamran 422") survived every A/B/C-only delete
+  // and made the gate count 2 while the seeded row was the only controlled
+  // one. The isolation tenant is untouched — the delete is shop-scoped, and
+  // its customers belong to a different shop.
   await execSql(`
-    DELETE FROM credit_limit_requests WHERE customer_id IN ('${QA_IDS.customerA}', '${QA_IDS.customerB}', '${QA_IDS.customerC}') AND status = 'pending';
+    DELETE FROM credit_limit_requests WHERE customer_id IN (SELECT id FROM customers WHERE shop_id = '${QA_IDS.shop}') AND status = 'pending';
   `);
   const [seededRequest] = await execSql(`
     INSERT INTO credit_limit_requests (customer_id, customer_name, requested_by, current_limit, requested_limit, status)

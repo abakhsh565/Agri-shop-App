@@ -181,7 +181,11 @@ test.describe('Cross-Screen Synchronization', () => {
     // Verify original
     await page.goto(`${BASE_URL}/employee/products`);
     await settle(page);
-    await expect(page.locator('text=Sync Product').first()).toBeVisible();
+    // The products fetch is the heaviest list fetch (products + variants +
+    // companies, plus a lazy page chunk) and the bare 5s default expect is
+    // too short on a slow lane (round-5: the row existed in the DB, the list
+    // just had not rendered it yet). Give it a convergence timeout.
+    await expect(page.locator('text=Sync Product').first()).toBeVisible({ timeout: 30_000 });
 
     // Update name
     await execSql(`UPDATE products SET name = 'Sync Product UPDATED' WHERE id = '${PROD_ID}'`);
@@ -191,12 +195,12 @@ test.describe('Cross-Screen Synchronization', () => {
     await settle(page);
     await page.goto(`${BASE_URL}/employee/products`);
     await settle(page);
-    await expect(page.locator('text=Sync Product UPDATED').first()).toBeVisible();
+    await expect(page.locator('text=Sync Product UPDATED').first()).toBeVisible({ timeout: 30_000 });
 
     // Hard reload
     await page.reload();
     await settle(page);
-    await expect(page.locator('text=Sync Product UPDATED').first()).toBeVisible();
+    await expect(page.locator('text=Sync Product UPDATED').first()).toBeVisible({ timeout: 30_000 });
 
     // Verify DB
     const db = await execSql(`SELECT name FROM products WHERE id = '${PROD_ID}'`);

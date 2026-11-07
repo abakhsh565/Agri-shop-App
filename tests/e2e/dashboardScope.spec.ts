@@ -176,6 +176,14 @@ test.describe('Locked dashboard scope: figures reconcile with the database', () 
       ).toHaveCount(0);
     }
 
+    // The UI count is fetched ONCE at mount and never refetched, so reload
+    // the dashboard here so the mount-time count reflects the final DB state
+    // instead of whatever it was when the page first loaded (round-5: the
+    // gate counted 2, the UI still showed the stale mount-time 1). The
+    // expect.poll below then converges on the re-fetched count.
+    await page.reload();
+    await page.waitForLoadState('networkidle');
+
     // The Quick Alerts headline count is data-dependent copy ("1 action needed" vs
     // "2 actions needed"), so assert the authoritative thing instead: any pending
     // credit request in the DB must be surfaced, with its real count.
