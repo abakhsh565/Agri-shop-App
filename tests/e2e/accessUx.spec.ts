@@ -227,7 +227,12 @@ test.describe('Employee job & access — simple for the owner, exact underneath'
 
     // Choosing a role answers "what access will they get?" on that role's own Modify
     // handle — the list opens on the role, and every area it shows is an area the
-    // database grants that role.
+    // database grants that role. The role cards render only after rolesStore.load()
+    // resolves (it waits for data-context confirmation first), so wait for the
+    // button to appear instead of clicking on a bare 10s timeout (round-7: test 2's
+    // identical click timed out on a slow lane while test 1's had passed minutes
+    // earlier — the roles just had not loaded yet).
+    await expect(page.getByRole('button', { name: /Sales Manager/ }).first()).toBeVisible({ timeout: 30_000 });
     await page.getByRole('button', { name: /Sales Manager/ }).first().click();
     await page.waitForTimeout(800);
     expect(await bodyText(page), 'the read-only access panel is back').not.toContain('Access from this role');
@@ -269,6 +274,10 @@ test.describe('Employee job & access — simple for the owner, exact underneath'
     await page.getByRole('button', { name: 'Next' }).click();
     await page.waitForTimeout(800);
 
+    // Same convergence wait as test 1: the role cards render only after
+    // rolesStore.load() resolves, and a bare click timeout is too short on a
+    // slow lane (round-7: this exact click timed out after 10s).
+    await expect(page.getByRole('button', { name: /Sales Manager/ }).first()).toBeVisible({ timeout: 30_000 });
     await page.getByRole('button', { name: /Sales Manager/ }).first().click();
     await page.waitForTimeout(600);
 
