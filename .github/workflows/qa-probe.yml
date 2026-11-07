@@ -30,6 +30,8 @@ jobs:
           const phones = baseline.fixtures.users.map((u) => u.phone);
           const phoneList = phones.map((p) => `'${p}'`).join(',');
           const employeePhone = baseline.fixtures.workContext.employeePhones[0];
+          const ownerPhone = baseline.fixtures.workContext.ownerPhone;
+          const tenantId = baseline.fixtures.workContext.tenantId;
           const url = process.env.QA_SUPABASE_URL + '/rest/v1/rpc/run_sql';
           const headers = {
             apikey: process.env.QA_SUPABASE_SERVICE_ROLE,
@@ -48,6 +50,13 @@ jobs:
             fixture_users: `SELECT id, name, phone, role, is_active, shop_id FROM users WHERE phone IN (${phoneList}) ORDER BY phone`,
             fixture_memberships: `SELECT m.user_id, u.phone, m.tenant_id, m.role, m.status, m.role_id FROM memberships m JOIN users u ON u.id = m.user_id WHERE u.phone IN (${phoneList}) ORDER BY u.phone`,
             lookup_employee_rpc: `SELECT * FROM lookup_user_by_phone('${employeePhone}')`,
+            // TEMPORARY round-2 E2E probe (2026-11-07) — revert after reading the log.
+            sales_by_shop_branch: "SELECT shop_id, branch_id, count(*)::int AS n, coalesce(sum(total_amount),0) AS total FROM sales WHERE is_voided = false GROUP BY shop_id, branch_id ORDER BY total DESC",
+            shops: 'SELECT id, name FROM shops ORDER BY name',
+            owner_active_shops: `SELECT shop_id, branch_id FROM user_active_shops WHERE user_id = (SELECT id FROM users WHERE phone = '${ownerPhone}')`,
+            sales_policies: "SELECT policyname, cmd, qual, with_check FROM pg_policies WHERE tablename = 'sales' ORDER BY policyname",
+            customer_a_row: "SELECT id, name, is_archived, shop_id FROM customers WHERE name = 'QA Customer A'",
+            fixture_shop_sales: `SELECT branch_id, count(*)::int AS n, coalesce(sum(total_amount),0) AS total FROM sales WHERE is_voided = false AND shop_id = '${tenantId}' GROUP BY branch_id ORDER BY total DESC`,
           };
           for (const [name, sql] of Object.entries(queries)) {
             const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify({ sql_query: sql }) });
