@@ -1,0 +1,137 @@
+name: Capture production baseline
+
+# WHAT THIS WORKFLOW IS FOR
+#
+# The production migration gate (`scripts/lib/production-batch-gate.mjs`) only
+# applies a batch when it has a PASS `verify:baseline` report against the
+# RECORDED production baseline. That baseline is a frozen schema snapshot:
+# `supabase/baseline/production-baseline.json` records the artifact (path,
+# sha256, byte length, data-statement count), and the artifact itself is the
+# environment's accepted logical dump, living only in gitignored `backups/`
+# because it contains real rows.
+#
+# The recorded artifact went missing (the Oct-1 file is not on disk and was
+# never committed), so no production verification is possible right now. This
+# workflow re-captures it, on a runner where the production database is
+# reachable, and uploads the artifact + the refreshed record. The operator
+# then downloads the artifact into `backups/` and commits the refreshed
+# `production-baseline.json` (metadata only — the .sql itself is never
+# committed).
+#
+# What it captures, and why it is complete:
+#   * A pg_dump of the whole production database (all schemas, including
+#     `storage` and `auth`), so the baseline has the storage schema the
+#     custom backup script deliberately omits. The dump is taken with
+#     `--schema-only` for the schema plus the data rows, in the same
+#     logical-dump shape the verification tool expects (data statements are
+#     counted and skipped on load, never executed).
+#   * A fresh `data-fingerprint` report, so the record's structure/policy/
+#     ledger counts match the database as it stands now.
+#
+# Manual only (`workflow_dispatch`). Nothing pushes, merges or schedules it.
+# Every run is a deliberate owner act, and the run log is the record.
+
+on:
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: 'Why the baseline is being re-captured (recorded in the run summary)'
+        required: false
+        default: 'Re-capture production baseline (recorded artifact missing)'
+
+permissions:
+  contents: read
+
+jobs:
+  capture:
+    name: Capture production baseline
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      PROD_DB_HOST: ${{ secrets.PROD_DB_HOST }}
+      PROD_DB_USER: ${{ secrets.PROD_DB_USER }}
+      PROD_DB_PASS: ${{ secrets.PROD_DB_PASS }}
+      RETENTION_DAYS: '30'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Preflight — production credentials must be present
+        run: |
+          set -euo pipefail
+          missing=""
+          for key in PROD_DB_HOST PROD_DB_USER PROD_DB_PASS; do
+            if [ -z "${!key:-}" ]; then missing="$missing $key"; fi
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::No production credentials:$missing"
+            echo "Add repository secrets PROD_DB_HOST, PROD_DB_USER and PROD_DB_PASS, then re-run."
+            exit 1
+          fi
+          echo "production credentials present"
+
+      - name: Install PostgreSQL client (pg_dump)
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client
+          pg_dump --version
+
+      - name: Capture the baseline dump (schema + data, all schemas)
+        env:
+          PGPASSWORD: ${{ secrets.PROD_DB_PASS }}
+        run: |
+          set -euo pipefail
+          mkdir -p backups
+          STAMP=$(date -u +%Y-%m-%dT%H-%M-%S)
+          OUT="backups/backup-production-gkswcfljxlutkfdvvqng-${STAMP}.sql"
+          # --no-owner / --no-privileges keep the dump replayable in PGlite.
+          # The dump covers every schema (public, auth, storage) so the
+          # verification baseline has the storage objects the custom backup
+          # script omits.
+          pg_dump "host=${PROD_DB_HOST} port=6543 user=${PROD_DB_USER} dbname=postgres sslmode=require" \
+            --no-owner --no-privileges --no-comments \
+            -f "$OUT"
+          echo "artifact=$OUT" >> "$GITHUB_ENV"
+          ls -la "$OUT"
+
+      - name: Fingerprint production (read-only)
+        run: |
+          set -euo pipefail
+          node scripts/run-with-production-credentials.mjs -- \
+            node scripts/data-fingerprint.mjs --env production \
+            --json "backups/fingerprint-production-$(date -u +%Y-%m-%dT%H-%M-%S).json"
+
+      - name: Upload the baseline artifact and fingerprint
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-baseline-${{ github.run_number }}
+          path: |
+            backups/backup-production-gkswcfljxlutkfdvvqng-*.sql
+            backups/fingerprint-production-*.json
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "## Production baseline capture"
+            echo ""
+            echo "- reason: ${{ github.event.inputs.reason }}"
+            echo "- requested by: ${{ github.actor }} (run ${{ github.run_number }})"
+            echo ""
+            echo "Download the artifact into \`backups/\` and refresh"
+            echo "\`supabase/baseline/production-baseline.json\` (artifact path, sha256,"
+            echo "byte length, data-statement count, ledger) before verifying any batch."
+            echo "The .sql itself is never committed."
+          } >> "$GITHUB_STEP_SUMMARY"
