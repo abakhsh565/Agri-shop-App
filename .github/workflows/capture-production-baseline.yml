@@ -93,7 +93,11 @@ jobs:
           echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
           sudo apt-get update -qq
           sudo apt-get install -y -qq postgresql-client-17
-          pg_dump --version
+          # postgresql-client-17 installs its binaries under
+          # /usr/lib/postgresql/17/bin; the bare `pg_dump` on PATH stays the
+          # distro's 16.15 (proven 2026-11-08: install succeeded yet
+          # `pg_dump --version` still printed 16.15). Use the v17 path.
+          /usr/lib/postgresql/17/bin/pg_dump --version
 
       - name: Capture the baseline dump (schema + data, all schemas)
         env:
@@ -107,7 +111,7 @@ jobs:
           # The dump covers every schema (public, auth, storage) so the
           # verification baseline has the storage objects the custom backup
           # script omits.
-          pg_dump "host=${PROD_DB_HOST} port=6543 user=${PROD_DB_USER} dbname=postgres sslmode=require" \
+          /usr/lib/postgresql/17/bin/pg_dump "host=${PROD_DB_HOST} port=6543 user=${PROD_DB_USER} dbname=postgres sslmode=require" \
             --no-owner --no-privileges --no-comments \
             -f "$OUT"
           echo "artifact=$OUT" >> "$GITHUB_ENV"
