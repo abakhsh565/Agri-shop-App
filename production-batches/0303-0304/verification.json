@@ -1,0 +1,230 @@
+{
+  "status": "PASS",
+  "generatedAt": "2026-11-09T21:02:50.086Z",
+  "baseline": {
+    "label": "backups/backup-production-gkswcfljxlutkfdvvqng-2026-11-09T15-37-29.sql",
+    "environment": "production",
+    "artifactSha256": "b29a8808fa5ed80da5944c1dcfa7682ef69e4d0beb9127d4c80b3965813b641e",
+    "sha256Verified": true,
+    "capturedAt": "2026-11-09T15:37:29Z",
+    "statements": 1140,
+    "dataStatements": 92,
+    "dataStatementsSkipped": 92,
+    "loadFailures": [],
+    "skippedStatements": [
+      {
+        "reason": "scaffold-schema",
+        "statement": "CREATE SCHEMA auth"
+      },
+      {
+        "reason": "scaffold-schema",
+        "statement": "CREATE SCHEMA extensions"
+      },
+      {
+        "reason": "scaffold-schema",
+        "statement": "CREATE SCHEMA storage"
+      },
+      {
+        "reason": "extension-unavailable",
+        "statement": "CREATE EXTENSION IF NOT EXISTS pg_stat_statements WITH SCHEMA extensions"
+      },
+      {
+        "reason": "extension-unavailable",
+        "statement": "CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA extensions"
+      },
+      {
+        "reason": "extension-unavailable",
+        "statement": "CREATE EXTENSION IF NOT EXISTS supabase_vault WITH SCHEMA vault"
+      },
+      {
+        "reason": "extension-unavailable",
+        "statement": "CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\" WITH SCHEMA extensions"
+      },
+      {
+        "reason": "scaffold-function",
+        "statement": "CREATE FUNCTION auth.email() RETURNS text LANGUAGE sql STABLE AS $$ select coalesce( nullif(current_setting('r"
+      },
+      {
+        "reason": "scaffold-function",
+        "statement": "CREATE FUNCTION auth.jwt() RETURNS jsonb LANGUAGE sql STABLE AS $$ select coalesce( nullif(current_setting('re"
+      },
+      {
+        "reason": "scaffold-function",
+        "statement": "CREATE FUNCTION auth.role() RETURNS text LANGUAGE sql STABLE AS $$ select coalesce( nullif(current_setting('re"
+      },
+      {
+        "reason": "scaffold-function",
+        "statement": "CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $$ select coalesce( nullif(current_setting('req"
+      },
+      {
+        "reason": "stub-table",
+        "statement": "CREATE TABLE storage.buckets ( id text NOT NULL, name text NOT NULL, owner uuid, created_at timestamp with tim"
+      },
+      {
+        "reason": "stub-table",
+        "statement": "CREATE TABLE storage.objects ( id uuid DEFAULT gen_random_uuid() NOT NULL, bucket_id text, name text, owner uu"
+      },
+      {
+        "reason": "stub-table",
+        "statement": "ALTER TABLE ONLY storage.buckets ADD CONSTRAINT buckets_pkey PRIMARY KEY (id)"
+      },
+      {
+        "reason": "stub-table",
+        "statement": "ALTER TABLE ONLY storage.objects ADD CONSTRAINT objects_pkey PRIMARY KEY (id)"
+      },
+      {
+        "reason": "stub-table",
+        "statement": "CREATE UNIQUE INDEX bname ON storage.buckets USING btree (name)"
+      },
+      {
+        "reason": "stub-table",
+        "statement": "CREATE INDEX idx_objects_bucket_id_name ON storage.objects USING btree (bucket_id, name COLLATE \"C\")"
+      },
+      {
+        "reason": "stub-table",
+        "statement": "CREATE INDEX idx_objects_bucket_id_name_lower ON storage.objects USING btree (bucket_id, lower(name) COLLATE \""
+      },
+      {
+        "reason": "stub-table",
+        "statement": "CREATE UNIQUE INDEX idx_objects_current_version ON storage.objects USING btree (bucket_id, name COLLATE \"C\") W"
+      },
+      {
+        "reason": "stub-table",
+        "statement": "CREATE INDEX idx_objects_delete_markers ON storage.objects USING btree (bucket_id, name COLLATE \"C\") WHERE is_"
+      },
+      {
+        "reason": "stub-table",
+        "statement": "CREATE UNIQUE INDEX idx_objects_null_version ON storage.objects USING btree (bucket_id, name COLLATE \"C\") WHER"
+      },
+      {
+        "reason": "stub-table",
+        "statement": "CREATE INDEX name_prefix_search ON storage.objects USING btree (name text_pattern_ops)"
+      },
+      {
+        "reason": "stub-table",
+        "statement": "CREATE INDEX objects_archived_due_idx ON storage.objects USING btree (bucket_id, archived_at, name COLLATE \"C\""
+      },
+      {
+        "reason": "stub-table",
+        "statement": "CREATE UNIQUE INDEX objects_archived_order_uq ON storage.objects USING btree (bucket_id, name COLLATE \"C\", arc"
+      },
+      {
+        "reason": "stub-table",
+        "statement": "CREATE UNIQUE INDEX objects_bucket_id_name_version_key ON storage.objects USING btree (bucket_id, name COLLATE"
+      },
+      {
+        "reason": "stub-table",
+        "statement": "CREATE TRIGGER enforce_bucket_name_length_trigger BEFORE INSERT OR UPDATE OF name ON storage.buckets FOR EACH "
+      },
+      {
+        "reason": "stub-table",
+        "statement": "CREATE TRIGGER enforce_versioning_status_transition BEFORE UPDATE OF versioning_status ON storage.buckets FOR "
+      },
+      {
+        "reason": "stub-table",
+        "statement": "CREATE TRIGGER protect_active_lifecycle_states BEFORE DELETE ON storage.buckets FOR EACH ROW EXECUTE FUNCTION "
+      },
+      {
+        "reason": "stub-table",
+        "statement": "CREATE TRIGGER protect_bucket_control_insert BEFORE INSERT ON storage.buckets FOR EACH ROW EXECUTE FUNCTION st"
+      },
+      {
+        "reason": "stub-table",
+        "statement": "CREATE TRIGGER protect_bucket_control_update BEFORE UPDATE OF lifecycle_configuration, lifecycle_configuration"
+      },
+      {
+        "reason": "stub-table",
+        "statement": "CREATE TRIGGER protect_bucket_control_update_role AFTER UPDATE OF lifecycle_configuration, lifecycle_configura"
+      },
+      {
+        "reason": "stub-table",
+        "statement": "CREATE TRIGGER protect_buckets_delete BEFORE DELETE ON storage.buckets FOR EACH STATEMENT EXECUTE FUNCTION sto"
+      },
+      {
+        "reason": "stub-table",
+        "statement": "CREATE TRIGGER protect_objects_delete BEFORE DELETE ON storage.objects FOR EACH STATEMENT EXECUTE FUNCTION sto"
+      },
+      {
+        "reason": "stub-table",
+        "statement": "CREATE TRIGGER update_objects_updated_at BEFORE UPDATE ON storage.objects FOR EACH ROW EXECUTE FUNCTION storag"
+      },
+      {
+        "reason": "stub-table",
+        "statement": "CREATE TRIGGER wake_lifecycle_on_policy_write AFTER INSERT OR UPDATE OF lifecycle_configuration_generation ON "
+      },
+      {
+        "reason": "stub-table",
+        "statement": "CREATE TRIGGER wake_lifecycle_on_versioning_enable AFTER UPDATE OF versioning_status ON storage.buckets FOR EA"
+      },
+      {
+        "reason": "stub-table",
+        "statement": "ALTER TABLE ONLY storage.objects ADD CONSTRAINT \"objects_bucketId_fkey\" FOREIGN KEY (bucket_id) REFERENCES sto"
+      },
+      {
+        "reason": "stub-table",
+        "statement": "ALTER TABLE storage.buckets ENABLE ROW LEVEL SECURITY"
+      },
+      {
+        "reason": "stub-table",
+        "statement": "CREATE POLICY \"images auth write\" ON storage.objects FOR INSERT TO authenticated WITH CHECK ((bucket_id = ANY "
+      },
+      {
+        "reason": "stub-table",
+        "statement": "CREATE POLICY \"images public read\" ON storage.objects FOR SELECT USING ((bucket_id = ANY (ARRAY['product-image"
+      },
+      {
+        "reason": "stub-table",
+        "statement": "ALTER TABLE storage.objects ENABLE ROW LEVEL SECURITY"
+      },
+      {
+        "reason": "scaffold-publication",
+        "statement": "CREATE PUBLICATION supabase_realtime WITH (publish = 'insert, update, delete, truncate')"
+      }
+    ]
+  },
+  "selection": {
+    "since": "0303",
+    "upto": "0304",
+    "files": null,
+    "resolved": [
+      "0303_production_reconciliation_for_batch1.sql",
+      "0304_create_purchase_recorded_by_uuid.sql"
+    ]
+  },
+  "files": [
+    {
+      "filename": "0303_production_reconciliation_for_batch1.sql",
+      "version": "0303",
+      "statements": 10,
+      "failures": []
+    },
+    {
+      "filename": "0304_create_purchase_recorded_by_uuid.sql",
+      "version": "0304",
+      "statements": 5,
+      "failures": []
+    }
+  ],
+  "summary": {
+    "status": "PASS",
+    "files": 2,
+    "statements": 15,
+    "failedStatements": 0,
+    "envGapFailures": 0,
+    "sqlFailures": 0,
+    "expectedPhaseFailures": 0,
+    "baselineLoadFailures": 0,
+    "baselineSqlFailures": 0,
+    "baselineEnvGapFailures": 0,
+    "baselineExpectedPhaseFailures": 0,
+    "baselineSkippedStatements": 42,
+    "baselineSkippedByReason": {
+      "scaffold-schema": 3,
+      "extension-unavailable": 4,
+      "scaffold-function": 4,
+      "stub-table": 30,
+      "scaffold-publication": 1
+    }
+  },
+  "exitCode": 0
+}
