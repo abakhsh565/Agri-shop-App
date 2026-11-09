@@ -1,6 +1,6 @@
 {
   "status": "PASS",
-  "generatedAt": "2026-11-09T21:02:50.086Z",
+  "generatedAt": "2026-11-09T22:42:47.769Z",
   "baseline": {
     "label": "backups/backup-production-gkswcfljxlutkfdvvqng-2026-11-09T15-37-29.sql",
     "environment": "production",
@@ -196,12 +196,14 @@
       "filename": "0303_production_reconciliation_for_batch1.sql",
       "version": "0303",
       "statements": 10,
+      "sha256": "0881a0a201f6fa9209f0b5a52d43e06459b0ef811021e8c67734acba4231ecc5",
       "failures": []
     },
     {
       "filename": "0304_create_purchase_recorded_by_uuid.sql",
       "version": "0304",
       "statements": 5,
+      "sha256": "31020b2ee3ae60b92994907d58cb1f3a921421f8c945fd04c2863952bd39f000",
       "failures": []
     }
   ],

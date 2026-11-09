@@ -1,10 +1,10 @@
 {
-  "artifact": "backup-production-gkswcfljxlutkfdvvqng-2026-11-09T20-56-09.sql",
+  "artifact": "backup-production-gkswcfljxlutkfdvvqng-2026-11-09T22-38-07.sql",
   "manifest": {
-    "artifact": "backup-production-gkswcfljxlutkfdvvqng-2026-11-09T20-56-09.sql",
+    "artifact": "backup-production-gkswcfljxlutkfdvvqng-2026-11-09T22-38-07.sql",
     "environment": "production",
     "projectRef": "gkswcfljxlutkfdvvqng",
-    "generatedAt": "2026-11-09T20:56:09.573Z",
+    "generatedAt": "2026-11-09T22:38:07.996Z",
     "serverVersion": "17.6",
     "identity": {
       "configuredUser": "postgres.gkswcfljxlutkfdvvqng",
@@ -96,7 +96,7 @@
       "supabase_migrations bookkeeping is not included."
     ],
     "bytes": 767657,
-    "sha256": "1f5898f16cc772cde37f12d74132c6818cdb7a1af22a149b3913b48e7379408a",
+    "sha256": "28400062468c4bab8824706cb7371147ed1d8f3f8996703959d0837858b2d073",
     "totalRows": 108,
     "tablesDumped": 46
   },
@@ -105,14 +105,14 @@
     "integrity": {
       "sha256Matches": true,
       "bytesMatch": true,
-      "sha256": "1f5898f16cc772cde37f12d74132c6818cdb7a1af22a149b3913b48e7379408a",
+      "sha256": "28400062468c4bab8824706cb7371147ed1d8f3f8996703959d0837858b2d073",
       "bytes": 767657
     },
     "replay": {
       "statements": 1143,
       "failures": 0,
       "expectedFailures": 1,
-      "durationMs": 525,
+      "durationMs": 676,
       "authShimTables": 2,
       "pgcrypto": "not available (extension \"pgcrypto\" is not available) — plpgsql bodies referencing extensions.crypt are not resolved at DDL time, so this only affects execution of those functions",
       "failureDetails": [],
