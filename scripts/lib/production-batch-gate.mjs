@@ -38,6 +38,8 @@ const minutesBetween = (then, now) => (now - then) / 60000;
  * @param {object} input
  * @param {string[]} input.batch            filenames as the operator named them, in the order given
  * @param {Array<{version:string,filename:string,sha256:string,bytes:number,mtimeMs:number}>} input.entries
+ *   (mtimeMs is carried but never consulted: a fresh checkout rewrites every mtime, so only the
+ *   sha256 can say whether the bytes are the verified bytes)
  * @param {Array<{version:string,sha256:string|null}>|null} input.ledgerRows  null = not read yet (pre-connection pass)
  * @param {object|null} input.verification  the `verify:baseline` report for this batch
  * @param {object|null} input.backupManifest the manifest of the backup taken immediately before
@@ -177,11 +179,30 @@ export function productionBatchGate({
         );
       }
 
-      // A file edited after it was verified is no longer the verified file — even if its name matches.
-      const editedSince = known.filter((name) => (byName.get(name).mtimeMs ?? 0) > generatedAt);
-      if (editedSince.length) {
+      // A file whose bytes differ from what was verified is no longer the verified file — even
+      // if its name matches. The comparison is by content hash, never by mtime: a fresh checkout
+      // sets every file's mtime to the checkout time, which is always after generatedAt, so an
+      // mtime comparison can never pass in the workflow (run 42706653163 refused a byte-identical
+      // batch for exactly that reason). A report that records no hash for a file cannot prove the
+      // bytes, so it refuses — fail closed, never pass.
+      const reportedByName = new Map((verification.files ?? []).map((f) => [f.filename, f]));
+      const unhashed = known.filter((name) => {
+        const reported = reportedByName.get(name);
+        return !reported || typeof reported.sha256 !== 'string' || !reported.sha256;
+      });
+      if (unhashed.length) {
         problems.push(
-          `file(s) changed after the verification report was produced: ${editedSince.join(', ')}. ` +
+          `the verification report records no content hash for ${unhashed.join(', ')}, so the bytes on disk ` +
+            'cannot be shown to be the bytes that were verified. Re-run verify:baseline with tooling that records hashes.',
+        );
+      }
+      const changed = known.filter((name) => {
+        const reported = reportedByName.get(name);
+        return reported?.sha256 && reported.sha256 !== byName.get(name).sha256;
+      });
+      if (changed.length) {
+        problems.push(
+          `file(s) changed after the verification report was produced: ${changed.join(', ')}. ` +
             'The report describes bytes that are no longer on disk.',
         );
       }

@@ -48,7 +48,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { PGlite } from '@electric-sql/pglite';
 
-import { readMigrationDirectory } from './lib/migrations.mjs';
+import { readMigrationDirectory, sha256 } from './lib/migrations.mjs';
 import { splitStatements, splitStatementsWithOffsets } from './lib/sql-statements.mjs';
 import { ROOT } from './lib/environments.mjs';
 import {
@@ -389,7 +389,18 @@ for (const file of selected) {
       failures.push({ class: classifyBaselineFailure(message), message, statement: collapse(statement) });
     }
   }
-  fileResults.push({ filename: file.filename, version: file.version, statements: statements.length, failures });
+  // The sha256 is what ties a verified file to the bytes on disk: the production gate compares
+  // the report's hash against the file's current hash. mtime cannot do that job — a fresh
+  // checkout sets every file's mtime to the checkout time, which is always after generatedAt.
+  // Entries from readMigrationDirectory already carry their hash; --files entries carry only a
+  // body, so hash it here.
+  fileResults.push({
+    filename: file.filename,
+    version: file.version,
+    statements: statements.length,
+    sha256: file.sha256 ?? sha256(file.body),
+    failures,
+  });
   const mark = failures.some((f) => f.class === 'sql') ? '✗' : failures.length ? '~' : '✓';
   console.log(`${mark} ${file.filename}: ${statements.length} statements, ${failures.length} failures`);
   for (const failure of failures) console.log(`    [${failure.class}] ${failure.message}\n      ${failure.statement}`);
