@@ -20,6 +20,23 @@
  * comment is not a statement). `-- @phase:` markers are not interpreted here; nothing in this file
  * knows about the backup artifact's structure. `splitStatementsWithOffsets` additionally returns
  * each statement's start offset, which is the only way a caller can link a statement to a marker.
+ *
+ * TWO pg_dump SHAPES IT ALSO HANDLES (added 2026-11-10, Option A baseline fix)
+ *   * `COPY ... FROM stdin` blocks: pg_dump writes rows as raw lines after the COPY header, up to
+ *     a line that is exactly `\.`. Those rows are data, not SQL — quotes, semicolons and dollar
+ *     tags inside them would corrupt the state machine for the rest of the file (measured
+ *     2026-11-09: a pg_dump baseline split into 1149 statements with only 1 recognised as data,
+ *     124 SQL failures, most of them fragments of data rows). So a COPY header and its data up to
+ *     the `\.` terminator are ONE statement, which `isDataStatement` (leading `copy`) then
+ *     counts and the baseline loader skips. `restore-verify.mjs` keeps its own private copy of
+ *     this splitter WITHOUT these two shapes: it loads `backup-database.mjs` output (INSERT rows,
+ *     no COPY, no psql meta-commands), so it needs neither — the copies diverge here, by design.
+ *   * psql meta-command lines (`\restrict`, `\unrestrict`, ...): directives for psql, not SQL.
+ *     A pg_dump starts with `\restrict` and ends with `\unrestrict`; between statements such a
+ *     line is skipped to end-of-line, so it cannot glue onto the next statement (the first line
+ *     has no `;`, so without this it merged into `SET statement_timeout = 0` and failed as
+ *     syntax). Only lines between statements are skipped — a `\` inside an accumulated statement
+ *     is left alone, so a real syntax error still fails.
  */
 
 /**
@@ -108,7 +125,36 @@ export function splitStatementsWithOffsets(text) {
       i++;
       continue;
     }
+    if (state === 'copy-data') {
+      // Raw COPY rows: no state transitions inside them — a quote, a semicolon or a
+      // dollar tag in the data must not flip the machine. Only a line that is exactly
+      // `\.` ends the block (pg_dump escapes a literal backslash as `\\`, so a data
+      // line can never be exactly `\.` unless it is the terminator).
+      if (ch === '\n') {
+        const term = text.slice(i + 1).match(/^\\\.(?:\r?\n|$)/);
+        if (term) {
+          buf += '\n\\.\n';
+          if (buf.trim()) out.push({ text: buf.trim(), offset: stmtStart });
+          buf = '';
+          stmtStart = -1;
+          state = 'normal';
+          i += 1 + term[0].length;
+          continue;
+        }
+      }
+      buf += ch;
+      i++;
+      continue;
+    }
 
+    // psql meta-command lines (`\restrict`, `\unrestrict`, ...). Only between statements:
+    // buf holds nothing but whitespace and nothing but whitespace precedes us on this line.
+    // Inside an accumulated statement a `\` is left alone — a real syntax error there
+    // still fails.
+    if (ch === '\\' && !buf.trim() && /^\s*$/.test(text.slice(text.lastIndexOf('\n', i - 1) + 1, i))) {
+      while (i < text.length && text[i] !== '\n') i++;
+      continue;
+    }
     if (ch === '-' && next === '-') {
       state = 'line-comment';
       i += 2;
@@ -145,7 +191,19 @@ export function splitStatementsWithOffsets(text) {
       }
     }
     if (ch === ';') {
-      if (buf.trim()) out.push({ text: buf.trim(), offset: stmtStart });
+      if (buf.trim()) {
+        const header = buf.trim();
+        // A COPY ... FROM stdin header is followed by raw data rows up to `\.`: keep the
+        // header in the buffer and read the rows as part of the same statement (see the
+        // `copy-data` state above). Every other statement ends here.
+        if (/^copy\b/i.test(header) && /\bfrom\s+stdin\b/i.test(header)) {
+          buf += ';';
+          state = 'copy-data';
+          i++;
+          continue;
+        }
+        out.push({ text: header, offset: stmtStart });
+      }
       buf = '';
       stmtStart = -1;
       i++;

@@ -7,9 +7,11 @@ import { splitStatements, splitStatementsWithOffsets } from '../../scripts/lib/s
 import {
   EXPECTED_PHASE,
   baselineMetadataPath,
+  baselineSkipReason,
   classifyBaselineFailure,
   countDataStatements,
   isDataStatement,
+  isExtensionStatement,
   phaseReader,
   selectForwardFiles,
   summarizeReplay,
@@ -179,6 +181,169 @@ create table public.memberships (id uuid);
       ];
       for (const message of envGaps) expect(classifyBaselineFailure(message), message).toBe('env-gap');
       for (const message of sqlFailures) expect(classifyBaselineFailure(message), message).toBe('sql');
+    });
+  });
+
+  describe('pg_dump baselines load (Option A)', () => {
+    it('a COPY ... FROM stdin block is one data statement, rows included', () => {
+      const text = [
+        `COPY public.t (id, note, payload) FROM stdin;`,
+        `1\tfirst; with semicolon\t{"a": "it's", "b": "$$"}`,
+        `2\tback\\slash\tplain`,
+        `\\.`,
+        `CREATE TABLE public.u (id int);`,
+        ``,
+      ].join('\n');
+      const statements = splitStatements(text);
+      expect(statements).toHaveLength(2);
+      expect(statements[0]).toContain('COPY public.t');
+      expect(statements[0]).toContain(`first; with semicolon`);
+      expect(statements[0]).toContain('\\.'); // the terminator belongs to the unit
+      expect(statements[1]).toBe('CREATE TABLE public.u (id int)');
+      expect(isDataStatement(statements[0])).toBe(true);
+      expect(countDataStatements(statements)).toBe(1);
+    });
+
+    it('an escaped backslash-dot data line does not end a COPY block', () => {
+      const text = [
+        `COPY public.t (id, note) FROM stdin;`,
+        `1\t\\\\. not the terminator`,
+        `2\tstill data`,
+        `\\.`,
+        `SELECT 1;`,
+        ``,
+      ].join('\n');
+      const statements = splitStatements(text);
+      expect(statements).toHaveLength(2);
+      expect(statements[0]).toContain('still data');
+      expect(statements[1]).toBe('SELECT 1');
+    });
+
+    it('an empty COPY block and COPY forms without stdin split normally', () => {
+      const text = [
+        `COPY public.empty (id) FROM stdin;`,
+        `\\.`,
+        `COPY public.t (id) TO stdout;`,
+        `COPY public.u (id) FROM PROGRAM 'cat';`,
+        `SELECT 1;`,
+        ``,
+      ].join('\n');
+      const statements = splitStatements(text);
+      // Each COPY form is its own statement — the stdin block did not swallow the rest.
+      expect(statements).toHaveLength(4);
+      expect(statements[1]).toBe('COPY public.t (id) TO stdout');
+      expect(statements[2]).toBe(`COPY public.u (id) FROM PROGRAM 'cat'`);
+      expect(statements[3]).toBe('SELECT 1');
+      expect(isDataStatement(statements[0])).toBe(true);
+      // The pre-existing leading-keyword rule counts every `copy`-led statement as data;
+      // the split above is what this fix owns, the classification is unchanged.
+      expect(countDataStatements(statements)).toBe(3);
+    });
+
+    it('COPY inside a dollar-quoted body does not start a data block', () => {
+      const statements = splitStatements(`
+        CREATE FUNCTION f() RETURNS void AS $$
+        BEGIN
+          COPY public.t FROM stdin;
+          RAISE NOTICE 'done';
+        END;
+        $$ LANGUAGE plpgsql;
+        SELECT 1;
+      `);
+      expect(statements).toHaveLength(2);
+      expect(statements[0]).toContain('COPY public.t FROM stdin;');
+      expect(statements[1]).toBe('SELECT 1');
+    });
+
+    it('psql meta-command lines are dropped between statements, kept inside one', () => {
+      const statements = splitStatements(
+        `\\restrict abc123\n\nSET statement_timeout = 0;\nSELECT 1;\n\\unrestrict abc123\n`,
+      );
+      expect(statements).toEqual(['SET statement_timeout = 0', 'SELECT 1']);
+      // A backslash inside an accumulated statement is left alone: the statement still
+      // reaches the database and fails there, instead of being silently repaired.
+      const kept = splitStatements(`SELECT 1 \\restrict 2;`);
+      expect(kept).toHaveLength(1);
+      expect(kept[0]).toContain('\\restrict');
+    });
+
+    it('scaffold re-creations are skipped, and only those', () => {
+      const skipped: Array<[string, string]> = [
+        ['CREATE SCHEMA auth', 'scaffold-schema'],
+        ['CREATE SCHEMA IF NOT EXISTS storage', 'scaffold-schema'],
+        ['CREATE SCHEMA "cron"', 'scaffold-schema'],
+        ['CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql AS $$ select 1 $$', 'scaffold-function'],
+        ['CREATE OR REPLACE FUNCTION auth.email() RETURNS text LANGUAGE sql AS $$ select 1 $$', 'scaffold-function'],
+        ['CREATE PUBLICATION supabase_realtime', 'scaffold-publication'],
+        ['CREATE TABLE storage.buckets (id text primary key)', 'stub-table'],
+        ['ALTER TABLE ONLY storage.buckets ADD CONSTRAINT buckets_pkey PRIMARY KEY (id)', 'stub-table'],
+        ['CREATE UNIQUE INDEX bname ON storage.buckets USING btree (name)', 'stub-table'],
+        [
+          'CREATE INDEX idx_objects_current_version ON storage.objects USING btree (bucket_id, name) WHERE (archived_at IS NULL)',
+          'stub-table',
+        ],
+        [
+          'CREATE TRIGGER wake_lifecycle AFTER UPDATE OF versioning_status ON storage.buckets FOR EACH ROW WHEN ((new.lifecycle_configuration IS NOT NULL)) EXECUTE FUNCTION storage.wake_lifecycle_state()',
+          'stub-table',
+        ],
+        ['CREATE POLICY "images auth write" ON storage.objects FOR INSERT TO authenticated WITH CHECK (true)', 'stub-table'],
+        ['ALTER TABLE storage.objects ENABLE ROW LEVEL SECURITY', 'stub-table'],
+      ];
+      for (const [statement, reason] of skipped) {
+        expect(baselineSkipReason(statement), statement).toBe(reason);
+      }
+      // Negative cases: these must EXECUTE, not be skipped. Each is a real statement whose
+      // failure would be a genuine defect — widening the skip would mask it, and this test
+      // is the tripwire.
+      const executed = [
+        'CREATE SCHEMA graphql',
+        'CREATE FUNCTION auth.custom_claims() RETURNS jsonb LANGUAGE sql AS $$ select 1 $$',
+        'CREATE PUBLICATION supabase_realtime_messages_publication WITH (publish = \'insert\')',
+        'CREATE TABLE storage.buckets_analytics (id uuid)',
+        'CREATE INDEX buckets_analytics_unique_name_idx ON storage.buckets_analytics USING btree (name)',
+        'ALTER TABLE ONLY storage.bucket_lifecycle_states ADD CONSTRAINT bucket_lifecycle_states_bucket_id_fkey FOREIGN KEY (bucket_id) REFERENCES storage.buckets(id) ON DELETE CASCADE',
+        'ALTER TABLE ONLY public.products ADD CONSTRAINT products_bucket_fkey FOREIGN KEY (bucket_id) REFERENCES storage.buckets(id)',
+        'CREATE TABLE public.broken (id int PRIMARY KEY, id int)',
+        'SELECT * FROM public.payments',
+        // Deliberate boundary: pg_dump never emits TRUNCATE, so there is no skip branch
+        // for it — a TRUNCATE executes (fail-closed default), it is never silently skipped.
+        'TRUNCATE storage.buckets',
+      ];
+      for (const statement of executed) {
+        expect(baselineSkipReason(statement), statement).toBeNull();
+      }
+    });
+
+    it('CREATE EXTENSION is recognised, and only that shape', () => {
+      expect(isExtensionStatement(`CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA extensions`)).toBe(true);
+      expect(isExtensionStatement(`CREATE EXTENSION "uuid-ossp" WITH SCHEMA extensions`)).toBe(true);
+      expect(isExtensionStatement(`CREATE TABLE public.t (id int)`)).toBe(false);
+      expect(isExtensionStatement(`-- comment\nCREATE EXTENSION pg_stat_statements`)).toBe(true);
+    });
+
+    it('skipped baseline statements change no status, but are counted', () => {
+      const clean = [{ filename: '0303_x.sql', statements: 2, failures: [] }];
+      const withSkips = summarizeReplay(clean, [], [
+        { reason: 'scaffold-schema', statement: 'CREATE SCHEMA auth' },
+        { reason: 'stub-table', statement: 'CREATE TABLE storage.buckets' },
+        { reason: 'extension-unavailable', statement: 'CREATE EXTENSION pgcrypto' },
+      ]);
+      expect(withSkips.status).toBe('PASS');
+      expect(withSkips.baselineSkippedStatements).toBe(3);
+      expect(withSkips.baselineSkippedByReason).toEqual({
+        'scaffold-schema': 1,
+        'stub-table': 1,
+        'extension-unavailable': 1,
+      });
+      // Skips never rescue a real failure.
+      const broken = [
+        {
+          filename: '0303_x.sql',
+          statements: 2,
+          failures: [{ class: 'sql', message: `relation "payments" does not exist` }],
+        },
+      ];
+      expect(summarizeReplay(broken, [], [{ reason: 'stub-table', statement: 'x' }]).status).toBe('FAIL');
     });
   });
 

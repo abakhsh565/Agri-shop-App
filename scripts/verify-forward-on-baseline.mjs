@@ -55,9 +55,11 @@ import {
   BASELINE_ENVIRONMENTS,
   EXPECTED_PHASE,
   baselineMetadataPath,
+  baselineSkipReason,
   classifyBaselineFailure,
   countDataStatements,
   isDataStatement,
+  isExtensionStatement,
   phaseReader,
   selectForwardFiles,
   summarizeReplay,
@@ -278,11 +280,41 @@ if (metadata && dataStatements !== metadata.dataStatements) {
 }
 const phaseAt = phaseReader(artifactText);
 const baselineLoadFailures = [];
+const baselineSkipped = [];
 let skippedDataStatements = 0;
 for (const entry of baselineEntries) {
   // A baseline is loaded for its schema. Real rows are never executed: see isDataStatement().
   if (isDataStatement(entry.text)) {
     skippedDataStatements++;
+    continue;
+  }
+  // Statements that re-create the PGlite scaffolding this tool pre-creates, or that target the
+  // stubbed storage tables, are skipped — not executed, not failures. The reason is recorded
+  // (see baselineSkipReason); a skip is explicit, never silent.
+  const skipReason = baselineSkipReason(entry.text);
+  if (skipReason) {
+    baselineSkipped.push({ reason: skipReason, statement: collapse(entry.text) });
+    continue;
+  }
+  // CREATE EXTENSION is tried for real: when PGlite can host the extension it is installed and
+  // later statements may use it. Only the exact "not available" message becomes a skip; any
+  // other error is a real failure, recorded like any other statement's.
+  if (isExtensionStatement(entry.text)) {
+    try {
+      await db.exec(entry.text);
+    } catch (error) {
+      const message = firstLine(error);
+      if (/extension "[^"]+" is not available/i.test(message)) {
+        baselineSkipped.push({ reason: 'extension-unavailable', statement: collapse(entry.text) });
+      } else {
+        baselineLoadFailures.push({
+          class: classifyBaselineFailure(message),
+          phase: phaseAt(entry.offset),
+          message,
+          statement: collapse(entry.text),
+        });
+      }
+    }
     continue;
   }
   try {
@@ -300,11 +332,20 @@ for (const entry of baselineEntries) {
     });
   }
 }
+// A dump sets session settings (notably search_path='') that must not leak into the selection
+// phase: forward files resolve unqualified names against the default path.
+await db.exec(`SET search_path TO "$user", public`);
 const loadByClass = (kind) => baselineLoadFailures.filter((f) => f.class === kind).length;
+const skippedByReason = {};
+for (const skipped of baselineSkipped) skippedByReason[skipped.reason] = (skippedByReason[skipped.reason] ?? 0) + 1;
+const skippedSummary = Object.entries(skippedByReason)
+  .map(([reason, count]) => `${count} ${reason}`)
+  .join(', ');
 console.log(
   `  baseline loaded: ${baselineEntries.length} statements, ${loadByClass('sql')} sql failures, ` +
     `${loadByClass('env-gap')} env-gap, ${loadByClass('expected-phase')} expected pre-table failure(s) (re-applied after the data), ` +
-    `${skippedDataStatements} data statement(s) skipped (never executed)`,
+    `${skippedDataStatements} data statement(s) skipped (never executed)` +
+    (baselineSkipped.length ? `, ${baselineSkipped.length} skipped (${skippedSummary})` : ''),
 );
 for (const failure of baselineLoadFailures.slice(0, 5)) console.log(`    [${failure.class}] ${failure.message}`);
 
@@ -321,6 +362,7 @@ const baseReport = {
     dataStatements, // measured in the artifact
     dataStatementsSkipped: skippedDataStatements,
     loadFailures: baselineLoadFailures,
+    skippedStatements: baselineSkipped,
   },
   selection: { since, upto, files: filesArg ?? null, resolved: selected.map((f) => f.filename) },
   files: [],
@@ -329,7 +371,7 @@ const baseReport = {
 
 if (baselineLoadFailures.some((failure) => failure.class === 'sql')) {
   baseReport.status = 'BASELINE-BROKEN';
-  baseReport.summary = summarizeReplay([], baselineLoadFailures);
+  baseReport.summary = summarizeReplay([], baselineLoadFailures, baselineSkipped);
   console.error('  the baseline itself fails to load with SQL errors; the selection was NOT applied.\n');
   fail('fix or re-capture the baseline before verifying forward files against it.', baseReport);
 }
@@ -354,7 +396,7 @@ for (const file of selected) {
 }
 await db.close();
 
-const summary = summarizeReplay(fileResults, baselineLoadFailures);
+const summary = summarizeReplay(fileResults, baselineLoadFailures, baselineSkipped);
 baseReport.status = summary.status;
 baseReport.files = fileResults;
 baseReport.summary = summary;

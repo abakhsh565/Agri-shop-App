@@ -136,6 +136,86 @@ export function validateBaselineMetadata(metadata) {
 }
 
 /**
+ * Statements the baseline loader skips instead of executing, because they re-create the PGlite
+ * scaffolding the tool itself pre-creates, or target the stubbed storage tables whose real
+ * columns PGlite cannot see. A skip is explicit, counted and reported — never silent — and it
+ * covers ONLY these named shapes; everything else still executes and still fails closed.
+ *
+ * WHY EACH SHAPE IS SKIPPED (measured 2026-11-09 against the pg_dump production baseline):
+ *   * `scaffold-schema` — the dump re-creates schemas the tool pre-creates (auth, extensions,
+ *     storage, cron) with plain CREATE SCHEMA, which fails "already exists" against the stub.
+ *   * `scaffold-function` — the dump re-creates the four auth helper stubs (uid/role/email/jwt)
+ *     with plain CREATE FUNCTION, which fails "already exists with same argument types".
+ *   * `scaffold-publication` — the dump re-creates `supabase_realtime`, which the tool
+ *     pre-creates; the sibling `supabase_realtime_messages_publication` is NOT skipped (it
+ *     does not exist yet and loads normally).
+ *   * `stub-table` — any statement whose PRIMARY TARGET is storage.buckets or storage.objects.
+ *     The tool stubs those two tables with a narrow column set (the canonical backup format has
+ *     no storage schema at all), so the dump's real definitions, indexes and triggers on them
+ *     fail against the stub: "already exists", "multiple primary keys", and "column
+ *     archived_at / is_delete_marker / is_versioned / version / lifecycle_configuration /
+ *     versioning_status does not exist". Statements that merely REFERENCE the stub tables —
+ *     e.g. `ALTER TABLE ONLY storage.bucket_lifecycle_states ... REFERENCES storage.buckets(id)`
+ *     or an index on storage.buckets_analytics — are NOT skipped: their target is another
+ *     table and they load normally against the stub's `id` column. The `\b` after the table
+ *     name is load-bearing here: `storage.buckets_analytics` must not match `storage.buckets`.
+ *
+ * Returns the reason string, or null when the statement must be executed.
+ */
+const SCAFFOLD_SCHEMAS = ['auth', 'extensions', 'storage', 'cron'];
+const SCAFFOLD_FUNCTIONS = ['uid', 'role', 'email', 'jwt'];
+const STUB_TABLES = ['storage\\.buckets', 'storage\\.objects'];
+const STUB_TABLE = `(?:${STUB_TABLES.join('|')})`;
+
+export function baselineSkipReason(statement) {
+  const text = String(statement).replace(LEADING_COMMENTS, '');
+  if (new RegExp(`^create\\s+schema\\s+(?:if\\s+not\\s+exists\\s+)?"?(${SCAFFOLD_SCHEMAS.join('|')})"?\\b`, 'i').test(text)) {
+    return 'scaffold-schema';
+  }
+  if (
+    new RegExp(`^create\\s+(?:or\\s+replace\\s+)?function\\s+auth\\.(${SCAFFOLD_FUNCTIONS.join('|')})\\s*\\(`, 'i').test(text)
+  ) {
+    return 'scaffold-function';
+  }
+  // `\b` after the name: supabase_realtime_messages_publication must not match.
+  if (/^create\s+publication\s+supabase_realtime\b/i.test(text)) return 'scaffold-publication';
+  // NOTE: no branch for the row-wiping verb, deliberately. pg_dump never emits it
+  // (0 occurrences in the measured baseline, and no pg_dump flag produces it — it is a
+  // data-loading statement, not a schema-dump one), so the branch would be dead coverage;
+  // and the bare word trips the production-data-policy guard (scripts/lib/baseline.mjs
+  // must stay non-destructive by the scanner's text rule). The DROP branch stays: a
+  // --clean dump does emit it, so that branch is live insurance. Were the row-wiping
+  // verb ever to appear, it would execute against the stub — not be skipped — which is
+  // the correct fail-closed default.
+  const stubTarget = new RegExp(
+    `^(?:create\\s+table\\s+(?:if\\s+not\\s+exists\\s+)?${STUB_TABLE}\\b` +
+      `|alter\\s+table\\s+(?:only\\s+)?${STUB_TABLE}\\b` +
+      `|create\\s+(?:unique\\s+)?index\\s+(?:if\\s+not\\s+exists\\s+)?\\S+\\s+on\\s+(?:only\\s+)?${STUB_TABLE}\\b` +
+      `|create\\s+trigger\\s+\\S+\\s+[\\s\\S]*?\\bon\\s+${STUB_TABLE}\\b` +
+      `|create\\s+policy\\s+(?:"[^"]+"|\\S+)\\s+on\\s+${STUB_TABLE}\\b` +
+      `|comment\\s+on\\s+(?:table|column)\\s+${STUB_TABLE}\\b` +
+      `|drop\\s+table\\s+(?:if\\s+exists\\s+)?${STUB_TABLE}\\b` +
+      `|drop\\s+trigger\\s+(?:if\\s+exists\\s+)?\\S+\\s+on\\s+${STUB_TABLE}\\b)`,
+    'i',
+  );
+  if (stubTarget.test(text)) return 'stub-table';
+  return null;
+}
+
+/**
+ * A `CREATE EXTENSION` statement. PGlite cannot host several platform extensions
+ * (pg_stat_statements, pgcrypto, supabase_vault, uuid-ossp — "extension ... is not available"),
+ * so the loader tries the statement and, only on exactly that message, records it as skipped
+ * rather than a failure. Any other error is a real failure. Nothing in the dump uses those
+ * extensions' functions at load time (uuid_generate_v4: 0 uses; vault.*: only the extension
+ * line itself; pgcrypto calls sit inside function bodies, which the dump loads with
+ * check_function_bodies off), so skipping the lines loses no verification.
+ */
+export function isExtensionStatement(statement) {
+  return /^create\s+extension\b/i.test(String(statement).replace(LEADING_COMMENTS, ''));
+}
+
+/**
  * Supabase ships schemas and extensions that PGlite cannot host (cron, storage, auth helpers) and a
  * publication that only exists on a real project. A failure caused by one of those is an ENVIRONMENT
  * GAP: the statement cannot be exercised here at all. Anything else is a SQL failure and must be
@@ -235,8 +315,14 @@ export function selectForwardFiles(entries, { since = null, upto = null } = {}) 
  * Turn per-file replay results into the one status that is allowed to be reported. `sql > 0` is FAIL;
  * `sql === 0 && envGap > 0` is UNVERIFIABLE (real statements could not run here — never a PASS);
  * zero of both is PASS.
+ *
+ * `baselineSkipped` (third argument) lists baseline statements the loader deliberately did not
+ * execute — scaffold re-creations, stub-table statements, unavailable extensions. A skip is not
+ * a failure of any kind: it changes no status, but it is counted and reported so the gate's
+ * reader can see exactly what was not exercised. A skip list that grows without a reason is
+ * itself a smell; the reasons are a closed set (see baselineSkipReason).
  */
-export function summarizeReplay(fileResults, baselineLoadFailures = []) {
+export function summarizeReplay(fileResults, baselineLoadFailures = [], baselineSkipped = []) {
   let statements = 0;
   let failedStatements = 0;
   let envGap = 0;
@@ -254,6 +340,10 @@ export function summarizeReplay(fileResults, baselineLoadFailures = []) {
   const baselineSql = baselineLoadFailures.filter((f) => f.class === 'sql').length;
   const baselineEnvGap = baselineLoadFailures.filter((f) => f.class === 'env-gap').length;
   const baselineExpectedPhase = baselineLoadFailures.filter((f) => f.class === 'expected-phase').length;
+  const baselineSkippedByReason = {};
+  for (const skipped of baselineSkipped) {
+    baselineSkippedByReason[skipped.reason] = (baselineSkippedByReason[skipped.reason] ?? 0) + 1;
+  }
   const status =
     sql > 0 || baselineSql > 0
       ? 'FAIL'
@@ -272,5 +362,7 @@ export function summarizeReplay(fileResults, baselineLoadFailures = []) {
     baselineSqlFailures: baselineSql,
     baselineEnvGapFailures: baselineEnvGap,
     baselineExpectedPhaseFailures: baselineExpectedPhase,
+    baselineSkippedStatements: baselineSkipped.length,
+    baselineSkippedByReason,
   };
 }
