@@ -26,8 +26,8 @@ baselines, forward-only files.
 
 | | Production (measured) | Repository |
 |---|---|---|
-| Recorded history | **8 rows, latest `0016`** at the time of writing — identical at the 2026-10-01 and 2026-10-15T23:57Z captures; **34 rows, latest `0221`** after the 2026-10-17 apply (§5.1) | **200 files**, newest `0208` (198 through `0206` when this plan was written) |
-| Schema | 28 tables · 37 functions · 2 views · 47 indexes · 56 FKs · 9 checks · 9 uniques · 10 triggers · 104 policies · 8 enums | — |
+| Recorded history | **46 rows, latest `0290`** at the 2026-11-09 capture (versions 0009–0016, 0179, 0181, 0190, 0199–0232, 0290); was **8 rows, latest `0016`** at the 2026-10-01 and 2026-10-15T23:57Z captures, **34 rows, latest `0221`** after the 2026-10-17 apply (§5.1), 45 rows/latest `0232` after the 2026-10-18 apply | **296 files**, newest `0304` (200 through `0208` when this plan was written) |
+| Schema | 44 tables · 127 functions · 3 views · 62 indexes · 90 FKs · 24 checks · 16 uniques · 32 triggers · 161 policies · 10 enums (measured from the 2026-11-09 pg_dump capture; was 28 tables · 37 functions · 2 views · 47 indexes · 56 FKs · 9 checks · 9 uniques · 10 triggers · 104 policies · 8 enums at the Oct-1/Oct-15 captures) | — |
 
 **The ledger is not a record of what production has.** Production's schema is far ahead of anything
 0009–0016 could create — 28 tables and 104 policies whose only possible origin is the project's own
@@ -35,9 +35,7 @@ out-of-band setup SQL. Replaying the directory to "catch the ledger up" is there
 is the failure mode this repository already measured four ways (30 of 169 files fail on the production
 schema). Two further facts follow, and they decide the whole plan:
 
-* **Production's schema has not moved since the baseline was frozen** (identical structure counts at
-  both captures), so the frozen production baseline is a faithful stand-in and this plan does not rest
-  on a stale snapshot.
+* **Production's schema moved exactly as the recorded applies predict, and the frozen baseline moved with it.** The Oct-1 and Oct-15 captures were identical, so the old frozen baseline was a faithful stand-in then; the Oct-17/18 applies (through `0232`) and the `0290` signup repair changed both the ledger and the schema, so the old baseline no longer is. The 2026-11-09 pg_dump capture (`backups/backup-production-gkswcfljxlutkfdvvqng-2026-11-09T15-37-29.sql`, sha256 `b29a8808…`, recorded in `supabase/baseline/production-baseline.json`) is the current frozen baseline and the faithful stand-in now. The gap the plan still closes is the unrecorded range: 0233–0289 plus 0291 onward.
 * **Files 0017–0176 are not replayed and are not re-issued.** Their intent is already realised in
   production's schema by that out-of-band work. What is verified is the *forward* range below.
 
@@ -56,6 +54,8 @@ counted and skipped, no environment contacted:
 statements — the same 106 failures, none of them in `0207` or `0208` (`✓ 0207 … 0 failures`, `✓ 0208 …
 0 failures`). The number is unchanged because failures and passes are independent here: batch 2's two
 files add 235 statements that all apply, and change nothing about the 30 files that fail ahead of them.
+
+**Update 2026-11-10:** the recorded position has since moved to 46 rows, latest `0290` (2026-11-09 capture; §1). The measurements above remain the record of what was verified against the old baseline; the forward range for new work is now the unrecorded files — 0233–0289 plus 0291 onward — verified as batches against the new baseline, not the range above.
 
 **Batch 1 — verified PASS, ready to apply on approval, no new code required:**
 
