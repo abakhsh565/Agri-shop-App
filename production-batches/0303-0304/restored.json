@@ -1,0 +1,776 @@
+{
+  "artifact": "backup-production-gkswcfljxlutkfdvvqng-2026-11-09T20-56-09.sql",
+  "manifest": {
+    "artifact": "backup-production-gkswcfljxlutkfdvvqng-2026-11-09T20-56-09.sql",
+    "environment": "production",
+    "projectRef": "gkswcfljxlutkfdvvqng",
+    "generatedAt": "2026-11-09T20:56:09.573Z",
+    "serverVersion": "17.6",
+    "identity": {
+      "configuredUser": "postgres.gkswcfljxlutkfdvvqng",
+      "serverUser": "postgres",
+      "clusterId": "7666007964130682852",
+      "note": "Session role is rewritten by the Supabase pooler, so the project ref comes from the credential."
+    },
+    "migrationLedger": {
+      "count": 46,
+      "latest": "0290"
+    },
+    "schemas": [
+      "public",
+      "auth"
+    ],
+    "tableCounts": {
+      "public.app_settings": 5,
+      "public.audit_events": 0,
+      "public.barcode_history": 0,
+      "public.barcode_registry": 0,
+      "public.branch_responsibility": 0,
+      "public.branches": 1,
+      "public.business_settings": 0,
+      "public.cash_reconciliations": 0,
+      "public.client_error_events": 0,
+      "public.companies": 0,
+      "public.credit_limit_requests": 0,
+      "public.customer_crops": 0,
+      "public.customer_payments": 0,
+      "public.customers": 0,
+      "public.incident_rate_limits": 0,
+      "public.incident_signatures": 0,
+      "public.incidents": 0,
+      "public.inventory_movements": 0,
+      "public.memberships": 0,
+      "public.notifications": 0,
+      "public.permissions": 32,
+      "public.product_barcodes": 0,
+      "public.product_variants": 0,
+      "public.products": 0,
+      "public.purchase_items": 0,
+      "public.purchases": 0,
+      "public.reminder_configs": 0,
+      "public.reminder_logs": 0,
+      "public.reminder_occurrences": 0,
+      "public.return_items": 0,
+      "public.returns": 0,
+      "public.role_permissions": 59,
+      "public.roles": 4,
+      "public.sale_items": 0,
+      "public.sale_submissions": 0,
+      "public.sales": 0,
+      "public.shop_requests": 2,
+      "public.shops": 1,
+      "public.stock_adjustments": 0,
+      "public.supplier_payments": 0,
+      "public.user_active_shops": 0,
+      "public.user_permissions": 0,
+      "public.users": 0,
+      "public.voids": 0,
+      "auth.users": 2,
+      "auth.identities": 2
+    },
+    "structure": {
+      "functions": 127,
+      "views": [
+        "marketplace_listings",
+        "product_variants_public",
+        "users_public"
+      ],
+      "indexes": 62,
+      "foreignKeys": 90,
+      "checks": 24,
+      "uniques": 16,
+      "triggers": 33,
+      "policies": 161,
+      "tables": 44,
+      "enums": 10
+    },
+    "phaseOrder": [
+      "pre-data",
+      "data",
+      "post-data"
+    ],
+    "limitations": [
+      "Logical dump, not a physical backup; not interchangeable with pg_dump output.",
+      "Storage objects are not included (Supabase database backups exclude them too).",
+      "Grants, ownership, extensions and custom role passwords are not included.",
+      "supabase_migrations bookkeeping is not included."
+    ],
+    "bytes": 767657,
+    "sha256": "1f5898f16cc772cde37f12d74132c6818cdb7a1af22a149b3913b48e7379408a",
+    "totalRows": 108,
+    "tablesDumped": 46
+  },
+  "target": "pglite",
+  "checks": {
+    "integrity": {
+      "sha256Matches": true,
+      "bytesMatch": true,
+      "sha256": "1f5898f16cc772cde37f12d74132c6818cdb7a1af22a149b3913b48e7379408a",
+      "bytes": 767657
+    },
+    "replay": {
+      "statements": 1143,
+      "failures": 0,
+      "expectedFailures": 1,
+      "durationMs": 525,
+      "authShimTables": 2,
+      "pgcrypto": "not available (extension \"pgcrypto\" is not available) — plpgsql bodies referencing extensions.crypt are not resolved at DDL time, so this only affects execution of those functions",
+      "failureDetails": [],
+      "expectedFailureDetails": [
+        {
+          "index": 78,
+          "phase": "functions-pre-tables",
+          "statement": "CREATE OR REPLACE FUNCTION public.membership_in_active_shop(p_user_id uuid DEFAULT NULL::uuid) RETURNS memberships LANGUAGE sql STABLE SECURITY DEFINER SET sear",
+          "error": "type \"memberships\" does not exist"
+        }
+      ],
+      "bootstrapFailures": []
+    },
+    "liveIdentity": {
+      "configuredUser": "postgres.gkswcfljxlutkfdvvqng",
+      "serverUser": "postgres",
+      "clusterId": "7666007964130682852",
+      "clusterIdError": null
+    },
+    "structure": {
+      "tables": {
+        "live": 44,
+        "restored": 44,
+        "missing": 0,
+        "extra": 0,
+        "changed": 0,
+        "rendered": 0,
+        "details": {
+          "missing": [],
+          "extra": [],
+          "changed": [],
+          "renderOnly": []
+        }
+      },
+      "columns": {
+        "live": 546,
+        "restored": 546,
+        "missing": 0,
+        "extra": 0,
+        "changed": 0,
+        "rendered": 0,
+        "details": {
+          "missing": [],
+          "extra": [],
+          "changed": [],
+          "renderOnly": []
+        }
+      },
+      "constraints": {
+        "live": 174,
+        "restored": 174,
+        "missing": 0,
+        "extra": 0,
+        "changed": 0,
+        "rendered": 3,
+        "details": {
+          "missing": [],
+          "extra": [],
+          "changed": [],
+          "renderOnly": [
+            {
+              "key": "barcode_history.barcode_history_action_check",
+              "field": "def",
+              "source": "CHECK (((action)::text = ANY ((ARRAY['added'::character varying, 'replaced'::character varying, 'deleted'::character varying])::text[])))",
+              "restored": "CHECK (((action)::text = ANY (ARRAY[('added'::character varying)::text, ('replaced'::character varying)::text, ('deleted'::character varying)::text])))"
+            },
+            {
+              "key": "barcode_registry.barcode_registry_status_check",
+              "field": "def",
+              "source": "CHECK (((status)::text = ANY ((ARRAY['active'::character varying, 'retired'::character varying])::text[])))",
+              "restored": "CHECK (((status)::text = ANY (ARRAY[('active'::character varying)::text, ('retired'::character varying)::text])))"
+            },
+            {
+              "key": "client_error_events.client_error_events_environment_check",
+              "field": "def",
+              "source": "CHECK (((environment)::text = ANY ((ARRAY['development'::character varying, 'staging'::character varying, 'production'::character varying])::text[])))",
+              "restored": "CHECK (((environment)::text = ANY (ARRAY[('development'::character varying)::text, ('staging'::character varying)::text, ('production'::character varying)::text])))"
+            }
+          ]
+        }
+      },
+      "indexes": {
+        "live": 122,
+        "restored": 122,
+        "missing": 0,
+        "extra": 0,
+        "changed": 0,
+        "rendered": 0,
+        "details": {
+          "missing": [],
+          "extra": [],
+          "changed": [],
+          "renderOnly": []
+        }
+      },
+      "policies": {
+        "live": 161,
+        "restored": 161,
+        "missing": 0,
+        "extra": 0,
+        "changed": 0,
+        "rendered": 1,
+        "details": {
+          "missing": [],
+          "extra": [],
+          "changed": [],
+          "renderOnly": [
+            {
+              "key": "client_error_events.client_error_events_insert_only",
+              "field": "check_expr",
+              "source": "(((environment)::text = ANY ((ARRAY['development'::character varying, 'staging'::character varying, 'production'::character varying])::text[])) AND (message IS NOT NULL) AND ((char_length(message) >= 1) AND (char_length(message) <= 500)))",
+              "restored": "(((environment)::text = ANY (ARRAY[('development'::character varying)::text, ('staging'::character varying)::text, ('production'::character varying)::text])) AND (message IS NOT NULL) AND ((char_length(message) >= 1) AND (char_length(message) <= 500)))"
+            }
+          ]
+        }
+      },
+      "triggers": {
+        "live": 33,
+        "restored": 33,
+        "missing": 0,
+        "extra": 0,
+        "changed": 0,
+        "rendered": 0,
+        "details": {
+          "missing": [],
+          "extra": [],
+          "changed": [],
+          "renderOnly": []
+        }
+      },
+      "functions": {
+        "live": 127,
+        "restored": 127,
+        "missing": 0,
+        "extra": 0,
+        "changed": 0,
+        "rendered": 0,
+        "details": {
+          "missing": [],
+          "extra": [],
+          "changed": [],
+          "renderOnly": []
+        }
+      },
+      "views": {
+        "live": 3,
+        "restored": 3,
+        "missing": 0,
+        "extra": 0,
+        "changed": 0,
+        "rendered": 0,
+        "details": {
+          "missing": [],
+          "extra": [],
+          "changed": [],
+          "renderOnly": []
+        }
+      },
+      "enums": {
+        "live": 10,
+        "restored": 10,
+        "missing": 0,
+        "extra": 0,
+        "changed": 0,
+        "rendered": 0,
+        "details": {
+          "missing": [],
+          "extra": [],
+          "changed": [],
+          "renderOnly": []
+        }
+      }
+    },
+    "renderOnlyTotal": 4,
+    "counts": {
+      "tables": 44,
+      "restoredMismatches": 0,
+      "driftedSinceBackup": 0,
+      "details": [
+        {
+          "table": "app_settings",
+          "atBackup": 5,
+          "restored": 5,
+          "liveNow": 5
+        },
+        {
+          "table": "audit_events",
+          "atBackup": 0,
+          "restored": 0,
+          "liveNow": 0
+        },
+        {
+          "table": "barcode_history",
+          "atBackup": 0,
+          "restored": 0,
+          "liveNow": 0
+        },
+        {
+          "table": "barcode_registry",
+          "atBackup": 0,
+          "restored": 0,
+          "liveNow": 0
+        },
+        {
+          "table": "branch_responsibility",
+          "atBackup": 0,
+          "restored": 0,
+          "liveNow": 0
+        },
+        {
+          "table": "branches",
+          "atBackup": 1,
+          "restored": 1,
+          "liveNow": 1
+        },
+        {
+          "table": "business_settings",
+          "atBackup": 0,
+          "restored": 0,
+          "liveNow": 0
+        },
+        {
+          "table": "cash_reconciliations",
+          "atBackup": 0,
+          "restored": 0,
+          "liveNow": 0
+        },
+        {
+          "table": "client_error_events",
+          "atBackup": 0,
+          "restored": 0,
+          "liveNow": 0
+        },
+        {
+          "table": "companies",
+          "atBackup": 0,
+          "restored": 0,
+          "liveNow": 0
+        },
+        {
+          "table": "credit_limit_requests",
+          "atBackup": 0,
+          "restored": 0,
+          "liveNow": 0
+        },
+        {
+          "table": "customer_crops",
+          "atBackup": 0,
+          "restored": 0,
+          "liveNow": 0
+        },
+        {
+          "table": "customer_payments",
+          "atBackup": 0,
+          "restored": 0,
+          "liveNow": 0
+        },
+        {
+          "table": "customers",
+          "atBackup": 0,
+          "restored": 0,
+          "liveNow": 0
+        },
+        {
+          "table": "incident_rate_limits",
+          "atBackup": 0,
+          "restored": 0,
+          "liveNow": 0
+        },
+        {
+          "table": "incident_signatures",
+          "atBackup": 0,
+          "restored": 0,
+          "liveNow": 0
+        },
+        {
+          "table": "incidents",
+          "atBackup": 0,
+          "restored": 0,
+          "liveNow": 0
+        },
+        {
+          "table": "inventory_movements",
+          "atBackup": 0,
+          "restored": 0,
+          "liveNow": 0
+        },
+        {
+          "table": "memberships",
+          "atBackup": 0,
+          "restored": 0,
+          "liveNow": 0
+        },
+        {
+          "table": "notifications",
+          "atBackup": 0,
+          "restored": 0,
+          "liveNow": 0
+        },
+        {
+          "table": "permissions",
+          "atBackup": 32,
+          "restored": 32,
+          "liveNow": 32
+        },
+        {
+          "table": "product_barcodes",
+          "atBackup": 0,
+          "restored": 0,
+          "liveNow": 0
+        },
+        {
+          "table": "product_variants",
+          "atBackup": 0,
+          "restored": 0,
+          "liveNow": 0
+        },
+        {
+          "table": "products",
+          "atBackup": 0,
+          "restored": 0,
+          "liveNow": 0
+        },
+        {
+          "table": "purchase_items",
+          "atBackup": 0,
+          "restored": 0,
+          "liveNow": 0
+        },
+        {
+          "table": "purchases",
+          "atBackup": 0,
+          "restored": 0,
+          "liveNow": 0
+        },
+        {
+          "table": "reminder_configs",
+          "atBackup": 0,
+          "restored": 0,
+          "liveNow": 0
+        },
+        {
+          "table": "reminder_logs",
+          "atBackup": 0,
+          "restored": 0,
+          "liveNow": 0
+        },
+        {
+          "table": "reminder_occurrences",
+          "atBackup": 0,
+          "restored": 0,
+          "liveNow": 0
+        },
+        {
+          "table": "return_items",
+          "atBackup": 0,
+          "restored": 0,
+          "liveNow": 0
+        },
+        {
+          "table": "returns",
+          "atBackup": 0,
+          "restored": 0,
+          "liveNow": 0
+        },
+        {
+          "table": "role_permissions",
+          "atBackup": 59,
+          "restored": 59,
+          "liveNow": 59
+        },
+        {
+          "table": "roles",
+          "atBackup": 4,
+          "restored": 4,
+          "liveNow": 4
+        },
+        {
+          "table": "sale_items",
+          "atBackup": 0,
+          "restored": 0,
+          "liveNow": 0
+        },
+        {
+          "table": "sale_submissions",
+          "atBackup": 0,
+          "restored": 0,
+          "liveNow": 0
+        },
+        {
+          "table": "sales",
+          "atBackup": 0,
+          "restored": 0,
+          "liveNow": 0
+        },
+        {
+          "table": "shop_requests",
+          "atBackup": 2,
+          "restored": 2,
+          "liveNow": 2
+        },
+        {
+          "table": "shops",
+          "atBackup": 1,
+          "restored": 1,
+          "liveNow": 1
+        },
+        {
+          "table": "stock_adjustments",
+          "atBackup": 0,
+          "restored": 0,
+          "liveNow": 0
+        },
+        {
+          "table": "supplier_payments",
+          "atBackup": 0,
+          "restored": 0,
+          "liveNow": 0
+        },
+        {
+          "table": "user_active_shops",
+          "atBackup": 0,
+          "restored": 0,
+          "liveNow": 0
+        },
+        {
+          "table": "user_permissions",
+          "atBackup": 0,
+          "restored": 0,
+          "liveNow": 0
+        },
+        {
+          "table": "users",
+          "atBackup": 0,
+          "restored": 0,
+          "liveNow": 0
+        },
+        {
+          "table": "voids",
+          "atBackup": 0,
+          "restored": 0,
+          "liveNow": 0
+        }
+      ]
+    },
+    "digests": {
+      "compared": 44,
+      "matched": 44,
+      "mismatched": [],
+      "skipped": 0
+    },
+    "columnDiagnosis": [],
+    "critical": [
+      {
+        "table": "shops",
+        "present": true,
+        "atBackup": 1,
+        "restored": 1,
+        "rowsEqual": true,
+        "digest": "identical"
+      },
+      {
+        "table": "users",
+        "present": true,
+        "atBackup": 0,
+        "restored": 0,
+        "rowsEqual": true,
+        "digest": "identical"
+      },
+      {
+        "table": "customers",
+        "present": true,
+        "atBackup": 0,
+        "restored": 0,
+        "rowsEqual": true,
+        "digest": "identical"
+      },
+      {
+        "table": "products",
+        "present": true,
+        "atBackup": 0,
+        "restored": 0,
+        "rowsEqual": true,
+        "digest": "identical"
+      },
+      {
+        "table": "product_variants",
+        "present": true,
+        "atBackup": 0,
+        "restored": 0,
+        "rowsEqual": true,
+        "digest": "identical"
+      },
+      {
+        "table": "sales",
+        "present": true,
+        "atBackup": 0,
+        "restored": 0,
+        "rowsEqual": true,
+        "digest": "identical"
+      },
+      {
+        "table": "sale_items",
+        "present": true,
+        "atBackup": 0,
+        "restored": 0,
+        "rowsEqual": true,
+        "digest": "identical"
+      },
+      {
+        "table": "customer_payments",
+        "present": true,
+        "atBackup": 0,
+        "restored": 0,
+        "rowsEqual": true,
+        "digest": "identical"
+      },
+      {
+        "table": "supplier_payments",
+        "present": true,
+        "atBackup": 0,
+        "restored": 0,
+        "rowsEqual": true,
+        "digest": "identical"
+      },
+      {
+        "table": "purchases",
+        "present": true,
+        "atBackup": 0,
+        "restored": 0,
+        "rowsEqual": true,
+        "digest": "identical"
+      },
+      {
+        "table": "purchase_items",
+        "present": true,
+        "atBackup": 0,
+        "restored": 0,
+        "rowsEqual": true,
+        "digest": "identical"
+      },
+      {
+        "table": "payments",
+        "present": false,
+        "reason": "not in this environment"
+      },
+      {
+        "table": "inventory_movements",
+        "present": true,
+        "atBackup": 0,
+        "restored": 0,
+        "rowsEqual": true,
+        "digest": "identical"
+      },
+      {
+        "table": "stock_adjustments",
+        "present": true,
+        "atBackup": 0,
+        "restored": 0,
+        "rowsEqual": true,
+        "digest": "identical"
+      },
+      {
+        "table": "returns",
+        "present": true,
+        "atBackup": 0,
+        "restored": 0,
+        "rowsEqual": true,
+        "digest": "identical"
+      },
+      {
+        "table": "return_items",
+        "present": true,
+        "atBackup": 0,
+        "restored": 0,
+        "rowsEqual": true,
+        "digest": "identical"
+      },
+      {
+        "table": "voids",
+        "present": true,
+        "atBackup": 0,
+        "restored": 0,
+        "rowsEqual": true,
+        "digest": "identical"
+      },
+      {
+        "table": "audit_events",
+        "present": true,
+        "atBackup": 0,
+        "restored": 0,
+        "rowsEqual": true,
+        "digest": "identical"
+      },
+      {
+        "table": "notifications",
+        "present": true,
+        "atBackup": 0,
+        "restored": 0,
+        "rowsEqual": true,
+        "digest": "identical"
+      },
+      {
+        "table": "memberships",
+        "present": true,
+        "atBackup": 0,
+        "restored": 0,
+        "rowsEqual": true,
+        "digest": "identical"
+      },
+      {
+        "table": "roles",
+        "present": true,
+        "atBackup": 4,
+        "restored": 4,
+        "rowsEqual": true,
+        "digest": "identical"
+      },
+      {
+        "table": "permissions",
+        "present": true,
+        "atBackup": 32,
+        "restored": 32,
+        "rowsEqual": true,
+        "digest": "identical"
+      },
+      {
+        "table": "role_permissions",
+        "present": true,
+        "atBackup": 59,
+        "restored": 59,
+        "rowsEqual": true,
+        "digest": "identical"
+      }
+    ],
+    "auth": {
+      "counts": {
+        "auth.users": {
+          "atBackup": 2,
+          "restored": 2,
+          "equal": true
+        },
+        "auth.identities": {
+          "atBackup": 2,
+          "restored": 2,
+          "equal": true
+        }
+      },
+      "fidelityNote": "auth tables are a shim; counts are exact, semantics are not Supabase auth"
+    }
+  },
+  "failures": [],
+  "verdict": {
+    "integrity": true,
+    "replay": true,
+    "counts": true,
+    "structure": true,
+    "digests": true,
+    "auth": true
+  }
+}

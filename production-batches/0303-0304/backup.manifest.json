@@ -1,0 +1,100 @@
+{
+  "artifact": "backup-production-gkswcfljxlutkfdvvqng-2026-11-09T20-56-09.sql",
+  "environment": "production",
+  "projectRef": "gkswcfljxlutkfdvvqng",
+  "generatedAt": "2026-11-09T20:56:09.573Z",
+  "serverVersion": "17.6",
+  "identity": {
+    "configuredUser": "postgres.gkswcfljxlutkfdvvqng",
+    "serverUser": "postgres",
+    "clusterId": "7666007964130682852",
+    "note": "Session role is rewritten by the Supabase pooler, so the project ref comes from the credential."
+  },
+  "migrationLedger": {
+    "count": 46,
+    "latest": "0290"
+  },
+  "schemas": [
+    "public",
+    "auth"
+  ],
+  "tableCounts": {
+    "public.app_settings": 5,
+    "public.audit_events": 0,
+    "public.barcode_history": 0,
+    "public.barcode_registry": 0,
+    "public.branch_responsibility": 0,
+    "public.branches": 1,
+    "public.business_settings": 0,
+    "public.cash_reconciliations": 0,
+    "public.client_error_events": 0,
+    "public.companies": 0,
+    "public.credit_limit_requests": 0,
+    "public.customer_crops": 0,
+    "public.customer_payments": 0,
+    "public.customers": 0,
+    "public.incident_rate_limits": 0,
+    "public.incident_signatures": 0,
+    "public.incidents": 0,
+    "public.inventory_movements": 0,
+    "public.memberships": 0,
+    "public.notifications": 0,
+    "public.permissions": 32,
+    "public.product_barcodes": 0,
+    "public.product_variants": 0,
+    "public.products": 0,
+    "public.purchase_items": 0,
+    "public.purchases": 0,
+    "public.reminder_configs": 0,
+    "public.reminder_logs": 0,
+    "public.reminder_occurrences": 0,
+    "public.return_items": 0,
+    "public.returns": 0,
+    "public.role_permissions": 59,
+    "public.roles": 4,
+    "public.sale_items": 0,
+    "public.sale_submissions": 0,
+    "public.sales": 0,
+    "public.shop_requests": 2,
+    "public.shops": 1,
+    "public.stock_adjustments": 0,
+    "public.supplier_payments": 0,
+    "public.user_active_shops": 0,
+    "public.user_permissions": 0,
+    "public.users": 0,
+    "public.voids": 0,
+    "auth.users": 2,
+    "auth.identities": 2
+  },
+  "structure": {
+    "functions": 127,
+    "views": [
+      "marketplace_listings",
+      "product_variants_public",
+      "users_public"
+    ],
+    "indexes": 62,
+    "foreignKeys": 90,
+    "checks": 24,
+    "uniques": 16,
+    "triggers": 33,
+    "policies": 161,
+    "tables": 44,
+    "enums": 10
+  },
+  "phaseOrder": [
+    "pre-data",
+    "data",
+    "post-data"
+  ],
+  "limitations": [
+    "Logical dump, not a physical backup; not interchangeable with pg_dump output.",
+    "Storage objects are not included (Supabase database backups exclude them too).",
+    "Grants, ownership, extensions and custom role passwords are not included.",
+    "supabase_migrations bookkeeping is not included."
+  ],
+  "bytes": 767657,
+  "sha256": "1f5898f16cc772cde37f12d74132c6818cdb7a1af22a149b3913b48e7379408a",
+  "totalRows": 108,
+  "tablesDumped": 46
+}
