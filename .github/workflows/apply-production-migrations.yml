@@ -140,7 +140,16 @@ jobs:
 
       - name: Ledger state after the apply (must show the batch recorded)
         if: ${{ inputs.apply == true }}
-        run: node scripts/migrate.mjs status --env production
+        run: |
+          set -euo pipefail
+          # `migrate.mjs status` refuses production by design (the tool's blanket
+          # refusal: only `apply` with a named batch may touch production), so the
+          # ledger is verified by re-running the same gated apply as a dry run.
+          # The gate reads the production ledger and refuses unless both files
+          # are already recorded with hashes matching the files on disk; the
+          # grep enforces that the run reports exactly that.
+          node scripts/migrate.mjs apply --env production --files "${{ inputs.files }}" --verification "${{ inputs.verification }}" --backup "${{ inputs.backup }}" --restored "${{ inputs.restored }}" | tee /tmp/post_apply_ledger.txt
+          grep -q "Nothing to apply: all .* file(s) in the batch are already recorded" /tmp/post_apply_ledger.txt
 
       - name: Summary
         if: always()

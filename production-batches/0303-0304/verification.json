@@ -1,6 +1,6 @@
 {
   "status": "PASS",
-  "generatedAt": "2026-11-09T22:42:47.769Z",
+  "generatedAt": "2026-11-09T23:56:04.691Z",
   "baseline": {
     "label": "backups/backup-production-gkswcfljxlutkfdvvqng-2026-11-09T15-37-29.sql",
     "environment": "production",
@@ -183,9 +183,9 @@
     ]
   },
   "selection": {
-    "since": "0303",
-    "upto": "0304",
-    "files": null,
+    "since": null,
+    "upto": null,
+    "files": "supabase/migrations/0303_production_reconciliation_for_batch1.sql,supabase/migrations/0304_create_purchase_recorded_by_uuid.sql",
     "resolved": [
       "0303_production_reconciliation_for_batch1.sql",
       "0304_create_purchase_recorded_by_uuid.sql"
