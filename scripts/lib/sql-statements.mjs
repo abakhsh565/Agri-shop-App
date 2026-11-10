@@ -218,6 +218,103 @@ export function splitStatementsWithOffsets(text) {
 }
 
 /**
+ * Convert one `COPY ... FROM stdin` data statement into the equivalent multi-row INSERT.
+ *
+ * WHY THIS EXISTS (Option B, batch 1)
+ *   PGlite cannot execute `COPY ... FROM stdin` (the copy protocol has no stdin channel in
+ *   `exec`), so a COPY block that must actually load — the reference rows a later migration's
+ *   foreign keys point at — has to be rewritten as INSERTs. The conversion is exact for the
+ *   COPY text format pg_dump emits: tab-separated fields, `\N` for NULL, backslash escapes
+ *   (`\\`, `\t`, `\n`, `\r`, `\b`, `\f`, `\v`), and a line that is exactly `\.` as the
+ *   terminator. Values are emitted as quoted literals and coerce to the column types on
+ *   INSERT (uuid, timestamptz, boolean `t`/`f`, enum text, text[] `{...}`), so no per-type
+ *   logic lives here. An unknown escape is kept verbatim (backslash + char) rather than
+ *   guessed at: silently changing a value would be worse than the INSERT failing loudly.
+ *
+ * Returns `{ table, columns, rows, insert }` — `table` is the schema-qualified name as
+ * written (normalised to `schema.table`, schema defaulting to `public`), `columns` the
+ * column list, `rows` the unescaped values (`null` for `\N`), and `insert` the multi-row
+ * INSERT string, or `null` when the block carries no rows. Returns `null` when the
+ * statement is not a `COPY ... FROM stdin` block at all (including `COPY ... TO stdout`).
+ * Throws when the input IS such a block but is malformed — wrong arity, or no `\.`
+ * terminator — because a reference table that loads partially would make FK validation
+ * wrong in the silent direction. The caller refuses on that throw, never guesses.
+ *
+ * @param {string} statement one statement as split by splitStatementsWithOffsets
+ * @returns {{ table: string, columns: string[], rows: Array<Array<string|null>>, insert: string|null } | null}
+ */
+export function copyDataToInsert(statement) {
+  const text = String(statement);
+  const lines = text.split('\n');
+  while (lines.length && lines[lines.length - 1].trim() === '') lines.pop();
+  const header = lines[0]?.trim() ?? '';
+  const headerMatch = header.match(
+    /^copy\s+((?:"[^"]+"|[A-Za-z_][A-Za-z0-9_$]*)(?:\.(?:"[^"]+"|[A-Za-z_][A-Za-z0-9_$]*))?)\s*\(([^)]*)\)\s+from\s+stdin\s*;?$/i,
+  );
+  if (!headerMatch) return null;
+  if (lines.length < 2 || lines[lines.length - 1].trim() !== '\\.') {
+    throw new Error(`COPY block for ${headerMatch[1]} has no \\. terminator; refusing to load partial reference data.`);
+  }
+  const table = normalizeTableName(headerMatch[1]);
+  const columns = headerMatch[2]
+    .split(',')
+    .map((c) => c.trim().replace(/^"|"$/g, '').replace(/""/g, '"'));
+  const rows = [];
+  for (const line of lines.slice(1, -1)) {
+    if (line === '') continue;
+    const fields = line.split('\t').map(unescapeCopyField);
+    if (fields.length !== columns.length) {
+      throw new Error(
+        `COPY block for ${table} has a row with ${fields.length} fields for ${columns.length} columns; refusing to load partial reference data.`,
+      );
+    }
+    rows.push(fields);
+  }
+  if (!rows.length) return { table, columns, rows, insert: null };
+  const quoteIdent = (name) => `"${name.replace(/"/g, '""')}"`;
+  const literal = (value) => (value === null ? 'NULL' : `'${String(value).replace(/'/g, "''")}'`);
+  const qualified = table
+    .split('.')
+    .map(quoteIdent)
+    .join('.');
+  const insert =
+    `INSERT INTO ${qualified} (${columns.map(quoteIdent).join(', ')}) VALUES ` +
+    rows.map((row) => `(${row.map(literal).join(', ')})`).join(', ');
+  return { table, columns, rows, insert };
+}
+
+/** A COPY text-format field: `\N` is NULL, backslash escapes are undone. */
+function unescapeCopyField(field) {
+  if (field === '\\N') return null;
+  let out = '';
+  for (let i = 0; i < field.length; i++) {
+    const ch = field[i];
+    if (ch !== '\\') {
+      out += ch;
+      continue;
+    }
+    const next = field[i + 1];
+    switch (next) {
+      case 'b': out += '\b'; i++; break;
+      case 'f': out += '\f'; i++; break;
+      case 'n': out += '\n'; i++; break;
+      case 'r': out += '\r'; i++; break;
+      case 't': out += '\t'; i++; break;
+      case 'v': out += '\v'; i++; break;
+      case '\\': out += '\\'; i++; break;
+      default: out += ch; break;
+    }
+  }
+  return out;
+}
+
+/** `permissions` → `public.permissions`; `"public"."permissions"` → `public.permissions`. */
+function normalizeTableName(raw) {
+  const parts = raw.split('.').map((p) => p.replace(/^"|"$/g, '').replace(/""/g, '"'));
+  return parts.length === 1 ? `public.${parts[0]}` : parts.join('.');
+}
+
+/**
  * Normalise SQL text to "what it says", ignoring comments and whitespace.
  *
  * Used for exactly one decision: when `verify` reports `changed after it was applied`, is the file

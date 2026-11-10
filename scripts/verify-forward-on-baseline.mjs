@@ -49,17 +49,21 @@ import crypto from 'node:crypto';
 import { PGlite } from '@electric-sql/pglite';
 
 import { readMigrationDirectory, sha256 } from './lib/migrations.mjs';
-import { splitStatements, splitStatementsWithOffsets } from './lib/sql-statements.mjs';
+import { copyDataToInsert, splitStatements, splitStatementsWithOffsets } from './lib/sql-statements.mjs';
 import { ROOT } from './lib/environments.mjs';
 import {
   BASELINE_ENVIRONMENTS,
   EXPECTED_PHASE,
   baselineMetadataPath,
+  baselineProvidesStorageSchema,
   baselineSkipReason,
+  checkReferenceDataCap,
   classifyBaselineFailure,
   countDataStatements,
+  dataStatementTarget,
   isDataStatement,
   isExtensionStatement,
+  isReferenceDataStatement,
   phaseReader,
   selectForwardFiles,
   summarizeReplay,
@@ -253,10 +257,17 @@ try {
   console.log(`  (env) pgcrypto unavailable in PGlite: ${String(error.message).split('\n')[0]}`);
 }
 await db.exec(`create schema if not exists storage`);
-await db.exec(`create table if not exists storage.buckets (id text primary key, name text, public boolean default false)`);
-await db.exec(
-  `create table if not exists storage.objects (id uuid default gen_random_uuid(), bucket_id text, name text, owner uuid, path_tokens text[], metadata jsonb)`,
-);
+// The pg_dump baselines define the real storage tables; the canonical backup format does
+// not. When the artifact provides them, use its own definitions — the stub's narrow columns
+// (no file_size_limit) are what made 0250/0261 fail. When it does not, stub exactly as
+// before, so the old format still verifies. See baselineProvidesStorageSchema.
+const storageSchemaInBaseline = baselineProvidesStorageSchema(artifactText);
+if (!storageSchemaInBaseline) {
+  await db.exec(`create table if not exists storage.buckets (id text primary key, name text, public boolean default false)`);
+  await db.exec(
+    `create table if not exists storage.objects (id uuid default gen_random_uuid(), bucket_id text, name text, owner uuid, path_tokens text[], metadata jsonb)`,
+  );
+}
 await db.exec(`create schema if not exists cron`);
 await db.exec(`create or replace function cron.schedule(job_name text, schedule text, command text) returns bigint language sql as $$ select 1::bigint $$`);
 await db.exec(`create or replace function cron.schedule(schedule text, command text) returns bigint language sql as $$ select 1::bigint $$`);
@@ -281,17 +292,56 @@ if (metadata && dataStatements !== metadata.dataStatements) {
 const phaseAt = phaseReader(artifactText);
 const baselineLoadFailures = [];
 const baselineSkipped = [];
+const referenceRowCounts = {};
 let skippedDataStatements = 0;
 for (const entry of baselineEntries) {
-  // A baseline is loaded for its schema. Real rows are never executed: see isDataStatement().
+  // A baseline is loaded for its schema: bulk rows are never executed — see isDataStatement().
+  // The one exception is the allowlisted reference tables (REFERENCE_DATA_TABLES): foreign
+  // keys in the selection can only be validated when the rows they point at exist, so those
+  // rows load — bounded by REFERENCE_DATA_ROW_CAP, counted, and reported in the report.
+  // COPY blocks are converted to INSERTs first: PGlite has no COPY ... FROM stdin channel.
   if (isDataStatement(entry.text)) {
-    skippedDataStatements++;
+    if (!isReferenceDataStatement(entry.text)) {
+      skippedDataStatements++;
+      continue;
+    }
+    const table = dataStatementTarget(entry.text);
+    let converted = null;
+    try {
+      converted = copyDataToInsert(entry.text);
+    } catch (error) {
+      // A malformed reference COPY block: the load cannot be trusted, refuse loudly.
+      refuse(firstLine(error));
+    }
+    const rows = converted ? converted.rows.length : 1;
+    const nextCounts = { ...referenceRowCounts, [table]: (referenceRowCounts[table] ?? 0) + rows };
+    const capProblems = checkReferenceDataCap(nextCounts);
+    if (capProblems.length) refuse(capProblems.join(' '));
+    try {
+      if (converted) {
+        if (converted.insert) await db.exec(converted.insert);
+      } else {
+        // INSERT-form reference data (the old backup format): execute as-is, one row.
+        await db.exec(entry.text);
+      }
+    } catch (error) {
+      baselineLoadFailures.push({
+        class: 'sql',
+        phase: phaseAt(entry.offset),
+        message: firstLine(error),
+        statement: collapse(entry.text),
+      });
+      continue;
+    }
+    referenceRowCounts[table] = nextCounts[table];
     continue;
   }
   // Statements that re-create the PGlite scaffolding this tool pre-creates, or that target the
   // stubbed storage tables, are skipped — not executed, not failures. The reason is recorded
-  // (see baselineSkipReason); a skip is explicit, never silent.
-  const skipReason = baselineSkipReason(entry.text);
+  // (see baselineSkipReason); a skip is explicit, never silent. When the baseline provides
+  // its own storage schema, the stub-table branch does not apply: the dump's own storage
+  // statements execute against its real tables.
+  const skipReason = baselineSkipReason(entry.text, { storageSchemaInBaseline });
   if (skipReason) {
     baselineSkipped.push({ reason: skipReason, statement: collapse(entry.text) });
     continue;
@@ -348,6 +398,12 @@ console.log(
     (baselineSkipped.length ? `, ${baselineSkipped.length} skipped (${skippedSummary})` : ''),
 );
 for (const failure of baselineLoadFailures.slice(0, 5)) console.log(`    [${failure.class}] ${failure.message}`);
+const referenceDataEntries = Object.entries(referenceRowCounts);
+if (referenceDataEntries.length) {
+  console.log(
+    `  reference data loaded for FK validation: ${referenceDataEntries.map(([table, rows]) => `${rows} row(s) from ${table}`).join(', ')}`,
+  );
+}
 
 const baseReport = {
   status: null,
@@ -361,6 +417,7 @@ const baseReport = {
     statements: baselineEntries.length,
     dataStatements, // measured in the artifact
     dataStatementsSkipped: skippedDataStatements,
+    referenceData: referenceDataEntries.map(([table, rows]) => ({ table, rows })),
     loadFailures: baselineLoadFailures,
     skippedStatements: baselineSkipped,
   },
