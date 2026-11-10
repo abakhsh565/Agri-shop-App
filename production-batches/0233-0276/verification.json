@@ -1,0 +1,457 @@
+{
+  "status": "PASS",
+  "generatedAt": "2026-11-10T04:22:10.957Z",
+  "baseline": {
+    "label": "backups/backup-production-gkswcfljxlutkfdvvqng-2026-11-10T01-28-00.sql",
+    "environment": "production",
+    "artifactSha256": "9c0b1d0a333dbb48136d5a9d41d07ef33316ccc53576e905b9d604310c9723b3",
+    "sha256Verified": true,
+    "capturedAt": "2026-11-10T01:28:00Z",
+    "statements": 1143,
+    "dataStatements": 92,
+    "dataStatementsSkipped": 90,
+    "referenceData": [
+      {
+        "table": "public.permissions",
+        "rows": 32
+      },
+      {
+        "table": "storage.buckets",
+        "rows": 4
+      }
+    ],
+    "loadFailures": [],
+    "skippedStatements": [
+      {
+        "reason": "scaffold-schema",
+        "statement": "CREATE SCHEMA auth"
+      },
+      {
+        "reason": "scaffold-schema",
+        "statement": "CREATE SCHEMA extensions"
+      },
+      {
+        "reason": "scaffold-schema",
+        "statement": "CREATE SCHEMA storage"
+      },
+      {
+        "reason": "extension-unavailable",
+        "statement": "CREATE EXTENSION IF NOT EXISTS pg_stat_statements WITH SCHEMA extensions"
+      },
+      {
+        "reason": "extension-unavailable",
+        "statement": "CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA extensions"
+      },
+      {
+        "reason": "extension-unavailable",
+        "statement": "CREATE EXTENSION IF NOT EXISTS supabase_vault WITH SCHEMA vault"
+      },
+      {
+        "reason": "extension-unavailable",
+        "statement": "CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\" WITH SCHEMA extensions"
+      },
+      {
+        "reason": "scaffold-function",
+        "statement": "CREATE FUNCTION auth.email() RETURNS text LANGUAGE sql STABLE AS $$ select coalesce( nullif(current_setting('r"
+      },
+      {
+        "reason": "scaffold-function",
+        "statement": "CREATE FUNCTION auth.jwt() RETURNS jsonb LANGUAGE sql STABLE AS $$ select coalesce( nullif(current_setting('re"
+      },
+      {
+        "reason": "scaffold-function",
+        "statement": "CREATE FUNCTION auth.role() RETURNS text LANGUAGE sql STABLE AS $$ select coalesce( nullif(current_setting('re"
+      },
+      {
+        "reason": "scaffold-function",
+        "statement": "CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $$ select coalesce( nullif(current_setting('req"
+      },
+      {
+        "reason": "scaffold-publication",
+        "statement": "CREATE PUBLICATION supabase_realtime WITH (publish = 'insert, update, delete, truncate')"
+      }
+    ]
+  },
+  "selection": {
+    "since": "0233",
+    "upto": "0276",
+    "files": null,
+    "resolved": [
+      "0233_a_role_is_granted_per_branch.sql",
+      "0234_a_branch_holds_its_own_stock_and_receivables.sql",
+      "0235_a_branch_counts_the_people_who_work_there.sql",
+      "0236_a_branch_reports_only_its_own_figures.sql",
+      "0237_the_branch_card_counts_staff_and_keeps_legacy_stock.sql",
+      "0238_the_product_shelf_is_the_branch_shelf.sql",
+      "0239_a_branch_only_moves_its_own_stock.sql",
+      "0240_a_product_belongs_to_the_branches_that_stock_it.sql",
+      "0241_the_branch_boundary_holds_at_the_database.sql",
+      "0242_the_other_branch_surfaces_close.sql",
+      "0243_an_access_request_reaches_who_can_act.sql",
+      "0244_the_card_and_the_team_agree.sql",
+      "0245_an_employee_can_set_the_pin_for_their_own_device.sql",
+      "0246_a_product_keeps_only_the_barcode_it_was_given.sql",
+      "0247_the_business_profile_reads_its_signup_record.sql",
+      "0248_the_business_keeps_its_own_record.sql",
+      "0249_the_business_profile_shows_its_papers.sql",
+      "0250_the_business_can_complete_its_papers.sql",
+      "0251_a_credit_limit_is_a_permission_the_owner_grants.sql",
+      "0252_the_sale_gate_reads_the_shelf_number.sql",
+      "0253_the_reports_read_their_period_per_branch.sql",
+      "0254_recorded_money_has_its_own_ledger.sql",
+      "0255_repeating_money_posts_itself_and_says_who_wrote_it.sql",
+      "0256_a_payment_reminder_is_the_owners_diary.sql",
+      "0257_a_payment_reminder_knows_who_it_is_about.sql",
+      "0258_a_delivery_advance_is_a_payment.sql",
+      "0259_a_shelf_and_a_unit_are_the_shops_own.sql",
+      "0260_editing_a_customer_is_not_blocked_by_an_old_due_date.sql",
+      "0261_recorded_money_keeps_its_papers_and_its_past.sql",
+      "0262_money_moves_in_one_statement.sql",
+      "0263_a_receipt_is_removed_by_its_row_not_by_a_client_delete.sql",
+      "0264_the_due_date_trigger_is_named_where_retirements_are_counted.sql",
+      "0265_a_role_says_what_it_does_and_what_it_sees.sql",
+      "0266_a_co_owner_is_a_delegation_not_an_admin.sql",
+      "0267_co_owner_hardening.sql",
+      "0268_co_owner_invitation_transaction_fix.sql",
+      "0269_co_owner_acceptance_transition_fix.sql",
+      "0270_co_owner_dashboard_uses_the_stock_ledger.sql",
+      "0271_co_owner_employee_bootstrap.sql",
+      "0272_co_owner_approval_target_scope.sql",
+      "0273_co_owner_explicit_acceptance.sql",
+      "0274_co_owner_invitation_normalizes_phone.sql",
+      "0275_roles_remember_category_and_level.sql",
+      "0276_branch_roles_and_dashboard_permission_rules.sql"
+    ]
+  },
+  "files": [
+    {
+      "filename": "0233_a_role_is_granted_per_branch.sql",
+      "version": "0233",
+      "statements": 31,
+      "sha256": "de0a3f40615d4bc9c74213b771224fa6a6fde76881f0a976b50e5e2f52b80567",
+      "failures": []
+    },
+    {
+      "filename": "0234_a_branch_holds_its_own_stock_and_receivables.sql",
+      "version": "0234",
+      "statements": 8,
+      "sha256": "b7b3067f914c6722c8b1c938e21e4e46b39e13f728cdd72477dc33f5290ba533",
+      "failures": []
+    },
+    {
+      "filename": "0235_a_branch_counts_the_people_who_work_there.sql",
+      "version": "0235",
+      "statements": 8,
+      "sha256": "bb1035e8de95107a3285a0be9f58357f1186e3259b43411049faf31e957d0e4a",
+      "failures": []
+    },
+    {
+      "filename": "0236_a_branch_reports_only_its_own_figures.sql",
+      "version": "0236",
+      "statements": 5,
+      "sha256": "a85dcbd9196e94a73e1c318f25dda89e76cef30b60ca594066d09540e09dc691",
+      "failures": []
+    },
+    {
+      "filename": "0237_the_branch_card_counts_staff_and_keeps_legacy_stock.sql",
+      "version": "0237",
+      "statements": 5,
+      "sha256": "a5ca4d2b030a9441068357ab9337f2e36f7cec965ebfe3e1d957bc13c8701d63",
+      "failures": []
+    },
+    {
+      "filename": "0238_the_product_shelf_is_the_branch_shelf.sql",
+      "version": "0238",
+      "statements": 4,
+      "sha256": "fed2a52d583018c8dfc8abbddd27549f5e81971b87d88b7d9eadb91ea4e72bd7",
+      "failures": []
+    },
+    {
+      "filename": "0239_a_branch_only_moves_its_own_stock.sql",
+      "version": "0239",
+      "statements": 15,
+      "sha256": "1b2535709de115879320fb4ea0e31839320a55ea4410e88acabdb7fbf586a551",
+      "failures": []
+    },
+    {
+      "filename": "0240_a_product_belongs_to_the_branches_that_stock_it.sql",
+      "version": "0240",
+      "statements": 16,
+      "sha256": "d9295ed3ea8324ee6923d6bc95bfed0e925efe40b8d793653ba42a85a0e98fc6",
+      "failures": []
+    },
+    {
+      "filename": "0241_the_branch_boundary_holds_at_the_database.sql",
+      "version": "0241",
+      "statements": 75,
+      "sha256": "0b0f97f92014af751a9b662fe8820cda49aabcd6c79abfd680708e220ce78708",
+      "failures": []
+    },
+    {
+      "filename": "0242_the_other_branch_surfaces_close.sql",
+      "version": "0242",
+      "statements": 52,
+      "sha256": "355bfa9c58bd7bc8e2855c0efa250f99f670ffa96feb0eeb3a7ff063e3f3ff05",
+      "failures": []
+    },
+    {
+      "filename": "0243_an_access_request_reaches_who_can_act.sql",
+      "version": "0243",
+      "statements": 27,
+      "sha256": "6a2320f847f335c2321f320f756a502e130edf063f3f4818062eb41e19cd14e3",
+      "failures": []
+    },
+    {
+      "filename": "0244_the_card_and_the_team_agree.sql",
+      "version": "0244",
+      "statements": 11,
+      "sha256": "5ed3732157cc65121bd0299fe3f469cda765ae595f7c18e11a8d5cad99f71aae",
+      "failures": []
+    },
+    {
+      "filename": "0245_an_employee_can_set_the_pin_for_their_own_device.sql",
+      "version": "0245",
+      "statements": 7,
+      "sha256": "98ead38113d815084005e385c7649dc67f00f89862f88a3191a58f7370c0d3d4",
+      "failures": []
+    },
+    {
+      "filename": "0246_a_product_keeps_only_the_barcode_it_was_given.sql",
+      "version": "0246",
+      "statements": 1,
+      "sha256": "fe4fb4c80eb1f68cdcd4ca166a2eec154d2a081a433f87af4253dcf4ac36c3ea",
+      "failures": []
+    },
+    {
+      "filename": "0247_the_business_profile_reads_its_signup_record.sql",
+      "version": "0247",
+      "statements": 4,
+      "sha256": "6c3cb97969de0fa89c9e45de14c2d80f501e7321a9697e1736a69e84ba16f52b",
+      "failures": []
+    },
+    {
+      "filename": "0248_the_business_keeps_its_own_record.sql",
+      "version": "0248",
+      "statements": 15,
+      "sha256": "2937e28b1f0a4c3adc091321b1fb682bafc0e36f4e48286b5805e39446653de6",
+      "failures": []
+    },
+    {
+      "filename": "0249_the_business_profile_shows_its_papers.sql",
+      "version": "0249",
+      "statements": 4,
+      "sha256": "e2c7bba53c23e88ce3c6c363c7666c3cd9fc2c7803d4d9df12ea0656dba28563",
+      "failures": []
+    },
+    {
+      "filename": "0250_the_business_can_complete_its_papers.sql",
+      "version": "0250",
+      "statements": 16,
+      "sha256": "b6411d338de55e62e8a71b2571129e58a3911ce71266e3b37f8e766554cd8867",
+      "failures": []
+    },
+    {
+      "filename": "0251_a_credit_limit_is_a_permission_the_owner_grants.sql",
+      "version": "0251",
+      "statements": 9,
+      "sha256": "5b14e6d493818bb7f62d945cf506029f14b105f0e42490cdaa1d5b84299188d5",
+      "failures": []
+    },
+    {
+      "filename": "0252_the_sale_gate_reads_the_shelf_number.sql",
+      "version": "0252",
+      "statements": 10,
+      "sha256": "757560cf24f4b68b5907e40503974fbde03895271c6f485aa1d08406871b656d",
+      "failures": []
+    },
+    {
+      "filename": "0253_the_reports_read_their_period_per_branch.sql",
+      "version": "0253",
+      "statements": 10,
+      "sha256": "d806875442a0e4d35cc6967d6decff5e6823420c4702144487dd51879ba5182c",
+      "failures": []
+    },
+    {
+      "filename": "0254_recorded_money_has_its_own_ledger.sql",
+      "version": "0254",
+      "statements": 20,
+      "sha256": "895e620176ed68059f920be5ec542230105ee3ec326f47b8b594b0b1fe444d16",
+      "failures": []
+    },
+    {
+      "filename": "0255_repeating_money_posts_itself_and_says_who_wrote_it.sql",
+      "version": "0255",
+      "statements": 29,
+      "sha256": "0e710bddcf7a598cd3e7e7fea120b6d16374b23116f3ff88976d97d62bf91918",
+      "failures": []
+    },
+    {
+      "filename": "0256_a_payment_reminder_is_the_owners_diary.sql",
+      "version": "0256",
+      "statements": 17,
+      "sha256": "0a0ddc2062d2477dcb561644510408dd052cfb1a1f746cbbe1fa6923f19400fa",
+      "failures": []
+    },
+    {
+      "filename": "0257_a_payment_reminder_knows_who_it_is_about.sql",
+      "version": "0257",
+      "statements": 29,
+      "sha256": "64cc2407346dab54c7cf7fe888ae51dc87ea61e69ee0e8528107678545ce5228",
+      "failures": []
+    },
+    {
+      "filename": "0258_a_delivery_advance_is_a_payment.sql",
+      "version": "0258",
+      "statements": 9,
+      "sha256": "ec0e3f129f7cfd635bfcda00cd974f32efb571a505c9fe01736f99e8cdb23b88",
+      "failures": []
+    },
+    {
+      "filename": "0259_a_shelf_and_a_unit_are_the_shops_own.sql",
+      "version": "0259",
+      "statements": 43,
+      "sha256": "ca222ad91cbf008fe598a94a3cdc7d4109a1460f52a05c3bc9523c08a9b045ca",
+      "failures": []
+    },
+    {
+      "filename": "0260_editing_a_customer_is_not_blocked_by_an_old_due_date.sql",
+      "version": "0260",
+      "statements": 5,
+      "sha256": "ad373be0aa79c6a1cb0a6523f4232c89148671823741a593f4b9939b43bc62a0",
+      "failures": []
+    },
+    {
+      "filename": "0261_recorded_money_keeps_its_papers_and_its_past.sql",
+      "version": "0261",
+      "statements": 48,
+      "sha256": "0113b4bd49f9f9fcdb2640da9fecec16be8ac78d020c9d79f7557a3e764b5cd9",
+      "failures": []
+    },
+    {
+      "filename": "0262_money_moves_in_one_statement.sql",
+      "version": "0262",
+      "statements": 10,
+      "sha256": "e292f37b34c75e2e40929c10021a593fd52e2600e52339fc7ebb4e84b64f4b47",
+      "failures": []
+    },
+    {
+      "filename": "0263_a_receipt_is_removed_by_its_row_not_by_a_client_delete.sql",
+      "version": "0263",
+      "statements": 2,
+      "sha256": "e7d9463896139c797c0fd0fbb9aaa56d6de77dc0102530a3c3ec4b434c829a36",
+      "failures": []
+    },
+    {
+      "filename": "0264_the_due_date_trigger_is_named_where_retirements_are_counted.sql",
+      "version": "0264",
+      "statements": 1,
+      "sha256": "d8ed3e36a02b2e26ad101620a86449025d67d82f68d2e1a9b3125194b9e8c01e",
+      "failures": []
+    },
+    {
+      "filename": "0265_a_role_says_what_it_does_and_what_it_sees.sql",
+      "version": "0265",
+      "statements": 47,
+      "sha256": "c55082d7c5140e782c9698194eb3e78dc17a400a1473feffe8c968b4814049bc",
+      "failures": []
+    },
+    {
+      "filename": "0266_a_co_owner_is_a_delegation_not_an_admin.sql",
+      "version": "0266",
+      "statements": 195,
+      "sha256": "4a241c71cf5a4b045210e84a4a57632cca5bbc73a0a82103892102fa5f7167bb",
+      "failures": []
+    },
+    {
+      "filename": "0267_co_owner_hardening.sql",
+      "version": "0267",
+      "statements": 35,
+      "sha256": "02a66b4412c9bd4125d7c03dd14df82ce6062eabf9a81fa6300af7c7b4ab5480",
+      "failures": []
+    },
+    {
+      "filename": "0268_co_owner_invitation_transaction_fix.sql",
+      "version": "0268",
+      "statements": 4,
+      "sha256": "4a0f31ec6501d2fff9b925cf28e32498cf2ee9a5eb6ae257ad19395beb8e4f2c",
+      "failures": []
+    },
+    {
+      "filename": "0269_co_owner_acceptance_transition_fix.sql",
+      "version": "0269",
+      "statements": 2,
+      "sha256": "eb173e731f6233ebbf4fdcf50e028e110d4c825d7bf015ccda2feb53ce2ffe4d",
+      "failures": []
+    },
+    {
+      "filename": "0270_co_owner_dashboard_uses_the_stock_ledger.sql",
+      "version": "0270",
+      "statements": 2,
+      "sha256": "b334c8ded5d5b75535dc2249139ab261acfed0026fcce7596ab4c9b947831842",
+      "failures": []
+    },
+    {
+      "filename": "0271_co_owner_employee_bootstrap.sql",
+      "version": "0271",
+      "statements": 2,
+      "sha256": "1357a7717cef1b763422774318ed4e8f063e3b0e66ba913f8c7580c0dde5a3d5",
+      "failures": []
+    },
+    {
+      "filename": "0272_co_owner_approval_target_scope.sql",
+      "version": "0272",
+      "statements": 7,
+      "sha256": "5ee6e238785566254b4a29c1fc38d9b0de4a730b8c8c8dbbdaae360be4ba0e0e",
+      "failures": []
+    },
+    {
+      "filename": "0273_co_owner_explicit_acceptance.sql",
+      "version": "0273",
+      "statements": 11,
+      "sha256": "1d5c33f0c3fee71417fd239984c2bcc772c0b8f2eb64e1ad783c64befb4744f9",
+      "failures": []
+    },
+    {
+      "filename": "0274_co_owner_invitation_normalizes_phone.sql",
+      "version": "0274",
+      "statements": 3,
+      "sha256": "8016c9894c3600a7ea6d1c859ae86b3207999d906c37fac7c40880e31b86d579",
+      "failures": []
+    },
+    {
+      "filename": "0275_roles_remember_category_and_level.sql",
+      "version": "0275",
+      "statements": 18,
+      "sha256": "e17553a15bf047ccd092b78ac3b322b85b6faba12d172bdb294787c90463f137",
+      "failures": []
+    },
+    {
+      "filename": "0276_branch_roles_and_dashboard_permission_rules.sql",
+      "version": "0276",
+      "statements": 7,
+      "sha256": "f5b06f703cde1225c55baf807569f15b76412d956f839b9bdd0c8e934d6469bb",
+      "failures": []
+    }
+  ],
+  "summary": {
+    "status": "PASS",
+    "files": 44,
+    "statements": 879,
+    "failedStatements": 0,
+    "envGapFailures": 0,
+    "sqlFailures": 0,
+    "expectedPhaseFailures": 0,
+    "baselineLoadFailures": 0,
+    "baselineSqlFailures": 0,
+    "baselineEnvGapFailures": 0,
+    "baselineExpectedPhaseFailures": 0,
+    "baselineSkippedStatements": 12,
+    "baselineSkippedByReason": {
+      "scaffold-schema": 3,
+      "extension-unavailable": 4,
+      "scaffold-function": 4,
+      "scaffold-publication": 1
+    }
+  },
+  "exitCode": 0
+}
