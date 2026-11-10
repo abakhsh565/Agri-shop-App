@@ -1,10 +1,10 @@
 {
-  "artifact": "backup-production-gkswcfljxlutkfdvvqng-2026-11-10T04-19-03.sql",
+  "artifact": "backup-production-gkswcfljxlutkfdvvqng-2026-11-10T05-39-03.sql",
   "manifest": {
-    "artifact": "backup-production-gkswcfljxlutkfdvvqng-2026-11-10T04-19-03.sql",
+    "artifact": "backup-production-gkswcfljxlutkfdvvqng-2026-11-10T05-39-03.sql",
     "environment": "production",
     "projectRef": "gkswcfljxlutkfdvvqng",
-    "generatedAt": "2026-11-10T04:19:03.240Z",
+    "generatedAt": "2026-11-10T05:39:03.982Z",
     "serverVersion": "17.6",
     "identity": {
       "configuredUser": "postgres.gkswcfljxlutkfdvvqng",
@@ -13,8 +13,8 @@
       "note": "Session role is rewritten by the Supabase pooler, so the project ref comes from the credential."
     },
     "migrationLedger": {
-      "count": 48,
-      "latest": "0304"
+      "count": 49,
+      "latest": "0305"
     },
     "schemas": [
       "public",
@@ -95,8 +95,8 @@
       "Grants, ownership, extensions and custom role passwords are not included.",
       "supabase_migrations bookkeeping is not included."
     ],
-    "bytes": 767943,
-    "sha256": "ba093ba881e06685e6fd38276194980451399968f2638444a85ca4af0e596392",
+    "bytes": 767982,
+    "sha256": "6ac5c266de61afb0457bfef4a1ae7c732f9b2e7f4d78395b02557fc71e1dced3",
     "totalRows": 108,
     "tablesDumped": 46
   },
@@ -105,14 +105,14 @@
     "integrity": {
       "sha256Matches": true,
       "bytesMatch": true,
-      "sha256": "ba093ba881e06685e6fd38276194980451399968f2638444a85ca4af0e596392",
-      "bytes": 767943
+      "sha256": "6ac5c266de61afb0457bfef4a1ae7c732f9b2e7f4d78395b02557fc71e1dced3",
+      "bytes": 767982
     },
     "replay": {
       "statements": 1146,
       "failures": 0,
       "expectedFailures": 1,
-      "durationMs": 683,
+      "durationMs": 511,
       "authShimTables": 2,
       "pgcrypto": "not available (extension \"pgcrypto\" is not available) — plpgsql bodies referencing extensions.crypt are not resolved at DDL time, so this only affects execution of those functions",
       "failureDetails": [],
