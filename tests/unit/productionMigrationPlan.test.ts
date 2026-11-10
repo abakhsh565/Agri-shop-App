@@ -12,7 +12,7 @@
  *      production the day it is written, not the day someone remembers to think about production. The
  *      first test below fails until the plan says what should happen to it.
  *   2. **A premise drifts while the plan keeps its old numbers.** The plan rests on two measured
- *      facts — production's recorded position (46 / 0290, re-derived 2026-11-10 from the 2026-11-09
+ *      facts — production's recorded position (48 / 0304, re-derived 2026-11-10 from the 2026-11-10
  *      pg_dump capture) and the batch results — plus one policy
  *      (the migration tool refuses production before connecting). Each is asserted here, so changing
  *      the baseline record or re-opening production in the tool fails the suite instead of quietly
@@ -36,7 +36,7 @@ const files = readdirSync(MIGRATIONS).filter((f) => f.endsWith('.sql')).sort();
 const versionOf = (file: string) => file.slice(0, 4);
 
 /** Production's recorded position, from the frozen baseline record. */
-const PRODUCTION_POSITION = '0290';
+const PRODUCTION_POSITION = '0304';
 /** Every file at or after the first one production has not recorded. */
 const PENDING = files.filter((f) => versionOf(f) >= '0177');
 
@@ -120,7 +120,7 @@ describe('the plan’s premises cannot drift unnoticed', () => {
       'the production baseline record moved. The plan’s whole shape depends on where production is; ' +
         're-derive §§1–2 and update docs/PRODUCTION_MIGRATION_PLAN.md before changing this record.',
     ).toBe(PRODUCTION_POSITION);
-    expect(plan).toContain('46 rows, latest `0290`');
+    expect(plan).toContain('48 rows, latest `0304`');
   });
 
   test('the tool still refuses production before connecting, except for a named, gated batch', () => {
