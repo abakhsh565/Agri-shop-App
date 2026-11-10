@@ -3,15 +3,21 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 
-import { splitStatements, splitStatementsWithOffsets } from '../../scripts/lib/sql-statements.mjs';
+import { copyDataToInsert, splitStatements, splitStatementsWithOffsets } from '../../scripts/lib/sql-statements.mjs';
 import {
   EXPECTED_PHASE,
+  REFERENCE_DATA_ROW_CAP,
+  REFERENCE_DATA_TABLES,
   baselineMetadataPath,
+  baselineProvidesStorageSchema,
   baselineSkipReason,
+  checkReferenceDataCap,
   classifyBaselineFailure,
   countDataStatements,
+  dataStatementTarget,
   isDataStatement,
   isExtensionStatement,
+  isReferenceDataStatement,
   phaseReader,
   selectForwardFiles,
   summarizeReplay,
@@ -59,7 +65,7 @@ describe('schema baseline strategy', () => {
         expect(record.environment).toBe(environment);
         expect(record.policy.forwardOnly).toBe(true);
         expect(record.policy.replayHistory).toBe('never');
-        expect(record.dataHandling, 'verification must never execute real rows').toBe('skipped-on-load');
+        expect(record.dataHandling, 'bulk rows are skipped; only allowlisted reference rows load').toBe('skipped-on-load');
         if (environment === 'production') {
           expect(record.policy.migrateTarget, 'production is checked against, never written').toBe(false);
         }
@@ -400,6 +406,179 @@ create table public.memberships (id uuid);
       expect(expectedSummary.status).toBe('PASS');
       expect(expectedSummary.expectedPhaseFailures + expectedSummary.baselineExpectedPhaseFailures).toBe(2);
       expect(expectedSummary.sqlFailures).toBe(0);
+    });
+  });
+
+  describe('reference data for FK validation (Option B)', () => {
+    /**
+     * Batch 1 (0233-0276) failed verify:baseline on 7 statements, all PGlite artifacts:
+     * 0250/0261 INSERT into storage.buckets (the tool's stub lacks file_size_limit) and
+     * 0265/0266 INSERTs whose foreign keys point at public.permissions(code) — a table the
+     * loader left empty because it skipped every data statement. The fix loads exactly the
+     * reference rows the FKs point at (bounded, reported), and uses the dump's own storage
+     * schema when the baseline provides it. These tests pin that decision: each case is a
+     * real shape from the pg_dump production baseline (permissions COPY block, buckets COPY
+     * block) or a boundary the fix must not cross (personal-data tables stay unloaded).
+     */
+    it('converts a permissions COPY block to one INSERT, NULLs and quotes exact', () => {
+      const block = [
+        `COPY public.permissions (id, code, module, action, label_en, label_ur, created_at) FROM stdin;`,
+        `4d02a069-fd6e-41d8-ac8e-e00618dbcd48\tcustomers.view\tcustomers\tview\tView Customers\tصارفین دیکھیں\t2026-10-17 15:00:49.425821+00`,
+        `736c2960-d6c4-4f43-a9c8-a323f9bd10f0\tcustomers.create\tcustomers\tcreate\tCreate Customers\tصارفین بنائیں\t2026-10-17 15:00:49.425821+00`,
+        `a72ca83e-57af-4ad8-a805-95f6190f3b1d\tcustomers.edit\tcustomers\tedit\tIt's fine\tصارفین میں ترمیم کریں\t2026-10-17 15:00:49.425821+00`,
+        `\\.`,
+        ``,
+      ].join('\n');
+      const converted = copyDataToInsert(block);
+      expect(converted).not.toBeNull();
+      expect(converted!.table).toBe('public.permissions');
+      expect(converted!.columns).toEqual(['id', 'code', 'module', 'action', 'label_en', 'label_ur', 'created_at']);
+      expect(converted!.rows).toHaveLength(3);
+      expect(converted!.rows[0][1]).toBe('customers.view');
+      expect(converted!.rows[0][5]).toBe('صارفین دیکھیں');
+      expect(converted!.insert).toContain('INSERT INTO "public"."permissions"');
+      expect(converted!.insert).toContain(`'customers.view'`);
+      expect(converted!.insert).toContain(`'صارفین دیکھیں'`);
+      // A single quote inside a value is doubled, never dropped or backslashed.
+      expect(converted!.insert).toContain(`'It''s fine'`);
+      expect(converted!.insert).not.toContain(`It\\'s`);
+      expect(converted!.insert).toContain('2026-10-17 15:00:49.425821+00');
+    });
+
+    it('converts a buckets COPY block: \\N becomes NULL, enums and booleans stay literal', () => {
+      const block = [
+        `COPY storage.buckets (id, name, owner, created_at, updated_at, public, avif_autodetection, file_size_limit, allowed_mime_types, owner_id, type, versioning_status, lifecycle_configuration, lifecycle_configuration_generation) FROM stdin;`,
+        `product-images\tproduct-images\t\\N\t2026-08-24 21:37:09.170551+00\t2026-08-24 21:37:09.170551+00\tt\tf\t\\N\t\\N\t\\N\tSTANDARD\tDISABLED\t\\N\t\\N`,
+        `\\.`,
+        ``,
+      ].join('\n');
+      const converted = copyDataToInsert(block);
+      expect(converted).not.toBeNull();
+      expect(converted!.table).toBe('storage.buckets');
+      expect(converted!.rows).toHaveLength(1);
+      expect(converted!.rows[0][2]).toBeNull(); // owner \N
+      expect(converted!.rows[0][7]).toBeNull(); // file_size_limit \N
+      expect(converted!.rows[0][8]).toBeNull(); // allowed_mime_types \N
+      expect(converted!.rows[0][10]).toBe('STANDARD');
+      expect(converted!.rows[0][11]).toBe('DISABLED');
+      expect(converted!.insert).toContain('INSERT INTO "storage"."buckets"');
+      expect(converted!.insert).toContain(`'product-images'`);
+      expect(converted!.insert).toContain('NULL');
+      expect(converted!.insert).not.toContain(`\\N`);
+    });
+
+    it('COPY escapes round-trip: backslash, tab and newline inside values', () => {
+      const block = [
+        `COPY public.t (id, note) FROM stdin;`,
+        `1\tback\\slash`,
+        `2\ta\\tb`,
+        `3\tline\\nbreak`,
+        `4\t\\\\. not the terminator`,
+        `\\.`,
+        `SELECT 1;`,
+        ``,
+      ].join('\n');
+      const statements = splitStatements(block);
+      expect(statements).toHaveLength(2); // the COPY block did not swallow SELECT 1
+      const converted = copyDataToInsert(statements[0]);
+      expect(converted).not.toBeNull();
+      expect(converted!.rows).toHaveLength(4);
+      expect(converted!.rows[0][1]).toBe('back\\slash');
+      expect(converted!.rows[1][1]).toBe('a\tb');
+      expect(converted!.rows[2][1]).toBe('line\nbreak');
+      expect(converted!.rows[3][1]).toBe('\\. not the terminator');
+    });
+
+    it('an empty COPY block converts to no INSERT, and non-COPY input is not converted', () => {
+      const empty = [`COPY public.permissions (id, code) FROM stdin;`, `\\.`, ``].join('\n');
+      const converted = copyDataToInsert(empty);
+      expect(converted).not.toBeNull();
+      expect(converted!.rows).toHaveLength(0);
+      expect(converted!.insert).toBeNull();
+      expect(copyDataToInsert(`COPY public.t (id) TO stdout;`)).toBeNull();
+      expect(copyDataToInsert(`INSERT INTO public.permissions (id) VALUES (1)`)).toBeNull();
+      expect(copyDataToInsert(`SELECT 1`)).toBeNull();
+    });
+
+    it('a malformed COPY block for a reference table throws instead of silently loading partial data', () => {
+      // Wrong arity: 2 values for 3 columns — the loader must refuse, never guess.
+      const bad = [
+        `COPY public.permissions (id, code, module) FROM stdin;`,
+        `only-two\tfields`,
+        `\\.`,
+        ``,
+      ].join('\n');
+      expect(() => copyDataToInsert(bad)).toThrow(/permissions/);
+      // Unterminated block: no `\.` line at all.
+      const unterminated = [
+        `COPY public.permissions (id, code) FROM stdin;`,
+        `1\tx`,
+        ``,
+      ].join('\n');
+      expect(() => copyDataToInsert(unterminated)).toThrow(/terminator/);
+    });
+
+    it('reference data is recognised by target table only, never by shape alone', () => {
+      expect(isReferenceDataStatement(`COPY public.permissions (id, code) FROM stdin;`)).toBe(true);
+      expect(isReferenceDataStatement(`INSERT INTO public.permissions (id, code) VALUES ('x', 'y')`)).toBe(true);
+      expect(isReferenceDataStatement(`INSERT INTO "public"."permissions" (id) VALUES (1)`)).toBe(true);
+      expect(isReferenceDataStatement(`COPY storage.buckets (id, name) FROM stdin;`)).toBe(true);
+      // Personal-data and operational tables are never reference data, whatever the shape.
+      expect(isReferenceDataStatement(`COPY public.customers (id, name) FROM stdin;`)).toBe(false);
+      expect(isReferenceDataStatement(`COPY public.sales (id) FROM stdin;`)).toBe(false);
+      expect(isReferenceDataStatement(`COPY storage.objects (id, bucket_id) FROM stdin;`)).toBe(false);
+      expect(isReferenceDataStatement(`COPY auth.users (id) FROM stdin;`)).toBe(false);
+      expect(isReferenceDataStatement(`SELECT * FROM public.permissions`)).toBe(false);
+      expect(dataStatementTarget(`COPY public.permissions (id) FROM stdin;`)).toBe('public.permissions');
+      expect(dataStatementTarget(`INSERT INTO permissions (id) VALUES (1)`)).toBe('public.permissions');
+      expect(dataStatementTarget(`INSERT INTO "public"."permissions" (id) VALUES (1)`)).toBe('public.permissions');
+      expect(dataStatementTarget(`SELECT 1`)).toBeNull();
+      expect(dataStatementTarget(`CREATE TABLE public.permissions (id uuid)`)).toBeNull();
+    });
+
+    it('the reference-data allowlist is exactly the two lookup tables, with a bounded cap', () => {
+      expect([...REFERENCE_DATA_TABLES].sort()).toEqual(['public.permissions', 'storage.buckets']);
+      expect(REFERENCE_DATA_ROW_CAP).toBe(1000);
+      expect(checkReferenceDataCap({ 'public.permissions': 32, 'storage.buckets': 4 })).toEqual([]);
+      expect(checkReferenceDataCap({ 'public.permissions': 1000 })).toEqual([]);
+      const over = checkReferenceDataCap({ 'public.permissions': 1001 });
+      expect(over.length).toBeGreaterThan(0);
+      expect(over.join(' ')).toContain('public.permissions');
+      expect(over.join(' ')).toContain('1001');
+    });
+
+    it('the baseline provides its storage schema only when the dump defines both tables', () => {
+      const both = [
+        `CREATE TABLE storage.buckets (id text NOT NULL, file_size_limit bigint);`,
+        `CREATE TABLE storage.objects (id uuid, bucket_id text);`,
+        ``,
+      ].join('\n');
+      expect(baselineProvidesStorageSchema(both)).toBe(true);
+      const bucketsOnly = `CREATE TABLE storage.buckets (id text NOT NULL);`;
+      expect(baselineProvidesStorageSchema(bucketsOnly)).toBe(false);
+      const neither = `CREATE TABLE public.permissions (id uuid, code text);`;
+      expect(baselineProvidesStorageSchema(neither)).toBe(false);
+      // The old backup-database.mjs format has no storage schema at all.
+      expect(baselineProvidesStorageSchema(`create table if not exists public.shops (id uuid);`)).toBe(false);
+    });
+
+    it('when the baseline provides the storage schema, its statements execute instead of being skipped', () => {
+      const withSchema = { storageSchemaInBaseline: true };
+      expect(baselineSkipReason('CREATE TABLE storage.buckets (id text primary key)', withSchema)).toBeNull();
+      expect(
+        baselineSkipReason(
+          'ALTER TABLE ONLY storage.buckets ADD CONSTRAINT buckets_pkey PRIMARY KEY (id)',
+          withSchema,
+        ),
+      ).toBeNull();
+      expect(
+        baselineSkipReason('CREATE POLICY "images auth write" ON storage.objects FOR INSERT TO authenticated WITH CHECK (true)', withSchema),
+      ).toBeNull();
+      // The other scaffold skips are untouched by this flag.
+      expect(baselineSkipReason('CREATE SCHEMA auth', withSchema)).toBe('scaffold-schema');
+      expect(baselineSkipReason('CREATE PUBLICATION supabase_realtime', withSchema)).toBe('scaffold-publication');
+      // And the default (no flag) is exactly today's behaviour: stub tables are skipped.
+      expect(baselineSkipReason('CREATE TABLE storage.buckets (id text primary key)')).toBe('stub-table');
     });
   });
 });
