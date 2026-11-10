@@ -100,10 +100,19 @@ jobs:
           if [ "$INTERVAL" -lt 30 ] || [ "$INTERVAL" -gt 300 ]; then echo "::error::interval_seconds must be 30-300"; exit 1; fi
           SAMPLES=$(( (DURATION * 60 + INTERVAL - 1) / INTERVAL ))
           echo "QA DB activity probe: $SAMPLES sample(s), every ${INTERVAL}s, for ~${DURATION} min (read-only, SELECT only)"
+          # SOFT SAMPLING (2026-11-11): the sample heredoc runs via psql_qa_soft
+          # (ON_ERROR_STOP=0), NOT psql_qa. On 2026-11-10 20:13Z the wedged DB
+          # made S0 hit the 15s statement_timeout and ON_ERROR_STOP=1 killed the
+          # whole run at sample 1 — destroying exactly the evidence the probe
+          # exists to collect. Now one timed-out query prints its error and the
+          # remaining queries (and later samples) still run. SAMPLES_OK counts
+          # samples where psql connected at all; zero means the DB was
+          # unreachable for the whole run and the job still fails at the end.
+          SAMPLES_OK=0
           for i in $(seq 1 "$SAMPLES"); do
             echo ""
             echo "===== SAMPLE $i/$SAMPLES at $(date -u +%FT%TZ) ====="
-            psql_qa <<'SQL'
+            if psql_qa_soft <<'SQL'
           SET default_transaction_read_only = on;
           SET statement_timeout = '15s';
           \echo '--- S0 identity ---'
@@ -128,6 +137,11 @@ jobs:
           \echo '--- S9 database stats ---'
           SELECT datname, numbackends, xact_commit, xact_rollback, deadlocks, temp_files, temp_bytes FROM pg_stat_database WHERE datname = 'postgres';
           SQL
+            then
+              SAMPLES_OK=$((SAMPLES_OK+1))
+            else
+              echo "SAMPLE $i: psql could not connect — continuing to next sample"
+            fi
             # Checkpoints are a separate soft call: pg_stat_bgwriter was removed
             # in PG17, and a failure here must never kill sampling (it did on
             # the first main-branch run, 2026-11-10, run 42883454554). PG17
@@ -136,5 +150,6 @@ jobs:
             psql_qa_soft -c "SET statement_timeout = '15s'; SET default_transaction_read_only = on; SELECT num_timed AS checkpoints_timed, num_requested AS checkpoints_req, write_time AS checkpoint_write_time, sync_time AS checkpoint_sync_time, buffers_written FROM pg_stat_checkpointer;" || echo 'S9 checkpoints query unavailable (non-fatal — sampling continues)'
             if [ "$i" -lt "$SAMPLES" ]; then sleep "$INTERVAL"; fi
           done
+          if [ "$SAMPLES_OK" -eq 0 ]; then echo "::error::probe could not connect for any of the $SAMPLES sample(s) — QA database unreachable for the whole run"; exit 1; fi
           echo ""
-          echo "QA DB activity probe complete: $SAMPLES sample(s) at $(date -u +%FT%TZ)"
+          echo "QA DB activity probe complete: $SAMPLES sample(s) ($SAMPLES_OK connected) at $(date -u +%FT%TZ)"
