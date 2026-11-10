@@ -36,6 +36,14 @@ name: QA DB activity probe (read-only)
 # Query text is truncated to 200 chars per row: enough to identify the
 # statement class (RPC / fixture insert / migration check) without dumping
 # fixture payloads into the log.
+#
+# PG17 NOTE (2026-11-11 fix): pg_stat_bgwriter was removed in PostgreSQL 17
+# (checkpoints_timed / checkpoints_req no longer exist); checkpoint stats now
+# come from pg_stat_checkpointer, and the checkpoint query runs as a separate
+# soft-failing call so a future catalog change can never kill sampling again
+# (the original S9 query aborted the first main-branch probe at sample 1,
+# run 42883454554). sslmode=require travels inside a single quoted conninfo
+# string — a bare key=value argv item after -d is ignored by psql (PR #31).
 on:
   workflow_dispatch:
     inputs:
@@ -72,10 +80,17 @@ jobs:
           QA_DB_USER: ${{ secrets.QA_DB_USER }}
         run: |
           set -euo pipefail
-          # Proper psql flags (PR #31 lesson): bare key=value args are ignored
-          # past the first, so host/port/user/dbname go as real flags.
+          # Connection as ONE quoted conninfo string (PR #31 lesson): bare
+          # key=value argv items after -d are silently ignored by psql — the
+          # previous form dropped sslmode=require entirely (psql warned, the
+          # connection still worked, but SSL was not enforced).
           psql_qa() {
-            /usr/lib/postgresql/17/bin/psql -h "$QA_DB_HOST" -p 6543 -U "$QA_DB_USER" -d postgres "sslmode=require" -X -v ON_ERROR_STOP=1 "$@"
+            /usr/lib/postgresql/17/bin/psql "host=$QA_DB_HOST port=6543 user=$QA_DB_USER dbname=postgres sslmode=require" -X -v ON_ERROR_STOP=1 "$@"
+          }
+          # Soft variant for nice-to-have queries (S9 checkpoints): a catalog
+          # change must degrade, never kill the sample run.
+          psql_qa_soft() {
+            /usr/lib/postgresql/17/bin/psql "host=$QA_DB_HOST port=6543 user=$QA_DB_USER dbname=postgres sslmode=require" -X -v ON_ERROR_STOP=0 "$@"
           }
           DURATION="${{ inputs.duration_minutes }}"
           INTERVAL="${{ inputs.interval_seconds }}"
@@ -92,7 +107,7 @@ jobs:
           SET default_transaction_read_only = on;
           SET statement_timeout = '15s';
           \echo '--- S0 identity ---'
-          SELECT now() AS sampled_at, current_user, session_user, current_database() AS db;
+          SELECT now() AS sampled_at, current_user, session_user, current_database() AS db, version() AS server_version;
           \echo '--- S1 sessions by state / wait event ---'
           SELECT state, wait_event_type, wait_event, count(*) AS n FROM pg_stat_activity GROUP BY 1, 2, 3 ORDER BY 4 DESC;
           \echo '--- S2 query-text visibility self-check (hidden = sessions whose query we cannot see) ---'
@@ -110,10 +125,15 @@ jobs:
           \echo '--- S8 connections by user / application ---'
           SELECT count(*) AS total_backends, (SELECT setting::int FROM pg_settings WHERE name = 'max_connections') AS max_connections FROM pg_stat_activity;
           SELECT usename, application_name, count(*) AS n FROM pg_stat_activity GROUP BY 1, 2 ORDER BY 3 DESC LIMIT 15;
-          \echo '--- S9 database stats + checkpoints ---'
+          \echo '--- S9 database stats ---'
           SELECT datname, numbackends, xact_commit, xact_rollback, deadlocks, temp_files, temp_bytes FROM pg_stat_database WHERE datname = 'postgres';
-          SELECT checkpoints_timed, checkpoints_req, checkpoint_write_time, buffers_checkpoint, buffers_clean, buffers_backend FROM pg_stat_bgwriter;
           SQL
+            # Checkpoints are a separate soft call: pg_stat_bgwriter was removed
+            # in PG17, and a failure here must never kill sampling (it did on
+            # the first main-branch run, 2026-11-10, run 42883454554). PG17
+            # merged the buffer counters into buffers_written.
+            echo '--- S9 checkpoints (pg_stat_checkpointer, PG17+) ---'
+            psql_qa_soft -c "SET statement_timeout = '15s'; SET default_transaction_read_only = on; SELECT num_timed AS checkpoints_timed, num_requested AS checkpoints_req, write_time AS checkpoint_write_time, sync_time AS checkpoint_sync_time, buffers_written FROM pg_stat_checkpointer;" || echo 'S9 checkpoints query unavailable (non-fatal — sampling continues)'
             if [ "$i" -lt "$SAMPLES" ]; then sleep "$INTERVAL"; fi
           done
           echo ""
