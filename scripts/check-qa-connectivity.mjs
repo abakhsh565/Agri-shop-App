@@ -81,7 +81,11 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 async function tryOnce() {
   const client = new pg.Client({
     connectionString: url,
-    ssl: { rejectUnauthorized: false },
+    // The local stack serves plain Postgres on 54322: asking for TLS fails
+    // the handshake. The hosted path keeps rejectUnauthorized: false (the
+    // pooler presents a chain Node's default trust store does not accept;
+    // the compensating control is the exact target pinning elsewhere).
+    ssl: process.env.QA_TARGET === 'local' ? undefined : { rejectUnauthorized: false },
     connectionTimeoutMillis: ATTEMPT_TIMEOUT_MS,
   });
   try {

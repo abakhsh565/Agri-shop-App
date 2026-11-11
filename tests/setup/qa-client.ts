@@ -49,13 +49,25 @@ function cleanUrl(url: string): string {
   return url.replace(/^\[|\]$/g, '').trim();
 }
 
-const QA_URL = cleanUrl(process.env.QA_SUPABASE_URL || 'https://bpybjrjenwccowvtrevu.supabase.co');
+const QA_URL = cleanUrl(process.env.QA_SUPABASE_URL || (process.env.QA_TARGET === 'local' ? '' : 'https://bpybjrjenwccowvtrevu.supabase.co'));
 const QA_ANON_KEY = process.env.QA_SUPABASE_ANON_KEY || '';
 const QA_SERVICE_ROLE = process.env.QA_SUPABASE_SERVICE_ROLE || '';
 
 // ── Environment Guard ────────────────────────────────────────
-import { assertQaProject } from './env-guard';
-assertQaProject(QA_URL);
+import { assertLocalTarget, assertQaProject } from './env-guard';
+/**
+ * Which target the suite runs against is named explicitly, never guessed.
+ * `QA_TARGET=local` selects the Supabase CLI stack on this machine
+ * (`http://127.0.0.1:54321`, direct Postgres on 54322, no TLS); anything
+ * else selects the staging project, exactly as before. A local target with
+ * no URL is refused — there is no staging default to fall back to, because
+ * falling back would run a "local" suite against QA.
+ */
+if (process.env.QA_TARGET === 'local') {
+  assertLocalTarget(QA_URL, QA_ANON_KEY || null);
+} else {
+  assertQaProject(QA_URL);
+}
 
 /**
  * QA clients are created LAZILY, on first use — never at module load.
@@ -115,6 +127,34 @@ const QA_DB_PASS = process.env.QA_DB_PASS || '';
 let _directClient: Client | null = null;
 
 /**
+ * The direct-Postgres connection settings, read from the environment at call
+ * time so a test can prove the mapping without opening a connection.
+ *
+ * The port is `QA_DB_PORT` (5432, the hosted default): the local stack's
+ * Postgres listens on 54322, not 5432. TLS is off for the local target only:
+ * the local stack serves plain Postgres, and asking `pg` for TLS against it
+ * fails the handshake — while the hosted path keeps `rejectUnauthorized:
+ * false` exactly as before (the pooler presents a chain Node's default
+ * trust store does not accept; the compensating control is the exact target
+ * pinning in the guard above, not the TLS flag).
+ */
+export function directClientConfig(): {
+  host: string;
+  port: number;
+  ssl: { rejectUnauthorized: boolean } | undefined;
+} {
+  const port = Number(process.env.QA_DB_PORT || '5432');
+  if (!Number.isInteger(port) || port <= 0 || port > 65535) {
+    throw new Error('QA_DB_PORT must be a port number — cannot create direct PG client');
+  }
+  return {
+    host: (process.env.QA_DB_HOST || '').replace(/^\[|\]$/g, ''),
+    port,
+    ssl: process.env.QA_TARGET === 'local' ? undefined : { rejectUnauthorized: false },
+  };
+}
+
+/**
  * Get a direct PostgreSQL connection (bypasses PgBouncer pooler).
  * This ensures writes are immediately visible to all subsequent queries.
  */
@@ -123,12 +163,14 @@ export async function getDirectClient(): Promise<Client> {
   if (!QA_DB_HOST || !QA_DB_USER || !QA_DB_PASS) {
     throw new Error('QA_DB_HOST/QA_DB_USER/QA_DB_PASS not set — cannot create direct PG client');
   }
+  const config = directClientConfig();
   _directClient = new Client({
-    host: QA_DB_HOST,
+    host: config.host,
     user: QA_DB_USER,
     password: QA_DB_PASS,
     database: 'postgres',
-    ssl: { rejectUnauthorized: false },
+    port: config.port,
+    ssl: config.ssl,
   });
   await _directClient.connect();
   return _directClient;

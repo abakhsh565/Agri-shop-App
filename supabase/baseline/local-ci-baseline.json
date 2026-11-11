@@ -1,0 +1,53 @@
+{
+  "record": "The sanitized production schema the local-CI job restores on the GitHub runner. Built from the production dump at ledger 0304: the whole schema, reference rows only (permissions, roles, role_permissions, app_settings, shops, branches, storage.buckets), plus the RBAC supplement for the surface production never received (business_areas). No personal data, no password hashes, no business rows — the build refuses to write an artifact that carries a fixture identity. CI-only; never a migrate target.",
+  "environment": "local-ci",
+  "projectRef": "gkswcfljxlutkfdvvqng",
+  "capturedAt": "2026-11-10T01:28:00Z",
+  "serverVersion": "17.6",
+  "artifact": "supabase/baseline/local-ci-baseline.sql",
+  "artifactSha256": "e6f89a792a12efc0b8d96f45192c96f1d7a3bd8e2bff07bf9b0aefd0a0ad9ac6",
+  "artifactBytes": 618908,
+  "contentType": "logical-dump",
+  "dataStatements": 8,
+  "dataHandling": "reference-only",
+  "dataNote": "Only the reference rows the suite needs are restored (see the build report); every other row block in the source dump is left out. The build asserts the kept row counts exactly, so a source dump with different reference data fails loudly.",
+  "ledgerOnServer": {
+    "count": 48,
+    "latest": "0304",
+    "note": "Production ledger at capture. Forward files 0233-0302 plus 0305 apply on top of this artifact in local-db init; that order is recorded in forwardOrder."
+  },
+  "structure": {
+    "tables": 45,
+    "functions": 129,
+    "views": [
+      "marketplace_listings",
+      "product_variants_public",
+      "users_public"
+    ],
+    "indexes": 64,
+    "triggers": 32,
+    "policies": 162
+  },
+  "policy": {
+    "forwardOnly": true,
+    "replayHistory": "never",
+    "migrateTarget": false,
+    "note": "Local CI test target only. It is checked against, never written by hosted tooling; the local stack is discarded after the run."
+  },
+  "forwardOrder": [
+    "0070",
+    "0071",
+    "0075-0078",
+    "0305",
+    "0233-0302"
+  ],
+  "forwardNote": "Apply order for local-db init: test helpers first (0070 run_sql, 0071 test-auth helper, 0075-0078 agent/impact tables), then 0305 (the enum labels batch 1 needs), then the production batches in version order (0233-0276, 0277-0289, 0291-0299, 0300-0302).",
+  "source": {
+    "dump": "backups/backup-production-gkswcfljxlutkfdvvqng-2026-11-10T01-28-00.sql",
+    "dumpSha256": "9c0b1d0a333dbb48136d5a9d41d07ef33316ccc53576e905b9d604310c9723b3",
+    "supplement": "supabase/baseline/local-ci-supplement.sql",
+    "builder": "scripts/dev/build-local-ci-baseline.mjs"
+  },
+  "refresh": "Re-run this script against a fresh production dump when production receives migrations beyond 0305, and commit the regenerated artifact + record together.",
+  "recheck": "npm run local:db -- init --baseline local-ci --skip-verify && npm run local:db -- seed && npm run local:db -- verify --baseline local-ci"
+}

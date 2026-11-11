@@ -1,7 +1,7 @@
 import { defineConfig } from 'vitest/config';
 import path from 'path';
 
-import { STAGING_PROJECT_ID } from './src/lib/environmentContract';
+import { DEVELOPMENT_LOCAL_PROJECT_ID, STAGING_PROJECT_ID } from './src/lib/environmentContract';
 
 /**
  * A key whose own claims name the project it belongs to, exactly as the real ones do — the same
@@ -17,6 +17,17 @@ function declaredAnonKey(ref: string): string {
     .replace(/=+$/, '');
   return `header.${payload}.signature`;
 }
+
+/**
+ * The suite's target is named by `QA_TARGET`, exactly as `tests/setup/qa-client.ts` names it.
+ * `QA_TARGET=local` is the Supabase CLI stack on this machine (the `integration-local` CI job):
+ * development environment, the loopback API URL, the local project id. Anything else is staging,
+ * unchanged. The integration suite talks to the database through `qa-client.ts` (the `QA_*`
+ * variables), so these `VITE_*` values only decide what the app code under test believes its
+ * environment is — and the declared key keeps the contract's cross-check honest for either target.
+ */
+const isLocalTarget = process.env.QA_TARGET === 'local';
+const localProjectId = DEVELOPMENT_LOCAL_PROJECT_ID ?? 'localdev';
 
 export default defineConfig({
   test: {
@@ -43,11 +54,13 @@ export default defineConfig({
     // failed on a machine whose `.env.local` was doing exactly what it should. A suite whose target
     // depends on the developer's machine is not a suite; the target belongs here.
     env: {
-      VITE_APP_ENV: 'staging',
+      VITE_APP_ENV: isLocalTarget ? 'development' : 'staging',
       VITE_OTP_DELIVERY: 'demo',
-      VITE_SUPABASE_URL: `https://${STAGING_PROJECT_ID}.supabase.co`,
-      VITE_SUPABASE_PROJECT_ID: STAGING_PROJECT_ID,
-      VITE_SUPABASE_ANON_KEY: declaredAnonKey(STAGING_PROJECT_ID),
+      VITE_SUPABASE_URL: isLocalTarget
+        ? 'http://127.0.0.1:54321'
+        : `https://${STAGING_PROJECT_ID}.supabase.co`,
+      VITE_SUPABASE_PROJECT_ID: isLocalTarget ? localProjectId : STAGING_PROJECT_ID,
+      VITE_SUPABASE_ANON_KEY: declaredAnonKey(isLocalTarget ? localProjectId : STAGING_PROJECT_ID),
     },
   },
   resolve: {

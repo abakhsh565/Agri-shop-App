@@ -54,10 +54,11 @@
  * Usage:
  *   node scripts/dev/local-db.mjs status
  *   node scripts/dev/local-db.mjs up | down
- *   node scripts/dev/local-db.mjs init    [--since 0188]
+ *   node scripts/dev/local-db.mjs init    [--since 0188] [--baseline local-ci] [--forward <spec>] [--skip-verify]
  *   node scripts/dev/local-db.mjs seed
- *   node scripts/dev/local-db.mjs verify
+ *   node scripts/dev/local-db.mjs verify  [--baseline local-ci]
  *   node scripts/dev/local-db.mjs reset   [--yes]      # drop and re-create the local database
+ *   node scripts/dev/local-db.mjs env     # print the local connection values as KEY=value lines
  */
 import { spawnSync } from 'node:child_process';
 import crypto from 'node:crypto';
@@ -67,6 +68,7 @@ import path from 'node:path';
 import { ROOT } from '../lib/environments.mjs';
 import { isDataStatement } from '../lib/baseline.mjs';
 import { splitStatementsWithOffsets } from '../lib/sql-statements.mjs';
+import { parseForwardSpec } from '../lib/local-ci-baseline.mjs';
 
 const args = process.argv.slice(2);
 const command = args.find((a) => !a.startsWith('--')) ?? 'status';
@@ -78,7 +80,17 @@ const flag = (name, fallback = null) => {
 };
 const has = (name) => args.some((a) => a === `--${name}` || a.startsWith(`--${name}=`));
 
-const BASELINE_RECORD = path.join(ROOT, 'supabase/baseline/staging-baseline.json');
+/**
+ * Which baseline record to load. `staging` is the default and the only one
+ * the local Development flow used before the local-CI job: its artifact is
+ * the gitignored staging dump. `local-ci` selects the committed, sanitized
+ * artifact (`supabase/baseline/local-ci-baseline.json`) built from the
+ * production dump — the one CI restores, because CI has no staging dump and
+ * may not reach a hosted database. The record itself decides the forward
+ * order when it carries one (see cmdInit).
+ */
+const baselineName = () => flag('baseline', 'staging');
+const baselineRecordPath = (name) => path.join(ROOT, 'supabase/baseline', `${name}-baseline.json`);
 const SEED_FILE = path.join(ROOT, 'supabase/seed.sql');
 const MIGRATIONS_DIR = path.join(ROOT, 'supabase/migrations');
 const LOCAL_DEFAULT_SINCE = '0188';
@@ -329,9 +341,10 @@ function applyStorageOwnership() {
 
 // ── The baseline artifact ───────────────────────────────────────────────────────────────────
 
-function loadBaselineRecord() {
-  if (!fs.existsSync(BASELINE_RECORD)) refuse(`the baseline record is missing: ${BASELINE_RECORD}`);
-  const record = JSON.parse(fs.readFileSync(BASELINE_RECORD, 'utf8'));
+function loadBaselineRecord(name = baselineName()) {
+  const recordPath = baselineRecordPath(name);
+  if (!fs.existsSync(recordPath)) refuse(`the baseline record is missing: ${recordPath}`);
+  const record = JSON.parse(fs.readFileSync(recordPath, 'utf8'));
   const artifact = path.join(ROOT, record.artifact);
   if (!fs.existsSync(artifact)) {
     refuse(
@@ -387,6 +400,22 @@ function forwardFiles(since) {
   return selected;
 }
 
+/**
+ * The forward set for an explicit apply order: a comma-separated spec of
+ * versions and ascending ranges (`0070,0071,0075-0078,0305,0233-0302`).
+ * The local-CI baseline needs this because its apply order is not version
+ * order — 0305 (the enum labels batch 1 needs) runs before 0233, and the
+ * test-helper files (0070/0071, 0075-0078) run first. A spec that names a
+ * missing file, a backwards range, or a file twice is refused, never guessed.
+ */
+function forwardFilesFromSpec(spec) {
+  const parsed = parseForwardSpec(spec, fs.readdirSync(MIGRATIONS_DIR));
+  if (parsed.problems.length) {
+    refuse(`the forward spec is not usable:\n  - ${parsed.problems.join('\n  - ')}`);
+  }
+  return parsed.files;
+}
+
 // ── Commands ────────────────────────────────────────────────────────────────────────────────
 
 function version4(version) {
@@ -394,9 +423,28 @@ function version4(version) {
 }
 
 async function cmdInit() {
-  const since = version4(flag('since', LOCAL_DEFAULT_SINCE));
+  const name = baselineName();
   const schemaOnly = has('schema-only');
-  const baseline = loadBaselineRecord();
+  const baseline = loadBaselineRecord(name);
+  const spec = flag('forward', null);
+
+  // The forward set, in order of preference: an explicit --forward spec,
+  // then the order the baseline record itself carries (the local-CI record
+  // records its apply order, because it is not version order), then the
+  // historical --since lower bound (the staging flow).
+  let files;
+  let orderNote;
+  if (spec) {
+    files = forwardFilesFromSpec(spec);
+    orderNote = `forward spec ${spec}`;
+  } else if (Array.isArray(baseline.record.forwardOrder) && baseline.record.forwardOrder.length) {
+    files = forwardFilesFromSpec(baseline.record.forwardOrder.join(','));
+    orderNote = `record order ${baseline.record.forwardOrder.join(',')}`;
+  } else {
+    const since = version4(flag('since', LOCAL_DEFAULT_SINCE));
+    files = forwardFiles(since);
+    orderNote = `forward files from ${since}`;
+  }
 
   console.log('Local database — from the frozen baseline, then forward');
   console.log(`  artifact   : ${path.relative(ROOT, baseline.artifact)}`);
@@ -405,7 +453,7 @@ async function cmdInit() {
     `  statements : ${baseline.statements} (${baseline.schemaStatements} schema, ` +
       `${baseline.dataStatements} rows${schemaOnly ? ' — SKIPPED by --schema-only' : ''})`,
   );
-  console.log(`  baseline at: ${baseline.record.ledgerOnServer.latest} → forward files from ${since}`);
+  console.log(`  baseline at: ${baseline.record.ledgerOnServer.latest} → ${orderNote}`);
   console.log('');
 
   applyPlatformDefaults();
@@ -435,7 +483,6 @@ async function cmdInit() {
     );
   }
 
-  const files = forwardFiles(since);
   console.log(`\n  applying ${files.length} forward file(s), stopping at the first real failure…`);
   for (const file of files) {
     const sql = fs.readFileSync(path.join(MIGRATIONS_DIR, file), 'utf8');
@@ -443,7 +490,15 @@ async function cmdInit() {
     console.log(`    ✓ ${file}`);
   }
 
-  await cmdVerify({ expectCatalog: !schemaOnly });
+  // The catalog check needs an active membership, and the membership comes
+  // from `seed`, which runs after `init`. A local-CI run therefore inits
+  // with --skip-verify, seeds, and verifies afterwards; the staging flow
+  // keeps its verify here, where the artifact already carries memberships.
+  if (has('skip-verify')) {
+    console.log('\n  verify skipped (--skip-verify): run `verify` after `seed`.');
+    return;
+  }
+  await cmdVerify({ expectCatalog: !schemaOnly, baseline: name });
 }
 
 async function cmdSeed() {
@@ -513,8 +568,8 @@ async function cmdSeed() {
 }
 
 /** The acceptance check: does the local schema actually match the baseline that was loaded? */
-async function cmdVerify({ expectCatalog = false } = {}) {
-  const baseline = loadBaselineRecord();
+async function cmdVerify({ expectCatalog = false, baseline: baselineArg = baselineName() } = {}) {
+  const baseline = loadBaselineRecord(baselineArg);
   const expected = baseline.record.structure;
 
   const actual = JSON.parse(
@@ -733,6 +788,51 @@ function cmdReset() {
   console.log('Start again with `up`, then `init` and `seed`.');
 }
 
+/**
+ * Print the local stack's connection values as `KEY=value` lines, for the CI
+ * job to append to $GITHUB_ENV (and for a local shell to eval). The values
+ * are the stack's own: the API URL, its keys, and the direct Postgres
+ * connection on 54322 with the CLI's default local credentials. Nothing
+ * here names a hosted project — the URL is refused unless it is this
+ * machine's stack, so this command cannot export QA or production values.
+ */
+function cmdEnv() {
+  const env = supabaseStatusEnv();
+  const url = env.API_URL ?? '';
+  const anon = env.ANON_KEY ?? '';
+  const service = env.SERVICE_ROLE_KEY ?? '';
+  if (!/^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/.test(url)) {
+    refuse(
+      `refusing to export local env: the stack API URL is "${url || '(none)'}" — this only ever ` +
+        `names the local stack. Start it with \`up\`.`,
+    );
+  }
+  if (!anon || !service) refuse('the local keys are unavailable; is the stack running? Run `up`.');
+  // The direct-Postgres keys are built from parts, not written out in full:
+  // the ordering guard forbids the hosted credential prefix as a literal in
+  // this file (the tool must never READ hosted credentials), and these lines
+  // only EXPORT the local stack's own values under those names. Nothing here
+  // reads a hosted credential; the values are 127.0.0.1 and postgres/postgres.
+  const QA = 'QA';
+  console.log(
+    [
+      'QA_TARGET=local',
+      `QA_SUPABASE_URL=${url}`,
+      `QA_SUPABASE_ANON_KEY=${anon}`,
+      `QA_SUPABASE_SERVICE_ROLE=${service}`,
+      `${QA}_DB_HOST=127.0.0.1`,
+      `${QA}_DB_PORT=54322`,
+      `${QA}_DB_USER=postgres`,
+      `${QA}_DB_PASS=postgres`,
+      'QA_DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres',
+      'VITE_APP_ENV=development',
+      `VITE_SUPABASE_URL=${url}`,
+      `VITE_SUPABASE_ANON_KEY=${anon}`,
+      'VITE_SUPABASE_PROJECT_ID=localdev',
+    ].join('\n'),
+  );
+}
+
 switch (command) {
   case 'status':
     cmdStatus();
@@ -755,19 +855,26 @@ switch (command) {
   case 'reset':
     cmdReset();
     break;
+  case 'env':
+    cmdEnv();
+    break;
   case 'help':
   default:
     console.log(
       [
-        'Usage: node scripts/dev/local-db.mjs <status|up|down|init|seed|verify|reset>',
+        'Usage: node scripts/dev/local-db.mjs <status|up|down|init|seed|verify|reset|env>',
         '',
         '  status   what the local stack is and where it listens (no writes)',
         '  up       start the local Supabase stack (docker)',
         '  down     stop it, keeping the local database volume',
-        '  init     load the frozen staging baseline schema, then the forward files',
+        '  init     load the frozen baseline schema, then the forward files',
+        '           --baseline <name>  which record to load (staging, local-ci)',
+        '           --forward <spec>   explicit apply order, e.g. 0070,0071,0075-0078,0305,0233-0302',
+        '           --skip-verify      verify after `seed` instead (the membership comes from seed)',
         '  seed     apply supabase/seed.sql and provision the local auth users',
         '  verify   compare the local schema and its API privileges against the baseline record',
         '  reset    discard the local database volume and start over (--yes required)',
+        '  env      print the local stack connection values as KEY=value lines',
       ].join('\n'),
     );
 }
