@@ -36,20 +36,22 @@ jobs:
           PROD_DB_USER: ${{ secrets.PROD_DB_USER }}
         run: |
           set -euo pipefail
-          PSQL="/usr/lib/postgresql/17/bin/psql host=${PROD_DB_HOST} port=6543 user=${PROD_DB_USER} dbname=postgres sslmode=require -X -v ON_ERROR_STOP=1"
+          psql_prod() {
+            /usr/lib/postgresql/17/bin/psql -h "$PROD_DB_HOST" -p 6543 -U "$PROD_DB_USER" -d postgres "sslmode=require" -X -v ON_ERROR_STOP=1 "$@"
+          }
           echo '=== Q0 connection identity ==='
-          $PSQL -c "SELECT current_user AS current_user, session_user AS session_user;"
+          psql_prod -c "SELECT current_user AS current_user, session_user AS session_user;"
           echo '=== Q1 roles (anon/authenticated/service_role/authenticator/postgres) ==='
-          $PSQL -c "SELECT rolname, rolsuper, rolinherit, rolcanlogin, rolbypassrls FROM pg_roles WHERE rolname IN ('anon','authenticated','service_role','authenticator','postgres') ORDER BY rolname;"
+          psql_prod -c "SELECT rolname, rolsuper, rolinherit, rolcanlogin, rolbypassrls FROM pg_roles WHERE rolname IN ('anon','authenticated','service_role','authenticator','postgres') ORDER BY rolname;"
           echo '=== Q2 full role memberships (pg_auth_members) ==='
-          $PSQL -c "SELECT m.rolname AS member, r.rolname AS granted_role FROM pg_auth_members am JOIN pg_roles m ON m.oid = am.member JOIN pg_roles r ON r.oid = am.roleid ORDER BY 1, 2;"
+          psql_prod -c "SELECT m.rolname AS member, r.rolname AS granted_role FROM pg_auth_members am JOIN pg_roles m ON m.oid = am.member JOIN pg_roles r ON r.oid = am.roleid ORDER BY 1, 2;"
           echo '=== Q3 all default privileges (pg_default_acl) ==='
-          $PSQL -c "SELECT defaclnamespace::regnamespace AS schema, defaclobjtype, defaclacl, pg_get_userbyid(defaclrole) AS for_role FROM pg_default_acl ORDER BY 1, 2, 4;"
+          psql_prod -c "SELECT defaclnamespace::regnamespace AS schema, defaclobjtype, defaclacl, pg_get_userbyid(defaclrole) AS for_role FROM pg_default_acl ORDER BY 1, 2, 4;"
           echo '=== Q4 functions whose ACL names authenticated ==='
-          $PSQL -c "SELECT n.nspname, p.proname, pg_get_userbyid(p.proowner) AS owner, p.proacl FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace WHERE p.proacl::text LIKE '%authenticated%' ORDER BY 1, 2 LIMIT 30;"
+          psql_prod -c "SELECT n.nspname, p.proname, pg_get_userbyid(p.proowner) AS owner, p.proacl FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace WHERE p.proacl::text LIKE '%authenticated%' ORDER BY 1, 2 LIMIT 30;"
           echo '=== Q5 EXECUTE posture of existing postgres-owned public functions ==='
-          $PSQL -c "SELECT p.proname, pg_get_userbyid(p.proowner) AS owner, p.proacl, has_function_privilege('anon', p.oid, 'EXECUTE') AS anon_exec, has_function_privilege('authenticated', p.oid, 'EXECUTE') AS auth_exec FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace WHERE n.nspname = 'public' AND p.proowner = (SELECT oid FROM pg_roles WHERE rolname = 'postgres') ORDER BY p.proname LIMIT 25;"
+          psql_prod -c "SELECT p.proname, pg_get_userbyid(p.proowner) AS owner, p.proacl, has_function_privilege('anon', p.oid, 'EXECUTE') AS anon_exec, has_function_privilege('authenticated', p.oid, 'EXECUTE') AS auth_exec FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace WHERE n.nspname = 'public' AND p.proowner = (SELECT oid FROM pg_roles WHERE rolname = 'postgres') ORDER BY p.proname LIMIT 25;"
           echo '=== Q6 co_owner functions present now (expect 0) ==='
-          $PSQL -c "SELECT count(*) AS co_owner_fn_count FROM pg_proc WHERE proname LIKE 'co_owner%';"
+          psql_prod -c "SELECT count(*) AS co_owner_fn_count FROM pg_proc WHERE proname LIKE 'co_owner%';"
           echo '=== Q7 ledger ==='
-          $PSQL -c "SELECT count(*)::int AS n, max(version) AS latest FROM supabase_migrations.schema_migrations;"
+          psql_prod -c "SELECT count(*)::int AS n, max(version) AS latest FROM supabase_migrations.schema_migrations;"
