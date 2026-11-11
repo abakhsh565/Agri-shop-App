@@ -79,6 +79,25 @@ values
   ('10000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-000000000001')
 on conflict (user_id) do update set shop_id = excluded.shop_id;
 
+-- ─── Memberships ─────────────────────────────────────────────────────────────
+-- The authorization rows the app and `local-db verify` need: without an
+-- active membership every business RPC answers NOT_AUTHORIZED, so a local
+-- database with people but no memberships is complete and unable to do any
+-- work. The owner holds the Store Manager template (the broadest); the
+-- employee holds Sales Employee. The role is resolved by name, so this does
+-- not depend on the role ids the artifact carries.
+insert into public.memberships (user_id, tenant_id, role, status, branch_scope, role_id)
+values
+  ('10000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000001', 'owner', 'active',
+    ARRAY['00000000-0000-0000-0000-000000000002'::uuid],
+    (select id from public.roles where tenant_id = '00000000-0000-0000-0000-000000000001' and name = 'Store Manager')),
+  ('10000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-000000000001', 'employee', 'active',
+    ARRAY['00000000-0000-0000-0000-000000000002'::uuid],
+    (select id from public.roles where tenant_id = '00000000-0000-0000-0000-000000000001' and name = 'Sales Employee'))
+on conflict (user_id, tenant_id) do update set
+  role = excluded.role, status = excluded.status,
+  branch_scope = excluded.branch_scope, role_id = excluded.role_id;
+
 -- ─── Supplier ───────────────────────────────────────────────────────────────────────────────
 insert into public.companies (id, name, contact_person, phone, address, outstanding_payable, total_purchases, shop_id)
 values ('50000000-0000-0000-0000-000000000001', 'QA Supplier A', 'Ali Khan', '923001234567', 'Local', 0, 0, '00000000-0000-0000-0000-000000000001')

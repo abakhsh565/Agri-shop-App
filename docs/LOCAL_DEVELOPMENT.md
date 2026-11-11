@@ -525,3 +525,77 @@ about code that *your own change* made unused, neither of which is a storage lif
 required today; when it is wanted it belongs with the DB/Security lens, because deleting an object is
 a destructive action, and the delete is governed by the same `public_all_storage_*` policy 0199
 restores. Recorded and measured, unchanged.
+
+## 10. The local integration job in CI (2026-11-11)
+
+**Why.** The cloud QA project goes slow for minutes at a time while otherwise idle — proven
+2026-11-10 20:12Z, a table-free `select 1` taking >10s on both the direct and the pooler path, then
+recovering — and the 60-minute QA job keeps being cancelled mid-run (free-tier throttling is the
+prime suspect; the Supabase dashboard check that would confirm it is still with the owner). The
+permanent free fix is to run the same integration suite against a Supabase stack started on the
+runner itself: Docker, `$0`, no hosted database in the path at all.
+
+**What runs.** The `integration-local` job in `.github/workflows/ci.yml` (needs `gates`, no
+`qa-database` concurrency group — the stack lives on the runner and is discarded with it):
+
+```bash
+node scripts/dev/local-db.mjs up                                  # supabase start --yes
+node scripts/dev/local-db.mjs env >> "$GITHUB_ENV"                 # the stack's own URL + keys
+node scripts/check-qa-connectivity.mjs                            # reachability, plain Postgres
+node scripts/dev/local-db.mjs init --baseline local-ci --skip-verify
+node scripts/dev/local-db.mjs apply tests/setup/create_run_sql.sql  # the working run_sql
+node scripts/dev/local-db.mjs seed
+node scripts/dev/local-db.mjs verify --baseline local-ci
+npx vitest run tests/integration --fileParallelism=false --reporter=verbose
+```
+
+`--skip-verify` is not a skipped check: verify needs an active membership, which only `seed`
+creates, so it runs after seed instead. The cloud-QA job is untouched, and this job is a parallel
+signal — not a gate — until it has three consecutive green runs.
+
+**What the artifact is.** `supabase/baseline/local-ci-baseline.sql` (+ `.json` record) is the
+production dump at ledger 48/0304, sanitized by `scripts/dev/build-local-ci-baseline.mjs`:
+structure only (45 tables / 129 functions / 3 views / 64 indexes / 32 triggers / 162 policies)
+plus reference rows only — permissions 32, roles 4, role_permissions 59, app_settings 5, shops 1,
+branches 1, storage buckets 4. No auth rows, no shop requests, no storage objects, no password
+hashes; the demo shop is renamed to "AgriShop Local Development". The build refuses to write if any
+reference count moved or a fixture identity survived. Appended to it is
+`supabase/baseline/local-ci-supplement.sql`: the 0107/0108 RBAC surface production never received
+(`business_areas` + `has_permission` / `create_business_area` / `update_business_area`). The artifact
+carries NO Supabase-managed storage internals (`storage.*` tables, functions, triggers, indexes):
+the local stack provides those at its own storage version, and production's hosted storage is newer —
+its `buckets` table has `lifecycle_configuration` columns the local stack lacks, so carrying
+production's definitions broke the local database two ways (the bucket rows failed to load, and the
+restored triggers fired against a record with no such field, failing 0250). The bucket rows travel
+in a rewritten COPY naming only the five version-stable columns the app's own migrations write
+(`id, name, public, file_size_limit, allowed_mime_types`); the app's own storage policies
+(`CREATE POLICY ... ON storage.objects`) ARE in the artifact. Forward
+files then apply in the order the record carries: 0071, 0075–0078, 0305, then 0233–0302 in
+version order (0305 must precede 0259, which needs the new enum labels). 0070 is deliberately
+NOT in the order: its `run_sql` body is invalid PL/pgSQL (`RETURN (EXECUTE ...)` — `EXECUTE` is a
+statement, not an expression) and has never applied anywhere, yet it is recorded in the QA ledger
+with its current hash, so editing it would break `migrate verify`. The suite calls `run_sql` for
+setup/teardown, so the local job deploys the working definition from `tests/setup/create_run_sql.sql`
+via `local-db apply` — the same file QA got by hand. Fixture memberships —
+the owner and employee logins — live in `supabase/seed.sql`, not the artifact: fixture ids are
+banned on shipped surfaces.
+
+**Refresh rule.** When production receives migrations beyond 0305, re-run the build against a fresh
+production dump and commit the new artifact + record together:
+
+```bash
+npm run local:baseline -- --dump backups/<fresh-production-dump>.sql
+```
+
+The dump must be under gitignored `backups/` and must carry its server-version line; the build
+fails rather than writing a wrong artifact. The record's `forwardOrder` is updated at the same time
+when the forward set changes.
+
+**Target safety.** `QA_TARGET=local` is the only way the suite names the local stack, and it is
+named explicitly — never guessed from the URL. `tests/setup/env-guard.ts::assertLocalTarget`
+accepts only plain `http:` on a loopback host at port 54321 with a bare path, and refuses a hosted
+key used against a local URL; `assertQaProject` still refuses the local URL, so the two guards
+disagree by design. Direct Postgres is 54322 with no TLS (`tests/setup/qa-client.ts` reads
+`QA_DB_PORT` at call time; the hosted default is unchanged at 5432 with TLS). `provision-auth-sessions`
+is hard-pinned to QA and is skipped in the local job; `migrate verify` has no local target and is
+not run there.

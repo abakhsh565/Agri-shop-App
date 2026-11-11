@@ -191,6 +191,75 @@ jobs:
         # are never the fixture, and nothing here deletes them afterwards.
         run: npx vitest run tests/integration --fileParallelism=false --reporter=verbose
 
+  integration-local:
+    name: Integration (local Supabase)
+    # The permanent free alternative to the cloud QA project: the same
+    # integration suites, against a Supabase stack started on the runner
+    # itself (Docker, $0). The cloud QA job above is untouched, and this job
+    # becomes the gate only after three consecutive green runs — until then it
+    # is a parallel signal, not a requirement.
+    needs: [gates]
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    # No concurrency group: the stack lives on this runner and is discarded
+    # with it, so two local runs cannot corrupt each other's fixtures the
+    # way two cloud-QA runs can.
+    env:
+      QA_TARGET: local
+    steps:
+      - name: Checkout the candidate commit
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Start the local Supabase stack
+        # `supabase` is a devDependency, so the CLI is already in
+        # node_modules/.bin; no setup action is needed. No `-x` exclusions:
+        # the pilot measures the full stack first.
+        run: node scripts/dev/local-db.mjs up
+
+      - name: Export the local connection values
+        # local-db env prints the stack's own URL, keys, and direct-Postgres
+        # connection; appending them to $GITHUB_ENV makes them the job's
+        # environment for every later step. Nothing here names a hosted
+        # project — the command refuses unless the URL is this machine's stack.
+        run: node scripts/dev/local-db.mjs env >> "$GITHUB_ENV"
+
+      - name: Local database reachability
+        run: node scripts/check-qa-connectivity.mjs
+
+      - name: Load the local baseline (sanitized production schema + forward files)
+        # --skip-verify: verify needs an active membership, which only seed
+        # creates; it runs after seed instead.
+        run: node scripts/dev/local-db.mjs init --baseline local-ci --skip-verify
+
+      - name: Deploy the working run_sql (test-helper RPC the suite calls)
+        # The suite executes setup/teardown SQL through the run_sql RPC, so
+        # the local database needs it before any suite runs. The only
+        # migration that would create it (0070) is invalid PL/pgSQL and has
+        # never applied anywhere — yet it is recorded in the QA ledger with
+        # its current hash, so editing it would break `migrate verify`.
+        # 0070 is therefore excluded from the forward order, and the local
+        # job deploys the working definition from the same file QA got by
+        # hand (tests/setup/create_run_sql.sql).
+        run: node scripts/dev/local-db.mjs apply tests/setup/create_run_sql.sql
+
+      - name: Seed the local database
+        run: node scripts/dev/local-db.mjs seed
+
+      - name: Verify the local database against the baseline record
+        run: node scripts/dev/local-db.mjs verify --baseline local-ci
+
+      - name: Integration suites (one file at a time — same shape as the QA job)
+        run: npx vitest run tests/integration --fileParallelism=false --reporter=verbose
+
   e2e:
     name: E2E lanes against QA
     needs: [gates, qa]

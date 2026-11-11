@@ -59,8 +59,12 @@ describe('the local database gets hosted privileges before its objects exist', (
   });
 
   it('applies them before the forward files, so a newer migration can also rely on them', () => {
+    // The marker is the APPLICATION loop, not the selection: `forwardFiles`
+    // only picks the list (pure, no database write) and sits at the top of
+    // cmdInit by preference order, while the files are applied in the loop
+    // below. What must come after the defaults is the applying, not the picking.
     const defaults = initBody.indexOf('applyPlatformDefaults()');
-    const forward = initBody.indexOf('forwardFiles(since)');
+    const forward = initBody.indexOf('for (const file of files)');
     expect(forward).toBeGreaterThan(-1);
     expect(defaults).toBeLessThan(forward);
   });
@@ -93,7 +97,8 @@ describe('the local database gets hosted privileges before its objects exist', (
     const ownership = initBody.indexOf('applyStorageOwnership()');
     const defaults = initBody.indexOf('applyPlatformDefaults()');
     const restore = initBody.indexOf("label: 'baseline restore'");
-    const forward = initBody.indexOf('forwardFiles(since)');
+    // Same marker as the test above: the application loop, not the selection.
+    const forward = initBody.indexOf('for (const file of files)');
     expect(ownership).toBeGreaterThan(-1);
     expect(defaults).toBeLessThan(ownership);
     expect(ownership).toBeLessThan(restore);

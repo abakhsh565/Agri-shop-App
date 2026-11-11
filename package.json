@@ -41,6 +41,7 @@
     "verify:targeting": "node scripts/verify-targeting-refusals.mjs",
     "verify:isolation": "node scripts/verify-environment-isolation.mjs",
     "local:db": "node scripts/dev/local-db.mjs",
+    "local:baseline": "node scripts/dev/build-local-ci-baseline.mjs",
     "verify:credentials": "node scripts/verify-credential-intake.mjs",
     "verify:workflow": "node scripts/verify-workflow-safety.mjs",
     "verify:baseline": "node scripts/verify-forward-on-baseline.mjs",
