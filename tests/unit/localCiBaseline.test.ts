@@ -94,12 +94,24 @@ function syntheticDump(): string {
       ['id', 'shop_id', 'name', 'created_at'],
       [[BRANCH, SHOP, 'Default Shop - Main', '2026-01-01 00:00:00+00']],
     ),
-    copyBlock('storage.buckets', ['id', 'name', 'public'], [
-      ['images', 'images', 't'],
-      ['videos', 'videos', 't'],
-      ['documents', 'documents', 't'],
-      ['avatars', 'avatars', 't'],
+    copyBlock('storage.buckets', ['id', 'name', 'owner', 'created_at', 'updated_at', 'public', 'avif_autodetection', 'file_size_limit', 'allowed_mime_types', 'owner_id', 'type', 'versioning_status', 'lifecycle_configuration', 'lifecycle_configuration_generation'], [
+      ['product-images', 'product-images', '\\N', '2026-08-24 21:37:09.170551+00', '2026-08-24 21:37:09.170551+00', 't', 'f', '\\N', '\\N', '\\N', 'STANDARD', 'DISABLED', '\\N', '\\N'],
+      ['employee-photos', 'employee-photos', '\\N', '2026-08-24 21:37:09.170551+00', '2026-08-24 21:37:09.170551+00', 't', 'f', '\\N', '\\N', '\\N', 'STANDARD', 'DISABLED', '\\N', '\\N'],
+      ['receipts', 'receipts', '\\N', '2026-08-24 21:37:09.170551+00', '2026-08-24 21:37:09.170551+00', 't', 'f', '\\N', '\\N', '\\N', 'STANDARD', 'DISABLED', '\\N', '\\N'],
+      ['logos', 'logos', '\\N', '2026-08-24 21:37:09.170551+00', '2026-08-24 21:37:09.170551+00', 't', 'f', '\\N', '\\N', '\\N', 'STANDARD', 'DISABLED', '\\N', '\\N'],
     ]),
+    // Supabase-managed storage internals (the hosted storage is newer than
+    // the local stack's): all of these must be stripped, except the app's
+    // own policy on storage.objects, which stays.
+    'CREATE SCHEMA storage;',
+    'CREATE TABLE storage.buckets (id text, name text);',
+    'CREATE TABLE storage.objects (id uuid, bucket_id text);',
+    'CREATE FUNCTION storage.protect_bucket_control_columns() RETURNS trigger LANGUAGE plpgsql AS $function$ BEGIN IF NEW.lifecycle_configuration IS NOT NULL THEN RAISE EXCEPTION \'x\'; END IF; RETURN NEW; END; $function$;',
+    'CREATE TRIGGER protect_bucket_control_insert BEFORE INSERT ON storage.buckets FOR EACH ROW EXECUTE FUNCTION storage.protect_bucket_control_columns(\'service_role\');',
+    'CREATE INDEX bname ON storage.buckets USING btree (name);',
+    'ALTER TABLE storage.buckets OWNER TO postgres;',
+    'GRANT SELECT ON TABLE storage.buckets TO anon;',
+    'CREATE POLICY "business documents read" ON storage.objects FOR SELECT TO authenticated USING (bucket_id = \'business-documents\');',
     // Data that must never reach the artifact.
     copyBlock('auth.users', ['id', 'encrypted_password'], [[uuid(900), 'not-a-real-hash']]),
     copyBlock('public.shop_requests', ['id', 'owner_name'], [[uuid(901), 'Real Person']]),
@@ -149,6 +161,57 @@ describe('sanitizeDump', () => {
     );
     expect(problems.length).toBeGreaterThan(0);
     expect(problems.join(' ')).toMatch(/shop/i);
+  });
+
+  test('Supabase-managed storage internals are stripped, bucket rows travel on stable columns only', () => {
+    // The input carries the hosted storage's newer objects (its buckets
+    // table has lifecycle_configuration columns the local stack lacks) —
+    // if the strip were a no-op, every assertion below would fail, which
+    // is the non-vacuous proof: the input is the failure, injected.
+    const supplement = 'CREATE TABLE IF NOT EXISTS public.business_areas (id uuid);';
+    const { artifact, report, problems } = sanitizeDump(syntheticDump(), supplement);
+    expect(problems).toEqual([]);
+    expect(report.strippedStorageStatements).toBeGreaterThan(0);
+    // Platform internals: gone.
+    expect(artifact).not.toContain('CREATE SCHEMA storage');
+    expect(artifact).not.toContain('CREATE TABLE storage.buckets');
+    expect(artifact).not.toContain('CREATE TABLE storage.objects');
+    expect(artifact).not.toContain('protect_bucket_control_columns');
+    expect(artifact).not.toContain('protect_bucket_control_insert');
+    expect(artifact).not.toContain('lifecycle_configuration');
+    expect(artifact).not.toContain('ALTER TABLE storage.buckets');
+    expect(artifact).not.toContain('GRANT SELECT ON TABLE storage.buckets');
+    // The app's own storage policy: kept.
+    expect(artifact).toContain('business documents read');
+    expect(artifact).toContain('ON storage.objects');
+    // The bucket rows: kept, on the five stable columns only.
+    expect(artifact).toContain(
+      'COPY storage.buckets (id, name, public, file_size_limit, allowed_mime_types) FROM stdin;',
+    );
+    expect(artifact).toContain('product-images');
+    expect(artifact).toContain('employee-photos');
+    expect(artifact).toContain('receipts');
+    expect(artifact).toContain('logos');
+    expect(report.keptRows['storage.buckets']).toBe(4);
+  });
+
+  test('a buckets row block without a stable column is refused, not shipped partial', () => {
+    // Swap the good 14-column buckets block for one that lacks
+    // file_size_limit (but is otherwise well-formed): the rewrite must
+    // refuse rather than ship a bucket set missing a column the app writes.
+    const good = syntheticDump();
+    const start = good.indexOf('COPY storage.buckets');
+    const end = good.indexOf('\\.\n', start) + 3;
+    const badBlock = copyBlock('storage.buckets', ['id', 'name', 'public', 'allowed_mime_types'], [
+      ['product-images', 'product-images', 't', '\\N'],
+      ['employee-photos', 'employee-photos', 't', '\\N'],
+      ['receipts', 'receipts', 't', '\\N'],
+      ['logos', 'logos', 't', '\\N'],
+    ]);
+    const dump = good.slice(0, start) + badBlock + good.slice(end);
+    const { problems } = sanitizeDump(dump, 'CREATE TABLE IF NOT EXISTS public.business_areas (id uuid);');
+    expect(problems.length).toBeGreaterThan(0);
+    expect(problems.join(' ')).toMatch(/lacks file_size_limit/);
   });
 });
 

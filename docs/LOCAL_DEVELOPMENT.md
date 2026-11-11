@@ -561,7 +561,15 @@ branches 1, storage buckets 4. No auth rows, no shop requests, no storage object
 hashes; the demo shop is renamed to "AgriShop Local Development". The build refuses to write if any
 reference count moved or a fixture identity survived. Appended to it is
 `supabase/baseline/local-ci-supplement.sql`: the 0107/0108 RBAC surface production never received
-(`business_areas` + `has_permission` / `create_business_area` / `update_business_area`). Forward
+(`business_areas` + `has_permission` / `create_business_area` / `update_business_area`). The artifact
+carries NO Supabase-managed storage internals (`storage.*` tables, functions, triggers, indexes):
+the local stack provides those at its own storage version, and production's hosted storage is newer —
+its `buckets` table has `lifecycle_configuration` columns the local stack lacks, so carrying
+production's definitions broke the local database two ways (the bucket rows failed to load, and the
+restored triggers fired against a record with no such field, failing 0250). The bucket rows travel
+in a rewritten COPY naming only the five version-stable columns the app's own migrations write
+(`id, name, public, file_size_limit, allowed_mime_types`); the app's own storage policies
+(`CREATE POLICY ... ON storage.objects`) ARE in the artifact. Forward
 files then apply in the order the record carries: 0071, 0075–0078, 0305, then 0233–0302 in
 version order (0305 must precede 0259, which needs the new enum labels). 0070 is deliberately
 NOT in the order: its `run_sql` body is invalid PL/pgSQL (`RETURN (EXECUTE ...)` — `EXECUTE` is a

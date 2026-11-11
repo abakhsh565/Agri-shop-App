@@ -28,6 +28,18 @@
  *   * The one demo-shop name in the kept `shops` row is replaced with the
  *     local fixture shop name (see DEMO_SHOP_NAME below for why the match is
  *     built from parts rather than written out).
+ *   * Every Supabase-managed storage-schema definition (`storage.*` tables,
+ *     functions, triggers, indexes, and ALTERs). The local stack provides
+ *     those at ITS storage version; production's hosted storage is newer
+ *     (its `buckets` carries `lifecycle_configuration` columns the local
+ *     stack lacks), so carrying production's definitions breaks the local
+ *     database two ways: the bucket rows fail to load (their COPY names
+ *     columns the local table has not got) and the restored triggers fire
+ *     against a record that has no such field. The app's own storage
+ *     policies (`CREATE POLICY ... ON storage.objects`) are kept — they are
+ *     app schema, not platform internals — and the bucket rows travel in a
+ *     rewritten COPY that names only the version-stable columns the app's
+ *     own migrations write (see BUCKET_STABLE_COLUMNS).
  *
  * SAFETY PROPERTIES (each is asserted by the build, not assumed)
  *   * The artifact carries no shipped fixture identity
@@ -91,6 +103,89 @@ const DEMO_SHOP_NAME = ['Default', 'Shop'].join(' ');
 const FORBIDDEN_DATA_SCHEMAS = ['auth', 'vault', 'realtime', 'supabase_migrations'];
 
 /**
+ * The `storage.buckets` columns the bucket rows travel with. These are the
+ * columns the app's own migrations write (0013 creates the buckets with
+ * them; 0250 inserts exactly these five) and they exist in every storage
+ * version — unlike `lifecycle_configuration`,
+ * `lifecycle_configuration_generation`, `avif_autodetection`, `type`, and
+ * `versioning_status`, which the hosted storage has and the local stack has
+ * not got. A COPY that names a column the local table lacks fails, so the
+ * rewrite drops every column outside this list (see rewriteBucketsCopy).
+ */
+export const BUCKET_STABLE_COLUMNS = ['id', 'name', 'public', 'file_size_limit', 'allowed_mime_types'];
+
+/**
+ * A statement that defines a Supabase-managed storage object — the platform
+ * internals the local stack already provides at its own version. The app
+ * owns no object in the storage schema (its migrations only create policies
+ * on storage.objects and insert bucket rows), so anything matching here is
+ * platform-owned by construction. `CREATE POLICY ... ON storage.objects` is
+ * deliberately NOT matched: the app's policies are app schema and stay.
+ */
+export function isManagedStorageSchemaStatement(statement) {
+  const head = headOf(statement);
+  return (
+    /^create\s+schema\s+(?:if\s+not\s+exists\s+)?storage\b/.test(head) ||
+    /^create\s+table\s+(?:if\s+not\s+exists\s+)?storage\./.test(head) ||
+    /^create\s+(?:or\s+replace\s+)?function\s+storage\./.test(head) ||
+    /^create\s+trigger\s+\S+\s+[\s\S]*?\bon\s+(?:only\s+)?storage\./.test(head) ||
+    /^create\s+(?:unique\s+)?index\s+(?:if\s+not\s+exists\s+)?\S+\s+on\s+(?:only\s+)?storage\./.test(head) ||
+    /^alter\s+table\s+(?:only\s+)?storage\./.test(head) ||
+    /^alter\s+function\s+storage\./.test(head) ||
+    /^(?:grant|revoke)\s+[\s\S]*?\bon\s+(?:table\s+)?storage\./.test(head)
+  );
+}
+
+/** A COPY text-format field, the inverse of sql-statements' unescape. */
+function escapeCopyField(value) {
+  if (value === null) return '\\N';
+  return String(value)
+    .replace(/\\/g, '\\\\')
+    .replace(/\t/g, '\\t')
+    .replace(/\n/g, '\\n')
+    .replace(/\r/g, '\\r');
+}
+
+/**
+ * Rewrite a `COPY storage.buckets` block to the version-stable columns
+ * (BUCKET_STABLE_COLUMNS), dropping every column the local stack's buckets
+ * table has not got. Returns the rewritten block, or null (with a problem
+ * recorded) when the block cannot be read or lacks a stable column — a
+ * bucket set that cannot be written exactly is a fact to look at, not a
+ * fixture to absorb quietly.
+ */
+export function rewriteBucketsCopy(statement, problems) {
+  let parsed;
+  try {
+    parsed = copyDataToInsert(statement);
+  } catch (error) {
+    problems.push(
+      `the storage.buckets row block could not be parsed (${error.message}); refusing to ship a partial bucket set.`,
+    );
+    return null;
+  }
+  if (!parsed) {
+    problems.push('the storage.buckets row block is not a COPY block; refusing to guess its shape.');
+    return null;
+  }
+  const missing = BUCKET_STABLE_COLUMNS.filter((c) => !parsed.columns.includes(c));
+  if (missing.length) {
+    problems.push(
+      `the storage.buckets row block lacks ${missing.join(', ')}; the source dump changed — re-measure before rebuilding.`,
+    );
+    return null;
+  }
+  const keep = BUCKET_STABLE_COLUMNS.map((c) => parsed.columns.indexOf(c));
+  const rows = parsed.rows.map((row) => keep.map((i) => escapeCopyField(row[i])).join('\t'));
+  return [
+    `COPY storage.buckets (${BUCKET_STABLE_COLUMNS.join(', ')}) FROM stdin;`,
+    ...rows,
+    '\\.',
+    '',
+  ].join('\n');
+}
+
+/**
  * Split a dump into its statements, sliced out of the original text so each
  * keeps its terminator and comments (the same slicing `local-db.mjs` uses —
  * re-joining splitter output would glue statements together).
@@ -123,9 +218,17 @@ export function sanitizeDump(dumpText, supplementText) {
   const kept = [];
   const keptRows = {};
   let omittedDataStatements = 0;
+  let strippedStorageStatements = 0;
 
   for (const span of spans) {
     if (!isDataStatement(span.text)) {
+      // Supabase-managed storage internals: the local stack provides them
+      // at its own version. The app's storage policies are not matched
+      // here and stay (see isManagedStorageSchemaStatement).
+      if (isManagedStorageSchemaStatement(span.text)) {
+        strippedStorageStatements += 1;
+        continue;
+      }
       kept.push(span.raw);
       continue;
     }
@@ -146,8 +249,19 @@ export function sanitizeDump(dumpText, supplementText) {
       }
       raw = raw.split(DEMO_SHOP_NAME).join(LOCAL_SHOP_NAME);
     }
+    if (target === 'storage.buckets') {
+      const rewritten = rewriteBucketsCopy(span.text, problems);
+      if (rewritten === null) {
+        omittedDataStatements += 1;
+        continue;
+      }
+      raw = rewritten;
+    }
     kept.push(raw);
-    keptRows[target] = (keptRows[target] ?? 0) + copyRowCount(span.text);
+    // Count from the statement itself — except the rewritten buckets COPY,
+    // whose kept text IS the statement. (span.raw carries the trailing
+    // comments up to the next statement, which the COPY parser rejects.)
+    keptRows[target] = (keptRows[target] ?? 0) + copyRowCount(target === 'storage.buckets' ? raw : span.text);
   }
 
   for (const [table, want] of Object.entries(EXPECTED_REFERENCE_ROWS)) {
@@ -170,6 +284,11 @@ export function sanitizeDump(dumpText, supplementText) {
     '-- pg_dump; no personal data, no password hashes, no business rows.',
     '-- Reference rows only: permissions, roles, role_permissions,',
     '-- app_settings, shops, branches, storage.buckets.',
+    '-- Supabase-managed storage internals (storage.* tables, functions,',
+    '-- triggers, indexes) are NOT here: the local stack provides them at',
+    '-- its own storage version, and the bucket rows name only the',
+    '-- version-stable columns (id, name, public, file_size_limit,',
+    '-- allowed_mime_types). The app\'s storage policies ARE here.',
     '',
     ...kept,
     '',
@@ -201,6 +320,7 @@ export function sanitizeDump(dumpText, supplementText) {
       statements: spans.length,
       keptStatements: kept.length,
       omittedDataStatements,
+      strippedStorageStatements,
       keptRows,
       dataStatements: countDataStatements(
         kept.filter((raw) => isDataStatement(raw)).map((raw) => raw),
