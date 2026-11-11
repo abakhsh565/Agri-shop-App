@@ -105,9 +105,18 @@ function throwIfCleanupFailed(context: string): void {
 }
 
 async function cleanup() {
-  // Shops first (they cascade), then identities, then the request rows by number — the
-  // request row is the one this lane exists to prove is gone, so it is also cleaned here
-  // in case a run aborted between the delete and the assertion.
+  // The fresh shop's people BEFORE the purge. `purge_shop_data` drops the shop row
+  // itself, and `users.shop_id` references it with no cascade — a run aborted after
+  // approval leaves the fresh shop's owner behind, and purging first fails on
+  // users_shop_id_fkey (attempt 5: the whole file died in beforeAll cleanup on a
+  // leftover 'QA Fresh Shop' + its user). Scoped by shop, not by phone, so no
+  // spelling of the number can dodge it; the phone loop below still removes the
+  // same people and the request rows.
+  const freshShopUsers = `user_id IN (SELECT id FROM users WHERE shop_id IN (SELECT id FROM shops WHERE name LIKE 'QA Fresh Shop%'))`;
+  await trySql('fresh-users-audit', sql(`DELETE FROM audit_events WHERE ${freshShopUsers}`));
+  await trySql('fresh-users-memberships', sql(`DELETE FROM memberships WHERE ${freshShopUsers}`));
+  await trySql('fresh-users-active', sql(`DELETE FROM user_active_shops WHERE ${freshShopUsers}`));
+  await trySql('fresh-users', sql(`DELETE FROM users WHERE shop_id IN (SELECT id FROM shops WHERE name LIKE 'QA Fresh Shop%')`));
   // A shop the registration flow created and a failed run left orphaned. `purge_shop_data`
   // erases the shop's records AND the shop row, which is the same erasure the product does.
   await trySql('select', sql(`SELECT public.purge_shop_data(id) FROM shops WHERE name LIKE 'QA Fresh Shop%'`));
