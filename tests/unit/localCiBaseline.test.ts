@@ -15,6 +15,8 @@
  *   vacuous: a short table and an unrenamed shop must both fail loudly.
  */
 import { describe, expect, test } from 'vitest';
+import fs from 'node:fs';
+import path from 'node:path';
 
 import {
   EXPECTED_REFERENCE_ROWS,
@@ -209,5 +211,35 @@ describe('parseForwardSpec', () => {
     expect(parseForwardSpec('0078-0075', files).problems.length).toBeGreaterThan(0);
     expect(parseForwardSpec('', files).problems.length).toBeGreaterThan(0);
     expect(parseForwardSpec('abc', files).problems.length).toBeGreaterThan(0);
+  });
+});
+
+describe('the committed local-ci record', () => {
+  test('its forward order excludes 0070, whose body never applied anywhere', () => {
+    // 0070_add_run_sql_for_ci.sql is invalid PL/pgSQL (RETURN (EXECUTE ...)
+    // — EXECUTE is a statement, not an expression), so `local-db init`
+    // fails on it. It is recorded in the QA ledger with its current hash,
+    // so editing it would break `migrate verify`; the order therefore
+    // leaves it out and the job deploys run_sql from
+    // tests/setup/create_run_sql.sql instead. If this test fails, someone
+    // re-added 0070 to the order — remove it again, do not "fix" the file.
+    const record = JSON.parse(
+      fs.readFileSync(
+        path.join(process.cwd(), 'supabase/baseline/local-ci-baseline.json'),
+        'utf8',
+      ),
+    ) as { forwardOrder: string[] };
+    const expanded = record.forwardOrder.flatMap((part) => {
+      const [a, b] = part.split('-');
+      if (!b) return [part];
+      const out: string[] = [];
+      for (let n = Number(a); n <= Number(b); n++) out.push(String(n).padStart(4, '0'));
+      return out;
+    });
+    expect(expanded).not.toContain('0070');
+    expect(expanded).toContain('0071');
+    expect(expanded).toContain('0305');
+    expect(expanded).toContain('0233');
+    expect(expanded).toContain('0302');
   });
 });

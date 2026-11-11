@@ -240,6 +240,17 @@ jobs:
         # creates; it runs after seed instead.
         run: node scripts/dev/local-db.mjs init --baseline local-ci --skip-verify
 
+      - name: Deploy the working run_sql (test-helper RPC the suite calls)
+        # The suite executes setup/teardown SQL through the run_sql RPC, so
+        # the local database needs it before any suite runs. The only
+        # migration that would create it (0070) is invalid PL/pgSQL and has
+        # never applied anywhere — yet it is recorded in the QA ledger with
+        # its current hash, so editing it would break `migrate verify`.
+        # 0070 is therefore excluded from the forward order, and the local
+        # job deploys the working definition from the same file QA got by
+        # hand (tests/setup/create_run_sql.sql).
+        run: node scripts/dev/local-db.mjs apply tests/setup/create_run_sql.sql
+
       - name: Seed the local database
         run: node scripts/dev/local-db.mjs seed
 

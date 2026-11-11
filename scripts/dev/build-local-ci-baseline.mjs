@@ -134,11 +134,9 @@ const record = {
     migrateTarget: false,
     note: 'Local CI test target only. It is checked against, never written by hosted tooling; the local stack is discarded after the run.',
   },
-  forwardOrder: ['0070', '0071', '0075-0078', '0305', '0233-0302'],
+  forwardOrder: ['0071', '0075-0078', '0305', '0233-0302'],
   forwardNote:
-    'Apply order for local-db init: test helpers first (0070 run_sql, 0071 test-auth helper, ' +
-    '0075-0078 agent/impact tables), then 0305 (the enum labels batch 1 needs), then the ' +
-    'production batches in version order (0233-0276, 0277-0289, 0291-0299, 0300-0302).',
+    'Apply order for local-db init: the test-auth helper first (0071 _test_check_auth), then the agent/impact tables (0075-0078), then 0305 (the enum labels batch 1 needs), then the production batches in version order (0233-0276, 0277-0289, 0291-0299, 0300-0302). 0070 is deliberately NOT in this order: its run_sql body is invalid PL/pgSQL (RETURN (EXECUTE ...) — EXECUTE is a statement, not an expression) and has never applied anywhere, yet it is recorded in the QA ledger with its current hash, so editing it would break migrate verify; the suite’s run_sql comes from tests/setup/create_run_sql.sql instead, applied by the local-CI job via `local-db apply` (the same file QA got by hand).',
   source: {
     dump: DUMP,
     dumpSha256,

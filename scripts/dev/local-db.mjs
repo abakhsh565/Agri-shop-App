@@ -56,6 +56,7 @@
  *   node scripts/dev/local-db.mjs up | down
  *   node scripts/dev/local-db.mjs init    [--since 0188] [--baseline local-ci] [--forward <spec>] [--skip-verify]
  *   node scripts/dev/local-db.mjs seed
+ *   node scripts/dev/local-db.mjs apply <file>   # one repo-relative .sql file, local DB only
  *   node scripts/dev/local-db.mjs verify  [--baseline local-ci]
  *   node scripts/dev/local-db.mjs reset   [--yes]      # drop and re-create the local database
  *   node scripts/dev/local-db.mjs env     # print the local connection values as KEY=value lines
@@ -402,11 +403,13 @@ function forwardFiles(since) {
 
 /**
  * The forward set for an explicit apply order: a comma-separated spec of
- * versions and ascending ranges (`0070,0071,0075-0078,0305,0233-0302`).
+ * versions and ascending ranges (`0071,0075-0078,0305,0233-0302`).
  * The local-CI baseline needs this because its apply order is not version
  * order — 0305 (the enum labels batch 1 needs) runs before 0233, and the
- * test-helper files (0070/0071, 0075-0078) run first. A spec that names a
+ * test-helper files (0071, 0075-0078) run first. A spec that names a
  * missing file, a backwards range, or a file twice is refused, never guessed.
+ * (0070 is not in the order: its run_sql body never applied anywhere; see
+ * cmdApply.)
  */
 function forwardFilesFromSpec(spec) {
   const parsed = parseForwardSpec(spec, fs.readdirSync(MIGRATIONS_DIR));
@@ -565,6 +568,37 @@ async function cmdSeed() {
 
   console.log(`\n  auth users: ${ok} already valid, ${created} created, ${repaired} repaired`);
   console.log(`  sign in with any of the seeded phones (e.g. 923009999999) and the app's demo code.`);
+}
+
+/**
+ * Apply one SQL file to the local database, stopping at the first failure.
+ * The file is named repo-relative (`apply tests/setup/create_run_sql.sql`)
+ * and must live under the repo root; the target is always the local
+ * container (psql() refuses anything else), so this cannot reach a hosted
+ * database no matter which file it is given.
+ *
+ * WHY THIS EXISTS — the suite cannot run without `run_sql`, and the only
+ * automated path that would create it is migration 0070, whose body is
+ * invalid PL/pgSQL (`RETURN (EXECUTE sql_query)` — EXECUTE is a statement,
+ * not an expression) and has never applied anywhere: QA got its working
+ * `run_sql` from this same file, deployed by hand. 0070 is recorded in the
+ * QA ledger with its current hash, so editing it would break `migrate
+ * verify`; it is therefore left alone and excluded from the local-CI
+ * forward order, and the local job deploys the working definition from
+ * `tests/setup/create_run_sql.sql` through this command instead.
+ */
+function cmdApply() {
+  const file = args.find((a) => !a.startsWith('--') && a !== 'apply');
+  if (!file) refuse('apply needs a file: `local-db apply <repo-relative .sql file>`.');
+  const resolved = path.resolve(ROOT, file);
+  if (!resolved.startsWith(`${ROOT}${path.sep}`) && resolved !== ROOT) {
+    refuse(`refusing to apply "${file}": it is not under the repo root.`);
+  }
+  if (!fs.existsSync(resolved)) refuse(`no such file: ${file}`);
+  if (!resolved.endsWith('.sql')) refuse(`refusing to apply "${file}": not a .sql file.`);
+  console.log(`Applying ${path.relative(ROOT, resolved)} to the local database…`);
+  psql(fs.readFileSync(resolved, 'utf8'), { stopOnError: true, label: path.basename(resolved) });
+  console.log('  done.');
 }
 
 /** The acceptance check: does the local schema actually match the baseline that was loaded? */
@@ -849,6 +883,9 @@ switch (command) {
   case 'seed':
     await cmdSeed();
     break;
+  case 'apply':
+    cmdApply();
+    break;
   case 'verify':
     await cmdVerify();
     break;
@@ -862,16 +899,18 @@ switch (command) {
   default:
     console.log(
       [
-        'Usage: node scripts/dev/local-db.mjs <status|up|down|init|seed|verify|reset|env>',
+        'Usage: node scripts/dev/local-db.mjs <status|up|down|init|seed|apply|verify|reset|env>',
         '',
         '  status   what the local stack is and where it listens (no writes)',
         '  up       start the local Supabase stack (docker)',
         '  down     stop it, keeping the local database volume',
         '  init     load the frozen baseline schema, then the forward files',
         '           --baseline <name>  which record to load (staging, local-ci)',
-        '           --forward <spec>   explicit apply order, e.g. 0070,0071,0075-0078,0305,0233-0302',
+        '           --forward <spec>   explicit apply order, e.g. 0071,0075-0078,0305,0233-0302',
         '           --skip-verify      verify after `seed` instead (the membership comes from seed)',
         '  seed     apply supabase/seed.sql and provision the local auth users',
+        '  apply    apply one repo-relative .sql file to the local database',
+        '           (e.g. tests/setup/create_run_sql.sql — the working run_sql)',
         '  verify   compare the local schema and its API privileges against the baseline record',
         '  reset    discard the local database volume and start over (--yes required)',
         '  env      print the local stack connection values as KEY=value lines',

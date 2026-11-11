@@ -543,6 +543,7 @@ node scripts/dev/local-db.mjs up                                  # supabase sta
 node scripts/dev/local-db.mjs env >> "$GITHUB_ENV"                 # the stack's own URL + keys
 node scripts/check-qa-connectivity.mjs                            # reachability, plain Postgres
 node scripts/dev/local-db.mjs init --baseline local-ci --skip-verify
+node scripts/dev/local-db.mjs apply tests/setup/create_run_sql.sql  # the working run_sql
 node scripts/dev/local-db.mjs seed
 node scripts/dev/local-db.mjs verify --baseline local-ci
 npx vitest run tests/integration --fileParallelism=false --reporter=verbose
@@ -561,8 +562,13 @@ hashes; the demo shop is renamed to "AgriShop Local Development". The build refu
 reference count moved or a fixture identity survived. Appended to it is
 `supabase/baseline/local-ci-supplement.sql`: the 0107/0108 RBAC surface production never received
 (`business_areas` + `has_permission` / `create_business_area` / `update_business_area`). Forward
-files then apply in the order the record carries: 0070, 0071, 0075–0078, 0305, then 0233–0302 in
-version order (0305 must precede 0259, which needs the new enum labels). Fixture memberships —
+files then apply in the order the record carries: 0071, 0075–0078, 0305, then 0233–0302 in
+version order (0305 must precede 0259, which needs the new enum labels). 0070 is deliberately
+NOT in the order: its `run_sql` body is invalid PL/pgSQL (`RETURN (EXECUTE ...)` — `EXECUTE` is a
+statement, not an expression) and has never applied anywhere, yet it is recorded in the QA ledger
+with its current hash, so editing it would break `migrate verify`. The suite calls `run_sql` for
+setup/teardown, so the local job deploys the working definition from `tests/setup/create_run_sql.sql`
+via `local-db apply` — the same file QA got by hand. Fixture memberships —
 the owner and employee logins — live in `supabase/seed.sql`, not the artifact: fixture ids are
 banned on shipped surfaces.
 
