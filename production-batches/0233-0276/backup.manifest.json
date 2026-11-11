@@ -1,8 +1,8 @@
 {
-  "artifact": "backup-production-gkswcfljxlutkfdvvqng-2026-11-10T05-39-03.sql",
+  "artifact": "backup-production-gkswcfljxlutkfdvvqng-2026-11-11T05-40-35.sql",
   "environment": "production",
   "projectRef": "gkswcfljxlutkfdvvqng",
-  "generatedAt": "2026-11-10T05:39:03.982Z",
+  "generatedAt": "2026-11-11T05:40:35.947Z",
   "serverVersion": "17.6",
   "identity": {
     "configuredUser": "postgres.gkswcfljxlutkfdvvqng",
@@ -11,8 +11,8 @@
     "note": "Session role is rewritten by the Supabase pooler, so the project ref comes from the credential."
   },
   "migrationLedger": {
-    "count": 49,
-    "latest": "0305"
+    "count": 50,
+    "latest": "0306"
   },
   "schemas": [
     "public",
@@ -94,7 +94,7 @@
     "supabase_migrations bookkeeping is not included."
   ],
   "bytes": 767982,
-  "sha256": "6ac5c266de61afb0457bfef4a1ae7c732f9b2e7f4d78395b02557fc71e1dced3",
+  "sha256": "89da0d7f95da43277a22c721c263ccf5b8d551236d198587edfb004c68a87a5c",
   "totalRows": 108,
   "tablesDumped": 46
 }
