@@ -54,24 +54,24 @@ async function count(query: string): Promise<number> {
 }
 
 async function cleanup() {
-  await sql(`DELETE FROM customers WHERE id IN ('${CUSTOMER}','${OTHER_CUSTOMER}')`).catch(() => undefined);
-  await sql(`DELETE FROM branches WHERE tenant_id IN ('${SHOP}','${OTHER_SHOP}')`).catch(() => undefined);
-  await sql(`DELETE FROM memberships WHERE tenant_id IN ('${SHOP}','${OTHER_SHOP}')`).catch(() => undefined);
+  await sql(`DELETE FROM customers WHERE id IN ('${CUSTOMER}','${OTHER_CUSTOMER}')`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
+  await sql(`DELETE FROM branches WHERE tenant_id IN ('${SHOP}','${OTHER_SHOP}')`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
+  await sql(`DELETE FROM memberships WHERE tenant_id IN ('${SHOP}','${OTHER_SHOP}')`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
   // Not a bare `DELETE FROM users`. `set_place` writes a `location_updated` audit row and
   // `audit_events.user_id` is NO ACTION, so the two owners were undeletable — and because one
   // blocked row makes the whole multi-row DELETE fail, BOTH stayed in the shared QA database and
   // were the entire cause of `rbacInvariants` invariant D's `expected 2 to be +0`. The helper
   // clears what account deletion clears, then proves the users are gone instead of assuming it.
   await deleteFixtureUsers([OWNER, OTHER_OWNER]);
-  await sql(`DELETE FROM shops WHERE id IN ('${SHOP}','${OTHER_SHOP}')`).catch(() => undefined);
-  await sql(`DELETE FROM shop_requests WHERE owner_phone LIKE '%9640001'`).catch(() => undefined);
+  await sql(`DELETE FROM shops WHERE id IN ('${SHOP}','${OTHER_SHOP}')`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
+  await sql(`DELETE FROM shop_requests WHERE owner_phone LIKE '%9640001'`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
   // The auth identities these fixtures signed in with. An app user deleted without its auth row
   // leaves a login behind that nothing can use and every later run has to work around (the app's
   // own credential address is derived from the phone, so a stray holder blocks it) — the same
   // rule the QA baseline reset applies.
   await sql(
     `DELETE FROM auth.users a WHERE (a.email LIKE 'user-9230096400%' OR a.email LIKE 'user-92300964%') AND NOT EXISTS (SELECT 1 FROM users u WHERE u.id = a.id)`
-  ).catch(() => undefined);
+  ).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
 }
 
 beforeAll(async () => {
@@ -277,7 +277,7 @@ describe('Locations are points in Pakistan, and only theirs', () => {
 
     // The registration form is the only place a place is written before sign-in, so it is the
     // only one that cannot go through set_place — the table's own box is what holds it there.
-    await sql(`DELETE FROM shop_requests WHERE owner_phone = '${OWNER_PHONE}'`).catch(() => undefined);
+    await sql(`DELETE FROM shop_requests WHERE owner_phone = '${OWNER_PHONE}'`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
     const request = await execRpcAsUser(OWNER, 'insert_shop_request', {
       p_owner_name: 'QA Place Applicant',
       p_owner_phone: OWNER_PHONE,
@@ -306,7 +306,7 @@ describe('Locations are points in Pakistan, and only theirs', () => {
     }
     expect(refused).toBe(true);
 
-    await sql(`DELETE FROM customers WHERE id = '${newId}'`).catch(() => undefined);
-    await sql(`DELETE FROM shop_requests WHERE id = '${request.data.id}'`).catch(() => undefined);
+    await sql(`DELETE FROM customers WHERE id = '${newId}'`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
+    await sql(`DELETE FROM shop_requests WHERE id = '${request.data.id}'`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
   });
 });

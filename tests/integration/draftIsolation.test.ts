@@ -26,9 +26,9 @@ describe('Draft QA Data Isolation', () => {
   beforeAll(async () => {
     // Clean — FK-safe order
     for (const t of ['sale_items', 'sales', 'inventory_movements', 'stock_adjustments']) {
-      await q(`DELETE FROM ${t} WHERE product_id IN ('${PROD_A}','${PROD_B}')`).catch(() => {});
+      await q(`DELETE FROM ${t} WHERE product_id IN ('${PROD_A}','${PROD_B}')`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
     }
-    await q(`DELETE FROM product_variants WHERE id IN ('${VAR_A}','${VAR_B}')`).catch(() => {});
+    await q(`DELETE FROM product_variants WHERE id IN ('${VAR_A}','${VAR_B}')`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
     await q(`DELETE FROM products WHERE id IN ('${PROD_A}','${PROD_B}')`);
     await q(`DELETE FROM companies WHERE id IN ('${CO_A}','${CO_B}')`);
     await q(`DELETE FROM customers WHERE id IN ('${CUST_A}','${CUST_B}')`);
@@ -68,9 +68,9 @@ describe('Draft QA Data Isolation', () => {
 
   afterAll(async () => {
     for (const t of ['sale_items', 'sales', 'inventory_movements', 'stock_adjustments']) {
-      await q(`DELETE FROM ${t} WHERE product_id IN ('${PROD_A}','${PROD_B}')`).catch(() => {});
+      await q(`DELETE FROM ${t} WHERE product_id IN ('${PROD_A}','${PROD_B}')`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
     }
-    await q(`DELETE FROM product_variants WHERE id IN ('${VAR_A}','${VAR_B}')`).catch(() => {});
+    await q(`DELETE FROM product_variants WHERE id IN ('${VAR_A}','${VAR_B}')`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
     await q(`DELETE FROM products WHERE id IN ('${PROD_A}','${PROD_B}')`);
     await q(`DELETE FROM companies WHERE id IN ('${CO_A}','${CO_B}')`);
     await q(`DELETE FROM customers WHERE id IN ('${CUST_A}','${CUST_B}')`);
@@ -165,7 +165,7 @@ describe('Draft QA Data Isolation', () => {
 
   it('Draft A cleanup: removes A customer+product+company+variant, B survives', async () => {
     for (const t of ['sale_items', 'sales', 'inventory_movements', 'stock_adjustments']) {
-      await q(`DELETE FROM ${t} WHERE product_id = '${PROD_A}'`).catch(() => {});
+      await q(`DELETE FROM ${t} WHERE product_id = '${PROD_A}'`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
     }
     await q(`DELETE FROM product_variants WHERE id = '${VAR_A}'`);
     await q(`DELETE FROM products WHERE id = '${PROD_A}'`);

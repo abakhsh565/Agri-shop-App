@@ -53,11 +53,11 @@ async function variantB(): Promise<any> {
 }
 
 async function cleanup() {
-  await sql(`DELETE FROM product_variants WHERE id IN ('${VARIANT_A}','${VARIANT_B}','${INJECTED}')`).catch(() => undefined);
-  await sql(`DELETE FROM products WHERE id IN ('${PRODUCT_A}','${PRODUCT_B}')`).catch(() => undefined);
-  await sql(`DELETE FROM user_permissions WHERE user_id = '${EMP_A}'`).catch(() => undefined);
-  await sql(`DELETE FROM users WHERE id IN ('${OWNER_A}','${OWNER_B}','${EMP_A}')`).catch(() => undefined);
-  await sql(`DELETE FROM shops WHERE id = '${TENANT_B}'`).catch(() => undefined);
+  await sql(`DELETE FROM product_variants WHERE id IN ('${VARIANT_A}','${VARIANT_B}','${INJECTED}')`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
+  await sql(`DELETE FROM products WHERE id IN ('${PRODUCT_A}','${PRODUCT_B}')`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
+  await sql(`DELETE FROM user_permissions WHERE user_id = '${EMP_A}'`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
+  await sql(`DELETE FROM users WHERE id IN ('${OWNER_A}','${OWNER_B}','${EMP_A}')`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
+  await sql(`DELETE FROM shops WHERE id = '${TENANT_B}'`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
 }
 
 beforeAll(async () => {
@@ -151,13 +151,13 @@ describe('variant isolation — is the child table scoped to the caller shop', (
   });
 
   it('a cross-tenant INSERT cannot attach a variant to the other shop’s product', async () => {
-    await sql(`DELETE FROM product_variants WHERE id = '${INJECTED}'`).catch(() => undefined);
+    await sql(`DELETE FROM product_variants WHERE id = '${INJECTED}'`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
     await insertAsUser(OWNER_A, 'product_variants', {
       id: INJECTED, product_id: PRODUCT_B, name: 'injected', selling_price: 1, cost_price: 1,
       unit_size: 1, low_stock_threshold: 1, stock_qty: 0,
     });
     const rows = await sql(`SELECT id FROM product_variants WHERE id = '${INJECTED}'`);
-    await sql(`DELETE FROM product_variants WHERE id = '${INJECTED}'`).catch(() => undefined);
+    await sql(`DELETE FROM product_variants WHERE id = '${INJECTED}'`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
     expect(rows.rows.length, 'a variant was written onto another shop’s product').toBe(0);
   });
 });

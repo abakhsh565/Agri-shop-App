@@ -34,14 +34,14 @@ async function sql(query: string) {
 }
 
 async function cleanup() {
-  await sql(`DELETE FROM reminder_occurrences WHERE config_id IN ('${CFG_A}') OR shop_id = '${TENANT_B}'`).catch(() => undefined);
+  await sql(`DELETE FROM reminder_occurrences WHERE config_id IN ('${CFG_A}') OR shop_id = '${TENANT_B}'`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
   // Only this suite's configuration — never the live tenant's own rows.
-  await sql(`DELETE FROM reminder_configs WHERE id = '${CFG_A}' OR name LIKE '${RUN}%' OR shop_id = '${TENANT_B}'`).catch(() => undefined);
-  await sql(`DELETE FROM reminder_logs WHERE shop_id = '${TENANT_B}'`).catch(() => undefined);
-  await sql(`DELETE FROM audit_events WHERE user_id IN ('${OWNER_A}','${OWNER_B}','${EMP_A}')`).catch(() => undefined);
-  await sql(`DELETE FROM customers WHERE id = '${CUST_A}'`).catch(() => undefined);
-  await sql(`DELETE FROM users WHERE id IN ('${OWNER_A}','${OWNER_B}','${EMP_A}')`).catch(() => undefined);
-  await sql(`DELETE FROM shops WHERE id = '${TENANT_B}'`).catch(() => undefined);
+  await sql(`DELETE FROM reminder_configs WHERE id = '${CFG_A}' OR name LIKE '${RUN}%' OR shop_id = '${TENANT_B}'`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
+  await sql(`DELETE FROM reminder_logs WHERE shop_id = '${TENANT_B}'`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
+  await sql(`DELETE FROM audit_events WHERE user_id IN ('${OWNER_A}','${OWNER_B}','${EMP_A}')`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
+  await sql(`DELETE FROM customers WHERE id = '${CUST_A}'`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
+  await sql(`DELETE FROM users WHERE id IN ('${OWNER_A}','${OWNER_B}','${EMP_A}')`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
+  await sql(`DELETE FROM shops WHERE id = '${TENANT_B}'`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
 }
 
 beforeAll(async () => {

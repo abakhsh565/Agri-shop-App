@@ -40,7 +40,7 @@ beforeAll(async () => {
   await sql(`INSERT INTO users (id, name, phone, role, is_original_owner, is_active, shop_id)
     VALUES ('${admin}', 'QA RBAC Admin', '${adminPhone}', 'admin', true, true, '${tenant}')
     ON CONFLICT (id) DO UPDATE SET is_active = true, role = 'admin', shop_id = EXCLUDED.shop_id`);
-  await qaServiceClient.auth.admin.updateUserById(employee, { password: `QA-test-${employee}-2024!` }).catch(() => undefined);
+  await qaServiceClient.auth.admin.updateUserById(employee, { password: `QA-test-${employee}-2024!` }).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
   await sql(`DELETE FROM audit_events WHERE entity_id IN ('${employee}') OR details->>'name'='QA RBAC Employee'`);
   await sql(`DELETE FROM user_permissions WHERE user_id IN (SELECT id FROM users WHERE id='${employee}' OR phone='923008880001')`);
   await sql(`DELETE FROM memberships WHERE user_id IN (SELECT id FROM users WHERE id='${employee}' OR phone='923008880001')`);
@@ -74,8 +74,8 @@ afterAll(async () => {
   await sql(`DELETE FROM users WHERE id='${admin}'`);
   // This file's own rows, removed and read back: a cleanup that silently failed is what made the
   // NEXT run fail with a duplicate phone.
-  await sql(`DELETE FROM customers WHERE phone='${DENIED_CUSTOMER_PHONE}'`).catch(() => undefined);
-  await sql(`DELETE FROM branches WHERE id='${WAREHOUSE}'`).catch(() => undefined);
+  await sql(`DELETE FROM customers WHERE phone='${DENIED_CUSTOMER_PHONE}'`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
+  await sql(`DELETE FROM branches WHERE id='${WAREHOUSE}'`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
   const { rows: left } = await sql(
     `SELECT (SELECT count(*) FROM customers WHERE phone='${DENIED_CUSTOMER_PHONE}')
           + (SELECT count(*) FROM branches WHERE id='${WAREHOUSE}') AS n`

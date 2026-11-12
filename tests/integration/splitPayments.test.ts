@@ -66,8 +66,8 @@ describe("Split Payment Recording", () => {
   });
 
   afterAll(async () => {
-    await execSqlAsAdmin(`DELETE FROM customer_payments WHERE customer_id IN ('${TEST.customerA}', '${TEST.customerB}')`).catch(() => {});
-    await execSqlAsAdmin(`DELETE FROM customers WHERE id IN ('${TEST.customerA}', '${TEST.customerB}')`).catch(() => {});
+    await execSqlAsAdmin(`DELETE FROM customer_payments WHERE customer_id IN ('${TEST.customerA}', '${TEST.customerB}')`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
+    await execSqlAsAdmin(`DELETE FROM customers WHERE id IN ('${TEST.customerA}', '${TEST.customerB}')`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
   });
 
   describe("Schema", () => {

@@ -112,9 +112,9 @@ async function setBranchMarketplace(branchId: string, enabled: boolean) {
 }
 
 async function cleanup() {
-  await sql(`DELETE FROM product_variants WHERE id IN ('${LAHORE_VARIANT}','${MULTAN_VARIANT}','${SHARED_VARIANT_L}','${SHARED_VARIANT_M}')`).catch(() => undefined);
-  await sql(`DELETE FROM products WHERE id IN ('${LAHORE_PRODUCT}','${MULTAN_PRODUCT}','${SHARED_PRODUCT_L}','${SHARED_PRODUCT_M}')`).catch(() => undefined);
-  await sql(`DELETE FROM shops WHERE id IN ('${LAHORE_BRANCH}','${MULTAN_BRANCH}')`).catch(() => undefined);
+  await sql(`DELETE FROM product_variants WHERE id IN ('${LAHORE_VARIANT}','${MULTAN_VARIANT}','${SHARED_VARIANT_L}','${SHARED_VARIANT_M}')`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
+  await sql(`DELETE FROM products WHERE id IN ('${LAHORE_PRODUCT}','${MULTAN_PRODUCT}','${SHARED_PRODUCT_L}','${SHARED_PRODUCT_M}')`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
+  await sql(`DELETE FROM shops WHERE id IN ('${LAHORE_BRANCH}','${MULTAN_BRANCH}')`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
 }
 
 async function createBranch(id: string, name: string, place: { lat: number; lng: number }, enabled: boolean) {

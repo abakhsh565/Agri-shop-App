@@ -48,9 +48,9 @@ async function cleanup() {
     DELETE FROM audit_events
     WHERE user_id IN (SELECT id FROM users WHERE phone IN (${PHONES.map((p) => `'${p}'`).join(',')}))
        OR entity_id IN (SELECT id FROM users WHERE phone IN (${PHONES.map((p) => `'${p}'`).join(',')}))
-  `).catch(() => undefined);
-  await sql(`DELETE FROM customers WHERE phone LIKE '92300966%'`).catch(() => undefined);
-  await sql(`DELETE FROM users WHERE phone IN (${PHONES.map((p) => `'${p}'`).join(',')})`).catch(() => undefined);
+  `).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
+  await sql(`DELETE FROM customers WHERE phone LIKE '92300966%'`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
+  await sql(`DELETE FROM users WHERE phone IN (${PHONES.map((p) => `'${p}'`).join(',')})`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
 }
 
 beforeAll(async () => {
@@ -157,7 +157,7 @@ describe('Employee invite lifecycle — an invitation is not access', () => {
     // function (tests/unit/rpcContractGuard.test.ts now fails on either).
     await execRpcAsUser(OWNER, 'deactivate_employee_v1', {
       payload: { employeeId: invited },
-    }).catch(() => undefined);
+    }).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
     // Deactivation is enforced through the same status field authorization reads.
     await sql(`UPDATE users SET is_active = false WHERE id = '${invited}'`);
     expect(await statusOf(invited)).toBe('suspended');
@@ -285,20 +285,20 @@ describe('An invitation is usable: the invitee can actually sign in', () => {
   let inviteeId = '';
 
   beforeAll(async () => {
-    await sql(`DELETE FROM user_permissions WHERE user_id IN (SELECT id FROM users WHERE phone = '${PHONE}')`).catch(() => undefined);
-    await sql(`DELETE FROM memberships WHERE user_id IN (SELECT id FROM users WHERE phone = '${PHONE}')`).catch(() => undefined);
-    await sql(`DELETE FROM auth.identities WHERE user_id IN (SELECT id FROM users WHERE phone = '${PHONE}')`).catch(() => undefined);
-    await sql(`DELETE FROM auth.users WHERE id IN (SELECT id FROM users WHERE phone = '${PHONE}')`).catch(() => undefined);
-    await sql(`DELETE FROM users WHERE phone = '${PHONE}'`).catch(() => undefined);
+    await sql(`DELETE FROM user_permissions WHERE user_id IN (SELECT id FROM users WHERE phone = '${PHONE}')`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
+    await sql(`DELETE FROM memberships WHERE user_id IN (SELECT id FROM users WHERE phone = '${PHONE}')`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
+    await sql(`DELETE FROM auth.identities WHERE user_id IN (SELECT id FROM users WHERE phone = '${PHONE}')`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
+    await sql(`DELETE FROM auth.users WHERE id IN (SELECT id FROM users WHERE phone = '${PHONE}')`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
+    await sql(`DELETE FROM users WHERE phone = '${PHONE}'`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
   });
 
   afterAll(async () => {
-    await sql(`DELETE FROM user_permissions WHERE user_id = '${inviteeId}'`).catch(() => undefined);
-    await sql(`DELETE FROM memberships WHERE user_id = '${inviteeId}'`).catch(() => undefined);
-    await sql(`DELETE FROM audit_events WHERE entity_id = '${inviteeId}' OR user_id = '${inviteeId}'`).catch(() => undefined);
-    await sql(`DELETE FROM users WHERE id = '${inviteeId}'`).catch(() => undefined);
-    await sql(`DELETE FROM auth.identities WHERE user_id = '${inviteeId}'`).catch(() => undefined);
-    await sql(`DELETE FROM auth.users WHERE id = '${inviteeId}'`).catch(() => undefined);
+    await sql(`DELETE FROM user_permissions WHERE user_id = '${inviteeId}'`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
+    await sql(`DELETE FROM memberships WHERE user_id = '${inviteeId}'`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
+    await sql(`DELETE FROM audit_events WHERE entity_id = '${inviteeId}' OR user_id = '${inviteeId}'`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
+    await sql(`DELETE FROM users WHERE id = '${inviteeId}'`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
+    await sql(`DELETE FROM auth.identities WHERE user_id = '${inviteeId}'`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
+    await sql(`DELETE FROM auth.users WHERE id = '${inviteeId}'`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
   });
 
   it('creates the login with the employee, so the invite can be accepted', async () => {
@@ -326,11 +326,11 @@ describe('An invitation is usable: the invitee can actually sign in', () => {
       payload: { name: 'QA Usable Invite 2', phone: '923009660006', roleId: ROLE_SALES_EMPLOYEE },
     });
     expect(perms.error).toBeNull();
-    await sql(`DELETE FROM user_permissions WHERE user_id = '${perms.data.id}'`).catch(() => undefined);
-    await sql(`DELETE FROM memberships WHERE user_id = '${perms.data.id}'`).catch(() => undefined);
-    await sql(`DELETE FROM auth.identities WHERE user_id = '${perms.data.id}'`).catch(() => undefined);
-    await sql(`DELETE FROM auth.users WHERE id = '${perms.data.id}'`).catch(() => undefined);
-    await sql(`DELETE FROM users WHERE id = '${perms.data.id}'`).catch(() => undefined);
+    await sql(`DELETE FROM user_permissions WHERE user_id = '${perms.data.id}'`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
+    await sql(`DELETE FROM memberships WHERE user_id = '${perms.data.id}'`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
+    await sql(`DELETE FROM auth.identities WHERE user_id = '${perms.data.id}'`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
+    await sql(`DELETE FROM auth.users WHERE id = '${perms.data.id}'`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
+    await sql(`DELETE FROM users WHERE id = '${perms.data.id}'`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
   });
 
   it('accepts the invitation with the app\'s own credential and no help from the tests', async () => {

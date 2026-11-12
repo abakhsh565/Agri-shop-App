@@ -78,8 +78,8 @@ describe('Payment Idempotency', () => {
   });
 
   afterAll(async () => {
-    await execSqlAsAdmin(`DELETE FROM customer_payments WHERE customer_id = '${TEST.customer}'`).catch(() => {});
-    await execSqlAsAdmin(`DELETE FROM customers WHERE id = '${TEST.customer}'`).catch(() => {});
+    await execSqlAsAdmin(`DELETE FROM customer_payments WHERE customer_id = '${TEST.customer}'`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
+    await execSqlAsAdmin(`DELETE FROM customers WHERE id = '${TEST.customer}'`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
   });
 
   it('1. Normal single payment', async () => {

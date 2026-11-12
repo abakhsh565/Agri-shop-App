@@ -203,9 +203,12 @@ if (!targetFlag && !envName) {
 // resolves a credential. Every other mode, and `apply` without a named batch, is refused here.
 if (envName === 'production' && !(mode === 'apply' && Boolean(flag('files')))) {
   refuse(
-    'production is not a target of this tool. Its schema does not yet match this directory ' +
-      '(the ledger says 0016; the membership model is absent), so what production needs is the ' +
-      'schema-strategy decision in PRODUCTION_READINESS_AUDIT.md §D — not a replay.\n' +
+    'production is not a target of this tool. This refusal happens before a credential is resolved\n' +
+      '  and before any ledger is read, so it states no position — a refusal that printed a version\n' +
+      '  number would be describing a measurement it never took. Where production actually stands is\n' +
+      '  recorded in supabase/baseline/production-baseline.json; that record, not this message, is the\n' +
+      '  measure. What production needs is the schema-strategy decision in PRODUCTION_READINESS_AUDIT.md\n' +
+      '  §D — not a replay.\n' +
       '  Nothing was read and nothing was written. This refusal is deliberate and is not a bug.\n' +
       '  The single exception is `apply` with a NAMED batch and a PASS verification report, a fresh\n' +
       '  restore-verified backup, and an in-position file list — see docs/PRODUCTION_MIGRATION_PLAN.md §7(a).',

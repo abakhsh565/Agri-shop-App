@@ -49,7 +49,7 @@ async function clean() {
     `DELETE FROM products WHERE name LIKE ${like}`,
     `DELETE FROM companies WHERE name LIKE ${like}`,
   ];
-  for (const s of steps) await execSqlAsAdmin(s).catch(() => undefined);
+  for (const s of steps) await execSqlAsAdmin(s).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
 }
 
 beforeAll(async () => {

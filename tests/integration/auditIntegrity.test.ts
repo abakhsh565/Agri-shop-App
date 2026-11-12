@@ -45,9 +45,9 @@ async function sql(query: string) {
 }
 
 async function cleanup() {
-  await sql(`DELETE FROM audit_events WHERE action LIKE '${RUN}%'`).catch(() => undefined);
-  await sql(`DELETE FROM users WHERE id IN ('${ADMIN_B_ID}','${ACTOR_B_ID}')`).catch(() => undefined);
-  await sql(`DELETE FROM shops WHERE id = '${SHOP_B}'`).catch(() => undefined);
+  await sql(`DELETE FROM audit_events WHERE action LIKE '${RUN}%'`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
+  await sql(`DELETE FROM users WHERE id IN ('${ADMIN_B_ID}','${ACTOR_B_ID}')`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
+  await sql(`DELETE FROM shops WHERE id = '${SHOP_B}'`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
 }
 
 beforeAll(async () => {

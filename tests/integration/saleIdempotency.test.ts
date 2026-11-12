@@ -128,7 +128,7 @@ afterAll(async () => {
     execSqlAsAdmin,
     [
       // The submission keys, first and in the same report: a stale key from an interrupted run is
-      // what makes the next run's first confirm look like a duplicate, and `.catch(() => undefined)`
+      // what makes the next run's first confirm look like a duplicate, and `.catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); })`
       // here meant that key stayed put while this teardown reported clean.
       `DELETE FROM sale_submissions WHERE idempotency_key LIKE 'qa-saleidem-%'`,
       `DELETE FROM stock_adjustments WHERE product_id = '${PRODUCT}'`,

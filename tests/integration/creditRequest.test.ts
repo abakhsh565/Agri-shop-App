@@ -43,7 +43,7 @@ describe('Credit Request Integration', () => {
   });
 
   afterAll(async () => {
-    // This suite's own rows, reported rather than swallowed: `.catch(() => {})` on both of these meant
+    // This suite's own rows, reported rather than swallowed: `.catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); })` on both of these meant
     // a request or a customer that survived a failed delete was invisible, and the next run's
     // `create_credit_limit_request` then read it as state it had to work around.
     await runCleanupStatements(

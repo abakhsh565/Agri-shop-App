@@ -135,7 +135,7 @@ afterAll(async () => {
   // passes them explicitly instead of sweeping the baseline.
   await cleanupOwnedTransactions({ customerIds: [CUSTOMER], productIds: [PRODUCT] });
   // Adjustments before the products they reference, and every failure reported. Four of these used to
-  // end in `.catch(() => undefined)`: an FK refusal there (the reason the order matters at all) was
+  // end in `.catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); })`: an FK refusal there (the reason the order matters at all) was
   // invisible — only the four tables the read-back below happens to cover would have caught it.
   await runCleanupStatements(
     execSqlAsAdmin,

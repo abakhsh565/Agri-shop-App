@@ -113,7 +113,7 @@ beforeAll(async () => {
 afterAll(async () => {
   // This suite's own rows, children before parents — and every failure reported.
   //
-  // Each of these statements used to end in `.catch(() => undefined)`, so a delete that failed (an FK
+  // Each of these statements used to end in `.catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); })`, so a delete that failed (an FK
   // that was not anticipated, a column that moved) left the row in the shared QA database while the
   // suite reported success — and the NEXT run then read this suite's purchase or employee as if it
   // were the fixture. The list is handed to `runCleanupStatements`, which runs all of them, collects

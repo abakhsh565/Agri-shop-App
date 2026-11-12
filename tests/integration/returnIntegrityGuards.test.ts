@@ -79,16 +79,16 @@ async function cleanup() {
   // Scoped to this suite's own customer, not the whole tenant: the previous shape was a table-wide
   // delete for the shared QA shop, so it could remove a sibling suite's return rows while they were
   // being asserted on (and did — see `returnRowCount`).
-  await sql(`DELETE FROM audit_events WHERE entity_id IN (${OWN_RETURNS})`).catch(() => undefined);
-  await sql(`DELETE FROM return_items WHERE return_id IN (${OWN_RETURNS})`).catch(() => undefined);
-  await sql(`DELETE FROM returns WHERE shop_id = '${TENANT}' AND customer_id = '${CUSTOMER}'`).catch(() => undefined);
-  await sql(`DELETE FROM sale_items WHERE sale_id IN ('${SALE}','${SALE_VOIDED}','${SALE_OTHER}')`).catch(() => undefined);
-  await sql(`DELETE FROM inventory_movements WHERE reference_id IN ('${SALE}','${SALE_VOIDED}','${SALE_OTHER}') OR product_id = '${PRODUCT}'`).catch(() => undefined);
-  await sql(`DELETE FROM sales WHERE id IN ('${SALE}','${SALE_VOIDED}','${SALE_OTHER}')`).catch(() => undefined);
-  await sql(`DELETE FROM product_variants WHERE id = '${VARIANT}'`).catch(() => undefined);
-  await sql(`DELETE FROM products WHERE id = '${PRODUCT}'`).catch(() => undefined);
-  await sql(`DELETE FROM customers WHERE id = '${CUSTOMER}'`).catch(() => undefined);
-  await sql(`DELETE FROM users WHERE phone = '${PHONE}'`).catch(() => undefined);
+  await sql(`DELETE FROM audit_events WHERE entity_id IN (${OWN_RETURNS})`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
+  await sql(`DELETE FROM return_items WHERE return_id IN (${OWN_RETURNS})`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
+  await sql(`DELETE FROM returns WHERE shop_id = '${TENANT}' AND customer_id = '${CUSTOMER}'`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
+  await sql(`DELETE FROM sale_items WHERE sale_id IN ('${SALE}','${SALE_VOIDED}','${SALE_OTHER}')`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
+  await sql(`DELETE FROM inventory_movements WHERE reference_id IN ('${SALE}','${SALE_VOIDED}','${SALE_OTHER}') OR product_id = '${PRODUCT}'`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
+  await sql(`DELETE FROM sales WHERE id IN ('${SALE}','${SALE_VOIDED}','${SALE_OTHER}')`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
+  await sql(`DELETE FROM product_variants WHERE id = '${VARIANT}'`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
+  await sql(`DELETE FROM products WHERE id = '${PRODUCT}'`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
+  await sql(`DELETE FROM customers WHERE id = '${CUSTOMER}'`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
+  await sql(`DELETE FROM users WHERE phone = '${PHONE}'`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
 }
 
 beforeAll(async () => {

@@ -36,9 +36,9 @@ describe('Security Audit — RLS & Authorization', () => {
   });
 
   afterAll(async () => {
-    await execSqlAsAdmin(`DELETE FROM credit_limit_requests WHERE customer_id = '${CUST_ID}'`).catch(() => {});
-    await execSqlAsAdmin(`DELETE FROM customers WHERE id = '${CUST_ID}'`).catch(() => {});
-    await execSqlAsAdmin(`DELETE FROM users WHERE id = '${EMP_ID}'`).catch(() => {});
+    await execSqlAsAdmin(`DELETE FROM credit_limit_requests WHERE customer_id = '${CUST_ID}'`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
+    await execSqlAsAdmin(`DELETE FROM customers WHERE id = '${CUST_ID}'`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
+    await execSqlAsAdmin(`DELETE FROM users WHERE id = '${EMP_ID}'`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
   });
 
   // ─── RLS: All critical tables have RLS enabled ────────────────────────────

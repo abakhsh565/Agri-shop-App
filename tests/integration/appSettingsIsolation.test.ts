@@ -73,12 +73,12 @@ async function cleanup() {
      WHERE id IN ('${SET_A_ID}','${SET_B_ID}')
         OR (shop_id IN ('${SHOP_A}','${SHOP_B}') AND setting_key LIKE 'qa_appsettings%')
         OR (shop_id = '${SHOP_A}' AND setting_key IN ('low_stock_threshold_default','stock_alert_frequency'))
-  `).catch(() => undefined);
+  `).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
   // Through the shared helper: these users may carry audit rows (`audit_events.user_id` is NO ACTION)
   // and one blocked row would leave the whole list behind. `placeLocation` is where that leak was
   // measured and fixed; this is the same fix applied where the same shape occurs.
   await deleteFixtureUsers([ADMIN_B_ID, EMPLOYEE_B_ID, EMPLOYEE_A_WITH_STOCK_ROLE]);
-  await sql(`DELETE FROM shops WHERE id = '${SHOP_B}'`).catch(() => undefined);
+  await sql(`DELETE FROM shops WHERE id = '${SHOP_B}'`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
 }
 
 beforeAll(async () => {

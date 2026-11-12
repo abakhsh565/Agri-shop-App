@@ -36,12 +36,12 @@ async function sql(query: string) {
 }
 
 async function cleanup() {
-  await sql(`DELETE FROM customers WHERE phone IN ('923009795001','923009795002','923009795004','923009795005')`).catch(() => undefined);
-  await sql(`DELETE FROM audit_events WHERE user_id IN ('${OWNER}','${EMP}','${VICTIM}')`).catch(() => undefined);
-  await sql(`DELETE FROM user_permissions WHERE user_id IN ('${OWNER}','${EMP}','${VICTIM}')`).catch(() => undefined);
-  await sql(`DELETE FROM role_permissions WHERE role_id IN (SELECT id FROM roles WHERE name LIKE '${RUN}%')`).catch(() => undefined);
-  await sql(`DELETE FROM roles WHERE name LIKE '${RUN}%'`).catch(() => undefined);
-  await sql(`DELETE FROM users WHERE id IN ('${OWNER}','${EMP}','${VICTIM}')`).catch(() => undefined);
+  await sql(`DELETE FROM customers WHERE phone IN ('923009795001','923009795002','923009795004','923009795005')`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
+  await sql(`DELETE FROM audit_events WHERE user_id IN ('${OWNER}','${EMP}','${VICTIM}')`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
+  await sql(`DELETE FROM user_permissions WHERE user_id IN ('${OWNER}','${EMP}','${VICTIM}')`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
+  await sql(`DELETE FROM role_permissions WHERE role_id IN (SELECT id FROM roles WHERE name LIKE '${RUN}%')`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
+  await sql(`DELETE FROM roles WHERE name LIKE '${RUN}%'`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
+  await sql(`DELETE FROM users WHERE id IN ('${OWNER}','${EMP}','${VICTIM}')`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
 }
 
 beforeAll(async () => {

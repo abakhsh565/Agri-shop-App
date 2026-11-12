@@ -42,13 +42,13 @@ async function sql(query: string) {
 }
 
 async function cleanup() {
-  await sql(`DELETE FROM product_variants WHERE id IN ('${VARIANT_A}','${VARIANT_B}','${VARIANT_C}')`).catch(() => undefined);
-  await sql(`DELETE FROM products WHERE id IN ('${PRODUCT_A}','${PRODUCT_B}','${PRODUCT_C}')`).catch(() => undefined);
-  await sql(`DELETE FROM user_permissions WHERE user_id IN ('${VICTIM_B}','${OWNER_B}')`).catch(() => undefined);
-  await sql(`DELETE FROM stock_adjustments WHERE id = '${ADJ_B}'`).catch(() => undefined);
-  await sql(`DELETE FROM cash_reconciliations WHERE id = '${CASH_B}'`).catch(() => undefined);
-  await sql(`DELETE FROM users WHERE id IN ('${OWNER_A}','${OWNER_B}','${VICTIM_B}')`).catch(() => undefined);
-  await sql(`DELETE FROM shops WHERE id IN ('${TENANT_B}','${TENANT_C}')`).catch(() => undefined);
+  await sql(`DELETE FROM product_variants WHERE id IN ('${VARIANT_A}','${VARIANT_B}','${VARIANT_C}')`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
+  await sql(`DELETE FROM products WHERE id IN ('${PRODUCT_A}','${PRODUCT_B}','${PRODUCT_C}')`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
+  await sql(`DELETE FROM user_permissions WHERE user_id IN ('${VICTIM_B}','${OWNER_B}')`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
+  await sql(`DELETE FROM stock_adjustments WHERE id = '${ADJ_B}'`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
+  await sql(`DELETE FROM cash_reconciliations WHERE id = '${CASH_B}'`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
+  await sql(`DELETE FROM users WHERE id IN ('${OWNER_A}','${OWNER_B}','${VICTIM_B}')`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
+  await sql(`DELETE FROM shops WHERE id IN ('${TENANT_B}','${TENANT_C}')`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
 }
 
 beforeAll(async () => {
@@ -65,15 +65,15 @@ beforeAll(async () => {
   `);
   // A product and a variant of tenant B, for the `product_variants_public` probe: the projection is
   // filtered by `current_shop_id()`, and this is the row it must not hand to tenant A.
-  await sql(`INSERT INTO products (id, name, shop_id) VALUES ('${PRODUCT_B}', '${RUN} product B', '${TENANT_B}') ON CONFLICT (id) DO NOTHING`).catch(() => undefined);
-  await sql(`INSERT INTO product_variants (id, product_id, name) VALUES ('${VARIANT_B}', '${PRODUCT_B}', '1kg') ON CONFLICT (id) DO NOTHING`).catch(() => undefined);
+  await sql(`INSERT INTO products (id, name, shop_id) VALUES ('${PRODUCT_B}', '${RUN} product B', '${TENANT_B}') ON CONFLICT (id) DO NOTHING`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
+  await sql(`INSERT INTO product_variants (id, product_id, name) VALUES ('${VARIANT_B}', '${PRODUCT_B}', '1kg') ON CONFLICT (id) DO NOTHING`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
   // A product and a variant of tenant A, so the `product_variants_public` probe has a control: the
   // claim is "tenant B's variant is absent", which is only meaningful if the same session CAN see
   // its own variant. A control built from whatever QA happens to hold would break on a prune.
-  await sql(`INSERT INTO products (id, name, shop_id) VALUES ('${PRODUCT_A}', '${RUN} product A', '${TENANT_A}') ON CONFLICT (id) DO NOTHING`).catch(() => undefined);
-  await sql(`INSERT INTO product_variants (id, product_id, name) VALUES ('${VARIANT_A}', '${PRODUCT_A}', '1kg') ON CONFLICT (id) DO NOTHING`).catch(() => undefined);
-  await sql(`INSERT INTO products (id, name, shop_id, marketplace_listed, is_active) VALUES ('${PRODUCT_C}', '${RUN} product C', '${TENANT_C}', true, true) ON CONFLICT (id) DO NOTHING`).catch(() => undefined);
-  await sql(`INSERT INTO product_variants (id, product_id, name, stock_qty, selling_price, is_active) VALUES ('${VARIANT_C}', '${PRODUCT_C}', '1kg', 10, 100, true) ON CONFLICT (id) DO NOTHING`).catch(() => undefined);
+  await sql(`INSERT INTO products (id, name, shop_id) VALUES ('${PRODUCT_A}', '${RUN} product A', '${TENANT_A}') ON CONFLICT (id) DO NOTHING`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
+  await sql(`INSERT INTO product_variants (id, product_id, name) VALUES ('${VARIANT_A}', '${PRODUCT_A}', '1kg') ON CONFLICT (id) DO NOTHING`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
+  await sql(`INSERT INTO products (id, name, shop_id, marketplace_listed, is_active) VALUES ('${PRODUCT_C}', '${RUN} product C', '${TENANT_C}', true, true) ON CONFLICT (id) DO NOTHING`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
+  await sql(`INSERT INTO product_variants (id, product_id, name, stock_qty, selling_price, is_active) VALUES ('${VARIANT_C}', '${PRODUCT_C}', '1kg', 10, 100, true) ON CONFLICT (id) DO NOTHING`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
 
   // ── THE MARKETPLACE CONSENT GATE ────────────────────────────────────────────────────────────
   // `marketplace_listings` is readable by ANON on purpose, so its boundary cannot be a policy on
@@ -132,14 +132,14 @@ describe('tenant boundary — tables the app reaches with admin-only policies', 
   });
 
   it('user_permissions: tenant A cannot grant a permission to tenant B’s employee', async () => {
-    await sql(`DELETE FROM user_permissions WHERE user_id = '${VICTIM_B}'`).catch(() => undefined);
+    await sql(`DELETE FROM user_permissions WHERE user_id = '${VICTIM_B}'`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
     const permId = (await sql(`SELECT id FROM permissions LIMIT 1`)).rows[0]?.id;
     if (!permId) return;
     const { error } = await insertAsUser(OWNER_A, 'user_permissions', {
       user_id: VICTIM_B, permission_id: permId, is_override: true, is_granted: true,
     });
     const written = await sql(`SELECT 1 FROM user_permissions WHERE user_id = '${VICTIM_B}'`);
-    await sql(`DELETE FROM user_permissions WHERE user_id = '${VICTIM_B}'`).catch(() => undefined);
+    await sql(`DELETE FROM user_permissions WHERE user_id = '${VICTIM_B}'`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
     expect(
       written.rows.length,
       `a cross-tenant permission grant was written (insert error: ${error ?? 'none'})`,

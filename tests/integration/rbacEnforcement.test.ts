@@ -60,32 +60,32 @@ const OWNER_AUDIT_CLEANUP = `
 `;
 
 async function cleanup() {
-  await sql(OWNER_AUDIT_CLEANUP).catch(() => undefined);
-  await sql(`DELETE FROM user_permissions WHERE user_id IN (SELECT id FROM users WHERE id IN ('${OWNER_A}','${OWNER_B}') OR phone IN ('923009770001','923009770002','923009770031','923009770032') OR name LIKE 'QA Enforce%')`).catch(() => undefined);
+  await sql(OWNER_AUDIT_CLEANUP).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
+  await sql(`DELETE FROM user_permissions WHERE user_id IN (SELECT id FROM users WHERE id IN ('${OWNER_A}','${OWNER_B}') OR phone IN ('923009770001','923009770002','923009770031','923009770032') OR name LIKE 'QA Enforce%')`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
   // Order matters: rows that reference `users` (inventory movements record the
   // actor) and `roles` (memberships hold role_id) must be removed first.
   await sql(`
     DELETE FROM inventory_movements
     WHERE created_by IN (SELECT id FROM users WHERE phone IN ('923009770001','923009770002','923009770031','923009770032') OR name LIKE 'QA Enforce%')
        OR product_id IN (SELECT id FROM products WHERE name = 'QA Enforce Product')
-  `).catch(() => undefined);
-  await sql(`DELETE FROM stock_adjustments WHERE product_id IN (SELECT id FROM products WHERE name = 'QA Enforce Product')`).catch(() => undefined);
-  await sql(`DELETE FROM product_variants WHERE product_id IN (SELECT id FROM products WHERE name = 'QA Enforce Product')`).catch(() => undefined);
-  await sql(`DELETE FROM products WHERE name = 'QA Enforce Product'`).catch(() => undefined);
-  await sql(`DELETE FROM customers WHERE phone IN ('923009770088','923009770099')`).catch(() => undefined);
+  `).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
+  await sql(`DELETE FROM stock_adjustments WHERE product_id IN (SELECT id FROM products WHERE name = 'QA Enforce Product')`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
+  await sql(`DELETE FROM product_variants WHERE product_id IN (SELECT id FROM products WHERE name = 'QA Enforce Product')`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
+  await sql(`DELETE FROM products WHERE name = 'QA Enforce Product'`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
+  await sql(`DELETE FROM customers WHERE phone IN ('923009770088','923009770099')`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
   await sql(`
     DELETE FROM users
     WHERE id IN ('${OWNER_A}','${OWNER_B}')
        OR phone IN ('923009770001','923009770002','923009770031','923009770032')
        OR name LIKE 'QA Enforce%'
-  `).catch(() => undefined);
+  `).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
   await sql(`
     DELETE FROM role_permissions
     WHERE role_id IN (SELECT id FROM roles WHERE name LIKE 'QA Enforcement %' OR tenant_id = '${TENANT_B}')
-  `).catch(() => undefined);
-  await sql(`DELETE FROM roles WHERE name LIKE 'QA Enforcement %' OR tenant_id = '${TENANT_B}'`).catch(() => undefined);
-  await sql(`DELETE FROM shops WHERE id = '${TENANT_B}'`).catch(() => undefined);
-  await sql(`DELETE FROM branches WHERE id = '${WAREHOUSE}'`).catch(() => undefined);
+  `).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
+  await sql(`DELETE FROM roles WHERE name LIKE 'QA Enforcement %' OR tenant_id = '${TENANT_B}'`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
+  await sql(`DELETE FROM shops WHERE id = '${TENANT_B}'`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
+  await sql(`DELETE FROM branches WHERE id = '${WAREHOUSE}'`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
 }
 
 beforeAll(async () => {
