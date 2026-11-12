@@ -194,9 +194,8 @@ export default function RolesAccessPage() {
       </div>
 
       <div className="px-4 pb-8">
-        {!ready ? (
-          <SkeletonList rows={4} />
-        ) : visibleRoles.length === 0 ? (
+        {!ready && <SkeletonList rows={4} />}
+        {ready && (visibleRoles.length === 0 ? (
           <EmptyState
             icon={Settings2}
             title={search.trim() ? t("roles.noMatch") : t("roles.empty")}
@@ -298,7 +297,7 @@ export default function RolesAccessPage() {
               );
             })}
           </div>
-        )}
+        ))}
       </div>
 
       <ConfirmDialog

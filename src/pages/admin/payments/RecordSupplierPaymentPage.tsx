@@ -77,7 +77,11 @@ export default function RecordSupplierPaymentPage() {
       await useCompaniesStore.getState().load();
 
       addToast(t("copy.paidToSupplier", { amount: formatCurrency(paid), name: company!.name }), "success");
-      navigate(returnTo, { replace: true });
+      // Back to the payables list by default: the refresh above landed first, so the row this
+      // payment changed already shows its new balance when the list paints. A caller that named
+      // its own destination still gets it.
+      if (returnTo && returnTo !== "/admin/payments") navigate(returnTo, { replace: true });
+      else navigate("/admin/payments", { replace: true });
     } catch (e) {
       // The key is KEPT on failure: the attempt may have reached the database and
       // only the answer was lost, so the retry must not be treated as a new payment.

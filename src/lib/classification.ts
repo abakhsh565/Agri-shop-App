@@ -75,9 +75,14 @@ export function familyOfPhysicalForm(code: PhysicalFormCode): UnitGroup {
 
 /** The family's own name, so a summary never says “Powder” where it means “Weight”. */
 export function familyLabelKey(family: UnitGroup): I18nKey {
-  return (
-    MEASUREMENT_FAMILIES.find((option) => option.family === family)?.labelKey ?? "units.weight"
-  );
+  const option = MEASUREMENT_FAMILIES.find((candidate) => candidate.family === family);
+  if (!option) {
+    // A family without an entry is a programming error, not a label: falling back to another
+    // family's English key would print "Weight" over a count, which is the one thing this
+    // function exists to prevent. Fail loudly instead of guessing a translation key.
+    throw new Error(`no measurement family is registered for "${family}"`);
+  }
+  return option.labelKey;
 }
 
 export const PHYSICAL_FORMS: { code: PhysicalFormCode; labelKey: I18nKey }[] = [

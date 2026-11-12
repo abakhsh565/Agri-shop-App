@@ -229,7 +229,9 @@ export default function CashPositionPage() {
     }
     setSavingCash(true);
     try {
-      const { error } = await supabase.rpc("record_cash_reconciliation_v1", {
+      // The ledger's current name (`0025` dropped the `_v1` form; `0308` restores the write under
+      // this signature). Calling the retired name is a call `authenticated` cannot execute.
+      const { error } = await supabase.rpc("record_cash_reconciliation", {
         payload: { date, expectedCash: expected, countedCash: amount, notes: null },
       });
       if (error) throw error;

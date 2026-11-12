@@ -42,7 +42,10 @@ function readRepoFile(relative: string): string | null {
 /** Split the log into entries, and report headings that do not name a failure id. */
 function splitEntries(markdown: string): { entries: Entry[]; problems: string[] } {
   const problems: string[] = [];
-  const lines = markdown.split('\n');
+  // CRLF-safe: a Windows checkout leaves `\r` at the end of every line, and `.` does not match
+  // `\r`, so splitting on `\n` alone made every heading fail this regex on that checkout while
+  // passing on Linux. The document is the same document; the reader must be too.
+  const lines = markdown.split(/\r?\n/);
   const marker = lines.findIndex((line) => line.trim() === '## Entries');
   if (marker === -1) return { entries: [], problems: ['the log has no "## Entries" section'] };
 

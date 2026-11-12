@@ -20,6 +20,7 @@ import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
 import Sheet from "@/components/ui/Sheet";
 import OTPInput from "@/components/ui/OTPInput";
+import { digitsOnlyPhone, phoneFieldProps } from "@/lib/phoneInput";
 import ImageCrop from "@/components/ui/ImageCrop";
 import { useAuthStore } from "@/stores/authStore";
 import { useUIStore } from "@/stores/uiStore";
@@ -455,10 +456,9 @@ export default function ProfileDetailsPage() {
               <input
                 id="profile-new-phone"
                 value={newPhone}
-                onChange={(e) => { setNewPhone(e.target.value); setPhoneError(""); }}
+                onChange={(e) => { setNewPhone(digitsOnlyPhone(e.target.value)); setPhoneError(""); }}
                 onKeyDown={(e) => { if (e.key === "Enter") void sendCode(); }}
-                type="tel"
-                inputMode="tel"
+                {...phoneFieldProps()}
                 autoComplete="tel"
                 placeholder={t("common.phonePlaceholder")}
                 className="w-full h-12 px-4 rounded-[var(--radius-control)] text-14 outline-none"
