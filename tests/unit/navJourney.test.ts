@@ -78,6 +78,23 @@ describe("module-aware back navigation", () => {
     expect(visits).toEqual([-1]);
   });
 
+  it("steps back through the tab's own history at any depth, across modules", () => {
+    // The owner's rule (2026-11-12): Back returns to the screen the reader came from, not to the
+    // canonical parent. A Co-Owner opened from a branch, a supplier opened from a sale and a flow
+    // opened from a record all have a real screen behind them, and only history knows which one.
+    for (const pathname of [
+      "/admin/settings/hub/people/co-owners/g1",
+      "/admin/companies/c1",
+      "/admin/purchases/42",
+      "/admin/settings/hub/finance/money",
+    ]) {
+      const visits: (string | number)[] = [];
+      const handled = navigateBack({ pathname, search: "" }, (to) => { visits.push(to); }, undefined, true);
+      expect(handled).toBe(true);
+      expect(visits).toEqual([-1]);
+    }
+  });
+
   it("lets a replaced form hand its place to the saved record", () => {
     recordNavigation("/admin/purchases", "/admin/dashboard", "push");
     recordNavigation("/admin/purchases/new", "/admin/purchases", "push");

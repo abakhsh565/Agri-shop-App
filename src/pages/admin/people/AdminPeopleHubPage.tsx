@@ -1,46 +1,30 @@
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import {
-  ChevronRight,
-  History,
-  ShieldCheck,
-  UserCog,
-  UserPlus,
-  Users,
-} from "lucide-react";
+import { ChevronRight, ShieldCheck, UserPlus, Users } from "lucide-react";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
 import ListCard from "@/components/ui/ListCard";
 import ListRow from "@/components/ui/ListRow";
 import { useT } from "@/lib/i18n";
 import { useShellBase } from "@/lib/useShellBase";
-import { hasPermission } from "@/lib/tenantContext";
-import { isCurrentUserOwner } from "@/lib/tenantContext";
+import { hasPermission, isCurrentUserOwner } from "@/lib/tenantContext";
 import { coOwnerEnabled } from "@/lib/experience";
 import { useEmployeesStore } from "@/stores/employeesStore";
+import { useCoOwnersStore } from "@/stores/coOwnersStore";
 import { useAuthStore } from "@/stores/authStore";
 
 /**
- * Employees & access — the people control centre.
+ * People — the two bodies you manage here: Co-Owner, and Employee.
  *
- * WHAT CHANGED, AND WHY. This page used to BE the roster: search, filters, every person's card
- * and its management rows, all in one scroll. The owner's reference (Figma 2087:1765) puts the
- * two numbers he checks first, the one action he takes most often, and the doors to the team's
- * work — nothing else.
- * The roster itself is a screen now (`AdminEmployeesDirectoryPage`), opened by the first door, so
- * this screen answers "how is the team doing and where do I go" without repeating the team.
+ * The owner is not a row. The owner is the account reading the screen, and the business is what
+ * they already own; a list that starts by naming them is a list with one item nobody came here to
+ * look for. This page answers "who runs a branch for me" and "who works in my business".
  *
- * The counts are the loaded team, not a second server read, so the number here and the list one
- * tap away cannot disagree. "Pending invitations" counts memberships still waiting, which is a
- * different question from an invitation: a request is somebody asking to join, an invitation is
- * somebody already invited. Only invitations remain actionable now that self-request access has
- * been retired.
- *
- * THE DOORS ARE THE SYSTEM'S OWN SCREENS. Employees opens the directory, Roles and permission
- * opens the access catalogue, Activity opens the per-person
- * history the audit trail already serves. No switch here claims an authority the database does
- * not enforce — this page only routes, and each destination checks its own permission.
+ * Roles and access are not a body either: a role is a reusable bundle of permissions we assign to
+ * an employee for convenience, so it lives inside the employee hierarchy (Settings › Roles, and
+ * the employee's own page) rather than sitting beside people as if it were one of them.
  */
+
 export default function AdminPeopleHubPage() {
   const t = useT();
   const base = useShellBase();
@@ -49,22 +33,26 @@ export default function AdminPeopleHubPage() {
   const employees = useEmployeesStore((s) => s.employees);
   const ready = useEmployeesStore((s) => s.ready);
   const load = useEmployeesStore((s) => s.load);
+  const grants = useCoOwnersStore((s) => s.grants);
+  const loadCoOwners = useCoOwnersStore((s) => s.load);
   const currentUserId = useAuthStore((s) => s.user?.id);
-  // The owner/admin's own account is not a team member in this directory. The store also
-  // removes the original owner and Co-Owners, so these numbers describe employees only.
+
+  // Only employees are counted as employees. The store already drops the original owner and every
+  // co-owner, so this is the one population the number and the directory both use.
   const team = employees.filter((employee) => employee.id !== currentUserId && !employee.isOriginalOwner);
 
+  const isOwner = isCurrentUserOwner();
   const canManage = hasPermission("employees.manage");
-  const canSeeActivity = hasPermission("activity.view");
-  const canManageCoOwners = isCurrentUserOwner() && coOwnerEnabled();
+  const canManageCoOwners = isOwner && coOwnerEnabled();
+  const coOwnerCount = grants.filter((grant) => grant.status !== "revoked").length;
 
   useEffect(() => {
     if (!ready) void load();
   }, [ready, load]);
 
-  const pendingInvitations = team.filter(
-    (employee) => employee.isActive && employee.membershipStatus === "pending",
-  ).length;
+  useEffect(() => {
+    if (canManageCoOwners) void loadCoOwners();
+  }, [canManageCoOwners, loadCoOwners]);
 
   const chevron = (
     <ChevronRight size={14} className="shrink-0" style={{ color: "var(--text-secondary)" }} />
@@ -78,33 +66,6 @@ export default function AdminPeopleHubPage() {
     >
       <StatusBar />
       <NavHeader title={t("people.hubTitle")} backTo={`${base}/more`} />
-
-      <div className="px-4 pt-1 grid grid-cols-2 gap-3">
-        <div
-          className="rounded-[var(--radius-tile)] p-4"
-          style={{ background: "var(--tone-card)" }}
-          data-testid="people-total"
-        >
-          <p className="text-11" style={{ color: "var(--text-secondary)" }}>
-            {t("people.totalEmployees")}
-          </p>
-          <p className="text-26 font-bold mt-1 tabular-nums">
-            {ready ? team.length.toLocaleString("en-PK") : "—"}
-          </p>
-        </div>
-        <div
-          className="rounded-[var(--radius-tile)] p-4"
-          style={{ background: "var(--tone-card)" }}
-          data-testid="people-pending"
-        >
-          <p className="text-11" style={{ color: "var(--text-secondary)" }}>
-            {t("people.pendingInvitations")}
-          </p>
-          <p className="text-26 font-bold mt-1 tabular-nums">
-            {ready ? pendingInvitations.toLocaleString("en-PK") : "—"}
-          </p>
-        </div>
-      </div>
 
       {canManage && (
         <div className="px-4 pt-3">
@@ -123,47 +84,29 @@ export default function AdminPeopleHubPage() {
 
       <div className="px-4 pt-5 pb-10">
         <ListCard>
-          <ListRow
-            icon={Users}
-            title={t("hub.people.employees")}
-            meta={t("people.employeesLine")}
-            trailing={chevron}
-            onClick={() => navigate(`${base}/settings/hub/people/employees`)}
-            testId="people-open-employees"
-          />
-
-          {canManage && (
-            <ListRow
-              icon={ShieldCheck}
-              title={t("hub.people.roles")}
-              meta={t("people.rolesHint")}
-              trailing={chevron}
-              onClick={() => navigate(`${base}/settings/roles`)}
-              testId="people-manage-roles"
-            />
-          )}
-
-          {canSeeActivity && (
-            <ListRow
-              icon={History}
-              title={t("hub.people.activity")}
-              meta={t("people.employeeActivityHint")}
-              trailing={chevron}
-              onClick={() => navigate(`${base}/settings/hub/people/activity`)}
-              testId="people-manage-activity"
-            />
-          )}
-
+          {/* Co-owner: the body that runs a branch, and the only place it is appointed from. */}
           {canManageCoOwners && (
             <ListRow
-              icon={UserCog}
-              title={t("more.coOwnersAccess")}
-              meta={t("coOwners.subtitle")}
+              icon={ShieldCheck}
+              title={t("coOwners.title")}
+              meta={t("people.coOwnersLine")}
+              value={coOwnerCount > 0 ? String(coOwnerCount) : undefined}
               trailing={chevron}
               onClick={() => navigate(`${base}/settings/hub/people/co-owners`)}
               testId="people-manage-co-owners"
             />
           )}
+
+          {/* Employee: everyone who works in a branch. */}
+          <ListRow
+            icon={Users}
+            title={t("hub.people.employees")}
+            meta={t("people.employeesLine")}
+            value={ready ? String(team.length) : undefined}
+            trailing={chevron}
+            onClick={() => navigate(`${base}/settings/hub/people/employees`)}
+            testId="people-open-employees"
+          />
         </ListCard>
       </div>
     </div>

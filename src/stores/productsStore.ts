@@ -4,6 +4,7 @@ import { useAuthStore } from "@/stores/authStore";
 import { getCachedData, setCachedData, captureDataContext, isDataContextCurrent } from "@/lib/localCache";
 import { rpcResolveProductBarcode } from "@/lib/db";
 import { applyBranchStock, filterProductsForBranch } from "@/lib/branchStock";
+import { resolveImageUrl } from "@/lib/storage";
 import type { Product, ProductVariant, ProductCategory, BaseUnit } from "@/types";
 
 const CACHE_KEY = "products";
@@ -199,7 +200,7 @@ export const useProductsStore = create<ProductsState>((set, get) => ({
           categoryId: p.category_id ?? undefined,
           unitId: p.unit_id ?? undefined,
           physicalForm: (p.physical_form as Product["physicalForm"]) ?? undefined,
-          imageUrl: p.image_url ?? undefined,
+          imageUrl: resolveImageUrl(p.image_url),
           barcode: p.barcode ?? undefined,
           baseUnit: (p.base_unit as BaseUnit) ?? "piece",
           stockQty: computedStockQty,

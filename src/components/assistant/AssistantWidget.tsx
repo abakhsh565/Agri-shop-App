@@ -783,7 +783,7 @@ export default function AssistantWidget({
   const screen = (widget.sources ?? [])[0];
 
   return (
-    <div className="mt-3">
+    <div className="mt-2">
       <div className="flex items-center gap-2 px-4 mb-2">
         <p className="ds-section flex-1 min-w-0">
           {titleKey ? t(titleKey) : widget.title}
@@ -801,9 +801,7 @@ export default function AssistantWidget({
           </button>
         )}
       </div>
-      <div className="px-4">
-        <ListCard>{body}</ListCard>
-      </div>
+      <ListCard>{body}</ListCard>
       {(widget.notes ?? []).map((text, index) => (
         <Note key={index} text={text} />
       ))}

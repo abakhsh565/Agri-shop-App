@@ -75,6 +75,27 @@ export async function uploadImage(bucket: ImageBucket, file: File): Promise<stri
 }
 
 /**
+ * A stored image, as THIS installation can load it.
+ *
+ * `uploadImage` stores `getPublicUrl()`'s absolute URL on the row, and an absolute URL names the
+ * project that uploaded it: an image uploaded on one origin then 404s on another, so the screen
+ * quietly falls back to initials while the picture itself is perfectly fine (a customer row in
+ * Development was pointing at the staging project). The object's PATH is portable; the origin is
+ * not. Anything stored from one of these public buckets is therefore rebuilt against the project
+ * this session is talking to, and every other shape (a bare path, an outside link) is returned
+ * untouched.
+ */
+export function resolveImageUrl(value: string | null | undefined): string | undefined {
+  if (!value) return undefined;
+  const match = /^https?:\/\/[^/]+\/storage\/v1\/object\/public\/([^/]+)\/(.+)$/i.exec(value);
+  if (!match) return value;
+  const bucket = decodeURIComponent(match[1]);
+  const path = decodeURIComponent(match[2].split("?")[0]);
+  const { data } = supabase.storage.from(bucket).getPublicUrl(path);
+  return data.publicUrl;
+}
+
+/**
  * Upload one business paper and return the object's PATH (not a URL).
  *
  * The path is prefixed with the shop it belongs to, because that prefix is what the storage policy

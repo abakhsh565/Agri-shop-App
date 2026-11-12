@@ -79,6 +79,8 @@ import {
   assertReached,
   connectionStringFor,
   identifyConnection,
+  isLocalEnvironment,
+  localStackConnection,
   resolveCredentials,
 } from './lib/environments.mjs';
 
@@ -103,7 +105,10 @@ if (has('help') || args.includes('-h') || args.length === 0) {
       '                                      --backup <artifact>.manifest.json --restored <report.json> [--apply]',
       '       node scripts/migrate.mjs <status|verify|apply> --target pglite [--dir <dir>] [--apply]',
       '',
-      '  --env staging      the QA project (the only live environment this tool will touch)',
+      '  --env staging      the QA project (the only hosted environment this tool will touch)',
+      '  --env development  the local stack, through the connection `localStackConnection` resolves',
+      '                     (loopback only). Its ledger is recorded here like any other target: a',
+      '                     file applied by hand shows as pending until `apply`/`adopt` records it.',
       '  --env production   refused, by policy — one exception: `apply` with a NAMED batch and all four',
       '                     preconditions satisfied (verification report, backup manifest, restore report,',
       '                     in-position versions). See docs/PRODUCTION_MIGRATION_PLAN.md §7(a).',
@@ -256,7 +261,67 @@ const LEDGER_DDL = [
    )`,
 ];
 
+/**
+ * The local stack, as a target of the SAME tool.
+ *
+ * Development had no ledger at all: `local-db.mjs init` restores the frozen baseline and applies
+ * the forward files, but records nothing, so a file applied there by hand (`psql`, a hotfix) left
+ * no trace and no `status`/`verify` could tell it from a pending one. The answer is not a hand
+ * INSERT into the ledger — that is how a record starts lying. It is to let this tool reach the
+ * stack through the connection the repository already owns (`localStackConnection`, which refuses
+ * anything but loopback) and then `adopt`/`apply` it exactly as it does staging: one file and its
+ * ledger rows in one transaction, or nothing.
+ *
+ * The hosted identity checks cannot run here: they compare a project ref, and a loopback address
+ * deliberately has none. Its own guard replaces them — the resolved connection must be loopback
+ * and the container it names must be a local `supabase_db_*` one.
+ */
+async function openLocalTarget(name) {
+  let local;
+  try {
+    local = localStackConnection(name);
+  } catch (error) {
+    refuse(String(error.message));
+  }
+  if (!local.loopback) {
+    refuse(`refusing "${name}": its connection is not loopback, so it is not this machine's stack.`);
+  }
+  if (!(local.containers?.length) || local.containers.some((c) => !/^supabase_db_[A-Za-z0-9_\-]+$/.test(c))) {
+    refuse(
+      `refusing "${name}": no local \`supabase_db_*\` container was found for it, so there is no local ` +
+        'database to record against. Start the stack with `npm run local:db -- up`.',
+    );
+  }
+
+  const client = new pg.Client({
+    connectionString: local.connectionString,
+    ssl: false,
+    connectionTimeoutMillis: 15000,
+    statement_timeout: 300000,
+  });
+  await client.connect();
+
+  const serverUser = (await client.query('select current_user as u')).rows[0]?.u ?? null;
+  const database = (await client.query('select current_database() as d')).rows[0]?.d ?? null;
+  let clusterId = null;
+  try {
+    clusterId = (await client.query('select system_identifier::text as id from pg_control_system()')).rows[0]?.id ?? null;
+  } catch {
+    clusterId = null;
+  }
+
+  return {
+    kind: 'postgres',
+    label: `${name} (local stack, ${local.host}:${local.port ?? '5432'}/${database})`,
+    identity: { clusterId, configuredUser: serverUser, serverUser, local: true },
+    exec: (sql) => client.query(sql),
+    query: (sql, params) => client.query(sql, params),
+    close: () => client.end(),
+  };
+}
+
 async function openLiveTarget(name) {
+  if (isLocalEnvironment(name)) return openLocalTarget(name);
   let creds;
   try {
     creds = resolveCredentials(name);

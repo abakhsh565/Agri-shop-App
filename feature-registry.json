@@ -1721,6 +1721,7 @@
       ],
       "libs": [
         "src/lib/assistant.ts",
+        "src/lib/assistantFinance.ts",
         "src/lib/imageCompression.ts",
         "src/lib/recommendationEngine.ts",
         "src/lib/signalEngine.ts",
@@ -1745,6 +1746,7 @@
       "dependedBy": [],
       "tests": [
         "tests/integration/assistantPermission.test.ts",
+        "tests/unit/assistantFinance.test.ts",
         "tests/unit/assistantScope.test.ts",
         "tests/unit/imageCompression.test.ts",
         "tests/unit/recommendationEngine.test.ts",
@@ -1761,9 +1763,14 @@
           "status": "VALID",
           "proves": "Recommendation and signal rules are locked.",
           "where": "tests/unit/recommendationEngine.test.ts, signalEngine.test.ts, signalSuppression.test.ts"
+        },
+        {
+          "status": "VALID",
+          "proves": "Explicit income/expense sentences produce a review card that opens the existing ledger form; sales, questions and amountless requests never create a draft.",
+          "where": "tests/unit/assistantFinance.test.ts"
         }
       ],
-      "lastVerified": "2026-11-03",
+      "lastVerified": "2026-11-10",
       "risks": [
         "The model layer is optional; the built-in answerer and the permission wall must keep working when no Gemini key is configured.",
         "Animated GIFs and vector files are deliberately not rasterised, so they can remain above 500 KB; the camera/photo paths this rule covers are JPEG, PNG, WebP, AVIF and supported HEIC decodes."

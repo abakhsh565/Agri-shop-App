@@ -23,6 +23,8 @@ import {
   type BusinessPatch,
   type BusinessProfile,
 } from "@/lib/businessProfile";
+import { resolveImageUrl } from "@/lib/storage";
+import Photo from "@/components/ui/Photo";
 
 /** The three papers, in the order the signup form asks for them. */
 const PAPERS = [
@@ -255,7 +257,7 @@ export default function BusinessProfilePage() {
 
   // The business image, from its own row or — for a business approved before that column
   // existed — from the picture on its approval record.
-  const logoUrl = shop?.logo_url ?? profile?.documents?.logo ?? null;
+  const logoUrl = resolveImageUrl(shop?.logo_url ?? profile?.documents?.logo ?? null) ?? null;
 
   const changeCta = (has: boolean) => (has ? t("common.change") : t("business.add"));
 
@@ -323,11 +325,11 @@ export default function BusinessProfilePage() {
                 border: logoUrl ? "none" : "1.5px dashed var(--divider)",
               }}
             >
-              {logoUrl ? (
-                <img src={logoUrl} alt="" className="w-full h-full object-cover" />
-              ) : (
-                <Camera size={20} style={{ color: "var(--text-tertiary)" }} aria-hidden="true" />
-              )}
+              <Photo
+                src={logoUrl}
+                className="w-full h-full object-cover"
+                fallback={<Camera size={20} style={{ color: "var(--text-tertiary)" }} aria-hidden="true" />}
+              />
               {uploading === "logo" && (
                 <span className="absolute inset-0 flex items-center justify-center" style={{ background: "rgba(0,0,0,0.45)" }}>
                   <Loader2 size={18} className="animate-spin" color="#fff" />
@@ -511,14 +513,16 @@ export default function BusinessProfilePage() {
                           border: url ? "none" : "1.5px dashed var(--divider)",
                         }}
                       >
-                        {url ? (
-                          <img src={url} alt="" className="w-full h-full object-cover" />
-                        ) : (
-                          <span className="flex flex-col items-center gap-1" style={{ color: "var(--text-tertiary)" }}>
-                            <Camera size={18} aria-hidden="true" />
-                            <span className="text-11 font-medium">{t("business.addImage")}</span>
-                          </span>
-                        )}
+                        <Photo
+                          src={url}
+                          className="w-full h-full object-cover"
+                          fallback={(
+                            <span className="flex flex-col items-center gap-1" style={{ color: "var(--text-tertiary)" }}>
+                              <Camera size={18} aria-hidden="true" />
+                              <span className="text-11 font-medium">{t("business.addImage")}</span>
+                            </span>
+                          )}
+                        />
                         {uploading === paper.key && (
                           <span className="absolute inset-0 flex items-center justify-center" style={{ background: "rgba(0,0,0,0.45)" }}>
                             <Loader2 size={18} className="animate-spin" color="#fff" />
@@ -594,7 +598,12 @@ export default function BusinessProfilePage() {
           </div>
 
           <div className="flex-1 min-h-0 flex items-center justify-center">
-            <img src={viewer.url} alt={viewer.title} className="w-full max-h-full object-contain" />
+            <Photo
+              src={viewer.url}
+              alt={viewer.title}
+              className="w-full max-h-full object-contain"
+              fallback={<span className="text-13" style={{ color: "var(--text-tertiary)" }}>{t("business.addImage")}</span>}
+            />
           </div>
         </div>
       )}

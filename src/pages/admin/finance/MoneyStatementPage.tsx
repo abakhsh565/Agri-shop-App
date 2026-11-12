@@ -401,7 +401,7 @@ export default function MoneyStatementPage() {
             <div className="px-4 pt-2">
               <button
                 type="button"
-                onClick={() => navigate(`${base}/settings/hub/finance/record`)}
+                onClick={() => navigate(`${base}/settings/hub/finance/record`, { state: { from: "finance" } })}
                 data-testid="money-record"
                 className="min-h-11 flex items-center gap-1.5 text-13 font-semibold active:opacity-60"
                 style={{ color: "var(--brand-dark)" }}

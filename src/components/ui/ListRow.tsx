@@ -23,7 +23,7 @@ export interface ListRowProps {
   /** Grey text shown inline after the name, as on the reference board. */
   qualifier?: string;
   /** Small tertiary line under the name. */
-  meta?: string;
+  meta?: ReactNode;
   description?: string;
   /** Right-aligned secondary value (e.g. "Auto", a date). */
   value?: string;

@@ -30,6 +30,8 @@ import { useT } from "@/lib/i18n";
 import { useShellBase } from "@/lib/useShellBase";
 import { uploadImage } from "@/lib/storage";
 import { supabase } from "@/lib/supabase";
+import { resolveImageUrl } from "@/lib/storage";
+import Photo from "@/components/ui/Photo";
 import { experienceOf } from "@/lib/experience";
 import { normalizePhone, requestPhoneChange, completePhoneChange } from "@/lib/auth";
 import { DEMO_OTP_CODE, isDemoOtpMode } from "@/lib/authMode";
@@ -169,7 +171,7 @@ export default function ProfileDetailsPage() {
       if (error) throw error;
       if (!data?.length) throw new Error("Profile photo matched no rows (not saved)");
 
-      const nextUser = { ...user!, photoUrl: data[0].photo_url ?? undefined };
+      const nextUser = { ...user!, photoUrl: resolveImageUrl(data[0].photo_url) };
       useAuthStore.getState().setUser(nextUser);
       syncDirectory(nextUser);
       await rememberLastProfile(nextUser);
@@ -325,7 +327,11 @@ export default function ProfileDetailsPage() {
             className="size-24 rounded-full overflow-hidden flex items-center justify-center text-2xl font-bold ds-pressable disabled:opacity-70"
             style={{ background: "var(--brand)", color: "var(--ink-fg)" }}
           >
-            {uploading ? <Loader2 size={22} className="animate-spin" /> : user.photoUrl ? <img src={user.photoUrl} alt="" className="w-full h-full object-cover" /> : initials}
+            {uploading ? (
+              <Loader2 size={22} className="animate-spin" />
+            ) : (
+              <Photo src={user.photoUrl} className="w-full h-full object-cover" fallback={initials} />
+            )}
           </button>
           <span className="absolute -bottom-0.5 -end-0.5 size-7 rounded-full flex items-center justify-center pointer-events-none" style={{ background: "var(--brand)", color: "var(--ink-fg)", border: "2px solid var(--background)" }}>
             <Pencil size={11} strokeWidth={2.5} />

@@ -4,6 +4,7 @@ import { useAuthStore } from "@/stores/authStore";
 import { getCachedData, setCachedData, clearCachedData, captureDataContext, isDataContextCurrent } from "@/lib/localCache";
 import { enqueueOperation } from "@/lib/offlineQueue";
 import { isStorablePlace, type PickedPlace } from "@/lib/geo";
+import { resolveImageUrl } from "@/lib/storage";
 import type { Customer } from "@/types";
 
 const CACHE_KEY = "customers";
@@ -47,7 +48,7 @@ function customerFromRow(r: CustomerRow): Customer {
     name: r.name,
     phone: r.phone,
     address: r.address ?? undefined,
-    imageUrl: r.image_url ?? undefined,
+    imageUrl: resolveImageUrl(r.image_url),
     creditLimit: Number(r.credit_limit),
     outstandingBalance: Number(r.outstanding_balance),
     totalPurchases: Number(r.total_purchases),

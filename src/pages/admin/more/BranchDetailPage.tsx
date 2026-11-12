@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Navigate, useNavigate, useParams } from "react-router-dom";
-import { Loader2, ShieldCheck } from "lucide-react";
+import { ArrowRightLeft, Crown, Loader2, MapPin, ShieldCheck } from "lucide-react";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
 import BranchEditor from "@/components/shop/BranchEditor";
@@ -10,6 +10,8 @@ import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import Input from "@/components/ui/Input";
 import ListCard from "@/components/ui/ListCard";
 import ListRow from "@/components/ui/ListRow";
+import SectionActionsSheet, { SectionActionsButton } from "@/components/ui/SectionActionsSheet";
+import { exportText } from "@/lib/exportData";
 import { useAuthStore } from "@/stores/authStore";
 import { useUIStore } from "@/stores/uiStore";
 import { useT } from "@/lib/i18n";
@@ -18,26 +20,30 @@ import { useShopStore } from "@/stores/shopStore";
 import { useEmployeesStore } from "@/stores/employeesStore";
 import { useCoOwnersStore, type BranchCoOwner } from "@/stores/coOwnersStore";
 import { loadBusinessProfile } from "@/lib/businessProfile";
+import { resolveImageUrl } from "@/lib/storage";
 import { supabase } from "@/lib/supabase";
 
 /**
- * One branch, as a page.
+ * One branch, as a record the owner reads.
  *
- * SHAPE (owner's reference, 2026-10-28): the branch's own identity with its employee total, its
- * period and money figures, its inventory health, then — in the order the owner manages them —
- * where it is, whether farmers can find it, who works here, who is responsible, and the way to
- * archive it. The operational and report rows that used to sit at the foot of this page are gone:
- * every one of those screens is already in the menu, and a branch page that listed them again
- * read as a second Settings rather than as this branch's own record.
+ * PURPOSE (owner's redesign, 2026-11-12). The owner opens this page to answer four questions
+ * about a branch they are not editing right now: whose place is this, how is it doing, where is it
+ * and can farmers find it, and who runs it. So the page is one reading order — identity,
+ * performance, location, people — and every block answers exactly one of those questions.
  *
- * The header carries the business's own picture (owner's correction, 2026-10-30): a branch is a
- * place that business trades from, so the mark the owner uploaded on the business record is what
- * belongs there. No rename control sits beside the name — the name is the business's own — and no
- * "Current" word either; the screen is already the branch the account is standing in.
+ * WHAT WAS REMOVED. The same people appeared in three separately titled blocks (roles, responsible
+ * person, co-owner), each with its own sentence explaining which branch could be read or why
+ * something was unavailable. Those are one People section now, and the sentences are gone: a row
+ * states the fact, and the control to change it is the row itself. The figures moved from a card
+ * of labelled tiles into the reports' plate, so this record page stops looking like a dashboard.
+ * The bottom "operational" list is still absent — those screens are in the menu, and a branch page
+ * that relisted them read as a second Settings.
  *
- * Deleting lives at the bottom, where it has room to be the deliberate act it is; the main branch
- * has none, because the database refuses it and a control that exists only to be refused is a lie
- * about what is possible.
+ * WHAT IT GAINED. A "..." menu with the two actions this page owns besides editing — switch to
+ * this branch, share its location — because the branch's address is the one thing an owner
+ * forwards to a driver or a customer. Archive stays at the foot of the page, where the only
+ * destructive act has room to be deliberate; the main branch has no archive, because the database
+ * refuses it and a control that exists only to be refused is a lie about what is possible.
  */
 export default function BranchDetailPage() {
   const { branchId } = useParams();
@@ -48,10 +54,12 @@ export default function BranchDetailPage() {
   const branches = useShopStore((s) => s.branches);
   const branchesLoaded = useShopStore((s) => s.branchesLoaded);
   const loadBranches = useShopStore((s) => s.loadBranches);
+  const switchTo = useShopStore((s) => s.switchBranch);
 
   const [deleting, setDeleting] = useState(false);
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   /** The business's picture, so the header shows the real mark rather than a stand-in letter. */
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const submitting = useRef(false);
@@ -59,27 +67,8 @@ export default function BranchDetailPage() {
   const { addToast } = useUIStore();
   const employees = useEmployeesStore((s) => s.employees);
   const loadEmployees = useEmployeesStore((s) => s.load);
-  const assign = useShopStore((s) => s.assignBranchResponsibility);
-  const transfer = useShopStore((s) => s.transferBranchResponsibility);
-  const revoke = useShopStore((s) => s.revokeBranchResponsibility);
   const getBranchCoOwners = useCoOwnersStore((s) => s.getBranchCoOwners);
-  const [responsible, setResponsible] = useState<{ user_id: string; name: string | null } | null>(null);
   const [coOwners, setCoOwners] = useState<BranchCoOwner[]>([]);
-  const [handingOver, setHandingOver] = useState(false);
-  const [revoking, setRevoking] = useState(false);
-  const [revokeReason, setRevokeReason] = useState("");
-  const [chosenId, setChosenId] = useState<string | null>(null);
-  // Same rule the database applies: active people who are not the business owner.
-  const candidates = employees.filter((e) => e.isActive && !e.isOriginalOwner && e.id !== responsible?.user_id);
-
-  // Read from the server rather than from a remembered value: who is responsible for a branch is
-  // exactly the kind of fact that must not be stale on the screen that changes it.
-  async function readResponsible() {
-    if (!branchId) return;
-    const { data } = await supabase.rpc("branch_responsible_person", { p_branch_id: branchId });
-    const person = data as { user_id?: string; name?: string | null } | null;
-    setResponsible(person?.user_id ? { user_id: person.user_id, name: person.name ?? null } : null);
-  }
 
   async function readCoOwners() {
     if (!branchId || !isOwner) return;
@@ -90,6 +79,7 @@ export default function BranchDetailPage() {
       setCoOwners([]);
     }
   }
+
   async function archive() {
     if (!branchId || !reason.trim() || submitting.current) return;
     submitting.current = true;
@@ -102,39 +92,6 @@ export default function BranchDetailPage() {
       }
       addToast(t("branchFlow.archived"), "success");
       navigate(`${base}/settings`);
-    } finally { submitting.current = false; setBusy(false); }
-  }
-
-  async function handOver() {
-    if (!branchId || !chosenId || submitting.current) return;
-    submitting.current = true;
-    setBusy(true);
-    try {
-      // Transfer when someone already holds it, assign when nobody does. Two different RPCs
-      // because they are two different acts, and the database refuses each in its own words.
-      const result = responsible ? await transfer(branchId, chosenId) : await assign(branchId, chosenId);
-      if (!result.ok) {
-        addToast(t(result.code === "already_assigned" ? "branchFlow.alreadyAssigned" : "branchFlow.responsibilityFailed"), "error");
-        return;
-      }
-      addToast(t("branchFlow.transferred", { name: employees.find((e) => e.id === chosenId)?.name ?? "" }), "success");
-      setHandingOver(false);
-      setChosenId(null);
-      await readResponsible();
-    } finally { submitting.current = false; setBusy(false); }
-  }
-
-  async function takeBack() {
-    if (!branchId || !revokeReason.trim() || submitting.current) return;
-    submitting.current = true;
-    setBusy(true);
-    try {
-      const result = await revoke(branchId, revokeReason);
-      if (!result.ok) { addToast(t("branchFlow.responsibilityFailed"), "error"); return; }
-      addToast(t("branchFlow.revoked"), "success");
-      setRevoking(false);
-      setRevokeReason("");
-      await readResponsible();
     } finally { submitting.current = false; setBusy(false); }
   }
 
@@ -151,17 +108,16 @@ export default function BranchDetailPage() {
     void loadBusinessProfile()
       .then((profile) => {
         if (!live) return;
-        setLogoUrl(profile?.shop?.logo_url ?? profile?.documents?.logo ?? null);
+        setLogoUrl(resolveImageUrl(profile?.shop?.logo_url ?? profile?.documents?.logo ?? null) ?? null);
       })
       .catch(() => { if (live) setLogoUrl(null); });
     return () => { live = false; };
   }, []);
 
   useEffect(() => {
-    void readResponsible();
     void readCoOwners();
     if (isOwner) void loadEmployees();
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- readResponsible closes over branchId only
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- readCoOwners closes over branchId only
   }, [branchId, isOwner, loadEmployees]);
 
   const branch = branches.find((b) => b.id === branchId);
@@ -188,95 +144,177 @@ export default function BranchDetailPage() {
     );
   }
 
+  /** Working in another branch is what changing its roles means; say so, then do it. */
+  async function openRoles() {
+    if (!branch) return;
+    if (!branch.isCurrent) {
+      const result = await switchTo(branch.id);
+      if (!result.ok) {
+        addToast(
+          t(result.code === "pending_sync" ? "shop.pendingSync" : "shop.switchFailed"),
+          result.code === "pending_sync" ? "warning" : "error",
+        );
+        return;
+      }
+      addToast(t("shop.switched", { shop: branch.name }), "success");
+    }
+    navigate(`${base}/settings/roles`);
+  }
+
+  async function switchHere() {
+    setMenuOpen(false);
+    if (!branch || branch.isCurrent) return;
+    const result = await switchTo(branch.id);
+    if (!result.ok) {
+      addToast(t("shop.switchFailed"), "error");
+      return;
+    }
+    addToast(t("shop.switched", { shop: branch.name }), "success");
+  }
+
+  /**
+   * The address, through the app's one share path: the system sheet (Android app, or a phone
+   * browser) with the branch's map link as its link card, and the clipboard where no sheet can
+   * exist. No custom chooser is drawn — the platform's own sheet already lists WhatsApp, mail and
+   * everything else installed (owner's reference, 2026-11-12).
+   */
+  async function shareLocation() {
+    setMenuOpen(false);
+    if (!branch) return;
+    if (!branch.place) {
+      addToast(t("branchPage.noLocationToShare"), "warning");
+      return;
+    }
+    const place = [branch.place.label, branch.place.address].filter(Boolean).join(" · ");
+    const url = `https://maps.google.com/?q=${branch.place.lat},${branch.place.lng}`;
+    const text = [branch.name, place].filter(Boolean).join("\n");
+    try {
+      const outcome = await exportText(text, branch.name, url);
+      addToast(
+        outcome === "shared" ? t("branchPage.locationShared") : t("branchPage.locationCopied"),
+        "success",
+      );
+    } catch {
+      addToast(t("sales.shareFailed"), "error");
+    }
+  }
+
+  const employeeLine = branch.employeeCount != null
+    ? t(branch.employeeCount === 1 ? "branches.employeeOne" : "branches.employeeOther", {
+        count: String(branch.employeeCount),
+      })
+    : undefined;
+
   return (
     <div className="flex flex-col w-full min-h-full" style={{ background: "var(--background)" }}>
       <StatusBar />
-      <NavHeader title={t("branchPage.title")} backTo={`${base}/settings/hub/branches`} />
+      <NavHeader
+        title={t("branchPage.title")}
+        backTo={`${base}/settings/hub/branches`}
+        right={
+          <SectionActionsButton
+            onClick={() => setMenuOpen(true)}
+            label={t("data.moreActions")}
+            testId="branch-actions"
+          />
+        }
+      />
 
-      {/* The record's header, in the business screen's block: the tile, the name and its one tag,
-          the place under them, and the line the section below begins from. */}
-      <div
-        className="px-5 pt-6 pb-5"
-        style={{ borderBottom: "1px solid var(--divider)" }}
-      >
+      <SectionActionsSheet
+        open={menuOpen}
+        onClose={() => setMenuOpen(false)}
+        title={branch.name}
+        actions={[
+          ...(branch.isCurrent
+            ? []
+            : [
+                {
+                  id: "switch" as const,
+                  icon: ArrowRightLeft,
+                  title: t("branchPage.switchHere"),
+                  onClick: () => { void switchHere(); },
+                },
+              ]),
+          // The existing Co-Owner flow, opened with this branch fixed: pick the person, then
+          // what they can open, their major actions, the dashboards and the employee limits,
+          // then the invitation. Reaching it from the branch is the point — a co-owner is a
+          // person who runs a branch, so this is the page where the decision is made.
+          ...(branch.isMain || !isOwner
+            ? []
+            : [
+                {
+                  id: "transfer-ownership" as const,
+                  icon: Crown,
+                  title: t("coOwners.transferTitle"),
+                  onClick: () => {
+                    setMenuOpen(false);
+                    navigate(`${base}/settings/hub/people/co-owners/new?branchId=${branch.id}`);
+                  },
+                },
+              ]),
+          {
+            id: "share-location",
+            icon: MapPin,
+            title: t("branchPage.shareLocation"),
+            onClick: () => { void shareLocation(); },
+          },
+        ]}
+      />
+
+      {/* The record's header: the mark, the name and its one tag, the place under them. */}
+      <div className="px-5 pt-6 pb-5" style={{ borderBottom: "1px solid var(--divider)" }}>
         <BranchIdentity branch={branch} imageUrl={logoUrl} />
       </div>
 
-      <div className="px-4 pt-4">
+      <div className="px-4 pt-5">
         <BranchPerformance branch={branch} />
       </div>
 
-      {/* Location, the marketplace decision and the roles: the branch's own configuration, in the
-          order the reference lays it out. The form no longer edits the name — that is the pencil
-          above — so this block starts where configuration starts. */}
+      {/* Location and the marketplace decision — the branch's own configuration, in the order a
+          reader checks it: where it is, then whether farmers can find it. */}
       <BranchEditor branch={branch} />
 
-      <div className="px-4 pt-6">
-        <p className="ds-section-label px-1 mb-2">{t("branchFlow.responsiblePerson")}</p>
+      {/* One section for everyone connected to this branch: who runs it day to day, who co-owns
+          it, and the door to the roles themselves. Three titled blocks became one list. */}
+      <div className="px-4 pt-6" data-testid={`branch-people-${branch.id}`}>
+        <p className="ds-section-label mb-2">{t("branchPage.people")}</p>
         <ListCard>
-          <ListRow testId={`branch-responsible-${branch.id}`}>
-            <p className="text-13" style={{ color: "var(--text-primary)" }}>
-              {responsible?.name ?? t("branchFlow.nobodyResponsible")}
-            </p>
-          </ListRow>
-          <ListRow
-            title={t("branchFlow.transfer")}
-            testId={`branch-handover-${branch.id}`}
-            disabled={busy}
-            onClick={() => { setChosenId(null); setHandingOver(true); }}
-          />
-          {responsible && (
+          {/* One body runs a branch and it is the co-owner: there is no separate "responsible
+              person" to hand the branch to, so the old assign/transfer/revoke rows and their
+              dialogs are gone. Nobody assigned shows the action to assign; somebody assigned
+              shows who, with their phone and status underneath, and tapping that row opens their
+              own page. */}
+          {branch.isMain ? (
+            <ListRow title={t("branchFlow.mainOwnerOnly")} />
+          ) : !isOwner ? null : coOwners.length > 0 ? (
+            coOwners.map((person) => (
+              <ListRow
+                key={person.grantId}
+                title={person.name}
+                description={`${person.phone} · ${t(person.status === "active" ? "coOwners.statusActive" : person.status === "invited" ? "coOwners.statusInvited" : "coOwners.statusSuspended")}`}
+                testId={`branch-co-owner-${person.grantId}`}
+                onClick={() => navigate(`${base}/settings/hub/people/co-owners/${person.grantId}`)}
+              />
+            ))
+          ) : (
             <ListRow
-              title={t("branchFlow.revoke")}
-              testId={`branch-revoke-${branch.id}`}
-              disabled={busy}
-              onClick={() => setRevoking(true)}
+              icon={ShieldCheck}
+              title={t("branchFlow.assignCoOwner")}
+              testId={`branch-assign-co-owner-${branch.id}`}
+              onClick={() => navigate(`${base}/settings/hub/people/co-owners/new?branchId=${branch.id}`)}
             />
           )}
+
+          <ListRow
+            testId={`branch-roles-${branch.id}`}
+            title={t("branchPage.rolesAndPermissions")}
+            value={employeeLine}
+            onClick={() => void openRoles()}
+          />
         </ListCard>
       </div>
 
-      {isOwner && (
-        <div className="px-4 pt-5" data-testid={`branch-co-owner-card-${branch.id}`}>
-          <p className="ds-section-label px-1 mb-2">{t("branchFlow.coOwner")}</p>
-          <ListCard>
-            {branch.isMain ? (
-              <ListRow
-                title={t("branchFlow.mainOwnerOnly")}
-                meta={t("branchFlow.mainOwnerOnlyHint")}
-              />
-            ) : (
-              <>
-                {coOwners.length > 0 ? (
-                  coOwners.map((person) => (
-                    <ListRow
-                      key={person.grantId}
-                      title={person.name}
-                      meta={`${person.phone} · ${t(person.status === "active" ? "coOwners.statusActive" : person.status === "invited" ? "coOwners.statusInvited" : "coOwners.statusSuspended")}`}
-                      testId={`branch-co-owner-${person.grantId}`}
-                      onClick={() => navigate(`${base}/settings/hub/people/co-owners/${person.grantId}`)}
-                    />
-                  ))
-                ) : (
-                  <ListRow
-                    title={t("branchFlow.noCoOwner")}
-                    meta={t("branchFlow.noCoOwnerHint")}
-                  />
-                )}
-                <ListRow
-                  icon={ShieldCheck}
-                  title={t("branchFlow.assignCoOwner")}
-                  meta={t("branchFlow.coOwnerOnlyBranch")}
-                  testId={`branch-assign-co-owner-${branch.id}`}
-                  onClick={() => navigate(`${base}/settings/hub/people/co-owners/new?branchId=${branch.id}`)}
-                />
-              </>
-            )}
-          </ListCard>
-        </div>
-      )}
-
-      {!branch.isMain && isOwner && (
+      {!branch.isMain && (
         <div className="px-4 pt-5 pb-8">
           <button
             type="button"
@@ -309,28 +347,6 @@ export default function BranchDetailPage() {
           data-testid="branch-archive-reason"
         />
       </ConfirmDialog>
-
-      {/* Rendered only while open, deliberately. ConfirmDialog keeps itself mounted through its
-          exit animation, so two always-rendered dialogs on one page put two `confirm-submit`
-          buttons in the document at once — ambiguous for a test and two overlapping dialogs for
-          a screen reader. Gating on the flag means a closed dialog is not in the DOM at all. */}
-      {handingOver && <ConfirmDialog open title={t("branchFlow.responsiblePerson")}
-        message={t("branchFlow.ownershipBody")} confirmLabel={t("branchFlow.transfer")}
-        loading={busy} confirmDisabled={!chosenId} onConfirm={() => void handOver()}
-        onCancel={() => { if (!busy) { setHandingOver(false); setChosenId(null); } }}>
-        {candidates.length > 0
-          ? <ListCard>{candidates.map((person) => <ListRow key={person.id} title={person.name}
-              testId={`handover-person-${person.id}`} selected={chosenId === person.id}
-              onClick={() => setChosenId(person.id)} />)}</ListCard>
-          : <p className="ds-meta">{t("branchFlow.noAssignablePeople")}</p>}
-      </ConfirmDialog>}
-
-      {revoking && <ConfirmDialog open title={t("branchFlow.revokeTitle", { branch: branch.name })}
-        message={t("branchFlow.revokeBody")} confirmLabel={t("branchFlow.revoke")}
-        destructive loading={busy} confirmDisabled={!revokeReason.trim()} onConfirm={() => void takeBack()}
-        onCancel={() => { if (!busy) setRevoking(false); }}>
-        <Input value={revokeReason} onChange={(e) => setRevokeReason(e.target.value)} label={t("branchFlow.reason")} maxLength={500} />
-      </ConfirmDialog>}
     </div>
   );
 }

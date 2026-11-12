@@ -16,17 +16,23 @@ import type { BranchSummary } from "@/stores/shopStore";
 type Period = "month" | "sixMonths" | "year" | "custom";
 
 /**
- * What this branch is doing, laid out as the owner's reference has it.
+ * What this branch is doing, in the reports' own plate.
  *
- * SHAPE (2026-10-28): the period strip first, directly under the branch's identity; then the
- * four money figures in one block — net sales, net profit, customer receivables, supplier
- * payables; then inventory health as its own card. There is no card title above them: the
- * screen is the branch, so "Main Branch performance" repeated what the header already said.
+ * SHAPE (owner's redesign, 2026-11-12). The owner opens this page to READ one branch, so the
+ * figures are the report's plate, not a dashboard: the period strip, then two figures to a row
+ * with a hairline between rows, value first and the name under it, and nothing drawn behind them.
+ * The previous version put the same four figures in a card of labelled tiles and then a second
+ * card for stock, which read as a dashboard inside a record page and stated the section's purpose
+ * twice.
  *
- * THE TWO HONEST STATES STAY. The branch this account is WORKING IN has the loaded ledger, so
- * the period is the reader's to choose and stock health can be counted from real products. Any
- * other branch only has the lifetime figures that travelled with the branch row; it shows those
- * and says why the period and stock card are absent, rather than inventing a window.
+ * STOCK IS THREE NUMBERS, NOT A CARD. Low, out and expiring are counts an owner checks at a
+ * glance; they sit in one row under their own label, with no title repeating the heading.
+ *
+ * THE TWO HONEST STATES STAY. The branch this account is WORKING IN has the loaded ledger, so the
+ * period is the reader's to choose and stock health can be counted from real products. Any other
+ * branch only has the lifetime figures that travelled with the branch row; it shows those, with
+ * labels that say "to date", and no period strip — rather than inventing a window or explaining
+ * the absence in a sentence.
  *
  * A figure the account may not read arrives as `null` and is drawn as "—", never as zero.
  */
@@ -151,30 +157,41 @@ export default function BranchPerformance({ branch }: { branch: BranchSummary })
     { key: "year", label: t("branchPage.thisYear") },
   ];
 
-  const figures = isCurrent
+  /** The figures, in reading order: what it sold and kept, then what is owed both ways. */
+  const figures: { id: string; label: string; value: string; note?: string | null }[] = isCurrent
     ? [
-        { id: "sales", label: t("branchPage.netSales"), value: money(periodTotal), note: null as string | null },
+        { id: "sales", label: t("branchPage.netSales"), value: money(periodTotal) },
         { id: "profit", label: t("overview.netProfit"), value: profitValue, note: profitHint },
-        { id: "receivables", label: t("branchPage.customerReceivables"), value: money(branch.creditOutstanding), note: null },
-        { id: "payables", label: t("overview.supplierPayables"), value: money(supplierPayables), note: null },
+        { id: "receivables", label: t("branchPage.customerReceivables"), value: money(branch.creditOutstanding) },
+        { id: "payables", label: t("overview.supplierPayables"), value: money(supplierPayables) },
       ]
     : [
-        { id: "sales", label: t("overall.salesToDate"), value: money(branch.salesTotal), note: null as string | null },
-        { id: "receivables", label: t("branchPage.customerReceivables"), value: money(branch.creditOutstanding), note: null },
+        { id: "sales", label: t("overall.salesToDate"), value: money(branch.salesTotal) },
+        { id: "receivables", label: t("branchPage.customerReceivables"), value: money(branch.creditOutstanding) },
         {
           id: "inventory",
           label: t("overview.inventoryValue"),
           value: money(branch.inventoryValue, branch.inventoryCostIncomplete),
-          note: null,
         },
       ];
+  const rows: (typeof figures)[] = [];
+  for (let i = 0; i < figures.length; i += 2) rows.push(figures.slice(i, i + 2));
+
+  const stock = [
+    { id: "low", label: t("branchPage.lowStock"), count: health.low },
+    { id: "out", label: t("branchPage.outOfStock"), count: health.out },
+    { id: "expiring", label: t("overview.expiring"), count: health.expiring },
+  ];
 
   const waiting = isCurrent && !(salesReady && productsReady && companiesReady);
 
   return (
     <div data-testid={`branch-performance-${branch.id}`}>
+      <p className="ds-section-label mb-1">{t("branchPage.perfLabel")}</p>
+
       {isCurrent && (
         <PeriodTabs
+          variant="underline"
           options={periodOptions}
           value={period === "custom" ? null : period}
           onChange={(key) => setPeriod(key)}
@@ -191,59 +208,45 @@ export default function BranchPerformance({ branch }: { branch: BranchSummary })
           <SkeletonList rows={2} bare tile={false} />
         </div>
       ) : (
-        <>
-          <div
-            className={`${isCurrent ? "mt-3" : ""} rounded-[var(--radius-card)] p-4`}
-            style={{ background: "var(--tone-card)" }}
-          >
-            <div className="grid grid-cols-2 gap-x-4 gap-y-5">
-              {figures.map((figure) => (
+        <div className={isCurrent ? "mt-2" : "mt-1"}>
+          {rows.map((row, index) => (
+            <div
+              key={row[0].id}
+              className="grid grid-cols-2 gap-x-4 py-3.5"
+              style={index > 0 ? { borderTop: "1px solid var(--hairline)" } : undefined}
+            >
+              {row.map((figure) => (
                 <div className="min-w-0" key={figure.id} data-testid={`branch-figure-${figure.id}-${branch.id}`}>
-                  <p className="text-12" style={{ color: "var(--text-secondary)" }}>{figure.label}</p>
-                  <p className="text-18 font-bold mt-1 tabular-nums break-words">{figure.value}</p>
+                  <p className="text-18 font-semibold leading-none tabular-nums break-words">{figure.value}</p>
+                  <p className="text-13 mt-2" style={{ color: "var(--text-secondary)" }}>{figure.label}</p>
                   {figure.note && (
-                    <p className="text-11 mt-0.5" style={{ color: "var(--text-tertiary)" }}>{figure.note}</p>
+                    <p className="text-12 mt-1 font-semibold" style={{ color: "var(--text-tertiary)" }}>
+                      {figure.note}
+                    </p>
                   )}
                 </div>
               ))}
             </div>
-          </div>
+          ))}
+        </div>
+      )}
 
-          {isCurrent ? (
-            <div
-              className="mt-2 rounded-[var(--radius-card)] p-4"
-              style={{ background: "var(--tone-card)" }}
-              data-testid={`branch-health-card-${branch.id}`}
-            >
-              <p className="text-15 font-bold">{t("branchPage.inventoryHealth")}</p>
-              <div className="mt-3 flex flex-col gap-2.5">
-                {[
-                  { id: "low", label: t("branchPage.lowStock"), count: health.low },
-                  { id: "out", label: t("branchPage.outOfStock"), count: health.out },
-                  { id: "expiring", label: t("overview.expiring"), count: health.expiring },
-                ].map((row) => (
-                  <div
-                    key={row.id}
-                    className="flex items-center justify-between gap-3"
-                    data-testid={`branch-health-${row.id}-${branch.id}`}
-                  >
-                    <p className="text-13" style={{ color: "var(--text-primary)" }}>{row.label}</p>
-                    <p className="text-14 font-bold tabular-nums shrink-0">
-                      {row.count.toLocaleString("en-PK")}
-                    </p>
-                  </div>
-                ))}
+      {isCurrent && !waiting && (
+        <div data-testid={`branch-health-${branch.id}`}>
+          <p className="ds-section-label mt-5 mb-1">{t("branchPage.inventoryHealth")}</p>
+          <div className="grid grid-cols-3 gap-x-3 py-2.5">
+            {stock.map((row) => (
+              <div className="min-w-0" key={row.id} data-testid={`branch-health-${row.id}-${branch.id}`}>
+                <p className="text-18 font-semibold leading-none tabular-nums">
+                  {row.count.toLocaleString("en-PK")}
+                </p>
+                <p className="text-12 mt-1.5 leading-snug" style={{ color: "var(--text-secondary)" }}>
+                  {row.label}
+                </p>
               </div>
-            </div>
-          ) : (
-            <p
-              className="text-11 mt-2 px-1"
-              style={{ color: "var(--text-tertiary)" }}
-            >
-              {t("branchPage.otherBranchNote")}
-            </p>
-          )}
-        </>
+            ))}
+          </div>
+        </div>
       )}
 
       <DateRangeSheet

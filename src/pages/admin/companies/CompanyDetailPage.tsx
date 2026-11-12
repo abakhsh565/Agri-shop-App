@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Navigate, useLocation, useNavigate, useParams } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
+import Photo from "@/components/ui/Photo";
 import NavHeader from "@/components/ui/NavHeader";
+import Button from "@/components/ui/Button";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import ImageUpload from "@/components/ui/ImageUpload";
 import PaymentReminderCard from "@/components/ui/PaymentReminderCard";
@@ -9,19 +11,24 @@ import PaymentReminderSheet from "@/components/ui/PaymentReminderSheet";
 import { SkeletonList } from "@/components/ui/Skeleton";
 import ListCard from "@/components/ui/ListCard";
 import ListRow from "@/components/ui/ListRow";
+import LogoTile from "@/components/ui/LogoTile";
 import { useCompaniesStore } from "@/stores/companiesStore";
 import { useProductsStore } from "@/stores/productsStore";
 import { useUIStore } from "@/stores/uiStore";
 import { useAuthStore } from "@/stores/authStore";
 import { fetchPurchases, fetchSupplierPayments, type SupplierPaymentEntry } from "@/lib/db";
+import { exportText } from "@/lib/exportData";
 import { digitsOnlyPhone, phoneFieldProps } from "@/lib/phoneInput";
 import type { Purchase } from "@/types";
 import { formatCurrency, formatDate } from "@/lib/formatters";
+import { unitWord } from "@/lib/inventoryView";
 import { useThemeStore } from "@/stores/themeStore";
-import { useT } from "@/lib/i18n";
+import { useT, type I18nKey } from "@/lib/i18n";
 import { useShellBase } from "@/lib/useShellBase";
 import { useReturnTo } from "@/lib/useReturnTo";
+import { useCompletePaymentReminder } from "@/hooks/useCompletePaymentReminder";
 import { pkToday } from "@/lib/pkDate";
+import { daysUntilDue, isSupplierOverdue } from "@/lib/supplierPayable";
 import {
   setPaymentReminderStatus,
   sortReminders,
@@ -37,11 +44,19 @@ import {
   Archive,
   X,
   MoreVertical,
+  Printer,
+  Share2,
   ChevronRight,
   Search,
   Bell,
+  CalendarDays,
   ReceiptText,
 } from "lucide-react";
+
+/** Text for the print window: a supplier name with a quote in it must not end the markup. */
+function esc(value: string): string {
+  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
 
 /**
  * One supplier, whole: who they are and what the business owes them.
@@ -57,8 +72,8 @@ import {
  * WHAT IS KEPT, IN ONE HOME EACH:
  *   identity + contact details   the header line
  *   payable, billed, paid        the summary card (with the settled-bill progress)
- *   record payment / order stock the card's two actions
- *   bills                        the Bills tab — the purchase history is that list
+ *   record payment / order stock the actions below the card
+ *   purchases                    the Purchases tab — the purchase history is that list
  *   payments made                the Payments tab
  *   the owner's reminders        the Reminders tab
  *   products supplied            the Products tab
@@ -95,6 +110,7 @@ export default function CompanyDetailPage() {
   const archiveCompany = useCompaniesStore((s) => s.archiveCompany);
   const allProducts = useProductsStore((s) => s.products);
   const { addToast } = useUIStore();
+  const completeReminder = useCompletePaymentReminder();
   const isOwner = useAuthStore((s) => s.user?.membershipRole === "owner");
 
   const [purchases, setPurchases] = useState<Purchase[] | null>(null);
@@ -187,6 +203,22 @@ export default function CompanyDetailPage() {
   const billed = Math.max(0, supplier.totalPurchases);
   const due = Math.max(0, supplier.outstandingPayable);
   const paid = Math.max(0, billed - due);
+  const paidPct = billed > 0 ? Math.min(100, Math.round((paid / billed) * 100)) : 0;
+  const overdue = isSupplierOverdue(supplier, today);
+  const daysToDue = supplier.dueDate ? daysUntilDue(supplier.dueDate, today) : null;
+  const dueLabel =
+    due <= 0
+      ? t("payable.paid")
+      : !supplier.dueDate
+        ? t("payable.noDate")
+        : overdue && daysToDue !== null
+          ? t("payable.overdueBy", { days: Math.abs(daysToDue) })
+          : daysToDue === 0
+            ? t("payable.dueToday")
+            : daysToDue !== null && daysToDue > 0
+              ? t("payable.dueOn", { date: shortDate(supplier.dueDate) })
+              : t("payable.noDate");
+  const balanceLabel = due > 0 ? t("supplierDetail.youOwe") : t("supplierDetail.allSettled");
 
 
   const supplierReminders = sortReminders(
@@ -201,6 +233,61 @@ export default function CompanyDetailPage() {
   const identityLine = [supplier.contactPerson, supplier.phone, supplier.address]
     .filter(Boolean)
     .join(" · ");
+
+  /**
+   * The account on paper: who they are, what is owed, what was billed and paid — the same figures
+   * the card shows, so paper cannot disagree with the page.
+   */
+  function printStatement() {
+    const win = window.open("", "_blank");
+    if (!win) {
+      addToast(t("purchase.printBlocked"), "error");
+      return;
+    }
+    win.document.write(`<!doctype html>
+<html dir="${isUrdu ? "rtl" : "ltr"}"><head><meta charset="utf-8">
+<title>${esc(supplier.name)}</title>
+<style>
+  body { font-family: Inter, system-ui, -apple-system, sans-serif; padding: 32px; color: #111; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  p { margin: 0; color: #555; font-size: 12px; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 16px; }
+  td { padding: 6px 0; border-bottom: 1px solid #ddd; }
+  td + td { text-align: end; }
+</style></head>
+<body>
+  <h1>${esc(supplier.name)}</h1>
+  ${identityLine ? `<p>${esc(identityLine)}</p>` : ""}
+  <p>${esc(dueLabel)}</p>
+  <table>
+    <tr><td>${esc(balanceLabel)}</td><td>${esc(formatCurrency(due))}</td></tr>
+    <tr><td>${esc(t("common.paid"))}</td><td>${esc(formatCurrency(paid))}</td></tr>
+    <tr><td>${esc(t("supplierDetail.totalBilled"))}</td><td>${esc(formatCurrency(billed))}</td></tr>
+  </table>
+</body></html>`);
+    win.document.close();
+    win.focus();
+    win.setTimeout(() => win.print(), 250);
+  }
+
+  async function shareStatement() {
+    const text = [
+      supplier.name,
+      identityLine,
+      `${balanceLabel}: ${formatCurrency(due)}`,
+      `${t("common.paid")}: ${formatCurrency(paid)}`,
+      `${t("supplierDetail.totalBilled")}: ${formatCurrency(billed)}`,
+      dueLabel,
+    ]
+      .filter(Boolean)
+      .join("\n");
+    try {
+      const outcome = await exportText(text, supplier.name);
+      addToast(outcome === "shared" ? t("sales.reportShared") : t("sales.reportCopied"), "success");
+    } catch {
+      addToast(t("sales.shareFailed"), "error");
+    }
+  }
 
   function openEdit() {
     setEdit({
@@ -304,6 +391,18 @@ export default function CompanyDetailPage() {
                     label={t("common.edit")}
                     onClick={() => { setMenuOpen(false); openEdit(); }}
                   />
+                  {/* The account on paper, and the same account in a message: the two ways an
+                      owner takes this page to a supplier or an accountant. */}
+                  <MenuItem
+                    icon={Printer}
+                    label={t("supplierDetail.print")}
+                    onClick={() => { setMenuOpen(false); printStatement(); }}
+                  />
+                  <MenuItem
+                    icon={Share2}
+                    label={t("supplierDetail.share")}
+                    onClick={() => { setMenuOpen(false); void shareStatement(); }}
+                  />
                   <MenuItem
                     icon={Archive}
                     label={t("company.removeSupplier")}
@@ -318,118 +417,122 @@ export default function CompanyDetailPage() {
       />
 
       <div className="flex flex-col gap-3.5 px-4 pt-3 pb-8">
-        {/* ── The supplier's file ────────────────────────────────────────────────────────────
-            A host profile, not a dashboard: the avatar, the name and the three numbers that say
-            where the account stands, separated by rules instead of nested grey boxes. The boxes
-            made the header read as four surfaces stacked inside a fifth; this is one surface and
-            three figures on it (owner's correction, 2026-10-31). */}
-        <div className="ds-card" data-testid="supplier-figures">
-          <div className="flex flex-col items-center text-center">
-            {supplier.logoUrl ? (
-              <img
-                src={supplier.logoUrl}
-                alt={supplier.name}
-                className="size-[76px] rounded-full object-cover shrink-0"
-              />
-            ) : (
-              <span
-                className="size-[76px] rounded-full flex items-center justify-center text-28 font-bold shrink-0"
-                style={{ background: "var(--surface-2)", color: "var(--text-secondary)" }}
-              >
-                {supplier.name.charAt(0).toUpperCase()}
-              </span>
-            )}
-            <p className="text-22 font-bold leading-tight mt-3 break-words">{supplier.name}</p>
-            <p className="text-12 mt-1" style={{ color: "var(--text-secondary)" }}>
+        {/* The identity is the page's header, not part of the money card. */}
+        <div className="flex items-start gap-3">
+          <LogoTile name={supplier.name} src={supplier.logoUrl} size={56} className="shrink-0" />
+          <div className="min-w-0 flex-1 pt-0.5">
+            <p className="text-20 font-bold leading-tight break-words">{supplier.name}</p>
+            <p className="text-12 mt-1 leading-snug line-clamp-2" style={{ color: "var(--text-secondary)" }}>
               {identityLine || t("supplierDetail.supplier")}
             </p>
           </div>
-
-          {/* Owed, paid, billed — three columns of one strip, told apart by a hairline. Amounts
-              wrap rather than truncate, so a seven-figure balance can never be read as a
-              smaller one on a narrow phone. */}
-          <div className="mt-4 pt-4 flex items-stretch" style={{ borderTop: "1px solid var(--hairline)" }}>
-            {[
-              { key: "owe", label: t("supplierDetail.youOwe"), value: due },
-              { key: "paid", label: t("common.paid"), value: paid },
-              { key: "billed", label: t("supplierDetail.totalBilled"), value: billed },
-            ].map((figure, index) => (
-              <div
-                key={figure.key}
-                className="min-w-0 flex-1 px-1 text-center"
-                style={index > 0 ? { borderInlineStart: "1px solid var(--hairline)" } : undefined}
-              >
-                <p
-                  className="text-14 font-bold tabular-nums leading-tight break-words"
-                  data-testid={figure.key === "owe" ? "supplier-due" : undefined}
-                >
-                  {formatCurrency(figure.value)}
-                </p>
-                <p className="text-10 mt-1 leading-tight" style={{ color: "var(--text-secondary)" }}>
-                  {figure.label}
-                </p>
-              </div>
-            ))}
-          </div>
         </div>
 
-        {/* The two things that move the balance, in one neutral pair. The white pill the payment
-            action used to wear read as a light-theme control dropped into a dark screen; matching
-            the order action keeps the pair calm, and the icon plus the bolder label still say
-            which one the page exists for (owner's correction, 2026-10-31). */}
-        <div className="flex gap-2">
-          <button
-            type="button"
+        {/* The account card is money only: the balance, what has been paid and what was billed. */}
+        <div className="ds-card" data-testid="supplier-figures">
+            <p className="ds-section-label" style={{ color: "var(--text-secondary)" }}>{balanceLabel}</p>
+            <p
+              className="text-32 font-bold tabular-nums leading-none mt-1.5 break-words"
+              data-testid="supplier-due"
+            >
+              {formatCurrency(due)}
+            </p>
+            <p
+              className="flex items-center gap-1.5 text-10 mt-2"
+              style={{ color: overdue ? "var(--error)" : "var(--text-secondary)" }}
+            >
+              <CalendarDays size={12} className="shrink-0" />
+              <span className="truncate">{dueLabel}</span>
+            </p>
+
+            <div className="mt-4 flex items-end justify-between gap-4">
+              <div className="min-w-0">
+                <p className="text-10" style={{ color: "var(--text-secondary)" }}>{t("common.paid")}</p>
+                <p className="text-13 font-bold tabular-nums mt-0.5 break-words">{formatCurrency(paid)}</p>
+              </div>
+              <div className="min-w-0 text-end">
+                <p className="text-10" style={{ color: "var(--text-secondary)" }}>{t("supplierDetail.totalBilled")}</p>
+                <p className="text-13 font-bold tabular-nums mt-0.5 break-words">{formatCurrency(billed)}</p>
+              </div>
+            </div>
+            <div className="mt-2 h-1.5 rounded-full overflow-hidden" style={{ background: "var(--divider)" }}>
+              <div className="h-full rounded-full" style={{ width: `${paidPct}%`, background: "var(--brand)" }} />
+            </div>
+
+        </div>
+
+        {/* The actions sit outside the account card. The primary is the owner's quiet dark CTA
+            with a green label; it is deliberately not a solid brand button. */}
+        <div className="grid grid-cols-[1.25fr_1fr] gap-2">
+          <Button
+            variant="cta"
+            fullWidth
             onClick={() => navigate(`${base}/payments/supplier/${supplier.id}`, { state: { from: location.pathname } })}
-            data-testid="supplier-detail-pay"
-            className="flex-[1.3] min-w-0 h-12 rounded-full flex items-center justify-center gap-2 text-13 font-bold active:opacity-80"
-            style={{ background: "var(--surface-2)", color: "var(--text-primary)" }}
+            testId="supplier-detail-pay"
+            className="min-w-0 gap-2"
           >
-            <Wallet size={16} className="shrink-0" />
+            <Wallet size={15} className="shrink-0" />
             <span className="truncate">{t("supplierDetail.recordPayment")}</span>
-          </button>
+          </Button>
           <button
             type="button"
             onClick={() => navigate(`${base}/purchases/new?companyId=${supplier.id}`)}
             data-testid="supplier-detail-order"
-            className="flex-1 min-w-0 h-12 rounded-full flex items-center justify-center gap-2 text-13 font-semibold active:opacity-80"
-            style={{ background: "var(--surface-2)", color: "var(--text-primary)" }}
+            className="min-w-0 h-12 rounded-full flex items-center justify-center gap-2 px-3 text-13 font-semibold active:opacity-80"
+            style={{ background: "var(--tone-sunken)", color: "var(--text-primary)" }}
           >
-            <ShoppingCart size={16} className="shrink-0" />
+            <ShoppingCart size={15} className="shrink-0" />
             <span className="truncate">{t("supplierDetail.orderStock")}</span>
           </button>
         </div>
 
-        {/* Four lists, one at a time: what was bought, what was paid, the owner's reminders and
-            what this supplier brings. Chips, so the row scrolls on a narrow phone rather than
-            squeezing four labels into equal quarters. */}
-        <div className="flex gap-2 overflow-x-auto no-scrollbar -mx-4 px-4 pt-1">
+        {/* Four lists, one at a time. A segmented track keeps all four destinations visible
+            on a phone and makes the current list a state, not four unrelated pills. */}
+        <div
+          role="tablist"
+          aria-label={t("supplierDetail.title")}
+          className="grid grid-cols-4 gap-1 rounded-full p-1"
+          style={{ background: "var(--tone-sunken)" }}
+        >
           {tabs.map((option) => {
             const selected = tab === option.key;
+            const count = option.key === "reminders" ? openSupplierReminders : 0;
             return (
               <button
                 key={option.key}
                 type="button"
+                role="tab"
+                id={`supplier-tab-${option.key}`}
+                aria-selected={selected}
+                aria-controls={selected ? `supplier-panel-${option.key}` : undefined}
                 onClick={() => setTab(option.key)}
-                aria-pressed={selected}
                 data-testid={`supplier-tab-${option.key}`}
-                className="shrink-0 h-9 px-4 rounded-full text-12 font-semibold transition-colors active:opacity-70"
+                className="min-w-0 h-9 px-0.5 rounded-full text-11 font-semibold transition-colors active:opacity-70 flex items-center justify-center gap-0.5"
                 style={selected
-                  ? { background: "var(--brand)", color: "var(--ink-fg)" }
-                  : { background: "var(--surface-2)", color: "var(--text-secondary)" }}
+                  ? { background: "var(--tone-card)", color: "var(--text-primary)" }
+                  : { background: "transparent", color: "var(--text-secondary)" }}
               >
-                {/* The count rides with the name, the way the payment book's own tabs say
-                    "Upcoming · 2": a separate bell badge beside the word read as an alert and
-                    doubled the icon already implied by the label (owner's correction,
-                    2026-10-31). */}
-                {option.key === "reminders" && openSupplierReminders > 0
-                  ? `${option.label} · ${openSupplierReminders}`
-                  : option.label}
+                <span className="truncate">{option.label}</span>
+                {count > 0 && (
+                  <span
+                    className="shrink-0 inline-flex items-center justify-center min-w-4 h-4 px-1 rounded-full text-10 font-bold tabular-nums"
+                    style={selected
+                      ? { background: "var(--tone-sunken)", color: "var(--text-secondary)" }
+                      : { background: "var(--tone-card)", color: "var(--text-secondary)" }}
+                  >
+                    {count}
+                  </span>
+                )}
               </button>
             );
           })}
         </div>
 
+        <div
+          role="tabpanel"
+          id={`supplier-panel-${tab}`}
+          aria-labelledby={`supplier-tab-${tab}`}
+        >
         {!companiesReady || purchases === null || payments === null || reminders.rows === null ? (
           <SkeletonList rows={3} />
         ) : tab === "bills" ? (
@@ -454,8 +557,21 @@ export default function CompanyDetailPage() {
                     key={bill.id}
                     testId={`supplier-bill-${bill.id}`}
                     onClick={() => navigate(`${base}/purchases/${bill.id}`)}
+                    tile={
+                      <span
+                        className="size-9 rounded-[var(--radius-tile)] flex items-center justify-center shrink-0"
+                        style={{ background: "var(--tone-sunken)", color: open ? "var(--warning)" : "var(--brand-dark)" }}
+                      >
+                        <ReceiptText size={15} />
+                      </span>
+                    }
                     title={bill.purchaseNumber}
-                    meta={`${formatDate(bill.createdAt)}${units > 0 ? ` · ${units} ${t("common.units")}` : ""}`}
+                    meta={
+                      <>
+                        <bdi dir="ltr">{formatDate(bill.createdAt)}</bdi>
+                        {units > 0 ? ` · ${units} ${t("common.units")}` : ""}
+                      </>
+                    }
                     trailing={
                       <div className="text-end shrink-0">
                         <p
@@ -465,8 +581,11 @@ export default function CompanyDetailPage() {
                           {formatCurrency(open ? bill.outstandingPayable : bill.totalAmount)}
                         </p>
                         <p
-                          className="text-10 font-semibold mt-0.5"
-                          style={{ color: open ? "var(--warning)" : "var(--brand-dark)" }}
+                          className="inline-block text-10 font-semibold mt-1 px-1.5 py-0.5 rounded-full"
+                          style={{
+                            color: open ? "var(--warning)" : "var(--brand-dark)",
+                            background: open ? "var(--warning-bg)" : "var(--brand-light)",
+                          }}
                         >
                           {open ? t("payable.outstanding") : t("payable.paid")}
                         </p>
@@ -495,14 +614,19 @@ export default function CompanyDetailPage() {
                   testId={`supplier-payment-${payment.id}`}
                   tile={
                     <span
-                      className="size-9 rounded-full flex items-center justify-center shrink-0"
-                      style={{ background: "var(--surface-2)", color: "var(--brand-dark)" }}
+                      className="size-9 rounded-[var(--radius-tile)] flex items-center justify-center shrink-0"
+                      style={{ background: "var(--tone-sunken)", color: "var(--brand-dark)" }}
                     >
                       <Wallet size={15} />
                     </span>
                   }
                   title={formatCurrency(payment.amount)}
-                  meta={`${shortDate(payment.createdAt)}${payment.recordedByName ? ` · ${payment.recordedByName}` : ""}`}
+                  meta={
+                    <>
+                      <bdi dir="ltr">{shortDate(payment.createdAt)}</bdi>
+                      {payment.recordedByName ? ` · ${payment.recordedByName}` : ""}
+                    </>
+                  }
                   description={paymentDescription(payment)}
                 />
               ))}
@@ -568,6 +692,10 @@ export default function CompanyDetailPage() {
                   onStatus={
                     isOwner
                       ? async (status) => {
+                          if (status === "completed") {
+                            await completeReminder(reminder, reminders.retry);
+                            return;
+                          }
                           try {
                             await setPaymentReminderStatus(reminder.id, status);
                             reminders.retry();
@@ -592,29 +720,49 @@ export default function CompanyDetailPage() {
           /* Their picture, then the name: the packet the owner already recognises on the shelf
              is easier to scan than a chip of words. */
           <ListCard>
-            {products.map((p) => (
-              <ListRow
-                key={p.id}
-                testId={`supplier-product-${p.id}`}
-                onClick={() => navigate(`${base}/products/${p.id}`)}
-                title={p.name}
-                tile={
-                  p.imageUrl ? (
-                    <img src={p.imageUrl} alt={p.name} className="size-10 rounded-[var(--radius-tile)] object-cover shrink-0" />
-                  ) : (
-                    <span
-                      className="size-10 rounded-[var(--radius-tile)] flex items-center justify-center text-13 font-bold shrink-0"
-                      style={{ background: "var(--surface-2)", color: "var(--text-secondary)" }}
-                    >
-                      {p.name.charAt(0).toUpperCase()}
-                    </span>
-                  )
-                }
-                trailing={<ChevronRight size={14} style={{ color: "var(--text-tertiary)" }} className="shrink-0" />}
-              />
-            ))}
+            {products.map((p) => {
+              const minPrice = p.variants.length
+                ? Math.min(...p.variants.map((v) => v.sellingPrice))
+                : null;
+              const categoryLabel = t(`products.category.${p.category}` as I18nKey);
+              return (
+                <ListRow
+                  key={p.id}
+                  testId={`supplier-product-${p.id}`}
+                  onClick={() => navigate(`${base}/products/${p.id}`)}
+                  title={p.name}
+                  meta={`${categoryLabel} · ${p.stockQty.toLocaleString("en-PK", { maximumFractionDigits: 2 })} ${unitWord(p.baseUnit, t)}`}
+                  tile={
+                    <Photo
+                      src={p.imageUrl}
+                      alt={p.name}
+                      className="size-10 rounded-[var(--radius-tile)] object-cover shrink-0"
+                      fallback={
+                        <span
+                          className="size-10 rounded-[var(--radius-tile)] flex items-center justify-center text-13 font-bold shrink-0"
+                          style={{ background: "var(--surface-2)", color: "var(--text-secondary)" }}
+                        >
+                          {p.name.charAt(0).toUpperCase()}
+                        </span>
+                      }
+                    />
+                  }
+                  trailing={
+                    <div className="flex items-center gap-2 shrink-0">
+                      {minPrice !== null && (
+                        <span className="text-11 font-semibold tabular-nums" style={{ color: "var(--text-primary)" }}>
+                          {formatCurrency(minPrice)}
+                        </span>
+                      )}
+                      <ChevronRight size={14} style={{ color: "var(--text-tertiary)" }} />
+                    </div>
+                  }
+                />
+              );
+            })}
           </ListCard>
         )}
+        </div>
       </div>
       <PaymentReminderSheet
         open={reminderOpen}

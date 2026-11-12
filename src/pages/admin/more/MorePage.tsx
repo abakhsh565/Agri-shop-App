@@ -121,6 +121,40 @@ export default function AdminMorePage() {
   }
 
   const groups: Array<{ id: string; headingKey: I18nKey; rows: MoreRow[] }> = [
+    // Alerts and the inbox sit above the business areas (owner, 2026-11-12): what needs an
+    // answer today is read before the places it came from.
+    {
+      id: "alerts",
+      headingKey: "more.group.alertsInbox",
+      rows: [
+        {
+          id: "alerts",
+          icon: BellRing,
+          labelKey: "more.alertsReminders",
+          descriptionKey: "more.hint.alerts",
+          to: `${base}/alerts/reminders`,
+          show: hasPermission("alerts.view"),
+        },
+        {
+          id: "notifications",
+          icon: Bell,
+          labelKey: "more.notifications",
+          descriptionKey: "more.hint.notifications",
+          to: `${base}/notifications`,
+          state: { from: `${base}/more` },
+          show: hasPermission("notifications.view"),
+        },
+        {
+          id: "messages",
+          icon: MessageSquare,
+          labelKey: "admin.messages",
+          descriptionKey: "more.hint.messages",
+          to: `${base}/messages`,
+          state: { from: `${base}/more` },
+          show: true,
+        },
+      ],
+    },
     {
       id: "business",
       headingKey: "more.group.business",
@@ -166,38 +200,6 @@ export default function AdminMorePage() {
           to: `${base}/reports/directory`,
           state: { from: `${base}/more` },
           show: hasPermission("reports.view"),
-        },
-      ],
-    },
-    {
-      id: "alerts",
-      headingKey: "more.group.alertsInbox",
-      rows: [
-        {
-          id: "alerts",
-          icon: BellRing,
-          labelKey: "more.alertsReminders",
-          descriptionKey: "more.hint.alerts",
-          to: `${base}/alerts/reminders`,
-          show: hasPermission("alerts.view"),
-        },
-        {
-          id: "notifications",
-          icon: Bell,
-          labelKey: "more.notifications",
-          descriptionKey: "more.hint.notifications",
-          to: `${base}/notifications`,
-          state: { from: `${base}/more` },
-          show: hasPermission("notifications.view"),
-        },
-        {
-          id: "messages",
-          icon: MessageSquare,
-          labelKey: "admin.messages",
-          descriptionKey: "more.hint.messages",
-          to: `${base}/messages`,
-          state: { from: `${base}/more` },
-          show: true,
         },
       ],
     },

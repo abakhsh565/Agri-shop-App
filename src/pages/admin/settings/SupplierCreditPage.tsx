@@ -104,7 +104,9 @@ export default function SupplierCreditPage({ mode }: { mode: "pending" | "overdu
       onView={(id) => navigate(`${base}/companies/${id}`, {
         state: { from: `${base}/settings/overview/suppliers/${overdue ? "overdue" : "pending"}` },
       })}
-      onPay={(id) => navigate(`${base}/payments/supplier/${id}`)}
+      onPay={(id) => navigate(`${base}/payments/supplier/${id}`, {
+        state: { from: `${base}/settings/overview/suppliers/${overdue ? "overdue" : "pending"}` },
+      })}
     />
   );
 }

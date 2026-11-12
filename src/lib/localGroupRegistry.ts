@@ -16,6 +16,7 @@ import { supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/stores/authStore";
 import type { ReminderConfig } from "@/types";
 import { tNow } from "@/lib/i18n";
+import { resolveImageUrl } from "@/lib/storage";
 
 /**
  * Both of the registries below hold rows that belong to exactly one shop — a reminder group is
@@ -181,7 +182,7 @@ export async function loadLocalGroups(): Promise<
         name: c?.name || tNow("common.unknown"),
         outstandingBalance: c?.outstanding_balance || 0,
         dueDate: c?.due_date || null,
-        imageUrl: c?.image_url || undefined,
+        imageUrl: resolveImageUrl(c?.image_url ?? null),
       };
     }),
     config: g.config,

@@ -212,12 +212,25 @@ export function navigateBack(
 
   if (meta.isBoard) return false;
 
-  // A module root is the main screen of that module, not a reason to jump over the reader's
-  // previous screen to the dashboard. If the module was opened from More (or from another
-  // screen), Back goes to that screen with history -1. A cold deep link has no in-app page
-  // behind it and keeps the existing board fallback below.
-  if (meta.entryType === "module-root" && canStepBack) {
+  // BACK IS WHERE THE READER CAME FROM, at every depth (owner, 2026-11-12).
+  //
+  // The hierarchy below knows the canonical parent of a screen, which is right for a cold open —
+  // a deep link, a refresh, a new tab — but wrong for a reader who is *in* a journey: a supplier
+  // opened from a sale, a branch's Co-Owner opened from the branch, a flow opened from a record.
+  // Those screens are reached across modules and through `replace`, and no parent map can say
+  // where the person was standing. The tab's own history can, because it is the only record of
+  // what they actually visited. Stepping back with `-1` is also what keeps the browser and
+  // hardware back buttons agreeing with the arrow instead of walking a second, different path.
+  //
+  // The in-app stack is not abandoned: `setSkipNext` keeps the pop from being re-recorded as a
+  // forward move, so the trail after the step is still the trail the reader walked. And when
+  // there is no in-app page behind this one (`canStepBack` false), the canonical parent/board is
+  // exactly the right answer, so the hierarchy below still runs.
+  if (canStepBack) {
+    // The step back is not recorded as a forward move, and the frame being left is dropped from
+    // the trail here so a later cold fallback cannot point at the screen we just left.
     setSkipNext();
+    popNav(current);
     (navigate as unknown as (delta: number) => void)(-1);
     return true;
   }

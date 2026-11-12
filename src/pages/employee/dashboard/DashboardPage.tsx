@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "@/stores/authStore";
+import Photo from "@/components/ui/Photo";
 import { useNotificationStore, type AppNotification } from "@/stores/notificationStore";
 import { useSalesStore } from "@/stores/salesStore";
 import { useShopStore } from "@/stores/shopStore";
@@ -20,6 +21,7 @@ import ListCard from "@/components/ui/ListCard";
 import ListRow from "@/components/ui/ListRow";
 import { SkeletonList } from "@/components/ui/Skeleton";
 import EmployeePersonaWidgets from "@/components/employee/dashboard/PersonaWidgets";
+import RecordPaymentTargetSheet from "@/components/payments/RecordPaymentTargetSheet";
 
 function initBgColor(name: string | null | undefined) {
   const colors = ["#84cc16","#3b82f6","#8b5cf6","#f59e0b","#06b6d4","#ec4899"];
@@ -60,6 +62,9 @@ export default function DashboardPage() {
   const navigate = useNavigate();
   const t = useT();
   const [showNotifs, setShowNotifs] = useState(false);
+  // Record Payment asks which side the money is on before it opens a screen: a customer paying
+  // off udhaar and a supplier being paid are two different books, not one screen with two names.
+  const [recordPaymentOpen, setRecordPaymentOpen] = useState(false);
   const allSales = useSalesStore((s) => s.sales);
   const customers = useCustomersStore((s) => s.customers);
   // The branch this person is working in. A person enrolled in one branch has nothing to
@@ -204,11 +209,11 @@ export default function DashboardPage() {
           className="flex items-center justify-center rounded-full shrink-0 size-[44px] font-bold text-15 transition-transform active:scale-95 overflow-hidden"
           style={{ background: "var(--brand)", color: "#0a0a0a" }}
         >
-          {user?.photoUrl ? (
-            <img src={user.photoUrl} alt="" className="w-full h-full object-cover" />
-          ) : (
-            firstName.charAt(0).toUpperCase()
-          )}
+          <Photo
+            src={user?.photoUrl}
+            className="w-full h-full object-cover"
+            fallback={firstName.charAt(0).toUpperCase()}
+          />
         </button>
 
         <div className="flex flex-col flex-1 min-w-0">
@@ -381,7 +386,7 @@ export default function DashboardPage() {
             {t("dashboard.newSale")}
           </button>)}
           {hasPermission("customers.payments") && (<button
-            onClick={() => navigate("/employee/customers")}
+            onClick={() => setRecordPaymentOpen(true)}
             className="flex-1 h-12 rounded-full font-bold text-14 flex items-center justify-center gap-2 transition-transform active:scale-[0.97]"
             style={{ border: "1.5px solid var(--divider)", color: "var(--text-primary)", background: "transparent" }}
           >
@@ -411,13 +416,18 @@ export default function DashboardPage() {
             <ListRow
               key={sale.id}
               onClick={() => navigate(`/employee/sales/${sale.id}`)}
-              tile={cImg ? (
-                <img src={cImg} alt={sale.customerName} className="size-9 rounded-full object-cover shrink-0" />
-              ) : (
-                <div className="size-9 rounded-full shrink-0 flex items-center justify-center text-11 font-bold" style={{ background: cBg, color: "#fff" }}>
-                  {sale.customerName.charAt(0).toUpperCase()}
-                </div>
-              )}
+              tile={
+                <Photo
+                  src={cImg}
+                  alt={sale.customerName}
+                  className="size-9 rounded-full object-cover shrink-0"
+                  fallback={
+                    <div className="size-9 rounded-full shrink-0 flex items-center justify-center text-11 font-bold" style={{ background: cBg, color: "#fff" }}>
+                      {sale.customerName.charAt(0).toUpperCase()}
+                    </div>
+                  }
+                />
+              }
               trailing={
                 <div className="flex flex-col items-end gap-1 shrink-0">
                   <span className="text-13 font-bold" style={{ color: "var(--text-primary)" }}>
@@ -446,6 +456,21 @@ export default function DashboardPage() {
       </div>)}
 
       {showSales && <EmployeePersonaWidgets salesOverviewVisible />}
+
+      {/* Which side is this payment on? The customer book and the supplier book are one tap
+          apart from Home, so neither side has to be found through another module. */}
+      <RecordPaymentTargetSheet
+        open={recordPaymentOpen}
+        onClose={() => setRecordPaymentOpen(false)}
+        onCustomers={() => {
+          setRecordPaymentOpen(false);
+          navigate("/employee/customers");
+        }}
+        onSuppliers={() => {
+          setRecordPaymentOpen(false);
+          navigate("/employee/companies");
+        }}
+      />
     </div>
     </PullToRefresh>
   );

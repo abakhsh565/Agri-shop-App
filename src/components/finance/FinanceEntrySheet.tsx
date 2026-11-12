@@ -449,6 +449,7 @@ export default function FinanceEntrySheet({ entryId, open, onClose, onChanged }:
         open={open}
         title={row ? categoryLabel(row.category) : t("finance.detail.title")}
         onClose={onClose}
+        closeButton={false}
         maxHeight="90vh"
       >
         {failed ? (
@@ -578,26 +579,6 @@ export default function FinanceEntrySheet({ entryId, open, onClose, onChanged }:
                   </p>
                 )}
 
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setEditing(false)}
-                    className="flex-1 h-11 rounded-full text-13 font-semibold"
-                    style={{ background: "var(--tone-sunken)", color: "var(--text-primary)" }}
-                  >
-                    {t("common.cancel")}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => void saveEdit()}
-                    disabled={savingEdit}
-                    data-testid="finance-entry-edit-save"
-                    className="flex-1 h-11 rounded-full text-13 font-bold disabled:opacity-45"
-                    style={{ background: "var(--text-primary)", color: "var(--background)" }}
-                  >
-                    {t("finance.detail.save")}
-                  </button>
-                </div>
               </div>
             ) : (
               <div className="px-5 flex flex-col gap-2.5">
@@ -637,7 +618,7 @@ export default function FinanceEntrySheet({ entryId, open, onClose, onChanged }:
                 photos={views("photo")}
                 voices={views("voice")}
                 busy={busy}
-                readOnly={!isOwner || Boolean(row.deletedAt)}
+                readOnly={!isOwner || !editing || Boolean(row.deletedAt)}
                 onAddPhotos={addPhotos}
                 onRemove={(view) => {
                   if (view.draft) {
@@ -700,31 +681,55 @@ export default function FinanceEntrySheet({ entryId, open, onClose, onChanged }:
               </div>
             </div>
 
-            {(deletable || (isOwner && !row.deletedAt)) && (
+            {isOwner && !row.deletedAt && (
               <div className="px-5 flex gap-2 pt-1">
-                {isOwner && !row.deletedAt && (
-                  <button
-                    type="button"
-                    onClick={() => setEditing((value) => !value)}
-                    data-testid="finance-entry-edit"
-                    className="flex-1 h-11 rounded-full text-13 font-semibold flex items-center justify-center gap-2"
-                    style={{ background: "var(--tone-sunken)", color: "var(--text-primary)" }}
-                  >
-                    <Pencil size={14} />
-                    {t("finance.detail.edit")}
-                  </button>
-                )}
-                {deletable && (
-                  <button
-                    type="button"
-                    onClick={() => setConfirmDelete(true)}
-                    data-testid="finance-entry-delete"
-                    className="flex-1 h-11 rounded-full text-13 font-semibold flex items-center justify-center gap-2"
-                    style={{ background: "var(--tone-sunken)", color: "var(--error)" }}
-                  >
-                    <Trash2 size={14} />
-                    {t("finance.detail.delete")}
-                  </button>
+                {editing ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setEditing(false)}
+                      data-testid="finance-entry-edit-cancel"
+                      className="flex-1 h-11 rounded-full text-13 font-semibold"
+                      style={{ background: "var(--tone-sunken)", color: "var(--text-primary)" }}
+                    >
+                      {t("common.cancel")}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void saveEdit()}
+                      disabled={savingEdit}
+                      data-testid="finance-entry-edit-save"
+                      className="flex-1 h-11 rounded-full text-13 font-bold disabled:opacity-45"
+                      style={{ background: "var(--text-primary)", color: "var(--background)" }}
+                    >
+                      {t("finance.detail.save")}
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setEditing(true)}
+                      data-testid="finance-entry-edit"
+                      className="flex-1 h-11 rounded-full text-13 font-semibold flex items-center justify-center gap-2"
+                      style={{ background: "var(--tone-sunken)", color: "var(--text-primary)" }}
+                    >
+                      <Pencil size={14} />
+                      {t("finance.detail.edit")}
+                    </button>
+                    {deletable && (
+                      <button
+                        type="button"
+                        onClick={() => setConfirmDelete(true)}
+                        data-testid="finance-entry-delete"
+                        className="flex-1 h-11 rounded-full text-13 font-semibold flex items-center justify-center gap-2"
+                        style={{ background: "var(--tone-sunken)", color: "var(--error)" }}
+                      >
+                        <Trash2 size={14} />
+                        {t("finance.detail.delete")}
+                      </button>
+                    )}
+                  </>
                 )}
               </div>
             )}

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import Photo from "@/components/ui/Photo";
 import { useThemeStore } from "@/stores/themeStore";
 import { useT } from "@/lib/i18n";
 import { useCompaniesStore } from "@/stores/companiesStore";
@@ -84,20 +85,19 @@ export default function CompaniesListPage() {
               style={{ background: "var(--tone-card)" }}
             >
               {/* Logo circle */}
-              {company.logoUrl ? (
-                <img
-                  src={company.logoUrl}
-                  alt={company.name}
-                  className="size-11 rounded-full object-cover shrink-0"
-                />
-              ) : (
-                <div
-                  className="size-11 rounded-full flex items-center justify-center font-bold text-16 shrink-0"
-                  style={{ background: color + "22", color }}
-                >
-                  {company.name ? company.name.charAt(0) : "?"}
-                </div>
-              )}
+              <Photo
+                src={company.logoUrl}
+                alt={company.name}
+                className="size-11 rounded-full object-cover shrink-0"
+                fallback={
+                  <div
+                    className="size-11 rounded-full flex items-center justify-center font-bold text-16 shrink-0"
+                    style={{ background: color + "22", color }}
+                  >
+                    {company.name ? company.name.charAt(0) : "?"}
+                  </div>
+                }
+              />
 
               {/* Info */}
               <div className="flex flex-col flex-1 min-w-0 gap-0.5">

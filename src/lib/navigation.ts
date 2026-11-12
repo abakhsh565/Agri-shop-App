@@ -218,6 +218,11 @@ export function resolveParentRoute(
     }
     case "inventory": {
       if (workspace === "admin") {
+        // The ledger and barcode printer are opened from Products & inventory, not from the
+        // catalogue's manage screen.
+        if ((s[1] === "movements" || s[1] === "barcodes") && s.length === 2) {
+          return `${base}/settings/hub/inventory`;
+        }
         if (s[1] === "categories") return `${base}/inventory/categories`;
         if (s[1] === "units") return `${base}/inventory/units`;
       }
@@ -254,6 +259,10 @@ export function resolveParentRoute(
       return settings;
     }
     case "alerts": {
+      // The low-stock list and reminder book are opened from their own section screens, not
+      // from the alerts landing page.
+      if (s[1] === "inventory" && s.length === 2) return `${base}/settings/hub/inventory`;
+      if (s[1] === "reminders" && s.length === 2) return `${base}/settings/hub/finance`;
       if (s[1] === "credit-overrides" && s[2]) return `${base}/alerts/credit-overrides`;
       return `${base}/alerts/reminders`;
     }
@@ -332,10 +341,13 @@ export function resolveRouteMeta(pathWithSearch: string): RouteNavigationMeta {
   // read-and-act screen with its own record list, so Back follows the same history rule as a
   // module root rather than dropping into the Action Center the reader never visited.
   const isAlertDestination = workspace === "admin" && path === "/admin/alerts/harvest";
+  // The reminder book is the alerts module's root for history, but it is reached from Finance;
+  // a cold open should return there rather than dropping the reader on the dashboard.
+  const isFinanceReminderBook = workspace === "admin" && path === "/admin/alerts/reminders";
   const entryType: NavigationEntryType =
     path === moduleRootPath || isAlertDestination ? "module-root" : "child";
   const parentRoute =
-    entryType === "module-root"
+    entryType === "module-root" && !isFinanceReminderBook
       ? board
       : resolveParentRoute(path, workspace, moduleRootPath);
 

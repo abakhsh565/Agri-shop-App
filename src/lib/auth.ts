@@ -10,6 +10,7 @@ import {
   isDemoOtpMode,
 } from "@/lib/authMode";
 import { clearAllCachedData } from "@/lib/localCache";
+import { resolveImageUrl } from "@/lib/storage";
 import type { Experience } from "@/types";
 
 // ─── Phone normalization ─────────────────────────────────────────────────────
@@ -80,7 +81,7 @@ function userFromRow(r: UserRow): User {
     deactivatedBy: r.deactivated_by,
     createdAt: r.created_at,
     createdBy: r.created_by,
-    photoUrl: r.photo_url ?? undefined,
+    photoUrl: resolveImageUrl(r.photo_url),
     agriId: r.agri_id ?? undefined,
     // Membership / tenant context
     tenantId,

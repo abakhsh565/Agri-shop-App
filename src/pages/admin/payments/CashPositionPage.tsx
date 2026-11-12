@@ -28,6 +28,7 @@ import { loadPaymentLedger, type LedgerPayment } from "@/lib/paymentLedger";
 import { formatCurrency, formatSmartDateTime } from "@/lib/formatters";
 import { pkDateFromISO, pkToday } from "@/lib/pkDate";
 import { downloadCsv } from "@/lib/csv";
+import { exportText } from "@/lib/exportData";
 import { supabase } from "@/lib/supabase";
 
 /**
@@ -275,20 +276,12 @@ export default function CashPositionPage() {
       received: entries ? formatCurrency(flows.received) : "—",
       paid: entries ? formatCurrency(flows.paid) : "—",
     });
+    // The app's one share path: the platform's own sheet (Android app or phone browser), and the
+    // clipboard where no sheet exists. This screen used to hand-roll the same three branches.
     try {
-      if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
-        await navigator.share({ title: t("cashPosition.title"), text });
-        return;
-      }
-      if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(text);
-        addToast(t("cashPosition.shared"), "success");
-        return;
-      }
-      addToast(t("cashPosition.shareFailed"), "error");
-    } catch (e) {
-      // The reader dismissed the platform share sheet; that is not a failure worth a toast.
-      if (e instanceof Error && e.name === "AbortError") return;
+      await exportText(text, t("cashPosition.title"));
+      addToast(t("cashPosition.shared"), "success");
+    } catch {
       addToast(t("cashPosition.shareFailed"), "error");
     }
   }

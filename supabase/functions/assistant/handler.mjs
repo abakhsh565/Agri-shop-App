@@ -19,6 +19,7 @@
  */
 import { makeClient, TOOLS_BY_NAME, toolsFor } from "./tools.mjs";
 import { ask } from "./providers.mjs";
+import { urduSpeech } from "./speech.mjs";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -155,6 +156,28 @@ export async function handle(req, env) {
     body = req.method === "POST" ? await req.json() : {};
   } catch {
     return json({ error: "That request could not be read." }, 400);
+  }
+
+  // The speaker needs a spoken Urdu rendering, not the browser's best installed voice. This is a
+  // read-only action: it translates the reply and returns audio, and never touches shop data.
+  if (body.action === "speak") {
+    if (!geminiKey) return json({ error: "Urdu speech is not switched on for this shop." }, 503);
+    try {
+      const speech = await urduSpeech({
+        text: body.text,
+        apiKey: geminiKey,
+        model: geminiModel,
+        fallbackModel: geminiFallbackModel || "gemini-flash-lite-latest",
+        baseUrl: modelBaseUrl,
+      });
+      return json(speech);
+    } catch (error) {
+      console.error("[assistant speech] failed:", error?.message);
+      return json(
+        { error: "I could not prepare the Urdu voice. Please try again." },
+        error?.status === 429 ? 503 : 502,
+      );
+    }
   }
 
   // Which capabilities this account has — the screen shows this so the boundary is visible

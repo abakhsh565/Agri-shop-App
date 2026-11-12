@@ -67,7 +67,6 @@ import ProfileDetailsPage from "@/pages/admin/settings/ProfileDetailsPage";
 import SectionHubPage from "@/pages/admin/settings/SectionHubPage";
 import AdminBranchesSectionPage from "@/pages/admin/settings/AdminBranchesSectionPage";
 import BusinessProfilePage from "@/pages/admin/settings/BusinessProfilePage";
-import BusinessOverviewPage from "@/pages/admin/settings/BusinessOverviewPage";
 // The two collection screens the overview's balance cards open. They answer the money question
 // the card asks, not the catalogue question the Customers and Suppliers lists answer.
 import CustomerReceivablePage from "@/pages/admin/settings/CustomerReceivablePage";
@@ -82,6 +81,7 @@ import EmployeeSalaryPage from "@/pages/admin/employees/EmployeeSalaryPage";
 const AdminPurchasesPage = React.lazy(() => import("@/pages/admin/purchases/AdminPurchasesPage"));
 const RecordPurchasePage = React.lazy(() => import("@/pages/admin/purchases/RecordPurchasePage"));
 const SupplierPaymentsPage = React.lazy(() => import("@/pages/admin/purchases/SupplierPaymentsPage"));
+const SupplierPaymentDetailPage = React.lazy(() => import("@/pages/admin/purchases/SupplierPaymentDetailPage"));
 const PurchasesPayablesPage = React.lazy(() => import("@/pages/admin/purchases/PurchasesPayablesPage"));
 import RecordSupplierPaymentPage from "@/pages/admin/payments/RecordSupplierPaymentPage";
 const AdminReportsPage = React.lazy(() => import("@/pages/admin/reports/AdminReportsPage"));
@@ -309,6 +309,7 @@ export const router = createBrowserRouter([
           { path: "purchases",  element: <AdminPurchasesPage /> },
           { path: "purchases/new", element: <RecordPurchasePage /> },
           { path: "purchases/payments", element: <SupplierPaymentsPage /> },
+          { path: "purchases/payments/:paymentId", element: <SupplierPaymentDetailPage /> },
           { path: "purchases/:purchaseId", element: <PurchaseDetailPage /> },
         ] },
 
@@ -372,11 +373,11 @@ export const router = createBrowserRouter([
           // One hub per menu section: the jobs inside Sales, Finance, Branches and the rest,
           // listed from the same catalogue the menu itself reads (`lib/settingsHub`).
           //
-          // Overview is the exception, and it is a screen rather than a menu (owner's
-          // instruction, 2026-10-28): tapping Business Overview in Settings opens the business
-          // performance dashboard itself — the period figures, the trend, the two balances and
-          // the branch cards — instead of a list whose first row opened the same dashboard.
-          { path: "settings/hub/overview", element: <BusinessOverviewPage /> },
+          // The Business overview screen is gone (owner's instruction, 2026-11-12): it and the
+          // Finance section were two screens drawing the same money from two paths, so they are
+          // now one Financial overview. The old address forwards instead of drawing a second
+          // copy, and the Settings menu no longer offers the duplicate.
+          { path: "settings/hub/overview", element: <Navigate to="/admin/settings/hub/finance" replace /> },
           // Branches is a screen too: the section opens on the branch card itself — every
           // branch with its headcount, plus the row that creates another — rather than on four
           // job rows whose first one opened this same list (owner's reference, 2026-10-28).
@@ -444,7 +445,7 @@ export const router = createBrowserRouter([
           // `settings/hub/overview`, so the same dashboard answered to two URLs and a link could
           // point at either. The hub address is the one the Settings menu opens; this one now
           // redirects to it instead of drawing a second copy.
-          { path: "settings/overview", element: <Navigate to="/admin/settings/hub/overview" replace /> },
+          { path: "settings/overview", element: <Navigate to="/admin/settings/hub/finance" replace /> },
           { path: "settings/overview/customers", element: <CustomerReceivablePage /> },
           { path: "settings/overview/customers/pending", element: <CustomerCreditPage mode="pending" /> },
           { path: "settings/overview/customers/overdue", element: <CustomerCreditPage mode="overdue" /> },
@@ -655,6 +656,7 @@ export const router = createBrowserRouter([
       { path: "purchases", element: <AdminPurchasesPage /> },
       { path: "purchases/new", element: <RecordPurchasePage /> },
       { path: "purchases/payments", element: <SupplierPaymentsPage /> },
+      { path: "purchases/payments/:paymentId", element: <SupplierPaymentDetailPage /> },
       { path: "purchases/:purchaseId", element: <PurchaseDetailPage /> },
       { path: "companies", element: <CompaniesListPage /> },
       { path: "companies/new", element: <AddCompanyPage /> },

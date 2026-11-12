@@ -25,6 +25,7 @@ import { useT } from "@/lib/i18n";
 import { useShellBase } from "@/lib/useShellBase";
 import { useReturnTo } from "@/lib/useReturnTo";
 import { formatCompactCurrency, formatCurrency } from "@/lib/formatters";
+import { exportText } from "@/lib/exportData";
 import { pkDateFromISO, pkMonthStart, pkMonthStartOf, pkToday, pkWeekStart } from "@/lib/pkDate";
 import { useSalesStore } from "@/stores/salesStore";
 import { useShopStore } from "@/stores/shopStore";
@@ -612,21 +613,12 @@ export default function AdminSalesSectionPage() {
       `${t("sales.refunds")}: ${formatCurrency(returnsTotal)}\n` +
       `${t("hub.sales.completedSales")}: ${completed}`;
     setOptionsOpen(false);
-    if (navigator.share) {
-      try {
-        await navigator.share({ title: t("hub.sales.reportTitle"), text });
-        addToast(t("sales.reportShared"), "success");
-        return;
-      } catch (error) {
-        // A sheet the person dismissed is not a failure. Any OTHER refusal (a browser that
-        // advertises share but blocks it) falls through to the clipboard rather than doing
-        // nothing at all when the row is tapped.
-        if ((error as DOMException | undefined)?.name === "AbortError") return;
-      }
-    }
+    // The app's one share path: the platform's own sheet on the Android app and on a phone
+    // browser (WhatsApp, mail, everything installed), the clipboard on a desktop. This screen
+    // used to spell out those three branches itself.
     try {
-      await navigator.clipboard.writeText(text);
-      addToast(t("sales.reportCopied"), "success");
+      const outcome = await exportText(text, t("hub.sales.reportTitle"));
+      addToast(outcome === "shared" ? t("sales.reportShared") : t("sales.reportCopied"), "success");
     } catch {
       addToast(t("sales.shareFailed"), "error");
     }

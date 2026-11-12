@@ -9,6 +9,7 @@ import PaymentReminderSheet from "@/components/ui/PaymentReminderSheet";
 import { useCustomersStore } from "@/stores/customersStore";
 import { useThemeStore } from "@/stores/themeStore";
 import { useAuthStore } from "@/stores/authStore";
+import { useCompletePaymentReminder } from "@/hooks/useCompletePaymentReminder";
 import { useUIStore } from "@/stores/uiStore";
 import { useShellBase } from "@/lib/useShellBase";
 import { Bell, ChevronRight, Clock, AlertTriangle, Plus } from "lucide-react";
@@ -77,6 +78,7 @@ export default function ReminderHistoryPage() {
 
   const [logs, setLogs] = useState<ReminderLogEntry[]>([]);
   const book = usePaymentReminderBook();
+  const completeReminder = useCompletePaymentReminder();
   const [sheet, setSheet] = useState<{ open: boolean; reminder: PaymentReminder | null }>({
     open: false,
     reminder: null,
@@ -101,12 +103,13 @@ export default function ReminderHistoryPage() {
   );
 
   async function markStatus(reminder: PaymentReminder, status: PaymentReminderStatus) {
+    if (status === "completed") {
+      await completeReminder(reminder, book.retry);
+      return;
+    }
     try {
       await setPaymentReminderStatus(reminder.id, status);
-      addToast(
-        status === "completed" ? t("paymentBook.markedDone") : t("paymentBook.reopened"),
-        "success",
-      );
+      addToast(t("paymentBook.reopened"), "success");
       book.retry();
     } catch {
       addToast(t("paymentBook.statusFailed"), "error");

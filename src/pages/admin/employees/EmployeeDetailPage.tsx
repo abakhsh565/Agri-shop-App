@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import Photo from "@/components/ui/Photo";
 import {
   Calendar,
   ChevronRight,
@@ -315,16 +316,19 @@ export default function EmployeeDetailPage() {
       <div className="px-4 pt-1 pb-4" style={{ borderBottom: "1px solid var(--divider)" }}>
         <div>
           <div className="flex items-start gap-3">
-            {emp.photoUrl ? (
-              <img src={emp.photoUrl} alt={emp.name} className="size-14 rounded-[var(--radius-tile)] object-cover shrink-0" />
-            ) : (
-              <div
-                className="size-14 rounded-[var(--radius-tile)] flex items-center justify-center text-18 font-bold shrink-0"
-                style={{ background: "var(--tone-sunken)", color: "var(--text-primary)" }}
-              >
-                {initialsOf(emp.name)}
-              </div>
-            )}
+            <Photo
+              src={emp.photoUrl}
+              alt={emp.name}
+              className="size-14 rounded-[var(--radius-tile)] object-cover shrink-0"
+              fallback={
+                <div
+                  className="size-14 rounded-[var(--radius-tile)] flex items-center justify-center text-18 font-bold shrink-0"
+                  style={{ background: "var(--tone-sunken)", color: "var(--text-primary)" }}
+                >
+                  {initialsOf(emp.name)}
+                </div>
+              }
+            />
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 min-w-0">
                 <p className="text-16 font-bold truncate">{emp.name}</p>

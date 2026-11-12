@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Fingerprint, Loader2 } from "lucide-react";
 import AuthLayout from "@/components/layout/AuthLayout";
+import Photo from "@/components/ui/Photo";
 import NavHeader from "@/components/ui/NavHeader";
 import PINInput from "@/components/ui/PINInput";
 import Button from "@/components/ui/Button";
@@ -257,16 +258,18 @@ export default function PINLoginPage() {
           {/* `ds-auth-avatar` scales with the height the screen was given — larger on a tall
               phone, smaller on a short one — so the greeting and the keypad share the budget
               instead of the picture taking a fixed 48px off it either way. */}
-          {user.photoUrl ? (
-            <img src={user.photoUrl} alt="" className="ds-auth-avatar rounded-full object-cover mb-1" />
-          ) : (
-            <div
-              className="ds-auth-avatar rounded-full flex items-center justify-center text-lg sm:text-xl font-bold mb-1"
-              style={{ background: "var(--brand)", color: "#0a0a0a" }}
-            >
-              {user.name.charAt(0).toUpperCase()}
-            </div>
-          )}
+          <Photo
+            src={user.photoUrl}
+            className="ds-auth-avatar rounded-full object-cover mb-1"
+            fallback={(
+              <div
+                className="ds-auth-avatar rounded-full flex items-center justify-center text-lg sm:text-xl font-bold mb-1"
+                style={{ background: "var(--brand)", color: "#0a0a0a" }}
+              >
+                {user.name.charAt(0).toUpperCase()}
+              </div>
+            )}
+          />
           <p className="text-lg sm:text-xl font-bold text-foreground">
             Welcome, {user.name.split(" ")[0]}
           </p>

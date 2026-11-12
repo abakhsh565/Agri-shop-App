@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
 import ListCard from "@/components/ui/ListCard";
+import Photo from "@/components/ui/Photo";
 import DateField from "@/components/ui/DateField";
 import ListRow from "@/components/ui/ListRow";
 import PullToRefresh from "@/components/ui/PullToRefresh";
@@ -364,13 +365,18 @@ export default function SalesListPage() {
                   <ListRow
                     key={sale.id}
                     onClick={() => navigate(`/employee/sales/${sale.id}`)}
-                    tile={cImg ? (
-                      <img src={cImg} alt={sale.customerName} className="size-10 rounded-full object-cover shrink-0" />
-                    ) : (
-                      <div className="size-10 rounded-full shrink-0 flex items-center justify-center text-sm font-bold" style={{ background: cBg, color: "#fff" }}>
-                        {sale.customerName.charAt(0).toUpperCase()}
-                      </div>
-                    )}
+                    tile={
+                      <Photo
+                        src={cImg}
+                        alt={sale.customerName}
+                        className="size-10 rounded-full object-cover shrink-0"
+                        fallback={
+                          <div className="size-10 rounded-full shrink-0 flex items-center justify-center text-sm font-bold" style={{ background: cBg, color: "#fff" }}>
+                            {sale.customerName.charAt(0).toUpperCase()}
+                          </div>
+                        }
+                      />
+                    }
                     trailing={
                       <div className="flex flex-col items-end gap-2 shrink-0">
                         <span className="text-14 font-bold" style={{ color: "var(--text-primary)" }}>

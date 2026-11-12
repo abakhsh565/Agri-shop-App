@@ -6,6 +6,7 @@ import PaymentReminderSheet, { type PaymentReminderDefaults } from "@/components
 import SectionActionsSheet, { SectionActionsButton } from "@/components/ui/SectionActionsSheet";
 import Sheet from "@/components/ui/Sheet";
 import ListRow from "@/components/ui/ListRow";
+import LogoTile from "@/components/ui/LogoTile";
 import { csvFileName, exportCsv, exportText, toCsv } from "@/lib/exportData";
 import { useUIStore } from "@/stores/uiStore";
 import StatusBar from "@/components/ui/StatusBar";
@@ -186,7 +187,7 @@ export default function SupplierPayablePage() {
       const csv = toCsv(
         [
           { label: t("payable.suppliers"), value: (r: (typeof list)[number]) => r.supplier },
-          { label: t("payable.totalBill"), value: (r: (typeof list)[number]) => r.bill },
+          { label: t("payable.totalPurchases"), value: (r: (typeof list)[number]) => r.bill },
           { label: t("payable.paid"), value: (r: (typeof list)[number]) => r.paid },
           { label: t("payable.balance"), value: (r: (typeof list)[number]) => r.balance },
         ],
@@ -235,6 +236,15 @@ export default function SupplierPayablePage() {
         onClose={() => setMenuOpen(false)}
         title={t("payable.title")}
         actions={[
+          // Recording a payment is what this book is for, so the menu offers it too — the same
+          // picker the button under the search opens, not a second form.
+          {
+            id: "pay",
+            icon: Plus,
+            title: t("supplierPayments.record"),
+            description: t("supplierPayments.recordHint"),
+            onClick: () => { setMenuOpen(false); setPayOpen(true); },
+          },
           {
             id: "export",
             icon: Download,
@@ -323,31 +333,9 @@ export default function SupplierPayablePage() {
             </div>
           </div>
 
-          {/* The payment the card is about. It is one row in the book's own grey — the same
-              shape the supplier-payments screen uses — rather than a second bright button that
-              competes with the balance above it. */}
-          <button
-            type="button"
-            onClick={() => setPayOpen(true)}
-            data-testid="payable-record-payment"
-            className="w-full flex items-center gap-3 rounded-[var(--radius-card)] p-3 mt-4 text-start active:opacity-70"
-            style={{ background: "var(--tone-sunken)" }}
-          >
-            <span
-              className="size-9 rounded-full flex items-center justify-center shrink-0"
-              style={{ background: "var(--surface-2)", color: "var(--brand-dark)" }}
-            >
-              <Plus size={18} strokeWidth={2.5} />
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="block text-14 font-bold" style={{ color: "var(--text-primary)" }}>
-                {t("supplierPayments.record")}
-              </span>
-              <span className="block text-11 mt-0.5" style={{ color: "var(--text-secondary)" }}>
-                {t("supplierPayments.recordHint")}
-              </span>
-            </span>
-          </button>
+          {/* The payment action used to live here, inside the balance card, where it read as part
+              of the figure above it. It now sits under the search (owner, 2026-11-12), where a
+              supplier has just been looked up and the payment is about to be recorded. */}
         </div>
       </div>
 
@@ -386,6 +374,33 @@ export default function SupplierPayablePage() {
           onClear={() => setSearch("")}
           placeholder={t("payable.search")}
         />
+      </div>
+
+      {/* Recording a payment, directly under the search: found a supplier, now pay them. */}
+      <div className="px-4 pb-3">
+        <button
+          type="button"
+          onClick={() => setPayOpen(true)}
+          data-testid="payable-record-payment"
+          className="w-full flex items-center gap-3 rounded-[var(--radius-card)] p-3 text-start active:opacity-70"
+          style={{ background: "var(--tone-card)" }}
+        >
+          <span
+            className="size-9 rounded-full flex items-center justify-center shrink-0"
+            style={{ background: "var(--brand-light)", color: "var(--brand-dark)" }}
+          >
+            <Plus size={18} strokeWidth={2.5} />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-14 font-bold" style={{ color: "var(--text-primary)" }}>
+              {t("supplierPayments.record")}
+            </span>
+            <span className="block text-11 mt-0.5" style={{ color: "var(--text-secondary)" }}>
+              {t("supplierPayments.recordHint")}
+            </span>
+          </span>
+          <ChevronRight size={14} className="shrink-0" style={{ color: "var(--text-secondary)" }} />
+        </button>
       </div>
 
       {/* The four states, as the same chip row the customer list uses: one height, one radius,
@@ -469,16 +484,14 @@ export default function SupplierPayablePage() {
                   className="w-full text-start active:opacity-70"
                 >
                 <div className="flex items-start gap-3">
-                  <span
-                    className="size-10 rounded-full flex items-center justify-center font-bold text-14 shrink-0"
-                    style={{ background: "var(--tone-sunken)", color: "var(--text-secondary)" }}
-                  >
-                    {c.name.charAt(0).toUpperCase()}
-                  </span>
+                  {/* The same mark the supplier directory and the supplier's own page draw: the
+                      saved logo when there is one, otherwise the shared initials tile. A bare
+                      letter here was the one place a supplier looked different. */}
+                  <LogoTile name={c.name} src={c.logoUrl} size={40} className="shrink-0" />
                   <div className="min-w-0 flex-1">
                     <p className="text-14 font-bold truncate">{c.name}</p>
                     <p className="text-11 mt-0.5 truncate" style={{ color: "var(--text-secondary)" }}>
-                      {t("payable.totalBill")} · {formatCurrency(billed)}
+                      {t("payable.totalPurchases")} · {formatCurrency(billed)}
                     </p>
                   </div>
                   <span
@@ -537,7 +550,9 @@ export default function SupplierPayablePage() {
                     {due > 0 ? (
                       <button
                         type="button"
-                        onClick={() => navigate(`${base}/payments/supplier/${c.id}`)}
+                        onClick={() => navigate(`${base}/payments/supplier/${c.id}`, {
+                          state: { from: `${base}/settings/overview/suppliers` },
+                        })}
                         data-testid={`payable-pay-${c.id}`}
                         className="h-8 px-3 rounded-full text-10 font-bold active:opacity-60"
                         style={{ background: "var(--tone-sunken)", color: "var(--text-primary)" }}
@@ -605,13 +620,17 @@ export default function SupplierPayablePage() {
             <ListRow
               key={company.id}
               testId={`payable-pick-${company.id}`}
-              icon={Building2}
+              // The supplier's own mark, the same one the list behind the sheet draws — an icon
+              // here made the picker the one place a supplier lost their logo.
+              tile={<LogoTile name={company.name} src={company.logoUrl} size={44} className="shrink-0" />}
               title={company.name}
               description={formatCurrency(Math.max(0, company.outstandingPayable))}
               onClick={() => {
                 setPayOpen(false);
                 setPayQuery("");
-                navigate(`${base}/payments/supplier/${company.id}`);
+                navigate(`${base}/payments/supplier/${company.id}`, {
+                  state: { from: `${base}/settings/overview/suppliers` },
+                });
               }}
             />
           ))}

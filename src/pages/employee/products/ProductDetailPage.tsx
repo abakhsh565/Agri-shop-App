@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
+import Photo from "@/components/ui/Photo";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import ImageCrop from "@/components/ui/ImageCrop";
 import ListCard from "@/components/ui/ListCard";
@@ -241,16 +242,19 @@ export default function ProductDetailPage() {
         >
           <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
           <div className="shrink-0">
-            {product.imageUrl ? (
-              <img src={product.imageUrl} alt={product.name} className="size-14 rounded-[var(--radius-tile)] object-cover" />
-            ) : (
-              <div
-                className="size-14 rounded-[var(--radius-tile)] flex items-center justify-center text-xl font-bold"
-                style={{ background: bg + "22", color: bg }}
-              >
-                {product.name.charAt(0)}
-              </div>
-            )}
+            <Photo
+              src={product.imageUrl}
+              alt={product.name}
+              className="size-14 rounded-[var(--radius-tile)] object-cover"
+              fallback={
+                <div
+                  className="size-14 rounded-[var(--radius-tile)] flex items-center justify-center text-xl font-bold"
+                  style={{ background: bg + "22", color: bg }}
+                >
+                  {product.name.charAt(0)}
+                </div>
+              }
+            />
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-base font-bold truncate" style={{ color: "var(--text-primary)" }}>{product.name}</p>
@@ -512,10 +516,8 @@ export default function ProductDetailPage() {
                 <div className="w-20 h-20 rounded-[var(--radius-tile)] overflow-hidden flex items-center justify-center text-2xl font-bold" style={{ background: initBgColor(editName), color: "#fff" }}>
                   {uploading ? (
                     <Loader2 size={20} className="animate-spin" />
-                  ) : editImageUrl ? (
-                    <img src={editImageUrl} alt="" className="w-full h-full object-cover" />
                   ) : (
-                    editName.charAt(0)
+                    <Photo src={editImageUrl} className="w-full h-full object-cover" fallback={editName.charAt(0)} />
                   )}
                 </div>
                 <button
@@ -695,18 +697,24 @@ function ProductCustomerRecommendations({ productId }: { productId: string }) {
         {recs.map((rec) => (
           <ListRow
             key={rec.subject.id}
-            tile={rec.subject.imageUrl ? (
+            tile={
               /* The same round avatar as the customer's own screens: a photo that appeared
                  as a rounded tile here and a circle there read as a different person. */
-              <img src={rec.subject.imageUrl} alt={rec.subject.name} className="w-10 h-10 rounded-full object-cover shrink-0" style={{ background: "var(--surface-2)" }} />
-            ) : (
-              <div
-                className="w-10 h-10 rounded-full flex items-center justify-center text-12 font-bold shrink-0"
-                style={{ background: getAvatarColor(rec.subject.name), color: "#fff" }}
-              >
-                {getInitials(rec.subject.name)}
-              </div>
-            )}
+              <Photo
+                src={rec.subject.imageUrl}
+                alt={rec.subject.name}
+                className="w-10 h-10 rounded-full object-cover shrink-0"
+                style={{ background: "var(--surface-2)" }}
+                fallback={
+                  <div
+                    className="w-10 h-10 rounded-full flex items-center justify-center text-12 font-bold shrink-0"
+                    style={{ background: getAvatarColor(rec.subject.name), color: "#fff" }}
+                  >
+                    {getInitials(rec.subject.name)}
+                  </div>
+                }
+              />
+            }
             trailing={
             <button
               className="size-8 rounded-full flex items-center justify-center shrink-0"

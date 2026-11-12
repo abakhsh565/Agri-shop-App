@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Building2, CalendarDays, Plus, Receipt } from "lucide-react";
+import { Building2, CalendarDays, ChevronRight, Plus, Receipt } from "lucide-react";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
 import Sheet from "@/components/ui/Sheet";
@@ -183,9 +183,11 @@ export default function SupplierPaymentsPage() {
       ) : (
         <div className="flex flex-col gap-2 px-4 pb-8">
           {shown.map((payment) => (
-            <div
+            <button
               key={payment.id}
-              className="rounded-[var(--radius-card)] p-3.5"
+              type="button"
+              onClick={() => navigate(`${base}/purchases/payments/${payment.id}`)}
+              className="w-full rounded-[var(--radius-card)] p-3.5 text-start active:opacity-70"
               style={{ background: "var(--tone-card)" }}
               data-testid={`supplier-payment-${payment.id}`}
             >
@@ -202,9 +204,12 @@ export default function SupplierPaymentsPage() {
                     {formatSmartDateTime(payment.createdAt, now, t)}
                   </p>
                 </div>
-                <p className="text-13 font-bold tabular-nums shrink-0" style={{ color: "var(--brand-dark)" }}>
-                  {formatCurrency(payment.amount)}
-                </p>
+                <div className="flex items-center gap-1 shrink-0">
+                  <p className="text-13 font-bold tabular-nums" style={{ color: "var(--brand-dark)" }}>
+                    {formatCurrency(payment.amount)}
+                  </p>
+                  <ChevronRight size={15} style={{ color: "var(--text-tertiary)" }} />
+                </div>
               </div>
               {(payment.purchaseId || payment.notes) && (
                 <p className="text-10 mt-2 truncate" style={{ color: "var(--text-tertiary)" }}>
@@ -213,7 +218,7 @@ export default function SupplierPaymentsPage() {
                   {payment.purchaseId ? t("supplierPayments.advance") : payment.notes}
                 </p>
               )}
-            </div>
+            </button>
           ))}
         </div>
       )}
@@ -244,7 +249,9 @@ export default function SupplierPaymentsPage() {
             description={formatCurrency(Math.max(0, company.outstandingPayable))}
             onClick={() => {
               setPickOpen(false);
-              navigate(`${base}/payments/supplier/${company.id}`);
+              navigate(`${base}/payments/supplier/${company.id}`, {
+                state: { from: `${base}/purchases/payments` },
+              });
             }}
           />
         ))}

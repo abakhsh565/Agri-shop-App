@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect, useCallback } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
+import Photo from "@/components/ui/Photo";
 import { useCustomersStore, type CreditLimitRequest } from "@/stores/customersStore";
 import { useSalesStore } from "@/stores/salesStore";
 import { useProductsStore } from "@/stores/productsStore";
@@ -10,6 +11,7 @@ import { useThemeStore } from "@/stores/themeStore";
 import { computeLiveSignals, type LiveSignal, type SignalCategory, type SignalSeverity, type SignalAction, type CreditRequestInput } from "@/lib/signalEngine";
 import { markSignalReviewed, isSignalSuppressed, isSignalEscalated, getSuppressionInterval, cleanupOldRecords } from "@/lib/signalSuppression";
 import { formatCurrency } from "@/lib/formatters";
+import { resolveImageUrl } from "@/lib/storage";
 import { useT, tNow } from "@/lib/i18n";
 import { generateReminders, generateReminderMessage, calculatePaymentStatus, markOccurrenceSent, categorizeReminders } from "@/lib/reminderEngine";
 import type { GeneratedReminder } from "@/types";
@@ -73,7 +75,7 @@ async function loadAllReminderLogs(): Promise<ReminderLogEntry[]> {
     let customerMap: Record<string, { name?: string; image?: string }> = {};
     if (customerIds.length > 0) {
       const { data: custs } = await supabase.from("customers").select("id, name, image_url").in("id", customerIds);
-      (custs || []).forEach((c: any) => { customerMap[c.id] = { name: c.name, image: c.image_url }; });
+      (custs || []).forEach((c: any) => { customerMap[c.id] = { name: c.name, image: resolveImageUrl(c.image_url) }; });
     }
     return data.map((r: any) => ({
       id: r.id,
@@ -139,6 +141,7 @@ function timeAgo(dateStr: string): string {
 /* ── Alert card for Action Needed — matches homepage Quick Alerts style ── */
 function AlertCard({
   icon,
+  image,
   title,
   subtitle,
   actionLabel,
@@ -148,6 +151,15 @@ function AlertCard({
   onClick,
 }: {
   icon: React.ReactNode;
+  /**
+   * The entity's own picture, when the record has one.
+   *
+   * The row used to show only a severity glyph, so a customer or product with an uploaded photo
+   * still appeared as an anonymous ring here while every other screen showed the picture. The
+   * picture is the record's identity; severity is already carried by the card's tone and by the
+   * Review label. A record without a picture keeps the glyph, which is the honest fallback.
+   */
+  image?: string | null;
   title: string;
   subtitle: string;
   actionLabel: string;
@@ -162,9 +174,15 @@ function AlertCard({
       className="w-full rounded-[var(--radius-card)] p-4 flex items-start gap-3 text-start transition-opacity active:opacity-70"
       style={{ background: cardBg }}
     >
-      <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 mt-0.5" style={{ background: iconBg, color: iconColor }}>
-        {icon}
-      </div>
+      <Photo
+        src={image}
+        className="w-9 h-9 rounded-full object-cover shrink-0 mt-0.5"
+        fallback={
+          <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 mt-0.5" style={{ background: iconBg, color: iconColor }}>
+            {icon}
+          </div>
+        }
+      />
       <div className="flex-1 min-w-0">
         <p className="text-14 font-bold" style={{ color: "var(--text-primary)" }}>{title}</p>
         <p className="text-12 mt-1 leading-relaxed" style={{ color: "var(--text-secondary)" }}>{subtitle}</p>
@@ -199,7 +217,7 @@ function ReminderCard({
       <ListRow
         onClick={() => setExpanded(!expanded)}
         tile={reminder.customerImage ? (
-          <img src={reminder.customerImage} alt="" className="w-11 h-11 rounded-full object-cover shrink-0" />
+          <Photo src={reminder.customerImage} className="w-11 h-11 rounded-full object-cover shrink-0" fallback={null} />
         ) : (
           <div className="w-11 h-11 rounded-full flex items-center justify-center text-13 font-bold shrink-0" style={{ background: getAvatarColor(reminder.customerName), color: "#fff" }}>
             {getInitials(reminder.customerName)}
@@ -266,7 +284,11 @@ function ActivityItem({ log }: { log: ReminderLogEntry }) {
   const name = log.customerName || t("common.customer");
   return (
     <ListRow
-      tile={log.customerImageUrl ? (<img src={log.customerImageUrl} alt="" className="w-9 h-9 rounded-full object-cover shrink-0" />) : (<div className="w-9 h-9 rounded-full flex items-center justify-center text-11 font-bold shrink-0" style={{ background: getAvatarColor(name), color: "#fff" }}>{getInitials(name)}</div>)}
+      tile={<Photo
+        src={log.customerImageUrl}
+        className="w-9 h-9 rounded-full object-cover shrink-0"
+        fallback={<div className="w-9 h-9 rounded-full flex items-center justify-center text-11 font-bold shrink-0" style={{ background: getAvatarColor(name), color: "#fff" }}>{getInitials(name)}</div>}
+      />}
       trailing={<span className="text-11 font-bold px-2.5 py-1 rounded-full shrink-0" style={{ background: "var(--brand-light, #d9f99d)", color: "var(--brand-dark, #65a30d)" }}>{t("common.sent")}</span>}
     >
       <div className="min-w-0">
@@ -529,6 +551,45 @@ export default function RemindersOverviewPage() {
     setEditingReminder(null);
   }, [editingReminder, editMessage]);
 
+  /* ── Pictures for the rows ──
+   * One lookup per store the page already reads, so an action row shows the same picture the
+   * customer/product screen shows, and a photo changed there appears here on the next read of
+   * that store — there is no second copy of the image to fall out of date. */
+  const customerImageById = useMemo(() => {
+    const map = new Map<string, string>();
+    customers.forEach((c) => { if (c.imageUrl) map.set(c.id, c.imageUrl); });
+    return map;
+  }, [customers]);
+  const productImageById = useMemo(() => {
+    const map = new Map<string, string>();
+    products.forEach((p) => { if (p.imageUrl) map.set(p.id, p.imageUrl); });
+    return map;
+  }, [products]);
+  /** A payable names its supplier company, whose picture is the logo on the company screen. */
+  const companyImageById = useMemo(() => {
+    const map = new Map<string, string>();
+    companies.forEach((c) => { if (c.logoUrl) map.set(c.id, c.logoUrl); });
+    return map;
+  }, [companies]);
+  /**
+   * An expiry signal names a variant, not a product; the picture belongs to the product, which is
+   * the row the product screen shows and the one an upload replaces.
+   */
+  const variantImageById = useMemo(() => {
+    const map = new Map<string, string>();
+    products.forEach((p) => { p.variants?.forEach((v) => { if (p.imageUrl) map.set(v.id, p.imageUrl); }); });
+    return map;
+  }, [products]);
+  const signalImage = (signal: LiveSignal): string | null => {
+    switch (signal.entity_type) {
+      case "customer": return customerImageById.get(signal.entity_id) ?? null;
+      case "product": return productImageById.get(signal.entity_id) ?? null;
+      case "variant": return variantImageById.get(signal.entity_id) ?? null;
+      case "company": return companyImageById.get(signal.entity_id) ?? null;
+      default: return null;
+    }
+  };
+
   /* ── Render action needed (signal-based) ── */
   function renderSignalCard(signal: LiveSignal) {
     const severityConfig: Record<string, { cardBg: string; iconBg: string; iconColor: string; icon: React.ReactNode }> = {
@@ -558,6 +619,7 @@ export default function RemindersOverviewPage() {
       <AlertCard
         key={signal.id}
         icon={config.icon}
+        image={signalImage(signal)}
         title={signal.title}
         subtitle={t(signal.detailKey, signal.detailParams)}
         actionLabel={t("admin.review")}
@@ -724,9 +786,13 @@ export default function RemindersOverviewPage() {
                 key={group.id}
                 onClick={() => navigate(`/admin/alerts/groups/${group.id}`)}
                 tile={
-                  <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0" style={{ background: "#ede9fe", color: "#7c3aed" }}>
-                    <Users size={18} />
-                  </div>
+                  group.photoUrl ? (
+                    <Photo src={group.photoUrl} className="w-10 h-10 rounded-full object-cover shrink-0" fallback={null} />
+                  ) : (
+                    <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0" style={{ background: "#ede9fe", color: "#7c3aed" }}>
+                      <Users size={18} />
+                    </div>
+                  )
                 }
                 trailing={<ChevronDown size={16} style={{ color: "var(--text-secondary)", transform: "rotate(-90deg)" }} className="shrink-0" />}
               >
@@ -876,7 +942,7 @@ export default function RemindersOverviewPage() {
             <div className="px-5 pb-6 flex flex-col gap-4 overflow-y-auto" style={{ flex: 1 }}>
               <div className="flex items-center gap-3">
                 {editingReminder.customerImage ? (
-                  <img src={editingReminder.customerImage} alt="" className="w-11 h-11 rounded-full object-cover shrink-0" />
+                  <Photo src={editingReminder.customerImage} className="w-11 h-11 rounded-full object-cover shrink-0" fallback={null} />
                 ) : (
                   <div className="w-11 h-11 rounded-full flex items-center justify-center text-13 font-bold shrink-0" style={{ background: getAvatarColor(editingReminder.customerName), color: "#fff" }}>
                     {getInitials(editingReminder.customerName)}

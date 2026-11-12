@@ -76,16 +76,52 @@ export async function exportCsv(filename: string, csv: string, title: string): P
   return "downloaded";
 }
 
-/** The fallback for a platform that advertises share but refuses it: hand over the text. */
-export async function exportText(text: string, title: string): Promise<ExportOutcome> {
+/**
+ * THE ONE SHARE PATH for the whole app: the platform's own sheet, or the clipboard.
+ *
+ * There are three platforms to satisfy and only one of them is a browser:
+ *   1. The Android app (Capacitor). `Share.share` opens the system sheet — the one in the
+ *      owner's reference: the link preview with its copy button, then Nearby Share, Gmail,
+ *      Messages, WhatsApp and the rest of the installed apps. `navigator.share` alone is not
+ *      enough there; a WebView can expose it and still draw nothing.
+ *   2. A phone browser. `navigator.share` draws the same system sheet.
+ *   3. A desktop browser. Neither exists, so the text (and its link) is copied and the caller
+ *      says so — never a silent no-op, which is what a share row did before.
+ *
+ * `url` is passed as its own field, not glued to the text: the platform sheet renders it as a
+ * link card with a copy button and lets the receiving app open it, and every app that only takes
+ * text still receives it because the clipboard fallback appends it.
+ */
+export async function shareText(text: string, title: string, url?: string): Promise<ExportOutcome> {
+  const payload = { title, text, ...(url ? { url } : {}) };
+
+  try {
+    const { Capacitor } = await import("@capacitor/core");
+    if (Capacitor.isNativePlatform()) {
+      const { Share } = await import("@capacitor/share");
+      await Share.share({ ...payload, dialogTitle: title });
+      return "shared";
+    }
+  } catch (error) {
+    // A dismissed native sheet is a cancel, not a failure to fall through from.
+    if ((error as DOMException | undefined)?.name === "AbortError") return "shared";
+  }
+
   if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
     try {
-      await navigator.share({ title, text });
+      await navigator.share(payload);
       return "shared";
-    } catch {
-      /* fall through to the clipboard */
+    } catch (error) {
+      if ((error as DOMException | undefined)?.name === "AbortError") return "shared";
+      /* any other refusal falls through to the clipboard */
     }
   }
-  await navigator.clipboard?.writeText?.(text);
+
+  await navigator.clipboard?.writeText?.(url ? `${text}\n${url}` : text);
   return "downloaded";
+}
+
+/** Backwards-compatible name: the plain-text share is the same path. */
+export async function exportText(text: string, title: string, url?: string): Promise<ExportOutcome> {
+  return shareText(text, title, url);
 }

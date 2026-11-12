@@ -16,6 +16,8 @@ import { useNotificationStore } from "@/stores/notificationStore";
 import { useUIStore } from "@/stores/uiStore";
 import { branchKind } from "@/lib/branchKind";
 import { loadBusinessProfile } from "@/lib/businessProfile";
+import { resolveImageUrl } from "@/lib/storage";
+import Photo from "@/components/ui/Photo";
 
 /**
  * The branch switcher, in the shape of an account switcher.
@@ -78,7 +80,7 @@ export default function ShopSwitcherSheet() {
     let live = true;
     void loadBusinessProfile()
       .then((profile) => {
-        if (live) setLogoUrl(profile?.shop?.logo_url ?? profile?.documents?.logo ?? null);
+        if (live) setLogoUrl(resolveImageUrl(profile?.shop?.logo_url ?? profile?.documents?.logo ?? null) ?? null);
       })
       .catch(() => { if (live) setLogoUrl(null); });
     return () => { live = false; };
@@ -195,7 +197,11 @@ export default function ShopSwitcherSheet() {
                   // branch has no picture of its own, so it carries the branch glyph instead of
                   // borrowing the business's face and looking like a second main branch.
                   tile={branch.isMain && logoUrl ? (
-                    <img src={logoUrl} alt="" className="size-11 rounded-full object-cover shrink-0" />
+                    <Photo
+                      src={logoUrl}
+                      className="size-11 rounded-full object-cover shrink-0"
+                      fallback={<Store size={18} style={{ color: "var(--text-secondary)" }} />}
+                    />
                   ) : (
                     <span
                       className="size-11 rounded-full flex items-center justify-center shrink-0"

@@ -1,4 +1,5 @@
 import BranchKindChip from "@/components/ui/BranchKindChip";
+import Photo from "@/components/ui/Photo";
 import { useT } from "@/lib/i18n";
 import { branchKind } from "@/lib/branchKind";
 import { branchPlaceLine } from "@/lib/branchContext";
@@ -36,14 +37,10 @@ export default function BranchIdentity({
 
   return (
     <div className="flex items-center gap-3.5" data-testid={`branch-identity-${branch.id}`}>
-      {imageUrl ? (
-        <img
-          src={imageUrl}
-          alt=""
-          className="size-[68px] rounded-[var(--radius-tile)] object-cover shrink-0"
-          data-testid={`branch-image-${branch.id}`}
-        />
-      ) : (
+      <Photo
+        src={imageUrl}
+        className="size-[68px] rounded-[var(--radius-tile)] object-cover shrink-0"
+        fallback={(
         <span
           className="size-[68px] rounded-[var(--radius-tile)] flex items-center justify-center shrink-0 text-22 font-bold"
           style={{
@@ -55,7 +52,8 @@ export default function BranchIdentity({
         >
           {initial}
         </span>
-      )}
+        )}
+      />
 
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2 min-w-0">

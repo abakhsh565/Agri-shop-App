@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Archive, ChevronRight, Clock3, Crown, GitBranch, Plus, ShieldCheck, UserCog, UserX } from "lucide-react";
+import { Archive, ChevronRight, Plus } from "lucide-react";
 import StatusBar from "@/components/ui/StatusBar";
+import Photo from "@/components/ui/Photo";
 import NavHeader from "@/components/ui/NavHeader";
 import { useT } from "@/lib/i18n";
 import { useShellBase } from "@/lib/useShellBase";
@@ -72,14 +73,14 @@ export default function CoOwnersPage() {
     );
   }
 
-  const active = grants.filter((g) => g.status === "active").length;
-  const pending = grants.filter((g) => g.status === "invited").length;
-  const suspended = grants.filter((g) => g.status === "suspended").length;
+  // What the Active tab lists is every grant that still stands — active, invited and suspended
+  // alike — so the number on the tab is that list's length, not just the activated ones.
+  const liveGrants = grants.filter((g) => g.status !== "revoked");
   const archivedGrants = grants.filter(
     (g) => g.status === "revoked" && g.revocationReason !== "ownership_transferred",
   );
   const archived = archivedGrants.length;
-  const visible = tab === "archived" ? archivedGrants : grants.filter((g) => g.status !== "revoked");
+  const visible = tab === "archived" ? archivedGrants : liveGrants;
 
   return (
     <div
@@ -96,26 +97,10 @@ export default function CoOwnersPage() {
         </p>
       </div>
 
-      <div className="px-4 pt-4 grid grid-cols-3 gap-2">
-        {[
-          { key: "active", value: active, icon: ShieldCheck },
-          { key: "pending", value: pending, icon: Clock3 },
-          { key: "suspended", value: suspended, icon: UserX },
-        ].map(({ key, value, icon: Icon }) => (
-          <div
-            key={key}
-            className="rounded-[var(--radius-tile)] p-3"
-            style={{ background: "var(--tone-card)", border: "1px solid var(--border-control)" }}
-          >
-            <Icon size={15} style={{ color: "var(--text-secondary)" }} />
-            <p className="text-20 font-bold mt-2 tabular-nums">{ready ? value : "—"}</p>
-            <p className="text-10" style={{ color: "var(--text-secondary)" }}>
-              {t(key === "active" ? "coOwners.active" : key === "pending" ? "coOwners.pending" : "coOwners.suspended")}
-            </p>
-          </div>
-        ))}
-      </div>
-
+      {/* One action and one list. This page used to open with three counter tiles and then offer
+          four more doors (assign a branch, approvals, transfer ownership); every one of those is
+          either a co-owner's own screen or a shortcut to somewhere else in the app, and together
+          they buried the list of co-owners this page exists to show. */}
       <div className="px-4 pt-4">
         <button
           type="button"
@@ -126,52 +111,6 @@ export default function CoOwnersPage() {
         >
           <Plus size={16} />
           {t("coOwners.add")}
-        </button>
-      </div>
-
-      <div className="px-4 pt-2">
-        <button
-          type="button"
-          onClick={() => navigate(`${base}/settings/hub/branches`)}
-          className="w-full h-11 rounded-[var(--radius-tile)] flex items-center justify-between px-4 text-13 font-semibold"
-          style={{ background: "var(--tone-sunken)", border: "1px solid var(--border-control)" }}
-          data-testid="co-owners-assign-branch"
-        >
-          <span className="flex items-center gap-2">
-            <GitBranch size={15} style={{ color: "var(--text-secondary)" }} />
-            {t("coOwners.assignBranch")}
-          </span>
-          <ChevronRight size={15} style={{ color: "var(--text-secondary)" }} />
-        </button>
-      </div>
-
-      <div className="px-4 pt-3">
-        <button
-          type="button"
-          onClick={() => navigate(`${base}/co-owner-approvals`)}
-          className="w-full h-11 rounded-[var(--radius-tile)] flex items-center justify-between px-4 text-13 font-semibold"
-          style={{ background: "var(--tone-sunken)", border: "1px solid var(--border-control)" }}
-          data-testid="co-owners-approvals"
-        >
-          <span className="flex items-center gap-2">
-            <UserCog size={15} style={{ color: "var(--text-secondary)" }} />
-            {t("coOwners.approvals")}
-          </span>
-          <ChevronRight size={15} style={{ color: "var(--text-secondary)" }} />
-        </button>
-
-        <button
-          type="button"
-          onClick={() => navigate(`${base}/settings/hub/people/co-owners/transfer`)}
-          className="w-full h-11 mt-2 rounded-[var(--radius-tile)] flex items-center justify-between px-4 text-13 font-semibold"
-          style={{ background: "var(--tone-sunken)", border: "1px solid var(--border-control)" }}
-          data-testid="co-owners-transfer"
-        >
-          <span className="flex items-center gap-2">
-            <Crown size={15} style={{ color: "var(--text-secondary)" }} />
-            {t("coOwners.transferOwnership")}
-          </span>
-          <ChevronRight size={15} style={{ color: "var(--text-secondary)" }} />
         </button>
       </div>
 
@@ -186,7 +125,7 @@ export default function CoOwnersPage() {
               color: tab === "active" ? "#0a0a0a" : "var(--text-secondary)",
             }}
           >
-            {t("coOwners.tabActive")} · {active + pending + suspended}
+            {t("coOwners.tabActive")} · {liveGrants.length}
           </button>
           <button
             type="button"
@@ -236,19 +175,29 @@ export default function CoOwnersPage() {
               data-testid={`co-owner-${grant.id}`}
             >
               <div className="flex items-center gap-3">
-                {grant.photoUrl ? (
-                  <img src={grant.photoUrl} alt="" className="size-11 rounded-full object-cover shrink-0" />
-                ) : (
-                  <span
-                    className="size-11 rounded-full flex items-center justify-center text-13 font-bold shrink-0"
-                    style={{ background: "var(--tone-sunken)", color: "var(--text-primary)" }}
-                  >
-                    {initials(grant.name || grant.phone)}
-                  </span>
-                )}
+                <Photo
+                  src={grant.photoUrl}
+                  className="size-11 rounded-full object-cover shrink-0"
+                  fallback={
+                    <span
+                      className="size-11 rounded-full flex items-center justify-center text-13 font-bold shrink-0"
+                      style={{ background: "var(--tone-sunken)", color: "var(--text-primary)" }}
+                    >
+                      {initials(grant.name || grant.phone)}
+                    </span>
+                  }
+                />
                 <span className="min-w-0 flex-1">
-                  <span className="flex items-center gap-2">
+                  <span className="flex items-center gap-1.5">
                     <span className="text-14 font-bold truncate">{grant.name}</span>
+                    {/* The body, said on the person: this person is the business's co-owner, not
+                        one of its employees. */}
+                    <span
+                      className="text-9 font-bold px-1.5 py-0.5 rounded-full shrink-0"
+                      style={{ background: "var(--tone-sunken)", color: "var(--text-secondary)" }}
+                    >
+                      {t("people.coOwner")}
+                    </span>
                     <span
                       className="text-10 font-bold px-2 py-0.5 rounded-full shrink-0"
                       style={{ background: tone.bg, color: tone.fg }}

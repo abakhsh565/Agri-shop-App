@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ChevronDown, ChevronRight, type LucideIcon } from "lucide-react";
 
 export type QuickAlertTone = "critical" | "warning" | "neutral";
@@ -46,14 +46,42 @@ const TONE: Record<
 const CARD_CLASS =
   "relative flex w-full items-start gap-2.5 rounded-[22px] px-3 py-2.5 text-start transition-transform duration-150 active:scale-[0.995]";
 
+const SCROLL_ANCHOR_HOLD_MS = 280;
+
+interface ScrollAnchorHold {
+  scroller: HTMLElement;
+  previous: string;
+  top: number;
+  timer: number;
+}
+
+function releaseScrollAnchor(hold: ScrollAnchorHold | null) {
+  if (!hold) return;
+  window.clearTimeout(hold.timer);
+  if (hold.previous) hold.scroller.style.setProperty("overflow-anchor", hold.previous);
+  else hold.scroller.style.removeProperty("overflow-anchor");
+}
+
+/** The shell has more than one `overflow-y-auto` node; only the nearest one that is actually
+ *  scrollable is the element whose scrollTop changes when content grows. */
+function findScrollableAncestor(start: HTMLElement | null): HTMLElement | null {
+  let node = start?.parentElement ?? null;
+  while (node) {
+    const style = getComputedStyle(node);
+    if (/(auto|scroll)/.test(style.overflowY) && node.scrollHeight > node.clientHeight) {
+      return node;
+    }
+    node = node.parentElement;
+  }
+  return null;
+}
+
 function AlertCard({
   item,
-  index,
   open,
   preview,
 }: {
   item: QuickAlertItem;
-  index: number;
   open: boolean;
   preview: boolean;
 }) {
@@ -67,16 +95,11 @@ function AlertCard({
       onClick={item.onPress}
       tabIndex={preview || open ? 0 : -1}
       data-testid={testId}
-      className={
-        CARD_CLASS +
-        (preview ? " relative z-10" : "") +
-        (!preview && open ? " ds-quick-alert-in" : "")
-      }
+      className={CARD_CLASS + (preview ? " relative z-10" : "")}
       style={{
         background: "var(--surface-2)",
         border: "1px solid var(--divider)",
         boxShadow: preview ? "0 8px 22px rgba(0, 0, 0, 0.18)" : "none",
-        animationDelay: preview ? undefined : String(index * 45) + "ms",
       }}
     >
       <span
@@ -151,26 +174,82 @@ export default function QuickAlertsPanel({
   onViewAll,
 }: QuickAlertsPanelProps) {
   const [open, setOpen] = useState(false);
+  const toggleRef = useRef<HTMLButtonElement>(null);
+  const anchorHold = useRef<ScrollAnchorHold | null>(null);
+
+  useEffect(() => {
+    return () => {
+      releaseScrollAnchor(anchorHold.current);
+      anchorHold.current = null;
+    };
+  }, []);
+
+  // The browser can adjust scrollTop while the card's height changes; put it back before paint
+  // as a fallback for engines that do not implement `overflow-anchor`.
+  useLayoutEffect(() => {
+    const hold = anchorHold.current;
+    if (hold && hold.scroller.scrollTop !== hold.top) hold.scroller.scrollTop = hold.top;
+  }, [open]);
+
+  /**
+   * The card grows in place. Chrome's scroll anchoring can otherwise decide the content below
+   * the card is the stable thing and move the viewport when the card expands or collapses. Hold
+   * the page's own scroll container still for the duration of the disclosure animation.
+   */
+  function holdScrollAnchor() {
+    const scroller = findScrollableAncestor(toggleRef.current);
+    if (!scroller) return;
+
+    let hold = anchorHold.current;
+    if (hold && hold.scroller !== scroller) {
+      releaseScrollAnchor(hold);
+      hold = null;
+      anchorHold.current = null;
+    }
+    if (!hold) {
+      hold = {
+        scroller,
+        previous: scroller.style.getPropertyValue("overflow-anchor"),
+        top: scroller.scrollTop,
+        timer: 0,
+      };
+      anchorHold.current = hold;
+    }
+
+    const active = hold;
+    window.clearTimeout(active.timer);
+    scroller.style.setProperty("overflow-anchor", "none");
+    active.timer = window.setTimeout(() => {
+      if (anchorHold.current !== active) return;
+      releaseScrollAnchor(active);
+      anchorHold.current = null;
+    }, SCROLL_ANCHOR_HOLD_MS);
+  }
+
   if (items.length === 0) return null;
 
   const deck = items.slice(0, 7);
 
   return (
-    <section className="px-4 pt-4" data-testid="quick-alerts">
+    <section className="px-4 pt-2" data-testid="quick-alerts">
       <div
         className="rounded-[28px] p-3"
         style={{ background: "var(--surface)" }}
       >
         <button
+          ref={toggleRef}
           type="button"
-          onClick={() => setOpen((value) => !value)}
+          onClick={() => {
+            holdScrollAnchor();
+            setOpen((value) => !value);
+          }}
           aria-expanded={open}
           aria-controls="quick-alerts-body"
           data-testid="quick-alerts-toggle"
           className="flex min-h-[44px] w-full items-center justify-between gap-3 px-1 text-start"
         >
           <p
-            className="text-12 font-semibold uppercase tracking-[0.08em]"
+            className="text-11 font-semibold uppercase tracking-[0.08em]"
             style={{ color: "var(--text-secondary)" }}
           >
             {title}
@@ -186,54 +265,56 @@ export default function QuickAlertsPanel({
           />
         </button>
 
-        {!open && (
-          <div className="relative mt-1 pb-4">
-            <span
-              aria-hidden
-              className="absolute inset-x-6 bottom-0 h-10 rounded-b-[24px]"
-              style={{
-                background: "var(--surface-2)",
-                border: "1px solid var(--divider)",
-                boxShadow: "0 4px 12px rgba(0, 0, 0, 0.16)",
-                opacity: 0.55,
-              }}
-            />
-            <span
-              aria-hidden
-              className="absolute inset-x-3 bottom-2 h-10 rounded-b-[24px]"
-              style={{
-                background: "var(--surface-2)",
-                border: "1px solid var(--divider)",
-                boxShadow: "0 4px 12px rgba(0, 0, 0, 0.16)",
-                opacity: 0.82,
-              }}
-            />
-            <AlertCard item={deck[0]} index={0} open={false} preview />
+        <div
+          className={"ds-quick-alerts-deck" + (open ? " is-collapsed" : "")}
+          aria-hidden={open}
+          inert={open}
+        >
+          <div className="min-h-0">
+            <div className="relative mt-1 pb-4">
+              <span
+                aria-hidden
+                className="absolute inset-x-6 bottom-0 h-10 rounded-b-[24px]"
+                style={{
+                  background: "var(--surface-2)",
+                  border: "1px solid var(--divider)",
+                  boxShadow: "0 4px 12px rgba(0, 0, 0, 0.16)",
+                  opacity: 0.55,
+                }}
+              />
+              <span
+                aria-hidden
+                className="absolute inset-x-3 bottom-2 h-10 rounded-b-[24px]"
+                style={{
+                  background: "var(--surface-2)",
+                  border: "1px solid var(--divider)",
+                  boxShadow: "0 4px 12px rgba(0, 0, 0, 0.16)",
+                  opacity: 0.82,
+                }}
+              />
+              <AlertCard item={deck[0]} open={false} preview />
+            </div>
           </div>
-        )}
+        </div>
 
         <div
           id="quick-alerts-body"
+          className={"ds-quick-alerts-list" + (open ? " is-expanded" : "")}
           aria-hidden={!open}
-          className="ds-quick-alerts-body grid"
-          style={{
-            gridTemplateRows: open ? "1fr" : "0fr",
-            opacity: open ? 1 : 0,
-          }}
+          inert={!open}
         >
           <div className="min-h-0 overflow-hidden">
-            <div className="flex flex-col gap-1.5 pt-2">
-              {deck.map((item, index) => (
+            <div className="flex flex-col gap-1.5 pt-1.5">
+              {deck.map((item) => (
                 <AlertCard
                   key={item.id}
                   item={item}
-                  index={index}
                   open={open}
                   preview={false}
                 />
               ))}
 
-              {open && viewAllLabel && onViewAll && (
+              {viewAllLabel && onViewAll && (
                 <button
                   type="button"
                   onClick={onViewAll}

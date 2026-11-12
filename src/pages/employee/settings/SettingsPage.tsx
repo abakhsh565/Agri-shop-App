@@ -2,6 +2,7 @@ import { useNavigate } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
 import ListCard from "@/components/ui/ListCard";
+import Photo from "@/components/ui/Photo";
 import ListRow from "@/components/ui/ListRow";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import ImageCrop from "@/components/ui/ImageCrop";
@@ -283,10 +284,8 @@ export default function SettingsPage() {
             >
               {uploading ? (
                 <Loader2 size={20} className="animate-spin" />
-              ) : avatarUrl ? (
-                <img src={avatarUrl} alt="avatar" className="w-full h-full object-cover" />
               ) : (
-                initials
+                <Photo src={avatarUrl} alt="avatar" className="w-full h-full object-cover" fallback={initials} />
               )}
             </div>
           </div>
@@ -473,7 +472,7 @@ export default function SettingsPage() {
             <div className="flex flex-col items-center mb-5">
               <div className="relative">
                 <div className="w-20 h-20 rounded-full overflow-hidden flex items-center justify-center text-2xl font-bold" style={{ background: "var(--brand)", color: "#0a0a0a" }}>
-                  {avatarUrl ? <img src={avatarUrl} alt="" className="w-full h-full object-cover" /> : initials}
+                  <Photo src={avatarUrl} className="w-full h-full object-cover" fallback={initials} />
                 </div>
                 <button
                   onClick={() => { setEditingName(false); fileInputRef.current?.click(); }}

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
+import Photo from "@/components/ui/Photo";
 import NavHeader from "@/components/ui/NavHeader";
 import ListCard from "@/components/ui/ListCard";
 import ListRow from "@/components/ui/ListRow";
@@ -361,16 +362,19 @@ export default function SaleDetailView() {
               onClick={() => navigate(`${base}/customers/${customer.id}`)}
               emphasis
               tile={
-                customer.imageUrl ? (
-                  <img src={customer.imageUrl} alt={customer.name} className="size-10 shrink-0 rounded-full object-cover" />
-                ) : (
-                  <div
-                    className="size-10 shrink-0 rounded-full flex items-center justify-center text-13 font-bold"
-                    style={{ background: "var(--brand)", color: "#0a0a0a" }}
-                  >
-                    {customer.name.charAt(0).toUpperCase()}
-                  </div>
-                )
+                <Photo
+                  src={customer.imageUrl}
+                  alt={customer.name}
+                  className="size-10 shrink-0 rounded-full object-cover"
+                  fallback={
+                    <div
+                      className="size-10 shrink-0 rounded-full flex items-center justify-center text-13 font-bold"
+                      style={{ background: "var(--brand)", color: "#0a0a0a" }}
+                    >
+                      {customer.name.charAt(0).toUpperCase()}
+                    </div>
+                  }
+                />
               }
               trailing={<ChevronRight size={18} className="shrink-0" style={{ color: "var(--text-secondary)" }} />}
             >
@@ -776,11 +780,18 @@ function AmountRow({
  * the place to fail because the catalogue moved on.
  */
 function ProductThumb({ name, imageUrl }: { name: string; imageUrl?: string }) {
-  if (imageUrl) {
-    return (
-      <img src={imageUrl} alt="" className="size-10 shrink-0 rounded-[10px] object-cover" />
-    );
-  }
+  return (
+    <Photo
+      src={imageUrl}
+      className="size-10 shrink-0 rounded-[10px] object-cover"
+      fallback={(
+        <ProductThumbFallback name={name} />
+      )}
+    />
+  );
+}
+
+function ProductThumbFallback({ name }: { name: string }) {
   return (
     <div
       className="size-10 shrink-0 rounded-[10px] flex items-center justify-center text-13 font-bold"

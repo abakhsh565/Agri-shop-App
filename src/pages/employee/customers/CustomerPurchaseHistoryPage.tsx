@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
+import Photo from "@/components/ui/Photo";
 import DateField from "@/components/ui/DateField";
 import { PaymentBadge, CreditHealthBadge } from "@/components/ui/Badge";
 import ListCard from "@/components/ui/ListCard";
@@ -95,13 +96,16 @@ export default function CustomerPurchaseHistoryPage() {
       {/* Hero Card — customer image + name */}
       <div className="mx-4 mt-3 rounded-[var(--radius-card)] p-4" style={{ border: "1px solid var(--divider)", background: "var(--surface-2)" }}>
         <div className="flex items-center gap-3 mb-3">
-          {customer.imageUrl ? (
-            <img src={customer.imageUrl} alt={customer.name} className="w-12 h-12 rounded-full object-cover shrink-0" />
-          ) : (
-            <div className="w-12 h-12 rounded-full shrink-0 flex items-center justify-center text-sm font-bold" style={{ background: initBgColor(customer.name), color: "#fff" }}>
-              {customer.name.charAt(0).toUpperCase()}
-            </div>
-          )}
+          <Photo
+            src={customer.imageUrl}
+            alt={customer.name}
+            className="w-12 h-12 rounded-full object-cover shrink-0"
+            fallback={
+              <div className="w-12 h-12 rounded-full shrink-0 flex items-center justify-center text-sm font-bold" style={{ background: initBgColor(customer.name), color: "#fff" }}>
+                {customer.name.charAt(0).toUpperCase()}
+              </div>
+            }
+          />
           <div className="flex-1 min-w-0">
             <div className="flex items-center justify-between">
               <p className="text-base font-bold truncate" style={{ color: "var(--text-primary)" }}>{customer.name}</p>

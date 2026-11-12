@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
+import Photo from "@/components/ui/Photo";
 import PullToRefresh from "@/components/ui/PullToRefresh";
 import { SkeletonList } from "@/components/ui/Skeleton";
 import SearchBar from "@/components/ui/SearchBar";
@@ -324,20 +325,18 @@ export default function CustomersListPage() {
                   style={{ background: "var(--surface)" }}
                 >
                   <div className="flex items-start gap-3">
-                    {c.imageUrl ? (
-                      <img
-                        src={c.imageUrl}
-                        alt=""
-                        className="rounded-full shrink-0 size-11 object-cover"
-                      />
-                    ) : (
-                      <div
-                        className="flex items-center justify-center rounded-full shrink-0 size-11 text-16 font-bold"
-                        style={{ background: bg, color: "#fff" }}
-                      >
-                        {c.name.charAt(0).toUpperCase()}
-                      </div>
-                    )}
+                    <Photo
+                      src={c.imageUrl}
+                      className="rounded-full shrink-0 size-11 object-cover"
+                      fallback={
+                        <div
+                          className="flex items-center justify-center rounded-full shrink-0 size-11 text-16 font-bold"
+                          style={{ background: bg, color: "#fff" }}
+                        >
+                          {c.name.charAt(0).toUpperCase()}
+                        </div>
+                      }
+                    />
 
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between gap-3">

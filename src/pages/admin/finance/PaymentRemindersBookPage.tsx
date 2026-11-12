@@ -11,6 +11,7 @@ import { useT } from "@/lib/i18n";
 import { useShellBase } from "@/lib/useShellBase";
 import { useUIStore } from "@/stores/uiStore";
 import { useAuthStore } from "@/stores/authStore";
+import { useCompletePaymentReminder } from "@/hooks/useCompletePaymentReminder";
 import { hasPermission } from "@/lib/tenantContext";
 import { pkToday } from "@/lib/pkDate";
 import {
@@ -30,9 +31,9 @@ import {
  * supplier, or a payment with no record at all, and for one screen that holds all of them. That is
  * a money screen, so it sits in the Finance hub beside the cash position and the ledger.
  *
- * WHY THE CLOSED ONES ARE STILL HERE. A reminder that was done or dropped is not deleted — the
- * owner asked to look back at it. The four chips are the four states the database records, and the
- * counts are the rows below them, so a tab cannot say "3" and open an empty list.
+ * WHAT HAPPENS WHEN ONE IS DONE. Done deletes the reminder and offers Undo in the success toast;
+ * the closed chips only hold rows closed before that rule. The counts are the rows below them, so
+ * a tab cannot say "3" and open an empty list.
  *
  * NOTHING IS CLAIMED TO HAVE BEEN SENT. There is no scheduler and no message: a card states the day
  * the reminder next falls and, once closed, the day it was about. Marking it done records the
@@ -46,6 +47,7 @@ export default function PaymentRemindersBookPage() {
   const navigate = useNavigate();
   const { addToast } = useUIStore();
   const book = usePaymentReminderBook();
+  const completeReminder = useCompletePaymentReminder();
   // Writing is the owner's own note, so a role that may read the diary is not offered controls
   // the database will refuse.
   const isOwner = useAuthStore((s) => s.user?.membershipRole === "owner");
@@ -87,12 +89,13 @@ export default function PaymentRemindersBookPage() {
   }
 
   async function markStatus(reminder: PaymentReminder, status: PaymentReminderStatus) {
+    if (status === "completed") {
+      await completeReminder(reminder, book.retry);
+      return;
+    }
     try {
       await setPaymentReminderStatus(reminder.id, status);
-      addToast(
-        status === "completed" ? t("paymentBook.markedDone") : t("paymentBook.reopened"),
-        "success",
-      );
+      addToast(t("paymentBook.reopened"), "success");
       book.retry();
     } catch {
       addToast(t("paymentBook.statusFailed"), "error");

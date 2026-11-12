@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ImagePlus, Mic, Square, X } from "lucide-react";
+import ImageCrop from "@/components/ui/ImageCrop";
+import Photo from "@/components/ui/Photo";
 import { useT } from "@/lib/i18n";
 import {
   MAX_PHOTOS,
@@ -65,6 +67,9 @@ export default function FinanceMediaField({
   const photoInput = useRef<HTMLInputElement>(null);
   const recorder = useVoiceRecorder();
   const [notice, setNotice] = useState("");
+  // The chosen pictures wait here one at a time. Each is framed before the parent sees it, so
+  // the form and the detail sheet upload exactly the crop the owner approved.
+  const [cropQueue, setCropQueue] = useState<File[]>([]);
 
   // A minute is the form's cap. The recorder itself does not decide that; the screen that knows
   // the limit stops it, and the database carries the final say.
@@ -108,7 +113,12 @@ export default function FinanceMediaField({
       return;
     }
     setNotice(files.length > room ? t("finance.media.limitPhotos") : "");
-    if (files.length > 0) onAddPhotos(files.slice(0, room));
+    if (files.length > 0) setCropQueue(files.slice(0, room));
+  }
+
+  function confirmCrop(picture: File) {
+    onAddPhotos([picture]);
+    setCropQueue((current) => current.slice(1));
   }
 
   const labelCls = "text-12 font-semibold";
@@ -136,11 +146,11 @@ export default function FinanceMediaField({
               style={{ width: 76, height: 76, background: "var(--tone-sunken)" }}
               data-testid={`finance-photo-${photo.key}`}
             >
-              {photo.url ? (
-                <img src={photo.url} alt="" className="w-full h-full object-cover" />
-              ) : (
-                <span className="absolute inset-0 animate-pulse" style={{ background: "var(--tone-sunken)" }} />
-              )}
+              <Photo
+                src={photo.url}
+                className="w-full h-full object-cover"
+                fallback={<span className="absolute inset-0 animate-pulse" style={{ background: "var(--tone-sunken)" }} />}
+              />
               {photo.draft && (
                 <span
                   className="absolute bottom-1 start-1 text-8 font-semibold px-1.5 py-0.5 rounded-full"
@@ -283,6 +293,17 @@ export default function FinanceMediaField({
           </p>
         )}
       </div>
+
+      {cropQueue[0] && (
+        <ImageCrop
+          key={`${cropQueue[0].name}-${cropQueue[0].size}-${cropQueue[0].lastModified}`}
+          file={cropQueue[0]}
+          // The receipt tile is square, so the saved paper is the part the tile will actually draw.
+          aspect={1}
+          onCancel={() => setCropQueue([])}
+          onConfirm={confirmCrop}
+        />
+      )}
     </div>
   );
 }

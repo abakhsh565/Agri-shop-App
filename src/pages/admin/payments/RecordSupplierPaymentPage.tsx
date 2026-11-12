@@ -9,11 +9,17 @@ import { useUIStore } from "@/stores/uiStore";
 import { useThemeStore } from "@/stores/themeStore";
 import type { PaymentMethod } from "@/types";
 import { useT } from "@/lib/i18n";
+import { useShellBase } from "@/lib/useShellBase";
+import { useReturnTo } from "@/lib/useReturnTo";
 
 export default function RecordSupplierPaymentPage() {
   const t = useT();
   const { companyId } = useParams();
   const navigate = useNavigate();
+  const base = useShellBase();
+  // A payment is started from a bill or a payable list. Return there, not to the general money
+  // statement the form used to hardcode.
+  const returnTo = useReturnTo(`${base}/purchases/payables`) ?? `${base}/purchases/payables`;
   const { addToast } = useUIStore();
   const { language } = useThemeStore();
   const isUrdu = language === "ur";
@@ -64,14 +70,14 @@ export default function RecordSupplierPaymentPage() {
       submissionKeyRef.current = null;
 
       // Read the suppliers back BEFORE leaving this screen. The payable is a store the shell
-      // loaded once and Realtime maintains, so without this the Payments screen this navigates
-      // to (and the alerts, and the supplier's own page) showed the balance from before the
-      // payment until something else happened to refresh it — the number the shopkeeper just
+      // loaded once and Realtime maintains, so without this the bill or payables list this
+      // returns to (and the alerts, and the supplier's own page) showed the balance from before
+      // the payment until something else happened to refresh it — the number the shopkeeper just
       // changed was the one number that did not move.
       await useCompaniesStore.getState().load();
 
       addToast(t("copy.paidToSupplier", { amount: formatCurrency(paid), name: company!.name }), "success");
-      navigate("/admin/payments", { replace: true });
+      navigate(returnTo, { replace: true });
     } catch (e) {
       // The key is KEPT on failure: the attempt may have reached the database and
       // only the answer was lost, so the retry must not be treated as a new payment.
@@ -94,7 +100,7 @@ export default function RecordSupplierPaymentPage() {
     >
       <div>
         <StatusBar />
-        <NavHeader title={t("supplier.paySupplier")} />
+        <NavHeader title={t("supplier.paySupplier")} backTo={returnTo} />
 
         <div className="mx-4 mt-3 rounded-[var(--radius-card)] p-5 text-center" style={{ background: "var(--brand)" }}>
           <p className="ds-section-label" style={{ color: "rgba(0,0,0,0.55)" }}>

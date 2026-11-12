@@ -153,7 +153,7 @@ export default function PaymentReminderSheet({
     () =>
       [...customers]
         .sort((a, b) => a.name.localeCompare(b.name))
-        .map((c) => ({ value: c.id, label: c.name, meta: c.phone })),
+        .map((c) => ({ value: c.id, label: c.name, meta: c.phone, logoSrc: c.imageUrl })),
     [customers],
   );
 
@@ -161,7 +161,7 @@ export default function PaymentReminderSheet({
     () =>
       [...companies]
         .sort((a, b) => a.name.localeCompare(b.name))
-        .map((c) => ({ value: c.id, label: c.name, meta: c.phone })),
+        .map((c) => ({ value: c.id, label: c.name, meta: c.phone, logoSrc: c.logoUrl })),
     [companies],
   );
 

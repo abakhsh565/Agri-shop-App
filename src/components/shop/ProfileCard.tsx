@@ -1,5 +1,6 @@
 import { ArrowLeftRight } from "lucide-react";
 import BranchKindChip from "@/components/ui/BranchKindChip";
+import Photo from "@/components/ui/Photo";
 import { useAuthStore } from "@/stores/authStore";
 import { useShopStore } from "@/stores/shopStore";
 import { useT } from "@/lib/i18n";
@@ -100,7 +101,7 @@ export default function ProfileCard({ onOpen, onEdit, editTestId, testId }: {
           className="size-[52px] rounded-full overflow-hidden flex items-center justify-center text-17 font-bold shrink-0"
           style={{ background: "var(--brand)", color: "var(--ink-fg)" }}
         >
-          {user?.photoUrl ? <img src={user.photoUrl} alt="" className="w-full h-full object-cover" /> : initials}
+          <Photo src={user?.photoUrl} className="w-full h-full object-cover" fallback={initials} />
         </div>
 
         <div className="flex-1 min-w-0" data-testid={onOpen ? undefined : testId}>{lines}</div>

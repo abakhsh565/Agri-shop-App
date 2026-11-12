@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type InputHTMLAttributes } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { Check, ContactRound, Mic, Square, X } from "lucide-react";
 import StatusBar from "@/components/ui/StatusBar";
 import Button from "@/components/ui/Button";
@@ -10,6 +10,7 @@ import { useShellBase } from "@/lib/useShellBase";
 import { useAuthStore } from "@/stores/authStore";
 import { useShopStore } from "@/stores/shopStore";
 import { useThemeStore } from "@/stores/themeStore";
+import { hasInAppHistory } from "@/lib/navContext";
 import { useUIStore } from "@/stores/uiStore";
 import { useCustomersStore } from "@/stores/customersStore";
 import { canPickContact, pickContact } from "@/lib/contacts";
@@ -150,7 +151,9 @@ export default function RecordMoneyPage() {
   const t = useT();
   const base = useShellBase();
   const navigate = useNavigate();
+  const location = useLocation();
   const [params, setParams] = useSearchParams();
+  const recordOrigin = (location.state as { from?: string } | null)?.from;
   const { addToast } = useUIStore();
   const customers = useCustomersStore((s) => s.customers);
   const role = useAuthStore((s) => s.user?.membershipRole);
@@ -158,6 +161,9 @@ export default function RecordMoneyPage() {
 
   const requested = params.get("kind") as FinanceEntryKind | null;
   const kind: FinanceEntryKind = requested && KINDS.includes(requested) ? requested : "income";
+  // The assistant hands over a sentence it has already understood. This is only a prefill: the
+  // owner still reviews every field and the normal save path remains the only write.
+  const requestedSentence = (params.get("sentence") ?? "").slice(0, 500);
 
   const [amount, setAmount] = useState("");
   const [day, setDay] = useState(pkToday());
@@ -168,7 +174,7 @@ export default function RecordMoneyPage() {
   const [repeatUnit, setRepeatUnit] = useState<RepeatUnit>("none");
   const [repeatEvery, setRepeatEvery] = useState("1");
   const [error, setError] = useState("");
-  const [sentence, setSentence] = useState("");
+  const [sentence, setSentence] = useState(requestedSentence);
   const [listening, setListening] = useState(false);
   const [voiceError, setVoiceError] = useState("");
   const stopListeningRef = useRef<(() => void) | null>(null);
@@ -356,6 +362,20 @@ export default function RecordMoneyPage() {
     return () => observer.disconnect();
   }, [measureMark]);
 
+  /**
+   * Closing the form must not add a second finance entry above the form in history. Opening it
+   * from a finance book goes back to that book; the Assistant card replaces the form with the
+   * finance screen, so the finance back arrow returns to the conversation instead of reopening
+   * the form forever.
+   */
+  function closeRecord() {
+    if (recordOrigin === "finance" && hasInAppHistory()) {
+      navigate(-1);
+      return;
+    }
+    navigate(`${base}/settings/hub/finance`, { replace: true });
+  }
+
   function chooseKind(next: FinanceEntryKind) {
     if (next === kind) return;
     // The category list belongs to the kind, so it moves with it; the rest of the form is the
@@ -384,7 +404,7 @@ export default function RecordMoneyPage() {
           stopListeningRef.current = null;
           setListening(false);
         },
-        language === "ur" ? "ur-PK" : "en-PK",
+        language === "ur" ? "ur-PK" : "en-US",
         (code) => {
           setListening(false);
           setVoiceError(
@@ -515,7 +535,7 @@ export default function RecordMoneyPage() {
         <div className="flex items-center gap-5">
           <button
             type="button"
-            onClick={() => navigate(`${base}/settings/hub/finance`)}
+            onClick={closeRecord}
             aria-label={t("common.close")}
             data-testid="record-money-close"
             className="ds-iconbtn shrink-0"

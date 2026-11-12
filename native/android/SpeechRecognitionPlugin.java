@@ -59,7 +59,12 @@ public class SpeechRecognitionPlugin extends Plugin {
     }
 
     private void beginListening(PluginCall call) {
-        String lang = call.getString("lang", "en-US");
+        String requestedLang = call.getString("lang", "en-US");
+        // Android recognizers commonly advertise en-US/en-GB but not en-PK. The old English
+        // default made the recognizer fail immediately with ERROR_LANGUAGE_NOT_SUPPORTED, which
+        // the screen could only report as "I could not hear that". Keep this guard for callers
+        // built before the language default changed.
+        String lang = "en-PK".equalsIgnoreCase(requestedLang) ? "en-US" : requestedLang;
         getActivity().runOnUiThread(() -> {
             try {
                 destroyRecognizer();
@@ -85,11 +90,10 @@ public class SpeechRecognitionPlugin extends Plugin {
 
                     @Override
                     public void onError(int error) {
-                        String code = error == SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS
-                            ? "permission"
-                            : "failed";
                         JSObject event = new JSObject();
-                        event.put("code", code);
+                        event.put("code", codeForError(error));
+                        // Kept for logcat/diagnosis; the UI translates the stable code above.
+                        event.put("reason", error);
                         notifyListeners("error", event);
                         finishSession();
                     }
@@ -110,6 +114,28 @@ public class SpeechRecognitionPlugin extends Plugin {
                 call.reject("failed");
             }
         });
+    }
+
+    private String codeForError(int error) {
+        switch (error) {
+            case SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS:
+                return "permission";
+            case SpeechRecognizer.ERROR_NO_MATCH:
+            case SpeechRecognizer.ERROR_SPEECH_TIMEOUT:
+                return "no_speech";
+            case SpeechRecognizer.ERROR_NETWORK:
+            case SpeechRecognizer.ERROR_NETWORK_TIMEOUT:
+            case SpeechRecognizer.ERROR_SERVER:
+            case 11: // ERROR_SERVER_DISCONNECTED (API 31); numeric for minSdk 23
+                return "network";
+            case SpeechRecognizer.ERROR_RECOGNIZER_BUSY:
+                return "busy";
+            case 12: // ERROR_LANGUAGE_NOT_SUPPORTED (API 31)
+            case 13: // ERROR_LANGUAGE_UNAVAILABLE (API 31)
+                return "language";
+            default:
+                return "failed";
+        }
     }
 
     private void sendText(Bundle bundle, boolean isFinal) {

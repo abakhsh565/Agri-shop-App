@@ -1,73 +1,48 @@
 import { useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { Loader2 } from "lucide-react";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
-import ListCard from "@/components/ui/ListCard";
-import ListRow from "@/components/ui/ListRow";
 import LocationField from "@/components/ui/LocationField";
 import Checkbox from "@/components/ui/Checkbox";
 import { supabase } from "@/lib/supabase";
 import type { PickedPlace } from "@/lib/geo";
 import { useT } from "@/lib/i18n";
 import { useShopStore, type BranchSummary } from "@/stores/shopStore";
-import { useRolesStore } from "@/stores/rolesStore";
 import { useUIStore } from "@/stores/uiStore";
-import { useShellBase } from "@/lib/useShellBase";
 
 /**
- * Everything a branch answers, in one form.
+ * The two things a branch answers about itself: where it is, and whether farmers nearby can find
+ * it. Everything else on this page belongs to another section and is drawn there.
  *
- * This is the whole of a branch's configuration, as the page the Branches list opens. The
- * branch's identity and its figures are drawn ABOVE it by that page (`BranchIdentity`,
- * `BranchPerformance`), so the form begins where configuration begins and never repeats the
- * name and place it sits under.
+ * WHAT MOVED OUT (owner's redesign, 2026-11-12). The roles list used to live here, with a heading,
+ * a per-role count and its own explanation of which branch's roles could be read. That made the
+ * page describe the same people three times — responsible person, co-owner and roles — in three
+ * separately titled blocks with a sentence each. Roles are now one row in the page's People
+ * section, and this form is only what it edits.
  *
- * The name is NOT edited here, and no longer anywhere on this screen (owner's correction,
- * 2026-10-30): the branch an owner reads at the top is named after the business itself, so its
- * name is the business's own record and not a line to be changed on the way to the map.
+ * NO SENTENCES THAT ONLY EXPLAIN THE DESIGN. The marketplace block used to repeat the branch's
+ * location in prose ("only a branch with a location can be found"), because the pin sat above it.
+ * It is now one row: the decision's name, the state it is in, and the box. A refusal is still
+ * reported where it was made — under the row — because that one is about what just happened, not
+ * about how the screen works.
  *
- * The roles are a deliberate limit rather than a missing feature: a role belongs to the branch it
- * was created in, and this app's role screens — the list, the permission grid, the delete — are
- * all authorized against the branch the account is working in. For the branch you are standing
- * in, the roles are listed with the number of people on each and the section hands off to the
- * real role screen. For any other branch the section states where roles are managed and shows
- * the branch's total employees, because showing roles this account cannot read (or whose saves
- * would be refused) would be worse than saying where they live.
- *
- * The location is read from the branch row the list handed in and written through `set_place`,
- * which is the only writer that knows a location is a point inside Pakistan. It is deliberately
- * not read back from `shops`: that table may only be read for the branch the account is working
- * in, so a query for any other branch comes back empty — not failed — and the picker would state
- * that a branch which is pinned has never been located.
+ * Every change is written the moment it is made. There is no Save button, and that is because
+ * there is nothing here worth batching: one place, one switch. What is on screen is what is
+ * stored, and each write reports its own refusal under the thing it refused about.
  */
 
 export default function BranchEditor({ branch }: { branch: BranchSummary }) {
   const t = useT();
-  const navigate = useNavigate();
-  const base = useShellBase();
   const { addToast } = useUIStore();
 
   const setBranchPlace = useShopStore((s) => s.setBranchPlace);
   const setMarketplaceSettings = useShopStore((s) => s.setMarketplaceSettings);
-  const switchTo = useShopStore((s) => s.switchBranch);
-
-  const roles = useRolesStore((s) => s.roles);
-  const rolesReady = useRolesStore((s) => s.ready);
-  const loadRoles = useRolesStore((s) => s.load);
-  const getBranchRoleCounts = useRolesStore((s) => s.getBranchRoleCounts);
+  const loadBranches = useShopStore((s) => s.loadBranches);
 
   /**
    * Where this branch is, as a point — read from the branch row, then picked on a map.
    *
    * Read rather than assumed: the form can be opened on a branch that has never had a location,
    * on one pinned last week, and everything in between, and "nothing here yet" must not look like
-   * "somewhere else". Every change on this screen is written the moment it is made.
-   *
-   * It comes from the branch the screen handed in, NOT from a `shops` query of our own. `shops`
-   * may only be read for the shop the account is working in, so querying it for any other branch
-   * returned an empty result — not an error — and the field said "Choose on the map" about a
-   * branch that was already pinned. `get_my_branches()` is the read allowed to see every branch
-   * the account belongs to, so the place travels with the branch.
+   * "somewhere else".
    */
   const [place, setPlace] = useState<PickedPlace | null>(branch.place);
   /** True while a write is on its way, so a second one cannot be queued behind it. */
@@ -76,91 +51,56 @@ export default function BranchEditor({ branch }: { branch: BranchSummary }) {
   const [askRemove, setAskRemove] = useState(false);
   /** A refused pin is reported where the picker is, not under a field it has nothing to do with. */
   const [locationError, setLocationError] = useState<string | null>(null);
-  const [counts, setCounts] = useState<Record<string, number>>({});
   /**
-   * The save guard is a ref, not `saving`.
-   *
-   * `saving` is a state variable, so it is still `false` for the second tap of a double
-   * tap inside the same task — two saves would go out for one intention, and the second
-   * could land after the form has closed. The ref is set synchronously, before anything
-   * awaits, which is what actually stops the second one.
+   * The save guard is a ref, not `busy`: `busy` is state and is still `false` for the second tap of
+   * a double tap inside one task, so two writes would go out for one intention.
    */
   const savingRef = useRef(false);
-  /**
-   * This branch's marketplace decision, as it stands.
-   *
-   * It only moves when the database has accepted the move, so a refusal leaves the switch where it
-   * was and says why underneath rather than reverting a choice the person made.
-   *
-   * The switch is the whole decision. There is no distance here, because how far a farmer is
-   * willing to search from is the farmer's choice, made in the farmer app — a branch answers
-   * only where it is.
-   */
+  /** This branch's marketplace decision, as it stands — it only moves once the database accepts it. */
   const [marketplaceOn, setMarketplaceOn] = useState(branch.marketplaceEnabled);
   const [marketError, setMarketError] = useState<string | null>(null);
 
-  // The branch being edited is the active one: its roles are the ones this app can read,
-  // so they are what the form can list. Any other branch gets the sentence and the way in.
-  const isActive = branch.isCurrent;
-  useEffect(() => {
-    if (!isActive) return;
-    if (!rolesReady) void loadRoles();
-  }, [isActive, rolesReady, loadRoles]);
-
-  useEffect(() => {
-    if (!isActive) return;
-    let cancelled = false;
-    (async () => {
-      const next = await getBranchRoleCounts(branch.id, branch.isMain);
-      if (!cancelled) setCounts(next);
-    })();
-    return () => { cancelled = true; };
-  }, [isActive, branch.id, branch.isMain, getBranchRoleCounts]);
-
-  // A farmer measures the distance from their own search point, so a branch that was never
-  // pinned can never be found however close the search is; the switch refuses to turn ON
-  // without a location. Turning it OFF is always allowed, whatever state it is in.
+  // A farmer measures the distance from their own search point, so a branch that was never pinned
+  // can never be found however close the search is; the switch refuses to turn ON without a
+  // location. Turning it OFF is always allowed, whatever state it is in.
   const hasPin = place !== null;
 
-  /**
-   * Every change here is written the moment it is made.
-   *
-   * There is no Save button, and that is because there is nothing on this screen worth batching:
-   * one place, one switch. A button over a single line edit asks the person to remember whether
-   * they have unsaved work, and on a screen they came to READ the branch's state that question is
-   * noise — what is on screen is what is stored. Each write reports its own refusal under the
-   * thing it refused about, so nothing is quietly reverted behind the person's back.
-   */
   async function writePlace(next: PickedPlace | null): Promise<boolean> {
     if (savingRef.current) return false;
     savingRef.current = true;
     setBusy(true);
     setLocationError(null);
-    // Through `set_place` rather than a direct UPDATE: that is the one writer that knows a
-    // location must be a point inside Pakistan, and it checks that the branch belongs to a tenant
-    // the caller is a member of. It is also the writer that takes a pin back off, so removing a
-    // location is a change like any other rather than a special case that writes nothing.
-    const { error: placeError } = await supabase.rpc("set_place", {
-      p_table: "branches",
-      p_id: branch.id,
-      p_latitude: next?.lat ?? null,
-      p_longitude: next?.lng ?? null,
-      p_label: next?.label ?? null,
-      p_address: next?.address ?? null,
-      p_source: next?.source ?? null,
-    });
-    savingRef.current = false;
-    setBusy(false);
-    if (placeError) {
+    try {
+      // Through `set_place` rather than a direct UPDATE: that is the one writer that knows a
+      // location must be a point inside Pakistan, and it takes a pin back off too.
+      const { error: placeError } = await supabase.rpc("set_place", {
+        p_table: "branches",
+        p_id: branch.id,
+        p_latitude: next?.lat ?? null,
+        p_longitude: next?.lng ?? null,
+        p_label: next?.label ?? null,
+        p_address: next?.address ?? null,
+        p_source: next?.source ?? null,
+      });
+      if (placeError) {
+        setLocationError(t("branches.locationFailed"));
+        return false;
+      }
+      setPlace(next);
+      // The list is what the next open of this page reads, so it is told now rather than after
+      // a round trip: a pin that saved must not come back as the old one a moment later.
+      setBranchPlace(branch.id, next);
+      addToast(t("branches.saved", { branch: branch.name }), "success");
+      return true;
+    } catch {
       setLocationError(t("branches.locationFailed"));
       return false;
+    } finally {
+      // Always released. A rejected request that left `busy` set disabled the row for the rest
+      // of the visit, so the control looked like it did nothing at all.
+      savingRef.current = false;
+      setBusy(false);
     }
-    setPlace(next);
-    // The list is what the next open of this page reads, so it is told now rather than after a
-    // round trip: a pin that saved must not come back as the old one a moment later.
-    setBranchPlace(branch.id, next);
-    addToast(t("branches.saved", { branch: branch.name }), "success");
-    return true;
   }
 
   /** The listing, written the same way, and refused here when there is no point to find it from. */
@@ -168,35 +108,49 @@ export default function BranchEditor({ branch }: { branch: BranchSummary }) {
     if (savingRef.current) return false;
     if (next && !hasPin) {
       setMarketError(t("marketplace.branchNoLocation"));
+      addToast(t("marketplace.branchNoLocation"), "warning");
       return false;
     }
     savingRef.current = true;
     setBusy(true);
     setMarketError(null);
-    const marketResult = await setMarketplaceSettings(branch.id, next);
-    savingRef.current = false;
-    setBusy(false);
-    if (!marketResult.ok) {
-      setMarketError(
-        marketResult.code === "no_location" ? t("marketplace.branchNoLocation")
-          : marketResult.code === "denied" ? t("marketplace.branchDenied")
-            : t("marketplace.branchSaveFailed"),
-      );
+    try {
+      const marketResult = await setMarketplaceSettings(branch.id, next);
+      if (!marketResult.ok) {
+        const message =
+          marketResult.code === "no_location" ? t("marketplace.branchNoLocation")
+            : marketResult.code === "denied" ? t("marketplace.branchDenied")
+              : t("marketplace.branchSaveFailed");
+        setMarketError(message);
+        // Also said out loud: a refusal that only appears as small text under the row reads as
+        // a toggle that did not move.
+        addToast(message, "error");
+        return false;
+      }
+      setMarketplaceOn(next);
+      // The listing is a business setting the branch row only reflects, so the row is re-read
+      // from the server instead of trusting the value we sent. Without this the box could spring
+      // back to the old state on the next load and look broken.
+      await loadBranches();
+      addToast(t("branches.saved", { branch: branch.name }), "success");
+      return true;
+    } catch {
+      const message = t("marketplace.branchSaveFailed");
+      setMarketError(message);
+      addToast(message, "error");
       return false;
+    } finally {
+      savingRef.current = false;
+      setBusy(false);
     }
-    setMarketplaceOn(next);
-    addToast(t("branches.saved", { branch: branch.name }), "success");
-    return true;
   }
 
   /**
    * Taking the pin off, once the question has been answered Yes.
    *
-   * A word, not a cross: an unlabelled X beside the address reads as "delete this branch", the one
-   * destructive action this screen must never look accidental about. A pin going also takes the
-   * branch out of the marketplace — a farmer measures distance from a point, so a branch with none
-   * can never be found however near the search is — and that write is made here too, visibly,
-   * instead of leaving a listed branch that nothing can locate.
+   * A word, not a cross: an unlabelled X beside the address reads as "delete this branch". A pin
+   * going also takes the branch out of the marketplace, and that write is made here too,
+   * visibly, instead of leaving a listed branch that nothing can locate.
    */
   async function removeLocation() {
     if (!(await writePlace(null))) return;
@@ -204,27 +158,13 @@ export default function BranchEditor({ branch }: { branch: BranchSummary }) {
     setAskRemove(false);
   }
 
-  /** Working in another branch is what changing its roles means; say so, then do it. */
-  async function openRoles() {
-    if (!isActive) {
-      const result = await switchTo(branch.id);
-      if (!result.ok) {
-        addToast(
-          t(result.code === "pending_sync" ? "shop.pendingSync" : "shop.switchFailed"),
-          result.code === "pending_sync" ? "warning" : "error",
-        );
-        return;
-      }
-      addToast(t("shop.switched", { shop: branch.name }), "success");
-    }
-    navigate(`${base}/settings/roles`);
-  }
-
+  // The page's own gutter. Every block on this record — the plate above, this form, the People
+  // list and the archive action — shares one 16px inset, so the location card cannot sit wider
+  // than the figures it describes (owner, 2026-11-12).
   return (
     <div className="px-4" data-testid={`branch-edit-${branch.id}`}>
-      {/* ── Where it is ───────────────────────────────────────────────────────── */}
-      {/* Not a text field: a branch's location is a point on a map, and an address typed
-          beside a pin is how the two end up describing different towns. */}
+      {/* Not a text field: a branch's location is a point on a map, and an address typed beside a
+          pin is how the two end up describing different towns. */}
       <div className="pt-4">
         <LocationField
           pagePicker
@@ -252,16 +192,9 @@ export default function BranchEditor({ branch }: { branch: BranchSummary }) {
           {locationError}
         </p>
       )}
-      {/* ── Where farmers can find this branch ───────────────────────────────── */}
-      {/* The branch's half of the marketplace decision, as a bare checkbox. It sits right under
-          the location because the two are read together: a farmer searches from their own
-          point, so only a branch with one can be found at all. Checking it without a location
-          is refused HERE with the instruction to add one — a disabled control that explains
-          nothing would say the same thing less usefully. How far a search reaches stays the
-          farmer's choice, not this branch's. */}
-      <p className="text-14 font-bold mt-5" style={{ color: "var(--text-primary)" }}>
-        {t("marketplace.branchTitle")}
-      </p>
+
+      {/* The decision and the state it is in, as one row: the name says what it is, the second
+          line says whether it is on, the box is the control. */}
       <button
         type="button"
         role="checkbox"
@@ -270,19 +203,16 @@ export default function BranchEditor({ branch }: { branch: BranchSummary }) {
         disabled={busy}
         onClick={() => void writeMarket(!marketplaceOn)}
         data-testid={`branch-marketplace-toggle-${branch.id}`}
-        className="mt-2.5 flex items-center gap-3 text-start ds-pressable disabled:opacity-50"
+        className="w-full flex items-center gap-3 py-3.5 mt-2 text-start ds-pressable disabled:opacity-50"
+        style={{ borderTop: "1px solid var(--hairline)" }}
       >
-        <span className="flex items-center justify-center shrink-0">
-          <Checkbox checked={marketplaceOn} size={22} />
+        <span className="min-w-0 flex-1">
+          <span className="text-15 font-semibold block">{t("marketplace.branchTitle")}</span>
+          <span className="text-13 block mt-1" style={{ color: "var(--text-secondary)" }}>
+            {marketplaceOn ? t("marketplace.branchToggleNotice") : t("marketplace.branchToggleOffNotice")}
+          </span>
         </span>
-        <span className="text-12 font-semibold" style={{ color: "var(--text-primary)" }}>
-          {/* The sentence follows the box, on every branch. It used to read "listed" on every
-              branch this account was not working in, so an unchecked box could sit beside words
-              claiming the opposite. */}
-          {marketplaceOn
-            ? t("marketplace.branchToggleNotice")
-            : t("marketplace.branchToggleOffNotice")}
-        </span>
+        <Checkbox checked={marketplaceOn} size={22} />
       </button>
 
       {marketError && (
@@ -295,62 +225,7 @@ export default function BranchEditor({ branch }: { branch: BranchSummary }) {
         </p>
       )}
 
-      {/* ── The roles ─────────────────────────────────────────────────────────── */}
-      {/* The employee total sits on the section's own line, so the answer to "how many people
-          are in this branch" is visible before the per-role breakdown, on every branch page. */}
-      <div className="flex items-baseline justify-between gap-3 mt-6">
-        <p className="text-14 font-bold" style={{ color: "var(--text-primary)" }}>
-          {t("branchPage.rolesAndPermissions")}
-        </p>
-        {branch.employeeCount != null && (
-          <p className="text-11 shrink-0" style={{ color: "var(--text-secondary)" }}>
-            {t(
-              branch.employeeCount === 1 ? "branches.employeeOne" : "branches.employeeOther",
-              { count: String(branch.employeeCount) },
-            )}
-          </p>
-        )}
-      </div>
-
-      {isActive && !rolesReady && (
-        <div className="flex items-center justify-center py-5" role="status" aria-busy="true">
-          <Loader2 size={18} className="animate-spin" style={{ color: "var(--text-secondary)" }} />
-        </div>
-      )}
-
-      {!isActive && (
-        <div
-          className="mt-2 rounded-[var(--radius-card)] p-4"
-          style={{ background: "var(--tone-card)" }}
-          data-testid={`branch-roles-other-${branch.id}`}
-        >
-          <p className="text-13" style={{ color: "var(--text-primary)" }}>
-            {t("branches.rolesOtherBranch")}
-          </p>
-        </div>
-      )}
-
-      {isActive && rolesReady && roles.length > 0 && (
-        <ListCard className="mt-2">
-          {roles.map((role) => (
-            <ListRow
-              key={role.id}
-              title={role.name}
-              meta={t(
-                (counts[role.id] ?? 0) === 1 ? "branches.employeeOne" : "branches.employeeOther",
-                { count: String(counts[role.id] ?? 0) },
-              )}
-              onClick={() => void openRoles()}
-            />
-          ))}
-        </ListCard>
-      )}
-
-      {/*
-        The one question this screen asks, and it is asked before anything is lost: a branch's
-        location is the whole of what a farmer can search from, so taking it off is a decision
-        rather than a stray tap — and the answer is a word, not a cross in the address line.
-      */}
+      {/* The one question this screen asks, and it is asked before anything is lost. */}
       <ConfirmDialog
         open={askRemove}
         title={t("branches.removeLocationTitle")}

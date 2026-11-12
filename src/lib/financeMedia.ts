@@ -1,5 +1,6 @@
 import { supabase } from "@/lib/supabase";
 import { compressImage } from "@/lib/storage";
+import { prepareVoice } from "@/lib/audioCompression";
 import { HARD_MAX_IMAGE_BYTES } from "@/lib/imageCompression";
 
 /**
@@ -92,7 +93,8 @@ export function mediaMime(file: File, kind: FinanceMediaKind): string {
  * The photo is prepared first by the app's adaptive, 500 KB-capped path, because a modern phone
  * camera's receipt is 4–8 MB and the bucket allows 10: one bill photographed twice would fill the
  * allowance. A receipt is text-like, so that path keeps more resolution than a product photo. A
- * voice note is sent as recorded.
+ * voice note goes through the audio path (audioCompression.ts): 32 kbps mono Opus, which is what
+ * the recorder writes, so a note from this app is uploaded without a second encode.
  */
 export async function uploadFinanceMedia(input: {
   shopId: string;
@@ -105,8 +107,11 @@ export async function uploadFinanceMedia(input: {
   if (input.file.size > MAX_MEDIA_BYTES) {
     throw new Error("TOO_LARGE");
   }
+  // A photo through the adaptive 500 KB path; a voice note through the 32 kbps path, which leaves
+  // a note recorded by this app untouched (it is already at that bitrate) and only re-encodes one
+  // that arrived above it. Both return the file to upload, never a promise to compress later.
   const prepared =
-    input.kind === "photo" ? await compressImage(input.file) : input.file;
+    input.kind === "photo" ? await compressImage(input.file) : (await prepareVoice(input.file)).file;
   if (input.kind === "photo" && prepared.size > HARD_MAX_IMAGE_BYTES) {
     throw new Error("TOO_LARGE");
   }

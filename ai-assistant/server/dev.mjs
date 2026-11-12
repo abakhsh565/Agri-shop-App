@@ -76,7 +76,11 @@ const server = http.createServer(async (req, res) => {
           : null,
         // Said out loud because it is the promise the whole design rests on.
         keeps: "nothing — the transcript lives in the app's memory only",
-        routes: ["POST / {action:'tools'}", "POST / {text, photo?, history?}"],
+        routes: [
+          "POST / {action:'tools'}",
+          "POST / {action:'speak', text}",
+          "POST / {text, photo?, history?}",
+        ],
       }),
     );
     return;

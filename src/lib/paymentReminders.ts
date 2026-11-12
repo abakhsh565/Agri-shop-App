@@ -141,7 +141,7 @@ export function usePaymentReminders(): {
   return useReminderRows(false);
 }
 
-/** Everything, including what was done or dropped: the reminder book and the supplier tab. */
+/** Everything, including legacy rows closed before Done started deleting the reminder. */
 export function usePaymentReminderBook(): {
   rows: PaymentReminder[] | null;
   failed: boolean;

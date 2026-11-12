@@ -9,6 +9,7 @@ import { getPendingCount } from "@/lib/offlineQueue";
 import PINInput from "@/components/ui/PINInput";
 import { Suspense, useState, useEffect, useRef } from "react";
 import useOverlayScrollLock from "@/hooks/useOverlayScrollLock";
+import { useScrollMemory } from "@/hooks/useScrollMemory";
 import { verifyPinDetailed } from "@/lib/pinLock";
 import { useUIStore } from "@/stores/uiStore";
 import { useProductsStore } from "@/stores/productsStore";
@@ -117,6 +118,9 @@ export default function EmployeeLayout() {
   useBootstrapData();
   // The same lock the owner shell uses: a sheet over a list does not let the list move underneath.
   useOverlayScrollLock();
+  // Each screen remembers the offset the reader left it at, so Back returns to that option
+  // instead of the top of the page.
+  useScrollMemory();
   // Which shop this session works in is the server's answer, not this device's — the owner
   // shell asks the same question for its header. Here there is nothing to switch, but the
   // answer is still the difference between "this employee can work" and "this account is in
@@ -217,7 +221,9 @@ export default function EmployeeLayout() {
   }
 
   const active = activeTab();
-  const showTabBar = isTopLevel(location.pathname);
+  // The assistant is a separate screen with its own conversation shell, not a fifth tab.
+  const isAssistant = location.pathname === "/employee/assistant";
+  const showTabBar = isTopLevel(location.pathname) && !isAssistant;
 
   // Scan button handler
   const resolveByCode = useProductsStore((s) => s.resolveByCode);
@@ -293,8 +299,12 @@ export default function EmployeeLayout() {
 
   return (
     <div
-      className="flex flex-col min-h-full w-full relative"
-      style={{ background: "var(--background)" }}
+      className={`flex flex-col w-full relative ${isAssistant ? "min-h-0 overflow-hidden" : "min-h-full"}`}
+      style={{
+        background: "var(--background)",
+        // Keep the conversation shell on the visible viewport; only its transcript may scroll.
+        ...(isAssistant ? { height: "var(--assistant-viewport-height, 100dvh)" } : {}),
+      }}
     >
       <NavTracker />
       <BackButtonHandler />
@@ -403,7 +413,7 @@ export default function EmployeeLayout() {
       {/* ── Main content ── */}
       <div
         data-app-scroll
-        className="flex flex-col flex-1 overflow-y-auto"
+        className={`flex flex-col flex-1 ${isAssistant ? "min-h-0 overflow-hidden" : "overflow-y-auto"}`}
         style={{ paddingBottom: showTabBar ? "var(--tabbar-height)" : "0px" }}
       >
         <Suspense fallback={<div className="flex items-center justify-center flex-1" style={{ color: "var(--text-secondary)" }}><div className="w-6 h-6 border-2 border-current border-t-transparent rounded-full animate-spin" /></div>}>
@@ -412,7 +422,10 @@ export default function EmployeeLayout() {
               never forces a layout pass mid-transition. */}
           {/* `flex-1` reproduces what a page root as a direct flex child did: at least
               as tall as its content, and filling the viewport when it is shorter. */}
-          <div key={location.pathname} className="ds-anim-screen flex flex-col w-full flex-1">
+          <div
+            key={location.pathname}
+            className={`ds-anim-screen flex flex-col w-full flex-1${isAssistant ? " min-h-0" : ""}`}
+          >
             {/* An account the database accepts nothing from is told so, instead of being shown
                 the employee's screens with nothing in them. */}
             {noActiveShop ? <ShopAccessNotice /> : <Outlet />}

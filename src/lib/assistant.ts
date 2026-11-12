@@ -216,14 +216,138 @@ export async function assistantAbilities(): Promise<AssistantAbilities> {
   };
 }
 
-/** Speak a reply through the device, when the browser supports it. */
-export function speak(text: string): boolean {
+export interface SpeakOptions {
+  lang?: string;
+  rate?: number;
+  onEnd?: () => void;
+  onError?: () => void;
+}
+
+/**
+ * Speak a reply through the device, when the browser supports it.
+ *
+ * The caller needs the end of the utterance, not just the start: turning a spoken reply into a
+ * voice conversation means opening the microphone only after the device has finished speaking,
+ * or it hears the assistant's own voice. The callbacks are deliberately optional so the older
+ * read-aloud buttons keep working unchanged.
+ */
+export function speak(text: string, options: SpeakOptions = {}): boolean {
   if (typeof window === "undefined" || !window.speechSynthesis) return false;
-  window.speechSynthesis.cancel();
+  if (typeof SpeechSynthesisUtterance === "undefined") return false;
+  const synth = window.speechSynthesis;
+  synth.cancel();
   const utterance = new SpeechSynthesisUtterance(text);
-  utterance.rate = 1;
-  window.speechSynthesis.speak(utterance);
+  utterance.lang = options.lang ?? "en-US";
+  utterance.rate = options.rate ?? 1;
+  // Prefer an installed voice for the reading language. Falling back to the browser default is
+  // still useful on a device with no matching voice, and the error path is handled by the page.
+  const base = utterance.lang.split("-")[0].toLowerCase();
+  const voice = synth
+    .getVoices()
+    .find((candidate) => candidate.lang.toLowerCase().split(/[-_]/)[0] === base);
+  if (voice) utterance.voice = voice;
+  if (options.onEnd) utterance.onend = options.onEnd;
+  if (options.onError) utterance.onerror = options.onError;
+  synth.speak(utterance);
   return true;
+}
+
+/** Stop whatever the device is reading, if anything. */
+export function stopSpeaking(): void {
+  if (typeof window === "undefined") return;
+  window.speechSynthesis?.cancel();
+}
+
+export interface UrduSpeechOptions {
+  onEnd?: () => void;
+  onError?: () => void;
+}
+
+export interface UrduSpeechHandle {
+  stop: () => void;
+}
+
+/** Built once per reply, so pressing the same speaker twice does not pay for speech twice. */
+const speechCache = new Map<string, { audio: string; mimeType: string }>();
+const MAX_CACHED_REPLIES = 12;
+
+function speechUrl(audio: string, mimeType: string): string {
+  const bytes = Uint8Array.from(atob(audio), (character) => character.charCodeAt(0));
+  return URL.createObjectURL(new Blob([bytes], { type: mimeType || "audio/wav" }));
+}
+
+/**
+ * Read a reply in Urdu through the assistant's own speech service.
+ *
+ * The server translates the displayed reply and returns a WAV, so this does not depend on an Urdu
+ * voice being installed on the phone. The request is kicked off synchronously from the click (the
+ * caller gets a stop handle immediately); the audio starts as soon as the server has prepared it.
+ * A stop during preparation prevents playback, and a stop during playback stops the element.
+ */
+export function speakUrdu(
+  text: string,
+  options: UrduSpeechOptions = {},
+): UrduSpeechHandle | null {
+  const value = text.trim();
+  if (!value) return null;
+  if (typeof window === "undefined" || typeof Audio === "undefined") return null;
+
+  let stopped = false;
+  let audio: HTMLAudioElement | null = null;
+  let objectUrl: string | null = null;
+
+  const cleanup = () => {
+    if (audio) {
+      audio.onended = null;
+      audio.onerror = null;
+    }
+    audio = null;
+    if (objectUrl) {
+      URL.revokeObjectURL(objectUrl);
+      objectUrl = null;
+    }
+  };
+  const settle = (failed: boolean) => {
+    if (stopped) return;
+    stopped = true;
+    cleanup();
+    if (failed) options.onError?.();
+    else options.onEnd?.();
+  };
+
+  void (async () => {
+    try {
+      let speech = speechCache.get(value);
+      if (!speech) {
+        const data = await post({ action: "speak", text: value });
+        const audioData = String(data?.audio ?? "");
+        if (!audioData) throw new Error("No speech returned.");
+        speech = { audio: audioData, mimeType: String(data?.mimeType ?? "audio/wav") };
+        speechCache.set(value, speech);
+        if (speechCache.size > MAX_CACHED_REPLIES) {
+          const oldest = speechCache.keys().next().value;
+          if (oldest) speechCache.delete(oldest);
+        }
+      }
+      if (stopped) return;
+      objectUrl = speechUrl(speech.audio, speech.mimeType);
+      audio = new Audio(objectUrl);
+      audio.onended = () => settle(false);
+      audio.onerror = () => settle(true);
+      await audio.play();
+    } catch {
+      settle(true);
+    }
+  })();
+
+  return {
+    stop: () => {
+      if (stopped) return;
+      stopped = true;
+      if (audio) audio.pause();
+      cleanup();
+    },
+  };
 }
 
 /**
@@ -235,7 +359,7 @@ export function speak(text: string): boolean {
 export function listen(
   onText: (text: string) => void,
   onEnd?: () => void,
-  lang = "en-PK",
+  lang = "en-US",
   onError?: (code: "unsupported" | "permission" | "failed") => void,
 ): (() => void) | null {
   // An installed Android app does not reliably expose the Web Speech API inside System WebView.
@@ -300,12 +424,12 @@ function listenOnAndroid(
   onError: ((code: "unsupported" | "permission" | "failed") => void) | undefined,
 ): () => void {
   let finished = false;
-  const listeners: Promise<PluginListenerHandle>[] = [];
+  let started = false;
+  let listeners: PluginListenerHandle[] = [];
 
   const removeListeners = () => {
-    void Promise.all(listeners).then((handles) => {
-      for (const handle of handles) void handle.remove();
-    });
+    for (const handle of listeners) void handle.remove();
+    listeners = [];
   };
   const finish = () => {
     if (finished) return;
@@ -319,33 +443,50 @@ function listenOnAndroid(
     finish();
   };
 
-  listeners.push(
-    NativeSpeech.addListener("result", (event: { text?: string }) => {
-      if (!finished && event?.text) onText(event.text);
-    }),
-  );
-  listeners.push(NativeSpeech.addListener("end", finish));
-  listeners.push(
-    NativeSpeech.addListener("error", (event: { code?: string }) => {
-      fail(event?.code === "permission" ? "permission" : "failed");
-    }),
-  );
-
-  void NativeSpeech.start({ lang }).catch((error: unknown) => {
-    const message = String((error as { message?: string })?.message ?? error ?? "").toLowerCase();
-    fail(
-      message.includes("permission")
-        ? "permission"
-        : message.includes("unsupported")
-          ? "unsupported"
-          : "failed",
-    );
-  });
+  const start = async () => {
+    try {
+      // Attach before starting. The native recognizer can emit `error` immediately when it cannot
+      // support the requested language; starting first let that event arrive with no listener and
+      // left the screen waiting for an utterance that had already failed.
+      const handles = await Promise.all([
+        NativeSpeech.addListener("result", (event: { text?: string }) => {
+          if (!finished && event?.text) onText(event.text);
+        }),
+        NativeSpeech.addListener("end", finish),
+        NativeSpeech.addListener("error", (event: { code?: string }) => {
+          fail(
+            event?.code === "permission"
+              ? "permission"
+              : event?.code === "unsupported"
+                ? "unsupported"
+                : "failed",
+          );
+        }),
+      ]);
+      if (finished) {
+        for (const handle of handles) void handle.remove();
+        return;
+      }
+      listeners = handles;
+      started = true;
+      await NativeSpeech.start({ lang });
+    } catch (error) {
+      const message = String((error as { message?: string })?.message ?? error ?? "").toLowerCase();
+      fail(
+        message.includes("permission")
+          ? "permission"
+          : message.includes("unsupported")
+            ? "unsupported"
+            : "failed",
+      );
+    }
+  };
+  void start();
 
   return () => {
     if (finished) return;
     finished = true;
     removeListeners();
-    void NativeSpeech.stop().catch(() => {});
+    if (started) void NativeSpeech.stop().catch(() => {});
   };
 }

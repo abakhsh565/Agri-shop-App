@@ -18,6 +18,7 @@ is the token every answer is read with.
 | The rules (shipped) | `supabase/functions/assistant/handler.mjs` | One request path — caller's token, tool list, question. |
 | The tools (shipped) | `supabase/functions/assistant/tools.mjs` | Every capability, and the permission each one sits behind. |
 | The models (shipped) | `supabase/functions/assistant/providers.mjs` | Gemini function-calling, the built-in answerer, the invented-figure guard. |
+| Urdu speech (shipped) | `supabase/functions/assistant/speech.mjs` | Translates a reply to Urdu and returns a WAV from Gemini TTS. |
 | The help text (shipped) | `supabase/functions/assistant/help-corpus.mjs` | The app's own tutorials, bundled so the function reads no files. |
 | The app's client | `src/lib/assistant.ts` | Calls the function with the open session. |
 | The chat screen | `src/pages/assistant/AssistantPage.tsx` | The tab, both shells (`/admin/assistant`, `/employee/assistant`). |
@@ -135,7 +136,9 @@ supabase secrets set GEMINI_API_KEY=...
 
 `GEMINI_API_KEY` is optional. Without it every answer comes from the built-in layer, which uses the
 same tools and refuses the same things; with it, questions can be asked loosely, in Urdu, or with a
-photo of a bill.
+photo of a bill. Urdu read-aloud additionally needs access to
+`gemini-3.8-flash-tts`; without that model the text chat still works, and the speaker says
+it could not prepare the voice.
 
 ## Answering from a gateway instead of Google
 
@@ -182,8 +185,11 @@ rate-limited tomorrow; that is the gateway's layer, not this one.
 
 ## Honest limits
 
-- **Voice both ways** uses the Web Speech API, so it works in Chrome and the Android WebView and
-  has not been proven on a device.
+- **Speech output** is translated to Urdu and synthesized server-side with Gemini 3.8 Flash TTS.
+  It therefore uses the same `GEMINI_API_KEY` and model quota as the answers; it does not depend
+  on an Urdu voice being installed on the phone. **Voice input**
+  uses the Web Speech API on the web and the native Android recognizer on the device; the Android
+  path is compiled but not yet device-verified here.
 - **Photos** need the model key; without it the assistant asks for the sale number instead.
 - **One question costs one or two model calls.** On a free-tier key a burst can hit a rate limit;
   the assistant waits once and retries, then falls back to the built-in layer, says so on screen,

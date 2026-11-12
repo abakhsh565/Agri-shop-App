@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
+import Photo from "@/components/ui/Photo";
 import { formatCurrency, formatSmartDateTime } from "@/lib/formatters";
 import { useT } from "@/lib/i18n";
 import { useThemeStore } from "@/stores/themeStore";
@@ -740,13 +741,18 @@ export default function AdminSalesListPage() {
                   <ListRow
                     key={sale.id}
                     onClick={() => navigate(`${base}/sales/${sale.id}`)}
-                    tile={cImg ? (
-                      <img src={cImg} alt={sale.customerName} className="size-10 rounded-full object-cover shrink-0" />
-                    ) : (
-                      <div className="size-10 rounded-full shrink-0 flex items-center justify-center text-sm font-bold" style={{ background: cBg, color: "#fff" }}>
-                        {(sale.customerName || '?').charAt(0).toUpperCase()}
-                      </div>
-                    )}
+                    tile={
+                      <Photo
+                        src={cImg}
+                        alt={sale.customerName}
+                        className="size-10 rounded-full object-cover shrink-0"
+                        fallback={
+                          <div className="size-10 rounded-full shrink-0 flex items-center justify-center text-sm font-bold" style={{ background: cBg, color: "#fff" }}>
+                            {(sale.customerName || '?').charAt(0).toUpperCase()}
+                          </div>
+                        }
+                      />
+                    }
                     trailing={
                       <div className="flex flex-col items-end gap-1 shrink-0">
                         <span className="text-14 font-bold" style={{ color: "var(--text-primary)" }}>

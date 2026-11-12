@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
+import Photo from "@/components/ui/Photo";
 import ListCard from "@/components/ui/ListCard";
 import ListRow from "@/components/ui/ListRow";
 import NavHeader from "@/components/ui/NavHeader";
@@ -356,16 +357,19 @@ export default function CustomerProfilePage() {
            ═══════════════════════════════════════════ */}
         <div className="ds-card flex items-center gap-3.5">
           <div className="shrink-0">
-            {customer.imageUrl ? (
-              <img src={customer.imageUrl} alt={customer.name} className="size-[60px] rounded-full object-cover" />
-            ) : (
-              <div
-                className="size-[60px] rounded-full flex items-center justify-center text-22 font-bold"
-                style={{ background: initBg, color: "#fff" }}
-              >
-                {customer.name.charAt(0).toUpperCase()}
-              </div>
-            )}
+            <Photo
+              src={customer.imageUrl}
+              alt={customer.name}
+              className="size-[60px] rounded-full object-cover"
+              fallback={
+                <div
+                  className="size-[60px] rounded-full flex items-center justify-center text-22 font-bold"
+                  style={{ background: initBg, color: "#fff" }}
+                >
+                  {customer.name.charAt(0).toUpperCase()}
+                </div>
+              }
+            />
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-20 font-bold truncate" style={{ color: "var(--text-primary)" }}>{customer.name}</p>
@@ -802,21 +806,22 @@ function RecommendedSection({ customerId }: { customerId: string | undefined }) 
             key={rec.subject.id}
             /* The same picture the product carries on its own page and in the product list — the
                uploaded photo when there is one, and the plain tile only when there is not. */
-            tile={rec.subject.imageUrl ? (
-              <img
+            tile={
+              <Photo
                 src={rec.subject.imageUrl}
                 alt={rec.subject.name}
                 className="size-10 rounded-[var(--radius-tile)] object-cover shrink-0"
                 style={{ background: "var(--surface-2)" }}
+                fallback={
+                  <div
+                    className="size-10 rounded-[var(--radius-tile)] flex items-center justify-center shrink-0"
+                    style={{ background: "var(--brand-light)" }}
+                  >
+                    <Package size={16} style={{ color: "var(--brand-dark)" }} />
+                  </div>
+                }
               />
-            ) : (
-              <div
-                className="size-10 rounded-[var(--radius-tile)] flex items-center justify-center shrink-0"
-                style={{ background: "var(--brand-light)" }}
-              >
-                <Package size={16} style={{ color: "var(--brand-dark)" }} />
-              </div>
-            )}
+            }
             trailing={
             <button
               className="size-8 rounded-full flex items-center justify-center shrink-0"

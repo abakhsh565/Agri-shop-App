@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { captureDataContext, isDataContextCurrent } from "@/lib/localCache";
 import { supabase } from "@/lib/supabase";
 import type { User, UserRole, MembershipRole, MembershipStatus } from "@/types";
+import { resolveImageUrl } from "@/lib/storage";
 
 // Employees ARE rows in the `users` table (the same table auth resolves login
 // against). Admins manage them; RLS lets admins read/insert/update all users.
@@ -53,7 +54,7 @@ function userFromRow(
     roleName: roleName ?? null,
     employeeNumber: r.employee_number ?? undefined,
     jobTitle: r.job_title ?? undefined,
-    photoUrl: r.photo_url ?? undefined,
+    photoUrl: resolveImageUrl(r.photo_url),
     firstLoginAt: r.first_login_at,
     lastLoginAt: r.last_login_at,
     deactivatedAt: r.deactivated_at,

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { mediaMime } from "@/lib/financeMedia";
+import { VOICE_BITS_PER_SECOND } from "@/lib/audioCompression";
 
 /**
  * Recording a voice note for a finance entry.
@@ -106,10 +107,16 @@ export function useVoiceRecorder(): {
     }
 
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // Mono, with the phone's own speech conditioning on: a note is one voice at one counter, and
+      // a stereo capture would only make the file bigger (see audioCompression.ts).
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+      });
       streamRef.current = stream;
       const mime = pickMime();
-      const recorder = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
+      // The bitrate is the encoder's own compression, so a new note never needs a second pass.
+      const options = { audioBitsPerSecond: VOICE_BITS_PER_SECOND, ...(mime ? { mimeType: mime } : {}) };
+      const recorder = new MediaRecorder(stream, options);
       recorderRef.current = recorder;
       chunksRef.current = [];
       startedAtRef.current = Date.now();

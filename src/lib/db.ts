@@ -562,6 +562,45 @@ export async function fetchPurchases(): Promise<Purchase[]> {
   }));
 }
 
+/** One unpaid delivery, as the payables list expands it. */
+export interface SupplierUnpaidBill {
+  id: string;
+  purchaseNumber: string;
+  outstandingPayable: number;
+  createdAt: string;
+}
+
+interface SupplierUnpaidBillRow {
+  id: string;
+  purchase_number: string;
+  amount_due: number | string;
+  created_at: string;
+}
+
+/**
+ * The unpaid bills behind one supplier's balance.
+ *
+ * Read on demand when the supplier is expanded, so opening the payables screen does not load
+ * every purchase line for every supplier. `amount_due` is what was left on the delivery when it
+ * was recorded; a later payment reduces the supplier balance rather than rewriting one bill.
+ */
+export async function fetchSupplierUnpaidBills(companyId: string): Promise<SupplierUnpaidBill[]> {
+  const { data, error } = await supabase
+    .from("purchases")
+    .select("id, purchase_number, amount_due, created_at")
+    .eq("company_id", companyId)
+    .gt("amount_due", 0)
+    .order("created_at", { ascending: false })
+    .limit(200);
+  if (error) throw new Error(error.message);
+  return (data as SupplierUnpaidBillRow[]).map((r) => ({
+    id: r.id,
+    purchaseNumber: r.purchase_number,
+    outstandingPayable: Number(r.amount_due),
+    createdAt: r.created_at,
+  }));
+}
+
 /** A payment recorded against a supplier, as the supplier's own page reads it. */
 export interface SupplierPaymentEntry {
   id: string;
@@ -617,6 +656,28 @@ export async function fetchSupplierPayments(companyId?: string): Promise<Supplie
     createdAt: r.created_at,
     purchaseId: r.purchase_id ?? null,
   }));
+}
+
+/** One supplier payment, for the detail screen opened from a history row. */
+export async function fetchSupplierPayment(id: string): Promise<SupplierPaymentEntry | null> {
+  const { data, error } = await supabase
+    .from("supplier_payments")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data) return null;
+  const r = data as SupplierPaymentDbRow;
+  return {
+    id: r.id,
+    companyId: r.company_id,
+    amount: Number(r.amount),
+    method: r.method,
+    notes: r.notes,
+    recordedByName: r.recorded_by_name,
+    createdAt: r.created_at,
+    purchaseId: r.purchase_id ?? null,
+  };
 }
 
 interface CustomerPaymentRow {

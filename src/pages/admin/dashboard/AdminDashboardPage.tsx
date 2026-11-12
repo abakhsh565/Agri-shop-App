@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "@/stores/authStore";
+import Photo from "@/components/ui/Photo";
 import { useNotificationStore, type AppNotification } from "@/stores/notificationStore";
 import { useThemeStore } from "@/stores/themeStore";
 import { useCurrentTime } from "@/lib/useCurrentTime";
@@ -10,6 +11,7 @@ import { useEmployeesStore } from "@/stores/employeesStore";
 import { useCompaniesStore } from "@/stores/companiesStore";
 import PullToRefresh from "@/components/ui/PullToRefresh";
 import SetupChecklist from "@/components/ui/SetupChecklist";
+import RecordPaymentTargetSheet from "@/components/payments/RecordPaymentTargetSheet";
 import { useCustomersStore } from "@/stores/customersStore";
 import { useShopStore } from "@/stores/shopStore";
 import { supabase } from "@/lib/supabase";
@@ -82,6 +84,9 @@ export default function AdminDashboardPage() {
   const isUrdu = language === "ur";
   const [dateFilter, setDateFilter] = useState<DateFilter>("all");
   const [showNotifs, setShowNotifs] = useState(false);
+  // Record Payment asks whether the money is going to a customer or a supplier before it
+  // opens a screen; both sides are reachable from Home now, not just the customer one.
+  const [recordPaymentOpen, setRecordPaymentOpen] = useState(false);
   const { items: allNotifications, load, subscribe, markAllRead, markManyRead, markOneRead, ready: notificationsReady } = useNotificationStore();
   const mockSales = useSalesStore((s) => s.sales);
   const mockProducts = useProductsStore((s) => s.products);
@@ -538,9 +543,7 @@ export default function AdminDashboardPage() {
             className="size-10 rounded-full flex items-center justify-center font-bold text-14 shrink-0 overflow-hidden transition-transform active:scale-90"
             style={{ background: "var(--brand)", color: "#0a0a0a" }}
           >
-            {user?.photoUrl
-              ? <img src={user.photoUrl} alt={displayName} className="w-full h-full object-cover" />
-              : initials}
+            <Photo src={user?.photoUrl} alt={displayName} className="w-full h-full object-cover" fallback={initials} />
           </button>
         )}
 
@@ -760,7 +763,7 @@ export default function AdminDashboardPage() {
         <button
           className="w-full rounded-[var(--radius-card)] p-5 text-start transition-transform hover:opacity-95 active:scale-[0.98]"
           style={{ background: "var(--brand)" }}
-          onClick={() => navigate("/admin/settings/hub/overview")}
+          onClick={() => navigate("/admin/settings/hub/finance")}
           data-testid="dashboard-overview-card"
         >
           <p className="ds-section-label mb-1" style={{ color: "rgba(0,0,0,0.55)" }}>
@@ -843,15 +846,17 @@ export default function AdminDashboardPage() {
       <div className="px-4 pt-4" data-tour="home:actions">
         <div className="grid grid-cols-3 gap-2.5">
           {([
-            { icon: ShoppingCart, label: t("dashboard.newSale"), to: "/admin/sale", primary: true },
-            { icon: HandCoins,    label: t("dashboard.recordPayment"), to: "/admin/customers", primary: false },
+            { icon: ShoppingCart, label: t("dashboard.newSale"), go: () => navigate("/admin/sale"), primary: true },
+            // Record Payment asks which side the money is on rather than assuming the customer
+            // one: what a customer owes and what a supplier is owed are different books.
+            { icon: HandCoins,    label: t("dashboard.recordPayment"), go: () => setRecordPaymentOpen(true), primary: false },
             // The purchase glyph, not a delivery truck: this button records stock coming in,
             // and it is the same mark the Purchases screens and that FAB already use.
-            { icon: PackagePlus,  label: t("admin.purchases") ?? "Purchase", to: "/admin/purchases/new", primary: false },
-          ] as const).map(({ icon: Icon, label, to, primary }) => (
+            { icon: PackagePlus,  label: t("admin.purchases") ?? "Purchase", go: () => navigate("/admin/purchases/new"), primary: false },
+          ] as const).map(({ icon: Icon, label, go, primary }) => (
             <button
-              key={to}
-              onClick={() => navigate(to)}
+              key={label}
+              onClick={go}
               className="h-14 rounded-[var(--radius-tile)] flex flex-col items-center justify-center gap-1 ds-pressable"
               style={primary
                 ? { background: "var(--brand)", color: "#0a0a0a" }
@@ -940,13 +945,18 @@ export default function AdminDashboardPage() {
               <ListRow
                 key={sale.id}
                 onClick={() => navigate(`/admin/sales/${sale.id}`)}
-                tile={cImg ? (
-                  <img src={cImg} alt={sale.customerName} className="size-9 rounded-full object-cover shrink-0" />
-                ) : (
-                  <div className="size-9 rounded-full shrink-0 flex items-center justify-center text-11 font-bold" style={{ background: cBg, color: "#fff" }}>
-                    {(sale.customerName ?? '?').charAt(0).toUpperCase()}
-                  </div>
-                )}
+                tile={
+                  <Photo
+                    src={cImg}
+                    alt={sale.customerName}
+                    className="size-9 rounded-full object-cover shrink-0"
+                    fallback={
+                      <div className="size-9 rounded-full shrink-0 flex items-center justify-center text-11 font-bold" style={{ background: cBg, color: "#fff" }}>
+                        {(sale.customerName ?? '?').charAt(0).toUpperCase()}
+                      </div>
+                    }
+                  />
+                }
                 trailing={
                   <div className="flex flex-col items-end gap-1 shrink-0">
                     <span className="text-14 font-bold" style={{ color: "var(--text-primary)" }}>
@@ -975,6 +985,21 @@ export default function AdminDashboardPage() {
           </ListCard>
         </div>
       )}
+
+      {/* Which side is this payment on? Asked once, here, because the list, the balance, the
+          form and the money movement that follow all belong to one side. */}
+      <RecordPaymentTargetSheet
+        open={recordPaymentOpen}
+        onClose={() => setRecordPaymentOpen(false)}
+        onCustomers={() => {
+          setRecordPaymentOpen(false);
+          navigate("/admin/customers/outstanding");
+        }}
+        onSuppliers={() => {
+          setRecordPaymentOpen(false);
+          navigate("/admin/purchases/payables");
+        }}
+      />
     </div>
     </PullToRefresh>
   );

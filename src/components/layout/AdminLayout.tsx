@@ -9,6 +9,7 @@ import { useBootstrapData } from "@/stores/useBootstrapData";
 import { isTopLevel } from "@/lib/navDepth";
 import { Suspense, useState, useEffect, useLayoutEffect, useRef, type CSSProperties } from "react";
 import useOverlayScrollLock from "@/hooks/useOverlayScrollLock";
+import { useScrollMemory } from "@/hooks/useScrollMemory";
 import ScanButton from "@/components/ui/ScanButton";
 import { useProductsStore } from "@/stores/productsStore";
 import { useUIStore } from "@/stores/uiStore";
@@ -50,6 +51,9 @@ export default function AdminLayout() {
   useBootstrapData();
   // One place for every sheet, dialog and cropper: while one is open the list behind it holds still.
   useOverlayScrollLock();
+  // Each screen remembers the offset the reader left it at, so Back returns to that option
+  // instead of the top of the page.
+  useScrollMemory();
   const noActiveShop = useNoActiveShop();
   const { user, isLocked, lock, unlock, logout } = useAuthStore();
   const refreshPermissions = useAuthStore((s) => s.refreshPermissions);
@@ -142,7 +146,9 @@ export default function AdminLayout() {
   }
 
   const active = activeTab();
-  const showTabBar = isTopLevel(location.pathname);
+  // The assistant is a separate screen with its own conversation shell, not a fifth tab.
+  const isAssistant = location.pathname === "/admin/assistant";
+  const showTabBar = isTopLevel(location.pathname) && !isAssistant;
 
   // The green pill is one element that travels between destinations instead of four
   // backgrounds switching at once. Measure the active button's box inside the pill so the
@@ -237,9 +243,12 @@ export default function AdminLayout() {
 
   return (
     <div
-      className="flex flex-col min-h-full w-full relative"
+      className={`flex flex-col w-full relative ${isAssistant ? "min-h-0 overflow-hidden" : "min-h-full"}`}
       style={{
         background: "var(--background)",
+        // The assistant is a chat, not a document: it owns the visible viewport so the header
+        // stays put and the transcript scrolls inside it while the Android keyboard is open.
+        ...(isAssistant ? { height: "var(--assistant-viewport-height, 100dvh)" } : {}),
         // The admin shell's floating pill is taller than the legacy bar. Keep the page reserve,
         // toasts and floating actions in step with it without changing the other shells.
         "--tabbar-height": "calc(86px + var(--safe-bottom))",
@@ -322,7 +331,7 @@ export default function AdminLayout() {
       {/* ── Main content ── */}
       <div
         data-app-scroll
-        className="flex flex-col flex-1 overflow-y-auto"
+        className={`flex flex-col flex-1 ${isAssistant ? "min-h-0 overflow-hidden" : "overflow-y-auto"}`}
         style={{ paddingBottom: showTabBar ? "var(--tabbar-height)" : "0px" }}
       >
         <Suspense fallback={<div className="flex items-center justify-center flex-1" style={{ color: "var(--text-secondary)" }}><div className="w-6 h-6 border-2 border-current border-t-transparent rounded-full animate-spin" /></div>}>
@@ -331,7 +340,10 @@ export default function AdminLayout() {
               never forces a layout pass mid-transition. */}
           {/* `flex-1` reproduces what a page root as a direct flex child did: at least
               as tall as its content, and filling the viewport when it is shorter. */}
-          <div key={location.pathname} className="ds-anim-screen flex flex-col w-full flex-1">
+          <div
+            key={location.pathname}
+            className={`ds-anim-screen flex flex-col w-full flex-1${isAssistant ? " min-h-0" : ""}`}
+          >
             {/* An account the database accepts nothing from is told so, instead of being shown
                 the owner's screens with nothing in them. */}
             {noActiveShop ? <ShopAccessNotice /> : <Outlet />}

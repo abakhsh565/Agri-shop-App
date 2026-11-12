@@ -3,11 +3,9 @@ import StockAlertsSheet from '@/components/ui/StockAlertsSheet';
 import { useLocation, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import {
-  AlertTriangle, BarChart3, Bell, BellRing, Building2, Check, ChevronRight, ClipboardList,
-  Cog, Compass, Fingerprint, Gauge, GitBranch, Globe, Landmark, Loader2, Lock, LogOut,
-  MessageSquare, Moon, Package, ShieldCheck, ShoppingCart, Sun, Trash2, TrendingUp, Truck, UserCog, Users, X,
+  AlertTriangle, Bell, Check, ChevronRight, Compass, Fingerprint, Gauge, Globe, Loader2, Lock,
+  LogOut, MessageSquare, Moon, ShieldCheck, Sun, Trash2, UserCog, X,
 } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
 import ListCard from "@/components/ui/ListCard";
@@ -23,7 +21,7 @@ import { useShopStore } from "@/stores/shopStore";
 import { useUIStore } from "@/stores/uiStore";
 import { clearDeviceSession } from "@/lib/deviceSession";
 import { hasPin } from "@/lib/pinLock";
-import { useT, type I18nKey } from "@/lib/i18n";
+import { useT } from "@/lib/i18n";
 import { HUB_SECTIONS } from "@/lib/settingsHub";
 import { useShellBase } from "@/lib/useShellBase";
 import { deleteAccount } from "@/lib/auth";
@@ -60,62 +58,6 @@ const LANG_LABELS: Record<string, string> = { en: "English", ur: "اردو" };
  * device preferences (language, theme, PIN, fingerprint) and the way out. The menu is added
  * above them: the destinations first, then the state of the business and the phone.
  */
-interface MenuRow {
-  id: string;
-  icon: LucideIcon;
-  label: string;
-  hint: string;
-  /** The section's own screen, or the one route that is not a section (`/dashboard`). */
-  to: string;
-  /** Where this row's screen returns when it has its own back arrow. */
-  state?: { from: string };
-  /** The guided tour's handle, rendered as `data-tour` on the real row. */
-  anchor?: string;
-  testId?: string;
-}
-
-/**
- * The two things the hub catalogue has no opinion about: which icon a section wears on this
- * menu, and the one line under its name.
- *
- * EVERYTHING ELSE COMES FROM `lib/settingsHub` — the id, the name and the destination. This
- * used to be a second hand-written list of the same ten sections, so a section could be added
- * to the hub and silently missing from the menu, or renamed in one place and not the other.
- * Now the menu is a *view* of the catalogue: `SECTION_GROUPS` only says which section belongs
- * under which heading, which is a layout decision this screen owns.
- */
-const SECTION_PRESENTATION: Record<string, { icon: LucideIcon; hintKey: I18nKey; anchor: string }> = {
-  sales: { icon: ShoppingCart, hintKey: "settings.menu.sales.hint", anchor: "settings:sales" },
-  inventory: { icon: Package, hintKey: "settings.menu.inventory.hint", anchor: "settings:inventory" },
-  customers: { icon: Users, hintKey: "settings.menu.customers.hint", anchor: "settings:customers" },
-  purchases: { icon: Truck, hintKey: "settings.menu.purchases.hint", anchor: "settings:purchases" },
-  finance: { icon: Landmark, hintKey: "settings.menu.finance.hint", anchor: "settings:finance" },
-  reports: { icon: BarChart3, hintKey: "settings.menu.reports.hint", anchor: "settings:reports" },
-  reminders: { icon: BellRing, hintKey: "settings.menu.reminders.hint", anchor: "settings:reminders" },
-  people: { icon: UserCog, hintKey: "settings.menu.people.hint", anchor: "settings:people" },
-  "business-profile": { icon: Building2, hintKey: "settings.menu.businessProfile.hint", anchor: "settings:business-profile" },
-  preferences: { icon: Cog, hintKey: "settings.menu.settings.hint", anchor: "settings:preferences" },
-};
-
-/** Which catalogue sections sit under each heading, in reading order. */
-const SECTION_GROUPS: Array<{ id: string; headingKey: I18nKey; sectionIds: string[] }> = [
-  {
-    id: "operations",
-    headingKey: "settings.menuGroup.operations",
-    sectionIds: ["sales", "inventory", "customers", "purchases"],
-  },
-  {
-    id: "finance",
-    headingKey: "settings.menuGroup.finance",
-    sectionIds: ["finance", "reports", "reminders"],
-  },
-  {
-    id: "people",
-    headingKey: "settings.menuGroup.people",
-    sectionIds: ["people", "business-profile", "preferences"],
-  },
-];
-
 export default function AdminSettingsPage() {
   const navigate = useNavigate();
   const t = useT();
@@ -312,27 +254,10 @@ export default function AdminSettingsPage() {
     setLanguage(language === "en" ? "ur" : "en");
   }
 
-  const menuGroups: { id: string; heading: string; rows: MenuRow[] }[] = [
-    {
-      id: "business",
-      heading: t("settings.menuGroup.business"),
-      rows: [
-        { id: "overview", icon: TrendingUp, label: t("settings.menu.overview"), hint: t("settings.menu.overview.hint"), to: "/settings/hub/overview" },
-        { id: "branches", icon: GitBranch, label: t("settings.menu.branches"), hint: t("settings.menu.branches.hint"), to: "/settings/hub/branches" },
-        { id: "business-profile", icon: Building2, label: t("settings.menu.businessProfile"), hint: t("settings.menu.businessProfile.hint"), to: "/settings/business" },
-      ],
-    },
-    {
-      id: "operations",
-      heading: t("settings.menuGroup.operations"),
-      rows: [
-        { id: "inventory", icon: Package, label: t("settings.menu.inventory"), hint: t("settings.menu.inventory.hint"), to: "/settings/hub/inventory", state: { from: `${base}/settings` } },
-      ],
-    },
-    // Settings is not the business's table of contents. Sales, stock, money, people and reports
-    // are doors in More; what remains here is configuration and this account's own state. The
-    // business group above is deliberately short for the same reason.
-  ];
+  // Settings carries no business destinations any more (owner, 2026-11-12). The two groups
+  // that used to sit here — Business (Financial overview, Branches, Business Profile) and
+  // Operations (Products & Inventory) — repeated doors that More already has, on the screen
+  // whose job is this account and this phone. What is left is configuration only.
 
   return (
     <div
@@ -370,36 +295,6 @@ export default function AdminSettingsPage() {
           testId="settings-open-profile"
           onOpen={() => navigate(`${base}/settings/profile`)}
         />
-
-        {/* ── What the business runs on ────────────────────────────────────────────
-            Four groups, and under each name the things inside it. The rows are the
-            destinations; the cards below are the state of the business and of this phone. */}
-        {menuGroups.map((group) => (
-          <section key={group.id} className="px-4 pt-4" data-testid={`settings-group-${group.id}`}>
-            {/* A real heading, so the groups are navigable by heading in a screen reader as
-                well as by eye — the rows underneath are the group's contents. */}
-            <h2 className="ds-section px-1 mb-2">{group.heading}</h2>
-            <ListCard>
-              {group.rows.map((row) => {
-                const Icon = row.icon;
-                return (
-                  <ListRow
-                    key={row.id}
-                    testId={`settings-row-${row.id}`}
-                    // The guided tour rings the real row rather than a coordinate; the handle
-                    // is stable because it names the section, not its position on the screen.
-                    anchor={row.anchor}
-                    icon={Icon}
-                    title={row.label}
-                    meta={row.hint}
-                    onClick={() => navigate(`${base}${row.to}`, { state: row.state })}
-                    trailing={<ChevronRight size={14} style={{ color: "var(--text-secondary)" }} className="shrink-0" />}
-                  />
-                );
-              })}
-            </ListCard>
-          </section>
-        ))}
 
         {/* The shop's three facts. They describe the shop, not the day: Home's figures follow a
             date filter and a branch, these never do. */}

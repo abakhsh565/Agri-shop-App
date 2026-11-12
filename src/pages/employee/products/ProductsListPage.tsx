@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
+import Photo from "@/components/ui/Photo";
 import PullToRefresh from "@/components/ui/PullToRefresh";
 import { useProductsStore } from "@/stores/productsStore";
 import {
@@ -273,16 +274,21 @@ export default function ProductsListPage() {
                   <ListRow
                     key={p.id}
                     onClick={() => navigate(`${base}/products/${p.id}`)}
-                    tile={p.imageUrl ? (
-                      <img src={p.imageUrl} alt={p.name} className="size-10 rounded-[var(--radius-tile)] object-cover shrink-0" />
-                    ) : (
-                      <div
-                        className="size-10 rounded-[var(--radius-tile)] shrink-0 flex items-center justify-center text-11 font-bold"
-                        style={{ background: dotColor + "22", color: dotColor }}
-                      >
-                        {p.name.charAt(0)}
-                      </div>
-                    )}
+                    tile={
+                      <Photo
+                        src={p.imageUrl}
+                        alt={p.name}
+                        className="size-10 rounded-[var(--radius-tile)] object-cover shrink-0"
+                        fallback={
+                          <div
+                            className="size-10 rounded-[var(--radius-tile)] shrink-0 flex items-center justify-center text-11 font-bold"
+                            style={{ background: dotColor + "22", color: dotColor }}
+                          >
+                            {p.name.charAt(0)}
+                          </div>
+                        }
+                      />
+                    }
                     trailing={<ChevronRight size={18} style={{ color: "var(--text-secondary)" }} className="shrink-0" />}
                   >
                     {/* Four facts and no more: what it is called, what kind of thing it is,

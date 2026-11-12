@@ -1,5 +1,4 @@
-import { ArrowLeft, ArrowRight, X } from "lucide-react";
-import { useThemeStore } from "@/stores/themeStore";
+import { ArrowLeft, X } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { type ReactNode } from "react";
 import { hasInAppHistory, navigateBack } from "@/lib/navContext";
@@ -29,9 +28,6 @@ interface NavHeaderProps {
 export default function NavHeader({ title, backTo, historyBack, onBack, right, noBack, backIcon = "arrow" }: NavHeaderProps) {
   const navigate = useNavigate();
   const location = useLocation();
-  const { language } = useThemeStore();
-  const isRtl = language === "ur";
-
   function handleBack() {
     // Genuine local step-backs (wizard steps, closing a panel) still own their behaviour.
     if (onBack) { onBack(); return; }
@@ -68,16 +64,12 @@ export default function NavHeader({ title, backTo, historyBack, onBack, right, n
           // part: the arrow must stay pinned to the 16px inset rather than drifting to the centre
           // of a wider box, which is exactly what centring it would have done.
           className="flex items-center justify-start w-11 h-11 text-sm font-medium absolute transition-opacity active:opacity-60"
-          // The arrow mirrors with the reading direction — in Urdu the leading edge is the right
-          // one, so back belongs there, with the mirrored glyph. A logical inset does the rest:
-          // the box's inline start IS the leading edge in both directions, so there is nothing to
-          // decide and the code stays the same size in both languages. This matches the trailing
-          // action and the px-4 content below; 20px read 4px inward on those screens.
+          // Position is logical: the box's inline start is the leading edge in both directions.
+          // The glyph is always the LTR arrow; the global `[dir="rtl"]` icon rule mirrors it
+          // once in Urdu. Swapping the icon here as well double-flips it back to the wrong side.
           style={{ color: "var(--text-primary)", insetInlineStart: 16 }}
         >
-          {backIcon === "close"
-            ? <X size={18} />
-            : isRtl ? <ArrowRight size={18} /> : <ArrowLeft size={18} />}
+          {backIcon === "close" ? <X size={18} /> : <ArrowLeft size={18} />}
         </button>
       )}
       <p
