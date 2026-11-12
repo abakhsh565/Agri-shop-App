@@ -11,6 +11,8 @@
     "preview": "vite preview",
     "format": "oxfmt",
     "cap:sync": "vite build && cap sync",
+    "brand:assets": "node scripts/brand/build-brand-assets.mjs",
+    "brand:android": "capacitor-assets generate --android",
     "cap:android": "cap open android",
     "cap:ios": "cap open ios",
     "registry:build": "node scripts/scan-frontend-deps.cjs && node scripts/dev/index.mjs && vitest run tests/unit/featureRegistryGuard.test.ts",
@@ -77,6 +79,7 @@
   },
   "devDependencies": {
     "@capacitor/android": "^7.6.8",
+    "@capacitor/assets": "^4.0.0",
     "@capacitor/cli": "^7.6.8",
     "@capacitor/ios": "^7.6.8",
     "@electric-sql/pglite": "^0.5.5",
