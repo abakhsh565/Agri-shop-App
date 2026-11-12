@@ -7,7 +7,12 @@ import PINInput from "@/components/ui/PINInput";
 import Button from "@/components/ui/Button";
 import Sheet from "@/components/ui/Sheet";
 import { verifyPinDetailed, clearPin } from "@/lib/pinLock";
-import { biometricPlatformAvailable, hasBiometricEnrolment, unlockWithBiometric } from "@/lib/biometric";
+import {
+  biometricPlatformAvailable,
+  canPromptWithoutGesture,
+  hasBiometricEnrolment,
+  unlockWithBiometric,
+} from "@/lib/biometric";
 import { useAuthStore } from "@/stores/authStore";
 import { resumeSession } from "@/lib/auth";
 import { pinAllowedOnThisDevice, rememberLastProfile } from "@/lib/loginWindow";
@@ -58,10 +63,14 @@ export default function PINLoginPage() {
    * Enrolling a fingerprint is only worth doing if the app then asks for it.
    *
    * So the question is asked on arrival, unasked, whenever this account has a finger enrolled
-   * on this phone — which is the entire point of enrolling. It opens the sheet, it does not
-   * fire the prompt: the person is told what is about to happen and taps the one thing that
-   * starts it. Cancelling costs nothing — the keypad is underneath, unchanged, and the mark is
-   * still there to try again.
+   * on this phone — which is the entire point of enrolling. It opens the sheet, and on the
+   * installed app it also starts the check: the device's prompt listens to the sensor the
+   * moment it appears, so the sheet is the only thing the person has to look at and a resting
+   * finger opens the app. Nothing is tapped twice, and nothing has to be tapped at all.
+   *
+   * A browser cannot do that — WebAuthn refuses to draw a prompt without a gesture — so there
+   * the sheet waits for the finger mark, which stays a button for exactly this reason. Either
+   * way the keypad underneath is untouched and a cancel costs nothing.
    */
   useEffect(() => {
     const who = routeUser ?? authUser;
@@ -73,6 +82,10 @@ export default function PINLoginPage() {
       if (!promptedRef.current) {
         promptedRef.current = true;
         setBioSheet(true);
+        // The sensor is live from the moment the phone's own prompt is on screen, so starting
+        // it here is what makes "just place your finger" true. `runBiometricUnlock` is a
+        // function declaration and this runs after the render, so the user it reads is set.
+        if (canPromptWithoutGesture()) void runBiometricUnlock();
       }
     });
     return () => { alive = false; };
@@ -327,6 +340,10 @@ export default function PINLoginPage() {
         title={t("fingerprint.sheetTitle")}
       >
         <div className="px-4 pb-7 pt-1 flex flex-col items-center text-center" data-testid="fingerprint-sheet">
+          {/* The check starts by itself on the installed app, so this is a status mark, not the
+              step that starts it. It stays a button for the one case that needs one: a browser
+              prompt cannot be drawn without a gesture, and a retry after a miss is the same
+              tap. */}
           <button
             type="button"
             onClick={() => { if (bioState !== "working") void runBiometricUnlock(); }}

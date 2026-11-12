@@ -62,7 +62,7 @@ import { secureGet, secureSet, secureHas, secureRemove } from "@/lib/secureStora
  * on our side, so enrolment there records only that the person chose to use it.
  */
 
-const RP_NAME = "AgriShop";
+const RP_NAME = "HisabPay";
 /** Where the enrolment for one account on this device is kept. */
 const ENROL_KEY = (userId: string) => `agri_bio_${userId}`;
 const CHALLENGE_BYTES = 32;
@@ -677,6 +677,21 @@ export function removeBiometric(userId: string): void {
  * user-verified flag, a signature that does not verify — because the only alternative is a
  * lock screen that opens for anything that looks like an answer.
  */
+/**
+ * Can the check start without a tap?
+ *
+ * The installed app asks the device's own BiometricPrompt, which begins listening to the
+ * sensor the moment it is shown — so the screen can open it on arrival and the person only
+ * has to put a finger down. A browser is the opposite: WebAuthn refuses to draw a prompt
+ * without a user gesture, so there the sheet must wait for the finger to be tapped.
+ *
+ * Callers use this to decide whether "just place your finger" is true on this platform, so
+ * the screen never fires a prompt the browser will reject with NotAllowedError.
+ */
+export function canPromptWithoutGesture(): boolean {
+  return isNative();
+}
+
 export async function unlockWithBiometric(userId: string): Promise<UnlockResult> {
   const enrolment = await getBiometricEnrolment(userId);
   if (!enrolment) return { status: "not_enrolled" };
@@ -793,4 +808,4 @@ export async function unlockWithBiometric(userId: string): Promise<UnlockResult>
 }
 
 /** Exposed for the unit tests, which drive it with a locally generated key pair. */
-export const __testing = { readCborMap, coseToJwk, publicKeyToJwk, derToRawP256, toB64url, fromB64url, originCanHostFingerprint };
+export const __testing = { readCborMap, coseToJwk, publicKeyToJwk, derToRawP256, toB64url, fromB64url, originCanHostFingerprint, canPromptWithoutGesture };

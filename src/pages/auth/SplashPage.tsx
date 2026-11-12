@@ -7,6 +7,7 @@ import { hasPin as hasPinMarker } from "@/lib/pinLock";
 import { pinAllowedOnThisDevice, rememberLastProfile } from "@/lib/loginWindow";
 import { entryDoor } from "@/lib/entryDoor";
 import StatusBar from "@/components/ui/StatusBar";
+import { APP_NAME } from "@/lib/brand";
 import { useT } from "@/lib/i18n";
 import { hasSeenIntro } from "@/education/introSeen";
 
@@ -80,25 +81,15 @@ export default function SplashPage() {
     <div className="flex flex-col bg-background min-h-full w-full justify-between">
       <StatusBar />
       <div className="flex flex-col items-center justify-center gap-6 py-[120px] flex-1">
-        {/* The mark follows the solid-control pair rather than a literal: light draws it
-            black-on-white, dark draws it brand-on-ink, and the glyph is what is *on* that
-            fill — a hardcoded `stroke="white"` left a white leaf on a lime tile. */}
-        <div
-          className="w-20 h-20 bg-ink rounded-[var(--radius-sheet)] flex items-center justify-center"
-          style={{ color: "var(--ink-fg)" }}
-        >
-          <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
-            <path d="M20 32C20 32 8 24 8 16C8 10.5 13.5 6 20 8C26.5 6 32 10.5 32 16C32 24 20 32 20 32Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-            <path d="M20 8V32M20 16C20 16 14 12 14 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-          </svg>
-        </div>
+        {/* The badge is the launcher icon's own artwork — brand-lime circle, mark in ink — so
+            the first screen and the phone's home screen show one identity. It is an image
+            rather than themed shapes because `--ink` becomes the brand colour in dark mode,
+            which drew a lime glyph on a lime tile. */}
+        <img src="/icon-192.png" alt="" className="w-20 h-20" />
         <div className="flex flex-col items-center gap-2 text-center">
-          <p className="text-32 font-bold text-foreground">AgriShop</p>
+          <p className="text-32 font-bold text-foreground">{APP_NAME}</p>
           <p className="text-sm text-caption">{t("auth.tagline")}</p>
         </div>
-      </div>
-      <div className="flex flex-col items-center p-6">
-        <p className="ds-section-label text-caption">{t("auth.employeeApp")}</p>
       </div>
     </div>
   );

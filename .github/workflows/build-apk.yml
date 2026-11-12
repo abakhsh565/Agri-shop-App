@@ -207,6 +207,12 @@ jobs:
           rm -rf android/
           npx cap add android
 
+      # `android/` was just regenerated, so the launcher icon and the native splash are
+      # Capacitor's defaults unless they are generated from the tracked brand sources in
+      # `resources/`. Without this step the release APK ships the wrong logo and name.
+      - name: Generate brand icons and splash
+        run: npx capacitor-assets generate --android
+
       - name: Sync Capacitor
         run: npx cap sync android
 
