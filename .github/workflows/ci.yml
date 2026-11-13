@@ -268,7 +268,14 @@ jobs:
       group: qa-database
       cancel-in-progress: false
     needs: [gates, qa]
-    if: github.event_name == 'pull_request' || inputs.run_e2e
+    # E2E blocks `main` only. It is the slow lane (the full Playwright suite runs ~40-50 minutes
+    # against one shared QA database), and putting it in front of every staging iteration is how
+    # a 12-minute promotion becomes an hour-long one. `staging` is where iterations happen, so
+    # there Gates + QA integration are required and E2E is opt-in; `main` — the branch production
+    # deploys from — still cannot advance without it.
+    if: >
+      (github.event_name == 'pull_request' && github.base_ref == 'main') ||
+      inputs.run_e2e
     runs-on: ubuntu-latest
     timeout-minutes: 60
     env:
