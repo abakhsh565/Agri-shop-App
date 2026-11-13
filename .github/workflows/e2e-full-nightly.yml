@@ -1,0 +1,129 @@
+name: E2E — full suite against QA (nightly)
+
+# WHY THIS WORKFLOW EXISTS
+#
+# The full Playwright suite is 157 tests on ONE worker — the QA database is single-writer and the
+# fixture ids are shared and pinned — measured at ~32 s per test, i.e. roughly 80 minutes in run
+# 43409329236 (144 tests, 1.2 h). While it was the required check for `main`, every release paid
+# that hour and a single stale selector at minute 60 sent the work back to the start.
+#
+# So the coverage moved here, where it costs nobody a release slot:
+#
+#   * PRs into `main` run the 20-test smoke lane (`.github/e2e-smoke.txt`) — about 10 minutes;
+#   * PRs into `dev`/`staging` run only the specs the change can reach (`affected-e2e.mjs`);
+#   * THIS runs everything, every night, and on demand.
+#
+# Nothing is skipped for good: the smoke lane is a subset that must stay green, and this suite is
+# what proves the rest. A red night is a real signal and must be triaged like any other failure.
+#
+# It writes QA fixtures the same way the CI lane does, so it takes the same advisory lock through
+# `tests/e2e/global-setup.ts` and the same `qa-database` concurrency group: it can never overlap a
+# PR run. It never touches staging data beyond its own registered rows, and it never touches
+# production — the environment guard refuses any project that is not QA.
+
+on:
+  schedule:
+    # 19:00 UTC = 00:00 Pakistan time, so the report is waiting at the start of the working day.
+    - cron: '0 19 * * *'
+  workflow_dispatch:
+    inputs:
+      max_failures:
+        description: 'Stop after this many failures (a full 157-test run takes ~80 minutes)'
+        type: number
+        required: false
+        default: 8
+
+permissions:
+  contents: read
+
+jobs:
+  e2e-full:
+    name: E2E full suite (157 specs) against QA
+    concurrency:
+      # The same literal group as ci.yml's `qa`/`e2e` jobs and build-apk.yml's `test` job: one
+      # QA-mutating job at a time, repository-wide. `cancel-in-progress: false` is load-bearing — a
+      # cancelled suite can strand the QA advisory lock and leave its run-owned rows behind.
+      group: qa-database
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    env:
+      NODE_OPTIONS: --dns-result-order=ipv4first
+      QA_SUPABASE_URL: ${{ secrets.QA_SUPABASE_URL }}
+      QA_SUPABASE_ANON_KEY: ${{ secrets.QA_SUPABASE_ANON_KEY }}
+      QA_SUPABASE_SERVICE_ROLE: ${{ secrets.QA_SUPABASE_SERVICE_ROLE }}
+      QA_DB_HOST: ${{ secrets.QA_DB_HOST }}
+      QA_DB_USER: ${{ secrets.QA_DB_USER }}
+      QA_DB_PASS: ${{ secrets.QA_DB_PASS }}
+      VITE_SUPABASE_URL: ${{ secrets.QA_SUPABASE_URL }}
+      VITE_SUPABASE_ANON_KEY: ${{ secrets.QA_SUPABASE_ANON_KEY }}
+      VITE_SUPABASE_PROJECT_ID: bpybjrjenwccowvtrevu
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            playwright-${{ runner.os }}-
+
+      - name: Install Playwright Browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: QA credentials are required — a check that did not run is not a pass
+        run: |
+          missing=""
+          for key in QA_SUPABASE_URL QA_SUPABASE_ANON_KEY QA_SUPABASE_SERVICE_ROLE QA_DB_HOST QA_DB_USER QA_DB_PASS; do
+            if [ -z "${!key:-}" ]; then missing="$missing $key"; fi
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::E2E verification is BLOCKED, not passed — missing:$missing"
+            exit 1
+          fi
+
+      - name: Provision QA Auth Sessions
+        run: node scripts/provision-auth-sessions.mjs
+
+      # No spec selection here on purpose: this IS the full suite, and `--max-failures` only bounds
+      # how long a broken night takes. It never turns a red run green.
+      - name: Run the full Playwright suite
+        run: npx playwright test --max-failures=${{ inputs.max_failures || 8 }}
+
+      - name: Upload the report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-full-report
+          path: |
+            tests/e2e/results.json
+            test-results
+          retention-days: 14
+
+      - name: Failure record — required when this job fails
+        if: failure()
+        continue-on-error: true
+        run: |
+          {
+            echo "### Nightly E2E failure — the five fields are required"
+            echo ""
+            echo "- commit: \`${{ github.sha }}\`"
+            echo "- run: \`${{ github.run_id }}\` — ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            echo "- observed: the failing spec(s) named in the log above"
+            echo "- root cause: **not yet confirmed**"
+            echo "- prevention: pending"
+            echo "- regression: name the test that must pass, and its result"
+            echo ""
+            echo "Add a reviewed entry to \`docs/FAILURE-LOG.md\` before this failure is closed."
+          } >> "$GITHUB_STEP_SUMMARY"

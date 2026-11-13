@@ -30,7 +30,10 @@ on:
   # drift accumulated unnoticed before: the branch people work on was the one no workflow watched.
   # Gates therefore run on every push to all three branches, and on every PR into staging or main.
   pull_request:
-    branches: [staging, main]
+    # `dev` is included because that is where the work happens: an affected-specs E2E lane there
+    # costs minutes and catches a regression the same day, instead of at the end of the chain where
+    # the only lane that used to run was the full one.
+    branches: [dev, staging, main]
     # A documentation-only change cannot alter the bundle, the schema or a policy. Running the
     # 11–29 minute QA + E2E path for it was pure queue time — and on a metered account it was also
     # the minutes that starved the release. `gates` still runs for anything that can reach the app.
@@ -275,20 +278,22 @@ jobs:
       group: qa-database
       cancel-in-progress: false
     needs: [gates, qa]
-    # E2E blocks `main` only. It is the slow lane (the full Playwright suite runs ~40-50 minutes
-    # against one shared QA database), and putting it in front of every staging iteration is how
-    # a 12-minute promotion becomes an hour-long one. `staging` is where iterations happen, so
-    # there Gates + QA integration are required and E2E is opt-in; `main` — the branch production
-    # deploys from — still cannot advance without it.
-    if: >
-      (github.event_name == 'pull_request' && github.base_ref == 'main') ||
-      inputs.run_e2e
+    # THREE LANES, ONE JOB. What runs depends on where the pull request is headed:
+    #
+    #   into `main`       the 20-test SMOKE lane (.github/e2e-smoke.txt) — ~10 minutes, required
+    #   into `dev`/`staging`  only the specs this change can reach (affected-e2e.mjs) — ~3-8 minutes
+    #   dispatch          whatever the selector decides; the full 157-test suite lives in
+    #                     e2e-full-nightly.yml, off the release path
+    #
+    # WHY: 157 tests on ONE worker (single-writer QA database, shared pinned fixtures) is ~80
+    # minutes measured at ~32 s per test. As the mandatory check before `main` that is a wager, not
+    # a gate — one stale selector at minute 60 sends the work back to the start. The smoke lane
+    # covers the same core flows in about ten minutes, and the nightly run keeps full coverage.
+    if: github.event_name == 'pull_request' || inputs.run_e2e
     runs-on: ubuntu-latest
-    # The lane runs 157 specs with ONE worker (the QA database is single-writer), and measured
-    # 60+ minutes on the staging -> main promotion: run 43395739168 was cancelled by the old
-    # 60-minute limit mid-suite, with no failures reported. A limit that kills a passing suite is
-    # not a safety net; it is a coin toss. 120 minutes leaves room for the slowest specs.
-    timeout-minutes: 120
+    # `--max-failures=2` bounds a broken run; the affected lane is minutes, the smoke lane is tens
+    # of minutes. This is a ceiling for the worst case, not an expectation.
+    timeout-minutes: 90
     env:
       NODE_OPTIONS: --dns-result-order=ipv4first
       QA_SUPABASE_URL: ${{ secrets.QA_SUPABASE_URL }}
@@ -337,20 +342,30 @@ jobs:
       - name: Provision QA Auth Sessions
         run: node scripts/provision-auth-sessions.mjs
 
-      # Run only the specs this change can reach. `scripts/dev/affected-e2e.mjs` maps the changed
-      # files through the SAME lane-map the local gate uses and prints every spec when the answer is
-      # not certain (tests, fixtures, migrations, workflows, or a source file no lane names). A
-      # skipped spec is a check that did not run, so the fallback is the whole suite, never a subset.
-      - name: Select the specs this change can reach
-        id: affected
+      # WHICH LANE. A pull request into `main` gets the smoke list; everything else gets the
+      # affected-spec selection. `scripts/dev/affected-e2e.mjs` maps changed files through the SAME
+      # lane-map the local gate uses and prints `ALL` whenever the answer is not certain (tests,
+      # fixtures, migrations, workflows, or a source file no lane names). A skipped spec is a check
+      # that did not run, so the fallback is the whole suite, never a subset.
+      - name: Choose the lane
+        id: lane
         run: |
-          specs=$(node scripts/dev/affected-e2e.mjs --base "${{ github.event.pull_request.base.sha || '' }}")
-          if [ -z "$specs" ]; then specs=$(node scripts/dev/affected-e2e.mjs --all); fi
-          echo "Running $(echo $specs | wc -w) spec file(s)"
+          if [ "${{ github.event_name }}" = "pull_request" ] && [ "${{ github.base_ref }}" = "main" ]; then
+            specs=$(grep -vE '^\s*(#|$)' .github/e2e-smoke.txt | sed 's|^|tests/e2e/|' | sed 's|$|.spec.ts|' | tr '\n' ' ')
+            echo "kind=smoke" >> "$GITHUB_OUTPUT"
+            echo "Running the smoke lane: $(echo $specs | wc -w) spec file(s), 20 tests"
+          else
+            specs=$(node scripts/dev/affected-e2e.mjs --base "${{ github.event.pull_request.base.sha || '' }}")
+            if [ -z "$specs" ]; then specs=$(node scripts/dev/affected-e2e.mjs --all); fi
+            echo "kind=affected" >> "$GITHUB_OUTPUT"
+            echo "Running $(echo $specs | wc -w) affected spec file(s)"
+          fi
           echo "specs=$specs" >> "$GITHUB_OUTPUT"
 
-      - name: Run Playwright E2E
-        run: npx playwright test ${{ steps.affected.outputs.specs }}
+      # `--max-failures=2`: a broken candidate stops after two failures instead of burning the whole
+      # allowance. It never turns red into green — a stopped run is a failed run.
+      - name: Run Playwright E2E (${{ steps.lane.outputs.kind }} lane)
+        run: npx playwright test ${{ steps.lane.outputs.specs }} --max-failures=2
 
       - name: Upload Playwright Report
         if: failure()
