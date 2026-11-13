@@ -42,6 +42,13 @@ const INITIAL_BALANCE = 20000;
 const INITIAL_PAYABLE = 10000;
 const PAYMENT_AMOUNT = 3000;
 
+// The three rows this lane drives, named once. These were used throughout the file while never
+// being declared, and `tsc` never said so: tsconfig.json type-checks only `src`, so the whole
+// spec was a ReferenceError waiting for a runner — it could not execute past its first payment.
+const DT_CUST_ID = QA_IDS.customerA;
+const DT_VAR_ID = QA_IDS.variantA;
+const DT_COMP_ID = QA_IDS.companyA;
+
 /**
  * The shared cells this lane writes, with the value each had BEFORE it wrote. Filled in beforeAll.
  *

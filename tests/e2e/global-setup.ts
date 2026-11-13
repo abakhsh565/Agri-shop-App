@@ -57,6 +57,7 @@ import {
   probeDevServerIdentity,
   refusedServerMessage,
 } from '../../scripts/lib/dev-server-identity.mjs';
+import { QA_FIXTURE_USERS } from '../setup/qa-fixtures';
 
 /** The documented default. The config decides the real origin, which may be another port. */
 export const QA_DEV_SERVER_ORIGIN = 'http://localhost:5173';
@@ -191,6 +192,68 @@ export async function claimE2eQaRunLock(deps: E2eQaLockDeps = {}): Promise<E2eQa
 /** What the setup needs that a test must be able to replace, so the ordering is provable. */
 export interface E2eGlobalSetupDeps {
   claim?: () => Promise<E2eQaLock | null>;
+  fixtureCheck?: () => Promise<void>;
+}
+
+/**
+ * ONE PHONE, ONE SHOP — a fixture account must hold exactly one active membership.
+ *
+ * WHY THIS GATE EXISTS. On 2026-11-13 the fixture owner held TWO active shops (the QA shop and a
+ * leftover "Baba jaani"). After sign-in the app sends a multi-shop account to `/login/business` and
+ * only auto-opens when there is exactly ONE, so every lane that signed in as the owner waited 30 s
+ * for a dashboard that was never coming: 87 of 144 specs failed in run 43409329236, almost none of
+ * them about the feature they were named for. The suite reported a timeout, and the cause lived in
+ * the database rather than in any spec.
+ *
+ * The cost of NOT having this check is measured, and it is not the failures — it is that the report
+ * pointed at `education.spec.ts` and at auth-state leakage, both of which are symptoms. This gate
+ * turns a 30-minute timeout storm into a two-second refusal that NAMES the phone and the extra
+ * shop.
+ *
+ * It reads only. Removing the extra shop is an owner action (`qa:clean`-class, never a side effect
+ * of a test run), so this never deletes anything to make itself pass.
+ */
+export async function assertFixtureAccountsHoldOneShop(
+  deps: { loadEnv?: () => void; createClient?: () => LockClient | null } = {},
+): Promise<void> {
+  (deps.loadEnv ?? loadQaEnv)();
+  const client = (deps.createClient ?? createQaClient)();
+  // No credentials: the run lock below refuses this run with its own, clearer message.
+  if (!client) return;
+
+  const phones = QA_FIXTURE_USERS.map((row) => String(row.phone));
+  await client.connect();
+  try {
+    const { rows } = await client.query(
+      `select u.phone, m.tenant_id, s.name
+         from memberships m
+         join users u on u.id = m.user_id
+         left join shops s on s.id = m.tenant_id
+        where m.status = 'active' and u.phone = any($1::text[])
+        order by u.phone, s.name`,
+      [phones],
+    );
+
+    const shopsByPhone = new Map<string, string[]>();
+    for (const row of rows) {
+      const phone = String(row.phone);
+      const label = String(row.name ?? row.tenant_id);
+      shopsByPhone.set(phone, [...(shopsByPhone.get(phone) ?? []), label]);
+    }
+
+    const extra = [...shopsByPhone.entries()].filter(([, shops]) => shops.length > 1);
+    if (extra.length) {
+      throw new Error(
+        '\n[E2E FIXTURES] one phone must answer for exactly ONE shop; these fixture accounts hold more:\n' +
+          extra.map(([phone, shops]) => `  · ${phone} → ${shops.join(', ')}`).join('\n') +
+          '\n  A multi-shop account is sent to the workspace chooser after sign-in, so a lane that\n' +
+          '  expects a dashboard waits for one the app will not show. Remove the extra shop (an\n' +
+          '  owner action) or correct the fixture — this run will not paper over it.\n',
+      );
+    }
+  } finally {
+    await closeQaClient(client);
+  }
 }
 
 /**
@@ -224,7 +287,8 @@ export async function e2eGlobalSetup(
   }
 
   // Only after the server is proven to be ours: a foreign server must never be accompanied by a
-  // held QA lock.
+  // held QA lock, and a fixture account with two shops must be refused before any spec runs.
+  await (deps.fixtureCheck ?? assertFixtureAccountsHoldOneShop)();
   const claim = await (deps.claim ?? claimE2eQaRunLock)();
   return claim?.release;
 }

@@ -13,6 +13,10 @@ import {
   trackOwned,
 } from './helpers';
 import { withSharedRowRestore } from './sharedRowRestore';
+// The active branch is server-owned, so switching it goes through the same RPC helper the
+// integration lanes use. This import was missing while the call was there: the spec crashed with
+// `setActiveBranchAsUser is not defined` before it ever opened a screen.
+import { setActiveBranchAsUser } from '../setup/qa-client';
 
 const OWNER_PHONE = '03009999999';       // 923009999999
 const ADMIN_ID_PHONE = '923009999999';   // the stored e164 form

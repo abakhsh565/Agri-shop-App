@@ -9,6 +9,9 @@
 // `./base` adds the worker-scoped ownership cleanup, which covers the rows this lane registers even
 // when a failing test restarts the worker before its `afterAll` runs.
 import { test, expect } from './base';
+// `Page` is used by the upload helper below; without this import the spec failed at runtime with
+// `Page is not defined` on the first lane that called it.
+import type { Page } from '@playwright/test';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
 import {
