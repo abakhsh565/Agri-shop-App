@@ -277,7 +277,11 @@ jobs:
       (github.event_name == 'pull_request' && github.base_ref == 'main') ||
       inputs.run_e2e
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    # The lane runs 157 specs with ONE worker (the QA database is single-writer), and measured
+    # 60+ minutes on the staging -> main promotion: run 43395739168 was cancelled by the old
+    # 60-minute limit mid-suite, with no failures reported. A limit that kills a passing suite is
+    # not a safety net; it is a coin toss. 120 minutes leaves room for the slowest specs.
+    timeout-minutes: 120
     env:
       NODE_OPTIONS: --dns-result-order=ipv4first
       QA_SUPABASE_URL: ${{ secrets.QA_SUPABASE_URL }}
