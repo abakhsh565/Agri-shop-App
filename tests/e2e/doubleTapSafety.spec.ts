@@ -197,7 +197,10 @@ test.describe('Double tap safety', () => {
     // The real flow: customer → product → variant → cart → Complete Sale.
     await page.goto(`${BASE_URL}/employee/sale`);
     await page.waitForLoadState('networkidle');
-    await page.getByText('DT Customer').first().click();
+    // The fixture customer's name, which is what the screen renders and searches on. This lane
+    // used to look for 'DT Customer' — a name no row in QA carries since the fixture was renamed
+    // to QA Customer A — so the click waited on text that could not exist.
+    await page.getByText('QA Customer A').first().click();
     await page.waitForURL(/\/sale\/products/, { timeout: 15000 });
     await page.getByText('DT Product').first().click();
     await page.waitForURL(/\/sale\/products\//, { timeout: 15000 });
@@ -231,7 +234,7 @@ test.describe('Double tap safety', () => {
     // above remains the authority).
     await page.goto(`${BASE_URL}/employee/sales`);
     await page.waitForLoadState('networkidle');
-    const rows = page.getByRole('button', { name: /DT Customer/ });
+    const rows = page.getByRole('button', { name: /QA Customer A/ });
     await expect(rows).toHaveCount(1, { timeout: 15000 });
     await expect(rows.first()).toContainText('Rs. 500');
   });

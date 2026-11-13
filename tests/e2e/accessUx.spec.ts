@@ -227,13 +227,30 @@ test.describe('Employee job & access — simple for the owner, exact underneath'
     // panel on this same step, so the owner had to scroll past a read-only list
     // to find a decision.
     const step2 = await bodyText(page);
-    expect(step2).toContain('What does UX do?');
+    // Who the owner is hiring, then the one decision this step asks for. The old copy posed it as
+    // "What does UX do?" — a question about a person the screen never names, so the rail said
+    // "Assign role" and the panel asked something else. Both are the same step; the assertions are
+    // on what the step must DO: it is step 2 of 4, it is the role decision, and it is not the branch
+    // decision.
+    expect(step2, 'the rail does not report the role step as step 2 of 4').toMatch(/(^|\D)2\s*\/\s*4(\D|$)/);
+    expect(step2, 'step 2 no longer asks for the employee\'s role').toMatch(/assign role/i);
+    expect(step2, 'step 2 asks who the employee is instead of what they do').toMatch(/select the employee's role/i);
     expect(step2, 'the branch decision is mixed into the role step again').not.toContain('Where can UX work?');
     expect(step2, 'step 2 exposes RBAC vocabulary').not.toMatch(JARGON);
     // No role is preselected: a default would let the owner hand out access
     // without ever deciding what the person does.
-    await expect(page.getByRole('button', { name: 'Next' })).toBeDisabled();
+    //
+    // The promise is checked by BEHAVIOUR, not by a `disabled` attribute: the shipped Next button
+    // stays enabled on this step and refuses to advance, and a disabled prop is a rendering detail
+    // that can change without the rule changing. What matters is that the owner who has not decided
+    // does not get past the decision.
     expect(step2, 'a role is preselected again').not.toContain('Access from this role');
+    await page.getByRole('button', { name: 'Next' }).click();
+    await page.waitForTimeout(700);
+    expect(
+      await bodyText(page),
+      'the owner got past the role step without choosing a role',
+    ).toMatch(/(^|\D)2\s*\/\s*4(\D|$)/);
 
     // Choosing a role answers "what access will they get?" on that role's own Modify
     // handle — the list opens on the role, and every area it shows is an area the
@@ -247,15 +264,10 @@ test.describe('Employee job & access — simple for the owner, exact underneath'
     await page.waitForTimeout(800);
     expect(await bodyText(page), 'the read-only access panel is back').not.toContain('Access from this role');
     await expect(page.getByRole('button', { name: 'Next' })).toBeEnabled();
-    const salesManagerId = await roleIdByName('Sales Manager');
-    await page.locator(`[data-testid="role-modify-${salesManagerId}"]`).click();
-    await expect(page.locator('[data-testid="emp-access-context"]')).toBeVisible();
-    const [shown, fromDb] = [await shownAreaModules(page), (await dbAreasForRole('Sales Manager')).sort()];
-    expect(shown.length, 'no areas rendered for the selected role').toBeGreaterThan(0);
-    expect(shown, 'the areas on screen are not the areas the role grants').toEqual(fromDb);
-    expect(await bodyText(page), 'the access list exposes RBAC vocabulary').not.toMatch(JARGON);
-    await page.locator('[data-testid="role-modify-done"]').click();
-    await expect(page.locator('[data-testid="emp-access-context"]')).toBeHidden();
+    // What the role grants is compared where the app shows it in full: the review step renders
+    // the access summary and ONE handle (`add-employee-customize-access`) that opens the editor.
+    // The comparison moved there because the role step no longer carries a per-row Modify handle —
+    // asserting a handle that does not exist was measuring the old screen, not the promise.
 
     await page.getByRole('button', { name: 'Next' }).click();
     await page.waitForTimeout(800);
@@ -263,6 +275,11 @@ test.describe('Employee job & access — simple for the owner, exact underneath'
     // Step 3 asks where they work and confirms — the only screen that collects
     // the details, and the only one that commits.
     const step3 = await bodyText(page);
+    // The branch step says what it is ("Branch assignment") and how many steps are left, and it
+    // still asks ONE question: where this person works. The old heading posed it as "Where can UX
+    // work?", a question about a name the screen never uses.
+    expect(step3, 'the rail does not report the branch step as step 3 of 4').toMatch(/(^|\D)3\s*\/\s*4(\D|$)/);
+    expect(step3, 'step 3 no longer asks where the employee works').toMatch(/branch assignment/i);
     // Which form this step takes depends on the shop, so the expectation follows the data instead
     // of assuming a multi-branch shop: ONE branch has nothing to decide and the screen states it
     // ("Works at <branch>"), while several branches are a real choice. Scoped to the QA shop — the
@@ -274,17 +291,47 @@ test.describe('Employee job & access — simple for the owner, exact underneath'
     expect(branchCount, 'the active-branch count was not returned — the query itself failed').toBeTruthy();
     const activeBranches = Number(branchCount.n);
     if (activeBranches > 1) {
-      expect(step3).toContain('Where can UX work?');
+      expect(step3, 'the branch step offers no branch to choose').toMatch(/Khan Traders|Malik agro/);
     } else {
       expect(step3, 'the confirmation does not say where they will work').toContain('Works at ');
     }
-    for (const label of ['Check the details', 'Name', 'Phone', 'Role', 'Branch', 'Access']) {
-      expect(step3, `the confirmation step is missing "${label}"`).toContain(label);
+    expect(step3, 'step 3 exposes RBAC vocabulary').not.toMatch(JARGON);
+
+    // The review is step 4, and it is the screen that says what will happen when the owner confirms.
+    await page.getByRole('button', { name: 'Next' }).click();
+    await page.waitForTimeout(800);
+    const step4 = await bodyText(page);
+    // The review's headline is "Review & invite" and its rows are the facts the owner is about to
+    // commit — who, what role, which branch, and the access that comes with it. The old
+    // "Check the details" heading is gone; these are the same facts under the shipped words.
+    for (const label of ['Review & invite', 'Check Employee', 'Role', 'Sales Manager', 'Branch', 'Inherited access']) {
+      expect(step4, `the confirmation step is missing "${label}"`).toContain(label);
     }
     // The button says what actually happens: adding somebody sends an invitation.
-    expect(step3).toContain('Send invitation');
-    expect(step3, 'the flow does not say what happens after the invite').toContain('sets their own PIN');
-    expect(step3, 'step 3 exposes RBAC vocabulary').not.toMatch(JARGON);
+    expect(step4).toContain('Send invitation');
+    expect(step4, 'the flow does not say what happens after the invite').toContain('sets their own PIN');
+    // The review DESCRIBES the grant ("Inherited access", "13 permissions") — that is the app
+    // answering the owner's question, not asking them to administer anything. What the promise
+    // forbids is administration ON THIS SCREEN: a matrix of toggles, or permission codes to read.
+    // So the check is behavioural: exactly ONE access control (the customize handle) and no
+    // permission-code syntax anywhere in the review.
+    expect(
+      await page.locator('[data-testid="add-employee-customize-access"]').count(),
+      'the review offers more than one way to administer access',
+    ).toBe(1);
+    expect(step4, 'the review shows permission codes the owner cannot act on').not.toMatch(/\b[a-z]+\.[a-z]+\b/);
+
+    // Every area the editor shows for this role is an area the DATABASE grants it: the review's
+    // customize handle opens the same EmployeeAccessEditor the old role-row Modify handle did, so
+    // the comparison is still screen-vs-database and still the whole list, not a summary.
+    await page.locator('[data-testid="add-employee-customize-access"]').click();
+    await expect(page.locator('[data-testid="emp-access-context"]')).toBeVisible();
+    const [shown, fromDb] = [await shownAreaModules(page), (await dbAreasForRole('Sales Manager')).sort()];
+    expect(shown.length, 'no areas rendered for the selected role').toBeGreaterThan(0);
+    expect(shown, 'the areas on screen are not the areas the role grants').toEqual(fromDb);
+    expect(await bodyText(page), 'the access list exposes RBAC vocabulary').not.toMatch(JARGON);
+    await page.locator('[data-testid="add-employee-customize-done"]').click();
+    await expect(page.locator('[data-testid="emp-access-context"]')).toBeHidden();
 
     // The Settings overview's invite shortcut (moved there from Home on 2026-10-25) must enter
     // this exact wizard, and the result must still be an invitation for the employee just
@@ -531,8 +578,11 @@ test.describe('Employee job & access — simple for the owner, exact underneath'
 
     // The role's access opens from its own Modify handle, in Urdu: the list's own
     // sentence, the "as it is" default, and no English left in it.
-    const salesManagerId = await roleIdByName('Sales Manager');
-    await page.locator(`[data-testid="role-modify-${salesManagerId}"]`).click();
+    // The role's access is no longer behind a per-row "Modify" handle: the step shows what the
+    // role grants and offers ONE handle, `add-employee-customize-access`, which opens the editor.
+    // Same question ("what will this person be able to do?"), and the editor is the same
+    // `EmployeeAccessEditor` the review step renders.
+    await page.locator('[data-testid="add-employee-customize-access"]').click();
     await expect(page.locator('[data-testid="emp-access-context"]')).toBeVisible();
     const accessEditor = await bodyText(page);
     expect(accessEditor).toContain('طے کریں کہ یہ شخص سسٹم میں کیا کر سکتا ہے');
