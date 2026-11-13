@@ -71,12 +71,11 @@ jobs:
       # ─── The migration ledger must contain every candidate migration ──────────
       # Read-only. Every file in supabase/migrations/ must be recorded in
       # supabase_migrations.schema_migrations with the sha256 it had when it was applied, and no
-      # file may be numbered before the newest recorded version. QA is intentionally ahead of a
-      # production hotfix, so the reviewed allowlist covers the QA-only rows (0233–0276); any
-      # unlisted or stale QA-only row still fails, as does any candidate file that is missing or
-      # hash-changed.
+      # file may be numbered before the newest recorded version. The reviewed allowlist was retired
+      # with the QA-ahead reconciliation (docs/PRODUCTION_MIGRATION_PLAN.md §5), so this fails closed
+      # on any ledger-only row as well as on a missing or hash-changed candidate file.
       - name: Verify the migration ledger contains every candidate migration
-        run: node scripts/migrate.mjs verify --env staging --ledger-only-allowlist .github/qa-ledger-only.txt
+        run: node scripts/migrate.mjs verify --env staging
 
       # ─── Unit + Integration Tests (Vitest) ──────────────────────────
       # Unit tests are isolated; they run in parallel. The integration suite shares ONE QA
