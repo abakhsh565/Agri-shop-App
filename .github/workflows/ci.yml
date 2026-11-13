@@ -157,6 +157,13 @@ jobs:
 
   qa:
     name: QA (migration ledger · integration suites)
+    # PULL REQUESTS ONLY. A push to dev/staging/main is already covered by the PR that produced it,
+    # and every QA job is serialized on the `qa-database` group — so the duplicate push run did not
+    # add evidence, it added QUEUE: the PR's own QA then waited behind a second identical suite.
+    # Measured on 2026-11-13: promotion run 43409329236 sat in `PENDING` for 25 minutes while the
+    # push-triggered run for the same commit held the group. Gates still run on every push, so a
+    # commit is never unbuilt; only the database-writing suites are per-PR.
+    if: github.event_name == 'pull_request'
     concurrency:
       # ONE QA-MUTATING JOB AT A TIME. This literal group is shared by this workflow's `e2e` job and
       # by build-apk.yml's `test` job: concurrency group names share one repository-wide namespace,
@@ -310,9 +317,23 @@ jobs:
       - name: Install Dependencies
         run: npm ci --legacy-peer-deps
 
+      # The browser bundle is ~120 MB and does not change between commits; without this cache every
+      # run paid for it. Keyed on the lockfile, because that is what pins the Playwright version.
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            playwright-${{ runner.os }}-
+
       - name: Install Playwright Browsers
         run: npx playwright install --with-deps chromium
 
+      # The suite is single-worker by design (one QA database, pinned shared fixture ids), so the
+      # real runtime lever is the NUMBER OF FAILING SPECS, not concurrency: each failure burned its
+      # 30 s navigation timeout. Fixing sign-in determinism is what takes this lane from ~76 minutes
+      # to minutes.
       - name: Provision QA Auth Sessions
         run: node scripts/provision-auth-sessions.mjs
 

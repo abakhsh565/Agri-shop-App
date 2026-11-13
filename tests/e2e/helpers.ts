@@ -89,6 +89,17 @@ const BASE_URL = process.env.QA_APP_URL || 'http://localhost:5173';
 const ADMIN_LOGIN_PHONE = '03009999999'; // 923009999999 -> 03009999999
 
 /**
+ * The fixture OWNER's number, in the local form the login field accepts.
+ *
+ * This constant was referenced by `injectOwnerAuth` and never declared, and `tsc` did not say so:
+ * `tsconfig.json` includes only `src`, so nothing type-checks `tests/`. Every lane that signed in
+ * as the owner therefore failed at runtime with `ReferenceError: OWNER_LOGIN_PHONE is not defined`
+ * before it touched the app. `tsconfig.tests.json` now type-checks this tree in CI so a name like
+ * this cannot be used undeclared again.
+ */
+const OWNER_LOGIN_PHONE = '03001234567'; // 923001234567 -> 03001234567
+
+/**
  * Test user IDs — declared ONCE, in `tests/setup/qa-fixtures.ts`, and re-exported here so every spec
  * that already imports `QA_IDS` keeps working against the same rows the integration seeder writes.
  */
@@ -337,6 +348,73 @@ export async function ensureAuthSession(phone: string): Promise<void> {
 }
 
 /**
+ * Leave the browser with NO session, so `/login` is the sign-in screen rather than a redirect.
+ *
+ * WHY THIS IS ONE FUNCTION AND NOT A LINE INSIDE `loginViaUi`. Two separate failures measured on
+ * run 43409329236 (87 of 144 specs red) came from a browser that still held the previous test's
+ * session:
+ *   · `/login` redirected straight to `/login/business`, so `getByTestId('auth-tab-employee')`
+ *     never existed and the click timed out (helpers.ts:376, education.spec.ts);
+ *   · the OTP step then ran against a session the test had not created.
+ * Cookies and the two storages are cleared because the app persists auth in ALL of them: the
+ * Supabase client keeps its session in localStorage under `sb-*`, the signed-in user lives in
+ * `agri_auth`, and the auth flow itself can set a cookie. Clearing only `agri_auth` (what this
+ * used to do) left a valid Supabase session behind.
+ *
+ * Storage is origin-scoped, so it can only be cleared once a document from the origin is loaded —
+ * hence one navigation that is ALLOWED to redirect, then the clear, and then the caller's own
+ * goto, which must not.
+ */
+export async function startFromAnonymousBrowser(page: Page): Promise<void> {
+  await page.context().clearCookies();
+  await page.goto(`${BASE_URL}/login`).catch(() => undefined);
+  await page
+    .evaluate(() => {
+      try {
+        localStorage.clear();
+      } catch {
+        /* an opaque origin has no storage to clear */
+      }
+      try {
+        sessionStorage.clear();
+      } catch {
+        /* same */
+      }
+    })
+    .catch(() => undefined);
+}
+
+/**
+ * Answer the workspace chooser when the account holds more than one active shop.
+ *
+ * THE CHOOSER IS A REAL SCREEN, NOT A LEAK. `OTPVerifyPage` sends every successful sign-in to
+ * `/login/business`, and that page opens the single active shop by itself — which is why a
+ * one-shop account never sees it. An account with two active shops is offered both and waits for
+ * a tap, so a lane that expected a dashboard sat there until the 30s navigation timeout.
+ *
+ * That is exactly what happened on 2026-11-13: the fixture owner held a second shop, and 87 specs
+ * failed at helpers.ts:492 rather than reporting anything about the feature under test. Choosing
+ * the shop the lane asked for (`shopCode`) keeps the flow deterministic without weakening it: an
+ * account that does NOT hold that shop fails here, printing the shops it does hold by name.
+ */
+export async function passBusinessChooser(page: Page, shopId: string): Promise<void> {
+  if (!page.url().includes('/login/business')) return;
+  const rows = page.getByTestId(/^business-choice-/);
+  await expect(rows.first(), 'the workspace chooser rendered no shop at all').toBeVisible({ timeout: 20000 });
+  const wanted = page.getByTestId(`business-choice-${shopId}`);
+  if ((await wanted.count()) === 0) {
+    const offered = (await rows.allInnerTexts()).map((t) => t.replace(/\s+/g, ' ').trim());
+    throw new Error(
+      `[QA LOGIN] this account reached the workspace chooser without shop ${shopId}. ` +
+        `Offered: ${offered.join(' | ')}. A second active shop on a fixture account is the defect ` +
+        'this message exists for — see tests/e2e/global-setup.ts, which fails the run instead.',
+    );
+  }
+  await wanted.click();
+  await page.waitForURL(/\/(admin|employee)\/dashboard|pin-set|account-ready/, { timeout: 30000 });
+}
+
+/**
  * Establish a REAL Supabase Auth session by driving the app's own login flow
  * (phone -> dev OTP -> set/confirm PIN).
  *
@@ -360,16 +438,9 @@ export async function loginViaUi(
   // The credential must exist before the UI can sign in (see ensureAuthSession).
   await ensureAuthSession(phone);
 
-  // Start clean so a re-entry during a test re-runs the flow instead of being
-  // redirected away from /login by the authenticated route guard.
-  await page.goto(`${BASE_URL}/login`).catch(() => undefined);
-  await page.evaluate(() => {
-    localStorage.removeItem('agri_auth');
-    for (const k of Object.keys(localStorage)) {
-      if (/^sb-/.test(k)) localStorage.removeItem(k);
-    }
-  }).catch(() => undefined);
-
+  // Start from a guaranteed anonymous browser so /login is the sign-in screen and its two doors
+  // (owner / employee) are both rendered — never a redirect into an existing session.
+  await startFromAnonymousBrowser(page);
   await page.goto(`${BASE_URL}/login`);
   // One phone, one door: the login page asks which door this number belongs at and
   // refuses a number that answers the other one, so the tab is part of the flow.
@@ -406,7 +477,14 @@ export async function loginViaUi(
   // A brand-new account is told it is ready before it is ever asked for a PIN, so the code can
   // land on three different screens. Follow whichever one actually appeared rather than
   // assuming the keypad: a wrong assumption here reads as "sign-in never reached the dashboard".
-  await page.waitForURL(/account-ready|pin-set|\/admin\/dashboard|\/employee\/dashboard/, { timeout: 30000 });
+  await page.waitForURL(
+    /account-ready|pin-set|\/login\/business|\/admin\/dashboard|\/employee\/dashboard/,
+    { timeout: 30000 },
+  );
+
+  // A multi-shop account stops on the chooser; answer it by id instead of waiting for a
+  // dashboard the app will not show until somebody taps a shop.
+  await passBusinessChooser(page, shopCode);
 
   if (page.url().includes('account-ready')) {
     await page.getByTestId('account-ready-pin').click();

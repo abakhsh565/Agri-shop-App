@@ -104,6 +104,9 @@ export default function BusinessSelectPage() {
           <button
             key={shop.shopId}
             type="button"
+            // The workspace a phone opens is addressed by id, not by name: the QA lanes must
+            // choose the shop they mean, and a shop name is translated copy that can change.
+            data-testid={`business-choice-${shop.shopId}`}
             disabled={switching !== null}
             onClick={() => void open(shop)}
             className="rounded-[var(--radius-card)] p-4 flex items-center gap-3 text-start disabled:opacity-60"
