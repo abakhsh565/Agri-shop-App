@@ -153,12 +153,17 @@ describe('a screen that changes a supplier payable re-reads the suppliers', () =
  * reduces. Nothing allocates a payment to a delivery (`supplier_payments` has no `purchase_id`), so
  * the two agreed only until the first payment: the delivery kept saying “Rs. 96,000 to pay” beside a
  * supplier balance of zero. Refreshing could never fix that, which is why it needs its own rule.
+ *
+ * WHICH SECOND SCREEN. The duty moved with the screen: Payments is now the ledger of money that
+ * moved (2026-10-28) and states no payable at all, so the second screen that labels a figure
+ * “what we owe suppliers” is the supplier payable screen, which sits behind the same hub. The
+ * rule is unchanged — two screens, one definition — only its second reader is the current one.
  */
 function payableDefinitionProblems(sources: { purchases: string; payments: string }): string[] {
   const problems: string[] = [];
   const screens: Array<[string, string]> = [
     ['AdminPurchasesPage', sources.purchases],
-    ['AdminPaymentsPage', sources.payments],
+    ['SupplierPayablePage', sources.payments],
   ];
 
   for (const [name, code] of screens) {
@@ -183,7 +188,7 @@ function payableDefinitionProblems(sources: { purchases: string; payments: strin
 describe('both screens take “what we owe suppliers” from the one figure that means it', () => {
   const FILES = {
     purchases: 'src/pages/admin/purchases/AdminPurchasesPage.tsx',
-    payments: 'src/pages/admin/payments/AdminPaymentsPage.tsx',
+    payments: 'src/pages/admin/settings/SupplierPayablePage.tsx',
   } as const;
   const read = () => ({ purchases: source(FILES.purchases), payments: source(FILES.payments) });
 

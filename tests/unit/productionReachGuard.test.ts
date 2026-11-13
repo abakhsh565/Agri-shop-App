@@ -56,6 +56,9 @@ const AUTOMATED_FILES = [
   'package.json',
   'vite.config.ts',
   'vitest.config.ts',
+  // The integration suite's own config: it can invoke every file in tests/integration, so it is part
+  // of the surface that must not name production.
+  'vitest.integration.config.ts',
   'playwright.config.ts',
   'playwright.media.config.ts',
   'capacitor.config.ts',

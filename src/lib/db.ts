@@ -12,6 +12,10 @@ import type {
   PaymentType,
   AdjustmentType,
   ProductCategory,
+  PhysicalFormCode,
+  ClassificationPreset,
+  ClassificationForm,
+  HandlingType,
 } from "@/types";
 
 // Centralised data access for the flows that either (a) mutate several tables
@@ -129,11 +133,17 @@ export async function rpcCreateProduct(payload: {
   name: string;
   company: string;
   category: ProductCategory;
+  /** The shop's own shelf (0259). The server writes the kind from its root, not from here. */
+  categoryId?: string;
+  /** The shop's own unit (0259). The server writes `base_unit` from its family. */
+  unitId?: string;
   /**
    * The unit the shop sells this product in. Required, and stored: before 0158 the server
    * silently dropped it, so every product added through the app read back as `piece`.
    */
   baseUnit: string;
+  /** The physical form selected from the category profile, when the category has one. */
+  physicalForm?: PhysicalFormCode | null;
   imageUrl?: string;
   /**
    * Optional. When it is absent the database mints one (`AGS-…`) and records it as this
@@ -153,7 +163,7 @@ export async function rpcCreateProduct(payload: {
   marketplaceListed?: boolean;
 }): Promise<{ id: string; name: string; barcode: string; marketplace_listed?: boolean }> {
   const actorId = useAuthStore.getState().user?.id;
-  const { data, error } = await supabase.rpc("create_product", { payload: { ...payload, actorId, userId: actorId } });
+  const { data, error } = await supabase.rpc("create_product_with_classification", { payload: { ...payload, actorId, userId: actorId } });
   if (error) throw new Error(friendly(error.message));
   return data as any;
 }
@@ -163,7 +173,16 @@ export async function rpcUpdateProduct(payload: {
   name: string;
   company: string;
   category: ProductCategory;
+  /**
+   * The shelf this product is on. Sent even when empty: an empty id takes the product off the
+   * shelf, while leaving the key out would leave the stored shelf alone. `null` is that empty.
+   */
+  categoryId?: string | null;
+  /** The unit it is sold in; the same present/absent rule as the shelf above. */
+  unitId?: string | null;
   baseUnit?: string;
+  /** The chosen form; absent preserves an existing product's form. */
+  physicalForm?: PhysicalFormCode | null;
   imageUrl?: string;
   barcode?: string;
   /**
@@ -181,9 +200,112 @@ export async function rpcUpdateProduct(payload: {
   marketplaceListed?: boolean;
 }): Promise<{ id: string }> {
   const actorId = useAuthStore.getState().user?.id;
-  const { data, error } = await supabase.rpc("update_product", { payload: { ...payload, actorId } });
+  const { data, error } = await supabase.rpc("update_product_with_classification", { payload: { ...payload, actorId } });
   if (error) throw new Error(friendly(error.message));
   return data as any;
+}
+
+/**
+ * The catalogue's own errors, said in a sentence.
+ *
+ * `save_product_category` and `save_product_unit` raise `CODE: sentence` — the code is for a
+ * developer, the sentence is for the person who typed the name. Permission failures keep the
+ * one translation the rest of the app uses, because "you are not allowed" is not something the
+ * server should phrase per table.
+ */
+function catalogueError(message: string): Error {
+  if (/NOT_AUTHORIZED|NOT_AUTHENTICATED|permission denied/i.test(message)) {
+    return new Error(friendly(message));
+  }
+  if (/CLASSIFICATION_PROFILE_INVALID/.test(message ?? "")) {
+    return new Error(tNow("classification.saveError"));
+  }
+  return new Error((message ?? "").replace(/^[A-Z_]+:\s*/, ""));
+}
+
+export interface SavedCategory {
+  id: string;
+  name: string;
+  parentId: string | null;
+  legacyCategory: ProductCategory | null;
+  isSystem: boolean;
+}
+
+/** The configuration the category form sends with its normal save. */
+export interface CategoryClassificationInput {
+  preset: ClassificationPreset;
+  physicalForms: ClassificationForm[];
+  handlingTypes: HandlingType[];
+}
+
+/**
+ * Create or rename one of the shop's shelves.
+ *
+ * `parentId` is the shelf this one lives under, or null for a top-level shelf. The database
+ * refuses a third level, a duplicate name and a parent from another shop; those refusals are
+ * the point, so none of them is checked here first and hoped for there.
+ */
+export async function rpcSaveProductCategory(payload: {
+  id?: string;
+  name: string;
+  parentId?: string | null;
+  /** Absent leaves an existing profile alone; null removes an override. */
+  classification?: CategoryClassificationInput | null;
+}): Promise<SavedCategory> {
+  const { data, error } = await supabase.rpc("save_product_category_with_classification", { payload });
+  if (error) throw catalogueError(error.message);
+  return data as SavedCategory;
+}
+
+export interface SavedUnit {
+  id: string;
+  name: string;
+  symbol: string;
+  baseUnit: "kg" | "liter" | "piece";
+  precision: number;
+  isSystem: boolean;
+}
+
+/**
+ * Create or edit one of the shop's units.
+ *
+ * The measurement family travels with it, because pack sizes and stock are arithmetic in that
+ * family; the database refuses a fourth one and a duplicate symbol.
+ */
+export async function rpcSaveProductUnit(payload: {
+  id?: string;
+  name: string;
+  symbol: string;
+  baseUnit: string;
+  precision: number;
+}): Promise<SavedUnit> {
+  const { data, error } = await supabase.rpc("save_product_unit", { payload });
+  if (error) throw catalogueError(error.message);
+  return data as SavedUnit;
+}
+
+/** The answer from a catalogue delete: a dependency count, or the row that was removed. */
+export interface CatalogueDeleteResult {
+  deleted: boolean;
+  reason?: "has_products" | "has_children";
+  productCount?: number;
+  childCount?: number;
+  id?: string;
+  name?: string;
+}
+
+/** Delete a shelf only when no active product or subcategory still uses it. */
+export async function rpcDeleteProductCategory(id: string): Promise<CatalogueDeleteResult> {
+  const { data, error } = await supabase.rpc("delete_product_category", { p_category_id: id });
+  if (error) throw catalogueError(error.message);
+  return data as CatalogueDeleteResult;
+}
+
+/** Delete a unit only when no active product still uses it. */
+export async function rpcDeleteProductUnit(id: string): Promise<CatalogueDeleteResult> {
+  const { data, error } = await supabase.rpc("delete_product_unit", { p_unit_id: id });
+  if (error) throw catalogueError(error.message);
+  return data as CatalogueDeleteResult;
 }
 
 /**
@@ -352,6 +474,10 @@ function friendly(msg: string): string {
   if (/BARCODE_RETIRED/.test(m)) return tNow("errors.barcodeRetired");
   if (/BARCODE_NONE/.test(m)) return tNow("errors.barcodeNone");
   if (/INVALID_UNIT/.test(m)) return tNow("errors.badUnit");
+  if (/CLASSIFICATION_FORM_REQUIRED|CLASSIFICATION_FORM_INVALID/.test(m))
+    return tNow("classification.formRequiredError");
+  if (/CLASSIFICATION_UNIT/.test(m)) return tNow("classification.unitMismatchError");
+  if (/CLASSIFICATION_PROFILE_INVALID/.test(m)) return tNow("classification.saveError");
   if (/NOT_AUTHENTICATED|JWT|invalid claim/i.test(m)) return tNow("errors.loginAgain");
   if (/^VALIDATION|VALIDATION:/i.test(m) || /check constraint|invalid input syntax/i.test(m))
     return tNow("errors.checkEntry");
@@ -380,15 +506,20 @@ interface PurchaseRow {
   purchase_number: string;
   company_id: string | null;
   company_name: string;
+  branch_id: string | null;
   total_amount: number;
   amount_paid: number;
   // The unpaid balance column is `amount_due`. It was read as `outstanding_payable`,
   // a name that exists on `companies`, not on `purchases` — so every row mapped to
   // NaN and the screen called an unpaid delivery "PAID" with Rs. 0 owing.
   amount_due: number;
-  payment_method: PaymentMethod;
-  note: string | null;
-  created_by: string | null;
+  // The method the advance was handed over in. Added to the table by 0258 — before that the
+  // form sent it and the database dropped it, so every bill could only print "cash".
+  payment_method: PaymentMethod | null;
+  // The bill's note and the person who booked it. These were read as `note`/`created_by`, names
+  // that live on nothing: `purchases` carries `notes` and `recorded_by`, so both read as blank.
+  notes: string | null;
+  recorded_by: string | null;
   created_at: string;
   purchase_items?: {
     id: string; purchase_id: string; product_id: string | null; product_name: string;
@@ -409,6 +540,7 @@ export async function fetchPurchases(): Promise<Purchase[]> {
     purchaseNumber: r.purchase_number,
     companyId: r.company_id ?? "",
     companyName: r.company_name,
+    branchId: r.branch_id ?? undefined,
     items: (r.purchase_items ?? []).map<PurchaseItem>((it) => ({
       id: it.id,
       purchaseId: it.purchase_id,
@@ -423,11 +555,129 @@ export async function fetchPurchases(): Promise<Purchase[]> {
     totalAmount: Number(r.total_amount),
     amountPaid: Number(r.amount_paid),
     outstandingPayable: Number(r.amount_due),
-    paymentMethod: r.payment_method,
-    note: r.note ?? undefined,
+    paymentMethod: r.payment_method ?? "cash",
+    note: r.notes ?? undefined,
     createdAt: r.created_at,
-    createdBy: r.created_by ?? "",
+    createdBy: r.recorded_by ?? "",
   }));
+}
+
+/** One unpaid delivery, as the payables list expands it. */
+export interface SupplierUnpaidBill {
+  id: string;
+  purchaseNumber: string;
+  outstandingPayable: number;
+  createdAt: string;
+}
+
+interface SupplierUnpaidBillRow {
+  id: string;
+  purchase_number: string;
+  amount_due: number | string;
+  created_at: string;
+}
+
+/**
+ * The unpaid bills behind one supplier's balance.
+ *
+ * Read on demand when the supplier is expanded, so opening the payables screen does not load
+ * every purchase line for every supplier. `amount_due` is what was left on the delivery when it
+ * was recorded; a later payment reduces the supplier balance rather than rewriting one bill.
+ */
+export async function fetchSupplierUnpaidBills(companyId: string): Promise<SupplierUnpaidBill[]> {
+  const { data, error } = await supabase
+    .from("purchases")
+    .select("id, purchase_number, amount_due, created_at")
+    .eq("company_id", companyId)
+    .gt("amount_due", 0)
+    .order("created_at", { ascending: false })
+    .limit(200);
+  if (error) throw new Error(error.message);
+  return (data as SupplierUnpaidBillRow[]).map((r) => ({
+    id: r.id,
+    purchaseNumber: r.purchase_number,
+    outstandingPayable: Number(r.amount_due),
+    createdAt: r.created_at,
+  }));
+}
+
+/** A payment recorded against a supplier, as the supplier's own page reads it. */
+export interface SupplierPaymentEntry {
+  id: string;
+  companyId: string;
+  amount: number;
+  method: PaymentMethod;
+  notes: string | null;
+  recordedByName: string | null;
+  createdAt: string;
+  /**
+   * The bill this payment settled at order time (0258), or null for a payment recorded later
+   * against the running balance. A supplier's history holds both kinds — the advance used to be
+   * missing from it entirely, which is what made “paid” disagree with the payable.
+   */
+  purchaseId: string | null;
+}
+
+interface SupplierPaymentDbRow {
+  id: string;
+  company_id: string;
+  amount: number;
+  method: PaymentMethod;
+  notes: string | null;
+  recorded_by_name: string | null;
+  created_at: string;
+  purchase_id: string | null;
+}
+
+/**
+ * The payments made to suppliers, newest first — all of them, or one supplier's.
+ *
+ * The supplier's page shows what has actually been paid against their bills, so it reads the
+ * payment records themselves rather than inferring them from a running total. The hub asks the
+ * same question for the whole month, which is why the supplier is optional: a second query with
+ * a different shape would be a second definition of "what we paid". Row-level security still
+ * decides which branch's payments an account may see.
+ */
+export async function fetchSupplierPayments(companyId?: string): Promise<SupplierPaymentEntry[]> {
+  let query = supabase
+    .from("supplier_payments")
+    .select("*")
+    .order("created_at", { ascending: false });
+  if (companyId) query = query.eq("company_id", companyId);
+  const { data, error } = await query.limit(200);
+  if (error) throw new Error(error.message);
+  return (data as SupplierPaymentDbRow[]).map((r) => ({
+    id: r.id,
+    companyId: r.company_id,
+    amount: Number(r.amount),
+    method: r.method,
+    notes: r.notes,
+    recordedByName: r.recorded_by_name,
+    createdAt: r.created_at,
+    purchaseId: r.purchase_id ?? null,
+  }));
+}
+
+/** One supplier payment, for the detail screen opened from a history row. */
+export async function fetchSupplierPayment(id: string): Promise<SupplierPaymentEntry | null> {
+  const { data, error } = await supabase
+    .from("supplier_payments")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data) return null;
+  const r = data as SupplierPaymentDbRow;
+  return {
+    id: r.id,
+    companyId: r.company_id,
+    amount: Number(r.amount),
+    method: r.method,
+    notes: r.notes,
+    recordedByName: r.recorded_by_name,
+    createdAt: r.created_at,
+    purchaseId: r.purchase_id ?? null,
+  };
 }
 
 interface CustomerPaymentRow {

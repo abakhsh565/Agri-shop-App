@@ -9,6 +9,9 @@ const ORIGIN = process.env.QA_APP_URL || `http://localhost:${PORT}`;
 
 export default defineConfig({
   testDir: './tests/e2e',
+  // The Co-Owner local lane writes to the local stack and is run with playwright.coowner.config.ts.
+  // Never let the staging suite pick it up by accident.
+  testIgnore: /coOwner\.local\.spec\.ts/,
   // Reusing a running server is safe only when it is THIS app's QA-mode server on the port. The
   // setup below reads that server's own environment block and fails the run closed otherwise, so a
   // foreign application can never be driven silently (see tests/e2e/global-setup.ts).
@@ -17,7 +20,13 @@ export default defineConfig({
   forbidOnly: true,
   retries: 0,
   timeout: 120000,
-  workers: 1,
+  // ONE worker by default, and it is not a tuning knob: the QA database is single-writer, and the
+  // fixture rows are SHARED AND PINNED (`QA_FIXTURE_IDS`, `fixtureIdCollision`). Running specs in
+  // parallel splits them across browsers that write the same ids, which is the collision class the
+  // 2026-10-13 parallel experiment produced (25 failures, 20 of them in the serial remainder).
+  // `E2E_WORKERS` exists so a read-only lane can be measured at higher concurrency deliberately;
+  // CI never raises it without that measurement.
+  workers: Number(process.env.E2E_WORKERS) || 1,
   reporter: [
     ['list'],
     ['json', { outputFile: './tests/e2e/results.json' }]

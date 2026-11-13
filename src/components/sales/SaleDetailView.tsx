@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
+import Photo from "@/components/ui/Photo";
 import NavHeader from "@/components/ui/NavHeader";
 import ListCard from "@/components/ui/ListCard";
 import ListRow from "@/components/ui/ListRow";
@@ -60,7 +61,9 @@ export default function SaleDetailView() {
   const { addToast } = useUIStore();
 
   const isManager = user?.role === "admin";
-  const canVoid = isManager && hasPermission("sales.void");
+  // `sales.void` is the owner's grant, not a job title: an employee trusted with voiding must
+  // be able to, and the database checks the same code either way.
+  const canVoid = hasPermission("sales.void");
 
   const [note, setNote] = useState("");
   const [savingNote, setSavingNote] = useState(false);
@@ -137,8 +140,9 @@ export default function SaleDetailView() {
   const withinReturnWindow = sale
     ? Date.now() - new Date(sale.createdAt).getTime() <= 30 * 24 * 60 * 60 * 1000
     : false;
-  // An employee may return what they sold; the shop's own sales are open to its owner.
-  const canReturn = !!sale && (isManager || sale.employeeId === user?.id) && withinReturnWindow;
+  // An employee may return what they sold — and only when the owner granted `returns.create`,
+  // which is the code the return RPC checks. The shop's own sales are open to its owner.
+  const canReturn = !!sale && hasPermission("returns.create") && (isManager || sale.employeeId === user?.id) && withinReturnWindow;
 
   // Cost is the snapshot taken when the sale was made, never today's price — editing a
   // product must not silently rewrite the profit of every sale already made. The live
@@ -358,16 +362,19 @@ export default function SaleDetailView() {
               onClick={() => navigate(`${base}/customers/${customer.id}`)}
               emphasis
               tile={
-                customer.imageUrl ? (
-                  <img src={customer.imageUrl} alt={customer.name} className="size-10 shrink-0 rounded-full object-cover" />
-                ) : (
-                  <div
-                    className="size-10 shrink-0 rounded-full flex items-center justify-center text-13 font-bold"
-                    style={{ background: "var(--brand)", color: "#0a0a0a" }}
-                  >
-                    {customer.name.charAt(0).toUpperCase()}
-                  </div>
-                )
+                <Photo
+                  src={customer.imageUrl}
+                  alt={customer.name}
+                  className="size-10 shrink-0 rounded-full object-cover"
+                  fallback={
+                    <div
+                      className="size-10 shrink-0 rounded-full flex items-center justify-center text-13 font-bold"
+                      style={{ background: "var(--brand)", color: "#0a0a0a" }}
+                    >
+                      {customer.name.charAt(0).toUpperCase()}
+                    </div>
+                  }
+                />
               }
               trailing={<ChevronRight size={18} className="shrink-0" style={{ color: "var(--text-secondary)" }} />}
             >
@@ -636,7 +643,7 @@ export default function SaleDetailView() {
             placeholder={t("saleDetail.addNote")}
             rows={3}
             className="w-full rounded-[var(--radius-tile)] px-4 py-3 text-14 resize-none outline-none"
-            style={{ background: "var(--surface)", border: "1px solid var(--border-control)", color: "var(--text-primary)" }}
+            style={{ background: "var(--field-bg)", color: "var(--text-primary)" }}
           />
         </div>
 
@@ -712,8 +719,8 @@ export default function SaleDetailView() {
             value={voidReason}
             onChange={(e) => setVoidReason(e.target.value)}
             placeholder={t("sale.voidReasonPlaceholder")}
-            className="w-full h-11 rounded-full px-4 text-14 outline-none"
-            style={{ background: "var(--surface-2)", border: "1px solid var(--border-control)", color: "var(--text-primary)" }}
+            className="w-full h-12 rounded-full px-4 text-14 outline-none"
+            style={{ background: "var(--field-bg)", color: "var(--text-primary)" }}
           />
           <div className="flex gap-3">
             <Button variant="outline" size="md" className="flex-1" onClick={() => setShowVoidDialog(false)}>
@@ -773,11 +780,18 @@ function AmountRow({
  * the place to fail because the catalogue moved on.
  */
 function ProductThumb({ name, imageUrl }: { name: string; imageUrl?: string }) {
-  if (imageUrl) {
-    return (
-      <img src={imageUrl} alt="" className="size-10 shrink-0 rounded-[10px] object-cover" />
-    );
-  }
+  return (
+    <Photo
+      src={imageUrl}
+      className="size-10 shrink-0 rounded-[10px] object-cover"
+      fallback={(
+        <ProductThumbFallback name={name} />
+      )}
+    />
+  );
+}
+
+function ProductThumbFallback({ name }: { name: string }) {
   return (
     <div
       className="size-10 shrink-0 rounded-[10px] flex items-center justify-center text-13 font-bold"

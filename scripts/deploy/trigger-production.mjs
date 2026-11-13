@@ -32,6 +32,7 @@
  *   VERCEL_REPO_ID      GitHub numeric repository id (default 1345429482)
  *   VERCEL_API_BASE     default https://api.vercel.com (tests point this at a local server)
  */
+import { appendFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 
 import { deploymentBody, productionDeployDecision } from '../lib/deploy-gate.mjs';
@@ -173,3 +174,16 @@ console.log(
     `    url:        ${payload.url ? `https://${payload.url}` : '(pending)'}\n` +
     `    target:     ${payload.target ?? 'production'}\n`,
 );
+
+// The workflow's next step waits for this deployment and proves production serves it. Writing the
+// id is what makes "accepted" and "released" two different facts instead of one assumption.
+if (env.GITHUB_OUTPUT) {
+  try {
+    appendFileSync(
+      env.GITHUB_OUTPUT,
+      `deployment_id=${payload.id}\ndeployment_url=${payload.url ?? ''}\n`,
+    );
+  } catch (error) {
+    fail(`the deployment was requested but its id could not be reported to the workflow: ${error.message}`);
+  }
+}

@@ -1,6 +1,7 @@
 import { defineConfig, loadEnv, type HtmlTagDescriptor, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
+import { sentryVitePlugin } from '@sentry/vite-plugin'
 import path from 'node:path'
 
 import { readEnvironmentInput, resolveEnvironment } from './src/lib/environmentContract'
@@ -13,15 +14,60 @@ export default defineConfig(({ mode, isPreview }) => {
   // .figma/make/deploy-preview passes `--mode development` for cached-preview builds.
   const emitSourcemaps = mode === 'development'
 
+  // ── Release identity and source maps ───────────────────────────────────────────────────────────
+  //
+  // Every error the app reports is tagged with the commit it was built from, so "production is
+  // broken" can be tied to a deploy instead of to a guess. The value comes from the build machine,
+  // never from a person: Vercel exports VERCEL_GIT_COMMIT_SHA, GitHub Actions exports GITHUB_SHA,
+  // and a workflow may name the release explicitly with VITE_RELEASE.
+  //
+  // Source-map upload is opt-in on three CI-only values (SENTRY_AUTH_TOKEN, SENTRY_ORG,
+  // SENTRY_PROJECT). Without them the build is byte-for-byte what it was before this existed — no
+  // maps, no upload attempt. With them the maps are emitted hidden, uploaded, and then removed from
+  // dist. An upload failure warns instead of failing the build: a monitoring vendor being briefly
+  // unavailable must not block a release, and the warning says the stack traces will be minified.
+  const releaseId = (
+    process.env.VITE_RELEASE ??
+    process.env.VERCEL_GIT_COMMIT_SHA ??
+    process.env.GITHUB_SHA ??
+    ''
+  ).trim()
+  const sentryAuthToken = (process.env.SENTRY_AUTH_TOKEN ?? '').trim()
+  const sentryOrg = (process.env.SENTRY_ORG ?? '').trim()
+  const sentryProject = (process.env.SENTRY_PROJECT ?? '').trim()
+  const uploadSourcemaps = Boolean(
+    sentryAuthToken && sentryOrg && sentryProject && /^[A-Za-z0-9._-]{1,60}$/.test(releaseId),
+  )
+
   return {
     base: process.env.FIGMA_PUBLIC_URL ? `${process.env.FIGMA_PUBLIC_URL}/` : '/',
+    // Consumed by src/lib/errorReporting.ts. A literal in the source would be a build that lies
+    // about which commit it is; this is the only definition.
+    define: { __APP_RELEASE__: JSON.stringify(releaseId) },
     build: {
-      sourcemap: emitSourcemaps ? 'inline' : false,
+      sourcemap: uploadSourcemaps ? 'hidden' : emitSourcemaps ? 'inline' : false,
       minify: !emitSourcemaps,
     },
     plugins: [
       react(),
       tailwindcss(),
+      ...(uploadSourcemaps
+        ? [
+            sentryVitePlugin({
+              org: sentryOrg,
+              project: sentryProject,
+              authToken: sentryAuthToken,
+              telemetry: false,
+              release: { name: `agrishop-app@${releaseId}` },
+              sourcemaps: { filesToDeleteAfterUpload: ['./dist/**/*.map'] },
+              errorHandler: (error) => {
+                console.warn(
+                  `[Sentry] source maps were NOT uploaded, so stack traces will be minified: ${error.message}`,
+                )
+              },
+            }),
+          ]
+        : []),
       environmentGate(mode, isPreview === true),
       figmaSiteConfiguration(siteConfiguration),
       figmaErrorOverlayReplay(),

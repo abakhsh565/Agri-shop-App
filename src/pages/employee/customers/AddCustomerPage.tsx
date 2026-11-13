@@ -17,8 +17,11 @@ import LocationField from "@/components/ui/LocationField";
 import type { PickedPlace } from "@/lib/geo";
 import type { ReminderConfig } from "@/types";
 import { Bell } from "lucide-react";
+import { ContactRound } from "lucide-react";
 import { KNOWN_CROPS } from "@/lib/recommendationEngine";
 import { saveCustomerCrops, saveReminderConfig } from "@/lib/reminderEngine";
+import { hasPermission } from "@/lib/tenantContext";
+import { canPickContact, pickContact } from "@/lib/contacts";
 
 function normalizePhone(p: string): string {
   return p.replace(/[\s\-()]/g, "").replace(/^\+?92/, "0");
@@ -40,6 +43,7 @@ export default function AddCustomerPage() {
   const { user } = useAuthStore();
   const customers = useCustomersStore((s) => s.customers);
   const createCustomer = useCustomersStore((s) => s.createCustomer);
+  const canSetCreditLimit = hasPermission("customers.credit_limit");
 
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [name, setName] = useState("");
@@ -54,6 +58,9 @@ export default function AddCustomerPage() {
   // plus the address that came with it.
   //
   const [place, setPlace] = useState<PickedPlace | null>(null);
+  // A full address the person can type, separate from the map pin. The pin gives routing;
+  // the line gives the gate number, street or landmark a courier actually needs.
+  const [addressLine, setAddressLine] = useState("");
   const [creditLimit, setCreditLimit] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
@@ -101,8 +108,8 @@ export default function AddCustomerPage() {
       const newCustomer = await createCustomer({
         name: name.trim(),
         phone: normalizedPhone,
-        address: place?.address ?? undefined,
-        creditLimit: creditLimit ? parseFloat(creditLimit) : 0,
+        address: addressLine.trim() || place?.address || undefined,
+        creditLimit: canSetCreditLimit && creditLimit ? parseFloat(creditLimit) : 0,
         createdBy: user?.id,
         place,
       });
@@ -147,7 +154,7 @@ export default function AddCustomerPage() {
     >
       <div>
         <StatusBar />
-        <NavHeader title={t("addCustomer.title")} />
+        <NavHeader title={t("addCustomer.title")} historyBack />
 
         <div className="flex flex-col gap-5 p-4 mt-2">
           {/* Profile Image */}
@@ -170,32 +177,52 @@ export default function AddCustomerPage() {
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder={t("inline.enter_customer_name")}
-              className="w-full h-12 rounded-[var(--radius-input)] px-4 text-sm outline-none"
-              style={{
-                background: "var(--surface-2)",
-                border: `1px solid ${errors.name ? "var(--error)" : "var(--divider)"}`,
-                color: "var(--text-primary)",
-              }}
+              className={`w-full h-12 rounded-[var(--radius-input)] px-4 text-sm outline-none ${
+                errors.name ? "border-[#ef4444]" : ""
+              }`}
+              style={{ background: "var(--field-bg)", color: "var(--text-primary)" }}
             />
             {errors.name && <p className="text-xs mt-1" style={{ color: "var(--error)" }}>{errors.name}</p>}
           </div>
 
           {/* Phone */}
           <div>
-            <p className="ds-section-label mb-2" style={{ color: "var(--text-secondary)" }}>
-              {t("addCustomer.phone")}
-            </p>
+            <div className="flex items-center justify-between gap-3 mb-2">
+              <p className="ds-section-label" style={{ color: "var(--text-secondary)" }}>
+                {t("addCustomer.phone")}
+              </p>
+              <button
+                type="button"
+                onClick={async () => {
+                  if (!canPickContact()) {
+                    addToast(t("contacts.notSupported"), "info");
+                    return;
+                  }
+                  try {
+                    const contact = await pickContact();
+                    if (!contact) return;
+                    if (contact.name) setName(contact.name);
+                    if (contact.phone) setPhone(digitsOnlyPhone(contact.phone));
+                  } catch {
+                    addToast(t("contacts.permissionDenied"), "error");
+                  }
+                }}
+                data-testid="customer-contact-pick"
+                className="flex items-center gap-1.5 h-7 px-2.5 rounded-full text-10 font-semibold active:opacity-70"
+                style={{ background: "var(--surface-2)", color: "var(--text-secondary)", border: "1px solid var(--divider)" }}
+              >
+                <ContactRound size={12} /> {t("contacts.pick")}
+              </button>
+            </div>
             <input
               {...phoneFieldProps()}
               value={phone}
               onChange={(e) => setPhone(digitsOnlyPhone(e.target.value))}
               placeholder="03001234567"
-              className="w-full h-12 rounded-[var(--radius-input)] px-4 text-sm outline-none"
-              style={{
-                background: "var(--surface-2)",
-                border: `1px solid ${errors.phone ? "var(--error)" : "var(--divider)"}`,
-                color: "var(--text-primary)",
-              }}
+              className={`w-full h-12 rounded-[var(--radius-input)] px-4 text-sm outline-none ${
+                errors.phone ? "border-[#ef4444]" : ""
+              }`}
+              style={{ background: "var(--field-bg)", color: "var(--text-primary)" }}
             />
             {errors.phone && (
               <div className="flex items-center gap-1 mt-1">
@@ -228,6 +255,27 @@ export default function AddCustomerPage() {
             testId="customer-location"
           />
 
+          {/* Optional, and never a replacement for the pin: the map is where the customer is,
+              this is the line a person reads at the gate. */}
+          <div>
+            <div className="flex items-baseline justify-between gap-3 mb-2">
+              <p className="ds-section-label" style={{ color: "var(--text-secondary)" }}>
+                {t("addCustomer.fullAddress")}
+              </p>
+              <span className="text-11" style={{ color: "var(--text-tertiary)" }}>
+                {t("common.optional")}
+              </span>
+            </div>
+            <input
+              value={addressLine}
+              onChange={(e) => setAddressLine(e.target.value)}
+              placeholder={t("addCustomer.fullAddressHint")}
+              data-testid="customer-full-address"
+              className="w-full h-12 rounded-[var(--radius-input)] px-4 text-sm outline-none"
+              style={{ background: "var(--field-bg)", color: "var(--text-primary)" }}
+            />
+          </div>
+
           {/* Crops */}
           <div>
             <p className="ds-section-label mb-2" style={{ color: "var(--text-secondary)" }}>
@@ -255,12 +303,17 @@ export default function AddCustomerPage() {
             </p>
           </div>
 
-          {/* Credit Limit + Reminder Config */}
+          {/* Credit Limit + Reminder Config. The limit is its own grant (0251); an employee
+              without it sees no field and cannot smuggle a value through the create RPC. */}
           <div>
             <div className="flex items-center justify-between mb-2">
-              <p className="ds-section-label" style={{ color: "var(--text-secondary)" }}>
-                {t("customers.creditLimit")} {t("common.optional")}
-              </p>
+              {canSetCreditLimit ? (
+                <p className="ds-section-label" style={{ color: "var(--text-secondary)" }}>
+                  {t("customers.creditLimit")} {t("common.optional")}
+                </p>
+              ) : (
+                <span />
+              )}
               <button
                 type="button"
                 onClick={() => setShowReminderConfig(true)}
@@ -270,23 +323,27 @@ export default function AddCustomerPage() {
                 <Bell size={12} /> {t("customer.reminder")}
               </button>
             </div>
-            <input
-              type="number"
-              inputMode="decimal"
-              value={creditLimit}
-              onChange={(e) => setCreditLimit(e.target.value)}
-              placeholder="0"
-              min="0"
-              className="w-full h-12 rounded-[var(--radius-input)] px-4 text-sm outline-none"
-              style={{
-                background: "var(--surface-2)",
-                border: "1px solid var(--divider)",
-                color: "var(--text-primary)",
-              }}
-            />
-            <p className="text-11 mt-1" style={{ color: "var(--text-secondary)" }}>
-              {t("inline.maximum_credit_amount_for_this_customer")}
-            </p>
+            {canSetCreditLimit && (
+              <>
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  value={creditLimit}
+                  onChange={(e) => setCreditLimit(e.target.value)}
+                  placeholder="0"
+                  min="0"
+                  data-testid="customer-credit-limit"
+                  className="w-full h-12 rounded-[var(--radius-input)] px-4 text-sm outline-none"
+                  style={{
+                    background: "var(--field-bg)",
+                    color: "var(--text-primary)",
+                  }}
+                />
+                <p className="text-11 mt-1" style={{ color: "var(--text-secondary)" }}>
+                  {t("inline.maximum_credit_amount_for_this_customer")}
+                </p>
+              </>
+            )}
           </div>
         </div>
       </div>

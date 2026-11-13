@@ -16,6 +16,28 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { execRpcAsUser, execSqlAsAdmin } from "../setup/qa-client";
 
+/**
+ * Cleanup that REPORTS instead of swallowing — the employeeInviteLifecycle pattern. The hooks here
+ * called `throwIfCleanupFailed`, which was never defined, so the suite died on a ReferenceError
+ * before its first assertion.
+ */
+const cleanupFailures: string[] = [];
+async function trySql(label: string, p: Promise<unknown>): Promise<void> {
+  try {
+    await p;
+  } catch (error) {
+    cleanupFailures.push(`${label}: ${(error as Error).message}`);
+  }
+}
+function throwIfCleanupFailed(context: string): void {
+  if (cleanupFailures.length) {
+    throw new Error(
+      `${context}: cleanup failed — ${cleanupFailures.join(' | ')}. ` +
+        `Leftover rows from this suite's namespace will contaminate the next run; fix the leak here rather than re-running.`,
+    );
+  }
+}
+
 const TEST = {
   shop: "00000000-0000-0000-0000-000000000001",
   customerA: "aa000000-0000-0000-0000-0000000000a1",
@@ -66,36 +88,11 @@ describe("Split Payment Recording", () => {
       throwIfCleanupFailed('Split Payment Recording beforeAll cleanup');
 });
 
-  /**
- * Cleanup that REPORTS instead of swallowing — the customerDeletionSecurity /
- * employeeInviteLifecycle pattern. This suite shares the QA database with the
- * other integration files, so a silent catch here would leave rows in place
- * and the next suite would fail deep inside a test with an authorization error
- * that is really leftover state. Failures are collected and the caller throws
- * with their names (throwIfCleanupFailed, wired in beforeAll/afterAll).
- */
-const cleanupFailures: string[] = [];
-async function trySql(label: string, p: Promise<unknown>): Promise<void> {
-  try {
-    await p;
-  } catch (error) {
-    cleanupFailures.push(`${label}: ${(error as Error).message}`);
-  }
-}
-function throwIfCleanupFailed(context: string): void {
-  if (cleanupFailures.length) {
-    throw new Error(
-      `${context}: cleanup failed — ${cleanupFailures.join(' | ')}. ` +
-        `Leftover rows from this suite's namespace will contaminate the next run; fix the leak here rather than re-running.`,
-    );
-  }
-}
-
-afterAll(async () => {
+  afterAll(async () => {
     await trySql('customer_payments', execSqlAsAdmin(`DELETE FROM customer_payments WHERE customer_id IN ('${TEST.customerA}', '${TEST.customerB}')`));
     await trySql('customers', execSqlAsAdmin(`DELETE FROM customers WHERE id IN ('${TEST.customerA}', '${TEST.customerB}')`));
-      throwIfCleanupFailed('Split Payment Recording afterAll cleanup');
-});
+    throwIfCleanupFailed('Split Payment Recording afterAll cleanup');
+  });
 
   describe("Schema", () => {
     it("should have payment_group_id and split_index columns", async () => {

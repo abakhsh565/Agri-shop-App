@@ -1,0 +1,101 @@
+# Deploy staging — migrate the staging schema, build the staging bundle, report the live URL.
+#
+# Staging is the middle of the permanent chain dev -> staging -> main. Two things used to be
+# manual here and both of them drifted: the staging ledger was applied by a person remembering to
+# dispatch `apply-staging-migrations`, and the staging web build was whatever the last preview
+# happened to be. This workflow makes the branch itself the trigger, so "merged to staging" means
+# "schema applied, bundle built, URL published".
+#
+# What it may do: apply PENDING migrations to the staging project only (`--env staging`), read the
+# ledger back, build a `VITE_APP_ENV=staging` bundle. What it may not do: touch production, run a
+# table-wide cleanup, or write QA business data (the migrate tool refuses production before it
+# resolves a credential, and the apply is the same tool the manual workflow uses).
+name: Deploy staging — migrate, build, report URL
+
+on:
+  push:
+    branches: [staging]
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
+      - 'device-evidence/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  # One QA database, one staging environment. Serialised like the QA jobs, and never cancelled:
+  # a cancelled migration apply leaves the ledger half-recorded.
+  group: deploy-staging
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Apply staging migrations, build, report the URL
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: staging
+    env:
+      NODE_OPTIONS: --dns-result-order=ipv4first
+      QA_SUPABASE_URL: ${{ secrets.QA_SUPABASE_URL }}
+      QA_SUPABASE_ANON_KEY: ${{ secrets.QA_SUPABASE_ANON_KEY }}
+      QA_SUPABASE_SERVICE_ROLE: ${{ secrets.QA_SUPABASE_SERVICE_ROLE }}
+      QA_DB_HOST: ${{ secrets.QA_DB_HOST }}
+      QA_DB_USER: ${{ secrets.QA_DB_USER }}
+      QA_DB_PASS: ${{ secrets.QA_DB_PASS }}
+    steps:
+      - name: Checkout the staging commit
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Staging credentials are required — an apply that did not run is not a pass
+        run: |
+          missing=""
+          for key in QA_SUPABASE_URL QA_SUPABASE_ANON_KEY QA_SUPABASE_SERVICE_ROLE QA_DB_HOST QA_DB_USER QA_DB_PASS; do
+            if [ -z "${!key:-}" ]; then missing="$missing $key"; fi
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::staging deploy is BLOCKED, not passed — missing:$missing"
+            exit 1
+          fi
+
+      - name: Ledger before the apply (pending is expected here)
+        run: node scripts/migrate.mjs status --env staging
+
+      - name: Apply pending migrations to staging
+        run: node scripts/migrate.mjs apply --env staging --apply
+
+      - name: The staging ledger must now show nothing pending
+        run: node scripts/migrate.mjs verify --env staging
+
+      - name: Build the staging bundle (VITE_APP_ENV=staging)
+        env:
+          VITE_APP_ENV: staging
+          VITE_SUPABASE_URL: ${{ secrets.QA_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.QA_SUPABASE_ANON_KEY }}
+          VITE_SUPABASE_PROJECT_ID: bpybjrjenwccowvtrevu
+          VITE_OTP_DELIVERY: demo
+        run: npx vite build --mode qa
+
+      - name: Report the live staging URL
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECTID }}
+          VERCEL_TEAM_ID: ${{ secrets.VERCEL_TEAMID }}
+          STAGING_REF: staging
+          STAGING_SHA: ${{ github.sha }}
+        run: |
+          echo "### Staging deployment" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- commit: \`${{ github.sha }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- branch: \`staging\`" >> "$GITHUB_STEP_SUMMARY"
+          node scripts/deploy/staging-url.mjs

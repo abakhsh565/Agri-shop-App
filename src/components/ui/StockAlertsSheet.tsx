@@ -197,8 +197,7 @@ export default function StockAlertsSheet({ onClose, onSaved }: Props) {
                   data-testid="stock-alerts-threshold"
                   className="w-full h-12 rounded-[var(--radius-input)] px-4 text-sm outline-none"
                   style={{
-                    background: "var(--surface-2)",
-                    border: "1px solid var(--divider)",
+                    background: "var(--field-bg)",
                     color: "var(--text-primary)",
                   }}
                 />

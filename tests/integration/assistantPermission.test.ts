@@ -74,12 +74,32 @@ async function signIn(baseUrl: string, anonKey: string, phone: string): Promise<
   if (!res.ok) throw new Error(json.error_description || json.msg || `sign-in failed (${res.status})`);
   const client = makeClient({ baseUrl, anonKey, accessToken: json.access_token });
   const permissions = await client.myPermissions();
+  const [access, activeBranch, allowedBranches] = await Promise.all([
+    client.rpc("get_my_access_context").catch(() => null),
+    client.rpc("current_branch_id").catch(() => null),
+    client.rpc("allowed_branch_scope").catch(() => null),
+  ]);
+  const experience =
+    access?.experience === "owner" || access?.experience === "co_owner" || access?.experience === "employee"
+      ? access.experience
+      : "employee";
+  const seeAllBranches = experience === "owner";
   return {
     phone: e164,
     userId: json.user?.id,
     permissions,
     client,
-    ctx: { client, permissions, shell: "admin", role: "owner", userId: json.user?.id },
+    ctx: {
+      client,
+      permissions,
+      shell: experience === "employee" ? "employee" : "admin",
+      role: experience,
+      userId: json.user?.id,
+      experience,
+      branchId: typeof activeBranch === "string" ? activeBranch : null,
+      branchScope: seeAllBranches ? null : Array.isArray(allowedBranches) ? allowedBranches : [],
+      seeAllBranches,
+    },
   };
 }
 
@@ -112,6 +132,12 @@ describe("the assistant runs as the person who is signed in", () => {
     expect(owner.permissions).toContain("reports.view");
     expect(employee.permissions).not.toContain("reports.view");
     expect(employee.permissions).toContain("sales.view");
+  });
+
+  it("gives the owner all branches and restricts the employee to the active branch", () => {
+    expect(owner.ctx.seeAllBranches).toBe(true);
+    expect(employee.ctx.seeAllBranches).toBe(false);
+    expect(employee.ctx.branchId).toBeTruthy();
   });
 
   it("never offers the employee a profit tool", () => {

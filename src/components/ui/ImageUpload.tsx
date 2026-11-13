@@ -3,6 +3,7 @@ import { ImagePlus, Loader2, X } from "lucide-react";
 import { uploadImage, type ImageBucket } from "@/lib/storage";
 import { useT, tNow } from "@/lib/i18n";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
+import ImageCrop from "@/components/ui/ImageCrop";
 
 interface ImageUploadProps {
   bucket: ImageBucket;
@@ -25,6 +26,12 @@ interface ImageUploadProps {
  * URL via onChange. Shows a local preview immediately, an uploading spinner,
  * and an error state if the upload fails. Used on Add Product / Employee /
  * Supplier screens so records carry a recognizable image, persisted in the DB.
+ *
+ * THE PICTURE IS FRAMED BEFORE IT IS SAVED (owner's instruction, 2026-10-30). This used to send
+ * whatever came off the camera, and every slot draws its picture with `object-cover` — so a photo
+ * taken across a shop counter lost its sides with no way to choose which part. Every screen that
+ * carries a picture goes through this one component, so the framing step is wired here once and
+ * the product, supplier, customer, employee and shop screens all get it.
  */
 export default function ImageUpload({
   bucket,
@@ -43,6 +50,8 @@ export default function ImageUpload({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmRemove, setConfirmRemove] = useState(false);
+  // The file waiting behind the framing screen; nothing is uploaded until it is confirmed.
+  const [framing, setFraming] = useState<File | null>(null);
 
   const radius = shape === "circle" ? "9999px" : "16px";
   const tiny = size < 72;
@@ -51,11 +60,17 @@ export default function ImageUpload({
   // the dashed tile and its caption did not already say — the whole tile is the button — and
   // on a small tile it covered part of the picture. The placeholder is the affordance.
 
-  async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+  function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
+    // The input is cleared straight away so choosing the same file twice still opens the frame.
+    if (inputRef.current) inputRef.current.value = "";
     if (!file) return;
     setError(null);
+    setFraming(file);
+  }
 
+  async function upload(file: File) {
+    setFraming(null);
     // Instant local preview while the upload runs.
     const reader = new FileReader();
     reader.onload = (ev) => setPreview(ev.target?.result as string);
@@ -66,14 +81,13 @@ export default function ImageUpload({
       const url = await uploadImage(bucket, file);
       setPreview(url);
       onChange(url);
-    } catch (err) {
+    } catch {
       // The raw uploader error is not something a shop owner can act on.
       setError(tNow("errors.uploadFailed"));
       setPreview(value ?? null);
       onChange(value ?? null);
     } finally {
       setBusy(false);
-      if (inputRef.current) inputRef.current.value = "";
     }
   }
 
@@ -133,6 +147,17 @@ export default function ImageUpload({
         <p className="text-11 text-center" style={{ color: "var(--error)" }}>
           {error}
         </p>
+      )}
+
+      {framing && (
+        <ImageCrop
+          file={framing}
+          // The frame is the shape the slot draws. People and logos sit in a circle, which is a
+          // square crop; products sit in a square. Either way what is saved is what is seen.
+          aspect={1}
+          onCancel={() => setFraming(null)}
+          onConfirm={(picture) => void upload(picture)}
+        />
       )}
 
       <ConfirmDialog

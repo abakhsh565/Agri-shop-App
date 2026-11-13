@@ -1,4 +1,4 @@
-import type { BaseUnit, ProductCategory } from "@/types";
+import type { PhysicalFormCode, ProductCategory } from "@/types";
 import type { PackDisplayUnit } from "@/lib/packSize";
 
 /**
@@ -41,7 +41,14 @@ export interface ProductDraft {
   name: string;
   company: string;
   category: ProductCategory;
-  baseUnit: BaseUnit;
+  /** The owner's own shelf (0259), when the form had one chosen. */
+  categoryId?: string;
+  /** The measurement family, or the shop's own unit symbol. */
+  baseUnit: string;
+  /** The shop unit chosen (0259), when one was. */
+  unitId?: string;
+  /** The physical form selected from the category's classification, when there is one. */
+  physicalForm?: PhysicalFormCode;
   barcode: string;
   /** Kept as the form's value, which is a URL. A huge data-URL photo can bust the quota,
    *  which is what `saveProductDraft` reports back rather than failing silently. */

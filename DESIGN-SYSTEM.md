@@ -166,6 +166,12 @@ Three tokens exist because the deleted shims encoded an intent that no token nam
 | `--caption` | `var(--text-secondary)` | `var(--text-tertiary)` | hint/caption text. The two greys were never aligned, so one class cannot mean both |
 | `--border-control` | `#d7d5cc` | `#3a3a34` | a field's visible edge, as opposed to the near-invisible in-card hairline |
 
+`--cta` / `--cta-fg` is a fourth, separate intent: the owner's **quiet dark action** (Figma
+2081-921, 2087-1765). Light fills it `#1a1a1a`, dark `#1f1f1e`, with a brand-green label, so
+the primary action is a step above the page and never a solid brand fill. Reach it through
+`Button variant="cta"`; never hand-paint a button in a screen. This is the app-wide CTA
+standard.
+
 `bg-white` and `text-white` are now Tailwind's real literals, and may be used where literal
 white *is* the intent (a barcode plate that has to scan, a switch knob, white type on a red
 badge) — the layer no longer silently re-tones them.
@@ -189,3 +195,22 @@ cards measure the reference radius, rest with no border, fill with the tone, row
 reference height with a hairline inset at the row's own leading edge, nothing overflows
 horizontally, and the console is clean. Empty-state-only rendering does not prove a conversion —
 seed real data, render it, then remove the seed.
+
+## 7. Owner's standing UI corrections (2026-11-06)
+
+These are defaults for every screen; apply them without being asked.
+
+- **Primary CTA** — dark grey `--cta` with a brand-green label (`--cta-fg`); never a solid green
+  CTA. Keep the CTA outside the amount/summary card; the card holds the money and its context,
+  not the action.
+- **Segmented tabs** — use the `PeriodTabs` treatment: a `--tone-sunken` track with the selected
+  item as a raised `--tone-card` pill and primary text. Never fill the selected tab with the
+  brand.
+- **Entity identity** — supplier/customer/business name, contact and location sit outside the
+  amount card. The line under the name is 12px.
+- **Directional icons** — the global `[dir="rtl"] svg.lucide-*` rule mirrors arrows once. Render
+  the LTR glyph; never swap it in JS on top of that rule, or it double-flips (the Urdu back arrow
+  then points left).
+- **Supplier terminology** — the supplier's stock purchase list is **Purchases**, one record is a
+  **purchase**, and money paid is a **payment**. Never label a supplier purchase as a “bill” or the
+  list “Bills” next to “Payments”; reserve “bill” for sales invoices and utility/expense bills.

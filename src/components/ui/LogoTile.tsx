@@ -1,3 +1,5 @@
+import { useEffect, useState } from "react";
+
 interface LogoTileProps {
   /** Used for the initials fallback and the alt text. */
   name: string;
@@ -16,6 +18,12 @@ interface LogoTileProps {
  * (the board is achromatic apart from real brand marks).
  */
 export default function LogoTile({ name, src, size = 44, className = "" }: LogoTileProps) {
+  // A logo whose file is gone (a URL that survives a deleted object) is not a logo: the tile falls
+  // back to initials and the sunken tone, the same as an empty column.
+  const [failed, setFailed] = useState(false);
+  useEffect(() => { setFailed(false); }, [src]);
+  const hasLogo = Boolean(src) && !failed;
+
   const initials =
     name
       .trim()
@@ -33,11 +41,15 @@ export default function LogoTile({ name, src, size = 44, className = "" }: LogoT
         height: size,
         fontSize: Math.round(size * 0.36),
         // A logo needs the page tone behind it so transparent marks read.
-        background: src ? "var(--tone-page)" : "var(--tone-sunken)",
+        background: hasLogo ? "var(--tone-page)" : "var(--tone-sunken)",
       }}
-      aria-hidden={src ? undefined : true}
+      aria-hidden={hasLogo ? undefined : true}
     >
-      {src ? <img src={src} alt="" className="w-full h-full object-cover" /> : initials}
+      {hasLogo ? (
+        <img src={src ?? undefined} alt="" className="w-full h-full object-cover" onError={() => setFailed(true)} />
+      ) : (
+        initials
+      )}
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import {
-  AlertTriangle, BadgeCheck, Ban, BookOpen, ChevronRight, Info, List, Package, Receipt, Truck, User,
+  AlertTriangle, ArrowDownLeft, ArrowUpRight, BadgeCheck, Ban, BookOpen, Boxes, Building2,
+  ChevronRight, Info, List, Package, Receipt, ShoppingCart, Truck, User, Users, Wallet,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import ListCard from "@/components/ui/ListCard";
@@ -249,6 +250,17 @@ function customerAccount(f: any, { t, onAsk }: WidgetHelpers): Card {
       <ListRow key="last" icon={Receipt} title={t("assistant.empty.nothingYet")} />
     ),
   );
+  for (const purchase of (f.recentPurchases ?? []).slice(1)) {
+    body.push(
+      <ListRow
+        key={`history-${purchase.saleNumber}`}
+        icon={Receipt}
+        title={purchase.saleNumber}
+        meta={`${purchase.at} · ${purchase.soldBy}`}
+        value={money(purchase.amount)}
+      />,
+    );
+  }
   return { meta: f.phone ?? t("assistant.customer"), body };
 }
 
@@ -319,6 +331,268 @@ function lowStock(f: any, { t }: WidgetHelpers): Card {
     body.push(<ListRow key="more" title={t("assistant.s.moreRows", { count: f.count - f.items.length })} />);
   }
   return { meta: t("assistant.s.reorder"), body };
+}
+
+function branchOverview(f: any, { t }: WidgetHelpers): Card {
+  const branches = f.branches ?? [];
+  if (!branches.length) {
+    return { meta: f.scope ?? null, body: [<EmptyState key="e" icon={Building2} title={t("assistant.empty.branches")} />] };
+  }
+  const body: React.ReactNode[] = [
+    <Stats key="stats" items={[<Stat key="c" label={t("assistant.l.branches")} value={String(branches.length)} />]} />,
+  ];
+  for (const branch of branches) {
+    const bits = [
+      branch.address ? String(branch.address) : null,
+      branch.employeeCount != null ? `${t("assistant.l.employeeCount")}: ${branch.employeeCount}` : null,
+      branch.productCount != null ? `${t("assistant.l.productCount")}: ${branch.productCount}` : null,
+    ].filter(Boolean) as string[];
+    body.push(
+      <ListRow
+        key={branch.id ?? branch.name}
+        icon={Building2}
+        title={branch.name}
+        meta={bits.join(" · ") || undefined}
+        value={branch.inventoryValue != null ? money(branch.inventoryValue) : branch.salesTotal != null ? money(branch.salesTotal) : undefined}
+        emphasis={branch.isCurrent}
+        trailing={
+          branch.isCurrent ? <Pill text={t("assistant.s.current")} tone="ok" /> : branch.isMain ? <Pill text={t("assistant.s.main")} /> : undefined
+        }
+      />,
+    );
+  }
+  return { meta: f.scope ?? null, body };
+}
+
+function employeeDirectory(f: any, { t }: WidgetHelpers): Card {
+  const employees = f.employees ?? [];
+  if (!employees.length) {
+    return { meta: null, body: [<EmptyState key="e" icon={Users} title={t("assistant.empty.employees")} />] };
+  }
+  return {
+    meta: String(f.count ?? employees.length),
+    body: employees.map((employee: any) => (
+      <ListRow
+        key={employee.id ?? employee.name}
+        icon={User}
+        title={employee.name}
+        qualifier={employee.phone ?? undefined}
+        meta={[employee.role, employee.branchNames?.length ? employee.branchNames.join(" · ") : t("assistant.s.allBranches")]
+          .filter(Boolean)
+          .join(" · ")}
+        trailing={
+          employee.status === "active" ? undefined : (
+            <Pill text={employee.status === "pending" ? t("assistant.s.pending") : t("assistant.s.deactivated")} tone={employee.status === "pending" ? "warn" : "muted"} />
+          )
+        }
+      />
+    )),
+  };
+}
+
+function employeePerformance(f: any, { t }: WidgetHelpers): Card {
+  const totals = f.totals ?? {};
+  const body: React.ReactNode[] = [
+    <ListRow key="who" icon={User} title={f.employeeName} meta={[f.role, f.phone].filter(Boolean).join(" · ")} emphasis />,
+    <Stats
+      key="stats"
+      items={[
+        <Stat key="s" label={t("assistant.l.sales")} value={String(totals.salesCount ?? 0)} />,
+        <Stat key="r" label={t("assistant.l.revenue")} value={money(totals.revenue)} />,
+        <Stat key="i" label={t("assistant.l.itemsSold")} value={String(totals.itemsSold ?? 0)} />,
+        <Stat key="c" label={t("assistant.l.customers")} value={String(totals.customers ?? 0)} />,
+      ]}
+    />,
+  ];
+  for (const branch of f.branches ?? []) {
+    body.push(
+      <ListRow
+        key={branch.branchName}
+        icon={Building2}
+        title={branch.branchName}
+        meta={`${branch.salesCount} · ${t("assistant.l.itemsSold")} ${branch.itemsSold}`}
+        value={money(branch.revenue)}
+      />,
+    );
+  }
+  for (const sale of f.recent ?? []) {
+    body.push(
+      <ListRow
+        key={`${sale.saleNumber}-${sale.at}`}
+        icon={Receipt}
+        title={sale.saleNumber ?? t("assistant.l.sales")}
+        meta={[sale.customer, sale.at, sale.branchName].filter(Boolean).join(" · ")}
+        value={money(sale.total)}
+      />,
+    );
+  }
+  for (const product of f.products ?? []) {
+    body.push(
+      <ListRow
+        key={`p-${product.name}`}
+        icon={Package}
+        title={product.name}
+        meta={`${t("assistant.l.itemsSold")}: ${product.qty}`}
+        value={money(product.total)}
+      />,
+    );
+  }
+  return { meta: t("assistant.l.employee"), body };
+}
+
+function purchasesOverview(f: any, { t }: WidgetHelpers): Card {
+  const body: React.ReactNode[] = [
+    <Stats
+      key="stats"
+      items={[
+        <Stat key="c" label={t("assistant.l.purchases")} value={String(f.count ?? 0)} />,
+        <Stat key="t" label={t("assistant.l.total")} value={money(f.total)} />,
+        <Stat key="p" label={t("assistant.l.paid")} value={money(f.paid)} />,
+        <Stat key="o" label={t("assistant.l.owed")} value={money(f.owed)} />,
+      ]}
+    />,
+  ];
+  if (!f.purchases?.length) {
+    body.push(<EmptyState key="e" icon={ShoppingCart} title={t("assistant.empty.purchases")} />);
+  } else {
+    for (const purchase of f.purchases) {
+      body.push(
+        <ListRow
+          key={`${purchase.number}-${purchase.at}`}
+          icon={ShoppingCart}
+          title={purchase.number}
+          meta={[purchase.supplier, purchase.at, purchase.owed !== "0.00" ? `${t("assistant.l.owed")}: ${money(purchase.owed)}` : null]
+            .filter(Boolean)
+            .join(" · ")}
+          value={money(purchase.total)}
+        />,
+      );
+    }
+  }
+  return { meta: f.period ?? null, body };
+}
+
+function financeOverview(f: any, { t }: WidgetHelpers): Card {
+  const body: React.ReactNode[] = [
+    <Stats
+      key="stats"
+      items={[
+        <Stat key="i" label={t("assistant.l.income")} value={money(f.income)} />,
+        <Stat key="e" label={t("assistant.l.expenses")} value={money(f.expenses)} />,
+        <Stat key="n" label={t("assistant.l.net")} value={money(f.net)} />,
+        <Stat key="r" label={t("assistant.l.receivables")} value={money(f.receivables)} />,
+        <Stat key="p" label={t("assistant.l.payables")} value={money(f.payables)} />,
+      ]}
+    />,
+  ];
+  if (!f.entries?.length) {
+    body.push(<EmptyState key="e" icon={Wallet} title={t("assistant.empty.finance")} />);
+  } else {
+    for (const entry of f.entries) {
+      body.push(
+        <ListRow
+          key={`${entry.date}-${entry.kind}-${entry.counterparty}-${entry.amount}`}
+          icon={entry.kind === "income" ? ArrowDownLeft : entry.kind === "expense" ? ArrowUpRight : Wallet}
+          title={entry.category || entry.counterparty || titleCase(entry.kind)}
+          meta={[entry.date, entry.counterparty, entry.method].filter(Boolean).join(" · ")}
+          value={money(entry.amount)}
+        />,
+      );
+    }
+  }
+  return { meta: f.period ?? f.scope ?? null, body };
+}
+
+function inventoryOverview(f: any, { t }: WidgetHelpers): Card {
+  const body: React.ReactNode[] = [
+    <Stats
+      key="stats"
+      items={[
+        <Stat key="p" label={t("assistant.l.products")} value={String(f.productCount ?? 0)} />,
+        <Stat key="v" label={t("assistant.l.stockValue")} value={f.inventoryValue == null ? "—" : money(f.inventoryValue)} />,
+        <Stat key="l" label={t("assistant.l.lowStock")} value={String(f.lowCount ?? 0)} />,
+        <Stat key="o" label={t("assistant.l.outOfStock")} value={String(f.outCount ?? 0)} />,
+      ]}
+    />,
+  ];
+  if (!f.items?.length) {
+    body.push(<EmptyState key="e" icon={Boxes} title={t("assistant.empty.inventory")} />);
+  } else {
+    for (const item of f.items) {
+      body.push(
+        <ListRow
+          key={`${item.product}-${item.pack}`}
+          icon={Package}
+          title={item.product}
+          qualifier={item.pack}
+          meta={`${t("assistant.l.stock")}: ${item.stock} · ${t("assistant.l.price")}: ${money(item.sellingPrice)}`}
+          trailing={<Pill text={item.stock <= 0 ? t("assistant.s.out") : item.low ? t("assistant.s.low") : t("assistant.s.active")} tone={item.stock <= 0 ? "bad" : item.low ? "warn" : "ok"} />}
+        />,
+      );
+    }
+  }
+  return { meta: f.branchName ?? f.scope ?? null, body };
+}
+
+function customerDirectory(f: any, { t, onAsk }: WidgetHelpers): Card {
+  if (!f.count) {
+    return { meta: f.scope ?? null, body: [<EmptyState key="e" icon={Users} title={t("assistant.empty.customers")} />] };
+  }
+  const body: React.ReactNode[] = [
+    <Stats
+      key="stats"
+      items={[
+        <Stat key="c" label={t("assistant.l.customers")} value={String(f.count)} />,
+        <Stat key="o" label={t("assistant.l.totalOwed")} value={money(f.totalOwed)} />,
+      ]}
+    />,
+  ];
+  for (const customer of f.customers ?? []) {
+    const tone = customer.standing === "over limit" ? "bad" : customer.standing === "near the limit" ? "warn" : "ok";
+    body.push(
+      <ListRow
+        key={customer.id ?? customer.name}
+        icon={User}
+        title={customer.name}
+        qualifier={customer.phone ?? undefined}
+        meta={customer.dueDate ? `${t("assistant.l.due")}: ${customer.dueDate}` : undefined}
+        value={money(customer.owed)}
+        onClick={() => onAsk(t("assistant.ask.customer", { name: customer.name }))}
+        trailing={<Pill text={t(`assistant.standing.${customer.standing === "over limit" ? "over" : customer.standing === "near the limit" ? "near" : "within"}`)} tone={tone as "bad" | "warn" | "ok"} />}
+      />,
+    );
+  }
+  return { meta: f.scope ?? null, body };
+}
+
+function productCatalogue(f: any, { t }: WidgetHelpers): Card {
+  const products = f.products ?? [];
+  if (!products.length) {
+    return { meta: null, body: [<EmptyState key="e" icon={Package} title={t("assistant.empty.catalogue")} />] };
+  }
+  const body: React.ReactNode[] = [
+    <Stats key="stats" items={[<Stat key="c" label={t("assistant.l.products")} value={String(f.count ?? products.length)} />]} />,
+  ];
+  for (const product of products) {
+    body.push(
+      <div key={`h-${product.id}`} className="ds-section px-4 pt-4 pb-1">
+        {[product.name, product.supplier, product.category].filter(Boolean).join(" · ")}
+      </div>,
+    );
+    for (const pack of product.packs ?? []) {
+      body.push(
+        <ListRow
+          key={`${product.id}-${pack.name}`}
+          icon={Package}
+          title={pack.name}
+          meta={`${t("assistant.l.stock")}: ${pack.stock}`}
+          value={money(pack.price)}
+          trailing={pack.low ? <Pill text={pack.stock <= 0 ? t("assistant.s.out") : t("assistant.s.low")} tone={pack.stock <= 0 ? "bad" : "warn"} /> : undefined}
+        />,
+      );
+    }
+  }
+  return { meta: null, body };
 }
 
 function saleLookup(f: any, { t }: WidgetHelpers): Card {
@@ -405,7 +679,7 @@ function employeeActivity(f: any, { t }: WidgetHelpers): Card {
         />,
       );
     }
-  } else {
+  } else if (f.canSeeSales !== false) {
     body.push(<EmptyState key="e" icon={User} title={t("assistant.empty.period")} />);
   }
   if (!f.activity?.length) {
@@ -475,6 +749,14 @@ const RENDERERS: Record<string, (f: any, helpers: WidgetHelpers) => Card> = {
   low_stock: lowStock,
   sale_lookup: saleLookup,
   supplier_dues: supplierDues,
+  branch_overview: branchOverview,
+  employee_directory: employeeDirectory,
+  employee_performance: employeePerformance,
+  purchases_overview: purchasesOverview,
+  finance_overview: financeOverview,
+  inventory_overview: inventoryOverview,
+  customer_directory: customerDirectory,
+  product_catalogue: productCatalogue,
   employee_activity: employeeActivity,
   my_abilities: myAbilities,
   help_topic: helpTopic,
@@ -501,7 +783,7 @@ export default function AssistantWidget({
   const screen = (widget.sources ?? [])[0];
 
   return (
-    <div className="mt-3">
+    <div className="mt-2">
       <div className="flex items-center gap-2 px-4 mb-2">
         <p className="ds-section flex-1 min-w-0">
           {titleKey ? t(titleKey) : widget.title}
@@ -519,9 +801,7 @@ export default function AssistantWidget({
           </button>
         )}
       </div>
-      <div className="px-4">
-        <ListCard>{body}</ListCard>
-      </div>
+      <ListCard>{body}</ListCard>
       {(widget.notes ?? []).map((text, index) => (
         <Note key={index} text={text} />
       ))}

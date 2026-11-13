@@ -39,11 +39,14 @@ export default function InviteLinkCard({ name, phone }: { name: string; phone: s
   const [shopCode, setShopCode] = useState<string | null>(null);
   useEffect(() => {
     let alive = true;
+    setShopCode(null);
     void myShopJoinCode().then((code) => { if (alive) setShopCode(code); });
     return () => { alive = false; };
   }, [activeShopId]);
 
-  const link = inviteLink(phone, activeShopId);
+  // Prefer the short join code in the link so the employee can follow this invite
+  // without needing to type or share an internal UUID.
+  const link = inviteLink(phone, activeShopId, shopCode);
   // The message spells the number out for a human; the share targets and the
   // link use the normalized form (see appInvite.ts).
   const message = buildInviteMessage({
@@ -76,12 +79,15 @@ export default function InviteLinkCard({ name, phone }: { name: string; phone: s
 
   return (
     <div
-      className="rounded-[var(--radius-tile)] overflow-hidden"
-      style={{ background: "var(--surface)", border: "1px solid var(--divider)", direction: isUrdu ? "rtl" : "ltr" }}
+      className="rounded-[var(--radius-card)] overflow-hidden"
+      style={{ background: "var(--tone-card)", direction: isUrdu ? "rtl" : "ltr" }}
     >
       <div className="px-4 pt-4 pb-3">
         <p className="ds-section-label" style={{ color: "var(--text-secondary)" }}>
           {t("invite.linkLabel")}
+        </p>
+        <p className="text-12 mt-1" style={{ color: "var(--text-secondary)" }} data-testid="invite-flow-hint">
+          {t("invite.flowHint")}
         </p>
 
         {link ? (
@@ -164,7 +170,7 @@ export default function InviteLinkCard({ name, phone }: { name: string; phone: s
           target="_blank"
           rel="noopener noreferrer"
           className="h-10 px-4 rounded-full text-xs font-bold flex items-center gap-2"
-          style={{ background: "var(--brand)", color: "#0a0a0a" }}
+          style={{ background: "var(--cta)", color: "var(--cta-fg)" }}
           data-testid="invite-whatsapp"
         >
           <MessageCircle size={14} />

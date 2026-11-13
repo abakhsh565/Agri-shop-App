@@ -2,6 +2,7 @@ import { useNavigate, useLocation, Navigate } from "react-router-dom";
 import { Home, RotateCcw, Receipt } from "lucide-react";
 import { formatCurrency, formatDateTime } from "@/lib/formatters";
 import { useT } from "@/lib/i18n";
+import { useShellBase } from "@/lib/useShellBase";
 
 interface ReturnResult {
   refundAmount: number;
@@ -17,11 +18,12 @@ interface ReturnResult {
 
 export default function AdminReturnSuccessPage() {
   const navigate = useNavigate();
+  const base = useShellBase();
   const t = useT();
   const { state } = useLocation();
   const result: ReturnResult | undefined = state?.result;
 
-  if (!result) return <Navigate to="/admin/sales" replace />;
+  if (!result) return <Navigate to={`${base}/sales`} replace />;
 
   const isCash = result.resolution === "refund_cash";
 
@@ -75,12 +77,12 @@ export default function AdminReturnSuccessPage() {
         </div>
       </div>
       <div className="flex flex-col gap-[12px] items-center px-[24px] pb-[32px] pt-[8px] w-full animate-fade-in-up delay-375">
-        <button onClick={() => navigate("/admin/dashboard", { replace: true })}
+        <button onClick={() => navigate(`${base}/dashboard`, { replace: true })}
           className="flex h-[48px] items-center justify-center gap-2 rounded-[var(--radius-input)] w-full font-bold text-14 transition-transform active:scale-[0.97]"
           style={{ background: "var(--brand)", color: "#0a0a0a" }}>
           <Home size={16} strokeWidth={2.5} /> {t("returns.backDashboard")}
         </button>
-        <button onClick={() => navigate(`/admin/sales/${result.saleId}`)}
+        <button onClick={() => navigate(`${base}/sales/${result.saleId}`)}
           className="flex h-[48px] items-center justify-center gap-2 rounded-[var(--radius-input)] w-full font-bold text-14 transition-transform active:scale-[0.97]"
           style={{ border: "1px solid var(--border-light)", color: "var(--text-primary)" }}>
           <Receipt size={16} strokeWidth={2} /> {t("returns.viewSale")}

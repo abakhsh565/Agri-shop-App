@@ -8,19 +8,20 @@
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { execSqlAsAdmin } from '../setup/qa-client';
-import { setupAllFixtures, cleanupTestData, QA_IDS } from '../setup/fixtures';
+import { setupAllFixtures, QA_IDS } from '../setup/fixtures';
 import { recordEvidence, printReport, clearEvidence } from '../setup/evidence';
 
 describe('Customer Balance Integrity', () => {
   beforeAll(async () => {
     clearEvidence();
-    // Clean any leftover QA data from previous test runs
-    await cleanupTestData();
+    // This suite creates nothing: it reads the shared baseline and asserts the declared values. It
+    // therefore deletes nothing — the shared-identity sweep it used to run here is gone
+    // (tests/setup/ownedCleanup.ts), and `setupAllFixtures()` is all it needs to know what it is
+    // reading, because the declaration IS the restore.
     await setupAllFixtures();
   });
 
   afterAll(async () => {
-    await cleanupTestData();
     printReport();
   });
 

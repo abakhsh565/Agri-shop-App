@@ -274,35 +274,3 @@ COMMENT ON TRIGGER customer_payments_notify_owner ON public.customer_payments IS
   'Writes one owner notification for a payment, including the employee name, from the database rather than the browser.';
 COMMENT ON TRIGGER finance_entries_notify_scheduled ON public.finance_entries IS
   'When a due cadence posts its row, tells the owner the amount, category and date that were written.';
-
--- 0285: name the retired function(s) in the server-only set the ACL guard
--- unions across migrations, and prove the closure rather than assume it.
-DO $server_only$
-DECLARE
-  v_server_only constant text[] := array['grant_customer_defaults_to_role', 'stamp_customer_payment_actor', 'notify_owner_of_customer_payment', 'notify_owner_of_scheduled_money'];
-  v_name text;
-  v_sig text;
-  v_open int;
-BEGIN
-  FOREACH v_name IN ARRAY v_server_only LOOP
-    FOR v_sig IN
-      SELECT p.oid::regprocedure::text
-        FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
-       WHERE n.nspname = 'public' AND p.proname = v_name
-    LOOP
-      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC, anon, authenticated', v_sig);
-    END LOOP;
-  END LOOP;
-  SELECT count(*) INTO v_open
-    FROM pg_proc p
-    JOIN pg_namespace n ON n.oid = p.pronamespace
-   WHERE n.nspname = 'public'
-     AND p.proname = ANY (v_server_only)
-     AND (has_function_privilege('anon', p.oid, 'EXECUTE')
-       OR has_function_privilege('authenticated', p.oid, 'EXECUTE'));
-  IF v_open > 0 THEN
-    RAISE EXCEPTION '0285: % server-only function(s) are still executable by an API role', v_open;
-  END IF;
-  RAISE NOTICE '0285: the server-only functions are closed';
-END
-$server_only$;

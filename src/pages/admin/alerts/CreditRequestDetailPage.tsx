@@ -1,12 +1,14 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
+import Photo from "@/components/ui/Photo";
 import NavHeader from "@/components/ui/NavHeader";
 import { useCustomersStore } from "@/stores/customersStore";
 import { useAuthStore } from "@/stores/authStore";
 import { useThemeStore } from "@/stores/themeStore";
 import { formatCurrency } from "@/lib/formatters";
 import { useT } from "@/lib/i18n";
+import { useAppBack } from "@/hooks/useAppBack";
 import { ArrowLeft, AlertTriangle, ChevronRight, CheckCircle2, XCircle } from "lucide-react";
 import {
   getCreditRequestsDB,
@@ -19,6 +21,7 @@ import { calculatePaymentStatus, getPaymentStatusLabel, getPaymentStatusColor } 
 export default function CreditRequestDetailPage() {
   const { requestId } = useParams<{ requestId: string }>();
   const navigate = useNavigate();
+  const back = useAppBack();
   const t = useT();
   const { user } = useAuthStore();
   const { language } = useThemeStore();
@@ -28,12 +31,16 @@ export default function CreditRequestDetailPage() {
   const [request, setRequest] = useState<LocalCreditRequest | null>(null);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
+  // What the owner is approving — starts at the requested amount and may be any figure at all
+  // (0251): asked 100,000 and granting 50,000 is a decision, not an error.
+  const [approvedAmount, setApprovedAmount] = useState("");
 
   useEffect(() => {
     (async () => {
       const requests = await getCreditRequestsDB();
     const found = requests.find((r) => r.id === requestId) || null;
     setRequest(found);
+    if (found) setApprovedAmount(String(found.requestedLimit));
     setLoading(false);
     })();
   }, [requestId]);
@@ -42,12 +49,15 @@ export default function CreditRequestDetailPage() {
 
   async function handleApprove() {
     if (!request || !user) return;
+    const parsed = Number(approvedAmount.replace(/[^\d.]/g, ""));
+    const amount = Number.isFinite(parsed) && approvedAmount.trim() !== "" ? parsed : request.requestedLimit;
     setProcessing(true);
     try {
-      await approveCreditRequest(request.id, user.name || user.id);
+      await approveCreditRequest(request.id, user.name || user.id, amount);
       setRequest({
         ...request,
         status: "approved",
+        approvedLimit: amount,
         reviewedBy: user.name || null,
         reviewedAt: new Date().toISOString(),
       });
@@ -110,7 +120,7 @@ export default function CreditRequestDetailPage() {
 
       {/* Header */}
       <div className="flex items-center gap-3 px-4 py-3">
-        <button onClick={() => navigate(-1)} className="size-9 rounded-full flex items-center justify-center" style={{ background: "var(--surface-2)" }}>
+        <button onClick={back} className="size-9 rounded-full flex items-center justify-center" style={{ background: "var(--surface-2)" }}>
           <ArrowLeft size={18} style={{ color: "var(--text-primary)", transform: isUrdu ? "rotate(180deg)" : "none" }} />
         </button>
         <p className="text-16 font-semibold flex-1" style={{ color: "var(--text-primary)" }}>
@@ -136,7 +146,11 @@ export default function CreditRequestDetailPage() {
             className="rounded-[var(--radius-tile)] p-4 flex items-center gap-3 text-start transition-opacity active:opacity-70"
             style={{ background: "var(--surface-2)" }}
           >
-            {customer.imageUrl ? (<img src={customer.imageUrl} alt="" className="w-11 h-11 rounded-full object-cover shrink-0" />) : (<div className="w-11 h-11 rounded-full flex items-center justify-center text-14 font-bold shrink-0" style={{ background: customer.outstandingBalance > 0 ? "#fee2e2" : "#d9f99d", color: customer.outstandingBalance > 0 ? "#dc2626" : "#166534" }}>{customer.name ? customer.name.charAt(0) : "?".toUpperCase()}</div>)}
+            <Photo
+              src={customer.imageUrl}
+              className="w-11 h-11 rounded-full object-cover shrink-0"
+              fallback={<div className="w-11 h-11 rounded-full flex items-center justify-center text-14 font-bold shrink-0" style={{ background: customer.outstandingBalance > 0 ? "#fee2e2" : "#d9f99d", color: customer.outstandingBalance > 0 ? "#dc2626" : "#166534" }}>{customer.name ? customer.name.charAt(0) : "?".toUpperCase()}</div>}
+            />
             <div className="flex-1 min-w-0">
               <p className="text-15 font-semibold" style={{ color: "var(--text-primary)" }}>{customer.name}</p>
               <p className="text-12 mt-0.5" style={{ color: customer.outstandingBalance > 0 ? "#dc2626" : "var(--text-secondary)" }}>
@@ -149,14 +163,17 @@ export default function CreditRequestDetailPage() {
 
         {/* Request details — key-value card */}
         <div className="rounded-[var(--radius-tile)] overflow-hidden" style={{ background: "var(--surface-2)" }}>
-          {/* Approved by */}
+          {/* Who decided it. A rejected request says "Rejected by": the row carried the
+              approval label whatever had happened, which read as a decision nobody made. */}
           <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: "1px solid var(--divider)" }}>
-            <span className="text-13" style={{ color: "var(--text-secondary)" }}>{t("inline.approved_by")}</span>
+            <span className="text-12" style={{ color: "var(--text-secondary)" }}>
+              {request.status === "rejected" ? t("inline.rejected_by") : t("inline.approved_by")}
+            </span>
             <span className="text-14 font-semibold" style={{ color: "var(--text-primary)" }}>{request.reviewedBy || "—"}</span>
           </div>
           {/* Customer */}
           <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: "1px solid var(--divider)" }}>
-            <span className="text-13" style={{ color: "var(--text-secondary)" }}>{t("receipt.customer")}</span>
+            <span className="text-12" style={{ color: "var(--text-secondary)" }}>{t("receipt.customer")}</span>
             <div className="flex items-center gap-2">
               <span className="text-14 font-semibold" style={{ color: "var(--text-primary)" }}>{request.customerName}</span>
               {customer && (() => {
@@ -171,14 +188,21 @@ export default function CreditRequestDetailPage() {
               })()}
             </div>
           </div>
-          {/* Amount */}
+          {/* Requested amount */}
           <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: "1px solid var(--divider)" }}>
-            <span className="text-13" style={{ color: "var(--text-secondary)" }}>{t("common.amount")}</span>
+            <span className="text-12" style={{ color: "var(--text-secondary)" }}>{t("creditRequest.requestedAmount")}</span>
             <span className="text-14 font-semibold" style={{ color: "var(--text-primary)" }}>{formatCurrency(request.requestedLimit)}</span>
           </div>
+          {/* Granted amount — what the owner actually approved, which may differ. */}
+          {isApproved && request.approvedLimit != null && (
+            <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: "1px solid var(--divider)" }}>
+              <span className="text-12" style={{ color: "var(--text-secondary)" }}>{t("creditRequest.approvedAs")}</span>
+              <span className="text-14 font-semibold" style={{ color: "var(--text-primary)" }}>{formatCurrency(request.approvedLimit)}</span>
+            </div>
+          )}
           {/* When */}
           <div className="flex items-center justify-between px-4 py-3">
-            <span className="text-13" style={{ color: "var(--text-secondary)" }}>{t("common.when")}</span>
+            <span className="text-12" style={{ color: "var(--text-secondary)" }}>{t("common.when")}</span>
             <span className="text-14 font-semibold" style={{ color: "var(--text-primary)" }}>
               {new Date(request.createdAt).toLocaleDateString()}{" "}
               {new Date(request.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
@@ -208,6 +232,38 @@ export default function CreditRequestDetailPage() {
           </div>
         )}
 
+        {/* The owner's own figure — the request says what was asked for, this says what is
+            granted. Approving the requested number is the default and needs no action. */}
+        {isPending && (
+          <div className="rounded-[var(--radius-tile)] p-4 flex flex-col gap-2" style={{ background: "var(--surface-2)" }}>
+            <label className="ds-section-label" htmlFor="credit-request-approved-amount" style={{ color: "var(--text-secondary)" }}>
+              {t("creditRequest.approvedAmount")}
+            </label>
+            <input
+              id="credit-request-approved-amount"
+              type="number"
+              inputMode="decimal"
+              min="0"
+              value={approvedAmount}
+              onChange={(e) => setApprovedAmount(e.target.value)}
+              data-testid="credit-request-approved-amount"
+              className="w-full h-12 rounded-[var(--radius-input)] px-4 text-sm text-foreground placeholder:text-caption outline-none"
+            />
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-11" style={{ color: "var(--text-secondary)" }}>{t("creditRequest.amountHint")}</p>
+              {approvedAmount !== String(request.requestedLimit) && (
+                <button
+                  onClick={() => setApprovedAmount(String(request.requestedLimit))}
+                  className="text-11 font-semibold shrink-0"
+                  style={{ color: "var(--brand-dark)" }}
+                >
+                  {t("creditRequest.useRequested")}
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Action buttons — approve/reject on right */}
         {isPending && (
           <div className="flex gap-3 justify-end">
@@ -233,7 +289,7 @@ export default function CreditRequestDetailPage() {
         {/* Mark as reviewed */}
         {!isPending && (
           <button
-            onClick={() => navigate(-1)}
+            onClick={back}
             className="w-full h-11 rounded-full text-13 font-semibold flex items-center justify-center"
             style={{ color: "var(--brand-dark, #65a30d)" }}
           >

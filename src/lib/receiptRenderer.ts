@@ -255,7 +255,7 @@ export function renderReceiptBlob(s: {
 
       // Footer
       ctx.font = "11px sans-serif"; ctx.fillStyle = "#aaa"; ctx.textAlign = "center";
-      ctx.fillText("Powered by AgriShop • agrishop.app", W / 2, y);
+      ctx.fillText("Powered by HisabPay", W / 2, y);
 
       canvas.toBlob((blob) => resolve(blob), "image/png");
     } catch {

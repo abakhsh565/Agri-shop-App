@@ -41,6 +41,7 @@ const missingUser = 'e1880000-0000-0000-0000-000000000025';
 const saleMain = 'e1880000-0000-0000-0000-000000000031';
 const saleWarehouse = 'e1880000-0000-0000-0000-000000000032';
 const saleRole = 'e1880000-0000-0000-0000-000000000041';
+const viewRole = 'e1880000-0000-0000-0000-000000000043';
 
 async function asUser<T>(id: string, run: () => Promise<T>): Promise<T> {
   await db.exec('BEGIN');
@@ -116,6 +117,7 @@ beforeAll(async () => {
       ('sales.view','sales','view','View sales','فروخت دیکھیں'),
       ('sales.create','sales','create','Create sales','فروخت کریں'),
       ('employees.manage','employees','manage','Manage employees','عملہ سنبھالیں'),
+      ('employees.view','employees','view','View employees','عملہ دیکھیں'),
       ('activity.view','activity','view','View activity','سرگرمی دیکھیں'),
       ('settings.edit','settings','edit','Edit settings','ترتیبات بدلیں'),
       ('sales.void','sales','void','Cancel sales','فروخت منسوخ کریں'),
@@ -134,9 +136,12 @@ beforeAll(async () => {
       ('${warehouseUser}','Fixture Warehouse','923018800003','employee',false,true,'${tenant}'),
       ('${multiUser}','Fixture Multiple','923018800004','employee',false,true,'${tenant}'),
       ('${missingUser}','Fixture Missing','923018800005','employee',false,true,'${tenant}');
-    INSERT INTO roles(id,tenant_id,name) VALUES ('${saleRole}','${tenant}','Sales fixture');
+    INSERT INTO roles(id,tenant_id,name) VALUES
+      ('${saleRole}','${tenant}','Sales fixture'), ('${viewRole}','${tenant}','View only fixture');
     INSERT INTO role_permissions(role_id,permission_id)
       SELECT '${saleRole}',id FROM permissions WHERE code IN ('sales.view','sales.create');
+    INSERT INTO role_permissions(role_id,permission_id)
+      SELECT '${viewRole}',id FROM permissions WHERE code='sales.view';
     UPDATE memberships SET branch_scope=ARRAY['${main}']::uuid[],role_id='${saleRole}' WHERE user_id='${mainUser}';
     UPDATE memberships SET branch_scope=ARRAY['${warehouse}']::uuid[],role_id='${saleRole}' WHERE user_id='${warehouseUser}';
     UPDATE memberships SET branch_scope=ARRAY['${main}','${warehouse}']::uuid[],role_id='${saleRole}' WHERE user_id='${multiUser}';
@@ -145,6 +150,12 @@ beforeAll(async () => {
       ('${saleMain}','BRANCH-MAIN','${owner}',100,100,0,'${tenant}','${main}'),
       ('${saleWarehouse}','BRANCH-WAREHOUSE','${owner}',5000,5000,0,'${tenant}','${warehouse}');
   `);
+  // Applied after the fixture so its backfill covers the memberships this suite creates. It is
+  // the file that makes a role a per-branch grant; without replaying it the assertions below
+  // would be testing the previous single-role model.
+  for (const sql of splitStatements(fs.readFileSync(
+    path.join(directory, '0233_a_role_is_granted_per_branch.sql'), 'utf8',
+  ))) await db.exec(sql);
 }, 60000);
 afterAll(async () => { await db.close(); });
 
@@ -437,6 +448,11 @@ suite('real branch identity and fail-closed scope — executed SQL', () => {
   it('replays the migration a second time without changing historical ownership', async () => {
     const before = (await db.query('SELECT id,branch_id FROM sales ORDER BY id')).rows;
     for (const sql of splitStatements(fs.readFileSync('supabase/migrations/0188_a_branch_is_not_its_tenant.sql', 'utf8'))) await db.exec(sql);
+    // 0188 is a historical file; replaying it must not leave the database on an older
+    // get_my_branches signature. Bring the schema back to the current forward position.
+    for (const sql of splitStatements(fs.readFileSync(
+      'supabase/migrations/0233_a_role_is_granted_per_branch.sql', 'utf8',
+    ))) await db.exec(sql);
     expect((await db.query('SELECT id,branch_id FROM sales ORDER BY id')).rows).toEqual(before);
     expect((await branches(mainUser)).map(r => r.branch_id)).toEqual([main]);
   });
@@ -519,5 +535,53 @@ suite('branch responsibility is operational control, never business ownership �
     const person = await asUser(owner, async () =>
       (await db.query('SELECT public.branch_responsible_person($1) AS r', [warehouse])).rows[0].r as any);
     expect(person.user_id).toBe(warehouseUser);
+  });
+
+  it('a role is granted per branch, and the branch being worked in decides the permissions', async () => {
+    await asUser(owner, async () => {
+      await db.query('SELECT public.set_employee_branch_roles($1, $2::jsonb)', [
+        multiUser,
+        JSON.stringify({ [main]: viewRole, [warehouse]: saleRole }),
+      ]);
+    });
+
+    await asUser(multiUser, () => db.query('SELECT public.set_active_branch($1)', [main]));
+    const mainPerms = (await asUser(multiUser, async () =>
+      (await db.query('SELECT public.get_my_permissions() AS p')).rows[0].p)) as string[];
+    expect(mainPerms).toContain('sales.view');
+    expect(mainPerms).not.toContain('sales.create');
+
+    await asUser(multiUser, () => db.query('SELECT public.set_active_branch($1)', [warehouse]));
+    const warehousePerms = (await asUser(multiUser, async () =>
+      (await db.query('SELECT public.get_my_permissions() AS p')).rows[0].p)) as string[];
+    expect(warehousePerms).toContain('sales.view');
+    expect(warehousePerms).toContain('sales.create');
+
+    const rows = await branches(multiUser);
+    const byId = Object.fromEntries(rows.map((r: any) => [r.branch_id, r]));
+    expect(byId[main].role_name).toBe('View only fixture');
+    expect(byId[warehouse].role_name).toBe('Sales fixture');
+    // The map is the scope: a branch absent from it is not a branch this person may enter.
+    await expect(asUser(multiUser, () => db.query('SELECT public.set_active_branch($1)', [foreign])))
+      .rejects.toThrow('branch access denied');
+  });
+
+  it('the owner reads one person across branches without the branch-scoped sales reader', async () => {
+    const expected = (await db.query(
+      "SELECT COALESCE(sum(total_amount),0) AS total FROM public.sales WHERE employee_id=$1 AND branch_id=$2 AND NOT is_voided",
+      [owner, main],
+    )).rows[0] as any;
+    const expectedWarehouse = (await db.query(
+      "SELECT COALESCE(sum(total_amount),0) AS total FROM public.sales WHERE employee_id=$1 AND branch_id=$2 AND NOT is_voided",
+      [owner, warehouse],
+    )).rows[0] as any;
+    const perf = (await asUser(owner, async () =>
+      (await db.query('SELECT public.get_employee_performance($1) AS p', [owner])).rows[0].p)) as any;
+    const mainRow = perf.branches.find((b: any) => b.branchId === main);
+    const warehouseRow = perf.branches.find((b: any) => b.branchId === warehouse);
+    expect(Number(mainRow.revenue)).toBe(Number(expected.total));
+    expect(Number(warehouseRow.revenue)).toBe(Number(expectedWarehouse.total));
+    expect(Number(perf.totals.revenue)).toBe(Number(expected.total) + Number(expectedWarehouse.total));
+    expect(perf.recent.every((s: any) => s.branchId === main || s.branchId === warehouse)).toBe(true);
   });
 });

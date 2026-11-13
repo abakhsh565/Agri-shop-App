@@ -1,4 +1,5 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect } from './base';
+import type { Page } from '@playwright/test';
 import {
   cleanupFixtures,
   claimOwned,
@@ -11,7 +12,11 @@ import {
   snapshotIds,
   trackOwned,
 } from './helpers';
-import { setActiveBranchAsUser } from '../../tests/setup/qa-client';
+import { withSharedRowRestore } from './sharedRowRestore';
+// The active branch is server-owned, so switching it goes through the same RPC helper the
+// integration lanes use. This import was missing while the call was there: the spec crashed with
+// `setActiveBranchAsUser is not defined` before it ever opened a screen.
+import { setActiveBranchAsUser } from '../setup/qa-client';
 
 const OWNER_PHONE = '03009999999';       // 923009999999
 const ADMIN_ID_PHONE = '923009999999';   // the stored e164 form
@@ -164,34 +169,44 @@ test.describe('admin full access + the account-deletion gate', () => {
     const before = String((await execSql(`SELECT name FROM users WHERE phone = '${ADMIN_ID_PHONE}'`))[0].name);
     const temporary = `${before} Test`;
 
-    await loginViaUi(page, OWNER_PHONE);
-    await page.goto('/admin/settings');
-    await page.waitForLoadState('networkidle');
+    // THE FIXTURE IS RESTORED IN `finally`-SEMANTICS, NOT AS THE LAST LINE.
+    //
+    // This name belongs to the shared QA Admin every lane signs in as. When the restore was the final
+    // statement of the body, any failing assertion above it skipped the restore — so a red run left
+    // QA Admin called "QA Admin Test" for every lane that followed, and the next run's `before` read
+    // that leftover as the fixture. `withSharedRowRestore` runs the restore whether the body passed or
+    // failed, and if the restore itself fails it says so instead of letting the row stay dirty.
+    await withSharedRowRestore(
+      `users.name for ${ADMIN_ID_PHONE} (profile edit)`,
+      async () => {
+        await execSql(`UPDATE users SET name = '${before.replace(/'/g, "''")}' WHERE phone = '${ADMIN_ID_PHONE}'`);
+      },
+      async () => {
+        await loginViaUi(page, OWNER_PHONE);
+        await page.goto('/admin/settings');
+        await page.waitForLoadState('networkidle');
 
-    // The profile card is a row on Settings: it carries a chevron and opens the profile screen.
-    // The edit itself is still a sheet — two fields, so a sheet — opened by that screen's own
-    // Edit button next to the name and number. The card renders only once the branches load, so
-    // wait for it by testId instead of clicking into an un-hydrated screen.
-    await expect(page.locator('[data-testid="settings-open-profile"]')).toBeVisible({ timeout: 10000 });
-    await page.locator('[data-testid="settings-open-profile"]').click();
-    await expect(page).toHaveURL(/\/admin\/settings\/profile$/, { timeout: 8000 });
-    await page.locator('[data-testid="settings-edit-profile"]').click();
-    await page.locator('input:not([type="file"])').first().fill(temporary);
-    await page.getByRole('button', { name: /^save$/i }).first().click();
+        // The profile card is a row on Settings: it carries a chevron and opens the profile screen.
+        // The edit itself is still a sheet — two fields, so a sheet — opened by that screen's own
+        // Edit button next to the name and number.
+        await page.locator('[data-testid="settings-open-profile"]').click();
+        await expect(page).toHaveURL(/\/admin\/settings\/profile$/, { timeout: 8000 });
+        await page.locator('[data-testid="settings-edit-profile"]').click();
+        await page.locator('input:not([type="file"])').first().fill(temporary);
+        await page.getByRole('button', { name: /^save$/i }).first().click();
 
-    await expect
-      .poll(
-        async () => String((await execSql(`SELECT name FROM users WHERE phone = '${ADMIN_ID_PHONE}'`))[0].name),
-        { timeout: 15000, message: 'the profile name was never written to the database' },
-      )
-      .toBe(temporary);
+        await expect
+          .poll(
+            async () => String((await execSql(`SELECT name FROM users WHERE phone = '${ADMIN_ID_PHONE}'`))[0].name),
+            { timeout: 15000, message: 'the profile name was never written to the database' },
+          )
+          .toBe(temporary);
 
-    await page.reload();
-    await page.waitForLoadState('networkidle');
-    await expect(page.getByText(temporary).first(), 'the saved name did not survive a reload').toBeVisible();
-
-    // Leave the fixture exactly as it was found.
-    await execSql(`UPDATE users SET name = '${before.replace(/'/g, "''")}' WHERE phone = '${ADMIN_ID_PHONE}'`);
+        await page.reload();
+        await page.waitForLoadState('networkidle');
+        await expect(page.getByText(temporary).first(), 'the saved name did not survive a reload').toBeVisible();
+      },
+    );
   });
 
   test('the same gate speaks Urdu, in RTL', async ({ page }) => {
