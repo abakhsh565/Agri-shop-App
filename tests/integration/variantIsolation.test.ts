@@ -26,7 +26,7 @@
  */
 
 import { describe, it, beforeAll, afterAll, expect } from 'vitest';
-import { execSqlAsAdmin, insertAsUser, selectAsUser, updateAsUser } from '../setup/qa-client';
+import { execSqlAsAdmin, insertAsUser, selectAsUser, setMembershipBranchScope, updateAsUser } from '../setup/qa-client';
 
 const TENANT_A = '00000000-0000-0000-0000-000000000001';
 const TENANT_B = '00000000-0000-0000-0000-00000000d0d0';
@@ -52,6 +52,31 @@ async function variantB(): Promise<any> {
   return r.rows[0];
 }
 
+/**
+ * Cleanup that REPORTS instead of swallowing — the customerDeletionSecurity /
+ * employeeInviteLifecycle pattern. This suite shares the QA database with the
+ * other integration files, so a silent catch here would leave rows in place
+ * and the next suite would fail deep inside a test with an authorization error
+ * that is really leftover state. Failures are collected and the caller throws
+ * with their names (throwIfCleanupFailed, wired in beforeAll/afterAll).
+ */
+const cleanupFailures: string[] = [];
+async function trySql(label: string, p: Promise<unknown>): Promise<void> {
+  try {
+    await p;
+  } catch (error) {
+    cleanupFailures.push(`${label}: ${(error as Error).message}`);
+  }
+}
+function throwIfCleanupFailed(context: string): void {
+  if (cleanupFailures.length) {
+    throw new Error(
+      `${context}: cleanup failed — ${cleanupFailures.join(' | ')}. ` +
+        `Leftover rows from this suite's namespace will contaminate the next run; fix the leak here rather than re-running.`,
+    );
+  }
+}
+
 async function cleanup() {
   await sql(`DELETE FROM product_variants WHERE id IN ('${VARIANT_A}','${VARIANT_B}','${INJECTED}')`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
   await sql(`DELETE FROM products WHERE id IN ('${PRODUCT_A}','${PRODUCT_B}')`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
@@ -67,7 +92,7 @@ beforeAll(async () => {
   await sql(`
     INSERT INTO users (id, name, phone, role, is_original_owner, is_active, shop_id)
     VALUES
-      ('${OWNER_A}', '${RUN} A', '923009820001', 'admin', true, true, '${TENANT_A}'),
+      ('${OWNER_A}', '${RUN} A', '923009820001', 'admin', false, true, '${TENANT_A}'),
       ('${OWNER_B}', '${RUN} B', '923009820002', 'admin', true, true, '${TENANT_B}'),
       ('${EMP_A}',   '${RUN} employee A', '923009820003', 'employee', false, true, '${TENANT_A}')
     ON CONFLICT (id) DO NOTHING
@@ -76,6 +101,15 @@ beforeAll(async () => {
     UPDATE memberships SET role_id = '${ROLE_EMPLOYEE}', role = 'employee', status = 'active'
      WHERE user_id = '${EMP_A}'
   `);
+
+  // The wave-1 demotion left OWNER_A with a NULL branch_scope, and 0188
+  // refuses a non-owner every branch-scoped call when no branch is in scope.
+  // Scope the membership to the tenant's active branches (OWNER_B is a true
+  // owner and exempt).
+  const branches = await sql(
+    `SELECT id FROM branches WHERE tenant_id = '${TENANT_A}' AND is_active = true ORDER BY is_default DESC, created_at`
+  );
+  await setMembershipBranchScope(OWNER_A, TENANT_A, branches.rows.map((r: { id: string }) => r.id));
   await sql(`
     INSERT INTO products (id, name, category, shop_id, is_active)
     VALUES
@@ -90,10 +124,12 @@ beforeAll(async () => {
       ('${VARIANT_B}', '${PRODUCT_B}', '1kg', 700, ${COST_B}, 1, 10, 100)
     ON CONFLICT (id) DO NOTHING
   `);
+  throwIfCleanupFailed('variantIsolation beforeAll cleanup');
 });
 
 afterAll(async () => {
   await cleanup();
+  throwIfCleanupFailed('variantIsolation afterAll cleanup');
 });
 
 describe('variant isolation — is the child table scoped to the caller shop', () => {

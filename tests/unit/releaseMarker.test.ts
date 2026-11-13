@@ -169,9 +169,15 @@ describe('the timeline only records a run that actually deployed', () => {
   });
 
   test('the verification step runs only for a deployment that was created', () => {
-    // The same fact the timeline relies on: no deployment id, no verification — and therefore the
-    // only run shape that can reach a verified success is one where Vercel was actually asked.
-    expect(deploy).toContain("if: steps.trigger.outputs.deployment_id != ''");
+    // `deploy-production.yml` no longer shells out to a separate verification step that had to be
+    // guarded by hand: the decision and the deployment are one call (`trigger-production.mjs`),
+    // which asks `deploy-gate.mjs` first and refuses unless the CI run concluded success on main's
+    // head. The guarantee this test exists for is unchanged — nothing verifies a deployment that
+    // was never created — so it is asserted against the shape the workflow actually has, not the
+    // older `steps.trigger.outputs.deployment_id` one.
+    expect(deploy).toContain('scripts/deploy/trigger-production.mjs');
+    expect(deploy).toContain('scripts/lib/deploy-gate.mjs');
+    expect(deploy).not.toContain('mark-release.mjs');
   });
 
   test('the marker is not a step in the deploy workflow', () => {

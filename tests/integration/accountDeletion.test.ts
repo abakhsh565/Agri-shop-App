@@ -42,6 +42,7 @@
 
 import { describe, it, beforeAll, afterAll, expect } from 'vitest';
 import { execRpcAsUser, execSqlAsAdmin } from '../setup/qa-client';
+import { QA_IDS } from '../setup/fixtures';
 
 // This suite's own fixture identities. Fresh UUIDs: two files must never share one, or one
 // suite's cleanup deletes the other's rows mid-run (tests/unit/fixtureIdCollision.test.ts).
@@ -60,7 +61,7 @@ const FRESH_PHONE_LOCAL = '03009630003';
 const FRESH_PHONE_E164 = '923009630003';
 
 /** The seeded QA owner, used only as the platform admin who approves a registration. */
-const SEEDED_OWNER = '10000000-0000-0000-0000-000000000003';
+const SEEDED_OWNER = QA_IDS.owner;
 
 const TOUCHED_PHONES = [ACTOR_PHONE, SIDE_EMPLOYEE_PHONE, FRESH_PHONE_E164, FRESH_PHONE_LOCAL];
 
@@ -78,10 +79,44 @@ async function count(query: string): Promise<number> {
   return rows[0]?.c ?? 0;
 }
 
+/**
+ * Cleanup that REPORTS instead of swallowing — the customerDeletionSecurity /
+ * employeeInviteLifecycle pattern. This suite shares the QA database with the
+ * other integration files, so a silent catch here would leave rows in place
+ * and the next suite would fail deep inside a test with an authorization error
+ * that is really leftover state. Failures are collected and the caller throws
+ * with their names (throwIfCleanupFailed, wired in beforeAll/afterAll).
+ */
+const cleanupFailures: string[] = [];
+async function trySql(label: string, p: Promise<unknown>): Promise<void> {
+  try {
+    await p;
+  } catch (error) {
+    cleanupFailures.push(`${label}: ${(error as Error).message}`);
+  }
+}
+function throwIfCleanupFailed(context: string): void {
+  if (cleanupFailures.length) {
+    throw new Error(
+      `${context}: cleanup failed — ${cleanupFailures.join(' | ')}. ` +
+        `Leftover rows from this suite's namespace will contaminate the next run; fix the leak here rather than re-running.`,
+    );
+  }
+}
+
 async function cleanup() {
-  // Shops first (they cascade), then identities, then the request rows by number — the
-  // request row is the one this lane exists to prove is gone, so it is also cleaned here
-  // in case a run aborted between the delete and the assertion.
+  // The fresh shop's people BEFORE the purge. `purge_shop_data` drops the shop row
+  // itself, and `users.shop_id` references it with no cascade — a run aborted after
+  // approval leaves the fresh shop's owner behind, and purging first fails on
+  // users_shop_id_fkey (attempt 5: the whole file died in beforeAll cleanup on a
+  // leftover 'QA Fresh Shop' + its user). Scoped by shop, not by phone, so no
+  // spelling of the number can dodge it; the phone loop below still removes the
+  // same people and the request rows.
+  const freshShopUsers = `user_id IN (SELECT id FROM users WHERE shop_id IN (SELECT id FROM shops WHERE name LIKE 'QA Fresh Shop%'))`;
+  await trySql('fresh-users-audit', sql(`DELETE FROM audit_events WHERE ${freshShopUsers}`));
+  await trySql('fresh-users-memberships', sql(`DELETE FROM memberships WHERE ${freshShopUsers}`));
+  await trySql('fresh-users-active', sql(`DELETE FROM user_active_shops WHERE ${freshShopUsers}`));
+  await trySql('fresh-users', sql(`DELETE FROM users WHERE shop_id IN (SELECT id FROM shops WHERE name LIKE 'QA Fresh Shop%')`));
   // A shop the registration flow created and a failed run left orphaned. `purge_shop_data`
   // erases the shop's records AND the shop row, which is the same erasure the product does.
   await sql(`SELECT public.purge_shop_data(id) FROM shops WHERE name LIKE 'QA Fresh Shop%'`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
@@ -169,10 +204,12 @@ beforeAll(async () => {
   // The actor must be able to sign in for the RPCs below to authorize anything.
   const signingIn = await execRpcAsUser(ACTOR, 'get_my_permissions', {});
   expect(signingIn.error).toBeNull();
+  throwIfCleanupFailed('accountDeletion beforeAll cleanup');
 });
 
 afterAll(async () => {
   await cleanup();
+  throwIfCleanupFailed('accountDeletion afterAll cleanup');
 });
 
 describe('Archiving a branch hides it, keeps its history and never decides a login silently', () => {

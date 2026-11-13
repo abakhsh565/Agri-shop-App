@@ -92,11 +92,14 @@ beforeAll(async () => {
   await setupAllFixtures();
 
   // 0113 guarantees a membership for every user, but only on INSERT; a fixture re-inserted with
-  // ON CONFLICT DO UPDATE keeps its old membership. Assert it, as the other authorized suites do.
+  // ON CONFLICT DO UPDATE keeps its old membership. Assert it, as the other authorized suites do —
+  // as an admin on the Store Manager template, never as owner: 0280 allows one
+  // active owner per shop and the fixture shop's owner is Khalid Khan.
+  const storeManagerRoleId = await roleIdByName(TENANT, 'Store Manager');
   await execSqlAsAdmin(`
-    INSERT INTO memberships (user_id, tenant_id, role, status)
-    VALUES ('${OWNER}', '${TENANT}', 'owner', 'active')
-    ON CONFLICT (user_id, tenant_id) DO UPDATE SET role = 'owner', status = 'active', updated_at = now()
+    INSERT INTO memberships (user_id, tenant_id, role, role_id, status)
+    VALUES ('${OWNER}', '${TENANT}', 'admin', '${storeManagerRoleId}', 'active')
+    ON CONFLICT (user_id, tenant_id) DO UPDATE SET role = 'admin', role_id = '${storeManagerRoleId}', status = 'active', updated_at = now()
   `);
   await execSqlAsAdmin(`
     INSERT INTO customers (id, name, phone, credit_limit, outstanding_balance, total_purchases, total_paid, shop_id, created_by)
@@ -113,7 +116,33 @@ beforeAll(async () => {
     VALUES ('${VARIANT}', '${PRODUCT}', '1kg', ${PRICE}, 300, 1, 1, 5, 100, true)
     ON CONFLICT (id) DO UPDATE SET stock_qty = 100, is_active = true, selling_price = ${PRICE}
   `);
+  throwIfCleanupFailed('saleIdempotency beforeAll cleanup');
 });
+
+/**
+ * Cleanup that REPORTS instead of swallowing — the customerDeletionSecurity /
+ * employeeInviteLifecycle pattern. This suite shares the QA database with the
+ * other integration files, so a silent catch here would leave rows in place
+ * and the next suite would fail deep inside a test with an authorization error
+ * that is really leftover state. Failures are collected and the caller throws
+ * with their names (throwIfCleanupFailed, wired in beforeAll/afterAll).
+ */
+const cleanupFailures: string[] = [];
+async function trySql(label: string, p: Promise<unknown>): Promise<void> {
+  try {
+    await p;
+  } catch (error) {
+    cleanupFailures.push(`${label}: ${(error as Error).message}`);
+  }
+}
+function throwIfCleanupFailed(context: string): void {
+  if (cleanupFailures.length) {
+    throw new Error(
+      `${context}: cleanup failed — ${cleanupFailures.join(' | ')}. ` +
+        `Leftover rows from this suite's namespace will contaminate the next run; fix the leak here rather than re-running.`,
+    );
+  }
+}
 
 afterAll(async () => {
   // Its own customer and product, so the sales, line items, voids, returns, payments and movements

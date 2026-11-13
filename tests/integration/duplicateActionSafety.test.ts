@@ -91,11 +91,14 @@ beforeAll(async () => {
 
   // 0113 guarantees a membership for every user, but it fires on INSERT only, so a
   // fixture re-inserted with ON CONFLICT DO UPDATE (as setupUsers does) keeps its
-  // old membership. Assert it here, exactly as the other authorized suites do.
+  // old membership. Assert it here, exactly as the other authorized suites do —
+  // as an admin on the Store Manager template, never as owner: 0280 allows one
+  // active owner per shop and the fixture shop's owner is Khalid Khan.
+  const storeManagerRoleId = await roleIdByName(TENANT, 'Store Manager');
   await execSqlAsAdmin(`
-    INSERT INTO memberships (user_id, tenant_id, role, status)
-    VALUES ('${OWNER}', '${TENANT}', 'owner', 'active')
-    ON CONFLICT (user_id, tenant_id) DO UPDATE SET role = 'owner', status = 'active', updated_at = now()
+    INSERT INTO memberships (user_id, tenant_id, role, role_id, status)
+    VALUES ('${OWNER}', '${TENANT}', 'admin', '${storeManagerRoleId}', 'active')
+    ON CONFLICT (user_id, tenant_id) DO UPDATE SET role = 'admin', role_id = '${storeManagerRoleId}', status = 'active', updated_at = now()
   `);
   await execSqlAsAdmin(`
     INSERT INTO products (id, name, category, base_unit, stock_qty, shop_id, is_active, created_at, updated_at)
@@ -118,7 +121,33 @@ beforeAll(async () => {
     ON CONFLICT (id) DO UPDATE SET outstanding_payable = 15000
   `);
   await setVariantStock(100);
+  throwIfCleanupFailed('duplicateActionSafety beforeAll cleanup');
 });
+
+/**
+ * Cleanup that REPORTS instead of swallowing — the customerDeletionSecurity /
+ * employeeInviteLifecycle pattern. This suite shares the QA database with the
+ * other integration files, so a silent catch here would leave rows in place
+ * and the next suite would fail deep inside a test with an authorization error
+ * that is really leftover state. Failures are collected and the caller throws
+ * with their names (throwIfCleanupFailed, wired in beforeAll/afterAll).
+ */
+const cleanupFailures: string[] = [];
+async function trySql(label: string, p: Promise<unknown>): Promise<void> {
+  try {
+    await p;
+  } catch (error) {
+    cleanupFailures.push(`${label}: ${(error as Error).message}`);
+  }
+}
+function throwIfCleanupFailed(context: string): void {
+  if (cleanupFailures.length) {
+    throw new Error(
+      `${context}: cleanup failed — ${cleanupFailures.join(' | ')}. ` +
+        `Leftover rows from this suite's namespace will contaminate the next run; fix the leak here rather than re-running.`,
+    );
+  }
+}
 
 afterAll(async () => {
   await execSqlAsAdmin(`DELETE FROM supplier_payments WHERE company_id = '${COMPANY}'`);
@@ -169,6 +198,7 @@ afterAll(async () => {
         '— find the reference rather than widening a `.catch`.',
     );
   }
+  throwIfCleanupFailed('duplicateActionSafety afterAll cleanup');
 });
 
 describe('Duplicate action safety', () => {

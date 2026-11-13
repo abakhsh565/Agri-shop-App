@@ -53,6 +53,31 @@ async function count(query: string): Promise<number> {
   return rows[0]?.c ?? 0;
 }
 
+/**
+ * Cleanup that REPORTS instead of swallowing — the customerDeletionSecurity /
+ * employeeInviteLifecycle pattern. This suite shares the QA database with the
+ * other integration files, so a silent catch here would leave rows in place
+ * and the next suite would fail deep inside a test with an authorization error
+ * that is really leftover state. Failures are collected and the caller throws
+ * with their names (throwIfCleanupFailed, wired in beforeAll/afterAll).
+ */
+const cleanupFailures: string[] = [];
+async function trySql(label: string, p: Promise<unknown>): Promise<void> {
+  try {
+    await p;
+  } catch (error) {
+    cleanupFailures.push(`${label}: ${(error as Error).message}`);
+  }
+}
+function throwIfCleanupFailed(context: string): void {
+  if (cleanupFailures.length) {
+    throw new Error(
+      `${context}: cleanup failed — ${cleanupFailures.join(' | ')}. ` +
+        `Leftover rows from this suite's namespace will contaminate the next run; fix the leak here rather than re-running.`,
+    );
+  }
+}
+
 async function cleanup() {
   await sql(`DELETE FROM customers WHERE id IN ('${CUSTOMER}','${OTHER_CUSTOMER}')`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
   await sql(`DELETE FROM branches WHERE tenant_id IN ('${SHOP}','${OTHER_SHOP}')`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
@@ -101,10 +126,12 @@ beforeAll(async () => {
   // rather than about the rule they exist to test.
   expect((await execRpcAsUser(OWNER, 'get_my_permissions', {})).error).toBeNull();
   expect((await execRpcAsUser(OTHER_OWNER, 'get_my_permissions', {})).error).toBeNull();
+  throwIfCleanupFailed('placeLocation beforeAll cleanup');
 });
 
 afterAll(async () => {
   await cleanup();
+  throwIfCleanupFailed('placeLocation afterAll cleanup');
 });
 
 describe('Locations are points in Pakistan, and only theirs', () => {

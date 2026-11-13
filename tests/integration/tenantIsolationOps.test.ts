@@ -15,7 +15,7 @@
  */
 
 import { describe, it, beforeAll, afterAll, expect } from 'vitest';
-import { execRpcAsUser, execSqlAsAdmin, insertAsUser, selectAsUser } from '../setup/qa-client';
+import { execRpcAsUser, execSqlAsAdmin, insertAsUser, selectAsUser, setMembershipBranchScope } from '../setup/qa-client';
 
 const TENANT_A = '00000000-0000-0000-0000-000000000001';
 const TENANT_B = '00000000-0000-0000-0000-00000000c0c0';
@@ -31,6 +31,31 @@ const RUN = `QA Iso ${Date.now()}`;
 
 async function sql(query: string) {
   return execSqlAsAdmin(query);
+}
+
+/**
+ * Cleanup that REPORTS instead of swallowing — the customerDeletionSecurity /
+ * employeeInviteLifecycle pattern. This suite shares the QA database with the
+ * other integration files, so a silent catch here would leave rows in place
+ * and the next suite would fail deep inside a test with an authorization error
+ * that is really leftover state. Failures are collected and the caller throws
+ * with their names (throwIfCleanupFailed, wired in beforeAll/afterAll).
+ */
+const cleanupFailures: string[] = [];
+async function trySql(label: string, p: Promise<unknown>): Promise<void> {
+  try {
+    await p;
+  } catch (error) {
+    cleanupFailures.push(`${label}: ${(error as Error).message}`);
+  }
+}
+function throwIfCleanupFailed(context: string): void {
+  if (cleanupFailures.length) {
+    throw new Error(
+      `${context}: cleanup failed — ${cleanupFailures.join(' | ')}. ` +
+        `Leftover rows from this suite's namespace will contaminate the next run; fix the leak here rather than re-running.`,
+    );
+  }
 }
 
 async function cleanup() {
@@ -52,7 +77,7 @@ beforeAll(async () => {
   await sql(`
     INSERT INTO users (id, name, phone, role, is_original_owner, is_active, shop_id)
     VALUES
-      ('${OWNER_A}', '${RUN} Owner A', '923009780001', 'admin',  true, true, '${TENANT_A}'),
+      ('${OWNER_A}', '${RUN} Owner A', '923009780001', 'admin',  false, true, '${TENANT_A}'),
       ('${OWNER_B}', '${RUN} Owner B', '923009780002', 'admin',  true, true, '${TENANT_B}'),
       ('${EMP_A}',   '${RUN} Employee A', '923009780003', 'employee', false, true, '${TENANT_A}')
     ON CONFLICT (id) DO NOTHING
@@ -65,6 +90,17 @@ beforeAll(async () => {
   `);
   await sql(`DELETE FROM user_permissions WHERE user_id = '${EMP_A}'`);
 
+  // The wave-1 demotion left these admins with a NULL branch_scope, and 0188
+  // refuses a non-owner every branch-scoped call when no branch is in scope.
+  // Scope both memberships to the tenant's active branches (OWNER_B is a true
+  // owner and exempt).
+  const branches = await sql(
+    `SELECT id FROM branches WHERE tenant_id = '${TENANT_A}' AND is_active = true ORDER BY is_default DESC, created_at`
+  );
+  const branchIds = branches.rows.map((r: { id: string }) => r.id);
+  await setMembershipBranchScope(OWNER_A, TENANT_A, branchIds);
+  await setMembershipBranchScope(EMP_A, TENANT_A, branchIds);
+
   // Deterministic fixtures for the reminder tests below (idempotent).
   await sql(`
     INSERT INTO reminder_configs (id, name, type, anchor, offset_days, repeat_mode, channel, is_active, shop_id)
@@ -76,10 +112,12 @@ beforeAll(async () => {
     VALUES ('${CUST_A}', '${RUN} Customer A', '923009780010', 100000, 0, 0, 0, '${TENANT_A}', 'QA')
     ON CONFLICT (id) DO NOTHING
   `);
+  throwIfCleanupFailed('tenantIsolationOps beforeAll cleanup');
 });
 
 afterAll(async () => {
   await cleanup();
+  throwIfCleanupFailed('tenantIsolationOps afterAll cleanup');
 });
 
 describe('Tenant isolation — tenant-scoped reads', () => {

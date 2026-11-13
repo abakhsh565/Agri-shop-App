@@ -24,7 +24,7 @@ import { QA_IDS, setupAllFixtures } from '../setup/fixtures';
 import { runCleanupStatements } from '../setup/ownedCleanup';
 
 const TENANT = QA_IDS.shop;
-const OWNER = QA_IDS.admin;
+const OWNER = QA_IDS.owner;
 
 // This suite's own supplier, product and variant. A purchase built on the shared QA baseline could
 // vanish mid-assertion: several files reseed it, and the sweep those files ran in their afterAll
@@ -108,7 +108,33 @@ beforeAll(async () => {
   `);
   await execSqlAsAdmin(`DELETE FROM purchases WHERE company_id = '${COMPANY}'`);
   await execSqlAsAdmin(`DELETE FROM users WHERE phone = '${EMPLOYEE_PHONE}'`);
+  throwIfCleanupFailed('createOnceSafety beforeAll cleanup');
 });
+
+/**
+ * Cleanup that REPORTS instead of swallowing — the customerDeletionSecurity /
+ * employeeInviteLifecycle pattern. This suite shares the QA database with the
+ * other integration files, so a silent catch here would leave rows in place
+ * and the next suite would fail deep inside a test with an authorization error
+ * that is really leftover state. Failures are collected and the caller throws
+ * with their names (throwIfCleanupFailed, wired in beforeAll/afterAll).
+ */
+const cleanupFailures: string[] = [];
+async function trySql(label: string, p: Promise<unknown>): Promise<void> {
+  try {
+    await p;
+  } catch (error) {
+    cleanupFailures.push(`${label}: ${(error as Error).message}`);
+  }
+}
+function throwIfCleanupFailed(context: string): void {
+  if (cleanupFailures.length) {
+    throw new Error(
+      `${context}: cleanup failed — ${cleanupFailures.join(' | ')}. ` +
+        `Leftover rows from this suite's namespace will contaminate the next run; fix the leak here rather than re-running.`,
+    );
+  }
+}
 
 afterAll(async () => {
   // This suite's own rows, children before parents — and every failure reported.

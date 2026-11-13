@@ -38,7 +38,7 @@
 
 import { describe, it, beforeAll, afterAll, expect } from 'vitest';
 import { execSqlAsAdmin, execRpcAsUser, insertAsUser, selectAsUser } from '../setup/qa-client';
-import { deleteFixtureUsers } from '../setup/fixtures';
+import { deleteFixtureUsers, QA_IDS } from '../setup/fixtures';
 
 const TENANT_A = '00000000-0000-0000-0000-000000000001';
 // A tenant of this suite's own. It used to borrow '00000000-…-c0c0', which
@@ -46,7 +46,7 @@ const TENANT_A = '00000000-0000-0000-0000-000000000001';
 // "another tenant" this suite asserts against could vanish underneath it.
 // tests/unit/fixtureIdCollision.test.ts now fails on a shared row-creating id.
 const TENANT_B = 'd2000000-0000-0000-0000-00000000b0b0';
-const OWNER_A = 'd2000000-0000-0000-0000-00000000000a';
+const OWNER_A = QA_IDS.owner;
 const EMP_MAIN = 'd2000000-0000-0000-0000-0000000000e1';
 const EMP_BOTH = 'd2000000-0000-0000-0000-0000000000e2';
 // This suite's own second branch. It used to take the seeded shop's second branch instead, which
@@ -55,6 +55,7 @@ const WAREHOUSE = 'd2000000-0000-0000-0000-00000000b001';
 const CUSTOMER = 'd2000000-0000-0000-0000-0000000000c1';
 const PRODUCT = 'd2000000-0000-0000-0000-0000000000d1';
 const VARIANT = 'd2000000-0000-0000-0000-0000000000d2';
+const RECEIPT = 'd2000000-0000-0000-0000-00000000d901';
 const PRICE = 100;
 const TAG = `QA-BRANCH-${Date.now()}`;
 
@@ -71,6 +72,31 @@ async function count(query: string): Promise<number> {
   return Number(rows[0]?.c ?? 0);
 }
 
+/**
+ * Cleanup that REPORTS instead of swallowing — the customerDeletionSecurity /
+ * employeeInviteLifecycle pattern. This suite shares the QA database with the
+ * other integration files, so a silent catch here would leave rows in place
+ * and the next suite would fail deep inside a test with an authorization error
+ * that is really leftover state. Failures are collected and the caller throws
+ * with their names (throwIfCleanupFailed, wired in beforeAll/afterAll).
+ */
+const cleanupFailures: string[] = [];
+async function trySql(label: string, p: Promise<unknown>): Promise<void> {
+  try {
+    await p;
+  } catch (error) {
+    cleanupFailures.push(`${label}: ${(error as Error).message}`);
+  }
+}
+function throwIfCleanupFailed(context: string): void {
+  if (cleanupFailures.length) {
+    throw new Error(
+      `${context}: cleanup failed — ${cleanupFailures.join(' | ')}. ` +
+        `Leftover rows from this suite's namespace will contaminate the next run; fix the leak here rather than re-running.`,
+    );
+  }
+}
+
 async function cleanup() {
   await sql(`DELETE FROM sale_items WHERE sale_id IN (SELECT id FROM sales WHERE customer_id = '${CUSTOMER}')`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
   await sql(`DELETE FROM sales WHERE customer_id = '${CUSTOMER}'`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
@@ -84,7 +110,7 @@ async function cleanup() {
   // Through the shared helper: `create_sale` writes a `sale_created` audit row and
   // `audit_events.user_id` is NO ACTION, so a bare DELETE is silently blocked (and one blocked row
   // takes the whole list with it). `placeLocation` is where that leak was measured.
-  await deleteFixtureUsers([OWNER_A, EMP_MAIN, EMP_BOTH]);
+  await deleteFixtureUsers([EMP_MAIN, EMP_BOTH]);
   // The suite's own branch, removed only after the rows that point at it are gone (sales first, then
   // the users whose active branch it may have been). Read back, because a cleanup that silently
   // failed is how a fixture becomes another suite's inherited state.
@@ -178,7 +204,6 @@ beforeAll(async () => {
   await sql(`
     INSERT INTO users (id, name, phone, role, is_original_owner, is_active, shop_id)
     VALUES
-      ('${OWNER_A}',  '${TAG} Owner',    '923009790001', 'admin',    true,  true, '${TENANT_A}'),
       ('${EMP_MAIN}', '${TAG} WhOnly',   '923009790002', 'employee', false, true, '${TENANT_A}'),
       ('${EMP_BOTH}', '${TAG} TwoBranch','923009790003', 'employee', false, true, '${TENANT_A}')
     ON CONFLICT (id) DO NOTHING
@@ -234,16 +259,37 @@ beforeAll(async () => {
     ON CONFLICT (id) DO UPDATE SET stock_qty = 100, is_active = true, selling_price = ${PRICE}
   `);
 
+  // Receive stock into the warehouse branch's own ledger. branch_variant_qty()
+  // (0252) gives a sub-branch ONLY its own ledger net, so without a receipt the
+  // warehouse holds 0 and every warehouse sale is correctly refused with
+  // INSUFFICIENT_STOCK. The 100 units are one pool: receiving 50 into the
+  // warehouse leaves the other 50 as the main branch's unclaimed remainder
+  // (stock_qty minus the active ledgers), so both branches can sell the 1 unit
+  // each test needs. Fixed id + ON CONFLICT DO NOTHING so a re-run never
+  // double-receives; cleanup() already deletes movements by product_id.
+  // movement_type is 'purchase', not 'opening': the repo's 0009 defines the enum
+  // WITH 'opening', but QA's live enum rejects it (proven by this suite's
+  // beforeAll failing on the value), while 'purchase' is what create_purchase
+  // writes and three purchase-driving suites pass on QA with it
+  // (createOnceSafety, priceTraceability, securityMatrix, run 42094756935).
+  await sql(`
+    INSERT INTO inventory_movements (id, variant_id, product_id, branch_id, movement_type, qty_before, qty_change, qty_after, reference_type, notes)
+    VALUES ('${RECEIPT}', '${VARIANT}', '${PRODUCT}', '${warehouseBranch}', 'purchase', 0, 50, 50, 'opening', 'QA branchScopeEnforcement: opening stock for the warehouse branch')
+    ON CONFLICT (id) DO NOTHING
+  `);
+
   // All three actors must be able to reach the RPC, or every assertion below would be about
   // authentication or permissions rather than about branch scope.
   for (const [who, label] of [[OWNER_A, 'owner'], [EMP_MAIN, 'warehouse-scoped employee'], [EMP_BOTH, 'two-branch employee']] as const) {
     const probe = await execRpcAsUser(who, 'get_my_permissions', {});
     expect(probe.error, `${label} must be able to sign in`).toBeNull();
   }
+  throwIfCleanupFailed('branchScopeEnforcement beforeAll cleanup');
 });
 
 afterAll(async () => {
   await cleanup();
+  throwIfCleanupFailed('branchScopeEnforcement afterAll cleanup');
 });
 
 describe('Branch ownership — records are stamped with a branch', () => {

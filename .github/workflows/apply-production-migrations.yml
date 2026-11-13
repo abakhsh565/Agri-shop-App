@@ -1,0 +1,163 @@
+name: Apply migrations to production (gated batch)
+
+# WHAT THIS WORKFLOW IS FOR — AND WHAT IT WILL NOT DO
+#
+# Production is read-only by default. This workflow is the ONE way a batch of
+# migrations reaches it, and it only runs when every gate precondition holds:
+#
+#   * a NAMED batch (--files), in the verified order;
+#   * a PASS verify:baseline report for THAT batch, against the RECORDED
+#     production baseline, taken recently (--verification);
+#   * a restore-verified backup taken immediately before (--backup manifest
+#     + --restored report);
+#   * the batch's versions in position (no out-of-order files — the
+#     --allow-out-of-order flag is never valid for production, and this
+#     workflow does not accept it);
+#   * a --data-change list naming the tables the batch may move rows in.
+#     Without it, a batch that moves a user-owned row is refused, in a
+#     rehearsal that is always rolled back, before production is written.
+#
+# The decision itself is `scripts/lib/production-batch-gate.mjs` (pure,
+# unit-tested). The apply rehearses the batch against production inside a
+# transaction that is always rolled back, and only then writes. A rehearsal
+# failure, a gate refusal, or a missing credential fails the run and nothing
+# is written.
+#
+# SAFETY DEFAULT: the workflow is a DRY RUN unless `apply` is set to true.
+# A dispatch without apply=true reads the ledger and the gate, prints the
+# decision, and writes nothing. There is no way to apply by accident.
+#
+# The gate files (--verification, --backup, --restored) are paths in this
+# repository, committed under `production-batches/<batch>/` by the operator
+# who prepared the batch (metadata only — the backup .sql itself is never
+# committed). The workflow refuses when any of them is missing.
+#
+# Manual only (`workflow_dispatch`). Nothing pushes, merges or schedules it.
+# Every run is a deliberate owner act, and the run log is the record.
+
+on:
+  workflow_dispatch:
+    inputs:
+      files:
+        description: 'Batch to apply: comma-separated migration filenames, in the verified order (e.g. 0303_production_reconciliation_for_batch1.sql)'
+        required: true
+        type: string
+      verification:
+        description: 'Path in the repo to the PASS verify:baseline report for this batch (e.g. production-batches/0303/verification.json)'
+        required: true
+        type: string
+      backup:
+        description: 'Path in the repo to the backup manifest taken just before (e.g. production-batches/0303/backup.manifest.json)'
+        required: true
+        type: string
+      restored:
+        description: 'Path in the repo to the restore-verify report proving that backup (e.g. production-batches/0303/restore-verification.json)'
+        required: true
+        type: string
+      data_change:
+        description: 'Tables this batch is ALLOWED to change, comma-separated (empty when the batch moves no user-owned rows)'
+        required: false
+        default: ''
+        type: string
+      apply:
+        description: 'Actually write to production. False = dry run (gate + ledger read only, nothing written).'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  # One production apply at a time, ever. Two applies must never interleave.
+  group: apply-production
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    name: Apply gated batch to production
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      PROD_DB_HOST: ${{ secrets.PROD_DB_HOST }}
+      PROD_DB_USER: ${{ secrets.PROD_DB_USER }}
+      PROD_DB_PASS: ${{ secrets.PROD_DB_PASS }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Preflight — production credentials must be present
+        run: |
+          set -euo pipefail
+          missing=""
+          for key in PROD_DB_HOST PROD_DB_USER PROD_DB_PASS; do
+            if [ -z "${!key:-}" ]; then missing="$missing $key"; fi
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::No production credentials:$missing"
+            echo "Add repository secrets PROD_DB_HOST, PROD_DB_USER and PROD_DB_PASS, then re-run."
+            exit 1
+          fi
+          echo "production credentials present"
+
+      - name: Preflight — gate files must exist in the repo
+        run: |
+          set -euo pipefail
+          for f in "${{ inputs.verification }}" "${{ inputs.backup }}" "${{ inputs.restored }}"; do
+            if [ ! -f "$f" ]; then
+              echo "::error::Gate file missing: $f"
+              echo "Commit the verification report, backup manifest and restore report under production-batches/<batch>/ first."
+              exit 1
+            fi
+          done
+          echo "gate files present"
+
+      - name: Ledger state before the apply (read-only)
+        continue-on-error: true
+        run: node scripts/migrate.mjs status --env production
+
+      - name: Apply the gated batch to production
+        run: |
+          set -euo pipefail
+          ARGS=(--env production --files "${{ inputs.files }}" --verification "${{ inputs.verification }}" --backup "${{ inputs.backup }}" --restored "${{ inputs.restored }}")
+          if [ -n "${{ inputs.data_change }}" ]; then ARGS+=(--data-change "${{ inputs.data_change }}"); fi
+          if [ "${{ inputs.apply }}" = "true" ]; then
+            echo "APPLY MODE — writing to production."
+            ARGS+=(--apply)
+          else
+            echo "DRY RUN — gate and ledger read only, nothing will be written."
+          fi
+          node scripts/migrate.mjs apply "${ARGS[@]}"
+
+      - name: Ledger state after the apply (must show the batch recorded)
+        if: ${{ inputs.apply == true }}
+        run: |
+          set -euo pipefail
+          # `migrate.mjs status` refuses production by design (the tool's blanket
+          # refusal: only `apply` with a named batch may touch production), so the
+          # ledger is verified by re-running the same gated apply as a dry run.
+          # The gate reads the production ledger and refuses unless both files
+          # are already recorded with hashes matching the files on disk; the
+          # grep enforces that the run reports exactly that.
+          node scripts/migrate.mjs apply --env production --files "${{ inputs.files }}" --verification "${{ inputs.verification }}" --backup "${{ inputs.backup }}" --restored "${{ inputs.restored }}" | tee /tmp/post_apply_ledger.txt
+          grep -q "Nothing to apply: all .* file(s) in the batch are already recorded" /tmp/post_apply_ledger.txt
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "## Production batch apply"
+            echo ""
+            echo "- batch: \`${{ inputs.files }}\`"
+            echo "- mode: ${{ inputs.apply == true && 'APPLY (wrote to production)' || 'DRY RUN (nothing written)' }}"
+            echo "- requested by: ${{ github.actor }} (run ${{ github.run_number }})"
+          } >> "$GITHUB_STEP_SUMMARY"

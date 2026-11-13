@@ -7,6 +7,7 @@ import {
   execSql,
   loginViaUi,
   ownership,
+  QA_IDS,
   setupFixtures,
   snapshotIds,
   trackOwned,
@@ -44,6 +45,17 @@ test.describe('admin full access + the account-deletion gate', () => {
   test.beforeAll(async () => {
     await setupFixtures();
     await ensureAuthSession(OWNER_PHONE);
+
+    // The profile card is `settings-open-profile` only on the main branch; on
+    // an added branch the same card is `settings-edit-branch` and opens the
+    // branch editor instead. The active branch is server-owned and another lane
+    // can leave it on an added branch, so resolve the main branch and switch to
+    // it here, through the app's own `set_active_branch` RPC.
+    const [mainBranch] = await execSql(
+      `SELECT id FROM branches WHERE tenant_id = '${QA_IDS.shop}' AND is_default = true`,
+    );
+    expect(mainBranch?.id, 'the QA shop has no main branch to switch to').toBeTruthy();
+    await setActiveBranchAsUser(QA_IDS.admin, String(mainBranch.id));
   });
 
   test.afterAll(async () => {

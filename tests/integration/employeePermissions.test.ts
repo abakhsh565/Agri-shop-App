@@ -17,6 +17,7 @@
 
 import { describe, it, beforeAll, afterAll } from 'vitest';
 import { getDbClient, execSqlAsAdmin, execRpcAsUser, checkAuthAsUser, asPostgres } from '../setup/qa-client';
+import { QA_IDS } from '../setup/fixtures';
 
 let client: any;
 
@@ -43,7 +44,7 @@ beforeAll(async () => {
   await cleanup();
 
   // Create test users — use DO UPDATE to reset state from any previous run
-  await client.query(`INSERT INTO users (id, name, phone, role, is_original_owner, is_active, shop_id) VALUES ('${T.adminUser}', 'Perm Test Admin', '92300PERM0001', 'admin', true, true, '${T.shop}'), ('${T.employeeUser}', 'Perm Test Employee', '92300PERM0002', 'employee', false, true, '${T.shop}') ON CONFLICT (id) DO UPDATE SET is_active = EXCLUDED.is_active, role = EXCLUDED.role`);
+  await client.query(`INSERT INTO users (id, name, phone, role, is_original_owner, is_active, shop_id) VALUES ('${T.adminUser}', 'Perm Test Admin', '92300PERM0001', 'admin', false, true, '${T.shop}'), ('${T.employeeUser}', 'Perm Test Employee', '92300PERM0002', 'employee', false, true, '${T.shop}') ON CONFLICT (id) DO UPDATE SET is_active = EXCLUDED.is_active, role = EXCLUDED.role, is_original_owner = EXCLUDED.is_original_owner`);
   await client.query(`INSERT INTO companies (id, name, outstanding_payable, total_purchases, shop_id) VALUES ('${T.companyA}', 'Perm Test Supplier', 0, 0, '${T.shop}') ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name`);
   await client.query(`INSERT INTO customers (id, name, phone, credit_limit, outstanding_balance, total_purchases, total_paid, shop_id, created_by) VALUES ('${T.customerA}', 'Perm Customer A', '92300PERM1001', 50000, 0, 0, 0, '${T.shop}', 'QA') ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, is_archived = false`);
   await client.query(`INSERT INTO products (id, name, company_id, category, stock_qty, shop_id) VALUES ('${T.productA}', 'Perm Test Product', '${T.companyA}', 'seed', 100, '${T.shop}') ON CONFLICT (id) DO UPDATE SET is_active = true, stock_qty = EXCLUDED.stock_qty`);
@@ -265,7 +266,9 @@ describe('Permissions — RPC Authorization (Admin Only)', () => {
   });
 
   it('should allow admin to deactivate employee', async () => {
-    const result = await execRpcAsUser(T.adminUser, 'deactivate_employee_v1', {
+    // Deactivate needs employees.manage, which no seeded role holds — only
+    // the fixture owner passes (implicit owner permission set).
+    const result = await execRpcAsUser(QA_IDS.owner, 'deactivate_employee_v1', {
       payload: JSON.stringify({ employeeId: T.employeeUser }),
     });
     rec('Admin deactivate_employee — no NOT_AUTHORIZED', 'no NOT_AUTHORIZED', result.error?.includes('NOT_AUTHORIZED') ? 'NOT_AUTHORIZED' : 'ok', result.error?.includes('NOT_AUTHORIZED') ? 'FAIL' : 'PASS');

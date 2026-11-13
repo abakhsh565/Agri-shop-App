@@ -28,7 +28,7 @@ import {
   ownership,
   snapshotIds,
   trackOwned,
-  injectAdminAuth,
+  injectOwnerAuth,
 } from './helpers';
 import { runCleanupStatements } from '../setup/ownedCleanup';
 
@@ -132,7 +132,7 @@ test.describe('Role deletion — assigned role revokes its access', () => {
     expect(await memberCount(), 'the fixture role must be assigned to two active employees').toBe(2);
     expect(await roleExists()).toBe(true);
 
-    await injectAdminAuth(page);
+    await injectOwnerAuth(page);
 
     await page.goto(`${BASE_URL}/admin/settings/roles`);
     await page.waitForLoadState('networkidle');
@@ -186,7 +186,7 @@ test.describe('Role deletion — assigned role revokes its access', () => {
   });
 
   test('a repeated deletion from a signed-in client cannot revive the role', async ({ page }) => {
-    await injectAdminAuth(page);
+    await injectOwnerAuth(page);
 
     // The bypass attempt: the browser's own session calls the RPC directly, for a role
     // that no longer exists. It must be refused, not silently recreate or half-apply.

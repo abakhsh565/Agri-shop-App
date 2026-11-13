@@ -81,11 +81,16 @@ beforeAll(async () => {
   }
 
   // Create fixtures
-  await client.query(`INSERT INTO users (id, name, phone, role, is_original_owner, is_active, shop_id) VALUES ('${TEST.customerA}', 'Inv Test User', '92300INV1001', 'admin', true, true, '${TEST.shop}') ON CONFLICT (id) DO NOTHING`);
+  await client.query(`INSERT INTO users (id, name, phone, role, is_original_owner, is_active, shop_id) VALUES ('${TEST.customerA}', 'Inv Test User', '92300INV1001', 'admin', false, true, '${TEST.shop}') ON CONFLICT (id) DO NOTHING`);
   await client.query(`INSERT INTO companies (id, name, outstanding_payable, total_purchases, shop_id) VALUES ('${TEST.companyA}', 'Inv Test Supplier', 0, 0, '${TEST.shop}') ON CONFLICT (id) DO NOTHING`);
   await client.query(`INSERT INTO customers (id, name, phone, credit_limit, outstanding_balance, total_purchases, total_paid, shop_id, created_by) VALUES ('${TEST.customerA}', 'Inv Customer A', '92300INV1001', 100000, 0, 0, 0, '${TEST.shop}', 'QA') ON CONFLICT (id) DO NOTHING`);
   await client.query(`INSERT INTO products (id, name, company_id, category, stock_qty, shop_id) VALUES ('${TEST.productA}', 'Inv Test Product A', '${TEST.companyA}', 'seed', 100, '${TEST.shop}'), ('${TEST.productB}', 'Inv Test Product B', '${TEST.companyA}', 'fertilizer', 50, '${TEST.shop}') ON CONFLICT (id) DO NOTHING`);
-  await client.query(`INSERT INTO product_variants (id, product_id, name, selling_price, cost_price, unit_size, low_stock_threshold, stock_qty) VALUES ('${TEST.variantA}', '${TEST.productA}', '1kg', 5000, 3000, 1, 10, 100), ('${TEST.variantB}', '${TEST.productB}', '5kg', 2000, 1500, 5, 5, 50) ON CONFLICT (id) DO NOTHING`);
+  await client.query(`INSERT INTO product_variants (id, product_id, name, selling_price, cost_price, unit_size, low_stock_threshold, stock_qty, is_active) VALUES ('${TEST.variantA}', '${TEST.productA}', '1kg', 5000, 3000, 1, 10, 100, true), ('${TEST.variantB}', '${TEST.productB}', '5kg', 2000, 1500, 5, 5, 50, true) ON CONFLICT (id) DO UPDATE SET is_active = true`);
+  // The upsert above is the fix for the rollup, not a nicety: the derived product
+  // rollup (0128) sums only ACTIVE variants, and a variant left is_active=false by
+  // an earlier run stays false under ON CONFLICT DO NOTHING, so the product reads
+  // 0 while the variant itself reads its real stock. Re-asserting is_active=true
+  // here fires the rollup trigger and repairs the product row too.
 });
 
 afterAll(async () => {

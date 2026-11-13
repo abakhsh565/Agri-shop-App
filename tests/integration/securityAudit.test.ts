@@ -33,7 +33,8 @@ describe('Security Audit — RLS & Authorization', () => {
       VALUES ('${CUST_ID}', 'Security Test Customer', '${CUST_PHONE}', 10000, 0, 0, 0, '${QA_IDS.shop}', 'QA')
       ON CONFLICT (id) DO NOTHING
     `);
-  });
+      throwIfCleanupFailed('Security Audit — RLS & Authorization beforeAll cleanup');
+});
 
   afterAll(async () => {
     await execSqlAsAdmin(`DELETE FROM credit_limit_requests WHERE customer_id = '${CUST_ID}'`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
@@ -149,7 +150,7 @@ describe('Security Audit — RLS & Authorization', () => {
 
   // ─── RPC: Missing auth checks (documented findings) ───────────────────────
 
-  it('RPC: archive_customer requires the customers.delete permission', async () => {
+  it('RPC: archive_customer is owner-only since 0285 (no role holds customers.delete)', async () => {
     // Employee (no membership / no customers.delete) must be rejected.
     // NOTE: this assertion was inverted when migration 0112 added the
     // authoritative permission guard — archive was previously unprotected.
@@ -166,23 +167,24 @@ describe('Security Audit — RLS & Authorization', () => {
     );
     expect(afterDenied.rows[0]?.is_archived).toBe(false);
 
-    // Owner/admin still holds the permission and can archive.
-    const allowed = await execRpcAsUser(QA_IDS.admin, 'archive_customer', {
+    // The owner passes via the implicit owner permission set (0285 deleted
+    // customers.delete from every role, so no role holds it anymore).
+    const allowed = await execRpcAsUser(QA_IDS.owner, 'archive_customer', {
       p_customer_id: CUST_ID,
-      p_archived_by: QA_IDS.admin,
+      p_archived_by: QA_IDS.owner,
     });
     expect(allowed.error).toBeNull();
 
-    await execRpcAsUser(QA_IDS.admin, 'restore_customer', {
+    await execRpcAsUser(QA_IDS.owner, 'restore_customer', {
       p_customer_id: CUST_ID,
     });
   });
 
-  it('RPC: restore_customer requires the customers.delete permission', async () => {
+  it('RPC: restore_customer is owner-only since 0285 (no role holds customers.delete)', async () => {
     // First archive
-    await execRpcAsUser(QA_IDS.admin, 'archive_customer', {
+    await execRpcAsUser(QA_IDS.owner, 'archive_customer', {
       p_customer_id: CUST_ID,
-      p_archived_by: QA_IDS.admin,
+      p_archived_by: QA_IDS.owner,
     });
 
     // Employee must be rejected (was previously unprotected).
@@ -197,8 +199,8 @@ describe('Security Audit — RLS & Authorization', () => {
     );
     expect(stillArchived.rows[0]?.is_archived).toBe(true);
 
-    // Admin can restore.
-    const allowed = await execRpcAsUser(QA_IDS.admin, 'restore_customer', {
+    // Owner can restore.
+    const allowed = await execRpcAsUser(QA_IDS.owner, 'restore_customer', {
       p_customer_id: CUST_ID,
     });
     expect(allowed.error).toBeNull();
@@ -208,7 +210,7 @@ describe('Security Audit — RLS & Authorization', () => {
     // Ensure admin user exists with phone for JWT
     await execSqlAsAdmin(`
       INSERT INTO users (id, name, phone, role, is_original_owner, is_active, shop_id)
-      VALUES ('${QA_IDS.admin}', 'QA Admin', '923009999999', 'admin', true, true, '${QA_IDS.shop}')
+      VALUES ('${QA_IDS.admin}', 'QA Admin', '923009999999', 'admin', false, true, '${QA_IDS.shop}')
       ON CONFLICT (id) DO UPDATE SET is_active = true, phone = '923009999999'
     `);
 
@@ -235,7 +237,7 @@ describe('Security Audit — RLS & Authorization', () => {
       // Ensure admin exists right before delete (other tests may have cleaned up)
       await execSqlAsAdmin(`
         INSERT INTO users (id, name, phone, role, is_original_owner, is_active, shop_id)
-        VALUES ('${QA_IDS.admin}', 'QA Admin', '923009999999', 'admin', true, true, '${QA_IDS.shop}')
+        VALUES ('${QA_IDS.admin}', 'QA Admin', '923009999999', 'admin', false, true, '${QA_IDS.shop}')
         ON CONFLICT (id) DO UPDATE SET is_active = true, phone = '923009999999'
       `);
 
@@ -280,7 +282,7 @@ describe('Security Audit — RLS & Authorization', () => {
     // Ensure admin user exists with phone for JWT
     await execSqlAsAdmin(`
       INSERT INTO users (id, name, phone, role, is_original_owner, is_active, shop_id)
-      VALUES ('${QA_IDS.admin}', 'QA Admin', '923009999999', 'admin', true, true, '${QA_IDS.shop}')
+      VALUES ('${QA_IDS.admin}', 'QA Admin', '923009999999', 'admin', false, true, '${QA_IDS.shop}')
       ON CONFLICT (id) DO UPDATE SET is_active = true, phone = '923009999999'
     `);
 
@@ -359,30 +361,84 @@ describe('Security Audit — RLS & Authorization', () => {
 
   // ─── Storage Security (documented) ─────────────────────────────────────────
 
-  it('Storage: no anonymous write, and exactly the two intended policies', async () => {
+  it('Storage: no anonymous write, and the per-bucket policy matrix holds', async () => {
     // This assertion used to require at least four `public_all_*` policies — i.e. it recorded the
     // demo-era state as the expected one. `0230` measured what that state meant (the publishable key
     // the browser bundle ships could delete or overwrite any image in all four buckets) and closed
     // it. The check is therefore rewritten to the property that now has to hold, and it is stronger:
     // it asserts an absence, the exact policy set, and that no client role can mutate an object.
+    //
+    // The exact-two-policies shape it used to assert is stale: `0250` deliberately added the
+    // business-documents policies and `0261` the finance-receipts policies, and `0263` asserts the
+    // finance-receipts read/write policies survive (it drops only the delete policy). The intended
+    // model is a PER-BUCKET matrix, so that is what this test now asserts — per bucket, the exact
+    // policies, the exact roles, and the exact scope. A policy added, removed, widened or
+    // unscoped anywhere in the matrix fails here.
     const policies = await execSqlAsAdmin(
-      `SELECT policyname, cmd, roles::text AS roles FROM pg_policies WHERE schemaname = 'storage' AND tablename = 'objects'`
+      `SELECT policyname, cmd, roles::text AS roles, qual, with_check FROM pg_policies WHERE schemaname = 'storage' AND tablename = 'objects'`
     );
+    type P = { policyname: string; cmd: string; roles: string; qual: string | null; with_check: string | null };
+    const rows = policies.rows as P[];
+    const byName = new Map(rows.map((p) => [`${p.policyname}/${p.cmd}`, p]));
 
-    const anonWrite = policies.rows.filter(
-      (p: { cmd: string; roles: string }) =>
-        ['INSERT', 'UPDATE', 'DELETE', 'ALL'].includes(p.cmd) && /(^|\{|,)\s*(public|anon)\s*(\}|,|$)/.test(p.roles),
+    const anonWrite = rows.filter(
+      (p) => ['INSERT', 'UPDATE', 'DELETE', 'ALL'].includes(p.cmd) && /(^|\{|,)\s*(public|anon)\s*(\}|,|$)/.test(p.roles),
     );
     expect(anonWrite, `an anonymous write policy survived: ${JSON.stringify(anonWrite)}`).toEqual([]);
 
-    const clientMutation = policies.rows.filter((p: { cmd: string }) => ['UPDATE', 'DELETE'].includes(p.cmd));
+    const clientMutation = rows.filter((p) => ['UPDATE', 'DELETE'].includes(p.cmd));
     expect(
       clientMutation,
       `an object can still be updated or deleted by a client role: ${JSON.stringify(clientMutation)}`,
     ).toEqual([]);
 
-    const names = policies.rows.map((p: { policyname: string; cmd: string }) => `${p.policyname}/${p.cmd}`).sort();
-    expect(names).toEqual(['images auth write/INSERT', 'images public read/SELECT']);
+    // Exact policy set: nothing added, nothing removed, nothing renamed.
+    const names = rows.map((p) => `${p.policyname}/${p.cmd}`).sort();
+    expect(names).toEqual([
+      'business documents read/SELECT',
+      'business documents write/INSERT',
+      'finance receipts read/SELECT',
+      'finance receipts write/INSERT',
+      'images auth write/INSERT',
+      'images public read/SELECT',
+    ]);
+
+    const IMAGE_BUCKETS = ['product-images', 'employee-photos', 'company-logos', 'customer-images'];
+    const isAuthenticatedOnly = (p: P) => p.roles.replace(/[\s{}]/g, '') === 'authenticated';
+
+    // Images: public read + authenticated upload, scoped to exactly the four image buckets.
+    const imgRead = byName.get('images public read/SELECT')!;
+    expect(imgRead.roles.replace(/[\s{}]/g, '')).toBe('public');
+    for (const b of IMAGE_BUCKETS) expect(imgRead.qual ?? '', `images public read lost bucket ${b}`).toContain(b);
+    const imgWrite = byName.get('images auth write/INSERT')!;
+    expect(isAuthenticatedOnly(imgWrite), 'images auth write must be authenticated-only').toBe(true);
+    for (const b of IMAGE_BUCKETS) expect(imgWrite.with_check ?? '', `images auth write lost bucket ${b}`).toContain(b);
+
+    // business-documents: authenticated SELECT + INSERT, scoped to the caller's shop prefix.
+    for (const key of ['business documents read/SELECT', 'business documents write/INSERT'] as const) {
+      const p = byName.get(key)!;
+      expect(isAuthenticatedOnly(p), `${key} must be authenticated-only`).toBe(true);
+      const scope = key.endsWith('/SELECT') ? p.qual ?? '' : p.with_check ?? '';
+      expect(scope, `${key} lost its bucket scope`).toContain('business-documents');
+      expect(scope, `${key} lost its shop scope`).toContain('current_shop_id');
+    }
+
+    // finance-receipts: authenticated SELECT + INSERT, scoped to the caller's shop AND branch.
+    for (const key of ['finance receipts read/SELECT', 'finance receipts write/INSERT'] as const) {
+      const p = byName.get(key)!;
+      expect(isAuthenticatedOnly(p), `${key} must be authenticated-only`).toBe(true);
+      const scope = key.endsWith('/SELECT') ? p.qual ?? '' : p.with_check ?? '';
+      expect(scope, `${key} lost its bucket scope`).toContain('finance-receipts');
+      expect(scope, `${key} lost its shop scope`).toContain('current_shop_id');
+      expect(scope, `${key} lost its branch scope`).toContain('current_branch_id');
+    }
+
+    // No policy is unscoped across all buckets: every SELECT carries bucket_id in its qual and
+    // every INSERT in its with_check, so a policy can never silently widen to every bucket.
+    for (const p of rows) {
+      const scope = p.cmd === 'SELECT' ? p.qual ?? '' : p.with_check ?? '';
+      expect(scope, `${p.policyname}/${p.cmd} has no bucket scope`).toContain('bucket_id');
+    }
   });
 
   // ─── Users table: UPDATE policy fixed ──────────────────────────────────────
@@ -460,15 +516,16 @@ describe('Security Audit — RLS & Authorization', () => {
     // never depends on whoever ran last.
     await execSqlAsAdmin(`
       INSERT INTO users (id, name, phone, role, is_original_owner, is_active, shop_id)
-      VALUES ('${QA_IDS.admin}', 'QA Admin', '923009999999', 'admin', true, true, '${QA_IDS.shop}')
+      VALUES ('${QA_IDS.admin}', 'QA Admin', '923009999999', 'admin', false, true, '${QA_IDS.shop}')
       ON CONFLICT (id) DO UPDATE SET phone = '923009999999', role = 'admin', is_active = true
     `);
     await execSqlAsAdmin(`UPDATE auth.users SET phone = '923009999999' WHERE id = '${QA_IDS.admin}'`);
 
-    // Archive the customer
-    const archiveResult = await execRpcAsUser(QA_IDS.admin, 'archive_customer', {
+    // Archive the customer (as the owner: 0285 deleted customers.delete from
+    // every role, so only the owner's implicit permission set passes).
+    const archiveResult = await execRpcAsUser(QA_IDS.owner, 'archive_customer', {
       p_customer_id: CUST_ID,
-      p_archived_by: QA_IDS.admin,
+      p_archived_by: QA_IDS.owner,
     });
     if (archiveResult.error) {
       console.error('[archive_customer error]', archiveResult.error);
@@ -490,8 +547,8 @@ describe('Security Audit — RLS & Authorization', () => {
     );
     // Sales count should not have changed
 
-    // Restore
-    await execRpcAsUser(QA_IDS.admin, 'restore_customer', {
+    // Restore (as the owner, same as the archive above)
+    await execRpcAsUser(QA_IDS.owner, 'restore_customer', {
       p_customer_id: CUST_ID,
     });
 

@@ -40,7 +40,7 @@ function validInput(overrides: Record<string, unknown> = {}) {
       generatedAt: minutesAgo(10),
       baseline: { environment: 'production', sha256Verified: true },
       selection: { resolved: [...BATCH] },
-      files: FILES.map((f) => ({ filename: f.filename, version: f.version, failures: [] })),
+      files: FILES.map((f) => ({ filename: f.filename, version: f.version, sha256: f.sha256, failures: [] })),
     },
     backupManifest: {
       artifact: 'backup-production-gkswcfljxlutkfdvvqng-2026-10-16T15-25-00.sql',
@@ -140,17 +140,43 @@ describe('the verification report is PASS, for THIS batch, against production, r
     });
   }
 
-  test('refused: a file edited AFTER it was verified', () => {
+  test('refused: a file whose bytes differ from the hash the report recorded', () => {
     // The subtle one: every name matches, the report is fresh, and the bytes still changed. A verified
     // batch is a batch of verified bytes, so this has to fail.
     const edited = validInput();
     const result = productionBatchGate({
       ...edited,
-      entries: edited.entries.map((e, i) => (i === 1 ? { ...e, mtimeMs: NOW - 60_000 } : e)),
+      entries: edited.entries.map((e, i) => (i === 1 ? { ...e, sha256: 'different-bytes' } : e)),
     } as never);
     expect(result.ok).toBe(false);
     expect(reasons(result)).toMatch(/changed after the verification report was produced/);
     expect(reasons(result)).toContain(FILES[1].filename);
+  });
+
+  test('passes: identical bytes with mtimes NEWER than the report (fresh checkout)', () => {
+    // Run 42706653163 refused a byte-identical batch because a fresh GitHub Actions checkout sets
+    // every file's mtime to the checkout time, after generatedAt. The gate compares content hashes,
+    // so mtimes newer than the report are not an edit.
+    const freshCheckout = validInput();
+    const result = productionBatchGate({
+      ...freshCheckout,
+      entries: freshCheckout.entries.map((e) => ({ ...e, mtimeMs: NOW - 60_000 })),
+    } as never);
+    expect(result.problems, reasons(result)).toEqual([]);
+    expect(result.ok).toBe(true);
+  });
+
+  test('refused: a report that records no content hash (old format) — fail closed', () => {
+    const noHashes = validInput();
+    const result = productionBatchGate({
+      ...noHashes,
+      verification: {
+        ...noHashes.verification,
+        files: FILES.map((f) => ({ filename: f.filename, version: f.version, failures: [] })),
+      },
+    } as never);
+    expect(result.ok).toBe(false);
+    expect(reasons(result)).toMatch(/records no content hash/);
   });
 
   test('the freshness window is a parameter, not a constant buried in a comparison', () => {

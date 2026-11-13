@@ -1,9 +1,12 @@
 /**
  * Employee access model regression suite
  *
- * The database is authoritative (0108 `get_effective_permissions`):
+ * The database is authoritative (0108 `get_effective_permissions`, 0277 deny-only):
  *
- *     effective = (role defaults ∪ granted overrides) ∖ denied overrides
+ *     effective = role defaults ∖ denied overrides
+ *
+ * An employee-level override can only DENY a permission the assigned role
+ * holds; it can never grant one (0277 `employee_overrides_restrict_only`).
  *
  * This suite proves, with a real JWT → PostgREST → RPC → database path, the three
  * properties the owner-facing screens depend on:
@@ -14,23 +17,21 @@
  *      it does not erase what the owner decided for this person. (The screens used
  *      to discard them — see the engineering memory entry — so this is the rule,
  *      not the UI's assumption.)
- *   3. Grants and denials both reach AUTHORIZATION, not just the screen, and
+ *   3. Denials reach AUTHORIZATION, not just the screen, and
  *      resetting to "role access only" clears every exception.
  *
  * Self-contained: creates its own owner + employee and removes them.
  */
 
 import { describe, it, beforeAll, afterAll, expect } from 'vitest';
-import { execRpcAsUser, execSqlAsAdmin, checkAuthAsUser, roleIdByName } from '../setup/qa-client';
+import { acceptInvitationAsUser, execRpcAsUser, execSqlAsAdmin, checkAuthAsUser, roleIdByName } from '../setup/qa-client';
+import { QA_IDS } from '../setup/fixtures';
 
 const TENANT = '00000000-0000-0000-0000-000000000001';
-// Must not be shared with another suite. It was 'c3000000-…-0001', which
-// returnIntegrityGuards also claims for a different owner: whichever suite cleaned
-// up first deleted the row the other was mid-run using, and the surviving suite then
-// answered "NOT_AUTHORIZED: tenant access denied" for an owner it had just
-// authorized. tests/unit/fixtureIdCollision.test.ts now fails if that ever happens
-// again.
-const OWNER = 'c3000000-0000-0000-0000-000000000009';
+// The fixture shop's sole owner (Khalid Khan). 0280 allows one active owner
+// per shop, so this suite uses him instead of creating its own owner — and
+// never inserts, updates or deletes his user row.
+const OWNER = QA_IDS.owner;
 // Built-in roles, resolved by NAME in beforeAll. Hard-coding `a0000000-…-0001` assumed a global id
 // that a built-in role keeps forever; it does not. The role can be deleted through the app, and
 // `roles.id` is ONE key across tenants, so the id 0107 seeded for this tenant can be held by another
@@ -72,8 +73,33 @@ async function createEmployee(payload: Record<string, unknown>) {
   return r;
 }
 
+/**
+ * Cleanup that REPORTS instead of swallowing — the customerDeletionSecurity /
+ * employeeInviteLifecycle pattern. This suite shares the QA database with the
+ * other integration files, so a silent catch here would leave rows in place
+ * and the next suite would fail deep inside a test with an authorization error
+ * that is really leftover state. Failures are collected and the caller throws
+ * with their names (throwIfCleanupFailed, wired in beforeAll/afterAll).
+ */
+const cleanupFailures: string[] = [];
+async function trySql(label: string, p: Promise<unknown>): Promise<void> {
+  try {
+    await p;
+  } catch (error) {
+    cleanupFailures.push(`${label}: ${(error as Error).message}`);
+  }
+}
+function throwIfCleanupFailed(context: string): void {
+  if (cleanupFailures.length) {
+    throw new Error(
+      `${context}: cleanup failed — ${cleanupFailures.join(' | ')}. ` +
+        `Leftover rows from this suite's namespace will contaminate the next run; fix the leak here rather than re-running.`,
+    );
+  }
+}
+
 async function cleanup() {
-  await sql(`
+  await trySql('audit_events', sql(`
     DELETE FROM audit_events
     WHERE user_id IN (SELECT id FROM users WHERE phone = '${EMP_PHONE}')
        OR entity_id IN (SELECT id FROM users WHERE phone = '${EMP_PHONE}')
@@ -107,23 +133,6 @@ async function roleDefaults(roleId: string): Promise<string[]> {
 
 beforeAll(async () => {
   await cleanup();
-  await sql(`
-    INSERT INTO users (id, name, phone, role, is_original_owner, is_active, shop_id)
-    VALUES ('${OWNER}', 'QA Override Owner', '923009670099', 'admin', true, true, '${TENANT}')
-    ON CONFLICT (id) DO UPDATE SET is_active = true, is_original_owner = true,
-      shop_id = EXCLUDED.shop_id, phone = EXCLUDED.phone
-  `);
-  // The User→Membership trigger (0113) is AFTER INSERT only, so an owner row
-  // that already exists — a previous run's leftovers, because cleanup() removes
-  // only this suite's employee — never gets a membership, and then every
-  // authorized RPC fails with NOT_AUTHORIZED while the suite looks broken.
-  // Ensure it explicitly, which is exactly the invariant 0113 guarantees.
-  await sql(`
-    INSERT INTO memberships (user_id, tenant_id, role, status)
-    VALUES ('${OWNER}', '${TENANT}', 'owner', 'active')
-    ON CONFLICT (user_id, tenant_id) DO UPDATE
-      SET role = 'owner', status = 'active', updated_at = now()
-  `);
   ROLE_SALES_EMPLOYEE = await roleIdByName(TENANT, 'Sales Employee');
   ROLE_STORE_MANAGER = await roleIdByName(TENANT, 'Store Manager');
   const b = await sql(
@@ -146,6 +155,7 @@ beforeAll(async () => {
   ).toBe('active');
   const perms = await execRpcAsUser(OWNER, 'get_my_permissions', {});
   expect(perms.error, 'the owner must be authorized through the real JWT path').toBeNull();
+  throwIfCleanupFailed('employeeAccessOverrides beforeAll cleanup');
 });
 
 afterAll(async () => {
@@ -161,16 +171,16 @@ describe('Employee access = role defaults + this employee\'s exceptions', () => 
       phone: EMP_PHONE,
       roleId: ROLE_SALES_EMPLOYEE,
       branchScope: [branchId],
-      overrides: { 'companies.view': true, 'sales.create': false, 'not.a.real.code': true },
+      overrides: { 'sales.create': false, 'not.a.real.code': true },
     });
     expect(created.error).toBeNull();
     employeeId = created.data.id;
     // The unknown code is skipped rather than failing the whole creation.
-    expect(created.data.overrides).toBe(2);
+    // Only the denial is stored: 0277 allows no granted override at all.
+    expect(created.data.overrides).toBe(1);
 
     const rows = await overridesInDb();
     expect(rows).toEqual([
-      { code: 'companies.view', is_granted: true },
       { code: 'sales.create', is_granted: false },
     ]);
 
@@ -179,14 +189,11 @@ describe('Employee access = role defaults + this employee\'s exceptions', () => 
     expect(await execRpcAsUser(employeeId, 'get_my_permissions', {})).toMatchObject({ data: [] });
   });
 
-  it('applies both the grant and the denial to authorization once they are active', async () => {
-    await execRpcAsUser(employeeId, 'complete_member_onboarding', {});
+  it('applies the denial to authorization once they are active', async () => {
+    await acceptInvitationAsUser(employeeId);
     const perms = await myPermissions();
     const defaults = await roleDefaults(ROLE_SALES_EMPLOYEE);
 
-    // Granted exception: not part of the role, present anyway.
-    expect(defaults).not.toContain('companies.view');
-    expect(perms).toContain('companies.view');
     // Denied exception: part of the role, honestly removed for this employee.
     expect(defaults).toContain('sales.create');
     expect(perms).not.toContain('sales.create');
@@ -203,7 +210,6 @@ describe('Employee access = role defaults + this employee\'s exceptions', () => 
 
     // The stored exceptions are still there — a role change is not a reset.
     expect(await overridesInDb()).toEqual([
-      { code: 'companies.view', is_granted: true },
       { code: 'sales.create', is_granted: false },
     ]);
 
@@ -213,7 +219,6 @@ describe('Employee access = role defaults + this employee\'s exceptions', () => 
     expect(perms).toContain('reports.view');   // came with the new role
     expect(storeDefaults).toContain('sales.create');
     expect(perms).not.toContain('sales.create'); // the old denial still means something
-    expect(perms).toContain('companies.view');   // the old grant still applies
   });
 
   it('reset to role access only clears every exception', async () => {

@@ -40,7 +40,8 @@ describe('Credit Request Integration', () => {
         ('${CR_CUSTOMER_B}', 'QA Credit Customer B', '923006666002', 25000, 0, 40000, 14000, '${QA_IDS.shop}', 'QA')
       ON CONFLICT (id) DO UPDATE SET credit_limit = EXCLUDED.credit_limit, outstanding_balance = EXCLUDED.outstanding_balance
     `);
-  });
+      throwIfCleanupFailed('Credit Request Integration beforeAll cleanup');
+});
 
   afterAll(async () => {
     // This suite's own rows, reported rather than swallowed: `.catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); })` on both of these meant
@@ -55,7 +56,8 @@ describe('Credit Request Integration', () => {
       'creditRequest removal of its own rows',
     );
     printReport();
-  });
+      throwIfCleanupFailed('Credit Request Integration afterAll cleanup');
+});
 
   describe('Create Credit Request', () => {
     let requestId: string;

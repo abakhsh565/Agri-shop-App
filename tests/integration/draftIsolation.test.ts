@@ -64,7 +64,8 @@ describe('Draft QA Data Isolation', () => {
     await q(`INSERT INTO product_variants (id, product_id, name, selling_price, cost_price, unit_size, low_stock_threshold, stock_qty)
       VALUES ('${VAR_B}', '${PROD_B}', '1kg', 8000, 5000, 1, 10, 200)
       ON CONFLICT (id) DO UPDATE SET stock_qty = EXCLUDED.stock_qty`);
-  });
+      throwIfCleanupFailed('Draft QA Data Isolation beforeAll cleanup');
+});
 
   afterAll(async () => {
     for (const t of ['sale_items', 'sales', 'inventory_movements', 'stock_adjustments']) {
@@ -74,7 +75,8 @@ describe('Draft QA Data Isolation', () => {
     await q(`DELETE FROM products WHERE id IN ('${PROD_A}','${PROD_B}')`);
     await q(`DELETE FROM companies WHERE id IN ('${CO_A}','${CO_B}')`);
     await q(`DELETE FROM customers WHERE id IN ('${CUST_A}','${CUST_B}')`);
-  });
+      throwIfCleanupFailed('Draft QA Data Isolation afterAll cleanup');
+});
 
   // ─── PART 1: Basic existence (shared QA DB, both drafts coexist) ───
 
@@ -167,6 +169,7 @@ describe('Draft QA Data Isolation', () => {
     for (const t of ['sale_items', 'sales', 'inventory_movements', 'stock_adjustments']) {
       await q(`DELETE FROM ${t} WHERE product_id = '${PROD_A}'`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
     }
+    await trySql('cleanup-3', q(`DELETE FROM sales WHERE customer_id = '${CUST_A}'`));
     await q(`DELETE FROM product_variants WHERE id = '${VAR_A}'`);
     await q(`DELETE FROM products WHERE id = '${PROD_A}'`);
     await q(`DELETE FROM companies WHERE id = '${CO_A}'`);

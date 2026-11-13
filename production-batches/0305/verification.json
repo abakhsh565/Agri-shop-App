@@ -1,0 +1,113 @@
+{
+  "status": "PASS",
+  "generatedAt": "2026-11-10T05:35:03.232Z",
+  "baseline": {
+    "label": "backups/backup-production-gkswcfljxlutkfdvvqng-2026-11-10T01-28-00.sql",
+    "environment": "production",
+    "artifactSha256": "9c0b1d0a333dbb48136d5a9d41d07ef33316ccc53576e905b9d604310c9723b3",
+    "sha256Verified": true,
+    "capturedAt": "2026-11-10T01:28:00Z",
+    "statements": 1143,
+    "dataStatements": 92,
+    "dataStatementsSkipped": 90,
+    "referenceData": [
+      {
+        "table": "public.permissions",
+        "rows": 32
+      },
+      {
+        "table": "storage.buckets",
+        "rows": 4
+      }
+    ],
+    "loadFailures": [],
+    "skippedStatements": [
+      {
+        "reason": "scaffold-schema",
+        "statement": "CREATE SCHEMA auth"
+      },
+      {
+        "reason": "scaffold-schema",
+        "statement": "CREATE SCHEMA extensions"
+      },
+      {
+        "reason": "scaffold-schema",
+        "statement": "CREATE SCHEMA storage"
+      },
+      {
+        "reason": "extension-unavailable",
+        "statement": "CREATE EXTENSION IF NOT EXISTS pg_stat_statements WITH SCHEMA extensions"
+      },
+      {
+        "reason": "extension-unavailable",
+        "statement": "CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA extensions"
+      },
+      {
+        "reason": "extension-unavailable",
+        "statement": "CREATE EXTENSION IF NOT EXISTS supabase_vault WITH SCHEMA vault"
+      },
+      {
+        "reason": "extension-unavailable",
+        "statement": "CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\" WITH SCHEMA extensions"
+      },
+      {
+        "reason": "scaffold-function",
+        "statement": "CREATE FUNCTION auth.email() RETURNS text LANGUAGE sql STABLE AS $$ select coalesce( nullif(current_setting('r"
+      },
+      {
+        "reason": "scaffold-function",
+        "statement": "CREATE FUNCTION auth.jwt() RETURNS jsonb LANGUAGE sql STABLE AS $$ select coalesce( nullif(current_setting('re"
+      },
+      {
+        "reason": "scaffold-function",
+        "statement": "CREATE FUNCTION auth.role() RETURNS text LANGUAGE sql STABLE AS $$ select coalesce( nullif(current_setting('re"
+      },
+      {
+        "reason": "scaffold-function",
+        "statement": "CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $$ select coalesce( nullif(current_setting('req"
+      },
+      {
+        "reason": "scaffold-publication",
+        "statement": "CREATE PUBLICATION supabase_realtime WITH (publish = 'insert, update, delete, truncate')"
+      }
+    ]
+  },
+  "selection": {
+    "since": "0305",
+    "upto": "0305",
+    "files": null,
+    "resolved": [
+      "0305_add_missing_product_category_labels.sql"
+    ]
+  },
+  "files": [
+    {
+      "filename": "0305_add_missing_product_category_labels.sql",
+      "version": "0305",
+      "statements": 4,
+      "sha256": "5bad40bf39101bf906d2468e7dcbc15087036bdfbf796e33470bcd27958a550b",
+      "failures": []
+    }
+  ],
+  "summary": {
+    "status": "PASS",
+    "files": 1,
+    "statements": 4,
+    "failedStatements": 0,
+    "envGapFailures": 0,
+    "sqlFailures": 0,
+    "expectedPhaseFailures": 0,
+    "baselineLoadFailures": 0,
+    "baselineSqlFailures": 0,
+    "baselineEnvGapFailures": 0,
+    "baselineExpectedPhaseFailures": 0,
+    "baselineSkippedStatements": 12,
+    "baselineSkippedByReason": {
+      "scaffold-schema": 3,
+      "extension-unavailable": 4,
+      "scaffold-function": 4,
+      "scaffold-publication": 1
+    }
+  },
+  "exitCode": 0
+}

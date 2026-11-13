@@ -1,0 +1,155 @@
+name: QA DB activity probe (read-only)
+
+# READ-ONLY diagnostic for the persistent QA degradation (PR #31 CI run
+# 42776278801, attempts 1 and 3): the integration suites degrade mid-run —
+# every DB/RPC call starts hitting the 30s vitest timeout until the 60-min
+# job limit cancels the QA job — while a read-only PostgREST probe minutes
+# before the run shows the QA database responsive. The cause is not visible
+# from the test log: it needs the live database state DURING the suites
+# (pg_stat_activity / pg_locks / blocking locks / connection counts).
+#
+# This workflow samples that state, read-only, every N seconds for M minutes
+# and prints each sample to the job log. It can NEVER write: every query
+# below is a SELECT (plus SHOW via pg_settings), the session sets
+# default_transaction_read_only = on, each probe query carries a 15s
+# statement_timeout so a wedged database cannot hang the probe itself, and
+# there is no migration step, no apply flag, and no production secret or URL
+# anywhere in this file.
+#
+# NO CONCURRENCY GROUP — DELIBERATE. The degradation only appears while the
+# integration suites run, so this probe must be dispatchable CONCURRENTLY
+# with a PR CI QA job (which holds the qa-database group). The probe only
+# reads pg_stat_activity / pg_locks / pg_stat_database; it never touches
+# fixtures, so it cannot corrupt the suites it observes. Manual dispatch
+# only.
+#
+# Primary route is direct psql via the QA_DB_* repo secrets — the same route
+# CI's QA job already uses (ci.yml: QA_DB_HOST/USER/PASS, pooler port 6543)
+# and the same proper-flag psql pattern as the prod-acl-probe fix (PR #31).
+# The PostgREST run_sql path was NOT used: run_sql is SECURITY DEFINER but
+# returns only the first row of a multi-row result ((EXECUTE ...)::text), so
+# a pg_stat_activity snapshot would collapse to one session; and PostgREST /
+# Auth themselves were part of the outage (QA Auth 504 killed PR #31
+# attempt 2). Direct psql bypasses both. If psql cannot connect, the probe
+# fails loudly (exit 1) instead of printing partial data.
+#
+# Query text is truncated to 200 chars per row: enough to identify the
+# statement class (RPC / fixture insert / migration check) without dumping
+# fixture payloads into the log.
+#
+# PG17 NOTE (2026-11-11 fix): pg_stat_bgwriter was removed in PostgreSQL 17
+# (checkpoints_timed / checkpoints_req no longer exist); checkpoint stats now
+# come from pg_stat_checkpointer, and the checkpoint query runs as a separate
+# soft-failing call so a future catalog change can never kill sampling again
+# (the original S9 query aborted the first main-branch probe at sample 1,
+# run 42883454554). sslmode=require travels inside a single quoted conninfo
+# string — a bare key=value argv item after -d is ignored by psql (PR #31).
+on:
+  workflow_dispatch:
+    inputs:
+      duration_minutes:
+        description: 'How long to sample (minutes, 1-25)'
+        required: false
+        default: '15'
+      interval_seconds:
+        description: 'Seconds between samples (30-300)'
+        required: false
+        default: '60'
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PostgreSQL 17 client (psql)
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq curl ca-certificates
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc --fail https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client-17
+          /usr/lib/postgresql/17/bin/psql --version
+      - name: Sample QA database activity (read-only)
+        env:
+          PGPASSWORD: ${{ secrets.QA_DB_PASS }}
+          QA_DB_HOST: ${{ secrets.QA_DB_HOST }}
+          QA_DB_USER: ${{ secrets.QA_DB_USER }}
+        run: |
+          set -euo pipefail
+          # Connection as ONE quoted conninfo string (PR #31 lesson): bare
+          # key=value argv items after -d are silently ignored by psql — the
+          # previous form dropped sslmode=require entirely (psql warned, the
+          # connection still worked, but SSL was not enforced).
+          psql_qa() {
+            /usr/lib/postgresql/17/bin/psql "host=$QA_DB_HOST port=6543 user=$QA_DB_USER dbname=postgres sslmode=require" -X -v ON_ERROR_STOP=1 "$@"
+          }
+          # Soft variant for nice-to-have queries (S9 checkpoints): a catalog
+          # change must degrade, never kill the sample run.
+          psql_qa_soft() {
+            /usr/lib/postgresql/17/bin/psql "host=$QA_DB_HOST port=6543 user=$QA_DB_USER dbname=postgres sslmode=require" -X -v ON_ERROR_STOP=0 "$@"
+          }
+          DURATION="${{ inputs.duration_minutes }}"
+          INTERVAL="${{ inputs.interval_seconds }}"
+          case "$DURATION" in ''|*[!0-9]*) echo "::error::duration_minutes must be an integer"; exit 1;; esac
+          case "$INTERVAL" in ''|*[!0-9]*) echo "::error::interval_seconds must be an integer"; exit 1;; esac
+          if [ "$DURATION" -lt 1 ] || [ "$DURATION" -gt 25 ]; then echo "::error::duration_minutes must be 1-25 (job timeout is 30 min)"; exit 1; fi
+          if [ "$INTERVAL" -lt 30 ] || [ "$INTERVAL" -gt 300 ]; then echo "::error::interval_seconds must be 30-300"; exit 1; fi
+          SAMPLES=$(( (DURATION * 60 + INTERVAL - 1) / INTERVAL ))
+          echo "QA DB activity probe: $SAMPLES sample(s), every ${INTERVAL}s, for ~${DURATION} min (read-only, SELECT only)"
+          # SOFT SAMPLING (2026-11-11): the sample heredoc runs via psql_qa_soft
+          # (ON_ERROR_STOP=0), NOT psql_qa. On 2026-11-10 20:13Z the wedged DB
+          # made S0 hit the 15s statement_timeout and ON_ERROR_STOP=1 killed the
+          # whole run at sample 1 — destroying exactly the evidence the probe
+          # exists to collect. Now one timed-out query prints its error and the
+          # remaining queries (and later samples) still run. SAMPLES_OK counts
+          # samples where psql connected at all; zero means the DB was
+          # unreachable for the whole run and the job still fails at the end.
+          SAMPLES_OK=0
+          for i in $(seq 1 "$SAMPLES"); do
+            echo ""
+            echo "===== SAMPLE $i/$SAMPLES at $(date -u +%FT%TZ) ====="
+            if psql_qa_soft <<'SQL'
+          SET default_transaction_read_only = on;
+          SET statement_timeout = '15s';
+          \echo '--- S0 identity ---'
+          SELECT now() AS sampled_at, current_user, session_user, current_database() AS db, version() AS server_version;
+          \echo '--- S1 sessions by state / wait event ---'
+          SELECT state, wait_event_type, wait_event, count(*) AS n FROM pg_stat_activity GROUP BY 1, 2, 3 ORDER BY 4 DESC;
+          \echo '--- S2 query-text visibility self-check (hidden = sessions whose query we cannot see) ---'
+          SELECT count(*) FILTER (WHERE query IS NULL) AS hidden_query_rows, count(*) AS total_rows FROM pg_stat_activity;
+          \echo '--- S3 non-idle sessions, longest-running first ---'
+          SELECT pid, usename, application_name, client_addr, state, wait_event_type, wait_event, round(extract(epoch FROM (now() - query_start))) AS running_s, left(query, 200) AS query FROM pg_stat_activity WHERE state <> 'idle' ORDER BY query_start NULLS LAST LIMIT 25;
+          \echo '--- S4 oldest open transactions (incl. idle-in-transaction lock holders) ---'
+          SELECT pid, usename, state, round(extract(epoch FROM (now() - xact_start))) AS xact_s, round(extract(epoch FROM (now() - query_start))) AS query_s, wait_event, left(query, 200) AS query FROM pg_stat_activity WHERE xact_start IS NOT NULL ORDER BY xact_start LIMIT 10;
+          \echo '--- S5 blocking locks (blocked -> blocking, with both queries) ---'
+          SELECT blocked.pid AS blocked_pid, blocked.usename AS blocked_user, blocking.pid AS blocking_pid, blocking.usename AS blocking_user, blocked.wait_event_type, blocked.wait_event, round(extract(epoch FROM (now() - blocked.query_start))) AS blocked_s, left(blocked.query, 150) AS blocked_query, left(blocking.query, 150) AS blocking_query FROM pg_stat_activity blocked JOIN pg_stat_activity blocking ON blocking.pid = ANY (pg_blocking_pids(blocked.pid)) WHERE cardinality(pg_blocking_pids(blocked.pid)) > 0;
+          \echo '--- S6 locks by type / mode / granted ---'
+          SELECT locktype, mode, granted, count(*) AS n FROM pg_locks GROUP BY 1, 2, 3 ORDER BY 4 DESC;
+          \echo '--- S7 ungranted (waiting) locks ---'
+          SELECT l.pid, a.usename, l.locktype, l.mode, left(a.query, 150) AS query FROM pg_locks l JOIN pg_stat_activity a ON a.pid = l.pid WHERE NOT l.granted ORDER BY l.pid LIMIT 20;
+          \echo '--- S8 connections by user / application ---'
+          SELECT count(*) AS total_backends, (SELECT setting::int FROM pg_settings WHERE name = 'max_connections') AS max_connections FROM pg_stat_activity;
+          SELECT usename, application_name, count(*) AS n FROM pg_stat_activity GROUP BY 1, 2 ORDER BY 3 DESC LIMIT 15;
+          \echo '--- S9 database stats ---'
+          SELECT datname, numbackends, xact_commit, xact_rollback, deadlocks, temp_files, temp_bytes FROM pg_stat_database WHERE datname = 'postgres';
+          SQL
+            then
+              SAMPLES_OK=$((SAMPLES_OK+1))
+            else
+              echo "SAMPLE $i: psql could not connect — continuing to next sample"
+            fi
+            # Checkpoints are a separate soft call: pg_stat_bgwriter was removed
+            # in PG17, and a failure here must never kill sampling (it did on
+            # the first main-branch run, 2026-11-10, run 42883454554). PG17
+            # merged the buffer counters into buffers_written.
+            echo '--- S9 checkpoints (pg_stat_checkpointer, PG17+) ---'
+            psql_qa_soft -c "SET statement_timeout = '15s'; SET default_transaction_read_only = on; SELECT num_timed AS checkpoints_timed, num_requested AS checkpoints_req, write_time AS checkpoint_write_time, sync_time AS checkpoint_sync_time, buffers_written FROM pg_stat_checkpointer;" || echo 'S9 checkpoints query unavailable (non-fatal — sampling continues)'
+            if [ "$i" -lt "$SAMPLES" ]; then sleep "$INTERVAL"; fi
+          done
+          if [ "$SAMPLES_OK" -eq 0 ]; then echo "::error::probe could not connect for any of the $SAMPLES sample(s) — QA database unreachable for the whole run"; exit 1; fi
+          echo ""
+          echo "QA DB activity probe complete: $SAMPLES sample(s) ($SAMPLES_OK connected) at $(date -u +%FT%TZ)"

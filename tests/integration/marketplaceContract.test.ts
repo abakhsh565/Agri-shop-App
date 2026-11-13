@@ -111,6 +111,31 @@ async function setBranchMarketplace(branchId: string, enabled: boolean) {
   await sql(`UPDATE shops SET marketplace_enabled = ${enabled} WHERE id = '${branchId}'`);
 }
 
+/**
+ * Cleanup that REPORTS instead of swallowing — the customerDeletionSecurity /
+ * employeeInviteLifecycle pattern. This suite shares the QA database with the
+ * other integration files, so a silent catch here would leave rows in place
+ * and the next suite would fail deep inside a test with an authorization error
+ * that is really leftover state. Failures are collected and the caller throws
+ * with their names (throwIfCleanupFailed, wired in beforeAll/afterAll).
+ */
+const cleanupFailures: string[] = [];
+async function trySql(label: string, p: Promise<unknown>): Promise<void> {
+  try {
+    await p;
+  } catch (error) {
+    cleanupFailures.push(`${label}: ${(error as Error).message}`);
+  }
+}
+function throwIfCleanupFailed(context: string): void {
+  if (cleanupFailures.length) {
+    throw new Error(
+      `${context}: cleanup failed — ${cleanupFailures.join(' | ')}. ` +
+        `Leftover rows from this suite's namespace will contaminate the next run; fix the leak here rather than re-running.`,
+    );
+  }
+}
+
 async function cleanup() {
   await sql(`DELETE FROM product_variants WHERE id IN ('${LAHORE_VARIANT}','${MULTAN_VARIANT}','${SHARED_VARIANT_L}','${SHARED_VARIANT_M}')`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
   await sql(`DELETE FROM products WHERE id IN ('${LAHORE_PRODUCT}','${MULTAN_PRODUCT}','${SHARED_PRODUCT_L}','${SHARED_PRODUCT_M}')`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
@@ -163,10 +188,12 @@ beforeAll(async () => {
   await createVariant(MULTAN_VARIANT, MULTAN_PRODUCT, 4400, 15);
   await createVariant(SHARED_VARIANT_L, SHARED_PRODUCT_L, 5000, 10);
   await createVariant(SHARED_VARIANT_M, SHARED_PRODUCT_M, 5100, 10);
+  throwIfCleanupFailed('marketplaceContract beforeAll cleanup');
 }, 120_000);
 
 afterAll(async () => {
   await cleanup();
+  throwIfCleanupFailed('marketplaceContract afterAll cleanup');
 }, 120_000);
 
 describe('the marketplace contract is the only public door', () => {
@@ -374,7 +401,8 @@ describe('the owner side still requires authority', () => {
          location_label = '${RUN} authority fixture', location_source = 'qa-fixture'
        WHERE id = '${TENANT}'`,
     );
-  });
+      throwIfCleanupFailed('the owner side still requires authority beforeAll cleanup');
+});
 
   afterAll(async () => {
     // Restored exactly: the shared QA branch had no pin before this suite, and it has none after.
@@ -384,7 +412,8 @@ describe('the owner side still requires authority', () => {
          location_source = NULL, marketplace_enabled = false
        WHERE id = '${TENANT}'`,
     );
-  });
+      throwIfCleanupFailed('the owner side still requires authority afterAll cleanup');
+});
 
   it('an owner can set the switch', async () => {
     const { data, error } = await execRpcAsUser(OWNER, 'set_marketplace_settings', {

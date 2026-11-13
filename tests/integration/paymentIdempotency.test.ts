@@ -21,6 +21,22 @@ const TEST = {
   initialBalance: 50000,
 };
 
+/**
+ * Per-run fixture phone, derived from the random customer id.
+ *
+ * customers.phone is UNIQUE (migrations 0017/0046), but the fixture used to
+ * pair a FIXED phone ('923000000001') with a randomUUID() id, and the INSERT
+ * only declared ON CONFLICT (id) — so a leftover customer row holding that
+ * phone (e.g. from a timed-out run whose afterAll cleanup never ran) made
+ * every later run fail at suite setup with customers_phone_unique. Deriving
+ * the phone from the per-run id makes the leftover row harmless: no run ever
+ * reuses another run's phone. The 92399… namespace is reserved for this
+ * suite — no other integration file uses it — so it can never collide with
+ * another suite's fixed fixture phone either.
+ */
+const TEST_CUSTOMER_PHONE =
+  '92399' + TEST.customer.replace(/[^0-9]/g, '').slice(0, 7).padStart(7, '0');
+
 /** Call record_customer_payment via Supabase Auth RPC (real JWT path) */
 async function callRecordPayment(payload: Record<string, any>) {
   const { data, error } = await execRpcAsUser(TEST.adminId, 'record_customer_payment', { payload });
@@ -73,9 +89,10 @@ describe('Payment Idempotency', () => {
       VALUES ('${TEST.adminId}', 'QA Admin', '923009999999', 'admin', true, true, '${TEST.shop}')
       ON CONFLICT (id) DO UPDATE SET role = 'admin', is_active = true`);
     await execSqlAsAdmin(`INSERT INTO customers (id, name, phone, credit_limit, outstanding_balance, total_purchases, total_paid, shop_id, created_by)
-      VALUES ('${TEST.customer}', 'Idempotency Test Customer', '923000000001', 50000, ${TEST.initialBalance}, 0, 0, '${TEST.shop}', 'QA')
+      VALUES ('${TEST.customer}', 'Idempotency Test Customer', '${TEST_CUSTOMER_PHONE}', 50000, ${TEST.initialBalance}, 0, 0, '${TEST.shop}', 'QA')
       ON CONFLICT (id) DO UPDATE SET outstanding_balance = ${TEST.initialBalance}, total_paid = 0`);
-  });
+      throwIfCleanupFailed('Payment Idempotency beforeAll cleanup');
+});
 
   afterAll(async () => {
     await execSqlAsAdmin(`DELETE FROM customer_payments WHERE customer_id = '${TEST.customer}'`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });

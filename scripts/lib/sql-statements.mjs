@@ -20,6 +20,23 @@
  * comment is not a statement). `-- @phase:` markers are not interpreted here; nothing in this file
  * knows about the backup artifact's structure. `splitStatementsWithOffsets` additionally returns
  * each statement's start offset, which is the only way a caller can link a statement to a marker.
+ *
+ * TWO pg_dump SHAPES IT ALSO HANDLES (added 2026-11-10, Option A baseline fix)
+ *   * `COPY ... FROM stdin` blocks: pg_dump writes rows as raw lines after the COPY header, up to
+ *     a line that is exactly `\.`. Those rows are data, not SQL — quotes, semicolons and dollar
+ *     tags inside them would corrupt the state machine for the rest of the file (measured
+ *     2026-11-09: a pg_dump baseline split into 1149 statements with only 1 recognised as data,
+ *     124 SQL failures, most of them fragments of data rows). So a COPY header and its data up to
+ *     the `\.` terminator are ONE statement, which `isDataStatement` (leading `copy`) then
+ *     counts and the baseline loader skips. `restore-verify.mjs` keeps its own private copy of
+ *     this splitter WITHOUT these two shapes: it loads `backup-database.mjs` output (INSERT rows,
+ *     no COPY, no psql meta-commands), so it needs neither — the copies diverge here, by design.
+ *   * psql meta-command lines (`\restrict`, `\unrestrict`, ...): directives for psql, not SQL.
+ *     A pg_dump starts with `\restrict` and ends with `\unrestrict`; between statements such a
+ *     line is skipped to end-of-line, so it cannot glue onto the next statement (the first line
+ *     has no `;`, so without this it merged into `SET statement_timeout = 0` and failed as
+ *     syntax). Only lines between statements are skipped — a `\` inside an accumulated statement
+ *     is left alone, so a real syntax error still fails.
  */
 
 /**
@@ -108,7 +125,36 @@ export function splitStatementsWithOffsets(text) {
       i++;
       continue;
     }
+    if (state === 'copy-data') {
+      // Raw COPY rows: no state transitions inside them — a quote, a semicolon or a
+      // dollar tag in the data must not flip the machine. Only a line that is exactly
+      // `\.` ends the block (pg_dump escapes a literal backslash as `\\`, so a data
+      // line can never be exactly `\.` unless it is the terminator).
+      if (ch === '\n') {
+        const term = text.slice(i + 1).match(/^\\\.(?:\r?\n|$)/);
+        if (term) {
+          buf += '\n\\.\n';
+          if (buf.trim()) out.push({ text: buf.trim(), offset: stmtStart });
+          buf = '';
+          stmtStart = -1;
+          state = 'normal';
+          i += 1 + term[0].length;
+          continue;
+        }
+      }
+      buf += ch;
+      i++;
+      continue;
+    }
 
+    // psql meta-command lines (`\restrict`, `\unrestrict`, ...). Only between statements:
+    // buf holds nothing but whitespace and nothing but whitespace precedes us on this line.
+    // Inside an accumulated statement a `\` is left alone — a real syntax error there
+    // still fails.
+    if (ch === '\\' && !buf.trim() && /^\s*$/.test(text.slice(text.lastIndexOf('\n', i - 1) + 1, i))) {
+      while (i < text.length && text[i] !== '\n') i++;
+      continue;
+    }
     if (ch === '-' && next === '-') {
       state = 'line-comment';
       i += 2;
@@ -145,7 +191,19 @@ export function splitStatementsWithOffsets(text) {
       }
     }
     if (ch === ';') {
-      if (buf.trim()) out.push({ text: buf.trim(), offset: stmtStart });
+      if (buf.trim()) {
+        const header = buf.trim();
+        // A COPY ... FROM stdin header is followed by raw data rows up to `\.`: keep the
+        // header in the buffer and read the rows as part of the same statement (see the
+        // `copy-data` state above). Every other statement ends here.
+        if (/^copy\b/i.test(header) && /\bfrom\s+stdin\b/i.test(header)) {
+          buf += ';';
+          state = 'copy-data';
+          i++;
+          continue;
+        }
+        out.push({ text: header, offset: stmtStart });
+      }
       buf = '';
       stmtStart = -1;
       i++;
@@ -157,6 +215,103 @@ export function splitStatementsWithOffsets(text) {
 
   if (buf.trim()) out.push({ text: buf.trim(), offset: stmtStart });
   return out;
+}
+
+/**
+ * Convert one `COPY ... FROM stdin` data statement into the equivalent multi-row INSERT.
+ *
+ * WHY THIS EXISTS (Option B, batch 1)
+ *   PGlite cannot execute `COPY ... FROM stdin` (the copy protocol has no stdin channel in
+ *   `exec`), so a COPY block that must actually load — the reference rows a later migration's
+ *   foreign keys point at — has to be rewritten as INSERTs. The conversion is exact for the
+ *   COPY text format pg_dump emits: tab-separated fields, `\N` for NULL, backslash escapes
+ *   (`\\`, `\t`, `\n`, `\r`, `\b`, `\f`, `\v`), and a line that is exactly `\.` as the
+ *   terminator. Values are emitted as quoted literals and coerce to the column types on
+ *   INSERT (uuid, timestamptz, boolean `t`/`f`, enum text, text[] `{...}`), so no per-type
+ *   logic lives here. An unknown escape is kept verbatim (backslash + char) rather than
+ *   guessed at: silently changing a value would be worse than the INSERT failing loudly.
+ *
+ * Returns `{ table, columns, rows, insert }` — `table` is the schema-qualified name as
+ * written (normalised to `schema.table`, schema defaulting to `public`), `columns` the
+ * column list, `rows` the unescaped values (`null` for `\N`), and `insert` the multi-row
+ * INSERT string, or `null` when the block carries no rows. Returns `null` when the
+ * statement is not a `COPY ... FROM stdin` block at all (including `COPY ... TO stdout`).
+ * Throws when the input IS such a block but is malformed — wrong arity, or no `\.`
+ * terminator — because a reference table that loads partially would make FK validation
+ * wrong in the silent direction. The caller refuses on that throw, never guesses.
+ *
+ * @param {string} statement one statement as split by splitStatementsWithOffsets
+ * @returns {{ table: string, columns: string[], rows: Array<Array<string|null>>, insert: string|null } | null}
+ */
+export function copyDataToInsert(statement) {
+  const text = String(statement);
+  const lines = text.split('\n');
+  while (lines.length && lines[lines.length - 1].trim() === '') lines.pop();
+  const header = lines[0]?.trim() ?? '';
+  const headerMatch = header.match(
+    /^copy\s+((?:"[^"]+"|[A-Za-z_][A-Za-z0-9_$]*)(?:\.(?:"[^"]+"|[A-Za-z_][A-Za-z0-9_$]*))?)\s*\(([^)]*)\)\s+from\s+stdin\s*;?$/i,
+  );
+  if (!headerMatch) return null;
+  if (lines.length < 2 || lines[lines.length - 1].trim() !== '\\.') {
+    throw new Error(`COPY block for ${headerMatch[1]} has no \\. terminator; refusing to load partial reference data.`);
+  }
+  const table = normalizeTableName(headerMatch[1]);
+  const columns = headerMatch[2]
+    .split(',')
+    .map((c) => c.trim().replace(/^"|"$/g, '').replace(/""/g, '"'));
+  const rows = [];
+  for (const line of lines.slice(1, -1)) {
+    if (line === '') continue;
+    const fields = line.split('\t').map(unescapeCopyField);
+    if (fields.length !== columns.length) {
+      throw new Error(
+        `COPY block for ${table} has a row with ${fields.length} fields for ${columns.length} columns; refusing to load partial reference data.`,
+      );
+    }
+    rows.push(fields);
+  }
+  if (!rows.length) return { table, columns, rows, insert: null };
+  const quoteIdent = (name) => `"${name.replace(/"/g, '""')}"`;
+  const literal = (value) => (value === null ? 'NULL' : `'${String(value).replace(/'/g, "''")}'`);
+  const qualified = table
+    .split('.')
+    .map(quoteIdent)
+    .join('.');
+  const insert =
+    `INSERT INTO ${qualified} (${columns.map(quoteIdent).join(', ')}) VALUES ` +
+    rows.map((row) => `(${row.map(literal).join(', ')})`).join(', ');
+  return { table, columns, rows, insert };
+}
+
+/** A COPY text-format field: `\N` is NULL, backslash escapes are undone. */
+function unescapeCopyField(field) {
+  if (field === '\\N') return null;
+  let out = '';
+  for (let i = 0; i < field.length; i++) {
+    const ch = field[i];
+    if (ch !== '\\') {
+      out += ch;
+      continue;
+    }
+    const next = field[i + 1];
+    switch (next) {
+      case 'b': out += '\b'; i++; break;
+      case 'f': out += '\f'; i++; break;
+      case 'n': out += '\n'; i++; break;
+      case 'r': out += '\r'; i++; break;
+      case 't': out += '\t'; i++; break;
+      case 'v': out += '\v'; i++; break;
+      case '\\': out += '\\'; i++; break;
+      default: out += ch; break;
+    }
+  }
+  return out;
+}
+
+/** `permissions` → `public.permissions`; `"public"."permissions"` → `public.permissions`. */
+function normalizeTableName(raw) {
+  const parts = raw.split('.').map((p) => p.replace(/^"|"$/g, '').replace(/""/g, '"'));
+  return parts.length === 1 ? `public.${parts[0]}` : parts.join('.');
 }
 
 /**

@@ -63,7 +63,8 @@ describe("Split Payment Recording", () => {
         ('${TEST.customerA}', 'Split Test A', '0300SPLIT101', 10000, 50000, 10000, 0, '${TEST.shop}', '${TEST.adminUser}', now()),
         ('${TEST.customerB}', 'Split Test B', '0300SPLIT102', 25000, 50000, 25000, 0, '${TEST.shop}', '${TEST.adminUser}', now())
     `);
-  });
+      throwIfCleanupFailed('Split Payment Recording beforeAll cleanup');
+});
 
   afterAll(async () => {
     await execSqlAsAdmin(`DELETE FROM customer_payments WHERE customer_id IN ('${TEST.customerA}', '${TEST.customerB}')`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });

@@ -94,14 +94,35 @@ const ADMIN_LOGIN_PHONE = '03009999999'; // 923009999999 -> 03009999999
  */
 export const QA_IDS = QA_FIXTURE_IDS;
 
-const _svcClient = createClient(QA_URL, QA_SERVICE_ROLE);
+/**
+ * Service-role client, created LAZILY on first use — never at module load.
+ * `createClient(url, '')` throws `supabaseKey is required` at construction, and
+ * this module is imported by unit guards that never open a connection
+ * (e2eCleanupOwnership): building the client at import time killed the whole
+ * file with an opaque error whenever QA_SUPABASE_SERVICE_ROLE was absent.
+ * The first call that actually needs the client throws an error naming the
+ * missing variable instead.
+ */
+let _svcClient: ReturnType<typeof createClient> | null = null;
+function svcClient(): ReturnType<typeof createClient> {
+  if (!_svcClient) {
+    if (!QA_SERVICE_ROLE) {
+      throw new Error(
+        'QA_SUPABASE_SERVICE_ROLE is not set — the QA client cannot be created. ' +
+          'In CI this comes from the repository secret; locally, set it in .env.qa or the environment.',
+      );
+    }
+    _svcClient = createClient(QA_URL, QA_SERVICE_ROLE);
+  }
+  return _svcClient;
+}
 
 /**
  * Execute raw SQL against the QA database via run_sql HTTP API.
  * Uses service-role to bypass RLS.
  */
 export async function execSql(sql: string): Promise<any[]> {
-  const { data, error } = await _svcClient.rpc('run_sql', { sql_query: sql });
+  const { data, error } = await svcClient().rpc('run_sql', { sql_query: sql });
   if (error) throw new Error(`execSql: ${error.message}`);
   if (!data || data === 'ok') return [];
   let parsed: unknown = data;
@@ -393,9 +414,76 @@ export async function loginViaUi(
   }
 
   if (page.url().includes('pin-set')) {
-    for (const d of PIN) await page.getByRole('button', { name: d, exact: true }).first().click();
-    await page.waitForTimeout(400);
-    for (const d of PIN) await page.getByRole('button', { name: d, exact: true }).first().click();
+    // The PIN keypad is a controlled input like the OTP boxes above: a tap can
+    // land one digit short when React has not re-rendered yet, and a short PIN
+    // submits nothing and reports nothing — the login then dies on the 30s
+    // dashboard wait below. Verify what landed after each entry (the OTP
+    // pattern in this same function) and retry the entry once if it did not take.
+    const pinPad = page.locator('div.ds-pin-pad');
+    const filledDots = async () =>
+      await pinPad.locator('xpath=..').locator('div.rounded-full.bg-ink').count();
+    const clearPin = async () => {
+      for (let i = 0; i < 4 && (await filledDots()) > 0; i++) {
+        await page.getByRole('button', { name: '⌫', exact: true }).first().click();
+        await page.waitForTimeout(150);
+      }
+    };
+    const enterPinDigits = async () => {
+      // Digits 1–3 are verified by the filled-dot count before the next tap,
+      // so a tap can never land on a stale render. The 4th digit completes
+      // the entry, which resets the dots, so it is verified by the caller.
+      for (let i = 0; i < PIN.length - 1; i++) {
+        await page.getByRole('button', { name: PIN[i], exact: true }).first().click();
+        try {
+          await expect.poll(filledDots, { timeout: 5000 }).toBe(i + 1);
+        } catch {
+          // Re-click only if the dot count never advanced — a slow render is
+          // not a lost tap, and re-clicking it would append a wrong digit.
+          if ((await filledDots()) === i) {
+            await page.getByRole('button', { name: PIN[i], exact: true }).first().click();
+            await expect.poll(filledDots, { timeout: 5000 }).toBe(i + 1);
+          } else {
+            throw new Error(`PIN digit ${i + 1} did not land`);
+          }
+        }
+      }
+      await page.getByRole('button', { name: PIN[PIN.length - 1], exact: true }).first().click();
+    };
+    const pinDoneVisible = async () => (await page.getByTestId('pin-done-open').count()) > 0;
+    const leftPinSet = async () => !page.url().includes('pin-set') || (await pinDoneVisible());
+
+    // SET: the 4th digit flips to the confirm step, which empties the dots.
+    await clearPin();
+    await enterPinDigits();
+    try {
+      await expect.poll(filledDots, { timeout: 5000 }).toBe(0);
+    } catch {
+      await clearPin();
+      await enterPinDigits();
+      await expect.poll(filledDots, { timeout: 5000 }).toBe(0);
+    }
+
+    // CONFIRM: the 4th digit saves the PIN and either navigates away or shows
+    // the success screen.
+    await enterPinDigits();
+    try {
+      await expect.poll(leftPinSet, { timeout: 5000 }).toBe(true);
+    } catch {
+      if (page.url().includes('pin-set') && (await pinPad.count()) > 0) {
+        await clearPin();
+        try {
+          await enterPinDigits();
+          await expect.poll(leftPinSet, { timeout: 5000 }).toBe(true);
+        } catch (retryErr) {
+          // A slow save from the first attempt may have finished while
+          // retrying; only fail if the page is still on the pin-set form.
+          if (page.url().includes('pin-set') && !(await pinDoneVisible())) throw retryErr;
+        }
+      } else {
+        throw new Error('PIN entry did not reach the dashboard or success screen');
+      }
+    }
+
     await page.waitForTimeout(600);
     // Standing a PIN up for the first time ends on a success screen; a like-for-like swap from
     // Settings goes straight back. Both are real, so follow whichever one appeared.
@@ -445,6 +533,52 @@ export async function injectAdminAuth(page: Page) {
     localStorage.removeItem('signal_suppression');
     localStorage.removeItem('signal_reviewed');
   }, adminUser);
+}
+
+/**
+ * Inject owner auth state into the page's localStorage.
+ *
+ * Mirrors injectAdminAuth, but as Khalid Khan — the fixture shop's sole active
+ * owner since the 0280 fix (one active owner per shop). QA Admin is a Store
+ * Manager admin since that fix and no longer holds employees.manage,
+ * settings.edit or employees.view, so lanes that exercise owner powers (role
+ * deletion, employee deactivation) must act as the owner; acting as the admin
+ * makes the product correctly refuse with NOT_AUTHORIZED. The injected
+ * identity mirrors the authoritative membership row, as injectAdminAuth does.
+ */
+export async function injectOwnerAuth(page: Page) {
+  const ownerUser = {
+    id: QA_IDS.owner,
+    name: 'Khalid Khan',
+    phone: '923001234567',
+    role: 'admin',
+    tenantId: QA_IDS.shop,
+    membershipRole: 'owner',
+    permissions: ['*'],
+    isOriginalOwner: true,
+    isActive: true,
+    firstLoginAt: new Date().toISOString(),
+    lastLoginAt: new Date().toISOString(),
+    deactivatedAt: null,
+    deactivatedBy: null,
+    createdAt: new Date().toISOString(),
+    createdBy: null,
+  };
+
+  // A real session is required before the injected identity is useful, because
+  // the backend authorizes from the JWT rather than from client state.
+  await loginViaUi(page, OWNER_LOGIN_PHONE);
+
+  await page.evaluate((user) => {
+    // Set Zustand persist auth state
+    localStorage.setItem('agri_auth', JSON.stringify({
+      state: { user },
+      version: 0,
+    }));
+    // Clear any signal suppression state
+    localStorage.removeItem('signal_suppression');
+    localStorage.removeItem('signal_reviewed');
+  }, ownerUser);
 }
 
 /**
@@ -569,7 +703,7 @@ export function ownedObjects(): OwnedObject[] {
 export { trackOwned, trackOwnedObject, ownedCount };
 
 async function removeStorageObject(object: OwnedObject): Promise<void> {
-  const { error } = await _svcClient.storage.from(object.bucket).remove([object.path]);
+  const { error } = await svcClient().storage.from(object.bucket).remove([object.path]);
   if (error) throw new Error(error.message);
 }
 

@@ -156,8 +156,13 @@ export const USER_DELETE_GUARDS: readonly UserReference[] = [
   { table: 'audit_events', column: 'user_id' },                              // 0009
   { table: 'branch_responsibility', column: 'user_id' },                     // RESTRICT
   { table: 'cash_reconciliations', column: 'reconciled_by' },                // 0009
+  { table: 'co_owner_approval_requests', column: 'requested_by' },          // 0266
+  { table: 'co_owner_grants', column: 'granted_by' },                       // 0266
   { table: 'daily_cash_reconciliations', column: 'reconciled_by' },          // 0009
   { table: 'inventory_movements', column: 'created_by' },                    // 0009
+  { table: 'memberships', column: 'invited_by' },                             // 0286
+  { table: 'ownership_transfers', column: 'initiated_by' },                   // 0280
+  { table: 'ownership_transfers', column: 'recipient_user_id' },              // 0280
   { table: 'returns', column: 'processed_by' },
   { table: 'sales', column: 'employee_id' },
   { table: 'user_permissions', column: 'granted_by' },                       // 0106

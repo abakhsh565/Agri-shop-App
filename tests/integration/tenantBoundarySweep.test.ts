@@ -41,6 +41,31 @@ async function sql(query: string) {
   return execSqlAsAdmin(query);
 }
 
+/**
+ * Cleanup that REPORTS instead of swallowing — the customerDeletionSecurity /
+ * employeeInviteLifecycle pattern. This suite shares the QA database with the
+ * other integration files, so a silent catch here would leave rows in place
+ * and the next suite would fail deep inside a test with an authorization error
+ * that is really leftover state. Failures are collected and the caller throws
+ * with their names (throwIfCleanupFailed, wired in beforeAll/afterAll).
+ */
+const cleanupFailures: string[] = [];
+async function trySql(label: string, p: Promise<unknown>): Promise<void> {
+  try {
+    await p;
+  } catch (error) {
+    cleanupFailures.push(`${label}: ${(error as Error).message}`);
+  }
+}
+function throwIfCleanupFailed(context: string): void {
+  if (cleanupFailures.length) {
+    throw new Error(
+      `${context}: cleanup failed — ${cleanupFailures.join(' | ')}. ` +
+        `Leftover rows from this suite's namespace will contaminate the next run; fix the leak here rather than re-running.`,
+    );
+  }
+}
+
 async function cleanup() {
   await sql(`DELETE FROM product_variants WHERE id IN ('${VARIANT_A}','${VARIANT_B}','${VARIANT_C}')`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
   await sql(`DELETE FROM products WHERE id IN ('${PRODUCT_A}','${PRODUCT_B}','${PRODUCT_C}')`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
@@ -58,7 +83,7 @@ beforeAll(async () => {
   await sql(`
     INSERT INTO users (id, name, phone, role, is_original_owner, is_active, shop_id)
     VALUES
-      ('${OWNER_A}', '${RUN} A', '923009810001', 'admin', true, true, '${TENANT_A}'),
+      ('${OWNER_A}', '${RUN} A', '923009810001', 'admin', false, true, '${TENANT_A}'),
       ('${OWNER_B}', '${RUN} B', '923009810002', 'admin', true, true, '${TENANT_B}'),
       ('${VICTIM_B}', '${RUN} victim B', '923009810003', 'employee', false, true, '${TENANT_B}')
     ON CONFLICT (id) DO NOTHING
@@ -110,10 +135,12 @@ beforeAll(async () => {
     VALUES ('${CASH_B}', '${TENANT_B}', current_date, 0, 0, 0, '${OWNER_B}', '${RUN} B')
     ON CONFLICT (id) DO NOTHING
   `).catch((e: any) => console.log('[boundary] cash_reconciliations fixture skipped:', e?.message ?? e));
+  throwIfCleanupFailed('tenantBoundarySweep beforeAll cleanup');
 });
 
 afterAll(async () => {
   await cleanup();
+  throwIfCleanupFailed('tenantBoundarySweep afterAll cleanup');
 });
 
 describe('tenant boundary — tables the app reaches with admin-only policies', () => {
@@ -135,14 +162,18 @@ describe('tenant boundary — tables the app reaches with admin-only policies', 
     await sql(`DELETE FROM user_permissions WHERE user_id = '${VICTIM_B}'`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
     const permId = (await sql(`SELECT id FROM permissions LIMIT 1`)).rows[0]?.id;
     if (!permId) return;
+    // A deny, not a grant: 0277's trigger refuses a granted override before RLS
+    // is even reached, so only a deny proves the boundary itself refuses the write.
+    // 0218 rewrote user_permissions_insert to require a membership in the
+    // caller's current shop, so a cross-tenant deny IS refused by RLS.
     const { error } = await insertAsUser(OWNER_A, 'user_permissions', {
-      user_id: VICTIM_B, permission_id: permId, is_override: true, is_granted: true,
+      user_id: VICTIM_B, permission_id: permId, is_override: true, is_granted: false,
     });
     const written = await sql(`SELECT 1 FROM user_permissions WHERE user_id = '${VICTIM_B}'`);
     await sql(`DELETE FROM user_permissions WHERE user_id = '${VICTIM_B}'`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
     expect(
       written.rows.length,
-      `a cross-tenant permission grant was written (insert error: ${error ?? 'none'})`,
+      `a cross-tenant permission row was written (insert error: ${error ?? 'none'})`,
     ).toBe(0);
     // The refusal has to come from the boundary, not from an incidental constraint: a grant
     // that fails for a foreign key would look identical to one the policy refused.

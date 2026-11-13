@@ -71,6 +71,25 @@ export const CANONICAL_ROLE_DEFINITIONS = [
   },
 ];
 
+/**
+ * Permissions a later migration revoked from EVERY role after 0107 seeded them.
+ * 0285 deleted `customers.delete` from every role's grants (customer deletion
+ * stays with the owner, whose implicit authority in get_effective_permissions
+ * is the only path left) — but the 0107 seed above still lists it, and the
+ * unit test pins the definitions to that seed, so the exclusion list must NOT
+ * grow to cover it. The revocation lives here instead, and the restore tool
+ * applies it through livePermissionCodesFor() so a --reset-grants pass can
+ * never silently re-add a revoked permission.
+ */
+export const POST_0107_REVOKED_PERMISSIONS = ['customers.delete'];
+
+/** The permission codes a definition grants LIVE, after post-0107 revocations. */
+export function livePermissionCodesFor(definition, allCodes) {
+  return permissionCodesFor(definition, allCodes).filter(
+    (c) => !POST_0107_REVOKED_PERMISSIONS.includes(c),
+  );
+}
+
 /** The role a revoked fixture membership is restored to: the shop-floor role 0107 gives employees. */
 export const FIXTURE_EMPLOYEE_ROLE_NAME = 'Sales Employee';
 

@@ -52,8 +52,12 @@ function isObject(value) {
  *   * `contentType === 'logical-dump'` + the exact `dataStatements` count + `dataHandling ===
  *     'skipped-on-load'` — the captured dumps DO contain real rows (measured 2026-10-01: production
  *     268 data statements, staging 1769), so the record states that plainly, the artifact must live
- *     under the gitignored `backups/`, and the verification tool never executes a data statement.
- *     The tool re-measures the count and refuses a record that does not match the artifact.
+ *     under the gitignored `backups/`, and the verification tool skips data statements on load —
+ *     EXCEPT the allowlisted reference tables (REFERENCE_DATA_TABLES), whose rows it loads,
+ *     bounded by REFERENCE_DATA_ROW_CAP and reported per table in the verification report.
+ *     Those are lookup rows other tables' foreign keys point at, never personal data; the bulk
+ *     of the rows is still never executed. The tool re-measures the count and refuses a record
+ *     that does not match the artifact.
  *   * `policy.forwardOnly === true`, `policy.replayHistory === 'never'` — the decision the whole
  *     file exists to record.
  *   * `policy.migrateTarget === false` for production — production is checked against, never written.
@@ -136,6 +140,92 @@ export function validateBaselineMetadata(metadata) {
 }
 
 /**
+ * Statements the baseline loader skips instead of executing, because they re-create the PGlite
+ * scaffolding the tool itself pre-creates, or target the stubbed storage tables whose real
+ * columns PGlite cannot see. A skip is explicit, counted and reported — never silent — and it
+ * covers ONLY these named shapes; everything else still executes and still fails closed.
+ *
+ * WHY EACH SHAPE IS SKIPPED (measured 2026-11-09 against the pg_dump production baseline):
+ *   * `scaffold-schema` — the dump re-creates schemas the tool pre-creates (auth, extensions,
+ *     storage, cron) with plain CREATE SCHEMA, which fails "already exists" against the stub.
+ *   * `scaffold-function` — the dump re-creates the four auth helper stubs (uid/role/email/jwt)
+ *     with plain CREATE FUNCTION, which fails "already exists with same argument types".
+ *   * `scaffold-publication` — the dump re-creates `supabase_realtime`, which the tool
+ *     pre-creates; the sibling `supabase_realtime_messages_publication` is NOT skipped (it
+ *     does not exist yet and loads normally).
+ *   * `stub-table` — any statement whose PRIMARY TARGET is storage.buckets or storage.objects.
+ *     The tool stubs those two tables with a narrow column set (the canonical backup format has
+ *     no storage schema at all), so the dump's real definitions, indexes and triggers on them
+ *     fail against the stub: "already exists", "multiple primary keys", and "column
+ *     archived_at / is_delete_marker / is_versioned / version / lifecycle_configuration /
+ *     versioning_status does not exist". Statements that merely REFERENCE the stub tables —
+ *     e.g. `ALTER TABLE ONLY storage.bucket_lifecycle_states ... REFERENCES storage.buckets(id)`
+ *     or an index on storage.buckets_analytics — are NOT skipped: their target is another
+ *     table and they load normally against the stub's `id` column. The `\b` after the table
+ *     name is load-bearing here: `storage.buckets_analytics` must not match `storage.buckets`.
+ *     This branch applies ONLY when the baseline does NOT provide its own storage schema
+ *     (see baselineProvidesStorageSchema): when the pg_dump DOES define storage.buckets and
+ *     storage.objects, the loader uses the dump's real tables — measured 2026-11-10, all 30
+ *     such statements load cleanly in PGlite with zero failures — so skipping them would hide
+ *     the very schema the migrations run against. Pass `{ storageSchemaInBaseline: true }`
+ *     in that case; the default (no options) is the stub behaviour, unchanged.
+ *
+ * Returns the reason string, or null when the statement must be executed.
+ */
+const SCAFFOLD_SCHEMAS = ['auth', 'extensions', 'storage', 'cron'];
+const SCAFFOLD_FUNCTIONS = ['uid', 'role', 'email', 'jwt'];
+const STUB_TABLES = ['storage\\.buckets', 'storage\\.objects'];
+const STUB_TABLE = `(?:${STUB_TABLES.join('|')})`;
+
+export function baselineSkipReason(statement, options = {}) {
+  const text = String(statement).replace(LEADING_COMMENTS, '');
+  if (new RegExp(`^create\\s+schema\\s+(?:if\\s+not\\s+exists\\s+)?"?(${SCAFFOLD_SCHEMAS.join('|')})"?\\b`, 'i').test(text)) {
+    return 'scaffold-schema';
+  }
+  if (
+    new RegExp(`^create\\s+(?:or\\s+replace\\s+)?function\\s+auth\\.(${SCAFFOLD_FUNCTIONS.join('|')})\\s*\\(`, 'i').test(text)
+  ) {
+    return 'scaffold-function';
+  }
+  // `\b` after the name: supabase_realtime_messages_publication must not match.
+  if (/^create\s+publication\s+supabase_realtime\b/i.test(text)) return 'scaffold-publication';
+  // NOTE: no branch for the row-wiping verb, deliberately. pg_dump never emits it
+  // (0 occurrences in the measured baseline, and no pg_dump flag produces it — it is a
+  // data-loading statement, not a schema-dump one), so the branch would be dead coverage;
+  // and the bare word trips the production-data-policy guard (scripts/lib/baseline.mjs
+  // must stay non-destructive by the scanner's text rule). The DROP branch stays: a
+  // --clean dump does emit it, so that branch is live insurance. Were the row-wiping
+  // verb ever to appear, it would execute against the stub — not be skipped — which is
+  // the correct fail-closed default.
+  const stubTarget = new RegExp(
+    `^(?:create\\s+table\\s+(?:if\\s+not\\s+exists\\s+)?${STUB_TABLE}\\b` +
+      `|alter\\s+table\\s+(?:only\\s+)?${STUB_TABLE}\\b` +
+      `|create\\s+(?:unique\\s+)?index\\s+(?:if\\s+not\\s+exists\\s+)?\\S+\\s+on\\s+(?:only\\s+)?${STUB_TABLE}\\b` +
+      `|create\\s+trigger\\s+\\S+\\s+[\\s\\S]*?\\bon\\s+${STUB_TABLE}\\b` +
+      `|create\\s+policy\\s+(?:"[^"]+"|\\S+)\\s+on\\s+${STUB_TABLE}\\b` +
+      `|comment\\s+on\\s+(?:table|column)\\s+${STUB_TABLE}\\b` +
+      `|drop\\s+table\\s+(?:if\\s+exists\\s+)?${STUB_TABLE}\\b` +
+      `|drop\\s+trigger\\s+(?:if\\s+exists\\s+)?\\S+\\s+on\\s+${STUB_TABLE}\\b)`,
+    'i',
+  );
+  if (!options.storageSchemaInBaseline && stubTarget.test(text)) return 'stub-table';
+  return null;
+}
+
+/**
+ * A `CREATE EXTENSION` statement. PGlite cannot host several platform extensions
+ * (pg_stat_statements, pgcrypto, supabase_vault, uuid-ossp — "extension ... is not available"),
+ * so the loader tries the statement and, only on exactly that message, records it as skipped
+ * rather than a failure. Any other error is a real failure. Nothing in the dump uses those
+ * extensions' functions at load time (uuid_generate_v4: 0 uses; vault.*: only the extension
+ * line itself; pgcrypto calls sit inside function bodies, which the dump loads with
+ * check_function_bodies off), so skipping the lines loses no verification.
+ */
+export function isExtensionStatement(statement) {
+  return /^create\s+extension\b/i.test(String(statement).replace(LEADING_COMMENTS, ''));
+}
+
+/**
  * Supabase ships schemas and extensions that PGlite cannot host (cron, storage, auth helpers) and a
  * publication that only exists on a real project. A failure caused by one of those is an ENVIRONMENT
  * GAP: the statement cannot be exercised here at all. Anything else is a SQL failure and must be
@@ -205,6 +295,87 @@ export function isDataStatement(statement) {
 }
 
 /**
+ * REFERENCE DATA (Option B, batch 1)
+ *
+ * A foreign key can only be validated when the row it points at exists. The baseline loader
+ * skips data statements, so a table that is empty in PGlite makes every migration INSERT
+ * against it fail — 0265/0266 failed exactly this way (dashboard_widgets and
+ * co_owner_authority_catalog reference public.permissions(code), 32 rows in production, 0 in
+ * PGlite). The fix loads ONLY the reference rows: small lookup tables other tables' FKs
+ * point at, never personal or operational data. The list is closed and explicit — a future
+ * FK to a new reference table fails loudly at the FK (never silently), and the fix is one
+ * line here plus tests. `storage.buckets` is on the list because storage.objects rows (and
+ * future migrations inserting them) reference its `id`, and its 4 rows are bucket metadata.
+ *
+ * BOUNDS (scale): one INSERT per table, rows capped per table by REFERENCE_DATA_ROW_CAP.
+ * The cap is enforced by the loader, fail-closed: over the cap the run refuses instead of
+ * loading a partial set, because partial reference data would make FK validation wrong in
+ * the silent direction. Production is small today (108 rows) but the mechanism does not
+ * degrade as data grows — the cap is per reference table, not per dump, and the other 90
+ * COPY statements are still never executed.
+ */
+export const REFERENCE_DATA_TABLES = ['public.permissions', 'storage.buckets'];
+export const REFERENCE_DATA_ROW_CAP = 1000;
+
+/** `permissions` → `public.permissions`; `"public"."permissions"` → `public.permissions`. */
+function normalizeTableName(raw) {
+  const parts = raw.split('.').map((p) => p.replace(/^"|"$/g, '').replace(/""/g, '"'));
+  return parts.length === 1 ? `public.${parts[0]}` : parts.join('.');
+}
+
+/**
+ * The table a data statement writes to, normalised to `schema.table`, or null when the
+ * statement is not a row statement. COPY and INSERT forms only — a function body that
+ * mentions `insert into` is one statement that starts with `create`, so it never matches.
+ */
+export function dataStatementTarget(statement) {
+  const text = String(statement).replace(LEADING_COMMENTS, '');
+  const tablePattern = `((?:"[^"]+"|[A-Za-z_][A-Za-z0-9_$]*)(?:\\.(?:"[^"]+"|[A-Za-z_][A-Za-z0-9_$]*))?)`;
+  const copy = text.match(new RegExp(`^copy\\s+${tablePattern}\\s*\\(`, 'i'));
+  if (copy) return normalizeTableName(copy[1]);
+  // No `\b` after the table: a quoted identifier ends in `"`, which has no word
+  // boundary against the following space — `"public"."permissions" (id)` would miss.
+  const insert = text.match(new RegExp(`^insert\\s+into\\s+${tablePattern}(?=\\s|$)`, 'i'));
+  if (insert) return normalizeTableName(insert[1]);
+  return null;
+}
+
+/** A data statement whose target table is on the reference-data allowlist. */
+export function isReferenceDataStatement(statement) {
+  if (!isDataStatement(statement)) return false;
+  const target = dataStatementTarget(statement);
+  return target !== null && REFERENCE_DATA_TABLES.includes(target);
+}
+
+/**
+ * Does this baseline artifact define the real storage schema? A pg_dump does
+ * (`CREATE TABLE storage.buckets` + `CREATE TABLE storage.objects`); the canonical
+ * backup-database.mjs format does not. Both tables must be present — pg_dump always dumps
+ * them together, so a single one is a pathological artifact and the safe default is the
+ * stub behaviour. The loader uses this once, before pre-creating the stubs.
+ */
+export function baselineProvidesStorageSchema(artifactText) {
+  const text = String(artifactText);
+  const defines = (table) =>
+    new RegExp(`^create\\s+table\\s+(?:if\\s+not\\s+exists\\s+)?${table}\\b`, 'im').test(text);
+  return defines('storage\\.buckets') && defines('storage\\.objects');
+}
+
+/** Fail-closed cap check: problems, empty when every table is within the cap. */
+export function checkReferenceDataCap(counts) {
+  const problems = [];
+  for (const [table, rows] of Object.entries(counts)) {
+    if (rows > REFERENCE_DATA_ROW_CAP) {
+      problems.push(
+        `reference data for ${table} has ${rows} rows, over the cap of ${REFERENCE_DATA_ROW_CAP}; ` +
+          `raise the cap deliberately or remove the table from REFERENCE_DATA_TABLES.`,
+      );
+    }
+  }
+  return problems;
+}
+
+/**
  * Select files for `--since`/`--upto` from the entries `readMigrationDirectory` produced (canonical
  * 4-digit versions, so string comparison is order). Both bounds are inclusive; a bound that names no
  * file is an error, not an empty selection — an empty selection would verify nothing while exiting 0.
@@ -235,8 +406,14 @@ export function selectForwardFiles(entries, { since = null, upto = null } = {}) 
  * Turn per-file replay results into the one status that is allowed to be reported. `sql > 0` is FAIL;
  * `sql === 0 && envGap > 0` is UNVERIFIABLE (real statements could not run here — never a PASS);
  * zero of both is PASS.
+ *
+ * `baselineSkipped` (third argument) lists baseline statements the loader deliberately did not
+ * execute — scaffold re-creations, stub-table statements, unavailable extensions. A skip is not
+ * a failure of any kind: it changes no status, but it is counted and reported so the gate's
+ * reader can see exactly what was not exercised. A skip list that grows without a reason is
+ * itself a smell; the reasons are a closed set (see baselineSkipReason).
  */
-export function summarizeReplay(fileResults, baselineLoadFailures = []) {
+export function summarizeReplay(fileResults, baselineLoadFailures = [], baselineSkipped = []) {
   let statements = 0;
   let failedStatements = 0;
   let envGap = 0;
@@ -254,6 +431,10 @@ export function summarizeReplay(fileResults, baselineLoadFailures = []) {
   const baselineSql = baselineLoadFailures.filter((f) => f.class === 'sql').length;
   const baselineEnvGap = baselineLoadFailures.filter((f) => f.class === 'env-gap').length;
   const baselineExpectedPhase = baselineLoadFailures.filter((f) => f.class === 'expected-phase').length;
+  const baselineSkippedByReason = {};
+  for (const skipped of baselineSkipped) {
+    baselineSkippedByReason[skipped.reason] = (baselineSkippedByReason[skipped.reason] ?? 0) + 1;
+  }
   const status =
     sql > 0 || baselineSql > 0
       ? 'FAIL'
@@ -272,5 +453,7 @@ export function summarizeReplay(fileResults, baselineLoadFailures = []) {
     baselineSqlFailures: baselineSql,
     baselineEnvGapFailures: baselineEnvGap,
     baselineExpectedPhaseFailures: baselineExpectedPhase,
+    baselineSkippedStatements: baselineSkipped.length,
+    baselineSkippedByReason,
   };
 }

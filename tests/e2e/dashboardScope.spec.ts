@@ -362,6 +362,20 @@ test.describe('Locked dashboard scope: figures reconcile with the database', () 
     await login(page, OWNER_PHONE);
     expect(page.url()).toContain('/admin/dashboard');
 
+    // The branch the dashboard's sales figures cover, resolved from the DB
+    // rather than a literal id (the fixture-id guard forbids two files from
+    // declaring the same UUID). The sales store is branch-scoped by RLS
+    // (sales_branch_select: branch_id = ANY (current_branch_scope())), and
+    // current_branch_scope() reads this same user_active_shops row, so the
+    // gate must sum this branch, not the whole shop. Round-2 probe (run
+    // 42321215789): this branch holds the 2 Perm sales (Rs. 10,000); the
+    // added branch holds the other 5 (Rs. 24,600).
+    const [activeBranch] = await execSql(
+      `SELECT branch_id FROM user_active_shops WHERE user_id = '${QA_IDS.owner}'`,
+    );
+    const branchId = activeBranch.branch_id as string;
+    expect(branchId, 'the owner fixture has no active branch').toBeTruthy();
+
     // WAIT FOR THE SCREEN TO HYDRATE — data-driven, not a stopwatch.
     //
     // WHY (reproduced 2026-10-15, full-suite run: `145 passed · 2 failed · 2 did not run`). `login()`
@@ -467,6 +481,14 @@ test.describe('Locked dashboard scope: figures reconcile with the database', () 
       ).toHaveCount(0);
     }
 
+    // The UI count is fetched ONCE at mount and never refetched, so reload
+    // the dashboard here so the mount-time count reflects the final DB state
+    // instead of whatever it was when the page first loaded (round-5: the
+    // gate counted 2, the UI still showed the stale mount-time 1). The
+    // expect.poll below then converges on the re-fetched count.
+    await page.reload();
+    await page.waitForLoadState('networkidle');
+
     // The Quick Alerts headline count is data-dependent copy ("1 action needed" vs
     // "2 actions needed"), so assert the authoritative thing instead: any pending
     // credit request in the DB must be surfaced, with its real count.
@@ -481,7 +503,16 @@ test.describe('Locked dashboard scope: figures reconcile with the database', () 
                       WHERE c.id = r.customer_id AND c.shop_id = '${QA_IDS.shop}')`);
     const pendingCount = Number(pending.n);
     if (pendingCount > 0) {
-      expect(body, 'pending credit requests are not surfaced in Quick Alerts').toContain(`${pendingCount} request`);
+      // The count is a separate async round-trip with no convergence wait: the
+      // sales poll above can resolve the instant the total appears, before the
+      // count's setState + re-render lands. Poll for the rendered count instead
+      // of reading the body once (round-3 failure: gate counted 1, body showed 0).
+      await expect
+        .poll(async () => (await page.textContent('body')) ?? '', {
+          timeout: 30_000,
+          message: `pending credit requests are not surfaced in Quick Alerts — expected ${pendingCount} request`,
+        })
+        .toContain(`${pendingCount} request`);
     }
 
     // ── Authoritative expectations, recomputed from the QA database ──

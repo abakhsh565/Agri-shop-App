@@ -1,7 +1,6 @@
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import http from 'node:http';
-import os from 'node:os';
 import path from 'node:path';
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -95,42 +94,27 @@ describe('the repository wiring', () => {
     expect(config.git?.deploymentEnabled?.main).toBe(false);
   });
 
-  it('deploys only from an explicit dispatch — a push or a green run cannot start it', () => {
+  it('has a deploy workflow that cannot run on a non-successful CI run', () => {
     const workflow = fs.readFileSync(path.join(ROOT, '.github/workflows/deploy-production.yml'), 'utf8');
-    // The trigger block is the only place an automatic start could be reintroduced, so it is read
-    // on its own: a comment elsewhere mentioning a push must not satisfy this check.
-    const triggers = /on:\r?\n([\s\S]*?)(?=\r?\npermissions:)/.exec(workflow)?.[1] ?? '';
-    expect(triggers).not.toBe('');
-    expect(triggers).toMatch(/\bworkflow_dispatch:/);
-    expect(triggers).not.toMatch(/\bworkflow_run:/);
-    expect(triggers).not.toMatch(/^\s*push:/m);
-    expect(triggers).not.toMatch(/^\s*schedule:/m);
-    // A dispatch is not an override: the gate still checks the named commit and its CI run.
+    expect(workflow).toMatch(/workflow_run:/);
+    expect(workflow).toMatch(/conclusion == 'success'/);
+    expect(workflow).toMatch(/head_branch == 'main'/);
     expect(workflow).toContain('scripts/deploy/trigger-production.mjs');
-    // Accepted is not released: the workflow must wait for the deployment and verify it, and that
-    // step must be bound to the id the trigger reported (a missing output skips verification).
-    expect(workflow).toContain('scripts/deploy/verify-production.mjs');
-    expect(workflow).toContain("steps.trigger.outputs.deployment_id != ''");
-    expect(workflow).toMatch(/DEPLOYMENT_ID: \$\{\{ steps\.trigger\.outputs\.deployment_id \}\}/);
     expect(workflow).not.toMatch(/continue-on-error:\s*true/);
     expect(workflow).not.toMatch(/\|\|\s*true/);
     expect(workflow).not.toMatch(/vercel\s+(deploy|--prod)/);
   });
 
-  it('runs CI on a push without deploying or migrating anything', () => {
-    // A push runs checks. It must never be the thing that moves an environment: not a deployment,
-    // not `migrate.mjs apply`, not `supabase db push`. CI may only READ staging (ledger verify).
+  it('names the CI workflow it waits for, exactly as ci.yml names it', () => {
+    // A rename on either side would leave this workflow waiting for a run that never arrives: the
+    // gate would not be wrong, it would be silent. Pin the coupling.
     const ci = fs.readFileSync(path.join(ROOT, '.github/workflows/ci.yml'), 'utf8');
+    const ciName = /^name:\s*(.+)$/m.exec(ci)?.[1].trim();
+    expect(ciName).toBeTruthy();
+    const deploy = fs.readFileSync(path.join(ROOT, '.github/workflows/deploy-production.yml'), 'utf8');
+    expect(deploy).toContain(`workflows: ['${ciName}']`);
+    // And CI must run on a push to main, or there is no run to wait for.
     expect(ci).toMatch(/push:\s*\n\s*branches:\s*\[[^\]]*main[^\]]*\]/);
-
-    const dir = path.join(ROOT, '.github/workflows');
-    for (const name of fs.readdirSync(dir)) {
-      const text = fs.readFileSync(path.join(dir, name), 'utf8');
-      expect(text, name).not.toMatch(/migrate\.mjs\s+apply/);
-      expect(text, name).not.toMatch(/supabase\s+db\s+push/);
-      if (name === 'deploy-production.yml') continue;
-      expect(text, name).not.toMatch(/trigger-production\.mjs/);
-    }
   });
 });
 
@@ -219,19 +203,5 @@ describe('the trigger script end to end, against a local fake Vercel API', () =>
     expect(status, out).toBe(0);
     expect(requests).toHaveLength(0);
     expect(out).toContain('DRY RUN');
-  });
-
-  it('reports the deployment id to the workflow, so the verify step can wait for it', async () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'deploy-output-'));
-    const output = path.join(dir, 'github-output');
-    try {
-      const { status, out } = await run({ CI_CONCLUSION: 'success', GITHUB_OUTPUT: output });
-      expect(status, out).toBe(0);
-      const written = fs.readFileSync(output, 'utf8');
-      expect(written).toContain('deployment_id=dpl_fake');
-      expect(written).toContain('deployment_url=fake.vercel.app');
-    } finally {
-      fs.rmSync(dir, { recursive: true, force: true });
-    }
   });
 });

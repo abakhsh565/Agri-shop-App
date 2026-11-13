@@ -22,7 +22,7 @@ import { test, expect } from './base';
 import type { Page } from '@playwright/test';
 import { cleanupFixtures, execSql, loginViaUi, setupFixtures } from './helpers';
 
-const OWNER_PHONE = '03009999999';   // 923009999999
+const OWNER_PHONE = '03001234567';   // 923001234567
 const EMPLOYEE_PHONE = '03008888888'; // 923008888888
 
 /**
@@ -125,7 +125,30 @@ async function loginAndDismissWelcome(page: Page, phone: string) {
  */
 async function setupState(page: Page): Promise<string> {
   await page.goto('/admin/settings');
-  await page.waitForTimeout(2000);
+  // Wait for READINESS, not a stopwatch: the SetupChecklist renders its block
+  // while `ready` is false and shows progress "–" until ready, and returns
+  // null only when ready && complete. A fixed sleep reads the "–" state and
+  // reports setup as less done than it is. Poll until the card is absent
+  // (ready+complete → null) or the progress is a real done/total.
+  await expect
+    .poll(
+      async () => {
+        try {
+          const card = page.locator('[data-testid="setup-checklist"]');
+          if ((await card.count()) === 0) return 'ready';
+          const progress = (await page
+            .locator('[data-testid="setup-progress"]')
+            .first()
+            .innerText({ timeout: 2000 }))
+            .trim();
+          return progress === '–' ? 'loading' : 'ready';
+        } catch {
+          return 'loading';
+        }
+      },
+      { timeout: 15000 },
+    )
+    .toBe('ready');
   const card = page.locator('[data-testid="setup-checklist"]');
   if ((await card.count()) === 0) return 'no block: nothing left to set up';
   const progress = (await page.locator('[data-testid="setup-progress"]').first().innerText()).trim();
@@ -555,7 +578,13 @@ test.describe('education — welcome, guided tour, app guide', () => {
 
     // And the ones they cannot open are lines of text, not buttons.
     await page.goto('/employee/guide');
-    await page.waitForTimeout(1400);
+    // Convergence, not a stopwatch: the guide renders each capability as a
+    // button only once the employee's permissions have loaded. A fixed wait
+    // can evaluate while permissions are still [] (round-3 failure: the
+    // Customers row rendered as a locked <div>). Wait for the open control
+    // to exist, then read the rows. If permissions never load this fails
+    // loudly naming the missing button instead of the misleading div mismatch.
+    await expect(page.locator('button:has-text("Customers & credit")')).toBeVisible({ timeout: 10_000 });
     const rows = await page.evaluate(() => {
       const all = [...document.querySelectorAll('.ds-row')];
       const describe = (r: Element) => ({

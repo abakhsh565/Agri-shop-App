@@ -16,7 +16,7 @@
  */
 
 import { describe, it, beforeAll, afterAll, expect } from 'vitest';
-import { execRpcAsUser, execSqlAsAdmin } from '../setup/qa-client';
+import { execRpcAsUser, execSqlAsAdmin, setMembershipBranchScope } from '../setup/qa-client';
 
 const TENANT = '00000000-0000-0000-0000-000000000001';
 const OWNER = 'c3000000-0000-0000-0000-000000000001';
@@ -75,6 +75,31 @@ function payload(overrides: Record<string, unknown> = {}) {
   };
 }
 
+/**
+ * Cleanup that REPORTS instead of swallowing — the customerDeletionSecurity /
+ * employeeInviteLifecycle pattern. This suite shares the QA database with the
+ * other integration files, so a silent catch here would leave rows in place
+ * and the next suite would fail deep inside a test with an authorization error
+ * that is really leftover state. Failures are collected and the caller throws
+ * with their names (throwIfCleanupFailed, wired in beforeAll/afterAll).
+ */
+const cleanupFailures: string[] = [];
+async function trySql(label: string, p: Promise<unknown>): Promise<void> {
+  try {
+    await p;
+  } catch (error) {
+    cleanupFailures.push(`${label}: ${(error as Error).message}`);
+  }
+}
+function throwIfCleanupFailed(context: string): void {
+  if (cleanupFailures.length) {
+    throw new Error(
+      `${context}: cleanup failed — ${cleanupFailures.join(' | ')}. ` +
+        `Leftover rows from this suite's namespace will contaminate the next run; fix the leak here rather than re-running.`,
+    );
+  }
+}
+
 async function cleanup() {
   // Scoped to this suite's own customer, not the whole tenant: the previous shape was a table-wide
   // delete for the shared QA shop, so it could remove a sibling suite's return rows while they were
@@ -96,13 +121,22 @@ beforeAll(async () => {
 
   await sql(`
     INSERT INTO users (id, name, phone, role, is_original_owner, is_active, shop_id)
-    VALUES ('${OWNER}', 'QA Return Owner', '${PHONE}', 'admin', true, true, '${TENANT}')
+    VALUES ('${OWNER}', 'QA Return Owner', '${PHONE}', 'admin', false, true, '${TENANT}')
     -- phone is part of the conflict update too: without it a row first created by
     -- another suite under the same id keeps THAT phone, and this suite's cleanup
     -- (DELETE … WHERE phone = …) then deletes a row it does not own.
-    ON CONFLICT (id) DO UPDATE SET is_active = true, is_original_owner = true,
+    ON CONFLICT (id) DO UPDATE SET is_active = true, is_original_owner = false,
       shop_id = EXCLUDED.shop_id, phone = EXCLUDED.phone
   `);
+
+  // The wave-1 demotion left this admin with a NULL branch_scope, and 0188
+  // refuses a non-owner every branch-scoped call when no branch is in scope.
+  // Scope the membership to the tenant's active branches — the scope the
+  // product's own invitation path writes.
+  const branches = await sql(
+    `SELECT id FROM branches WHERE tenant_id = '${TENANT}' AND is_active = true ORDER BY is_default DESC, created_at`
+  );
+  await setMembershipBranchScope(OWNER, TENANT, branches.rows.map((r: { id: string }) => r.id));
   await sql(`
     INSERT INTO customers (id, name, phone, credit_limit, outstanding_balance, total_purchases, total_paid, shop_id, created_by)
     VALUES ('${CUSTOMER}', 'QA Return Customer', '923009550101', 100000, 0, 0, 0, '${TENANT}', 'QA')
@@ -136,10 +170,12 @@ beforeAll(async () => {
       ('${SALE_ITEM_VOIDED}', '${SALE_VOIDED}', '${PRODUCT}', 'QA Return Product', '${VARIANT}', '10kg', 5, ${SALE_PRICE}, 10, 500)
     ON CONFLICT (id) DO NOTHING
   `);
+  throwIfCleanupFailed('returnIntegrityGuards beforeAll cleanup');
 });
 
 afterAll(async () => {
   await cleanup();
+  throwIfCleanupFailed('returnIntegrityGuards afterAll cleanup');
 });
 
 describe('Return integrity guards — restored and enforced by the database', () => {

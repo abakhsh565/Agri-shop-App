@@ -161,8 +161,16 @@ test.describe('education — help, tutorials, questions', () => {
 
     await page.goto(`/admin/customers/${QA_IDS.customerA}`);
     await page.waitForLoadState('networkidle');
+    // The detail route sits behind a PermissionGuard: if the login's
+    // permissions load failed or was slow, the guard redirects to the
+    // dashboard, where the help sheet opens but has no watch button
+    // (round-5: the click at the watch button timed out after the sheet
+    // opened fine). Assert the route first so a redirect fails loudly
+    // naming the actual URL instead of timing out on the button.
+    await expect(page).toHaveURL(new RegExp(`/admin/customers/${QA_IDS.customerA}`));
     await page.getByTestId('context-help').click();
     await expect(page.getByTestId('context-help-sheet')).toBeVisible();
+    await expect(page.getByTestId('context-help-watch')).toBeVisible({ timeout: 30_000 });
     await page.getByTestId('context-help-watch').click();
     const video = page.locator('video').first();
     await expect(video).toHaveAttribute('src', /collect-payment\.webm/);

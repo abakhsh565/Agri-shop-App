@@ -121,6 +121,10 @@ if (has('help') || args.includes('-h') || args.length === 0) {
       '                     (one version per line, # comments allowed). Every unlisted QA-only row and',
       '                     every stale entry still fails.',
       '  --files <list>     production apply only: the batch to apply, in the verified order',
+      '  --allow-out-of-order <reason>  verify/apply only, staging (or pglite) only: proceed when',
+      '                     pending files sort before the newest recorded version, and print the',
+      '                     reason in the run log and the report. Never valid for production. A',
+      '                     one-time, reviewed exception — not a way to skip the order rule.',
       '  --verification <f> production apply only: the PASS verify:baseline report for that batch',
       '  --backup <f>       production apply only: the manifest of the backup taken just before',
       '  --restored <f>     production apply only: the restore-verify report proving that backup',
@@ -201,6 +205,11 @@ if (!targetFlag && !envName) {
 // The blanket refusal, and the one exception to it. `apply` with an explicit `--files` batch is the
 // only path that proceeds, and it has to satisfy the gate below — which runs before this tool
 // resolves a credential. Every other mode, and `apply` without a named batch, is refused here.
+// The out-of-order flag gets its own refusal first, so a production run that names it is refused
+// for the flag, not for the missing batch.
+if (envName === 'production' && has('allow-out-of-order')) {
+  refuse('--allow-out-of-order is never valid for production. Nothing was read and nothing was written.');
+}
 if (envName === 'production' && !(mode === 'apply' && Boolean(flag('files')))) {
   refuse(
     'production is not a target of this tool. This refusal happens before a credential is resolved\n' +
@@ -217,6 +226,26 @@ if (envName === 'production' && !(mode === 'apply' && Boolean(flag('files')))) {
 
 const dir = path.resolve(ROOT, flag('dir', MIGRATIONS_DIR));
 const dryRun = !has('apply');
+
+// One-time, reviewed exception to the order rule (Phase 2, 2026-11-06): the release/merge
+// migrations 0277-0289 are new files that sort before the already-recorded 0299, because the
+// two branches numbered independently. The hazard is a numbering artifact, not a rewrite: the
+// 0291-0299 batch does not depend on them, and the production plan puts them last anyway. The
+// override is therefore narrow on purpose — a reason is required, it is printed in the run log
+// and recorded in the report, it only ever applies to verify/apply on staging (or pglite), and
+// it is never valid for production.
+const orderOverrideReason = flag('allow-out-of-order');
+if (orderOverrideReason !== null) {
+  if (mode !== 'verify' && mode !== 'apply') {
+    refuse(`--allow-out-of-order only applies to verify/apply, not ${mode}. Nothing was read and nothing was written.`);
+  }
+  if (!String(orderOverrideReason).trim() || String(orderOverrideReason).trim().startsWith('--')) {
+    refuse(
+      '--allow-out-of-order needs a reason: --allow-out-of-order "<why these files may apply out of order>". ' +
+        'Nothing was read and nothing was written.',
+    );
+  }
+}
 
 // `--state` keeps the throwaway PGlite database on disk so a second run sees what the first one
 // recorded. It exists for the proof runs (apply, then verify, then apply again) — nothing else uses
@@ -754,6 +783,10 @@ result.ledger = {
 const comparison = compareWithLedger(directory, ledger.rows, ledger.divergences);
 const pendingVersions = comparison.pending.map((e) => e.version);
 const order = orderHazards(directory, ledger.rows, pendingVersions);
+const orderOverride =
+  orderOverrideReason !== null && order.hazards.length
+    ? { reason: String(orderOverrideReason).trim(), versions: order.hazards }
+    : null;
 const allowlistAudit = allowedLedgerOnly
   ? ledgerOnlyAudit(comparison.ledgerOnly, allowedLedgerOnly)
   : null;
@@ -778,6 +811,7 @@ result.comparison = {
   staleDivergences: comparison.staleDivergences.map((d) => `${d.version} ${d.why}`),
   unattested: unattested.map((r) => `${r.version} ${r.name ?? ''}`.trim()),
   order,
+  orderOverride,
 };
 
 // ── Report the state ────────────────────────────────────────────────────────────────────────
@@ -827,6 +861,10 @@ if (order.hazards.length) {
   console.log(`\n  ORDER HAZARD: ${order.hazards.length} pending file(s) sort before the newest recorded version (${order.highestRecorded}):`);
   for (const hazard of order.hazards.slice(0, 25)) console.log(`    ${hazard}`);
 }
+if (orderOverride) {
+  console.log(`\n  OVERRIDE — applying out of order, reviewed (${orderOverride.versions.length}): ${orderOverride.versions.join(', ')}`);
+  console.log(`    Reason: ${orderOverride.reason}`);
+}
 if (allowlistAudit) {
   console.log(`\n  QA-AHEAD ALLOWLIST: ${allowlistAudit.allowed.length} reviewed ledger-only version(s) accepted; ${allowlistAudit.unlisted.length} unlisted, ${allowlistAudit.stale.length} stale.`);
   if (allowlistAudit.allowed.length) console.log(`    ${allowlistAudit.allowed.join(', ')}`);
@@ -837,7 +875,7 @@ if (!directory.problems.length && !totalDifferences && !order.hazards.length) {
 
 let exitCode = 0;
 if (mode === 'verify') {
-  const problems = directory.problems.length + totalDifferences + order.hazards.length;
+  const problems = directory.problems.length + totalDifferences + (orderOverride ? 0 : order.hazards.length);
   console.log(`\n  VERIFY: ${problems ? `FAIL — ${problems} problem(s)` : 'PASS'}`);
   exitCode = problems ? 1 : 0;
 } else if (mode === 'status') {
@@ -946,11 +984,17 @@ async function runAdopt() {
 async function runApply() {
   if (directory.problems.length) return fail('the directory breaks its own grammar; nothing was applied.');
   if (order.hazards.length) {
-    refuse(
-      `refusing to apply out of order: ${order.hazards.join(', ')} sort before the newest recorded ` +
-        `version (${order.highestRecorded}). Applying them would rewrite history; normalise the ` +
-        `filenames or resolve the difference with the owner first.`,
-    );
+    if (orderOverride) {
+      console.log(
+        `\n  OVERRIDE in effect: applying ${order.hazards.join(', ')} out of order — ${orderOverride.reason}`,
+      );
+    } else {
+      refuse(
+        `refusing to apply out of order: ${order.hazards.join(', ')} sort before the newest recorded ` +
+          `version (${order.highestRecorded}). Applying them would rewrite history; normalise the ` +
+          `filenames or resolve the difference with the owner first.`,
+      );
+    }
   }
   if (!comparison.pending.length) {
     console.log('\n  Nothing to apply: every file in the directory is recorded.');
